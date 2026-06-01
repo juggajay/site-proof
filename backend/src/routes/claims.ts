@@ -933,7 +933,7 @@ router.put(
           },
         },
       });
-      res.json({ claim: existingClaim });
+      res.json(buildClaimDetailResponse(existingClaim));
       return;
     }
 
@@ -1116,7 +1116,7 @@ router.put(
       });
     }
 
-    res.json({ claim: updatedClaim });
+    res.json(buildClaimDetailResponse(updatedClaim));
   }),
 );
 
