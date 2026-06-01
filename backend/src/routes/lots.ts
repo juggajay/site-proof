@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
@@ -56,6 +55,12 @@ import {
   requireItpTemplateForProject,
   syncPrimaryLotSubcontractorAssignment,
 } from './lots/assignmentHelpers.js';
+import {
+  LOT_EDITORS,
+  LOT_BUDGET_EDITORS,
+  CONFORMED_LOT_BUDGET_EDIT_FIELDS,
+  getProvidedUpdateFields,
+} from './lots/updateFields.js';
 
 export const lotsRouter = Router();
 
@@ -807,24 +812,6 @@ lotsRouter.post(
     });
   }),
 );
-
-// Roles that can edit lots
-const LOT_EDITORS = [
-  'owner',
-  'admin',
-  'project_manager',
-  'site_engineer',
-  'quality_manager',
-  'foreman',
-];
-const LOT_BUDGET_EDITORS = ['owner', 'admin', 'project_manager'];
-const CONFORMED_LOT_BUDGET_EDIT_FIELDS = new Set(['budgetAmount', 'expectedUpdatedAt']);
-
-function getProvidedUpdateFields(data: z.infer<typeof updateLotSchema>) {
-  return Object.entries(data)
-    .filter(([, value]) => value !== undefined)
-    .map(([key]) => key);
-}
 
 // PATCH /api/lots/:id - Update a lot
 lotsRouter.patch(
