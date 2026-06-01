@@ -76,6 +76,7 @@ import {
 import { presentLotList } from './lots/listPresentation.js';
 import { shapeLotDetailResponse } from './lots/detailPresentation.js';
 import { prepareClonedLot } from './lots/cloneHelpers.js';
+import { assertLotsBulkMutable } from './lots/bulkMutationGuards.js';
 
 export const lotsRouter = Router();
 
@@ -1160,16 +1161,8 @@ lotsRouter.post(
       );
     }
 
-    // Check for lots that cannot be updated (conformed or claimed)
-    const unupdatableLots = lotsToUpdate.filter(
-      (lot) => lot.status === 'conformed' || lot.status === 'claimed',
-    );
-
-    if (unupdatableLots.length > 0) {
-      throw AppError.badRequest(
-        `Cannot update ${unupdatableLots.length} lot(s) that are conformed or claimed: ${unupdatableLots.map((l) => l.lotNumber).join(', ')}`,
-      );
-    }
+    // Block lots that cannot be bulk-mutated (conformed or claimed)
+    assertLotsBulkMutable(lotsToUpdate);
 
     // Update all lots
     const result = await prisma.lot.updateMany({
@@ -1237,16 +1230,8 @@ lotsRouter.post(
       await requireSubcontractorInProject(subcontractorId, projectIds[0]);
     }
 
-    // Check for lots that cannot be updated (conformed or claimed)
-    const unupdatableLots = lotsToUpdate.filter(
-      (lot) => lot.status === 'conformed' || lot.status === 'claimed',
-    );
-
-    if (unupdatableLots.length > 0) {
-      throw AppError.badRequest(
-        `Cannot update ${unupdatableLots.length} lot(s) that are conformed or claimed: ${unupdatableLots.map((l) => l.lotNumber).join(', ')}`,
-      );
-    }
+    // Block lots that cannot be bulk-mutated (conformed or claimed)
+    assertLotsBulkMutable(lotsToUpdate);
 
     // Update all lots and keep assignment records in sync with the legacy field.
     const result = await prisma.$transaction(async (tx) => {
