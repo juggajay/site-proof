@@ -21,6 +21,15 @@ import {
 } from './helpers/access.js';
 import { isStoredDocumentUploadPath } from '../../lib/uploadPaths.js';
 import { logError } from '../../lib/serverLogger.js';
+import {
+  buildItpCompletionAttachmentDeletedResponse,
+  buildItpCompletionAttachmentResponse,
+  buildItpCompletionAttachmentsResponse,
+  buildItpCompletionResponse,
+  buildItpCompletionResultResponse,
+  buildItpCompletionStatusResponse,
+  buildPendingItpVerificationsResponse,
+} from './completionResponses.js';
 
 // ============== Zod Schemas ==============
 const GPS_COORDINATE_PATTERN = /^-?(?:\d+|\d+\.\d+|\.\d+)$/;
@@ -694,12 +703,14 @@ completionsRouter.post(
       linkedNcr: createdNcr,
     };
 
-    res.json({
-      completion: transformedCompletion,
-      ncr: createdNcr,
-      witnessPointNotification,
-      subbieCompletionNotification,
-    });
+    res.json(
+      buildItpCompletionResultResponse(
+        transformedCompletion,
+        createdNcr,
+        witnessPointNotification,
+        subbieCompletionNotification,
+      ),
+    );
   }),
 );
 
@@ -820,17 +831,19 @@ completionsRouter.patch(
       req,
     });
 
-    res.json({
-      completion: {
-        ...completion,
-        isCompleted: completion.status === 'completed' || completion.status === 'not_applicable',
-        isNotApplicable: completion.status === 'not_applicable',
-        isFailed: completion.status === 'failed',
-        isVerified: completion.verificationStatus === 'verified',
-        isPendingVerification: completion.verificationStatus === 'pending_verification',
-        attachments: completion.attachments || [],
-      },
-    });
+    res.json(
+      buildItpCompletionStatusResponse(
+        {
+          ...completion,
+          isNotApplicable: completion.status === 'not_applicable',
+          isFailed: completion.status === 'failed',
+          isVerified: completion.verificationStatus === 'verified',
+          isPendingVerification: completion.verificationStatus === 'pending_verification',
+          attachments: completion.attachments || [],
+        },
+        completion.status === 'completed' || completion.status === 'not_applicable',
+      ),
+    );
   }),
 );
 
@@ -877,13 +890,15 @@ completionsRouter.post(
         include: completionVerificationResponseInclude,
       });
 
-      res.json({
-        completion: {
-          ...completion,
-          isCompleted: completion.status === 'completed',
-          isVerified: true,
-        },
-      });
+      res.json(
+        buildItpCompletionStatusResponse(
+          {
+            ...completion,
+            isVerified: true,
+          },
+          completion.status === 'completed',
+        ),
+      );
       return;
     }
 
@@ -946,7 +961,7 @@ completionsRouter.post(
       isVerified: completion.verificationStatus === 'verified',
     };
 
-    res.json({ completion: transformedCompletion });
+    res.json(buildItpCompletionResponse(transformedCompletion));
   }),
 );
 
@@ -1055,7 +1070,7 @@ completionsRouter.post(
       rejectionReason: reason.trim(),
     };
 
-    res.json({ completion: transformedCompletion });
+    res.json(buildItpCompletionResponse(transformedCompletion));
   }),
 );
 
@@ -1139,10 +1154,7 @@ completionsRouter.get(
       })),
     }));
 
-    res.json({
-      pendingVerifications: transformed,
-      count: transformed.length,
-    });
+    res.json(buildPendingItpVerificationsResponse(transformed));
   }),
 );
 
@@ -1318,13 +1330,7 @@ completionsRouter.post(
     });
 
     if (existingAttachment) {
-      res.json({
-        attachment: {
-          id: existingAttachment.id,
-          documentId: existingAttachment.documentId,
-          document: existingAttachment.document,
-        },
-      });
+      res.json(buildItpCompletionAttachmentResponse(existingAttachment));
       return;
     }
 
@@ -1339,13 +1345,7 @@ completionsRouter.post(
       },
     });
 
-    res.status(201).json({
-      attachment: {
-        id: attachment.id,
-        documentId: attachment.documentId,
-        document: attachment.document,
-      },
-    });
+    res.status(201).json(buildItpCompletionAttachmentResponse(attachment));
   }),
 );
 
@@ -1400,13 +1400,7 @@ completionsRouter.get(
       },
     });
 
-    res.json({
-      attachments: attachments.map((a) => ({
-        id: a.id,
-        documentId: a.documentId,
-        document: a.document,
-      })),
-    });
+    res.json(buildItpCompletionAttachmentsResponse(attachments));
   }),
 );
 
@@ -1478,6 +1472,6 @@ completionsRouter.delete(
       where: { id: attachmentId },
     });
 
-    res.json({ success: true });
+    res.json(buildItpCompletionAttachmentDeletedResponse());
   }),
 );
