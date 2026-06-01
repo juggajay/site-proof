@@ -1,10 +1,6 @@
 import { Router } from 'express';
 import crypto from 'crypto';
-import type {
-  NotificationAlert as NotificationAlertRecord,
-  NotificationDigestItem as NotificationDigestItemRecord,
-  Prisma,
-} from '@prisma/client';
+import type { NotificationAlert as NotificationAlertRecord, Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
 import {
@@ -47,10 +43,19 @@ import {
   requireProjectNotificationAdminAccess,
   requireProjectReadAccess,
 } from './notifications/access.js';
+import {
+  addDigestItem,
+  clearDigestItems,
+  getDigestItems,
+  getUserDigestQueue,
+} from './notifications/digestQueue.js';
 
 // Re-exported so external modules that import the notification timing type from
 // this route file keep working after the email-preference helper extraction.
 export type { NotificationTiming };
+// Re-exported so external modules that import the digest-queue accessor from
+// this route file keep working after the digest-queue helper extraction.
+export { getUserDigestQueue };
 
 export const notificationsRouter = Router();
 
@@ -352,45 +357,6 @@ notificationsRouter.get(
   }),
 );
 
-function toDigestItem(record: NotificationDigestItemRecord): DigestItem {
-  return {
-    type: record.type,
-    title: record.title,
-    message: record.message,
-    projectName: record.projectName ?? undefined,
-    linkUrl: record.linkUrl ?? undefined,
-    timestamp: record.createdAt,
-  };
-}
-
-async function addDigestItem(userId: string, item: DigestItem): Promise<number> {
-  await prisma.notificationDigestItem.create({
-    data: {
-      userId,
-      type: item.type,
-      title: item.title,
-      message: item.message,
-      projectName: item.projectName,
-      linkUrl: item.linkUrl,
-    },
-  });
-
-  return prisma.notificationDigestItem.count({ where: { userId } });
-}
-
-async function getDigestItems(userId: string): Promise<DigestItem[]> {
-  const items = await prisma.notificationDigestItem.findMany({
-    where: { userId },
-    orderBy: { createdAt: 'asc' },
-  });
-
-  return items.map(toDigestItem);
-}
-
-async function clearDigestItems(userId: string): Promise<void> {
-  await prisma.notificationDigestItem.deleteMany({ where: { userId } });
-}
-
 // GET /api/notifications/email-preferences - Get email notification preferences
 notificationsRouter.get(
   '/email-preferences',
@@ -634,11 +600,6 @@ export async function getNotificationTiming(
   const preferences = await getEmailPreferences(userId);
   const timingKey = `${notificationType}Timing` as keyof typeof preferences;
   return timingKey in preferences ? (preferences[timingKey] as NotificationTiming) : 'immediate';
-}
-
-// Helper function to get digest queue for a user
-export async function getUserDigestQueue(userId: string): Promise<DigestItem[]> {
-  return getDigestItems(userId);
 }
 
 // POST /api/notifications/add-to-digest - Add item to digest queue
