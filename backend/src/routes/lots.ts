@@ -77,6 +77,11 @@ import { presentLotList } from './lots/listPresentation.js';
 import { shapeLotDetailResponse } from './lots/detailPresentation.js';
 import { prepareClonedLot } from './lots/cloneHelpers.js';
 import { assertLotsBulkMutable } from './lots/bulkMutationGuards.js';
+import {
+  buildLotsBulkDeletedResponse,
+  buildLotsBulkStatusUpdatedResponse,
+  buildLotsBulkSubcontractorAssignedResponse,
+} from './lots/bulkMutationResponses.js';
 import { buildLotListOrderBy, buildLotListSelect, buildLotListWhere } from './lots/listQuery.js';
 import {
   buildLotConformedResponse,
@@ -1052,10 +1057,7 @@ lotsRouter.post(
       },
     });
 
-    res.json({
-      message: `Successfully deleted ${result.count} lot(s)`,
-      count: result.count,
-    });
+    res.json(buildLotsBulkDeletedResponse(result.count));
   }),
 );
 
@@ -1112,10 +1114,7 @@ lotsRouter.post(
       },
     });
 
-    res.json({
-      message: `Successfully updated ${result.count} lot(s) to "${status.replace('_', ' ')}"`,
-      count: result.count,
-    });
+    res.json(buildLotsBulkStatusUpdatedResponse(result.count, status));
   }),
 );
 
@@ -1194,11 +1193,7 @@ lotsRouter.post(
       return updateResult;
     });
 
-    const action = subcontractorId ? 'assigned' : 'unassigned';
-    res.json({
-      message: `Successfully ${action} ${result.count} lot(s)`,
-      count: result.count,
-    });
+    res.json(buildLotsBulkSubcontractorAssignedResponse(result.count, subcontractorId));
   }),
 );
 
