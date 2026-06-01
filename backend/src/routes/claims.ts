@@ -16,6 +16,7 @@ import { checkConformancePrerequisites } from '../lib/conformancePrerequisites.j
 import { getEffectiveProjectRole } from '../lib/projectAccess.js';
 import {
   buildClaimCertifiedResponse,
+  buildClaimCreatedResponse,
   buildClaimDeletedResponse,
   buildClaimDetailResponse,
   buildClaimEvidencePackageResponse,
@@ -855,7 +856,7 @@ router.post(
       req,
     });
 
-    res.status(201).json({ claim: transformedClaim });
+    res.status(201).json(buildClaimCreatedResponse(transformedClaim));
   }),
 );
 
