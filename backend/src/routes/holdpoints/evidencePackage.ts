@@ -1,0 +1,197 @@
+import { Prisma } from '@prisma/client';
+
+/**
+ * Hold-point evidence-package presentation helpers, extracted verbatim from
+ * backend/src/routes/holdpoints.ts as a slice of the holdpoints route split
+ * (engineering-health Workstream 1).
+ *
+ * The authenticated `/:id/evidence-package`, the `/preview-evidence-package`,
+ * and the public `/public/:token` routes each fetched a hold point's related
+ * data and then built the same response sub-objects inline. These are the pure
+ * presentation mappers shared by all three: they take already-fetched rows
+ * (no DB, no auth, no request) and produce the exact response shapes — the
+ * checklist-with-status list, the test-result list, the photo list, the
+ * checklist/test/photo summary counts, and the lot/project/ITP-template headers.
+ * Field names, status derivations, date pass-through, and array ordering are
+ * preserved exactly as they were inline. Each route still assembles the
+ * top-level package itself (its hold-point header, `generatedAt`, and any
+ * `isPreview` / public-only fields differ per route). Unit-tested DB-free in
+ * evidencePackage.test.ts.
+ */
+
+type EvidenceNamedUser = { fullName: string | null } | null | undefined;
+
+export type EvidenceChecklistItemInput = {
+  id: string;
+  sequenceNumber: number;
+  description: string;
+  pointType: string;
+  responsibleParty: string;
+};
+
+export type EvidenceCompletionInput = {
+  checklistItemId: string;
+  status: string;
+  completedAt: Date | null;
+  completedBy: EvidenceNamedUser;
+  verificationStatus: string;
+  verifiedAt: Date | null;
+  verifiedBy: EvidenceNamedUser;
+  notes: string | null;
+  attachments?: Array<{
+    id: string;
+    document: { filename: string; fileUrl: string; caption: string | null };
+  }> | null;
+};
+
+export type EvidenceTestResultInput = {
+  id: string;
+  testType: string;
+  testRequestNumber: string | null;
+  laboratoryName: string | null;
+  resultValue: Prisma.Decimal | null;
+  resultUnit: string | null;
+  passFail: string;
+  status: string;
+  verifiedBy: EvidenceNamedUser;
+  createdAt: Date;
+};
+
+export type EvidenceDocumentInput = {
+  id: string;
+  filename: string;
+  fileUrl: string;
+  caption: string | null;
+  uploadedAt: Date;
+};
+
+export type EvidenceLotInput = {
+  id: string;
+  lotNumber: string;
+  description: string | null;
+  activityType: string;
+  chainageStart: Prisma.Decimal | null;
+  chainageEnd: Prisma.Decimal | null;
+};
+
+export type EvidenceProjectInput = {
+  id: string;
+  name: string;
+  projectNumber: string;
+};
+
+export type EvidenceItpTemplateInput = {
+  id: string;
+  name: string;
+  activityType: string | null;
+};
+
+// Map the checklist items up to and including the hold point, attaching each
+// item's completion status. Filters the full template list by sequence number
+// so callers can pass the whole checklist.
+export function buildHoldPointEvidenceChecklist(
+  checklistItems: EvidenceChecklistItemInput[],
+  completions: EvidenceCompletionInput[],
+  holdPointSequenceNumber: number,
+) {
+  const itemsUpToHP = checklistItems.filter(
+    (item) => item.sequenceNumber <= holdPointSequenceNumber,
+  );
+
+  return itemsUpToHP.map((item) => {
+    const completion = completions.find((c) => c.checklistItemId === item.id);
+    return {
+      sequenceNumber: item.sequenceNumber,
+      description: item.description,
+      pointType: item.pointType,
+      responsibleParty: item.responsibleParty,
+      isCompleted: completion?.status === 'completed',
+      completedAt: completion?.completedAt,
+      completedBy: completion?.completedBy?.fullName || null,
+      isVerified: completion?.verificationStatus === 'verified',
+      verifiedAt: completion?.verifiedAt,
+      verifiedBy: completion?.verifiedBy?.fullName || null,
+      notes: completion?.notes,
+      attachments:
+        completion?.attachments?.map((a) => ({
+          id: a.id,
+          filename: a.document.filename,
+          fileUrl: a.document.fileUrl,
+          caption: a.document.caption,
+        })) || [],
+    };
+  });
+}
+
+export function mapHoldPointEvidenceTestResults(testResults: EvidenceTestResultInput[]) {
+  return testResults.map((t) => ({
+    id: t.id,
+    testType: t.testType,
+    testRequestNumber: t.testRequestNumber,
+    laboratoryName: t.laboratoryName,
+    resultValue: t.resultValue,
+    resultUnit: t.resultUnit,
+    passFail: t.passFail,
+    status: t.status,
+    isVerified: t.status === 'verified',
+    verifiedBy: t.verifiedBy?.fullName || null,
+    createdAt: t.createdAt,
+  }));
+}
+
+export function mapHoldPointEvidencePhotos(documents: EvidenceDocumentInput[]) {
+  return documents.map((d) => ({
+    id: d.id,
+    filename: d.filename,
+    fileUrl: d.fileUrl,
+    caption: d.caption,
+    uploadedAt: d.uploadedAt,
+  }));
+}
+
+type EvidenceChecklistEntry = ReturnType<typeof buildHoldPointEvidenceChecklist>[number];
+type EvidenceTestResultEntry = ReturnType<typeof mapHoldPointEvidenceTestResults>[number];
+type EvidencePhotoEntry = ReturnType<typeof mapHoldPointEvidencePhotos>[number];
+
+export function buildHoldPointEvidenceSummary(
+  checklist: EvidenceChecklistEntry[],
+  testResults: EvidenceTestResultEntry[],
+  photos: EvidencePhotoEntry[],
+) {
+  return {
+    totalChecklistItems: checklist.length,
+    completedItems: checklist.filter((i) => i.isCompleted).length,
+    verifiedItems: checklist.filter((i) => i.isVerified).length,
+    totalTestResults: testResults.length,
+    passingTests: testResults.filter((t) => t.passFail === 'pass').length,
+    totalPhotos: photos.length,
+    totalAttachments: checklist.reduce((sum, i) => sum + i.attachments.length, 0),
+  };
+}
+
+export function mapHoldPointEvidenceLot(lot: EvidenceLotInput) {
+  return {
+    id: lot.id,
+    lotNumber: lot.lotNumber,
+    description: lot.description,
+    activityType: lot.activityType,
+    chainageStart: lot.chainageStart,
+    chainageEnd: lot.chainageEnd,
+  };
+}
+
+export function mapHoldPointEvidenceProject(project: EvidenceProjectInput) {
+  return {
+    id: project.id,
+    name: project.name,
+    projectNumber: project.projectNumber,
+  };
+}
+
+export function mapHoldPointEvidenceItpTemplate(template: EvidenceItpTemplateInput) {
+  return {
+    id: template.id,
+    name: template.name,
+    activityType: template.activityType,
+  };
+}
