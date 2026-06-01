@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { z } from 'zod';
-import { parsePagination, getPrismaSkipTake, getPaginationMeta } from '../../lib/pagination.js';
+import { parsePagination, getPrismaSkipTake } from '../../lib/pagination.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import {
@@ -16,6 +16,11 @@ import {
   requireDiaryWriteAccess,
   requireEditableDiaryForWrite,
 } from './diaryAccess.js';
+import {
+  buildDiaryListResponse,
+  buildPreviousPersonnelEmptyResponse,
+  buildPreviousPersonnelResponse,
+} from './diaryCoreResponses.js';
 
 const router = Router();
 const DIARY_SHORT_TEXT_MAX_LENGTH = 120;
@@ -150,10 +155,7 @@ router.get(
       prisma.dailyDiary.count({ where }),
     ]);
 
-    res.json({
-      data: diaries,
-      pagination: getPaginationMeta(total, pagination.page, pagination.limit),
-    });
+    res.json(buildDiaryListResponse(diaries, total, pagination.page, pagination.limit));
   }),
 );
 
@@ -377,7 +379,7 @@ router.get(
     });
 
     if (!previousDiary || previousDiary.personnel.length === 0) {
-      return res.json({ personnel: [], message: 'No personnel from previous day' });
+      return res.json(buildPreviousPersonnelEmptyResponse());
     }
 
     // Return personnel without IDs (so they can be added as new entries)
@@ -390,11 +392,7 @@ router.get(
       hours: p.hours,
     }));
 
-    res.json({
-      personnel: personnelToCopy,
-      previousDate: previousDiary.date.toISOString().split('T')[0],
-      message: `Copied ${personnelToCopy.length} personnel from previous diary`,
-    });
+    res.json(buildPreviousPersonnelResponse(personnelToCopy, previousDiary.date));
   }),
 );
 
