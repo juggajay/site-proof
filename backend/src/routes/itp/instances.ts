@@ -14,6 +14,7 @@ import {
   requireItpProjectRole,
 } from './helpers/access.js';
 import { requireSubcontractorPortalModuleAccess } from '../../lib/projectAccess.js';
+import { buildItpInstanceResponse } from './instances/responses.js';
 
 // Type for ITP completion with attachments
 interface CompletionWithAttachments {
@@ -223,7 +224,7 @@ instancesRouter.post(
       },
     };
 
-    res.status(201).json({ instance: transformedInstance });
+    res.status(201).json(buildItpInstanceResponse(transformedInstance));
   }),
 );
 
@@ -291,7 +292,7 @@ instancesRouter.get(
     });
 
     if (!instance) {
-      res.json({ instance: null });
+      res.json(buildItpInstanceResponse(null));
       return;
     }
 
@@ -369,6 +370,6 @@ instancesRouter.get(
         })),
     };
 
-    res.json({ instance: transformedInstance });
+    res.json(buildItpInstanceResponse(transformedInstance));
   }),
 );
