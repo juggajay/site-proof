@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildMentionableProjectFilter, buildMentionableUserFilters } from './mentionUsers.js';
+import {
+  buildMentionableProjectFilter,
+  buildMentionableUserFilters,
+  buildMentionableUsersResponse,
+} from './mentionUsers.js';
 
 // DB-free coverage of the mentionable-user filter builders. They contain no
 // database or access-control calls, so the real isSubcontractorRole classifier
@@ -83,5 +87,16 @@ describe('buildMentionableProjectFilter', () => {
         { companyId: 'company-9', roleInCompany: { in: ['owner', 'admin'] } },
       ],
     });
+  });
+});
+
+describe('buildMentionableUsersResponse', () => {
+  it('wraps mentionable users under the existing response key', () => {
+    const users = [
+      { id: 'user-1', email: 'one@example.com', fullName: 'One User' },
+      { id: 'user-2', email: 'two@example.com', fullName: null },
+    ];
+
+    expect(buildMentionableUsersResponse(users)).toEqual({ users });
   });
 });
