@@ -6,14 +6,19 @@ import { parsePagination, getPaginationMeta, getPrismaSkipTake } from '../lib/pa
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
 import { createAuditLog, AuditAction } from '../lib/auditLog.js';
-import {
-  activeSubcontractorCompanyWhere,
-  checkProjectAccess,
-  getEffectiveProjectRole,
-  isCompanyAdminRole,
-  isSubcontractorPortalRole,
-} from '../lib/projectAccess.js';
+import { activeSubcontractorCompanyWhere } from '../lib/projectAccess.js';
 import { requireEditableDiaryForWrite } from './diary/diaryAccess.js';
+import {
+  DOCKET_APPROVERS,
+  isDocketEntryEditable,
+  isSubcontractorUser,
+  requireApprovedDocketResource,
+  requireDocketApproverAccess,
+  requireDocketReadAccess,
+  requireDocketSubcontractorAccess,
+  requireLotAllocationsInProject,
+  requireProjectReadAccess,
+} from './dockets/access.js';
 import {
   DOCKET_SORT_FIELDS,
   createDocketSchema,
@@ -99,194 +104,6 @@ export const docketsRouter = Router();
 
 // Apply authentication middleware to all docket routes
 docketsRouter.use(requireAuth);
-
-// Roles that can approve dockets
-const DOCKET_APPROVERS = ['owner', 'admin', 'project_manager', 'site_manager', 'foreman'];
-const DOCKET_ENTRY_EDIT_STATUSES = new Set(['draft', 'queried', 'rejected']);
-
-type AuthUser = NonNullable<Express.Request['user']>;
-type DocketAccess = {
-  projectId: string;
-  subcontractorCompanyId: string;
-};
-type DocketProjectReadScope = {
-  subcontractorCompanyId?: string;
-};
-
-function isSubcontractorUser(user: AuthUser): boolean {
-  return isSubcontractorPortalRole(user.roleInCompany);
-}
-
-function isDocketEntryEditable(status: string): boolean {
-  return DOCKET_ENTRY_EDIT_STATUSES.has(status);
-}
-
-function requireApprovedDocketResource(status: string, resourceName: 'Employee' | 'Plant'): void {
-  if (status !== 'approved') {
-    throw AppError.badRequest(`${resourceName} must be approved before it can be used on a docket`);
-  }
-}
-
-async function hasLinkedSubcontractorCompany(
-  userId: string,
-  subcontractorCompanyId: string,
-): Promise<boolean> {
-  const count = await prisma.subcontractorUser.count({
-    where: {
-      userId,
-      subcontractorCompanyId,
-      subcontractorCompany: activeSubcontractorCompanyWhere(),
-    },
-  });
-  return count > 0;
-}
-
-async function getLinkedSubcontractorCompanyIdForProject(
-  userId: string,
-  projectId: string,
-): Promise<string | null> {
-  const subcontractorUser = await prisma.subcontractorUser.findFirst({
-    where: {
-      userId,
-      subcontractorCompany: activeSubcontractorCompanyWhere({ projectId }),
-    },
-    select: { subcontractorCompanyId: true },
-  });
-  return subcontractorUser?.subcontractorCompanyId ?? null;
-}
-
-async function requireProjectReadAccess(
-  user: AuthUser,
-  projectId: string,
-): Promise<DocketProjectReadScope> {
-  const project = await prisma.project.findUnique({
-    where: { id: projectId },
-    select: { companyId: true },
-  });
-
-  if (!project) {
-    throw AppError.forbidden('Access denied');
-  }
-
-  if (
-    !isSubcontractorUser(user) &&
-    isCompanyAdminRole(user.roleInCompany) &&
-    project.companyId === user.companyId
-  ) {
-    return {};
-  }
-
-  if (!isSubcontractorUser(user)) {
-    const projectUser = await prisma.projectUser.findFirst({
-      where: {
-        projectId,
-        userId: user.id,
-        status: 'active',
-      },
-      select: { id: true },
-    });
-
-    if (projectUser) {
-      return {};
-    }
-  }
-
-  const subcontractorCompanyId = await getLinkedSubcontractorCompanyIdForProject(
-    user.id,
-    projectId,
-  );
-  if (subcontractorCompanyId) {
-    return { subcontractorCompanyId };
-  }
-
-  if (!(await checkProjectAccess(user.id, projectId))) {
-    throw AppError.forbidden('Access denied');
-  }
-
-  return {};
-}
-
-async function requireDocketApproverAccess(user: AuthUser, projectId: string): Promise<void> {
-  const role = await getEffectiveProjectRole(user, projectId, {
-    excludeSubcontractorProjectMemberships: true,
-    throwIfProjectMissing: true,
-  });
-  if (!role || !DOCKET_APPROVERS.includes(role)) {
-    throw AppError.forbidden('You do not have permission to perform this action.');
-  }
-}
-
-async function requireDocketReadAccess(user: AuthUser, docket: DocketAccess): Promise<void> {
-  if (isSubcontractorUser(user)) {
-    if (!(await hasLinkedSubcontractorCompany(user.id, docket.subcontractorCompanyId))) {
-      throw AppError.forbidden('Access denied');
-    }
-    return;
-  }
-
-  const scope = await requireProjectReadAccess(user, docket.projectId);
-  if (
-    scope.subcontractorCompanyId &&
-    scope.subcontractorCompanyId !== docket.subcontractorCompanyId
-  ) {
-    throw AppError.forbidden('Access denied');
-  }
-}
-
-async function requireDocketSubcontractorAccess(
-  user: AuthUser,
-  docket: DocketAccess,
-): Promise<void> {
-  if (
-    !isSubcontractorUser(user) ||
-    !(await hasLinkedSubcontractorCompany(user.id, docket.subcontractorCompanyId))
-  ) {
-    throw AppError.forbidden('Only the linked subcontractor can modify this docket');
-  }
-}
-
-async function requireLotAllocationsInProject(
-  projectId: string,
-  subcontractorCompanyId: string,
-  lotAllocations?: Array<{ lotId: string }>,
-): Promise<void> {
-  const lotIds = [...new Set(lotAllocations?.map((alloc) => alloc.lotId) ?? [])];
-  if (lotIds.length === 0) return;
-
-  const lotCount = await prisma.lot.count({
-    where: {
-      id: { in: lotIds },
-      projectId,
-    },
-  });
-
-  if (lotCount !== lotIds.length) {
-    throw AppError.badRequest('All lot allocations must belong to the docket project');
-  }
-
-  const assignedLotCount = await prisma.lot.count({
-    where: {
-      id: { in: lotIds },
-      projectId,
-      OR: [
-        { assignedSubcontractorId: subcontractorCompanyId },
-        {
-          subcontractorAssignments: {
-            some: {
-              projectId,
-              subcontractorCompanyId,
-              status: 'active',
-            },
-          },
-        },
-      ],
-    },
-  });
-
-  if (assignedLotCount !== lotIds.length) {
-    throw AppError.forbidden('Docket lot allocations are limited to lots assigned to your company');
-  }
-}
 
 // GET /api/dockets - List dockets for a project
 docketsRouter.get(
