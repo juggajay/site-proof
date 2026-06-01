@@ -2,7 +2,6 @@ import { Router, Request, Response } from 'express';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import crypto from 'crypto';
-import { z } from 'zod';
 import { sendNotificationIfEnabled } from './notifications.js';
 import {
   sendHPReleaseRequestEmail,
@@ -23,6 +22,24 @@ import {
 } from '../lib/projectAccess.js';
 import { buildFrontendUrl } from '../lib/runtimeConfig.js';
 import { logError } from '../lib/serverLogger.js';
+import {
+  type HPProjectSettings,
+  MAX_ID_LENGTH,
+  MAX_RELEASE_TOKEN_LENGTH,
+  DATE_ONLY_RE,
+  DATE_COMPONENT_RE,
+  isValidEmailAddress,
+  parseNotificationEmailList,
+  parseHPDefaultRecipients,
+  parseHPProjectSettings,
+  requiresSuperintendentApproval,
+  requestReleaseSchema,
+  releaseHoldPointSchema,
+  escalateSchema,
+  calculateNotificationTimeSchema,
+  previewEvidencePackageSchema,
+  publicReleaseSchema,
+} from './holdpoints/validation.js';
 
 // Type for hold point list item
 interface HoldPointListItem {
@@ -44,224 +61,12 @@ interface HoldPointListItem {
   createdAt: Date;
 }
 
-// Type for project settings related to hold points
-interface HPProjectSettings {
-  hpRecipients?: Array<{ email: string }>;
-  hpApprovalRequirement?: string;
-  holdPointMinimumNoticeDays?: number;
-}
-
 interface HoldPointReleaseRecipient {
   email: string;
   fullName: string | null;
   secureToken: string;
   tokenExpiry: Date;
 }
-
-const emailAddressSchema = z.string().trim().email();
-
-function isValidEmailAddress(email: string): boolean {
-  return emailAddressSchema.safeParse(email).success;
-}
-
-function normalizeEmailList(emails: string[]): string[] {
-  const seen = new Set<string>();
-
-  return emails
-    .map((email) => email.trim())
-    .filter(Boolean)
-    .filter((email) => {
-      const key = email.toLowerCase();
-      if (seen.has(key)) {
-        return false;
-      }
-      seen.add(key);
-      return true;
-    });
-}
-
-function parseNotificationEmailList(value: string | null | undefined): string[] {
-  if (!value) {
-    return [];
-  }
-
-  return normalizeEmailList(value.split(/[,\n;]/));
-}
-
-function hasValidNotificationEmailList(value: string | null | undefined): boolean {
-  if (!value?.trim()) {
-    return true;
-  }
-
-  const emails = parseNotificationEmailList(value);
-  return emails.length > 0 && emails.every(isValidEmailAddress);
-}
-
-function parseHPDefaultRecipients(settings: HPProjectSettings): string[] {
-  if (!Array.isArray(settings.hpRecipients)) {
-    return [];
-  }
-
-  return normalizeEmailList(
-    settings.hpRecipients.map((recipient) => recipient?.email || ''),
-  ).filter(isValidEmailAddress);
-}
-
-function parseHPProjectSettings(rawSettings: string | null | undefined): HPProjectSettings {
-  if (!rawSettings) {
-    return {};
-  }
-
-  try {
-    return JSON.parse(rawSettings) as HPProjectSettings;
-  } catch (_error) {
-    return {};
-  }
-}
-
-function requiresSuperintendentApproval(settings: HPProjectSettings): boolean {
-  return settings.hpApprovalRequirement === 'superintendent';
-}
-
-// =============================================================================
-// Zod Validation Schemas
-// =============================================================================
-
-const MAX_ID_LENGTH = 120;
-const MAX_NAME_LENGTH = 160;
-const MAX_ORG_LENGTH = 160;
-const MAX_NOTE_LENGTH = 5000;
-const MAX_SIGNATURE_DATA_URL_LENGTH = 900_000;
-const MAX_DATE_INPUT_LENGTH = 64;
-const MAX_TIME_INPUT_LENGTH = 5;
-const MAX_RELEASE_TOKEN_LENGTH = 512;
-const DATE_ONLY_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
-const DATE_COMPONENT_RE = /^(\d{4})-(\d{2})-(\d{2})(?:$|[T\s])/;
-const TIME_24H_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
-const RELEASE_METHODS = ['digital', 'email', 'paper'] as const;
-
-const requiredIdSchema = (fieldName: string) =>
-  z
-    .string()
-    .trim()
-    .min(1, `${fieldName} is required`)
-    .max(MAX_ID_LENGTH, `${fieldName} is too long`);
-
-const requiredTrimmedStringSchema = (fieldName: string, maxLength: number) =>
-  z.string().trim().min(1, `${fieldName} is required`).max(maxLength, `${fieldName} is too long`);
-
-const nullableTrimmedStringSchema = (maxLength: number, fieldName: string) =>
-  z.preprocess(
-    (value) => {
-      if (typeof value !== 'string') {
-        return value;
-      }
-
-      const trimmed = value.trim();
-      return trimmed.length > 0 ? trimmed : null;
-    },
-    z.string().max(maxLength, `${fieldName} is too long`).nullish(),
-  );
-
-const optionalTrimmedStringSchema = (maxLength: number, fieldName: string) =>
-  z.preprocess(
-    (value) => {
-      if (typeof value !== 'string') {
-        return value;
-      }
-
-      const trimmed = value.trim();
-      return trimmed.length > 0 ? trimmed : undefined;
-    },
-    z.string().max(maxLength, `${fieldName} is too long`).optional(),
-  );
-
-const nullableScheduledTimeSchema = z.preprocess((value) => {
-  if (typeof value !== 'string') {
-    return value;
-  }
-
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
-}, z.string().max(MAX_TIME_INPUT_LENGTH, 'scheduledTime must be in HH:mm format').regex(TIME_24H_RE, 'scheduledTime must be in HH:mm format').nullish());
-
-const optionalReleaseMethodSchema = z.preprocess((value) => {
-  if (typeof value !== 'string') {
-    return value;
-  }
-
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
-}, z.enum(RELEASE_METHODS).optional());
-
-const nullableScheduledDateSchema = nullableTrimmedStringSchema(
-  MAX_DATE_INPUT_LENGTH,
-  'scheduledDate',
-);
-const nullableReleaseDateSchema = nullableTrimmedStringSchema(MAX_DATE_INPUT_LENGTH, 'releaseDate');
-const nullableReleaseTimeSchema = z.preprocess((value) => {
-  if (typeof value !== 'string') {
-    return value;
-  }
-
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
-}, z.string().max(MAX_TIME_INPUT_LENGTH, 'releaseTime must be in HH:mm format').regex(TIME_24H_RE, 'releaseTime must be in HH:mm format').nullish());
-
-const requestReleaseSchema = z
-  .object({
-    lotId: requiredIdSchema('lotId'),
-    itpChecklistItemId: requiredIdSchema('itpChecklistItemId'),
-    scheduledDate: nullableScheduledDateSchema,
-    scheduledTime: nullableScheduledTimeSchema,
-    notificationSentTo: nullableTrimmedStringSchema(MAX_NOTE_LENGTH, 'notificationSentTo').refine(
-      hasValidNotificationEmailList,
-      'notificationSentTo must contain one or more valid email addresses separated by commas or semicolons',
-    ),
-    noticePeriodOverride: z.boolean().optional(),
-    noticePeriodOverrideReason: nullableTrimmedStringSchema(1000, 'noticePeriodOverrideReason'),
-  })
-  .superRefine((data, ctx) => {
-    if (data.noticePeriodOverride && !data.noticePeriodOverrideReason) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['noticePeriodOverrideReason'],
-        message: 'noticePeriodOverrideReason is required when noticePeriodOverride is true',
-      });
-    }
-  });
-
-const releaseHoldPointSchema = z.object({
-  releasedByName: optionalTrimmedStringSchema(MAX_NAME_LENGTH, 'releasedByName'),
-  releasedByOrg: optionalTrimmedStringSchema(MAX_ORG_LENGTH, 'releasedByOrg'),
-  releaseDate: nullableReleaseDateSchema,
-  releaseTime: nullableReleaseTimeSchema,
-  releaseMethod: optionalReleaseMethodSchema,
-  releaseNotes: optionalTrimmedStringSchema(MAX_NOTE_LENGTH, 'releaseNotes'),
-  signatureDataUrl: nullableTrimmedStringSchema(MAX_SIGNATURE_DATA_URL_LENGTH, 'signatureDataUrl'),
-});
-
-const escalateSchema = z.object({
-  escalatedTo: optionalTrimmedStringSchema(MAX_NAME_LENGTH, 'escalatedTo'),
-  escalationReason: optionalTrimmedStringSchema(MAX_NOTE_LENGTH, 'escalationReason'),
-});
-
-const calculateNotificationTimeSchema = z.object({
-  projectId: requiredIdSchema('projectId'),
-  requestedDateTime: requiredTrimmedStringSchema('requestedDateTime', MAX_DATE_INPUT_LENGTH),
-});
-
-const previewEvidencePackageSchema = z.object({
-  lotId: requiredIdSchema('lotId'),
-  itpChecklistItemId: requiredIdSchema('itpChecklistItemId'),
-});
-
-const publicReleaseSchema = z.object({
-  releasedByName: requiredTrimmedStringSchema('Released by name', MAX_NAME_LENGTH),
-  releasedByOrg: optionalTrimmedStringSchema(MAX_ORG_LENGTH, 'releasedByOrg'),
-  releaseNotes: optionalTrimmedStringSchema(MAX_NOTE_LENGTH, 'releaseNotes'),
-  signatureDataUrl: nullableTrimmedStringSchema(MAX_SIGNATURE_DATA_URL_LENGTH, 'signatureDataUrl'),
-});
 
 // Secure link expiry time (48 hours)
 const SECURE_LINK_EXPIRY_HOURS = 48;
