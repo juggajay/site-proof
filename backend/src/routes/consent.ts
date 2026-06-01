@@ -5,6 +5,14 @@ import { requireAuth } from '../middleware/authMiddleware.js';
 import { prisma } from '../lib/prisma.js';
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
+import {
+  buildAllConsentsWithdrawnResponse,
+  buildBulkConsentRecordedResponse,
+  buildConsentHistoryResponse,
+  buildConsentRecordedResponse,
+  buildConsentTypesResponse,
+  buildCurrentConsentStatusResponse,
+} from './consent/responses.js';
 import { z } from 'zod';
 
 const router = Router();
@@ -123,10 +131,7 @@ router.get(
       };
     }
 
-    res.json({
-      consents,
-      currentVersions: CONSENT_VERSIONS,
-    });
+    res.json(buildCurrentConsentStatusResponse(consents, CONSENT_VERSIONS));
   }),
 );
 
@@ -156,16 +161,7 @@ router.post(
       },
     });
 
-    res.status(201).json({
-      consentRecord: {
-        id: consentRecord.id,
-        consentType: consentRecord.consentType,
-        granted: consentRecord.granted,
-        version: consentRecord.version,
-        recordedAt: consentRecord.createdAt.toISOString(),
-      },
-      message: granted ? 'Consent granted' : 'Consent withdrawn',
-    });
+    res.status(201).json(buildConsentRecordedResponse(consentRecord, granted));
   }),
 );
 
@@ -199,16 +195,7 @@ router.post(
     const createdRecords =
       createConsentOperations.length > 0 ? await prisma.$transaction(createConsentOperations) : [];
 
-    res.status(201).json({
-      consentRecords: createdRecords.map((record) => ({
-        id: record.id,
-        consentType: record.consentType,
-        granted: record.granted,
-        version: record.version,
-        recordedAt: record.createdAt.toISOString(),
-      })),
-      message: `${createdRecords.length} consent records created`,
-    });
+    res.status(201).json(buildBulkConsentRecordedResponse(createdRecords));
   }),
 );
 
@@ -232,15 +219,7 @@ router.get(
       take: 100,
     });
 
-    res.json({
-      history: history.map((record) => ({
-        id: record.id,
-        consentType: record.consentType,
-        granted: record.granted,
-        version: record.version,
-        recordedAt: record.createdAt.toISOString(),
-      })),
-    });
+    res.json(buildConsentHistoryResponse(history));
   }),
 );
 
@@ -268,23 +247,13 @@ router.post(
       ),
     );
 
-    res.json({
-      message: 'All consents withdrawn',
-      withdrawnCount: withdrawals.length,
-      withdrawnAt: new Date().toISOString(),
-    });
+    res.json(buildAllConsentsWithdrawnResponse(withdrawals.length, new Date()));
   }),
 );
 
 // GET /api/consent/types - Get available consent types and their descriptions
 router.get('/types', async (_req: Request, res: Response) => {
-  res.json({
-    consentTypes: CONSENT_TYPES.map((type) => ({
-      type,
-      version: CONSENT_VERSIONS[type],
-      description: getConsentDescription(type),
-    })),
-  });
+  res.json(buildConsentTypesResponse(CONSENT_TYPES, CONSENT_VERSIONS, getConsentDescription));
 });
 
 function getConsentDescription(consentType: string): string {
