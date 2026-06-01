@@ -39,6 +39,10 @@ import {
 import { confirmExtraction, processBatchConfirm } from './testResults/extractionConfirmation.js';
 import { testTypeSpecifications } from './testResults/specifications.js';
 import {
+  buildTestSpecificationsResponse,
+  mapTestSpecification,
+} from './testResults/specificationResponses.js';
+import {
   buildTestRequestFormMetadata,
   buildVerificationViewData,
   renderTestRequestFormHtml,
@@ -91,12 +95,7 @@ type TestFieldStatus = { value: TestFieldValue; confidence: number; status: stri
 testResultsRouter.get(
   '/specifications',
   asyncHandler(async (_req, res) => {
-    res.json({
-      specifications: Object.entries(testTypeSpecifications).map(([key, spec]) => ({
-        testType: key,
-        ...spec,
-      })),
-    });
+    res.json(buildTestSpecificationsResponse(testTypeSpecifications));
   }),
 );
 
@@ -123,10 +122,7 @@ testResultsRouter.get(
       );
 
       if (partialMatch) {
-        return res.json({
-          testType: partialMatch[0],
-          ...partialMatch[1],
-        });
+        return res.json(mapTestSpecification(partialMatch[0], partialMatch[1]));
       }
 
       throw new AppError(404, `No specification found for test type: ${testType}`, 'NOT_FOUND', {
@@ -134,10 +130,7 @@ testResultsRouter.get(
       });
     }
 
-    res.json({
-      testType: normalizedType,
-      ...spec,
-    });
+    res.json(mapTestSpecification(normalizedType, spec));
   }),
 );
 

@@ -10,17 +10,16 @@
 
 // Test type specifications lookup table
 // Based on Australian road standards (TMR MRTS, RMS QA specs, etc.)
-export const testTypeSpecifications: Record<
-  string,
-  {
-    name: string;
-    description: string;
-    specificationMin: number | null;
-    specificationMax: number | null;
-    unit: string;
-    specReference: string;
-  }
-> = {
+export type TestTypeSpecification = {
+  name: string;
+  description: string;
+  specificationMin: number | null;
+  specificationMax: number | null;
+  unit: string;
+  specReference: string;
+};
+
+export const testTypeSpecifications: Record<string, TestTypeSpecification> = {
   compaction: {
     name: 'Compaction Test',
     description: 'Relative compaction as percentage of maximum dry density',
