@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { mapClaimCreateItem, mapClaimListItem, mapClaimableLot } from './presentation.js';
+import {
+  buildClaimCertifiedResponse,
+  mapClaimCertificationItem,
+  mapClaimCreateItem,
+  mapClaimListItem,
+  mapClaimableLot,
+} from './presentation.js';
 
 describe('mapClaimableLot', () => {
   it('preserves the claimable-lot response shape', () => {
@@ -129,5 +135,52 @@ describe('mapClaimCreateItem', () => {
         _count: { claimedLots: 0 },
       }).totalClaimedAmount,
     ).toBe(0);
+  });
+});
+
+describe('claim certification presentation', () => {
+  const certifiedClaim = {
+    id: 'claim-5',
+    claimNumber: 12,
+    claimPeriodStart: new Date('2026-06-01T10:00:00.000Z'),
+    claimPeriodEnd: new Date('2026-06-30T10:00:00.000Z'),
+    status: 'certified',
+    totalClaimedAmount: '48000.25',
+    certifiedAmount: '47000.10',
+    certifiedAt: new Date('2026-07-02T03:04:05.000Z'),
+    paidAmount: null,
+    claimedLots: [{ id: 'lot-1' }, { id: 'lot-2' }],
+  };
+
+  it('preserves the certified-claim response item shape', () => {
+    expect(
+      mapClaimCertificationItem(certifiedClaim, 'Variation approved', 'certification-document-1'),
+    ).toEqual({
+      id: 'claim-5',
+      claimNumber: 12,
+      periodStart: '2026-06-01',
+      periodEnd: '2026-06-30',
+      status: 'certified',
+      totalClaimedAmount: 48000.25,
+      certifiedAmount: 47000.1,
+      certifiedAt: '2026-07-02T03:04:05.000Z',
+      paidAmount: null,
+      lotCount: 2,
+      variationNotes: 'Variation approved',
+      certificationDocumentId: 'certification-document-1',
+    });
+  });
+
+  it('wraps the certified claim with previous status and success message', () => {
+    expect(buildClaimCertifiedResponse(certifiedClaim, 'submitted', undefined, null)).toMatchObject(
+      {
+        previousStatus: 'submitted',
+        message: 'Claim certified successfully',
+        claim: {
+          variationNotes: null,
+          certificationDocumentId: null,
+        },
+      },
+    );
   });
 });

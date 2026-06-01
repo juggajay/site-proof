@@ -34,6 +34,19 @@ type ClaimCreateItem = {
   };
 };
 
+type ClaimCertificationItem = {
+  id: string;
+  claimNumber: number;
+  claimPeriodStart: Date;
+  claimPeriodEnd: Date;
+  status: string;
+  totalClaimedAmount: unknown;
+  certifiedAmount: unknown;
+  certifiedAt: Date | null;
+  paidAmount: unknown;
+  claimedLots: unknown[];
+};
+
 function formatClaimDateKey(date: Date): string {
   return date.toISOString().split('T')[0];
 }
@@ -76,5 +89,39 @@ export function mapClaimCreateItem(claim: ClaimCreateItem) {
     paidAmount: null,
     submittedAt: null,
     lotCount: claim._count.claimedLots,
+  };
+}
+
+export function mapClaimCertificationItem(
+  claim: ClaimCertificationItem,
+  variationNotes: string | undefined,
+  certificationDocumentId: string | null,
+) {
+  return {
+    id: claim.id,
+    claimNumber: claim.claimNumber,
+    periodStart: formatClaimDateKey(claim.claimPeriodStart),
+    periodEnd: formatClaimDateKey(claim.claimPeriodEnd),
+    status: claim.status,
+    totalClaimedAmount: claim.totalClaimedAmount ? Number(claim.totalClaimedAmount) : 0,
+    certifiedAmount: claim.certifiedAmount ? Number(claim.certifiedAmount) : null,
+    certifiedAt: claim.certifiedAt?.toISOString() || null,
+    paidAmount: claim.paidAmount ? Number(claim.paidAmount) : null,
+    lotCount: claim.claimedLots.length,
+    variationNotes: variationNotes || null,
+    certificationDocumentId,
+  };
+}
+
+export function buildClaimCertifiedResponse(
+  claim: ClaimCertificationItem,
+  previousStatus: string,
+  variationNotes: string | undefined,
+  certificationDocumentId: string | null,
+) {
+  return {
+    claim: mapClaimCertificationItem(claim, variationNotes, certificationDocumentId),
+    previousStatus,
+    message: 'Claim certified successfully',
   };
 }
