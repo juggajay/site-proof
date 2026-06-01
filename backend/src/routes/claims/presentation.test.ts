@@ -1,8 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   buildClaimCertifiedResponse,
   buildClaimDeletedResponse,
   buildClaimDetailResponse,
+  buildClaimEvidencePackageResponse,
+  buildClaimEvidenceReviewResponse,
   buildClaimReadinessResponse,
   buildClaimableLotsResponse,
   buildClaimsListResponse,
@@ -208,6 +210,48 @@ describe('claim collection response helpers', () => {
     expect(buildClaimDetailResponse(claim)).toEqual({ claim });
     expect(buildClaimDeletedResponse()).toEqual({ success: true });
   });
+
+  it('passes claim evidence packages through without wrapping or rewriting them', () => {
+    const evidencePackage = {
+      claimId: 'claim-1',
+      lots: [{ lotId: 'lot-1', evidenceScore: 80 }],
+      generatedAt: '2026-06-01T00:00:00.000Z',
+    };
+
+    expect(buildClaimEvidencePackageResponse(evidencePackage)).toBe(evidencePackage);
+  });
+
+  it('builds claim evidence reviews through the shared readiness helper', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-06-01T02:03:04.000Z'));
+
+    expect(
+      buildClaimEvidenceReviewResponse({
+        id: 'claim-3',
+        claimNumber: 9,
+        totalClaimedAmount: '2500.50',
+        claimedLots: [],
+      }),
+    ).toEqual({
+      claimId: 'claim-3',
+      claimNumber: 9,
+      analyzedAt: '2026-06-01T02:03:04.000Z',
+      summary: {
+        totalLots: 0,
+        readyCount: 0,
+        reviewCount: 0,
+        blockedCount: 0,
+        totalClaimAmount: 2500.5,
+        recommendedAmount: 0,
+      },
+      lots: [],
+      overallSuggestions: [],
+    });
+  });
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe('claim certification presentation', () => {

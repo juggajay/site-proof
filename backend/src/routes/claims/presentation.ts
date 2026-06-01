@@ -1,3 +1,8 @@
+import {
+  buildClaimEvidenceReviewFromInputs,
+  type ClaimEvidenceReviewInput,
+} from '../../lib/evidenceReadiness.js';
+
 type ClaimableLot = {
   id: string;
   lotNumber: string;
@@ -139,6 +144,16 @@ export function buildClaimsListResponse<TClaim>(claims: TClaim[]) {
 
 export function buildClaimDetailResponse<TClaim>(claim: TClaim) {
   return { claim };
+}
+
+export function buildClaimEvidencePackageResponse<TEvidencePackage>(
+  evidencePackage: TEvidencePackage,
+) {
+  return evidencePackage;
+}
+
+export function buildClaimEvidenceReviewResponse(claim: ClaimEvidenceReviewInput['claim']) {
+  return buildClaimEvidenceReviewFromInputs({ claim });
 }
 
 export function buildClaimDeletedResponse() {
