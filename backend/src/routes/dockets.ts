@@ -68,6 +68,7 @@ import {
   buildDocketApprovedResponse,
   resolveDocketApprovedTotals,
 } from './dockets/approvalResponse.js';
+import { buildDocketSubmittedResponse } from './dockets/submissionResponse.js';
 import {
   buildDocketQueriedResponse,
   buildDocketQueryResponseSubmittedResponse,
@@ -504,18 +505,7 @@ docketsRouter.post(
       }
     }
 
-    res.json({
-      message: 'Docket submitted for approval',
-      docket: {
-        id: updatedDocket.id,
-        status: updatedDocket.status,
-        submittedAt: updatedDocket.submittedAt,
-      },
-      notifiedUsers: projectUsers.map((pu) => ({
-        email: pu.user.email,
-        fullName: pu.user.fullName,
-      })),
-    });
+    res.json(buildDocketSubmittedResponse(updatedDocket, projectUsers));
   }),
 );
 
