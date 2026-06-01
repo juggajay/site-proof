@@ -12,6 +12,14 @@ export type MissingDiaryAlertResult = {
   usersNotified: string[];
 };
 
+export type DocketBacklogAlertResult = {
+  projectId: string;
+  projectName: string;
+  docketCount: number;
+  docketIds: string[];
+  usersNotified: string[];
+};
+
 type NotificationUser = {
   id: string;
   email: string;
@@ -64,6 +72,24 @@ export function buildMissingDiaryAlertsResponse(
     success: true,
     missingDate,
     projectsChecked,
+    alertsCreated: alertsCreated.length,
+    uniqueUsersNotified: usersNotified.size,
+    details: alertsCreated,
+  };
+}
+
+export function buildDocketBacklogAlertsResponse(
+  cutoffTime: Date,
+  totalOverdueDockets: number,
+  projectsWithBacklog: number,
+  alertsCreated: DocketBacklogAlertResult[],
+  usersNotified: Set<string>,
+) {
+  return {
+    success: true,
+    cutoffTime: cutoffTime.toISOString(),
+    totalOverdueDockets,
+    projectsWithBacklog,
     alertsCreated: alertsCreated.length,
     uniqueUsersNotified: usersNotified.size,
     details: alertsCreated,

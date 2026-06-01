@@ -97,8 +97,10 @@ import {
 import {
   buildDiaryReminderCheckResponse,
   buildDiaryReminderSendResponse,
+  buildDocketBacklogAlertsResponse,
   buildMissingDiaryAlertsResponse,
   type DiaryReminderResult,
+  type DocketBacklogAlertResult,
   type MissingDiaryAlertResult,
 } from './notifications/diaryReminderResponses.js';
 import {
@@ -129,14 +131,6 @@ export const notificationsRouter = Router();
 
 // Apply authentication middleware to all notification routes
 notificationsRouter.use(requireAuth);
-
-type DocketBacklogAlertResult = {
-  projectId: string;
-  projectName: string;
-  docketCount: number;
-  docketIds: string[];
-  usersNotified: string[];
-};
 
 type SystemAlertResult = {
   type: 'overdue_ncr' | 'stale_hold_point' | 'missing_diary';
@@ -1450,15 +1444,15 @@ notificationsRouter.post(
       }
     }
 
-    res.json({
-      success: true,
-      cutoffTime: cutoffTime.toISOString(),
-      totalOverdueDockets: overdueDockers.length,
-      projectsWithBacklog: docketsByProject.size,
-      alertsCreated: alertsCreated.length,
-      uniqueUsersNotified: usersNotified.size,
-      details: alertsCreated,
-    });
+    res.json(
+      buildDocketBacklogAlertsResponse(
+        cutoffTime,
+        overdueDockers.length,
+        docketsByProject.size,
+        alertsCreated,
+        usersNotified,
+      ),
+    );
   }),
 );
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildDiaryReminderCheckResponse,
   buildDiaryReminderSendResponse,
+  buildDocketBacklogAlertsResponse,
   buildMissingDiaryAlertsResponse,
 } from './diaryReminderResponses.js';
 
@@ -66,6 +67,31 @@ describe('diary reminder responses', () => {
       projectsChecked: 4,
       alertsCreated: 1,
       uniqueUsersNotified: 1,
+      details,
+    });
+  });
+
+  it('preserves the overdue docket backlog alert response shape', () => {
+    const cutoffTime = new Date('2026-06-01T01:02:03.000Z');
+    const details = [
+      {
+        projectId: 'project-1',
+        projectName: 'Gateway Upgrade',
+        docketCount: 2,
+        docketIds: ['docket-1', 'docket-2'],
+        usersNotified: ['pm@example.com'],
+      },
+    ];
+
+    expect(
+      buildDocketBacklogAlertsResponse(cutoffTime, 5, 1, details, new Set(['user-1', 'user-2'])),
+    ).toEqual({
+      success: true,
+      cutoffTime: '2026-06-01T01:02:03.000Z',
+      totalOverdueDockets: 5,
+      projectsWithBacklog: 1,
+      alertsCreated: 1,
+      uniqueUsersNotified: 2,
       details,
     });
   });
