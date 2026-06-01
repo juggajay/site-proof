@@ -8,6 +8,15 @@ import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
 import { logError } from '../lib/serverLogger.js';
 import { isSubcontractorPortalRole } from '../lib/projectAccess.js';
+import {
+  buildGeneratedVapidKeysResponse,
+  buildPushPublicConfigResponse,
+  buildPushServiceStatusResponse,
+  buildPushSubscriptionRegisteredResponse,
+  buildPushSubscriptionsResponse,
+  buildPushTestSendResponse,
+  buildPushUnsubscribedResponse,
+} from './pushNotificationResponses.js';
 
 export const pushNotificationsRouter = Router();
 
@@ -506,10 +515,7 @@ pushNotificationsRouter.get(
       );
     }
 
-    res.json({
-      publicKey: config.keys.publicKey,
-      configured: config.configured,
-    });
+    res.json(buildPushPublicConfigResponse(config.keys.publicKey, config.configured));
   }),
 );
 
@@ -555,11 +561,7 @@ pushNotificationsRouter.post(
       },
     });
 
-    res.json({
-      success: true,
-      message: 'Push notification subscription registered',
-      subscriptionId,
-    });
+    res.json(buildPushSubscriptionRegisteredResponse(subscriptionId));
   }),
 );
 
@@ -590,7 +592,7 @@ pushNotificationsRouter.delete(
       where: { endpoint },
     });
 
-    res.json({ success: true, message: 'Unsubscribed from push notifications' });
+    res.json(buildPushUnsubscribedResponse());
   }),
 );
 
@@ -616,10 +618,7 @@ pushNotificationsRouter.get(
       endpointPreview: subscription.endpoint.substring(0, 50) + '...',
     }));
 
-    res.json({
-      subscriptions: userSubscriptions,
-      count: userSubscriptions.length,
-    });
+    res.json(buildPushSubscriptionsResponse(userSubscriptions));
   }),
 );
 
@@ -707,13 +706,7 @@ pushNotificationsRouter.post(
       }
     }
 
-    const successCount = results.filter((r) => r.success).length;
-
-    res.json({
-      success: successCount > 0,
-      message: `Sent push notification to ${successCount}/${results.length} device(s)`,
-      results,
-    });
+    res.json(buildPushTestSendResponse(results));
   }),
 );
 
@@ -785,18 +778,17 @@ pushNotificationsRouter.get(
           : Promise.resolve(null),
       ]);
 
-    res.json({
-      configured: pushConfig.configured,
-      vapidConfigured: pushConfig.vapidConfigured,
-      usingGeneratedKeys: pushConfig.usingGeneratedKeys,
-      totalSubscriptions: visibleSubscriptionCount,
-      userSubscriptionCount,
-      currentDeviceSubscribed:
-        currentDeviceSubscriptionCount === null ? undefined : currentDeviceSubscriptionCount > 0,
-      message: pushConfig.configured
-        ? 'Push notifications are configured and ready'
-        : 'Push notifications require VAPID keys to be configured',
-    });
+    res.json(
+      buildPushServiceStatusResponse({
+        configured: pushConfig.configured,
+        vapidConfigured: pushConfig.vapidConfigured,
+        usingGeneratedKeys: pushConfig.usingGeneratedKeys,
+        totalSubscriptions: visibleSubscriptionCount,
+        userSubscriptionCount,
+        currentDeviceSubscribed:
+          currentDeviceSubscriptionCount === null ? undefined : currentDeviceSubscriptionCount > 0,
+      }),
+    );
   }),
 );
 
@@ -931,11 +923,6 @@ pushNotificationsRouter.get(
 
     const keys = webpush.generateVAPIDKeys();
 
-    res.json({
-      message: 'New VAPID keys generated. Add these to your .env file:',
-      publicKey: keys.publicKey,
-      privateKey: keys.privateKey,
-      envFormat: `VAPID_PUBLIC_KEY="${keys.publicKey}"\nVAPID_PRIVATE_KEY="${keys.privateKey}"`,
-    });
+    res.json(buildGeneratedVapidKeysResponse(keys.publicKey, keys.privateKey));
   }),
 );
