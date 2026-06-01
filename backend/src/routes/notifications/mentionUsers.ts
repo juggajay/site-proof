@@ -74,3 +74,7 @@ export function buildMentionableProjectFilter(
     ],
   };
 }
+
+export function buildMentionableUsersResponse<TUser>(users: TUser[]) {
+  return { users };
+}

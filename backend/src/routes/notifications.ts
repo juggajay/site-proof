@@ -68,6 +68,7 @@ import { createMentionNotifications } from './notifications/mentions.js';
 import {
   buildMentionableProjectFilter,
   buildMentionableUserFilters,
+  buildMentionableUsersResponse,
 } from './notifications/mentionUsers.js';
 import {
   buildEmailServiceStatus,
@@ -302,7 +303,7 @@ notificationsRouter.get(
       orderBy: [{ fullName: 'asc' }, { email: 'asc' }],
     });
 
-    res.json({ users });
+    res.json(buildMentionableUsersResponse(users));
   }),
 );
 
