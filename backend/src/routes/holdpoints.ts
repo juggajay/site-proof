@@ -49,6 +49,11 @@ import {
   requireProjectRole,
 } from './holdpoints/access.js';
 import { calculateNotificationTime, calculateWorkingDays } from './holdpoints/scheduling.js';
+import {
+  SECURE_LINK_EXPIRY_HOURS,
+  hashHoldPointReleaseToken,
+  holdPointReleaseTokenLookup,
+} from './holdpoints/tokens.js';
 
 // Type for hold point list item
 interface HoldPointListItem {
@@ -75,28 +80,6 @@ interface HoldPointReleaseRecipient {
   fullName: string | null;
   secureToken: string;
   tokenExpiry: Date;
-}
-
-// Secure link expiry time (48 hours)
-const SECURE_LINK_EXPIRY_HOURS = 48;
-const HOLD_POINT_TOKEN_HASH_PREFIX = 'sha256:';
-
-function hashHoldPointReleaseToken(token: string): string {
-  return `${HOLD_POINT_TOKEN_HASH_PREFIX}${crypto.createHash('sha256').update(token).digest('hex')}`;
-}
-
-function holdPointReleaseTokenLookup(rawToken: string): Prisma.HoldPointReleaseTokenWhereInput {
-  const conditions: Prisma.HoldPointReleaseTokenWhereInput[] = [
-    { token: hashHoldPointReleaseToken(rawToken) },
-  ];
-
-  // Legacy plaintext release tokens remain valid until their normal expiry.
-  // Prefixed hashes are never accepted directly as bearer tokens.
-  if (!rawToken.startsWith(HOLD_POINT_TOKEN_HASH_PREFIX)) {
-    conditions.push({ token: rawToken });
-  }
-
-  return { OR: conditions };
 }
 
 const holdpointsRouter = Router();
