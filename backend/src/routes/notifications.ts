@@ -96,6 +96,12 @@ import {
   type DiaryReminderResult,
   type MissingDiaryAlertResult,
 } from './notifications/diaryReminderResponses.js';
+import {
+  buildNotificationReadResponse,
+  buildNotificationSuccessResponse,
+  buildNotificationsListResponse,
+  buildUnreadCountResponse,
+} from './notifications/readResponses.js';
 
 // Re-exported so external modules that import the notification timing type from
 // this route file keep working after the email-preference helper extraction.
@@ -179,7 +185,7 @@ notificationsRouter.get(
       },
     });
 
-    res.json({ notifications, unreadCount });
+    res.json(buildNotificationsListResponse(notifications, unreadCount));
   }),
 );
 
@@ -199,7 +205,7 @@ notificationsRouter.get(
       },
     });
 
-    res.json({ count });
+    res.json(buildUnreadCountResponse(count));
   }),
 );
 
@@ -231,7 +237,7 @@ notificationsRouter.put(
       data: { isRead: true },
     });
 
-    res.json({ notification: updated });
+    res.json(buildNotificationReadResponse(updated));
   }),
 );
 
@@ -252,7 +258,7 @@ notificationsRouter.put(
       data: { isRead: true },
     });
 
-    res.json({ success: true });
+    res.json(buildNotificationSuccessResponse());
   }),
 );
 
@@ -557,7 +563,7 @@ notificationsRouter.delete(
       where: { id },
     });
 
-    res.json({ success: true });
+    res.json(buildNotificationSuccessResponse());
   }),
 );
 
