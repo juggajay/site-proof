@@ -81,6 +81,7 @@ import {
 import {
   buildDigestItemAddedResponse,
   buildDigestItemFromBody,
+  buildDigestQueueClearedResponse,
   buildDigestQueueResponse,
   buildDigestSentResponse,
 } from './notifications/digestResponses.js';
@@ -533,7 +534,7 @@ notificationsRouter.delete(
 
     await clearDigestItems(userId);
 
-    res.json({ success: true, message: 'Digest queue cleared' });
+    res.json(buildDigestQueueClearedResponse());
   }),
 );
 
