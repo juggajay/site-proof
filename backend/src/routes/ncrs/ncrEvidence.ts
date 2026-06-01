@@ -15,6 +15,12 @@ import {
   requireNcrResponsibleOrProjectRole,
 } from './ncrAccess.js';
 import { isStoredDocumentUploadPath } from '../../lib/uploadPaths.js';
+import {
+  buildNcrEvidenceAddedResponse,
+  buildNcrEvidenceAlreadyLinkedResponse,
+  buildNcrEvidenceListResponse,
+  buildNcrEvidenceRemovedResponse,
+} from './ncrEvidenceResponses.js';
 
 const MAX_DOCUMENT_FILE_SIZE_BYTES = 2_147_483_647;
 const MAX_EVIDENCE_TYPE_LENGTH = 80;
@@ -186,10 +192,7 @@ ncrEvidenceRouter.post(
     });
 
     if (existingEvidence) {
-      res.json({
-        evidence: existingEvidence,
-        message: 'Evidence already linked to NCR',
-      });
+      res.json(buildNcrEvidenceAlreadyLinkedResponse(existingEvidence));
       return;
     }
 
@@ -227,10 +230,7 @@ ncrEvidenceRouter.post(
       req,
     });
 
-    res.status(201).json({
-      evidence,
-      message: 'Evidence added to NCR successfully',
-    });
+    res.status(201).json(buildNcrEvidenceAddedResponse(evidence));
   }),
 );
 
@@ -271,23 +271,7 @@ ncrEvidenceRouter.get(
       orderBy: { uploadedAt: 'desc' },
     });
 
-    // Group by evidence type
-    const grouped = {
-      photos: evidence.filter((e) => e.evidenceType === 'photo'),
-      certificates: evidence.filter(
-        (e) => e.evidenceType === 'certificate' || e.evidenceType === 'retest_certificate',
-      ),
-      documents: evidence.filter(
-        (e) => !['photo', 'certificate', 'retest_certificate'].includes(e.evidenceType),
-      ),
-      all: evidence,
-    };
-
-    res.json({
-      evidence: grouped.all,
-      grouped,
-      count: evidence.length,
-    });
+    res.json(buildNcrEvidenceListResponse(evidence));
   }),
 );
 
@@ -352,6 +336,6 @@ ncrEvidenceRouter.delete(
       req,
     });
 
-    res.json({ message: 'Evidence removed successfully' });
+    res.json(buildNcrEvidenceRemovedResponse());
   }),
 );
