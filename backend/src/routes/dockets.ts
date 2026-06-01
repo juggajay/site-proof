@@ -41,6 +41,11 @@ import {
   refreshLabourSubmittedTotals,
   refreshPlantSubmittedTotals,
 } from './dockets/entryTotals.js';
+import {
+  formatDocketDate,
+  formatDocketNumber,
+  formatDocketUserName,
+} from './dockets/formatting.js';
 import type { Prisma } from '@prisma/client';
 
 export const docketsRouter = Router();
@@ -118,10 +123,10 @@ docketsRouter.get(
     // Format dockets for response
     const formattedDockets = dockets.map((docket) => ({
       id: docket.id,
-      docketNumber: `DKT-${docket.id.slice(0, 6).toUpperCase()}`,
+      docketNumber: formatDocketNumber(docket.id),
       subcontractor: docket.subcontractorCompany.companyName,
       subcontractorId: docket.subcontractorCompany.id,
-      date: docket.date.toISOString().split('T')[0],
+      date: formatDocketDate(docket.date),
       status: docket.status,
       notes: docket.notes,
       labourHours: docket.labourEntries.reduce(
@@ -206,9 +211,9 @@ docketsRouter.post(
     res.status(201).json({
       docket: {
         id: docket.id,
-        docketNumber: `DKT-${docket.id.slice(0, 6).toUpperCase()}`,
+        docketNumber: formatDocketNumber(docket.id),
         subcontractor: docket.subcontractorCompany.companyName,
-        date: docket.date.toISOString().split('T')[0],
+        date: formatDocketDate(docket.date),
         status: docket.status,
         labourHours: Number(docket.totalLabourSubmitted) || 0,
         plantHours: Number(docket.totalPlantSubmitted) || 0,
@@ -297,7 +302,7 @@ docketsRouter.get(
 
       foremanDiary = {
         id: diary.id,
-        date: diary.date.toISOString().split('T')[0],
+        date: formatDocketDate(diary.date),
         status: diary.status,
         personnelCount: diary.personnel.length,
         plantCount: diary.plant.length,
@@ -393,8 +398,8 @@ docketsRouter.get(
     res.json({
       docket: {
         id: docket.id,
-        docketNumber: `DKT-${docket.id.slice(0, 6).toUpperCase()}`,
-        date: docket.date.toISOString().split('T')[0],
+        docketNumber: formatDocketNumber(docket.id),
+        date: formatDocketDate(docket.date),
         status: docket.status,
         projectId: docket.projectId,
         project,
@@ -470,8 +475,8 @@ docketsRouter.patch(
     res.json({
       docket: {
         id: updatedDocket.id,
-        docketNumber: `DKT-${updatedDocket.id.slice(0, 6).toUpperCase()}`,
-        date: updatedDocket.date.toISOString().split('T')[0],
+        docketNumber: formatDocketNumber(updatedDocket.id),
+        date: formatDocketDate(updatedDocket.date),
         status: updatedDocket.status,
         notes: updatedDocket.notes,
         foremanNotes: updatedDocket.foremanNotes,
@@ -557,7 +562,7 @@ docketsRouter.post(
       entityId: docket.id,
       action: AuditAction.DOCKET_SUBMITTED,
       changes: {
-        docketNumber: `DKT-${docket.id.slice(0, 6).toUpperCase()}`,
+        docketNumber: formatDocketNumber(docket.id),
         status: { from: docket.status, to: updatedDocket.status },
         subcontractorCompanyId: docket.subcontractorCompanyId,
         subcontractorCompanyName: docket.subcontractorCompany.companyName,
@@ -589,8 +594,8 @@ docketsRouter.post(
     });
 
     // Create in-app notifications for approvers
-    const docketNumber = `DKT-${docket.id.slice(0, 6).toUpperCase()}`;
-    const docketDate = docket.date.toISOString().split('T')[0];
+    const docketNumber = formatDocketNumber(docket.id);
+    const docketDate = formatDocketDate(docket.date);
     const subcontractorName = docket.subcontractorCompany.companyName;
 
     const notificationsToCreate = projectUsers.map((pu) => ({
@@ -707,7 +712,7 @@ docketsRouter.post(
       entityId: docket.id,
       action: AuditAction.DOCKET_APPROVED,
       changes: {
-        docketNumber: `DKT-${docket.id.slice(0, 6).toUpperCase()}`,
+        docketNumber: formatDocketNumber(docket.id),
         status: { from: docket.status, to: updatedDocket.status },
         foremanNotes,
         adjustmentReason,
@@ -802,9 +807,9 @@ docketsRouter.post(
     // === END DIARY AUTO-POPULATION ===
 
     // Feature #927 - Notify subcontractor users about docket approval
-    const docketNumber = `DKT-${docket.id.slice(0, 6).toUpperCase()}`;
-    const docketDate = docket.date.toISOString().split('T')[0];
-    const approverName = user.fullName || user.email;
+    const docketNumber = formatDocketNumber(docket.id);
+    const docketDate = formatDocketDate(docket.date);
+    const approverName = formatDocketUserName(user);
 
     // Get all subcontractor users linked to this subcontractor company
     const subcontractorUserLinks = await prisma.subcontractorUser.findMany({
@@ -857,7 +862,7 @@ docketsRouter.post(
       message: 'Docket approved successfully',
       docket: {
         id: updatedDocket.id,
-        docketNumber: `DKT-${updatedDocket.id.slice(0, 6).toUpperCase()}`,
+        docketNumber: formatDocketNumber(updatedDocket.id),
         subcontractor: updatedDocket.subcontractorCompany.companyName,
         status: updatedDocket.status,
         approvedAt: updatedDocket.approvedAt,
@@ -923,7 +928,7 @@ docketsRouter.post(
       entityId: docket.id,
       action: AuditAction.DOCKET_REJECTED,
       changes: {
-        docketNumber: `DKT-${docket.id.slice(0, 6).toUpperCase()}`,
+        docketNumber: formatDocketNumber(docket.id),
         status: { from: docket.status, to: updatedDocket.status },
         reason,
       },
@@ -931,9 +936,9 @@ docketsRouter.post(
     });
 
     // Feature #928 - Notify subcontractor users about docket rejection
-    const docketNumber = `DKT-${docket.id.slice(0, 6).toUpperCase()}`;
-    const docketDate = docket.date.toISOString().split('T')[0];
-    const rejectorName = user.fullName || user.email;
+    const docketNumber = formatDocketNumber(docket.id);
+    const docketDate = formatDocketDate(docket.date);
+    const rejectorName = formatDocketUserName(user);
 
     // Get all subcontractor users linked to this subcontractor company
     const subcontractorUserLinks = await prisma.subcontractorUser.findMany({
@@ -1054,7 +1059,7 @@ docketsRouter.post(
       entityId: docket.id,
       action: AuditAction.DOCKET_QUERIED,
       changes: {
-        docketNumber: `DKT-${docket.id.slice(0, 6).toUpperCase()}`,
+        docketNumber: formatDocketNumber(docket.id),
         status: { from: docket.status, to: updatedDocket.status },
         questionLength: questions.length,
       },
@@ -1062,9 +1067,9 @@ docketsRouter.post(
     });
 
     // Step 6 - Notify subcontractor users
-    const docketNumber = `DKT-${docket.id.slice(0, 6).toUpperCase()}`;
-    const docketDate = docket.date.toISOString().split('T')[0];
-    const querierName = user.fullName || user.email;
+    const docketNumber = formatDocketNumber(docket.id);
+    const docketDate = formatDocketDate(docket.date);
+    const querierName = formatDocketUserName(user);
 
     // Get all subcontractor users linked to this subcontractor company
     const subcontractorUserLinks = await prisma.subcontractorUser.findMany({
@@ -1187,7 +1192,7 @@ docketsRouter.post(
       entityId: docket.id,
       action: AuditAction.DOCKET_QUERY_RESPONDED,
       changes: {
-        docketNumber: `DKT-${docket.id.slice(0, 6).toUpperCase()}`,
+        docketNumber: formatDocketNumber(docket.id),
         status: { from: docket.status, to: updatedDocket.status },
         responseLength: response.length,
       },
@@ -1195,9 +1200,9 @@ docketsRouter.post(
     });
 
     // Notify project approvers about the response
-    const docketNumber = `DKT-${docket.id.slice(0, 6).toUpperCase()}`;
-    const docketDate = docket.date.toISOString().split('T')[0];
-    const responderName = user.fullName || user.email;
+    const docketNumber = formatDocketNumber(docket.id);
+    const docketDate = formatDocketDate(docket.date);
+    const responderName = formatDocketUserName(user);
 
     const projectUsers = await prisma.projectUser.findMany({
       where: {
