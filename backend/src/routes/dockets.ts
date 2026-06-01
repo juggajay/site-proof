@@ -52,6 +52,13 @@ import {
   sumDocketLabourTotals,
   sumDocketPlantTotals,
 } from './dockets/presentation.js';
+import {
+  buildDocketApprovedNotifications,
+  buildDocketQueriedNotifications,
+  buildDocketQueryResponseNotification,
+  buildDocketRejectedNotifications,
+  buildDocketSubmittedNotifications,
+} from './dockets/notifications.js';
 import type { Prisma } from '@prisma/client';
 
 export const docketsRouter = Router();
@@ -569,13 +576,18 @@ docketsRouter.post(
     const docketDate = formatDocketDate(docket.date);
     const subcontractorName = docket.subcontractorCompany.companyName;
 
+    const { inApp: submittedInApp, email: submittedEmail } = buildDocketSubmittedNotifications({
+      projectId: docket.projectId,
+      projectName: docket.project.name,
+      docketNumber,
+      docketDate,
+      subcontractorName,
+      pendingCount,
+    });
+
     const notificationsToCreate = projectUsers.map((pu) => ({
       userId: pu.userId,
-      projectId: docket.projectId,
-      type: 'docket_pending',
-      title: 'Docket Pending Approval',
-      message: `${subcontractorName} has submitted docket ${docketNumber} (${docketDate}) for approval. ${pendingCount} docket${pendingCount !== 1 ? 's' : ''} pending.`,
-      linkUrl: `/projects/${docket.projectId}/dockets`,
+      ...submittedInApp,
     }));
 
     if (notificationsToCreate.length > 0) {
@@ -587,12 +599,7 @@ docketsRouter.post(
     // Send email notifications to approvers (if configured)
     for (const pu of projectUsers) {
       try {
-        await sendNotificationIfEnabled(pu.userId, 'enabled', {
-          title: 'Docket Pending Approval',
-          message: `${subcontractorName} has submitted docket ${docketNumber} (${docketDate}) for approval.\n\nProject: ${docket.project.name}\nPending Dockets: ${pendingCount}\n\nPlease review and approve at your earliest convenience.`,
-          projectName: docket.project.name,
-          linkUrl: `/projects/${docket.projectId}/dockets`,
-        });
+        await sendNotificationIfEnabled(pu.userId, 'enabled', submittedEmail);
       } catch {
         // Non-critical: don't fail the main request if email fails
       }
@@ -800,13 +807,19 @@ docketsRouter.post(
         : [];
 
     // Create notifications for subcontractor users
+    const { inApp: approvedInApp, email: approvedEmail } = buildDocketApprovedNotifications({
+      projectId: docket.projectId,
+      projectName: docket.project.name,
+      docketNumber,
+      docketDate,
+      approverName,
+      foremanNotes,
+      adjustmentReason,
+    });
+
     const notificationsToCreate = subcontractorUsers.map((su) => ({
       userId: su.id,
-      projectId: docket.projectId,
-      type: 'docket_approved',
-      title: 'Docket Approved',
-      message: `Your docket ${docketNumber} (${docketDate}) has been approved by ${approverName}. Status: Approved${adjustmentReason ? ` (with adjustments)` : ''}.`,
-      linkUrl: `/projects/${docket.projectId}/dockets`,
+      ...approvedInApp,
     }));
 
     if (notificationsToCreate.length > 0) {
@@ -818,12 +831,7 @@ docketsRouter.post(
     // Send email notifications to subcontractor users
     for (const su of subcontractorUsers) {
       try {
-        await sendNotificationIfEnabled(su.id, 'enabled', {
-          title: 'Docket Approved',
-          message: `Your docket ${docketNumber} (${docketDate}) has been approved by ${approverName}.\n\nProject: ${docket.project.name}\nStatus: Approved\n${foremanNotes ? `Notes: ${foremanNotes}` : ''}\n${adjustmentReason ? `Adjustment Reason: ${adjustmentReason}` : ''}`,
-          projectName: docket.project.name,
-          linkUrl: `/projects/${docket.projectId}/dockets`,
-        });
+        await sendNotificationIfEnabled(su.id, 'enabled', approvedEmail);
       } catch {
         // Non-critical: don't fail the main request if email fails
       }
@@ -929,13 +937,18 @@ docketsRouter.post(
         : [];
 
     // Create notifications for subcontractor users
+    const { inApp: rejectedInApp, email: rejectedEmail } = buildDocketRejectedNotifications({
+      projectId: docket.projectId,
+      projectName: docket.project.name,
+      docketNumber,
+      docketDate,
+      rejectorName,
+      reason,
+    });
+
     const notificationsToCreate = subcontractorUsers.map((su) => ({
       userId: su.id,
-      projectId: docket.projectId,
-      type: 'docket_rejected',
-      title: 'Docket Rejected',
-      message: `Your docket ${docketNumber} (${docketDate}) has been rejected by ${rejectorName}.${reason ? ` Reason: ${reason}` : ''}`,
-      linkUrl: `/projects/${docket.projectId}/dockets`,
+      ...rejectedInApp,
     }));
 
     if (notificationsToCreate.length > 0) {
@@ -947,12 +960,7 @@ docketsRouter.post(
     // Send email notifications to subcontractor users
     for (const su of subcontractorUsers) {
       try {
-        await sendNotificationIfEnabled(su.id, 'enabled', {
-          title: 'Docket Rejected',
-          message: `Your docket ${docketNumber} (${docketDate}) has been rejected by ${rejectorName}.\n\nProject: ${docket.project.name}\nStatus: Rejected\n${reason ? `Reason: ${reason}` : 'No reason provided.'}\n\nPlease review and resubmit if necessary.`,
-          projectName: docket.project.name,
-          linkUrl: `/projects/${docket.projectId}/dockets`,
-        });
+        await sendNotificationIfEnabled(su.id, 'enabled', rejectedEmail);
       } catch {
         // Non-critical: don't fail the main request if email fails
       }
@@ -1059,13 +1067,18 @@ docketsRouter.post(
         : [];
 
     // Create notifications for subcontractor users
+    const { inApp: queriedInApp, email: queriedEmail } = buildDocketQueriedNotifications({
+      projectId: docket.projectId,
+      projectName: docket.project.name,
+      docketNumber,
+      docketDate,
+      querierName,
+      questions,
+    });
+
     const notificationsToCreate = subcontractorUsers.map((su) => ({
       userId: su.id,
-      projectId: docket.projectId,
-      type: 'docket_queried',
-      title: 'Docket Query',
-      message: `${querierName} has raised a query on docket ${docketNumber} (${docketDate}).\n\nQuestions: ${questions.substring(0, 200)}${questions.length > 200 ? '...' : ''}\n\nPlease review and respond or amend the docket.`,
-      linkUrl: `/projects/${docket.projectId}/dockets`,
+      ...queriedInApp,
     }));
 
     if (notificationsToCreate.length > 0) {
@@ -1077,12 +1090,7 @@ docketsRouter.post(
     // Send email notifications to subcontractor users
     for (const su of subcontractorUsers) {
       try {
-        await sendNotificationIfEnabled(su.id, 'enabled', {
-          title: 'Docket Query - Response Required',
-          message: `${querierName} has raised a query on docket ${docketNumber} (${docketDate}).\n\nProject: ${docket.project.name}\n\nQuestions/Issues:\n${questions}\n\nPlease review and respond or amend the docket.`,
-          projectName: docket.project.name,
-          linkUrl: `/projects/${docket.projectId}/dockets`,
-        });
+        await sendNotificationIfEnabled(su.id, 'enabled', queriedEmail);
       } catch {
         // Non-critical: don't fail the main request if email fails
       }
@@ -1186,13 +1194,17 @@ docketsRouter.post(
       },
     });
 
+    const { inApp: queryResponseInApp } = buildDocketQueryResponseNotification({
+      projectId: docket.projectId,
+      docketNumber,
+      docketDate,
+      responderName,
+      response,
+    });
+
     const notificationsToCreate = projectUsers.map((pu) => ({
       userId: pu.userId,
-      projectId: docket.projectId,
-      type: 'docket_query_response',
-      title: 'Docket Query Response',
-      message: `${responderName} has responded to the query on docket ${docketNumber} (${docketDate}).\n\nResponse: ${response.substring(0, 200)}${response.length > 200 ? '...' : ''}\n\nThe docket is ready for review.`,
-      linkUrl: `/projects/${docket.projectId}/dockets`,
+      ...queryResponseInApp,
     }));
 
     if (notificationsToCreate.length > 0) {
