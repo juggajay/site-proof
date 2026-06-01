@@ -19,6 +19,11 @@ import { checkConformancePrerequisites } from '../lib/conformancePrerequisites.j
 import { getEffectiveProjectRole } from '../lib/projectAccess.js';
 import {
   buildClaimCertifiedResponse,
+  buildClaimDeletedResponse,
+  buildClaimDetailResponse,
+  buildClaimReadinessResponse,
+  buildClaimableLotsResponse,
+  buildClaimsListResponse,
   buildClaimPaymentRecordedResponse,
   mapClaimCreateItem,
   mapClaimListItem,
@@ -520,7 +525,7 @@ router.get(
 
     const transformedLots = lots.map((lot) => mapClaimableLot(lot));
 
-    res.json({ lots: transformedLots });
+    res.json(buildClaimableLotsResponse(transformedLots));
   }),
 );
 
@@ -618,7 +623,7 @@ router.get(
       }),
     );
 
-    res.json({ lots: readinessLots });
+    res.json(buildClaimReadinessResponse(readinessLots));
   }),
 );
 
@@ -641,7 +646,7 @@ router.get(
 
     const transformedClaims = claims.map((claim) => mapClaimListItem(claim));
 
-    res.json({ claims: transformedClaims });
+    res.json(buildClaimsListResponse(transformedClaims));
   }),
 );
 
@@ -671,7 +676,7 @@ router.get(
       throw AppError.notFound('Claim');
     }
 
-    res.json({ claim });
+    res.json(buildClaimDetailResponse(claim));
   }),
 );
 
@@ -1931,7 +1936,7 @@ router.delete(
       where: { id: claimId },
     });
 
-    res.json({ success: true });
+    res.json(buildClaimDeletedResponse());
   }),
 );
 

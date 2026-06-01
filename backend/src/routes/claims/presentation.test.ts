@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildClaimCertifiedResponse,
+  buildClaimDeletedResponse,
+  buildClaimDetailResponse,
+  buildClaimReadinessResponse,
+  buildClaimableLotsResponse,
+  buildClaimsListResponse,
   buildClaimPaymentRecordedResponse,
   mapClaimCertificationItem,
   mapClaimCreateItem,
@@ -183,6 +188,25 @@ describe('mapClaimReadinessItem', () => {
         },
       ).claim,
     ).toBe(claim);
+  });
+});
+
+describe('claim collection response helpers', () => {
+  it('wraps claimable lots, readiness lots, and claim lists under their existing keys', () => {
+    const lots = [{ id: 'lot-1' }];
+    const readinessLots = [{ lotId: 'lot-1' }];
+    const claims = [{ id: 'claim-1' }];
+
+    expect(buildClaimableLotsResponse(lots)).toEqual({ lots });
+    expect(buildClaimReadinessResponse(readinessLots)).toEqual({ lots: readinessLots });
+    expect(buildClaimsListResponse(claims)).toEqual({ claims });
+  });
+
+  it('wraps claim detail and delete responses without changing contracts', () => {
+    const claim = { id: 'claim-2', status: 'draft' };
+
+    expect(buildClaimDetailResponse(claim)).toEqual({ claim });
+    expect(buildClaimDeletedResponse()).toEqual({ success: true });
   });
 });
 
