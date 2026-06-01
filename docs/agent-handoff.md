@@ -1,6 +1,6 @@
 # Agent Handoff
 
-Last updated: 2026-05-29
+Last updated: 2026-06-01
 
 This file is the tracked handoff for the current SiteProof workstream. It is
 intended for a fresh agent starting from `master`.
@@ -9,7 +9,7 @@ intended for a fresh agent starting from `master`.
 
 - Current branch: `master`
 - Current app-code baseline when this handoff refresh was last updated:
-  `8c7ce06 test: characterize lot delete blockers (#278)`
+  `7ddec84 refactor(lots): move ITP completion mutations into useItpInstance (#316)`
 - Expected local status after syncing: clean tracked tree, with `.deepsec/`
   possibly present as an untracked local audit workspace.
 - Do not commit `.deepsec/`, `.gstack/`, browser profiles, backup dumps,
@@ -472,7 +472,8 @@ fresh production recheck proves otherwise:
 
 ### Product Strategy Docs And Codebase Health
 
-Status: active, with the first code-health wave merged through PR #278.
+Status: active; the code-health wave has continued on `master` through PR #316
+(testResults route split, ITP hook extraction, more PDF/test characterization).
 
 Product context docs:
 
@@ -523,15 +524,37 @@ Dashboard and lot-detail frontend refactors:
 - PR #277 started the `LotDetailPage` low-risk extraction sequence by moving
   pure ITP evidence helpers and override status constants out of the page.
 
-Current large-file pressure after this wave:
+Refactor wave since PR #278 (now merged to `master` through #316):
 
-- `backend/src/routes/lots.ts` is still ~2,926 lines.
-- `backend/src/routes/testResults.ts` is still ~2,903 lines.
-- `frontend/src/pages/lots/LotDetailPage.tsx` is still ~2,291 lines.
-- Former targets `frontend/src/lib/pdfGenerator.ts`,
-  `frontend/src/pages/lots/LotsPage.tsx`, and
-  `frontend/src/pages/diary/DailyDiaryPage.tsx` are no longer primary
-  oversized files.
+- `backend/src/routes/testResults.ts` was split into a `routes/testResults/`
+  folder of 11 focused files (validation, access control, certificate intake/
+  storage/extraction, corrections, presentation, status workflow,
+  specifications); the main route is down to ~1,500 lines.
+- `frontend/src/pages/lots/LotDetailPage.tsx` is down to ~1,463 lines after
+  further component/hook extraction, including `useItpInstance` (#313, #316).
+- More PDF and backend characterization coverage landed (hold-point and claim
+  evidence-package PDFs, test-result access control).
+
+Current large-file pressure (counts as of 2026-06-01, `master` @ `7ddec84`;
+the still-monolithic backend routes now dominate — re-measure before picking
+one):
+
+- `backend/src/routes/holdpoints.ts` ~2,825, `notifications.ts` ~2,807,
+  `lots.ts` ~2,802, `auth.ts` ~2,476, `dockets.ts` ~2,364 — all single files.
+- `backend/src/lib/email.ts` ~1,640 and `lib/notificationAutomation.ts` ~1,527.
+- Former targets `testResults.ts`, `pdfGenerator.ts`, `LotsPage.tsx`, and
+  `DailyDiaryPage.tsx` are no longer primary oversized files.
+
+These targets and the phase rules come from the **2026-06-01 engineering-health
+roadmap**, the prioritized plan for this phase. In Workstream order it covers:
+(1) split the giant backend route files (highest priority), (2) unify frontend
+data-fetching on TanStack Query, (3) close testing gaps + add a coverage floor,
+(4) consolidate the duplicate `ci.yml`/`test.yml` workflows, (5) small cleanups,
+(6) refresh stale docs. Every PR must be behavior-preserving (no schema/API/UI
+changes), one domain per PR, with tests green before and after. The roadmap is
+framed as groundwork for a future AI/agentic layer; no AI features are built in
+this phase. (The roadmap currently lives as Jay's external planning doc dated
+2026-06-01, not yet a tracked file in this repo.)
 
 Current merge discipline:
 
