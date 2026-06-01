@@ -24,6 +24,8 @@ import {
 import { buildProjectEntityLink } from './notifications/links.js';
 import {
   type NotificationTiming,
+  buildEmailPreferencesResponse,
+  buildEmailPreferencesUpdatedResponse,
   getEmailPreferences,
   normalizeEmailPreferences,
   saveEmailPreferences,
@@ -314,7 +316,7 @@ notificationsRouter.get(
 
     const preferences = await getEmailPreferences(userId);
 
-    res.json({ preferences });
+    res.json(buildEmailPreferencesResponse(preferences));
   }),
 );
 
@@ -330,7 +332,7 @@ notificationsRouter.put(
     const validatedPreferences = normalizeEmailPreferences(req.body.preferences);
     const savedPreferences = await saveEmailPreferences(userId, validatedPreferences);
 
-    res.json({ preferences: savedPreferences, message: 'Email preferences updated' });
+    res.json(buildEmailPreferencesUpdatedResponse(savedPreferences));
   }),
 );
 

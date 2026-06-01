@@ -126,6 +126,17 @@ export function toEmailPreferences(
   return normalizeEmailPreferences(record);
 }
 
+export function buildEmailPreferencesResponse(preferences: EmailPreferences) {
+  return { preferences };
+}
+
+export function buildEmailPreferencesUpdatedResponse(preferences: EmailPreferences) {
+  return {
+    preferences,
+    message: 'Email preferences updated',
+  };
+}
+
 export async function getEmailPreferences(userId: string): Promise<EmailPreferences> {
   const preferences = await prisma.notificationEmailPreference.findUnique({
     where: { userId },
