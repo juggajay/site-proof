@@ -82,6 +82,10 @@ import {
   selectHoldPointReleaseContractors,
   selectHoldPointReleaseSuperintendents,
 } from './holdpoints/releaseConfirmationEmails.js';
+import {
+  buildHoldPointChaseEmail,
+  selectHoldPointChaseRecipients,
+} from './holdpoints/chaseNotifications.js';
 
 interface HoldPointReleaseRecipient {
   email: string;
@@ -943,10 +947,11 @@ holdpointsRouter.post(
         },
       });
 
-      // If no superintendents, also check for project managers
-      const recipientsToNotify =
+      // If no superintendents, also check for project managers. Keep the lookup
+      // lazy: project managers are only queried when there are no superintendents.
+      const projectManagers: typeof superintendents =
         superintendents.length > 0
-          ? superintendents
+          ? []
           : await prisma.projectUser.findMany({
               where: {
                 projectId: existingHP.lot.project.id,
@@ -957,9 +962,7 @@ holdpointsRouter.post(
                 user: { select: { id: true, email: true, fullName: true } },
               },
             });
-
-      // Get the original requester info (from who created the HP request)
-      const requestedBy = existingHP.notificationSentTo || 'Site Team';
+      const recipientsToNotify = selectHoldPointChaseRecipients(superintendents, projectManagers);
 
       const releaseUrl = buildFrontendUrl(
         `/projects/${existingHP.lot.project.id}/lots/${existingHP.lot.id}?tab=itp`,
@@ -980,20 +983,20 @@ holdpointsRouter.post(
         day: 'numeric',
       });
 
+      const chaseContext = {
+        projectName: existingHP.lot.project.name,
+        lotNumber: existingHP.lot.lotNumber,
+        holdPointDescription: existingHP.description,
+        originalRequestDate: formattedRequestDate,
+        chaseCount: holdPoint.chaseCount,
+        daysSinceRequest,
+        evidencePackageUrl,
+        releaseUrl,
+        notificationSentTo: existingHP.notificationSentTo,
+      };
+
       for (const recipient of recipientsToNotify) {
-        await sendHPChaseEmail({
-          to: recipient.user.email,
-          superintendentName: recipient.user.fullName || 'Superintendent',
-          projectName: existingHP.lot.project.name,
-          lotNumber: existingHP.lot.lotNumber,
-          holdPointDescription: existingHP.description || 'Hold Point',
-          originalRequestDate: formattedRequestDate,
-          chaseCount: holdPoint.chaseCount || 1,
-          daysSinceRequest,
-          evidencePackageUrl,
-          releaseUrl,
-          requestedBy,
-        });
+        await sendHPChaseEmail(buildHoldPointChaseEmail(recipient, chaseContext));
       }
     } catch (emailError) {
       logError('[HP Chase] Failed to send chase email:', emailError);
