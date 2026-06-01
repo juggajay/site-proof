@@ -54,6 +54,7 @@ import {
   sumDocketLabourTotals,
   sumDocketPlantTotals,
 } from './dockets/presentation.js';
+import { assertDocketSubmittable } from './dockets/submissionGuards.js';
 import {
   buildDocketApprovedNotifications,
   buildDocketQueriedNotifications,
@@ -410,35 +411,7 @@ docketsRouter.post(
     }
     await requireDocketSubcontractorAccess(user, docket);
 
-    if (!['draft', 'rejected'].includes(docket.status)) {
-      throw AppError.badRequest('Only draft or rejected dockets can be submitted');
-    }
-
-    // Feature #891: Require at least one entry before submission
-    const hasLabourEntries = docket.labourEntries && docket.labourEntries.length > 0;
-    const hasPlantEntries = docket.plantEntries && docket.plantEntries.length > 0;
-    if (!hasLabourEntries && !hasPlantEntries) {
-      throw new AppError(
-        400,
-        'At least one labour or plant entry is required before submitting the docket.',
-        'ENTRY_REQUIRED',
-      );
-    }
-
-    // Feature #890: Require lot selection for docket submission
-    // Check if docket has labour entries that need lot allocation
-    if (docket.labourEntries.length > 0) {
-      const hasAnyLotAllocation = docket.labourEntries.some(
-        (entry) => entry.lotAllocations && entry.lotAllocations.length > 0,
-      );
-      if (!hasAnyLotAllocation) {
-        throw new AppError(
-          400,
-          'At least one labour entry must be allocated to a lot before submitting the docket.',
-          'LOT_REQUIRED',
-        );
-      }
-    }
+    assertDocketSubmittable(docket);
 
     const updatedDocket = await prisma.dailyDocket.update({
       where: { id },
