@@ -36,69 +36,12 @@ import {
   parseOptionalDocketStatus,
   parseDocketDate,
 } from './dockets/validation.js';
+import {
+  lockDocketForEntryMutation,
+  refreshLabourSubmittedTotals,
+  refreshPlantSubmittedTotals,
+} from './dockets/entryTotals.js';
 import type { Prisma } from '@prisma/client';
-
-type DocketEntryMutationTx = Prisma.TransactionClient;
-
-async function lockDocketForEntryMutation(
-  tx: DocketEntryMutationTx,
-  docketId: string,
-): Promise<void> {
-  await tx.$queryRaw<Array<{ id: string }>>`
-    SELECT id
-    FROM daily_dockets
-    WHERE id = ${docketId}
-    FOR UPDATE
-  `;
-}
-
-async function refreshLabourSubmittedTotals(
-  tx: DocketEntryMutationTx,
-  docketId: string,
-): Promise<{ hours: number; cost: number }> {
-  const aggregate = await tx.docketLabour.aggregate({
-    where: { docketId },
-    _sum: {
-      submittedHours: true,
-      submittedCost: true,
-    },
-  });
-  const hours = Number(aggregate._sum.submittedHours) || 0;
-  const cost = Number(aggregate._sum.submittedCost) || 0;
-
-  await tx.dailyDocket.update({
-    where: { id: docketId },
-    data: {
-      totalLabourSubmitted: cost,
-    },
-  });
-
-  return { hours, cost };
-}
-
-async function refreshPlantSubmittedTotals(
-  tx: DocketEntryMutationTx,
-  docketId: string,
-): Promise<{ hours: number; cost: number }> {
-  const aggregate = await tx.docketPlant.aggregate({
-    where: { docketId },
-    _sum: {
-      hoursOperated: true,
-      submittedCost: true,
-    },
-  });
-  const hours = Number(aggregate._sum.hoursOperated) || 0;
-  const cost = Number(aggregate._sum.submittedCost) || 0;
-
-  await tx.dailyDocket.update({
-    where: { id: docketId },
-    data: {
-      totalPlantSubmitted: cost,
-    },
-  });
-
-  return { hours, cost };
-}
 
 export const docketsRouter = Router();
 
