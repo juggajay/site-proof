@@ -24,7 +24,6 @@ import {
   parseNotificationEmailList,
   parseHPDefaultRecipients,
   parseHPProjectSettings,
-  requiresSuperintendentApproval,
   requestReleaseSchema,
   releaseHoldPointSchema,
   escalateSchema,
@@ -54,6 +53,10 @@ import {
   hashHoldPointReleaseToken,
   holdPointReleaseTokenLookup,
 } from './holdpoints/tokens.js';
+import {
+  HP_SUPERINTENDENT_RELEASE_ROLES,
+  requireSuperintendentApprovalRecipients,
+} from './holdpoints/superintendentRecipients.js';
 
 // Type for hold point list item
 interface HoldPointListItem {
@@ -85,7 +88,6 @@ interface HoldPointReleaseRecipient {
 const holdpointsRouter = Router();
 
 const HP_RELEASE_ROLES = [...HP_REQUEST_ROLES, 'superintendent'];
-const HP_SUPERINTENDENT_RELEASE_ROLES = ['owner', 'admin', 'project_manager', 'superintendent'];
 const HP_ESCALATION_ROLES = [
   'owner',
   'admin',
@@ -93,84 +95,6 @@ const HP_ESCALATION_ROLES = [
   'quality_manager',
   'superintendent',
 ];
-type HoldPointNotificationRecipient = {
-  email: string;
-  fullName: string | null;
-};
-
-async function getEligibleSuperintendentReleaseRecipients(projectId: string) {
-  const project = await prisma.project.findUnique({
-    where: { id: projectId },
-    select: { companyId: true },
-  });
-
-  if (!project) {
-    throw AppError.notFound('Project');
-  }
-
-  const [projectUsers, companyAdmins] = await Promise.all([
-    prisma.projectUser.findMany({
-      where: {
-        projectId,
-        status: 'active',
-        role: { in: HP_SUPERINTENDENT_RELEASE_ROLES },
-      },
-      include: {
-        user: { select: { email: true, fullName: true } },
-      },
-    }),
-    prisma.user.findMany({
-      where: {
-        companyId: project.companyId,
-        roleInCompany: { in: ['owner', 'admin'] },
-      },
-      select: { email: true, fullName: true },
-    }),
-  ]);
-
-  const eligibleByEmail = new Map<string, HoldPointNotificationRecipient>();
-
-  for (const projectUser of projectUsers) {
-    eligibleByEmail.set(projectUser.user.email.toLowerCase(), {
-      email: projectUser.user.email,
-      fullName: projectUser.user.fullName,
-    });
-  }
-
-  for (const companyAdmin of companyAdmins) {
-    eligibleByEmail.set(companyAdmin.email.toLowerCase(), {
-      email: companyAdmin.email,
-      fullName: companyAdmin.fullName,
-    });
-  }
-
-  return eligibleByEmail;
-}
-
-async function requireSuperintendentApprovalRecipients(
-  projectId: string,
-  settings: HPProjectSettings,
-  recipients: HoldPointNotificationRecipient[],
-): Promise<HoldPointNotificationRecipient[]> {
-  if (!requiresSuperintendentApproval(settings) || recipients.length === 0) {
-    return recipients;
-  }
-
-  const eligibleByEmail = await getEligibleSuperintendentReleaseRecipients(projectId);
-
-  const resolvedRecipients = recipients.map((recipient) => {
-    const eligibleRecipient = eligibleByEmail.get(recipient.email.trim().toLowerCase());
-    if (!eligibleRecipient) {
-      throw AppError.forbidden(
-        'This project requires superintendent approval to release hold points.',
-      );
-    }
-
-    return eligibleRecipient;
-  });
-
-  return resolvedRecipients;
-}
 
 function parseHoldPointRouteParam(
   value: unknown,
