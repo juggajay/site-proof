@@ -24,6 +24,13 @@ import {
   verifyAndConsumeMfaBackupCode,
 } from '../lib/mfaBackupCodes.js';
 import { AuditAction, createAuditLog } from '../lib/auditLog.js';
+import {
+  buildMfaDisabledResponse,
+  buildMfaSetupResponse,
+  buildMfaSetupVerifiedResponse,
+  buildMfaStatusResponse,
+  buildMfaVerifiedResponse,
+} from './mfa/responses.js';
 
 export const mfaRouter = Router();
 
@@ -109,9 +116,7 @@ mfaRouter.get(
       throw AppError.notFound('User');
     }
 
-    res.json({
-      mfaEnabled: Boolean(user.two_factor_enabled),
-    });
+    res.json(buildMfaStatusResponse(Boolean(user.two_factor_enabled)));
   }),
 );
 
@@ -160,12 +165,7 @@ mfaRouter.post(
     // Generate QR code as data URL
     const qrCodeDataUrl = await QRCode.toDataURL(otpAuthUrl);
 
-    res.json({
-      secret,
-      qrCode: qrCodeDataUrl,
-      otpAuthUrl,
-      message: 'Scan the QR code with your authenticator app, then verify with a code.',
-    });
+    res.json(buildMfaSetupResponse(secret, qrCodeDataUrl, otpAuthUrl));
   }),
 );
 
@@ -226,11 +226,7 @@ mfaRouter.post(
       req,
     });
 
-    res.json({
-      success: true,
-      message: 'Two-factor authentication has been enabled successfully.',
-      backupCodes,
-    });
+    res.json(buildMfaSetupVerifiedResponse(backupCodes));
   }),
 );
 
@@ -320,10 +316,7 @@ mfaRouter.post(
       req,
     });
 
-    res.json({
-      success: true,
-      message: 'Two-factor authentication has been disabled.',
-    });
+    res.json(buildMfaDisabledResponse());
   }),
 );
 
@@ -386,8 +379,6 @@ mfaRouter.post(
 
     await clearFailedAuthAttempts(clientIp, normalizedUserId);
 
-    res.json({
-      valid: true,
-    });
+    res.json(buildMfaVerifiedResponse());
   }),
 );
