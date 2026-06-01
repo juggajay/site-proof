@@ -75,6 +75,7 @@ import {
 } from './lots/suggestNumber.js';
 import { presentLotList } from './lots/listPresentation.js';
 import { shapeLotDetailResponse } from './lots/detailPresentation.js';
+import { prepareClonedLot } from './lots/cloneHelpers.js';
 
 export const lotsRouter = Router();
 
@@ -690,45 +691,20 @@ lotsRouter.post(
       'You do not have permission to create lots in this project.',
     );
 
-    // Calculate suggested adjacent chainage if not provided
-    let suggestedChainageStart = chainageStart;
-    let suggestedChainageEnd = chainageEnd;
-
-    if (suggestedChainageStart === undefined && sourceLot.chainageEnd !== null) {
-      // Suggest next section starting from where the original ended
-      suggestedChainageStart = Number(sourceLot.chainageEnd);
-      if (sourceLot.chainageStart !== null) {
-        const sectionLength = Number(sourceLot.chainageEnd) - Number(sourceLot.chainageStart);
-        suggestedChainageEnd = Number(suggestedChainageStart) + sectionLength;
-      }
-    }
-
-    // If no lotNumber provided, generate a suggestion
-    let newLotNumber = lotNumber;
-    if (!newLotNumber) {
-      // Try to increment the lot number (e.g., LOT-001 -> LOT-002)
-      const match = sourceLot.lotNumber.match(/^(.*)(\d+)$/);
-      if (match) {
-        const prefix = match[1];
-        const num = parseInt(match[2], 10);
-        const paddedNum = String(num + 1).padStart(match[2].length, '0');
-        newLotNumber = `${prefix}${paddedNum}`;
-      } else {
-        newLotNumber = `${sourceLot.lotNumber}-copy`;
-      }
-    }
-
-    const finalChainageStart =
-      suggestedChainageStart !== undefined ? suggestedChainageStart : sourceLot.chainageStart;
-    const finalChainageEnd =
-      suggestedChainageEnd !== undefined ? suggestedChainageEnd : sourceLot.chainageEnd;
-    if (
-      finalChainageStart !== null &&
-      finalChainageEnd !== null &&
-      Number(finalChainageStart) > Number(finalChainageEnd)
-    ) {
-      throw AppError.badRequest('chainageStart must be less than or equal to chainageEnd');
-    }
+    // Compute the cloned lot number + final chainage (suggestion, increment,
+    // and range validation), keeping the route's DB/transaction work below.
+    const {
+      lotNumber: newLotNumber,
+      chainageStart: finalChainageStart,
+      chainageEnd: finalChainageEnd,
+    } = prepareClonedLot({
+      provided: { lotNumber, chainageStart, chainageEnd },
+      source: {
+        lotNumber: sourceLot.lotNumber,
+        chainageStart: sourceLot.chainageStart,
+        chainageEnd: sourceLot.chainageEnd,
+      },
+    });
 
     // Create the cloned lot and keep legacy/new subcontractor assignment state aligned.
     const clonedLot = await prisma.$transaction(async (tx) => {
