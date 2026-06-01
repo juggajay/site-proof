@@ -37,6 +37,7 @@ import {
   processCertificateUpload,
 } from './testResults/certificateIntake.js';
 import { confirmExtraction, processBatchConfirm } from './testResults/extractionConfirmation.js';
+import { buildLaboratoriesResponse } from './testResults/laboratoryResponses.js';
 import { testTypeSpecifications } from './testResults/specifications.js';
 import {
   buildTestSpecificationsResponse,
@@ -157,14 +158,14 @@ testResultsRouter.get(
       const assignedLotIds = await getAssignedSubcontractorLotIds(projectId, user);
       if (assignedLotIds !== null) {
         if (assignedLotIds.length === 0) {
-          return res.json({ laboratories: [] });
+          return res.json(buildLaboratoriesResponse([]));
         }
         whereClause.lotId = { in: assignedLotIds };
       }
     } else {
       let readableProjectIds = await getReadableProjectIds(user);
       if (readableProjectIds.length === 0) {
-        return res.json({ laboratories: [] });
+        return res.json(buildLaboratoriesResponse([]));
       }
 
       if (isSubcontractorUser(user)) {
@@ -182,7 +183,7 @@ testResultsRouter.get(
 
         readableProjectIds = portalEnabledProjectIds;
         if (readableProjectIds.length === 0) {
-          return res.json({ laboratories: [] });
+          return res.json(buildLaboratoriesResponse([]));
         }
       }
 
@@ -195,7 +196,7 @@ testResultsRouter.get(
         );
         const assignedLotIds = [...new Set(assignedLotIdSets.flatMap((lotIds) => lotIds ?? []))];
         if (assignedLotIds.length === 0) {
-          return res.json({ laboratories: [] });
+          return res.json(buildLaboratoriesResponse([]));
         }
         whereClause.lotId = { in: assignedLotIds };
       }
@@ -224,11 +225,7 @@ testResultsRouter.get(
       take: 20,
     });
 
-    const laboratories = recentLabs
-      .filter((lab) => lab.laboratoryName)
-      .map((lab) => lab.laboratoryName);
-
-    res.json({ laboratories });
+    res.json(buildLaboratoriesResponse(recentLabs.map((lab) => lab.laboratoryName)));
   }),
 );
 
