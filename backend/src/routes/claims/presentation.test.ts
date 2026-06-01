@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mapClaimListItem, mapClaimableLot } from './presentation.js';
+import { mapClaimCreateItem, mapClaimListItem, mapClaimableLot } from './presentation.js';
 
 describe('mapClaimableLot', () => {
   it('preserves the claimable-lot response shape', () => {
@@ -88,5 +88,46 @@ describe('mapClaimListItem', () => {
       disputedAt: null,
       lotCount: 0,
     });
+  });
+});
+
+describe('mapClaimCreateItem', () => {
+  it('preserves the claim-created response shape expected by the frontend', () => {
+    expect(
+      mapClaimCreateItem({
+        id: 'claim-3',
+        claimNumber: 9,
+        claimPeriodStart: new Date('2026-06-01T12:00:00.000Z'),
+        claimPeriodEnd: new Date('2026-06-30T12:00:00.000Z'),
+        status: 'draft',
+        totalClaimedAmount: '250000.40',
+        _count: { claimedLots: 2 },
+      }),
+    ).toEqual({
+      id: 'claim-3',
+      claimNumber: 9,
+      periodStart: '2026-06-01',
+      periodEnd: '2026-06-30',
+      status: 'draft',
+      totalClaimedAmount: 250000.4,
+      certifiedAmount: null,
+      paidAmount: null,
+      submittedAt: null,
+      lotCount: 2,
+    });
+  });
+
+  it('falls back nullish created-claim totals to zero', () => {
+    expect(
+      mapClaimCreateItem({
+        id: 'claim-4',
+        claimNumber: 10,
+        claimPeriodStart: new Date('2026-06-01T12:00:00.000Z'),
+        claimPeriodEnd: new Date('2026-06-30T12:00:00.000Z'),
+        status: 'draft',
+        totalClaimedAmount: null,
+        _count: { claimedLots: 0 },
+      }).totalClaimedAmount,
+    ).toBe(0);
   });
 });
