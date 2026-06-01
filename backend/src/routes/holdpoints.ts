@@ -96,6 +96,10 @@ import {
   buildHoldPointReleasedResponse,
   buildHoldPointReleaseRequestedResponse,
 } from './holdpoints/actionResponses.js';
+import {
+  buildNotificationTimeResponse,
+  buildProjectWorkingHoursResponse,
+} from './holdpoints/workingHoursResponses.js';
 
 interface HoldPointReleaseRecipient {
   email: string;
@@ -1306,17 +1310,7 @@ holdpointsRouter.post(
       project.workingDays || '1,2,3,4,5',
     );
 
-    res.json({
-      requestedDateTime: requestedDate.toISOString(),
-      scheduledNotificationTime: result.scheduledTime.toISOString(),
-      adjustedForWorkingHours: result.adjustedForWorkingHours,
-      adjustmentReason: result.reason,
-      workingHours: {
-        start: project.workingHoursStart || '07:00',
-        end: project.workingHoursEnd || '17:00',
-        days: project.workingDays || '1,2,3,4,5',
-      },
-    });
+    res.json(buildNotificationTimeResponse(requestedDate, result, project));
   }),
 );
 
@@ -1344,21 +1338,7 @@ holdpointsRouter.get(
 
     await requireInternalProjectReadAccess(projectId, req.user!);
 
-    // Parse working days to human-readable format
-    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    const workingDaysList = (project.workingDays || '1,2,3,4,5').split(',').map(Number);
-    const workingDayNames = workingDaysList.map((d) => dayNames[d]);
-
-    res.json({
-      projectId: project.id,
-      projectName: project.name,
-      workingHours: {
-        start: project.workingHoursStart || '07:00',
-        end: project.workingHoursEnd || '17:00',
-        days: project.workingDays || '1,2,3,4,5',
-        dayNames: workingDayNames,
-      },
-    });
+    res.json(buildProjectWorkingHoursResponse(project));
   }),
 );
 
