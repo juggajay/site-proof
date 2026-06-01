@@ -85,6 +85,13 @@ import {
   buildAlertsListResponse,
   buildAlertTestEscalatedResponse,
 } from './notifications/alertResponses.js';
+import {
+  buildDiaryReminderCheckResponse,
+  buildDiaryReminderSendResponse,
+  buildMissingDiaryAlertsResponse,
+  type DiaryReminderResult,
+  type MissingDiaryAlertResult,
+} from './notifications/diaryReminderResponses.js';
 
 // Re-exported so external modules that import the notification timing type from
 // this route file keep working after the email-preference helper extraction.
@@ -107,20 +114,6 @@ export const notificationsRouter = Router();
 
 // Apply authentication middleware to all notification routes
 notificationsRouter.use(requireAuth);
-
-type DiaryReminderResult = {
-  projectId: string;
-  projectName: string;
-  date: string;
-  usersNotified: string[];
-};
-
-type MissingDiaryAlertResult = {
-  projectId: string;
-  projectName: string;
-  missingDate: string;
-  usersNotified: string[];
-};
 
 type DocketBacklogAlertResult = {
   projectId: string;
@@ -1087,14 +1080,9 @@ notificationsRouter.post(
       }
     }
 
-    res.json({
-      success: true,
-      date: dateString,
-      projectsChecked: projects.length,
-      remindersCreated: remindersCreated.length,
-      uniqueUsersNotified: usersNotified.size,
-      details: remindersCreated,
-    });
+    res.json(
+      buildDiaryReminderCheckResponse(dateString, projects.length, remindersCreated, usersNotified),
+    );
   }),
 );
 
@@ -1173,14 +1161,9 @@ notificationsRouter.post(
       }
     }
 
-    res.json({
-      success: true,
-      projectId: project.id,
-      projectName: project.name,
-      date: dateString,
-      usersNotified: users.map((u) => ({ id: u.id, email: u.email })),
-      notificationCount: notificationsToCreate.length,
-    });
+    res.json(
+      buildDiaryReminderSendResponse(project, dateString, users, notificationsToCreate.length),
+    );
   }),
 );
 
@@ -1305,14 +1288,14 @@ notificationsRouter.post(
       }
     }
 
-    res.json({
-      success: true,
-      missingDate: yesterdayString,
-      projectsChecked: projects.length,
-      alertsCreated: alertsCreated.length,
-      uniqueUsersNotified: usersNotified.size,
-      details: alertsCreated,
-    });
+    res.json(
+      buildMissingDiaryAlertsResponse(
+        yesterdayString,
+        projects.length,
+        alertsCreated,
+        usersNotified,
+      ),
+    );
   }),
 );
 
