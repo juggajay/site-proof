@@ -12,7 +12,7 @@ import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { ensureUploadSubdirectory, resolveUploadPath } from '../lib/uploadPaths.js';
 import { assertUploadedFileMatchesDeclaredType } from '../lib/imageValidation.js';
-import { getPaginationMeta, getPrismaSkipTake, parsePagination } from '../lib/pagination.js';
+import { getPrismaSkipTake, parsePagination } from '../lib/pagination.js';
 import { logError, logWarn } from '../lib/serverLogger.js';
 import { getEffectiveProjectRole } from '../lib/projectAccess.js';
 import {
@@ -22,6 +22,7 @@ import {
   getSupabaseStoragePath,
   isSupabaseConfigured,
 } from '../lib/supabase.js';
+import { buildCurrentDrawingSetResponse, buildDrawingListResponse } from './drawings/responses.js';
 
 const DRAWINGS_STORAGE_PREFIX = 'drawings';
 
@@ -462,11 +463,7 @@ router.get(
       asBuilt,
     };
 
-    res.json({
-      drawings,
-      stats,
-      pagination: getPaginationMeta(total, page, limit),
-    });
+    res.json(buildDrawingListResponse(drawings, stats, page, limit));
   }),
 );
 
@@ -889,22 +886,7 @@ router.get(
       orderBy: [{ drawingNumber: 'asc' }, { revision: 'desc' }],
     });
 
-    // Return the list of current drawings with download info
-    res.json({
-      drawings: currentDrawings.map((d) => ({
-        id: d.id,
-        documentId: d.document.id,
-        drawingNumber: d.drawingNumber,
-        title: d.title,
-        revision: d.revision,
-        status: d.status,
-        fileUrl: d.document.fileUrl,
-        filename: d.document.filename,
-        fileSize: d.document.fileSize,
-      })),
-      totalCount: currentDrawingCount,
-      totalSize: currentDrawings.reduce((sum, d) => sum + (d.document.fileSize || 0), 0),
-    });
+    res.json(buildCurrentDrawingSetResponse(currentDrawings, currentDrawingCount));
   }),
 );
 
