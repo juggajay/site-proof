@@ -24,6 +24,17 @@ import {
   hasSubcontractorPortalModuleAccess,
   type SubcontractorPortalAccessKey,
 } from '../lib/projectAccess.js';
+import {
+  MAX_NOTIFICATION_FILTER_LENGTH,
+  MAX_NOTIFICATION_MESSAGE_LENGTH,
+  MAX_NOTIFICATION_TITLE_LENGTH,
+  appendQueryParams,
+  parseNotificationPagination,
+  parseNotificationRouteId,
+  parseOptionalDate,
+  parseOptionalString,
+  parseRequiredString,
+} from './notifications/validation.js';
 
 export const notificationsRouter = Router();
 
@@ -33,11 +44,6 @@ notificationsRouter.use(requireAuth);
 type AuthUser = NonNullable<Express.Request['user']>;
 const NOTIFICATION_ADMIN_ROLES = ['owner', 'admin', 'project_manager'];
 const SUBCONTRACTOR_NOTIFICATION_ROLES = new Set(['subcontractor', 'subcontractor_admin']);
-const DEFAULT_NOTIFICATION_LIMIT = 20;
-const MAX_NOTIFICATION_LIMIT = 100;
-const MAX_NOTIFICATION_FILTER_LENGTH = 120;
-const MAX_NOTIFICATION_TITLE_LENGTH = 200;
-const MAX_NOTIFICATION_MESSAGE_LENGTH = 2000;
 
 type DiaryReminderResult = {
   projectId: string;
@@ -120,116 +126,6 @@ function getSubcontractorAlertPortalTarget(
     default:
       return null;
   }
-}
-
-function parseOptionalString(
-  value: unknown,
-  fieldName: string,
-  maxLength = MAX_NOTIFICATION_FILTER_LENGTH,
-): string | undefined {
-  if (value === undefined || value === null || value === '') {
-    return undefined;
-  }
-
-  if (typeof value !== 'string') {
-    throw AppError.badRequest(`${fieldName} must be a string`);
-  }
-
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return undefined;
-  }
-
-  if (trimmed.length > maxLength) {
-    throw AppError.badRequest(`${fieldName} must be ${maxLength} characters or less`);
-  }
-
-  return trimmed;
-}
-
-function parseRequiredString(value: unknown, fieldName: string, maxLength: number): string {
-  const parsed = parseOptionalString(value, fieldName, maxLength);
-  if (!parsed) {
-    throw AppError.badRequest(`${fieldName} is required`);
-  }
-
-  return parsed;
-}
-
-function parseNotificationRouteId(value: unknown, fieldName = 'id'): string {
-  return parseRequiredString(value, fieldName, MAX_NOTIFICATION_FILTER_LENGTH);
-}
-
-function parseNonNegativeInteger(value: unknown, fieldName: string, defaultValue: number): number {
-  if (value === undefined || value === null || value === '') {
-    return defaultValue;
-  }
-
-  if (typeof value !== 'string' || !/^\d+$/.test(value)) {
-    throw AppError.badRequest(`${fieldName} must be a non-negative integer`);
-  }
-
-  const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed)) {
-    throw AppError.badRequest(`${fieldName} is too large`);
-  }
-
-  return parsed;
-}
-
-function parseNotificationPagination(query: Record<string, unknown>): {
-  limit: number;
-  offset: number;
-} {
-  const rawLimit = parseNonNegativeInteger(query.limit, 'limit', DEFAULT_NOTIFICATION_LIMIT);
-  if (rawLimit < 1) {
-    throw AppError.badRequest('limit must be greater than 0');
-  }
-
-  return {
-    limit: Math.min(rawLimit, MAX_NOTIFICATION_LIMIT),
-    offset: parseNonNegativeInteger(query.offset, 'offset', 0),
-  };
-}
-
-function parseOptionalDate(value: unknown, fieldName: string): Date | undefined {
-  const rawValue = parseOptionalString(value, fieldName, 10);
-  if (!rawValue) {
-    return undefined;
-  }
-
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(rawValue);
-  if (!match) {
-    throw AppError.badRequest(`${fieldName} must be a date in YYYY-MM-DD format`);
-  }
-
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-  const parsed = new Date(Date.UTC(year, month - 1, day));
-
-  if (
-    parsed.getUTCFullYear() !== year ||
-    parsed.getUTCMonth() !== month - 1 ||
-    parsed.getUTCDate() !== day
-  ) {
-    throw AppError.badRequest(`${fieldName} must be a valid date`);
-  }
-
-  parsed.setUTCHours(0, 0, 0, 0);
-  return parsed;
-}
-
-function appendQueryParams(pathname: string, params?: Record<string, string | undefined>): string {
-  const query = new URLSearchParams();
-  Object.entries(params ?? {}).forEach(([key, value]) => {
-    if (value) {
-      query.set(key, value);
-    }
-  });
-
-  const queryString = query.toString();
-  return queryString ? `${pathname}?${queryString}` : pathname;
 }
 
 function buildProjectEntityLink(
