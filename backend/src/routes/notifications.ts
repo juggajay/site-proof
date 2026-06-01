@@ -68,6 +68,11 @@ import {
   buildMentionableProjectFilter,
   buildMentionableUserFilters,
 } from './notifications/mentionUsers.js';
+import {
+  buildEmailServiceStatus,
+  buildTestEmailPayload,
+  buildTestEmailSuccessResponse,
+} from './notifications/emailDiagnostics.js';
 
 // Re-exported so external modules that import the notification timing type from
 // this route file keep working after the email-preference helper extraction.
@@ -341,25 +346,14 @@ notificationsRouter.post(
     }
 
     // Send test email
-    const result = await sendNotificationEmail(user.email, 'test', {
-      title: 'Test Notification',
-      message:
-        'This is a test email notification from SiteProof. If you received this email, your email notifications are configured correctly!',
-      userName: user.fullName || 'SiteProof System',
-      linkUrl: '/settings',
-    });
+    const result = await sendNotificationEmail(
+      user.email,
+      'test',
+      buildTestEmailPayload(user.fullName),
+    );
 
     if (result.success) {
-      res.json({
-        success: true,
-        message:
-          result.provider === 'resend'
-            ? 'Test email sent successfully via Resend API'
-            : 'Test email logged to console (Resend API not configured)',
-        messageId: result.messageId,
-        sentTo: user.email,
-        provider: result.provider || 'mock',
-      });
+      res.json(buildTestEmailSuccessResponse(result, user.email));
     } else {
       throw AppError.internal('Failed to send test email');
     }
@@ -382,25 +376,14 @@ notificationsRouter.get(
     const productionMisconfigured =
       process.env.NODE_ENV === 'production' && emailEnabled && !resendConfigured;
 
-    res.json({
-      provider: resendConfigured ? 'resend' : mockEmailEnabled ? 'mock' : null,
-      resendConfigured,
-      emailEnabled,
-      status: resendConfigured
-        ? 'ready'
-        : productionMisconfigured
-          ? 'misconfigured'
-          : mockEmailEnabled
-            ? 'development'
-            : 'disabled',
-      message: resendConfigured
-        ? 'Resend API is configured and emails will be delivered to real recipients.'
-        : productionMisconfigured
-          ? 'Email delivery is not configured. Set a valid RESEND_API_KEY before using production email workflows.'
-          : mockEmailEnabled
-            ? 'Mock email is enabled for development. Emails are logged to console only.'
-            : 'Email delivery is not configured.',
-    });
+    res.json(
+      buildEmailServiceStatus({
+        resendConfigured,
+        emailEnabled,
+        mockEmailEnabled,
+        productionMisconfigured,
+      }),
+    );
   }),
 );
 
