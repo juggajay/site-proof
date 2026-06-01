@@ -20,7 +20,14 @@ import {
 import { ensureUploadSubdirectoryAsync, resolveUploadPath } from '../lib/uploadPaths.js';
 import { assertUploadedFileMatchesDeclaredType } from '../lib/imageValidation.js';
 import { logError, logWarn } from '../lib/serverLogger.js';
-import { getPaginationMeta, getPrismaSkipTake, parsePagination } from '../lib/pagination.js';
+import { getPrismaSkipTake, parsePagination } from '../lib/pagination.js';
+import {
+  buildCommentAttachmentsCreatedResponse,
+  buildCommentListResponse,
+  buildCommentMutationResponse,
+  buildCommentSuccessResponse,
+  buildUploadedCommentAttachmentsResponse,
+} from './comments/responses.js';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -678,7 +685,7 @@ commentsRouter.get(
       prisma.comment.count({ where }),
     ]);
 
-    res.json({ comments, pagination: getPaginationMeta(total, page, limit) });
+    res.json(buildCommentListResponse(comments, total, page, limit));
   }),
 );
 
@@ -796,7 +803,7 @@ commentsRouter.post(
 
     const attachments = await storeCommentAttachmentFiles(files, projectId);
 
-    res.status(201).json({ attachments });
+    res.status(201).json(buildUploadedCommentAttachmentsResponse(attachments));
   }),
 );
 
@@ -955,7 +962,7 @@ commentsRouter.post(
       logError('Error creating mention notifications:', notifError);
     }
 
-    res.status(201).json({ comment });
+    res.status(201).json(buildCommentMutationResponse(comment));
   }),
 );
 
@@ -1007,7 +1014,7 @@ commentsRouter.put(
       },
     });
 
-    res.json({ comment });
+    res.json(buildCommentMutationResponse(comment));
   }),
 );
 
@@ -1072,7 +1079,7 @@ commentsRouter.delete(
       }),
     );
 
-    res.json({ success: true });
+    res.json(buildCommentSuccessResponse());
   }),
 );
 
@@ -1150,10 +1157,11 @@ commentsRouter.post(
       },
     });
 
-    res.status(201).json({
-      count: created.count,
-      attachments: updatedComment?.attachments || [],
-    });
+    res
+      .status(201)
+      .json(
+        buildCommentAttachmentsCreatedResponse(created.count, updatedComment?.attachments || []),
+      );
   }),
 );
 
@@ -1211,6 +1219,6 @@ commentsRouter.delete(
       logWarn('Failed to remove comment attachment file after attachment delete:', cleanupError);
     }
 
-    res.json({ success: true });
+    res.json(buildCommentSuccessResponse());
   }),
 );
