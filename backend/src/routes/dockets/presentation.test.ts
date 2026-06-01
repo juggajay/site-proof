@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildDocketDetailResponse,
+  buildDocketEntryDeletedResponse,
+  buildDocketLabourEntriesResponse,
+  buildDocketListResponse,
+  buildDocketPlantEntriesResponse,
   mapDocketLabourEntry,
   mapDocketListItem,
   mapDocketPlantEntry,
@@ -379,6 +383,62 @@ describe('dockets presentation helpers (pure)', () => {
       expect(result.subcontractorId).toBe('sc-1');
       expect(result.docketNumber).toBe('DKT-FF00AA');
       expect(result.date).toBe('2026-12-31'); // UTC-based, TZ-stable
+    });
+  });
+
+  describe('response envelopes', () => {
+    it('builds the docket list response with the backward-compatible dockets alias', () => {
+      const docket = mapDocketListItem(listSource);
+      const pagination = {
+        total: 1,
+        page: 1,
+        limit: 20,
+        totalPages: 1,
+        hasNextPage: false,
+        hasPrevPage: false,
+      };
+
+      expect(buildDocketListResponse([docket], pagination)).toStrictEqual({
+        data: [docket],
+        pagination,
+        dockets: [docket],
+      });
+    });
+
+    it('builds labour and plant entry list responses with derived totals', () => {
+      const labourEntry = mapDocketLabourEntry(labourSource, {
+        includeAdjustmentReason: true,
+      });
+      const plantEntry = mapDocketPlantEntry(plantSource, {
+        includeAdjustmentReason: true,
+      });
+
+      expect(buildDocketLabourEntriesResponse([labourEntry])).toStrictEqual({
+        labourEntries: [labourEntry],
+        totals: {
+          submittedHours: 8,
+          submittedCost: 400,
+          approvedHours: 7.5,
+          approvedCost: 375,
+        },
+      });
+      expect(buildDocketPlantEntriesResponse([plantEntry])).toStrictEqual({
+        plantEntries: [plantEntry],
+        totals: {
+          hours: 6,
+          submittedCost: 900,
+          approvedCost: 880,
+        },
+      });
+    });
+
+    it('builds entry deletion message envelopes', () => {
+      expect(buildDocketEntryDeletedResponse('Labour entry deleted')).toStrictEqual({
+        message: 'Labour entry deleted',
+      });
+      expect(buildDocketEntryDeletedResponse('Plant entry deleted')).toStrictEqual({
+        message: 'Plant entry deleted',
+      });
     });
   });
 

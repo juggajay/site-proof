@@ -202,6 +202,41 @@ export function mapDocketListItem(docket: DocketListItemSource) {
   };
 }
 
+export function buildDocketListResponse(
+  dockets: ReturnType<typeof mapDocketListItem>[],
+  pagination: unknown,
+) {
+  return {
+    data: dockets,
+    pagination,
+    dockets,
+  };
+}
+
+export function buildDocketLabourEntriesResponse(
+  labourEntries: Array<ReturnType<typeof mapDocketLabourEntry>>,
+) {
+  return {
+    labourEntries,
+    totals: sumDocketLabourTotals(labourEntries),
+  };
+}
+
+export function buildDocketPlantEntriesResponse(
+  plantEntries: Array<ReturnType<typeof mapDocketPlantEntry>>,
+) {
+  return {
+    plantEntries,
+    totals: sumDocketPlantTotals(plantEntries),
+  };
+}
+
+export function buildDocketEntryDeletedResponse(
+  message: 'Labour entry deleted' | 'Plant entry deleted',
+) {
+  return { message };
+}
+
 // =============================================================================
 // Docket detail presentation: assembles the full `GET /api/dockets/:id` response
 // body — the `docket` object (reusing the labour/plant entry mappers above),
