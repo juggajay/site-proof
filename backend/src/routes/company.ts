@@ -24,6 +24,15 @@ import {
   getSupabaseStoragePath,
   isSupabaseConfigured,
 } from '../lib/supabase.js';
+import {
+  buildCompanyCreatedResponse,
+  buildCompanyLeftResponse,
+  buildCompanyLogoUploadedResponse,
+  buildCompanyMembersResponse,
+  buildCompanyOwnershipTransferredResponse,
+  buildCompanyProfileResponse,
+  buildCompanyUpdatedResponse,
+} from './company/responses.js';
 
 const COMPANY_LOGO_STORAGE_PREFIX = 'company-logos';
 
@@ -475,21 +484,7 @@ companyRouter.post(
       req,
     });
 
-    res.status(201).json({
-      company,
-      user: {
-        id: updatedUser.id,
-        email: updatedUser.email,
-        fullName: updatedUser.fullName,
-        phone: updatedUser.phone,
-        role: updatedUser.roleInCompany,
-        roleInCompany: updatedUser.roleInCompany,
-        companyId: updatedUser.companyId,
-        companyName: company.name,
-        avatarUrl: updatedUser.avatarUrl,
-        hasPassword: Boolean(updatedUser.passwordHash),
-      },
-    });
+    res.status(201).json(buildCompanyCreatedResponse(company, updatedUser));
   }),
 );
 
@@ -539,15 +534,14 @@ companyRouter.get(
     const projectLimit = TIER_PROJECT_LIMITS[tier] || TIER_PROJECT_LIMITS.basic;
     const userLimit = TIER_USER_LIMITS[tier] || TIER_USER_LIMITS.basic;
 
-    res.json({
-      company: {
-        ...company,
+    res.json(
+      buildCompanyProfileResponse(company, {
         projectCount,
         projectLimit: serializeTierLimit(projectLimit),
         userCount,
         userLimit: serializeTierLimit(userLimit),
-      },
-    });
+      }),
+    );
   }),
 );
 
@@ -614,10 +608,7 @@ companyRouter.post(
       req,
     });
 
-    res.json({
-      message: 'Successfully left the company',
-      leftAt: new Date().toISOString(),
-    });
+    res.json(buildCompanyLeftResponse(new Date()));
   }),
 );
 
@@ -647,7 +638,7 @@ companyRouter.get(
       orderBy: { fullName: 'asc' },
     });
 
-    res.json({ members });
+    res.json(buildCompanyMembersResponse(members));
   }),
 );
 
@@ -714,15 +705,7 @@ companyRouter.post(
       req,
     });
 
-    res.json({
-      message: 'Ownership transferred successfully',
-      newOwner: {
-        id: newOwner.id,
-        email: newOwner.email,
-        fullName: newOwner.fullName,
-      },
-      transferredAt: new Date().toISOString(),
-    });
+    res.json(buildCompanyOwnershipTransferredResponse(newOwner, new Date()));
   }),
 );
 
@@ -809,10 +792,7 @@ companyRouter.post(
       }
     }
 
-    res.status(201).json({
-      logoUrl,
-      company: updatedCompany,
-    });
+    res.status(201).json(buildCompanyLogoUploadedResponse(logoUrl, updatedCompany));
   }),
 );
 
@@ -902,9 +882,6 @@ companyRouter.patch(
       });
     }
 
-    res.json({
-      message: 'Company settings updated successfully',
-      company: updatedCompany,
-    });
+    res.json(buildCompanyUpdatedResponse(updatedCompany));
   }),
 );
