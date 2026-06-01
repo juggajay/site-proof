@@ -13,6 +13,16 @@ import { prisma } from '../lib/prisma.js';
 import { decrypt, encrypt } from '../lib/encryption.js';
 import { sanitizeUrlValueForLog } from '../lib/logSanitization.js';
 import { logError } from '../lib/serverLogger.js';
+import {
+  buildTestWebhookLogsClearedResponse,
+  buildTestWebhookLogsResponse,
+  buildTestWebhookReceivedResponse,
+  buildWebhookConfigsResponse,
+  buildWebhookCreatedResponse,
+  buildWebhookDeliveriesResponse,
+  buildWebhookSecretRegeneratedResponse,
+  buildWebhookTestDeliveryResponse,
+} from './webhookResponses.js';
 
 const router = Router();
 const WEBHOOK_MANAGER_ROLES = ['owner', 'admin'];
@@ -519,11 +529,7 @@ router.post('/test-receiver', (req: Request, res: Response) => {
     testWebhookReceived.shift();
   }
 
-  res.status(200).json({
-    received: true,
-    id: received.id,
-    timestamp: received.timestamp.toISOString(),
-  });
+  res.status(200).json(buildTestWebhookReceivedResponse(received));
 });
 
 // GET /api/webhooks/test-receiver/logs - Get received test webhooks (for verification)
@@ -538,11 +544,7 @@ router.get(
     const { limit } = req.query;
     const logs = testWebhookReceived.slice(-parseLimit(limit, 10)).reverse();
 
-    res.json({
-      logs,
-      total: testWebhookReceived.length,
-      message: `Showing last ${logs.length} received webhooks`,
-    });
+    res.json(buildTestWebhookLogsResponse(logs, testWebhookReceived.length));
   }),
 );
 
@@ -556,7 +558,7 @@ router.delete(
     requireWebhookManager(req.user!);
 
     testWebhookReceived.length = 0;
-    res.json({ message: 'Test webhook logs cleared' });
+    res.json(buildTestWebhookLogsClearedResponse());
   }),
 );
 
@@ -578,7 +580,11 @@ router.get(
       orderBy: { createdAt: 'desc' },
     });
 
-    res.json({ webhooks: configs.map((config) => toPublicWebhookConfig(toWebhookConfig(config))) });
+    res.json(
+      buildWebhookConfigsResponse(
+        configs.map((config) => toPublicWebhookConfig(toWebhookConfig(config))),
+      ),
+    );
   }),
 );
 
@@ -616,15 +622,7 @@ router.post(
       req,
     });
 
-    res.status(201).json({
-      id: config.id,
-      url: config.url,
-      secret: config.secret, // Return secret only on creation
-      events: config.events,
-      enabled: config.enabled,
-      createdAt: config.createdAt.toISOString(),
-      message: 'Webhook configured successfully. Save the secret - it will not be shown again.',
-    });
+    res.status(201).json(buildWebhookCreatedResponse(config));
   }),
 );
 
@@ -777,11 +775,7 @@ router.post(
       req,
     });
 
-    res.json({
-      id: record.id,
-      secret,
-      message: 'Secret regenerated. Save the new secret - it will not be shown again.',
-    });
+    res.json(buildWebhookSecretRegeneratedResponse(record.id, secret));
   }),
 );
 
@@ -813,10 +807,7 @@ router.get(
       prisma.webhookDelivery.count({ where: { webhookId: id } }),
     ]);
 
-    res.json({
-      deliveries,
-      total,
-    });
+    res.json(buildWebhookDeliveriesResponse(deliveries, total));
   }),
 );
 
@@ -850,13 +841,7 @@ router.post(
     // Deliver the webhook
     const delivery = await deliverWebhook(config, 'test', testPayload);
 
-    res.json({
-      success: delivery.success,
-      deliveryId: delivery.id,
-      responseStatus: delivery.responseStatus,
-      responseBody: delivery.responseBody,
-      error: delivery.error,
-    });
+    res.json(buildWebhookTestDeliveryResponse(delivery));
   }),
 );
 
