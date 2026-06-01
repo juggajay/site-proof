@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildEmptyHoldPointListResponse,
   buildHoldPointListResponse,
   buildHoldPointListItems,
   type HoldPointListChecklistItem,
@@ -273,5 +274,11 @@ describe('buildHoldPointListResponse', () => {
       holdPoints,
       pagination,
     });
+  });
+});
+
+describe('buildEmptyHoldPointListResponse', () => {
+  it('preserves the no-access/no-company early return shape', () => {
+    expect(buildEmptyHoldPointListResponse()).toEqual({ holdPoints: [] });
   });
 });

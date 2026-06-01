@@ -74,6 +74,7 @@ import {
   getPrecedingChecklistItems,
 } from './holdpoints/prerequisites.js';
 import {
+  buildEmptyHoldPointListResponse,
   buildHoldPointListItems,
   buildHoldPointListResponse,
 } from './holdpoints/listPresentation.js';
@@ -190,7 +191,7 @@ holdpointsRouter.get(
         ];
       } else {
         // No subcontractor company - return empty
-        return res.json({ holdPoints: [] });
+        return res.json(buildEmptyHoldPointListResponse());
       }
     }
 
