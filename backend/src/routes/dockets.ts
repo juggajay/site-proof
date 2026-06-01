@@ -47,12 +47,14 @@ import {
   formatDocketUserName,
 } from './dockets/formatting.js';
 import {
+  buildDocketEntryDeletedResponse,
   buildDocketDetailResponse,
+  buildDocketLabourEntriesResponse,
+  buildDocketListResponse,
+  buildDocketPlantEntriesResponse,
   mapDocketLabourEntry,
   mapDocketListItem,
   mapDocketPlantEntry,
-  sumDocketLabourTotals,
-  sumDocketPlantTotals,
 } from './dockets/presentation.js';
 import { assertDocketSubmittable } from './dockets/submissionGuards.js';
 import { buildQueryResponseNotes } from './dockets/queryResponse.js';
@@ -151,11 +153,7 @@ docketsRouter.get(
     // Format dockets for response
     const formattedDockets = dockets.map((docket) => mapDocketListItem(docket));
 
-    res.json({
-      data: formattedDockets,
-      pagination: getPaginationMeta(total, page, limit),
-      dockets: formattedDockets, // Backward compatibility
-    });
+    res.json(buildDocketListResponse(formattedDockets, getPaginationMeta(total, page, limit)));
   }),
 );
 
@@ -1110,10 +1108,7 @@ docketsRouter.get(
       mapDocketLabourEntry(entry, { includeAdjustmentReason: true }),
     );
 
-    res.json({
-      labourEntries,
-      totals: sumDocketLabourTotals(labourEntries),
-    });
+    res.json(buildDocketLabourEntriesResponse(labourEntries));
   }),
 );
 
@@ -1403,7 +1398,7 @@ docketsRouter.delete(
       await refreshLabourSubmittedTotals(tx, id);
     });
 
-    res.json({ message: 'Labour entry deleted' });
+    res.json(buildDocketEntryDeletedResponse('Labour entry deleted'));
   }),
 );
 
@@ -1448,10 +1443,7 @@ docketsRouter.get(
       mapDocketPlantEntry(entry, { includeAdjustmentReason: true }),
     );
 
-    res.json({
-      plantEntries,
-      totals: sumDocketPlantTotals(plantEntries),
-    });
+    res.json(buildDocketPlantEntriesResponse(plantEntries));
   }),
 );
 
@@ -1687,6 +1679,6 @@ docketsRouter.delete(
       await refreshPlantSubmittedTotals(tx, id);
     });
 
-    res.json({ message: 'Plant entry deleted' });
+    res.json(buildDocketEntryDeletedResponse('Plant entry deleted'));
   }),
 );
