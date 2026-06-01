@@ -73,6 +73,10 @@ import {
   getPrecedingChecklistItems,
 } from './holdpoints/prerequisites.js';
 import { buildHoldPointListItems } from './holdpoints/listPresentation.js';
+import {
+  buildHoldPointReleaseEmailNotification,
+  buildHoldPointReleaseNotifications,
+} from './holdpoints/releaseNotifications.js';
 
 interface HoldPointReleaseRecipient {
   email: string;
@@ -763,14 +767,12 @@ holdpointsRouter.post(
     });
 
     // Create in-app notifications for all project team members
-    const notificationsToCreate = projectUsers.map((pu) => ({
-      userId: pu.userId,
+    const notificationsToCreate = buildHoldPointReleaseNotifications(projectUsers, {
       projectId: existingHP.lot.projectId,
-      type: 'hold_point_release',
-      title: 'Hold Point Released',
-      message: `Hold point "${holdPoint.description}" on lot ${holdPoint.lot.lotNumber} has been released by ${releasedByName || 'Unknown'}.`,
-      linkUrl: `/projects/${existingHP.lot.projectId}/hold-points`,
-    }));
+      holdPointDescription: holdPoint.description,
+      lotNumber: holdPoint.lot.lotNumber,
+      releasedByName,
+    });
 
     if (notificationsToCreate.length > 0) {
       await prisma.notification.createMany({
@@ -778,15 +780,20 @@ holdpointsRouter.post(
       });
     }
 
-    // Send email notifications to team members (if configured)
+    // Send email notifications to team members (if configured). The payload is
+    // the same for every recipient, so build it once.
+    const releaseEmailNotification = buildHoldPointReleaseEmailNotification({
+      projectId: existingHP.lot.projectId,
+      holdPointDescription: holdPoint.description,
+      lotNumber: holdPoint.lot.lotNumber,
+      releasedByName,
+      projectName: existingHP.lot.project.name,
+      releaseMethod,
+      releaseNotes,
+    });
     for (const pu of projectUsers) {
       try {
-        await sendNotificationIfEnabled(pu.userId, 'holdPointRelease', {
-          title: 'Hold Point Released',
-          message: `Hold point "${holdPoint.description}" on lot ${holdPoint.lot.lotNumber} has been released by ${releasedByName || 'Unknown'}.\n\nProject: ${existingHP.lot.project.name}\nRelease Method: ${releaseMethod || 'Digital'}\nNotes: ${releaseNotes || 'None'}`,
-          projectName: existingHP.lot.project.name,
-          linkUrl: `/projects/${existingHP.lot.projectId}/hold-points`,
-        });
+        await sendNotificationIfEnabled(pu.userId, 'holdPointRelease', releaseEmailNotification);
       } catch (emailError) {
         logError(`[HP Release] Failed to send email to user ${pu.userId}:`, emailError);
         // Continue with other notifications even if one fails
