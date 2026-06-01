@@ -72,26 +72,7 @@ import {
   getIncompletePrerequisites,
   getPrecedingChecklistItems,
 } from './holdpoints/prerequisites.js';
-
-// Type for hold point list item
-interface HoldPointListItem {
-  id: string;
-  lotId: string;
-  lotNumber: string;
-  itpChecklistItemId: string;
-  description: string;
-  pointType: string | null;
-  status: string;
-  notificationSentAt: Date | null | undefined;
-  scheduledDate: Date | null | undefined;
-  releasedAt: Date | null | undefined;
-  releasedByName: string | null | undefined;
-  releaseNotes: string | null | undefined;
-  sequenceNumber: number;
-  isCompleted: boolean;
-  isVerified: boolean;
-  createdAt: Date;
-}
+import { buildHoldPointListItems } from './holdpoints/listPresentation.js';
 
 interface HoldPointReleaseRecipient {
   email: string;
@@ -206,45 +187,9 @@ holdpointsRouter.get(
       },
     });
 
-    // Transform to hold point list
-    const holdPoints: HoldPointListItem[] = [];
-
-    for (const lot of lots) {
-      if (!lot.itpInstance?.template?.checklistItems) continue;
-
-      for (const item of lot.itpInstance.template.checklistItems) {
-        // Find existing hold point record or create virtual one
-        const existingHP = lot.holdPoints.find((hp) => hp.itpChecklistItemId === item.id);
-
-        // Find the completion status for this item
-        const completion = lot.itpInstance.completions.find((c) => c.checklistItemId === item.id);
-
-        holdPoints.push({
-          id: existingHP?.id || `virtual-${lot.id}-${item.id}`,
-          lotId: lot.id,
-          lotNumber: lot.lotNumber,
-          itpChecklistItemId: item.id,
-          description: item.description,
-          pointType: item.pointType,
-          status: existingHP?.status || 'pending',
-          notificationSentAt: existingHP?.notificationSentAt,
-          scheduledDate: existingHP?.scheduledDate,
-          releasedAt: existingHP?.releasedAt,
-          releasedByName: existingHP?.releasedByName,
-          releaseNotes: existingHP?.releaseNotes,
-          sequenceNumber: item.sequenceNumber,
-          isCompleted: completion?.status === 'completed',
-          isVerified: completion?.verificationStatus === 'verified',
-          createdAt: existingHP?.createdAt || lot.createdAt,
-        });
-      }
-    }
-
-    // Sort by lot number, then sequence number
-    holdPoints.sort((a, b) => {
-      if (a.lotNumber !== b.lotNumber) return a.lotNumber.localeCompare(b.lotNumber);
-      return a.sequenceNumber - b.sequenceNumber;
-    });
+    // Transform to a sorted hold point list (one item per hold-point checklist
+    // item; persisted row reused when present, otherwise a virtual entry).
+    const holdPoints = buildHoldPointListItems(lots);
 
     // Apply pagination
     const { page, limit } = parsePagination(req.query);
