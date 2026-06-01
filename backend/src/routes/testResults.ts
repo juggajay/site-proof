@@ -44,6 +44,12 @@ import {
   renderTestRequestFormHtml,
 } from './testResults/presentation.js';
 import { STATUS_LABELS, VALID_STATUS_TRANSITIONS } from './testResults/statusWorkflow.js';
+import {
+  buildTestResultAlreadyVerifiedResponse,
+  buildTestResultRejectedResponse,
+  buildTestResultRejectionNotification,
+  buildTestResultVerifiedResponse,
+} from './testResults/verificationResponses.js';
 import { buildTestResultWorkflowResponse } from './testResults/workflowResponse.js';
 import {
   MAX_REJECTION_REASON_LENGTH,
@@ -896,16 +902,7 @@ testResultsRouter.post(
       },
     });
 
-    // In a real app, we would send a notification to the engineer here
-    // For now, we'll just include the engineer info in the response
-    const engineerNotified = testResult.enteredBy
-      ? {
-          userId: testResult.enteredBy.id,
-          name: testResult.enteredBy.fullName,
-          email: testResult.enteredBy.email,
-          message: `Your test result "${testResult.testType}" was rejected. Reason: ${reason}`,
-        }
-      : null;
+    const engineerNotified = buildTestResultRejectionNotification(testResult, reason);
 
     // Audit log for test result rejection
     await createAuditLog({
@@ -918,14 +915,7 @@ testResultsRouter.post(
       req,
     });
 
-    res.json({
-      message: 'Test result rejected',
-      testResult: updatedTestResult,
-      notification: {
-        sent: engineerNotified !== null,
-        recipient: engineerNotified,
-      },
-    });
+    res.json(buildTestResultRejectedResponse(updatedTestResult, engineerNotified));
   }),
 );
 
@@ -968,10 +958,7 @@ testResultsRouter.post(
         },
       });
 
-      return res.json({
-        message: 'Test result already verified',
-        testResult: existingVerifiedTestResult,
-      });
+      return res.json(buildTestResultAlreadyVerifiedResponse(existingVerifiedTestResult));
     }
 
     // Feature #883: Require certificate before verification
@@ -1015,10 +1002,7 @@ testResultsRouter.post(
       req,
     });
 
-    res.json({
-      message: 'Test result verified successfully',
-      testResult: updatedTestResult,
-    });
+    res.json(buildTestResultVerifiedResponse(updatedTestResult));
   }),
 );
 
