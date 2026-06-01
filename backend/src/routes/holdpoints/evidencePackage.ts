@@ -195,3 +195,20 @@ export function mapHoldPointEvidenceItpTemplate(template: EvidenceItpTemplateInp
     activityType: template.activityType,
   };
 }
+
+export function buildHoldPointEvidencePackageResponse<TEvidencePackage>(
+  evidencePackage: TEvidencePackage,
+) {
+  return { evidencePackage };
+}
+
+export function buildPublicHoldPointEvidencePackageResponse<TEvidencePackage, TTokenInfo>(
+  evidencePackage: TEvidencePackage,
+  tokenInfo: TTokenInfo,
+) {
+  return {
+    evidencePackage,
+    tokenInfo,
+    isPublicAccess: true,
+  };
+}
