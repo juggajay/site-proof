@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildDigestItemAddedResponse,
   buildDigestItemFromBody,
+  buildDigestQueueClearedResponse,
   buildDigestQueueResponse,
   buildDigestSentResponse,
 } from './digestResponses.js';
@@ -95,5 +96,12 @@ describe('notification digest response helpers', () => {
     ];
 
     expect(buildDigestQueueResponse(items)).toEqual({ items, count: 1 });
+  });
+
+  it('builds the digest queue cleared response shape', () => {
+    expect(buildDigestQueueClearedResponse()).toEqual({
+      success: true,
+      message: 'Digest queue cleared',
+    });
   });
 });

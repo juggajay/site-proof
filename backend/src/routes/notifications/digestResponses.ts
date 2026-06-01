@@ -76,3 +76,13 @@ export function buildDigestQueueResponse(items: DigestItem[]): {
     count: items.length,
   };
 }
+
+export function buildDigestQueueClearedResponse(): {
+  success: true;
+  message: 'Digest queue cleared';
+} {
+  return {
+    success: true,
+    message: 'Digest queue cleared',
+  };
+}
