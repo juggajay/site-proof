@@ -17,6 +17,7 @@ import {
 } from '../lib/evidenceReadiness.js';
 import { checkConformancePrerequisites } from '../lib/conformancePrerequisites.js';
 import { getEffectiveProjectRole } from '../lib/projectAccess.js';
+import { mapClaimListItem, mapClaimableLot } from './claims/presentation.js';
 
 interface PaymentHistoryEntry {
   amount: number;
@@ -510,13 +511,7 @@ router.get(
       orderBy: { lotNumber: 'asc' },
     });
 
-    // Transform to match frontend interface
-    const transformedLots = lots.map((lot) => ({
-      id: lot.id,
-      lotNumber: lot.lotNumber,
-      activity: lot.activityType,
-      budgetAmount: lot.budgetAmount ? Number(lot.budgetAmount) : 0,
-    }));
+    const transformedLots = lots.map((lot) => mapClaimableLot(lot));
 
     res.json({ lots: transformedLots });
   }),
@@ -642,21 +637,7 @@ router.get(
       },
     });
 
-    // Transform to match frontend interface
-    const transformedClaims = claims.map((claim) => ({
-      id: claim.id,
-      claimNumber: claim.claimNumber,
-      periodStart: claim.claimPeriodStart.toISOString().split('T')[0],
-      periodEnd: claim.claimPeriodEnd.toISOString().split('T')[0],
-      status: claim.status,
-      totalClaimedAmount: claim.totalClaimedAmount ? Number(claim.totalClaimedAmount) : 0,
-      certifiedAmount: claim.certifiedAmount ? Number(claim.certifiedAmount) : null,
-      paidAmount: claim.paidAmount ? Number(claim.paidAmount) : null,
-      submittedAt: claim.submittedAt ? claim.submittedAt.toISOString().split('T')[0] : null,
-      disputeNotes: claim.disputeNotes || null,
-      disputedAt: claim.disputedAt ? claim.disputedAt.toISOString().split('T')[0] : null,
-      lotCount: claim._count.claimedLots,
-    }));
+    const transformedClaims = claims.map((claim) => mapClaimListItem(claim));
 
     res.json({ claims: transformedClaims });
   }),
