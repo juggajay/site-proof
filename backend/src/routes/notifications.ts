@@ -73,6 +73,10 @@ import {
   buildTestEmailSuccessResponse,
 } from './notifications/emailDiagnostics.js';
 import {
+  buildEmailQueueClearedResponse,
+  buildEmailQueueResponse,
+} from './notifications/emailQueueResponses.js';
+import {
   buildDigestItemAddedResponse,
   buildDigestItemFromBody,
   buildDigestQueueResponse,
@@ -404,7 +408,7 @@ notificationsRouter.get(
     requireNonProductionDiagnostics();
 
     const queue = getQueuedEmails();
-    res.json({ emails: queue, count: queue.length });
+    res.json(buildEmailQueueResponse(queue));
   }),
 );
 
@@ -420,7 +424,7 @@ notificationsRouter.delete(
     requireNonProductionDiagnostics();
 
     clearEmailQueue();
-    res.json({ success: true, message: 'Email queue cleared' });
+    res.json(buildEmailQueueClearedResponse());
   }),
 );
 
