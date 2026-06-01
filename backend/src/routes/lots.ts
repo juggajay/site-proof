@@ -61,7 +61,13 @@ import {
   CONFORMED_LOT_BUDGET_EDIT_FIELDS,
   getProvidedUpdateFields,
 } from './lots/updateFields.js';
-import { LOT_CREATORS, LOT_DELETERS, LOT_CONFORMERS, LOT_FORCE_CONFORMERS } from './lots/roles.js';
+import {
+  LOT_CREATORS,
+  LOT_DELETERS,
+  LOT_CONFORMERS,
+  LOT_FORCE_CONFORMERS,
+  STATUS_OVERRIDERS,
+} from './lots/roles.js';
 
 export const lotsRouter = Router();
 
@@ -1715,9 +1721,6 @@ lotsRouter.post(
     });
   }),
 );
-
-// Roles that can override lot status
-const STATUS_OVERRIDERS = ['owner', 'admin', 'project_manager', 'quality_manager'];
 
 // POST /api/lots/:id/override-status - Manual status override with reason (Feature #159)
 lotsRouter.post(
