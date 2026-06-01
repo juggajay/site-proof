@@ -6,6 +6,7 @@ import {
   mapClaimCreateItem,
   mapClaimListItem,
   mapClaimPaymentItem,
+  mapClaimReadinessItem,
   mapClaimableLot,
 } from './presentation.js';
 
@@ -137,6 +138,51 @@ describe('mapClaimCreateItem', () => {
         _count: { claimedLots: 0 },
       }).totalClaimedAmount,
     ).toBe(0);
+  });
+});
+
+describe('mapClaimReadinessItem', () => {
+  it('preserves the claim-readiness lot response shape', () => {
+    const claim = {
+      canClaim: true,
+      blockers: [],
+      support: [{ label: 'Budget set' }],
+    };
+
+    expect(
+      mapClaimReadinessItem(
+        { activityType: 'Earthworks' },
+        {
+          lotId: 'lot-1',
+          lotNumber: 'EW-001',
+          claim,
+        },
+      ),
+    ).toEqual({
+      lotId: 'lot-1',
+      lotNumber: 'EW-001',
+      activityType: 'Earthworks',
+      claim,
+    });
+  });
+
+  it('passes through blocker-heavy readiness summaries without rewriting them', () => {
+    const claim = {
+      canClaim: false,
+      blockers: [{ severity: 'blocker', message: 'Lot is not conformed' }],
+      warnings: [{ severity: 'warning', message: 'Unreleased hold point' }],
+    };
+
+    expect(
+      mapClaimReadinessItem(
+        { activityType: 'Drainage' },
+        {
+          lotId: 'lot-2',
+          lotNumber: 'DR-002',
+          claim,
+        },
+      ).claim,
+    ).toBe(claim);
   });
 });
 
