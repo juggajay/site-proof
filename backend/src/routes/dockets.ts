@@ -64,6 +64,10 @@ import {
   buildDocketSubmittedNotifications,
 } from './dockets/notifications.js';
 import { buildDocketDiaryComparison } from './dockets/diaryComparison.js';
+import {
+  buildDocketApprovedResponse,
+  resolveDocketApprovedTotals,
+} from './dockets/approvalResponse.js';
 import type { Prisma } from '@prisma/client';
 
 export const docketsRouter = Router();
@@ -547,11 +551,12 @@ docketsRouter.post(
       throw AppError.badRequest('Only pending dockets can be approved');
     }
 
-    // Use adjusted values if provided, otherwise copy submitted values
-    const labourApproved =
-      adjustedLabourHours !== undefined ? adjustedLabourHours : docket.totalLabourSubmitted;
-    const plantApproved =
-      adjustedPlantHours !== undefined ? adjustedPlantHours : docket.totalPlantSubmitted;
+    const { labourApproved, plantApproved } = resolveDocketApprovedTotals({
+      adjustedLabourHours,
+      adjustedPlantHours,
+      totalLabourSubmitted: docket.totalLabourSubmitted,
+      totalPlantSubmitted: docket.totalPlantSubmitted,
+    });
 
     const updatedDocket = await prisma.dailyDocket.update({
       where: { id },
@@ -727,20 +732,7 @@ docketsRouter.post(
       }
     }
 
-    res.json({
-      message: 'Docket approved successfully',
-      docket: {
-        id: updatedDocket.id,
-        docketNumber: formatDocketNumber(updatedDocket.id),
-        subcontractor: updatedDocket.subcontractorCompany.companyName,
-        status: updatedDocket.status,
-        approvedAt: updatedDocket.approvedAt,
-      },
-      notifiedUsers: subcontractorUsers.map((su) => ({
-        email: su.email,
-        fullName: su.fullName,
-      })),
-    });
+    res.json(buildDocketApprovedResponse({ updatedDocket, subcontractorUsers }));
   }),
 );
 
