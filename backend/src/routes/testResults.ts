@@ -42,6 +42,11 @@ import {
   buildEmptyTestResultsListResponse,
   buildTestResultsListResponse,
 } from './testResults/listResponses.js';
+import {
+  buildTestResultDeletedResponse,
+  buildTestResultDetailResponse,
+  buildTestResultUpdatedResponse,
+} from './testResults/detailResponses.js';
 import { testTypeSpecifications } from './testResults/specifications.js';
 import {
   buildTestSpecificationsResponse,
@@ -397,7 +402,7 @@ testResultsRouter.get(
 
     await requireTestResultReadAccess(testResult, user);
 
-    res.json({ testResult });
+    res.json(buildTestResultDetailResponse(testResult));
   }),
 );
 
@@ -620,7 +625,7 @@ testResultsRouter.patch(
       req,
     });
 
-    res.json({ testResult: updatedTestResult });
+    res.json(buildTestResultUpdatedResponse(updatedTestResult));
   }),
 );
 
@@ -689,7 +694,7 @@ testResultsRouter.delete(
       }
     }
 
-    res.json({ message: 'Test result deleted successfully' });
+    res.json(buildTestResultDeletedResponse());
   }),
 );
 
