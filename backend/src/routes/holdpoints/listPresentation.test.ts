@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildHoldPointListResponse,
   buildHoldPointListItems,
   type HoldPointListChecklistItem,
   type HoldPointListCompletion,
@@ -247,5 +248,30 @@ describe('buildHoldPointListItems', () => {
       'B:1',
       'B:2',
     ]);
+  });
+});
+
+describe('buildHoldPointListResponse', () => {
+  it('preserves the route response wrapper around paginated hold points', () => {
+    const holdPoints = buildHoldPointListItems([
+      lot({
+        id: 'lot1',
+        lotNumber: 'A',
+        itpInstance: {
+          template: {
+            checklistItems: [
+              checklistItem({ id: 'item1', description: 'Pour slab', sequenceNumber: 1 }),
+            ],
+          },
+          completions: [],
+        },
+      }),
+    ]);
+    const pagination = { page: 1, limit: 20, total: 1, totalPages: 1 };
+
+    expect(buildHoldPointListResponse(holdPoints, pagination)).toEqual({
+      holdPoints,
+      pagination,
+    });
   });
 });
