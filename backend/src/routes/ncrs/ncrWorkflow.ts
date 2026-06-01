@@ -13,6 +13,13 @@ import {
   requireNcrResponsibleOrProjectRole,
 } from './ncrAccess.js';
 import { AuditAction, createAuditLog } from '../../lib/auditLog.js';
+import {
+  buildNcrClientNotificationResponse,
+  buildNcrClosedResponse,
+  buildNcrSubmittedForVerificationResponse,
+  buildNcrWorkflowMessageResponse,
+  buildNcrWorkflowResponse,
+} from './ncrWorkflowResponses.js';
 
 const NCR_WORKFLOW_SHORT_TEXT_MAX_LENGTH = 160;
 const NCR_WORKFLOW_TEXT_MAX_LENGTH = 5000;
@@ -192,7 +199,7 @@ ncrWorkflowRouter.post(
       req,
     });
 
-    res.json({ ncr: updatedNcr });
+    res.json(buildNcrWorkflowResponse(updatedNcr));
   }),
 );
 
@@ -244,10 +251,12 @@ ncrWorkflowRouter.post(
         include: qmReviewedNcrInclude,
       });
 
-      res.json({
-        ncr: acceptedNcr,
-        message: 'Response already accepted, NCR is in rectification',
-      });
+      res.json(
+        buildNcrWorkflowMessageResponse(
+          acceptedNcr,
+          'Response already accepted, NCR is in rectification',
+        ),
+      );
       return;
     }
 
@@ -279,10 +288,12 @@ ncrWorkflowRouter.post(
         });
 
         if (acceptedNcr) {
-          res.json({
-            ncr: acceptedNcr,
-            message: 'Response already accepted, NCR is in rectification',
-          });
+          res.json(
+            buildNcrWorkflowMessageResponse(
+              acceptedNcr,
+              'Response already accepted, NCR is in rectification',
+            ),
+          );
           return;
         }
 
@@ -325,7 +336,12 @@ ncrWorkflowRouter.post(
         req,
       });
 
-      res.json({ ncr: updatedNcr, message: 'Response accepted, NCR proceeds to rectification' });
+      res.json(
+        buildNcrWorkflowMessageResponse(
+          updatedNcr,
+          'Response accepted, NCR proceeds to rectification',
+        ),
+      );
     } else {
       // Request revision - send back to responsible party
       const updatedNcr = await prisma.nCR.update({
@@ -382,10 +398,12 @@ ncrWorkflowRouter.post(
         req,
       });
 
-      res.json({
-        ncr: updatedNcr,
-        message: 'Revision requested, feedback sent to responsible party',
-      });
+      res.json(
+        buildNcrWorkflowMessageResponse(
+          updatedNcr,
+          'Revision requested, feedback sent to responsible party',
+        ),
+      );
     }
   }),
 );
@@ -458,7 +476,7 @@ ncrWorkflowRouter.post(
       req,
     });
 
-    res.json({ ncr: updatedNcr });
+    res.json(buildNcrWorkflowResponse(updatedNcr));
   }),
 );
 
@@ -556,10 +574,12 @@ ncrWorkflowRouter.post(
       req,
     });
 
-    res.json({
-      ncr: updatedNcr,
-      message: 'Rectification rejected, NCR returned to rectification status',
-    });
+    res.json(
+      buildNcrWorkflowMessageResponse(
+        updatedNcr,
+        'Rectification rejected, NCR returned to rectification status',
+      ),
+    );
   }),
 );
 
@@ -624,10 +644,9 @@ ncrWorkflowRouter.post(
       req,
     });
 
-    res.json({
-      ncr: updatedNcr,
-      message: 'QM approval granted. NCR can now be closed.',
-    });
+    res.json(
+      buildNcrWorkflowMessageResponse(updatedNcr, 'QM approval granted. NCR can now be closed.'),
+    );
   }),
 );
 
@@ -747,13 +766,7 @@ ncrWorkflowRouter.post(
       req,
     });
 
-    res.json({
-      ncr: updatedNcr,
-      message:
-        ncr.severity === 'major'
-          ? 'Major NCR closed successfully with QM approval'
-          : 'NCR closed successfully',
-    });
+    res.json(buildNcrClosedResponse(updatedNcr, ncr.severity));
   }),
 );
 
@@ -863,11 +876,7 @@ ncrWorkflowRouter.post(
       req,
     });
 
-    res.json({
-      ncr: updatedNcr,
-      notificationPackage,
-      message: `Client notification sent for ${ncr.ncrNumber}`,
-    });
+    res.json(buildNcrClientNotificationResponse(updatedNcr, notificationPackage, ncr.ncrNumber));
   }),
 );
 
@@ -934,7 +943,7 @@ ncrWorkflowRouter.post(
       req,
     });
 
-    res.json({ ncr: updatedNcr });
+    res.json(buildNcrWorkflowResponse(updatedNcr));
   }),
 );
 
@@ -1001,10 +1010,6 @@ ncrWorkflowRouter.post(
       },
     });
 
-    res.json({
-      ncr: updatedNcr,
-      message: 'NCR submitted for verification successfully',
-      evidenceCount: updatedNcr.ncrEvidence.length,
-    });
+    res.json(buildNcrSubmittedForVerificationResponse(updatedNcr));
   }),
 );
