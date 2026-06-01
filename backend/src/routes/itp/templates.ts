@@ -6,6 +6,17 @@ import { requireAuth } from '../../middleware/authMiddleware.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { isSubcontractorPortalRole } from '../../lib/projectAccess.js';
+import {
+  buildCrossProjectTemplatesResponse,
+  buildEmptyCrossProjectTemplatesResponse,
+  buildTemplateArchivedResponse,
+  buildTemplateDeletedResponse,
+  buildTemplateListResponse,
+  buildTemplatePropagatedResponse,
+  buildTemplateResponse,
+  buildTemplateRestoredResponse,
+  buildTemplateUsageResponse,
+} from './templateResponses.js';
 
 // ============== Zod Schemas ==============
 
@@ -295,7 +306,7 @@ templatesRouter.get(
       .map((project) => project.id);
 
     if (otherProjectIds.length === 0) {
-      return res.json({ projects: [], templates: [] });
+      return res.json(buildEmptyCrossProjectTemplatesResponse());
     }
 
     // Get templates from other projects
@@ -336,10 +347,7 @@ templatesRouter.get(
       }))
       .filter((p) => p.templates.length > 0);
 
-    res.json({
-      projects: projectsWithTemplates,
-      totalTemplates: templates.length,
-    });
+    res.json(buildCrossProjectTemplatesResponse(projectsWithTemplates, templates.length));
   }),
 );
 
@@ -404,10 +412,7 @@ templatesRouter.get(
       })),
     }));
 
-    res.json({
-      templates: transformedTemplates,
-      projectSpecificationSet: project?.specificationSet || null,
-    });
+    res.json(buildTemplateListResponse(transformedTemplates, project?.specificationSet || null));
   }),
 );
 
@@ -452,7 +457,7 @@ templatesRouter.get(
       })),
     };
 
-    res.json({ template: transformedTemplate });
+    res.json(buildTemplateResponse(transformedTemplate));
   }),
 );
 
@@ -511,7 +516,7 @@ templatesRouter.post(
       })),
     };
 
-    res.status(201).json({ template: transformedTemplate });
+    res.status(201).json(buildTemplateResponse(transformedTemplate));
   }),
 );
 
@@ -599,7 +604,7 @@ templatesRouter.post(
       })),
     };
 
-    res.status(201).json({ template: transformedTemplate });
+    res.status(201).json(buildTemplateResponse(transformedTemplate));
   }),
 );
 
@@ -673,7 +678,7 @@ templatesRouter.patch(
       })),
     };
 
-    res.json({ template: transformedTemplate });
+    res.json(buildTemplateResponse(transformedTemplate));
   }),
 );
 
@@ -716,7 +721,7 @@ templatesRouter.get(
         hasSnapshot: !!inst.templateSnapshot,
       }));
 
-    res.json({ lots: lotsUsingTemplate, total: lotsUsingTemplate.length });
+    res.json(buildTemplateUsageResponse(lotsUsingTemplate));
   }),
 );
 
@@ -799,10 +804,7 @@ templatesRouter.delete(
       });
     });
 
-    res.json({
-      success: true,
-      message: 'Template deleted successfully',
-    });
+    res.json(buildTemplateDeletedResponse());
   }),
 );
 
@@ -843,12 +845,7 @@ templatesRouter.post(
       })),
     };
 
-    res.json({
-      success: true,
-      message:
-        'Template archived. It will no longer appear in template selection but existing lots will continue working.',
-      template: transformedTemplate,
-    });
+    res.json(buildTemplateArchivedResponse(transformedTemplate));
   }),
 );
 
@@ -889,11 +886,7 @@ templatesRouter.post(
       })),
     };
 
-    res.json({
-      success: true,
-      message: 'Template restored and is now active.',
-      template: transformedTemplate,
-    });
+    res.json(buildTemplateRestoredResponse(transformedTemplate));
   }),
 );
 
@@ -978,10 +971,6 @@ templatesRouter.post(
       },
     });
 
-    res.json({
-      success: true,
-      updatedCount: updateResult.count,
-      message: `Updated ${updateResult.count} lot(s) with latest template`,
-    });
+    res.json(buildTemplatePropagatedResponse(updateResult.count));
   }),
 );
