@@ -47,6 +47,7 @@ import {
   formatDocketUserName,
 } from './dockets/formatting.js';
 import {
+  buildDocketDetailResponse,
   mapDocketLabourEntry,
   mapDocketListItem,
   mapDocketPlantEntry,
@@ -285,12 +286,6 @@ docketsRouter.get(
     // docket/diary discrepancies (pure comparison; see dockets/diaryComparison).
     const { foremanDiary, discrepancies } = buildDocketDiaryComparison(docket, diary);
 
-    // Format labour entries
-    const labourEntries = docket.labourEntries.map((entry) => mapDocketLabourEntry(entry));
-
-    // Format plant entries
-    const plantEntries = docket.plantEntries.map((entry) => mapDocketPlantEntry(entry));
-
     // Fetch project info separately since it's not a relation on DailyDocket
     const project = await prisma.project.findUnique({
       where: { id: docket.projectId },
@@ -312,34 +307,16 @@ docketsRouter.get(
         })
       : null;
 
-    res.json({
-      docket: {
-        id: docket.id,
-        docketNumber: formatDocketNumber(docket.id),
-        date: formatDocketDate(docket.date),
-        status: docket.status,
-        projectId: docket.projectId,
+    res.json(
+      buildDocketDetailResponse({
+        docket,
         project,
-        subcontractor: docket.subcontractorCompany,
-        notes: docket.notes,
-        foremanNotes: docket.foremanNotes,
-        adjustmentReason: docket.adjustmentReason,
-        submittedAt: docket.submittedAt,
-        submittedById: docket.submittedById,
         submittedBy,
-        approvedAt: docket.approvedAt,
-        approvedById: docket.approvedById,
         approvedBy,
-        totalLabourSubmitted: Number(docket.totalLabourSubmitted) || 0,
-        totalLabourApproved: Number(docket.totalLabourApproved) || 0,
-        totalPlantSubmitted: Number(docket.totalPlantSubmitted) || 0,
-        totalPlantApproved: Number(docket.totalPlantApproved) || 0,
-        labourEntries,
-        plantEntries,
-      },
-      foremanDiary,
-      discrepancies: discrepancies.length > 0 ? discrepancies : null,
-    });
+        foremanDiary,
+        discrepancies,
+      }),
+    );
   }),
 );
 

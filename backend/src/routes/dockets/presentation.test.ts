@@ -1,14 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildDocketDetailResponse,
   mapDocketLabourEntry,
   mapDocketListItem,
   mapDocketPlantEntry,
   sumDocketLabourTotals,
   sumDocketPlantTotals,
+  type DocketDetailSource,
   type DocketLabourEntrySource,
   type DocketListItemSource,
   type DocketPlantEntrySource,
 } from './presentation.js';
+import type { ForemanDiarySummary } from './diaryComparison.js';
 
 const labourSource: DocketLabourEntrySource = {
   id: 'lab-1',
@@ -60,6 +63,38 @@ const listSource: DocketListItemSource = {
   submittedAt: new Date('2026-03-05T01:00:00.000Z'),
   approvedAt: new Date('2026-03-06T02:00:00.000Z'),
   foremanNotes: 'approved with notes',
+};
+
+const foremanDiarySummary: ForemanDiarySummary = {
+  id: 'd-9',
+  date: '2026-03-04',
+  status: 'submitted',
+  personnelCount: 3,
+  plantCount: 2,
+  weatherConditions: 'Fine',
+  weatherHoursLost: 4,
+  activitiesCount: 5,
+};
+
+const detailDocket: DocketDetailSource = {
+  id: 'abc123def456',
+  date: new Date('2026-03-04T10:00:00.000Z'),
+  status: 'approved',
+  projectId: 'proj-1',
+  subcontractorCompany: { id: 'sc-1', companyName: 'Acme Concreting' },
+  notes: 'docket notes',
+  foremanNotes: 'foreman notes',
+  adjustmentReason: 'rounded',
+  submittedAt: new Date('2026-03-05T01:00:00.000Z'),
+  submittedById: 'u-1',
+  approvedAt: new Date('2026-03-06T02:00:00.000Z'),
+  approvedById: 'u-2',
+  totalLabourSubmitted: 600,
+  totalLabourApproved: 550,
+  totalPlantSubmitted: 800,
+  totalPlantApproved: 780,
+  labourEntries: [labourSource],
+  plantEntries: [plantSource],
 };
 
 describe('dockets presentation helpers (pure)', () => {
@@ -344,6 +379,124 @@ describe('dockets presentation helpers (pure)', () => {
       expect(result.subcontractorId).toBe('sc-1');
       expect(result.docketNumber).toBe('DKT-FF00AA');
       expect(result.date).toBe('2026-12-31'); // UTC-based, TZ-stable
+    });
+  });
+
+  describe('buildDocketDetailResponse', () => {
+    it('assembles the full GET /api/dockets/:id response (fields + order)', () => {
+      const result = buildDocketDetailResponse({
+        docket: detailDocket,
+        project: { id: 'proj-1', name: 'Bridge 12' },
+        submittedBy: { id: 'u-1', fullName: 'Sam Submit', email: 'sam@example.com' },
+        approvedBy: { id: 'u-2', fullName: 'Amy Approve', email: 'amy@example.com' },
+        foremanDiary: foremanDiarySummary,
+        discrepancies: ['Weather hours lost noted in diary: 4 hours'],
+      });
+
+      expect(result.docket).toStrictEqual({
+        id: 'abc123def456',
+        docketNumber: 'DKT-ABC123',
+        date: '2026-03-04',
+        status: 'approved',
+        projectId: 'proj-1',
+        project: { id: 'proj-1', name: 'Bridge 12' },
+        subcontractor: { id: 'sc-1', companyName: 'Acme Concreting' },
+        notes: 'docket notes',
+        foremanNotes: 'foreman notes',
+        adjustmentReason: 'rounded',
+        submittedAt: detailDocket.submittedAt,
+        submittedById: 'u-1',
+        submittedBy: { id: 'u-1', fullName: 'Sam Submit', email: 'sam@example.com' },
+        approvedAt: detailDocket.approvedAt,
+        approvedById: 'u-2',
+        approvedBy: { id: 'u-2', fullName: 'Amy Approve', email: 'amy@example.com' },
+        totalLabourSubmitted: 600,
+        totalLabourApproved: 550,
+        totalPlantSubmitted: 800,
+        totalPlantApproved: 780,
+        labourEntries: [mapDocketLabourEntry(labourSource)],
+        plantEntries: [mapDocketPlantEntry(plantSource)],
+      });
+      expect(result.foremanDiary).toBe(foremanDiarySummary);
+      expect(result.discrepancies).toEqual(['Weather hours lost noted in diary: 4 hours']);
+      // Lock the top-level + docket key order to the route's original literals.
+      expect(Object.keys(result)).toEqual(['docket', 'foremanDiary', 'discrepancies']);
+      expect(Object.keys(result.docket)).toEqual([
+        'id',
+        'docketNumber',
+        'date',
+        'status',
+        'projectId',
+        'project',
+        'subcontractor',
+        'notes',
+        'foremanNotes',
+        'adjustmentReason',
+        'submittedAt',
+        'submittedById',
+        'submittedBy',
+        'approvedAt',
+        'approvedById',
+        'approvedBy',
+        'totalLabourSubmitted',
+        'totalLabourApproved',
+        'totalPlantSubmitted',
+        'totalPlantApproved',
+        'labourEntries',
+        'plantEntries',
+      ]);
+    });
+
+    it('keeps project/submittedBy/approvedBy null when absent and nulls empty discrepancies', () => {
+      const result = buildDocketDetailResponse({
+        docket: detailDocket,
+        project: null,
+        submittedBy: null,
+        approvedBy: null,
+        foremanDiary: null,
+        discrepancies: [],
+      });
+      expect(result.docket.project).toBeNull();
+      expect(result.docket.submittedBy).toBeNull();
+      expect(result.docket.approvedBy).toBeNull();
+      expect(result.foremanDiary).toBeNull();
+      expect(result.discrepancies).toBeNull(); // empty list -> null
+    });
+
+    it('coerces docket totals with Number(...) || 0', () => {
+      const result = buildDocketDetailResponse({
+        docket: {
+          ...detailDocket,
+          totalLabourSubmitted: null,
+          totalLabourApproved: 'not-a-number',
+          totalPlantSubmitted: undefined,
+          totalPlantApproved: '12.5',
+        },
+        project: null,
+        submittedBy: null,
+        approvedBy: null,
+        foremanDiary: null,
+        discrepancies: [],
+      });
+      expect(result.docket.totalLabourSubmitted).toBe(0);
+      expect(result.docket.totalLabourApproved).toBe(0);
+      expect(result.docket.totalPlantSubmitted).toBe(0);
+      expect(result.docket.totalPlantApproved).toBe(12.5);
+    });
+
+    it('reuses the labour/plant entry mappers (detail shape omits adjustmentReason)', () => {
+      const result = buildDocketDetailResponse({
+        docket: detailDocket,
+        project: null,
+        submittedBy: null,
+        approvedBy: null,
+        foremanDiary: null,
+        discrepancies: [],
+      });
+      expect(result.docket.labourEntries).toStrictEqual([mapDocketLabourEntry(labourSource)]);
+      expect(result.docket.plantEntries).toStrictEqual([mapDocketPlantEntry(plantSource)]);
+      expect('adjustmentReason' in result.docket.labourEntries[0]).toBe(false);
+      expect('adjustmentReason' in result.docket.plantEntries[0]).toBe(false);
     });
   });
 });

@@ -12,6 +12,7 @@
 // =============================================================================
 
 import { formatDocketDate, formatDocketNumber } from './formatting.js';
+import type { ForemanDiarySummary } from './diaryComparison.js';
 
 // Accepts a Prisma Decimal, number, string, or nullish value — anything the
 // route code coerces with `Number(x) || 0`.
@@ -198,5 +199,81 @@ export function mapDocketListItem(docket: DocketListItemSource) {
     submittedAt: docket.submittedAt,
     approvedAt: docket.approvedAt,
     foremanNotes: docket.foremanNotes,
+  };
+}
+
+// =============================================================================
+// Docket detail presentation: assembles the full `GET /api/dockets/:id` response
+// body — the `docket` object (reusing the labour/plant entry mappers above),
+// plus the top-level `foremanDiary` and `discrepancies`. Extracted verbatim
+// from the inline `res.json({ ... })`: same field names + order, same
+// `formatDocketNumber`/`formatDocketDate` formatting, same `Number(x) || 0`
+// total coercion, same pass-through of nullable project/submittedBy/approvedBy,
+// and the same `discrepancies.length > 0 ? discrepancies : null` shaping. The
+// route still owns request parsing, the Prisma reads, the access check, and
+// finding the diary/project/users.
+// =============================================================================
+
+export type DocketProjectSummary = { id: string; name: string };
+
+export type DocketUserSummary = { id: string; fullName: string | null; email: string };
+
+export type DocketDetailSource = {
+  id: string;
+  date: Date;
+  status: string;
+  projectId: string;
+  subcontractorCompany: { id: string; companyName: string };
+  notes: string | null;
+  foremanNotes: string | null;
+  adjustmentReason: string | null;
+  submittedAt: Date | null;
+  submittedById: string | null;
+  approvedAt: Date | null;
+  approvedById: string | null;
+  totalLabourSubmitted: NumericLike;
+  totalLabourApproved: NumericLike;
+  totalPlantSubmitted: NumericLike;
+  totalPlantApproved: NumericLike;
+  labourEntries: DocketLabourEntrySource[];
+  plantEntries: DocketPlantEntrySource[];
+};
+
+export function buildDocketDetailResponse(input: {
+  docket: DocketDetailSource;
+  project: DocketProjectSummary | null;
+  submittedBy: DocketUserSummary | null;
+  approvedBy: DocketUserSummary | null;
+  foremanDiary: ForemanDiarySummary | null;
+  discrepancies: string[];
+}) {
+  const { docket, project, submittedBy, approvedBy, foremanDiary, discrepancies } = input;
+  return {
+    docket: {
+      id: docket.id,
+      docketNumber: formatDocketNumber(docket.id),
+      date: formatDocketDate(docket.date),
+      status: docket.status,
+      projectId: docket.projectId,
+      project,
+      subcontractor: docket.subcontractorCompany,
+      notes: docket.notes,
+      foremanNotes: docket.foremanNotes,
+      adjustmentReason: docket.adjustmentReason,
+      submittedAt: docket.submittedAt,
+      submittedById: docket.submittedById,
+      submittedBy,
+      approvedAt: docket.approvedAt,
+      approvedById: docket.approvedById,
+      approvedBy,
+      totalLabourSubmitted: Number(docket.totalLabourSubmitted) || 0,
+      totalLabourApproved: Number(docket.totalLabourApproved) || 0,
+      totalPlantSubmitted: Number(docket.totalPlantSubmitted) || 0,
+      totalPlantApproved: Number(docket.totalPlantApproved) || 0,
+      labourEntries: docket.labourEntries.map((entry) => mapDocketLabourEntry(entry)),
+      plantEntries: docket.plantEntries.map((entry) => mapDocketPlantEntry(entry)),
+    },
+    foremanDiary,
+    discrepancies: discrepancies.length > 0 ? discrepancies : null,
   };
 }
