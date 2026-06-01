@@ -17,7 +17,6 @@ import { activeSubcontractorCompanyWhere } from '../lib/projectAccess.js';
 import { buildFrontendUrl } from '../lib/runtimeConfig.js';
 import { logError } from '../lib/serverLogger.js';
 import {
-  type HPProjectSettings,
   MAX_ID_LENGTH,
   MAX_RELEASE_TOKEN_LENGTH,
   isValidEmailAddress,
@@ -86,6 +85,10 @@ import {
   buildHoldPointChaseEmail,
   selectHoldPointChaseRecipients,
 } from './holdpoints/chaseNotifications.js';
+import {
+  buildHoldPointDetailResponse,
+  resolveHoldPointDetailSettings,
+} from './holdpoints/detailResponse.js';
 
 interface HoldPointReleaseRecipient {
   email: string;
@@ -279,45 +282,25 @@ holdpointsRouter.get(
     // Get existing hold point record
     const existingHP = lot.holdPoints[0];
 
-    // Get HP default recipients from project settings (Feature #697)
-    // Get HP approval requirement from project settings (Feature #698)
-    let defaultRecipients: string[] = [];
-    let approvalRequirement = 'any';
-    if (hasRequestPermission && lot.project.settings) {
-      try {
-        const settings = JSON.parse(lot.project.settings);
-        if (settings.hpRecipients && Array.isArray(settings.hpRecipients)) {
-          defaultRecipients = parseHPDefaultRecipients(settings as HPProjectSettings);
-        }
-        if (settings.hpApprovalRequirement) {
-          approvalRequirement = settings.hpApprovalRequirement;
-        }
-      } catch (_e) {
-        // Invalid JSON, use defaults
-      }
-    }
+    const { defaultRecipients, approvalRequirement } = resolveHoldPointDetailSettings({
+      hasRequestPermission,
+      projectSettings: lot.project.settings,
+    });
 
-    res.json({
-      holdPoint: {
-        id: existingHP?.id || null,
+    res.json(
+      buildHoldPointDetailResponse({
         lotId,
         lotNumber: lot.lotNumber,
-        itpChecklistItemId: itemId,
-        description: holdPointItem.description,
-        sequenceNumber: holdPointItem.sequenceNumber,
-        status: existingHP?.status || 'pending',
-        notificationSentAt: existingHP?.notificationSentAt,
-        scheduledDate: existingHP?.scheduledDate,
-        releasedAt: existingHP?.releasedAt,
-        releasedByName: existingHP?.releasedByName,
-        releaseNotes: existingHP?.releaseNotes,
-      },
-      prerequisites,
-      incompletePrerequisites,
-      canRequestRelease,
-      defaultRecipients, // Feature #697 - HP default recipients from project settings
-      approvalRequirement, // Feature #698 - HP approval requirement from project settings
-    });
+        itemId,
+        holdPointItem,
+        existingHoldPoint: existingHP,
+        prerequisites,
+        incompletePrerequisites,
+        canRequestRelease,
+        defaultRecipients,
+        approvalRequirement,
+      }),
+    );
   }),
 );
 
