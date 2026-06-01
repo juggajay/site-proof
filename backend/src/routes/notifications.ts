@@ -78,6 +78,13 @@ import {
   buildDigestQueueResponse,
   buildDigestSentResponse,
 } from './notifications/digestResponses.js';
+import {
+  buildAlertCreatedResponse,
+  buildAlertEscalationCheckResponse,
+  buildAlertResolvedResponse,
+  buildAlertsListResponse,
+  buildAlertTestEscalatedResponse,
+} from './notifications/alertResponses.js';
 
 // Re-exported so external modules that import the notification timing type from
 // this route file keep working after the email-preference helper extraction.
@@ -637,11 +644,7 @@ notificationsRouter.post(
       },
     });
 
-    res.json({
-      success: true,
-      alert: savedAlert,
-      message: 'Alert created successfully',
-    });
+    res.json(buildAlertCreatedResponse(savedAlert));
   }),
 );
 
@@ -709,10 +712,7 @@ notificationsRouter.get(
     // Sort by creation date (newest first)
     alerts.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-    res.json({
-      alerts,
-      count: alerts.length,
-    });
+    res.json(buildAlertsListResponse(alerts));
   }),
 );
 
@@ -746,11 +746,7 @@ notificationsRouter.put(
       }),
     );
 
-    res.json({
-      success: true,
-      alert: updatedAlert,
-      message: 'Alert resolved successfully',
-    });
+    res.json(buildAlertResolvedResponse(updatedAlert));
   }),
 );
 
@@ -860,12 +856,7 @@ notificationsRouter.post(
       },
     });
 
-    res.json({
-      success: true,
-      message: `Escalation check complete. ${escalatedAlerts.length} alerts escalated.`,
-      escalatedAlerts,
-      totalActiveAlerts,
-    });
+    res.json(buildAlertEscalationCheckResponse(escalatedAlerts, totalActiveAlerts));
   }),
 );
 
@@ -972,16 +963,7 @@ notificationsRouter.post(
       });
     }
 
-    res.json({
-      success: true,
-      alert: escalatedAlert,
-      escalatedTo: escalationUsers.map((u) => ({
-        id: u.id,
-        email: u.email,
-        roleInCompany: u.roleInCompany,
-      })),
-      message: `Alert escalated to level ${newLevel}. Notified ${escalationUsers.length} users.`,
-    });
+    res.json(buildAlertTestEscalatedResponse(escalatedAlert, escalationUsers, newLevel));
   }),
 );
 
