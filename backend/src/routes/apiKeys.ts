@@ -5,6 +5,11 @@ import { requireAuth } from '../middleware/authMiddleware.js';
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
 import { AuditAction, createAuditLog } from '../lib/auditLog.js';
+import {
+  buildApiKeyCreatedResponse,
+  buildApiKeyListResponse,
+  buildApiKeyRevokedResponse,
+} from './apiKeys/responses.js';
 import crypto from 'crypto';
 import { z } from 'zod';
 
@@ -217,13 +222,7 @@ router.post(
     });
 
     // Return the key (only shown once!)
-    res.status(201).json({
-      apiKey: {
-        ...apiKeyRecord,
-        key: apiKey, // Only returned on creation
-      },
-      message: 'API key created. Save this key securely - it cannot be retrieved again.',
-    });
+    res.status(201).json(buildApiKeyCreatedResponse(apiKeyRecord, apiKey));
   }),
 );
 
@@ -248,7 +247,7 @@ router.get(
       orderBy: { createdAt: 'desc' },
     });
 
-    res.json({ apiKeys });
+    res.json(buildApiKeyListResponse(apiKeys));
   }),
 );
 
@@ -289,7 +288,7 @@ router.delete(
       req,
     });
 
-    res.json({ message: 'API key revoked successfully' });
+    res.json(buildApiKeyRevokedResponse());
   }),
 );
 
