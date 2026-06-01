@@ -77,6 +77,11 @@ import {
   buildHoldPointReleaseEmailNotification,
   buildHoldPointReleaseNotifications,
 } from './holdpoints/releaseNotifications.js';
+import {
+  buildHoldPointReleaseConfirmationEmail,
+  selectHoldPointReleaseContractors,
+  selectHoldPointReleaseSuperintendents,
+} from './holdpoints/releaseConfirmationEmails.js';
 
 interface HoldPointReleaseRecipient {
   email: string;
@@ -814,46 +819,36 @@ holdpointsRouter.post(
         minute: '2-digit',
       });
 
-      // Send to contractors (site_engineer, foreman roles)
-      const contractorRoles = ['site_engineer', 'foreman', 'engineer'];
-      const contractors = projectUsers.filter((pu) => contractorRoles.includes(pu.role));
+      const confirmationContext = {
+        projectName: existingHP.lot.project.name,
+        lotNumber: holdPoint.lot.lotNumber,
+        holdPointDescription: holdPoint.description,
+        releasedByName,
+        releasedByOrg,
+        releaseMethod,
+        releaseNotes,
+        releasedAt: releasedAtDisplay,
+        lotUrl,
+      };
 
+      // Send to contractors (site_engineer, foreman roles)
+      const contractors = selectHoldPointReleaseContractors(projectUsers);
       for (const contractor of contractors) {
-        await sendHPReleaseConfirmationEmail({
-          to: contractor.user.email,
-          recipientName: contractor.user.fullName || 'Site Team',
-          recipientRole: 'contractor',
-          projectName: existingHP.lot.project.name,
-          lotNumber: holdPoint.lot.lotNumber,
-          holdPointDescription: holdPoint.description || 'Hold Point',
-          releasedByName: releasedByName || 'Unknown',
-          releasedByOrg: releasedByOrg || undefined,
-          releaseMethod: releaseMethod || undefined,
-          releaseNotes: releaseNotes || undefined,
-          releasedAt: releasedAtDisplay,
-          lotUrl,
-        });
+        await sendHPReleaseConfirmationEmail(
+          buildHoldPointReleaseConfirmationEmail(contractor, 'contractor', confirmationContext),
+        );
       }
 
       // Send to superintendents
-      const superintendentRoles = ['superintendent', 'project_manager'];
-      const superintendents = projectUsers.filter((pu) => superintendentRoles.includes(pu.role));
-
+      const superintendents = selectHoldPointReleaseSuperintendents(projectUsers);
       for (const superintendent of superintendents) {
-        await sendHPReleaseConfirmationEmail({
-          to: superintendent.user.email,
-          recipientName: superintendent.user.fullName || 'Superintendent',
-          recipientRole: 'superintendent',
-          projectName: existingHP.lot.project.name,
-          lotNumber: holdPoint.lot.lotNumber,
-          holdPointDescription: holdPoint.description || 'Hold Point',
-          releasedByName: releasedByName || 'Unknown',
-          releasedByOrg: releasedByOrg || undefined,
-          releaseMethod: releaseMethod || undefined,
-          releaseNotes: releaseNotes || undefined,
-          releasedAt: releasedAtDisplay,
-          lotUrl,
-        });
+        await sendHPReleaseConfirmationEmail(
+          buildHoldPointReleaseConfirmationEmail(
+            superintendent,
+            'superintendent',
+            confirmationContext,
+          ),
+        );
       }
     } catch (emailError) {
       logError('[HP Release] Failed to send confirmation emails:', emailError);
