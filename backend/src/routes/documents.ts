@@ -33,6 +33,13 @@ import { assertUploadedFileMatchesDeclaredType } from '../lib/imageValidation.js
 import { sanitizeUrlValueForLog } from '../lib/logSanitization.js';
 import { logError, logWarn } from '../lib/serverLogger.js';
 import { fetchWithTimeout } from '../lib/fetchWithTimeout.js';
+import {
+  buildDocumentClassificationResponse,
+  buildDocumentSignedUrlResponse,
+  buildDocumentVersionsResponse,
+  buildDocumentsListResponse,
+  buildSavedDocumentClassificationResponse,
+} from './documentResponses.js';
 
 type SignedUrlValidation = {
   valid: boolean;
@@ -1415,12 +1422,14 @@ router.get(
       categories[cat] = (categories[cat] || 0) + 1;
     }
 
-    res.json({
-      documents,
-      total,
-      categories,
-      pagination: getPaginationMeta(total, pagination.page, pagination.limit),
-    });
+    res.json(
+      buildDocumentsListResponse(
+        documents,
+        total,
+        categories,
+        getPaginationMeta(total, pagination.page, pagination.limit),
+      ),
+    );
   }),
 );
 
@@ -1704,11 +1713,7 @@ router.get(
       orderBy: { version: 'desc' },
     });
 
-    res.json({
-      documentId: rootDocumentId,
-      totalVersions: versions.length,
-      versions,
-    });
+    res.json(buildDocumentVersionsResponse(rootDocumentId, versions));
   }),
 );
 
@@ -1779,17 +1784,18 @@ router.post(
     }
     const signedUrl = buildBackendUrl(`/api/documents/download/${documentId}?${query}`);
 
-    res.json({
-      signedUrl,
-      token,
-      documentId,
-      filename: document.filename,
-      mimeType: document.mimeType,
-      disposition,
-      expiresAt: expiresAt.toISOString(),
-      expiresInMinutes: validExpiry,
-      message: `Signed URL valid for ${validExpiry} minutes`,
-    });
+    res.json(
+      buildDocumentSignedUrlResponse({
+        signedUrl,
+        token,
+        documentId,
+        filename: document.filename,
+        mimeType: document.mimeType,
+        disposition,
+        expiresAt,
+        expiresInMinutes: validExpiry,
+      }),
+    );
   }),
 );
 
@@ -1981,19 +1987,13 @@ Respond with ONLY the category lines, nothing else.`,
     suggestedClassifications.sort((a, b) => b.confidence - a.confidence);
     suggestedClassifications = suggestedClassifications.slice(0, 3);
 
-    // Primary classification is the highest confidence one (for backward compatibility)
-    const primaryClassification = suggestedClassifications[0]!;
-
-    res.json({
-      documentId,
-      // Backward compatible single classification
-      suggestedClassification: primaryClassification.label,
-      confidence: primaryClassification.confidence,
-      // Feature #729: Multi-label classifications
-      suggestedClassifications,
-      isMultiLabel: suggestedClassifications.length > 1,
-      categories: PHOTO_CLASSIFICATION_CATEGORIES,
-    });
+    res.json(
+      buildDocumentClassificationResponse(
+        documentId,
+        suggestedClassifications,
+        PHOTO_CLASSIFICATION_CATEGORIES,
+      ),
+    );
   }),
 );
 
@@ -2053,11 +2053,7 @@ router.post(
       },
     });
 
-    res.json({
-      ...updatedDocument,
-      // Feature #729: Return parsed classifications array for convenience
-      classificationLabels: finalClassification.split(', ').filter(Boolean),
-    });
+    res.json(buildSavedDocumentClassificationResponse(updatedDocument, finalClassification));
   }),
 );
 
