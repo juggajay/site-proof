@@ -55,6 +55,7 @@ import {
   sumDocketPlantTotals,
 } from './dockets/presentation.js';
 import { assertDocketSubmittable } from './dockets/submissionGuards.js';
+import { buildQueryResponseNotes } from './dockets/queryResponse.js';
 import {
   buildDocketApprovedNotifications,
   buildDocketQueriedNotifications,
@@ -1040,10 +1041,7 @@ docketsRouter.post(
     }
 
     // Update status back to pending_approval and append response to notes
-    const existingNotes = docket.notes || '';
-    const newNotes = existingNotes
-      ? `${existingNotes}\n\n--- Response to Query ---\n${response}`
-      : `--- Response to Query ---\n${response}`;
+    const newNotes = buildQueryResponseNotes(docket.notes, response);
 
     const updatedDocket = await prisma.dailyDocket.update({
       where: { id },
