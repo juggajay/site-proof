@@ -51,6 +51,10 @@ import {
   buildTestResultVerifiedResponse,
 } from './testResults/verificationResponses.js';
 import {
+  buildTestResultReceivedEmail,
+  buildTestResultReceivedNotification,
+} from './testResults/statusNotifications.js';
+import {
   buildTestResultStatusUpdatedResponse,
   buildTestResultWorkflowResponse,
 } from './testResults/workflowResponse.js';
@@ -1146,14 +1150,15 @@ testResultsRouter.post(
         const requestNum = testWithLab?.testRequestNumber || id.substring(0, 8).toUpperCase();
 
         // Create in-app notifications for site engineers
-        const notificationsToCreate = engineerUsers.map((eng) => ({
-          userId: eng.id,
-          projectId: testResult.projectId,
-          type: 'test_result_received',
-          title: 'Test Result Received',
-          message: `Test result for ${testResult.testType} (${requestNum}) has been received from ${labName}. Pending verification.`,
-          linkUrl: `/projects/${testResult.projectId}/tests`,
-        }));
+        const notificationsToCreate = engineerUsers.map((eng) =>
+          buildTestResultReceivedNotification({
+            userId: eng.id,
+            projectId: testResult.projectId,
+            testType: testResult.testType,
+            requestNumber: requestNum,
+            labName,
+          }),
+        );
 
         if (notificationsToCreate.length > 0) {
           await prisma.notification.createMany({
@@ -1163,12 +1168,17 @@ testResultsRouter.post(
 
         // Send email notifications
         for (const eng of engineerUsers) {
-          await sendNotificationIfEnabled(eng.id, 'enabled', {
-            title: 'Test Result Received',
-            message: `Test result for ${testResult.testType} (${requestNum}) from ${labName} is pending verification.`,
-            linkUrl: `/projects/${testResult.projectId}/tests`,
-            projectName: project?.name,
-          });
+          await sendNotificationIfEnabled(
+            eng.id,
+            'enabled',
+            buildTestResultReceivedEmail({
+              projectId: testResult.projectId,
+              projectName: project?.name,
+              testType: testResult.testType,
+              requestNumber: requestNum,
+              labName,
+            }),
+          );
         }
       } catch {
         // Don't fail the main request if notifications fail

@@ -793,6 +793,10 @@ test.describe('production readiness guardrails', () => {
       new URL('../../backend/src/routes/testResults.ts', import.meta.url),
       'utf8',
     );
+    const testResultsNotifications = await readFile(
+      new URL('../../backend/src/routes/testResults/statusNotifications.ts', import.meta.url),
+      'utf8',
+    );
 
     expectProjectRouteGuard(appSource, '/projects/:projectId/hold-points', 'HoldPointsPage');
     expectProjectRouteGuard(appSource, '/projects/:projectId/ncr', 'NCRPage');
@@ -805,8 +809,9 @@ test.describe('production readiness guardrails', () => {
       "/projects/${encodeURIComponent(projectId || '')}/ncr?ncr=${encodeURIComponent(ncrId)}",
     );
     expect(ncrActions).not.toContain('/projects/${projectId}/ncrs?ncr=${ncrId}');
-    expect(testResultsRoute).toContain('/projects/${testResult.projectId}/tests');
+    expect(testResultsNotifications).toContain('/projects/${projectId}/tests');
     expect(testResultsRoute).not.toContain('/projects/${testResult.projectId}/test-results');
+    expect(testResultsNotifications).not.toContain('/projects/${projectId}/test-results');
   });
 
   test('internal project module routes show role-denied UI before API fallback errors', async () => {
