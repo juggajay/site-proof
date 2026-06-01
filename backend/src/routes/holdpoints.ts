@@ -89,6 +89,13 @@ import {
   buildHoldPointDetailResponse,
   resolveHoldPointDetailSettings,
 } from './holdpoints/detailResponse.js';
+import {
+  buildHoldPointChaseResponse,
+  buildHoldPointEscalatedResponse,
+  buildHoldPointEscalationResolvedResponse,
+  buildHoldPointReleasedResponse,
+  buildHoldPointReleaseRequestedResponse,
+} from './holdpoints/actionResponses.js';
 
 interface HoldPointReleaseRecipient {
   email: string;
@@ -621,11 +628,7 @@ holdpointsRouter.post(
       req,
     });
 
-    res.json({
-      success: true,
-      message: 'Hold point release requested successfully',
-      holdPoint,
-    });
+    res.json(buildHoldPointReleaseRequestedResponse(holdPoint));
   }),
 );
 
@@ -861,15 +864,7 @@ holdpointsRouter.post(
       req,
     });
 
-    res.json({
-      success: true,
-      message: 'Hold point released successfully',
-      holdPoint,
-      notifiedUsers: projectUsers.map((pu) => ({
-        email: pu.user.email,
-        fullName: pu.user.fullName,
-      })),
-    });
+    res.json(buildHoldPointReleasedResponse(holdPoint, projectUsers));
   }),
 );
 
@@ -997,11 +992,7 @@ holdpointsRouter.post(
       req,
     });
 
-    res.json({
-      success: true,
-      message: 'Chase notification sent',
-      holdPoint,
-    });
+    res.json(buildHoldPointChaseResponse(holdPoint));
   }),
 );
 
@@ -1104,16 +1095,7 @@ holdpointsRouter.post(
       req,
     });
 
-    res.json({
-      success: true,
-      message: 'Hold point escalated successfully',
-      holdPoint,
-      notifiedUsers: projectUsers.map((pu) => ({
-        email: pu.user.email,
-        fullName: pu.user.fullName,
-        role: pu.role,
-      })),
-    });
+    res.json(buildHoldPointEscalatedResponse(holdPoint, projectUsers));
   }),
 );
 
@@ -1165,11 +1147,7 @@ holdpointsRouter.post(
       req,
     });
 
-    res.json({
-      success: true,
-      message: 'Escalation resolved',
-      holdPoint,
-    });
+    res.json(buildHoldPointEscalationResolvedResponse(holdPoint));
   }),
 );
 
