@@ -564,3 +564,13 @@ export function buildVerificationViewData(
     needsVerification: testResult.status !== 'verified',
   };
 }
+
+export function buildTestRequestFormResponse<TMetadata>(testRequestForm: TMetadata) {
+  return { testRequestForm };
+}
+
+export function buildVerificationViewResponse<TVerificationView>(
+  verificationView: TVerificationView,
+) {
+  return { verificationView };
+}

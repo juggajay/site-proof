@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildTestRequestFormMetadata,
+  buildTestRequestFormResponse,
   buildVerificationViewData,
+  buildVerificationViewResponse,
   escapeHtml,
   renderTestRequestFormHtml,
   type RequestFormSource,
@@ -317,5 +319,21 @@ describe('buildVerificationViewData', () => {
     );
     expect(result.extractedData.aiExtracted).toBe(true);
     expect(result.extractedData.aiConfidence).toEqual({ testType: 0.95 });
+  });
+});
+
+describe('test-result presentation response wrappers', () => {
+  it('wraps test request form metadata under the existing response key', () => {
+    const metadata = buildTestRequestFormMetadata(requestFormSource());
+
+    expect(buildTestRequestFormResponse(metadata)).toEqual({ testRequestForm: metadata });
+  });
+
+  it('wraps verification view data under the existing response key', () => {
+    const verificationView = buildVerificationViewData(verificationViewSource(), {
+      canVerify: true,
+    });
+
+    expect(buildVerificationViewResponse(verificationView)).toEqual({ verificationView });
   });
 });
