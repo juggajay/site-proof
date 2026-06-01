@@ -125,6 +125,26 @@ export function mapClaimReadinessItem(lot: ClaimReadinessLot, readiness: ClaimRe
   };
 }
 
+export function buildClaimableLotsResponse<TLot>(lots: TLot[]) {
+  return { lots };
+}
+
+export function buildClaimReadinessResponse<TLot>(lots: TLot[]) {
+  return { lots };
+}
+
+export function buildClaimsListResponse<TClaim>(claims: TClaim[]) {
+  return { claims };
+}
+
+export function buildClaimDetailResponse<TClaim>(claim: TClaim) {
+  return { claim };
+}
+
+export function buildClaimDeletedResponse() {
+  return { success: true };
+}
+
 export function mapClaimCertificationItem(
   claim: ClaimCertificationItem,
   variationNotes: string | undefined,
