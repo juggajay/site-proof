@@ -59,6 +59,11 @@ import {
   type AlertSeverity,
   type AlertType,
 } from './notifications/alertMappers.js';
+import {
+  ESCALATION_CONFIG,
+  createAlertRecord,
+  updateAlertEscalation,
+} from './notifications/alertPersistence.js';
 
 // Re-exported so external modules that import the notification timing type from
 // this route file keep working after the email-preference helper extraction.
@@ -779,71 +784,6 @@ notificationsRouter.delete(
 // ============================================================================
 // ALERT ESCALATION SYSTEM
 // ============================================================================
-
-// Escalation configuration (in hours)
-const ESCALATION_CONFIG = {
-  overdue_ncr: {
-    firstEscalationAfterHours: 24, // Escalate after 24 hours
-    secondEscalationAfterHours: 48, // Second escalation after 48 hours
-    escalationRoles: ['project_manager', 'quality_manager', 'admin'],
-  },
-  stale_hold_point: {
-    firstEscalationAfterHours: 4, // Escalate after 4 hours (critical workflow)
-    secondEscalationAfterHours: 8, // Second escalation after 8 hours
-    escalationRoles: ['superintendent', 'project_manager', 'admin'],
-  },
-  pending_approval: {
-    firstEscalationAfterHours: 8, // Escalate after 8 hours
-    secondEscalationAfterHours: 24, // Second escalation after 24 hours
-    escalationRoles: ['project_manager', 'admin'],
-  },
-  overdue_test: {
-    firstEscalationAfterHours: 48, // Escalate after 48 hours
-    secondEscalationAfterHours: 96, // Second escalation after 96 hours
-    escalationRoles: ['quality_manager', 'project_manager'],
-  },
-};
-
-async function createAlertRecord(alert: Alert): Promise<Alert> {
-  const record = await prisma.notificationAlert.create({
-    data: {
-      id: alert.id,
-      type: alert.type,
-      severity: alert.severity,
-      title: alert.title,
-      message: alert.message,
-      entityId: alert.entityId,
-      entityType: alert.entityType,
-      projectId: alert.projectId ?? null,
-      assignedToId: alert.assignedTo,
-      createdAt: alert.createdAt,
-      resolvedAt: alert.resolvedAt ?? null,
-      escalatedAt: alert.escalatedAt ?? null,
-      escalationLevel: alert.escalationLevel,
-      escalatedTo: alert.escalatedTo ?? undefined,
-    },
-  });
-
-  return toAlert(record);
-}
-
-async function updateAlertEscalation(
-  id: string,
-  escalationLevel: number,
-  escalatedAt: Date,
-  escalatedTo: string[],
-): Promise<Alert> {
-  const record = await prisma.notificationAlert.update({
-    where: { id },
-    data: {
-      escalationLevel,
-      escalatedAt,
-      escalatedTo,
-    },
-  });
-
-  return toAlert(record);
-}
 
 // POST /api/notifications/alerts - Create a new alert
 notificationsRouter.post(
