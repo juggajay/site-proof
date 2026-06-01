@@ -668,6 +668,10 @@ test.describe('production readiness guardrails', () => {
       new URL('../../backend/src/routes/notifications.ts', import.meta.url),
       'utf8',
     );
+    const notificationsAccessSource = await readFile(
+      new URL('../../backend/src/routes/notifications/access.ts', import.meta.url),
+      'utf8',
+    );
     const pushSource = await readFile(
       new URL('../../backend/src/routes/pushNotifications.ts', import.meta.url),
       'utf8',
@@ -677,8 +681,16 @@ test.describe('production readiness guardrails', () => {
       'utf8',
     );
 
-    expect(notificationsSource).toContain('function requireNonProductionDiagnostics');
-    expect(notificationsSource).toContain("process.env.NODE_ENV === 'production'");
+    // The non-production diagnostics guard was extracted to
+    // notifications/access.ts; assert it still lives there and gates on
+    // NODE_ENV === 'production' by throwing the forbidden error.
+    expect(notificationsAccessSource).toContain('function requireNonProductionDiagnostics');
+    expect(notificationsAccessSource).toContain("process.env.NODE_ENV === 'production'");
+    expect(notificationsAccessSource).toContain(
+      "throw AppError.forbidden('Not available in production')",
+    );
+    // notifications.ts must still import and call the guard on its diagnostic routes.
+    expect(notificationsSource).toContain('requireNonProductionDiagnostics');
     for (const route of ['email-queue', 'add-to-digest', 'send-digest', 'digest-queue']) {
       expect(notificationsSource).toContain(route);
     }
