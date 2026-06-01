@@ -79,6 +79,16 @@ export type HoldPointListLot = {
   holdPoints: HoldPointListPersistedHoldPoint[];
 };
 
+export function buildHoldPointListResponse<TPagination>(
+  holdPoints: HoldPointListItem[],
+  pagination: TPagination,
+) {
+  return {
+    holdPoints,
+    pagination,
+  };
+}
+
 // Build the sorted hold-point list from the loaded lots. One item per hold-point
 // checklist item: the persisted HoldPoint row when present, otherwise a virtual
 // entry keyed `virtual-${lot.id}-${item.id}`. Sorted by lot number then sequence.

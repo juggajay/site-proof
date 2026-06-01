@@ -71,7 +71,10 @@ import {
   getIncompletePrerequisites,
   getPrecedingChecklistItems,
 } from './holdpoints/prerequisites.js';
-import { buildHoldPointListItems } from './holdpoints/listPresentation.js';
+import {
+  buildHoldPointListItems,
+  buildHoldPointListResponse,
+} from './holdpoints/listPresentation.js';
 import {
   buildHoldPointReleaseEmailNotification,
   buildHoldPointReleaseNotifications,
@@ -224,10 +227,9 @@ holdpointsRouter.get(
     const start = (page - 1) * limit;
     const paginatedHoldPoints = holdPoints.slice(start, start + limit);
 
-    res.json({
-      holdPoints: paginatedHoldPoints,
-      pagination: getPaginationMeta(total, page, limit),
-    });
+    res.json(
+      buildHoldPointListResponse(paginatedHoldPoints, getPaginationMeta(total, page, limit)),
+    );
   }),
 );
 
