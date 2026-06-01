@@ -59,6 +59,7 @@ import {
   buildDocketRejectedNotifications,
   buildDocketSubmittedNotifications,
 } from './dockets/notifications.js';
+import { buildDocketDiaryComparison } from './dockets/diaryComparison.js';
 import type { Prisma } from '@prisma/client';
 
 export const docketsRouter = Router();
@@ -281,9 +282,6 @@ docketsRouter.get(
     await requireDocketReadAccess(req.user!, docket);
 
     // Get foreman diary for the same date to compare (Feature #265 Step 3)
-    let foremanDiary = null;
-    const discrepancies: string[] = [];
-
     const diary = await prisma.dailyDiary.findFirst({
       where: {
         projectId: docket.projectId,
@@ -305,46 +303,9 @@ docketsRouter.get(
       },
     });
 
-    if (diary) {
-      // Calculate weather hours lost from delays
-      const weatherDelays = diary.delays.filter((d) => d.delayType === 'weather');
-      const weatherHoursLost = weatherDelays.reduce(
-        (sum, d) => sum + (Number(d.durationHours) || 0),
-        0,
-      );
-
-      foremanDiary = {
-        id: diary.id,
-        date: formatDocketDate(diary.date),
-        status: diary.status,
-        personnelCount: diary.personnel.length,
-        plantCount: diary.plant.length,
-        weatherConditions: diary.weatherConditions,
-        weatherHoursLost,
-        activitiesCount: diary.activities.length,
-      };
-
-      // Feature #265 Step 4 - Highlight discrepancies
-      const docketPersonnelCount = docket.labourEntries.length;
-      const diaryPersonnelCount = diary.personnel.length;
-      if (docketPersonnelCount > 0 && diaryPersonnelCount !== docketPersonnelCount) {
-        discrepancies.push(
-          `Personnel count may differ: docket has ${docketPersonnelCount} entries, diary has ${diaryPersonnelCount}`,
-        );
-      }
-
-      const docketPlantCount = docket.plantEntries.length;
-      const diaryPlantCount = diary.plant.length;
-      if (docketPlantCount > 0 && diaryPlantCount !== docketPlantCount) {
-        discrepancies.push(
-          `Plant/equipment count may differ: docket has ${docketPlantCount} entries, diary has ${diaryPlantCount}`,
-        );
-      }
-
-      if (weatherHoursLost > 0) {
-        discrepancies.push(`Weather hours lost noted in diary: ${weatherHoursLost} hours`);
-      }
-    }
+    // Feature #265 Steps 3-4 - Summarize the same-day foreman diary and flag
+    // docket/diary discrepancies (pure comparison; see dockets/diaryComparison).
+    const { foremanDiary, discrepancies } = buildDocketDiaryComparison(docket, diary);
 
     // Format labour entries
     const labourEntries = docket.labourEntries.map((entry) => mapDocketLabourEntry(entry));
