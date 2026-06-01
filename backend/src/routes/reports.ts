@@ -15,6 +15,11 @@ import {
   calculateNextScheduledReportRunAt,
 } from '../lib/scheduledReports.js';
 import { getEffectiveProjectRole } from '../lib/projectAccess.js';
+import {
+  buildScheduledReportDeletedResponse,
+  buildScheduledReportResponse,
+  buildScheduledReportsResponse,
+} from './reportResponses.js';
 
 export const reportsRouter = Router();
 
@@ -1388,7 +1393,7 @@ reportsRouter.get(
       take: MAX_SCHEDULED_REPORTS_PER_PROJECT,
     });
 
-    res.json({ schedules, maxSchedules: MAX_SCHEDULED_REPORTS_PER_PROJECT });
+    res.json(buildScheduledReportsResponse(schedules, MAX_SCHEDULED_REPORTS_PER_PROJECT));
   }),
 );
 
@@ -1444,7 +1449,7 @@ reportsRouter.post(
       },
     });
 
-    res.status(201).json({ schedule });
+    res.status(201).json(buildScheduledReportResponse(schedule));
   }),
 );
 
@@ -1514,7 +1519,7 @@ reportsRouter.put(
       data: updateData,
     });
 
-    res.json({ schedule });
+    res.json(buildScheduledReportResponse(schedule));
   }),
 );
 
@@ -1538,6 +1543,6 @@ reportsRouter.delete(
       where: { id },
     });
 
-    res.json({ success: true, message: 'Scheduled report deleted' });
+    res.json(buildScheduledReportDeletedResponse());
   }),
 );
