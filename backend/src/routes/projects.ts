@@ -9,6 +9,10 @@ import { asyncHandler } from '../lib/asyncHandler.js';
 import { ROLES } from '../lib/roles.js';
 import { PROJECT_ADMIN_ROLES } from '../lib/projectAdminInvariant.js';
 import { Prisma } from '@prisma/client';
+import {
+  buildProjectDetailResponse,
+  buildProjectListResponse,
+} from './projects/listDetailResponses.js';
 
 export const projectsRouter = Router();
 
@@ -432,12 +436,7 @@ projectsRouter.get(
       orderBy: { createdAt: 'desc' },
     });
 
-    // Hide contract values from subcontractors (commercial isolation)
-    const sanitizedProjects = isSubcontractor
-      ? projects.map((p) => ({ ...p, contractValue: null }))
-      : projects;
-
-    res.json({ projects: sanitizedProjects });
+    res.json(buildProjectListResponse(projects, isSubcontractor));
   }),
 );
 
@@ -541,15 +540,7 @@ projectsRouter.get(
       project.workingDays = null;
     }
 
-    // Map projectNumber to code for frontend consistency
-    res.json({
-      project: {
-        ...project,
-        code: project.projectNumber,
-        chainageStart: project.chainageStart ? Number(project.chainageStart) : null,
-        chainageEnd: project.chainageEnd ? Number(project.chainageEnd) : null,
-      },
-    });
+    res.json(buildProjectDetailResponse(project));
   }),
 );
 
