@@ -4,11 +4,14 @@ import {
   buildProjectEntityLink,
   formatDateKey,
   getPreviousWorkingDay,
-  isDueForProjectTime,
-  isWorkingDay,
   parsePositiveInteger,
   startOfDay,
 } from './notificationAutomation/helpers.js';
+import {
+  type DiaryAutomationDependencies,
+  processDueDiaryReminders as processDueDiaryRemindersJob,
+  processMissingDiaryAlerts as processMissingDiaryAlertsJob,
+} from './notificationAutomation/diaryAutomation.js';
 import {
   type EmailPreferences,
   type NotificationTypeWithTiming,
@@ -477,176 +480,26 @@ async function createAlertRecord(data: {
   return id;
 }
 
+const diaryAutomationDependencies = {
+  prisma,
+  dayMs: DAY_MS,
+  diaryReminderRoles: DIARY_REMINDER_ROLES,
+  missingDiaryAlertRoles: MISSING_DIARY_ALERT_ROLES,
+  findActiveProjects,
+  findProjectUsersByRoles,
+  notifyUsers,
+} satisfies DiaryAutomationDependencies;
+
 export async function processDueDiaryReminders(
   options: NotificationAutomationJobOptions = {},
 ): Promise<DiaryReminderJobResult> {
-  const now = options.now ?? new Date();
-  const targetDate = startOfDay(now);
-  const dateKey = formatDateKey(targetDate);
-  const projects = await findActiveProjects(options);
-  const result: DiaryReminderJobResult = {
-    projectsChecked: projects.length,
-    remindersCreated: 0,
-    skippedProjects: 0,
-    usersNotified: 0,
-    inAppCreated: 0,
-    emailsSent: 0,
-    emailsQueued: 0,
-    emailsFailed: 0,
-    date: dateKey,
-  };
-
-  for (const project of projects) {
-    if (!isWorkingDay(project, targetDate) || !isDueForProjectTime(now, project.workingHoursEnd)) {
-      result.skippedProjects += 1;
-      continue;
-    }
-
-    const existingDiary = await prisma.dailyDiary.findFirst({
-      where: {
-        projectId: project.id,
-        date: {
-          gte: targetDate,
-          lt: new Date(targetDate.getTime() + DAY_MS),
-        },
-      },
-    });
-
-    if (existingDiary) {
-      result.skippedProjects += 1;
-      continue;
-    }
-
-    const existingReminder = await prisma.notification.findFirst({
-      where: {
-        projectId: project.id,
-        type: 'diary_reminder',
-        message: { contains: dateKey },
-      },
-    });
-
-    if (existingReminder) {
-      result.skippedProjects += 1;
-      continue;
-    }
-
-    const users = await findProjectUsersByRoles(project.id, DIARY_REMINDER_ROLES);
-    const message = `No daily diary entry found for ${project.name} on ${dateKey}. Please complete your site diary.`;
-    const delivery = await notifyUsers(
-      users,
-      {
-        projectId: project.id,
-        type: 'diary_reminder',
-        title: 'Daily Diary Reminder',
-        message,
-        linkUrl: `/projects/${project.id}/diary`,
-        createdAt: now,
-      },
-      'diaryReminder',
-      {
-        title: 'Daily Diary Reminder',
-        message,
-        projectName: project.name,
-        linkUrl: `/projects/${project.id}/diary`,
-      },
-    );
-
-    if (delivery.inAppCreated > 0) {
-      result.remindersCreated += 1;
-      result.inAppCreated += delivery.inAppCreated;
-      result.emailsSent += delivery.emailsSent;
-      result.emailsQueued += delivery.emailsQueued;
-      result.emailsFailed += delivery.emailsFailed;
-      result.usersNotified += delivery.usersNotified;
-    } else {
-      result.skippedProjects += 1;
-    }
-  }
-
-  return result;
+  return processDueDiaryRemindersJob(options, diaryAutomationDependencies);
 }
 
 export async function processMissingDiaryAlerts(
   options: NotificationAutomationJobOptions = {},
 ): Promise<MissingDiaryAlertJobResult> {
-  const now = options.now ?? new Date();
-  const projects = await findActiveProjects(options);
-  const result: MissingDiaryAlertJobResult = {
-    projectsChecked: projects.length,
-    alertsCreated: 0,
-    skippedProjects: 0,
-    usersNotified: 0,
-    inAppCreated: 0,
-    emailsSent: 0,
-    emailsQueued: 0,
-    emailsFailed: 0,
-  };
-
-  for (const project of projects) {
-    const missingDate = getPreviousWorkingDay(now, project.workingDays);
-    const missingDateKey = formatDateKey(missingDate);
-    const existingDiary = await prisma.dailyDiary.findFirst({
-      where: {
-        projectId: project.id,
-        date: {
-          gte: missingDate,
-          lt: new Date(missingDate.getTime() + DAY_MS),
-        },
-      },
-    });
-
-    if (existingDiary) {
-      result.skippedProjects += 1;
-      continue;
-    }
-
-    const existingAlert = await prisma.notification.findFirst({
-      where: {
-        projectId: project.id,
-        type: 'diary_missing_alert',
-        message: { contains: missingDateKey },
-      },
-    });
-
-    if (existingAlert) {
-      result.skippedProjects += 1;
-      continue;
-    }
-
-    const users = await findProjectUsersByRoles(project.id, MISSING_DIARY_ALERT_ROLES);
-    const message = `ALERT: No daily diary entry was completed for ${project.name} on ${missingDateKey}. This is more than 24 hours overdue.`;
-    const delivery = await notifyUsers(
-      users,
-      {
-        projectId: project.id,
-        type: 'diary_missing_alert',
-        title: 'Missing Diary Alert',
-        message,
-        linkUrl: `/projects/${project.id}/diary`,
-        createdAt: now,
-      },
-      'ncrAssigned',
-      {
-        title: 'Missing Diary Alert',
-        message,
-        projectName: project.name,
-        linkUrl: `/projects/${project.id}/diary`,
-      },
-    );
-
-    if (delivery.inAppCreated > 0) {
-      result.alertsCreated += 1;
-      result.inAppCreated += delivery.inAppCreated;
-      result.emailsSent += delivery.emailsSent;
-      result.emailsQueued += delivery.emailsQueued;
-      result.emailsFailed += delivery.emailsFailed;
-      result.usersNotified += delivery.usersNotified;
-    } else {
-      result.skippedProjects += 1;
-    }
-  }
-
-  return result;
+  return processMissingDiaryAlertsJob(options, diaryAutomationDependencies);
 }
 
 export async function processDocketBacklogAlerts(
