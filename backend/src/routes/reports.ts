@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
@@ -10,6 +9,7 @@ import { createClaimReportRouter } from './reports/claimRoutes.js';
 import { createLotStatusReportRouter } from './reports/lotStatusRoutes.js';
 import { createNcrReportRouter } from './reports/ncrRoutes.js';
 import { createScheduledReportRouter } from './reports/scheduleRoutes.js';
+import { createTestReportRouter } from './reports/testRoutes.js';
 
 export const reportsRouter = Router();
 
@@ -265,116 +265,15 @@ reportsRouter.use(
   }),
 );
 
-// GET /api/reports/test - Test results report (Feature #208)
-reportsRouter.get(
-  '/test',
-  asyncHandler(async (req, res) => {
-    const { startDate, endDate, testTypes, lotIds, page = '1', limit = '100' } = req.query;
-    const projectId = parseRequiredString(req.query.projectId, 'projectId');
-
-    await requireReportProjectAccess(req.user, projectId);
-
-    // Pagination parameters
-    const { pageNum, limitNum, skip } = parseReportPagination(page, limit);
-
-    // Build where clause with optional filters
-    const whereClause: Prisma.TestResultWhereInput = { projectId };
-
-    // Filter by date range (using sample date)
-    const parsedStartDate = parseOptionalDateQuery(startDate, 'startDate');
-    const parsedEndDate = parseOptionalDateQuery(endDate, 'endDate', true);
-    validateDateRange(parsedStartDate, parsedEndDate);
-    if (parsedStartDate || parsedEndDate) {
-      const sampleDate: Prisma.DateTimeNullableFilter = {};
-      if (parsedStartDate) {
-        sampleDate.gte = parsedStartDate.date;
-      }
-      if (parsedEndDate) {
-        sampleDate.lte = parsedEndDate.date;
-      }
-      whereClause.sampleDate = sampleDate;
-    }
-
-    // Filter by test types
-    const types = parseOptionalCommaSeparatedQuery(testTypes, 'testTypes');
-    if (types.length > 0) {
-      whereClause.testType = { in: types };
-    }
-
-    // Filter by lot IDs
-    const lots = parseOptionalCommaSeparatedQuery(lotIds, 'lotIds');
-    if (lots.length > 0) {
-      whereClause.lotId = { in: lots };
-    }
-
-    const [total, tests, passFailGroups, testTypeGroups, statusGroups] = await Promise.all([
-      prisma.testResult.count({ where: whereClause }),
-      prisma.testResult.findMany({
-        where: whereClause,
-        select: {
-          id: true,
-          testRequestNumber: true,
-          testType: true,
-          laboratoryName: true,
-          laboratoryReportNumber: true,
-          sampleDate: true,
-          resultDate: true,
-          resultValue: true,
-          resultUnit: true,
-          specificationMin: true,
-          specificationMax: true,
-          passFail: true,
-          status: true,
-          lotId: true,
-        },
-        orderBy: { sampleDate: 'desc' },
-        skip,
-        take: limitNum,
-      }),
-      prisma.testResult.groupBy({
-        by: ['passFail'],
-        where: whereClause,
-        _count: true,
-      }),
-      prisma.testResult.groupBy({
-        by: ['testType'],
-        where: whereClause,
-        _count: true,
-      }),
-      prisma.testResult.groupBy({
-        by: ['status'],
-        where: whereClause,
-        _count: true,
-      }),
-    ]);
-
-    const passFailCounts = groupedCountsToRecord(passFailGroups, 'passFail', 'pending');
-    const testTypeCounts = groupedCountsToRecord(testTypeGroups, 'testType', 'Unknown');
-    const statusCounts = groupedCountsToRecord(statusGroups, 'status', 'requested');
-
-    const report = {
-      generatedAt: new Date().toISOString(),
-      projectId,
-      totalTests: total,
-      passFailCounts,
-      testTypeCounts,
-      statusCounts,
-      tests,
-      summary: {
-        pass: passFailCounts['pass'] || 0,
-        fail: passFailCounts['fail'] || 0,
-        pending: passFailCounts['pending'] || 0,
-        passRate: total > 0 ? (((passFailCounts['pass'] || 0) / total) * 100).toFixed(1) : '0.0',
-      },
-      pagination: {
-        page: pageNum,
-        limit: limitNum,
-        total,
-        totalPages: Math.ceil(total / limitNum),
-      },
-    };
-
-    res.json(report);
+reportsRouter.use(
+  createTestReportRouter({
+    parseRequiredString,
+    parseReportPagination,
+    parseOptionalDateQuery,
+    parseOptionalCommaSeparatedQuery,
+    validateDateRange,
+    requireReportProjectAccess,
+    groupedCountsToRecord,
   }),
 );
 
