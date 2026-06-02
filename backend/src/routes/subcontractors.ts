@@ -5,55 +5,17 @@ import { requireAuth } from '../middleware/authMiddleware.js';
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
 import { activeSubcontractorCompanyWhere } from '../lib/projectAccess.js';
-import {
-  buildSubcontractorDirectoryResponse,
-  buildSubcontractorsForProjectResponse,
-} from './subcontractors/invitationResponses.js';
+import { buildSubcontractorsForProjectResponse } from './subcontractors/invitationResponses.js';
 import { createSubcontractorAdminRouter } from './subcontractors/adminRoutes.js';
-import { buildAbnValidationResponse } from './subcontractors/abnValidationResponse.js';
+import {
+  createSubcontractorAbnValidationRouter,
+  validateABN,
+} from './subcontractors/abnValidationRoutes.js';
+import { createSubcontractorDirectoryRouter } from './subcontractors/directoryRoutes.js';
 import { createSubcontractorInvitationRouters } from './subcontractors/invitationRoutes.js';
 import { createSubcontractorMyCompanyRouter } from './subcontractors/myCompanyRoutes.js';
 import { createSubcontractorPortalAccessRouter } from './subcontractors/portalAccessRoutes.js';
 import { createSubcontractorRosterAdminRouter } from './subcontractors/rosterAdminRoutes.js';
-
-// Feature #483: ABN (Australian Business Number) validation
-// ABN is an 11-digit number with a specific checksum algorithm
-function validateABN(abn: string): { valid: boolean; error?: string } {
-  if (!abn) {
-    return { valid: true }; // ABN is optional
-  }
-
-  // Remove spaces and dashes
-  const cleanABN = abn.replace(/[\s-]/g, '');
-
-  // Must be exactly 11 digits
-  if (!/^\d{11}$/.test(cleanABN)) {
-    return { valid: false, error: 'ABN must be exactly 11 digits' };
-  }
-
-  // ABN validation algorithm (ATO specification)
-  // 1. Subtract 1 from the first digit
-  // 2. Multiply each digit by its weighting factor
-  // 3. Sum the results
-  // 4. If divisible by 89, ABN is valid
-  const weights = [10, 1, 3, 5, 7, 9, 11, 13, 15, 17, 19];
-  const digits = cleanABN.split('').map(Number);
-
-  // Subtract 1 from first digit
-  digits[0] = digits[0] - 1;
-
-  // Calculate weighted sum
-  let sum = 0;
-  for (let i = 0; i < 11; i++) {
-    sum += digits[i] * weights[i];
-  }
-
-  if (sum % 89 !== 0) {
-    return { valid: false, error: 'Invalid ABN - checksum failed' };
-  }
-
-  return { valid: true };
-}
 
 export const subcontractorsRouter = Router();
 
@@ -386,32 +348,9 @@ subcontractorsRouter.use(subcontractorInvitationRouters.authenticatedRouter);
 
 // GET /api/subcontractors/directory - Get global subcontractors for the user's organization
 // This allows selecting existing subcontractors when inviting to a new project
-subcontractorsRouter.get(
-  '/directory',
-  asyncHandler(async (req, res) => {
-    const user = req.user!;
-
-    // User must belong to a company
-    if (!user.companyId) {
-      throw AppError.badRequest(
-        'User must belong to an organization to access the subcontractor directory',
-      );
-    }
-
-    if (!isHeadContractorRole(user)) {
-      throw AppError.forbidden('Only head contractor users can access the subcontractor directory');
-    }
-
-    // Get all global subcontractors for this organization
-    const globalSubcontractors = await prisma.globalSubcontractor.findMany({
-      where: {
-        organizationId: user.companyId,
-        status: 'active',
-      },
-      orderBy: { companyName: 'asc' },
-    });
-
-    res.json(buildSubcontractorDirectoryResponse(globalSubcontractors));
+subcontractorsRouter.use(
+  createSubcontractorDirectoryRouter({
+    isHeadContractorRole,
   }),
 );
 
@@ -546,21 +485,9 @@ subcontractorsRouter.use(
     equipmentTextMaxLength: EQUIPMENT_TEXT_MAX_LENGTH,
   }),
 );
-// Feature #483: POST /api/subcontractors/validate-abn - Validate an ABN
-subcontractorsRouter.post(
-  '/validate-abn',
-  asyncHandler(async (req, res) => {
-    const { abn } = req.body;
 
-    if (typeof abn !== 'string' || !abn.trim()) {
-      throw AppError.badRequest('Please provide an ABN to validate');
-    }
-    if (abn.length > ABN_MAX_LENGTH) {
-      throw AppError.badRequest(`ABN must be ${ABN_MAX_LENGTH} characters or fewer`);
-    }
-
-    const validation = validateABN(abn);
-
-    res.json(buildAbnValidationResponse(abn, validation));
+subcontractorsRouter.use(
+  createSubcontractorAbnValidationRouter({
+    abnMaxLength: ABN_MAX_LENGTH,
   }),
 );
