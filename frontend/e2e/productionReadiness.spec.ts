@@ -763,12 +763,14 @@ test.describe('production readiness guardrails', () => {
       new URL('../src/pages/holdpoints/PublicHoldPointReleasePage.tsx', import.meta.url),
       'utf8',
     );
-    const holdpointsRoute = await readFile(
-      new URL('../../backend/src/routes/holdpoints.ts', import.meta.url),
+    const holdPointRequestReleaseRoute = await readFile(
+      new URL('../../backend/src/routes/holdpoints/requestReleaseRoutes.ts', import.meta.url),
       'utf8',
     );
 
-    expect(holdpointsRoute).toContain('buildFrontendUrl(`/hp-release/${recipient.secureToken}`)');
+    expect(holdPointRequestReleaseRoute).toContain(
+      'buildFrontendUrl(`/hp-release/${recipient.secureToken}`)',
+    );
     expect(appSource).toContain('PublicHoldPointReleasePage');
     expect(appSource).toContain(
       '<Route path="/hp-release/:token" element={<PublicHoldPointReleasePage />} />',
