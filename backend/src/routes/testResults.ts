@@ -2,28 +2,19 @@ import { Router } from 'express';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
-import { parsePagination, getPrismaSkipTake, getPaginationMeta } from '../lib/pagination.js';
 import { sendNotificationIfEnabled } from './notifications.js';
 import { createAuditLog, AuditAction } from '../lib/auditLog.js';
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
-import {
-  getEffectiveProjectRole,
-  requireSubcontractorPortalModuleAccess,
-} from '../lib/projectAccess.js';
+import { getEffectiveProjectRole } from '../lib/projectAccess.js';
 import { logWarn } from '../lib/serverLogger.js';
 import {
   TEST_CREATORS,
   TEST_DELETERS,
   TEST_VERIFIERS,
-  getAssignedSubcontractorLotIds,
-  getReadableProjectIds,
-  isSubcontractorUser,
   requireLotInProject,
-  requireProjectReadAccess,
   requireTestProjectRole,
   requireTestResultReadAccess,
-  requireTestResultsPortalAccess,
 } from './testResults/accessControl.js';
 import {
   certificateUpload,
@@ -37,17 +28,13 @@ import {
   processCertificateUpload,
 } from './testResults/certificateIntake.js';
 import { confirmExtraction, processBatchConfirm } from './testResults/extractionConfirmation.js';
-import { buildLaboratoriesResponse } from './testResults/laboratoryResponses.js';
-import {
-  buildEmptyTestResultsListResponse,
-  buildTestResultsListResponse,
-} from './testResults/listResponses.js';
 import {
   buildTestResultCreatedResponse,
   buildTestResultDeletedResponse,
   buildTestResultDetailResponse,
   buildTestResultUpdatedResponse,
 } from './testResults/detailResponses.js';
+import { listRoutes } from './testResults/listRoutes.js';
 import { specificationRoutes } from './testResults/specificationRoutes.js';
 import {
   buildTestRequestFormMetadata,
@@ -75,13 +62,10 @@ import {
   MAX_REJECTION_REASON_LENGTH,
   MAX_RESULT_UNIT_LENGTH,
   MAX_SAMPLE_LOCATION_LENGTH,
-  MAX_SEARCH_LENGTH,
   MAX_TEST_ID_LENGTH,
   MAX_TEST_REQUEST_NUMBER_LENGTH,
   MAX_TEST_TEXT_LENGTH,
   MAX_TEST_TYPE_LENGTH,
-  MAX_UPLOAD_PROJECT_ID_LENGTH,
-  normalizeOptionalQueryString,
   normalizeOptionalString,
   normalizePassFail,
   normalizeRequiredString,
@@ -98,224 +82,7 @@ export const testResultsRouter = Router();
 testResultsRouter.use(requireAuth);
 
 testResultsRouter.use('/specifications', specificationRoutes);
-
-// GET /api/test-results/laboratories - Get recent laboratory names for auto-population (Feature #470)
-testResultsRouter.get(
-  '/laboratories',
-  asyncHandler(async (req, res) => {
-    const user = req.user!;
-    const projectId = normalizeOptionalQueryString(
-      req.query.projectId,
-      'projectId',
-      MAX_UPLOAD_PROJECT_ID_LENGTH,
-    );
-    const search = normalizeOptionalQueryString(req.query.search, 'search', MAX_SEARCH_LENGTH);
-
-    const whereClause: Prisma.TestResultWhereInput = {
-      laboratoryName: { not: null },
-    };
-
-    if (projectId) {
-      await requireProjectReadAccess(projectId, user);
-      await requireTestResultsPortalAccess(projectId, user);
-      whereClause.projectId = projectId;
-      const assignedLotIds = await getAssignedSubcontractorLotIds(projectId, user);
-      if (assignedLotIds !== null) {
-        if (assignedLotIds.length === 0) {
-          return res.json(buildLaboratoriesResponse([]));
-        }
-        whereClause.lotId = { in: assignedLotIds };
-      }
-    } else {
-      let readableProjectIds = await getReadableProjectIds(user);
-      if (readableProjectIds.length === 0) {
-        return res.json(buildLaboratoriesResponse([]));
-      }
-
-      if (isSubcontractorUser(user)) {
-        const portalEnabledProjectIds: string[] = [];
-        for (const readableProjectId of readableProjectIds) {
-          try {
-            await requireTestResultsPortalAccess(readableProjectId, user);
-            portalEnabledProjectIds.push(readableProjectId);
-          } catch (error) {
-            if (!(error instanceof AppError) || error.statusCode !== 403) {
-              throw error;
-            }
-          }
-        }
-
-        readableProjectIds = portalEnabledProjectIds;
-        if (readableProjectIds.length === 0) {
-          return res.json(buildLaboratoriesResponse([]));
-        }
-      }
-
-      whereClause.projectId = { in: readableProjectIds };
-      if (isSubcontractorUser(user)) {
-        const assignedLotIdSets = await Promise.all(
-          readableProjectIds.map((readableProjectId) =>
-            getAssignedSubcontractorLotIds(readableProjectId, user),
-          ),
-        );
-        const assignedLotIds = [...new Set(assignedLotIdSets.flatMap((lotIds) => lotIds ?? []))];
-        if (assignedLotIds.length === 0) {
-          return res.json(buildLaboratoriesResponse([]));
-        }
-        whereClause.lotId = { in: assignedLotIds };
-      }
-    }
-
-    if (search) {
-      whereClause.laboratoryName = {
-        not: null,
-        contains: search,
-        mode: 'insensitive',
-      };
-    }
-
-    // Get distinct laboratory names, ordered by most recently used
-    const recentLabs = await prisma.testResult.groupBy({
-      by: ['laboratoryName'],
-      where: whereClause,
-      _max: {
-        createdAt: true,
-      },
-      orderBy: {
-        _max: {
-          createdAt: 'desc',
-        },
-      },
-      take: 20,
-    });
-
-    res.json(buildLaboratoriesResponse(recentLabs.map((lab) => lab.laboratoryName)));
-  }),
-);
-
-// GET /api/test-results - List all test results for a project
-testResultsRouter.get(
-  '/',
-  asyncHandler(async (req, res) => {
-    const user = req.user!;
-    const projectId = normalizeOptionalQueryString(
-      req.query.projectId,
-      'projectId',
-      MAX_UPLOAD_PROJECT_ID_LENGTH,
-    );
-    const lotId = normalizeOptionalQueryString(req.query.lotId, 'lotId', MAX_TEST_ID_LENGTH);
-    const search = normalizeOptionalQueryString(req.query.search, 'search', MAX_SEARCH_LENGTH);
-
-    if (!projectId) {
-      throw AppError.badRequest('projectId query parameter is required');
-    }
-
-    await requireProjectReadAccess(projectId, user);
-    await requireSubcontractorPortalModuleAccess({
-      userId: user.id,
-      role: user.roleInCompany,
-      projectId,
-      module: 'testResults',
-    });
-
-    // Build where clause
-    const whereClause: Prisma.TestResultWhereInput = { projectId };
-
-    // Filter by lot if provided
-    if (lotId) {
-      whereClause.lotId = lotId;
-    }
-
-    const assignedLotIds = await getAssignedSubcontractorLotIds(projectId, user);
-    if (assignedLotIds !== null) {
-      // Subcontractors can only see test results on their assigned lots.
-      if (assignedLotIds.length === 0) {
-        return res.json(buildEmptyTestResultsListResponse());
-      }
-
-      if (lotId) {
-        if (!assignedLotIds.includes(lotId)) {
-          return res.json(buildEmptyTestResultsListResponse());
-        }
-        whereClause.lotId = lotId;
-      } else {
-        whereClause.lotId = { in: assignedLotIds };
-      }
-    }
-
-    const pagination = parsePagination(req.query);
-    const { skip, take } = getPrismaSkipTake(pagination.page, pagination.limit);
-    const finalWhereClause: Prisma.TestResultWhereInput = search
-      ? {
-          AND: [
-            whereClause,
-            {
-              OR: [
-                { testType: { contains: search, mode: 'insensitive' } },
-                { testRequestNumber: { contains: search, mode: 'insensitive' } },
-                { laboratoryName: { contains: search, mode: 'insensitive' } },
-                { laboratoryReportNumber: { contains: search, mode: 'insensitive' } },
-                { sampleLocation: { contains: search, mode: 'insensitive' } },
-                { resultUnit: { contains: search, mode: 'insensitive' } },
-                { status: { contains: search, mode: 'insensitive' } },
-                {
-                  lot: {
-                    is: {
-                      lotNumber: { contains: search, mode: 'insensitive' },
-                    },
-                  },
-                },
-              ],
-            },
-          ],
-        }
-      : whereClause;
-
-    const [testResults, total] = await Promise.all([
-      prisma.testResult.findMany({
-        where: finalWhereClause,
-        select: {
-          id: true,
-          testType: true,
-          testRequestNumber: true,
-          laboratoryName: true,
-          laboratoryReportNumber: true,
-          sampleDate: true,
-          sampleLocation: true,
-          testDate: true,
-          resultDate: true,
-          resultValue: true,
-          resultUnit: true,
-          specificationMin: true,
-          specificationMax: true,
-          passFail: true,
-          status: true,
-          lotId: true,
-          lot: {
-            select: {
-              id: true,
-              lotNumber: true,
-            },
-          },
-          aiExtracted: true, // Feature #200
-          createdAt: true,
-          updatedAt: true,
-        },
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take,
-      }),
-      prisma.testResult.count({ where: finalWhereClause }),
-    ]);
-
-    res.json(
-      buildTestResultsListResponse(
-        testResults,
-        getPaginationMeta(total, pagination.page, pagination.limit),
-      ),
-    );
-  }),
-);
+testResultsRouter.use(listRoutes);
 
 // GET /api/test-results/:id - Get a single test result
 testResultsRouter.get(
