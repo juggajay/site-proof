@@ -24,6 +24,7 @@ const parentProtectedRoutePrefixes = new Set([
   'dockets/',
   'notifications/',
   'lots/',
+  'claims/evidenceRoutes.ts',
   'subcontractors/myCompanyRoutes.ts',
 ]);
 
