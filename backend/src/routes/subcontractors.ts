@@ -35,13 +35,8 @@ import {
   buildSubcontractorsForProjectResponse,
   buildUserPendingSubcontractorInvitationResponse,
 } from './subcontractors/invitationResponses.js';
-import {
-  buildSubcontractorPortalCompanyResponse,
-  buildSubcontractorPortalEmployeeCreatedResponse,
-  buildSubcontractorPortalPlantCreatedResponse,
-  buildSubcontractorPortalResourceDeletedResponse,
-} from './subcontractors/portalResourceResponses.js';
 import { buildAbnValidationResponse } from './subcontractors/abnValidationResponse.js';
+import { createSubcontractorMyCompanyRouter } from './subcontractors/myCompanyRoutes.js';
 
 // Feature #483: ABN (Australian Business Number) validation
 // ABN is an 11-digit number with a specific checksum algorithm
@@ -857,210 +852,21 @@ subcontractorsRouter.post(
   }),
 );
 
-// GET /api/subcontractors/my-company - Get the current user's subcontractor company
-subcontractorsRouter.get(
-  '/my-company',
-  asyncHandler(async (req, res) => {
-    const user = req.user!;
-    assertStandaloneSubcontractorPortalUser(user);
-    const requestedProjectId =
-      req.query.projectId === undefined ? null : normalizeIdParam(req.query.projectId, 'projectId');
-
-    // Get every active project link for this subcontractor portal user. A single subcontractor
-    // identity can work across multiple head-contractor projects, so the portal must not silently
-    // pin them to whichever link Postgres happens to return first.
-    const subcontractorUsers = await prisma.subcontractorUser.findMany({
-      where: {
-        userId: user.id,
-        subcontractorCompany: activeSubcontractorCompanyWhere(),
-      },
-      include: {
-        subcontractorCompany: {
-          include: {
-            employeeRoster: true,
-            plantRegister: true,
-            project: {
-              select: {
-                id: true,
-                name: true,
-              },
-            },
-          },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    const subcontractorUser = requestedProjectId
-      ? subcontractorUsers.find(
-          (link) => link.subcontractorCompany.projectId === requestedProjectId,
-        )
-      : subcontractorUsers[0];
-
-    if (!subcontractorUser || !subcontractorUser.subcontractorCompany) {
-      throw AppError.forbidden(
-        requestedProjectId
-          ? 'You do not have subcontractor portal access to this project'
-          : 'Only subcontractors can access this endpoint',
-      );
-    }
-
-    const company = subcontractorUser.subcontractorCompany;
-    assertSubcontractorPortalActive(company);
-
-    res.json(
-      buildSubcontractorPortalCompanyResponse(
-        company,
-        user,
-        subcontractorUsers,
-        DEFAULT_PORTAL_ACCESS,
-      ),
-    );
-  }),
-);
-
-// POST /api/subcontractors/my-company/employees - Add a new employee
-subcontractorsRouter.post(
-  '/my-company/employees',
-  asyncHandler(async (req, res) => {
-    const user = req.user!;
-    assertStandaloneSubcontractorPortalUser(user);
-    const subcontractorUser = await getScopedSubcontractorUserLink(req, user);
-
-    if (!canManageLinkedSubcontractorCompany(user, subcontractorUser.role)) {
-      throw AppError.forbidden('Only subcontractor admins can add employees');
-    }
-
-    assertSubcontractorPortalActive(subcontractorUser.subcontractorCompany);
-
-    const { name, phone, role, hourlyRate } = req.body;
-
-    const normalizedName = normalizeRequiredText(name, 'name', PERSON_NAME_MAX_LENGTH);
-    const normalizedPhone = normalizeOptionalPhone(phone, 'phone');
-    const normalizedRole = normalizeRequiredText(role, 'role', ROLE_MAX_LENGTH);
-    const normalizedHourlyRate = normalizeRate(hourlyRate, 'hourlyRate');
-
-    const employee = await prisma.employeeRoster.create({
-      data: {
-        subcontractorCompanyId: subcontractorUser.subcontractorCompany.id,
-        name: normalizedName,
-        phone: normalizedPhone,
-        role: normalizedRole,
-        hourlyRate: normalizedHourlyRate,
-        status: 'pending', // Needs head contractor approval
-      },
-    });
-
-    res.status(201).json(buildSubcontractorPortalEmployeeCreatedResponse(employee));
-  }),
-);
-
-// POST /api/subcontractors/my-company/plant - Add new plant
-subcontractorsRouter.post(
-  '/my-company/plant',
-  asyncHandler(async (req, res) => {
-    const user = req.user!;
-    assertStandaloneSubcontractorPortalUser(user);
-    const subcontractorUser = await getScopedSubcontractorUserLink(req, user);
-
-    if (!canManageLinkedSubcontractorCompany(user, subcontractorUser.role)) {
-      throw AppError.forbidden('Only subcontractor admins can add plant');
-    }
-
-    assertSubcontractorPortalActive(subcontractorUser.subcontractorCompany);
-
-    const { type, description, idRego, dryRate, wetRate } = req.body;
-
-    const normalizedType = normalizeRequiredText(type, 'type', EQUIPMENT_TEXT_MAX_LENGTH);
-    const normalizedDescription = normalizeRequiredText(
-      description,
-      'description',
-      EQUIPMENT_TEXT_MAX_LENGTH,
-    );
-    const normalizedIdRego = normalizeOptionalText(idRego, 'idRego', EQUIPMENT_TEXT_MAX_LENGTH);
-    const normalizedDryRate = normalizeRate(dryRate, 'dryRate');
-    const normalizedWetRate = normalizeRate(wetRate, 'wetRate', {
-      required: false,
-      allowZero: true,
-    });
-
-    const plant = await prisma.plantRegister.create({
-      data: {
-        subcontractorCompanyId: subcontractorUser.subcontractorCompany.id,
-        type: normalizedType,
-        description: normalizedDescription,
-        idRego: normalizedIdRego,
-        dryRate: normalizedDryRate,
-        wetRate: normalizedWetRate,
-        status: 'pending', // Needs head contractor approval
-      },
-    });
-
-    res.status(201).json(buildSubcontractorPortalPlantCreatedResponse(plant));
-  }),
-);
-
-// DELETE /api/subcontractors/my-company/employees/:id - Delete an employee
-subcontractorsRouter.delete(
-  '/my-company/employees/:id',
-  asyncHandler(async (req, res) => {
-    const user = req.user!;
-    const id = normalizeIdParam(req.params.id, 'Employee ID');
-    assertStandaloneSubcontractorPortalUser(user);
-    const subcontractorUser = await getScopedSubcontractorUserLink(req, user);
-
-    if (!canManageLinkedSubcontractorCompany(user, subcontractorUser.role)) {
-      throw AppError.forbidden('Only subcontractor admins can delete employees');
-    }
-
-    assertSubcontractorPortalActive(subcontractorUser.subcontractorCompany);
-
-    // Verify the employee belongs to this company
-    const employee = await prisma.employeeRoster.findUnique({
-      where: { id },
-    });
-
-    if (!employee || employee.subcontractorCompanyId !== subcontractorUser.subcontractorCompanyId) {
-      throw AppError.notFound('Employee');
-    }
-
-    await prisma.employeeRoster.delete({
-      where: { id },
-    });
-
-    res.json(buildSubcontractorPortalResourceDeletedResponse('Employee deleted successfully'));
-  }),
-);
-
-// DELETE /api/subcontractors/my-company/plant/:id - Delete plant
-subcontractorsRouter.delete(
-  '/my-company/plant/:id',
-  asyncHandler(async (req, res) => {
-    const user = req.user!;
-    const id = normalizeIdParam(req.params.id, 'Plant ID');
-    assertStandaloneSubcontractorPortalUser(user);
-    const subcontractorUser = await getScopedSubcontractorUserLink(req, user);
-
-    if (!canManageLinkedSubcontractorCompany(user, subcontractorUser.role)) {
-      throw AppError.forbidden('Only subcontractor admins can delete plant');
-    }
-
-    assertSubcontractorPortalActive(subcontractorUser.subcontractorCompany);
-
-    // Verify the plant belongs to this company
-    const plant = await prisma.plantRegister.findUnique({
-      where: { id },
-    });
-
-    if (!plant || plant.subcontractorCompanyId !== subcontractorUser.subcontractorCompanyId) {
-      throw AppError.notFound('Plant');
-    }
-
-    await prisma.plantRegister.delete({
-      where: { id },
-    });
-
-    res.json(buildSubcontractorPortalResourceDeletedResponse('Plant deleted successfully'));
+subcontractorsRouter.use(
+  createSubcontractorMyCompanyRouter({
+    defaultPortalAccess: DEFAULT_PORTAL_ACCESS,
+    assertStandaloneSubcontractorPortalUser,
+    assertSubcontractorPortalActive,
+    canManageLinkedSubcontractorCompany,
+    getScopedSubcontractorUserLink,
+    normalizeIdParam,
+    normalizeRequiredText,
+    normalizeOptionalText,
+    normalizeOptionalPhone,
+    normalizeRate,
+    personNameMaxLength: PERSON_NAME_MAX_LENGTH,
+    roleMaxLength: ROLE_MAX_LENGTH,
+    equipmentTextMaxLength: EQUIPMENT_TEXT_MAX_LENGTH,
   }),
 );
 

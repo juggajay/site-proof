@@ -24,6 +24,7 @@ const parentProtectedRoutePrefixes = new Set([
   'dockets/',
   'notifications/',
   'lots/',
+  'subcontractors/myCompanyRoutes.ts',
 ]);
 
 const routeDeclarationPattern = /\b(?:router|[A-Za-z]+Router)\.(get|post|put|patch|delete)\(/;
