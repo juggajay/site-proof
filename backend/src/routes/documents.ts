@@ -3,7 +3,6 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
 import { AppError } from '../lib/AppError.js';
-import { asyncHandler } from '../lib/asyncHandler.js';
 import {
   getSupabaseClient,
   isSupabaseConfigured,
@@ -18,7 +17,6 @@ import {
   requireSubcontractorPortalModuleAccess,
 } from '../lib/projectAccess.js';
 import type { SubcontractorPortalAccessKey } from '../lib/projectAccess.js';
-import { createAuditLog, AuditAction } from '../lib/auditLog.js';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -37,6 +35,7 @@ import { createDocumentListRouter } from './documents/listRoutes.js';
 import { createDocumentUploadRouter } from './documents/uploadRoutes.js';
 import { createDocumentFileAccessRouter } from './documents/fileAccessRoutes.js';
 import { createDocumentVersionRouter } from './documents/versionRoutes.js';
+import { createDocumentDeleteRouter } from './documents/deleteRoutes.js';
 import { createDocumentClassificationRouter } from './documents/classificationRoutes.js';
 
 type SignedUrlValidation = {
@@ -1184,68 +1183,17 @@ router.use(
 );
 
 // DELETE /api/documents/:documentId - Delete a document
-router.delete(
-  '/:documentId',
-  asyncHandler(async (req: Request, res: Response) => {
-    const documentId = parseDocumentRouteParam(req.params.documentId, 'documentId');
-    const userId = req.user!.id;
-
-    if (!userId) {
-      throw AppError.unauthorized();
-    }
-
-    const document = await prisma.document.findUnique({
-      where: { id: documentId },
-    });
-
-    if (!document) {
-      throw AppError.notFound('Document');
-    }
-
-    const hasAccess = await canReadDocument(req.user!, document);
-    if (!hasAccess) {
-      throw AppError.forbidden('Access denied');
-    }
-    await requireDocumentMutationAccess(req.user!, document);
-
-    // Audit log for document deletion
-    await createAuditLog({
-      projectId: document.projectId,
-      userId,
-      entityType: 'document',
-      entityId: documentId,
-      action: AuditAction.DOCUMENT_DELETED,
-      changes: { filename: document.filename, fileUrl: document.fileUrl },
-      req,
-    });
-
-    // Delete database record
-    await prisma.document.delete({ where: { id: documentId } });
-
-    try {
-      if (
-        isSupabaseConfigured() &&
-        getOwnedDocumentStoragePath(document.fileUrl, document.projectId, document.documentType)
-      ) {
-        await deleteFromSupabase(document.fileUrl, document.projectId, document.documentType);
-      } else if (isExternalFileUrl(document.fileUrl)) {
-        logWarn(
-          'Skipping delete for external document URL:',
-          sanitizeUrlValueForLog(document.fileUrl),
-        );
-      } else if (document.fileUrl.startsWith('data:')) {
-        // Legacy inline documents have no storage object to delete.
-      } else {
-        const filePath = resolveLocalDocumentFilePath(document.fileUrl);
-        if (fs.existsSync(filePath)) {
-          fs.unlinkSync(filePath);
-        }
-      }
-    } catch (error) {
-      logWarn('Failed to delete document storage object after database delete:', error);
-    }
-
-    res.status(204).send();
+router.use(
+  createDocumentDeleteRouter({
+    prisma,
+    parseDocumentRouteParam,
+    canReadDocument,
+    requireDocumentMutationAccess,
+    isSupabaseConfigured,
+    getOwnedDocumentStoragePath,
+    deleteFromSupabase,
+    isExternalFileUrl,
+    resolveLocalDocumentFilePath,
   }),
 );
 
