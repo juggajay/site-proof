@@ -21,6 +21,11 @@ import {
 import { buildProjectOverviewResponse } from './projects/overviewResponses.js';
 import { buildProjectAuditLogsResponse } from './projects/auditResponses.js';
 import {
+  buildProjectAreaDeletedResponse,
+  buildProjectAreaResponse,
+  buildProjectAreasResponse,
+} from './projects/areaResponses.js';
+import {
   buildProjectUserInvitedResponse,
   buildProjectUserRemovedResponse,
   buildProjectUserRoleUpdatedResponse,
@@ -1825,16 +1830,7 @@ projectsRouter.get(
       orderBy: { chainageStart: 'asc' },
     });
 
-    res.json({
-      areas: areas.map((area) => ({
-        id: area.id,
-        name: area.name,
-        chainageStart: area.chainageStart ? Number(area.chainageStart) : null,
-        chainageEnd: area.chainageEnd ? Number(area.chainageEnd) : null,
-        colour: area.colour,
-        createdAt: area.createdAt,
-      })),
-    });
+    res.json(buildProjectAreasResponse(areas));
   }),
 );
 
@@ -1881,16 +1877,7 @@ projectsRouter.post(
       },
     });
 
-    res.status(201).json({
-      area: {
-        id: area.id,
-        name: area.name,
-        chainageStart: area.chainageStart ? Number(area.chainageStart) : null,
-        chainageEnd: area.chainageEnd ? Number(area.chainageEnd) : null,
-        colour: area.colour,
-        createdAt: area.createdAt,
-      },
-    });
+    res.status(201).json(buildProjectAreaResponse(area));
   }),
 );
 
@@ -1963,16 +1950,7 @@ projectsRouter.patch(
       data: updateData,
     });
 
-    res.json({
-      area: {
-        id: area.id,
-        name: area.name,
-        chainageStart: area.chainageStart ? Number(area.chainageStart) : null,
-        chainageEnd: area.chainageEnd ? Number(area.chainageEnd) : null,
-        colour: area.colour,
-        createdAt: area.createdAt,
-      },
-    });
+    res.json(buildProjectAreaResponse(area));
   }),
 );
 
@@ -2003,6 +1981,6 @@ projectsRouter.delete(
       where: { id: areaId },
     });
 
-    res.json({ message: 'Area deleted successfully' });
+    res.json(buildProjectAreaDeletedResponse());
   }),
 );
