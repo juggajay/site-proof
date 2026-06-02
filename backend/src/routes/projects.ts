@@ -1,7 +1,7 @@
 import { Router, type Request } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
-import { createAuditLog, AuditAction, parseAuditLogChanges } from '../lib/auditLog.js';
+import { createAuditLog, AuditAction } from '../lib/auditLog.js';
 import { sendNotificationIfEnabled } from './notifications.js';
 import { TIER_PROJECT_LIMITS } from '../lib/tierLimits.js';
 import { AppError } from '../lib/AppError.js';
@@ -19,6 +19,7 @@ import {
   buildProjectCreatedResponse,
 } from './projects/costResponses.js';
 import { buildProjectOverviewResponse } from './projects/overviewResponses.js';
+import { buildProjectAuditLogsResponse } from './projects/auditResponses.js';
 import {
   buildProjectUserInvitedResponse,
   buildProjectUserRemovedResponse,
@@ -1798,23 +1799,7 @@ projectsRouter.get(
       take: 100, // Limit to last 100 entries
     });
 
-    res.json({
-      auditLogs: auditLogs.map((log) => ({
-        id: log.id,
-        action: log.action,
-        entityType: log.entityType,
-        entityId: log.entityId,
-        changes: parseAuditLogChanges(log.changes),
-        performedBy: log.user
-          ? {
-              email: log.user.email,
-              fullName: log.user.fullName,
-            }
-          : null,
-        ipAddress: log.ipAddress,
-        createdAt: log.createdAt,
-      })),
-    });
+    res.json(buildProjectAuditLogsResponse(auditLogs));
   }),
 );
 
