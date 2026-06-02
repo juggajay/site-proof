@@ -76,8 +76,12 @@ function routeCalls(source: string): RouteCall[] {
   }));
 }
 
+function routeSourceHasAuthMiddleware(source: string): boolean {
+  return source.includes('requireAuth') || source.includes('requireJwtAuth');
+}
+
 function hasRouteWideAuth(source: string): boolean {
-  return /\b(?:router|[A-Za-z]+Router)\.use\(requireAuth\)/.test(source);
+  return /\b(?:router|[A-Za-z]+Router)\.use\((?:requireAuth|requireJwtAuth)\)/.test(source);
 }
 
 function isProtectedByParentRoute(relativePath: string): boolean {
@@ -86,9 +90,10 @@ function isProtectedByParentRoute(relativePath: string): boolean {
 
 function publicRouteDescriptorsBeforeRouteWideAuth(source: string): string[] {
   const preAuthSource =
-    source.split(/\b(?:router|[A-Za-z]+Router)\.use\(requireAuth\)/)[0] ?? source;
+    source.split(/\b(?:router|[A-Za-z]+Router)\.use\((?:requireAuth|requireJwtAuth)\)/)[0] ??
+    source;
   return routeCalls(preAuthSource)
-    .filter((route) => !route.source.includes('requireAuth'))
+    .filter((route) => !routeSourceHasAuthMiddleware(route.source))
     .map((route) => route.descriptor);
 }
 
@@ -148,9 +153,13 @@ function extractedPasswordResetRouteDescriptors(source: string): string[] {
   return routeCalls(source).map((route) => route.descriptor);
 }
 
+function extractedProfileRouteDescriptors(source: string): string[] {
+  return routeCalls(source).map((route) => route.descriptor);
+}
+
 function unprotectedRouteDescriptors(source: string): string[] {
   return routeCalls(source)
-    .filter((route) => !route.source.includes('requireAuth'))
+    .filter((route) => !routeSourceHasAuthMiddleware(route.source))
     .map((route) => route.descriptor);
 }
 
@@ -198,6 +207,10 @@ describe('route authentication coverage', () => {
       path.join(routesDir, 'auth/passwordResetRoutes.ts'),
       'utf8',
     );
+    const profileRoutesSource = await readFile(
+      path.join(routesDir, 'auth/profileRoutes.ts'),
+      'utf8',
+    );
     const oauthSource = await readFile(path.join(routesDir, 'oauth.ts'), 'utf8');
     const documentsSource = await readFile(path.join(routesDir, 'documents.ts'), 'utf8');
     const documentsPublicRoutesSource = await readFile(
@@ -239,7 +252,14 @@ describe('route authentication coverage', () => {
     const webhooksSource = await readFile(path.join(routesDir, 'webhooks.ts'), 'utf8');
     const serverSource = await readFile(serverPath, 'utf8');
 
-    expect(routeCalls(authSource).map((route) => route.descriptor)).toEqual([
+    const authRouteDescriptors = routeCalls(authSource).map((route) => route.descriptor);
+    const changePasswordIndex = authRouteDescriptors.indexOf('POST /change-password');
+    expect(changePasswordIndex).toBeGreaterThan(-1);
+    expect([
+      ...authRouteDescriptors.slice(0, changePasswordIndex),
+      ...extractedProfileRouteDescriptors(profileRoutesSource),
+      ...authRouteDescriptors.slice(changePasswordIndex),
+    ]).toEqual([
       'POST /register',
       'POST /login',
       'POST /magic-link/request',
@@ -267,7 +287,10 @@ describe('route authentication coverage', () => {
       authSource.indexOf("'/logout-all-devices'"),
     );
     expect(authSource.indexOf('createPasswordResetRouter({')).toBeLessThan(
-      authSource.indexOf("'/profile'"),
+      authSource.indexOf('createProfileRouter({'),
+    );
+    expect(authSource.indexOf('createProfileRouter({')).toBeLessThan(
+      authSource.indexOf("'/change-password'"),
     );
     expect(extractedPasswordResetRouteDescriptors(passwordResetRoutesSource)).toEqual([
       'POST /forgot-password',
@@ -278,9 +301,31 @@ describe('route authentication coverage', () => {
     expect(passwordResetRoutesSource).toContain('isMagicLinkToken(normalizedToken)');
     expect(passwordResetRoutesSource).toContain('AuditAction.PASSWORD_RESET_REQUESTED');
     expect(passwordResetRoutesSource).toContain('AuditAction.PASSWORD_CHANGED');
-    expect(routeSourceForDescriptor(authSource, 'PATCH /profile')).toContain('requireJwtAuth');
-    expect(routeSourceForDescriptor(authSource, 'POST /avatar')).toContain('requireJwtAuth');
-    expect(routeSourceForDescriptor(authSource, 'DELETE /avatar')).toContain('requireJwtAuth');
+    expect(extractedProfileRouteDescriptors(profileRoutesSource)).toEqual([
+      'PATCH /profile',
+      'POST /avatar',
+      'DELETE /avatar',
+    ]);
+    expect(routeSourceForDescriptor(profileRoutesSource, 'PATCH /profile')).toContain(
+      'requireJwtAuth',
+    );
+    expect(routeSourceForDescriptor(profileRoutesSource, 'POST /avatar')).toContain(
+      'requireJwtAuth',
+    );
+    expect(routeSourceForDescriptor(profileRoutesSource, 'DELETE /avatar')).toContain(
+      'requireJwtAuth',
+    );
+    expect(profileRoutesSource).toContain("avatarUpload.single('avatar')");
+    expect(profileRoutesSource).toContain('cleanupUploadedAvatar(uploadedFile)');
+    expect(profileRoutesSource).toContain(
+      'cleanupStoredAvatarUpload(avatarUrl, uploadedFile, userData.id)',
+    );
+    expect(profileRoutesSource).toContain('removeStoredAvatar(oldUser.avatarUrl, userData.id)');
+    expect(profileRoutesSource).toContain('removeStoredAvatar(user.avatarUrl, userData.id)');
+    expect(profileRoutesSource).toContain('isSupabaseConfigured() && uploadedFile.buffer');
+    expect(profileRoutesSource).toContain('AuditAction.USER_PROFILE_UPDATED');
+    expect(profileRoutesSource).toContain('AuditAction.USER_AVATAR_UPDATED');
+    expect(profileRoutesSource).toContain('AuditAction.USER_AVATAR_REMOVED');
     expect(routeSourceForDescriptor(authSource, 'POST /change-password')).toContain(
       'verifyToken(token)',
     );
