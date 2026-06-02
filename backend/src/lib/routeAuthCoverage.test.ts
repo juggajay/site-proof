@@ -18,7 +18,7 @@ const allowedPublicRouteFiles = new Set([
   'webhooks.ts',
 ]);
 
-const parentProtectedRoutePrefixes = new Set(['diary/']);
+const parentProtectedRoutePrefixes = new Set(['diary/', 'dockets/']);
 
 const routeDeclarationPattern = /\b(?:router|[A-Za-z]+Router)\.(get|post|put|patch|delete)\(/;
 const routeDescriptorPattern =
