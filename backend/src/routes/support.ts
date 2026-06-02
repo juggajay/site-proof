@@ -6,6 +6,7 @@ import { asyncHandler } from '../lib/asyncHandler.js';
 import { sendSupportRequestEmail } from '../lib/email.js';
 import { sanitizeLogText } from '../lib/logSanitization.js';
 import { logError } from '../lib/serverLogger.js';
+import { buildClientErrorReportResponse, buildSupportRequestResponse } from './supportResponses.js';
 
 export const supportRouter = Router();
 
@@ -209,12 +210,7 @@ supportRouter.post(
       throw new AppError(502, 'Support request could not be delivered', 'EXTERNAL_SERVICE_ERROR');
     }
 
-    return res.status(200).json({
-      success: true,
-      message: 'Support request submitted successfully',
-      ticketId,
-      category: supportRequest.category,
-    });
+    return res.status(200).json(buildSupportRequestResponse(ticketId, supportRequest.category));
   }),
 );
 
@@ -256,10 +252,7 @@ supportRouter.post(
       });
     }
 
-    return res.status(202).json({
-      success: true,
-      reportId,
-    });
+    return res.status(202).json(buildClientErrorReportResponse(reportId));
   }),
 );
 
