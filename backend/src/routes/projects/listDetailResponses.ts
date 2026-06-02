@@ -32,3 +32,10 @@ export function buildProjectDetailResponse(project: ProjectDetailRecord) {
     },
   };
 }
+
+export function buildProjectDeletedResponse(project: { id: string; name: string }) {
+  return {
+    message: 'Project deleted successfully',
+    deletedProject: { id: project.id, name: project.name },
+  };
+}
