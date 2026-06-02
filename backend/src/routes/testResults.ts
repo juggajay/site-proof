@@ -48,11 +48,7 @@ import {
   buildTestResultDetailResponse,
   buildTestResultUpdatedResponse,
 } from './testResults/detailResponses.js';
-import { testTypeSpecifications } from './testResults/specifications.js';
-import {
-  buildTestSpecificationsResponse,
-  mapTestSpecification,
-} from './testResults/specificationResponses.js';
+import { specificationRoutes } from './testResults/specificationRoutes.js';
 import {
   buildTestRequestFormMetadata,
   buildTestRequestFormResponse,
@@ -101,48 +97,7 @@ export const testResultsRouter = Router();
 // Apply authentication middleware to all test result routes
 testResultsRouter.use(requireAuth);
 
-// GET /api/test-results/specifications - Get all test type specifications
-testResultsRouter.get(
-  '/specifications',
-  asyncHandler(async (_req, res) => {
-    res.json(buildTestSpecificationsResponse(testTypeSpecifications));
-  }),
-);
-
-// GET /api/test-results/specifications/:testType - Get specification for a specific test type
-testResultsRouter.get(
-  '/specifications/:testType',
-  asyncHandler(async (req, res) => {
-    const testType = parseTestResultRouteParam(
-      req.params.testType,
-      'testType',
-      MAX_TEST_TYPE_LENGTH,
-    );
-
-    // Normalize test type key (lowercase, replace spaces with underscore)
-    const normalizedType = testType.toLowerCase().replace(/\s+/g, '_');
-
-    const spec = testTypeSpecifications[normalizedType];
-
-    if (!spec) {
-      // Try to find a partial match
-      const partialMatch = Object.entries(testTypeSpecifications).find(
-        ([key, value]) =>
-          key.includes(normalizedType) || value.name.toLowerCase().includes(testType.toLowerCase()),
-      );
-
-      if (partialMatch) {
-        return res.json(mapTestSpecification(partialMatch[0], partialMatch[1]));
-      }
-
-      throw new AppError(404, `No specification found for test type: ${testType}`, 'NOT_FOUND', {
-        availableTypes: Object.keys(testTypeSpecifications),
-      });
-    }
-
-    res.json(mapTestSpecification(normalizedType, spec));
-  }),
-);
+testResultsRouter.use('/specifications', specificationRoutes);
 
 // GET /api/test-results/laboratories - Get recent laboratory names for auto-population (Feature #470)
 testResultsRouter.get(
