@@ -14,6 +14,19 @@ import { AppError } from '../../lib/AppError.js';
 export const COMMERCIAL_DASHBOARD_ROLES = new Set(['owner', 'admin', 'project_manager']);
 export const COMPANY_ADMIN_ROLES = new Set(['owner', 'admin']);
 export const SUBCONTRACTOR_DASHBOARD_ROLES = new Set(['subcontractor', 'subcontractor_admin']);
+export const FOREMAN_DASHBOARD_ROLES = new Set([
+  'owner',
+  'admin',
+  'project_manager',
+  'site_manager',
+  'foreman',
+]);
+export const QUALITY_DASHBOARD_ROLES = new Set([
+  'owner',
+  'admin',
+  'project_manager',
+  'quality_manager',
+]);
 
 export type AuthUser = NonNullable<Express.Request['user']>;
 export type DashboardProject = {
