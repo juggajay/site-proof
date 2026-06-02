@@ -6,7 +6,6 @@ import { AppError } from '../lib/AppError.js';
 import {
   getSupabaseClient,
   isSupabaseConfigured,
-  getSupabasePublicUrl,
   getSupabaseStoragePath,
   DOCUMENTS_BUCKET,
 } from '../lib/supabase.js';
@@ -23,9 +22,8 @@ import fs from 'fs';
 import exifr from 'exifr';
 import crypto from 'crypto';
 import type { Prisma } from '@prisma/client';
-import { ensureUploadSubdirectory, resolveUploadPath } from '../lib/uploadPaths.js';
-import { sanitizeUrlValueForLog } from '../lib/logSanitization.js';
-import { logError, logWarn } from '../lib/serverLogger.js';
+import { ensureUploadSubdirectory } from '../lib/uploadPaths.js';
+import { logWarn } from '../lib/serverLogger.js';
 import {
   buildDocumentSignedUrlTokenResponse,
   buildInvalidDocumentSignedUrlTokenResponse,
@@ -37,6 +35,16 @@ import { createDocumentFileAccessRouter } from './documents/fileAccessRoutes.js'
 import { createDocumentVersionRouter } from './documents/versionRoutes.js';
 import { createDocumentDeleteRouter } from './documents/deleteRoutes.js';
 import { createDocumentClassificationRouter } from './documents/classificationRoutes.js';
+import {
+  cleanupStoredDocumentUpload,
+  cleanupUploadedFile,
+  deleteFromSupabase,
+  getOwnedDocumentStoragePath,
+  isExternalFileUrl,
+  loadDocumentImageAsBase64,
+  resolveLocalDocumentFilePath,
+  uploadToSupabase,
+} from './documents/storage.js';
 
 type SignedUrlValidation = {
   valid: boolean;
@@ -53,9 +61,7 @@ const MAX_CAPTION_LENGTH = 2000;
 const MAX_TAGS_LENGTH = 2000;
 const MAX_FILENAME_LENGTH = 180;
 const MAX_SEARCH_LENGTH = 200;
-const MAX_CLASSIFICATION_IMAGE_BYTES = 50 * 1024 * 1024;
 const DATE_COMPONENT_QUERY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})(?:$|[T\s])/;
-const LOCAL_DOCUMENT_FILE_SUBDIRECTORIES = ['documents', 'certificates', 'drawings'] as const;
 const ALLOWED_DOCUMENT_MIME_TYPES = new Set([
   'application/pdf',
   'application/msword',
@@ -82,70 +88,6 @@ const INLINE_RENDERABLE_DOCUMENT_MIME_TYPES = new Set([
   'image/gif',
   'image/webp',
 ]);
-
-async function loadSupabaseDocumentImageAsBase64(document: {
-  fileUrl: string;
-  projectId: string;
-  documentType?: string | null;
-}): Promise<string> {
-  const storagePath = getOwnedDocumentStoragePath(
-    document.fileUrl,
-    document.projectId,
-    document.documentType,
-  );
-  if (!storagePath) {
-    throw AppError.badRequest('Invalid Supabase document URL');
-  }
-
-  const { data, error } = await getSupabaseClient()
-    .storage.from(DOCUMENTS_BUCKET)
-    .download(storagePath);
-
-  if (error || !data) {
-    logWarn('Supabase image download failed for classification:', error);
-    throw AppError.notFound('Image file');
-  }
-
-  if (data.size > MAX_CLASSIFICATION_IMAGE_BYTES) {
-    throw AppError.badRequest('Image file is too large to classify');
-  }
-
-  return Buffer.from(await data.arrayBuffer()).toString('base64');
-}
-
-async function loadDocumentImageAsBase64(
-  document: { fileUrl: string; projectId: string; documentType?: string | null },
-  mimeType: string,
-): Promise<string> {
-  if (document.fileUrl.startsWith('data:')) {
-    const base64Match = document.fileUrl.match(
-      new RegExp(`^data:${mimeType.replace('/', '\\/')};base64,(.+)$`),
-    );
-    if (!base64Match) {
-      throw AppError.badRequest('Invalid base64 data URL format');
-    }
-    return base64Match[1];
-  }
-
-  if (isExternalFileUrl(document.fileUrl)) {
-    if (!isSupabaseConfigured()) {
-      throw AppError.notFound('Image file');
-    }
-    return loadSupabaseDocumentImageAsBase64(document);
-  }
-
-  const filePath = resolveLocalDocumentFilePath(document.fileUrl);
-  if (!fs.existsSync(filePath)) {
-    throw AppError.notFound('Image file');
-  }
-
-  const stats = fs.statSync(filePath);
-  if (stats.size > MAX_CLASSIFICATION_IMAGE_BYTES) {
-    throw AppError.badRequest('Image file is too large to classify');
-  }
-
-  return fs.readFileSync(filePath).toString('base64');
-}
 
 function hashSignedUrlToken(token: string): string {
   return crypto.createHash('sha256').update(token).digest('hex');
@@ -233,26 +175,8 @@ function parseSignedUrlExpiryMinutes(value: unknown): number {
   return parsed;
 }
 
-function isExternalFileUrl(fileUrl: string): boolean {
-  return /^https?:\/\//i.test(fileUrl);
-}
-
 function isSafeExternalDocumentUrl(fileUrl: string): boolean {
   return getSupabaseStoragePath(fileUrl, DOCUMENTS_BUCKET) !== null;
-}
-
-function resolveLocalDocumentFilePath(fileUrl: string): string {
-  for (const subdirectory of LOCAL_DOCUMENT_FILE_SUBDIRECTORIES) {
-    try {
-      return resolveUploadPath(fileUrl, subdirectory);
-    } catch (error) {
-      if (!(error instanceof AppError)) {
-        throw error;
-      }
-    }
-  }
-
-  throw AppError.badRequest('Invalid upload path');
 }
 
 function getSafeDownloadFilename(filename: string): string {
@@ -638,12 +562,6 @@ const DOCUMENT_CATEGORY_PORTAL_MODULES: Record<
   itp_evidence: 'itps',
   test_results: 'testResults',
 };
-
-function cleanupUploadedFile(file?: Express.Multer.File): void {
-  if (file?.path && fs.existsSync(file.path)) {
-    fs.unlinkSync(file.path);
-  }
-}
 
 function isDocumentSubcontractorUser(user: AuthUser): boolean {
   return user.roleInCompany === 'subcontractor' || user.roleInCompany === 'subcontractor_admin';
@@ -1033,87 +951,14 @@ const upload = multer({
   },
 });
 
-// Helper to upload file to Supabase Storage
-async function uploadToSupabase(
+function uploadDocumentToSupabase(
   file: Express.Multer.File,
   projectId: string,
 ): Promise<{ url: string; storagePath: string }> {
-  const storagePath = `${projectId}/${buildStoredFilename(file.originalname)}`;
-
-  const { error } = await getSupabaseClient()
-    .storage.from(DOCUMENTS_BUCKET)
-    .upload(storagePath, file.buffer, {
-      contentType: getSafeStoredDocumentMimeType(file),
-      upsert: false,
-    });
-
-  if (error) {
-    logError('Supabase document upload failed:', error);
-    throw AppError.internal('Failed to upload document');
-  }
-
-  const url = getSupabasePublicUrl(DOCUMENTS_BUCKET, storagePath);
-  return { url, storagePath };
-}
-
-function getDocumentStoragePrefixes(projectId: string, documentType?: string | null): string[] {
-  const prefixes = [`${projectId}/`];
-  if (documentType === 'drawing') {
-    prefixes.push(`drawings/${projectId}/`);
-  }
-  if (documentType === 'test_certificate') {
-    prefixes.push(`certificates/${projectId}/`);
-  }
-  return prefixes;
-}
-
-function getOwnedDocumentStoragePath(
-  fileUrl: string,
-  projectId: string,
-  documentType?: string | null,
-): string | null {
-  for (const expectedPrefix of getDocumentStoragePrefixes(projectId, documentType)) {
-    const storagePath = getSupabaseStoragePath(fileUrl, {
-      bucket: DOCUMENTS_BUCKET,
-      expectedPrefix,
-    });
-    if (storagePath) return storagePath;
-  }
-  return null;
-}
-
-// Helper to delete file from Supabase Storage
-async function deleteFromSupabase(
-  fileUrl: string,
-  projectId: string,
-  documentType?: string | null,
-): Promise<void> {
-  const storagePath = getOwnedDocumentStoragePath(fileUrl, projectId, documentType);
-  if (!storagePath) {
-    logWarn('Could not extract storage path from URL:', sanitizeUrlValueForLog(fileUrl));
-    return;
-  }
-
-  const { error } = await getSupabaseClient().storage.from(DOCUMENTS_BUCKET).remove([storagePath]);
-
-  if (error) {
-    logError('Supabase document delete failed:', error);
-  }
-}
-
-async function cleanupStoredDocumentUpload(
-  fileUrl: string | null,
-  file: Express.Multer.File,
-  projectId: string,
-): Promise<void> {
-  if (fileUrl && isSupabaseConfigured() && getOwnedDocumentStoragePath(fileUrl, projectId)) {
-    await deleteFromSupabase(fileUrl, projectId);
-    return;
-  }
-
-  if (!fileUrl || (!isExternalFileUrl(fileUrl) && !fileUrl.startsWith('data:'))) {
-    cleanupUploadedFile(file);
-  }
+  return uploadToSupabase(file, projectId, {
+    buildStoredFilename,
+    getSafeStoredDocumentMimeType,
+  });
 }
 
 router.use(
@@ -1146,7 +991,7 @@ router.use(
     getSafeStoredDocumentMimeType,
     extractPhotoMetadata,
     extractPhotoMetadataFromBuffer,
-    uploadToSupabase,
+    uploadToSupabase: uploadDocumentToSupabase,
     cleanupStoredDocumentUpload,
     sanitizeUploadFilename,
   }),
@@ -1164,7 +1009,7 @@ router.use(
     getSafeStoredDocumentMimeType,
     extractPhotoMetadata,
     extractPhotoMetadataFromBuffer,
-    uploadToSupabase,
+    uploadToSupabase: uploadDocumentToSupabase,
     cleanupStoredDocumentUpload,
     sanitizeUploadFilename,
   }),
