@@ -23,6 +23,12 @@ import {
   buildSubcontractorsForProjectResponse,
   buildUserPendingSubcontractorInvitationResponse,
 } from './subcontractors/invitationResponses.js';
+import {
+  buildSubcontractorPortalCompanyResponse,
+  buildSubcontractorPortalEmployeeCreatedResponse,
+  buildSubcontractorPortalPlantCreatedResponse,
+  buildSubcontractorPortalResourceDeletedResponse,
+} from './subcontractors/portalResourceResponses.js';
 
 // Feature #483: ABN (Australian Business Number) validation
 // ABN is an 11-digit number with a specific checksum algorithm
@@ -889,45 +895,14 @@ subcontractorsRouter.get(
     const company = subcontractorUser.subcontractorCompany;
     assertSubcontractorPortalActive(company);
 
-    res.json({
-      company: {
-        id: company.id,
-        companyName: company.companyName,
-        abn: company.abn || '',
-        projectId: company.projectId,
-        projectName: company.project?.name || '',
-        primaryContactName: company.primaryContactName || user.fullName || '',
-        primaryContactEmail: company.primaryContactEmail || user.email,
-        primaryContactPhone: company.primaryContactPhone || '',
-        status: company.status,
-        availableProjects: subcontractorUsers.map((link) => ({
-          id: link.subcontractorCompany.id,
-          companyName: link.subcontractorCompany.companyName,
-          projectId: link.subcontractorCompany.projectId,
-          projectName: link.subcontractorCompany.project?.name || '',
-          status: link.subcontractorCompany.status,
-          portalAccess: link.subcontractorCompany.portalAccess || DEFAULT_PORTAL_ACCESS,
-        })),
-        employees: company.employeeRoster.map((e) => ({
-          id: e.id,
-          name: e.name,
-          phone: e.phone || '',
-          role: e.role || '',
-          hourlyRate: e.hourlyRate?.toNumber() || 0,
-          status: e.status === 'approved' ? 'approved' : 'pending',
-        })),
-        plant: company.plantRegister.map((p) => ({
-          id: p.id,
-          type: p.type,
-          description: p.description || '',
-          idRego: p.idRego || '',
-          dryRate: p.dryRate?.toNumber() || 0,
-          wetRate: p.wetRate?.toNumber() || 0,
-          status: p.status === 'approved' ? 'approved' : 'pending',
-        })),
-        portalAccess: company.portalAccess || DEFAULT_PORTAL_ACCESS,
-      },
-    });
+    res.json(
+      buildSubcontractorPortalCompanyResponse(
+        company,
+        user,
+        subcontractorUsers,
+        DEFAULT_PORTAL_ACCESS,
+      ),
+    );
   }),
 );
 
@@ -963,16 +938,7 @@ subcontractorsRouter.post(
       },
     });
 
-    res.status(201).json({
-      employee: {
-        id: employee.id,
-        name: employee.name,
-        phone: employee.phone || '',
-        role: employee.role || '',
-        hourlyRate: employee.hourlyRate?.toNumber() || 0,
-        status: 'pending',
-      },
-    });
+    res.status(201).json(buildSubcontractorPortalEmployeeCreatedResponse(employee));
   }),
 );
 
@@ -1017,17 +983,7 @@ subcontractorsRouter.post(
       },
     });
 
-    res.status(201).json({
-      plant: {
-        id: plant.id,
-        type: plant.type,
-        description: plant.description || '',
-        idRego: plant.idRego || '',
-        dryRate: plant.dryRate?.toNumber() || 0,
-        wetRate: plant.wetRate?.toNumber() || 0,
-        status: 'pending',
-      },
-    });
+    res.status(201).json(buildSubcontractorPortalPlantCreatedResponse(plant));
   }),
 );
 
@@ -1059,7 +1015,7 @@ subcontractorsRouter.delete(
       where: { id },
     });
 
-    res.json({ message: 'Employee deleted successfully' });
+    res.json(buildSubcontractorPortalResourceDeletedResponse('Employee deleted successfully'));
   }),
 );
 
@@ -1091,7 +1047,7 @@ subcontractorsRouter.delete(
       where: { id },
     });
 
-    res.json({ message: 'Plant deleted successfully' });
+    res.json(buildSubcontractorPortalResourceDeletedResponse('Plant deleted successfully'));
   }),
 );
 
