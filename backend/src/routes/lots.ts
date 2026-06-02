@@ -102,6 +102,12 @@ import {
   buildLotAssignmentResponse,
   buildLotAssignmentsResponse,
 } from './lots/assignmentResponses.js';
+import {
+  buildLegacyLotAssignmentMutationResponse,
+  buildLotReadinessResponse,
+  buildLotRoleResponse,
+  buildLotUpdatedResponse,
+} from './lots/remainingResponses.js';
 
 export const lotsRouter = Router();
 
@@ -890,12 +896,7 @@ lotsRouter.patch(
       return updated;
     });
 
-    res.json({
-      lot: {
-        ...updatedLot,
-        budgetAmount: canViewLotBudget(userProjectRole) ? updatedLot.budgetAmount : null,
-      },
-    });
+    res.json(buildLotUpdatedResponse(updatedLot, canViewLotBudget(userProjectRole)));
   }),
 );
 
@@ -1315,13 +1316,7 @@ lotsRouter.post(
       });
     }
 
-    res.json({
-      message: subcontractorId
-        ? `Lot assigned to ${updatedLot.assignedSubcontractor?.companyName || 'subcontractor'}`
-        : 'Lot unassigned from subcontractor',
-      lot: updatedLot,
-      notificationsSent: subcontractorId ? true : false,
-    });
+    res.json(buildLegacyLotAssignmentMutationResponse(subcontractorId, updatedLot));
   }),
 );
 
@@ -1347,14 +1342,16 @@ lotsRouter.get(
     const canCloseNCRs = LOT_CONFORMERS.includes(role);
     const canManageITPTemplates = LOT_CONFORMERS.includes(role);
 
-    res.json({
-      role,
-      isQualityManager,
-      canConformLots,
-      canVerifyTestResults,
-      canCloseNCRs,
-      canManageITPTemplates,
-    });
+    res.json(
+      buildLotRoleResponse(
+        role,
+        isQualityManager,
+        canConformLots,
+        canVerifyTestResults,
+        canCloseNCRs,
+        canManageITPTemplates,
+      ),
+    );
   }),
 );
 
@@ -1450,7 +1447,7 @@ lotsRouter.get(
       },
     });
 
-    res.json({ readiness });
+    res.json(buildLotReadinessResponse(readiness));
   }),
 );
 
