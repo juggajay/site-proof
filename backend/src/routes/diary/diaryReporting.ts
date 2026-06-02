@@ -5,25 +5,19 @@ import { asyncHandler } from '../../lib/asyncHandler.js';
 import { buildCsv } from '../../lib/csvSafe.js';
 import { fetchWithTimeout } from '../../lib/fetchWithTimeout.js';
 import { parseDiaryDate, parseDiaryRouteParam, requireDiaryReadAccess } from './diaryAccess.js';
+import {
+  buildDiaryDelaysResponse,
+  buildDiaryTimelineResponse,
+  buildWeatherResponse,
+  buildWeatherUnavailableResponse,
+  type DailyWeatherData,
+} from './diaryReportingResponses.js';
 
 const router = Router();
 const REPORT_QUERY_MAX_LENGTH = 120;
-const WEATHER_UNAVAILABLE_MESSAGE = 'Weather auto-population unavailable. Enter weather manually.';
-
-type WeatherLocation = {
-  latitude: number;
-  longitude: number;
-  fromProjectState: boolean;
-};
 
 type OpenMeteoDailyWeatherResponse = {
-  daily?: {
-    time?: string[];
-    weather_code?: number[];
-    temperature_2m_min?: number[];
-    temperature_2m_max?: number[];
-    precipitation_sum?: number[];
-  };
+  daily?: DailyWeatherData;
 };
 
 function parseOptionalQueryString(
@@ -71,18 +65,12 @@ function buildDiaryDateFilter(query: Request['query']) {
   return dateFilter;
 }
 
-function sendWeatherUnavailable(res: Response, date: string, location: WeatherLocation) {
-  res.json({
-    date,
-    weatherConditions: null,
-    temperatureMin: null,
-    temperatureMax: null,
-    rainfallMm: null,
-    source: null,
-    unavailable: true,
-    message: WEATHER_UNAVAILABLE_MESSAGE,
-    location,
-  });
+function sendWeatherUnavailable(
+  res: Response,
+  date: string,
+  location: Parameters<typeof buildWeatherUnavailableResponse>[1],
+) {
+  res.json(buildWeatherUnavailableResponse(date, location));
 }
 
 // GET /api/diary/:projectId/weather/:date - Get weather for project location
@@ -207,16 +195,7 @@ router.get(
     const weatherCode = weatherData.daily.weather_code?.[0] ?? 0;
     const weatherCondition = weatherCodeMap[weatherCode] || 'Partly Cloudy';
 
-    res.json({
-      date: weatherData.daily.time?.[0],
-      weatherConditions: weatherCondition,
-      temperatureMin: weatherData.daily.temperature_2m_min?.[0],
-      temperatureMax: weatherData.daily.temperature_2m_max?.[0],
-      rainfallMm: weatherData.daily.precipitation_sum?.[0] || 0,
-      source: 'Open-Meteo',
-      unavailable: false,
-      location,
-    });
+    res.json(buildWeatherResponse(weatherData.daily, weatherCondition, location));
   }),
 );
 
@@ -267,30 +246,7 @@ router.get(
       delays = delays.filter((d) => d.delayType === delayType);
     }
 
-    // Calculate summary by type
-    const summaryByType: Record<string, { count: number; totalHours: number }> = {};
-    for (const delay of delays) {
-      if (!summaryByType[delay.delayType]) {
-        summaryByType[delay.delayType] = { count: 0, totalHours: 0 };
-      }
-      summaryByType[delay.delayType].count++;
-      summaryByType[delay.delayType].totalHours += delay.durationHours || 0;
-    }
-
-    // Calculate totals
-    const totalDelays = delays.length;
-    const totalHours = delays.reduce((sum, d) => sum + (d.durationHours || 0), 0);
-
-    res.json({
-      delays: delays.sort(
-        (a, b) => new Date(b.diaryDate).getTime() - new Date(a.diaryDate).getTime(),
-      ),
-      summary: {
-        totalDelays,
-        totalHours,
-        byType: summaryByType,
-      },
-    });
+    res.json(buildDiaryDelaysResponse(delays));
   }),
 );
 
@@ -536,7 +492,7 @@ router.get(
         })),
     ].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
-    res.json({ timeline });
+    res.json(buildDiaryTimelineResponse(timeline));
   }),
 );
 
