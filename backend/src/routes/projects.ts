@@ -13,6 +13,10 @@ import {
   buildProjectDetailResponse,
   buildProjectListResponse,
 } from './projects/listDetailResponses.js';
+import {
+  buildProjectCostsResponse,
+  buildProjectCreatedResponse,
+} from './projects/costResponses.js';
 
 export const projectsRouter = Router();
 
@@ -1067,8 +1071,8 @@ projectsRouter.get(
       (a, b) => b.totalCost - a.totalCost,
     ); // Sort by total cost descending
 
-    res.json({
-      summary: {
+    res.json(
+      buildProjectCostsResponse({
         totalLabourCost,
         totalPlantCost,
         totalCost,
@@ -1076,10 +1080,10 @@ projectsRouter.get(
         budgetVariance,
         approvedDockets: dockets.length,
         pendingDockets: pendingDocketCount,
-      },
-      subcontractorCosts,
-      lotCosts,
-    });
+        subcontractorCosts,
+        lotCosts,
+      }),
+    );
   }),
 );
 
@@ -1195,7 +1199,7 @@ projectsRouter.post(
       req,
     });
 
-    res.status(201).json({ project });
+    res.status(201).json(buildProjectCreatedResponse(project));
   }),
 );
 
