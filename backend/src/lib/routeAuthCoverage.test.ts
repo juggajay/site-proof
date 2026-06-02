@@ -10,6 +10,7 @@ const serverPath = fileURLToPath(new URL('../server.ts', import.meta.url));
 const allowedPublicRouteFiles = new Set([
   'auth.ts',
   'auth/registrationRoutes.ts',
+  'auth/sessionRoutes.ts',
   'auth/passwordResetRoutes.ts',
   'oauth.ts',
   'support.ts',
@@ -162,6 +163,10 @@ function extractedRegistrationRouteDescriptors(source: string): string[] {
   return routeCalls(source).map((route) => route.descriptor);
 }
 
+function extractedSessionRouteDescriptors(source: string): string[] {
+  return routeCalls(source).map((route) => route.descriptor);
+}
+
 function extractedProfileRouteDescriptors(source: string): string[] {
   return routeCalls(source).map((route) => route.descriptor);
 }
@@ -214,6 +219,10 @@ describe('route authentication coverage', () => {
     const authSource = await readFile(path.join(routesDir, 'auth.ts'), 'utf8');
     const registrationRoutesSource = await readFile(
       path.join(routesDir, 'auth/registrationRoutes.ts'),
+      'utf8',
+    );
+    const sessionRoutesSource = await readFile(
+      path.join(routesDir, 'auth/sessionRoutes.ts'),
       'utf8',
     );
     const passwordResetRoutesSource = await readFile(
@@ -270,13 +279,16 @@ describe('route authentication coverage', () => {
     const serverSource = await readFile(serverPath, 'utf8');
 
     const authRouteDescriptors = routeCalls(authSource).map((route) => route.descriptor);
-    const changePasswordIndex = authRouteDescriptors.indexOf('POST /change-password');
-    expect(changePasswordIndex).toBeGreaterThan(-1);
+    const verifyEmailIndex = authRouteDescriptors.indexOf('POST /verify-email');
+    const sessionRouteDescriptors = extractedSessionRouteDescriptors(sessionRoutesSource);
+    expect(verifyEmailIndex).toBeGreaterThan(-1);
     expect([
       ...extractedRegistrationRouteDescriptors(registrationRoutesSource),
-      ...authRouteDescriptors.slice(0, changePasswordIndex),
+      ...authRouteDescriptors.slice(0, verifyEmailIndex),
+      ...sessionRouteDescriptors.slice(0, 3),
       ...extractedProfileRouteDescriptors(profileRoutesSource),
-      ...authRouteDescriptors.slice(changePasswordIndex),
+      sessionRouteDescriptors[3],
+      ...authRouteDescriptors.slice(verifyEmailIndex),
     ]).toEqual([
       'POST /register',
       'POST /register-and-accept-invitation',
@@ -325,18 +337,59 @@ describe('route authentication coverage', () => {
     expect(
       routeSourceForDescriptor(registrationRoutesSource, 'POST /register-and-accept-invitation'),
     ).toContain('Account created and invitation accepted successfully');
-    expect(routeSourceForDescriptor(authSource, 'GET /me')).toContain('verifyToken(token)');
-    expect(routeSourceForDescriptor(authSource, 'POST /logout-all-devices')).toContain(
+    expect(authSource.indexOf('createSessionRouter({')).toBeGreaterThan(
+      authSource.indexOf("'/magic-link/verify'"),
+    );
+    expect(authSource.indexOf('createSessionRouter({')).toBeLessThan(
+      authSource.indexOf('createPasswordResetRouter({'),
+    );
+    expect(extractedSessionRouteDescriptors(sessionRoutesSource)).toEqual([
+      'GET /me',
+      'POST /logout',
+      'POST /logout-all-devices',
+      'POST /change-password',
+    ]);
+    expect(routeSourceForDescriptor(sessionRoutesSource, 'GET /me')).toContain(
+      "await import('../../lib/auth.js')",
+    );
+    expect(routeSourceForDescriptor(sessionRoutesSource, 'GET /me')).toContain(
       'verifyToken(token)',
     );
+    expect(routeSourceForDescriptor(sessionRoutesSource, 'POST /logout')).toContain(
+      'Logged out successfully',
+    );
+    expect(routeSourceForDescriptor(sessionRoutesSource, 'POST /logout-all-devices')).toContain(
+      'verifyToken(token)',
+    );
+    expect(routeSourceForDescriptor(sessionRoutesSource, 'POST /logout-all-devices')).toContain(
+      'getTokenAuthTime(token)',
+    );
+    expect(routeSourceForDescriptor(sessionRoutesSource, 'POST /logout-all-devices')).toContain(
+      'AuditAction.USER_LOGOUT',
+    );
+    expect(routeSourceForDescriptor(sessionRoutesSource, 'POST /change-password')).toContain(
+      "await import('../../lib/auth.js')",
+    );
+    expect(routeSourceForDescriptor(sessionRoutesSource, 'POST /change-password')).toContain(
+      'verifyPassword(normalizedCurrentPassword, user.passwordHash)',
+    );
+    expect(routeSourceForDescriptor(sessionRoutesSource, 'POST /change-password')).toContain(
+      'hashPassword(normalizedNewPassword)',
+    );
+    expect(routeSourceForDescriptor(sessionRoutesSource, 'POST /change-password')).toContain(
+      'AuditAction.PASSWORD_CHANGED',
+    );
     expect(authSource.indexOf('createPasswordResetRouter({')).toBeGreaterThan(
-      authSource.indexOf("'/logout-all-devices'"),
+      authSource.indexOf('createSessionRouter({'),
     );
     expect(authSource.indexOf('createPasswordResetRouter({')).toBeLessThan(
       authSource.indexOf('createProfileRouter({'),
     );
     expect(authSource.indexOf('createProfileRouter({')).toBeLessThan(
-      authSource.indexOf("'/change-password'"),
+      authSource.indexOf('createSessionPasswordRouter({'),
+    );
+    expect(authSource.indexOf('createSessionPasswordRouter({')).toBeLessThan(
+      authSource.indexOf("'/verify-email'"),
     );
     expect(extractedPasswordResetRouteDescriptors(passwordResetRoutesSource)).toEqual([
       'POST /forgot-password',
@@ -372,7 +425,7 @@ describe('route authentication coverage', () => {
     expect(profileRoutesSource).toContain('AuditAction.USER_PROFILE_UPDATED');
     expect(profileRoutesSource).toContain('AuditAction.USER_AVATAR_UPDATED');
     expect(profileRoutesSource).toContain('AuditAction.USER_AVATAR_REMOVED');
-    expect(routeSourceForDescriptor(authSource, 'POST /change-password')).toContain(
+    expect(routeSourceForDescriptor(sessionRoutesSource, 'POST /change-password')).toContain(
       'verifyToken(token)',
     );
     expect(routeSourceForDescriptor(authSource, 'POST /test-expired-token')).toContain(

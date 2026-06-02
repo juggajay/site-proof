@@ -1,14 +1,7 @@
 import { Router } from 'express';
 import type { NextFunction, Request, Response } from 'express';
 import { prisma } from '../lib/prisma.js';
-import {
-  generateToken,
-  generateExpiredToken,
-  getTokenAuthTime,
-  hashPassword,
-  verifyPassword,
-  verifyToken,
-} from '../lib/auth.js';
+import { generateToken, generateExpiredToken, verifyPassword, verifyToken } from '../lib/auth.js';
 import { sendMagicLinkEmail, sendVerificationEmail } from '../lib/email.js';
 import crypto from 'crypto';
 import { AppError } from '../lib/AppError.js';
@@ -28,6 +21,7 @@ import { AuditAction, createAuditLog } from '../lib/auditLog.js';
 import { hasActiveSubcontractorPortalIdentity } from '../lib/projectAccess.js';
 import { resolveDashboardRoleForUser } from '../lib/dashboardRole.js';
 import { createRegistrationRouter } from './auth/registrationRoutes.js';
+import { createSessionPasswordRouter, createSessionRouter } from './auth/sessionRoutes.js';
 import { createPasswordResetRouter } from './auth/passwordResetRoutes.js';
 import { createProfileRouter } from './auth/profileRoutes.js';
 
@@ -581,72 +575,10 @@ authRouter.post(
   }),
 );
 
-// GET /api/auth/me
-authRouter.get(
-  '/me',
-  asyncHandler(async (req, res) => {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      throw AppError.unauthorized();
-    }
-
-    const token = authHeader.substring(7);
-
-    // Import verifyToken dynamically to avoid circular import
-    const { verifyToken } = await import('../lib/auth.js');
-    const user = await verifyToken(token);
-
-    if (!user) {
-      throw AppError.unauthorized('Invalid token');
-    }
-
-    res.json({ user });
-  }),
-);
-
-// POST /api/auth/logout
-authRouter.post('/logout', (_req, res) => {
-  // For JWT-based auth, client simply clears the token
-  res.json({ message: 'Logged out successfully' });
-});
-
-// POST /api/auth/logout-all-devices - Invalidate all existing sessions
-authRouter.post(
-  '/logout-all-devices',
-  asyncHandler(async (req, res) => {
-    // Get the authorization header
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      throw AppError.unauthorized('Authentication required');
-    }
-
-    const token = authHeader.substring(7);
-    const user = await verifyToken(token);
-
-    if (!user) {
-      throw AppError.unauthorized('Invalid or expired token');
-    }
-
-    // Use the app clock and current token authTime so DB clock skew cannot leave
-    // the request token valid when logout happens immediately after login.
-    const tokenAuthTime = getTokenAuthTime(token);
-    const invalidatedAt = new Date(Math.max(Date.now(), tokenAuthTime ?? 0) + 1);
-    await prisma.user.update({
-      where: { id: user.userId },
-      data: { tokenInvalidatedAt: invalidatedAt },
-    });
-
-    await auditUserAuthEvent(req, user.userId, AuditAction.USER_LOGOUT, {
-      scope: 'all_devices',
-      sessionsInvalidated: true,
-    });
-
-    const now = invalidatedAt.toISOString();
-
-    res.json({
-      message: 'Successfully logged out from all devices',
-      loggedOutAt: now,
-    });
+authRouter.use(
+  createSessionRouter({
+    prisma,
+    auditUserAuthEvent,
   }),
 );
 
@@ -676,79 +608,12 @@ authRouter.use(
   }),
 );
 
-// POST /api/auth/change-password - Change user password (requires current password)
-authRouter.post(
-  '/change-password',
-  asyncHandler(async (req, res) => {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      throw AppError.unauthorized();
-    }
-
-    const token = authHeader.substring(7);
-
-    // Import verifyToken dynamically to avoid circular import
-    const { verifyToken } = await import('../lib/auth.js');
-    const userData = await verifyToken(token);
-
-    if (!userData) {
-      throw AppError.unauthorized('Invalid token');
-    }
-
-    const { currentPassword, newPassword, confirmPassword } = req.body;
-
-    // Validate input
-    if (!currentPassword || !newPassword || !confirmPassword) {
-      throw AppError.badRequest(
-        'Current password, new password, and confirm password are required',
-      );
-    }
-    const normalizedCurrentPassword = normalizePasswordInput(currentPassword, 'Current password');
-    const normalizedNewPassword = normalizePasswordInput(newPassword, 'New password');
-    const normalizedConfirmPassword = normalizePasswordInput(confirmPassword, 'Confirm password');
-
-    if (normalizedNewPassword !== normalizedConfirmPassword) {
-      throw AppError.badRequest('New password and confirm password do not match');
-    }
-
-    const passwordValidation = validatePassword(normalizedNewPassword);
-    if (!passwordValidation.valid) {
-      throw AppError.badRequest('New password does not meet security requirements', {
-        errors: passwordValidation.errors as unknown as Record<string, unknown>,
-      });
-    }
-
-    // Get user with password hash
-    const user = await prisma.user.findUnique({
-      where: { id: userData.userId || userData.id },
-      select: { id: true, passwordHash: true },
-    });
-
-    if (!user || !user.passwordHash) {
-      throw AppError.notFound('User');
-    }
-
-    // Verify current password
-    if (!verifyPassword(normalizedCurrentPassword, user.passwordHash)) {
-      throw AppError.unauthorized('Current password is incorrect');
-    }
-
-    // Hash and update password
-    const newPasswordHash = hashPassword(normalizedNewPassword);
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        passwordHash: newPasswordHash,
-        tokenInvalidatedAt: new Date(),
-      },
-    });
-
-    await auditUserAuthEvent(req, user.id, AuditAction.PASSWORD_CHANGED, {
-      method: 'password_change',
-      sessionsInvalidated: true,
-    });
-
-    res.json({ message: 'Password changed successfully' });
+authRouter.use(
+  createSessionPasswordRouter({
+    prisma,
+    normalizePasswordInput,
+    validatePassword,
+    auditUserAuthEvent,
   }),
 );
 
