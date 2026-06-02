@@ -1,9 +1,12 @@
 import { z } from 'zod';
 
+import { AppError } from '../../lib/AppError.js';
+
 // =============================================================================
 // Hold point request validation: shared Zod schemas, input limits/format
-// constants, and email-list/project-settings helpers. Extracted verbatim from
-// holdpoints.ts to keep validation contracts identical (behavior-preserving).
+// constants, route-parameter parsing, and email-list/project-settings helpers.
+// Extracted verbatim from holdpoints.ts to keep validation contracts identical
+// (behavior-preserving).
 // =============================================================================
 
 // Type for project settings related to hold points
@@ -220,3 +223,32 @@ export const publicReleaseSchema = z.object({
   releaseNotes: optionalTrimmedStringSchema(MAX_NOTE_LENGTH, 'releaseNotes'),
   signatureDataUrl: nullableTrimmedStringSchema(MAX_SIGNATURE_DATA_URL_LENGTH, 'signatureDataUrl'),
 });
+
+// =============================================================================
+// Route parameter parsing
+// =============================================================================
+
+// Validate and trim a single hold point route parameter (e.g. :projectId,
+// :lotId, :itemId, :id, :token), enforcing the shared length limits before any
+// database lookup. Extracted verbatim from holdpoints.ts so both the parent
+// router and the read-route child router share one implementation.
+export function parseHoldPointRouteParam(
+  value: unknown,
+  fieldName: string,
+  maxLength = MAX_ID_LENGTH,
+): string {
+  if (typeof value !== 'string') {
+    throw AppError.badRequest(`${fieldName} must be a single value`);
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    throw AppError.badRequest(`${fieldName} is required`);
+  }
+
+  if (trimmed.length > maxLength) {
+    throw AppError.badRequest(`${fieldName} is too long`);
+  }
+
+  return trimmed;
+}
