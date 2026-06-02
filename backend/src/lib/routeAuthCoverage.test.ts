@@ -115,6 +115,10 @@ function extractedDocumentFileAccessRouteDescriptors(source: string): string[] {
   ).map((match) => `${match[1].toUpperCase()} ${match[3]}`);
 }
 
+function extractedDocumentDeleteRouteDescriptors(source: string): string[] {
+  return routeCalls(source).map((route) => route.descriptor);
+}
+
 function extractedDocumentClassificationRouteDescriptors(source: string): string[] {
   return Array.from(
     source.matchAll(/\bclassificationRoutes\.(get|post|put|patch|delete)\(\s*(['"`])([^'"`]+)\2/g),
@@ -223,6 +227,10 @@ describe('route authentication coverage', () => {
     );
     const documentsFileAccessRoutesSource = await readFile(
       path.join(routesDir, 'documents/fileAccessRoutes.ts'),
+      'utf8',
+    );
+    const documentsDeleteRoutesSource = await readFile(
+      path.join(routesDir, 'documents/deleteRoutes.ts'),
       'utf8',
     );
     const documentsClassificationRoutesSource = await readFile(
@@ -395,6 +403,15 @@ describe('route authentication coverage', () => {
     expect(extractedDocumentFileAccessRouteDescriptors(documentsFileAccessRoutesSource)).toEqual([
       'GET /file/:documentId',
       'POST /:documentId/signed-url',
+    ]);
+    expect(documentsSource.indexOf('createDocumentDeleteRouter({')).toBeGreaterThan(
+      documentsSource.indexOf('createDocumentFileAccessRouter({'),
+    );
+    expect(documentsSource.indexOf('createDocumentDeleteRouter({')).toBeLessThan(
+      documentsSource.indexOf('createDocumentClassificationRouter({'),
+    );
+    expect(extractedDocumentDeleteRouteDescriptors(documentsDeleteRoutesSource)).toEqual([
+      'DELETE /:documentId',
     ]);
     expect(documentsSource.indexOf('createDocumentClassificationRouter({')).toBeGreaterThan(
       documentsSource.indexOf('// DELETE /api/documents/:documentId'),
