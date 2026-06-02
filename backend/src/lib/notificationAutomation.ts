@@ -1,5 +1,21 @@
 import { randomUUID } from 'node:crypto';
 import { sendNotificationEmail } from './email.js';
+import {
+  buildProjectEntityLink,
+  formatDateKey,
+  getPreviousWorkingDay,
+  isDueForProjectTime,
+  isWorkingDay,
+  parsePositiveInteger,
+  startOfDay,
+} from './notificationAutomation/helpers.js';
+import {
+  type EmailPreferences,
+  type NotificationTypeWithTiming,
+  getNotificationTiming,
+  isNotificationTypeEnabled,
+  normalizeEmailPreferences,
+} from './notificationAutomation/preferences.js';
 import { prisma } from './prisma.js';
 import { logError, logInfo } from './serverLogger.js';
 
@@ -7,62 +23,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
 const DEFAULT_JOB_LIMIT = 100;
 const DEFAULT_AUTOMATION_WORKER_INTERVAL_MS = 60 * 60 * 1000;
-const DEFAULT_TIME_OF_DAY = '17:00';
-const DEFAULT_WORKING_DAYS = new Set([1, 2, 3, 4, 5]);
 const NOTIFICATION_AUTOMATION_WORKER_LOCK_ID = 731_452_021;
-
-type NotificationTiming = 'immediate' | 'digest';
-type NotificationTypeWithTiming =
-  | 'mentions'
-  | 'ncrAssigned'
-  | 'ncrStatusChange'
-  | 'holdPointReminder'
-  | 'holdPointRelease'
-  | 'commentReply'
-  | 'scheduledReports'
-  | 'diaryReminder';
-
-type EmailPreferences = {
-  enabled: boolean;
-  mentions: boolean;
-  mentionsTiming: NotificationTiming;
-  ncrAssigned: boolean;
-  ncrAssignedTiming: NotificationTiming;
-  ncrStatusChange: boolean;
-  ncrStatusChangeTiming: NotificationTiming;
-  holdPointReminder: boolean;
-  holdPointReminderTiming: NotificationTiming;
-  holdPointRelease: boolean;
-  holdPointReleaseTiming: NotificationTiming;
-  commentReply: boolean;
-  commentReplyTiming: NotificationTiming;
-  scheduledReports: boolean;
-  scheduledReportsTiming: NotificationTiming;
-  dailyDigest: boolean;
-  diaryReminder: boolean;
-  diaryReminderTiming: NotificationTiming;
-};
-
-const DEFAULT_EMAIL_PREFERENCES: EmailPreferences = {
-  enabled: true,
-  mentions: true,
-  mentionsTiming: 'immediate',
-  ncrAssigned: true,
-  ncrAssignedTiming: 'immediate',
-  ncrStatusChange: true,
-  ncrStatusChangeTiming: 'immediate',
-  holdPointReminder: true,
-  holdPointReminderTiming: 'immediate',
-  holdPointRelease: true,
-  holdPointReleaseTiming: 'immediate',
-  commentReply: true,
-  commentReplyTiming: 'immediate',
-  scheduledReports: true,
-  scheduledReportsTiming: 'immediate',
-  dailyDigest: false,
-  diaryReminder: true,
-  diaryReminderTiming: 'immediate',
-};
 
 type AlertType = 'overdue_ncr' | 'stale_hold_point' | 'pending_approval' | 'overdue_test';
 type AlertSeverity = 'medium' | 'high' | 'critical';
@@ -236,274 +197,9 @@ function emptyNotificationAutomationResult(now: Date): NotificationAutomationRun
   };
 }
 
-function parsePositiveInteger(value: unknown, fallback: number): number {
-  const parsed =
-    typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
-
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
-}
-
-function parseTimeOfDay(value: string | null | undefined): { hours: number; minutes: number } {
-  const candidate = value?.trim() || DEFAULT_TIME_OF_DAY;
-  const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(candidate);
-  if (!match) {
-    return parseTimeOfDay(DEFAULT_TIME_OF_DAY);
-  }
-
-  return {
-    hours: Number(match[1]),
-    minutes: Number(match[2]),
-  };
-}
-
-function validateTiming(value: unknown, fallback: NotificationTiming): NotificationTiming {
-  return value === 'immediate' || value === 'digest' ? value : fallback;
-}
-
-function normalizeBoolean(value: unknown, fallback: boolean): boolean {
-  return typeof value === 'boolean' ? value : fallback;
-}
-
-function normalizeEmailPreferences(value: unknown): EmailPreferences {
-  const input = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
-
-  return {
-    enabled: normalizeBoolean(input.enabled, DEFAULT_EMAIL_PREFERENCES.enabled),
-    mentions: normalizeBoolean(input.mentions, DEFAULT_EMAIL_PREFERENCES.mentions),
-    mentionsTiming: validateTiming(input.mentionsTiming, DEFAULT_EMAIL_PREFERENCES.mentionsTiming),
-    ncrAssigned: normalizeBoolean(input.ncrAssigned, DEFAULT_EMAIL_PREFERENCES.ncrAssigned),
-    ncrAssignedTiming: validateTiming(
-      input.ncrAssignedTiming,
-      DEFAULT_EMAIL_PREFERENCES.ncrAssignedTiming,
-    ),
-    ncrStatusChange: normalizeBoolean(
-      input.ncrStatusChange,
-      DEFAULT_EMAIL_PREFERENCES.ncrStatusChange,
-    ),
-    ncrStatusChangeTiming: validateTiming(
-      input.ncrStatusChangeTiming,
-      DEFAULT_EMAIL_PREFERENCES.ncrStatusChangeTiming,
-    ),
-    holdPointReminder: normalizeBoolean(
-      input.holdPointReminder,
-      DEFAULT_EMAIL_PREFERENCES.holdPointReminder,
-    ),
-    holdPointReminderTiming: validateTiming(
-      input.holdPointReminderTiming,
-      DEFAULT_EMAIL_PREFERENCES.holdPointReminderTiming,
-    ),
-    holdPointRelease: normalizeBoolean(
-      input.holdPointRelease,
-      DEFAULT_EMAIL_PREFERENCES.holdPointRelease,
-    ),
-    holdPointReleaseTiming: validateTiming(
-      input.holdPointReleaseTiming,
-      DEFAULT_EMAIL_PREFERENCES.holdPointReleaseTiming,
-    ),
-    commentReply: normalizeBoolean(input.commentReply, DEFAULT_EMAIL_PREFERENCES.commentReply),
-    commentReplyTiming: validateTiming(
-      input.commentReplyTiming,
-      DEFAULT_EMAIL_PREFERENCES.commentReplyTiming,
-    ),
-    scheduledReports: normalizeBoolean(
-      input.scheduledReports,
-      DEFAULT_EMAIL_PREFERENCES.scheduledReports,
-    ),
-    scheduledReportsTiming: validateTiming(
-      input.scheduledReportsTiming,
-      DEFAULT_EMAIL_PREFERENCES.scheduledReportsTiming,
-    ),
-    dailyDigest: normalizeBoolean(input.dailyDigest, DEFAULT_EMAIL_PREFERENCES.dailyDigest),
-    diaryReminder: normalizeBoolean(input.diaryReminder, DEFAULT_EMAIL_PREFERENCES.diaryReminder),
-    diaryReminderTiming: validateTiming(
-      input.diaryReminderTiming,
-      DEFAULT_EMAIL_PREFERENCES.diaryReminderTiming,
-    ),
-  };
-}
-
 async function getEmailPreferences(userId: string): Promise<EmailPreferences> {
   const preferences = await prisma.notificationEmailPreference.findUnique({ where: { userId } });
   return normalizeEmailPreferences(preferences);
-}
-
-function isNotificationTypeEnabled(
-  preferences: EmailPreferences,
-  notificationType: NotificationTypeWithTiming,
-): boolean {
-  switch (notificationType) {
-    case 'mentions':
-      return preferences.mentions;
-    case 'ncrAssigned':
-      return preferences.ncrAssigned;
-    case 'ncrStatusChange':
-      return preferences.ncrStatusChange;
-    case 'holdPointReminder':
-      return preferences.holdPointReminder;
-    case 'holdPointRelease':
-      return preferences.holdPointRelease;
-    case 'commentReply':
-      return preferences.commentReply;
-    case 'scheduledReports':
-      return preferences.scheduledReports;
-    case 'diaryReminder':
-      return preferences.diaryReminder;
-  }
-}
-
-function getNotificationTiming(
-  preferences: EmailPreferences,
-  notificationType: NotificationTypeWithTiming,
-): NotificationTiming {
-  switch (notificationType) {
-    case 'mentions':
-      return preferences.mentionsTiming;
-    case 'ncrAssigned':
-      return preferences.ncrAssignedTiming;
-    case 'ncrStatusChange':
-      return preferences.ncrStatusChangeTiming;
-    case 'holdPointReminder':
-      return preferences.holdPointReminderTiming;
-    case 'holdPointRelease':
-      return preferences.holdPointReleaseTiming;
-    case 'commentReply':
-      return preferences.commentReplyTiming;
-    case 'scheduledReports':
-      return preferences.scheduledReportsTiming;
-    case 'diaryReminder':
-      return preferences.diaryReminderTiming;
-  }
-}
-
-function startOfDay(value: Date): Date {
-  const date = new Date(value);
-  date.setHours(0, 0, 0, 0);
-  return date;
-}
-
-function addDays(value: Date, days: number): Date {
-  const date = new Date(value);
-  date.setDate(date.getDate() + days);
-  return date;
-}
-
-function formatDateKey(value: Date): string {
-  return value.toISOString().split('T')[0]!;
-}
-
-function parseWorkingDays(value: string | null | undefined): Set<number> {
-  const days = new Set(
-    (value ?? '')
-      .split(',')
-      .map((day) => Number(day.trim()))
-      .filter((day) => Number.isInteger(day) && day >= 0 && day <= 6),
-  );
-
-  return days.size > 0 ? days : DEFAULT_WORKING_DAYS;
-}
-
-function getPreviousWorkingDay(now: Date, workingDaysValue: string | null | undefined): Date {
-  const workingDays = parseWorkingDays(workingDaysValue);
-  let candidate = startOfDay(addDays(now, -1));
-
-  for (let attempt = 0; attempt < 7; attempt += 1) {
-    if (workingDays.has(candidate.getDay())) {
-      return candidate;
-    }
-    candidate = addDays(candidate, -1);
-  }
-
-  return startOfDay(addDays(now, -1));
-}
-
-function isWorkingDay(project: ProjectForAutomation, date: Date): boolean {
-  return parseWorkingDays(project.workingDays).has(date.getDay());
-}
-
-function isDueForProjectTime(now: Date, timeOfDay: string | null | undefined): boolean {
-  const { hours, minutes } = parseTimeOfDay(process.env.DIARY_REMINDER_TIME_OF_DAY ?? timeOfDay);
-  return now.getHours() * 60 + now.getMinutes() >= hours * 60 + minutes;
-}
-
-function appendQueryParams(pathname: string, params?: Record<string, string | undefined>): string {
-  const query = new URLSearchParams();
-  Object.entries(params ?? {}).forEach(([key, value]) => {
-    if (value) {
-      query.set(key, value);
-    }
-  });
-
-  const queryString = query.toString();
-  return queryString ? `${pathname}?${queryString}` : pathname;
-}
-
-function buildProjectEntityLink(
-  entityType: string,
-  entityId: string,
-  projectId?: string | null,
-  params?: Record<string, string | undefined>,
-): string {
-  if (!projectId) {
-    return '/dashboard';
-  }
-
-  const encodedProjectId = encodeURIComponent(projectId);
-  const encodedEntityId = encodeURIComponent(entityId);
-  const normalizedType = entityType.toLowerCase().replace(/[\s-]/g, '_');
-
-  switch (normalizedType) {
-    case 'lot':
-      return appendQueryParams(`/projects/${encodedProjectId}/lots/${encodedEntityId}`, params);
-    case 'ncr':
-      return appendQueryParams(`/projects/${encodedProjectId}/ncr`, { ncr: entityId, ...params });
-    case 'test':
-    case 'test_result':
-    case 'testresult':
-      return appendQueryParams(`/projects/${encodedProjectId}/tests`, {
-        test: entityId,
-        ...params,
-      });
-    case 'holdpoint':
-    case 'hold_point':
-      return appendQueryParams(`/projects/${encodedProjectId}/hold-points`, {
-        holdPoint: entityId,
-        ...params,
-      });
-    case 'document':
-      return appendQueryParams(`/projects/${encodedProjectId}/documents`, {
-        document: entityId,
-        ...params,
-      });
-    case 'drawing':
-      return appendQueryParams(`/projects/${encodedProjectId}/drawings`, {
-        drawing: entityId,
-        ...params,
-      });
-    case 'docket':
-    case 'daily_docket':
-    case 'dailydocket':
-      return appendQueryParams(`/projects/${encodedProjectId}/dockets`, {
-        docket: entityId,
-        ...params,
-      });
-    case 'diary':
-    case 'daily_diary':
-    case 'dailydiary':
-      return appendQueryParams(`/projects/${encodedProjectId}/diary`, params);
-    case 'progress_claim':
-    case 'progressclaim':
-    case 'claim':
-      return appendQueryParams(`/projects/${encodedProjectId}/claims`, {
-        claim: entityId,
-        ...params,
-      });
-    case 'itp':
-    case 'itp_instance':
-    case 'itpinstance':
-      return appendQueryParams(`/projects/${encodedProjectId}/itp`, { itp: entityId, ...params });
-    default:
-      return appendQueryParams(`/projects/${encodedProjectId}`, params);
-  }
 }
 
 function isAlertType(value: string): value is AlertType {
