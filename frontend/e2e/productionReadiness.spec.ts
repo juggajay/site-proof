@@ -1733,8 +1733,8 @@ test.describe('production readiness guardrails', () => {
       new URL('../../backend/src/routes/oauth.ts', import.meta.url),
       'utf8',
     );
-    const documentsSource = await readFile(
-      new URL('../../backend/src/routes/documents.ts', import.meta.url),
+    const documentClassificationSource = await readFile(
+      new URL('../../backend/src/routes/documents/classificationRoutes.ts', import.meta.url),
       'utf8',
     );
     const testCertificateExtractionSource = await readFile(
@@ -1759,7 +1759,9 @@ test.describe('production readiness guardrails', () => {
     expect(oauthSource).toMatch(
       /fetchWithTimeout\(\s*`https:\/\/oauth2\.googleapis\.com\/tokeninfo/,
     );
-    expect(documentsSource).toContain("fetchWithTimeout('https://api.anthropic.com/v1/messages'");
+    expect(documentClassificationSource).toContain(
+      "fetchWithTimeout('https://api.anthropic.com/v1/messages'",
+    );
     expect(testCertificateExtractionSource).toContain(
       "fetchWithTimeout('https://api.anthropic.com/v1/messages'",
     );
