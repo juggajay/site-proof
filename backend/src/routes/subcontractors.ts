@@ -14,6 +14,15 @@ import {
   isSubcontractorInvitationExpired,
 } from '../lib/subcontractorInvitations.js';
 import { activeSubcontractorCompanyWhere } from '../lib/projectAccess.js';
+import {
+  buildEmptyPendingSubcontractorInvitationResponse,
+  buildSubcontractorDirectoryResponse,
+  buildSubcontractorInvitationAcceptedResponse,
+  buildSubcontractorInvitationDetailsResponse,
+  buildSubcontractorInvitedResponse,
+  buildSubcontractorsForProjectResponse,
+  buildUserPendingSubcontractorInvitationResponse,
+} from './subcontractors/invitationResponses.js';
 
 // Feature #483: ABN (Australian Business Number) validation
 // ABN is an 11-digit number with a specific checksum algorithm
@@ -407,21 +416,14 @@ subcontractorsRouter.get(
       select: { name: true },
     });
 
-    res.json({
-      invitation: {
-        id: subcontractor.id,
-        companyName: subcontractor.companyName,
-        projectName: subcontractor.project.name,
-        headContractorName: headContractor?.name || 'Unknown',
-        primaryContactEmail: subcontractor.primaryContactEmail,
-        primaryContactName: subcontractor.primaryContactName,
-        status: subcontractor.status,
-        expiresAt: subcontractor.invitationExpiresAt?.toISOString() ?? null,
-        canAccept:
-          isSubcontractorInvitationAcceptableStatus(subcontractor.status) &&
+    res.json(
+      buildSubcontractorInvitationDetailsResponse(
+        subcontractor,
+        headContractor?.name || 'Unknown',
+        isSubcontractorInvitationAcceptableStatus(subcontractor.status) &&
           subcontractor._count.users === 0,
-      },
-    });
+      ),
+    );
   }),
 );
 
@@ -460,24 +462,11 @@ subcontractorsRouter.get(
     });
 
     if (!invitation) {
-      res.json({ invitation: null });
+      res.json(buildEmptyPendingSubcontractorInvitationResponse());
       return;
     }
 
-    res.json({
-      invitation: {
-        id: invitation.id,
-        companyName: invitation.companyName,
-        projectId: invitation.project.id,
-        projectName: invitation.project.name,
-        headContractorName: invitation.project.company.name,
-        primaryContactEmail: invitation.primaryContactEmail,
-        primaryContactName: invitation.primaryContactName,
-        status: invitation.status,
-        expiresAt: invitation.invitationExpiresAt?.toISOString() ?? null,
-        canAccept: true,
-      },
-    });
+    res.json(buildUserPendingSubcontractorInvitationResponse(invitation));
   }),
 );
 
@@ -508,16 +497,7 @@ subcontractorsRouter.get(
       orderBy: { companyName: 'asc' },
     });
 
-    res.json({
-      subcontractors: globalSubcontractors.map((gs) => ({
-        id: gs.id,
-        companyName: gs.companyName,
-        abn: gs.abn || '',
-        primaryContactName: gs.primaryContactName || '',
-        primaryContactEmail: gs.primaryContactEmail || '',
-        primaryContactPhone: gs.primaryContactPhone || '',
-      })),
-    });
+    res.json(buildSubcontractorDirectoryResponse(globalSubcontractors));
   }),
 );
 
@@ -719,23 +699,7 @@ subcontractorsRouter.post(
       // Don't fail the invite if email fails
     }
 
-    res.status(201).json({
-      message: 'Subcontractor invited successfully',
-      subcontractor: {
-        id: subcontractor.id,
-        companyName: subcontractor.companyName,
-        abn: subcontractor.abn || '',
-        primaryContact: subcontractor.primaryContactName || '',
-        email: subcontractor.primaryContactEmail || '',
-        phone: subcontractor.primaryContactPhone || '',
-        status: subcontractor.status,
-        employees: [],
-        plant: [],
-        totalApprovedDockets: 0,
-        totalCost: 0,
-        assignedLotCount: 0,
-      },
-    });
+    res.status(201).json(buildSubcontractorInvitedResponse(subcontractor));
   }),
 );
 
@@ -761,7 +725,7 @@ subcontractorsRouter.get(
       orderBy: { companyName: 'asc' },
     });
 
-    res.json({ subcontractors });
+    res.json(buildSubcontractorsForProjectResponse(subcontractors));
   }),
 );
 
@@ -870,15 +834,7 @@ subcontractorsRouter.post(
       req,
     });
 
-    res.json({
-      message: 'Invitation accepted successfully',
-      subcontractor: {
-        id: subcontractor.id,
-        companyName: subcontractor.companyName,
-        projectName: subcontractor.project.name,
-        status: 'approved',
-      },
-    });
+    res.json(buildSubcontractorInvitationAcceptedResponse(subcontractor));
   }),
 );
 
