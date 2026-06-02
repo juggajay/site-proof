@@ -664,8 +664,8 @@ test.describe('production readiness guardrails', () => {
   });
 
   test('backend diagnostic endpoints are gated out of production', async () => {
-    const notificationsSource = await readFile(
-      new URL('../../backend/src/routes/notifications.ts', import.meta.url),
+    const notificationEmailRoutesSource = await readFile(
+      new URL('../../backend/src/routes/notifications/emailRoutes.ts', import.meta.url),
       'utf8',
     );
     const notificationsAccessSource = await readFile(
@@ -689,10 +689,12 @@ test.describe('production readiness guardrails', () => {
     expect(notificationsAccessSource).toContain(
       "throw AppError.forbidden('Not available in production')",
     );
-    // notifications.ts must still import and call the guard on its diagnostic routes.
-    expect(notificationsSource).toContain('requireNonProductionDiagnostics');
+    // The diagnostic email/digest routes were relocated to
+    // notifications/emailRoutes.ts; that child router must still import and call
+    // the guard on its diagnostic routes.
+    expect(notificationEmailRoutesSource).toContain('requireNonProductionDiagnostics');
     for (const route of ['email-queue', 'add-to-digest', 'send-digest', 'digest-queue']) {
-      expect(notificationsSource).toContain(route);
+      expect(notificationEmailRoutesSource).toContain(route);
     }
     expect(pushSource).toContain("process.env.NODE_ENV === 'production'");
     expect(pushSource).toContain("throw AppError.forbidden('Not available in production')");
