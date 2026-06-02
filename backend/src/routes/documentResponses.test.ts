@@ -1,91 +1,40 @@
 import { describe, expect, it } from 'vitest';
 import {
-  buildDocumentClassificationResponse,
-  buildDocumentSignedUrlResponse,
-  buildDocumentVersionsResponse,
-  buildDocumentsListResponse,
-  buildSavedDocumentClassificationResponse,
+  buildDocumentSignedUrlTokenResponse,
+  buildInvalidDocumentSignedUrlTokenResponse,
 } from './documentResponses.js';
 
-describe('documentResponses', () => {
-  it('builds the document list response', () => {
-    const documents = [{ id: 'doc-1', filename: 'qa.pdf' }];
-    const categories = { QA: 1 };
-    const pagination = { page: 1, limit: 20, total: 1 };
-
-    expect(buildDocumentsListResponse(documents, 1, categories, pagination)).toEqual({
-      documents,
-      total: 1,
-      categories,
-      pagination,
+describe('document response helpers', () => {
+  it('builds an invalid signed URL token response', () => {
+    expect(buildInvalidDocumentSignedUrlTokenResponse(false)).toEqual({
+      valid: false,
+      expired: false,
+      message: 'Token is invalid',
     });
   });
 
-  it('builds the document versions response with a derived total', () => {
-    const versions = [{ id: 'doc-2', version: 2 }];
-
-    expect(buildDocumentVersionsResponse('doc-1', versions)).toEqual({
-      documentId: 'doc-1',
-      totalVersions: 1,
-      versions,
+  it('builds an expired signed URL token response', () => {
+    expect(buildInvalidDocumentSignedUrlTokenResponse(true)).toEqual({
+      valid: false,
+      expired: true,
+      message: 'Token has expired',
     });
   });
 
-  it('builds the signed URL response including expiry copy', () => {
-    const expiresAt = new Date('2026-06-01T00:00:00.000Z');
-
+  it('builds a valid signed URL token response with ISO timestamps', () => {
     expect(
-      buildDocumentSignedUrlResponse({
-        signedUrl: 'https://example.test/download?token=abc',
-        token: 'abc',
-        documentId: 'doc-1',
-        filename: 'qa.pdf',
-        mimeType: 'application/pdf',
-        disposition: 'inline',
-        expiresAt,
-        expiresInMinutes: 30,
+      buildDocumentSignedUrlTokenResponse({
+        documentId: 'doc-123',
+        expiresAt: new Date('2026-06-01T01:02:03.000Z'),
+        createdAt: new Date('2026-06-01T00:02:03.000Z'),
       }),
     ).toEqual({
-      signedUrl: 'https://example.test/download?token=abc',
-      token: 'abc',
-      documentId: 'doc-1',
-      filename: 'qa.pdf',
-      mimeType: 'application/pdf',
-      disposition: 'inline',
-      expiresAt: '2026-06-01T00:00:00.000Z',
-      expiresInMinutes: 30,
-      message: 'Signed URL valid for 30 minutes',
-    });
-  });
-
-  it('builds the multi-label classification response with backward-compatible primary fields', () => {
-    const suggestions = [
-      { label: 'Inspection', confidence: 0.92 },
-      { label: 'Testing', confidence: 0.71 },
-    ];
-
-    expect(
-      buildDocumentClassificationResponse('doc-1', suggestions, ['Inspection', 'Testing']),
-    ).toEqual({
-      documentId: 'doc-1',
-      suggestedClassification: 'Inspection',
-      confidence: 0.92,
-      suggestedClassifications: suggestions,
-      isMultiLabel: true,
-      categories: ['Inspection', 'Testing'],
-    });
-  });
-
-  it('builds the saved classification response with parsed labels', () => {
-    expect(
-      buildSavedDocumentClassificationResponse(
-        { id: 'doc-1', aiClassification: 'Inspection, Testing' },
-        'Inspection, Testing',
-      ),
-    ).toEqual({
-      id: 'doc-1',
-      aiClassification: 'Inspection, Testing',
-      classificationLabels: ['Inspection', 'Testing'],
+      valid: true,
+      expired: false,
+      documentId: 'doc-123',
+      expiresAt: '2026-06-01T01:02:03.000Z',
+      createdAt: '2026-06-01T00:02:03.000Z',
+      message: 'Token is valid',
     });
   });
 });

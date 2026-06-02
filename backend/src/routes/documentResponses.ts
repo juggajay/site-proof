@@ -54,6 +54,33 @@ export function buildDocumentSignedUrlResponse({
   };
 }
 
+export function buildInvalidDocumentSignedUrlTokenResponse(expired?: boolean) {
+  return {
+    valid: false,
+    expired: expired || false,
+    message: expired ? 'Token has expired' : 'Token is invalid',
+  };
+}
+
+export function buildDocumentSignedUrlTokenResponse({
+  documentId,
+  expiresAt,
+  createdAt,
+}: {
+  documentId: string;
+  expiresAt?: Date;
+  createdAt?: Date;
+}) {
+  return {
+    valid: true,
+    expired: false,
+    documentId,
+    expiresAt: expiresAt?.toISOString(),
+    createdAt: createdAt?.toISOString(),
+    message: 'Token is valid',
+  };
+}
+
 export function buildDocumentClassificationResponse(
   documentId: string,
   suggestedClassifications: ClassificationSuggestion[],

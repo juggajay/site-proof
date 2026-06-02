@@ -36,8 +36,10 @@ import { fetchWithTimeout } from '../lib/fetchWithTimeout.js';
 import {
   buildDocumentClassificationResponse,
   buildDocumentSignedUrlResponse,
+  buildDocumentSignedUrlTokenResponse,
   buildDocumentVersionsResponse,
   buildDocumentsListResponse,
+  buildInvalidDocumentSignedUrlTokenResponse,
   buildSavedDocumentClassificationResponse,
 } from './documentResponses.js';
 
@@ -361,17 +363,6 @@ async function validateSignedUrlToken(
     userId: data.userId,
     expiresAt: data.expiresAt,
     createdAt: data.createdAt,
-  };
-}
-
-function getSignedUrlTokenResponse(validation: SignedUrlValidation, documentId: string) {
-  return {
-    valid: true,
-    expired: false,
-    documentId,
-    expiresAt: validation.expiresAt?.toISOString(),
-    createdAt: validation.createdAt?.toISOString(),
-    message: 'Token is valid',
   };
 }
 
@@ -1205,14 +1196,10 @@ router.get(
     const validation = await validateSignedUrlToken(token, documentId);
 
     if (!validation.valid) {
-      return res.json({
-        valid: false,
-        expired: validation.expired || false,
-        message: validation.expired ? 'Token has expired' : 'Token is invalid',
-      });
+      return res.json(buildInvalidDocumentSignedUrlTokenResponse(validation.expired));
     }
 
-    res.json(getSignedUrlTokenResponse(validation, documentId));
+    res.json(buildDocumentSignedUrlTokenResponse({ documentId, ...validation }));
   }),
 );
 
