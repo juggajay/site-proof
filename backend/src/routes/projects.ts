@@ -18,6 +18,12 @@ import {
   buildProjectCreatedResponse,
 } from './projects/costResponses.js';
 import { buildProjectOverviewResponse } from './projects/overviewResponses.js';
+import {
+  buildProjectUserInvitedResponse,
+  buildProjectUserRemovedResponse,
+  buildProjectUserRoleUpdatedResponse,
+  buildProjectUsersResponse,
+} from './projects/teamResponses.js';
 
 export const projectsRouter = Router();
 
@@ -1451,18 +1457,7 @@ projectsRouter.get(
       orderBy: { invitedAt: 'desc' },
     });
 
-    res.json({
-      users: projectUsers.map((pu) => ({
-        id: pu.id,
-        userId: pu.userId,
-        email: pu.user.email,
-        fullName: pu.user.fullName,
-        role: pu.role,
-        status: pu.status,
-        invitedAt: pu.invitedAt,
-        acceptedAt: pu.acceptedAt,
-      })),
-    });
+    res.json(buildProjectUsersResponse(projectUsers));
   }),
 );
 
@@ -1570,16 +1565,7 @@ projectsRouter.post(
       // Don't fail the main request if notifications fail
     }
 
-    res.status(201).json({
-      message: 'User invited successfully',
-      projectUser: {
-        id: newProjectUser.id,
-        userId: invitedUser.id,
-        email: invitedUser.email,
-        fullName: invitedUser.fullName,
-        role,
-      },
-    });
+    res.status(201).json(buildProjectUserInvitedResponse(newProjectUser, invitedUser, role));
   }),
 );
 
@@ -1694,15 +1680,7 @@ projectsRouter.patch(
       }
     }
 
-    res.json({
-      message: 'User role updated successfully',
-      projectUser: {
-        id: updated.id,
-        userId: targetUserId,
-        email: targetForAudit.user.email,
-        role: updated.role,
-      },
-    });
+    res.json(buildProjectUserRoleUpdatedResponse(updated, targetUserId, targetForAudit.user.email));
   }),
 );
 
@@ -1801,13 +1779,7 @@ projectsRouter.delete(
       // Don't fail the main request if notifications fail
     }
 
-    res.json({
-      message: 'User removed successfully',
-      removedUser: {
-        userId: targetUserId,
-        email: removedProjectUser.user.email,
-      },
-    });
+    res.json(buildProjectUserRemovedResponse(removedProjectUser, targetUserId));
   }),
 );
 
