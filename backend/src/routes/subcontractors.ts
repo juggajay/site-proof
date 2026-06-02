@@ -9,8 +9,6 @@ import { logError } from '../lib/serverLogger.js';
 import { activeSubcontractorCompanyWhere } from '../lib/projectAccess.js';
 import {
   buildSubcontractorDeletedResponse,
-  buildSubcontractorPortalAccessResponse,
-  buildSubcontractorPortalAccessUpdatedResponse,
   buildSubcontractorStatusUpdatedResponse,
 } from './subcontractors/adminResponses.js';
 import {
@@ -26,6 +24,7 @@ import {
 import { buildAbnValidationResponse } from './subcontractors/abnValidationResponse.js';
 import { createSubcontractorInvitationRouters } from './subcontractors/invitationRoutes.js';
 import { createSubcontractorMyCompanyRouter } from './subcontractors/myCompanyRoutes.js';
+import { createSubcontractorPortalAccessRouter } from './subcontractors/portalAccessRoutes.js';
 
 // Feature #483: ABN (Australian Business Number) validation
 // ABN is an 11-digit number with a specific checksum algorithm
@@ -364,18 +363,6 @@ async function requireSubcontractorProjectAccess(
   return { project, projectUser };
 }
 
-async function hasLinkedSubcontractorAccess(
-  subcontractorCompanyId: string,
-  userId: string,
-): Promise<boolean> {
-  const subcontractorUser = await prisma.subcontractorUser.findFirst({
-    where: { subcontractorCompanyId, userId },
-    select: { id: true },
-  });
-
-  return Boolean(subcontractorUser);
-}
-
 const subcontractorInvitationRouters = createSubcontractorInvitationRouters({
   blockedSubcontractorStatuses: BLOCKED_SUBCONTRACTOR_STATUSES,
   headContractorCompanyRoles: HEAD_CONTRACTOR_COMPANY_ROLES,
@@ -578,111 +565,12 @@ subcontractorsRouter.delete(
   }),
 );
 
-// PATCH /api/subcontractors/:id/portal-access - Update portal access settings
-subcontractorsRouter.patch(
-  '/:id/portal-access',
-  asyncHandler(async (req, res) => {
-    const user = req.user!;
-    const id = normalizeIdParam(req.params.id, 'Subcontractor ID');
-    const { portalAccess } = req.body;
-
-    // Validate portal access object
-    if (!portalAccess || typeof portalAccess !== 'object' || Array.isArray(portalAccess)) {
-      throw AppError.badRequest('portalAccess object is required');
-    }
-
-    // Validate the structure - ensure all keys are valid booleans
-    const validKeys = ['lots', 'itps', 'holdPoints', 'testResults', 'ncrs', 'documents'];
-    for (const key of Object.keys(portalAccess)) {
-      if (!validKeys.includes(key)) {
-        throw AppError.badRequest(`Invalid portal access setting: ${key}`);
-      }
-    }
-    for (const key of validKeys) {
-      if (portalAccess[key] !== undefined && typeof portalAccess[key] !== 'boolean') {
-        throw AppError.badRequest(`Invalid value for ${key} - must be a boolean`);
-      }
-    }
-
-    // Find the subcontractor company
-    const subcontractor = await prisma.subcontractorCompany.findUnique({
-      where: { id },
-      include: { project: true },
-    });
-
-    if (!subcontractor) {
-      throw AppError.notFound('Subcontractor company');
-    }
-
-    await requireSubcontractorProjectAccess(subcontractor.projectId, user, true);
-
-    // Merge with defaults to ensure all keys exist
-    const mergedAccess = {
-      ...DEFAULT_PORTAL_ACCESS,
-      ...portalAccess,
-    };
-
-    // Update the portal access
-    const updatedSubcontractor = await prisma.subcontractorCompany.update({
-      where: { id },
-      data: {
-        portalAccess: mergedAccess,
-      },
-      select: {
-        id: true,
-        companyName: true,
-        portalAccess: true,
-      },
-    });
-
-    // Audit log for portal access update
-    await createAuditLog({
-      projectId: subcontractor.projectId,
-      userId: user.id,
-      entityType: 'subcontractor',
-      entityId: id,
-      action: AuditAction.SUBCONTRACTOR_PORTAL_ACCESS_CHANGED,
-      changes: { portalAccess: mergedAccess, companyName: subcontractor.companyName },
-      req,
-    });
-
-    res.json(buildSubcontractorPortalAccessUpdatedResponse(updatedSubcontractor.portalAccess));
-  }),
-);
-
-// GET /api/subcontractors/:id/portal-access - Get portal access settings
-subcontractorsRouter.get(
-  '/:id/portal-access',
-  asyncHandler(async (req, res) => {
-    const user = req.user!;
-    const id = normalizeIdParam(req.params.id, 'Subcontractor ID');
-
-    const subcontractor = await prisma.subcontractorCompany.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        companyName: true,
-        projectId: true,
-        status: true,
-        portalAccess: true,
-      },
-    });
-
-    if (!subcontractor) {
-      throw AppError.notFound('Subcontractor company');
-    }
-
-    const hasPortalUserAccess = await hasLinkedSubcontractorAccess(id, user.id);
-    if (!hasPortalUserAccess) {
-      await requireSubcontractorProjectAccess(subcontractor.projectId, user);
-    } else {
-      assertSubcontractorPortalActive(subcontractor);
-    }
-
-    // Return stored access or defaults
-    const portalAccess = subcontractor.portalAccess || DEFAULT_PORTAL_ACCESS;
-
-    res.json(buildSubcontractorPortalAccessResponse(portalAccess));
+subcontractorsRouter.use(
+  createSubcontractorPortalAccessRouter({
+    defaultPortalAccess: DEFAULT_PORTAL_ACCESS,
+    normalizeIdParam,
+    assertSubcontractorPortalActive,
+    requireSubcontractorProjectAccess,
   }),
 );
 

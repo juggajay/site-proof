@@ -28,6 +28,7 @@ const parentProtectedRoutePrefixes = new Set([
   'lots/',
   'claims/evidenceRoutes.ts',
   'subcontractors/myCompanyRoutes.ts',
+  'subcontractors/portalAccessRoutes.ts',
 ]);
 
 const routeDeclarationPattern = /\b(?:router|[A-Za-z]+Router)\.(get|post|put|patch|delete)\(/;
@@ -118,6 +119,10 @@ function extractedSubcontractorInvitationAuthenticatedRouteDescriptors(source: s
   ).map((match) => `${match[1].toUpperCase()} ${match[3]}`);
 }
 
+function extractedSubcontractorPortalAccessRouteDescriptors(source: string): string[] {
+  return routeCalls(source).map((route) => route.descriptor);
+}
+
 function unprotectedRouteDescriptors(source: string): string[] {
   return routeCalls(source)
     .filter((route) => !route.source.includes('requireAuth'))
@@ -183,6 +188,10 @@ describe('route authentication coverage', () => {
     const subcontractorsSource = await readFile(path.join(routesDir, 'subcontractors.ts'), 'utf8');
     const subcontractorInvitationRoutesSource = await readFile(
       path.join(routesDir, 'subcontractors/invitationRoutes.ts'),
+      'utf8',
+    );
+    const subcontractorPortalAccessRoutesSource = await readFile(
+      path.join(routesDir, 'subcontractors/portalAccessRoutes.ts'),
       'utf8',
     );
     const webhooksSource = await readFile(path.join(routesDir, 'webhooks.ts'), 'utf8');
@@ -310,6 +319,12 @@ describe('route authentication coverage', () => {
     expect(
       subcontractorsSource.indexOf('subcontractorInvitationRouters.authenticatedRouter'),
     ).toBeLessThan(subcontractorsSource.indexOf("'/:id/status'"));
+    expect(subcontractorsSource.indexOf('createSubcontractorPortalAccessRouter({')).toBeGreaterThan(
+      subcontractorsSource.indexOf("'/:id'"),
+    );
+    expect(subcontractorsSource.indexOf('createSubcontractorPortalAccessRouter({')).toBeLessThan(
+      subcontractorsSource.indexOf("'/project/:projectId'"),
+    );
     expect(
       extractedSubcontractorInvitationPublicRouteDescriptors(subcontractorInvitationRoutesSource),
     ).toEqual(['GET /invitation/:id']);
@@ -323,6 +338,9 @@ describe('route authentication coverage', () => {
       'GET /for-project/:projectId',
       'POST /invitation/:id/accept',
     ]);
+    expect(
+      extractedSubcontractorPortalAccessRouteDescriptors(subcontractorPortalAccessRoutesSource),
+    ).toEqual(['PATCH /:id/portal-access', 'GET /:id/portal-access']);
 
     expect(publicRouteDescriptorsBeforeRouteWideAuth(webhooksSource)).toEqual([
       'POST /test-receiver',
