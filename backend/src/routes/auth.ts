@@ -25,58 +25,17 @@ import {
 } from '../middleware/rateLimiter.js';
 import { assertCanRemoveUserFromProjectAdminRoles } from '../lib/projectAdminInvariant.js';
 import { AuditAction, createAuditLog } from '../lib/auditLog.js';
-import {
-  isSubcontractorInvitationAcceptableStatus,
-  isSubcontractorInvitationExpired,
-} from '../lib/subcontractorInvitations.js';
 import { hasActiveSubcontractorPortalIdentity } from '../lib/projectAccess.js';
 import { resolveDashboardRoleForUser } from '../lib/dashboardRole.js';
+import { createRegistrationRouter } from './auth/registrationRoutes.js';
 import { createPasswordResetRouter } from './auth/passwordResetRoutes.js';
 import { createProfileRouter } from './auth/profileRoutes.js';
 
 const GENERIC_RESEND_VERIFICATION_MESSAGE =
   'If an account exists with this email, a new verification link has been sent.';
 const GENERIC_RESET_TOKEN_VALIDATION_MESSAGE = 'Invalid or expired reset token';
-const VERIFICATION_BYPASS_EMAIL_DOMAINS_ENV = 'VERIFICATION_BYPASS_EMAIL_DOMAINS';
 
 export const authRouter = Router();
-
-function getEmailDomain(email: string): string | null {
-  const atIndex = email.lastIndexOf('@');
-  if (atIndex === -1 || atIndex === email.length - 1) {
-    return null;
-  }
-  return email
-    .slice(atIndex + 1)
-    .trim()
-    .toLowerCase();
-}
-
-function getVerificationBypassDomains(): Set<string> {
-  const rawValue = process.env[VERIFICATION_BYPASS_EMAIL_DOMAINS_ENV];
-  if (!rawValue) {
-    return new Set();
-  }
-
-  return new Set(
-    rawValue
-      .split(',')
-      .map((domain) => domain.trim().toLowerCase().replace(/^@/, ''))
-      .filter((domain) => domain && !domain.includes('*') && domain.includes('.')),
-  );
-}
-
-function shouldBypassEmailVerification(email: string): { bypass: boolean; domain: string | null } {
-  const domain = getEmailDomain(email);
-  if (!domain) {
-    return { bypass: false, domain: null };
-  }
-
-  return {
-    bypass: getVerificationBypassDomains().has(domain),
-    domain,
-  };
-}
 
 async function auditUserAuthEvent(
   req: Request,
@@ -155,9 +114,6 @@ export function getSafeDataExportFilename(email: string, date = new Date()): str
   return `${prefix}${safeEmail}${suffix}`;
 }
 
-// Current ToS version - update when ToS changes
-const CURRENT_TOS_VERSION = '1.0';
-
 // Password validation schema
 const PASSWORD_MIN_LENGTH = 12;
 const PASSWORD_MAX_BYTES = 72;
@@ -174,7 +130,6 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const ONE_TIME_TOKEN_HASH_PREFIX = 'sha256:';
 const ONE_TIME_TOKEN_MAX_LENGTH = 256;
 const PROFILE_FULL_NAME_MAX_LENGTH = 120;
-const SUBCONTRACTOR_INVITATION_ID_MAX_LENGTH = 120;
 const TOTP_CODE_PATTERN = /^\d{6}$/;
 const MFA_BACKUP_CODE_PATTERN = /^[A-F0-9]{10}$/i;
 
@@ -211,30 +166,6 @@ function normalizeOneTimeTokenInput(value: unknown, fieldName = 'Token'): string
   const normalized = value.trim();
   if (normalized.length > ONE_TIME_TOKEN_MAX_LENGTH) {
     throw AppError.badRequest(`${fieldName} is too long`);
-  }
-
-  return normalized;
-}
-
-function normalizeSubcontractorInvitationId(value: unknown): string {
-  if (typeof value !== 'string') {
-    throw AppError.badRequest('Invitation ID must be a string');
-  }
-
-  const normalized = value.trim();
-  if (!normalized) {
-    throw AppError.badRequest('Invitation ID is required');
-  }
-
-  if (normalized.length > SUBCONTRACTOR_INVITATION_ID_MAX_LENGTH) {
-    throw AppError.badRequest('Invitation ID is too long');
-  }
-
-  for (let index = 0; index < normalized.length; index += 1) {
-    const code = normalized.charCodeAt(index);
-    if (code <= 31 || code === 127) {
-      throw AppError.badRequest('Invitation ID contains invalid characters');
-    }
   }
 
   return normalized;
@@ -325,136 +256,16 @@ function normalizeProfileText(
   return normalized || null;
 }
 
-// POST /api/auth/register
-authRouter.post(
-  '/register',
-  asyncHandler(async (req, res) => {
-    const { email, password, fullName, firstName, lastName, tosAccepted } = req.body;
-
-    if (!email || !password) {
-      throw AppError.badRequest('Email and password are required');
-    }
-    const normalizedEmail = normalizeEmailInput(email);
-    const normalizedPassword = normalizePasswordInput(password);
-
-    // Validate password strength
-    const passwordValidation = validatePassword(normalizedPassword);
-    if (!passwordValidation.valid) {
-      throw AppError.badRequest('Password does not meet security requirements', {
-        errors: passwordValidation.errors as unknown as Record<string, unknown>,
-      });
-    }
-
-    // Require ToS acceptance
-    if (!tosAccepted) {
-      throw AppError.badRequest('You must accept the Terms of Service to create an account');
-    }
-
-    // Check if user already exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email: normalizedEmail },
-    });
-
-    if (existingUser) {
-      throw AppError.badRequest('Email already in use');
-    }
-
-    // Build full name from parts if not provided directly
-    const name =
-      fullName ||
-      (firstName && lastName ? `${firstName} ${lastName}` : firstName || lastName || null);
-    const verificationBypass = shouldBypassEmailVerification(normalizedEmail);
-    const emailVerifiedAt = verificationBypass.bypass ? new Date() : null;
-
-    // Create user with email verification state and ToS acceptance recorded.
-    const passwordHash = hashPassword(normalizedPassword);
-    const user = await prisma.user.create({
-      data: {
-        email: normalizedEmail,
-        passwordHash,
-        fullName: name,
-        emailVerified: verificationBypass.bypass,
-        emailVerifiedAt,
-      },
-      select: {
-        id: true,
-        email: true,
-        fullName: true,
-        roleInCompany: true,
-        emailVerified: true,
-      },
-    });
-
-    // Record ToS acceptance using parameterized query
-    // Use PostgreSQL NOW() function for timestamp compatibility
-    await prisma.$executeRaw`UPDATE users SET tos_accepted_at = NOW(), tos_version = ${CURRENT_TOS_VERSION} WHERE id = ${user.id}`;
-
-    if (!verificationBypass.bypass) {
-      // Generate email verification token
-      const crypto = await import('crypto');
-      const verificationToken = crypto.randomBytes(32).toString('hex');
-
-      // Token expires in 24 hours
-      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-
-      await prisma.emailVerificationToken.create({
-        data: {
-          userId: user.id,
-          token: hashOneTimeToken(verificationToken),
-          expiresAt,
-        },
-      });
-
-      const verifyUrl = buildFrontendUrl(`/verify-email?token=${verificationToken}`);
-
-      // Send verification email
-      await sendVerificationEmail({
-        to: normalizedEmail,
-        userName: name || undefined,
-        verificationUrl: verifyUrl,
-        expiresInHours: 24,
-      });
-    }
-
-    await auditUserAuthEvent(req, user.id, AuditAction.USER_REGISTERED, {
-      emailVerified: { from: null, to: user.emailVerified },
-      tosVersion: CURRENT_TOS_VERSION,
-      ...(verificationBypass.bypass && {
-        method: 'domain_allowlist',
-        domain: verificationBypass.domain,
-      }),
-    });
-
-    if (verificationBypass.bypass) {
-      await auditUserAuthEvent(req, user.id, AuditAction.USER_EMAIL_VERIFIED, {
-        emailVerified: { from: false, to: true },
-        method: 'domain_allowlist',
-        domain: verificationBypass.domain,
-      });
-    }
-
-    // Generate auth token
-    const token = generateToken({
-      userId: user.id,
-      email: user.email,
-      role: user.roleInCompany,
-    });
-
-    res.status(201).json({
-      user: {
-        id: user.id,
-        email: user.email,
-        fullName: user.fullName,
-        role: user.roleInCompany,
-        emailVerified: user.emailVerified,
-        hasPassword: true,
-      },
-      token,
-      message: verificationBypass.bypass
-        ? 'Account created. Email verified for this configured demo domain.'
-        : 'Account created. Please check your email to verify your account.',
-      verificationRequired: !verificationBypass.bypass,
-    });
+authRouter.use(
+  createRegistrationRouter({
+    prisma,
+    normalizeEmailInput,
+    normalizePasswordInput,
+    normalizeProfileText,
+    hashOneTimeToken,
+    validatePassword,
+    auditUserAuthEvent,
+    profileFullNameMaxLength: PROFILE_FULL_NAME_MAX_LENGTH,
   }),
 );
 
@@ -1650,149 +1461,6 @@ authRouter.get(
     );
 
     res.json(exportData);
-  }),
-);
-
-// POST /api/auth/register-and-accept-invitation - Register new user and accept subcontractor invitation
-// This is a public endpoint (no auth required) for onboarding new subcontractor users
-authRouter.post(
-  '/register-and-accept-invitation',
-  asyncHandler(async (req, res) => {
-    const { email, password, fullName, invitationId, tosAccepted } = req.body;
-
-    if (!email || !password || !invitationId) {
-      throw AppError.badRequest('Email, password, and invitationId are required');
-    }
-    const normalizedEmail = normalizeEmailInput(email);
-    const normalizedPassword = normalizePasswordInput(password);
-    const normalizedInvitationId = normalizeSubcontractorInvitationId(invitationId);
-    const normalizedFullName = normalizeProfileText(
-      fullName,
-      'Full name',
-      PROFILE_FULL_NAME_MAX_LENGTH,
-    );
-
-    // Validate password strength
-    const passwordValidation = validatePassword(normalizedPassword);
-    if (!passwordValidation.valid) {
-      throw AppError.badRequest('Password does not meet security requirements', {
-        errors: passwordValidation.errors as unknown as Record<string, unknown>,
-      });
-    }
-
-    // Require ToS acceptance
-    if (!tosAccepted) {
-      throw AppError.badRequest('You must accept the Terms of Service to create an account');
-    }
-
-    const passwordHash = hashPassword(normalizedPassword);
-    const { user, subcontractor } = await prisma.$transaction(async (tx) => {
-      const invitedSubcontractor = await tx.subcontractorCompany.findUnique({
-        where: { id: normalizedInvitationId },
-        include: {
-          project: { select: { id: true, name: true } },
-        },
-      });
-
-      if (!invitedSubcontractor) {
-        throw AppError.notFound('Invitation');
-      }
-
-      if (isSubcontractorInvitationExpired(invitedSubcontractor)) {
-        throw AppError.notFound('Invitation');
-      }
-
-      if (!isSubcontractorInvitationAcceptableStatus(invitedSubcontractor.status)) {
-        throw AppError.forbidden('This invitation is no longer active');
-      }
-
-      if (invitedSubcontractor.primaryContactEmail?.trim().toLowerCase() !== normalizedEmail) {
-        throw AppError.badRequest('Email does not match the invitation');
-      }
-
-      const existingUser = await tx.user.findUnique({
-        where: { email: normalizedEmail },
-      });
-
-      if (existingUser) {
-        throw AppError.badRequest(
-          'An account with this email already exists. Please log in and accept the invitation.',
-        );
-      }
-
-      const existingLink = await tx.subcontractorUser.findFirst({
-        where: { subcontractorCompanyId: invitedSubcontractor.id },
-      });
-
-      if (existingLink) {
-        throw AppError.badRequest('This invitation has already been accepted by another user');
-      }
-
-      if (invitedSubcontractor.status === 'pending_approval') {
-        const statusUpdate = await tx.subcontractorCompany.updateMany({
-          where: { id: invitedSubcontractor.id, status: 'pending_approval' },
-          data: { status: 'approved' },
-        });
-
-        if (statusUpdate.count !== 1) {
-          throw AppError.badRequest('This invitation has already been accepted by another user');
-        }
-      }
-
-      const createdUser = await tx.user.create({
-        data: {
-          email: normalizedEmail,
-          passwordHash,
-          fullName: normalizedFullName ?? invitedSubcontractor.primaryContactName ?? null,
-          emailVerified: true, // Auto-verify since they're accepting an invitation
-          emailVerifiedAt: new Date(),
-          roleInCompany: 'subcontractor_admin',
-          tosAcceptedAt: new Date(),
-          tosVersion: CURRENT_TOS_VERSION,
-        },
-        select: {
-          id: true,
-          email: true,
-          fullName: true,
-          roleInCompany: true,
-        },
-      });
-
-      await tx.subcontractorUser.create({
-        data: {
-          userId: createdUser.id,
-          subcontractorCompanyId: invitedSubcontractor.id,
-          role: 'admin', // First user is admin
-        },
-      });
-
-      return { user: createdUser, subcontractor: invitedSubcontractor };
-    });
-
-    // Generate auth token
-    const token = generateToken({
-      userId: user.id,
-      email: user.email,
-      role: user.roleInCompany,
-    });
-
-    res.status(201).json({
-      user: {
-        id: user.id,
-        email: user.email,
-        fullName: user.fullName,
-        role: user.roleInCompany,
-        hasPassword: true,
-      },
-      company: {
-        id: subcontractor.id,
-        companyName: subcontractor.companyName,
-        projectId: subcontractor.projectId,
-        projectName: subcontractor.project.name,
-      },
-      token,
-      message: 'Account created and invitation accepted successfully',
-    });
   }),
 );
 
