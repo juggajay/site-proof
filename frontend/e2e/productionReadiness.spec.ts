@@ -920,6 +920,10 @@ test.describe('production readiness guardrails', () => {
       new URL('../../backend/src/routes/reports.ts', import.meta.url),
       'utf8',
     );
+    const scheduledReportsRoute = await readFile(
+      new URL('../../backend/src/routes/reports/scheduleRoutes.ts', import.meta.url),
+      'utf8',
+    );
     const scheduledReportsLib = await readFile(
       new URL('../../backend/src/lib/scheduledReports.ts', import.meta.url),
       'utf8',
@@ -938,8 +942,11 @@ test.describe('production readiness guardrails', () => {
     );
 
     expect(scheduledReportsLib).toContain('export const MAX_SCHEDULED_REPORTS_PER_PROJECT = 25');
-    expect(reportsRoute).toContain('take: MAX_SCHEDULED_REPORTS_PER_PROJECT');
-    expect(reportsRoute).toContain('existingScheduleCount >= MAX_SCHEDULED_REPORTS_PER_PROJECT');
+    expect(reportsRoute).toContain('createScheduledReportRouter');
+    expect(scheduledReportsRoute).toContain('take: MAX_SCHEDULED_REPORTS_PER_PROJECT');
+    expect(scheduledReportsRoute).toContain(
+      'existingScheduleCount >= MAX_SCHEDULED_REPORTS_PER_PROJECT',
+    );
     expect(scheduledReportsLib).toContain('processDueScheduledReports');
     expect(scheduledReportsLib).toContain('claimScheduledReport');
     expect(scheduledReportsLib).toContain('sendScheduledReportEmail');
