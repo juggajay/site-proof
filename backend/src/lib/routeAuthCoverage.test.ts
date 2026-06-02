@@ -9,6 +9,7 @@ const serverPath = fileURLToPath(new URL('../server.ts', import.meta.url));
 
 const allowedPublicRouteFiles = new Set([
   'auth.ts',
+  'auth/passwordResetRoutes.ts',
   'oauth.ts',
   'support.ts',
   'documents.ts',
@@ -139,6 +140,10 @@ function extractedClaimWorkflowRouteDescriptors(source: string): string[] {
   ).map((match) => `${match[1].toUpperCase()} ${match[3]}`);
 }
 
+function extractedPasswordResetRouteDescriptors(source: string): string[] {
+  return routeCalls(source).map((route) => route.descriptor);
+}
+
 function unprotectedRouteDescriptors(source: string): string[] {
   return routeCalls(source)
     .filter((route) => !route.source.includes('requireAuth'))
@@ -185,6 +190,10 @@ describe('route authentication coverage', () => {
 
   it('limits mixed public/protected route modules to documented public endpoints', async () => {
     const authSource = await readFile(path.join(routesDir, 'auth.ts'), 'utf8');
+    const passwordResetRoutesSource = await readFile(
+      path.join(routesDir, 'auth/passwordResetRoutes.ts'),
+      'utf8',
+    );
     const oauthSource = await readFile(path.join(routesDir, 'oauth.ts'), 'utf8');
     const documentsSource = await readFile(path.join(routesDir, 'documents.ts'), 'utf8');
     const documentsPublicRoutesSource = await readFile(
@@ -230,9 +239,6 @@ describe('route authentication coverage', () => {
       'GET /me',
       'POST /logout',
       'POST /logout-all-devices',
-      'POST /forgot-password',
-      'POST /reset-password',
-      'GET /validate-reset-token',
       'PATCH /profile',
       'POST /avatar',
       'DELETE /avatar',
@@ -249,6 +255,21 @@ describe('route authentication coverage', () => {
     expect(routeSourceForDescriptor(authSource, 'POST /logout-all-devices')).toContain(
       'verifyToken(token)',
     );
+    expect(authSource.indexOf('createPasswordResetRouter({')).toBeGreaterThan(
+      authSource.indexOf("'/logout-all-devices'"),
+    );
+    expect(authSource.indexOf('createPasswordResetRouter({')).toBeLessThan(
+      authSource.indexOf("'/profile'"),
+    );
+    expect(extractedPasswordResetRouteDescriptors(passwordResetRoutesSource)).toEqual([
+      'POST /forgot-password',
+      'POST /reset-password',
+      'GET /validate-reset-token',
+    ]);
+    expect(passwordResetRoutesSource).toContain('genericResetTokenValidationMessage');
+    expect(passwordResetRoutesSource).toContain('isMagicLinkToken(normalizedToken)');
+    expect(passwordResetRoutesSource).toContain('AuditAction.PASSWORD_RESET_REQUESTED');
+    expect(passwordResetRoutesSource).toContain('AuditAction.PASSWORD_CHANGED');
     expect(routeSourceForDescriptor(authSource, 'PATCH /profile')).toContain('requireJwtAuth');
     expect(routeSourceForDescriptor(authSource, 'POST /avatar')).toContain('requireJwtAuth');
     expect(routeSourceForDescriptor(authSource, 'DELETE /avatar')).toContain('requireJwtAuth');
