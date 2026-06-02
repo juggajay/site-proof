@@ -5,6 +5,8 @@ import { requireAuth } from '../middleware/authMiddleware.js';
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
 import {
+  buildDashboardStatsResponse,
+  buildEmptyDashboardStatsResponse,
   buildPortfolioCashFlowResponse,
   buildPortfolioNcrsResponse,
   buildProjectsAtRiskResponse,
@@ -298,20 +300,7 @@ dashboardRouter.get(
 
     // If no projects, return empty stats
     if (projectIds.length === 0) {
-      return res.json({
-        totalProjects: 0,
-        activeProjects: 0,
-        totalLots: 0,
-        lotStatusCounts: createEmptyLotStatusCounts(),
-        openHoldPoints: 0,
-        openNCRs: 0,
-        attentionItems: {
-          overdueNCRs: [],
-          staleHoldPoints: [],
-          total: 0,
-        },
-        recentActivities: [],
-      });
+      return res.json(buildEmptyDashboardStatsResponse(createEmptyLotStatusCounts()));
     }
 
     // Calculate date thresholds
@@ -529,20 +518,19 @@ dashboardRouter.get(
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
       .slice(0, 5);
 
-    res.json({
-      totalProjects,
-      activeProjects,
-      totalLots,
-      lotStatusCounts,
-      openHoldPoints,
-      openNCRs,
-      attentionItems: {
+    res.json(
+      buildDashboardStatsResponse({
+        totalProjects,
+        activeProjects,
+        totalLots,
+        lotStatusCounts,
+        openHoldPoints,
+        openNCRs,
         overdueNCRs: formattedOverdueNCRs,
         staleHoldPoints: formattedStaleHPs,
-        total: formattedOverdueNCRs.length + formattedStaleHPs.length,
-      },
-      recentActivities,
-    });
+        recentActivities,
+      }),
+    );
   }),
 );
 
