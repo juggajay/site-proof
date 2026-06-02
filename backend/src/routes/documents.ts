@@ -25,9 +25,7 @@ import fs from 'fs';
 import exifr from 'exifr';
 import crypto from 'crypto';
 import type { Prisma } from '@prisma/client';
-import { z } from 'zod';
 import { ensureUploadSubdirectory, resolveUploadPath } from '../lib/uploadPaths.js';
-import { assertUploadedFileMatchesDeclaredType } from '../lib/imageValidation.js';
 import { sanitizeUrlValueForLog } from '../lib/logSanitization.js';
 import { logError, logWarn } from '../lib/serverLogger.js';
 import {
@@ -36,6 +34,7 @@ import {
 } from './documentResponses.js';
 import { createDocumentPublicRouter } from './documents/publicRoutes.js';
 import { createDocumentListRouter } from './documents/listRoutes.js';
+import { createDocumentUploadRouter } from './documents/uploadRoutes.js';
 import { createDocumentFileAccessRouter } from './documents/fileAccessRoutes.js';
 import { createDocumentVersionRouter } from './documents/versionRoutes.js';
 import { createDocumentClassificationRouter } from './documents/classificationRoutes.js';
@@ -57,7 +56,6 @@ const MAX_FILENAME_LENGTH = 180;
 const MAX_SEARCH_LENGTH = 200;
 const MAX_CLASSIFICATION_IMAGE_BYTES = 50 * 1024 * 1024;
 const DATE_COMPONENT_QUERY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})(?:$|[T\s])/;
-const GPS_COORDINATE_PATTERN = /^-?(?:\d+|\d+\.\d+|\.\d+)$/;
 const LOCAL_DOCUMENT_FILE_SUBDIRECTORIES = ['documents', 'certificates', 'drawings'] as const;
 const ALLOWED_DOCUMENT_MIME_TYPES = new Set([
   'application/pdf',
@@ -85,60 +83,6 @@ const INLINE_RENDERABLE_DOCUMENT_MIME_TYPES = new Set([
   'image/gif',
   'image/webp',
 ]);
-
-const requiredFormStringSchema = (fieldName: string, maxLength = MAX_DOCUMENT_ID_LENGTH) =>
-  z.string().trim().min(1, `${fieldName} is required`).max(maxLength, `${fieldName} is too long`);
-
-const optionalFormStringSchema = (fieldName: string, maxLength: number) =>
-  z.preprocess(
-    (value) => {
-      if (typeof value !== 'string') {
-        return value;
-      }
-
-      const trimmed = value.trim();
-      return trimmed.length > 0 ? trimmed : null;
-    },
-    z.string().max(maxLength, `${fieldName} is too long`).nullish(),
-  );
-
-const optionalGpsCoordinateSchema = (fieldName: string, min: number, max: number) =>
-  z.preprocess(
-    (value) => {
-      if (value === undefined || value === null) {
-        return null;
-      }
-
-      if (typeof value === 'string') {
-        const trimmed = value.trim();
-        if (!trimmed) {
-          return null;
-        }
-        return GPS_COORDINATE_PATTERN.test(trimmed) ? Number(trimmed) : Number.NaN;
-      }
-
-      return value;
-    },
-    z
-      .number({ invalid_type_error: `${fieldName} must be a valid decimal coordinate` })
-      .refine(Number.isFinite, `${fieldName} must be a valid decimal coordinate`)
-      .refine(
-        (value) => value >= min && value <= max,
-        `${fieldName} must be between ${min} and ${max}`,
-      )
-      .nullish(),
-  );
-
-const uploadDocumentBodySchema = z.object({
-  projectId: requiredFormStringSchema('projectId'),
-  lotId: optionalFormStringSchema('lotId', MAX_DOCUMENT_ID_LENGTH),
-  documentType: requiredFormStringSchema('documentType', MAX_DOCUMENT_TYPE_LENGTH),
-  category: optionalFormStringSchema('category', MAX_CATEGORY_LENGTH),
-  caption: optionalFormStringSchema('caption', MAX_CAPTION_LENGTH),
-  tags: optionalFormStringSchema('tags', MAX_TAGS_LENGTH),
-  gpsLatitude: optionalGpsCoordinateSchema('gpsLatitude', -90, 90),
-  gpsLongitude: optionalGpsCoordinateSchema('gpsLongitude', -180, 180),
-});
 
 async function loadSupabaseDocumentImageAsBase64(document: {
   fileUrl: string;
@@ -1189,108 +1133,23 @@ router.use(
   }),
 );
 
-// POST /api/documents/upload - Upload a document
-router.post(
-  '/upload',
-  upload.single('file'),
-  asyncHandler(async (req: Request, res: Response) => {
-    const userId = req.user!.id;
-    if (!userId) {
-      throw AppError.unauthorized();
-    }
-
-    if (!req.file) {
-      throw AppError.badRequest('No file uploaded');
-    }
-
-    const uploadedFile = req.file;
-
-    const bodyParse = uploadDocumentBodySchema.safeParse(req.body);
-    if (!bodyParse.success) {
-      cleanupUploadedFile(uploadedFile);
-      throw AppError.fromZodError(bodyParse.error);
-    }
-
-    const { projectId, lotId, documentType, category, caption, tags, gpsLatitude, gpsLongitude } =
-      bodyParse.data;
-
-    const hasAccess = await checkProjectAccess(userId, projectId);
-    if (!hasAccess) {
-      cleanupUploadedFile(uploadedFile);
-      throw AppError.forbidden('Access denied');
-    }
-    try {
-      await requireDocumentUploadAccess(req.user!, projectId, lotId || null, category || null);
-    } catch (error) {
-      cleanupUploadedFile(uploadedFile);
-      throw error;
-    }
-    try {
-      assertUploadedFileMatchesDeclaredType(uploadedFile);
-    } catch (error) {
-      cleanupUploadedFile(uploadedFile);
-      throw error;
-    }
-
-    let fileUrl: string | null = null;
-    let photoMetadata: Awaited<ReturnType<typeof extractPhotoMetadata>> = {};
-    let documentCreated = false;
-
-    try {
-      // Upload to Supabase Storage if configured, otherwise use local filesystem
-      const storedMimeType = getSafeStoredDocumentMimeType(uploadedFile);
-      if (isSupabaseConfigured() && uploadedFile.buffer) {
-        // For EXIF extraction from memory buffer, write to temp file
-        if (uploadedFile.mimetype.startsWith('image/')) {
-          photoMetadata = await extractPhotoMetadataFromBuffer(uploadedFile);
-        }
-
-        // Upload to Supabase
-        const uploaded = await uploadToSupabase(uploadedFile, projectId);
-        fileUrl = uploaded.url;
-      } else {
-        // Fallback to local filesystem
-        photoMetadata = await extractPhotoMetadata(uploadedFile.path, uploadedFile.mimetype);
-        fileUrl = `/uploads/documents/${uploadedFile.filename}`;
-      }
-
-      // Create document record
-      const document = await prisma.document.create({
-        data: {
-          projectId,
-          lotId: lotId || null,
-          documentType,
-          category: category || null,
-          filename: sanitizeUploadFilename(uploadedFile.originalname),
-          fileUrl,
-          fileSize: uploadedFile.size,
-          mimeType: storedMimeType,
-          uploadedById: userId,
-          caption: caption || null,
-          tags: tags || null,
-          // Feature #479: Store extracted EXIF data
-          gpsLatitude: gpsLatitude ?? photoMetadata.gpsLatitude,
-          gpsLongitude: gpsLongitude ?? photoMetadata.gpsLongitude,
-          captureTimestamp: photoMetadata.captureTimestamp,
-          // Store device info in aiClassification field as metadata
-          aiClassification: photoMetadata.deviceInfo
-            ? JSON.stringify({ deviceInfo: photoMetadata.deviceInfo })
-            : null,
-        },
-        include: {
-          lot: { select: { id: true, lotNumber: true } },
-          uploadedBy: { select: { id: true, fullName: true, email: true } },
-        },
-      });
-
-      documentCreated = true;
-      res.status(201).json(document);
-    } catch (error) {
-      if (!documentCreated) {
-        await cleanupStoredDocumentUpload(fileUrl, uploadedFile, projectId);
-      }
-      throw error;
-    }
+router.use(
+  createDocumentUploadRouter({
+    prisma,
+    uploadFileMiddleware: upload.single('file'),
+    maxDocumentIdLength: MAX_DOCUMENT_ID_LENGTH,
+    maxDocumentTypeLength: MAX_DOCUMENT_TYPE_LENGTH,
+    maxCategoryLength: MAX_CATEGORY_LENGTH,
+    maxCaptionLength: MAX_CAPTION_LENGTH,
+    maxTagsLength: MAX_TAGS_LENGTH,
+    cleanupUploadedFile,
+    requireDocumentUploadAccess,
+    getSafeStoredDocumentMimeType,
+    extractPhotoMetadata,
+    extractPhotoMetadataFromBuffer,
+    uploadToSupabase,
+    cleanupStoredDocumentUpload,
+    sanitizeUploadFilename,
   }),
 );
 
