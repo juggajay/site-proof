@@ -96,6 +96,12 @@ import {
   buildLotsCreatedResponse,
   buildSuggestedLotNumberResponse,
 } from './lots/coreResponses.js';
+import {
+  buildLegacyLotAssignmentResponse,
+  buildLotAssignmentDeletedResponse,
+  buildLotAssignmentResponse,
+  buildLotAssignmentsResponse,
+} from './lots/assignmentResponses.js';
 
 export const lotsRouter = Router();
 
@@ -1682,7 +1688,7 @@ lotsRouter.get(
       orderBy: { assignedAt: 'desc' },
     });
 
-    res.json(assignments);
+    res.json(buildLotAssignmentsResponse(assignments));
   }),
 );
 
@@ -1726,7 +1732,7 @@ lotsRouter.get(
     });
 
     if (assignment) {
-      return res.json(assignment);
+      return res.json(buildLotAssignmentResponse(assignment));
     }
 
     const legacyLot = await prisma.lot.findFirst({
@@ -1742,15 +1748,7 @@ lotsRouter.get(
       throw AppError.notFound('Assignment');
     }
 
-    res.json({
-      id: `legacy-${id}-${subcontractorCompanyId}`,
-      lotId: id,
-      projectId: lot.projectId,
-      subcontractorCompanyId,
-      canCompleteITP: false,
-      itpRequiresVerification: true,
-      status: 'active',
-    });
+    res.json(buildLegacyLotAssignmentResponse(id, lot.projectId, subcontractorCompanyId));
   }),
 );
 
@@ -1879,7 +1877,7 @@ lotsRouter.post(
       req,
     });
 
-    res.status(201).json(assignment);
+    res.status(201).json(buildLotAssignmentResponse(assignment));
   }),
 );
 
@@ -1964,7 +1962,7 @@ lotsRouter.patch(
       req,
     });
 
-    res.json(updated);
+    res.json(buildLotAssignmentResponse(updated));
   }),
 );
 
@@ -2052,6 +2050,6 @@ lotsRouter.delete(
       req,
     });
 
-    res.json({ message: 'Assignment removed successfully' });
+    res.json(buildLotAssignmentDeletedResponse());
   }),
 );
