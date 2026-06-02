@@ -21,6 +21,12 @@ import {
   buildSubcontractorStatusUpdatedResponse,
 } from './subcontractors/adminResponses.js';
 import {
+  buildAdminEmployeeCreatedResponse,
+  buildAdminEmployeeStatusResponse,
+  buildAdminPlantCreatedResponse,
+  buildAdminPlantStatusResponse,
+} from './subcontractors/rosterAdminResponses.js';
+import {
   buildEmptyPendingSubcontractorInvitationResponse,
   buildSubcontractorDirectoryResponse,
   buildSubcontractorInvitationAcceptedResponse,
@@ -1367,7 +1373,7 @@ subcontractorsRouter.get(
       };
     });
 
-    res.json({ subcontractors: formattedSubcontractors });
+    res.json(buildSubcontractorsForProjectResponse(formattedSubcontractors));
   }),
 );
 
@@ -1406,15 +1412,7 @@ subcontractorsRouter.post(
       },
     });
 
-    res.status(201).json({
-      employee: {
-        id: employee.id,
-        name: employee.name,
-        role: employee.role || '',
-        hourlyRate: Number(employee.hourlyRate),
-        status: employee.status,
-      },
-    });
+    res.status(201).json(buildAdminEmployeeCreatedResponse(employee));
   }),
 );
 
@@ -1581,17 +1579,7 @@ subcontractorsRouter.patch(
       req,
     });
 
-    res.json({
-      employee: {
-        id: updated.id,
-        name: updated.name,
-        role: updated.role || '',
-        hourlyRate: Number(updated.hourlyRate),
-        status: updated.status,
-        ...(status === 'counter' &&
-          normalizedCounterRate !== undefined && { counterRate: normalizedCounterRate }),
-      },
-    });
+    res.json(buildAdminEmployeeStatusResponse(updated, status, normalizedCounterRate));
   }),
 );
 
@@ -1637,17 +1625,7 @@ subcontractorsRouter.post(
       },
     });
 
-    res.status(201).json({
-      plant: {
-        id: plant.id,
-        type: plant.type,
-        description: plant.description || '',
-        idRego: plant.idRego || '',
-        dryRate: Number(plant.dryRate),
-        wetRate: Number(plant.wetRate) || 0,
-        status: plant.status,
-      },
-    });
+    res.status(201).json(buildAdminPlantCreatedResponse(plant));
   }),
 );
 
@@ -1840,23 +1818,14 @@ subcontractorsRouter.patch(
       req,
     });
 
-    res.json({
-      plant: {
-        id: updated.id,
-        type: updated.type,
-        description: updated.description || '',
-        idRego: updated.idRego || '',
-        dryRate: Number(updated.dryRate),
-        wetRate: Number(updated.wetRate) || 0,
-        status: updated.status,
-        ...(status === 'counter' && {
-          counterDryRate: normalizedCounterDryRate,
-          ...(normalizedCounterWetRate !== undefined && {
-            counterWetRate: normalizedCounterWetRate,
-          }),
-        }),
-      },
-    });
+    res.json(
+      buildAdminPlantStatusResponse(
+        updated,
+        status,
+        normalizedCounterDryRate,
+        normalizedCounterWetRate,
+      ),
+    );
   }),
 );
 
