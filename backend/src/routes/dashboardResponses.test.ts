@@ -5,10 +5,12 @@ import {
   buildEmptyCostTrendResponse,
   buildEmptyDashboardStatsResponse,
   buildEmptyForemanDashboardResponse,
+  buildEmptyQualityManagerDashboardResponse,
   buildForemanDashboardResponse,
   buildPortfolioCashFlowResponse,
   buildPortfolioNcrsResponse,
   buildProjectsAtRiskResponse,
+  buildQualityManagerDashboardResponse,
 } from './dashboardResponses.js';
 
 describe('dashboardResponses', () => {
@@ -147,6 +149,93 @@ describe('dashboardResponses', () => {
         items: [{ id: 'inspection-1' }, { id: 'inspection-2' }],
       },
       weather: { conditions: 'Fine' },
+      project: { id: 'project-1' },
+    });
+  });
+
+  it('builds the empty quality manager dashboard response', () => {
+    expect(buildEmptyQualityManagerDashboardResponse()).toEqual({
+      lotConformance: { totalLots: 0, conformingLots: 0, nonConformingLots: 0, rate: 100 },
+      ncrsByCategory: { major: 0, minor: 0, observation: 0, total: 0 },
+      openNCRs: [],
+      pendingVerifications: { count: 0, items: [] },
+      holdPointMetrics: {
+        totalReleased: 0,
+        totalPending: 0,
+        releaseRate: 100,
+        avgTimeToRelease: 0,
+      },
+      itpTrends: {
+        completedThisWeek: 0,
+        completedLastWeek: 0,
+        trend: 'stable',
+        completionRate: 100,
+      },
+      auditReadiness: { score: 100, status: 'ready', issues: [] },
+      project: null,
+    });
+  });
+
+  it('builds the quality manager dashboard response with rounded rates', () => {
+    expect(
+      buildQualityManagerDashboardResponse({
+        totalLots: 10,
+        conformingLots: 7,
+        nonConformingLots: 3,
+        conformanceRate: 66.66,
+        majorNCRs: 1,
+        minorNCRs: 2,
+        observationNCRs: 3,
+        openNCRs: [{ id: 'ncr-1' }],
+        pendingVerificationItems: [{ id: 'verification-1' }, { id: 'verification-2' }],
+        releasedHPs: 4,
+        pendingHPs: 5,
+        releaseRate: 88.88,
+        avgTimeToRelease: 12,
+        completedThisWeek: 6,
+        completedLastWeek: 5,
+        trend: 'up',
+        itpCompletionRate: 77.77,
+        auditScore: 85,
+        auditStatus: 'ready',
+        auditIssues: ['issue-1'],
+        project: { id: 'project-1' },
+      }),
+    ).toEqual({
+      lotConformance: {
+        totalLots: 10,
+        conformingLots: 7,
+        nonConformingLots: 3,
+        rate: 66.7,
+      },
+      ncrsByCategory: {
+        major: 1,
+        minor: 2,
+        observation: 3,
+        total: 6,
+      },
+      openNCRs: [{ id: 'ncr-1' }],
+      pendingVerifications: {
+        count: 2,
+        items: [{ id: 'verification-1' }, { id: 'verification-2' }],
+      },
+      holdPointMetrics: {
+        totalReleased: 4,
+        totalPending: 5,
+        releaseRate: 88.9,
+        avgTimeToRelease: 12,
+      },
+      itpTrends: {
+        completedThisWeek: 6,
+        completedLastWeek: 5,
+        trend: 'up',
+        completionRate: 77.8,
+      },
+      auditReadiness: {
+        score: 85,
+        status: 'ready',
+        issues: ['issue-1'],
+      },
       project: { id: 'project-1' },
     });
   });
