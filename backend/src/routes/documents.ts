@@ -42,6 +42,7 @@ import {
   buildInvalidDocumentSignedUrlTokenResponse,
   buildSavedDocumentClassificationResponse,
 } from './documentResponses.js';
+import { createDocumentPublicRouter } from './documents/publicRoutes.js';
 
 type SignedUrlValidation = {
   valid: boolean;
@@ -1136,70 +1137,19 @@ async function requireDocumentMutationAccess(
   );
 }
 
-// Feature #741: Public route for signed URL download (no auth required)
-// This MUST be defined BEFORE the requireAuth middleware
-router.get(
-  '/download/:documentId',
-  asyncHandler(async (req: Request, res: Response) => {
-    const documentId = parseDocumentRouteParam(req.params.documentId, 'documentId');
-    const { token } = req.query;
-    const disposition = parseDocumentContentDisposition(req.query.disposition);
-
-    if (!token || typeof token !== 'string') {
-      throw AppError.badRequest('Token is required', {
-        message: 'Please provide a valid signed URL token',
-      });
-    }
-
-    // Validate the signed token
-    const validation = await validateSignedUrlToken(token, documentId);
-
-    if (!validation.valid) {
-      if (validation.expired) {
-        throw new AppError(
-          410,
-          'This signed URL has expired. Please request a new one.',
-          'URL_EXPIRED',
-        );
-      }
-      throw AppError.forbidden('The signed URL token is invalid or does not match this document.');
-    }
-
-    // Get document
-    const document = await prisma.document.findUnique({
-      where: { id: documentId },
-    });
-
-    if (!document) {
-      throw AppError.notFound('Document');
-    }
-
-    await sendDocumentFile(document, res, disposition);
-  }),
-);
-
-// Feature #741: Public route for token validation (no auth required)
-router.get(
-  '/signed-url/validate',
-  asyncHandler(async (req: Request, res: Response) => {
-    const { token } = req.query;
-    const documentId = getOptionalQueryString(req.query, 'documentId', MAX_DOCUMENT_ID_LENGTH);
-
-    if (!token || typeof token !== 'string') {
-      throw AppError.badRequest('Token is required');
-    }
-
-    if (!documentId) {
-      throw AppError.badRequest('Document ID is required');
-    }
-
-    const validation = await validateSignedUrlToken(token, documentId);
-
-    if (!validation.valid) {
-      return res.json(buildInvalidDocumentSignedUrlTokenResponse(validation.expired));
-    }
-
-    res.json(buildDocumentSignedUrlTokenResponse({ documentId, ...validation }));
+// Feature #741: Public signed URL routes (no auth required)
+// This MUST be mounted BEFORE the requireAuth middleware.
+router.use(
+  createDocumentPublicRouter({
+    prisma,
+    maxDocumentIdLength: MAX_DOCUMENT_ID_LENGTH,
+    parseDocumentRouteParam,
+    parseDocumentContentDisposition,
+    getOptionalQueryString,
+    validateSignedUrlToken,
+    sendDocumentFile,
+    buildInvalidDocumentSignedUrlTokenResponse,
+    buildDocumentSignedUrlTokenResponse,
   }),
 );
 
