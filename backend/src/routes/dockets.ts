@@ -42,6 +42,10 @@ import {
   refreshPlantSubmittedTotals,
 } from './dockets/entryTotals.js';
 import {
+  buildDocketLabourEntryMutationResponse,
+  buildDocketPlantEntryMutationResponse,
+} from './dockets/entryMutationResponses.js';
+import {
   formatDocketDate,
   formatDocketNumber,
   formatDocketUserName,
@@ -1213,31 +1217,7 @@ docketsRouter.post(
       };
     });
 
-    res.status(201).json({
-      labourEntry: {
-        id: entry.id,
-        employee: {
-          id: entry.employee.id,
-          name: entry.employee.name,
-          role: entry.employee.role,
-          hourlyRate: Number(entry.employee.hourlyRate) || 0,
-        },
-        startTime: entry.startTime,
-        finishTime: entry.finishTime,
-        submittedHours: Number(entry.submittedHours) || 0,
-        hourlyRate: Number(entry.hourlyRate) || 0,
-        submittedCost: Number(entry.submittedCost) || 0,
-        lotAllocations: entry.lotAllocations.map((alloc) => ({
-          lotId: alloc.lotId,
-          lotNumber: alloc.lot.lotNumber,
-          hours: Number(alloc.hours) || 0,
-        })),
-      },
-      runningTotal: {
-        hours: totals.hours,
-        cost: totals.cost,
-      },
-    });
+    res.status(201).json(buildDocketLabourEntryMutationResponse(entry, totals));
   }),
 );
 
@@ -1342,27 +1322,7 @@ docketsRouter.put(
       return refreshed;
     });
 
-    res.json({
-      labourEntry: {
-        id: updated.id,
-        employee: {
-          id: updated.employee.id,
-          name: updated.employee.name,
-          role: updated.employee.role,
-          hourlyRate: Number(updated.employee.hourlyRate) || 0,
-        },
-        startTime: updated.startTime,
-        finishTime: updated.finishTime,
-        submittedHours: Number(updated.submittedHours) || 0,
-        hourlyRate: Number(updated.hourlyRate) || 0,
-        submittedCost: Number(updated.submittedCost) || 0,
-        lotAllocations: updated.lotAllocations.map((alloc) => ({
-          lotId: alloc.lotId,
-          lotNumber: alloc.lot.lotNumber,
-          hours: Number(alloc.hours) || 0,
-        })),
-      },
-    });
+    res.json(buildDocketLabourEntryMutationResponse(updated));
   }),
 );
 
@@ -1530,27 +1490,7 @@ docketsRouter.post(
       };
     });
 
-    res.status(201).json({
-      plantEntry: {
-        id: entry.id,
-        plant: {
-          id: entry.plant.id,
-          type: entry.plant.type,
-          description: entry.plant.description,
-          idRego: entry.plant.idRego,
-          dryRate: Number(entry.plant.dryRate) || 0,
-          wetRate: Number(entry.plant.wetRate) || 0,
-        },
-        hoursOperated: Number(entry.hoursOperated) || 0,
-        wetOrDry: entry.wetOrDry || 'dry',
-        hourlyRate: Number(entry.hourlyRate) || 0,
-        submittedCost: Number(entry.submittedCost) || 0,
-      },
-      runningTotal: {
-        hours: totals.hours,
-        cost: totals.cost,
-      },
-    });
+    res.status(201).json(buildDocketPlantEntryMutationResponse(entry, totals));
   }),
 );
 
@@ -1627,23 +1567,7 @@ docketsRouter.put(
       return refreshed;
     });
 
-    res.json({
-      plantEntry: {
-        id: updated.id,
-        plant: {
-          id: updated.plant.id,
-          type: updated.plant.type,
-          description: updated.plant.description,
-          idRego: updated.plant.idRego,
-          dryRate: Number(updated.plant.dryRate) || 0,
-          wetRate: Number(updated.plant.wetRate) || 0,
-        },
-        hoursOperated: Number(updated.hoursOperated) || 0,
-        wetOrDry: updated.wetOrDry || 'dry',
-        hourlyRate: Number(updated.hourlyRate) || 0,
-        submittedCost: Number(updated.submittedCost) || 0,
-      },
-    });
+    res.json(buildDocketPlantEntryMutationResponse(updated));
   }),
 );
 
