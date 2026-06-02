@@ -46,6 +46,10 @@ import {
   buildDocketPlantEntryMutationResponse,
 } from './dockets/entryMutationResponses.js';
 import {
+  buildDocketCreatedResponse,
+  buildDocketUpdatedResponse,
+} from './dockets/coreMutationResponses.js';
+import {
   formatDocketDate,
   formatDocketNumber,
   formatDocketUserName,
@@ -215,18 +219,7 @@ docketsRouter.post(
       },
     });
 
-    res.status(201).json({
-      docket: {
-        id: docket.id,
-        docketNumber: formatDocketNumber(docket.id),
-        subcontractor: docket.subcontractorCompany.companyName,
-        date: formatDocketDate(docket.date),
-        status: docket.status,
-        labourHours: Number(docket.totalLabourSubmitted) || 0,
-        plantHours: Number(docket.totalPlantSubmitted) || 0,
-        notes: docket.notes,
-      },
-    });
+    res.status(201).json(buildDocketCreatedResponse(docket));
   }),
 );
 
@@ -380,17 +373,7 @@ docketsRouter.patch(
       },
     });
 
-    res.json({
-      docket: {
-        id: updatedDocket.id,
-        docketNumber: formatDocketNumber(updatedDocket.id),
-        date: formatDocketDate(updatedDocket.date),
-        status: updatedDocket.status,
-        notes: updatedDocket.notes,
-        foremanNotes: updatedDocket.foremanNotes,
-        subcontractor: updatedDocket.subcontractorCompany,
-      },
-    });
+    res.json(buildDocketUpdatedResponse(updatedDocket));
   }),
 );
 
