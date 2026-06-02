@@ -106,3 +106,42 @@ export function buildEmptyCostTrendResponse() {
     subcontractors: [],
   };
 }
+
+export function buildEmptyForemanDashboardResponse() {
+  return {
+    todayDiary: { exists: false, status: null, id: null },
+    pendingDockets: { count: 0, totalLabourHours: 0, totalPlantHours: 0 },
+    inspectionsDueToday: { count: 0, items: [] },
+    weather: { conditions: null, temperatureMin: null, temperatureMax: null, rainfallMm: null },
+    project: null,
+  };
+}
+
+export function buildForemanDashboardResponse<TDocketStats, TInspectionItem, TWeather, TProject>({
+  todayDiary,
+  pendingDockets,
+  inspectionItems,
+  weather,
+  project,
+}: {
+  todayDiary: { id: string; status: string } | null;
+  pendingDockets: TDocketStats;
+  inspectionItems: TInspectionItem[];
+  weather: TWeather;
+  project: TProject;
+}) {
+  return {
+    todayDiary: {
+      exists: !!todayDiary,
+      status: todayDiary?.status || null,
+      id: todayDiary?.id || null,
+    },
+    pendingDockets,
+    inspectionsDueToday: {
+      count: inspectionItems.length,
+      items: inspectionItems,
+    },
+    weather,
+    project,
+  };
+}

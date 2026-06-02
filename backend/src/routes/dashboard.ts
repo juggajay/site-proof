@@ -9,6 +9,8 @@ import {
   buildDashboardStatsResponse,
   buildEmptyCostTrendResponse,
   buildEmptyDashboardStatsResponse,
+  buildEmptyForemanDashboardResponse,
+  buildForemanDashboardResponse,
   buildPortfolioCashFlowResponse,
   buildPortfolioNcrsResponse,
   buildProjectsAtRiskResponse,
@@ -1060,13 +1062,7 @@ dashboardRouter.get(
 
     // Return empty data if no project access
     if (!projectId) {
-      return res.json({
-        todayDiary: { exists: false, status: null, id: null },
-        pendingDockets: { count: 0, totalLabourHours: 0, totalPlantHours: 0 },
-        inspectionsDueToday: { count: 0, items: [] },
-        weather: { conditions: null, temperatureMin: null, temperatureMax: null, rainfallMm: null },
-        project: null,
-      });
+      return res.json(buildEmptyForemanDashboardResponse());
     }
 
     // Get today's date range
@@ -1197,20 +1193,15 @@ dashboardRouter.get(
       };
     }
 
-    res.json({
-      todayDiary: {
-        exists: !!todayDiary,
-        status: todayDiary?.status || null,
-        id: todayDiary?.id || null,
-      },
-      pendingDockets: docketStats,
-      inspectionsDueToday: {
-        count: inspectionItems.length,
-        items: inspectionItems,
-      },
-      weather,
-      project: primaryProject,
-    });
+    res.json(
+      buildForemanDashboardResponse({
+        todayDiary,
+        pendingDockets: docketStats,
+        inspectionItems,
+        weather,
+        project: primaryProject,
+      }),
+    );
   }),
 );
 
