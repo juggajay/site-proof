@@ -4,6 +4,8 @@ import {
   buildDashboardStatsResponse,
   buildEmptyCostTrendResponse,
   buildEmptyDashboardStatsResponse,
+  buildEmptyForemanDashboardResponse,
+  buildForemanDashboardResponse,
   buildPortfolioCashFlowResponse,
   buildPortfolioNcrsResponse,
   buildProjectsAtRiskResponse,
@@ -115,6 +117,37 @@ describe('dashboardResponses', () => {
       totals: { labour: 0, plant: 0, combined: 0 },
       runningAverage: 0,
       subcontractors: [],
+    });
+  });
+
+  it('builds the empty foreman dashboard response', () => {
+    expect(buildEmptyForemanDashboardResponse()).toEqual({
+      todayDiary: { exists: false, status: null, id: null },
+      pendingDockets: { count: 0, totalLabourHours: 0, totalPlantHours: 0 },
+      inspectionsDueToday: { count: 0, items: [] },
+      weather: { conditions: null, temperatureMin: null, temperatureMax: null, rainfallMm: null },
+      project: null,
+    });
+  });
+
+  it('builds the foreman dashboard response', () => {
+    expect(
+      buildForemanDashboardResponse({
+        todayDiary: { id: 'diary-1', status: 'submitted' },
+        pendingDockets: { count: 2 },
+        inspectionItems: [{ id: 'inspection-1' }, { id: 'inspection-2' }],
+        weather: { conditions: 'Fine' },
+        project: { id: 'project-1' },
+      }),
+    ).toEqual({
+      todayDiary: { exists: true, status: 'submitted', id: 'diary-1' },
+      pendingDockets: { count: 2 },
+      inspectionsDueToday: {
+        count: 2,
+        items: [{ id: 'inspection-1' }, { id: 'inspection-2' }],
+      },
+      weather: { conditions: 'Fine' },
+      project: { id: 'project-1' },
     });
   });
 });
