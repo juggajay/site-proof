@@ -28,6 +28,7 @@ const parentProtectedRoutePrefixes = new Set([
   'notifications/',
   'lots/',
   'claims/evidenceRoutes.ts',
+  'claims/workflowRoutes.ts',
   'subcontractors/myCompanyRoutes.ts',
   'subcontractors/portalAccessRoutes.ts',
 ]);
@@ -130,6 +131,14 @@ function extractedSubcontractorPortalAccessRouteDescriptors(source: string): str
   return routeCalls(source).map((route) => route.descriptor);
 }
 
+function extractedClaimWorkflowRouteDescriptors(source: string): string[] {
+  return Array.from(
+    source.matchAll(
+      /\b(?:workflowRouter|postEvidenceWorkflowRouter)\.(get|post|put|patch|delete)\(\s*(['"`])([^'"`]+)\2/g,
+    ),
+  ).map((match) => `${match[1].toUpperCase()} ${match[3]}`);
+}
+
 function unprotectedRouteDescriptors(source: string): string[] {
   return routeCalls(source)
     .filter((route) => !route.source.includes('requireAuth'))
@@ -192,6 +201,11 @@ describe('route authentication coverage', () => {
     );
     const documentsClassificationRoutesSource = await readFile(
       path.join(routesDir, 'documents/classificationRoutes.ts'),
+      'utf8',
+    );
+    const claimsSource = await readFile(path.join(routesDir, 'claims.ts'), 'utf8');
+    const claimsWorkflowRoutesSource = await readFile(
+      path.join(routesDir, 'claims/workflowRoutes.ts'),
       'utf8',
     );
     const holdpointsSource = await readFile(path.join(routesDir, 'holdpoints.ts'), 'utf8');
@@ -317,6 +331,23 @@ describe('route authentication coverage', () => {
       'POST /:documentId/classify',
       'POST /:documentId/save-classification',
       'PATCH /:documentId',
+    ]);
+
+    expect(claimsSource.indexOf('router.use(requireAuth)')).toBeLessThan(
+      claimsSource.indexOf('createClaimWorkflowRouter({'),
+    );
+    expect(claimsSource.indexOf('createClaimWorkflowRouter({')).toBeLessThan(
+      claimsSource.indexOf('createClaimEvidenceRouter({'),
+    );
+    expect(claimsSource.indexOf('createClaimEvidenceRouter({')).toBeLessThan(
+      claimsSource.indexOf('createClaimPostEvidenceWorkflowRouter({'),
+    );
+    expect(extractedClaimWorkflowRouteDescriptors(claimsWorkflowRoutesSource)).toEqual([
+      'POST /:projectId/claims',
+      'PUT /:projectId/claims/:claimId',
+      'POST /:projectId/claims/:claimId/certify',
+      'POST /:projectId/claims/:claimId/payment',
+      'DELETE /:projectId/claims/:claimId',
     ]);
 
     expect(publicRouteDescriptorsBeforeRouteWideAuth(holdpointsSource)).toEqual([
