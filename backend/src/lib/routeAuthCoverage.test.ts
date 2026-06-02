@@ -32,8 +32,10 @@ const parentProtectedRoutePrefixes = new Set([
   'lots/',
   'claims/evidenceRoutes.ts',
   'claims/workflowRoutes.ts',
+  'subcontractors/directoryRoutes.ts',
   'subcontractors/myCompanyRoutes.ts',
   'subcontractors/portalAccessRoutes.ts',
+  'subcontractors/abnValidationRoutes.ts',
 ]);
 
 const routeDeclarationPattern = /\b(?:router|[A-Za-z]+Router)\.(get|post|put|patch|delete)\(/;
@@ -140,6 +142,14 @@ function extractedSubcontractorInvitationAuthenticatedRouteDescriptors(source: s
 }
 
 function extractedSubcontractorPortalAccessRouteDescriptors(source: string): string[] {
+  return routeCalls(source).map((route) => route.descriptor);
+}
+
+function extractedSubcontractorDirectoryRouteDescriptors(source: string): string[] {
+  return routeCalls(source).map((route) => route.descriptor);
+}
+
+function extractedSubcontractorAbnValidationRouteDescriptors(source: string): string[] {
   return routeCalls(source).map((route) => route.descriptor);
 }
 
@@ -267,12 +277,20 @@ describe('route authentication coverage', () => {
       path.join(routesDir, 'subcontractors/invitationRoutes.ts'),
       'utf8',
     );
+    const subcontractorDirectoryRoutesSource = await readFile(
+      path.join(routesDir, 'subcontractors/directoryRoutes.ts'),
+      'utf8',
+    );
     const subcontractorAdminRoutesSource = await readFile(
       path.join(routesDir, 'subcontractors/adminRoutes.ts'),
       'utf8',
     );
     const subcontractorPortalAccessRoutesSource = await readFile(
       path.join(routesDir, 'subcontractors/portalAccessRoutes.ts'),
+      'utf8',
+    );
+    const subcontractorAbnValidationRoutesSource = await readFile(
+      path.join(routesDir, 'subcontractors/abnValidationRoutes.ts'),
       'utf8',
     );
     const webhooksSource = await readFile(path.join(routesDir, 'webhooks.ts'), 'utf8');
@@ -553,6 +571,12 @@ describe('route authentication coverage', () => {
     expect(
       subcontractorsSource.indexOf('subcontractorInvitationRouters.authenticatedRouter'),
     ).toBeLessThan(subcontractorsSource.indexOf('createSubcontractorAdminRouter({'));
+    expect(subcontractorsSource.indexOf('createSubcontractorDirectoryRouter({')).toBeGreaterThan(
+      subcontractorsSource.indexOf('subcontractorInvitationRouters.authenticatedRouter'),
+    );
+    expect(subcontractorsSource.indexOf('createSubcontractorDirectoryRouter({')).toBeLessThan(
+      subcontractorsSource.indexOf('createSubcontractorMyCompanyRouter({'),
+    );
     expect(subcontractorsSource.indexOf('createSubcontractorAdminRouter({')).toBeGreaterThan(
       subcontractorsSource.indexOf('createSubcontractorMyCompanyRouter({'),
     );
@@ -562,6 +586,9 @@ describe('route authentication coverage', () => {
     expect(subcontractorsSource.indexOf('createSubcontractorPortalAccessRouter({')).toBeLessThan(
       subcontractorsSource.indexOf("'/project/:projectId'"),
     );
+    expect(
+      subcontractorsSource.indexOf('createSubcontractorAbnValidationRouter({'),
+    ).toBeGreaterThan(subcontractorsSource.indexOf('createSubcontractorRosterAdminRouter({'));
     expect(
       extractedSubcontractorInvitationPublicRouteDescriptors(subcontractorInvitationRoutesSource),
     ).toEqual(['GET /invitation/:id']);
@@ -575,6 +602,9 @@ describe('route authentication coverage', () => {
       'GET /for-project/:projectId',
       'POST /invitation/:id/accept',
     ]);
+    expect(
+      extractedSubcontractorDirectoryRouteDescriptors(subcontractorDirectoryRoutesSource),
+    ).toEqual(['GET /directory']);
     expect(extractedSubcontractorAdminRouteDescriptors(subcontractorAdminRoutesSource)).toEqual([
       'PATCH /:id/status',
       'DELETE /:id',
@@ -582,6 +612,9 @@ describe('route authentication coverage', () => {
     expect(
       extractedSubcontractorPortalAccessRouteDescriptors(subcontractorPortalAccessRoutesSource),
     ).toEqual(['PATCH /:id/portal-access', 'GET /:id/portal-access']);
+    expect(
+      extractedSubcontractorAbnValidationRouteDescriptors(subcontractorAbnValidationRoutesSource),
+    ).toEqual(['POST /validate-abn']);
 
     expect(publicRouteDescriptorsBeforeRouteWideAuth(webhooksSource)).toEqual([
       'POST /test-receiver',
