@@ -17,6 +17,7 @@ import {
   buildProjectCostsResponse,
   buildProjectCreatedResponse,
 } from './projects/costResponses.js';
+import { buildProjectOverviewResponse } from './projects/overviewResponses.js';
 
 export const projectsRouter = Router();
 
@@ -829,56 +830,27 @@ projectsRouter.get(
       })),
     ];
 
-    res.json({
-      project: {
-        id: project.id,
-        name: project.name,
-        projectNumber: project.projectNumber,
-        status: project.status,
-        client: project.clientName,
-        state: project.state,
-      },
-      stats: {
-        lots: {
-          total: lotsTotal,
-          completed: lotsCompleted,
-          inProgress: lotsInProgress,
-          notStarted: lotsNotStarted,
-          onHold: lotsOnHold,
-          progressPct: lotsProgressPct,
-        },
-        ncrs: {
-          open: ncrStats[0],
-          total: ncrStats[1],
-          overdue: ncrStats[2],
-          major: ncrByCategory[0],
-          minor: ncrByCategory[1],
-          observation: ncrByCategory[2],
-        },
-        holdPoints: {
-          pending: holdPointStats[0],
-          released: holdPointStats[1],
-        },
-        itps: {
-          pending: itpStats[0],
-          completed: itpStats[1],
-        },
-        dockets: {
-          pendingApproval: docketStats,
-        },
-        tests: {
-          total: testCount,
-        },
-        documents: {
-          total: documentCount,
-        },
-        diary: {
-          todayStatus: todayDiary?.status || null,
-        },
-      },
-      attentionItems,
-      recentActivity: formattedActivity.slice(0, 10),
-    });
+    res.json(
+      buildProjectOverviewResponse({
+        project,
+        lotsTotal,
+        lotsCompleted,
+        lotsInProgress,
+        lotsNotStarted,
+        lotsOnHold,
+        lotsProgressPct,
+        ncrStats,
+        ncrByCategory,
+        holdPointStats,
+        itpStats,
+        docketStats,
+        testCount,
+        documentCount,
+        todayDiaryStatus: todayDiary?.status || null,
+        attentionItems,
+        recentActivity: formattedActivity,
+      }),
+    );
   }),
 );
 
