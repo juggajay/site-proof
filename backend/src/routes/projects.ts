@@ -1,22 +1,16 @@
 import { Router, type Request } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
-import { createAuditLog, AuditAction } from '../lib/auditLog.js';
-import { TIER_PROJECT_LIMITS } from '../lib/tierLimits.js';
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
 import { ROLES } from '../lib/roles.js';
 import { PROJECT_ADMIN_ROLES } from '../lib/projectAdminInvariant.js';
 import { Prisma } from '@prisma/client';
-import {
-  buildProjectDeletedResponse,
-  buildProjectDetailResponse,
-} from './projects/listDetailResponses.js';
-import { buildProjectCreatedResponse } from './projects/costResponses.js';
 import { buildProjectAuditLogsResponse } from './projects/auditResponses.js';
 import { createProjectAreaRouter } from './projects/areaRoutes.js';
 import { createProjectReadRouter } from './projects/readRoutes.js';
 import { createProjectTeamRouter } from './projects/teamRoutes.js';
+import { createProjectWriteRouter } from './projects/writeRoutes.js';
 
 export const projectsRouter = Router();
 
@@ -384,356 +378,28 @@ projectsRouter.use(
   }),
 );
 
-// POST /api/projects - Create a new project
-projectsRouter.post(
-  '/',
-  asyncHandler(async (req, res) => {
-    const user = req.user!;
-    const name = parseRequiredTrimmedString(req.body.name, 'Name', PROJECT_NAME_MAX_LENGTH);
-    const projectNumber = parseOptionalTrimmedString(
-      req.body.projectNumber,
-      'Project number',
-      PROJECT_NUMBER_MAX_LENGTH,
-    );
-    const clientName = parseOptionalTrimmedString(
-      req.body.clientName,
-      'Client name',
-      PROJECT_CLIENT_MAX_LENGTH,
-    );
-    const startDate = parseOptionalDate(req.body.startDate, 'Start date');
-    const targetCompletion = parseOptionalDate(req.body.targetCompletion, 'Target completion');
-    const contractValue = parseOptionalNonNegativeNumber(req.body.contractValue, 'Contract value');
-    const state = parseOptionalTrimmedString(req.body.state, 'State', PROJECT_STATE_MAX_LENGTH);
-    const specificationSet = parseOptionalTrimmedString(
-      req.body.specificationSet,
-      'Specification set',
-      PROJECT_SPECIFICATION_SET_MAX_LENGTH,
-    );
-
-    if (await hasSubcontractorProjectIdentity(user)) {
-      throw AppError.forbidden('Subcontractor portal users cannot create company projects');
-    }
-
-    if (!user.companyId) {
-      throw AppError.forbidden('Users must belong to an organization before creating projects');
-    }
-
-    if (!canCreateProjectForCompany(user)) {
-      throw AppError.forbidden('Only company admins and project managers can create projects');
-    }
-
-    const companyId = user.companyId;
-    const company = await prisma.company.findUnique({
-      where: { id: companyId },
-      select: { subscriptionTier: true },
-    });
-
-    if (company) {
-      const tier = company.subscriptionTier || 'basic';
-      const limit = TIER_PROJECT_LIMITS[tier] || TIER_PROJECT_LIMITS.basic;
-
-      // Count existing projects for this company
-      const projectCount = await prisma.project.count({
-        where: { companyId },
-      });
-
-      if (projectCount >= limit) {
-        throw AppError.forbidden(
-          `Your ${tier} subscription allows up to ${limit} projects. Please upgrade to create more projects.`,
-        );
-      }
-    }
-
-    // Generate project number if not provided
-    const generatedProjectNumber = projectNumber || `PRJ-${Date.now().toString(36).toUpperCase()}`;
-
-    const project = await prisma.project.create({
-      data: {
-        name,
-        projectNumber: generatedProjectNumber,
-        clientName,
-        startDate,
-        targetCompletion,
-        contractValue: contractValue ?? null,
-        companyId: companyId,
-        state: state || 'NSW',
-        specificationSet: specificationSet || 'MRTS',
-      },
-      select: {
-        id: true,
-        name: true,
-        projectNumber: true,
-        status: true,
-        createdAt: true,
-      },
-    });
-
-    // Add the creating user to the project
-    await prisma.projectUser.create({
-      data: {
-        projectId: project.id,
-        userId: user.id,
-        role: 'admin',
-        status: 'active',
-        acceptedAt: new Date(),
-      },
-    });
-
-    await createAuditLog({
-      projectId: project.id,
-      userId: user.id,
-      entityType: 'project',
-      entityId: project.id,
-      action: AuditAction.PROJECT_CREATED,
-      changes: {
-        name: project.name,
-        projectNumber: project.projectNumber,
-        state: state || 'NSW',
-        specificationSet: specificationSet || 'MRTS',
-        clientName: clientName || null,
-        contractValue: contractValue ?? null,
-      },
-      req,
-    });
-
-    res.status(201).json(buildProjectCreatedResponse(project));
-  }),
-);
-
-// PATCH /api/projects/:id - Update project settings
-projectsRouter.patch(
-  '/:id',
-  asyncHandler(async (req, res) => {
-    const id = parseProjectRouteParam(req.params.id, 'id');
-    const user = req.user!;
-    if (isSubcontractorUser(user)) {
-      throw AppError.forbidden('Access denied. Only project admins can update settings.');
-    }
-
-    const name =
-      req.body.name === undefined
-        ? undefined
-        : parseRequiredTrimmedString(req.body.name, 'Project name', PROJECT_NAME_MAX_LENGTH);
-    const code =
-      req.body.code === undefined
-        ? undefined
-        : parseRequiredTrimmedString(req.body.code, 'Project code', PROJECT_NUMBER_MAX_LENGTH);
-    const lotPrefix =
-      req.body.lotPrefix === undefined
-        ? undefined
-        : parseRequiredTrimmedString(req.body.lotPrefix, 'Lot prefix', PROJECT_PREFIX_MAX_LENGTH);
-    const ncrPrefix =
-      req.body.ncrPrefix === undefined
-        ? undefined
-        : parseRequiredTrimmedString(req.body.ncrPrefix, 'NCR prefix', PROJECT_PREFIX_MAX_LENGTH);
-    const lotStartingNumber = parseOptionalPositiveInteger(
-      req.body.lotStartingNumber,
-      'Lot starting number',
-    );
-    const ncrStartingNumber = parseOptionalPositiveInteger(
-      req.body.ncrStartingNumber,
-      'NCR starting number',
-    );
-    const workingHoursStart = parseOptionalWorkingTime(
-      req.body.workingHoursStart,
-      'Working hours start',
-    );
-    const workingHoursEnd = parseOptionalWorkingTime(req.body.workingHoursEnd, 'Working hours end');
-    const workingDays = parseOptionalWorkingDays(req.body.workingDays);
-    const chainageStart = parseOptionalNonNegativeNumber(req.body.chainageStart, 'Chainage start');
-    const chainageEnd = parseOptionalNonNegativeNumber(req.body.chainageEnd, 'Chainage end');
-    const settings = parseOptionalProjectSettings(req.body.settings);
-    const status = req.body.status;
-    if (status !== undefined && (typeof status !== 'string' || !PROJECT_STATUSES.has(status))) {
-      throw AppError.badRequest('Invalid status value');
-    }
-
-    // Check access - user must be admin or project admin
-    const projectUser = await prisma.projectUser.findFirst({
-      where: {
-        projectId: id,
-        userId: user.id,
-        status: 'active',
-      },
-    });
-
-    const isProjectAdmin = projectUser?.role === 'admin' || projectUser?.role === 'project_manager';
-    const companyAdmin = isCompanyAdmin(user);
-
-    // Get the project to check company ownership
-    const project = await prisma.project.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        companyId: true,
-        chainageStart: true,
-        chainageEnd: true,
-        workingHoursStart: true,
-        workingHoursEnd: true,
-        settings: true,
-      },
-    });
-
-    if (!project) {
-      throw AppError.notFound('Project');
-    }
-
-    const isCompanyProject = project.companyId === user.companyId;
-
-    if (!isProjectAdmin && !(companyAdmin && isCompanyProject)) {
-      throw AppError.forbidden('Access denied. Only project admins can update settings.');
-    }
-
-    const effectiveChainageStart =
-      chainageStart !== undefined
-        ? chainageStart
-        : project.chainageStart === null
-          ? null
-          : Number(project.chainageStart);
-    const effectiveChainageEnd =
-      chainageEnd !== undefined
-        ? chainageEnd
-        : project.chainageEnd === null
-          ? null
-          : Number(project.chainageEnd);
-    if (
-      effectiveChainageStart !== null &&
-      effectiveChainageEnd !== null &&
-      effectiveChainageStart >= effectiveChainageEnd
-    ) {
-      throw AppError.badRequest('Chainage end must be greater than chainage start');
-    }
-
-    const effectiveWorkingHoursStart =
-      workingHoursStart !== undefined ? workingHoursStart : project.workingHoursStart;
-    const effectiveWorkingHoursEnd =
-      workingHoursEnd !== undefined ? workingHoursEnd : project.workingHoursEnd;
-    if (
-      effectiveWorkingHoursStart &&
-      effectiveWorkingHoursEnd &&
-      effectiveWorkingHoursStart >= effectiveWorkingHoursEnd
-    ) {
-      throw AppError.badRequest('Working hours end must be later than working hours start');
-    }
-
-    // Build update data
-    const updateData: Record<string, unknown> = {};
-    if (name !== undefined) updateData.name = name;
-    if (code !== undefined) updateData.projectNumber = code;
-    if (lotPrefix !== undefined) updateData.lotPrefix = lotPrefix;
-    if (lotStartingNumber !== undefined) updateData.lotStartingNumber = lotStartingNumber;
-    if (ncrPrefix !== undefined) updateData.ncrPrefix = ncrPrefix;
-    if (ncrStartingNumber !== undefined) updateData.ncrStartingNumber = ncrStartingNumber;
-    if (workingHoursStart !== undefined) updateData.workingHoursStart = workingHoursStart;
-    if (workingHoursEnd !== undefined) updateData.workingHoursEnd = workingHoursEnd;
-    if (workingDays !== undefined) updateData.workingDays = workingDays;
-    if (chainageStart !== undefined) updateData.chainageStart = chainageStart;
-    if (chainageEnd !== undefined) updateData.chainageEnd = chainageEnd;
-    if (status !== undefined) updateData.status = status;
-    // Feature #697 - Store HP recipients and other notification settings in JSON settings field
-    if (settings !== undefined) {
-      let existingSettings: Record<string, unknown> = {};
-      if (project.settings) {
-        try {
-          existingSettings = JSON.parse(project.settings);
-        } catch {
-          // Invalid JSON, start fresh
-        }
-      }
-      const mergedSettings = { ...existingSettings, ...settings };
-      updateData.settings = JSON.stringify(mergedSettings);
-    }
-
-    // Update the project
-    const updatedProject = await prisma.project.update({
-      where: { id },
-      data: updateData,
-      select: {
-        id: true,
-        name: true,
-        projectNumber: true,
-        lotPrefix: true,
-        lotStartingNumber: true,
-        ncrPrefix: true,
-        ncrStartingNumber: true,
-        workingHoursStart: true,
-        workingHoursEnd: true,
-        workingDays: true,
-        chainageStart: true,
-        chainageEnd: true,
-        status: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
-
-    // Map projectNumber to code for frontend consistency
-    res.json(buildProjectDetailResponse(updatedProject));
-  }),
-);
-
-// DELETE /api/projects/:id - Delete a project (requires password confirmation)
-projectsRouter.delete(
-  '/:id',
-  asyncHandler(async (req, res) => {
-    const id = parseProjectRouteParam(req.params.id, 'id');
-    const { password } = req.body;
-    const user = req.user!;
-
-    // Password is required for deletion
-    if (typeof password !== 'string' || password.length === 0) {
-      throw AppError.badRequest('Password confirmation is required to delete a project');
-    }
-
-    // Get the full user record with password hash
-    const fullUser = await prisma.user.findUnique({
-      where: { id: user.id },
-      select: {
-        id: true,
-        passwordHash: true,
-        roleInCompany: true,
-        companyId: true,
-      },
-    });
-
-    if (!fullUser || !fullUser.passwordHash) {
-      throw AppError.unauthorized('Invalid credentials');
-    }
-
-    // Verify password
-    const { verifyPassword } = await import('../lib/auth.js');
-    if (!verifyPassword(password, fullUser.passwordHash)) {
-      throw AppError.unauthorized('Incorrect password');
-    }
-
-    // Check if project exists
-    const project = await prisma.project.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        name: true,
-        companyId: true,
-      },
-    });
-
-    if (!project) {
-      throw AppError.notFound('Project');
-    }
-
-    // Authorization: only company owners/admins may delete projects in their own company.
-    const isAdmin = fullUser.roleInCompany === 'admin' || fullUser.roleInCompany === 'owner';
-    const isCompanyProject = project.companyId === fullUser.companyId;
-
-    if (!isAdmin || !isCompanyProject) {
-      throw AppError.forbidden('You do not have permission to delete this project');
-    }
-
-    // Delete the project (cascading deletes will handle related records)
-    await prisma.project.delete({
-      where: { id },
-    });
-
-    res.json(buildProjectDeletedResponse(project));
+projectsRouter.use(
+  createProjectWriteRouter({
+    canCreateProjectForCompany,
+    hasSubcontractorProjectIdentity,
+    isCompanyAdmin,
+    isSubcontractorUser,
+    parseOptionalDate,
+    parseOptionalNonNegativeNumber,
+    parseOptionalPositiveInteger,
+    parseOptionalProjectSettings,
+    parseOptionalTrimmedString,
+    parseOptionalWorkingDays,
+    parseOptionalWorkingTime,
+    parseProjectRouteParam,
+    parseRequiredTrimmedString,
+    projectClientMaxLength: PROJECT_CLIENT_MAX_LENGTH,
+    projectNameMaxLength: PROJECT_NAME_MAX_LENGTH,
+    projectNumberMaxLength: PROJECT_NUMBER_MAX_LENGTH,
+    projectPrefixMaxLength: PROJECT_PREFIX_MAX_LENGTH,
+    projectSpecificationSetMaxLength: PROJECT_SPECIFICATION_SET_MAX_LENGTH,
+    projectStateMaxLength: PROJECT_STATE_MAX_LENGTH,
+    projectStatuses: PROJECT_STATUSES,
   }),
 );
 
