@@ -11,9 +11,11 @@ import {
   buildEmptyDashboardStatsResponse,
   buildEmptyForemanDashboardResponse,
   buildForemanDashboardResponse,
+  buildEmptyQualityManagerDashboardResponse,
   buildPortfolioCashFlowResponse,
   buildPortfolioNcrsResponse,
   buildProjectsAtRiskResponse,
+  buildQualityManagerDashboardResponse,
 } from './dashboardResponses.js';
 
 // Type definitions for dashboard work items
@@ -1236,30 +1238,8 @@ dashboardRouter.get(
     const primaryProject = activeProjects[0] || eligibleProjectAccess[0]?.project || null;
     const projectId = primaryProject?.id;
 
-    // Default empty response
-    const emptyResponse = {
-      lotConformance: { totalLots: 0, conformingLots: 0, nonConformingLots: 0, rate: 100 },
-      ncrsByCategory: { major: 0, minor: 0, observation: 0, total: 0 },
-      openNCRs: [],
-      pendingVerifications: { count: 0, items: [] },
-      holdPointMetrics: {
-        totalReleased: 0,
-        totalPending: 0,
-        releaseRate: 100,
-        avgTimeToRelease: 0,
-      },
-      itpTrends: {
-        completedThisWeek: 0,
-        completedLastWeek: 0,
-        trend: 'stable' as const,
-        completionRate: 100,
-      },
-      auditReadiness: { score: 100, status: 'ready' as const, issues: [] },
-      project: null,
-    };
-
     if (!projectId) {
-      return res.json(emptyResponse);
+      return res.json(buildEmptyQualityManagerDashboardResponse());
     }
 
     // Run all independent queries in parallel for performance
@@ -1439,43 +1419,31 @@ dashboardRouter.get(
     const auditStatus =
       auditScore >= 80 ? 'ready' : auditScore >= 50 ? 'needs_attention' : 'not_ready';
 
-    res.json({
-      lotConformance: {
+    res.json(
+      buildQualityManagerDashboardResponse({
         totalLots,
         conformingLots,
         nonConformingLots,
-        rate: Math.round(conformanceRate * 10) / 10,
-      },
-      ncrsByCategory: {
-        major: majorNCRs,
-        minor: minorNCRs,
-        observation: observationNCRs,
-        total: majorNCRs + minorNCRs + observationNCRs,
-      },
-      openNCRs: formattedNCRs,
-      pendingVerifications: {
-        count: pendingVerifications.length,
-        items: pendingVerificationItems,
-      },
-      holdPointMetrics: {
-        totalReleased: releasedHPs,
-        totalPending: pendingHPs,
-        releaseRate: Math.round(releaseRate * 10) / 10,
+        conformanceRate,
+        majorNCRs,
+        minorNCRs,
+        observationNCRs,
+        openNCRs: formattedNCRs,
+        pendingVerificationItems,
+        releasedHPs,
+        pendingHPs,
+        releaseRate,
         avgTimeToRelease,
-      },
-      itpTrends: {
         completedThisWeek,
         completedLastWeek,
         trend,
-        completionRate: Math.round(itpCompletionRate * 10) / 10,
-      },
-      auditReadiness: {
-        score: auditScore,
-        status: auditStatus,
-        issues: auditIssues,
-      },
-      project: primaryProject,
-    });
+        itpCompletionRate,
+        auditScore,
+        auditStatus,
+        auditIssues,
+        project: primaryProject,
+      }),
+    );
   }),
 );
 
