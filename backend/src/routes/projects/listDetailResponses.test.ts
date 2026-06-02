@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildProjectDetailResponse, buildProjectListResponse } from './listDetailResponses.js';
+import {
+  buildProjectDeletedResponse,
+  buildProjectDetailResponse,
+  buildProjectListResponse,
+} from './listDetailResponses.js';
 
 describe('project list/detail response helpers', () => {
   it('preserves head-contractor project list values', () => {
@@ -71,6 +75,13 @@ describe('project list/detail response helpers', () => {
       code: 'GW-001',
       chainageStart: null,
       chainageEnd: null,
+    });
+  });
+
+  it('builds the project deletion response', () => {
+    expect(buildProjectDeletedResponse({ id: 'project-1', name: 'Gateway Upgrade' })).toEqual({
+      message: 'Project deleted successfully',
+      deletedProject: { id: 'project-1', name: 'Gateway Upgrade' },
     });
   });
 });

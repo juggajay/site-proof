@@ -10,6 +10,7 @@ import { ROLES } from '../lib/roles.js';
 import { PROJECT_ADMIN_ROLES } from '../lib/projectAdminInvariant.js';
 import { Prisma } from '@prisma/client';
 import {
+  buildProjectDeletedResponse,
   buildProjectDetailResponse,
   buildProjectListResponse,
 } from './projects/listDetailResponses.js';
@@ -1343,14 +1344,7 @@ projectsRouter.patch(
     });
 
     // Map projectNumber to code for frontend consistency
-    res.json({
-      project: {
-        ...updatedProject,
-        code: updatedProject.projectNumber,
-        chainageStart: updatedProject.chainageStart ? Number(updatedProject.chainageStart) : null,
-        chainageEnd: updatedProject.chainageEnd ? Number(updatedProject.chainageEnd) : null,
-      },
-    });
+    res.json(buildProjectDetailResponse(updatedProject));
   }),
 );
 
@@ -1415,10 +1409,7 @@ projectsRouter.delete(
       where: { id },
     });
 
-    res.json({
-      message: 'Project deleted successfully',
-      deletedProject: { id: project.id, name: project.name },
-    });
+    res.json(buildProjectDeletedResponse(project));
   }),
 );
 
