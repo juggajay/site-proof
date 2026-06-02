@@ -161,17 +161,17 @@ test.describe('production readiness guardrails', () => {
       new URL('../src/pages/claims/components/CreateClaimModal.tsx', import.meta.url),
       'utf8',
     );
-    const claimsRoute = await readFile(
-      new URL('../../backend/src/routes/claims.ts', import.meta.url),
+    const claimsWorkflowRoute = await readFile(
+      new URL('../../backend/src/routes/claims/workflowRoutes.ts', import.meta.url),
       'utf8',
     );
 
     expect(createClaimModal).toContain("percentComplete: '100'");
     expect(createClaimModal).toContain('required');
     expect(createClaimModal).toContain('Percent complete is required for every selected lot.');
-    expect(claimsRoute).toContain('Each claimed lot must include percentageComplete');
-    expect(claimsRoute).not.toContain('percentageComplete: lot.percentageComplete ?? 100');
-    expect(claimsRoute).not.toContain('percentageComplete: 100,');
+    expect(claimsWorkflowRoute).toContain('Each claimed lot must include percentageComplete');
+    expect(claimsWorkflowRoute).not.toContain('percentageComplete: lot.percentageComplete ?? 100');
+    expect(claimsWorkflowRoute).not.toContain('percentageComplete: 100,');
   });
 
   test('claim evidence review uses deterministic wording instead of AI branding', async () => {
