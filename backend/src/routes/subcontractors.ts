@@ -41,6 +41,7 @@ import {
   buildSubcontractorPortalPlantCreatedResponse,
   buildSubcontractorPortalResourceDeletedResponse,
 } from './subcontractors/portalResourceResponses.js';
+import { buildAbnValidationResponse } from './subcontractors/abnValidationResponse.js';
 
 // Feature #483: ABN (Australian Business Number) validation
 // ABN is an 11-digit number with a specific checksum algorithm
@@ -1844,18 +1845,6 @@ subcontractorsRouter.post(
 
     const validation = validateABN(abn);
 
-    res.json({
-      abn: abn.replace(/[\s-]/g, ''),
-      valid: validation.valid,
-      error: validation.error || null,
-      formatted: validation.valid ? formatABN(abn.replace(/[\s-]/g, '')) : null,
-    });
+    res.json(buildAbnValidationResponse(abn, validation));
   }),
 );
-
-// Helper to format ABN with spaces: XX XXX XXX XXX
-function formatABN(abn: string): string {
-  const clean = abn.replace(/[\s-]/g, '');
-  if (clean.length !== 11) return abn;
-  return `${clean.slice(0, 2)} ${clean.slice(2, 5)} ${clean.slice(5, 8)} ${clean.slice(8, 11)}`;
-}
