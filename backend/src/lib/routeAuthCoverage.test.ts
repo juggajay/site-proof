@@ -90,6 +90,12 @@ function extractedDocumentPublicRouteDescriptors(source: string): string[] {
   ).map((match) => `${match[1].toUpperCase()} ${match[3]}`);
 }
 
+function extractedDocumentVersionRouteDescriptors(source: string): string[] {
+  return Array.from(
+    source.matchAll(/\bversionRoutes\.(get|post|put|patch|delete)\(\s*(['"`])([^'"`]+)\2/g),
+  ).map((match) => `${match[1].toUpperCase()} ${match[3]}`);
+}
+
 function unprotectedRouteDescriptors(source: string): string[] {
   return routeCalls(source)
     .filter((route) => !route.source.includes('requireAuth'))
@@ -140,6 +146,10 @@ describe('route authentication coverage', () => {
     const documentsSource = await readFile(path.join(routesDir, 'documents.ts'), 'utf8');
     const documentsPublicRoutesSource = await readFile(
       path.join(routesDir, 'documents/publicRoutes.ts'),
+      'utf8',
+    );
+    const documentsVersionRoutesSource = await readFile(
+      path.join(routesDir, 'documents/versionRoutes.ts'),
       'utf8',
     );
     const holdpointsSource = await readFile(path.join(routesDir, 'holdpoints.ts'), 'utf8');
@@ -230,6 +240,16 @@ describe('route authentication coverage', () => {
     expect(extractedDocumentPublicRouteDescriptors(documentsPublicRoutesSource)).toEqual([
       'GET /download/:documentId',
       'GET /signed-url/validate',
+    ]);
+    expect(documentsSource.indexOf('createDocumentVersionRouter({')).toBeGreaterThan(
+      documentsSource.indexOf('router.use(requireAuth)'),
+    );
+    expect(documentsSource.indexOf('createDocumentVersionRouter({')).toBeLessThan(
+      documentsSource.indexOf("'/file/:documentId'"),
+    );
+    expect(extractedDocumentVersionRouteDescriptors(documentsVersionRoutesSource)).toEqual([
+      'POST /:documentId/version',
+      'GET /:documentId/versions',
     ]);
 
     expect(publicRouteDescriptorsBeforeRouteWideAuth(holdpointsSource)).toEqual([
