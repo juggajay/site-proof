@@ -1,0 +1,64 @@
+import { describe, expect, it } from 'vitest';
+import { AppError } from '../../lib/AppError.js';
+import { MAX_ID_LENGTH, MAX_RELEASE_TOKEN_LENGTH, parseHoldPointRouteParam } from './validation.js';
+
+function captureError(fn: () => unknown): AppError {
+  try {
+    fn();
+  } catch (error) {
+    return error as AppError;
+  }
+  throw new Error('Expected parseHoldPointRouteParam to throw');
+}
+
+describe('parseHoldPointRouteParam (pure, DB-free)', () => {
+  it('trims and returns a valid route parameter', () => {
+    expect(parseHoldPointRouteParam('  lot-123  ', 'lotId')).toBe('lot-123');
+    expect(parseHoldPointRouteParam('abc', 'id')).toBe('abc');
+  });
+
+  it('rejects non-string values with a 400 "must be a single value"', () => {
+    for (const value of [undefined, null, 42, ['a', 'b'], { id: 'x' }]) {
+      const error = captureError(() => parseHoldPointRouteParam(value, 'projectId'));
+      expect(error).toBeInstanceOf(AppError);
+      expect(error.statusCode).toBe(400);
+      expect(error.code).toBe('VALIDATION_ERROR');
+      expect(error.message).toBe('projectId must be a single value');
+    }
+  });
+
+  it('rejects empty or whitespace-only values with a 400 "is required"', () => {
+    for (const value of ['', '   ', '\t\n']) {
+      const error = captureError(() => parseHoldPointRouteParam(value, 'itemId'));
+      expect(error.statusCode).toBe(400);
+      expect(error.message).toBe('itemId is required');
+    }
+  });
+
+  it('rejects values longer than the default MAX_ID_LENGTH with a 400 "is too long"', () => {
+    const tooLong = 'a'.repeat(MAX_ID_LENGTH + 1);
+    const error = captureError(() => parseHoldPointRouteParam(tooLong, 'lotId'));
+    expect(error.statusCode).toBe(400);
+    expect(error.message).toBe('lotId is too long');
+
+    // Exactly at the limit is allowed.
+    const atLimit = 'a'.repeat(MAX_ID_LENGTH);
+    expect(parseHoldPointRouteParam(atLimit, 'lotId')).toBe(atLimit);
+  });
+
+  it('honours a custom maxLength (e.g. the longer release-token bound)', () => {
+    const longToken = 't'.repeat(MAX_RELEASE_TOKEN_LENGTH);
+    expect(parseHoldPointRouteParam(longToken, 'token', MAX_RELEASE_TOKEN_LENGTH)).toBe(longToken);
+
+    const overToken = 't'.repeat(MAX_RELEASE_TOKEN_LENGTH + 1);
+    const error = captureError(() =>
+      parseHoldPointRouteParam(overToken, 'token', MAX_RELEASE_TOKEN_LENGTH),
+    );
+    expect(error.statusCode).toBe(400);
+    expect(error.message).toBe('token is too long');
+
+    // The token bound is intentionally larger than the default id bound, so the
+    // long (valid) token above only passes because the custom maxLength is used.
+    expect(longToken.length).toBeGreaterThan(MAX_ID_LENGTH);
+  });
+});
