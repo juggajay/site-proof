@@ -22,6 +22,7 @@ const parentProtectedRoutePrefixes = new Set([
   'dashboard/',
   'diary/',
   'dockets/',
+  'documents/fileAccessRoutes.ts',
   'notifications/',
   'lots/',
   'subcontractors/myCompanyRoutes.ts',
@@ -97,6 +98,12 @@ function extractedDocumentVersionRouteDescriptors(source: string): string[] {
   ).map((match) => `${match[1].toUpperCase()} ${match[3]}`);
 }
 
+function extractedDocumentFileAccessRouteDescriptors(source: string): string[] {
+  return Array.from(
+    source.matchAll(/\bfileAccessRoutes\.(get|post|put|patch|delete)\(\s*(['"`])([^'"`]+)\2/g),
+  ).map((match) => `${match[1].toUpperCase()} ${match[3]}`);
+}
+
 function unprotectedRouteDescriptors(source: string): string[] {
   return routeCalls(source)
     .filter((route) => !route.source.includes('requireAuth'))
@@ -151,6 +158,10 @@ describe('route authentication coverage', () => {
     );
     const documentsVersionRoutesSource = await readFile(
       path.join(routesDir, 'documents/versionRoutes.ts'),
+      'utf8',
+    );
+    const documentsFileAccessRoutesSource = await readFile(
+      path.join(routesDir, 'documents/fileAccessRoutes.ts'),
       'utf8',
     );
     const holdpointsSource = await readFile(path.join(routesDir, 'holdpoints.ts'), 'utf8');
@@ -246,11 +257,18 @@ describe('route authentication coverage', () => {
       documentsSource.indexOf('router.use(requireAuth)'),
     );
     expect(documentsSource.indexOf('createDocumentVersionRouter({')).toBeLessThan(
-      documentsSource.indexOf("'/file/:documentId'"),
+      documentsSource.indexOf('createDocumentFileAccessRouter({'),
     );
     expect(extractedDocumentVersionRouteDescriptors(documentsVersionRoutesSource)).toEqual([
       'POST /:documentId/version',
       'GET /:documentId/versions',
+    ]);
+    expect(documentsSource.indexOf('createDocumentFileAccessRouter({')).toBeLessThan(
+      documentsSource.indexOf('// DELETE /api/documents/:documentId'),
+    );
+    expect(extractedDocumentFileAccessRouteDescriptors(documentsFileAccessRoutesSource)).toEqual([
+      'GET /file/:documentId',
+      'POST /:documentId/signed-url',
     ]);
 
     expect(publicRouteDescriptorsBeforeRouteWideAuth(holdpointsSource)).toEqual([

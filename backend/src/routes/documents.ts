@@ -27,7 +27,6 @@ import exifr from 'exifr';
 import crypto from 'crypto';
 import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
-import { buildBackendUrl } from '../lib/runtimeConfig.js';
 import { ensureUploadSubdirectory, resolveUploadPath } from '../lib/uploadPaths.js';
 import { assertUploadedFileMatchesDeclaredType } from '../lib/imageValidation.js';
 import { sanitizeUrlValueForLog } from '../lib/logSanitization.js';
@@ -35,13 +34,13 @@ import { logError, logWarn } from '../lib/serverLogger.js';
 import { fetchWithTimeout } from '../lib/fetchWithTimeout.js';
 import {
   buildDocumentClassificationResponse,
-  buildDocumentSignedUrlResponse,
   buildDocumentSignedUrlTokenResponse,
   buildDocumentsListResponse,
   buildInvalidDocumentSignedUrlTokenResponse,
   buildSavedDocumentClassificationResponse,
 } from './documentResponses.js';
 import { createDocumentPublicRouter } from './documents/publicRoutes.js';
+import { createDocumentFileAccessRouter } from './documents/fileAccessRoutes.js';
 import { createDocumentVersionRouter } from './documents/versionRoutes.js';
 
 type SignedUrlValidation = {
@@ -1493,85 +1492,15 @@ router.use(
   }),
 );
 
-// GET /api/documents/file/:documentId - Get document file (requires auth)
-router.get(
-  '/file/:documentId',
-  asyncHandler(async (req: Request, res: Response) => {
-    const documentId = parseDocumentRouteParam(req.params.documentId, 'documentId');
-    const userId = req.user!.id;
-
-    if (!userId) {
-      throw AppError.unauthorized();
-    }
-
-    const document = await prisma.document.findUnique({
-      where: { id: documentId },
-    });
-
-    if (!document) {
-      throw AppError.notFound('Document');
-    }
-
-    const hasAccess = await canReadDocument(req.user!, document);
-    if (!hasAccess) {
-      throw AppError.forbidden('Access denied');
-    }
-
-    await sendDocumentFile(document, res);
-  }),
-);
-
-// Feature #741: POST /api/documents/:documentId/signed-url - Generate a signed URL for file download
-// This creates a time-limited, secure URL that can be shared without requiring auth
-router.post(
-  '/:documentId/signed-url',
-  asyncHandler(async (req: Request, res: Response) => {
-    const documentId = parseDocumentRouteParam(req.params.documentId, 'documentId');
-    const { expiresInMinutes } = req.body;
-    const disposition = parseDocumentContentDisposition(req.body.disposition);
-    const userId = req.user!.id;
-
-    if (!userId) {
-      throw AppError.unauthorized();
-    }
-
-    const document = await prisma.document.findUnique({
-      where: { id: documentId },
-    });
-
-    if (!document) {
-      throw AppError.notFound('Document');
-    }
-
-    const hasAccess = await canReadDocument(req.user!, document);
-    if (!hasAccess) {
-      throw AppError.forbidden('Access denied');
-    }
-
-    // Validate expiry time (1 minute to 24 hours)
-    const validExpiry = parseSignedUrlExpiryMinutes(expiresInMinutes);
-
-    // Generate signed token
-    const { token, expiresAt } = await generateSignedUrlToken(documentId, userId, validExpiry);
-
-    const query = new URLSearchParams({ token });
-    if (disposition === 'inline') {
-      query.set('disposition', disposition);
-    }
-    const signedUrl = buildBackendUrl(`/api/documents/download/${documentId}?${query}`);
-
-    res.json(
-      buildDocumentSignedUrlResponse({
-        signedUrl,
-        token,
-        documentId,
-        filename: document.filename,
-        mimeType: document.mimeType,
-        disposition,
-        expiresAt,
-        expiresInMinutes: validExpiry,
-      }),
-    );
+router.use(
+  createDocumentFileAccessRouter({
+    prisma,
+    parseDocumentRouteParam,
+    parseDocumentContentDisposition,
+    parseSignedUrlExpiryMinutes,
+    generateSignedUrlToken,
+    canReadDocument,
+    sendDocumentFile,
   }),
 );
 
