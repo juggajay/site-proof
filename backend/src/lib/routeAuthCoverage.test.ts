@@ -24,6 +24,7 @@ const parentProtectedRoutePrefixes = new Set([
   'diary/',
   'dockets/',
   'documents/fileAccessRoutes.ts',
+  'documents/classificationRoutes.ts',
   'notifications/',
   'lots/',
   'claims/evidenceRoutes.ts',
@@ -106,6 +107,12 @@ function extractedDocumentFileAccessRouteDescriptors(source: string): string[] {
   ).map((match) => `${match[1].toUpperCase()} ${match[3]}`);
 }
 
+function extractedDocumentClassificationRouteDescriptors(source: string): string[] {
+  return Array.from(
+    source.matchAll(/\bclassificationRoutes\.(get|post|put|patch|delete)\(\s*(['"`])([^'"`]+)\2/g),
+  ).map((match) => `${match[1].toUpperCase()} ${match[3]}`);
+}
+
 function extractedSubcontractorInvitationPublicRouteDescriptors(source: string): string[] {
   return Array.from(
     source.matchAll(/\bpublicRouter\.(get|post|put|patch|delete)\(\s*(['"`])([^'"`]+)\2/g),
@@ -176,6 +183,10 @@ describe('route authentication coverage', () => {
     );
     const documentsFileAccessRoutesSource = await readFile(
       path.join(routesDir, 'documents/fileAccessRoutes.ts'),
+      'utf8',
+    );
+    const documentsClassificationRoutesSource = await readFile(
+      path.join(routesDir, 'documents/classificationRoutes.ts'),
       'utf8',
     );
     const holdpointsSource = await readFile(path.join(routesDir, 'holdpoints.ts'), 'utf8');
@@ -287,6 +298,16 @@ describe('route authentication coverage', () => {
     expect(extractedDocumentFileAccessRouteDescriptors(documentsFileAccessRoutesSource)).toEqual([
       'GET /file/:documentId',
       'POST /:documentId/signed-url',
+    ]);
+    expect(documentsSource.indexOf('createDocumentClassificationRouter({')).toBeGreaterThan(
+      documentsSource.indexOf('// DELETE /api/documents/:documentId'),
+    );
+    expect(
+      extractedDocumentClassificationRouteDescriptors(documentsClassificationRoutesSource),
+    ).toEqual([
+      'POST /:documentId/classify',
+      'POST /:documentId/save-classification',
+      'PATCH /:documentId',
     ]);
 
     expect(publicRouteDescriptorsBeforeRouteWideAuth(holdpointsSource)).toEqual([
