@@ -15,6 +15,12 @@ import {
 } from '../lib/subcontractorInvitations.js';
 import { activeSubcontractorCompanyWhere } from '../lib/projectAccess.js';
 import {
+  buildSubcontractorDeletedResponse,
+  buildSubcontractorPortalAccessResponse,
+  buildSubcontractorPortalAccessUpdatedResponse,
+  buildSubcontractorStatusUpdatedResponse,
+} from './subcontractors/adminResponses.js';
+import {
   buildEmptyPendingSubcontractorInvitationResponse,
   buildSubcontractorDirectoryResponse,
   buildSubcontractorInvitationAcceptedResponse,
@@ -1112,10 +1118,7 @@ subcontractorsRouter.patch(
       req,
     });
 
-    res.json({
-      message: `Subcontractor status updated to ${status}`,
-      subcontractor: updatedSubcontractor,
-    });
+    res.json(buildSubcontractorStatusUpdatedResponse(updatedSubcontractor, status));
   }),
 );
 
@@ -1172,10 +1175,7 @@ subcontractorsRouter.delete(
       });
     });
 
-    res.json({
-      message: `Subcontractor ${subcontractor.companyName} permanently deleted`,
-      deletedCounts,
-    });
+    res.json(buildSubcontractorDeletedResponse(subcontractor.companyName, deletedCounts));
   }),
 );
 
@@ -1247,10 +1247,7 @@ subcontractorsRouter.patch(
       req,
     });
 
-    res.json({
-      message: 'Portal access updated successfully',
-      portalAccess: updatedSubcontractor.portalAccess,
-    });
+    res.json(buildSubcontractorPortalAccessUpdatedResponse(updatedSubcontractor.portalAccess));
   }),
 );
 
@@ -1286,7 +1283,7 @@ subcontractorsRouter.get(
     // Return stored access or defaults
     const portalAccess = subcontractor.portalAccess || DEFAULT_PORTAL_ACCESS;
 
-    res.json({ portalAccess });
+    res.json(buildSubcontractorPortalAccessResponse(portalAccess));
   }),
 );
 
