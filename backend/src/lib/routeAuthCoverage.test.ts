@@ -9,6 +9,7 @@ const serverPath = fileURLToPath(new URL('../server.ts', import.meta.url));
 
 const allowedPublicRouteFiles = new Set([
   'auth.ts',
+  'auth/registrationRoutes.ts',
   'auth/passwordResetRoutes.ts',
   'oauth.ts',
   'support.ts',
@@ -153,6 +154,10 @@ function extractedPasswordResetRouteDescriptors(source: string): string[] {
   return routeCalls(source).map((route) => route.descriptor);
 }
 
+function extractedRegistrationRouteDescriptors(source: string): string[] {
+  return routeCalls(source).map((route) => route.descriptor);
+}
+
 function extractedProfileRouteDescriptors(source: string): string[] {
   return routeCalls(source).map((route) => route.descriptor);
 }
@@ -203,6 +208,10 @@ describe('route authentication coverage', () => {
 
   it('limits mixed public/protected route modules to documented public endpoints', async () => {
     const authSource = await readFile(path.join(routesDir, 'auth.ts'), 'utf8');
+    const registrationRoutesSource = await readFile(
+      path.join(routesDir, 'auth/registrationRoutes.ts'),
+      'utf8',
+    );
     const passwordResetRoutesSource = await readFile(
       path.join(routesDir, 'auth/passwordResetRoutes.ts'),
       'utf8',
@@ -256,11 +265,13 @@ describe('route authentication coverage', () => {
     const changePasswordIndex = authRouteDescriptors.indexOf('POST /change-password');
     expect(changePasswordIndex).toBeGreaterThan(-1);
     expect([
+      ...extractedRegistrationRouteDescriptors(registrationRoutesSource),
       ...authRouteDescriptors.slice(0, changePasswordIndex),
       ...extractedProfileRouteDescriptors(profileRoutesSource),
       ...authRouteDescriptors.slice(changePasswordIndex),
     ]).toEqual([
       'POST /register',
+      'POST /register-and-accept-invitation',
       'POST /login',
       'POST /magic-link/request',
       'POST /magic-link/verify',
@@ -276,9 +287,36 @@ describe('route authentication coverage', () => {
       'POST /resend-verification',
       'POST /test-expired-token',
       'GET /export-data',
-      'POST /register-and-accept-invitation',
       'DELETE /delete-account',
     ]);
+    expect(authSource.indexOf('createRegistrationRouter({')).toBeLessThan(
+      authSource.indexOf("'/login'"),
+    );
+    expect(extractedRegistrationRouteDescriptors(registrationRoutesSource)).toEqual([
+      'POST /register',
+      'POST /register-and-accept-invitation',
+    ]);
+    expect(routeSourceForDescriptor(registrationRoutesSource, 'POST /register')).toContain(
+      'AuditAction.USER_REGISTERED',
+    );
+    expect(routeSourceForDescriptor(registrationRoutesSource, 'POST /register')).toContain(
+      'AuditAction.USER_EMAIL_VERIFIED',
+    );
+    expect(routeSourceForDescriptor(registrationRoutesSource, 'POST /register')).toContain(
+      'sendVerificationEmail',
+    );
+    expect(routeSourceForDescriptor(registrationRoutesSource, 'POST /register')).toContain(
+      'domain_allowlist',
+    );
+    expect(
+      routeSourceForDescriptor(registrationRoutesSource, 'POST /register-and-accept-invitation'),
+    ).toContain('prisma.$transaction');
+    expect(
+      routeSourceForDescriptor(registrationRoutesSource, 'POST /register-and-accept-invitation'),
+    ).toContain('isSubcontractorInvitationExpired');
+    expect(
+      routeSourceForDescriptor(registrationRoutesSource, 'POST /register-and-accept-invitation'),
+    ).toContain('Account created and invitation accepted successfully');
     expect(routeSourceForDescriptor(authSource, 'GET /me')).toContain('verifyToken(token)');
     expect(routeSourceForDescriptor(authSource, 'POST /logout-all-devices')).toContain(
       'verifyToken(token)',
