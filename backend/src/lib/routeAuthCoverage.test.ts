@@ -132,6 +132,10 @@ function extractedSubcontractorPortalAccessRouteDescriptors(source: string): str
   return routeCalls(source).map((route) => route.descriptor);
 }
 
+function extractedSubcontractorAdminRouteDescriptors(source: string): string[] {
+  return routeCalls(source).map((route) => route.descriptor);
+}
+
 function extractedClaimWorkflowRouteDescriptors(source: string): string[] {
   return Array.from(
     source.matchAll(
@@ -222,6 +226,10 @@ describe('route authentication coverage', () => {
     const subcontractorsSource = await readFile(path.join(routesDir, 'subcontractors.ts'), 'utf8');
     const subcontractorInvitationRoutesSource = await readFile(
       path.join(routesDir, 'subcontractors/invitationRoutes.ts'),
+      'utf8',
+    );
+    const subcontractorAdminRoutesSource = await readFile(
+      path.join(routesDir, 'subcontractors/adminRoutes.ts'),
       'utf8',
     );
     const subcontractorPortalAccessRoutesSource = await readFile(
@@ -391,9 +399,12 @@ describe('route authentication coverage', () => {
     ).toBeGreaterThan(subcontractorsSource.indexOf('subcontractorsRouter.use(requireAuth)'));
     expect(
       subcontractorsSource.indexOf('subcontractorInvitationRouters.authenticatedRouter'),
-    ).toBeLessThan(subcontractorsSource.indexOf("'/:id/status'"));
-    expect(subcontractorsSource.indexOf('createSubcontractorPortalAccessRouter({')).toBeGreaterThan(
-      subcontractorsSource.indexOf("'/:id'"),
+    ).toBeLessThan(subcontractorsSource.indexOf('createSubcontractorAdminRouter({'));
+    expect(subcontractorsSource.indexOf('createSubcontractorAdminRouter({')).toBeGreaterThan(
+      subcontractorsSource.indexOf('createSubcontractorMyCompanyRouter({'),
+    );
+    expect(subcontractorsSource.indexOf('createSubcontractorAdminRouter({')).toBeLessThan(
+      subcontractorsSource.indexOf('createSubcontractorPortalAccessRouter({'),
     );
     expect(subcontractorsSource.indexOf('createSubcontractorPortalAccessRouter({')).toBeLessThan(
       subcontractorsSource.indexOf("'/project/:projectId'"),
@@ -410,6 +421,10 @@ describe('route authentication coverage', () => {
       'POST /invite',
       'GET /for-project/:projectId',
       'POST /invitation/:id/accept',
+    ]);
+    expect(extractedSubcontractorAdminRouteDescriptors(subcontractorAdminRoutesSource)).toEqual([
+      'PATCH /:id/status',
+      'DELETE /:id',
     ]);
     expect(
       extractedSubcontractorPortalAccessRouteDescriptors(subcontractorPortalAccessRoutesSource),
