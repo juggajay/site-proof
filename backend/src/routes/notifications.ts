@@ -11,12 +11,7 @@ import {
 } from '../lib/email.js';
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
-import {
-  parseNotificationPagination,
-  parseNotificationRouteId,
-  parseOptionalDate,
-  parseOptionalString,
-} from './notifications/validation.js';
+import { parseOptionalDate, parseOptionalString } from './notifications/validation.js';
 import {
   type NotificationTiming,
   buildEmailPreferencesResponse,
@@ -40,6 +35,7 @@ import {
 import { type Alert, type AlertSeverity, type AlertType } from './notifications/alertMappers.js';
 import { getNotificationTiming, sendNotificationIfEnabled } from './notifications/delivery.js';
 import { notificationAlertsRouter } from './notifications/alerts.js';
+import { notificationUserRouter } from './notifications/userRoutes.js';
 import { createMentionNotifications } from './notifications/mentions.js';
 import {
   buildMentionableProjectFilter,
@@ -71,12 +67,6 @@ import {
   type DocketBacklogAlertResult,
   type MissingDiaryAlertResult,
 } from './notifications/diaryReminderResponses.js';
-import {
-  buildNotificationReadResponse,
-  buildNotificationSuccessResponse,
-  buildNotificationsListResponse,
-  buildUnreadCountResponse,
-} from './notifications/readResponses.js';
 
 // Re-exported so external modules that import the notification timing type from
 // this route file keep working after the email-preference helper extraction.
@@ -99,126 +89,6 @@ export const notificationsRouter = Router();
 
 // Apply authentication middleware to all notification routes
 notificationsRouter.use(requireAuth);
-
-// GET /api/notifications - Get notifications for current user
-notificationsRouter.get(
-  '/',
-  asyncHandler(async (req, res) => {
-    const userId = req.user?.id;
-    if (!userId) {
-      throw AppError.unauthorized();
-    }
-
-    const unreadOnly = parseOptionalString(req.query.unreadOnly, 'unreadOnly', 5);
-    const { limit, offset } = parseNotificationPagination(req.query);
-
-    const where: Prisma.NotificationWhereInput = { userId };
-    if (unreadOnly !== undefined && unreadOnly !== 'true' && unreadOnly !== 'false') {
-      throw AppError.badRequest('unreadOnly must be true or false');
-    }
-    if (unreadOnly === 'true') {
-      where.isRead = false;
-    }
-
-    const notifications = await prisma.notification.findMany({
-      where,
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      take: limit,
-      skip: offset,
-      include: {
-        project: {
-          select: {
-            id: true,
-            name: true,
-            projectNumber: true,
-          },
-        },
-      },
-    });
-
-    const unreadCount = await prisma.notification.count({
-      where: {
-        userId,
-        isRead: false,
-      },
-    });
-
-    res.json(buildNotificationsListResponse(notifications, unreadCount));
-  }),
-);
-
-// GET /api/notifications/unread-count - Get unread notification count
-notificationsRouter.get(
-  '/unread-count',
-  asyncHandler(async (req, res) => {
-    const userId = req.user?.id;
-    if (!userId) {
-      throw AppError.unauthorized();
-    }
-
-    const count = await prisma.notification.count({
-      where: {
-        userId,
-        isRead: false,
-      },
-    });
-
-    res.json(buildUnreadCountResponse(count));
-  }),
-);
-
-// PUT /api/notifications/:id/read - Mark notification as read
-notificationsRouter.put(
-  '/:id/read',
-  asyncHandler(async (req, res) => {
-    const userId = req.user?.id;
-    if (!userId) {
-      throw AppError.unauthorized();
-    }
-
-    const id = parseNotificationRouteId(req.params.id);
-
-    const notification = await prisma.notification.findUnique({
-      where: { id },
-    });
-
-    if (!notification) {
-      throw AppError.notFound('Notification');
-    }
-
-    if (notification.userId !== userId) {
-      throw AppError.forbidden('Access denied');
-    }
-
-    const updated = await prisma.notification.update({
-      where: { id },
-      data: { isRead: true },
-    });
-
-    res.json(buildNotificationReadResponse(updated));
-  }),
-);
-
-// PUT /api/notifications/read-all - Mark all notifications as read
-notificationsRouter.put(
-  '/read-all',
-  asyncHandler(async (req, res) => {
-    const userId = req.user?.id;
-    if (!userId) {
-      throw AppError.unauthorized();
-    }
-
-    await prisma.notification.updateMany({
-      where: {
-        userId,
-        isRead: false,
-      },
-      data: { isRead: true },
-    });
-
-    res.json(buildNotificationSuccessResponse());
-  }),
-);
 
 // GET /api/notifications/users - Get users that can be mentioned (for autocomplete)
 notificationsRouter.get(
@@ -490,38 +360,6 @@ notificationsRouter.delete(
     await clearDigestItems(userId);
 
     res.json(buildDigestQueueClearedResponse());
-  }),
-);
-
-// DELETE /api/notifications/:id - Delete a notification.
-// Keep this after static DELETE routes so paths like /digest-queue are not treated as IDs.
-notificationsRouter.delete(
-  '/:id',
-  asyncHandler(async (req, res) => {
-    const userId = req.user?.id;
-    if (!userId) {
-      throw AppError.unauthorized();
-    }
-
-    const id = parseNotificationRouteId(req.params.id);
-
-    const notification = await prisma.notification.findUnique({
-      where: { id },
-    });
-
-    if (!notification) {
-      throw AppError.notFound('Notification');
-    }
-
-    if (notification.userId !== userId) {
-      throw AppError.forbidden('Access denied');
-    }
-
-    await prisma.notification.delete({
-      where: { id },
-    });
-
-    res.json(buildNotificationSuccessResponse());
   }),
 );
 
@@ -1018,3 +856,10 @@ notificationsRouter.post(
 // mounted here after the route-wide requireAuth above so they inherit auth
 // (mirrors the diary/ and dockets/ child router pattern). Paths are unchanged.
 notificationsRouter.use(notificationAlertsRouter);
+
+// Core authenticated user-notification routes (list, unread-count, mark-read,
+// mark-all-read, delete) live in a child router (notifications/userRoutes.ts).
+// Mounted LAST — after the static /email-queue and /digest-queue DELETE routes
+// above — so its dynamic DELETE /:id does not shadow them. It inherits the
+// route-wide requireAuth (mirrors the diary/ and dockets/ child router pattern).
+notificationsRouter.use(notificationUserRouter);
