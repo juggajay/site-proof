@@ -1,0 +1,495 @@
+import { Router, type Request } from 'express';
+
+import { AppError } from '../../lib/AppError.js';
+import { createAuditLog, AuditAction } from '../../lib/auditLog.js';
+import { asyncHandler } from '../../lib/asyncHandler.js';
+import { sendSubcontractorInvitationEmail } from '../../lib/email.js';
+import { prisma } from '../../lib/prisma.js';
+import { buildFrontendUrl } from '../../lib/runtimeConfig.js';
+import { logError } from '../../lib/serverLogger.js';
+import {
+  getSubcontractorInvitationExpiresAt,
+  isSubcontractorInvitationAcceptableStatus,
+  isSubcontractorInvitationExpired,
+} from '../../lib/subcontractorInvitations.js';
+import {
+  buildEmptyPendingSubcontractorInvitationResponse,
+  buildSubcontractorInvitationAcceptedResponse,
+  buildSubcontractorInvitationDetailsResponse,
+  buildSubcontractorInvitedResponse,
+  buildSubcontractorsForProjectResponse,
+  buildUserPendingSubcontractorInvitationResponse,
+} from './invitationResponses.js';
+
+type AuthenticatedUser = NonNullable<Request['user']>;
+
+export interface SubcontractorInvitationRouterDependencies {
+  blockedSubcontractorStatuses: Set<string>;
+  headContractorCompanyRoles: Set<string>;
+  idMaxLength: number;
+  companyNameMaxLength: number;
+  personNameMaxLength: number;
+  normalizeIdParam(value: unknown, field?: string): string;
+  normalizeRequiredText(value: unknown, field: string, maxLength: number): string;
+  normalizeOptionalText(value: unknown, field: string, maxLength: number): string | null;
+  normalizeEmail(value: unknown, field: string): string;
+  normalizeOptionalPhone(value: unknown, field: string): string | null;
+  normalizeOptionalAbn(value: unknown): string | null;
+  companyNameMatches(a: string, b: string): boolean;
+  isSubcontractorPortalRole(user: AuthenticatedUser): boolean;
+  requireSubcontractorProjectAccess(
+    projectId: string,
+    user: AuthenticatedUser,
+    manage?: boolean,
+  ): Promise<unknown>;
+}
+
+export interface SubcontractorInvitationRouters {
+  publicRouter: Router;
+  authenticatedRouter: Router;
+}
+
+export function createSubcontractorInvitationRouters({
+  blockedSubcontractorStatuses,
+  headContractorCompanyRoles,
+  idMaxLength,
+  companyNameMaxLength,
+  personNameMaxLength,
+  normalizeIdParam,
+  normalizeRequiredText,
+  normalizeOptionalText,
+  normalizeEmail,
+  normalizeOptionalPhone,
+  normalizeOptionalAbn,
+  companyNameMatches,
+  isSubcontractorPortalRole,
+  requireSubcontractorProjectAccess,
+}: SubcontractorInvitationRouterDependencies): SubcontractorInvitationRouters {
+  const publicRouter = Router();
+  const authenticatedRouter = Router();
+
+  function assertInvitationAcceptable(status: string): void {
+    if (!isSubcontractorInvitationAcceptableStatus(status)) {
+      throw AppError.forbidden('This invitation is no longer active');
+    }
+  }
+
+  // Feature #484: GET /api/subcontractors/invitation/:id - Get invitation details (no auth required)
+  // This allows the frontend to display invitation info before user creates account
+  publicRouter.get(
+    '/invitation/:id',
+    asyncHandler(async (req, res) => {
+      const id = normalizeIdParam(req.params.id, 'Invitation ID');
+
+      const subcontractor = await prisma.subcontractorCompany.findUnique({
+        where: { id },
+        include: {
+          project: { select: { id: true, name: true, companyId: true } },
+          _count: { select: { users: true } },
+        },
+      });
+
+      if (!subcontractor) {
+        throw AppError.notFound('Invitation');
+      }
+
+      if (blockedSubcontractorStatuses.has(subcontractor.status)) {
+        throw AppError.notFound('Invitation');
+      }
+
+      if (isSubcontractorInvitationExpired(subcontractor)) {
+        throw AppError.notFound('Invitation');
+      }
+
+      // Get the head contractor company name
+      const headContractor = await prisma.company.findUnique({
+        where: { id: subcontractor.project.companyId },
+        select: { name: true },
+      });
+
+      res.json(
+        buildSubcontractorInvitationDetailsResponse(
+          subcontractor,
+          headContractor?.name || 'Unknown',
+          isSubcontractorInvitationAcceptableStatus(subcontractor.status) &&
+            subcontractor._count.users === 0,
+        ),
+      );
+    }),
+  );
+
+  // GET /api/subcontractors/my-pending-invitation - Find the current user's invite without email link
+  authenticatedRouter.get(
+    '/my-pending-invitation',
+    asyncHandler(async (req, res) => {
+      const user = req.user!;
+      const email = user.email.trim();
+      const now = new Date();
+
+      const invitation = await prisma.subcontractorCompany.findFirst({
+        where: {
+          status: { in: ['pending_approval', 'approved'] },
+          primaryContactEmail: { equals: email, mode: 'insensitive' },
+          OR: [{ invitationExpiresAt: null }, { invitationExpiresAt: { gt: now } }],
+          users: { none: {} },
+        },
+        include: {
+          project: {
+            select: {
+              id: true,
+              name: true,
+              company: { select: { name: true } },
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      if (!invitation) {
+        res.json(buildEmptyPendingSubcontractorInvitationResponse());
+        return;
+      }
+
+      res.json(buildUserPendingSubcontractorInvitationResponse(invitation));
+    }),
+  );
+
+  // POST /api/subcontractors/invite - Invite/create a new subcontractor company for a project
+  // Now supports selecting from global directory via globalSubcontractorId
+  authenticatedRouter.post(
+    '/invite',
+    asyncHandler(async (req, res) => {
+      const user = req.user!;
+      const { companyName, abn, primaryContactName, primaryContactEmail, primaryContactPhone } =
+        req.body;
+      const projectId = normalizeRequiredText(req.body.projectId, 'projectId', idMaxLength);
+      const globalSubcontractorId = normalizeOptionalText(
+        req.body.globalSubcontractorId,
+        'globalSubcontractorId',
+        idMaxLength,
+      );
+
+      // Validate required fields
+      if (!projectId) {
+        throw AppError.badRequest('projectId is required');
+      }
+
+      // If not selecting from directory, require all fields
+      const inputCompanyName = globalSubcontractorId
+        ? null
+        : normalizeRequiredText(companyName, 'companyName', companyNameMaxLength);
+      const inputContactName = globalSubcontractorId
+        ? null
+        : normalizeRequiredText(primaryContactName, 'primaryContactName', personNameMaxLength);
+      const inputContactEmail = globalSubcontractorId
+        ? null
+        : normalizeEmail(primaryContactEmail, 'primaryContactEmail');
+      const inputContactPhone = globalSubcontractorId
+        ? null
+        : normalizeOptionalPhone(primaryContactPhone, 'primaryContactPhone');
+      const inputAbn = globalSubcontractorId ? null : normalizeOptionalAbn(abn);
+
+      // Verify project exists and user has access
+      const project = await prisma.project.findUnique({
+        where: { id: projectId },
+      });
+
+      if (!project) {
+        throw AppError.notFound('Project');
+      }
+
+      await requireSubcontractorProjectAccess(projectId, user, true);
+
+      // Determine the company details to use
+      let finalCompanyName: string;
+      let finalAbn: string | null;
+      let finalContactName: string;
+      let finalContactEmail: string;
+      let finalContactPhone: string | null;
+      let globalId: string | null = null;
+
+      if (globalSubcontractorId) {
+        // Selecting from directory - fetch the global subcontractor
+        const globalSub = await prisma.globalSubcontractor.findUnique({
+          where: { id: globalSubcontractorId },
+        });
+
+        if (!globalSub) {
+          throw AppError.notFound('Global subcontractor');
+        }
+
+        // Verify it belongs to the same organization
+        if (globalSub.organizationId !== project.companyId) {
+          throw AppError.forbidden('This subcontractor does not belong to your organization');
+        }
+
+        // Check if this global subcontractor is already invited to this project
+        const existingLink = await prisma.subcontractorCompany.findFirst({
+          where: {
+            projectId,
+            globalSubcontractorId,
+          },
+        });
+
+        if (existingLink) {
+          throw AppError.conflict('This subcontractor has already been invited to this project');
+        }
+
+        finalCompanyName = normalizeRequiredText(
+          globalSub.companyName,
+          'companyName',
+          companyNameMaxLength,
+        );
+        finalAbn = normalizeOptionalAbn(globalSub.abn);
+        finalContactName = normalizeRequiredText(
+          globalSub.primaryContactName,
+          'primaryContactName',
+          personNameMaxLength,
+        );
+        finalContactEmail = normalizeEmail(globalSub.primaryContactEmail, 'primaryContactEmail');
+        finalContactPhone = normalizeOptionalPhone(
+          globalSub.primaryContactPhone,
+          'primaryContactPhone',
+        );
+        globalId = globalSub.id;
+      } else {
+        // Check if a subcontractor with same name already exists for this project
+        const existingSubcontractors = await prisma.subcontractorCompany.findMany({
+          where: {
+            projectId,
+          },
+          select: { companyName: true },
+        });
+
+        if (
+          existingSubcontractors.some((existing) =>
+            companyNameMatches(existing.companyName, inputCompanyName!),
+          )
+        ) {
+          throw AppError.conflict(
+            'A subcontractor with this company name already exists for this project',
+          );
+        }
+
+        const existingGlobalSubs = await prisma.globalSubcontractor.findMany({
+          where: { organizationId: project.companyId },
+          select: { id: true, companyName: true },
+        });
+        const existingGlobalSub = existingGlobalSubs.find((existing) =>
+          companyNameMatches(existing.companyName, inputCompanyName!),
+        );
+        globalId = existingGlobalSub?.id || null;
+
+        if (!globalId) {
+          // Create a new GlobalSubcontractor record
+          const newGlobalSub = await prisma.globalSubcontractor.create({
+            data: {
+              organizationId: project.companyId,
+              companyName: inputCompanyName!,
+              abn: inputAbn,
+              primaryContactName: inputContactName!,
+              primaryContactEmail: inputContactEmail!,
+              primaryContactPhone: inputContactPhone,
+              status: 'active',
+            },
+          });
+          globalId = newGlobalSub.id;
+        }
+
+        finalCompanyName = inputCompanyName!;
+        finalAbn = inputAbn;
+        finalContactName = inputContactName!;
+        finalContactEmail = inputContactEmail!;
+        finalContactPhone = inputContactPhone;
+      }
+
+      // Create the project-specific SubcontractorCompany linked to the global record
+      const subcontractor = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          globalSubcontractorId: globalId,
+          companyName: finalCompanyName,
+          abn: finalAbn,
+          primaryContactName: finalContactName,
+          primaryContactEmail: finalContactEmail,
+          primaryContactPhone: finalContactPhone,
+          status: 'pending_approval',
+          invitationExpiresAt: getSubcontractorInvitationExpiresAt(),
+        },
+      });
+
+      await createAuditLog({
+        projectId,
+        userId: user.id,
+        entityType: 'subcontractor',
+        entityId: subcontractor.id,
+        action: AuditAction.SUBCONTRACTOR_INVITED,
+        changes: {
+          companyName: subcontractor.companyName,
+          primaryContactEmail: subcontractor.primaryContactEmail,
+          status: subcontractor.status,
+          globalSubcontractorId: globalId,
+        },
+        req,
+      });
+
+      // Feature #942 - Send subcontractor invitation email with setup link
+      const inviteUrl = buildFrontendUrl(
+        `/subcontractor-portal/accept-invite?id=${subcontractor.id}`,
+      );
+
+      try {
+        await sendSubcontractorInvitationEmail({
+          to: finalContactEmail,
+          contactName: finalContactName,
+          companyName: finalCompanyName,
+          projectName: project.name,
+          inviterEmail: user.email,
+          inviteUrl,
+        });
+      } catch (emailError) {
+        logError('[Subcontractor Invite] Failed to send email:', emailError);
+        // Don't fail the invite if email fails
+      }
+
+      res.status(201).json(buildSubcontractorInvitedResponse(subcontractor));
+    }),
+  );
+
+  // GET /api/subcontractors/for-project/:projectId - Get subcontractors for a project
+  authenticatedRouter.get(
+    '/for-project/:projectId',
+    asyncHandler(async (req, res) => {
+      const user = req.user!;
+      const projectId = normalizeIdParam(req.params.projectId, 'Project ID');
+
+      await requireSubcontractorProjectAccess(projectId, user);
+
+      // Get all subcontractor companies associated with this project
+      const subcontractors = await prisma.subcontractorCompany.findMany({
+        where: {
+          projectId: projectId,
+        },
+        select: {
+          id: true,
+          companyName: true,
+          status: true,
+        },
+        orderBy: { companyName: 'asc' },
+      });
+
+      res.json(buildSubcontractorsForProjectResponse(subcontractors));
+    }),
+  );
+
+  // Feature #484: POST /api/subcontractors/invitation/:id/accept - Accept invitation and link user
+  authenticatedRouter.post(
+    '/invitation/:id/accept',
+    asyncHandler(async (req, res) => {
+      const id = normalizeIdParam(req.params.id, 'Invitation ID');
+      const user = req.user!;
+
+      // Find the subcontractor company
+      const subcontractor = await prisma.subcontractorCompany.findUnique({
+        where: { id },
+        include: {
+          project: { select: { id: true, name: true } },
+        },
+      });
+
+      if (!subcontractor) {
+        throw AppError.notFound('Invitation');
+      }
+
+      if (blockedSubcontractorStatuses.has(subcontractor.status)) {
+        throw AppError.notFound('Invitation');
+      }
+
+      if (isSubcontractorInvitationExpired(subcontractor)) {
+        throw AppError.notFound('Invitation');
+      }
+
+      const invitedEmail = subcontractor.primaryContactEmail?.trim().toLowerCase();
+      if (invitedEmail && invitedEmail !== user.email.trim().toLowerCase()) {
+        throw AppError.forbidden('This invitation was sent to a different email address');
+      }
+
+      await prisma.$transaction(async (tx) => {
+        const currentUser = await tx.user.findUnique({
+          where: { id: user.id },
+          select: { companyId: true, roleInCompany: true },
+        });
+
+        if (!currentUser) {
+          throw AppError.unauthorized('Invalid user session');
+        }
+
+        if (
+          currentUser.companyId ||
+          headContractorCompanyRoles.has(currentUser.roleInCompany || '')
+        ) {
+          throw AppError.forbidden(
+            'Head contractor company accounts cannot accept subcontractor invitations. Use a separate subcontractor account.',
+          );
+        }
+
+        const existingLinks = await tx.subcontractorUser.findMany({
+          where: { subcontractorCompanyId: id },
+          select: { userId: true },
+        });
+        const existingLink = existingLinks.find((link) => link.userId === user.id);
+
+        if (existingLink) {
+          throw AppError.badRequest('Your account is already linked to this subcontractor company');
+        }
+
+        if (existingLinks.length > 0) {
+          throw AppError.badRequest('This invitation has already been accepted by another user');
+        }
+
+        assertInvitationAcceptable(subcontractor.status);
+
+        if (subcontractor.status === 'pending_approval') {
+          const statusUpdate = await tx.subcontractorCompany.updateMany({
+            where: { id: subcontractor.id, status: 'pending_approval' },
+            data: { status: 'approved' },
+          });
+
+          if (statusUpdate.count !== 1) {
+            throw AppError.badRequest('This invitation has already been accepted by another user');
+          }
+        }
+
+        await tx.subcontractorUser.create({
+          data: {
+            userId: user.id,
+            subcontractorCompanyId: subcontractor.id,
+            role: 'admin', // First user is admin
+          },
+        });
+
+        if (!isSubcontractorPortalRole({ ...user, roleInCompany: currentUser.roleInCompany })) {
+          await tx.user.update({
+            where: { id: user.id },
+            data: { roleInCompany: 'subcontractor_admin' },
+          });
+        }
+      });
+
+      // Audit log for subcontractor invitation acceptance
+      await createAuditLog({
+        projectId: subcontractor.project.id,
+        userId: user.id,
+        entityType: 'subcontractor',
+        entityId: id,
+        action: AuditAction.SUBCONTRACTOR_INVITATION_ACCEPTED,
+        changes: { companyName: subcontractor.companyName },
+        req,
+      });
+
+      res.json(buildSubcontractorInvitationAcceptedResponse(subcontractor));
+    }),
+  );
+
+  return { publicRouter, authenticatedRouter };
+}

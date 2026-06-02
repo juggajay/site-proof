@@ -15,6 +15,7 @@ const allowedPublicRouteFiles = new Set([
   'holdpoints.ts',
   'mfa.ts',
   'subcontractors.ts',
+  'subcontractors/invitationRoutes.ts',
   'webhooks.ts',
 ]);
 
@@ -105,6 +106,18 @@ function extractedDocumentFileAccessRouteDescriptors(source: string): string[] {
   ).map((match) => `${match[1].toUpperCase()} ${match[3]}`);
 }
 
+function extractedSubcontractorInvitationPublicRouteDescriptors(source: string): string[] {
+  return Array.from(
+    source.matchAll(/\bpublicRouter\.(get|post|put|patch|delete)\(\s*(['"`])([^'"`]+)\2/g),
+  ).map((match) => `${match[1].toUpperCase()} ${match[3]}`);
+}
+
+function extractedSubcontractorInvitationAuthenticatedRouteDescriptors(source: string): string[] {
+  return Array.from(
+    source.matchAll(/\bauthenticatedRouter\.(get|post|put|patch|delete)\(\s*(['"`])([^'"`]+)\2/g),
+  ).map((match) => `${match[1].toUpperCase()} ${match[3]}`);
+}
+
 function unprotectedRouteDescriptors(source: string): string[] {
   return routeCalls(source)
     .filter((route) => !route.source.includes('requireAuth'))
@@ -168,6 +181,10 @@ describe('route authentication coverage', () => {
     const holdpointsSource = await readFile(path.join(routesDir, 'holdpoints.ts'), 'utf8');
     const mfaSource = await readFile(path.join(routesDir, 'mfa.ts'), 'utf8');
     const subcontractorsSource = await readFile(path.join(routesDir, 'subcontractors.ts'), 'utf8');
+    const subcontractorInvitationRoutesSource = await readFile(
+      path.join(routesDir, 'subcontractors/invitationRoutes.ts'),
+      'utf8',
+    );
     const webhooksSource = await readFile(path.join(routesDir, 'webhooks.ts'), 'utf8');
     const serverSource = await readFile(serverPath, 'utf8');
 
@@ -283,8 +300,28 @@ describe('route authentication coverage', () => {
     expect(mfaSource).toContain('recordFailedAuthAttempt(clientIp, normalizedUserId)');
     expect(mfaSource).toContain('clearFailedAuthAttempts(clientIp, normalizedUserId)');
 
-    expect(publicRouteDescriptorsBeforeRouteWideAuth(subcontractorsSource)).toEqual([
-      'GET /invitation/:id',
+    expect(publicRouteDescriptorsBeforeRouteWideAuth(subcontractorsSource)).toEqual([]);
+    expect(
+      subcontractorsSource.indexOf('subcontractorInvitationRouters.publicRouter'),
+    ).toBeLessThan(subcontractorsSource.indexOf('subcontractorsRouter.use(requireAuth)'));
+    expect(
+      subcontractorsSource.indexOf('subcontractorInvitationRouters.authenticatedRouter'),
+    ).toBeGreaterThan(subcontractorsSource.indexOf('subcontractorsRouter.use(requireAuth)'));
+    expect(
+      subcontractorsSource.indexOf('subcontractorInvitationRouters.authenticatedRouter'),
+    ).toBeLessThan(subcontractorsSource.indexOf("'/:id/status'"));
+    expect(
+      extractedSubcontractorInvitationPublicRouteDescriptors(subcontractorInvitationRoutesSource),
+    ).toEqual(['GET /invitation/:id']);
+    expect(
+      extractedSubcontractorInvitationAuthenticatedRouteDescriptors(
+        subcontractorInvitationRoutesSource,
+      ),
+    ).toEqual([
+      'GET /my-pending-invitation',
+      'POST /invite',
+      'GET /for-project/:projectId',
+      'POST /invitation/:id/accept',
     ]);
 
     expect(publicRouteDescriptorsBeforeRouteWideAuth(webhooksSource)).toEqual([
