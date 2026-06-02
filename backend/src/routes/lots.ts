@@ -87,6 +87,15 @@ import {
   buildLotConformedResponse,
   buildLotStatusOverrideResponse,
 } from './lots/statusResponses.js';
+import {
+  buildLotClonedResponse,
+  buildLotCreatedResponse,
+  buildLotDeletedResponse,
+  buildLotDetailEnvelope,
+  buildLotListEnvelope,
+  buildLotsCreatedResponse,
+  buildSuggestedLotNumberResponse,
+} from './lots/coreResponses.js';
 
 export const lotsRouter = Router();
 
@@ -195,12 +204,7 @@ lotsRouter.get(
         ];
       } else {
         // No subcontractor company found - return empty result with pagination
-        return res.json({
-          data: [],
-          pagination: getPaginationMeta(0, page, limit),
-          // Backward compatibility - keep 'lots' alias during transition
-          lots: [],
-        });
+        return res.json(buildLotListEnvelope([], getPaginationMeta(0, page, limit)));
       }
     }
 
@@ -230,12 +234,7 @@ lotsRouter.get(
       includeITP: includeITP === 'true',
     });
 
-    res.json({
-      data: transformedLots,
-      pagination: getPaginationMeta(total, page, limit),
-      // Backward compatibility - keep 'lots' alias during transition
-      lots: transformedLots,
-    });
+    res.json(buildLotListEnvelope(transformedLots, getPaginationMeta(total, page, limit)));
   }),
 );
 
@@ -285,12 +284,7 @@ lotsRouter.get(
       existingLotNumbers: existingLots.map((lot) => lot.lotNumber),
     });
 
-    res.json({
-      suggestedNumber,
-      prefix,
-      nextNumber,
-      startingNumber,
-    });
+    res.json(buildSuggestedLotNumberResponse(suggestedNumber, prefix, nextNumber, startingNumber));
   }),
 );
 
@@ -380,7 +374,7 @@ lotsRouter.get(
 
     const lotResponse = shapeLotDetailResponse(lot, { isSubcontractor, subcontractorCompanyId });
 
-    res.json({ lot: lotResponse });
+    res.json(buildLotDetailEnvelope(lotResponse));
   }),
 );
 
@@ -509,7 +503,7 @@ lotsRouter.post(
       req,
     });
 
-    res.status(201).json({ lot });
+    res.status(201).json(buildLotCreatedResponse(lot));
   }),
 );
 
@@ -580,11 +574,7 @@ lotsRouter.post(
       ),
     );
 
-    res.status(201).json({
-      message: `Successfully created ${createdLots.length} lots`,
-      lots: createdLots,
-      count: createdLots.length,
-    });
+    res.status(201).json(buildLotsCreatedResponse(createdLots));
   }),
 );
 
@@ -693,11 +683,7 @@ lotsRouter.post(
       return lot;
     });
 
-    res.status(201).json({
-      lot: clonedLot,
-      sourceLotId: sourceLot.id,
-      message: `Lot cloned from ${sourceLot.lotNumber}`,
-    });
+    res.status(201).json(buildLotClonedResponse(clonedLot, sourceLot.id, sourceLot.lotNumber));
   }),
 );
 
@@ -970,7 +956,7 @@ lotsRouter.delete(
       where: { id },
     });
 
-    res.json({ message: 'Lot deleted successfully' });
+    res.json(buildLotDeletedResponse());
   }),
 );
 
