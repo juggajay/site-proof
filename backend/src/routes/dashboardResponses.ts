@@ -69,3 +69,40 @@ export function buildEmptyDashboardStatsResponse(lotStatusCounts: Record<string,
     recentActivities: [],
   });
 }
+
+export function buildCostTrendResponse<TDailyCost, TSubcontractor>({
+  dailyCosts,
+  totals,
+  runningAverage,
+  subcontractors,
+  start,
+  end,
+}: {
+  dailyCosts: TDailyCost[];
+  totals: { labour: number; plant: number; combined: number };
+  runningAverage: number;
+  subcontractors: TSubcontractor[];
+  start: Date;
+  end: Date;
+}) {
+  return {
+    dailyCosts,
+    totals,
+    runningAverage: Math.round(runningAverage * 100) / 100,
+    subcontractors,
+    dateRange: {
+      start: start.toISOString().split('T')[0],
+      end: end.toISOString().split('T')[0],
+      daysWithData: dailyCosts.length,
+    },
+  };
+}
+
+export function buildEmptyCostTrendResponse() {
+  return {
+    dailyCosts: [],
+    totals: { labour: 0, plant: 0, combined: 0 },
+    runningAverage: 0,
+    subcontractors: [],
+  };
+}

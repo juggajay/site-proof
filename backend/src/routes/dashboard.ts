@@ -5,7 +5,9 @@ import { requireAuth } from '../middleware/authMiddleware.js';
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
 import {
+  buildCostTrendResponse,
   buildDashboardStatsResponse,
+  buildEmptyCostTrendResponse,
   buildEmptyDashboardStatsResponse,
   buildPortfolioCashFlowResponse,
   buildPortfolioNcrsResponse,
@@ -884,12 +886,7 @@ dashboardRouter.get(
     }
 
     if (targetProjectIds.length === 0) {
-      return res.json({
-        dailyCosts: [],
-        totals: { labour: 0, plant: 0, combined: 0 },
-        runningAverage: 0,
-        subcontractors: [],
-      });
+      return res.json(buildEmptyCostTrendResponse());
     }
 
     // Calculate date range
@@ -1016,17 +1013,16 @@ dashboardRouter.get(
       (a, b) => b.labour + b.plant - (a.labour + a.plant),
     ); // Sort by total cost descending
 
-    res.json({
-      dailyCosts: dailyCostsWithTrend,
-      totals,
-      runningAverage: Math.round(runningAverage * 100) / 100,
-      subcontractors,
-      dateRange: {
-        start: start.toISOString().split('T')[0],
-        end: end.toISOString().split('T')[0],
-        daysWithData: dailyCosts.length,
-      },
-    });
+    res.json(
+      buildCostTrendResponse({
+        dailyCosts: dailyCostsWithTrend,
+        totals,
+        runningAverage,
+        subcontractors,
+        start,
+        end,
+      }),
+    );
   }),
 );
 

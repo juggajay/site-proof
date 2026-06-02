@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildCostTrendResponse,
   buildDashboardStatsResponse,
+  buildEmptyCostTrendResponse,
   buildEmptyDashboardStatsResponse,
   buildPortfolioCashFlowResponse,
   buildPortfolioNcrsResponse,
@@ -81,6 +83,38 @@ describe('dashboardResponses', () => {
         total: 0,
       },
       recentActivities: [],
+    });
+  });
+
+  it('builds the cost trend response with rounded running average and date range', () => {
+    expect(
+      buildCostTrendResponse({
+        dailyCosts: [{ date: '2026-06-01', combined: 123.45 }],
+        totals: { labour: 100, plant: 50, combined: 150 },
+        runningAverage: 12.345,
+        subcontractors: [{ id: 'subbie-1', combined: 150 }],
+        start: new Date('2026-06-01T10:00:00.000Z'),
+        end: new Date('2026-06-10T10:00:00.000Z'),
+      }),
+    ).toEqual({
+      dailyCosts: [{ date: '2026-06-01', combined: 123.45 }],
+      totals: { labour: 100, plant: 50, combined: 150 },
+      runningAverage: 12.35,
+      subcontractors: [{ id: 'subbie-1', combined: 150 }],
+      dateRange: {
+        start: '2026-06-01',
+        end: '2026-06-10',
+        daysWithData: 1,
+      },
+    });
+  });
+
+  it('builds the empty cost trend response', () => {
+    expect(buildEmptyCostTrendResponse()).toEqual({
+      dailyCosts: [],
+      totals: { labour: 0, plant: 0, combined: 0 },
+      runningAverage: 0,
+      subcontractors: [],
     });
   });
 });
