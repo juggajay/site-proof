@@ -1,0 +1,257 @@
+import { Router, Request, Response, type RequestHandler } from 'express';
+import type { PrismaClient } from '@prisma/client';
+import { z } from 'zod';
+import { AppError } from '../../lib/AppError.js';
+import { asyncHandler } from '../../lib/asyncHandler.js';
+import { requireAuth } from '../../middleware/authMiddleware.js';
+import { checkProjectAccess } from '../../lib/projectAccess.js';
+import { isSupabaseConfigured } from '../../lib/supabase.js';
+import { assertUploadedFileMatchesDeclaredType } from '../../lib/imageValidation.js';
+
+type AuthUser = NonNullable<Express.Request['user']>;
+
+type PhotoMetadata = {
+  gpsLatitude?: number;
+  gpsLongitude?: number;
+  captureTimestamp?: Date;
+  deviceInfo?: string;
+};
+
+type CreateDocumentUploadRouterDependencies = {
+  prisma: PrismaClient;
+  uploadFileMiddleware: RequestHandler;
+  maxDocumentIdLength: number;
+  maxDocumentTypeLength: number;
+  maxCategoryLength: number;
+  maxCaptionLength: number;
+  maxTagsLength: number;
+  cleanupUploadedFile: (file?: Express.Multer.File) => void;
+  requireDocumentUploadAccess: (
+    user: AuthUser,
+    projectId: string,
+    lotId?: string | null,
+    category?: string | null,
+  ) => Promise<void>;
+  getSafeStoredDocumentMimeType: (
+    file: Pick<Express.Multer.File, 'mimetype' | 'originalname'>,
+  ) => string;
+  extractPhotoMetadata: (filePath: string, mimeType: string) => Promise<PhotoMetadata>;
+  extractPhotoMetadataFromBuffer: (file: Express.Multer.File) => Promise<PhotoMetadata>;
+  uploadToSupabase: (
+    file: Express.Multer.File,
+    projectId: string,
+  ) => Promise<{ url: string; storagePath: string }>;
+  cleanupStoredDocumentUpload: (
+    fileUrl: string | null,
+    file: Express.Multer.File,
+    projectId: string,
+  ) => Promise<void>;
+  sanitizeUploadFilename: (filename: string) => string;
+};
+
+const GPS_COORDINATE_PATTERN = /^-?(?:\d+|\d+\.\d+|\.\d+)$/;
+
+const requiredFormStringSchema = (fieldName: string, maxLength: number) =>
+  z.string().trim().min(1, `${fieldName} is required`).max(maxLength, `${fieldName} is too long`);
+
+const optionalFormStringSchema = (fieldName: string, maxLength: number) =>
+  z.preprocess(
+    (value) => {
+      if (typeof value !== 'string') {
+        return value;
+      }
+
+      const trimmed = value.trim();
+      return trimmed.length > 0 ? trimmed : null;
+    },
+    z.string().max(maxLength, `${fieldName} is too long`).nullish(),
+  );
+
+const optionalGpsCoordinateSchema = (fieldName: string, min: number, max: number) =>
+  z.preprocess(
+    (value) => {
+      if (value === undefined || value === null) {
+        return null;
+      }
+
+      if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (!trimmed) {
+          return null;
+        }
+        return GPS_COORDINATE_PATTERN.test(trimmed) ? Number(trimmed) : Number.NaN;
+      }
+
+      return value;
+    },
+    z
+      .number({ invalid_type_error: `${fieldName} must be a valid decimal coordinate` })
+      .refine(Number.isFinite, `${fieldName} must be a valid decimal coordinate`)
+      .refine(
+        (value) => value >= min && value <= max,
+        `${fieldName} must be between ${min} and ${max}`,
+      )
+      .nullish(),
+  );
+
+function createUploadDocumentBodySchema({
+  maxDocumentIdLength,
+  maxDocumentTypeLength,
+  maxCategoryLength,
+  maxCaptionLength,
+  maxTagsLength,
+}: Pick<
+  CreateDocumentUploadRouterDependencies,
+  | 'maxDocumentIdLength'
+  | 'maxDocumentTypeLength'
+  | 'maxCategoryLength'
+  | 'maxCaptionLength'
+  | 'maxTagsLength'
+>) {
+  return z.object({
+    projectId: requiredFormStringSchema('projectId', maxDocumentIdLength),
+    lotId: optionalFormStringSchema('lotId', maxDocumentIdLength),
+    documentType: requiredFormStringSchema('documentType', maxDocumentTypeLength),
+    category: optionalFormStringSchema('category', maxCategoryLength),
+    caption: optionalFormStringSchema('caption', maxCaptionLength),
+    tags: optionalFormStringSchema('tags', maxTagsLength),
+    gpsLatitude: optionalGpsCoordinateSchema('gpsLatitude', -90, 90),
+    gpsLongitude: optionalGpsCoordinateSchema('gpsLongitude', -180, 180),
+  });
+}
+
+export function createDocumentUploadRouter({
+  prisma,
+  uploadFileMiddleware,
+  maxDocumentIdLength,
+  maxDocumentTypeLength,
+  maxCategoryLength,
+  maxCaptionLength,
+  maxTagsLength,
+  cleanupUploadedFile,
+  requireDocumentUploadAccess,
+  getSafeStoredDocumentMimeType,
+  extractPhotoMetadata,
+  extractPhotoMetadataFromBuffer,
+  uploadToSupabase,
+  cleanupStoredDocumentUpload,
+  sanitizeUploadFilename,
+}: CreateDocumentUploadRouterDependencies) {
+  const uploadRoutes = Router();
+  const uploadDocumentBodySchema = createUploadDocumentBodySchema({
+    maxDocumentIdLength,
+    maxDocumentTypeLength,
+    maxCategoryLength,
+    maxCaptionLength,
+    maxTagsLength,
+  });
+
+  uploadRoutes.use(requireAuth);
+
+  // POST /api/documents/upload - Upload a document
+  uploadRoutes.post(
+    '/upload',
+    uploadFileMiddleware,
+    asyncHandler(async (req: Request, res: Response) => {
+      const userId = req.user!.id;
+      if (!userId) {
+        throw AppError.unauthorized();
+      }
+
+      if (!req.file) {
+        throw AppError.badRequest('No file uploaded');
+      }
+
+      const uploadedFile = req.file;
+
+      const bodyParse = uploadDocumentBodySchema.safeParse(req.body);
+      if (!bodyParse.success) {
+        cleanupUploadedFile(uploadedFile);
+        throw AppError.fromZodError(bodyParse.error);
+      }
+
+      const { projectId, lotId, documentType, category, caption, tags, gpsLatitude, gpsLongitude } =
+        bodyParse.data;
+
+      const hasAccess = await checkProjectAccess(userId, projectId);
+      if (!hasAccess) {
+        cleanupUploadedFile(uploadedFile);
+        throw AppError.forbidden('Access denied');
+      }
+      try {
+        await requireDocumentUploadAccess(req.user!, projectId, lotId || null, category || null);
+      } catch (error) {
+        cleanupUploadedFile(uploadedFile);
+        throw error;
+      }
+      try {
+        assertUploadedFileMatchesDeclaredType(uploadedFile);
+      } catch (error) {
+        cleanupUploadedFile(uploadedFile);
+        throw error;
+      }
+
+      let fileUrl: string | null = null;
+      let photoMetadata: PhotoMetadata = {};
+      let documentCreated = false;
+
+      try {
+        // Upload to Supabase Storage if configured, otherwise use local filesystem
+        const storedMimeType = getSafeStoredDocumentMimeType(uploadedFile);
+        if (isSupabaseConfigured() && uploadedFile.buffer) {
+          // For EXIF extraction from memory buffer, write to temp file
+          if (uploadedFile.mimetype.startsWith('image/')) {
+            photoMetadata = await extractPhotoMetadataFromBuffer(uploadedFile);
+          }
+
+          // Upload to Supabase
+          const uploaded = await uploadToSupabase(uploadedFile, projectId);
+          fileUrl = uploaded.url;
+        } else {
+          // Fallback to local filesystem
+          photoMetadata = await extractPhotoMetadata(uploadedFile.path, uploadedFile.mimetype);
+          fileUrl = `/uploads/documents/${uploadedFile.filename}`;
+        }
+
+        // Create document record
+        const document = await prisma.document.create({
+          data: {
+            projectId,
+            lotId: lotId || null,
+            documentType,
+            category: category || null,
+            filename: sanitizeUploadFilename(uploadedFile.originalname),
+            fileUrl,
+            fileSize: uploadedFile.size,
+            mimeType: storedMimeType,
+            uploadedById: userId,
+            caption: caption || null,
+            tags: tags || null,
+            // Feature #479: Store extracted EXIF data
+            gpsLatitude: gpsLatitude ?? photoMetadata.gpsLatitude,
+            gpsLongitude: gpsLongitude ?? photoMetadata.gpsLongitude,
+            captureTimestamp: photoMetadata.captureTimestamp,
+            // Store device info in aiClassification field as metadata
+            aiClassification: photoMetadata.deviceInfo
+              ? JSON.stringify({ deviceInfo: photoMetadata.deviceInfo })
+              : null,
+          },
+          include: {
+            lot: { select: { id: true, lotNumber: true } },
+            uploadedBy: { select: { id: true, fullName: true, email: true } },
+          },
+        });
+
+        documentCreated = true;
+        res.status(201).json(document);
+      } catch (error) {
+        if (!documentCreated) {
+          await cleanupStoredDocumentUpload(fileUrl, uploadedFile, projectId);
+        }
+        throw error;
+      }
+    }),
+  );
+
+  return uploadRoutes;
+}
