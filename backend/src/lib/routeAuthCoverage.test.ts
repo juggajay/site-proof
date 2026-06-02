@@ -84,6 +84,12 @@ function publicRouteDescriptorsBeforeRouteWideAuth(source: string): string[] {
     .map((route) => route.descriptor);
 }
 
+function extractedDocumentPublicRouteDescriptors(source: string): string[] {
+  return Array.from(
+    source.matchAll(/\bpublicRoutes\.(get|post|put|patch|delete)\(\s*(['"`])([^'"`]+)\2/g),
+  ).map((match) => `${match[1].toUpperCase()} ${match[3]}`);
+}
+
 function unprotectedRouteDescriptors(source: string): string[] {
   return routeCalls(source)
     .filter((route) => !route.source.includes('requireAuth'))
@@ -132,6 +138,10 @@ describe('route authentication coverage', () => {
     const authSource = await readFile(path.join(routesDir, 'auth.ts'), 'utf8');
     const oauthSource = await readFile(path.join(routesDir, 'oauth.ts'), 'utf8');
     const documentsSource = await readFile(path.join(routesDir, 'documents.ts'), 'utf8');
+    const documentsPublicRoutesSource = await readFile(
+      path.join(routesDir, 'documents/publicRoutes.ts'),
+      'utf8',
+    );
     const holdpointsSource = await readFile(path.join(routesDir, 'holdpoints.ts'), 'utf8');
     const mfaSource = await readFile(path.join(routesDir, 'mfa.ts'), 'utf8');
     const subcontractorsSource = await readFile(path.join(routesDir, 'subcontractors.ts'), 'utf8');
@@ -213,7 +223,11 @@ describe('route authentication coverage', () => {
       'isMockOAuthEnabled()',
     );
 
-    expect(publicRouteDescriptorsBeforeRouteWideAuth(documentsSource)).toEqual([
+    expect(publicRouteDescriptorsBeforeRouteWideAuth(documentsSource)).toEqual([]);
+    expect(documentsSource.indexOf('createDocumentPublicRouter({')).toBeLessThan(
+      documentsSource.indexOf('router.use(requireAuth)'),
+    );
+    expect(extractedDocumentPublicRouteDescriptors(documentsPublicRoutesSource)).toEqual([
       'GET /download/:documentId',
       'GET /signed-url/validate',
     ]);
