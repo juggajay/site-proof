@@ -4,7 +4,6 @@ import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
-import { parsePagination, getPrismaSkipTake, getPaginationMeta } from '../lib/pagination.js';
 import {
   getSupabaseClient,
   isSupabaseConfigured,
@@ -33,10 +32,10 @@ import { sanitizeUrlValueForLog } from '../lib/logSanitization.js';
 import { logError, logWarn } from '../lib/serverLogger.js';
 import {
   buildDocumentSignedUrlTokenResponse,
-  buildDocumentsListResponse,
   buildInvalidDocumentSignedUrlTokenResponse,
 } from './documentResponses.js';
 import { createDocumentPublicRouter } from './documents/publicRoutes.js';
+import { createDocumentListRouter } from './documents/listRoutes.js';
 import { createDocumentFileAccessRouter } from './documents/fileAccessRoutes.js';
 import { createDocumentVersionRouter } from './documents/versionRoutes.js';
 import { createDocumentClassificationRouter } from './documents/classificationRoutes.js';
@@ -1174,100 +1173,19 @@ async function cleanupStoredDocumentUpload(
   }
 }
 
-// GET /api/documents/:projectId - List documents for a project
-router.get(
-  '/:projectId',
-  asyncHandler(async (req: Request, res: Response) => {
-    const projectId = parseDocumentRouteParam(req.params.projectId, 'projectId');
-    const user = req.user!;
-    const userId = user.id;
-
-    if (!userId) {
-      throw AppError.unauthorized();
-    }
-
-    const hasAccess = await checkProjectAccess(userId, projectId);
-    if (!hasAccess) {
-      throw AppError.forbidden('Access denied');
-    }
-
-    const category = getOptionalQueryString(req.query, 'category', MAX_CATEGORY_LENGTH);
-    const documentType = getOptionalQueryString(
-      req.query,
-      'documentType',
-      MAX_DOCUMENT_TYPE_LENGTH,
-    );
-    const lotId = getOptionalQueryString(req.query, 'lotId', MAX_DOCUMENT_ID_LENGTH);
-    const search = getOptionalQueryString(req.query, 'search', MAX_SEARCH_LENGTH);
-    const dateFrom = getOptionalDateQuery(req.query, 'dateFrom');
-    const dateTo = getOptionalDateQuery(req.query, 'dateTo', true);
-
-    const where: Prisma.DocumentWhereInput = { projectId };
-    if (category) {
-      await requireSubcontractorDocumentPortalAccess(user, projectId, category);
-      where.category = category;
-    }
-    if (documentType) where.documentType = documentType;
-    if (lotId) where.lotId = lotId;
-
-    // Feature #249: Date range filtering
-    if (dateFrom || dateTo) {
-      where.uploadedAt = {};
-      if (dateFrom) {
-        where.uploadedAt.gte = dateFrom;
-      }
-      if (dateTo) {
-        where.uploadedAt.lte = dateTo;
-      }
-    }
-
-    // Push search filtering to database
-    if (search) {
-      where.OR = [
-        { filename: { contains: search, mode: 'insensitive' } },
-        { caption: { contains: search, mode: 'insensitive' } },
-        { category: { contains: search, mode: 'insensitive' } },
-        { documentType: { contains: search, mode: 'insensitive' } },
-      ];
-    }
-
-    await applyDocumentReadScope(user, projectId, where);
-    if (!category) {
-      await applyDocumentPortalCategoryScope(user, projectId, where);
-    }
-
-    const pagination = parsePagination(req.query);
-    const { skip, take } = getPrismaSkipTake(pagination.page, pagination.limit);
-
-    const [documents, total] = await Promise.all([
-      prisma.document.findMany({
-        where,
-        include: {
-          lot: { select: { id: true, lotNumber: true, description: true } },
-          uploadedBy: { select: { id: true, fullName: true, email: true } },
-        },
-        orderBy: { uploadedAt: 'desc' },
-        skip,
-        take,
-      }),
-      prisma.document.count({ where }),
-    ]);
-
-    // Group by category for convenience
-    const categories: Record<string, number> = {};
-    for (const doc of documents) {
-      const cat = doc.category || 'Uncategorized';
-      categories[cat] = (categories[cat] || 0) + 1;
-    }
-
-    res.json(
-      buildDocumentsListResponse(
-        documents,
-        total,
-        categories,
-        getPaginationMeta(total, pagination.page, pagination.limit),
-      ),
-    );
+router.use(
+  createDocumentListRouter({
+    prisma,
+    maxCategoryLength: MAX_CATEGORY_LENGTH,
+    maxDocumentTypeLength: MAX_DOCUMENT_TYPE_LENGTH,
+    maxDocumentIdLength: MAX_DOCUMENT_ID_LENGTH,
+    maxSearchLength: MAX_SEARCH_LENGTH,
+    parseDocumentRouteParam,
+    getOptionalQueryString,
+    getOptionalDateQuery,
+    requireSubcontractorDocumentPortalAccess,
+    applyDocumentReadScope,
+    applyDocumentPortalCategoryScope,
   }),
 );
 
