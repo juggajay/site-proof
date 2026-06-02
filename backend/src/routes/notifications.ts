@@ -2,62 +2,27 @@ import { Router } from 'express';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
-import {
-  sendNotificationEmail,
-  sendDailyDigestEmail,
-  getQueuedEmails,
-  clearEmailQueue,
-  isResendConfigured,
-} from '../lib/email.js';
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
 import { parseOptionalDate, parseOptionalString } from './notifications/validation.js';
-import {
-  type NotificationTiming,
-  buildEmailPreferencesResponse,
-  buildEmailPreferencesUpdatedResponse,
-  getEmailPreferences,
-  normalizeEmailPreferences,
-  saveEmailPreferences,
-} from './notifications/emailPreferences.js';
+import { type NotificationTiming } from './notifications/emailPreferences.js';
 import {
   getManageableActiveProjectIds,
-  requireNonProductionDiagnostics,
   requireProjectNotificationAdminAccess,
   requireProjectReadAccess,
 } from './notifications/access.js';
-import {
-  addDigestItem,
-  clearDigestItems,
-  getDigestItems,
-  getUserDigestQueue,
-} from './notifications/digestQueue.js';
+import { getUserDigestQueue } from './notifications/digestQueue.js';
 import { type Alert, type AlertSeverity, type AlertType } from './notifications/alertMappers.js';
 import { getNotificationTiming, sendNotificationIfEnabled } from './notifications/delivery.js';
 import { notificationAlertsRouter } from './notifications/alerts.js';
 import { notificationUserRouter } from './notifications/userRoutes.js';
+import { notificationEmailRouter } from './notifications/emailRoutes.js';
 import { createMentionNotifications } from './notifications/mentions.js';
 import {
   buildMentionableProjectFilter,
   buildMentionableUserFilters,
   buildMentionableUsersResponse,
 } from './notifications/mentionUsers.js';
-import {
-  buildEmailServiceStatus,
-  buildTestEmailPayload,
-  buildTestEmailSuccessResponse,
-} from './notifications/emailDiagnostics.js';
-import {
-  buildEmailQueueClearedResponse,
-  buildEmailQueueResponse,
-} from './notifications/emailQueueResponses.js';
-import {
-  buildDigestItemAddedResponse,
-  buildDigestItemFromBody,
-  buildDigestQueueClearedResponse,
-  buildDigestQueueResponse,
-  buildDigestSentResponse,
-} from './notifications/digestResponses.js';
 import {
   buildDiaryReminderCheckResponse,
   buildDiaryReminderSendResponse,
@@ -131,237 +96,15 @@ notificationsRouter.get(
   }),
 );
 
-// GET /api/notifications/email-preferences - Get email notification preferences
-notificationsRouter.get(
-  '/email-preferences',
-  asyncHandler(async (req, res) => {
-    const userId = req.user?.id;
-    if (!userId) {
-      throw AppError.unauthorized();
-    }
-
-    const preferences = await getEmailPreferences(userId);
-
-    res.json(buildEmailPreferencesResponse(preferences));
-  }),
-);
-
-// PUT /api/notifications/email-preferences - Update email notification preferences
-notificationsRouter.put(
-  '/email-preferences',
-  asyncHandler(async (req, res) => {
-    const userId = req.user?.id;
-    if (!userId) {
-      throw AppError.unauthorized();
-    }
-
-    const validatedPreferences = normalizeEmailPreferences(req.body.preferences);
-    const savedPreferences = await saveEmailPreferences(userId, validatedPreferences);
-
-    res.json(buildEmailPreferencesUpdatedResponse(savedPreferences));
-  }),
-);
-
-// POST /api/notifications/send-test-email - Send a test email notification
-notificationsRouter.post(
-  '/send-test-email',
-  asyncHandler(async (req, res) => {
-    const userId = req.user?.id;
-    if (!userId) {
-      throw AppError.unauthorized();
-    }
-
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { email: true, fullName: true },
-    });
-
-    if (!user) {
-      throw AppError.notFound('User');
-    }
-
-    // Check email preferences
-    const preferences = await getEmailPreferences(userId);
-    if (!preferences.enabled) {
-      throw AppError.badRequest(
-        'Email notifications are disabled. Enable them first in your preferences.',
-      );
-    }
-
-    // Send test email
-    const result = await sendNotificationEmail(
-      user.email,
-      'test',
-      buildTestEmailPayload(user.fullName),
-    );
-
-    if (result.success) {
-      res.json(buildTestEmailSuccessResponse(result, user.email));
-    } else {
-      throw AppError.internal('Failed to send test email');
-    }
-  }),
-);
-
-// GET /api/notifications/email-service-status - Get email service configuration status
-notificationsRouter.get(
-  '/email-service-status',
-  asyncHandler(async (req, res) => {
-    const userId = req.user?.id;
-    if (!userId) {
-      throw AppError.unauthorized();
-    }
-
-    const resendConfigured = isResendConfigured();
-    const emailEnabled = process.env.EMAIL_ENABLED !== 'false';
-    const mockEmailEnabled =
-      process.env.NODE_ENV !== 'production' && process.env.EMAIL_PROVIDER === 'mock';
-    const productionMisconfigured =
-      process.env.NODE_ENV === 'production' && emailEnabled && !resendConfigured;
-
-    res.json(
-      buildEmailServiceStatus({
-        resendConfigured,
-        emailEnabled,
-        mockEmailEnabled,
-        productionMisconfigured,
-      }),
-    );
-  }),
-);
-
-// GET /api/notifications/email-queue - Get queued emails (for testing/debugging)
-notificationsRouter.get(
-  '/email-queue',
-  asyncHandler(async (req, res) => {
-    const userId = req.user?.id;
-    if (!userId) {
-      throw AppError.unauthorized();
-    }
-
-    requireNonProductionDiagnostics();
-
-    const queue = getQueuedEmails();
-    res.json(buildEmailQueueResponse(queue));
-  }),
-);
-
-// DELETE /api/notifications/email-queue - Clear email queue (for testing/debugging)
-notificationsRouter.delete(
-  '/email-queue',
-  asyncHandler(async (req, res) => {
-    const userId = req.user?.id;
-    if (!userId) {
-      throw AppError.unauthorized();
-    }
-
-    requireNonProductionDiagnostics();
-
-    clearEmailQueue();
-    res.json(buildEmailQueueClearedResponse());
-  }),
-);
-
-// POST /api/notifications/add-to-digest - Add item to digest queue
-notificationsRouter.post(
-  '/add-to-digest',
-  asyncHandler(async (req, res) => {
-    const userId = req.user?.id;
-    if (!userId) {
-      throw AppError.unauthorized();
-    }
-    requireNonProductionDiagnostics();
-
-    const digestItem = buildDigestItemFromBody(req.body);
-    const queuedItems = await addDigestItem(userId, digestItem);
-
-    res.json(buildDigestItemAddedResponse(queuedItems));
-  }),
-);
-
-// POST /api/notifications/send-digest - Send daily digest email
-notificationsRouter.post(
-  '/send-digest',
-  asyncHandler(async (req, res) => {
-    const userId = req.user?.id;
-    if (!userId) {
-      throw AppError.unauthorized();
-    }
-    requireNonProductionDiagnostics();
-
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { email: true, fullName: true },
-    });
-
-    if (!user) {
-      throw AppError.notFound('User');
-    }
-
-    // Check email preferences
-    const preferences = await getEmailPreferences(userId);
-    if (!preferences.enabled) {
-      throw AppError.badRequest('Email notifications are disabled');
-    }
-
-    // Get digest items
-    const items = await getDigestItems(userId);
-
-    if (items.length === 0) {
-      throw AppError.badRequest('No items in digest queue');
-    }
-
-    // Send digest email
-    const result = await sendDailyDigestEmail(user.email, items);
-
-    if (result.success) {
-      // Clear the digest queue after sending
-      await clearDigestItems(userId);
-
-      res.json(
-        buildDigestSentResponse({
-          messageId: result.messageId,
-          sentTo: user.email,
-          itemCount: items.length,
-        }),
-      );
-    } else {
-      throw AppError.internal('Failed to send digest');
-    }
-  }),
-);
-
-// GET /api/notifications/digest-queue - Get current digest queue
-notificationsRouter.get(
-  '/digest-queue',
-  asyncHandler(async (req, res) => {
-    const userId = req.user?.id;
-    if (!userId) {
-      throw AppError.unauthorized();
-    }
-    requireNonProductionDiagnostics();
-
-    const items = await getDigestItems(userId);
-
-    res.json(buildDigestQueueResponse(items));
-  }),
-);
-
-// DELETE /api/notifications/digest-queue - Clear digest queue
-notificationsRouter.delete(
-  '/digest-queue',
-  asyncHandler(async (req, res) => {
-    const userId = req.user?.id;
-    if (!userId) {
-      throw AppError.unauthorized();
-    }
-    requireNonProductionDiagnostics();
-
-    await clearDigestItems(userId);
-
-    res.json(buildDigestQueueClearedResponse());
-  }),
-);
+// Email and digest operational routes (preferences, test email, service status,
+// email queue, and digest queue) live in a child router
+// (notifications/emailRoutes.ts), mounted here after the route-wide requireAuth
+// above so they inherit auth (mirrors the diary/ and dockets/ child router
+// pattern). Mounted before the diary-reminder routes below and before the
+// dynamic DELETE /:id in notifications/userRoutes.ts, so the static
+// DELETE /email-queue and DELETE /digest-queue routes are not shadowed. Paths
+// are unchanged.
+notificationsRouter.use(notificationEmailRouter);
 
 // ============================================================================
 // Feature #934: Daily Diary Reminder Notification
