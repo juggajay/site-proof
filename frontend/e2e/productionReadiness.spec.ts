@@ -414,14 +414,21 @@ test.describe('production readiness guardrails', () => {
       new URL('../../backend/src/routes/documents.ts', import.meta.url),
       'utf8',
     );
+    const documentFileHelpers = await readFile(
+      new URL('../../backend/src/routes/documents/fileHelpers.ts', import.meta.url),
+      'utf8',
+    );
     const supabaseSource = await readFile(
       new URL('../../backend/src/lib/supabase.ts', import.meta.url),
       'utf8',
     );
 
-    expect(documentsRoute).toContain('function isSafeExternalDocumentUrl');
-    expect(documentsRoute).toContain('getSupabaseStoragePath(fileUrl, DOCUMENTS_BUCKET) !== null');
-    expect(documentsRoute).toContain('if (!isSafeExternalDocumentUrl(document.fileUrl))');
+    expect(documentFileHelpers).toContain('function isSafeExternalDocumentUrl');
+    expect(documentFileHelpers).toContain(
+      'getSupabaseStoragePath(fileUrl, DOCUMENTS_BUCKET) !== null',
+    );
+    expect(documentFileHelpers).toContain('if (!isSafeExternalDocumentUrl(document.fileUrl))');
+    expect(documentsRoute).toContain('sendDocumentFile');
     expect(supabaseSource).toContain('parsedFileUrl.origin !== parsedSupabaseUrl.origin');
     expect(supabaseSource).toContain('parsedFileUrl.username || parsedFileUrl.password');
   });
