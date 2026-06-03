@@ -11,6 +11,7 @@ const allowedPublicRouteFiles = new Set([
   'auth.ts',
   'auth/registrationRoutes.ts',
   'auth/sessionRoutes.ts',
+  'auth/magicLinkRoutes.ts',
   'auth/passwordResetRoutes.ts',
   'auth/emailVerificationRoutes.ts',
   'auth/accountPrivacyRoutes.ts',
@@ -179,6 +180,10 @@ function extractedSessionRouteDescriptors(source: string): string[] {
   return routeCalls(source).map((route) => route.descriptor);
 }
 
+function extractedMagicLinkRouteDescriptors(source: string): string[] {
+  return routeCalls(source).map((route) => route.descriptor);
+}
+
 function extractedProfileRouteDescriptors(source: string): string[] {
   return routeCalls(source).map((route) => route.descriptor);
 }
@@ -243,6 +248,10 @@ describe('route authentication coverage', () => {
     );
     const sessionRoutesSource = await readFile(
       path.join(routesDir, 'auth/sessionRoutes.ts'),
+      'utf8',
+    );
+    const magicLinkRoutesSource = await readFile(
+      path.join(routesDir, 'auth/magicLinkRoutes.ts'),
       'utf8',
     );
     const passwordResetRoutesSource = await readFile(
@@ -316,6 +325,7 @@ describe('route authentication coverage', () => {
 
     const authRouteDescriptors = routeCalls(authSource).map((route) => route.descriptor);
     const testExpiredTokenIndex = authRouteDescriptors.indexOf('POST /test-expired-token');
+    const magicLinkRouteDescriptors = extractedMagicLinkRouteDescriptors(magicLinkRoutesSource);
     const sessionRouteDescriptors = extractedSessionRouteDescriptors(sessionRoutesSource);
     const emailVerificationRouteDescriptors = extractedEmailVerificationRouteDescriptors(
       emailVerificationRoutesSource,
@@ -327,6 +337,7 @@ describe('route authentication coverage', () => {
     expect([
       ...extractedRegistrationRouteDescriptors(registrationRoutesSource),
       ...authRouteDescriptors.slice(0, testExpiredTokenIndex),
+      ...magicLinkRouteDescriptors,
       ...sessionRouteDescriptors.slice(0, 3),
       ...extractedProfileRouteDescriptors(profileRoutesSource),
       sessionRouteDescriptors[3],
@@ -355,6 +366,12 @@ describe('route authentication coverage', () => {
     ]);
     expect(authSource.indexOf('createRegistrationRouter({')).toBeLessThan(
       authSource.indexOf("'/login'"),
+    );
+    expect(authSource.indexOf('createMagicLinkRouter({')).toBeGreaterThan(
+      authSource.indexOf("'/login'"),
+    );
+    expect(authSource.indexOf('createMagicLinkRouter({')).toBeLessThan(
+      authSource.indexOf('createSessionRouter({'),
     );
     expect(authSource.indexOf('createSessionPasswordRouter({')).toBeLessThan(
       authSource.indexOf('createEmailVerificationRouter({'),
@@ -387,6 +404,22 @@ describe('route authentication coverage', () => {
     expect(
       routeSourceForDescriptor(registrationRoutesSource, 'POST /register-and-accept-invitation'),
     ).toContain('Account created and invitation accepted successfully');
+    expect(magicLinkRouteDescriptors).toEqual([
+      'POST /magic-link/request',
+      'POST /magic-link/verify',
+    ]);
+    expect(routeSourceForDescriptor(magicLinkRoutesSource, 'POST /magic-link/request')).toContain(
+      'Always return success to prevent email enumeration',
+    );
+    expect(routeSourceForDescriptor(magicLinkRoutesSource, 'POST /magic-link/request')).toContain(
+      'AuditAction.MAGIC_LINK_REQUESTED',
+    );
+    expect(routeSourceForDescriptor(magicLinkRoutesSource, 'POST /magic-link/verify')).toContain(
+      'isMagicLinkToken(token)',
+    );
+    expect(routeSourceForDescriptor(magicLinkRoutesSource, 'POST /magic-link/verify')).toContain(
+      'MFA-enabled accounts must sign in with email, password, and MFA code',
+    );
     expect(emailVerificationRouteDescriptors).toEqual([
       'POST /verify-email',
       'GET /verify-email-status',

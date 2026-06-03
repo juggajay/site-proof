@@ -2,13 +2,11 @@ import { Router } from 'express';
 import type { NextFunction, Request, Response } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { generateToken, generateExpiredToken, verifyPassword, verifyToken } from '../lib/auth.js';
-import { sendMagicLinkEmail } from '../lib/email.js';
 import crypto from 'crypto';
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
 import { decrypt } from '../lib/encryption.js';
 import { verifyAndConsumeMfaBackupCode } from '../lib/mfaBackupCodes.js';
-import { buildFrontendUrl } from '../lib/runtimeConfig.js';
 import {
   clearFailedAuthAttempts,
   getClientIp,
@@ -24,6 +22,7 @@ import { createPasswordResetRouter } from './auth/passwordResetRoutes.js';
 import { createProfileRouter } from './auth/profileRoutes.js';
 import { createAccountPrivacyRouter } from './auth/accountPrivacyRoutes.js';
 import { createEmailVerificationRouter } from './auth/emailVerificationRoutes.js';
+import { createMagicLinkRouter } from './auth/magicLinkRoutes.js';
 export { getSafeDataExportFilename } from './auth/accountPrivacyRoutes.js';
 
 const GENERIC_RESET_TOKEN_VALIDATION_MESSAGE = 'Invalid or expired reset token';
@@ -381,166 +380,15 @@ authRouter.post(
   }),
 );
 
-// Magic link expiry time in minutes
-const MAGIC_LINK_EXPIRY_MINUTES = 15;
-
-// POST /api/auth/magic-link/request - Request a magic link login email (Feature #1005)
-authRouter.post(
-  '/magic-link/request',
-  asyncHandler(async (req, res) => {
-    const { email } = req.body;
-
-    if (!email) {
-      throw AppError.badRequest('Email is required');
-    }
-    const normalizedEmail = normalizeEmailInput(email);
-
-    // Find user
-    const user = await prisma.user.findUnique({
-      where: { email: normalizedEmail },
-      select: {
-        id: true,
-        email: true,
-        fullName: true,
-      },
-    });
-
-    // Always return success to prevent email enumeration
-    if (!user) {
-      return res.json({
-        message: 'If an account exists with this email, a login link has been sent.',
-      });
-    }
-
-    // Generate magic link token
-    const token = crypto.randomBytes(32).toString('hex');
-    const expiresAt = new Date(Date.now() + MAGIC_LINK_EXPIRY_MINUTES * 60 * 1000);
-
-    // Store token using password reset token table (reusing existing infrastructure)
-    // Delete any existing tokens for this user first
-    await prisma.passwordResetToken.deleteMany({
-      where: { userId: user.id },
-    });
-
-    // Create new magic link token
-    await prisma.passwordResetToken.create({
-      data: {
-        userId: user.id,
-        token: hashOneTimeToken(`magic_${token}`), // Prefix remains in the emailed token only.
-        expiresAt,
-      },
-    });
-
-    const magicLinkUrl = buildFrontendUrl(`/auth/magic-link?token=magic_${token}`);
-
-    // Send magic link email
-    await sendMagicLinkEmail({
-      to: user.email,
-      userName: user.fullName || undefined,
-      magicLinkUrl,
-      expiresInMinutes: MAGIC_LINK_EXPIRY_MINUTES,
-    });
-
-    await auditUserAuthEvent(req, user.id, AuditAction.MAGIC_LINK_REQUESTED, {
-      method: 'magic_link',
-      expiresInMinutes: MAGIC_LINK_EXPIRY_MINUTES,
-    });
-
-    res.json({
-      message: 'If an account exists with this email, a login link has been sent.',
-    });
-  }),
-);
-
-// POST /api/auth/magic-link/verify - Verify magic link and login (Feature #1005)
-authRouter.post(
-  '/magic-link/verify',
-  asyncHandler(async (req, res) => {
-    const token = normalizeOneTimeTokenInput(req.body.token);
-
-    // Only accept magic_ prefixed tokens
-    if (!isMagicLinkToken(token)) {
-      throw AppError.badRequest('Invalid token format');
-    }
-
-    // Find the token
-    const tokenRecord = await prisma.passwordResetToken.findFirst({
-      where: oneTimeTokenLookup(token),
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            fullName: true,
-            roleInCompany: true,
-            companyId: true,
-            passwordHash: true,
-            twoFactorEnabled: true,
-            company: {
-              select: { name: true },
-            },
-          },
-        },
-      },
-    });
-
-    if (!tokenRecord) {
-      throw AppError.badRequest('Invalid or expired link');
-    }
-
-    // Check if token has expired
-    if (tokenRecord.expiresAt < new Date()) {
-      // Delete expired token
-      await prisma.passwordResetToken.delete({
-        where: { id: tokenRecord.id },
-      });
-      throw AppError.badRequest('This link has expired. Please request a new one.');
-    }
-
-    // Check if token has already been used
-    if (tokenRecord.usedAt) {
-      throw AppError.badRequest('This link has already been used. Please request a new one.');
-    }
-
-    if (tokenRecord.user.twoFactorEnabled) {
-      await prisma.passwordResetToken.update({
-        where: { id: tokenRecord.id },
-        data: { usedAt: new Date() },
-      });
-      throw AppError.forbidden(
-        'MFA-enabled accounts must sign in with email, password, and MFA code',
-      );
-    }
-
-    // Mark token as used
-    await prisma.passwordResetToken.update({
-      where: { id: tokenRecord.id },
-      data: { usedAt: new Date() },
-    });
-
-    // Generate JWT token for the user
-    const authToken = generateToken({
-      userId: tokenRecord.user.id,
-      email: tokenRecord.user.email,
-      role: tokenRecord.user.roleInCompany,
-    });
-
-    await auditUserAuthEvent(req, tokenRecord.user.id, AuditAction.USER_LOGIN, {
-      method: 'magic_link',
-    });
-
-    res.json({
-      user: {
-        id: tokenRecord.user.id,
-        email: tokenRecord.user.email,
-        fullName: tokenRecord.user.fullName,
-        role: tokenRecord.user.roleInCompany,
-        companyId: tokenRecord.user.companyId,
-        companyName: tokenRecord.user.company?.name || null,
-        hasPassword: Boolean(tokenRecord.user.passwordHash),
-      },
-      token: authToken,
-    });
+authRouter.use(
+  createMagicLinkRouter({
+    prisma,
+    normalizeEmailInput,
+    normalizeOneTimeTokenInput,
+    hashOneTimeToken,
+    oneTimeTokenLookup,
+    isMagicLinkToken,
+    auditUserAuthEvent,
   }),
 );
 
