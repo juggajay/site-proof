@@ -399,16 +399,37 @@ describe('Lots API', () => {
       });
       const foremanToken = foremanRes.body.token;
       const foremanUserId = foremanRes.body.user.id;
+      const siteManagerEmail = `lots-site-manager-${Date.now()}@example.com`;
+      const siteManagerRes = await request(app).post('/api/auth/register').send({
+        email: siteManagerEmail,
+        password: 'SecureP@ssword123!',
+        fullName: 'Lots Site Manager',
+        tosAccepted: true,
+      });
+      const siteManagerToken = siteManagerRes.body.token;
+      const siteManagerUserId = siteManagerRes.body.user.id;
 
       await prisma.user.update({
         where: { id: foremanUserId },
         data: { companyId, roleInCompany: 'foreman' },
+      });
+      await prisma.user.update({
+        where: { id: siteManagerUserId },
+        data: { companyId, roleInCompany: 'site_manager' },
       });
       await prisma.projectUser.create({
         data: {
           projectId,
           userId: foremanUserId,
           role: 'foreman',
+          status: 'active',
+        },
+      });
+      await prisma.projectUser.create({
+        data: {
+          projectId,
+          userId: siteManagerUserId,
+          role: 'site_manager',
           status: 'active',
         },
       });
@@ -437,8 +458,8 @@ describe('Lots API', () => {
 
         const updateRes = await request(app)
           .patch(`/api/lots/${budgetLot.id}`)
-          .set('Authorization', `Bearer ${foremanToken}`)
-          .send({ description: 'Foreman can edit non-commercial lot details' });
+          .set('Authorization', `Bearer ${siteManagerToken}`)
+          .send({ description: 'Site manager can edit non-commercial lot details' });
         expect(updateRes.status).toBe(200);
         expect(updateRes.body.lot.budgetAmount).toBeNull();
 
@@ -447,12 +468,15 @@ describe('Lots API', () => {
           select: { budgetAmount: true, description: true },
         });
         expect(Number(dbLot?.budgetAmount)).toBe(12345);
-        expect(dbLot?.description).toBe('Foreman can edit non-commercial lot details');
+        expect(dbLot?.description).toBe('Site manager can edit non-commercial lot details');
       } finally {
         await prisma.lot.deleteMany({ where: { id: budgetLot.id } });
         await prisma.projectUser.deleteMany({ where: { projectId, userId: foremanUserId } });
+        await prisma.projectUser.deleteMany({ where: { projectId, userId: siteManagerUserId } });
         await prisma.emailVerificationToken.deleteMany({ where: { userId: foremanUserId } });
+        await prisma.emailVerificationToken.deleteMany({ where: { userId: siteManagerUserId } });
         await prisma.user.delete({ where: { id: foremanUserId } }).catch(() => {});
+        await prisma.user.delete({ where: { id: siteManagerUserId } }).catch(() => {});
       }
     });
 
