@@ -112,6 +112,7 @@ export const queryKeys = {
 
   // Settings
   settings: ['settings'] as const,
+  emailPreferences: ['email-preferences'] as const,
   companySettings: ['company-settings'] as const,
   projectSettings: (projectId: string) => ['project-settings', projectId] as const,
   projectUsers: (projectId: string) => ['project-users', projectId] as const,
