@@ -989,6 +989,10 @@ test.describe('production readiness guardrails', () => {
       new URL('../../backend/src/lib/notificationAutomation.ts', import.meta.url),
       'utf8',
     );
+    const notificationAutomationRunner = await readFile(
+      new URL('../../backend/src/lib/notificationAutomation/runner.ts', import.meta.url),
+      'utf8',
+    );
     const backendServer = await readFile(
       new URL('../../backend/src/server.ts', import.meta.url),
       'utf8',
@@ -1003,8 +1007,10 @@ test.describe('production readiness guardrails', () => {
     expect(notificationAutomation).toContain('processDocketBacklogAlerts');
     expect(notificationAutomation).toContain('processSystemAlerts');
     expect(notificationAutomation).toContain('processAlertEscalations');
-    expect(notificationAutomation).toContain('NOTIFICATION_AUTOMATION_WORKER_ENABLED');
     expect(notificationAutomation).not.toContain("from '../routes/notifications");
+    expect(notificationAutomationRunner).toContain('NOTIFICATION_AUTOMATION_WORKER_ENABLED');
+    expect(notificationAutomationRunner).toContain('NOTIFICATION_AUTOMATION_WORKER_INTERVAL_MS');
+    expect(notificationAutomationRunner).toContain('NotificationAutomationProcess');
     expect(backendServer).toContain('startNotificationAutomationWorker');
     expect(backendPackage).toContain('notifications:process-automation');
   });
