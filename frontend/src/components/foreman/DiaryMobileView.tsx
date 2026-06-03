@@ -7,6 +7,7 @@ import { DiaryDocketSummary } from './DiaryDocketSummary';
 import type { DocketSummaryData, ManualEntries } from './DiaryDocketSummary';
 import { usePullToRefresh, PullToRefreshIndicator } from '@/hooks/usePullToRefresh';
 import { MobileDataCardSkeleton } from '@/components/ui/MobileDataCard';
+import { Button } from '@/components/ui/button';
 import type { DailyDiary } from '@/pages/diary/types';
 import { formatDateKey } from '@/lib/localDate';
 
@@ -42,6 +43,9 @@ interface DiaryMobileViewProps {
   onRefresh: () => Promise<void>;
   onEditEntry: (entry: TimelineEntry) => void;
   onDeleteEntry: (entry: TimelineEntry) => void;
+  // Opens the end-of-day finish/submit flow. Shown as a persistent button while
+  // today's diary is still a draft so submit is one tap, not buried in the timeline.
+  onReviewSubmit?: () => void;
 }
 
 export function DiaryMobileView(props: DiaryMobileViewProps) {
@@ -66,6 +70,7 @@ export function DiaryMobileView(props: DiaryMobileViewProps) {
     onRefresh,
     onEditEntry,
     onDeleteEntry,
+    onReviewSubmit,
   } = props;
 
   const { containerRef, pullDistance, isRefreshing, progress } = usePullToRefresh({
@@ -75,6 +80,9 @@ export function DiaryMobileView(props: DiaryMobileViewProps) {
   const todayStr = formatDateKey();
   const isToday = selectedDate === todayStr;
   const isSubmitted = diary?.status === 'submitted';
+  // Only offer one-tap submit for today's draft: DiaryFinishFlow finalises today's
+  // diary, so showing it for a past-date draft would target the wrong day.
+  const canReviewSubmit = Boolean(onReviewSubmit) && isToday && diary?.status === 'draft';
 
   const dateLabel = new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-AU', {
     weekday: 'short',
@@ -84,14 +92,23 @@ export function DiaryMobileView(props: DiaryMobileViewProps) {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header: date + lot selector */}
-      <div className="flex items-center justify-between px-4 py-3 border-b bg-background sticky top-0 z-20">
-        <div>
-          <h1 className="text-lg font-bold">{dateLabel}</h1>
-          {!isToday && <p className="text-xs text-muted-foreground">Not today</p>}
-          {isSubmitted && <p className="text-xs text-green-600 font-medium">Submitted</p>}
+      {/* Header: date + lot selector, with a persistent submit action for a draft */}
+      <div className="border-b bg-background sticky top-0 z-20">
+        <div className="flex items-center justify-between px-4 py-3">
+          <div>
+            <h1 className="text-lg font-bold">{dateLabel}</h1>
+            {!isToday && <p className="text-xs text-muted-foreground">Not today</p>}
+            {isSubmitted && <p className="text-xs text-green-600 font-medium">Submitted</p>}
+          </div>
+          <DiaryLotSelector lots={lots} activeLotId={activeLotId} onLotChange={onLotChange} />
         </div>
-        <DiaryLotSelector lots={lots} activeLotId={activeLotId} onLotChange={onLotChange} />
+        {canReviewSubmit && (
+          <div className="px-4 pb-3">
+            <Button type="button" variant="success" className="w-full" onClick={onReviewSubmit}>
+              Review &amp; submit
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Scrollable content */}
