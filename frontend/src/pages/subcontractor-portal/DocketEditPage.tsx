@@ -1,18 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams, Link, useSearchParams } from 'react-router-dom';
-import {
-  ArrowLeft,
-  Users,
-  Truck,
-  FileText,
-  Loader2,
-  Trash2,
-  MapPin,
-  Send,
-  AlertCircle,
-  Check,
-  X,
-} from 'lucide-react';
+import { ArrowLeft, Loader2, MapPin, Send, AlertCircle, Check, X } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 import { toast } from '@/components/ui/toaster';
 import { extractErrorMessage, handleApiError } from '@/lib/errorHandling';
@@ -39,25 +27,8 @@ import {
   type Plant,
   type PlantEntry,
 } from './docketEditData';
-
-function formatCurrency(amount: number) {
-  return new Intl.NumberFormat('en-AU', {
-    style: 'currency',
-    currency: 'AUD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
-
-function formatDate(dateString: string) {
-  const date = new Date(dateString);
-  return date.toLocaleDateString('en-AU', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
-}
+import { formatCurrency, formatDate } from './docketEditDisplay';
+import { DocketEditTabs } from './components/DocketEditTabs';
 
 function calculateHours(startTime: string, finishTime: string): number {
   if (!startTime || !finishTime) return 0;
@@ -683,290 +654,24 @@ export function DocketEditPage() {
       )}
 
       {/* Tabs */}
-      <div className="space-y-4">
-        <div className="grid grid-cols-3 gap-1 p-1 bg-muted rounded-lg">
-          <button
-            onClick={() => setActiveTab('labour')}
-            className={cn(
-              'flex items-center justify-center gap-2 py-2 px-3 text-sm font-medium rounded-md transition-colors',
-              activeTab === 'labour'
-                ? 'bg-card text-foreground shadow'
-                : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            <Users className="h-4 w-4" />
-            Labour
-            {docket?.labourEntries.length ? (
-              <span className="px-1.5 py-0.5 text-xs bg-muted rounded">
-                {docket.labourEntries.length}
-              </span>
-            ) : null}
-          </button>
-          <button
-            onClick={() => setActiveTab('plant')}
-            className={cn(
-              'flex items-center justify-center gap-2 py-2 px-3 text-sm font-medium rounded-md transition-colors',
-              activeTab === 'plant'
-                ? 'bg-card text-foreground shadow'
-                : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            <Truck className="h-4 w-4" />
-            Plant
-            {docket?.plantEntries.length ? (
-              <span className="px-1.5 py-0.5 text-xs bg-muted rounded">
-                {docket.plantEntries.length}
-              </span>
-            ) : null}
-          </button>
-          <button
-            onClick={() => setActiveTab('summary')}
-            className={cn(
-              'flex items-center justify-center gap-2 py-2 px-3 text-sm font-medium rounded-md transition-colors',
-              activeTab === 'summary'
-                ? 'bg-card text-foreground shadow'
-                : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            <FileText className="h-4 w-4" />
-            Summary
-          </button>
-        </div>
-
-        {/* Labour Tab */}
-        {activeTab === 'labour' && (
-          <div className="space-y-4">
-            {canEdit && approvedEmployees.length > 0 && (
-              <div className="border border-dashed border-border rounded-lg p-4">
-                <p className="text-sm text-muted-foreground mb-3">Tap an employee to add hours</p>
-                <div className="grid grid-cols-2 gap-2">
-                  {approvedEmployees.map((emp) => {
-                    const alreadyAdded = docket?.labourEntries.some(
-                      (e) => e.employee.id === emp.id,
-                    );
-                    return (
-                      <button
-                        key={emp.id}
-                        onClick={() => openAddLabour(emp)}
-                        className={cn(
-                          'relative p-3 rounded-lg border text-left transition-colors min-h-[60px]',
-                          alreadyAdded
-                            ? 'bg-primary/5 border-primary'
-                            : 'hover:border-primary hover:bg-muted/50 border-border',
-                        )}
-                      >
-                        <p className="font-medium text-sm text-foreground truncate">{emp.name}</p>
-                        <p className="text-xs text-muted-foreground">{emp.role}</p>
-                        <p className="text-xs text-muted-foreground">${emp.hourlyRate}/hr</p>
-                        {alreadyAdded && (
-                          <Check className="h-4 w-4 text-primary absolute top-2 right-2" />
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {approvedEmployees.length === 0 && (
-              <div className="flex items-start gap-3 p-4 bg-primary/5 border border-primary/30 rounded-lg">
-                <AlertCircle className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-                <p className="text-primary">
-                  No approved employees yet. Add employees in{' '}
-                  <Link to={myCompanyLink} className="underline">
-                    My Company
-                  </Link>{' '}
-                  and wait for rate approval.
-                </p>
-              </div>
-            )}
-
-            {/* Labour entries list */}
-            {docket?.labourEntries && docket.labourEntries.length > 0 && (
-              <div className="space-y-2">
-                <h3 className="font-medium text-sm text-muted-foreground">Today's Entries</h3>
-                {docket.labourEntries.map((entry) => (
-                  <div key={entry.id} className="border border-border rounded-lg bg-card p-4">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <p className="font-medium text-foreground">{entry.employee.name}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {entry.startTime} - {entry.finishTime}
-                        </p>
-                        <p className="text-sm text-foreground">
-                          {entry.submittedHours}h × ${entry.hourlyRate}/hr ={' '}
-                          {formatCurrency(entry.submittedCost)}
-                        </p>
-                        {entry.lotAllocations.length > 0 && (
-                          <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-                            <MapPin className="h-3 w-3" />
-                            {entry.lotAllocations.map((a) => a.lotNumber).join(', ')}
-                          </p>
-                        )}
-                      </div>
-                      {canEdit && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => deleteLabourEntry(entry.id)}
-                          className="text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-                <div className="text-right p-2">
-                  <p className="text-sm text-muted-foreground">Labour Subtotal</p>
-                  <p className="text-lg font-semibold text-foreground">
-                    {formatCurrency(docket.totalLabourSubmitted)}
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Plant Tab */}
-        {activeTab === 'plant' && (
-          <div className="space-y-4">
-            {canEdit && approvedPlant.length > 0 && (
-              <div className="border border-dashed border-border rounded-lg p-4">
-                <p className="text-sm text-muted-foreground mb-3">Tap equipment to add hours</p>
-                <div className="grid grid-cols-2 gap-2">
-                  {approvedPlant.map((plant) => {
-                    const alreadyAdded = docket?.plantEntries.some((e) => e.plant.id === plant.id);
-                    return (
-                      <button
-                        key={plant.id}
-                        onClick={() => openAddPlant(plant)}
-                        className={cn(
-                          'relative p-3 rounded-lg border text-left transition-colors min-h-[60px]',
-                          alreadyAdded
-                            ? 'bg-primary/5 border-primary'
-                            : 'hover:border-primary hover:bg-muted/50 border-border',
-                        )}
-                      >
-                        <p className="font-medium text-sm text-foreground truncate">{plant.type}</p>
-                        <p className="text-xs text-muted-foreground truncate">
-                          {plant.description}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          ${plant.dryRate}
-                          {plant.wetRate > 0 ? `/$${plant.wetRate}` : ''}/hr
-                        </p>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {approvedPlant.length === 0 && (
-              <div className="flex items-start gap-3 p-4 bg-primary/5 border border-primary/30 rounded-lg">
-                <AlertCircle className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-                <p className="text-primary">
-                  No approved plant yet. Add plant in{' '}
-                  <Link to={myCompanyLink} className="underline">
-                    My Company
-                  </Link>{' '}
-                  and wait for rate approval.
-                </p>
-              </div>
-            )}
-
-            {/* Plant entries list */}
-            {docket?.plantEntries && docket.plantEntries.length > 0 && (
-              <div className="space-y-2">
-                <h3 className="font-medium text-sm text-muted-foreground">Today's Entries</h3>
-                {docket.plantEntries.map((entry) => (
-                  <div key={entry.id} className="border border-border rounded-lg bg-card p-4">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <p className="font-medium text-foreground">{entry.plant.type}</p>
-                        <p className="text-sm text-muted-foreground">{entry.plant.description}</p>
-                        <p className="text-sm text-foreground">
-                          {entry.hoursOperated}h × ${entry.hourlyRate}/hr ({entry.wetOrDry}) ={' '}
-                          {formatCurrency(entry.submittedCost)}
-                        </p>
-                      </div>
-                      {canEdit && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => deletePlantEntry(entry.id)}
-                          className="text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-                <div className="text-right p-2">
-                  <p className="text-sm text-muted-foreground">Plant Subtotal</p>
-                  <p className="text-lg font-semibold text-foreground">
-                    {formatCurrency(docket.totalPlantSubmitted)}
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Summary Tab */}
-        {activeTab === 'summary' && (
-          <div className="space-y-4">
-            <div className="border border-border rounded-lg bg-card">
-              <div className="p-4 border-b border-border">
-                <h2 className="text-lg font-semibold text-foreground">Docket Summary</h2>
-                <p className="text-sm text-muted-foreground">{formatDate(docket?.date || today)}</p>
-              </div>
-              <div className="p-4 space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm text-muted-foreground">
-                      Labour ({docket?.labourEntries.length || 0} entries)
-                    </p>
-                    <p className="text-lg font-semibold text-foreground">
-                      {formatCurrency(docket?.totalLabourSubmitted || 0)}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">
-                      Plant ({docket?.plantEntries.length || 0} entries)
-                    </p>
-                    <p className="text-lg font-semibold text-foreground">
-                      {formatCurrency(docket?.totalPlantSubmitted || 0)}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="border-t border-border pt-4">
-                  <p className="text-sm text-muted-foreground">Total</p>
-                  <p className="text-2xl font-bold text-foreground">{formatCurrency(totalCost)}</p>
-                </div>
-
-                {canEdit && (
-                  <div className="pt-4">
-                    <Label htmlFor="notes">Notes (optional)</Label>
-                    <Textarea
-                      id="notes"
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
-                      onBlur={handleNotesBlur}
-                      placeholder="Add any notes for this docket..."
-                      rows={3}
-                      className="mt-1"
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
+      <DocketEditTabs
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        docket={docket}
+        canEdit={canEdit}
+        approvedEmployees={approvedEmployees}
+        approvedPlant={approvedPlant}
+        myCompanyLink={myCompanyLink}
+        today={today}
+        totalCost={totalCost}
+        notes={notes}
+        onNotesChange={setNotes}
+        onNotesBlur={handleNotesBlur}
+        onAddLabour={openAddLabour}
+        onAddPlant={openAddPlant}
+        onDeleteLabour={deleteLabourEntry}
+        onDeletePlant={deletePlantEntry}
+      />
 
       {/* Bottom Action Bar - bottom-16 on mobile to sit above MobileNav (h-16, z-30) */}
       <div className="fixed bottom-16 md:bottom-0 left-0 right-0 z-40 p-4 bg-background border-t border-border md:relative md:border-0 md:bg-transparent md:p-0 md:mt-6 md:z-auto">
