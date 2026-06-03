@@ -33,11 +33,31 @@ interface PortalOptions {
 
 // Local-date key matching the frontend's formatDateKey() (YYYY-MM-DD, local tz).
 function todayKey(): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
+  const parts = new Intl.DateTimeFormat('en-AU', {
+    timeZone: 'Australia/Sydney',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date());
+  const year = parts.find((part) => part.type === 'year')?.value;
+  const month = parts.find((part) => part.type === 'month')?.value;
+  const day = parts.find((part) => part.type === 'day')?.value;
   return `${year}-${month}-${day}`;
+}
+
+async function browserTodayKey(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const parts = new Intl.DateTimeFormat('en-AU', {
+      timeZone: 'Australia/Sydney',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(new Date());
+    const year = parts.find((part) => part.type === 'year')?.value;
+    const month = parts.find((part) => part.type === 'month')?.value;
+    const day = parts.find((part) => part.type === 'day')?.value;
+    return `${year}-${month}-${day}`;
+  });
 }
 
 async function mockPortalApi(page: Page, options: PortalOptions = {}) {
@@ -139,7 +159,7 @@ test.describe('Subcontractor docket reachability', () => {
     const todaysDocket: DocketFixture = {
       id: 'e2e-today-docket',
       docketNumber: 'DK-TODAY',
-      date: todayKey(),
+      date: await browserTodayKey(page),
       status: 'draft',
       totalLabourSubmitted: 0,
       totalPlantSubmitted: 0,
