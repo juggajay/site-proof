@@ -11,11 +11,6 @@ import { formatDateTime } from '@/lib/utils';
 import { toast } from '@/components/ui/toaster';
 import { CommentsSection } from '@/components/comments/CommentsSection';
 import { AssignSubcontractorModal } from '@/components/lots/AssignSubcontractorModal';
-import type {
-  ConformanceReportData,
-  ConformanceFormat,
-  ConformanceFormatOptions,
-} from '@/lib/pdfGenerator';
 import { useOfflineStatus } from '@/lib/useOfflineStatus';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 
@@ -28,7 +23,6 @@ import type {
   NCR,
   ITPAttachment,
   ITPCompletion,
-  ITPInstance,
   ConformStatus,
   ActivityLog,
   LocationState,
@@ -36,7 +30,6 @@ import type {
 } from './types';
 import { LOT_TABS as tabs, LOT_OVERRIDE_STATUSES } from './constants';
 import { getGPSLocation, getItpPhotoValidationError } from './lib/itpEvidence';
-import { buildConformanceReportData } from './lib/buildConformanceReportData';
 import {
   buildConformanceStatusPath,
   buildLotHistoryPath,
@@ -48,6 +41,7 @@ import {
   useLotQualityAccessQuery,
 } from './lotDetailData';
 import { useItpInstance } from './hooks/useItpInstance';
+import { useConformanceReportGeneration } from './hooks/useConformanceReportGeneration';
 import { TestsTabContent, NCRsTabContent, HistoryTabContent } from '@/components/lots';
 import { MarkAsNAModal } from './components/MarkAsNAModal';
 import { MarkAsFailedModal } from './components/MarkAsFailedModal';
@@ -70,26 +64,6 @@ import {
   type LotDetailPageError,
 } from './components/LotDetailPageStates';
 import type { LotEvidenceReadiness } from '@/types/evidenceReadiness';
-
-interface ProjectResponse {
-  project?: {
-    name?: string | null;
-    projectNumber?: string | null;
-    clientName?: string | null;
-  };
-}
-
-interface ItpInstanceResponse {
-  instance: ITPInstance | null;
-}
-
-interface TestResultsResponse {
-  testResults?: ConformanceReportData['testResults'];
-}
-
-interface NcrsResponse {
-  ncrs?: ConformanceReportData['ncrs'];
-}
 
 export function LotDetailPage() {
   const { projectId, lotId } = useParams();
@@ -138,9 +112,6 @@ export function LotDetailPage() {
   const [linkCopied, setLinkCopied] = useState(false);
   const [showOverrideModal, setShowOverrideModal] = useState(false);
   const [overriding, setOverriding] = useState(false);
-  const [generatingReport, setGeneratingReport] = useState(false);
-  const [showReportFormatDialog, setShowReportFormatDialog] = useState(false);
-  const [selectedReportFormat, setSelectedReportFormat] = useState<ConformanceFormat>('standard');
   const [showSubcontractorModal, setShowSubcontractorModal] = useState(false);
   const [subcontractors, setSubcontractors] = useState<SubcontractorCompany[]>([]);
   const [selectedSubcontractor, setSelectedSubcontractor] = useState<string>('');
@@ -484,6 +455,19 @@ export function LotDetailPage() {
     refreshLotAfterFailure,
     refreshNcrsAfterFailure,
   });
+
+  // Conformance report generation workflow (format dialog + lazy PDF import).
+  // Lives in a hook because it owns its own dialog/generating state; it reuses
+  // the already-loaded itpInstance to avoid an extra fetch.
+  const {
+    generatingReport,
+    showReportFormatDialog,
+    selectedReportFormat,
+    setSelectedReportFormat,
+    setShowReportFormatDialog,
+    showReportDialog,
+    generateReport,
+  } = useConformanceReportGeneration({ lot, projectId, lotId, itpInstance });
 
   // Fetch activity history when History tab is selected
   useEffect(() => {
@@ -1023,73 +1007,6 @@ export function LotDetailPage() {
     }
   };
 
-  // Show format selection dialog before generating report
-  const handleShowReportDialog = () => {
-    // Allow generating report for conformed or claimed lots (claimed lots were previously conformed)
-    if (!lot || (lot.status !== 'conformed' && lot.status !== 'claimed')) return;
-    setShowReportFormatDialog(true);
-  };
-
-  // Handle generating conformance report PDF with selected format
-  const handleGenerateReport = async () => {
-    // Allow generating report for conformed or claimed lots (claimed lots were previously conformed)
-    if (!lot || (lot.status !== 'conformed' && lot.status !== 'claimed')) return;
-
-    setShowReportFormatDialog(false);
-    setGeneratingReport(true);
-
-    try {
-      // Fetch all data needed for the report
-      const encodedProjectId = encodeURIComponent(projectId || '');
-      const encodedLotId = encodeURIComponent(lotId || '');
-      const [projectData, itpData, testsData, ncrsData] = await Promise.all([
-        apiFetch<ProjectResponse>(`/api/projects/${encodedProjectId}`),
-        itpInstance
-          ? Promise.resolve<ItpInstanceResponse>({ instance: itpInstance })
-          : apiFetch<ItpInstanceResponse>(`/api/itp/instances/lot/${encodedLotId}`),
-        apiFetch<TestResultsResponse>(
-          `/api/test-results?projectId=${encodedProjectId}&lotId=${encodedLotId}`,
-        ),
-        apiFetch<NcrsResponse>(`/api/ncrs?projectId=${encodedProjectId}&lotId=${encodedLotId}`),
-      ]);
-      const project = projectData.project;
-      if (!project?.name) {
-        throw new Error('Project details are required before generating a conformance report.');
-      }
-      const reportData = buildConformanceReportData({
-        lot,
-        project: { name: project.name, projectNumber: project.projectNumber },
-        itpInstance: itpData.instance,
-        testResults: testsData.testResults,
-        ncrs: ncrsData.ncrs,
-      });
-
-      // Generate PDF with selected format
-      const { defaultConformanceOptions, generateConformanceReportPDF } =
-        await import('@/lib/pdfGenerator');
-      const formatOptions: ConformanceFormatOptions = {
-        ...defaultConformanceOptions,
-        format: selectedReportFormat,
-        clientName: project.clientName || undefined,
-        contractNumber: project.projectNumber || undefined,
-      };
-      await generateConformanceReportPDF(reportData, formatOptions);
-
-      const formatName =
-        selectedReportFormat === 'standard'
-          ? ''
-          : ` (${selectedReportFormat.toUpperCase()} format)`;
-      toast({
-        title: 'Report generated',
-        description: `The conformance report PDF${formatName} has been downloaded.`,
-      });
-    } catch (err) {
-      handleApiError(err, 'Failed to generate conformance report');
-    } finally {
-      setGeneratingReport(false);
-    }
-  };
-
   // Handle assigning subcontractor to lot
   const handleAssignSubcontractor = async () => {
     if (!lot) return;
@@ -1330,8 +1247,8 @@ export function LotDetailPage() {
         onConformLot={() => setShowConformConfirm(true)}
         onForceConformLot={() => setShowForceConformConfirm(true)}
         onTabChange={handleTabChange}
-        onShowReportDialog={handleShowReportDialog}
-        onGenerateReport={handleGenerateReport}
+        onShowReportDialog={showReportDialog}
+        onGenerateReport={generateReport}
         onCloseReportDialog={() => setShowReportFormatDialog(false)}
         onReportFormatChange={setSelectedReportFormat}
       />
