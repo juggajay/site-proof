@@ -2,13 +2,14 @@
 // 5 primary actions: Today, Approve, [Capture], Diary, Lots
 // Camera button centered between 4 nav tabs
 // Reference: docs/archive/2026-05-repo-hygiene/Foreman persona document (AU civil).md
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Camera, ListChecks, CheckSquare, BookOpen, MapPin } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { apiFetch } from '@/lib/api';
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
+import { useEffectiveProjectId } from '@/hooks/useEffectiveProjectId';
 
 type NavTab = 'capture' | 'today' | 'approve' | 'diary' | 'lots';
 
@@ -63,19 +64,19 @@ export function ForemanBottomNavV2({
   onCapturePress,
   todayBadgeCount: externalBadgeCount,
 }: ForemanBottomNavV2Props) {
-  const { projectId } = useParams();
+  const { projectId: effectiveProjectId, hasNoProject } = useEffectiveProjectId();
   const location = useLocation();
   const navigate = useNavigate();
   const { isOnline, pendingSyncCount } = useOnlineStatus();
 
   // Self-manage badge count when no external count provided
   const { data: badgeData } = useQuery({
-    queryKey: queryKeys.foremanBadges(projectId!),
+    queryKey: queryKeys.foremanBadges(effectiveProjectId!),
     queryFn: () =>
       apiFetch<{ blocking?: unknown[]; dueToday?: unknown[] }>(
-        `/api/dashboard/projects/${projectId}/foreman/today`,
+        `/api/dashboard/projects/${effectiveProjectId}/foreman/today`,
       ),
-    enabled: externalBadgeCount === undefined && !!projectId,
+    enabled: externalBadgeCount === undefined && !!effectiveProjectId,
     refetchInterval: 300_000, // 5 minutes
   });
 
@@ -103,8 +104,8 @@ export function ForemanBottomNavV2({
       return;
     }
 
-    if (projectId) {
-      navigate(item.getPath(projectId));
+    if (effectiveProjectId) {
+      navigate(item.getPath(effectiveProjectId));
     }
   };
 
@@ -137,6 +138,13 @@ export function ForemanBottomNavV2({
         </div>
       )}
 
+      {/* No active project: keep the bar honest instead of silently inert */}
+      {hasNoProject && (
+        <div className="px-3 py-1.5 text-center text-xs font-medium bg-muted text-muted-foreground">
+          Ask your site manager to add you to a project.
+        </div>
+      )}
+
       {/* Nav items */}
       <div className="flex justify-around items-center h-16">
         {navItems.map((item) => {
@@ -149,11 +157,13 @@ export function ForemanBottomNavV2({
             <button
               key={item.id}
               onClick={() => handleNavClick(item)}
+              disabled={hasNoProject}
               className={cn(
                 'flex flex-col items-center justify-center flex-1 h-full gap-1',
                 'min-h-[48px] touch-manipulation',
                 'transition-colors duration-150',
                 'active:bg-muted/50',
+                'disabled:opacity-40 disabled:active:bg-transparent',
                 isCapture ? 'text-primary' : isActive ? 'text-primary' : 'text-muted-foreground',
               )}
               aria-label={item.label}
