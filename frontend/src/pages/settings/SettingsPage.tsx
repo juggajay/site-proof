@@ -22,12 +22,10 @@ import {
   Info,
   Building2,
   LogOut,
-  Mail,
-  Bell,
-  Send,
 } from 'lucide-react';
 import { PushNotificationSettings } from '@/components/settings/PushNotificationSettings';
 import { MfaSecuritySection } from './components/MfaSecuritySection';
+import { EmailPreferencesSection } from './components/EmailPreferencesSection';
 import { downloadBlob } from '@/lib/downloads';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -81,154 +79,6 @@ function getContentDispositionFilename(contentDisposition: string | null) {
   );
 }
 
-type NotificationTiming = 'immediate' | 'digest';
-
-type EmailPreferences = {
-  enabled: boolean;
-  mentions: boolean;
-  mentionsTiming: NotificationTiming;
-  ncrAssigned: boolean;
-  ncrAssignedTiming: NotificationTiming;
-  ncrStatusChange: boolean;
-  ncrStatusChangeTiming: NotificationTiming;
-  holdPointReminder: boolean;
-  holdPointReminderTiming: NotificationTiming;
-  holdPointRelease: boolean;
-  holdPointReleaseTiming: NotificationTiming;
-  commentReply: boolean;
-  commentReplyTiming: NotificationTiming;
-  scheduledReports: boolean;
-  scheduledReportsTiming: NotificationTiming;
-  dailyDigest: boolean;
-  diaryReminder: boolean;
-  diaryReminderTiming: NotificationTiming;
-};
-
-type EmailPreferenceBooleanKey =
-  | 'mentions'
-  | 'ncrAssigned'
-  | 'ncrStatusChange'
-  | 'holdPointReminder'
-  | 'holdPointRelease'
-  | 'commentReply'
-  | 'scheduledReports'
-  | 'dailyDigest'
-  | 'diaryReminder';
-
-type EmailPreferenceTimingKey =
-  | 'mentionsTiming'
-  | 'ncrAssignedTiming'
-  | 'ncrStatusChangeTiming'
-  | 'holdPointReminderTiming'
-  | 'holdPointReleaseTiming'
-  | 'commentReplyTiming'
-  | 'scheduledReportsTiming'
-  | 'diaryReminderTiming';
-
-type EmailPreferenceToggleKey = 'enabled' | EmailPreferenceBooleanKey;
-
-const DEFAULT_EMAIL_PREFERENCES: EmailPreferences = {
-  enabled: true,
-  mentions: true,
-  mentionsTiming: 'immediate',
-  ncrAssigned: true,
-  ncrAssignedTiming: 'immediate',
-  ncrStatusChange: true,
-  ncrStatusChangeTiming: 'digest',
-  holdPointReminder: true,
-  holdPointReminderTiming: 'immediate',
-  holdPointRelease: true,
-  holdPointReleaseTiming: 'immediate',
-  commentReply: true,
-  commentReplyTiming: 'immediate',
-  scheduledReports: true,
-  scheduledReportsTiming: 'immediate',
-  dailyDigest: false,
-  diaryReminder: true,
-  diaryReminderTiming: 'immediate',
-};
-
-const emailNotificationItems: Array<{
-  key: EmailPreferenceBooleanKey;
-  timingKey: EmailPreferenceTimingKey | null;
-  label: string;
-  description: string;
-  supportsTiming: boolean;
-}> = [
-  {
-    key: 'mentions',
-    timingKey: 'mentionsTiming',
-    label: 'Mentions',
-    description: 'When someone @mentions you in a comment',
-    supportsTiming: true,
-  },
-  {
-    key: 'ncrAssigned',
-    timingKey: 'ncrAssignedTiming',
-    label: 'NCR Assigned',
-    description: 'When you are assigned to an NCR',
-    supportsTiming: true,
-  },
-  {
-    key: 'ncrStatusChange',
-    timingKey: 'ncrStatusChangeTiming',
-    label: 'NCR Status Changes',
-    description: "When an NCR you're involved with changes status",
-    supportsTiming: true,
-  },
-  {
-    key: 'holdPointReminder',
-    timingKey: 'holdPointReminderTiming',
-    label: 'Hold Point Reminders',
-    description: 'Reminders for upcoming hold points',
-    supportsTiming: true,
-  },
-  {
-    key: 'holdPointRelease',
-    timingKey: 'holdPointReleaseTiming',
-    label: 'Hold Point Released',
-    description: 'When a hold point is released',
-    supportsTiming: true,
-  },
-  {
-    key: 'commentReply',
-    timingKey: 'commentReplyTiming',
-    label: 'Comment Replies',
-    description: 'When someone replies to your comment',
-    supportsTiming: true,
-  },
-  {
-    key: 'scheduledReports',
-    timingKey: 'scheduledReportsTiming',
-    label: 'Scheduled Reports',
-    description: 'Delivery of scheduled report emails',
-    supportsTiming: true,
-  },
-  {
-    key: 'dailyDigest',
-    timingKey: null,
-    label: 'Daily Digest',
-    description: 'Receive digest emails at your preferred time',
-    supportsTiming: false,
-  },
-  {
-    key: 'diaryReminder',
-    timingKey: 'diaryReminderTiming',
-    label: 'Daily Diary Reminders',
-    description: 'Reminders when a daily diary has not been completed',
-    supportsTiming: true,
-  },
-];
-
-function normalizeEmailPreferences(
-  preferences: Partial<EmailPreferences> | null | undefined,
-): EmailPreferences {
-  return {
-    ...DEFAULT_EMAIL_PREFERENCES,
-    ...(preferences || {}),
-  };
-}
-
 function emailMatchesConfirmation(input: string, expectedEmail?: string | null): boolean {
   if (!expectedEmail) return false;
   return input.trim().toLowerCase() === expectedEmail.trim().toLowerCase();
@@ -267,21 +117,6 @@ export function SettingsPage() {
   const [isLeavingCompany, setIsLeavingCompany] = useState(false);
   const [leaveCompanyError, setLeaveCompanyError] = useState<string | null>(null);
 
-  const [emailPreferences, setEmailPreferences] = useState<EmailPreferences>(() => ({
-    ...DEFAULT_EMAIL_PREFERENCES,
-  }));
-  const [isLoadingEmailPrefs, setIsLoadingEmailPrefs] = useState(true);
-  const [isSavingEmailPrefs, setIsSavingEmailPrefs] = useState(false);
-  const [isSendingTestEmail, setIsSendingTestEmail] = useState(false);
-  const [emailPrefsMessage, setEmailPrefsMessage] = useState<{
-    type: 'success' | 'error';
-    text: string;
-  } | null>(null);
-  const [emailPrefsLoadFailed, setEmailPrefsLoadFailed] = useState(false);
-  const savingEmailPrefsRef = useRef(false);
-  const sendingTestEmailRef = useRef(false);
-  const emailPrefsMessageTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
   // MFA state (Feature #22, #420, #421)
   const [mfaEnabled, setMfaEnabled] = useState(false);
   const [isLoadingMfa, setIsLoadingMfa] = useState(true);
@@ -306,24 +141,6 @@ export function SettingsPage() {
   const deletingAccountRef = useRef(false);
   const leavingCompanyRef = useRef(false);
 
-  const showEmailPreferenceMessage = useCallback(
-    (message: { type: 'success' | 'error'; text: string } | null, duration?: number) => {
-      if (emailPrefsMessageTimeoutRef.current) {
-        clearTimeout(emailPrefsMessageTimeoutRef.current);
-        emailPrefsMessageTimeoutRef.current = null;
-      }
-
-      setEmailPrefsMessage(message);
-      if (message && duration) {
-        emailPrefsMessageTimeoutRef.current = setTimeout(
-          () => setEmailPrefsMessage(null),
-          duration,
-        );
-      }
-    },
-    [],
-  );
-
   const showExportSuccess = useCallback(() => {
     if (exportSuccessTimeoutRef.current) {
       clearTimeout(exportSuccessTimeoutRef.current);
@@ -335,9 +152,6 @@ export function SettingsPage() {
 
   useEffect(() => {
     return () => {
-      if (emailPrefsMessageTimeoutRef.current) {
-        clearTimeout(emailPrefsMessageTimeoutRef.current);
-      }
       if (copiedSecretTimeoutRef.current) {
         clearTimeout(copiedSecretTimeoutRef.current);
       }
@@ -363,33 +177,6 @@ export function SettingsPage() {
     { value: 'MM/DD/YYYY', label: 'MM/DD/YYYY', example: '12/31/2024' },
     { value: 'YYYY-MM-DD', label: 'YYYY-MM-DD', example: '2024-12-31' },
   ];
-
-  const loadEmailPreferences = useCallback(async () => {
-    setIsLoadingEmailPrefs(true);
-    setEmailPrefsLoadFailed(false);
-    showEmailPreferenceMessage(null);
-
-    try {
-      const data = await apiFetch<{ preferences: EmailPreferences }>(
-        '/api/notifications/email-preferences',
-      );
-      setEmailPreferences(normalizeEmailPreferences(data.preferences));
-    } catch (error) {
-      logError('Failed to load email preferences:', error);
-      setEmailPrefsLoadFailed(true);
-      showEmailPreferenceMessage({
-        type: 'error',
-        text: extractErrorMessage(error, 'Failed to load email preferences'),
-      });
-    } finally {
-      setIsLoadingEmailPrefs(false);
-    }
-  }, [showEmailPreferenceMessage]);
-
-  // Load email notification preferences
-  useEffect(() => {
-    void loadEmailPreferences();
-  }, [loadEmailPreferences]);
 
   const loadMfaStatus = useCallback(async () => {
     setIsLoadingMfa(true);
@@ -548,83 +335,6 @@ export function SettingsPage() {
       setMfaMessage(null);
     }
   }, [isMfaLoading]);
-
-  // Save email notification preferences with optimistic update
-  const saveEmailPreferences = async (
-    newPreferences: EmailPreferences,
-    previousPreferences: EmailPreferences,
-  ): Promise<boolean> => {
-    if (savingEmailPrefsRef.current || emailPrefsLoadFailed) return false;
-
-    savingEmailPrefsRef.current = true;
-    setIsSavingEmailPrefs(true);
-    showEmailPreferenceMessage(null);
-
-    try {
-      const data = await apiFetch<{ preferences: EmailPreferences; message?: string }>(
-        '/api/notifications/email-preferences',
-        {
-          method: 'PUT',
-          body: JSON.stringify({ preferences: newPreferences }),
-        },
-      );
-      setEmailPreferences(normalizeEmailPreferences(data.preferences));
-      // Server confirmed, keep the optimistic update
-      showEmailPreferenceMessage({ type: 'success', text: 'Email preferences saved' }, 3000);
-      return true;
-    } catch (error) {
-      // Error occurred, rollback to previous state
-      setEmailPreferences(previousPreferences);
-      showEmailPreferenceMessage({
-        type: 'error',
-        text: extractErrorMessage(error, 'Failed to save email preferences - changes reverted'),
-      });
-      return false;
-    } finally {
-      savingEmailPrefsRef.current = false;
-      setIsSavingEmailPrefs(false);
-    }
-  };
-
-  // Toggle email preference with optimistic update
-  const toggleEmailPreference = (key: EmailPreferenceToggleKey) => {
-    if (savingEmailPrefsRef.current || emailPrefsLoadFailed) return;
-
-    // Store previous state for potential rollback
-    const previousPreferences = { ...emailPreferences };
-    // Optimistically update UI immediately
-    const newPreferences = { ...emailPreferences, [key]: !emailPreferences[key] };
-    setEmailPreferences(newPreferences);
-    // Then persist to server (will rollback on error)
-    void saveEmailPreferences(newPreferences, previousPreferences);
-  };
-
-  // Send test email
-  const sendTestEmail = async () => {
-    if (sendingTestEmailRef.current) return;
-
-    sendingTestEmailRef.current = true;
-    setIsSendingTestEmail(true);
-    showEmailPreferenceMessage(null);
-
-    try {
-      const data = await apiFetch<{ sentTo: string }>('/api/notifications/send-test-email', {
-        method: 'POST',
-      });
-      showEmailPreferenceMessage(
-        { type: 'success', text: `Test email sent to ${data.sentTo}` },
-        5000,
-      );
-    } catch (error) {
-      showEmailPreferenceMessage({
-        type: 'error',
-        text: extractErrorMessage(error, 'Failed to send test email'),
-      });
-    } finally {
-      sendingTestEmailRef.current = false;
-      setIsSendingTestEmail(false);
-    }
-  };
 
   // GDPR Data Export function
   const handleExportData = async () => {
@@ -885,175 +595,7 @@ export function SettingsPage() {
       </div>
 
       {/* Email Notification Settings */}
-      <div className="rounded-lg border bg-card p-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-semibold flex items-center gap-2">
-              <Mail className="h-5 w-5" />
-              Email Notifications
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              Configure which email notifications you receive.
-            </p>
-          </div>
-          <Button
-            onClick={sendTestEmail}
-            disabled={
-              isSendingTestEmail ||
-              isLoadingEmailPrefs ||
-              emailPrefsLoadFailed ||
-              !emailPreferences.enabled
-            }
-          >
-            {isSendingTestEmail ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Send className="h-4 w-4" />
-            )}
-            Send Test Email
-          </Button>
-        </div>
-
-        {/* Status Message */}
-        {emailPrefsMessage && (
-          <div
-            role={emailPrefsMessage.type === 'success' ? 'status' : 'alert'}
-            className={`flex items-center gap-2 text-sm px-4 py-2 rounded-md ${
-              emailPrefsMessage.type === 'success'
-                ? 'bg-green-50 text-green-600 dark:bg-green-950 dark:text-green-400'
-                : 'bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-400'
-            }`}
-          >
-            {emailPrefsMessage.type === 'success' ? (
-              <Check className="h-4 w-4" />
-            ) : (
-              <AlertTriangle className="h-4 w-4" />
-            )}
-            {emailPrefsMessage.text}
-          </div>
-        )}
-
-        {isLoadingEmailPrefs ? (
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Loading preferences...
-          </div>
-        ) : emailPrefsLoadFailed ? (
-          <div
-            role="alert"
-            className="rounded-lg bg-red-50 p-4 text-sm text-red-700 dark:bg-red-950 dark:text-red-300"
-          >
-            <p>
-              Email notification preferences could not be loaded. Existing preferences were not
-              changed.
-            </p>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="mt-3"
-              onClick={() => void loadEmailPreferences()}
-            >
-              Try again
-            </Button>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {/* Master Toggle */}
-            <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
-              <div className="flex items-center gap-3">
-                <Bell className="h-5 w-5 text-muted-foreground" />
-                <div>
-                  <p className="font-medium">Enable Email Notifications</p>
-                  <p className="text-sm text-muted-foreground">Receive notifications via email</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => toggleEmailPreference('enabled')}
-                disabled={isSavingEmailPrefs}
-                role="switch"
-                aria-checked={emailPreferences.enabled}
-                aria-label="Enable email notifications"
-                className={`relative w-12 h-6 rounded-full transition-colors ${
-                  emailPreferences.enabled ? 'bg-primary' : 'bg-muted-foreground/30'
-                }`}
-              >
-                <span
-                  className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${
-                    emailPreferences.enabled ? 'translate-x-7' : 'translate-x-1'
-                  }`}
-                />
-              </button>
-            </div>
-
-            {/* Individual Preferences with Timing Options */}
-            <div
-              className={`space-y-3 ${!emailPreferences.enabled ? 'opacity-50 pointer-events-none' : ''}`}
-            >
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-medium text-muted-foreground">Notification Types</p>
-                <p className="text-xs text-muted-foreground">Timing</p>
-              </div>
-
-              {emailNotificationItems.map((pref) => (
-                <div key={pref.key} className="py-3 border-b border-border last:border-b-0">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1 mr-4">
-                      <p className="font-medium">{pref.label}</p>
-                      <p className="text-sm text-muted-foreground">{pref.description}</p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      {/* Timing selector for supported notifications */}
-                      {pref.supportsTiming && emailPreferences[pref.key] && pref.timingKey && (
-                        <NativeSelect
-                          value={emailPreferences[pref.timingKey] || 'immediate'}
-                          onChange={(e) => {
-                            if (savingEmailPrefsRef.current || emailPrefsLoadFailed) return;
-
-                            const previousPreferences = { ...emailPreferences };
-                            const newPreferences = {
-                              ...emailPreferences,
-                              [pref.timingKey!]: e.target.value as NotificationTiming,
-                            };
-                            setEmailPreferences(newPreferences);
-                            void saveEmailPreferences(newPreferences, previousPreferences);
-                          }}
-                          disabled={isSavingEmailPrefs}
-                          className="text-xs px-2 py-1 h-auto min-w-[90px]"
-                          aria-label={`${pref.label} notification timing`}
-                          data-testid={`timing-${pref.key}`}
-                        >
-                          <option value="immediate">Immediate</option>
-                          <option value="digest">Digest</option>
-                        </NativeSelect>
-                      )}
-                      {/* Enable/disable toggle */}
-                      <button
-                        type="button"
-                        onClick={() => toggleEmailPreference(pref.key)}
-                        disabled={isSavingEmailPrefs}
-                        role="switch"
-                        aria-checked={emailPreferences[pref.key]}
-                        aria-label={`${pref.label} email notifications`}
-                        className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ${
-                          emailPreferences[pref.key] ? 'bg-primary' : 'bg-muted-foreground/30'
-                        }`}
-                      >
-                        <span
-                          className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
-                            emailPreferences[pref.key] ? 'translate-x-5' : 'translate-x-0.5'
-                          }`}
-                        />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
+      <EmailPreferencesSection />
 
       {/* Push Notification Settings (Feature #657) */}
       <PushNotificationSettings />
