@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, useMemo, useCallback } from 'react';
+import { useRef, useState, useMemo, useCallback } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { apiFetch } from '@/lib/api';
@@ -11,68 +11,17 @@ import type { DocketDetailPDFData } from '@/lib/pdfGenerator';
 import { VoiceInputButton } from '@/components/ui/VoiceInputButton';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { DocketApprovalsMobileView } from '@/components/foreman/DocketApprovalsMobileView';
-import { devLog, logError } from '@/lib/logger';
+import { logError } from '@/lib/logger';
 import { buildScopedCsvFilename, downloadCsv } from '@/lib/csv';
-
-interface Docket {
-  id: string;
-  docketNumber: string;
-  subcontractor: string;
-  subcontractorId: string;
-  date: string;
-  status: 'draft' | 'pending_approval' | 'approved' | 'rejected' | 'queried';
-  notes: string | null;
-  labourHours: number;
-  plantHours: number;
-  totalLabourSubmitted: number;
-  totalLabourApproved: number;
-  totalPlantSubmitted: number;
-  totalPlantApproved: number;
-  submittedAt: string | null;
-  approvedAt: string | null;
-  foremanNotes: string | null;
-}
-
-interface LabourEntry {
-  id: string;
-  employee: { name: string; role: string };
-  startTime: string | null;
-  finishTime: string | null;
-  submittedHours: number;
-  approvedHours: number;
-  hourlyRate: number;
-  submittedCost: number;
-  approvedCost: number;
-}
-
-interface PlantEntry {
-  id: string;
-  plant: { type: string; description: string; idRego?: string };
-  hoursOperated: number;
-  wetOrDry: string;
-  hourlyRate: number;
-  submittedCost: number;
-  approvedCost: number;
-}
-
-type DocketsResponse = Docket[] | { dockets?: Docket[] };
-
-interface DocketDetailResponse {
-  docket?: {
-    labourEntries?: LabourEntry[];
-    plantEntries?: PlantEntry[];
-  };
-}
-
-interface ProjectResponse {
-  project?: {
-    name?: string | null;
-    projectNumber?: string | null;
-  };
-}
-
-const normalizeDockets = (data: DocketsResponse): Docket[] =>
-  Array.isArray(data) ? data : data.dockets || [];
+import {
+  type Docket,
+  type DocketDetailResponse,
+  type LabourEntry,
+  type PlantEntry,
+  type ProjectResponse,
+  useDocketApprovalsQuery,
+  useDocketProjectQuery,
+} from './docketApprovalsData';
 
 const statusColors: Record<string, string> = {
   draft: 'bg-muted text-foreground',
@@ -90,6 +39,7 @@ const statusLabels: Record<string, string> = {
   queried: 'Queried',
 };
 
+const EMPTY_DOCKETS: Docket[] = [];
 const HOURS_INPUT_ERROR = 'Hours must be a non-negative decimal number.';
 const HOURS_INPUT_PATTERN = /^\d+(?:\.\d+)?$/;
 
@@ -118,10 +68,7 @@ export function DocketApprovalsPage() {
   const isMobile = useIsMobile();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  // State for dockets and filtering — initialise from URL
-  const [dockets, setDockets] = useState<Docket[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  // State for filtering — initialise from URL
   const initialStatus = searchParams.get('status') || 'all';
   const [statusFilter, setStatusFilter] = useState<string>(initialStatus);
 
@@ -147,12 +94,26 @@ export function DocketApprovalsPage() {
   const actionInProgressRef = useRef(false);
   const printingDocketRef = useRef<string | null>(null);
   const [printingDocketId, setPrintingDocketId] = useState<string | null>(null);
-  const [projectInfo, setProjectInfo] = useState<ProjectResponse['project'] | null>(null);
 
   // State for docket detail entries (fetched on modal open)
   const [detailLoading, setDetailLoading] = useState(false);
   const [labourEntries, setLabourEntries] = useState<LabourEntry[]>([]);
   const [plantEntries, setPlantEntries] = useState<PlantEntry[]>([]);
+
+  const docketsQuery = useDocketApprovalsQuery(projectId, statusFilter);
+  const projectQuery = useDocketProjectQuery(projectId);
+  const { refetch: refetchDocketsQuery } = docketsQuery;
+  const dockets = docketsQuery.data ?? EMPTY_DOCKETS;
+  const loading = docketsQuery.isLoading;
+  const loadError =
+    docketsQuery.error && !docketsQuery.data
+      ? extractErrorMessage(docketsQuery.error, 'Failed to fetch dockets')
+      : null;
+  const projectInfo = projectQuery.data ?? null;
+
+  const refetchDockets = useCallback(async () => {
+    await refetchDocketsQuery();
+  }, [refetchDocketsQuery]);
 
   // Role checks - use roleInCompany which is the field returned from the backend
   const userRole = user?.roleInCompany || user?.role;
@@ -230,27 +191,6 @@ export function DocketApprovalsPage() {
     return filteredDockets.reduce((sum, d) => sum + (d.plantHours || 0), 0);
   }, [filteredDockets]);
 
-  // Fetch dockets from API
-  const fetchDockets = useCallback(async () => {
-    setLoading(true);
-    setLoadError(null);
-
-    try {
-      const queryParams = new URLSearchParams();
-      if (projectId) queryParams.append('projectId', projectId);
-      if (statusFilter !== 'all') queryParams.append('status', statusFilter);
-
-      const data = await apiFetch<DocketsResponse>(`/api/dockets?${queryParams.toString()}`);
-      setDockets(normalizeDockets(data));
-    } catch (error) {
-      logError('Error fetching dockets:', error);
-      setLoadError(extractErrorMessage(error, 'Failed to fetch dockets'));
-      setDockets([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [projectId, statusFilter]);
-
   // Create a new docket
   const handleCreateDocket = async () => {
     if (creatingRef.current) return;
@@ -288,7 +228,7 @@ export function DocketApprovalsPage() {
       setNewDocketLabourHours('');
       setNewDocketPlantHours('');
       setNewDocketNotes('');
-      await fetchDockets();
+      await refetchDockets();
     } catch (error) {
       logError('Error creating docket:', error);
       toast({
@@ -309,7 +249,7 @@ export function DocketApprovalsPage() {
     try {
       await apiFetch(`/api/dockets/${encodeURIComponent(docket.id)}/submit`, { method: 'POST' });
       toast({ variant: 'success', description: 'Docket submitted for approval' });
-      await fetchDockets();
+      await refetchDockets();
     } catch (error) {
       logError('Error submitting docket:', error);
       toast({
@@ -406,7 +346,7 @@ export function DocketApprovalsPage() {
       setActionModalOpen(false);
       setSelectedDocket(null);
       setActionNotes('');
-      await fetchDockets();
+      await refetchDockets();
     } catch (error) {
       logError(`Error ${actionType}ing docket:`, error);
       toast({
@@ -418,101 +358,6 @@ export function DocketApprovalsPage() {
       setActionInProgress(false);
     }
   };
-
-  // Fetch dockets on mount and when filter changes
-  useEffect(() => {
-    fetchDockets();
-  }, [fetchDockets]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const fetchProjectInfo = async () => {
-      if (!projectId) {
-        setProjectInfo(null);
-        return;
-      }
-
-      try {
-        const projectResponse = await apiFetch<ProjectResponse>(
-          `/api/projects/${encodeURIComponent(projectId)}`,
-        );
-        if (!cancelled) {
-          setProjectInfo(projectResponse.project ?? null);
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setProjectInfo(null);
-        }
-        logError('Error fetching docket project info:', err);
-      }
-    };
-
-    fetchProjectInfo();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId]);
-
-  // Feature #735: Real-time docket approval notification polling
-  // Poll for updates every 30 seconds when the tab is visible
-  useEffect(() => {
-    if (!projectId) return;
-
-    let pollInterval: NodeJS.Timeout | null = null;
-
-    const silentFetchDockets = async () => {
-      try {
-        const queryParams = new URLSearchParams();
-        queryParams.append('projectId', projectId);
-        if (statusFilter !== 'all') queryParams.append('status', statusFilter);
-
-        const data = await apiFetch<DocketsResponse>(`/api/dockets?${queryParams.toString()}`);
-        const newDockets = normalizeDockets(data);
-
-        // Only update if there are actual changes
-        setDockets((prevDockets: Docket[]) => {
-          const hasChanges =
-            newDockets.length !== prevDockets.length ||
-            newDockets.some(
-              (newDocket: Docket, index: number) =>
-                !prevDockets[index] ||
-                newDocket.id !== prevDockets[index].id ||
-                newDocket.status !== prevDockets[index].status ||
-                newDocket.approvedAt !== prevDockets[index].approvedAt ||
-                newDocket.totalLabourApproved !== prevDockets[index].totalLabourApproved,
-            );
-          return hasChanges ? newDockets : prevDockets;
-        });
-      } catch (err) {
-        // Silent fail for background polling
-        devLog('Background docket fetch failed:', err);
-      }
-    };
-
-    const startPolling = () => {
-      pollInterval = setInterval(() => {
-        if (document.visibilityState === 'visible') {
-          silentFetchDockets();
-        }
-      }, 30000); // 30 seconds
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        silentFetchDockets();
-      }
-    };
-
-    startPolling();
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    return () => {
-      if (pollInterval) clearInterval(pollInterval);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [projectId, statusFilter]);
 
   // Export dockets to CSV
   const handleExportCSV = () => {
@@ -621,7 +466,7 @@ export function DocketApprovalsPage() {
           onQuery={(d) => openActionModal(d, 'query')}
           onReject={(d) => openActionModal(d, 'reject')}
           onTapDocket={handleTapDocket}
-          onRefresh={fetchDockets}
+          onRefresh={refetchDockets}
         />
       ) : (
         <div className="space-y-6 p-6">
@@ -664,7 +509,7 @@ export function DocketApprovalsPage() {
             >
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-sm font-medium text-destructive">{loadError}</p>
-                <Button type="button" variant="outline" onClick={() => void fetchDockets()}>
+                <Button type="button" variant="outline" onClick={() => void refetchDockets()}>
                   Try again
                 </Button>
               </div>

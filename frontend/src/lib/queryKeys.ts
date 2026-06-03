@@ -39,7 +39,8 @@ export const queryKeys = {
   costs: (projectId: string) => ['costs', projectId] as const,
 
   // Dockets
-  dockets: (projectId: string) => ['dockets', projectId] as const,
+  dockets: (projectId: string, status = 'all') => ['dockets', projectId, status] as const,
+  docketProject: (projectId: string) => ['docket-project', projectId] as const,
 
   // Subcontractors
   subcontractors: (projectId: string) => ['subcontractors', projectId] as const,
