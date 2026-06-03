@@ -19,7 +19,13 @@ import { AccessDeniedState } from '@/components/AccessDeniedState';
 import { parseJsonPreference, readLocalStorageItem } from '@/lib/storagePreferences';
 
 // Extracted components
-import { LotFiltersBar, type ColumnId, DEFAULT_COLUMN_ORDER } from './components/LotFiltersBar';
+import { LotFiltersBar } from './components/LotFiltersBar';
+import {
+  COLUMN_ORDER_STORAGE_KEY,
+  COLUMN_STORAGE_KEY,
+  DEFAULT_COLUMN_ORDER,
+  type ColumnId,
+} from './components/lotFilterConfig';
 import { LotTable } from './components/LotTable';
 import { LotMobileList } from './components/LotMobileList';
 import { CreateLotModal } from './components/CreateLotModal';
@@ -34,9 +40,6 @@ import { useLotsActions } from './hooks/useLotsActions';
 // Roles that can delete lots
 const LOT_DELETE_ROLES = ['owner', 'admin', 'project_manager'];
 
-// Column persistence keys
-const COLUMN_STORAGE_KEY = 'siteproof_lot_columns';
-const COLUMN_ORDER_STORAGE_KEY = 'siteproof_lot_column_order';
 const LOT_VIEW_MODE_STORAGE_KEY = 'siteproof_lot_view_mode';
 const VALID_COLUMN_IDS = new Set<ColumnId>(DEFAULT_COLUMN_ORDER);
 

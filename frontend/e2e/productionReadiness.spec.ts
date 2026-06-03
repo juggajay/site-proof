@@ -2047,6 +2047,14 @@ test.describe('production readiness guardrails', () => {
       new URL('../src/pages/lots/components/LotFiltersBar.tsx', import.meta.url),
       'utf8',
     );
+    const lotColumnSettingsMenu = await readFile(
+      new URL('../src/pages/lots/components/LotColumnSettingsMenu.tsx', import.meta.url),
+      'utf8',
+    );
+    const lotFilterConfig = await readFile(
+      new URL('../src/pages/lots/components/lotFilterConfig.ts', import.meta.url),
+      'utf8',
+    );
     const lotTable = await readFile(
       new URL('../src/pages/lots/components/LotTable.tsx', import.meta.url),
       'utf8',
@@ -2083,12 +2091,17 @@ test.describe('production readiness guardrails', () => {
     expect(lotActions).not.toContain("localStorage.setItem('siteproof_lot_view_mode'");
     expect(lotFiltersBar).toContain('readLocalStorageItem(SAVED_FILTERS_STORAGE_KEY)');
     expect(lotFiltersBar).toContain('writeLocalStorageItem(SAVED_FILTERS_STORAGE_KEY');
-    expect(lotFiltersBar).toContain('writeLocalStorageItem(COLUMN_STORAGE_KEY');
-    expect(lotFiltersBar).toContain('writeLocalStorageItem(COLUMN_ORDER_STORAGE_KEY');
     expect(lotFiltersBar).toContain('parseSavedFiltersPreference');
     expect(lotFiltersBar).not.toContain('return JSON.parse(stored) as SavedFilter[]');
     expect(lotFiltersBar).not.toContain('localStorage.getItem(SAVED_FILTERS_STORAGE_KEY)');
     expect(lotFiltersBar).not.toContain('localStorage.setItem(SAVED_FILTERS_STORAGE_KEY');
+    expect(lotColumnSettingsMenu).toContain('writeLocalStorageItem(COLUMN_STORAGE_KEY');
+    expect(lotColumnSettingsMenu).toContain('writeLocalStorageItem(COLUMN_ORDER_STORAGE_KEY');
+    expect(lotColumnSettingsMenu).not.toContain('localStorage.setItem(COLUMN_STORAGE_KEY');
+    expect(lotColumnSettingsMenu).not.toContain('localStorage.setItem(COLUMN_ORDER_STORAGE_KEY');
+    expect(lotFilterConfig).toContain("COLUMN_STORAGE_KEY = 'siteproof_lot_columns'");
+    expect(lotFilterConfig).toContain("COLUMN_ORDER_STORAGE_KEY = 'siteproof_lot_column_order'");
+    expect(lotFilterConfig).toContain("SAVED_FILTERS_STORAGE_KEY = 'siteproof_lot_saved_filters'");
     expect(lotTable).toContain('readLocalStorageItem(COLUMN_WIDTH_STORAGE_KEY)');
     expect(lotTable).toContain('writeLocalStorageItem(COLUMN_WIDTH_STORAGE_KEY');
     expect(lotTable).toContain('parseColumnWidthsPreference');
