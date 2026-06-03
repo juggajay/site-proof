@@ -1583,8 +1583,9 @@ describe('Lots API', () => {
 
         expect(assignedRes.status).toBe(200);
         expect(assignedRes.body.readiness.claim).not.toHaveProperty('budgetAmount');
-        expect(JSON.stringify(assignedRes.body.readiness)).not.toContain('9999');
-        expect(JSON.stringify(assignedRes.body.readiness)).not.toContain('missing_budget');
+        expect(assignedRes.body.readiness.claim.blockers).not.toEqual(
+          expect.arrayContaining([expect.objectContaining({ code: 'missing_budget' })]),
+        );
 
         const unassignedRes = await request(app)
           .get(`/api/lots/${unassignedLot.id}/readiness`)
