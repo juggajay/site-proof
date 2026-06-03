@@ -2,6 +2,7 @@ import { useState, lazy, Suspense } from 'react';
 import { useParams } from 'react-router-dom';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { DiaryMobileView } from '@/components/foreman/DiaryMobileView';
+import { DiaryFinishFlow } from '@/components/foreman/DiaryFinishFlow';
 import type { TimelineEntry } from '@/components/foreman/DiaryTimelineEntry';
 import type { DiaryTab } from './types';
 import { useDiaryData } from './hooks/useDiaryData';
@@ -35,6 +36,7 @@ export function DailyDiaryPage() {
   const isMobile = useIsMobile();
   const [activeTab, setActiveTab] = useState<DiaryTab>('weather');
   const [entryPendingDelete, setEntryPendingDelete] = useState<TimelineEntry | null>(null);
+  const [showFinishFlow, setShowFinishFlow] = useState(false);
 
   // Data hook (state, fetching, effects)
   const data = useDiaryData({ projectId, isMobile });
@@ -100,6 +102,17 @@ export function DailyDiaryPage() {
           onRefresh={mobile.handleRefresh}
           onEditEntry={mobile.handleEditEntry}
           onDeleteEntry={(entry) => setEntryPendingDelete(entry)}
+          onReviewSubmit={() => setShowFinishFlow(true)}
+        />
+        <DiaryFinishFlow
+          isOpen={showFinishFlow}
+          onClose={() => setShowFinishFlow(false)}
+          onSubmit={() => {
+            // Reflect the submitted status without a second submit path: the finish
+            // flow owns the POST; we just refresh the page's diary + list afterwards.
+            void data.fetchDiaryForDate(data.selectedDate);
+            void data.fetchDiaries();
+          }}
         />
         <DiaryMobileSheets
           activeSheet={mobile.activeSheet}
