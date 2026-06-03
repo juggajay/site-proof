@@ -5,6 +5,8 @@ import { apiFetch } from '@/lib/api';
 import type { TestResult, Lot, FailedTestForNcr, NcrFormData, CreateTestFormData } from './types';
 import { TestFilters } from './components/TestFilters';
 import { TestResultsTable } from './components/TestResultsTable';
+import { TestResultsMobileList } from './components/TestResultsMobileList';
+import { useIsMobile } from '@/hooks/useMediaQuery';
 import { CreateTestModal } from './components/CreateTestModal';
 import { UploadCertificateModal } from './components/UploadCertificateModal';
 import { BatchUploadModal } from './components/BatchUploadModal';
@@ -19,6 +21,7 @@ import { formatTestDate, TEST_REJECTION_REASON_MAX_LENGTH } from './constants';
 export function TestResultsPage() {
   const { projectId } = useParams();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
 
   // Core data state
   const [testResults, setTestResults] = useState<TestResult[]>([]);
@@ -433,9 +436,9 @@ export function TestResultsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="text-3xl font-bold">Test Results</h1>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {testResults.length > 0 && (
             <button
               onClick={handleExportCSV}
@@ -494,17 +497,30 @@ export function TestResultsPage() {
         />
       )}
 
-      {/* Table */}
-      <TestResultsTable
-        projectId={projectId || ''}
-        filteredTestResults={testResults.length === 0 ? [] : filteredTestResults}
-        hasActiveFilters={testResults.length > 0 && hasActiveFilters}
-        updatingStatusId={updatingStatusId}
-        onUpdateStatus={handleUpdateStatus}
-        onRejectTest={openRejectModal}
-        onClearFilters={clearFilters}
-        onOpenCreateModal={() => setShowCreateModal(true)}
-      />
+      {/* Results: mobile card list on phones, virtualized table on desktop */}
+      {isMobile ? (
+        <TestResultsMobileList
+          projectId={projectId || ''}
+          filteredTestResults={testResults.length === 0 ? [] : filteredTestResults}
+          hasActiveFilters={testResults.length > 0 && hasActiveFilters}
+          updatingStatusId={updatingStatusId}
+          onUpdateStatus={handleUpdateStatus}
+          onRejectTest={openRejectModal}
+          onClearFilters={clearFilters}
+          onOpenCreateModal={() => setShowCreateModal(true)}
+        />
+      ) : (
+        <TestResultsTable
+          projectId={projectId || ''}
+          filteredTestResults={testResults.length === 0 ? [] : filteredTestResults}
+          hasActiveFilters={testResults.length > 0 && hasActiveFilters}
+          updatingStatusId={updatingStatusId}
+          onUpdateStatus={handleUpdateStatus}
+          onRejectTest={openRejectModal}
+          onClearFilters={clearFilters}
+          onOpenCreateModal={() => setShowCreateModal(true)}
+        />
+      )}
 
       {/* Modals */}
       <CreateTestModal
