@@ -508,6 +508,7 @@ export function LotDetailPage() {
   const canConformLots = qualityAccess?.canConformLots || false;
   const canForceConformLots = qualityAccess?.role === 'owner' || qualityAccess?.role === 'admin';
   const canVerifyTestResults = qualityAccess?.canVerifyTestResults || false;
+  const canAssignITPTemplate = qualityAccess?.canManageITPTemplates || false;
 
   // Permission check for managing lot (assign subcontractors)
   const canManageLot = ['owner', 'admin', 'project_manager', 'site_manager'].includes(
@@ -1134,6 +1135,7 @@ export function LotDetailPage() {
               isMobile={isMobile}
               updatingCompletion={updatingCompletion}
               canCompleteITPItems={canCompleteITPItems}
+              canAssignITPTemplate={canAssignITPTemplate}
               onToggleCompletion={toggleCompletion}
               onUpdateNotes={updateNotes}
               onMarkAsNA={mobileMarkNA}

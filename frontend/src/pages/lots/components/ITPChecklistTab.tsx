@@ -27,6 +27,7 @@ export interface ITPChecklistTabProps {
   isMobile: boolean;
   updatingCompletion: string | null;
   canCompleteITPItems: boolean;
+  canAssignITPTemplate: boolean;
   // Handlers
   onToggleCompletion: (
     checklistItemId: string,
@@ -68,6 +69,7 @@ export function ITPChecklistTab({
   isMobile,
   updatingCompletion,
   canCompleteITPItems,
+  canAssignITPTemplate,
   onToggleCompletion,
   onUpdateNotes,
   onMarkAsNA,
@@ -100,7 +102,7 @@ export function ITPChecklistTab({
 
     const frame = window.requestAnimationFrame(() => {
       assignTemplateCardRef.current?.scrollIntoView({ block: 'center', inline: 'nearest' });
-      if (templates.length > 0) {
+      if (canAssignITPTemplate && templates.length > 0) {
         setShowAssignModal(true);
       }
       onAutoOpenAssignTemplateHandled?.();
@@ -111,6 +113,7 @@ export function ITPChecklistTab({
     autoOpenAssignTemplate,
     itpInstance,
     loadingItp,
+    canAssignITPTemplate,
     onAutoOpenAssignTemplateHandled,
     templates.length,
   ]);
@@ -452,35 +455,45 @@ export function ITPChecklistTab({
     );
   }
 
-  // No ITP assigned - show assignment UI
+  // No ITP assigned - show assignment UI for managers, execution guidance for field roles.
   return (
     <>
       <div ref={assignTemplateCardRef} className="rounded-lg border p-6 text-center">
         <div className="text-4xl mb-2">ITP</div>
         <h3 className="text-lg font-semibold mb-2">ITP Checklist</h3>
-        <p className="text-muted-foreground mb-4">
-          No ITP template assigned to this lot yet. Assign an ITP template to track quality
-          checkpoints.
-        </p>
-        {templates.length > 0 ? (
-          <button
-            onClick={() => setShowAssignModal(true)}
-            className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
-          >
-            Assign ITP Template
-          </button>
+        {canAssignITPTemplate ? (
+          <>
+            <p className="text-muted-foreground mb-4">
+              No ITP template assigned to this lot yet. Assign an ITP template to track quality
+              checkpoints.
+            </p>
+            {templates.length > 0 ? (
+              <button
+                onClick={() => setShowAssignModal(true)}
+                className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
+              >
+                Assign ITP Template
+              </button>
+            ) : (
+              <button
+                onClick={() => navigate(`/projects/${encodeURIComponent(projectId)}/itp`)}
+                className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
+              >
+                Create ITP Template First
+              </button>
+            )}
+          </>
         ) : (
-          <button
-            onClick={() => navigate(`/projects/${encodeURIComponent(projectId)}/itp`)}
-            className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
-          >
-            Create ITP Template First
-          </button>
+          <p className="text-muted-foreground mb-0">
+            An ITP template needs to be assigned before this lot can be checked off. Ask your
+            project manager or site engineer to assign one, then complete checklist items from the
+            lot.
+          </p>
         )}
       </div>
 
       {/* Assign Template Modal */}
-      {showAssignModal && (
+      {canAssignITPTemplate && showAssignModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-background rounded-lg p-6 w-full max-w-md">
             <h2 className="text-xl font-semibold mb-4">Assign ITP Template</h2>
