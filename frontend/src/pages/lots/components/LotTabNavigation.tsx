@@ -24,7 +24,7 @@ export function LotTabNavigation({
   counts = { tests: null, ncrs: null },
 }: LotTabNavigationProps) {
   return (
-    <div className="border-b">
+    <div className="border-b overflow-x-auto">
       <nav className="flex gap-4" aria-label="Lot detail tabs">
         {tabs.map((tab) => {
           // Get count for tabs that have badges
@@ -34,7 +34,7 @@ export function LotTabNavigation({
             <button
               key={tab.id}
               onClick={() => onTabChange(tab.id)}
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5 ${
+              className={`flex-shrink-0 whitespace-nowrap min-h-[44px] px-4 py-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5 ${
                 currentTab === tab.id
                   ? 'border-primary text-primary'
                   : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
