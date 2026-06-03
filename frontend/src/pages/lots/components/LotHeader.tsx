@@ -10,7 +10,9 @@ export interface LotHeaderProps {
   projectId: string;
   lotId: string;
   // Permissions
-  canEdit: boolean;
+  // canManageLot gates lot setup/configuration actions (Edit Lot, Assign
+  // Subcontractor) — it mirrors the MANAGEMENT_ROLES route guard, so a foreman
+  // (field execution only) never sees a button that leads to Access Denied.
   canConformLots: boolean;
   canManageLot: boolean;
   isEditable: boolean;
@@ -33,7 +35,6 @@ export function LotHeader({
   lot,
   projectId,
   lotId,
-  canEdit,
   canConformLots,
   canManageLot,
   isEditable,
@@ -87,7 +88,7 @@ export function LotHeader({
             <Printer className="h-4 w-4" />
             <span>Print</span>
           </button>
-          {canEdit && isEditable && (
+          {canManageLot && isEditable && (
             <button
               onClick={onEdit}
               className="rounded-lg border border-amber-500 px-4 py-2 text-sm text-amber-600 hover:bg-amber-50"
@@ -96,7 +97,7 @@ export function LotHeader({
             </button>
           )}
           {/* Assign Subcontractor Button - only for PMs and above, not claimed lots */}
-          {canEdit && lot.status !== 'claimed' && (
+          {canManageLot && lot.status !== 'claimed' && (
             <button
               onClick={onAssignSubcontractorLegacy}
               className="flex items-center gap-1.5 rounded-lg border border-primary px-3 py-2 text-sm text-primary hover:bg-primary/5"

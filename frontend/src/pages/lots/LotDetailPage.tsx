@@ -2,7 +2,6 @@ import { useParams, useNavigate, useSearchParams, useLocation } from 'react-rout
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCommercialAccess } from '@/hooks/useCommercialAccess';
-import { useViewerAccess } from '@/hooks/useViewerAccess';
 import { apiFetch, ApiError, authFetch } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 import { extractErrorMessage, extractErrorDetails, handleApiError } from '@/lib/errorHandling';
@@ -85,7 +84,6 @@ export function LotDetailPage() {
     }
   };
   const { canViewBudgets } = useCommercialAccess();
-  const { canCreate: canEdit } = useViewerAccess();
   const isMobile = useIsMobile();
   const tabSectionRef = useRef<HTMLDivElement>(null);
   const [lot, setLot] = useState<Lot | null>(null);
@@ -1057,7 +1055,6 @@ export function LotDetailPage() {
         lot={lot}
         projectId={projectId!}
         lotId={lotId!}
-        canEdit={canEdit}
         canConformLots={canConformLots}
         canManageLot={canManageLot}
         isEditable={isEditable}

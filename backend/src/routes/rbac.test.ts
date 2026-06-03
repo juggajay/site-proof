@@ -146,17 +146,19 @@ describe('Role-Based Access Control', () => {
       expect(res.status).toBe(201);
     });
 
-    it('foreman should create lots', async () => {
+    it('foreman should NOT create lots', async () => {
+      // Foreman is field execution, not lot setup. Lot creation is restricted to
+      // LOT_CREATORS (owner/admin/project_manager/site_manager).
       const res = await request(app)
         .post('/api/lots')
         .set('Authorization', `Bearer ${foremenToken}`)
         .send({
           projectId,
           lotNumber: `FOREMAN-LOT-${Date.now()}`,
-          description: 'Foreman created lot',
+          description: 'Foreman attempted lot',
         });
 
-      expect(res.status).toBe(201);
+      expect(res.status).toBe(403);
     });
 
     it('viewer should NOT create lots', async () => {
@@ -197,6 +199,35 @@ describe('Role-Based Access Control', () => {
         .set('Authorization', `Bearer ${viewerToken}`);
 
       expect(res.status).toBe(200);
+    });
+  });
+
+  describe('Lot Edit Permissions', () => {
+    let editableLotId: string;
+
+    beforeAll(async () => {
+      const lot = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `EDIT-TEST-${Date.now()}`,
+          status: 'not_started',
+          lotType: 'chainage',
+          activityType: 'Earthworks',
+        },
+      });
+      editableLotId = lot.id;
+    });
+
+    it('foreman should NOT edit lot metadata', async () => {
+      // Foreman is field execution, not lot setup. Editing lot metadata is
+      // restricted to LOT_EDITORS (owner/admin/project_manager/site_engineer/
+      // quality_manager).
+      const res = await request(app)
+        .patch(`/api/lots/${editableLotId}`)
+        .set('Authorization', `Bearer ${foremenToken}`)
+        .send({ description: 'Foreman attempted edit' });
+
+      expect(res.status).toBe(403);
     });
   });
 

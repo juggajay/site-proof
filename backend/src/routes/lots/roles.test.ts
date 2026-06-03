@@ -10,8 +10,10 @@ import {
 // These are pure authorization role lists — freeze the exact arrays so an
 // accidental edit cannot silently widen or narrow who may act on lots.
 describe('lots role constants (pure)', () => {
-  it('LOT_CREATORS is exactly owner/admin/project_manager/site_manager/foreman', () => {
-    expect(LOT_CREATORS).toEqual(['owner', 'admin', 'project_manager', 'site_manager', 'foreman']);
+  it('LOT_CREATORS is exactly owner/admin/project_manager/site_manager (no foreman)', () => {
+    expect(LOT_CREATORS).toEqual(['owner', 'admin', 'project_manager', 'site_manager']);
+    // Foreman is field execution, not lot setup — must not be able to create lots.
+    expect(LOT_CREATORS).not.toContain('foreman');
   });
 
   it('LOT_DELETERS is exactly owner/admin/project_manager', () => {
@@ -39,9 +41,10 @@ describe('lots role constants (pure)', () => {
     // Force-conform is the strictest set; deleters are a subset of conformers.
     expect(LOT_FORCE_CONFORMERS.every((role) => LOT_CONFORMERS.includes(role))).toBe(true);
     expect(LOT_DELETERS.every((role) => LOT_CONFORMERS.includes(role))).toBe(true);
-    // Field roles can create lots but not delete or conform them.
+    // site_manager can create lots (field operations) but cannot delete or
+    // conform them. Foreman is field execution only — not a lot creator.
     expect(LOT_CREATORS).toContain('site_manager');
-    expect(LOT_CREATORS).toContain('foreman');
+    expect(LOT_CREATORS).not.toContain('foreman');
     expect(LOT_DELETERS).not.toContain('site_manager');
     expect(LOT_DELETERS).not.toContain('foreman');
     expect(LOT_CONFORMERS).not.toContain('site_manager');

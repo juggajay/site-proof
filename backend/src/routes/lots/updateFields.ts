@@ -10,14 +10,17 @@ import { updateLotSchema } from './validation.js';
 // and same provided-field detection (only `undefined` is treated as absent).
 // =============================================================================
 
-// Roles that can edit lots
+// Roles that can edit lots. Foreman is deliberately excluded: editing lot
+// metadata (and lot status / budget / subcontractor via this route) is
+// setup/configuration work, not field execution. Foreman field workflows (ITP
+// completion, evidence, hold points, tests, NCRs, diary/dockets) live on their
+// own routes and are unaffected.
 export const LOT_EDITORS = [
   'owner',
   'admin',
   'project_manager',
   'site_engineer',
   'quality_manager',
-  'foreman',
 ];
 export const LOT_BUDGET_EDITORS = ['owner', 'admin', 'project_manager'];
 export const CONFORMED_LOT_BUDGET_EDIT_FIELDS = new Set(['budgetAmount', 'expectedUpdatedAt']);
