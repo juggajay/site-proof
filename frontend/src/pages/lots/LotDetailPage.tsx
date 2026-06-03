@@ -22,7 +22,6 @@ import { useIsMobile } from '@/hooks/useMediaQuery';
 // Types and constants extracted to separate files
 import type {
   LotTab,
-  QualityAccess,
   Lot,
   SubcontractorCompany,
   TestResult,
@@ -38,6 +37,16 @@ import type {
 import { LOT_TABS as tabs, LOT_OVERRIDE_STATUSES } from './constants';
 import { getGPSLocation, getItpPhotoValidationError } from './lib/itpEvidence';
 import { buildConformanceReportData } from './lib/buildConformanceReportData';
+import {
+  buildConformanceStatusPath,
+  buildLotHistoryPath,
+  buildLotNcrsPath,
+  buildLotTestResultsPath,
+  normalizeActivityLogs,
+  normalizeNcrs,
+  normalizeTestResults,
+  useLotQualityAccessQuery,
+} from './lotDetailData';
 import { useItpInstance } from './hooks/useItpInstance';
 import { TestsTabContent, NCRsTabContent, HistoryTabContent } from '@/components/lots';
 import { MarkAsNAModal } from './components/MarkAsNAModal';
@@ -112,7 +121,6 @@ export function LotDetailPage() {
   const [showConformConfirm, setShowConformConfirm] = useState(false);
   const [showForceConformConfirm, setShowForceConformConfirm] = useState(false);
   const [forceConformReason, setForceConformReason] = useState('');
-  const [qualityAccess, setQualityAccess] = useState<QualityAccess | null>(null);
   const [testResults, setTestResults] = useState<TestResult[]>([]);
   const [loadingTests, setLoadingTests] = useState(false);
   const [ncrs, setNcrs] = useState<NCR[]>([]);
@@ -285,23 +293,10 @@ export function LotDetailPage() {
     refetchInterval: 20_000,
   });
 
-  // Fetch quality access permissions for this project
-  useEffect(() => {
-    async function fetchQualityAccess() {
-      if (!projectId) return;
-
-      try {
-        const data = await apiFetch<QualityAccess>(
-          `/api/lots/check-role/${encodeURIComponent(projectId)}`,
-        );
-        setQualityAccess(data);
-      } catch (err) {
-        logError('Failed to fetch quality access:', err);
-      }
-    }
-
-    fetchQualityAccess();
-  }, [projectId]);
+  // Quality access permissions for this project (read-only; drives the derived
+  // permissions below). Single-attempt fetch that logs on failure, preserving
+  // the prior inline effect's behavior — see useLotQualityAccessQuery.
+  const { data: qualityAccess } = useLotQualityAccessQuery(projectId);
 
   const fetchLot = useCallback(async () => {
     if (!lotId) {
@@ -344,9 +339,7 @@ export function LotDetailPage() {
     setLoadingConformStatus(true);
 
     try {
-      const data = await apiFetch<ConformStatus>(
-        `/api/lots/${encodeURIComponent(lotId)}/conform-status`,
-      );
+      const data = await apiFetch<ConformStatus>(buildConformanceStatusPath(lotId));
       setConformStatus(data);
     } catch (err) {
       logError('Failed to fetch conform status:', err);
@@ -368,19 +361,17 @@ export function LotDetailPage() {
       // Fetch test results count
       try {
         const testsData = await apiFetch<{ testResults: TestResult[] }>(
-          `/api/test-results?projectId=${encodeURIComponent(projectId)}&lotId=${encodeURIComponent(lotId)}`,
+          buildLotTestResultsPath(projectId, lotId),
         );
-        setTestsCount(testsData.testResults?.length || 0);
+        setTestsCount(normalizeTestResults(testsData).length);
       } catch (err) {
         logError('Failed to fetch tests count:', err);
       }
 
       // Fetch NCRs count
       try {
-        const ncrsData = await apiFetch<{ ncrs: NCR[] }>(
-          `/api/ncrs?projectId=${encodeURIComponent(projectId)}&lotId=${encodeURIComponent(lotId)}`,
-        );
-        setNcrsCount(ncrsData.ncrs?.length || 0);
+        const ncrsData = await apiFetch<{ ncrs: NCR[] }>(buildLotNcrsPath(projectId, lotId));
+        setNcrsCount(normalizeNcrs(ncrsData).length);
       } catch (err) {
         logError('Failed to fetch NCRs count:', err);
       }
@@ -398,10 +389,11 @@ export function LotDetailPage() {
 
       try {
         const data = await apiFetch<{ testResults: TestResult[] }>(
-          `/api/test-results?projectId=${encodeURIComponent(projectId)}&lotId=${encodeURIComponent(lotId)}`,
+          buildLotTestResultsPath(projectId, lotId),
         );
-        setTestResults(data.testResults || []);
-        setTestsCount(data.testResults?.length || 0);
+        const results = normalizeTestResults(data);
+        setTestResults(results);
+        setTestsCount(results.length);
       } catch (err) {
         logError('Failed to fetch test results:', err);
       } finally {
@@ -420,11 +412,10 @@ export function LotDetailPage() {
       setLoadingNcrs(true);
 
       try {
-        const data = await apiFetch<{ ncrs: NCR[] }>(
-          `/api/ncrs?projectId=${encodeURIComponent(projectId)}&lotId=${encodeURIComponent(lotId)}`,
-        );
-        setNcrs(data.ncrs || []);
-        setNcrsCount(data.ncrs?.length || 0);
+        const data = await apiFetch<{ ncrs: NCR[] }>(buildLotNcrsPath(projectId, lotId));
+        const ncrList = normalizeNcrs(data);
+        setNcrs(ncrList);
+        setNcrsCount(ncrList.length);
       } catch (err) {
         logError('Failed to fetch NCRs:', err);
       } finally {
@@ -502,10 +493,8 @@ export function LotDetailPage() {
       setLoadingHistory(true);
 
       try {
-        const data = await apiFetch<{ logs: ActivityLog[] }>(
-          `/api/audit-logs?entityType=Lot&search=${encodeURIComponent(lotId)}&limit=100`,
-        );
-        setActivityLogs(data.logs || []);
+        const data = await apiFetch<{ logs: ActivityLog[] }>(buildLotHistoryPath(lotId));
+        setActivityLogs(normalizeActivityLogs(data));
       } catch (err) {
         logError('Failed to fetch activity history:', err);
       } finally {
