@@ -4,11 +4,9 @@ import { AppError } from '../lib/AppError.js';
 import { getEffectiveProjectRole } from '../lib/projectAccess.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
 import { createClaimEvidenceRouter } from './claims/evidenceRoutes.js';
+import { createClaimPostEvidenceWorkflowRouter } from './claims/postEvidenceWorkflowRoutes.js';
 import { createClaimReadRouter } from './claims/readRoutes.js';
-import {
-  createClaimPostEvidenceWorkflowRouter,
-  createClaimWorkflowRouter,
-} from './claims/workflowRoutes.js';
+import { createClaimWorkflowRouter } from './claims/workflowRoutes.js';
 
 const router = Router();
 const CLAIM_COMMERCIAL_ROLES = ['owner', 'admin', 'project_manager'];

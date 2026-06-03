@@ -35,6 +35,7 @@ const parentProtectedRoutePrefixes = new Set([
   'lots/',
   'claims/evidenceRoutes.ts',
   'claims/workflowRoutes.ts',
+  'claims/postEvidenceWorkflowRoutes.ts',
   'subcontractors/directoryRoutes.ts',
   'subcontractors/myCompanyRoutes.ts',
   'subcontractors/portalAccessRoutes.ts',
@@ -295,6 +296,10 @@ describe('route authentication coverage', () => {
     const claimsSource = await readFile(path.join(routesDir, 'claims.ts'), 'utf8');
     const claimsWorkflowRoutesSource = await readFile(
       path.join(routesDir, 'claims/workflowRoutes.ts'),
+      'utf8',
+    );
+    const claimsPostEvidenceWorkflowRoutesSource = await readFile(
+      path.join(routesDir, 'claims/postEvidenceWorkflowRoutes.ts'),
       'utf8',
     );
     const holdpointsSource = await readFile(path.join(routesDir, 'holdpoints.ts'), 'utf8');
@@ -670,6 +675,8 @@ describe('route authentication coverage', () => {
     expect(extractedClaimWorkflowRouteDescriptors(claimsWorkflowRoutesSource)).toEqual([
       'POST /:projectId/claims',
       'PUT /:projectId/claims/:claimId',
+    ]);
+    expect(extractedClaimWorkflowRouteDescriptors(claimsPostEvidenceWorkflowRoutesSource)).toEqual([
       'POST /:projectId/claims/:claimId/certify',
       'POST /:projectId/claims/:claimId/payment',
       'DELETE /:projectId/claims/:claimId',
