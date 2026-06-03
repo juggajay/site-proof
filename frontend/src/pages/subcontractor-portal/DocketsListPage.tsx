@@ -8,6 +8,7 @@ import {
   XCircle,
   MessageSquare,
   ChevronRight,
+  Plus,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
@@ -178,6 +179,15 @@ export function DocketsListPage() {
           </p>
         </div>
       </div>
+
+      {/* Primary CTA: start (or continue) today's docket so this page is not a creation dead end */}
+      <Link
+        to="/subcontractor-portal/docket/new"
+        className="flex items-center justify-center gap-2 w-full rounded-lg bg-primary px-4 py-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors touch-manipulation"
+      >
+        <Plus className="h-5 w-5" />
+        Start today's docket
+      </Link>
 
       {/* Filter tabs - wraps on mobile */}
       <div

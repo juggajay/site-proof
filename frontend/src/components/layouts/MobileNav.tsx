@@ -17,7 +17,8 @@ import {
   FileCheck,
   Menu,
   X,
-  Briefcase,
+  ClipboardList,
+  Home,
   Building2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -45,7 +46,8 @@ const FOREMAN_MENU_ITEMS = [
 
 // Subcontractor-specific navigation
 const subcontractorNavigation = [
-  { name: 'Portal', href: '/subcontractor-portal', icon: Briefcase },
+  { name: 'Docket', href: '/subcontractor-portal/docket/new', icon: ClipboardList },
+  { name: 'Home', href: '/subcontractor-portal', icon: Home },
   { name: 'My Company', href: '/my-company', icon: Building2 },
 ];
 
@@ -53,6 +55,7 @@ interface NavigationItem {
   name: string;
   href: string;
   icon: typeof LayoutDashboard;
+  end?: boolean;
   requiresProject?: boolean;
   requiresCommercialAccess?: boolean;
   requiresAdmin?: boolean;
@@ -118,9 +121,10 @@ const bottomNavItems: NavigationItem[] = [
   { name: 'Settings', href: '/settings', icon: Settings, excludeRoles: ROLE_GROUPS.SUBCONTRACTOR },
 ];
 
-// Subcontractor bottom nav items
+// Subcontractor bottom nav items — Docket first so the subbie's daily action is one tap away
 const subcontractorBottomNavItems: NavigationItem[] = [
-  { name: 'Portal', href: '/subcontractor-portal', icon: Briefcase },
+  { name: 'Docket', href: '/subcontractor-portal/docket/new', icon: ClipboardList },
+  { name: 'Home', href: '/subcontractor-portal', icon: Home, end: true },
   { name: 'My Company', href: '/my-company', icon: Building2 },
 ];
 
@@ -306,6 +310,7 @@ export function MobileNav() {
               <NavLink
                 key={item.name}
                 to={href}
+                end={item.end}
                 className={({ isActive }) =>
                   cn(
                     'flex flex-col items-center justify-center w-full h-full gap-1 text-xs transition-colors',
