@@ -23,6 +23,16 @@ import { logError } from '@/lib/logger';
 import { DocumentUploadModal } from './components/DocumentUploadModal';
 import { useDocumentUpload } from './useDocumentUpload';
 import { CATEGORIES, DOCUMENT_TYPES } from './documentsUploadData';
+import {
+  canPreviewDocument as canPreview,
+  formatDocumentDate as formatDate,
+  formatDocumentFileSize as formatFileSize,
+  getDocumentTypeLabel as getTypeLabel,
+  isExcelDocument as isExcel,
+  isImageDocument as isImage,
+  isPdfDocument as isPdf,
+  isWordDocument as isWord,
+} from './documentsDisplayData';
 
 interface Document {
   id: string;
@@ -259,61 +269,6 @@ export function DocumentsPage() {
 
     favouriteDocumentRef.current = doc.id;
     toggleFavouriteMutation.mutate(doc);
-  };
-
-  const formatFileSize = (bytes: number | null) => {
-    if (!bytes) return 'Unknown';
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-  };
-
-  const formatDate = (dateStr: string | null | undefined) => {
-    if (!dateStr) return 'Unknown date';
-    try {
-      const date = new Date(dateStr);
-      if (isNaN(date.getTime())) return 'Invalid date';
-      return date.toLocaleDateString('en-AU', {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-    } catch {
-      return 'Invalid date';
-    }
-  };
-
-  const getTypeLabel = (type: string) => {
-    return DOCUMENT_TYPES.find((t) => t.id === type)?.label || type;
-  };
-
-  const isImage = (mimeType: string | null) => {
-    return mimeType?.startsWith('image/');
-  };
-
-  const isPdf = (mimeType: string | null) => {
-    return mimeType === 'application/pdf';
-  };
-
-  const isExcel = (mimeType: string | null) => {
-    return (
-      mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
-      mimeType === 'application/vnd.ms-excel' ||
-      mimeType === 'text/csv'
-    );
-  };
-
-  const isWord = (mimeType: string | null) => {
-    return (
-      mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
-      mimeType === 'application/msword'
-    );
-  };
-
-  const canPreview = (mimeType: string | null) => {
-    return isImage(mimeType) || isPdf(mimeType);
   };
 
   const openViewer = async (doc: Document) => {
