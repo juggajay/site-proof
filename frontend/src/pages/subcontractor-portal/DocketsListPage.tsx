@@ -18,6 +18,7 @@ import { useAuth } from '@/lib/auth';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { formatDateKey } from '@/lib/localDate';
+import { formatStatusLabel } from '@/lib/statusLabels';
 
 interface Docket {
   id: string;
@@ -72,13 +73,6 @@ function getDocketStatusBadge(status: string) {
     rejected: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100',
     queried: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100',
   };
-  const labels: Record<string, string> = {
-    draft: 'Draft',
-    pending_approval: 'Pending',
-    approved: 'Approved',
-    rejected: 'Rejected',
-    queried: 'Queried',
-  };
   return (
     <span
       className={cn(
@@ -86,7 +80,7 @@ function getDocketStatusBadge(status: string) {
         variants[status] || variants.draft,
       )}
     >
-      {labels[status] || status}
+      {formatStatusLabel(status)}
     </span>
   );
 }
@@ -280,7 +274,7 @@ export function DocketsListPage() {
             <p className="text-muted-foreground dark:text-muted-foreground">
               {statusFilter === 'all'
                 ? 'No dockets yet'
-                : `No ${statusFilter.replace('_', ' ')} dockets`}
+                : `No ${formatStatusLabel(statusFilter)} dockets`}
             </p>
           </div>
         </div>

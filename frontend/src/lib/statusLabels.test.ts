@@ -9,6 +9,8 @@ describe('formatStatusLabel', () => {
       expect(formatStatusLabel('awaiting_test')).toBe('Awaiting Test');
       expect(formatStatusLabel('hold_point')).toBe('Hold Point');
       expect(formatStatusLabel('ncr_raised')).toBe('NCR Raised');
+      expect(formatStatusLabel('on_hold')).toBe('On Hold');
+      expect(formatStatusLabel('pending')).toBe('Pending');
       expect(formatStatusLabel('completed')).toBe('Completed');
       expect(formatStatusLabel('conformed')).toBe('Conformed');
       expect(formatStatusLabel('claimed')).toBe('Claimed');
@@ -33,6 +35,15 @@ describe('formatStatusLabel', () => {
       expect(formatStatusLabel('approved')).toBe('Approved');
       expect(formatStatusLabel('rejected')).toBe('Rejected');
       expect(formatStatusLabel('queried')).toBe('Queried');
+    });
+  });
+
+  describe('known claim, hold-point, and subcontractor statuses', () => {
+    it('maps adjacent workflow enums to their canonical labels', () => {
+      expect(formatStatusLabel('submitted')).toBe('Submitted');
+      expect(formatStatusLabel('partially_paid')).toBe('Partially Paid');
+      expect(formatStatusLabel('released')).toBe('Released');
+      expect(formatStatusLabel('suspended')).toBe('Suspended');
     });
   });
 

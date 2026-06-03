@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { formatDateKey } from '@/lib/localDate';
 import { devWarn } from '@/lib/logger';
+import { formatStatusLabel } from '@/lib/statusLabels';
 
 interface Lot {
   id: string;
@@ -510,7 +511,7 @@ export function LinearMapView({
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Status:</span>
-                <span className="font-medium capitalize">{popup.lot.status.replace('_', ' ')}</span>
+                <span className="font-medium">{formatStatusLabel(popup.lot.status)}</span>
               </div>
               {popup.lot.activityType && (
                 <div className="flex justify-between">

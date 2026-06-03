@@ -63,7 +63,7 @@ describe('LotHeader lot-configuration permissions', () => {
     // Field/non-configuration controls stay available to every non-viewer.
     expect(screen.getByRole('button', { name: 'Copy Link' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Print' })).toBeInTheDocument();
-    expect(screen.getByText('in progress')).toBeInTheDocument();
+    expect(screen.getByText('In Progress')).toBeInTheDocument();
   });
 
   it('shows Edit Lot and Assign Subcontractor for a manager (canManageLot=true)', () => {

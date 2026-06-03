@@ -4,6 +4,7 @@ import type { Lot, LotSubcontractorAssignment } from '../types';
 import { lotStatusColors as statusColors } from '../constants';
 import { SubcontractorAssignmentsSection } from './SubcontractorAssignmentsSection';
 import { LotSummaryCards } from './LotSummaryCards';
+import { formatStatusLabel } from '@/lib/statusLabels';
 
 export interface LotHeaderProps {
   lot: Lot;
@@ -129,7 +130,7 @@ export function LotHeader({
           <span
             className={`px-3 py-1 rounded text-sm font-medium ${statusColors[lot.status] || 'bg-muted text-muted-foreground'}`}
           >
-            {lot.status.replace('_', ' ')}
+            {formatStatusLabel(lot.status)}
           </span>
         </div>
       </div>

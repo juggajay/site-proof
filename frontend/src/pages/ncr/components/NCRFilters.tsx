@@ -6,6 +6,7 @@ import {
   type FilterConfig,
   type FilterValues,
 } from '@/components/mobile/FilterBottomSheet';
+import { formatStatusLabel } from '@/lib/statusLabels';
 import type { NCR } from '../types';
 
 interface NCRFiltersProps {
@@ -102,7 +103,7 @@ function NCRFiltersInner({ ncrs, isMobile, onFilteredNcrsChange }: NCRFiltersPro
         label: 'Status',
         options: uniqueStatuses.map((status) => ({
           value: status,
-          label: status.replace(/_/g, ' '),
+          label: formatStatusLabel(status),
         })),
         value: statusFilter || null,
       },
@@ -256,7 +257,7 @@ function NCRFiltersInner({ ncrs, isMobile, onFilteredNcrsChange }: NCRFiltersPro
                 <option value="">All Statuses</option>
                 {uniqueStatuses.map((status) => (
                   <option key={status} value={status}>
-                    {status.replace(/_/g, ' ')}
+                    {formatStatusLabel(status)}
                   </option>
                 ))}
               </select>

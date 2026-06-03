@@ -13,6 +13,7 @@ import { apiFetch } from '@/lib/api';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import type { HPEvidencePackageData } from '@/lib/pdfGenerator';
 import { Button } from '@/components/ui/button';
+import { formatStatusLabel } from '@/lib/statusLabels';
 
 interface PublicReleaseResponse {
   evidencePackage: HPEvidencePackageData;
@@ -61,7 +62,7 @@ function formatDate(value: string | null | undefined): string {
 
 function StatusPill({ status }: { status: string }) {
   const released = status === 'released';
-  const label = status.replace(/_/g, ' ');
+  const label = formatStatusLabel(status);
 
   return (
     <span

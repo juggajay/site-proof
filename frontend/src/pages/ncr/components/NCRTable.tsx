@@ -6,6 +6,7 @@ import type { NCRDetailData } from '@/lib/pdfGenerator';
 import { getStatusBadgeColor } from '../constants';
 import type { NCR, UserRole } from '../types';
 import { logError } from '@/lib/logger';
+import { formatStatusLabel } from '@/lib/statusLabels';
 
 interface NCRTableProps {
   ncrs: NCR[];
@@ -166,7 +167,7 @@ function NCRTableInner({
                   <span
                     className={`px-2 py-1 rounded-full text-xs ${getStatusBadgeColor(ncr.status)}`}
                   >
-                    {ncr.status.replace('_', ' ')}
+                    {formatStatusLabel(ncr.status)}
                   </span>
                 </td>
                 <td className="px-4 py-3 text-sm">

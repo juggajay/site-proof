@@ -14,6 +14,7 @@ import {
   Clock,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { formatStatusLabel } from '@/lib/statusLabels';
 
 interface LotQuickViewProps {
   lotId: string;
@@ -128,7 +129,7 @@ export function LotQuickView({ lotId, projectId, onClose, position }: LotQuickVi
               <span
                 className={`px-2 py-0.5 rounded text-xs font-medium ${statusColors[lot.status] || 'bg-muted text-muted-foreground'}`}
               >
-                {lot.status.replace('_', ' ')}
+                {formatStatusLabel(lot.status)}
               </span>
             </div>
           </div>

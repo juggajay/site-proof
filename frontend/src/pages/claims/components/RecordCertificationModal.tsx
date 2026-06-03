@@ -16,6 +16,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { parseOptionalNonNegativeDecimalInput } from '@/lib/numericInput';
 import { formatDateKey } from '@/lib/localDate';
+import { formatStatusLabel } from '@/lib/statusLabels';
 
 interface RecordCertificationModalProps {
   claim: Claim;
@@ -94,7 +95,7 @@ export const RecordCertificationModal = React.memo(function RecordCertificationM
                   Claimed {formatCurrency(claim.totalClaimedAmount)}
                 </p>
                 <p className="font-semibold text-foreground">
-                  Current status {claim.status.replace('_', ' ')}
+                  Current status {formatStatusLabel(claim.status)}
                 </p>
               </div>
             </div>

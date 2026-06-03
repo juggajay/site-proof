@@ -6,6 +6,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { apiFetch } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { extractErrorMessage } from '@/lib/errorHandling';
+import { formatStatusLabel } from '@/lib/statusLabels';
 import { PortalAccessDenied } from './portalAccess';
 import { isPortalModuleEnabled, type PortalAccess } from './portalAccessModel';
 
@@ -41,7 +42,7 @@ function getStatusBadge(status: string) {
       return (
         <span className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100">
           <CheckCircle2 className="h-3 w-3" />
-          {status === 'closed_concession' ? 'Closed with Concession' : 'Closed'}
+          {formatStatusLabel(status)}
         </span>
       );
     case 'investigating':
@@ -50,7 +51,7 @@ function getStatusBadge(status: string) {
       return (
         <span className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-primary/10 text-primary">
           <Clock className="h-3 w-3" />
-          {status.replace('_', ' ')}
+          {formatStatusLabel(status)}
         </span>
       );
     case 'rejected':
@@ -64,7 +65,7 @@ function getStatusBadge(status: string) {
       return (
         <span className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100">
           <AlertTriangle className="h-3 w-3" />
-          Open
+          {formatStatusLabel(status, { fallback: 'Open' })}
         </span>
       );
   }
