@@ -554,6 +554,9 @@ export function DocketEditPage() {
             {isNewDocket ? "Today's Docket" : `Docket ${docket?.docketNumber || ''}`}
           </h1>
           <p className="text-sm text-muted-foreground">{formatDate(docket?.date || today)}</p>
+          {company?.projectName && (
+            <p className="text-xs text-muted-foreground">Project: {company.projectName}</p>
+          )}
         </div>
         {docket && (
           <span
