@@ -5,7 +5,6 @@ import { apiFetch } from '@/lib/api';
 import { toast } from '@/components/ui/toaster';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { MessageSquare, Printer, X } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import type { DocketDetailPDFData } from '@/lib/pdfGenerator';
 import { VoiceInputButton } from '@/components/ui/VoiceInputButton';
@@ -15,52 +14,21 @@ import { logError } from '@/lib/logger';
 import { buildScopedCsvFilename, downloadCsv } from '@/lib/csv';
 import {
   type Docket,
-  type DocketDetailResponse,
-  type LabourEntry,
-  type PlantEntry,
   type ProjectResponse,
   useDocketApprovalsQuery,
   useDocketProjectQuery,
 } from './docketApprovalsData';
-
-const statusColors: Record<string, string> = {
-  draft: 'bg-muted text-foreground',
-  pending_approval: 'bg-yellow-100 text-yellow-800',
-  approved: 'bg-green-100 text-green-800',
-  rejected: 'bg-red-100 text-red-800',
-  queried: 'bg-amber-100 text-amber-800',
-};
-
-const statusLabels: Record<string, string> = {
-  draft: 'Draft',
-  pending_approval: 'Pending Approval',
-  approved: 'Approved',
-  rejected: 'Rejected',
-  queried: 'Queried',
-};
+import {
+  type DocketActionType,
+  HOURS_INPUT_ERROR,
+  parseHoursInput,
+  statusColors,
+  statusLabels,
+  validateHours,
+} from './docketActionData';
+import { DocketActionModal } from './components/DocketActionModal';
 
 const EMPTY_DOCKETS: Docket[] = [];
-const HOURS_INPUT_ERROR = 'Hours must be a non-negative decimal number.';
-const HOURS_INPUT_PATTERN = /^\d+(?:\.\d+)?$/;
-
-function parseHoursInput(value: string): number | null {
-  const normalized = value.trim();
-  if (!normalized) {
-    return 0;
-  }
-
-  if (!HOURS_INPUT_PATTERN.test(normalized)) {
-    return null;
-  }
-
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
-}
-
-function hasHoursChanged(value: string, submittedHours: number): boolean {
-  const parsed = parseHoursInput(value);
-  return parsed !== null && parsed !== submittedHours;
-}
 
 export function DocketApprovalsPage() {
   const { projectId } = useParams();
@@ -80,25 +48,16 @@ export function DocketApprovalsPage() {
   const [newDocketNotes, setNewDocketNotes] = useState('');
   const [creating, setCreating] = useState(false);
 
-  // State for approve/reject/view modal
+  // State for approve/reject/view modal — only the trigger lives here; all of the
+  // modal's own working state (notes, adjusted hours, detail entries, submission)
+  // lives inside DocketActionModal.
   const [actionModalOpen, setActionModalOpen] = useState(false);
-  const [actionType, setActionType] = useState<'approve' | 'reject' | 'query' | 'view'>('approve');
+  const [actionType, setActionType] = useState<DocketActionType>('approve');
   const [selectedDocket, setSelectedDocket] = useState<Docket | null>(null);
-  const [actionNotes, setActionNotes] = useState('');
-  const [actionInProgress, setActionInProgress] = useState(false);
-  const [adjustedLabourHours, setAdjustedLabourHours] = useState('');
-  const [adjustedPlantHours, setAdjustedPlantHours] = useState('');
-  const [adjustmentReason, setAdjustmentReason] = useState('');
   const creatingRef = useRef(false);
   const submittingDocketRef = useRef<string | null>(null);
-  const actionInProgressRef = useRef(false);
   const printingDocketRef = useRef<string | null>(null);
   const [printingDocketId, setPrintingDocketId] = useState<string | null>(null);
-
-  // State for docket detail entries (fetched on modal open)
-  const [detailLoading, setDetailLoading] = useState(false);
-  const [labourEntries, setLabourEntries] = useState<LabourEntry[]>([]);
-  const [plantEntries, setPlantEntries] = useState<PlantEntry[]>([]);
 
   const docketsQuery = useDocketApprovalsQuery(projectId, statusFilter);
   const projectQuery = useDocketProjectQuery(projectId);
@@ -121,30 +80,9 @@ export function DocketApprovalsPage() {
   const projectLabel = projectInfo?.name || projectId || 'this project';
   const subcontractorSetupHref = projectId ? `/projects/${projectId}/subcontractors` : '/projects';
 
-  // Hours validation helper - warn if hours > 24
-  const validateHours = (hours: string): { isValid: boolean; warning: string | null } => {
-    const normalizedHours = hours.trim();
-    if (!normalizedHours) {
-      return { isValid: true, warning: null };
-    }
-    if (normalizedHours.startsWith('-')) {
-      return { isValid: false, warning: 'Hours cannot be negative' };
-    }
-    const numHours = parseHoursInput(hours);
-    if (numHours === null) {
-      return { isValid: false, warning: HOURS_INPUT_ERROR };
-    }
-    if (numHours > 24) {
-      return { isValid: true, warning: 'Warning: Hours exceed 24 - please verify this is correct' };
-    }
-    return { isValid: true, warning: null };
-  };
-
-  // Validation state for hours inputs
+  // Validation state for the create-docket hours inputs
   const labourHoursValidation = validateHours(newDocketLabourHours);
   const plantHoursValidation = validateHours(newDocketPlantHours);
-  const adjustedLabourValidation = validateHours(adjustedLabourHours);
-  const adjustedPlantValidation = validateHours(adjustedPlantHours);
   const canApprove = ['owner', 'admin', 'project_manager', 'site_manager', 'foreman'].includes(
     userRole || '',
   );
@@ -261,102 +199,13 @@ export function DocketApprovalsPage() {
     }
   };
 
-  // Open the approve/reject/view modal and fetch detail entries
-  const openActionModal = async (docket: Docket, type: 'approve' | 'reject' | 'query' | 'view') => {
+  // Open the approve/reject/view modal. DocketActionModal mounts fresh each time,
+  // seeds its own adjusted-hours/notes state from the docket, and fetches the
+  // detail entries via its keyed query.
+  const openActionModal = (docket: Docket, type: DocketActionType) => {
     setSelectedDocket(docket);
     setActionType(type);
-    setActionNotes('');
-    // Initialize adjusted values with submitted values
-    setAdjustedLabourHours(String(docket.labourHours || 0));
-    setAdjustedPlantHours(String(docket.plantHours || 0));
-    setAdjustmentReason('');
-    setLabourEntries([]);
-    setPlantEntries([]);
     setActionModalOpen(true);
-
-    // Fetch full docket detail for labour/plant entries
-    setDetailLoading(true);
-    try {
-      const data = await apiFetch<DocketDetailResponse>(
-        `/api/dockets/${encodeURIComponent(docket.id)}`,
-      );
-      setLabourEntries(data.docket?.labourEntries || []);
-      setPlantEntries(data.docket?.plantEntries || []);
-    } catch (err) {
-      logError('Error fetching docket detail:', err);
-    } finally {
-      setDetailLoading(false);
-    }
-  };
-
-  // Handle approve or reject action
-  const handleAction = async () => {
-    if (!selectedDocket || actionInProgressRef.current) return;
-
-    let adjustedLabourHoursValue: number | undefined;
-    let adjustedPlantHoursValue: number | undefined;
-    if (actionType === 'approve') {
-      const parsedAdjustedLabourHours = parseHoursInput(adjustedLabourHours);
-      const parsedAdjustedPlantHours = parseHoursInput(adjustedPlantHours);
-      if (parsedAdjustedLabourHours === null || parsedAdjustedPlantHours === null) {
-        toast({ variant: 'warning', description: HOURS_INPUT_ERROR });
-        return;
-      }
-      adjustedLabourHoursValue = parsedAdjustedLabourHours;
-      adjustedPlantHoursValue = parsedAdjustedPlantHours;
-    }
-
-    if (actionType === 'query' && !actionNotes.trim()) {
-      toast({ variant: 'warning', description: 'Please enter the query details.' });
-      return;
-    }
-
-    actionInProgressRef.current = true;
-    setActionInProgress(true);
-    const endpoint =
-      actionType === 'approve' ? 'approve' : actionType === 'reject' ? 'reject' : 'query';
-
-    try {
-      await apiFetch(`/api/dockets/${encodeURIComponent(selectedDocket.id)}/${endpoint}`, {
-        method: 'POST',
-        body: JSON.stringify(
-          actionType === 'approve'
-            ? {
-                foremanNotes: actionNotes.trim() || null,
-                adjustedLabourHours: adjustedLabourHoursValue,
-                adjustedPlantHours: adjustedPlantHoursValue,
-                adjustmentReason: adjustmentReason.trim() || null,
-              }
-            : actionType === 'query'
-              ? {
-                  questions: actionNotes.trim(),
-                }
-              : {
-                  reason: actionNotes.trim() || null,
-                },
-        ),
-      });
-
-      const actionPastTense =
-        actionType === 'approve' ? 'approved' : actionType === 'reject' ? 'rejected' : 'queried';
-      toast({
-        variant: 'success',
-        description: `Docket ${actionPastTense} successfully`,
-      });
-      setActionModalOpen(false);
-      setSelectedDocket(null);
-      setActionNotes('');
-      await refetchDockets();
-    } catch (error) {
-      logError(`Error ${actionType}ing docket:`, error);
-      toast({
-        variant: 'error',
-        description: extractErrorMessage(error, `Failed to ${actionType} docket`),
-      });
-    } finally {
-      actionInProgressRef.current = false;
-      setActionInProgress(false);
-    }
   };
 
   // Export dockets to CSV
@@ -839,416 +688,17 @@ export function DocketApprovalsPage() {
 
       {/* Approve/Reject/View Modal */}
       {actionModalOpen && selectedDocket && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div
-            className="bg-background rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="docket-action-title"
-          >
-            <div className="flex items-center justify-between p-4 border-b">
-              <h2 id="docket-action-title" className="text-xl font-semibold">
-                {actionType === 'approve'
-                  ? 'Approve Docket'
-                  : actionType === 'reject'
-                    ? 'Reject Docket'
-                    : actionType === 'query'
-                      ? 'Query Docket'
-                      : 'Docket Details'}
-              </h2>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setActionModalOpen(false)}
-                aria-label="Close docket modal"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-
-            <div className="p-6 space-y-4">
-              <div className="rounded-lg bg-muted/50 p-3 space-y-1">
-                <p className="text-sm">
-                  <strong>Docket:</strong> {selectedDocket.docketNumber}
-                </p>
-                <p className="text-sm">
-                  <strong>Subcontractor:</strong> {selectedDocket.subcontractor}
-                </p>
-                <p className="text-sm">
-                  <strong>Date:</strong> {selectedDocket.date}
-                </p>
-                <p className="text-sm">
-                  <strong>Status:</strong>{' '}
-                  <span
-                    className={cn(
-                      'text-xs font-medium px-2 py-0.5 rounded-full',
-                      statusColors[selectedDocket.status] || 'bg-muted text-foreground',
-                    )}
-                  >
-                    {statusLabels[selectedDocket.status] || selectedDocket.status}
-                  </span>
-                </p>
-                <p className="text-sm">
-                  <strong>Labour Hours:</strong> {selectedDocket.labourHours}h
-                  {selectedDocket.totalLabourApproved > 0 &&
-                    selectedDocket.totalLabourApproved !== selectedDocket.labourHours && (
-                      <span className="text-muted-foreground">
-                        {' '}
-                        (approved: {selectedDocket.totalLabourApproved}h)
-                      </span>
-                    )}
-                </p>
-                <p className="text-sm">
-                  <strong>Plant Hours:</strong> {selectedDocket.plantHours}h
-                  {selectedDocket.totalPlantApproved > 0 &&
-                    selectedDocket.totalPlantApproved !== selectedDocket.plantHours && (
-                      <span className="text-muted-foreground">
-                        {' '}
-                        (approved: {selectedDocket.totalPlantApproved}h)
-                      </span>
-                    )}
-                </p>
-                {selectedDocket.notes && (
-                  <p className="text-sm">
-                    <strong>Notes:</strong> {selectedDocket.notes}
-                  </p>
-                )}
-                {selectedDocket.foremanNotes && (
-                  <p className="text-sm">
-                    <strong>Foreman Notes:</strong> {selectedDocket.foremanNotes}
-                  </p>
-                )}
-                {selectedDocket.submittedAt && (
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Submitted: {new Date(selectedDocket.submittedAt).toLocaleString('en-AU')}
-                  </p>
-                )}
-                {selectedDocket.approvedAt && (
-                  <p className="text-xs text-muted-foreground">
-                    Approved: {new Date(selectedDocket.approvedAt).toLocaleString('en-AU')}
-                  </p>
-                )}
-              </div>
-
-              {/* Labour & Plant entry details */}
-              {detailLoading ? (
-                <p className="text-sm text-muted-foreground text-center py-3">Loading entries...</p>
-              ) : (
-                <>
-                  {labourEntries.length > 0 && (
-                    <div>
-                      <h3 className="text-sm font-semibold mb-2">Labour Entries</h3>
-                      <div className="rounded-lg border overflow-hidden">
-                        <table className="w-full text-sm">
-                          <thead className="bg-muted/50">
-                            <tr>
-                              <th className="text-left px-3 py-2 font-medium">Name</th>
-                              <th className="text-left px-3 py-2 font-medium">Role</th>
-                              <th className="text-right px-3 py-2 font-medium">Hours</th>
-                              <th className="text-right px-3 py-2 font-medium">Cost</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y">
-                            {labourEntries.map((entry) => (
-                              <tr key={entry.id}>
-                                <td className="px-3 py-2">{entry.employee.name}</td>
-                                <td className="px-3 py-2 text-muted-foreground">
-                                  {entry.employee.role}
-                                </td>
-                                <td className="px-3 py-2 text-right">
-                                  {entry.approvedHours > 0 &&
-                                  entry.approvedHours !== entry.submittedHours ? (
-                                    <span>
-                                      <span className="font-medium">{entry.approvedHours}h</span>
-                                      <span className="text-muted-foreground line-through ml-1 text-xs">
-                                        {entry.submittedHours}h
-                                      </span>
-                                    </span>
-                                  ) : (
-                                    <>{entry.submittedHours}h</>
-                                  )}
-                                </td>
-                                <td className="px-3 py-2 text-right">
-                                  {entry.approvedCost > 0 &&
-                                  entry.approvedCost !== entry.submittedCost ? (
-                                    <span>
-                                      <span className="font-medium">
-                                        ${entry.approvedCost.toFixed(2)}
-                                      </span>
-                                      <span className="text-muted-foreground line-through ml-1 text-xs">
-                                        ${entry.submittedCost.toFixed(2)}
-                                      </span>
-                                    </span>
-                                  ) : (
-                                    <>${entry.submittedCost.toFixed(2)}</>
-                                  )}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  )}
-
-                  {plantEntries.length > 0 && (
-                    <div>
-                      <h3 className="text-sm font-semibold mb-2">Plant Entries</h3>
-                      <div className="rounded-lg border overflow-hidden">
-                        <table className="w-full text-sm">
-                          <thead className="bg-muted/50">
-                            <tr>
-                              <th className="text-left px-3 py-2 font-medium">Plant</th>
-                              <th className="text-left px-3 py-2 font-medium">Type</th>
-                              <th className="text-right px-3 py-2 font-medium">Hours</th>
-                              <th className="text-right px-3 py-2 font-medium">Cost</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y">
-                            {plantEntries.map((entry) => (
-                              <tr key={entry.id}>
-                                <td className="px-3 py-2">
-                                  {entry.plant.description}
-                                  {entry.plant.idRego ? ` (${entry.plant.idRego})` : ''}
-                                </td>
-                                <td className="px-3 py-2 text-muted-foreground capitalize">
-                                  {entry.wetOrDry}
-                                </td>
-                                <td className="px-3 py-2 text-right">{entry.hoursOperated}h</td>
-                                <td className="px-3 py-2 text-right">
-                                  {entry.approvedCost > 0 &&
-                                  entry.approvedCost !== entry.submittedCost ? (
-                                    <span>
-                                      <span className="font-medium">
-                                        ${entry.approvedCost.toFixed(2)}
-                                      </span>
-                                      <span className="text-muted-foreground line-through ml-1 text-xs">
-                                        ${entry.submittedCost.toFixed(2)}
-                                      </span>
-                                    </span>
-                                  ) : (
-                                    <>${entry.submittedCost.toFixed(2)}</>
-                                  )}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  )}
-
-                  {labourEntries.length === 0 && plantEntries.length === 0 && (
-                    <p className="text-sm text-muted-foreground text-center py-2">
-                      No entries found
-                    </p>
-                  )}
-                </>
-              )}
-
-              {/* View mode: show approve/reject buttons if docket is pending */}
-              {actionType === 'view' &&
-                selectedDocket.status === 'pending_approval' &&
-                canApprove && (
-                  <div className="flex gap-2">
-                    <Button
-                      variant="success"
-                      className="flex-1"
-                      onClick={() => setActionType('approve')}
-                    >
-                      Approve
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="flex-1 border-amber-500 text-amber-700 hover:bg-amber-50"
-                      onClick={() => setActionType('query')}
-                    >
-                      <MessageSquare className="mr-2 h-4 w-4" />
-                      Query
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      className="flex-1"
-                      onClick={() => setActionType('reject')}
-                    >
-                      Reject
-                    </Button>
-                  </div>
-                )}
-
-              {actionType === 'approve' && (
-                <>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label
-                        htmlFor="adjusted-labour-hours"
-                        className="block text-sm font-medium mb-1"
-                      >
-                        Adjusted Labour Hours
-                      </label>
-                      <input
-                        id="adjusted-labour-hours"
-                        type="number"
-                        value={adjustedLabourHours}
-                        onChange={(e) => setAdjustedLabourHours(e.target.value)}
-                        className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary ${
-                          adjustedLabourValidation.warning ? 'border-amber-500' : ''
-                        }`}
-                        min="0"
-                        step="0.5"
-                      />
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Submitted: {selectedDocket?.labourHours || 0}h
-                      </p>
-                      {adjustedLabourValidation.warning && (
-                        <p className="mt-1 text-sm text-amber-600 flex items-center gap-1">
-                          <svg
-                            className="h-4 w-4"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                            />
-                          </svg>
-                          {adjustedLabourValidation.warning}
-                        </p>
-                      )}
-                    </div>
-                    <div>
-                      <label
-                        htmlFor="adjusted-plant-hours"
-                        className="block text-sm font-medium mb-1"
-                      >
-                        Adjusted Plant Hours
-                      </label>
-                      <input
-                        id="adjusted-plant-hours"
-                        type="number"
-                        value={adjustedPlantHours}
-                        onChange={(e) => setAdjustedPlantHours(e.target.value)}
-                        className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary ${
-                          adjustedPlantValidation.warning ? 'border-amber-500' : ''
-                        }`}
-                        min="0"
-                        step="0.5"
-                      />
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Submitted: {selectedDocket?.plantHours || 0}h
-                      </p>
-                      {adjustedPlantValidation.warning && (
-                        <p className="mt-1 text-sm text-amber-600 flex items-center gap-1">
-                          <svg
-                            className="h-4 w-4"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                            />
-                          </svg>
-                          {adjustedPlantValidation.warning}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  <div>
-                    <label htmlFor="adjustment-reason" className="block text-sm font-medium mb-1">
-                      Adjustment Reason{' '}
-                      {(hasHoursChanged(adjustedLabourHours, selectedDocket?.labourHours || 0) ||
-                        hasHoursChanged(adjustedPlantHours, selectedDocket?.plantHours || 0)) &&
-                        '*'}
-                    </label>
-                    <input
-                      id="adjustment-reason"
-                      type="text"
-                      value={adjustmentReason}
-                      onChange={(e) => setAdjustmentReason(e.target.value)}
-                      className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                      placeholder="Reason for adjustment (if hours changed)"
-                    />
-                  </div>
-                </>
-              )}
-
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label htmlFor="docket-action-notes" className="block text-sm font-medium">
-                    {actionType === 'approve'
-                      ? 'Approval Notes'
-                      : actionType === 'query'
-                        ? 'Query Details'
-                        : 'Rejection Reason'}
-                    {(actionType === 'reject' || actionType === 'query') && ' *'}
-                  </label>
-                  {/* Feature #289: Voice-to-text for approval/rejection notes */}
-                  <VoiceInputButton
-                    onTranscript={(text) =>
-                      setActionNotes((prev) => (prev ? prev + ' ' + text : text))
-                    }
-                    appendMode={true}
-                  />
-                </div>
-                <textarea
-                  id="docket-action-notes"
-                  value={actionNotes}
-                  onChange={(e) => setActionNotes(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                  rows={3}
-                  placeholder={
-                    actionType === 'approve'
-                      ? 'Add any notes (optional)...'
-                      : actionType === 'query'
-                        ? 'Ask what needs to be clarified before approval...'
-                        : 'Please provide a reason for rejection...'
-                  }
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 p-4 border-t">
-              <Button variant="outline" onClick={() => setActionModalOpen(false)}>
-                {actionType === 'view' ? 'Close' : 'Cancel'}
-              </Button>
-              {actionType !== 'view' && (
-                <Button
-                  variant={
-                    actionType === 'approve'
-                      ? 'success'
-                      : actionType === 'reject'
-                        ? 'destructive'
-                        : 'default'
-                  }
-                  onClick={handleAction}
-                  disabled={
-                    actionInProgress ||
-                    ((actionType === 'reject' || actionType === 'query') && !actionNotes.trim())
-                  }
-                >
-                  {actionInProgress
-                    ? actionType === 'approve'
-                      ? 'Approving...'
-                      : actionType === 'reject'
-                        ? 'Rejecting...'
-                        : 'Querying...'
-                    : actionType === 'approve'
-                      ? 'Approve'
-                      : actionType === 'reject'
-                        ? 'Reject'
-                        : 'Send Query'}
-                </Button>
-              )}
-            </div>
-          </div>
-        </div>
+        <DocketActionModal
+          docket={selectedDocket}
+          initialActionType={actionType}
+          canApprove={canApprove}
+          onClose={() => setActionModalOpen(false)}
+          onActionComplete={async () => {
+            setActionModalOpen(false);
+            setSelectedDocket(null);
+            await refetchDockets();
+          }}
+        />
       )}
     </>
   );
