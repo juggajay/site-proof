@@ -1,9 +1,9 @@
 // ForemanBottomNavV2 - Research-backed mobile navigation for foreman role
-// 5 primary actions: Today, Approve, [Capture], Diary, Lots
+// 5 primary actions: Today, Issues, [Capture], Diary, Lots
 // Camera button centered between 4 nav tabs
 // Reference: docs/archive/2026-05-repo-hygiene/Foreman persona document (AU civil).md
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Camera, ListChecks, CheckSquare, BookOpen, MapPin } from 'lucide-react';
+import { Camera, ListChecks, AlertTriangle, BookOpen, MapPin } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { apiFetch } from '@/lib/api';
@@ -11,7 +11,7 @@ import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
 import { useEffectiveProjectId } from '@/hooks/useEffectiveProjectId';
 
-type NavTab = 'capture' | 'today' | 'approve' | 'diary' | 'lots';
+type NavTab = 'capture' | 'today' | 'issues' | 'diary' | 'lots';
 
 interface NavItem {
   id: NavTab;
@@ -29,10 +29,10 @@ const navItems: NavItem[] = [
     getPath: (projectId) => `/projects/${projectId}/foreman/today`,
   },
   {
-    id: 'approve',
-    label: 'Approve',
-    icon: CheckSquare,
-    getPath: (projectId) => `/projects/${projectId}/dockets?status=pending_approval`,
+    id: 'issues',
+    label: 'Issues',
+    icon: AlertTriangle,
+    getPath: (projectId) => `/projects/${projectId}/ncr`,
   },
   {
     id: 'capture',
@@ -90,7 +90,7 @@ export function ForemanBottomNavV2({
   const getActiveTab = (): NavTab | null => {
     const path = location.pathname;
     if (path.includes('/foreman/today')) return 'today';
-    if (path.includes('/dockets')) return 'approve';
+    if (path.includes('/ncr')) return 'issues';
     if (path.includes('/diary')) return 'diary';
     if (path.includes('/lots')) return 'lots';
     return null;
