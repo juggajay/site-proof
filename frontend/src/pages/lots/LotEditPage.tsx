@@ -16,62 +16,23 @@ import {
   AlertModalFooter,
 } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/button';
-import { logError } from '@/lib/logger';
 import { parseOptionalNonNegativeDecimalInput } from '@/lib/numericInput';
 import { formatDateTime } from '@/lib/utils';
-
-interface Lot {
-  id: string;
-  lotNumber: string;
-  description: string | null;
-  status: string;
-  activityType: string | null;
-  chainageStart: number | null;
-  chainageEnd: number | null;
-  offset: string | null;
-  offsetCustom: string | null;
-  layer: string | null;
-  areaZone: string | null;
-  budgetAmount?: number | null;
-  assignedSubcontractorId?: string | null;
-}
-
-interface Subcontractor {
-  id: string;
-  companyName: string;
-  status: string;
-}
-
-interface LotResponse {
-  lot: Lot & { updatedAt: string };
-}
-
-interface SubcontractorsResponse {
-  subcontractors: Subcontractor[];
-}
-
-interface LotUpdatePayload {
-  lotNumber?: string;
-  description?: string | null;
-  activityType?: string | null;
-  chainageStart?: number | null;
-  chainageEnd?: number | null;
-  offset?: string | null;
-  offsetCustom?: string | null;
-  layer?: string | null;
-  areaZone?: string | null;
-  status?: string | null;
-  budgetAmount?: number | null;
-  assignedSubcontractorId?: string | null;
-  expectedUpdatedAt?: string;
-}
-
-function getOptionalDecimalValidationError(value: string, fieldLabel: string): string | null {
-  if (!value.trim()) return null;
-  return parseOptionalNonNegativeDecimalInput(value) === null
-    ? `${fieldLabel} must be a non-negative decimal number.`
-    : null;
-}
+import {
+  buildLotDetailPath,
+  buildLotUpdatePayload,
+  buildOfflineLotCacheInput,
+  buildOfflineLotEditInput,
+  deriveLotEditLocks,
+  getOptionalDecimalValidationError,
+  mapLotToFormData,
+  mapOfflineLotToFormData,
+  mapOfflineLotToLot,
+  useProjectSubcontractorsQuery,
+  type Lot,
+  type LotEditFormData,
+  type LotResponse,
+} from './lotEditData';
 
 const ACTIVITY_TYPES = [
   'Earthworks',
@@ -104,14 +65,15 @@ export function LotEditPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [subcontractors, setSubcontractors] = useState<Subcontractor[]>([]);
+  const subcontractorsQuery = useProjectSubcontractorsQuery(projectId);
+  const subcontractors = subcontractorsQuery.data ?? [];
   const [offlineSyncStatus, setOfflineSyncStatus] = useState<
     'synced' | 'pending' | 'conflict' | 'error'
   >('synced');
   const [serverUpdatedAt, setServerUpdatedAt] = useState<string | null>(null);
 
   // Form state
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<LotEditFormData>({
     lotNumber: '',
     description: '',
     activityType: '',
@@ -193,39 +155,10 @@ export function LotEditPage() {
         setOfflineSyncStatus(offlineLot.syncStatus);
 
         // Populate form with offline data
-        // Note: OfflineLotEdit stores offset as number but we display as string option
-        const offlineOffsetStr = offlineLot.offset !== undefined ? String(offlineLot.offset) : '';
-        const initialData = {
-          lotNumber: offlineLot.lotNumber || '',
-          description: offlineLot.description || '',
-          activityType: offlineLot.activityType || '',
-          chainageStart: offlineLot.chainageStart?.toString() || '',
-          chainageEnd: offlineLot.chainageEnd?.toString() || '',
-          offset: offlineOffsetStr,
-          offsetCustom: '', // OfflineLotEdit uses offsetLeft/offsetRight instead
-          layer: offlineLot.layer || '',
-          areaZone: offlineLot.areaZone || '',
-          status: offlineLot.status || '',
-          budgetAmount: offlineLot.budget?.toString() || '',
-          assignedSubcontractorId: '',
-        };
+        const initialData = mapOfflineLotToFormData(offlineLot);
         setFormData(initialData);
         initialFormData.current = initialData;
-        setLot({
-          id: offlineLot.id,
-          lotNumber: offlineLot.lotNumber,
-          description: offlineLot.description || null,
-          status: offlineLot.status || 'not_started',
-          activityType: offlineLot.activityType || null,
-          chainageStart: offlineLot.chainageStart ?? null,
-          chainageEnd: offlineLot.chainageEnd ?? null,
-          offset: offlineOffsetStr || null,
-          offsetCustom: null, // OfflineLotEdit uses offsetLeft/offsetRight instead
-          layer: offlineLot.layer || null,
-          areaZone: offlineLot.areaZone || null,
-          budgetAmount: offlineLot.budget,
-          assignedSubcontractorId: null,
-        });
+        setLot(mapOfflineLotToLot(offlineLot));
         setLoading(false);
 
         // If online, still try to fetch from server to check for conflicts
@@ -244,7 +177,7 @@ export function LotEditPage() {
       }
 
       try {
-        const data = await apiFetch<LotResponse>(`/api/lots/${lotId}`);
+        const data = await apiFetch<LotResponse>(buildLotDetailPath(lotId));
         const loadedLot = data.lot;
         setLot(loadedLot);
         setServerUpdatedAt(loadedLot.updatedAt);
@@ -252,39 +185,14 @@ export function LotEditPage() {
         // Cache lot for offline editing
         if (user) {
           await cacheLotForOfflineEdit(
-            {
-              id: loadedLot.id,
-              projectId,
-              lotNumber: loadedLot.lotNumber,
-              description: loadedLot.description ?? undefined,
-              chainageStart: loadedLot.chainageStart ?? undefined,
-              chainageEnd: loadedLot.chainageEnd ?? undefined,
-              layer: loadedLot.layer ?? undefined,
-              areaZone: loadedLot.areaZone ?? undefined,
-              activityType: loadedLot.activityType ?? undefined,
-              status: loadedLot.status ?? undefined,
-              budget: loadedLot.budgetAmount ?? undefined,
-            },
+            buildOfflineLotCacheInput(loadedLot, projectId),
             loadedLot.updatedAt,
             user.id,
           );
         }
 
         // Populate form with lot data
-        const initialData = {
-          lotNumber: loadedLot.lotNumber || '',
-          description: loadedLot.description || '',
-          activityType: loadedLot.activityType || '',
-          chainageStart: loadedLot.chainageStart?.toString() || '',
-          chainageEnd: loadedLot.chainageEnd?.toString() || '',
-          offset: loadedLot.offset || '',
-          offsetCustom: loadedLot.offsetCustom || '',
-          layer: loadedLot.layer || '',
-          areaZone: loadedLot.areaZone || '',
-          status: loadedLot.status || '',
-          budgetAmount: loadedLot.budgetAmount?.toString() || '',
-          assignedSubcontractorId: loadedLot.assignedSubcontractorId || '',
-        };
+        const initialData = mapLotToFormData(loadedLot);
         setFormData(initialData);
         initialFormData.current = initialData;
       } catch (err) {
@@ -316,24 +224,6 @@ export function LotEditPage() {
 
     fetchLot();
   }, [lotId, projectId, navigate, isOnline]);
-
-  // Fetch subcontractors for this project
-  useEffect(() => {
-    async function fetchSubcontractors() {
-      if (!projectId) return;
-
-      try {
-        const data = await apiFetch<SubcontractorsResponse>(
-          `/api/subcontractors/for-project/${projectId}`,
-        );
-        setSubcontractors(data.subcontractors || []);
-      } catch (err) {
-        logError('Failed to fetch subcontractors:', err);
-      }
-    }
-
-    fetchSubcontractors();
-  }, [projectId]);
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
@@ -409,35 +299,15 @@ export function LotEditPage() {
     const user = getCurrentUser();
 
     // Build update payload
-    const updatePayload: LotUpdatePayload = isConformedBudgetOnlyMode
-      ? {}
-      : {
-          lotNumber: formData.lotNumber,
-          description: formData.description || null,
-          activityType: formData.activityType || null,
-          chainageStart: parsedChainageStart,
-          chainageEnd: parsedChainageEnd,
-          offset: formData.offset || null,
-          offsetCustom: formData.offset === 'custom' ? formData.offsetCustom || null : null,
-          layer: formData.layer || null,
-          areaZone: formData.areaZone || null,
-          status: formData.status || null,
-        };
-
-    // Only include budget if user has access
-    if (canViewBudgets && (parsedBudgetAmount !== null || isConformedBudgetOnlyMode)) {
-      updatePayload.budgetAmount = parsedBudgetAmount;
-    }
-
-    // Include subcontractor assignment (can be null to unassign)
-    if (canViewBudgets && !isConformedBudgetOnlyMode) {
-      updatePayload.assignedSubcontractorId = formData.assignedSubcontractorId || null;
-    }
-
-    // Feature #871: Include expected version for concurrent edit detection
-    if (serverUpdatedAt) {
-      updatePayload.expectedUpdatedAt = serverUpdatedAt;
-    }
+    const updatePayload = buildLotUpdatePayload({
+      formData,
+      parsedChainageStart,
+      parsedChainageEnd,
+      parsedBudgetAmount,
+      isConformedBudgetOnlyMode,
+      canViewBudgets,
+      serverUpdatedAt,
+    });
 
     // If offline, save to IndexedDB and queue for sync
     if (!isOnline && isConformedBudgetOnlyMode) {
@@ -448,26 +318,18 @@ export function LotEditPage() {
 
     if (!isOnline && lotId && projectId && user) {
       try {
-        await saveLotEditOffline({
-          id: lotId,
-          projectId,
-          lotNumber: formData.lotNumber,
-          description: formData.description || undefined,
-          chainage: parsedChainageStart ?? undefined,
-          chainageStart: parsedChainageStart ?? undefined,
-          chainageEnd: parsedChainageEnd ?? undefined,
-          offset: formData.offset ? parseFloat(formData.offset) || undefined : undefined,
-          layer: formData.layer || undefined,
-          areaZone: formData.areaZone || undefined,
-          activityType: formData.activityType || undefined,
-          status: formData.status || undefined,
-          budget: parsedBudgetAmount ?? undefined,
-          notes: undefined,
-          syncStatus: 'pending',
-          localUpdatedAt: new Date().toISOString(),
-          serverUpdatedAt: serverUpdatedAt || undefined,
-          editedBy: user.id,
-        });
+        await saveLotEditOffline(
+          buildOfflineLotEditInput({
+            lotId,
+            projectId,
+            formData,
+            parsedChainageStart,
+            parsedChainageEnd,
+            parsedBudgetAmount,
+            serverUpdatedAt,
+            userId: user.id,
+          }),
+        );
 
         toast({
           title: 'Changes saved offline',
@@ -514,26 +376,18 @@ export function LotEditPage() {
       // If network error and we're actually offline, save offline
       if (!navigator.onLine && lotId && projectId && user) {
         try {
-          await saveLotEditOffline({
-            id: lotId,
-            projectId,
-            lotNumber: formData.lotNumber,
-            description: formData.description || undefined,
-            chainage: parsedChainageStart ?? undefined,
-            chainageStart: parsedChainageStart ?? undefined,
-            chainageEnd: parsedChainageEnd ?? undefined,
-            offset: formData.offset ? parseFloat(formData.offset) || undefined : undefined,
-            layer: formData.layer || undefined,
-            areaZone: formData.areaZone || undefined,
-            activityType: formData.activityType || undefined,
-            status: formData.status || undefined,
-            budget: parsedBudgetAmount ?? undefined,
-            notes: undefined,
-            syncStatus: 'pending',
-            localUpdatedAt: new Date().toISOString(),
-            serverUpdatedAt: serverUpdatedAt || undefined,
-            editedBy: user.id,
-          });
+          await saveLotEditOffline(
+            buildOfflineLotEditInput({
+              lotId,
+              projectId,
+              formData,
+              parsedChainageStart,
+              parsedChainageEnd,
+              parsedBudgetAmount,
+              serverUpdatedAt,
+              userId: user.id,
+            }),
+          );
 
           toast({
             title: 'Changes saved offline',
@@ -584,12 +438,10 @@ export function LotEditPage() {
   }
 
   // Conformed lots keep QA fields locked but allow commercial budget repair before claiming.
-  const isClaimed = lot.status === 'claimed';
-  const isConformed = lot.status === 'conformed';
-  const canEditConformedBudget = isConformed && canViewBudgets;
-  const detailsLocked = isConformed || isClaimed;
-  const budgetLocked = isClaimed || (isConformed && !canViewBudgets);
-  const canSubmit = !isClaimed && (!isConformed || canEditConformedBudget);
+  const { canEditConformedBudget, detailsLocked, budgetLocked, canSubmit } = deriveLotEditLocks(
+    lot,
+    canViewBudgets,
+  );
 
   return (
     <div className="space-y-6 p-6 max-w-3xl mx-auto">
