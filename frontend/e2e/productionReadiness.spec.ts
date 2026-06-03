@@ -73,15 +73,22 @@ test.describe('production readiness guardrails', () => {
   });
 
   test('lot conformance reports do not synthesize missing project or evidence data', async () => {
-    const source = await readFile(
-      new URL('../src/pages/lots/LotDetailPage.tsx', import.meta.url),
-      'utf8',
+    // The report-generation workflow moved into useConformanceReportGeneration;
+    // guard both the page and the hook so neither can re-introduce synthesized
+    // project/evidence data.
+    const conformanceSources = await Promise.all(
+      [
+        '../src/pages/lots/LotDetailPage.tsx',
+        '../src/pages/lots/hooks/useConformanceReportGeneration.ts',
+      ].map((relativePath) => readFile(new URL(relativePath, import.meta.url), 'utf8')),
     );
 
-    expect(source).not.toContain('fallbackProjectData');
-    expect(source).not.toContain("name: 'Unknown Project'");
-    expect(source).not.toContain('catch(() => ({ testResults: [] }))');
-    expect(source).not.toContain('catch(() => ({ ncrs: [] }))');
+    for (const source of conformanceSources) {
+      expect(source).not.toContain('fallbackProjectData');
+      expect(source).not.toContain("name: 'Unknown Project'");
+      expect(source).not.toContain('catch(() => ({ testResults: [] }))');
+      expect(source).not.toContain('catch(() => ({ ncrs: [] }))');
+    }
   });
 
   test('foreman diary finish flow can acknowledge backend submission warnings', async () => {
@@ -2172,8 +2179,10 @@ test.describe('production readiness guardrails', () => {
     const frontendPackage = JSON.parse(
       await readFile(new URL('../package.json', import.meta.url), 'utf8'),
     ) as { scripts: Record<string, string> };
-    const lotDetailSource = await readFile(
-      new URL('../src/pages/lots/LotDetailPage.tsx', import.meta.url),
+    // The conformance report's lazy PDF import moved from LotDetailPage into the
+    // useConformanceReportGeneration hook; assert the dynamic import there.
+    const reportHookSource = await readFile(
+      new URL('../src/pages/lots/hooks/useConformanceReportGeneration.ts', import.meta.url),
       'utf8',
     );
     const claimsSource = await readFile(
@@ -2220,10 +2229,10 @@ test.describe('production readiness guardrails', () => {
     expect(pdfViewerSource).not.toContain('unpkg.com');
     expect(pdfGeneratorSource).not.toContain('getJsPDF().catch');
     expect(pdfGeneratorSource).not.toContain('getJsPDFSync');
-    expect(lotDetailSource).toContain("await import('@/lib/pdfGenerator')");
+    expect(reportHookSource).toContain("await import('@/lib/pdfGenerator')");
     expect(claimsSource).toContain("await import('@/lib/pdfGenerator')");
     expect(dashboardSource).toContain("await import('@/lib/pdfGenerator')");
-    expect(lotDetailSource).not.toMatch(/import \{[^}]*generateConformanceReportPDF/);
+    expect(reportHookSource).not.toMatch(/import \{[^}]*generateConformanceReportPDF/);
     expect(claimsSource).not.toMatch(/import \{[^}]*generateClaimEvidencePackagePDF/);
     expect(dashboardSource).not.toMatch(/import \{[^}]*generateDashboardPDF/);
   });
