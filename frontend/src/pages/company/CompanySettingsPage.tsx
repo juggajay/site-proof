@@ -12,7 +12,7 @@ import {
   DollarSign,
 } from 'lucide-react';
 import { apiFetch, authFetch } from '@/lib/api';
-import { extractErrorMessage, extractResponseErrorMessage, isNotFound } from '@/lib/errorHandling';
+import { extractErrorMessage, extractResponseErrorMessage } from '@/lib/errorHandling';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -31,6 +31,17 @@ import {
   normalizeSupportEmail,
   supportMailtoHref,
 } from '@/lib/contactLinks';
+import {
+  formatLimit,
+  getCompanyLoadErrorMessage,
+  getPlanBillingLabel,
+  getPlanStorageLabel,
+  hasFiniteLimit,
+  toCompanyFormData,
+  useCompanySettingsQuery,
+  type Company,
+  type CompanyFormData,
+} from './companySettingsData';
 
 interface CompanyMember {
   id: string;
@@ -39,66 +50,9 @@ interface CompanyMember {
   roleInCompany: string;
 }
 
-interface Company {
-  id: string;
-  name: string;
-  abn: string | null;
-  address: string | null;
-  logoUrl: string | null;
-  subscriptionTier: string;
-  projectCount: number;
-  projectLimit: number | null;
-  userCount: number;
-  userLimit: number | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
 interface LogoUploadResponse {
   logoUrl: string;
   company: Company;
-}
-
-function formatLimit(limit: number | null | undefined, fallback: number) {
-  if (limit === null) return 'Unlimited';
-  return (limit ?? fallback).toString();
-}
-
-function hasFiniteLimit(limit: number | null | undefined): limit is number {
-  return typeof limit === 'number' && Number.isFinite(limit);
-}
-
-function getPlanBillingLabel(subscriptionTier: string | null | undefined) {
-  switch ((subscriptionTier || 'basic').toLowerCase()) {
-    case 'professional':
-      return '$99/month';
-    case 'enterprise':
-    case 'unlimited':
-      return 'Custom pricing';
-    default:
-      return 'Contact billing';
-  }
-}
-
-function getPlanStorageLabel(subscriptionTier: string | null | undefined) {
-  switch ((subscriptionTier || 'basic').toLowerCase()) {
-    case 'professional':
-      return '100 GB';
-    case 'enterprise':
-    case 'unlimited':
-      return 'Unlimited';
-    default:
-      return '1 GB';
-  }
-}
-
-function toCompanyFormData(company: Company) {
-  return {
-    name: company.name || '',
-    abn: company.abn || '',
-    address: company.address || '',
-    logoUrl: company.logoUrl || '',
-  };
 }
 
 interface SupportContactInfo {
@@ -107,17 +61,23 @@ interface SupportContactInfo {
 
 export function CompanySettingsPage() {
   const { user, refreshUser } = useAuth();
+  const companyQuery = useCompanySettingsQuery();
   const [company, setCompany] = useState<Company | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
   const [supportEmail, setSupportEmail] = useState(DEFAULT_SUPPORT_EMAIL);
   const isCompanyOwner = user?.roleInCompany === 'owner' || user?.role === 'owner';
+
+  // Spinner while the first load is in flight, including each "Try again"
+  // refetch (which has no cached data yet). Mirrors the previous
+  // setLoading(true)-at-start-of-fetch behavior.
+  const loading = companyQuery.isFetching && !companyQuery.data;
+  const error =
+    companyQuery.error && !companyQuery.data ? getCompanyLoadErrorMessage(companyQuery.error) : '';
 
   // File input ref for logo upload
   const logoInputRef = useRef<HTMLInputElement>(null);
 
   // Form state
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<CompanyFormData>({
     name: '',
     abn: '',
     address: '',
@@ -156,30 +116,17 @@ export function CompanySettingsPage() {
     };
   }, []);
 
-  const fetchCompany = useCallback(async () => {
-    setLoading(true);
-    setError('');
-
-    try {
-      const data = await apiFetch<{ company: Company }>('/api/company');
-      setCompany(data.company);
-      // Initialize form data from company
-      setFormData(toCompanyFormData(data.company));
-    } catch (err) {
-      logError('Failed to fetch company:', err);
-      if (isNotFound(err)) {
-        setError('No company associated with your account');
-      } else {
-        setError(extractErrorMessage(err, 'Failed to load company settings'));
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
+  // Seed the local company record and editable form buffer from the query.
+  // The form stays a local editing buffer (and is re-seeded by the save/logo
+  // mutations), so subsequent edits are never clobbered by a background
+  // refetch — the only refetch is the error-state "Try again", when there are
+  // no edits in flight.
   useEffect(() => {
-    void fetchCompany();
-  }, [fetchCompany]);
+    if (companyQuery.data) {
+      setCompany(companyQuery.data);
+      setFormData(toCompanyFormData(companyQuery.data));
+    }
+  }, [companyQuery.data]);
 
   useEffect(() => {
     let cancelled = false;
@@ -380,7 +327,10 @@ export function CompanySettingsPage() {
     }
   };
 
-  if (loading) {
+  // The `!company && !error` clause bridges the single render between the
+  // query resolving and the seed effect populating the form buffer, so the
+  // form never flashes empty before its loaded values appear.
+  if (loading || (!company && !error)) {
     return (
       <div className="flex items-center justify-center py-12">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
@@ -398,7 +348,12 @@ export function CompanySettingsPage() {
               <AlertTriangle className="h-5 w-5" />
               <span>{error}</span>
             </div>
-            <Button type="button" variant="outline" size="sm" onClick={() => void fetchCompany()}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void companyQuery.refetch()}
+            >
               Try again
             </Button>
           </div>
