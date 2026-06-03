@@ -1,9 +1,10 @@
 import { sendNotificationEmail } from './email.js';
+import { formatDateKey, parsePositiveInteger } from './notificationAutomation/helpers.js';
 import {
-  buildProjectEntityLink,
-  formatDateKey,
-  parsePositiveInteger,
-} from './notificationAutomation/helpers.js';
+  type AlertEscalationAutomationDependencies,
+  type AlertEscalationAutomationResult,
+  processAlertEscalations as processAlertEscalationsJob,
+} from './notificationAutomation/alertEscalations.js';
 import {
   type BacklogAutomationDependencies,
   processDocketBacklogAlerts as processDocketBacklogAlertsJob,
@@ -32,38 +33,6 @@ const HOUR_MS = 60 * 60 * 1000;
 const DEFAULT_JOB_LIMIT = 100;
 const DEFAULT_AUTOMATION_WORKER_INTERVAL_MS = 60 * 60 * 1000;
 const NOTIFICATION_AUTOMATION_WORKER_LOCK_ID = 731_452_021;
-
-type AlertType = 'overdue_ncr' | 'stale_hold_point' | 'pending_approval' | 'overdue_test';
-
-const ESCALATION_CONFIG: Record<
-  AlertType,
-  {
-    firstEscalationAfterHours: number;
-    secondEscalationAfterHours: number;
-    escalationRoles: string[];
-  }
-> = {
-  overdue_ncr: {
-    firstEscalationAfterHours: 24,
-    secondEscalationAfterHours: 48,
-    escalationRoles: ['project_manager', 'quality_manager', 'admin'],
-  },
-  stale_hold_point: {
-    firstEscalationAfterHours: 4,
-    secondEscalationAfterHours: 8,
-    escalationRoles: ['superintendent', 'project_manager', 'admin'],
-  },
-  pending_approval: {
-    firstEscalationAfterHours: 8,
-    secondEscalationAfterHours: 24,
-    escalationRoles: ['project_manager', 'admin'],
-  },
-  overdue_test: {
-    firstEscalationAfterHours: 48,
-    secondEscalationAfterHours: 96,
-    escalationRoles: ['quality_manager', 'project_manager'],
-  },
-};
 
 const DIARY_REMINDER_ROLES = ['site_engineer', 'foreman', 'project_manager'];
 const MISSING_DIARY_ALERT_ROLES = ['project_manager', 'admin', 'owner'];
@@ -128,12 +97,7 @@ export type SystemAlertJobResult = {
   skippedAlerts: number;
 };
 
-export type AlertEscalationJobResult = NotificationDeliverySummary & {
-  alertsChecked: number;
-  escalated: number;
-  skippedAlerts: number;
-  usersNotified: number;
-};
+export type AlertEscalationJobResult = AlertEscalationAutomationResult;
 
 export type NotificationAutomationRunResult = {
   diaryReminders: DiaryReminderJobResult;
@@ -195,10 +159,6 @@ function emptyNotificationAutomationResult(now: Date): NotificationAutomationRun
 async function getEmailPreferences(userId: string): Promise<EmailPreferences> {
   const preferences = await prisma.notificationEmailPreference.findUnique({ where: { userId } });
   return normalizeEmailPreferences(preferences);
-}
-
-function isAlertType(value: string): value is AlertType {
-  return Object.prototype.hasOwnProperty.call(ESCALATION_CONFIG, value);
 }
 
 async function sendNotificationIfEnabled(
@@ -432,6 +392,14 @@ const systemAutomationDependencies = {
   findProjectUsersByRoles,
 } satisfies SystemAutomationDependencies;
 
+const alertEscalationDependencies = {
+  prisma,
+  hourMs: HOUR_MS,
+  defaultJobLimit: DEFAULT_JOB_LIMIT,
+  findEscalationUsers,
+  notifyUsers,
+} satisfies AlertEscalationAutomationDependencies;
+
 export async function processDueDiaryReminders(
   options: NotificationAutomationJobOptions = {},
 ): Promise<DiaryReminderJobResult> {
@@ -459,116 +427,7 @@ export async function processSystemAlerts(
 export async function processAlertEscalations(
   options: NotificationAutomationJobOptions & { alertIds?: string[] } = {},
 ): Promise<AlertEscalationJobResult> {
-  const now = options.now ?? new Date();
-  const alertIds = options.alertIds;
-  if (alertIds && alertIds.length === 0) {
-    return {
-      alertsChecked: 0,
-      escalated: 0,
-      skippedAlerts: 0,
-      usersNotified: 0,
-      inAppCreated: 0,
-      emailsSent: 0,
-      emailsQueued: 0,
-      emailsFailed: 0,
-    };
-  }
-
-  const alerts = await prisma.notificationAlert.findMany({
-    where: {
-      resolvedAt: null,
-      ...(alertIds ? { id: { in: alertIds } } : {}),
-      ...(options.projectIds ? { projectId: { in: options.projectIds } } : {}),
-    },
-    orderBy: { createdAt: 'asc' },
-    take: parsePositiveInteger(options.limit, DEFAULT_JOB_LIMIT),
-  });
-  const result: AlertEscalationJobResult = {
-    alertsChecked: alerts.length,
-    escalated: 0,
-    skippedAlerts: 0,
-    usersNotified: 0,
-    inAppCreated: 0,
-    emailsSent: 0,
-    emailsQueued: 0,
-    emailsFailed: 0,
-  };
-
-  for (const alert of alerts) {
-    if (!isAlertType(alert.type)) {
-      result.skippedAlerts += 1;
-      continue;
-    }
-
-    const config = ESCALATION_CONFIG[alert.type];
-    const hoursSinceCreation = (now.getTime() - alert.createdAt.getTime()) / HOUR_MS;
-    let newLevel: number | null = null;
-    if (alert.escalationLevel === 0 && hoursSinceCreation >= config.firstEscalationAfterHours) {
-      newLevel = 1;
-    } else if (
-      alert.escalationLevel === 1 &&
-      hoursSinceCreation >= config.secondEscalationAfterHours
-    ) {
-      newLevel = 2;
-    }
-
-    if (newLevel === null) {
-      result.skippedAlerts += 1;
-      continue;
-    }
-
-    const escalationUsers = await findEscalationUsers(
-      alert.projectId,
-      config.escalationRoles,
-      alert.assignedToId,
-    );
-    const escalatedToIds = escalationUsers.map((user) => user.id);
-    const updateResult = await prisma.notificationAlert.updateMany({
-      where: {
-        id: alert.id,
-        resolvedAt: null,
-        escalationLevel: alert.escalationLevel,
-      },
-      data: {
-        escalationLevel: newLevel,
-        escalatedAt: now,
-        escalatedTo: escalatedToIds,
-      },
-    });
-
-    if (updateResult.count === 0) {
-      result.skippedAlerts += 1;
-      continue;
-    }
-
-    const linkUrl = buildProjectEntityLink(alert.entityType, alert.entityId, alert.projectId);
-    const delivery = await notifyUsers(
-      escalationUsers,
-      {
-        projectId: alert.projectId,
-        type: 'alert_escalation',
-        title: `ESCALATED: ${alert.title}`,
-        message: `Alert has been escalated (Level ${newLevel}): ${alert.message}`,
-        linkUrl,
-        createdAt: now,
-      },
-      'ncrAssigned',
-      {
-        title: `ESCALATED ALERT: ${alert.title}`,
-        message: `This alert has been escalated to you because it was not resolved within ${newLevel === 1 ? config.firstEscalationAfterHours : config.secondEscalationAfterHours} hours.\n\n${alert.message}`,
-        linkUrl,
-      },
-    );
-
-    result.escalated += 1;
-    result.inAppCreated += delivery.inAppCreated;
-    result.emailsSent += delivery.emailsSent;
-    result.emailsQueued += delivery.emailsQueued;
-    result.emailsFailed += delivery.emailsFailed;
-    result.usersNotified += delivery.usersNotified;
-  }
-
-  return result;
+  return processAlertEscalationsJob(options, alertEscalationDependencies);
 }
 
 async function processNotificationAutomationUnlocked(
