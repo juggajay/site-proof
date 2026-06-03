@@ -1,17 +1,15 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Save, Bookmark, Trash2, LayoutGrid, LayoutList, MapPin } from 'lucide-react';
+import { LayoutGrid, LayoutList, MapPin } from 'lucide-react';
 import {
   FilterBottomSheet,
   FilterTriggerButton,
   type FilterConfig,
   type FilterValues,
 } from '@/components/mobile/FilterBottomSheet';
-import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { NativeSelect } from '@/components/ui/native-select';
-import { formatStatusLabel } from '@/lib/statusLabels';
 import {
   isRecord,
   parseJsonPreference,
@@ -19,18 +17,13 @@ import {
   writeLocalStorageItem,
 } from '@/lib/storagePreferences';
 import { LotColumnSettingsMenu } from './LotColumnSettingsMenu';
-import { SAVED_FILTERS_STORAGE_KEY, STATUS_OPTIONS, type ColumnId } from './lotFilterConfig';
-
-export interface SavedFilter {
-  id: string;
-  name: string;
-  status: string;
-  activity: string;
-  search: string;
-  subcontractor?: string;
-  areaZone?: string;
-  createdAt: string;
-}
+import { LotSavedFiltersMenu } from './LotSavedFiltersMenu';
+import {
+  SAVED_FILTERS_STORAGE_KEY,
+  STATUS_OPTIONS,
+  type ColumnId,
+  type SavedFilter,
+} from './lotFilterConfig';
 
 function isSavedFilter(value: unknown): value is SavedFilter {
   return (
@@ -117,9 +110,6 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
   const [savedFilters, setSavedFilters] = useState<SavedFilter[]>(() => {
     return parseSavedFiltersPreference(readLocalStorageItem(SAVED_FILTERS_STORAGE_KEY));
   });
-  const [showSaveFilterModal, setShowSaveFilterModal] = useState(false);
-  const [newFilterName, setNewFilterName] = useState('');
-  const [savedFiltersDropdownOpen, setSavedFiltersDropdownOpen] = useState(false);
 
   // Mobile filter bottom sheet state
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
@@ -198,12 +188,12 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
   };
 
   // Save filter to local storage
-  const saveCurrentFilter = () => {
-    if (!newFilterName.trim()) return;
+  const saveCurrentFilter = (filterName: string) => {
+    if (!filterName.trim()) return;
 
     const newFilter: SavedFilter = {
       id: crypto.randomUUID(),
-      name: newFilterName.trim(),
+      name: filterName.trim(),
       status: statusFilters.join(','),
       activity: activityFilter,
       search: searchQuery,
@@ -215,8 +205,6 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
     const updatedFilters = [...savedFilters, newFilter];
     setSavedFilters(updatedFilters);
     writeLocalStorageItem(SAVED_FILTERS_STORAGE_KEY, JSON.stringify(updatedFilters));
-    setShowSaveFilterModal(false);
-    setNewFilterName('');
   };
 
   // Load a saved filter
@@ -228,7 +216,6 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
       subcontractor: filter.subcontractor || '',
       areaZone: filter.areaZone || '',
     });
-    setSavedFiltersDropdownOpen(false);
   };
 
   // Delete a saved filter
@@ -690,74 +677,19 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
             >
               Clear All Filters
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowSaveFilterModal(true)}
-              className="text-muted-foreground hover:text-foreground"
-              title="Save current filter"
-            >
-              <Save className="h-3.5 w-3.5" />
-              Save Filter
-            </Button>
           </>
         )}
 
-        {/* Saved Filters Dropdown */}
-        {savedFilters.length > 0 && (
-          <div className="relative">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setSavedFiltersDropdownOpen(!savedFiltersDropdownOpen)}
-              title="Load saved filter"
-            >
-              <Bookmark className="h-4 w-4" />
-              Saved ({savedFilters.length})
-            </Button>
-            {savedFiltersDropdownOpen && (
-              <>
-                <div
-                  className="fixed inset-0 z-10"
-                  onClick={() => setSavedFiltersDropdownOpen(false)}
-                />
-                <div className="absolute left-0 top-full mt-1 z-20 w-64 rounded-lg border bg-card shadow-lg">
-                  <div className="p-2 border-b">
-                    <span className="text-xs font-medium text-muted-foreground">Saved Filters</span>
-                  </div>
-                  <div className="max-h-60 overflow-y-auto">
-                    {savedFilters.map((filter) => (
-                      <div
-                        key={filter.id}
-                        className="flex items-center justify-between px-3 py-2 hover:bg-muted group"
-                      >
-                        <button
-                          onClick={() => loadSavedFilter(filter)}
-                          className="flex-1 text-left text-sm truncate"
-                          title={`Load filter: ${filter.name}`}
-                        >
-                          {filter.name}
-                        </button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deleteSavedFilter(filter.id);
-                          }}
-                          className="h-6 w-6 text-muted-foreground hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
-                          title="Delete filter"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-        )}
+        <LotSavedFiltersMenu
+          hasActiveFilters={activeFilterCount > 0}
+          savedFilters={savedFilters}
+          statusFilters={statusFilters}
+          activityFilter={activityFilter}
+          searchQuery={searchQuery}
+          onSaveFilter={saveCurrentFilter}
+          onLoadSavedFilter={loadSavedFilter}
+          onDeleteSavedFilter={deleteSavedFilter}
+        />
 
         <span className="text-sm text-muted-foreground">
           Showing {filteredLotsCount} of {totalLots} lots
@@ -801,61 +733,6 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
           onSetColumnOrder={onSetColumnOrder}
         />
       </div>
-
-      {/* Save Filter Modal */}
-      {showSaveFilterModal && (
-        <Modal
-          onClose={() => {
-            setShowSaveFilterModal(false);
-            setNewFilterName('');
-          }}
-          className="max-w-md"
-        >
-          <ModalHeader>Save Current Filter</ModalHeader>
-          <ModalBody>
-            <p className="text-sm text-muted-foreground mb-4">
-              Save the current filter settings for quick access later.
-            </p>
-            <div>
-              <Label className="mb-1">Filter Name</Label>
-              <Input
-                type="text"
-                value={newFilterName}
-                onChange={(e) => setNewFilterName(e.target.value)}
-                placeholder="e.g., Completed Earthworks"
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') saveCurrentFilter();
-                }}
-              />
-            </div>
-            <div className="mt-2 text-xs text-muted-foreground">
-              <p>Current filter:</p>
-              <ul className="mt-1 ml-4 list-disc">
-                {statusFilters.length > 0 && (
-                  <li>Status: {statusFilters.map((s) => formatStatusLabel(s)).join(', ')}</li>
-                )}
-                {activityFilter && <li>Activity: {activityFilter}</li>}
-                {searchQuery && <li>Search: &quot;{searchQuery}&quot;</li>}
-              </ul>
-            </div>
-          </ModalBody>
-          <ModalFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setShowSaveFilterModal(false);
-                setNewFilterName('');
-              }}
-            >
-              Cancel
-            </Button>
-            <Button onClick={saveCurrentFilter} disabled={!newFilterName.trim()}>
-              Save Filter
-            </Button>
-          </ModalFooter>
-        </Modal>
-      )}
     </>
   );
 });
