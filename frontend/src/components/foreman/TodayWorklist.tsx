@@ -9,6 +9,7 @@ import {
   ChevronRight,
   RefreshCw,
   CheckCircle2,
+  Camera,
   Shield,
   ClipboardList,
   Calendar,
@@ -19,6 +20,7 @@ import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
 import { Button } from '@/components/ui/button';
+import { useForemanMobileStore } from '@/stores/foremanMobileStore';
 
 type WorklistItemType = 'hold_point' | 'itp_item' | 'inspection' | 'task';
 type UrgencyLevel = 'blocking' | 'due_today' | 'upcoming';
@@ -91,6 +93,7 @@ export function TodayWorklist() {
   const { projectId } = useParams();
   const navigate = useNavigate();
   const { isOnline } = useOnlineStatus();
+  const { setIsCameraOpen } = useForemanMobileStore();
 
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
@@ -123,6 +126,14 @@ export function TodayWorklist() {
 
   const handleItemClick = (item: WorklistItem) => {
     navigate(item.link);
+  };
+
+  const handleStartDiary = () => {
+    navigate(`/projects/${projectId}/diary`);
+  };
+
+  const handleCapturePhoto = () => {
+    setIsCameraOpen(true);
   };
 
   const totalItems = data.blocking.length + data.dueToday.length + data.upcoming.length;
@@ -243,7 +254,21 @@ export function TodayWorklist() {
           <p className="text-sm text-muted-foreground text-center max-w-xs">
             No hold points, inspections, or ITP items need your attention right now.
           </p>
-          <Button variant="outline" onClick={handleRefresh} className="mt-6 touch-manipulation">
+          <div className="mt-6 flex w-full max-w-xs flex-col gap-2">
+            <Button onClick={handleStartDiary} className="touch-manipulation min-h-[44px]">
+              <ClipboardList className="mr-2 h-4 w-4" />
+              Start today's diary
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleCapturePhoto}
+              className="touch-manipulation min-h-[44px]"
+            >
+              <Camera className="mr-2 h-4 w-4" />
+              Capture a photo
+            </Button>
+          </div>
+          <Button variant="ghost" onClick={handleRefresh} className="mt-3 touch-manipulation">
             Check again
           </Button>
         </div>
