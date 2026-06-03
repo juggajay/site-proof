@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   MessageSquare,
   Send,
@@ -19,49 +20,13 @@ import { toast } from '@/components/ui/toaster';
 import { devLog, logError } from '@/lib/logger';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { downloadBlob } from '@/lib/downloads';
-
-interface CommentAuthor {
-  id: string;
-  email: string;
-  fullName: string | null;
-  avatarUrl: string | null;
-}
-
-interface CommentAttachment {
-  id: string;
-  filename: string;
-  fileUrl: string;
-  fileSize: number | null;
-  mimeType: string | null;
-  createdAt: string;
-}
-
-interface Comment {
-  id: string;
-  content: string;
-  authorId: string;
-  author: CommentAuthor;
-  parentId: string | null;
-  isEdited: boolean;
-  editedAt: string | null;
-  createdAt: string;
-  attachments?: CommentAttachment[];
-  replies?: Comment[];
-}
-
-interface CommentsPagination {
-  total: number;
-  page: number;
-  limit: number;
-  totalPages: number;
-  hasNextPage: boolean;
-  hasPrevPage: boolean;
-}
-
-interface CommentsResponse {
-  comments: Comment[];
-  pagination?: CommentsPagination | null;
-}
+import {
+  useCommentsQuery,
+  extractResponseError,
+  getErrorMessage,
+  type Comment,
+  type CommentAttachment,
+} from './commentsData';
 
 interface CommentsSectionProps {
   entityType: string;
@@ -74,61 +39,16 @@ interface PendingAttachment {
   preview?: string;
 }
 
-const COMMENTS_PAGE_LIMIT = 25;
-
-function buildCommentsPath(entityType: string, entityId: string, page: number): string {
-  const params = new URLSearchParams({
-    entityType,
-    entityId,
-    page: String(page),
-    limit: String(COMMENTS_PAGE_LIMIT),
-  });
-  return `/api/comments?${params.toString()}`;
-}
-
-function extractResponseError(responseText: string, fallback: string): string {
-  if (!responseText) return fallback;
-
-  try {
-    const parsed: unknown = JSON.parse(responseText);
-    if (parsed && typeof parsed === 'object') {
-      const data = parsed as {
-        error?: string | { message?: string };
-        message?: string;
-      };
-
-      if (typeof data.error === 'string' && data.error.trim()) {
-        return data.error;
-      }
-
-      if (data.error && typeof data.error === 'object' && data.error.message?.trim()) {
-        return data.error.message;
-      }
-
-      if (data.message?.trim()) {
-        return data.message;
-      }
-    }
-  } catch {
-    // Use the fallback for non-JSON error bodies.
-  }
-
-  return fallback;
-}
-
-function getErrorMessage(err: unknown, fallback: string): string {
-  return err instanceof Error && err.message ? err.message : fallback;
-}
-
 export function CommentsSection({ entityType, entityId }: CommentsSectionProps) {
   const { user } = useAuth();
-  const [comments, setComments] = useState<Comment[]>([]);
-  const [pagination, setPagination] = useState<CommentsPagination | null>(null);
+  const queryClient = useQueryClient();
   const [currentPage, setCurrentPage] = useState(1);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [newComment, setNewComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  // Tracks whether the list is currently empty so a failed background poll can
+  // stay silent (Feature #736) while a failed foreground load surfaces a banner.
+  const hasNoCommentsRef = useRef(true);
 
   // Reply state
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
@@ -196,6 +116,42 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
     };
   }, [revokeAttachmentPreviews]);
 
+  // Feature #736: comments behave like a chat panel — fetch fresh on mount/focus
+  // and poll every 15s while the tab is visible. TanStack Query's structural
+  // sharing replaces the old manual "only update if changed" diff.
+  const commentsQuery = useCommentsQuery(entityType, entityId, currentPage, {
+    onError: (err) => {
+      // A failed foreground load (nothing on screen yet) surfaces a banner; a
+      // failed background poll keeps the existing list and stays silent.
+      if (hasNoCommentsRef.current) {
+        logError('Error fetching comments:', err);
+        setError('Failed to load comments');
+      } else {
+        devLog('Background comments fetch failed:', err);
+      }
+    },
+  });
+  const { refetch: refetchCommentsQuery } = commentsQuery;
+  const comments = commentsQuery.data?.comments ?? [];
+  const pagination = commentsQuery.data?.pagination ?? null;
+  const loading = commentsQuery.isLoading;
+
+  useEffect(() => {
+    hasNoCommentsRef.current = comments.length === 0;
+  }, [comments.length]);
+
+  // Keep the visible page clamped if comments were removed while viewing a later
+  // page (e.g. the background poll reports a smaller page count).
+  useEffect(() => {
+    if (pagination && pagination.totalPages > 0 && currentPage > pagination.totalPages) {
+      setCurrentPage(pagination.totalPages);
+    }
+  }, [pagination, currentPage]);
+
+  const refetchComments = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: ['comments', entityType, entityId] });
+  }, [queryClient, entityType, entityId]);
+
   useEffect(() => {
     clearPendingDraft();
     clearReplyDraft();
@@ -203,98 +159,9 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
     setEditingId(null);
     setEditContent('');
     setCommentPendingDelete(null);
+    setError(null);
     setCurrentPage(1);
-    setPagination(null);
   }, [entityType, entityId, clearPendingDraft, clearReplyDraft]);
-
-  const fetchComments = useCallback(
-    async (page = currentPage) => {
-      setLoading(true);
-      setError(null);
-
-      try {
-        const data = await apiFetch<CommentsResponse>(
-          buildCommentsPath(entityType, entityId, page),
-        );
-        setComments(data.comments || []);
-        setPagination(data.pagination || null);
-        if (
-          data.pagination &&
-          data.pagination.totalPages > 0 &&
-          page > data.pagination.totalPages
-        ) {
-          setCurrentPage(data.pagination.totalPages);
-        }
-      } catch (err) {
-        logError('Error fetching comments:', err);
-        setError('Failed to load comments');
-      } finally {
-        setLoading(false);
-      }
-    },
-    [currentPage, entityType, entityId],
-  );
-
-  useEffect(() => {
-    fetchComments();
-  }, [fetchComments]);
-
-  // Feature #736: Real-time comment notification polling
-  // Poll for new comments every 15 seconds (more frequent for chat-like experience)
-  useEffect(() => {
-    let pollInterval: NodeJS.Timeout | null = null;
-
-    const silentFetchComments = async () => {
-      try {
-        const data = await apiFetch<CommentsResponse>(
-          buildCommentsPath(entityType, entityId, currentPage),
-        );
-        const newComments = data.comments || [];
-        setPagination(data.pagination || null);
-
-        // Only update if there are actual changes
-        setComments((prevComments: Comment[]) => {
-          // Check if comments have changed by comparing lengths and IDs
-          const hasChanges =
-            newComments.length !== prevComments.length ||
-            newComments.some(
-              (newComment: Comment, index: number) =>
-                !prevComments[index] ||
-                newComment.id !== prevComments[index].id ||
-                newComment.isEdited !== prevComments[index].isEdited ||
-                (newComment.replies?.length || 0) !== (prevComments[index].replies?.length || 0),
-            );
-          return hasChanges ? newComments : prevComments;
-        });
-      } catch (err) {
-        // Silent fail for background polling
-        devLog('Background comments fetch failed:', err);
-      }
-    };
-
-    const startPolling = () => {
-      // Poll every 15 seconds for comments (more frequent for chat-like experience)
-      pollInterval = setInterval(() => {
-        if (document.visibilityState === 'visible') {
-          silentFetchComments();
-        }
-      }, 15000);
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        silentFetchComments();
-      }
-    };
-
-    startPolling();
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    return () => {
-      if (pollInterval) clearInterval(pollInterval);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [currentPage, entityType, entityId]);
 
   // File validation constants
   const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -482,8 +349,9 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
 
       setNewComment('');
       clearPendingDraft();
+      setError(null);
       setCurrentPage(1);
-      await fetchComments(1);
+      await refetchComments();
     } catch (err) {
       logError('Error posting comment:', err);
       setError(getErrorMessage(err, 'Failed to post comment'));
@@ -501,7 +369,8 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
       await createComment(replyContent.trim(), replyAttachments, parentId);
 
       clearReplyDraft();
-      await fetchComments();
+      setError(null);
+      await refetchComments();
     } catch (err) {
       logError('Error posting reply:', err);
       setError(getErrorMessage(err, 'Failed to post reply'));
@@ -525,7 +394,8 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
 
       setEditingId(null);
       setEditContent('');
-      await fetchComments();
+      setError(null);
+      await refetchComments();
     } catch (err) {
       logError('Error updating comment:', err);
       setError(getErrorMessage(err, 'Failed to update comment'));
@@ -541,7 +411,8 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
       });
 
       setCommentPendingDelete(null);
-      await fetchComments();
+      setError(null);
+      await refetchComments();
     } catch (err) {
       logError('Error deleting comment:', err);
       setError(getErrorMessage(err, 'Failed to delete comment'));
@@ -1025,7 +896,10 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
           {error}
           <button
             type="button"
-            onClick={() => void fetchComments()}
+            onClick={() => {
+              setError(null);
+              void refetchCommentsQuery();
+            }}
             className="ml-2 text-red-800 hover:underline"
           >
             Retry
@@ -1109,7 +983,10 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
             <button
               type="button"
               disabled={!pagination.hasPrevPage}
-              onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+              onClick={() => {
+                setError(null);
+                setCurrentPage((page) => Math.max(1, page - 1));
+              }}
               className="rounded-lg border px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-50 hover:bg-muted"
             >
               Previous
@@ -1120,7 +997,10 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
             <button
               type="button"
               disabled={!pagination.hasNextPage}
-              onClick={() => setCurrentPage((page) => page + 1)}
+              onClick={() => {
+                setError(null);
+                setCurrentPage((page) => page + 1);
+              }}
               className="rounded-lg border px-3 py-1.5 disabled:cursor-not-allowed disabled:opacity-50 hover:bg-muted"
             >
               Next
