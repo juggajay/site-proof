@@ -78,6 +78,10 @@ export const queryKeys = {
     ['portal-dashboard', userId ?? 'anonymous'] as const,
   portalDockets: (userId: string | null | undefined, projectId: string | null | undefined) =>
     ['portal-dockets', userId ?? 'anonymous', projectId ?? 'no-project'] as const,
+  portalDocket: (userId: string | null | undefined, docketId: string | null | undefined) =>
+    ['portal-docket', userId ?? 'anonymous', docketId ?? 'no-docket'] as const,
+  portalDocketEditLots: (userId: string | null | undefined, projectId: string | null | undefined) =>
+    ['portal-docket-edit-lots', userId ?? 'anonymous', projectId ?? 'no-project'] as const,
   portalNCRs: (userId: string | null | undefined, projectId: string | null | undefined) =>
     ['portal-ncrs', userId ?? 'anonymous', projectId ?? 'no-project'] as const,
   portalTestResults: (userId: string | null | undefined, projectId: string | null | undefined) =>

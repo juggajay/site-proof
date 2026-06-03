@@ -24,86 +24,21 @@ import { Label } from '@/components/ui/label';
 import { NativeSelect } from '@/components/ui/native-select';
 import { logError } from '@/lib/logger';
 import { formatDateKey } from '@/lib/localDate';
-
-interface Employee {
-  id: string;
-  name: string;
-  role: string;
-  hourlyRate: number;
-  status: string;
-}
-
-interface Plant {
-  id: string;
-  type: string;
-  description: string;
-  idRego: string;
-  dryRate: number;
-  wetRate: number;
-  status: string;
-}
-
-interface Lot {
-  id: string;
-  lotNumber: string;
-  activity?: string;
-}
-
-interface LabourEntry {
-  id: string;
-  employee: {
-    id: string;
-    name: string;
-    role: string;
-    hourlyRate: number;
-  };
-  startTime: string;
-  finishTime: string;
-  submittedHours: number;
-  hourlyRate: number;
-  submittedCost: number;
-  lotAllocations: Array<{
-    lotId: string;
-    lotNumber: string;
-    hours: number;
-  }>;
-}
-
-interface PlantEntry {
-  id: string;
-  plant: {
-    id: string;
-    type: string;
-    description: string;
-    dryRate: number;
-    wetRate: number;
-  };
-  hoursOperated: number;
-  wetOrDry: 'dry' | 'wet';
-  hourlyRate: number;
-  submittedCost: number;
-}
-
-interface Docket {
-  id: string;
-  docketNumber: string;
-  date: string;
-  status: string;
-  notes?: string;
-  foremanNotes?: string;
-  totalLabourSubmitted: number;
-  totalPlantSubmitted: number;
-  labourEntries: LabourEntry[];
-  plantEntries: PlantEntry[];
-}
-
-interface Company {
-  id: string;
-  projectId: string;
-  projectName: string;
-  employees: Employee[];
-  plant: Plant[];
-}
+import { useAuth } from '@/lib/auth';
+import {
+  buildDocketEditRoute,
+  findTodayDocket,
+  useAssignedLotsQuery,
+  useDocketEditQuery,
+  useExistingDocketsQuery,
+  useMyCompanyQuery,
+  type Docket,
+  type Employee,
+  type LabourEntry,
+  type Lot,
+  type Plant,
+  type PlantEntry,
+} from './docketEditData';
 
 function formatCurrency(amount: number) {
   return new Intl.NumberFormat('en-AU', {
@@ -169,21 +104,22 @@ const TIME_PRESETS = [
   { label: '6am-6pm', start: '06:00', finish: '18:00' },
 ];
 
+// Stable empty reference so an empty lot list keeps the same identity per render.
+const EMPTY_LOTS: Lot[] = [];
+
 export function DocketEditPage() {
   const navigate = useNavigate();
   const { docketId } = useParams();
   const [searchParams] = useSearchParams();
+  const { user } = useAuth();
+  const userId = user?.id;
   const requestedProjectId = searchParams.get('projectId');
   const isNewDocket = !docketId || docketId === 'new';
 
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  const [company, setCompany] = useState<Company | null>(null);
   const [docket, setDocket] = useState<Docket | null>(null);
-  const [assignedLots, setAssignedLots] = useState<Lot[]>([]);
   const [notes, setNotes] = useState('');
   const [activeTab, setActiveTab] = useState('labour');
 
@@ -204,72 +140,60 @@ export function DocketEditPage() {
 
   const today = formatDateKey();
 
-  // Fetch initial data
+  // Bootstrap reads are served from TanStack Query: the subbie's company, their
+  // assigned lots, and either the docket being edited or (for a new docket) the
+  // "does one already exist for today?" check.
+  const companyQuery = useMyCompanyQuery(userId, requestedProjectId);
+  const company = companyQuery.data ?? null;
+
+  const lotsQuery = useAssignedLotsQuery(userId, company?.projectId);
+  const assignedLots = lotsQuery.data ?? EMPTY_LOTS;
+
+  const docketQuery = useDocketEditQuery(userId, docketId, !isNewDocket);
+  const existingDocketsQuery = useExistingDocketsQuery(userId, company?.projectId, isNewDocket);
+
+  const todayDocket =
+    isNewDocket && existingDocketsQuery.data
+      ? findTodayDocket(existingDocketsQuery.data, today)
+      : undefined;
+
+  // Seed the local editing buffer from the loaded docket. This re-runs when
+  // docketId changes (e.g. after a new docket is created and the URL gains its
+  // id), mirroring the original effect's dependency on docketId.
   useEffect(() => {
-    async function fetchData() {
-      try {
-        // Fetch company data
-        const companyQuery = requestedProjectId
-          ? `?projectId=${encodeURIComponent(requestedProjectId)}`
-          : '';
-        const companyData = await apiFetch<{ company: Company }>(
-          `/api/subcontractors/my-company${companyQuery}`,
-        );
-        setCompany(companyData.company);
-
-        // Fetch assigned lots
-        try {
-          const lotsData = await apiFetch<{ lots: Lot[] }>(
-            `/api/lots?projectId=${companyData.company.projectId}`,
-          );
-          setAssignedLots(lotsData.lots || []);
-          // Auto-select if only one lot
-          if (lotsData.lots?.length === 1) {
-            setSelectedLotId(lotsData.lots[0].id);
-          }
-        } catch {
-          // Lots fetch failed, continue with empty
-        }
-
-        // If editing existing docket, fetch it
-        if (!isNewDocket) {
-          try {
-            const docketData = await apiFetch<{ docket: Docket }>(`/api/dockets/${docketId}`);
-            setDocket(docketData.docket);
-            setNotes(docketData.docket.notes || '');
-          } catch {
-            setError('Docket not found');
-          }
-        } else {
-          // Check if a docket already exists for today
-          try {
-            const existingData = await apiFetch<{ dockets: Docket[] }>(
-              `/api/dockets?projectId=${companyData.company.projectId}`,
-            );
-            const todayDocket = existingData.dockets.find((d: Docket) => d.date === today);
-            if (todayDocket) {
-              // Redirect to existing docket
-              const projectQuery = companyData.company.projectId
-                ? `?projectId=${encodeURIComponent(companyData.company.projectId)}`
-                : '';
-              navigate(`/subcontractor-portal/docket/${todayDocket.id}${projectQuery}`, {
-                replace: true,
-              });
-              return;
-            }
-          } catch {
-            // Existing dockets fetch failed, continue
-          }
-        }
-      } catch (err) {
-        setError(extractErrorMessage(err, 'Failed to load data'));
-      } finally {
-        setLoading(false);
-      }
+    if (docketQuery.data) {
+      setDocket(docketQuery.data);
+      setNotes(docketQuery.data.notes || '');
     }
+  }, [docketQuery.data]);
 
-    fetchData();
-  }, [docketId, isNewDocket, navigate, requestedProjectId, today]);
+  // Auto-select the lot when the subbie is assigned exactly one.
+  useEffect(() => {
+    if (lotsQuery.data && lotsQuery.data.length === 1) {
+      setSelectedLotId(lotsQuery.data[0].id);
+    }
+  }, [lotsQuery.data]);
+
+  // A docket already exists for today: send the subbie to it instead of a new one.
+  useEffect(() => {
+    if (todayDocket) {
+      navigate(buildDocketEditRoute(todayDocket.id, company?.projectId), { replace: true });
+    }
+  }, [todayDocket, company?.projectId, navigate]);
+
+  // Keep the spinner up until the company, lots, and the docket/existing-docket
+  // read have all settled — and while a redirect to today's docket is pending.
+  const loading =
+    companyQuery.isLoading ||
+    (Boolean(company) && lotsQuery.isLoading) ||
+    (isNewDocket ? Boolean(company) && existingDocketsQuery.isLoading : docketQuery.isLoading) ||
+    Boolean(todayDocket);
+
+  const error = companyQuery.isError
+    ? extractErrorMessage(companyQuery.error, 'Failed to load data')
+    : !isNewDocket && docketQuery.isError
+      ? 'Docket not found'
+      : null;
 
   // Create docket if new
   const ensureDocket = useCallback(async () => {
