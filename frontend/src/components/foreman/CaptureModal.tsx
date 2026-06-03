@@ -132,7 +132,12 @@ export function CaptureModal({
       });
 
       if (captureType === 'ncr') {
-        toast({ description: 'NCR captured - complete details later', variant: 'success' });
+        // This only saves a defect-tagged photo - it does NOT raise an NCR
+        // record. Keep the copy honest and point at the real NCR flow.
+        toast({
+          description: 'Defect photo saved. Raise an NCR from the lot to log it formally.',
+          variant: 'success',
+        });
       } else {
         toast({ description: 'Photo saved', variant: 'success' });
       }
@@ -264,7 +269,7 @@ export function CaptureModal({
               />
               <TypeButton
                 icon={AlertTriangle}
-                label="NCR/Defect"
+                label="Defect"
                 selected={captureType === 'ncr'}
                 onClick={() => setCaptureType('ncr')}
                 accentColor="text-red-600"
@@ -282,7 +287,9 @@ export function CaptureModal({
                 <Input
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder={captureType === 'ncr' ? 'Brief NCR description' : 'Note description'}
+                  placeholder={
+                    captureType === 'ncr' ? 'Brief defect description' : 'Note description'
+                  }
                 />
                 <VoiceInputButton onTranscript={handleVoiceInput} />
               </div>
@@ -341,7 +348,7 @@ export function CaptureModal({
                   Saving...
                 </>
               ) : captureType === 'ncr' ? (
-                'Save NCR'
+                'Save Defect Photo'
               ) : captureType === 'note' ? (
                 'Save Note'
               ) : (
