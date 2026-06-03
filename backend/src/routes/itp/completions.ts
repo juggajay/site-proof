@@ -13,62 +13,30 @@ import {
   ITP_VERIFY_ROLES,
   ITP_WRITE_ROLES,
   isItpSubcontractorUser,
-  requireItpLotAccess,
   requireItpLotRole,
-  requireItpProjectAccess,
   requireItpProjectRole,
   requireItpSubcontractorCompletionPermission,
 } from './helpers/access.js';
-import { isStoredDocumentUploadPath } from '../../lib/uploadPaths.js';
 import { logError } from '../../lib/serverLogger.js';
 import {
-  buildItpCompletionAttachmentDeletedResponse,
-  buildItpCompletionAttachmentResponse,
-  buildItpCompletionAttachmentsResponse,
   buildItpCompletionResponse,
   buildItpCompletionResultResponse,
   buildItpCompletionStatusResponse,
   buildPendingItpVerificationsResponse,
 } from './completionResponses.js';
+import { completionAttachmentRoutes } from './completionAttachmentRoutes.js';
+import {
+  parseCompletionRouteParam,
+  parseRequiredCompletionQueryString,
+} from './completionValidation.js';
 
 // ============== Zod Schemas ==============
-const GPS_COORDINATE_PATTERN = /^-?(?:\d+|\d+\.\d+|\.\d+)$/;
-const ITP_ATTACHMENT_FILENAME_MAX_LENGTH = 180;
-const ITP_ATTACHMENT_URL_MAX_LENGTH = 2048;
-const ITP_ATTACHMENT_CAPTION_MAX_LENGTH = 2000;
-const ITP_ATTACHMENT_MIME_TYPE_MAX_LENGTH = 120;
 const ITP_COMPLETION_NOTES_MAX_LENGTH = 5000;
 const ITP_COMPLETION_FAILURE_DESCRIPTION_MAX_LENGTH = 5000;
 const ITP_COMPLETION_REVISION_REASON_MAX_LENGTH = 1000;
 const ITP_COMPLETION_SHORT_TEXT_MAX_LENGTH = 160;
 const ITP_COMPLETION_REJECTION_REASON_MAX_LENGTH = 3000;
 const ITP_SIGNATURE_DATA_URL_MAX_LENGTH = 512_000;
-const ITP_COMPLETION_ROUTE_PARAM_MAX_LENGTH = 128;
-
-function optionalTrimmedAttachmentString(fieldName: string, maxLength: number) {
-  return z
-    .string({ invalid_type_error: `${fieldName} must be text` })
-    .trim()
-    .max(maxLength, `${fieldName} must be ${maxLength} characters or less`)
-    .optional();
-}
-
-function optionalNonEmptyAttachmentString(fieldName: string, maxLength: number) {
-  return z.preprocess(
-    (value) => {
-      if (typeof value !== 'string') {
-        return value;
-      }
-
-      const trimmed = value.trim();
-      return trimmed.length > 0 ? trimmed : undefined;
-    },
-    z
-      .string({ invalid_type_error: `${fieldName} must be text` })
-      .max(maxLength, `${fieldName} must be ${maxLength} characters or less`)
-      .optional(),
-  );
-}
 
 // POST /completions - Complete/update checklist item
 const createCompletionSchema = z.object({
@@ -160,36 +128,6 @@ const rejectCompletionSchema = z.object({
     ),
 });
 
-// POST /completions/:completionId/attachments - Add attachment
-const addAttachmentSchema = z
-  .object({
-    documentId: z.string().uuid().optional(),
-    filename: optionalNonEmptyAttachmentString('filename', ITP_ATTACHMENT_FILENAME_MAX_LENGTH),
-    fileUrl: optionalNonEmptyAttachmentString('fileUrl', ITP_ATTACHMENT_URL_MAX_LENGTH),
-    caption: optionalTrimmedAttachmentString('caption', ITP_ATTACHMENT_CAPTION_MAX_LENGTH),
-    gpsLatitude: z.union([z.string(), z.number()]).optional().nullable(),
-    gpsLongitude: z.union([z.string(), z.number()]).optional().nullable(),
-    mimeType: optionalNonEmptyAttachmentString('mimeType', ITP_ATTACHMENT_MIME_TYPE_MAX_LENGTH),
-  })
-  .superRefine((data, ctx) => {
-    if (!data.documentId && (!data.filename || !data.fileUrl)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Either documentId or filename and fileUrl are required',
-        path: ['documentId'],
-      });
-    }
-
-    if (data.fileUrl?.startsWith('data:')) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message:
-          'Inline data URLs are not supported for ITP attachments. Upload the file first and attach the stored document.',
-        path: ['fileUrl'],
-      });
-    }
-  });
-
 export const completionsRouter = Router();
 
 const completionVerificationResponseInclude = {
@@ -210,71 +148,6 @@ const completionVerificationResponseInclude = {
     select: { description: true },
   },
 } as const;
-
-function parseCompletionRouteParam(value: unknown, field: string): string {
-  if (typeof value !== 'string') {
-    throw AppError.badRequest(`${field} must be a single value`);
-  }
-
-  const normalized = value.trim();
-  if (!normalized) {
-    throw AppError.badRequest(`${field} is required`);
-  }
-
-  if (normalized.length > ITP_COMPLETION_ROUTE_PARAM_MAX_LENGTH) {
-    throw AppError.badRequest(`${field} is too long`);
-  }
-
-  return normalized;
-}
-
-function parseRequiredCompletionQueryString(value: unknown, field: string): string {
-  if (typeof value !== 'string') {
-    throw AppError.badRequest(`${field} is required`);
-  }
-
-  const normalized = value.trim();
-  if (!normalized) {
-    throw AppError.badRequest(`${field} is required`);
-  }
-
-  return normalized;
-}
-
-function parseOptionalGpsCoordinate(
-  value: unknown,
-  field: string,
-  min: number,
-  max: number,
-): number | null {
-  if (value === undefined || value === null) {
-    return null;
-  }
-
-  const parsed =
-    typeof value === 'number'
-      ? value
-      : typeof value === 'string'
-        ? (() => {
-            const normalized = value.trim();
-            if (!normalized) return null;
-            if (!GPS_COORDINATE_PATTERN.test(normalized)) {
-              throw AppError.badRequest(`${field} must be a valid decimal coordinate`);
-            }
-            return Number(normalized);
-          })()
-        : Number.NaN;
-
-  if (parsed === null) {
-    return null;
-  }
-
-  if (!Number.isFinite(parsed) || parsed < min || parsed > max) {
-    throw AppError.badRequest(`${field} must be between ${min} and ${max}`);
-  }
-
-  return parsed;
-}
 
 // Complete/update a checklist item (supports N/A and Failed status with reason)
 completionsRouter.post(
@@ -1158,320 +1031,4 @@ completionsRouter.get(
   }),
 );
 
-// Add photo attachment to ITP completion
-completionsRouter.post(
-  '/completions/:completionId/attachments',
-  requireAuth,
-  asyncHandler(async (req: Request, res: Response) => {
-    const user = req.user as AuthUser;
-    const completionId = parseCompletionRouteParam(req.params.completionId, 'completionId');
-    const parseResult = addAttachmentSchema.safeParse(req.body);
-    if (!parseResult.success) {
-      throw AppError.fromZodError(parseResult.error);
-    }
-    const { documentId, filename, fileUrl, caption, gpsLatitude, gpsLongitude, mimeType } =
-      parseResult.data;
-
-    // Get the completion to find projectId
-    const completion = await prisma.iTPCompletion.findUnique({
-      where: { id: completionId },
-      include: {
-        itpInstance: {
-          include: {
-            template: {
-              include: {
-                project: true,
-              },
-            },
-          },
-        },
-        checklistItem: true,
-      },
-    });
-
-    if (!completion) {
-      throw AppError.notFound('Completion not found');
-    }
-
-    // Get the lot from the ITP instance
-    const itpInstance = await prisma.iTPInstance.findUnique({
-      where: { id: completion.itpInstanceId },
-      include: { lot: true },
-    });
-
-    // Use the lot's projectId (important for cross-project template imports)
-    // Fall back to template's projectId if lot is not found
-    const documentProjectId =
-      itpInstance?.lot?.projectId || completion.itpInstance.template.projectId;
-
-    if (!documentProjectId) {
-      throw AppError.badRequest('Unable to determine project for attachment');
-    }
-
-    if (itpInstance?.lotId) {
-      await requireItpLotRole(
-        user,
-        documentProjectId,
-        itpInstance.lotId,
-        ITP_WRITE_ROLES,
-        'ITP attachment write access required',
-      );
-      await requireItpSubcontractorCompletionPermission(user, documentProjectId, itpInstance.lotId);
-    } else {
-      await requireItpProjectRole(
-        user,
-        documentProjectId,
-        ITP_WRITE_ROLES,
-        'ITP attachment write access required',
-      );
-      if (isItpSubcontractorUser(user)) {
-        throw AppError.forbidden('ITP attachment write access required');
-      }
-    }
-
-    const parsedGpsLatitude = parseOptionalGpsCoordinate(gpsLatitude, 'gpsLatitude', -90, 90);
-    const parsedGpsLongitude = parseOptionalGpsCoordinate(gpsLongitude, 'gpsLongitude', -180, 180);
-
-    let document;
-
-    if (documentId) {
-      const existingDocument = await prisma.document.findUnique({
-        where: { id: documentId },
-      });
-
-      if (!existingDocument) {
-        throw AppError.notFound('Document');
-      }
-
-      if (existingDocument.projectId !== documentProjectId) {
-        throw AppError.badRequest('Document must belong to the same project as the ITP completion');
-      }
-
-      if (
-        itpInstance?.lotId &&
-        existingDocument.lotId &&
-        existingDocument.lotId !== itpInstance.lotId
-      ) {
-        throw AppError.badRequest('Document must belong to the same lot as the ITP completion');
-      }
-
-      const updateData: {
-        caption?: string;
-        gpsLatitude?: number;
-        gpsLongitude?: number;
-      } = {};
-
-      if (caption !== undefined) {
-        updateData.caption = caption;
-      }
-      if (parsedGpsLatitude !== null) {
-        updateData.gpsLatitude = parsedGpsLatitude;
-      }
-      if (parsedGpsLongitude !== null) {
-        updateData.gpsLongitude = parsedGpsLongitude;
-      }
-
-      document =
-        Object.keys(updateData).length > 0
-          ? await prisma.document.update({
-              where: { id: existingDocument.id },
-              data: updateData,
-            })
-          : existingDocument;
-    } else {
-      if (!filename || !fileUrl) {
-        throw AppError.badRequest('filename and fileUrl are required');
-      }
-
-      if (!isStoredDocumentUploadPath(fileUrl)) {
-        throw AppError.badRequest('fileUrl must reference an uploaded document file');
-      }
-
-      // Determine mimeType from the stored file URL or filename
-      let determinedMimeType: string | null = mimeType || null;
-      if (!determinedMimeType) {
-        const ext = filename.split('.').pop()?.toLowerCase();
-        const mimeMap: Record<string, string> = {
-          jpg: 'image/jpeg',
-          jpeg: 'image/jpeg',
-          png: 'image/png',
-          gif: 'image/gif',
-          webp: 'image/webp',
-        };
-        determinedMimeType = mimeMap[ext || ''] || null;
-      }
-
-      // Create a document record for clients that already uploaded the file elsewhere.
-      document = await prisma.document.create({
-        data: {
-          projectId: documentProjectId,
-          lotId: itpInstance?.lotId ?? undefined,
-          documentType: 'photo',
-          category: 'itp_evidence',
-          filename,
-          fileUrl,
-          mimeType: determinedMimeType,
-          uploadedById: user.userId,
-          caption: caption || `ITP Evidence: ${completion.checklistItem.description}`,
-          gpsLatitude: parsedGpsLatitude,
-          gpsLongitude: parsedGpsLongitude,
-        },
-      });
-    }
-
-    const existingAttachment = await prisma.iTPCompletionAttachment.findFirst({
-      where: {
-        completionId,
-        documentId: document.id,
-      },
-      include: {
-        document: true,
-      },
-    });
-
-    if (existingAttachment) {
-      res.json(buildItpCompletionAttachmentResponse(existingAttachment));
-      return;
-    }
-
-    // Create the attachment link
-    const attachment = await prisma.iTPCompletionAttachment.create({
-      data: {
-        completionId,
-        documentId: document.id,
-      },
-      include: {
-        document: true,
-      },
-    });
-
-    res.status(201).json(buildItpCompletionAttachmentResponse(attachment));
-  }),
-);
-
-// Get attachments for an ITP completion
-completionsRouter.get(
-  '/completions/:completionId/attachments',
-  requireAuth,
-  asyncHandler(async (req: Request, res: Response) => {
-    const user = req.user as AuthUser;
-    const completionId = parseCompletionRouteParam(req.params.completionId, 'completionId');
-
-    const completion = await prisma.iTPCompletion.findUnique({
-      where: { id: completionId },
-      select: {
-        itpInstance: {
-          select: {
-            lotId: true,
-            lot: { select: { projectId: true } },
-          },
-        },
-      },
-    });
-
-    if (!completion) {
-      throw AppError.notFound('Completion');
-    }
-
-    const projectId = completion.itpInstance?.lot?.projectId;
-    if (!projectId) {
-      throw AppError.badRequest('Unable to determine project for ITP completion');
-    }
-
-    if (!completion.itpInstance?.lotId) {
-      await requireItpProjectAccess(user, projectId);
-      if (isItpSubcontractorUser(user)) {
-        throw AppError.forbidden('Access denied');
-      }
-    } else {
-      await requireItpLotAccess(user, projectId, completion.itpInstance.lotId);
-    }
-
-    const attachments = await prisma.iTPCompletionAttachment.findMany({
-      where: { completionId },
-      include: {
-        document: {
-          include: {
-            uploadedBy: {
-              select: { id: true, fullName: true, email: true },
-            },
-          },
-        },
-      },
-    });
-
-    res.json(buildItpCompletionAttachmentsResponse(attachments));
-  }),
-);
-
-// Delete an attachment from ITP completion
-completionsRouter.delete(
-  '/completions/:completionId/attachments/:attachmentId',
-  requireAuth,
-  asyncHandler(async (req: Request, res: Response) => {
-    const user = req.user as AuthUser;
-    const completionId = parseCompletionRouteParam(req.params.completionId, 'completionId');
-    const attachmentId = parseCompletionRouteParam(req.params.attachmentId, 'attachmentId');
-
-    // Verify the attachment belongs to this completion
-    const attachment = await prisma.iTPCompletionAttachment.findFirst({
-      where: {
-        id: attachmentId,
-        completionId,
-      },
-      include: {
-        completion: {
-          select: {
-            itpInstance: {
-              select: {
-                lotId: true,
-                lot: { select: { projectId: true } },
-              },
-            },
-          },
-        },
-      },
-    });
-
-    if (!attachment) {
-      throw AppError.notFound('Attachment not found');
-    }
-
-    const projectId = attachment.completion.itpInstance?.lot?.projectId;
-    if (!projectId) {
-      throw AppError.badRequest('Unable to determine project for ITP completion');
-    }
-
-    if (attachment.completion.itpInstance?.lotId) {
-      await requireItpLotRole(
-        user,
-        projectId,
-        attachment.completion.itpInstance.lotId,
-        ITP_WRITE_ROLES,
-        'ITP attachment write access required',
-      );
-      await requireItpSubcontractorCompletionPermission(
-        user,
-        projectId,
-        attachment.completion.itpInstance.lotId,
-      );
-    } else {
-      await requireItpProjectRole(
-        user,
-        projectId,
-        ITP_WRITE_ROLES,
-        'ITP attachment write access required',
-      );
-      if (isItpSubcontractorUser(user)) {
-        throw AppError.forbidden('ITP attachment write access required');
-      }
-    }
-
-    // Delete the attachment (document remains for record keeping)
-    await prisma.iTPCompletionAttachment.delete({
-      where: { id: attachmentId },
-    });
-
-    res.json(buildItpCompletionAttachmentDeletedResponse());
-  }),
-);
+completionsRouter.use(completionAttachmentRoutes);
