@@ -53,6 +53,10 @@ export const queryKeys = {
   auditLogs: (params: string) => ['audit-logs', params] as const,
   notifications: ['notifications'] as const,
 
+  // Comments
+  comments: (entityType: string, entityId: string, page: number) =>
+    ['comments', entityType, entityId, page] as const,
+
   // Search
   search: (term: string) => ['search', term] as const,
   globalSearch: (projectId: string, term: string, scope: 'lots' | 'ncrs' | 'tests') =>

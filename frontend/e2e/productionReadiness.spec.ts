@@ -461,10 +461,20 @@ test.describe('production readiness guardrails', () => {
       new URL('../src/components/comments/CommentsSection.tsx', import.meta.url),
       'utf8',
     );
+    const commentsData = await readFile(
+      new URL('../src/components/comments/commentsData.ts', import.meta.url),
+      'utf8',
+    );
 
-    expect(commentsSection).toContain('function buildCommentsPath');
-    expect(commentsSection).toContain('page: String(page)');
-    expect(commentsSection).toContain('limit: String(COMMENTS_PAGE_LIMIT)');
+    // The comments path builder now lives in the Query-backed data module; assert
+    // the safe String() coercion there, while the timestamp guard and the error
+    // extraction call site remain in the component.
+    expect(commentsData).toContain('function buildCommentsPath');
+    expect(commentsData).toContain('page: String(page)');
+    expect(commentsData).toContain('limit: String(COMMENTS_PAGE_LIMIT)');
+    expect(commentsData).not.toContain(
+      '`/api/comments?entityType=${entityType}&entityId=${entityId}`',
+    );
     expect(commentsSection).toContain("return 'Unknown date'");
     expect(commentsSection).toContain('extractResponseError(responseText');
     expect(commentsSection).not.toContain(
