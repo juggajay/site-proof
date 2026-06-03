@@ -1,4 +1,4 @@
-import { Outlet, useLocation, useParams } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
@@ -6,10 +6,11 @@ import { MobileNav } from './MobileNav';
 import { useAuth } from '@/lib/auth';
 import { useForemanMobileStore } from '@/stores/foremanMobileStore';
 import { CaptureModal } from '@/components/foreman/CaptureModal';
+import { useEffectiveProjectId } from '@/hooks/useEffectiveProjectId';
 
 export function MainLayout() {
   const location = useLocation();
-  const { projectId } = useParams();
+  const { projectId: effectiveProjectId } = useEffectiveProjectId();
   const { user } = useAuth();
   const [isTransitioning, setIsTransitioning] = useState(false);
 
@@ -39,10 +40,14 @@ export function MainLayout() {
       </div>
       <MobileNav />
 
-      {/* Foreman capture modal - triggered by bottom nav Capture button via store */}
-      {isForeman && projectId && (
+      {/* Foreman capture modal - triggered by the bottom nav Capture button via
+          the store. Sourced from the effective project id so it works on
+          project-less routes too. Skipped on /dashboard, which mounts its own
+          capture modal (the duplicate B2 consolidates) - avoids stacking two
+          camera modals until that consolidation lands. */}
+      {isForeman && effectiveProjectId && location.pathname !== '/dashboard' && (
         <CaptureModal
-          projectId={projectId}
+          projectId={effectiveProjectId}
           isOpen={isCameraOpen}
           onClose={() => setIsCameraOpen(false)}
         />
