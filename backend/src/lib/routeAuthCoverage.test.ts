@@ -12,6 +12,7 @@ const allowedPublicRouteFiles = new Set([
   'auth/registrationRoutes.ts',
   'auth/sessionRoutes.ts',
   'auth/passwordResetRoutes.ts',
+  'auth/emailVerificationRoutes.ts',
   'auth/accountPrivacyRoutes.ts',
   'oauth.ts',
   'support.ts',
@@ -186,6 +187,10 @@ function extractedAccountPrivacyRouteDescriptors(source: string): string[] {
   return routeCalls(source).map((route) => route.descriptor);
 }
 
+function extractedEmailVerificationRouteDescriptors(source: string): string[] {
+  return routeCalls(source).map((route) => route.descriptor);
+}
+
 function unprotectedRouteDescriptors(source: string): string[] {
   return routeCalls(source)
     .filter((route) => !routeSourceHasAuthMiddleware(route.source))
@@ -242,6 +247,10 @@ describe('route authentication coverage', () => {
     );
     const passwordResetRoutesSource = await readFile(
       path.join(routesDir, 'auth/passwordResetRoutes.ts'),
+      'utf8',
+    );
+    const emailVerificationRoutesSource = await readFile(
+      path.join(routesDir, 'auth/emailVerificationRoutes.ts'),
       'utf8',
     );
     const profileRoutesSource = await readFile(
@@ -306,19 +315,23 @@ describe('route authentication coverage', () => {
     const serverSource = await readFile(serverPath, 'utf8');
 
     const authRouteDescriptors = routeCalls(authSource).map((route) => route.descriptor);
-    const verifyEmailIndex = authRouteDescriptors.indexOf('POST /verify-email');
+    const testExpiredTokenIndex = authRouteDescriptors.indexOf('POST /test-expired-token');
     const sessionRouteDescriptors = extractedSessionRouteDescriptors(sessionRoutesSource);
+    const emailVerificationRouteDescriptors = extractedEmailVerificationRouteDescriptors(
+      emailVerificationRoutesSource,
+    );
     const accountPrivacyRouteDescriptors = extractedAccountPrivacyRouteDescriptors(
       accountPrivacyRoutesSource,
     );
-    expect(verifyEmailIndex).toBeGreaterThan(-1);
+    expect(testExpiredTokenIndex).toBeGreaterThan(-1);
     expect([
       ...extractedRegistrationRouteDescriptors(registrationRoutesSource),
-      ...authRouteDescriptors.slice(0, verifyEmailIndex),
+      ...authRouteDescriptors.slice(0, testExpiredTokenIndex),
       ...sessionRouteDescriptors.slice(0, 3),
       ...extractedProfileRouteDescriptors(profileRoutesSource),
       sessionRouteDescriptors[3],
-      ...authRouteDescriptors.slice(verifyEmailIndex),
+      ...emailVerificationRouteDescriptors,
+      ...authRouteDescriptors.slice(testExpiredTokenIndex),
       ...accountPrivacyRouteDescriptors,
     ]).toEqual([
       'POST /register',
@@ -342,6 +355,12 @@ describe('route authentication coverage', () => {
     ]);
     expect(authSource.indexOf('createRegistrationRouter({')).toBeLessThan(
       authSource.indexOf("'/login'"),
+    );
+    expect(authSource.indexOf('createSessionPasswordRouter({')).toBeLessThan(
+      authSource.indexOf('createEmailVerificationRouter({'),
+    );
+    expect(authSource.indexOf('createEmailVerificationRouter({')).toBeLessThan(
+      authSource.indexOf("'/test-expired-token'"),
     );
     expect(extractedRegistrationRouteDescriptors(registrationRoutesSource)).toEqual([
       'POST /register',
@@ -368,6 +387,17 @@ describe('route authentication coverage', () => {
     expect(
       routeSourceForDescriptor(registrationRoutesSource, 'POST /register-and-accept-invitation'),
     ).toContain('Account created and invitation accepted successfully');
+    expect(emailVerificationRouteDescriptors).toEqual([
+      'POST /verify-email',
+      'GET /verify-email-status',
+      'POST /resend-verification',
+    ]);
+    expect(routeSourceForDescriptor(emailVerificationRoutesSource, 'POST /verify-email')).toContain(
+      'auditUserAuthEvent',
+    );
+    expect(
+      routeSourceForDescriptor(emailVerificationRoutesSource, 'POST /resend-verification'),
+    ).toContain('verificationResendLimiter');
     expect(authSource.indexOf('createSessionRouter({')).toBeGreaterThan(
       authSource.indexOf("'/magic-link/verify'"),
     );
@@ -420,7 +450,7 @@ describe('route authentication coverage', () => {
       authSource.indexOf('createSessionPasswordRouter({'),
     );
     expect(authSource.indexOf('createSessionPasswordRouter({')).toBeLessThan(
-      authSource.indexOf("'/verify-email'"),
+      authSource.indexOf('createEmailVerificationRouter({'),
     );
     expect(extractedPasswordResetRouteDescriptors(passwordResetRoutesSource)).toEqual([
       'POST /forgot-password',
