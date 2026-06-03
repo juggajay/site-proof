@@ -229,6 +229,16 @@ export function SubcontractorDashboard() {
   const myCompanyLink = `/my-company${currentProjectQuery}`;
   const newDocketLink = `/subcontractor-portal/docket/new${currentProjectQuery}`;
 
+  // Docket prerequisites: a subbie needs at least one approved employee or plant
+  // item (rates approved) to add anything, and — when the lots module is on — at
+  // least one assigned lot to allocate labour against. When these are missing the
+  // "start docket" empty state explains the next steps instead of dead-ending.
+  const approvedEmployees = company?.employees?.filter((e) => e.status === 'approved') ?? [];
+  const approvedPlant = company?.plant?.filter((p) => p.status === 'approved') ?? [];
+  const hasDocketResources = approvedEmployees.length > 0 || approvedPlant.length > 0;
+  const needsLotAssignment = canViewAssignedLots && assignedLots.length === 0;
+  const docketPrerequisitesMet = hasDocketResources && !needsLotAssignment;
+
   const loading = companyLoading;
 
   const handleProjectChange = (projectId: string) => {
@@ -404,7 +414,30 @@ export function SubcontractorDashboard() {
             </div>
           ) : (
             <div className="text-center py-4">
-              <p className="text-muted-foreground mb-4">No docket started for today</p>
+              {docketPrerequisitesMet ? (
+                <p className="text-muted-foreground mb-4">No docket started for today</p>
+              ) : (
+                <div className="mb-4 text-left rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20 p-3 space-y-2">
+                  <p className="flex items-center gap-1.5 text-sm font-medium text-foreground">
+                    <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                    Finish setup before filling out a docket
+                  </p>
+                  {!hasDocketResources && (
+                    <p className="text-sm text-muted-foreground">
+                      Add approved employees or plant in{' '}
+                      <Link to={myCompanyLink} className="text-primary underline">
+                        My Company
+                      </Link>{' '}
+                      and wait for rate approval.
+                    </p>
+                  )}
+                  {needsLotAssignment && (
+                    <p className="text-sm text-muted-foreground">
+                      No lots assigned yet. Contact your project manager to get lot assignments.
+                    </p>
+                  )}
+                </div>
+              )}
               <Link
                 to={newDocketLink}
                 className="inline-flex items-center gap-2 py-2.5 px-4 bg-primary hover:bg-primary/90 text-white font-medium rounded-lg transition-colors"

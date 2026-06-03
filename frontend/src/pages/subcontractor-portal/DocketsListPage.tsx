@@ -17,6 +17,7 @@ import { apiFetch } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/useMediaQuery';
+import { formatDateKey } from '@/lib/localDate';
 
 interface Docket {
   id: string;
@@ -117,6 +118,12 @@ export function DocketsListPage() {
     enabled: !!user?.id && !!company?.projectId,
   });
 
+  // Today's docket drives the primary CTA: continue it if it exists, otherwise
+  // start a new one. (`/docket/new` already redirects to today's docket when one
+  // exists, so linking straight to it just keeps the label honest.)
+  const today = formatDateKey();
+  const todaysDocket = dockets.find((d) => d.date === today) ?? null;
+
   // Filter dockets
   const filteredDockets =
     statusFilter === 'all' ? dockets : dockets.filter((d) => d.status === statusFilter);
@@ -182,11 +189,24 @@ export function DocketsListPage() {
 
       {/* Primary CTA: start (or continue) today's docket so this page is not a creation dead end */}
       <Link
-        to="/subcontractor-portal/docket/new"
+        to={
+          todaysDocket
+            ? `/subcontractor-portal/docket/${todaysDocket.id}`
+            : '/subcontractor-portal/docket/new'
+        }
         className="flex items-center justify-center gap-2 w-full rounded-lg bg-primary px-4 py-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors touch-manipulation"
       >
-        <Plus className="h-5 w-5" />
-        Start today's docket
+        {todaysDocket ? (
+          <>
+            Continue today's docket
+            <ChevronRight className="h-5 w-5" />
+          </>
+        ) : (
+          <>
+            <Plus className="h-5 w-5" />
+            Start today's docket
+          </>
+        )}
       </Link>
 
       {/* Filter tabs - wraps on mobile */}
