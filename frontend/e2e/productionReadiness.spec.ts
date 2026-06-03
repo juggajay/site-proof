@@ -2372,8 +2372,8 @@ test.describe('production readiness guardrails', () => {
       new URL('../src/pages/lots/components/PhotosTab.tsx', import.meta.url),
       'utf8',
     );
-    const itpChecklistSource = await readFile(
-      new URL('../src/pages/lots/components/ITPChecklistTab.tsx', import.meta.url),
+    const itpPhotoLightboxSource = await readFile(
+      new URL('../src/pages/lots/components/ITPPhotoLightbox.tsx', import.meta.url),
       'utf8',
     );
 
@@ -2384,9 +2384,11 @@ test.describe('production readiness guardrails', () => {
     expect(photoLocationLinksSource).toContain('new URLSearchParams');
     expect(photoLocationMapSource).toContain('referrerPolicy="no-referrer"');
     expect(photosTabSource).toContain('<PhotoLocationMap');
-    expect(itpChecklistSource).toContain('<PhotoLocationMap');
+    expect(itpPhotoLightboxSource).toContain('<PhotoLocationMap');
     expect(photosTabSource).not.toContain('openstreetmap.org/export/embed.html?bbox=${Number');
-    expect(itpChecklistSource).not.toContain('openstreetmap.org/export/embed.html?bbox=${Number');
+    expect(itpPhotoLightboxSource).not.toContain(
+      'openstreetmap.org/export/embed.html?bbox=${Number',
+    );
   });
 
   test('photo GPS link builder rejects missing coordinates without dropping valid zeros', () => {
