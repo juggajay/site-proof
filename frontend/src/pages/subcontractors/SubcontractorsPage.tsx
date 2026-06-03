@@ -13,6 +13,7 @@ import { toast } from '@/components/ui/toaster';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { logError } from '@/lib/logger';
+import { formatStatusLabel } from '@/lib/statusLabels';
 
 type PendingConfirmation =
   | { type: 'suspend-subcontractor'; id: string }
@@ -140,7 +141,7 @@ export function SubcontractorsPage() {
         }
         toast({
           title: 'Subcontractor updated',
-          description: `Status changed to ${status.replace(/_/g, ' ')}.`,
+          description: `Status changed to ${formatStatusLabel(status)}.`,
           variant: 'success',
         });
       } catch (error) {

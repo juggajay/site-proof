@@ -17,6 +17,7 @@ import {
   readLocalStorageItem,
   writeLocalStorageItem,
 } from '@/lib/storagePreferences';
+import { formatStatusLabel } from '@/lib/statusLabels';
 
 // Default column widths in pixels
 const DEFAULT_COLUMN_WIDTHS: Record<string, number> = {
@@ -476,7 +477,7 @@ export const LotTable = React.memo(function LotTable({
                                 <span
                                   className={`px-2 py-1 rounded text-xs font-medium ${statusColors[lot.status] || 'bg-muted text-muted-foreground'}`}
                                 >
-                                  {lot.status.replace('_', ' ')}
+                                  {formatStatusLabel(lot.status)}
                                 </span>
                               </td>
                             );

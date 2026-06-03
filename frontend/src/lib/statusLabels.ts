@@ -29,6 +29,8 @@ export const STATUS_LABELS: Record<string, string> = {
   awaiting_test: 'Awaiting Test',
   hold_point: 'Hold Point',
   ncr_raised: 'NCR Raised',
+  on_hold: 'On Hold',
+  pending: 'Pending',
   completed: 'Completed',
   conformed: 'Conformed',
   claimed: 'Claimed',
@@ -47,6 +49,20 @@ export const STATUS_LABELS: Record<string, string> = {
   approved: 'Approved',
   rejected: 'Rejected',
   queried: 'Queried',
+
+  // Claim lifecycle statuses
+  submitted: 'Submitted',
+  certified: 'Certified',
+  disputed: 'Disputed',
+  paid: 'Paid',
+  partially_paid: 'Partially Paid',
+
+  // Hold point / subcontractor admin statuses
+  requested: 'Requested',
+  released: 'Released',
+  suspended: 'Suspended',
+  removed: 'Removed',
+  inactive: 'Inactive',
 };
 
 export interface FormatStatusLabelOptions {

@@ -7,6 +7,7 @@ import { queryKeys } from '@/lib/queryKeys';
 import { extractErrorMessage, extractErrorDetails, handleApiError } from '@/lib/errorHandling';
 import { devWarn, logError } from '@/lib/logger';
 import { formatDateTime } from '@/lib/utils';
+import { formatStatusLabel } from '@/lib/statusLabels';
 import { toast } from '@/components/ui/toaster';
 import { CommentsSection } from '@/components/comments/CommentsSection';
 import { AssignSubcontractorModal } from '@/components/lots/AssignSubcontractorModal';
@@ -989,7 +990,7 @@ export function LotDetailPage() {
       setShowOverrideModal(false);
       toast({
         title: 'Status overridden',
-        description: `Status changed from "${data.previousStatus.replace('_', ' ')}" to "${data.lot.status.replace('_', ' ')}".`,
+        description: `Status changed from "${formatStatusLabel(data.previousStatus)}" to "${formatStatusLabel(data.lot.status)}".`,
       });
       // Refresh history if we're on that tab
       if (currentTab === 'history') {

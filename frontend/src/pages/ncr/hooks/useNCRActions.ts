@@ -4,6 +4,7 @@ import { toast } from '@/components/ui/toaster';
 import { extractErrorMessage, extractErrorDetails } from '@/lib/errorHandling';
 import { downloadCsv } from '@/lib/csv';
 import { formatDateKey } from '@/lib/localDate';
+import { formatStatusLabel } from '@/lib/statusLabels';
 import type { NCR } from '../types';
 
 const optionalTrimmed = (value?: string) => {
@@ -290,7 +291,7 @@ export function useNCRActions({
         ncr.description,
         ncr.category,
         ncr.severity,
-        ncr.status.replace('_', ' '),
+        formatStatusLabel(ncr.status),
         ncr.responsibleUser
           ? ncr.responsibleUser.fullName || ncr.responsibleUser.email
           : 'Unassigned',

@@ -3,6 +3,7 @@ import { useDateFormat } from '@/lib/dateFormat';
 import { useTimezone } from '@/lib/timezone';
 import type { ClaimsReport } from '../types';
 import { formatReportDateTime } from '../reportFormatting';
+import { formatStatusLabel } from '@/lib/statusLabels';
 
 export interface ClaimsReportTabProps {
   report: ClaimsReport;
@@ -14,21 +15,8 @@ const currencyFormatter = new Intl.NumberFormat('en-AU', {
   maximumFractionDigits: 0,
 });
 
-const statusLabels: Record<string, string> = {
-  draft: 'Draft',
-  submitted: 'Submitted',
-  certified: 'Certified',
-  disputed: 'Disputed',
-  paid: 'Paid',
-  partially_paid: 'Partially Paid',
-};
-
 function formatCurrency(value: number | null | undefined): string {
   return currencyFormatter.format(value ?? 0);
-}
-
-function formatStatus(status: string): string {
-  return statusLabels[status] || status.replace(/_/g, ' ');
 }
 
 export const ClaimsReportTab = React.memo(function ClaimsReportTab({
@@ -83,7 +71,7 @@ export const ClaimsReportTab = React.memo(function ClaimsReportTab({
         <div className="mt-4 flex flex-wrap gap-2">
           {Object.entries(report.statusCounts).map(([status, count]) => (
             <span key={status} className="rounded-full bg-muted px-3 py-1 text-sm">
-              {formatStatus(status)}: <strong>{count}</strong>
+              {formatStatusLabel(status)}: <strong>{count}</strong>
             </span>
           ))}
         </div>
@@ -147,7 +135,7 @@ export const ClaimsReportTab = React.memo(function ClaimsReportTab({
                     {formatDate(claim.periodStart)} to {formatDate(claim.periodEnd)}
                   </td>
                   <td className="px-4 py-3 text-sm text-muted-foreground">
-                    {formatStatus(claim.status)}
+                    {formatStatusLabel(claim.status)}
                   </td>
                   <td className="px-4 py-3 text-right text-sm text-muted-foreground">
                     {formatCurrency(claim.totalClaimedAmount)}

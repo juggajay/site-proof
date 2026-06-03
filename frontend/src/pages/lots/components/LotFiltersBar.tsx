@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { NativeSelect } from '@/components/ui/native-select';
+import { formatStatusLabel } from '@/lib/statusLabels';
 import {
   isRecord,
   parseJsonPreference,
@@ -1011,7 +1012,7 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
               <p>Current filter:</p>
               <ul className="mt-1 ml-4 list-disc">
                 {statusFilters.length > 0 && (
-                  <li>Status: {statusFilters.map((s) => s.replace('_', ' ')).join(', ')}</li>
+                  <li>Status: {statusFilters.map((s) => formatStatusLabel(s)).join(', ')}</li>
                 )}
                 {activityFilter && <li>Activity: {activityFilter}</li>}
                 {searchQuery && <li>Search: &quot;{searchQuery}&quot;</li>}

@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { NativeSelect } from '@/components/ui/native-select';
 import { Label } from '@/components/ui/label';
+import { formatStatusLabel } from '@/lib/statusLabels';
 
 export interface StatusOption {
   value: string;
@@ -29,13 +30,6 @@ interface StatusOverrideModalProps {
   onClose: () => void;
   onSubmit: (newStatus: string, reason: string) => Promise<void>;
   isSubmitting: boolean;
-}
-
-function formatStatusLabel(status: string) {
-  return status
-    .split('_')
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
 }
 
 export function StatusOverrideModal({

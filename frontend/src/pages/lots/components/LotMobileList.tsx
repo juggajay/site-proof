@@ -4,6 +4,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { AlertTriangle, MapPin, Eye } from 'lucide-react';
 import { usePullToRefresh, PullToRefreshIndicator } from '@/hooks/usePullToRefresh';
 import { SwipeableCard } from '@/components/foreman/SwipeableCard';
+import { formatStatusLabel } from '@/lib/statusLabels';
 import type { Lot } from '../lotsPageTypes';
 
 // Feature #438: Okabe-Ito color-blind safe palette
@@ -150,7 +151,7 @@ export const LotMobileList = React.memo(function LotMobileList({
                   <span
                     className={`px-2 py-0.5 rounded text-xs font-medium ${statusColors[lot.status] || 'bg-muted text-muted-foreground'}`}
                   >
-                    {lot.status.replace('_', ' ')}
+                    {formatStatusLabel(lot.status)}
                   </span>
                 </div>
                 <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
