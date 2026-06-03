@@ -26,6 +26,17 @@ export const COLUMN_STORAGE_KEY = 'siteproof_lot_columns';
 export const COLUMN_ORDER_STORAGE_KEY = 'siteproof_lot_column_order';
 export const SAVED_FILTERS_STORAGE_KEY = 'siteproof_lot_saved_filters';
 
+export interface SavedFilter {
+  id: string;
+  name: string;
+  status: string;
+  activity: string;
+  search: string;
+  subcontractor?: string;
+  areaZone?: string;
+  createdAt: string;
+}
+
 export const STATUS_OPTIONS = [
   { value: 'not_started', label: 'Not Started' },
   { value: 'in_progress', label: 'In Progress' },
