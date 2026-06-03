@@ -73,3 +73,18 @@ describe('LotHeader lot-configuration permissions', () => {
     expect(screen.getByRole('button', { name: /Assign Subcontractor/i })).toBeInTheDocument();
   });
 });
+
+describe('LotHeader mobile layout', () => {
+  it('stacks the title and actions and wraps the action cluster so it does not overflow at 390px', () => {
+    renderHeader({ canManageLot: true });
+
+    const actionCluster = screen.getByRole('button', { name: 'Copy Link' }).parentElement;
+    // The action buttons wrap onto multiple lines instead of overflowing.
+    expect(actionCluster).toHaveClass('flex-wrap');
+
+    const headerRow = actionCluster?.parentElement;
+    // Title block and actions stack vertically on mobile, side-by-side on >= sm.
+    expect(headerRow).toHaveClass('flex-col');
+    expect(headerRow).toHaveClass('sm:flex-row');
+  });
+});

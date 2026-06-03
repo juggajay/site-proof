@@ -3,7 +3,7 @@
  * Extracted from LotDetailPage.tsx for reusability.
  */
 
-import type { TabConfig } from './types';
+import type { LotTab, TabConfig } from './types';
 import { API_URL } from '@/lib/config';
 
 // Tab configuration for lot detail page
@@ -16,6 +16,26 @@ export const LOT_TABS: TabConfig[] = [
   { id: 'comments', label: 'Comments' },
   { id: 'history', label: 'History' },
 ];
+
+// Foreman-first tab order. The field-execution tabs (ITP checklist, Photos,
+// NCRs) come first so a foreman on a narrow (390px) screen reaches the work they
+// do most without scrolling the strip. No tab is removed — secondary tabs follow
+// in their original order.
+export const FOREMAN_TAB_PRIORITY: LotTab[] = ['itp', 'photos', 'ncrs'];
+
+// Return the lot-detail tabs ordered for a given role. Foreman gets the
+// field-first order; every other role (and unknown/undefined roles) keeps the
+// default order. Pure and total: all tabs are always returned, never dropped.
+export function getLotTabsForRole(role: string | undefined | null): TabConfig[] {
+  if (role !== 'foreman') return LOT_TABS;
+
+  const prioritized = FOREMAN_TAB_PRIORITY.map((id) =>
+    LOT_TABS.find((tab) => tab.id === id),
+  ).filter((tab): tab is TabConfig => tab !== undefined);
+  const rest = LOT_TABS.filter((tab) => !FOREMAN_TAB_PRIORITY.includes(tab.id));
+
+  return [...prioritized, ...rest];
+}
 
 // Status color classes for lot status badges
 export const lotStatusColors: Record<string, string> = {

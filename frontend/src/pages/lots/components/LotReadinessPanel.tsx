@@ -12,6 +12,10 @@ interface LotReadinessPanelProps {
   error: string | null;
   onRetry: () => void;
   onTabChange: (tab: LotTab, actionCode?: string) => void;
+  // When true, render a field-first view (foreman/field roles): no commercial
+  // "Claim" bucket and no claim-readiness language. Quality/conformance work is
+  // preserved, but framed as outstanding field work rather than a claims workflow.
+  fieldView?: boolean;
 }
 
 const TAB_IDS: LotTab[] = ['itp', 'tests', 'ncrs', 'photos', 'documents', 'comments', 'history'];
@@ -29,6 +33,15 @@ function stateLabel(bucket: ReadinessBucket, kind: 'conformance' | 'claim'): str
   if (bucket.state === 'already_claimed') return 'Claim: Already claimed';
   if (bucket.state === 'not_conformed') return 'Claim: Not ready';
   return `${title}: Blocked`;
+}
+
+// Field-language label for the conformance bucket on the foreman view. Keeps the
+// quality/conformance meaning (sign-off) without any commercial claim wording.
+function conformanceFieldLabel(bucket: ReadinessBucket): string {
+  if (bucket.state === 'ready') return 'Ready for sign-off';
+  if (bucket.state === 'already_conformed') return 'Signed off';
+  if (bucket.state === 'warning') return 'A few things to check';
+  return 'Needs work before sign-off';
 }
 
 function bucketTone(bucket: ReadinessBucket): string {
@@ -120,16 +133,20 @@ function ReadinessBucketView({
   bucket,
   kind,
   onTabChange,
+  fieldView = false,
 }: {
   bucket: ReadinessBucket;
   kind: 'conformance' | 'claim';
   onTabChange: (tab: LotTab, actionCode?: string) => void;
+  fieldView?: boolean;
 }) {
   const items = [...bucket.blockers, ...bucket.warnings, ...bucket.support];
 
   return (
     <div className={`rounded-md border p-3 ${bucketTone(bucket)}`}>
-      <h3 className="text-sm font-semibold">{stateLabel(bucket, kind)}</h3>
+      <h3 className="text-sm font-semibold">
+        {fieldView ? conformanceFieldLabel(bucket) : stateLabel(bucket, kind)}
+      </h3>
       <ItemList items={items} onTabChange={onTabChange} />
     </div>
   );
@@ -141,6 +158,7 @@ export function LotReadinessPanel({
   error,
   onRetry,
   onTabChange,
+  fieldView = false,
 }: LotReadinessPanelProps) {
   if (loading) {
     return (
@@ -174,6 +192,37 @@ export function LotReadinessPanel({
   }
 
   if (!readiness) return null;
+
+  // Field-first view for foreman/field roles: surface only the outstanding
+  // quality/conformance field work, with no commercial "Claim" bucket. The lot
+  // edit / claim setup actions are gated elsewhere (LotHeader, route guards).
+  if (fieldView) {
+    const bucket = readiness.conformance;
+
+    return (
+      <section className="rounded-lg border bg-card p-4" aria-label="What still needs doing">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold">What still needs doing on this lot</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {bucket.blockers.length} to fix &middot; {bucket.warnings.length} to check &middot;{' '}
+              {bucket.support.length} done
+            </p>
+          </div>
+          <ShieldCheck className="h-5 w-5 flex-shrink-0 text-muted-foreground" aria-hidden="true" />
+        </div>
+
+        <div className="mt-4">
+          <ReadinessBucketView
+            bucket={bucket}
+            kind="conformance"
+            onTabChange={onTabChange}
+            fieldView
+          />
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="rounded-lg border bg-card p-4" aria-label="Evidence Readiness">

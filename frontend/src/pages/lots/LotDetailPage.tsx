@@ -27,7 +27,7 @@ import type {
   LocationState,
   LotSubcontractorAssignment,
 } from './types';
-import { LOT_TABS as tabs, LOT_OVERRIDE_STATUSES } from './constants';
+import { LOT_TABS, LOT_OVERRIDE_STATUSES, getLotTabsForRole } from './constants';
 import { getGPSLocation, getItpPhotoValidationError } from './lib/itpEvidence';
 import {
   buildConformanceStatusPath,
@@ -185,7 +185,7 @@ export function LotDetailPage() {
   // Get current tab from URL or default to 'itp'
   const currentTab = (searchParams.get('tab') as LotTab) || 'itp';
   const shouldOpenAssignItp = searchParams.get('action') === 'assign-itp';
-  const currentTabLabel = tabs.find((tab) => tab.id === currentTab)?.label ?? 'Lot detail';
+  const currentTabLabel = LOT_TABS.find((tab) => tab.id === currentTab)?.label ?? 'Lot detail';
   const [readinessFocusTarget, setReadinessFocusTarget] = useState<{
     tab: LotTab;
     requestedAt: number;
@@ -513,6 +513,11 @@ export function LotDetailPage() {
   const canManageLot = ['owner', 'admin', 'project_manager', 'site_manager'].includes(
     qualityAccess?.role || '',
   );
+
+  // Foreman is a field-execution role: render lot detail field-first (no
+  // commercial claim-readiness language) and order the tabs around field work.
+  const isForeman = qualityAccess?.role === 'foreman';
+  const lotTabs = getLotTabsForRole(qualityAccess?.role);
 
   // Check if user is a subcontractor
   const isSubcontractor = ['subcontractor', 'subcontractor_admin'].includes(
@@ -1082,6 +1087,7 @@ export function LotDetailPage() {
       />
 
       <LotReadinessPanel
+        fieldView={isForeman}
         readiness={readinessData?.readiness ?? null}
         loading={loadingReadiness}
         error={readinessError ? 'Could not load evidence readiness.' : null}
@@ -1091,7 +1097,7 @@ export function LotDetailPage() {
 
       {/* Tab Navigation */}
       <LotTabNavigation
-        tabs={tabs}
+        tabs={lotTabs}
         currentTab={currentTab}
         onTabChange={handleTabChange}
         counts={{ tests: testsCount, ncrs: ncrsCount }}
