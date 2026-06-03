@@ -433,13 +433,13 @@ test.describe('Projects seeded account contract', () => {
     await page.getByRole('button', { name: 'Issues' }).click();
     await expect(page).toHaveURL(`/projects/${E2E_PROJECT_ID}/ncr`);
 
-    await page.getByRole('button', { name: 'Diary' }).click();
+    await page.getByRole('button', { name: 'Diary', exact: true }).click();
     await expect(page).toHaveURL(`/projects/${E2E_PROJECT_ID}/diary`);
 
     await page.getByRole('button', { name: 'Lots' }).click();
     await expect(page).toHaveURL(`/projects/${E2E_PROJECT_ID}/lots`);
 
-    await page.getByRole('button', { name: 'Today' }).click();
+    await page.getByRole('button', { name: 'Today', exact: true }).click();
     await expect(page).toHaveURL(`/projects/${E2E_PROJECT_ID}/foreman/today`);
   });
 });
