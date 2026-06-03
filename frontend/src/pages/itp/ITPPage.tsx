@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { getAuthToken } from '@/lib/auth';
+import { getAuthToken, useAuth } from '@/lib/auth';
 import { apiFetch } from '@/lib/api';
+import { canManageItpTemplates } from '@/lib/roles';
 import { logError } from '@/lib/logger';
 import { toast } from '@/components/ui/toaster';
 import { extractErrorMessage } from '@/lib/errorHandling';
@@ -19,6 +20,10 @@ import { ImportFromProjectModal } from './components/ImportFromProjectModal';
 
 export function ITPPage() {
   const { projectId } = useParams();
+  const { actualRole } = useAuth();
+  // Foremen (and other field roles) can view ITP templates for context but must
+  // not be led into template setup/admin work — those actions 403 on the backend.
+  const canManage = canManageItpTemplates(actualRole);
   const queryClient = useQueryClient();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
@@ -217,7 +222,9 @@ export function ITPPage() {
         <div>
           <h1 className="text-3xl font-bold">Inspection & Test Plans</h1>
           <p className="text-muted-foreground mt-1">
-            Manage ITP templates for quality checkpoints{' '}
+            {canManage
+              ? 'Manage ITP templates for quality checkpoints'
+              : 'View ITP templates and complete checklist items from each lot'}{' '}
             {projectSpecificationSet && (
               <span className="inline-flex text-xs bg-primary/10 text-primary px-2 py-0.5 rounded">
                 {projectSpecificationSet}
@@ -226,20 +233,33 @@ export function ITPPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => setShowImportModal(true)}
-            className="rounded-lg border px-4 py-2 hover:bg-muted"
-          >
-            Import from Project
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowCreateModal(true)}
-            className="rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
-          >
-            Create ITP Template
-          </button>
+          {canManage ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setShowImportModal(true)}
+                className="rounded-lg border px-4 py-2 hover:bg-muted"
+              >
+                Import from Project
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowCreateModal(true)}
+                className="rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
+              >
+                Create ITP Template
+              </button>
+            </>
+          ) : (
+            projectId && (
+              <Link
+                to={`/projects/${projectId}/lots`}
+                className="rounded-lg border px-4 py-2 hover:bg-muted"
+              >
+                Back to Lots
+              </Link>
+            )
+          )}
         </div>
       </div>
 
@@ -308,20 +328,39 @@ export function ITPPage() {
           </button>
         </div>
       ) : templates.length === 0 ? (
-        <div className="rounded-lg border p-8 text-center">
-          <div className="text-4xl mb-4">📋</div>
-          <h3 className="text-lg font-semibold mb-2">No ITP Templates</h3>
-          <p className="text-muted-foreground mb-4">
-            Create ITP templates to define quality checkpoints for different activity types.
-          </p>
-          <button
-            type="button"
-            onClick={() => setShowCreateModal(true)}
-            className="rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
-          >
-            Create Your First Template
-          </button>
-        </div>
+        canManage ? (
+          <div className="rounded-lg border p-8 text-center">
+            <div className="text-4xl mb-4">📋</div>
+            <h3 className="text-lg font-semibold mb-2">No ITP Templates</h3>
+            <p className="text-muted-foreground mb-4">
+              Create ITP templates to define quality checkpoints for different activity types.
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowCreateModal(true)}
+              className="rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
+            >
+              Create Your First Template
+            </button>
+          </div>
+        ) : (
+          <div className="rounded-lg border p-8 text-center">
+            <div className="text-4xl mb-4">📋</div>
+            <h3 className="text-lg font-semibold mb-2">No ITP templates available</h3>
+            <p className="text-muted-foreground mb-4">
+              No ITP templates are available for this project yet. Ask your project manager or site
+              engineer to assign a template, then complete checklist items from the lot.
+            </p>
+            {projectId && (
+              <Link
+                to={`/projects/${projectId}/lots`}
+                className="inline-block rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
+              >
+                Go to Lots
+              </Link>
+            )}
+          </div>
+        )
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {templates
@@ -379,48 +418,50 @@ export function ITPPage() {
                     hold points
                   </span>
                 </div>
-                <div className="mt-3 pt-3 border-t flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handleCloneTemplate(template)}
-                      disabled={cloningTemplateId === template.id}
-                      className="text-xs px-2 py-1 rounded border hover:bg-muted disabled:opacity-50"
-                      title="Clone template"
-                    >
-                      {cloningTemplateId === template.id ? 'Copying...' : 'Copy'}
-                    </button>
-                    {/* Feature #128 - Edit button */}
+                {canManage && (
+                  <div className="mt-3 pt-3 border-t flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleCloneTemplate(template)}
+                        disabled={cloningTemplateId === template.id}
+                        className="text-xs px-2 py-1 rounded border hover:bg-muted disabled:opacity-50"
+                        title="Clone template"
+                      >
+                        {cloningTemplateId === template.id ? 'Copying...' : 'Copy'}
+                      </button>
+                      {/* Feature #128 - Edit button */}
+                      {!template.isGlobalTemplate && (
+                        <button
+                          type="button"
+                          onClick={() => handleEditTemplate(template)}
+                          className="text-xs px-2 py-1 rounded border hover:bg-muted"
+                          title="Edit template"
+                        >
+                          Edit
+                        </button>
+                      )}
+                    </div>
                     {!template.isGlobalTemplate && (
                       <button
                         type="button"
-                        onClick={() => handleEditTemplate(template)}
-                        className="text-xs px-2 py-1 rounded border hover:bg-muted"
-                        title="Edit template"
+                        onClick={() => handleToggleActive(template)}
+                        disabled={togglingTemplateId === template.id}
+                        className={`text-xs px-2 py-1 rounded ${
+                          template.isActive !== false
+                            ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                            : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                        } disabled:opacity-50`}
                       >
-                        Edit
+                        {togglingTemplateId === template.id
+                          ? 'Updating...'
+                          : template.isActive !== false
+                            ? 'Active'
+                            : 'Inactive'}
                       </button>
                     )}
                   </div>
-                  {!template.isGlobalTemplate && (
-                    <button
-                      type="button"
-                      onClick={() => handleToggleActive(template)}
-                      disabled={togglingTemplateId === template.id}
-                      className={`text-xs px-2 py-1 rounded ${
-                        template.isActive !== false
-                          ? 'bg-green-100 text-green-700 hover:bg-green-200'
-                          : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                      } disabled:opacity-50`}
-                    >
-                      {togglingTemplateId === template.id
-                        ? 'Updating...'
-                        : template.isActive !== false
-                          ? 'Active'
-                          : 'Inactive'}
-                    </button>
-                  )}
-                </div>
+                )}
               </div>
             ))}
         </div>

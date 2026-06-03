@@ -121,6 +121,18 @@ export const ROLE_GROUPS = {
   // Can perform quality actions (conformance, ITP verification)
   QUALITY: [ROLES.OWNER, ROLES.ADMIN, ROLES.PROJECT_MANAGER, ROLES.QUALITY_MANAGER] as const,
 
+  // Can manage ITP templates (create/edit/import/activate). Field roles such as
+  // foreman get read-only template visibility instead. MUST mirror the backend
+  // TEMPLATE_MANAGER_ROLES in backend/src/routes/itp/templates.ts so the UI never
+  // offers a template action the API would reject with 403.
+  ITP_TEMPLATE_MANAGERS: [
+    ROLES.OWNER,
+    ROLES.ADMIN,
+    ROLES.PROJECT_MANAGER,
+    ROLES.QUALITY_MANAGER,
+    ROLES.SITE_MANAGER,
+  ] as const,
+
   // Subcontractor roles
   SUBCONTRACTOR: [ROLES.SUBCONTRACTOR, ROLES.SUBCONTRACTOR_ADMIN] as const,
 
@@ -181,4 +193,15 @@ export function isViewerRole(role: string | undefined | null): boolean {
  */
 export function hasQualityAccess(role: string | undefined | null): boolean {
   return hasRoleInGroup(role, ROLE_GROUPS.QUALITY);
+}
+
+/**
+ * Check if a user can manage ITP templates (template setup/admin actions:
+ * create, edit, import, clone, activate/deactivate). Field roles such as foreman
+ * get read-only template visibility instead and are guided to lot checklist
+ * execution. Mirrors the backend permission so the UI never offers an action the
+ * API would reject.
+ */
+export function canManageItpTemplates(role: string | undefined | null): boolean {
+  return hasRoleInGroup(role, ROLE_GROUPS.ITP_TEMPLATE_MANAGERS);
 }
