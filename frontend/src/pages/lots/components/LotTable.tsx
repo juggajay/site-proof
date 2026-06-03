@@ -9,7 +9,7 @@ import {
   TestTube,
   AlertTriangle,
 } from 'lucide-react';
-import { COLUMN_CONFIG, type ColumnId } from './LotFiltersBar';
+import { COLUMN_CONFIG, type ColumnId } from './lotFilterConfig';
 import type { Lot } from '../lotsPageTypes';
 import {
   isRecord,
