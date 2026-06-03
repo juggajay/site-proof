@@ -165,6 +165,7 @@ export function useMyCompanyQuery(
     queryKey: [...queryKeys.portalCompanies(userId), requestedProjectId ?? 'default'],
     queryFn: () => fetchMyCompany(requestedProjectId),
     enabled: Boolean(userId),
+    retry: false,
   });
 }
 
@@ -176,6 +177,7 @@ export function useAssignedLotsQuery(
     queryKey: queryKeys.portalDocketEditLots(userId, projectId),
     queryFn: () => fetchAssignedLots(projectId!),
     enabled: Boolean(userId) && Boolean(projectId),
+    retry: false,
   });
 }
 
@@ -188,6 +190,7 @@ export function useDocketEditQuery(
     queryKey: queryKeys.portalDocket(userId, docketId),
     queryFn: () => fetchDocketDetail(docketId!),
     enabled: Boolean(userId) && Boolean(docketId) && enabled,
+    retry: false,
   });
 }
 
@@ -200,5 +203,6 @@ export function useExistingDocketsQuery(
     queryKey: queryKeys.portalDockets(userId, projectId),
     queryFn: () => fetchExistingDockets(projectId!),
     enabled: Boolean(userId) && Boolean(projectId) && enabled,
+    retry: false,
   });
 }
