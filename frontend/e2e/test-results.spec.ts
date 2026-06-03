@@ -568,3 +568,52 @@ test.describe('Test results seeded quality evidence contract', () => {
     expect(api.getVerifyRequestCount()).toBe(1);
   });
 });
+
+test.describe('Test results mobile card layout', () => {
+  test('renders test results as cards with preserved data and primary actions on a phone viewport', async ({
+    page,
+  }) => {
+    const api = await mockSeededTestResultsApi(page);
+
+    // The repo's proven mobile pattern: setViewportSize fires matchMedia's change
+    // listener so useIsMobile() flips to true. A describe-level test.use viewport
+    // does NOT work here because the project uses devices['Desktop Chrome'].
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(`/projects/${E2E_PROJECT_ID}/tests`);
+
+    await expect(page.getByRole('heading', { name: 'Test Results' })).toBeVisible();
+
+    // No virtualized table on mobile — the card list replaces it entirely.
+    await expect(page.getByRole('table')).toHaveCount(0);
+
+    // The seeded density-ratio test renders as a card preserving every column.
+    const densityCard = page
+      .getByText('Density Ratio', { exact: true })
+      .locator('xpath=ancestor::*[contains(@class,"rounded-xl")][1]');
+    await expect(densityCard).toBeVisible();
+    await expect(densityCard.getByText('98.2 % DDR')).toBeVisible();
+    await expect(densityCard.getByText('pass', { exact: true })).toBeVisible();
+    await expect(densityCard.getByText('Entered')).toBeVisible();
+    await expect(densityCard.getByText('AI', { exact: true })).toBeVisible();
+    await expect(densityCard.getByRole('button', { name: 'LOT-TEST-001' })).toBeVisible();
+    await expect(
+      densityCard.getByRole('button', { name: 'Print test certificate for Density Ratio' }),
+    ).toBeVisible();
+    await expect(densityCard.getByRole('button', { name: 'Reject' })).toBeVisible();
+
+    // The next-status workflow action is a full-width primary button on the card.
+    const verifyButton = densityCard.getByRole('button', { name: 'Verify' });
+    await expect(verifyButton).toBeVisible();
+    const cardBox = await densityCard.boundingBox();
+    const verifyBox = await verifyButton.boundingBox();
+    expect(cardBox).not.toBeNull();
+    expect(verifyBox).not.toBeNull();
+    expect(verifyBox!.width).toBeGreaterThan(cardBox!.width * 0.8);
+
+    // The status workflow still drives the real handler/API from the card.
+    await verifyButton.click();
+    expect(api.getVerifyRequest()).toMatchObject({ status: 'verified' });
+    await expect(densityCard.getByText('Verified')).toBeVisible();
+    await expect(densityCard.getByText('Complete')).toBeVisible();
+  });
+});

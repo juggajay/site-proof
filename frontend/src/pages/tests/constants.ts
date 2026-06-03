@@ -57,6 +57,12 @@ export const isTestOverdue = (test: TestResult): boolean => {
   return getCalendarDaysSince(test.createdAt) >= OVERDUE_DAYS;
 };
 
+// Feature #200: AI extraction rows stay flagged as a draft review until the AI
+// review dialog is confirmed (status moves on from results_received).
+export const isAiExtractionReviewDraft = (test: TestResult): boolean => {
+  return Boolean(test.aiExtracted && test.status === 'results_received');
+};
+
 // Feature #197: Calculate days since sample/creation
 export const getDaysSince = (dateStr: string | null, fallbackDateStr: string): number => {
   return getCalendarDaysSince(dateStr || fallbackDateStr);

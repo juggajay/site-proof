@@ -1,9 +1,6 @@
 import React, { useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useNavigate } from 'react-router-dom';
-import { apiFetch } from '@/lib/api';
-import type { TestCertificateData } from '@/lib/pdfGenerator';
-import { toast } from '@/components/ui/toaster';
 import type { TestResult } from '../types';
 import {
   statusColors,
@@ -13,8 +10,9 @@ import {
   nextStatusButtonLabels,
   isTestOverdue,
   getDaysSince,
+  isAiExtractionReviewDraft,
 } from '../constants';
-import { logError } from '@/lib/logger';
+import { generateTestResultCertificate } from '../testResultCertificate';
 
 interface TestResultsTableProps {
   projectId: string;
@@ -25,26 +23,6 @@ interface TestResultsTableProps {
   onRejectTest: (testId: string) => void;
   onClearFilters: () => void;
   onOpenCreateModal: () => void;
-}
-
-interface ProjectCertificateResponse {
-  name?: string;
-  projectNumber?: string;
-  project?: {
-    name?: string;
-    projectNumber?: string;
-  };
-}
-
-type TestCertificateLot = NonNullable<TestResult['lot']> & {
-  description?: string | null;
-  activityType?: string | null;
-  chainageStart?: number | null;
-  chainageEnd?: number | null;
-};
-
-function isAiExtractionReviewDraft(test: TestResult): boolean {
-  return Boolean(test.aiExtracted && test.status === 'results_received');
 }
 
 export const TestResultsTable = React.memo(function TestResultsTable({
@@ -213,80 +191,7 @@ export const TestResultsTable = React.memo(function TestResultsTable({
                           <div className="flex gap-2 items-center">
                             {/* Feature #668: Print Certificate button */}
                             <button
-                              onClick={async () => {
-                                try {
-                                  // Fetch project info for the certificate
-                                  let projectData: ProjectCertificateResponse | null = null;
-                                  try {
-                                    projectData = await apiFetch<ProjectCertificateResponse>(
-                                      `/api/projects/${encodeURIComponent(projectId)}`,
-                                    );
-                                  } catch {
-                                    // ignore - projectData stays null
-                                  }
-
-                                  // Get lot info if test is linked to a lot
-                                  const lot = test.lot as TestCertificateLot | null;
-                                  const lotInfo = lot
-                                    ? {
-                                        lotNumber: lot.lotNumber,
-                                        description: lot.description || null,
-                                        activityType: lot.activityType || null,
-                                        chainageStart: lot.chainageStart || null,
-                                        chainageEnd: lot.chainageEnd || null,
-                                      }
-                                    : null;
-
-                                  const pdfData: TestCertificateData = {
-                                    test: {
-                                      id: test.id,
-                                      testType: test.testType,
-                                      testRequestNumber: test.testRequestNumber,
-                                      laboratoryName: test.laboratoryName,
-                                      laboratoryReportNumber: test.laboratoryReportNumber,
-                                      sampleDate: test.sampleDate,
-                                      sampleLocation: test.sampleLocation,
-                                      testDate: test.testDate,
-                                      resultDate: test.resultDate,
-                                      resultValue: test.resultValue,
-                                      resultUnit: test.resultUnit,
-                                      specificationMin: test.specificationMin,
-                                      specificationMax: test.specificationMax,
-                                      passFail: test.passFail,
-                                      status: test.status,
-                                      aiExtracted: test.aiExtracted,
-                                      createdAt: test.createdAt,
-                                    },
-                                    lot: lotInfo,
-                                    project: {
-                                      name:
-                                        projectData?.project?.name ||
-                                        projectData?.name ||
-                                        'Unknown Project',
-                                      projectNumber:
-                                        projectData?.project?.projectNumber ||
-                                        projectData?.projectNumber ||
-                                        projectId ||
-                                        'N/A',
-                                    },
-                                  };
-
-                                  const { generateTestCertificatePDF } =
-                                    await import('@/lib/pdfGenerator');
-                                  await generateTestCertificatePDF(pdfData);
-                                  toast({
-                                    title: 'Certificate Generated',
-                                    description: `Test certificate PDF downloaded successfully`,
-                                  });
-                                } catch (error) {
-                                  logError('Error generating test certificate:', error);
-                                  toast({
-                                    title: 'Error',
-                                    description: 'Failed to generate test certificate',
-                                    variant: 'error',
-                                  });
-                                }
-                              }}
+                              onClick={() => generateTestResultCertificate(test, projectId)}
                               className="p-1.5 text-xs border rounded hover:bg-muted/50 transition-colors"
                               title="Print Test Certificate"
                               aria-label={`Print test certificate for ${test.testType}`}
