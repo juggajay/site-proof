@@ -2,7 +2,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { LazyPDFViewer } from '../../components/ui/LazyPDFViewer'; // Feature #446: React-PDF viewer (lazy loaded)
 import { apiFetch } from '../../lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 import { createMutationErrorHandler, extractErrorMessage } from '@/lib/errorHandling';
@@ -21,6 +20,7 @@ import {
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { logError } from '@/lib/logger';
 import { DocumentUploadModal } from './components/DocumentUploadModal';
+import { DocumentViewerModal } from './components/DocumentViewerModal';
 import { useDocumentUpload } from './useDocumentUpload';
 import { CATEGORIES, DOCUMENT_TYPES } from './documentsUploadData';
 import {
@@ -837,179 +837,21 @@ export function DocumentsPage() {
 
       {/* Document Viewer Modal */}
       {viewerDoc && (
-        <div
-          ref={viewerRef}
-          className="fixed inset-0 z-50 flex flex-col bg-black/90"
-          data-testid="document-viewer-modal"
-        >
-          {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 bg-black/50 text-white">
-            <div className="flex items-center gap-4">
-              <h3 className="font-medium truncate max-w-md">{viewerDoc.filename}</h3>
-              <span className="text-sm text-muted-foreground">
-                {formatFileSize(viewerDoc.fileSize)}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              {/* Zoom Controls */}
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={zoomOut}
-                disabled={viewerZoom <= 50}
-                className="hover:bg-white/20 text-white"
-                title="Zoom Out"
-              >
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM13 10H7"
-                  />
-                </svg>
-              </Button>
-              <span className="text-sm w-12 text-center">{viewerZoom}%</span>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={zoomIn}
-                disabled={viewerZoom >= 200}
-                className="hover:bg-white/20 text-white"
-                title="Zoom In"
-              >
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"
-                  />
-                </svg>
-              </Button>
-              {/* Fullscreen Toggle */}
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={toggleFullscreen}
-                className="hover:bg-white/20 text-white"
-                title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
-                data-testid="fullscreen-toggle"
-              >
-                {isFullscreen ? (
-                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25"
-                    />
-                  </svg>
-                ) : (
-                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15"
-                    />
-                  </svg>
-                )}
-              </Button>
-              {/* Download */}
-              <button
-                type="button"
-                onClick={() => void handleDownload(viewerDoc)}
-                className="rounded-md p-2 hover:bg-white/20"
-                title="Download"
-              >
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                  />
-                </svg>
-              </button>
-              {/* Close */}
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={closeViewer}
-                className="hover:bg-white/20 text-white ml-2"
-                title="Close"
-              >
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              </Button>
-            </div>
-          </div>
-
-          {/* Content Area */}
-          <div className="flex-1 overflow-auto flex items-center justify-center p-4">
-            {viewerUrlLoading ? (
-              <div className="text-white" role="status">
-                Loading secure preview...
-              </div>
-            ) : viewerError ? (
-              <div className="text-center text-white" role="alert">
-                <p>{viewerError}</p>
-                <Button type="button" className="mt-4" onClick={() => void openViewer(viewerDoc)}>
-                  Try again
-                </Button>
-              </div>
-            ) : isPdf(viewerDoc.mimeType) && viewerUrl ? (
-              /* Feature #446: Use React-PDF viewer for better PDF rendering (lazy loaded) */
-              <LazyPDFViewer
-                url={viewerUrl}
-                filename={viewerDoc.filename}
-                className="w-full h-full max-w-5xl"
-              />
-            ) : isImage(viewerDoc.mimeType) && viewerUrl ? (
-              <div className="overflow-auto max-h-[90vh]" style={{ cursor: 'grab' }}>
-                <img
-                  src={viewerUrl}
-                  alt={viewerDoc.filename}
-                  className="rounded shadow-lg transition-transform"
-                  style={{
-                    transform: `scale(${viewerZoom / 100})`,
-                    transformOrigin: 'center',
-                    maxWidth: viewerZoom <= 100 ? '100%' : 'none',
-                  }}
-                  draggable={false}
-                />
-              </div>
-            ) : (
-              <div className="text-white text-center">
-                <p>Preview not available for this file type</p>
-                <button
-                  type="button"
-                  onClick={() => void handleDownload(viewerDoc)}
-                  className="mt-4 inline-block rounded-md bg-primary px-4 py-2 text-sm"
-                >
-                  Download File
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Document Info Footer */}
-          <div className="px-4 py-2 bg-black/50 text-white text-sm">
-            <div className="flex items-center gap-4">
-              {viewerDoc.caption && <span>{viewerDoc.caption}</span>}
-              {viewerDoc.uploadedBy && <span>Uploaded by {viewerDoc.uploadedBy.fullName}</span>}
-              <span>{formatDate(viewerDoc.uploadedAt)}</span>
-              {viewerDoc.lot && <span>Lot {viewerDoc.lot.lotNumber}</span>}
-            </div>
-          </div>
-        </div>
+        <DocumentViewerModal
+          doc={viewerDoc}
+          url={viewerUrl}
+          urlLoading={viewerUrlLoading}
+          error={viewerError}
+          zoom={viewerZoom}
+          isFullscreen={isFullscreen}
+          viewerRef={viewerRef}
+          onZoomIn={zoomIn}
+          onZoomOut={zoomOut}
+          onToggleFullscreen={toggleFullscreen}
+          onDownload={() => void handleDownload(viewerDoc)}
+          onClose={closeViewer}
+          onRetry={() => void openViewer(viewerDoc)}
+        />
       )}
 
       <ConfirmDialog
