@@ -1453,7 +1453,6 @@ test.describe('production readiness guardrails', () => {
       '../src/pages/diary/components/DiarySubmitSection.tsx',
       '../src/components/foreman/DiaryFinishFlow.tsx',
       '../src/components/foreman/CaptureModal.tsx',
-      '../src/components/foreman/PhotoCaptureModal.tsx',
     ];
 
     expect(loggerSource).toContain('export function logError');
@@ -1918,10 +1917,6 @@ test.describe('production readiness guardrails', () => {
       new URL('../src/components/foreman/CaptureModal.tsx', import.meta.url),
       'utf8',
     );
-    const photoCaptureModalSource = await readFile(
-      new URL('../src/components/foreman/PhotoCaptureModal.tsx', import.meta.url),
-      'utf8',
-    );
     const quickPhotoCaptureSource = await readFile(
       new URL('../src/components/QuickPhotoCapture.tsx', import.meta.url),
       'utf8',
@@ -1938,7 +1933,6 @@ test.describe('production readiness guardrails', () => {
     expect(captureModalSource).toContain(
       "documentType: captureType === 'ncr' ? 'ncr_evidence' : 'photo'",
     );
-    expect(photoCaptureModalSource).toContain("documentType: 'photo'");
     expect(quickPhotoCaptureSource).toContain("documentType: 'photo'");
   });
 

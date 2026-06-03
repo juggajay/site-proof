@@ -14,7 +14,6 @@ export { DiaryFinishFlow } from './DiaryFinishFlow';
 
 // Capture Components
 export { QuickCaptureButton } from './QuickCaptureButton';
-export { PhotoCaptureModal } from './PhotoCaptureModal';
 
 // Dashboard Widgets
 export { DashboardCard, DashboardStat } from './DashboardCard';

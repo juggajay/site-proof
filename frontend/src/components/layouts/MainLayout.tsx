@@ -40,12 +40,13 @@ export function MainLayout() {
       </div>
       <MobileNav />
 
-      {/* Foreman capture modal - triggered by the bottom nav Capture button via
-          the store. Sourced from the effective project id so it works on
-          project-less routes too. Skipped on /dashboard, which mounts its own
-          capture modal (the duplicate B2 consolidates) - avoids stacking two
-          camera modals until that consolidation lands. */}
-      {isForeman && effectiveProjectId && location.pathname !== '/dashboard' && (
+      {/* Foreman capture modal - the single shared mobile capture workflow.
+          Triggered by both the bottom-nav Capture button and the dashboard
+          quick-capture FAB via the foreman store. Sourced from the effective
+          project id so it works on project-less routes too, including the bare
+          /dashboard landing screen (the dashboard no longer mounts its own
+          capture modal, so there is exactly one camera modal everywhere). */}
+      {isForeman && effectiveProjectId && (
         <CaptureModal
           projectId={effectiveProjectId}
           isOpen={isCameraOpen}
