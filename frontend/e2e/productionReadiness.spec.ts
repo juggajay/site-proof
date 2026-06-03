@@ -165,11 +165,15 @@ test.describe('production readiness guardrails', () => {
       new URL('../../backend/src/routes/claims/workflowRoutes.ts', import.meta.url),
       'utf8',
     );
+    const claimsWorkflowValidation = await readFile(
+      new URL('../../backend/src/routes/claims/workflowValidation.ts', import.meta.url),
+      'utf8',
+    );
 
     expect(createClaimModal).toContain("percentComplete: '100'");
     expect(createClaimModal).toContain('required');
     expect(createClaimModal).toContain('Percent complete is required for every selected lot.');
-    expect(claimsWorkflowRoute).toContain('Each claimed lot must include percentageComplete');
+    expect(claimsWorkflowValidation).toContain('Each claimed lot must include percentageComplete');
     expect(claimsWorkflowRoute).not.toContain('percentageComplete: lot.percentageComplete ?? 100');
     expect(claimsWorkflowRoute).not.toContain('percentageComplete: 100,');
   });
