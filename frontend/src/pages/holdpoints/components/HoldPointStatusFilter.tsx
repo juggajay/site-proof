@@ -5,12 +5,16 @@ interface HoldPointStatusFilterProps {
   statusFilter: StatusFilter;
   onStatusFilterChange: (filter: StatusFilter) => void;
   onExportCSV: () => void;
+  // Mobile hides the CSV export to keep the primary actions uncluttered; desktop
+  // keeps it (default true), so this is a no-op for existing callers.
+  showExport?: boolean;
 }
 
 export const HoldPointStatusFilter = React.memo(function HoldPointStatusFilter({
   statusFilter,
   onStatusFilterChange,
   onExportCSV,
+  showExport = true,
 }: HoldPointStatusFilterProps) {
   return (
     <>
@@ -26,12 +30,14 @@ export const HoldPointStatusFilter = React.memo(function HoldPointStatusFilter({
           <option value="notified">Awaiting Release</option>
           <option value="released">Released</option>
         </select>
-        <button
-          onClick={onExportCSV}
-          className="rounded-lg border border-border px-4 py-2 text-foreground hover:bg-muted/50"
-        >
-          Export CSV
-        </button>
+        {showExport && (
+          <button
+            onClick={onExportCSV}
+            className="rounded-lg border border-border px-4 py-2 text-foreground hover:bg-muted/50"
+          >
+            Export CSV
+          </button>
+        )}
       </div>
     </>
   );

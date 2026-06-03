@@ -1,0 +1,251 @@
+import { Link2, Check, Download, RefreshCw, ClipboardCheck } from 'lucide-react';
+import { MobileDataCard } from '@/components/ui/MobileDataCard';
+import { Button } from '@/components/ui/button';
+import type { HoldPoint, StatusFilter } from '../types';
+import { formatHoldPointDate, getStatusLabel, isOverdue } from './holdPointTableUtils';
+
+interface HoldPointsMobileListProps {
+  holdPoints: HoldPoint[];
+  filteredHoldPoints: HoldPoint[];
+  loading: boolean;
+  statusFilter: StatusFilter;
+  copiedHpId: string | null;
+  generatingPdf: string | null;
+  chasingHpId: string | null;
+  onCopyLink: (hpId: string, lotNumber: string, description: string) => void;
+  onRequestRelease: (hp: HoldPoint) => void;
+  onRecordRelease: (hp: HoldPoint) => void;
+  onChase: (hp: HoldPoint) => void;
+  onGenerateEvidence: (hp: HoldPoint) => void;
+  onClearFilter: () => void;
+}
+
+// Mobile (<768px) card layout for the hold-point register. Mirrors the desktop
+// HoldPointsTable's loading/empty/filter-empty states and its exact per-status
+// action gating, but renders each hold point as a tap-friendly card with a
+// full-width primary action. Reuses the page's existing request/record/chase/
+// evidence handlers and modals — no behavior or permission changes.
+export function HoldPointsMobileList({
+  holdPoints,
+  filteredHoldPoints,
+  loading,
+  statusFilter,
+  copiedHpId,
+  generatingPdf,
+  chasingHpId,
+  onCopyLink,
+  onRequestRelease,
+  onRecordRelease,
+  onChase,
+  onGenerateEvidence,
+  onClearFilter,
+}: HoldPointsMobileListProps) {
+  if (loading) {
+    return (
+      <div className="flex justify-center p-8" role="status" aria-label="Loading hold points">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      </div>
+    );
+  }
+
+  if (holdPoints.length === 0) {
+    return (
+      <div className="rounded-lg border p-8 text-center">
+        <div className="text-4xl mb-4">&#x1f512;</div>
+        <h3 className="text-lg font-semibold mb-2">No Hold Points</h3>
+        <p className="text-muted-foreground mb-4">
+          Hold points are created when ITPs with hold point items are assigned to lots. Create an
+          ITP template with hold point items and assign it to a lot to see hold points here.
+        </p>
+      </div>
+    );
+  }
+
+  if (filteredHoldPoints.length === 0) {
+    return (
+      <div className="rounded-lg border p-8 text-center">
+        <div className="text-4xl mb-4">&#x1f50d;</div>
+        <h3 className="text-lg font-semibold mb-2">No Hold Points Match Filter</h3>
+        <p className="text-muted-foreground mb-4">
+          No hold points with status &quot;{getStatusLabel(statusFilter)}&quot; found. Try selecting
+          a different status filter.
+        </p>
+        <button type="button" onClick={onClearFilter} className="text-primary hover:underline">
+          Show all hold points
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {filteredHoldPoints.map((hp) => (
+        <HoldPointMobileCard
+          key={hp.id}
+          hp={hp}
+          copiedHpId={copiedHpId}
+          generatingPdf={generatingPdf}
+          chasingHpId={chasingHpId}
+          onCopyLink={onCopyLink}
+          onRequestRelease={onRequestRelease}
+          onRecordRelease={onRecordRelease}
+          onChase={onChase}
+          onGenerateEvidence={onGenerateEvidence}
+        />
+      ))}
+    </div>
+  );
+}
+
+interface HoldPointMobileCardProps {
+  hp: HoldPoint;
+  copiedHpId: string | null;
+  generatingPdf: string | null;
+  chasingHpId: string | null;
+  onCopyLink: (hpId: string, lotNumber: string, description: string) => void;
+  onRequestRelease: (hp: HoldPoint) => void;
+  onRecordRelease: (hp: HoldPoint) => void;
+  onChase: (hp: HoldPoint) => void;
+  onGenerateEvidence: (hp: HoldPoint) => void;
+}
+
+const statusVariants: Record<string, 'default' | 'warning' | 'success'> = {
+  pending: 'default',
+  notified: 'warning',
+  released: 'success',
+};
+
+function HoldPointMobileCard({
+  hp,
+  copiedHpId,
+  generatingPdf,
+  chasingHpId,
+  onCopyLink,
+  onRequestRelease,
+  onRecordRelease,
+  onChase,
+  onGenerateEvidence,
+}: HoldPointMobileCardProps) {
+  const overdue = isOverdue(hp);
+  const isVirtual = hp.id.startsWith('virtual-');
+
+  return (
+    <MobileDataCard
+      title={hp.lotNumber}
+      subtitle={hp.description}
+      status={{ label: getStatusLabel(hp.status), variant: statusVariants[hp.status] ?? 'default' }}
+      className={overdue ? 'border-red-400' : undefined}
+      fields={[
+        {
+          label: 'Scheduled',
+          value: overdue ? (
+            <span className="text-red-600 font-medium">
+              {formatHoldPointDate(hp.scheduledDate)} &middot; Overdue
+            </span>
+          ) : (
+            formatHoldPointDate(hp.scheduledDate)
+          ),
+          priority: 'primary',
+        },
+        {
+          label: 'Released',
+          value: hp.releasedAt ? (
+            <span>
+              {formatHoldPointDate(hp.releasedAt)}
+              {hp.releasedByName && (
+                <span className="block text-xs text-muted-foreground">{hp.releasedByName}</span>
+              )}
+            </span>
+          ) : (
+            '-'
+          ),
+          priority: 'primary',
+        },
+      ]}
+      actions={
+        <div className="flex w-full flex-col gap-2">
+          {hp.status === 'pending' && (
+            <Button size="lg" className="w-full" onClick={() => onRequestRelease(hp)}>
+              Request Release
+            </Button>
+          )}
+
+          {hp.status === 'notified' && !isVirtual && (
+            <>
+              <Button
+                variant="success"
+                size="lg"
+                className="w-full"
+                onClick={() => onRecordRelease(hp)}
+              >
+                <ClipboardCheck className="h-4 w-4" />
+                Record Release
+              </Button>
+              <Button
+                variant="outline"
+                size="lg"
+                className="w-full"
+                disabled={chasingHpId === hp.id}
+                onClick={() => onChase(hp)}
+              >
+                {chasingHpId === hp.id ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                    Chasing...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-4 w-4" />
+                    Chase
+                  </>
+                )}
+              </Button>
+            </>
+          )}
+
+          {hp.status === 'released' && !isVirtual && (
+            <Button
+              variant="outline"
+              size="lg"
+              className="w-full"
+              disabled={generatingPdf === hp.id}
+              onClick={() => onGenerateEvidence(hp)}
+            >
+              {generatingPdf === hp.id ? (
+                <>
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Download className="h-4 w-4" />
+                  Evidence PDF
+                </>
+              )}
+            </Button>
+          )}
+
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full"
+            onClick={() => onCopyLink(hp.id, hp.lotNumber, hp.description)}
+            aria-label={`Copy link to hold point ${hp.lotNumber}`}
+          >
+            {copiedHpId === hp.id ? (
+              <>
+                <Check className="h-4 w-4 text-green-600" />
+                Copied
+              </>
+            ) : (
+              <>
+                <Link2 className="h-4 w-4" />
+                Copy link
+              </>
+            )}
+          </Button>
+        </div>
+      }
+    />
+  );
+}

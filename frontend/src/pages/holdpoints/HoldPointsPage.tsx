@@ -54,10 +54,12 @@ const HOLD_POINTS_PAGE_LIMIT = 100;
 // Extracted components
 import { HoldPointStatusFilter, HoldPointSummaryCards } from './components/HoldPointStatusFilter';
 import { HoldPointsTable } from './components/HoldPointsTable';
+import { HoldPointsMobileList } from './components/HoldPointsMobileList';
 import { formatHoldPointDate, getStatusLabel, isOverdue } from './components/holdPointTableUtils';
 import { RequestReleaseModal } from './components/RequestReleaseModal';
 import { RecordReleaseModal } from './components/RecordReleaseModal';
 import { downloadCsv } from '@/lib/csv';
+import { useIsMobile } from '@/hooks/useMediaQuery';
 
 async function fetchAllProjectHoldPoints(projectId: string): Promise<HoldPoint[]> {
   const allHoldPoints: HoldPoint[] = [];
@@ -80,6 +82,7 @@ async function fetchAllProjectHoldPoints(projectId: string): Promise<HoldPoint[]
 
 export function HoldPointsPage() {
   const { projectId } = useParams();
+  const isMobile = useIsMobile();
   const [holdPoints, setHoldPoints] = useState<HoldPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [showRequestModal, setShowRequestModal] = useState(false);
@@ -517,6 +520,7 @@ export function HoldPointsPage() {
             statusFilter={statusFilter}
             onStatusFilterChange={setStatusFilter}
             onExportCSV={handleExportCSV}
+            showExport={!isMobile}
           />
         )}
       </div>
@@ -534,7 +538,7 @@ export function HoldPointsPage() {
 
       {!loading && !loadError && holdPoints.length > 0 && <HoldPointSummaryCards stats={stats} />}
 
-      {!loading && !loadError && holdPoints.length > 0 && (
+      {!isMobile && !loading && !loadError && holdPoints.length > 0 && (
         <LazyHoldPointsChart
           releasesOverTime={chartData.releasesOverTime}
           avgTimeToRelease={chartData.avgTimeToRelease}
@@ -542,23 +546,40 @@ export function HoldPointsPage() {
         />
       )}
 
-      {!loadError && (
-        <HoldPointsTable
-          holdPoints={holdPoints}
-          filteredHoldPoints={filteredHoldPoints}
-          loading={loading}
-          statusFilter={statusFilter}
-          copiedHpId={copiedHpId}
-          generatingPdf={generatingPdf}
-          chasingHpId={chasingHpId}
-          onCopyLink={handleCopyHpLink}
-          onRequestRelease={handleRequestRelease}
-          onRecordRelease={handleRecordRelease}
-          onChase={handleChaseHoldPoint}
-          onGenerateEvidence={handleGenerateEvidencePackage}
-          onClearFilter={handleClearFilter}
-        />
-      )}
+      {!loadError &&
+        (isMobile ? (
+          <HoldPointsMobileList
+            holdPoints={holdPoints}
+            filteredHoldPoints={filteredHoldPoints}
+            loading={loading}
+            statusFilter={statusFilter}
+            copiedHpId={copiedHpId}
+            generatingPdf={generatingPdf}
+            chasingHpId={chasingHpId}
+            onCopyLink={handleCopyHpLink}
+            onRequestRelease={handleRequestRelease}
+            onRecordRelease={handleRecordRelease}
+            onChase={handleChaseHoldPoint}
+            onGenerateEvidence={handleGenerateEvidencePackage}
+            onClearFilter={handleClearFilter}
+          />
+        ) : (
+          <HoldPointsTable
+            holdPoints={holdPoints}
+            filteredHoldPoints={filteredHoldPoints}
+            loading={loading}
+            statusFilter={statusFilter}
+            copiedHpId={copiedHpId}
+            generatingPdf={generatingPdf}
+            chasingHpId={chasingHpId}
+            onCopyLink={handleCopyHpLink}
+            onRequestRelease={handleRequestRelease}
+            onRecordRelease={handleRecordRelease}
+            onChase={handleChaseHoldPoint}
+            onGenerateEvidence={handleGenerateEvidencePackage}
+            onClearFilter={handleClearFilter}
+          />
+        ))}
 
       {showRequestModal && selectedHoldPoint && (
         <RequestReleaseModal

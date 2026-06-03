@@ -516,3 +516,45 @@ test.describe('Hold points seeded release contract', () => {
     await expect(notifiedRow.getByText('Released', { exact: true })).toBeHidden();
   });
 });
+
+test.describe('Hold points mobile card layout', () => {
+  test('renders hold points as cards with a full-width Request Release and no desktop table/export', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await mockSeededHoldPointsApi(page);
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/hold-points`);
+
+    await expect(page.getByRole('heading', { name: 'Hold Points' })).toBeVisible();
+    await expect(page.getByText('Total HPs')).toBeVisible();
+
+    // Mobile drops the desktop table and the CSV export.
+    await expect(page.getByRole('table')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Export CSV' })).toBeHidden();
+
+    // Pending hold point is a card with the primary release action.
+    await expect(page.getByText('LOT-HP-001')).toBeVisible();
+    await expect(page.getByText('Verify formation before covering work')).toBeVisible();
+    const requestRelease = page.getByRole('button', { name: 'Request Release' });
+    await expect(requestRelease).toBeVisible();
+
+    // The action spans (close to) the full card width so it is an obvious tap target.
+    const cardWidth = await page
+      .getByText('LOT-HP-001')
+      .locator('xpath=ancestor::*[contains(@class,"rounded-xl")][1]')
+      .evaluate((el) => el.getBoundingClientRect().width);
+    const buttonWidth = await requestRelease.evaluate((el) => el.getBoundingClientRect().width);
+    expect(buttonWidth).toBeGreaterThan(cardWidth * 0.8);
+
+    // Per-status actions are preserved on mobile.
+    await expect(page.getByRole('button', { name: 'Record Release' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Chase' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Evidence PDF' })).toBeVisible();
+
+    // Request Release still opens the existing modal workflow.
+    await requestRelease.click();
+    const modal = page.getByRole('dialog').filter({ hasText: 'Request Hold Point Release' });
+    await expect(modal.getByRole('heading', { name: 'Request Hold Point Release' })).toBeVisible();
+  });
+});
