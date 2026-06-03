@@ -1,55 +1,24 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { getAuthToken } from '@/lib/auth';
 import { apiFetch } from '@/lib/api';
 import { logError } from '@/lib/logger';
 import { toast } from '@/components/ui/toaster';
 import { extractErrorMessage } from '@/lib/errorHandling';
+import {
+  applyItpTemplatesUpdate,
+  useCrossProjectItpTemplatesQuery,
+  useItpTemplatesQuery,
+  type ChecklistItem,
+  type ITPTemplate,
+} from './itpPageData';
 
-interface ChecklistItem {
-  id?: string;
-  description: string;
-  category: string;
-  responsibleParty: 'contractor' | 'subcontractor' | 'superintendent' | 'general';
-  isHoldPoint: boolean;
-  pointType: 'standard' | 'witness' | 'hold_point';
-  evidenceRequired: 'none' | 'photo' | 'test' | 'document';
-  verificationMethod?: string;
-  acceptanceCriteria?: string;
-  testType?: string;
-  order: number;
-}
-
+// ChecklistItem, ITPTemplate, CrossProjectTemplate and ProjectWithTemplates now
+// live in ./itpPageData (the data-layer contract, imported above). These two
+// derived form types stay here — they only describe the create/edit modal form.
 type NewChecklistItem = Omit<ChecklistItem, 'id' | 'order'>;
 type EditableChecklistItem = Omit<ChecklistItem, 'id'>;
-
-interface ITPTemplate {
-  id: string;
-  name: string;
-  description: string | null;
-  activityType: string;
-  checklistItems: ChecklistItem[];
-  createdAt: string;
-  isGlobalTemplate?: boolean;
-  stateSpec?: string | null;
-  isActive?: boolean;
-}
-
-interface CrossProjectTemplate {
-  id: string;
-  name: string;
-  description: string | null;
-  activityType: string;
-  checklistItemCount: number;
-  holdPointCount: number;
-}
-
-interface ProjectWithTemplates {
-  id: string;
-  name: string;
-  code: string;
-  templates: CrossProjectTemplate[];
-}
 
 const ACTIVITY_TYPE_LABELS: Record<string, string> = {
   asphalt_prep: 'Asphalt prep',
@@ -73,8 +42,7 @@ function formatActivityTypeLabel(activityType: string): string {
 
 export function ITPPage() {
   const { projectId } = useParams();
-  const [templates, setTemplates] = useState<ITPTemplate[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false); // Feature #128
@@ -83,44 +51,28 @@ export function ITPPage() {
   const [togglingTemplateId, setTogglingTemplateId] = useState<string | null>(null);
   const [cloningTemplateId, setCloningTemplateId] = useState<string | null>(null);
   const [includeGlobalTemplates, setIncludeGlobalTemplates] = useState(true);
-  const [projectSpecificationSet, setProjectSpecificationSet] = useState<string | null>(null);
   const [activityTypeFilter, setActivityTypeFilter] = useState<string>('');
   const [responsiblePartyFilter, setResponsiblePartyFilter] = useState<string>(''); // Feature #711
-  const [error, setError] = useState<string | null>(null);
 
   const token = getAuthToken();
 
-  const fetchTemplates = useCallback(async () => {
-    if (!projectId || !token) {
-      setTemplates([]);
-      setProjectSpecificationSet(null);
-      setError(null);
-      setLoading(false);
-      return;
-    }
+  const templatesQuery = useItpTemplatesQuery(projectId, includeGlobalTemplates);
+  const templates = templatesQuery.data?.templates ?? [];
+  const projectSpecificationSet = templatesQuery.data?.projectSpecificationSet ?? null;
+  // Spinner only while a fetch is genuinely in flight with nothing to show yet —
+  // covers first load and the "Try again" refetch, and stays false when the
+  // query is disabled (no projectId/token), matching the previous behavior.
+  const loading = templatesQuery.isFetching && !templatesQuery.data;
+  const error =
+    templatesQuery.error && !templatesQuery.data
+      ? extractErrorMessage(templatesQuery.error, 'Failed to load ITP templates.')
+      : null;
 
-    setLoading(true);
-    setError(null);
-
-    try {
-      const data = await apiFetch<{ templates: ITPTemplate[]; projectSpecificationSet?: string }>(
-        `/api/itp/templates?projectId=${encodeURIComponent(projectId)}&includeGlobal=${includeGlobalTemplates ? 'true' : 'false'}`,
-      );
-      setTemplates(data.templates || []);
-      setProjectSpecificationSet(data.projectSpecificationSet || null);
-    } catch (err) {
-      logError('Failed to fetch ITP templates:', err);
-      setTemplates([]);
-      setProjectSpecificationSet(null);
-      setError(extractErrorMessage(err, 'Failed to load ITP templates.'));
-    } finally {
-      setLoading(false);
-    }
-  }, [projectId, token, includeGlobalTemplates]);
-
-  useEffect(() => {
-    void fetchTemplates();
-  }, [fetchTemplates]);
+  // Replaces the previous `setTemplates(...)` optimistic updates: write straight
+  // to the active query's cache so create/clone/import/toggle/edit keep updating
+  // the visible list instantly, with no refetch and identical ordering.
+  const setTemplatesCache = (updater: (prev: ITPTemplate[]) => ITPTemplate[]) =>
+    applyItpTemplatesUpdate(queryClient, projectId, includeGlobalTemplates, updater);
 
   const handleCreateTemplate = async (data: {
     name: string;
@@ -140,7 +92,7 @@ export function ITPPage() {
         }),
       });
 
-      setTemplates((prev) => [result.template, ...prev]);
+      setTemplatesCache((prev) => [result.template, ...prev]);
       setShowCreateModal(false);
     } catch (err) {
       logError('Failed to create template:', err);
@@ -169,7 +121,7 @@ export function ITPPage() {
         },
       );
 
-      setTemplates((prev) =>
+      setTemplatesCache((prev) =>
         prev.map((t) => (t.id === template.id ? { ...t, isActive: result.template.isActive } : t)),
       );
     } catch (err) {
@@ -199,7 +151,7 @@ export function ITPPage() {
         },
       );
 
-      setTemplates((prev) => [result.template, ...prev]);
+      setTemplatesCache((prev) => [result.template, ...prev]);
     } catch (err) {
       logError('Failed to clone template:', err);
       toast({
@@ -240,7 +192,7 @@ export function ITPPage() {
         },
       );
 
-      setTemplates((prev) => prev.map((t) => (t.id === templateId ? result.template : t)));
+      setTemplatesCache((prev) => prev.map((t) => (t.id === templateId ? result.template : t)));
       setShowEditModal(false);
       setEditingTemplate(null);
     } catch (err) {
@@ -269,7 +221,7 @@ export function ITPPage() {
         },
       );
 
-      setTemplates((prev) => [result.template, ...prev]);
+      setTemplatesCache((prev) => [result.template, ...prev]);
       return true;
     } catch (err) {
       logError('Failed to import template:', err);
@@ -372,7 +324,7 @@ export function ITPPage() {
           <p className="mt-2 text-sm text-muted-foreground">{error}</p>
           <button
             type="button"
-            onClick={() => void fetchTemplates()}
+            onClick={() => void templatesQuery.refetch()}
             className="mt-4 rounded-lg border px-4 py-2 text-sm hover:bg-muted"
           >
             Try again
@@ -821,40 +773,23 @@ function ImportFromProjectModal({
   onImport: (templateId: string) => Promise<boolean>;
   currentProjectId: string;
 }) {
-  const [projects, setProjects] = useState<ProjectWithTemplates[]>([]);
-  const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState<string | null>(null);
-  const [selectedProject, setSelectedProject] = useState<string>('');
+  const [userSelectedProject, setUserSelectedProject] = useState<string | null>(null);
   const [importedTemplates, setImportedTemplates] = useState<Set<string>>(new Set());
-  const [error, setError] = useState<string | null>(null);
 
-  const fetchCrossProjectTemplates = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const data = await apiFetch<{ projects: ProjectWithTemplates[] }>(
-        `/api/itp/templates/cross-project?currentProjectId=${encodeURIComponent(currentProjectId)}`,
-      );
-      setProjects(data.projects || []);
-      if (data.projects?.length > 0) {
-        setSelectedProject(data.projects[0].id);
-      } else {
-        setSelectedProject('');
-      }
-    } catch (err) {
-      logError('Failed to fetch cross-project templates:', err);
-      setProjects([]);
-      setSelectedProject('');
-      setError(extractErrorMessage(err, 'Failed to load templates from other projects.'));
-    } finally {
-      setLoading(false);
-    }
-  }, [currentProjectId]);
-
-  useEffect(() => {
-    void fetchCrossProjectTemplates();
-  }, [fetchCrossProjectTemplates]);
+  const crossProjectQuery = useCrossProjectItpTemplatesQuery(currentProjectId);
+  const projects = crossProjectQuery.data ?? [];
+  const loading = crossProjectQuery.isFetching && !crossProjectQuery.data;
+  const error =
+    crossProjectQuery.error && !crossProjectQuery.data
+      ? extractErrorMessage(
+          crossProjectQuery.error,
+          'Failed to load templates from other projects.',
+        )
+      : null;
+  // Default to the first project once data arrives (matching the old fetch's
+  // `setSelectedProject(projects[0].id)`); a manual pick takes precedence.
+  const selectedProject = userSelectedProject ?? projects[0]?.id ?? '';
 
   const handleImport = async (templateId: string) => {
     if (importing === templateId || importedTemplates.has(templateId)) return;
@@ -903,7 +838,7 @@ function ImportFromProjectModal({
             <p className="mt-2 text-sm text-muted-foreground">{error}</p>
             <button
               type="button"
-              onClick={() => void fetchCrossProjectTemplates()}
+              onClick={() => void crossProjectQuery.refetch()}
               className="mt-4 rounded-lg border px-4 py-2 text-sm hover:bg-muted"
             >
               Try again
@@ -923,7 +858,7 @@ function ImportFromProjectModal({
               <label className="block text-sm font-medium mb-1">Select Project</label>
               <select
                 value={selectedProject}
-                onChange={(e) => setSelectedProject(e.target.value)}
+                onChange={(e) => setUserSelectedProject(e.target.value)}
                 className="w-full px-3 py-2 border rounded-lg"
               >
                 {projects.map((project) => (
