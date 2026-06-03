@@ -267,7 +267,10 @@ test.describe('production readiness guardrails', () => {
       new URL('../src/components/QuickPhotoCapture.tsx', import.meta.url),
       'utf8',
     );
-    const offlineDb = await readFile(new URL('../src/lib/offlineDb.ts', import.meta.url), 'utf8');
+    const offlinePhotoCompression = await readFile(
+      new URL('../src/lib/offlinePhotoCompression.ts', import.meta.url),
+      'utf8',
+    );
 
     expect(uploadCertificateModal).toContain('URL.revokeObjectURL(pdfUrlRef.current)');
     expect(commentsSection).toContain('revokeAttachmentPreviews(pendingAttachmentsRef.current)');
@@ -280,7 +283,7 @@ test.describe('production readiness guardrails', () => {
     expect(commentsSection).toContain('onClick={() => beginReply(comment.id)}');
     expect(quickPhotoCapture).toContain('URL.revokeObjectURL(previewUrlRef.current)');
     expect(quickPhotoCapture).not.toContain('alert(');
-    expect(offlineDb).toContain('URL.revokeObjectURL(objectUrl)');
+    expect(offlinePhotoCompression).toContain('URL.revokeObjectURL(objectUrl)');
   });
 
   test('blob downloads use centralized delayed URL revocation', async () => {
