@@ -45,6 +45,7 @@ export const queryKeys = {
   // Dockets
   dockets: (projectId: string, status = 'all') => ['dockets', projectId, status] as const,
   docketProject: (projectId: string) => ['docket-project', projectId] as const,
+  docketDetail: (docketId: string) => ['docket-detail', docketId] as const,
 
   // Subcontractors
   subcontractors: (projectId: string) => ['subcontractors', projectId] as const,
