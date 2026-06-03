@@ -12,37 +12,29 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { NativeSelect } from '@/components/ui/native-select';
-import {
-  Modal,
-  ModalHeader,
-  ModalDescription,
-  ModalBody,
-  ModalFooter,
-} from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { logError } from '@/lib/logger';
 import { sanitizeDownloadFilename } from '@/lib/downloads';
-
-interface Drawing {
-  id: string;
-  drawingNumber: string;
-  title: string | null;
-  revision: string | null;
-  issueDate: string | null;
-  status: string;
-  createdAt: string;
-  document: {
-    id: string;
-    filename: string;
-    fileUrl: string;
-    fileSize: number | null;
-    mimeType: string | null;
-    uploadedAt: string;
-    uploadedBy: { id: string; fullName: string; email: string } | null;
-  };
-  supersededBy: { id: string; drawingNumber: string; revision: string } | null;
-  supersedes: { id: string; drawingNumber: string; revision: string }[];
-}
+import { DrawingUploadModal } from './components/DrawingUploadModal';
+import { DrawingRevisionModal } from './components/DrawingRevisionModal';
+import {
+  DEFAULT_REVISION_FORM,
+  DEFAULT_UPLOAD_FORM,
+  DRAWING_STATUSES,
+  buildDrawingRevisionFormData,
+  buildDrawingSupersedePath,
+  buildDrawingUploadFormData,
+  buildDrawingUploadPath,
+  formatFileSize,
+  getMutationDrawing,
+  getResponseErrorMessage,
+  normalizeRevisionForm,
+  normalizeUploadForm,
+  type Drawing,
+  type DrawingMutationPayload,
+  type DrawingRevisionForm,
+  type DrawingUploadForm,
+} from './drawingsUploadData';
 
 interface Stats {
   total: number;
@@ -66,13 +58,6 @@ interface PaginationMeta {
   hasPrevPage: boolean;
 }
 
-interface DrawingMutationResponse {
-  drawing?: Drawing;
-  message?: string;
-}
-
-type DrawingMutationPayload = Drawing | DrawingMutationResponse;
-
 interface CurrentSetResponse {
   drawings: Array<{
     documentId: string;
@@ -82,12 +67,6 @@ interface CurrentSetResponse {
     fileUrl: string;
   }>;
 }
-
-const DRAWING_STATUSES = [
-  { id: 'preliminary', label: 'Preliminary', color: 'bg-yellow-100 text-yellow-800' },
-  { id: 'for_construction', label: 'For Construction', color: 'bg-primary/10 text-primary' },
-  { id: 'as_built', label: 'As-Built', color: 'bg-green-100 text-green-800' },
-];
 
 const DRAWING_WRITE_ROLES = [
   'owner',
@@ -99,21 +78,6 @@ const DRAWING_WRITE_ROLES = [
   'foreman',
 ];
 const DRAWINGS_PAGE_LIMIT = 50;
-
-async function getResponseErrorMessage(res: Response, fallback: string): Promise<string> {
-  try {
-    const data = (await res.json()) as { error?: string | { message?: string }; message?: string };
-    if (typeof data.error === 'string') return data.error;
-    if (typeof data.error === 'object' && data.error?.message) return data.error.message;
-    return data.message || fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function getMutationDrawing(data: DrawingMutationPayload): Drawing | undefined {
-  return 'drawingNumber' in data ? data : data.drawing;
-}
 
 export function DrawingsPage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -127,23 +91,14 @@ export function DrawingsPage() {
   // Upload modal state
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [uploadForm, setUploadForm] = useState({
-    drawingNumber: '',
-    title: '',
-    revision: '',
-    issueDate: '',
-    status: 'preliminary',
-  });
+  const [uploadForm, setUploadForm] = useState<DrawingUploadForm>({ ...DEFAULT_UPLOAD_FORM });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Revision modal state
   const [showRevisionModal, setShowRevisionModal] = useState(false);
   const [revisionDrawing, setRevisionDrawing] = useState<Drawing | null>(null);
-  const [revisionForm, setRevisionForm] = useState({
-    revision: '',
-    title: '',
-    issueDate: '',
-    status: 'for_construction',
+  const [revisionForm, setRevisionForm] = useState<DrawingRevisionForm>({
+    ...DEFAULT_REVISION_FORM,
   });
   const revisionFileInputRef = useRef<HTMLInputElement>(null);
   const [revisionFile, setRevisionFile] = useState<File | null>(null);
@@ -169,13 +124,7 @@ export function DrawingsPage() {
   const resetUploadForm = () => {
     setShowUploadModal(false);
     setSelectedFile(null);
-    setUploadForm({
-      drawingNumber: '',
-      title: '',
-      revision: '',
-      issueDate: '',
-      status: 'preliminary',
-    });
+    setUploadForm({ ...DEFAULT_UPLOAD_FORM });
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
   const resetRevisionForm = () => {
@@ -239,19 +188,10 @@ export function DrawingsPage() {
 
   // Upload drawing mutation (FormData)
   const uploadDrawingMutation = useMutation({
-    mutationFn: async ({ file, form }: { file: File; form: typeof uploadForm }) => {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('projectId', projectId || '');
-      formData.append('drawingNumber', form.drawingNumber);
-      if (form.title.trim()) formData.append('title', form.title.trim());
-      if (form.revision.trim()) formData.append('revision', form.revision.trim());
-      if (form.issueDate) formData.append('issueDate', form.issueDate);
-      formData.append('status', form.status);
-
-      const res = await authFetch('/api/drawings', {
+    mutationFn: async ({ file, form }: { file: File; form: DrawingUploadForm }) => {
+      const res = await authFetch(buildDrawingUploadPath(), {
         method: 'POST',
-        body: formData,
+        body: buildDrawingUploadFormData(projectId || '', file, form),
       });
 
       if (!res.ok) {
@@ -274,12 +214,7 @@ export function DrawingsPage() {
 
   const handleUpload = () => {
     if (!canManageDrawings || uploadDrawingMutation.isPending) return;
-    const normalizedForm = {
-      ...uploadForm,
-      drawingNumber: uploadForm.drawingNumber.trim(),
-      title: uploadForm.title.trim(),
-      revision: uploadForm.revision.trim(),
-    };
+    const normalizedForm = normalizeUploadForm(uploadForm);
     if (!selectedFile || !normalizedForm.drawingNumber) {
       toast({
         title: 'Drawing details required',
@@ -333,18 +268,11 @@ export function DrawingsPage() {
     }: {
       drawingId: string;
       file: File;
-      form: typeof revisionForm;
+      form: DrawingRevisionForm;
     }) => {
-      const formData = new FormData();
-      formData.append('file', file);
-      if (form.title.trim()) formData.append('title', form.title.trim());
-      formData.append('revision', form.revision);
-      if (form.issueDate) formData.append('issueDate', form.issueDate);
-      formData.append('status', form.status);
-
-      const res = await authFetch(`/api/drawings/${encodeURIComponent(drawingId)}/supersede`, {
+      const res = await authFetch(buildDrawingSupersedePath(drawingId), {
         method: 'POST',
-        body: formData,
+        body: buildDrawingRevisionFormData(file, form),
       });
 
       if (!res.ok) {
@@ -367,11 +295,7 @@ export function DrawingsPage() {
 
   const handleRevisionUpload = () => {
     if (!canManageDrawings || revisionUploadMutation.isPending) return;
-    const normalizedForm = {
-      ...revisionForm,
-      revision: revisionForm.revision.trim(),
-      title: revisionForm.title.trim(),
-    };
+    const normalizedForm = normalizeRevisionForm(revisionForm);
     if (!revisionFile || !normalizedForm.revision || !revisionDrawing) {
       toast({
         title: 'Revision details required',
@@ -483,13 +407,6 @@ export function DrawingsPage() {
       month: 'short',
       year: 'numeric',
     });
-  };
-
-  const formatFileSize = (bytes: number | null) => {
-    if (!bytes) return 'Unknown';
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   };
 
   const getStatusInfo = (status: string) => {
@@ -826,260 +743,31 @@ export function DrawingsPage() {
 
       {/* Upload Modal */}
       {showUploadModal && (
-        <Modal
-          onClose={() => {
-            if (!uploading) resetUploadForm();
-          }}
-          className="max-w-lg"
-        >
-          <ModalHeader>Add Drawing</ModalHeader>
-          <ModalDescription>
-            Upload a drawing file with its register number, revision, issue date, and status.
-          </ModalDescription>
-          <ModalBody>
-            <div className="space-y-4">
-              {/* File Input */}
-              <div>
-                <Label htmlFor="drawing-upload-file" className="mb-2">
-                  Select File *
-                </Label>
-                <Input
-                  id="drawing-upload-file"
-                  ref={fileInputRef}
-                  type="file"
-                  onChange={handleFileSelect}
-                  accept=".pdf,.dwg,.dxf,.jpg,.jpeg,.png,.tiff,.tif"
-                />
-                {selectedFile && (
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Selected: {selectedFile.name} ({formatFileSize(selectedFile.size)})
-                  </p>
-                )}
-              </div>
-
-              {/* Drawing Number */}
-              <div>
-                <Label htmlFor="drawing-upload-number" className="mb-2">
-                  Drawing Number *
-                </Label>
-                <Input
-                  id="drawing-upload-number"
-                  type="text"
-                  value={uploadForm.drawingNumber}
-                  onChange={(e) =>
-                    setUploadForm((prev) => ({ ...prev, drawingNumber: e.target.value }))
-                  }
-                  placeholder="e.g., DWG-001"
-                />
-              </div>
-
-              {/* Title */}
-              <div>
-                <Label htmlFor="drawing-upload-title" className="mb-2">
-                  Title
-                </Label>
-                <Input
-                  id="drawing-upload-title"
-                  type="text"
-                  value={uploadForm.title}
-                  onChange={(e) => setUploadForm((prev) => ({ ...prev, title: e.target.value }))}
-                  placeholder="e.g., Site Plan"
-                />
-              </div>
-
-              {/* Revision */}
-              <div>
-                <Label htmlFor="drawing-upload-revision" className="mb-2">
-                  Revision
-                </Label>
-                <Input
-                  id="drawing-upload-revision"
-                  type="text"
-                  value={uploadForm.revision}
-                  onChange={(e) => setUploadForm((prev) => ({ ...prev, revision: e.target.value }))}
-                  placeholder="e.g., A, B, 01"
-                />
-              </div>
-
-              {/* Issue Date */}
-              <div>
-                <Label htmlFor="drawing-upload-issue-date" className="mb-2">
-                  Issue Date
-                </Label>
-                <Input
-                  id="drawing-upload-issue-date"
-                  type="date"
-                  value={uploadForm.issueDate}
-                  onChange={(e) =>
-                    setUploadForm((prev) => ({ ...prev, issueDate: e.target.value }))
-                  }
-                />
-              </div>
-
-              {/* Status */}
-              <div>
-                <Label htmlFor="drawing-upload-status" className="mb-2">
-                  Status
-                </Label>
-                <NativeSelect
-                  id="drawing-upload-status"
-                  value={uploadForm.status}
-                  onChange={(e) => setUploadForm((prev) => ({ ...prev, status: e.target.value }))}
-                >
-                  {DRAWING_STATUSES.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.label}
-                    </option>
-                  ))}
-                </NativeSelect>
-              </div>
-            </div>
-          </ModalBody>
-          <ModalFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                resetUploadForm();
-              }}
-              disabled={uploading}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleUpload}
-              disabled={!selectedFile || !uploadForm.drawingNumber.trim() || uploading}
-            >
-              {uploading ? 'Uploading...' : 'Upload'}
-            </Button>
-          </ModalFooter>
-        </Modal>
+        <DrawingUploadModal
+          form={uploadForm}
+          setForm={setUploadForm}
+          selectedFile={selectedFile}
+          onFileSelect={handleFileSelect}
+          fileInputRef={fileInputRef}
+          uploading={uploading}
+          onClose={resetUploadForm}
+          onUpload={handleUpload}
+        />
       )}
 
       {/* Revision Modal */}
       {showRevisionModal && revisionDrawing && (
-        <Modal
-          onClose={() => {
-            if (!uploading) resetRevisionForm();
-          }}
-          className="max-w-lg"
-        >
-          <ModalHeader>Upload New Revision</ModalHeader>
-          <ModalDescription>
-            Upload a new file and revision details. The existing drawing will be marked as
-            superseded.
-          </ModalDescription>
-          <ModalBody>
-            <p className="text-sm text-muted-foreground mb-4">
-              Creating new revision for: <strong>{revisionDrawing.drawingNumber}</strong>
-              {revisionDrawing.revision && ` (Current: Rev ${revisionDrawing.revision})`}
-            </p>
-
-            <div className="space-y-4">
-              {/* File Input */}
-              <div>
-                <Label htmlFor="drawing-revision-file" className="mb-2">
-                  Select File *
-                </Label>
-                <Input
-                  id="drawing-revision-file"
-                  ref={revisionFileInputRef}
-                  type="file"
-                  onChange={(e) => setRevisionFile(e.target.files?.[0] || null)}
-                  accept=".pdf,.dwg,.dxf,.jpg,.jpeg,.png,.tiff,.tif"
-                />
-                {revisionFile && (
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Selected: {revisionFile.name} ({formatFileSize(revisionFile.size)})
-                  </p>
-                )}
-              </div>
-
-              {/* New Revision */}
-              <div>
-                <Label htmlFor="drawing-revision-number" className="mb-2">
-                  New Revision *
-                </Label>
-                <Input
-                  id="drawing-revision-number"
-                  type="text"
-                  value={revisionForm.revision}
-                  onChange={(e) =>
-                    setRevisionForm((prev) => ({ ...prev, revision: e.target.value }))
-                  }
-                  placeholder="e.g., B, C, 02"
-                />
-              </div>
-
-              {/* Title */}
-              <div>
-                <Label htmlFor="drawing-revision-title" className="mb-2">
-                  Title
-                </Label>
-                <Input
-                  id="drawing-revision-title"
-                  type="text"
-                  value={revisionForm.title}
-                  onChange={(e) => setRevisionForm((prev) => ({ ...prev, title: e.target.value }))}
-                />
-              </div>
-
-              {/* Issue Date */}
-              <div>
-                <Label htmlFor="drawing-revision-issue-date" className="mb-2">
-                  Issue Date
-                </Label>
-                <Input
-                  id="drawing-revision-issue-date"
-                  type="date"
-                  value={revisionForm.issueDate}
-                  onChange={(e) =>
-                    setRevisionForm((prev) => ({ ...prev, issueDate: e.target.value }))
-                  }
-                />
-              </div>
-
-              {/* Status */}
-              <div>
-                <Label htmlFor="drawing-revision-status" className="mb-2">
-                  Status
-                </Label>
-                <NativeSelect
-                  id="drawing-revision-status"
-                  value={revisionForm.status}
-                  onChange={(e) => setRevisionForm((prev) => ({ ...prev, status: e.target.value }))}
-                >
-                  {DRAWING_STATUSES.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.label}
-                    </option>
-                  ))}
-                </NativeSelect>
-              </div>
-
-              <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
-                <strong>Note:</strong> The previous revision (
-                {revisionDrawing.revision || 'original'}) will be marked as superseded.
-              </div>
-            </div>
-          </ModalBody>
-          <ModalFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                resetRevisionForm();
-              }}
-              disabled={uploading}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleRevisionUpload}
-              disabled={!revisionFile || !revisionForm.revision.trim() || uploading}
-            >
-              {uploading ? 'Uploading...' : 'Upload Revision'}
-            </Button>
-          </ModalFooter>
-        </Modal>
+        <DrawingRevisionModal
+          drawing={revisionDrawing}
+          form={revisionForm}
+          setForm={setRevisionForm}
+          selectedFile={revisionFile}
+          onFileSelect={(e) => setRevisionFile(e.target.files?.[0] || null)}
+          fileInputRef={revisionFileInputRef}
+          uploading={uploading}
+          onClose={resetRevisionForm}
+          onUpload={handleRevisionUpload}
+        />
       )}
 
       <ConfirmDialog
