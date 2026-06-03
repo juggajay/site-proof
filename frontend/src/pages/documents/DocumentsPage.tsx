@@ -2,24 +2,15 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle } from 'lucide-react';
 import { LazyPDFViewer } from '../../components/ui/LazyPDFViewer'; // Feature #446: React-PDF viewer (lazy loaded)
-import { apiFetch, authFetch } from '../../lib/api';
+import { apiFetch } from '../../lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 import { createMutationErrorHandler, extractErrorMessage } from '@/lib/errorHandling';
 import { toast } from '@/components/ui/toaster';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { NativeSelect } from '@/components/ui/native-select';
-import {
-  Modal,
-  ModalHeader,
-  ModalDescription,
-  ModalBody,
-  ModalFooter,
-} from '@/components/ui/Modal';
 import {
   getDocumentAccess,
   getDocumentAccessUrl,
@@ -29,6 +20,9 @@ import {
 } from '@/lib/documentAccess';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { logError } from '@/lib/logger';
+import { DocumentUploadModal } from './components/DocumentUploadModal';
+import { useDocumentUpload } from './useDocumentUpload';
+import { CATEGORIES, DOCUMENT_TYPES } from './documentsUploadData';
 
 interface Document {
   id: string;
@@ -60,69 +54,14 @@ interface LotsResponse {
   lots?: Lot[];
 }
 
-const DOCUMENT_TYPES = [
-  { id: 'specification', label: 'Specification' },
-  { id: 'drawing', label: 'Drawing' },
-  { id: 'photo', label: 'Photo' },
-  { id: 'certificate', label: 'Certificate' },
-  { id: 'report', label: 'Report' },
-  { id: 'correspondence', label: 'Correspondence' },
-  { id: 'contract', label: 'Contract' },
-  { id: 'other', label: 'Other' },
-];
-
-const CATEGORIES = [
-  { id: 'design', label: 'Design' },
-  { id: 'construction', label: 'Construction' },
-  { id: 'quality', label: 'Quality' },
-  { id: 'safety', label: 'Safety' },
-  { id: 'environmental', label: 'Environmental' },
-  { id: 'commercial', label: 'Commercial' },
-  { id: 'general', label: 'General' },
-];
-
-async function getResponseErrorMessage(res: Response, fallback: string): Promise<string> {
-  try {
-    const data = (await res.json()) as { error?: string | { message?: string }; message?: string };
-    if (typeof data.error === 'string') return data.error;
-    if (typeof data.error === 'object' && data.error?.message) return data.error.message;
-    return data.message || fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function formatFailedUpload(filename: string, reason: string): string {
-  const trimmedReason = reason.trim();
-  if (!trimmedReason || trimmedReason === 'Upload failed') {
-    return filename;
-  }
-
-  return trimmedReason.toLowerCase().includes(filename.toLowerCase())
-    ? trimmedReason
-    : `${filename}: ${trimmedReason}`;
-}
-
 export function DocumentsPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const queryClient = useQueryClient();
-  const uploadingRef = useRef(false);
   const deletingDocumentRef = useRef<string | null>(null);
   const favouriteDocumentRef = useRef<string | null>(null);
 
-  // Upload modal state
-  const [showUploadModal, setShowUploadModal] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [uploadedCount, setUploadedCount] = useState(0);
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [uploadForm, setUploadForm] = useState({
-    documentType: '',
-    category: '',
-    caption: '',
-    lotId: '',
-  });
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  // Upload workflow (modal state, drag/drop, multi-file progress, upload mutation)
+  const upload = useDocumentUpload(projectId);
 
   // Filters
   const [filterType, setFilterType] = useState('');
@@ -144,18 +83,6 @@ export function DocumentsPage() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [documentPendingDelete, setDocumentPendingDelete] = useState<Document | null>(null);
   const viewerRef = useRef<HTMLDivElement>(null);
-
-  // Drag and drop state
-  const [isDragging, setIsDragging] = useState(false);
-  const dropZoneRef = useRef<HTMLDivElement>(null);
-
-  // Image dimension validation state
-  const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(
-    null,
-  );
-  const [dimensionWarning, setDimensionWarning] = useState<string | null>(null);
-  const MIN_IMAGE_WIDTH = 100;
-  const MIN_IMAGE_HEIGHT = 100;
 
   const triggerSearch = () => setCommittedSearch(searchQuery.trim());
 
@@ -279,154 +206,6 @@ export function DocumentsPage() {
   });
 
   const lots: Lot[] = lotsData?.lots || [];
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files && files.length > 0) {
-      const fileArray = Array.from(files);
-      setSelectedFiles(fileArray);
-      setImageDimensions(null);
-      setDimensionWarning(null);
-
-      // Auto-detect type from first file
-      const firstFile = fileArray[0];
-      if (firstFile.type.startsWith('image/')) {
-        setUploadForm((prev) => ({ ...prev, documentType: 'photo' }));
-
-        // Check image dimensions for single image
-        if (fileArray.length === 1) {
-          const objectUrl = URL.createObjectURL(firstFile);
-          const img = new window.Image();
-          img.onload = () => {
-            const width = img.naturalWidth;
-            const height = img.naturalHeight;
-            setImageDimensions({ width, height });
-
-            if (width < MIN_IMAGE_WIDTH || height < MIN_IMAGE_HEIGHT) {
-              setDimensionWarning(
-                `Warning: Image dimensions (${width}x${height}) are below recommended minimum (${MIN_IMAGE_WIDTH}x${MIN_IMAGE_HEIGHT}). Photo may lack detail for documentation.`,
-              );
-            }
-            URL.revokeObjectURL(objectUrl);
-          };
-          img.onerror = () => {
-            URL.revokeObjectURL(objectUrl);
-          };
-          img.src = objectUrl;
-        }
-      } else if (firstFile.type === 'application/pdf') {
-        setUploadForm((prev) => ({ ...prev, documentType: 'drawing' }));
-      }
-    }
-  };
-
-  // Upload mutation - keeps existing multi-file progress tracking logic
-  const uploadDocsMutation = useMutation({
-    mutationFn: async ({ files, form }: { files: File[]; form: typeof uploadForm }) => {
-      const uploadedDocs: Document[] = [];
-      const failedUploads: string[] = [];
-      const sanitizedForm = {
-        ...form,
-        caption: form.caption.trim(),
-      };
-
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        try {
-          const formData = new FormData();
-          formData.append('file', file);
-          formData.append('projectId', projectId || '');
-          formData.append('documentType', sanitizedForm.documentType);
-          if (sanitizedForm.category) formData.append('category', sanitizedForm.category);
-          if (sanitizedForm.caption && files.length === 1) {
-            formData.append('caption', sanitizedForm.caption);
-          }
-          if (sanitizedForm.lotId) formData.append('lotId', sanitizedForm.lotId);
-
-          const res = await authFetch('/api/documents/upload', {
-            method: 'POST',
-            body: formData,
-          });
-
-          if (res.ok) {
-            const newDoc = await res.json();
-            uploadedDocs.push(newDoc);
-          } else {
-            const reason = await getResponseErrorMessage(res, 'Upload failed');
-            logError('Document upload failed', reason);
-            failedUploads.push(formatFailedUpload(file.name, reason));
-          }
-        } catch (err) {
-          logError('Document upload failed', err);
-          failedUploads.push(
-            formatFailedUpload(file.name, extractErrorMessage(err, 'Upload failed')),
-          );
-        }
-
-        setUploadedCount(i + 1);
-        setUploadProgress(Math.round(((i + 1) / files.length) * 100));
-      }
-
-      if (failedUploads.length > 0) {
-        const description = `Uploaded ${uploadedDocs.length} of ${files.length}. Failed: ${failedUploads.join('; ')}`;
-        if (uploadedDocs.length === 0) {
-          throw new Error(description);
-        }
-        toast({
-          title: 'Some files failed',
-          description,
-          variant: 'warning',
-        });
-      }
-
-      return uploadedDocs;
-    },
-    onSuccess: (uploadedDocs) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.documents(projectId!) });
-      setShowUploadModal(false);
-      setSelectedFiles([]);
-      setUploadForm({ documentType: '', category: '', caption: '', lotId: '' });
-      if (fileInputRef.current) fileInputRef.current.value = '';
-      setUploading(false);
-      uploadingRef.current = false;
-      setUploadProgress(0);
-      setUploadedCount(0);
-      toast({
-        title: 'Documents uploaded',
-        description: `${uploadedDocs.length} file${uploadedDocs.length === 1 ? '' : 's'} uploaded successfully.`,
-        variant: 'success',
-      });
-    },
-    onError: (error) => {
-      setUploading(false);
-      uploadingRef.current = false;
-      setUploadProgress(0);
-      setUploadedCount(0);
-      toast({
-        title: 'Upload failed',
-        description: extractErrorMessage(error, 'Failed to upload documents. Please try again.'),
-        variant: 'error',
-      });
-    },
-  });
-
-  const handleUpload = () => {
-    if (uploadingRef.current) return;
-
-    if (selectedFiles.length === 0 || !uploadForm.documentType) {
-      toast({
-        title: 'Document details required',
-        description: 'Select file(s) and choose a document type before uploading.',
-        variant: 'error',
-      });
-      return;
-    }
-    uploadingRef.current = true;
-    setUploading(true);
-    setUploadProgress(0);
-    setUploadedCount(0);
-    uploadDocsMutation.mutate({ files: selectedFiles, form: uploadForm });
-  };
 
   // Delete mutation
   const deleteDocMutation = useMutation({
@@ -604,58 +383,10 @@ export function DocumentsPage() {
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
 
-  // Drag and drop handlers
-  const handleDragEnter = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    // Only set dragging to false if leaving the drop zone entirely
-    if (dropZoneRef.current && !dropZoneRef.current.contains(e.relatedTarget as Node)) {
-      setIsDragging(false);
-    }
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-
-    const files = e.dataTransfer.files;
-    if (files && files.length > 0) {
-      const fileArray = Array.from(files);
-      setSelectedFiles(fileArray);
-      // Auto-detect type from first file
-      const firstFile = fileArray[0];
-      if (firstFile.type.startsWith('image/')) {
-        setUploadForm((prev) => ({ ...prev, documentType: 'photo' }));
-      } else if (firstFile.type === 'application/pdf') {
-        setUploadForm((prev) => ({ ...prev, documentType: 'drawing' }));
-      }
-      setShowUploadModal(true);
-    }
-  };
-
   return (
-    <div
-      ref={dropZoneRef}
-      className="space-y-6 relative"
-      onDragEnter={handleDragEnter}
-      onDragLeave={handleDragLeave}
-      onDragOver={handleDragOver}
-      onDrop={handleDrop}
-    >
+    <div ref={upload.dropZoneRef} className="space-y-6 relative" {...upload.containerDragHandlers}>
       {/* Drag overlay */}
-      {isDragging && (
+      {upload.isDragging && (
         <div className="fixed inset-0 z-50 bg-primary/20 backdrop-blur-sm flex items-center justify-center pointer-events-none">
           <div className="rounded-xl border-4 border-dashed border-primary bg-card/90 p-12 text-center shadow-2xl">
             <svg
@@ -683,7 +414,7 @@ export function DocumentsPage() {
           <h1 className="text-2xl font-bold">Documents & Photos</h1>
           <p className="text-muted-foreground">Upload and manage project documents and photos</p>
         </div>
-        <Button onClick={() => setShowUploadModal(true)}>
+        <Button onClick={upload.openUploadModal}>
           <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path
               strokeLinecap="round"
@@ -1129,255 +860,24 @@ export function DocumentsPage() {
       </div>
 
       {/* Upload Modal */}
-      {showUploadModal && (
-        <Modal
-          onClose={() => {
-            setShowUploadModal(false);
-            setSelectedFiles([]);
-            setUploadForm({ documentType: '', category: '', caption: '', lotId: '' });
-          }}
-          className="max-w-lg"
-        >
-          <ModalHeader>Upload Document</ModalHeader>
-          <ModalDescription>
-            Upload project documents, photos, certificates, or drawings with optional metadata.
-          </ModalDescription>
-          <ModalBody>
-            <div className="space-y-4">
-              {/* File Input with Drag-Drop Zone */}
-              <div>
-                <Label htmlFor="document-upload-file-input" className="mb-2">
-                  Select Files
-                </Label>
-                <div
-                  className={`relative border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
-                    selectedFiles.length > 0
-                      ? 'border-green-400 bg-green-50'
-                      : 'border-border hover:border-primary hover:bg-primary/5'
-                  }`}
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                  }}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    const files = e.dataTransfer.files;
-                    if (files && files.length > 0) {
-                      const fileArray = Array.from(files);
-                      setSelectedFiles(fileArray);
-                      setImageDimensions(null);
-                      setDimensionWarning(null);
-                      const firstFile = fileArray[0];
-                      if (firstFile.type.startsWith('image/')) {
-                        setUploadForm((prev) => ({ ...prev, documentType: 'photo' }));
-                      } else if (firstFile.type === 'application/pdf') {
-                        setUploadForm((prev) => ({ ...prev, documentType: 'drawing' }));
-                      }
-                    }
-                  }}
-                >
-                  <input
-                    id="document-upload-file-input"
-                    ref={fileInputRef}
-                    type="file"
-                    multiple
-                    onChange={handleFileSelect}
-                    accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.webp"
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                  />
-                  {selectedFiles.length > 0 ? (
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-center gap-2">
-                        <svg
-                          className="h-8 w-8 text-green-500"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                          />
-                        </svg>
-                        <span className="font-medium text-green-700">
-                          {selectedFiles.length} file{selectedFiles.length > 1 ? 's' : ''} selected
-                        </span>
-                      </div>
-                      <div className="max-h-32 overflow-y-auto text-left">
-                        {selectedFiles.map((file, idx) => (
-                          <div
-                            key={idx}
-                            className="flex items-center justify-between text-sm py-1 px-2 hover:bg-green-100 rounded"
-                          >
-                            <span className="truncate text-green-700">{file.name}</span>
-                            <span className="text-green-600 ml-2 flex-shrink-0">
-                              {formatFileSize(file.size)}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                      <p className="text-xs text-green-600">
-                        Total: {formatFileSize(selectedFiles.reduce((sum, f) => sum + f.size, 0))}
-                      </p>
-                    </div>
-                  ) : (
-                    <>
-                      <svg
-                        className="mx-auto h-10 w-10 text-muted-foreground"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-                        />
-                      </svg>
-                      <p className="mt-2 text-sm text-muted-foreground">
-                        <span className="font-medium text-primary">Click to browse</span> or drag
-                        and drop
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        PDF, DOC, XLS, JPG, PNG up to 50MB (select multiple files)
-                      </p>
-                    </>
-                  )}
-                </div>
-
-                {/* Image dimension info and warning (for single image) */}
-                {imageDimensions && selectedFiles.length === 1 && (
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    Image dimensions: {imageDimensions.width} x {imageDimensions.height} pixels
-                  </p>
-                )}
-                {dimensionWarning && (
-                  <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded-lg">
-                    <p className="text-sm text-amber-700 flex items-center gap-2">
-                      <AlertTriangle className="h-4 w-4 flex-shrink-0" />
-                      <span>{dimensionWarning}</span>
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {/* Document Type */}
-              <div>
-                <Label htmlFor="document-upload-type" className="mb-2">
-                  Document Type *
-                </Label>
-                <NativeSelect
-                  id="document-upload-type"
-                  value={uploadForm.documentType}
-                  onChange={(e) =>
-                    setUploadForm((prev) => ({ ...prev, documentType: e.target.value }))
-                  }
-                >
-                  <option value="">Select type...</option>
-                  {DOCUMENT_TYPES.map((type) => (
-                    <option key={type.id} value={type.id}>
-                      {type.label}
-                    </option>
-                  ))}
-                </NativeSelect>
-              </div>
-
-              {/* Category */}
-              <div>
-                <Label htmlFor="document-upload-category" className="mb-2">
-                  Category
-                </Label>
-                <NativeSelect
-                  id="document-upload-category"
-                  value={uploadForm.category}
-                  onChange={(e) => setUploadForm((prev) => ({ ...prev, category: e.target.value }))}
-                >
-                  <option value="">Select category...</option>
-                  {CATEGORIES.map((cat) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.label}
-                    </option>
-                  ))}
-                </NativeSelect>
-              </div>
-
-              {/* Link to Lot */}
-              <div>
-                <Label htmlFor="document-upload-lot" className="mb-2">
-                  Link to Lot (optional)
-                </Label>
-                <NativeSelect
-                  id="document-upload-lot"
-                  value={uploadForm.lotId}
-                  onChange={(e) => setUploadForm((prev) => ({ ...prev, lotId: e.target.value }))}
-                >
-                  <option value="">No lot selected</option>
-                  {lots.map((lot) => (
-                    <option key={lot.id} value={lot.id}>
-                      {lot.lotNumber} - {lot.description}
-                    </option>
-                  ))}
-                </NativeSelect>
-              </div>
-
-              {/* Description/Caption */}
-              <div>
-                <Label htmlFor="document-upload-description" className="mb-2">
-                  Description
-                </Label>
-                <Textarea
-                  id="document-upload-description"
-                  value={uploadForm.caption}
-                  onChange={(e) => setUploadForm((prev) => ({ ...prev, caption: e.target.value }))}
-                  placeholder="Add a description..."
-                  rows={3}
-                />
-              </div>
-
-              {/* Upload Progress */}
-              {uploading && (
-                <div className="space-y-2">
-                  <div className="h-2 bg-muted rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-primary transition-all duration-300"
-                      style={{ width: `${uploadProgress}%` }}
-                    />
-                  </div>
-                  <p className="text-sm text-center text-muted-foreground">
-                    Uploading {uploadedCount} of {selectedFiles.length} files... {uploadProgress}%
-                  </p>
-                </div>
-              )}
-            </div>
-          </ModalBody>
-          <ModalFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setShowUploadModal(false);
-                setSelectedFiles([]);
-                setUploadForm({ documentType: '', category: '', caption: '', lotId: '' });
-              }}
-              disabled={uploading}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleUpload}
-              disabled={selectedFiles.length === 0 || !uploadForm.documentType || uploading}
-            >
-              {uploading
-                ? 'Uploading...'
-                : selectedFiles.length > 1
-                  ? `Upload ${selectedFiles.length} Files`
-                  : 'Upload'}
-            </Button>
-          </ModalFooter>
-        </Modal>
+      {upload.showUploadModal && (
+        <DocumentUploadModal
+          selectedFiles={upload.selectedFiles}
+          uploadForm={upload.uploadForm}
+          uploading={upload.uploading}
+          uploadProgress={upload.uploadProgress}
+          uploadedCount={upload.uploadedCount}
+          imageDimensions={upload.imageDimensions}
+          dimensionWarning={upload.dimensionWarning}
+          fileInputRef={upload.fileInputRef}
+          lots={lots}
+          formatFileSize={formatFileSize}
+          onClose={upload.closeUploadModal}
+          onFileSelect={upload.handleFileSelect}
+          onModalDrop={upload.handleModalDrop}
+          onFormChange={upload.updateUploadForm}
+          onUpload={upload.handleUpload}
+        />
       )}
 
       {/* Document Viewer Modal */}
