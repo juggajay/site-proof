@@ -2,6 +2,7 @@ import { memo, useRef, type RefObject } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ChevronRight, Link2 } from 'lucide-react';
 import { MobileDataCard } from '@/components/ui/MobileDataCard';
+import { formatStatusLabel } from '@/lib/statusLabels';
 import { PullToRefreshIndicator } from '@/hooks/usePullToRefresh';
 import { SwipeableCard } from '@/components/foreman/SwipeableCard';
 import type { NCR } from '../types';
@@ -110,7 +111,7 @@ function NCRMobileListInner({
                   title={ncr.ncrNumber}
                   subtitle={ncr.description}
                   status={{
-                    label: ncr.status.replace('_', ' '),
+                    label: formatStatusLabel(ncr.status),
                     variant: statusVariant,
                   }}
                   fields={[
