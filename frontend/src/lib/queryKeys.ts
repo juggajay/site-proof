@@ -22,6 +22,10 @@ export const queryKeys = {
 
   // ITPs
   itps: (projectId: string) => ['itps', projectId] as const,
+  itpTemplates: (projectId: string, includeGlobal: boolean) =>
+    ['itp-templates', projectId, includeGlobal] as const,
+  itpCrossProjectTemplates: (currentProjectId: string) =>
+    ['itp-cross-project-templates', currentProjectId] as const,
 
   // Diary
   diaries: (projectId: string) => ['diaries', projectId] as const,
