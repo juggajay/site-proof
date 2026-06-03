@@ -400,17 +400,19 @@ test.describe('production readiness guardrails', () => {
   });
 
   test('comment attachment downloads force safe MIME response headers', async () => {
-    const commentsRoute = await readFile(
-      new URL('../../backend/src/routes/comments.ts', import.meta.url),
+    const commentAttachmentStorage = await readFile(
+      new URL('../../backend/src/routes/comments/attachmentStorage.ts', import.meta.url),
       'utf8',
     );
 
-    expect(commentsRoute).toContain('function getSafeAttachmentMimeType');
-    expect(commentsRoute).toContain(
+    expect(commentAttachmentStorage).toContain('function getSafeAttachmentMimeType');
+    expect(commentAttachmentStorage).toContain(
       "res.setHeader('Content-Type', getSafeAttachmentMimeType(attachment.mimeType))",
     );
-    expect(commentsRoute).toContain("res.setHeader('X-Content-Type-Options', 'nosniff')");
-    expect(commentsRoute).toContain('getSafeAttachmentMimeType(attachment.mimeType)');
+    expect(commentAttachmentStorage).toContain(
+      "res.setHeader('X-Content-Type-Options', 'nosniff')",
+    );
+    expect(commentAttachmentStorage).toContain('getSafeAttachmentMimeType(attachment.mimeType)');
   });
 
   test('document downloads only redirect to configured Supabase storage URLs', async () => {
@@ -1571,6 +1573,7 @@ test.describe('production readiness guardrails', () => {
       '../../backend/src/routes/auth/profileRoutes.ts',
       '../../backend/src/routes/company.ts',
       '../../backend/src/routes/comments.ts',
+      '../../backend/src/routes/comments/attachmentStorage.ts',
       '../../backend/src/routes/documents.ts',
       '../../backend/src/routes/drawings.ts',
       '../../backend/src/routes/testResults.ts',
