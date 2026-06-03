@@ -53,17 +53,18 @@ describe('lots update-field helpers (pure, DB-free)', () => {
   });
 
   describe('editor role constants', () => {
-    it('LOT_EDITORS lists the lot-editing roles', () => {
+    it('LOT_EDITORS lists the lot-editing roles (no foreman)', () => {
       expect(LOT_EDITORS).toEqual([
         'owner',
         'admin',
         'project_manager',
         'site_engineer',
         'quality_manager',
-        'foreman',
       ]);
       // site_manager can create lots but is intentionally not a lot editor.
       expect(LOT_EDITORS).not.toContain('site_manager');
+      // Foreman is field execution, not lot setup — must not edit lot metadata.
+      expect(LOT_EDITORS).not.toContain('foreman');
     });
 
     it('LOT_BUDGET_EDITORS is the narrower budget-editing set', () => {

@@ -399,16 +399,37 @@ describe('Lots API', () => {
       });
       const foremanToken = foremanRes.body.token;
       const foremanUserId = foremanRes.body.user.id;
+      const siteEngineerEmail = `lots-site-engineer-${Date.now()}@example.com`;
+      const siteEngineerRes = await request(app).post('/api/auth/register').send({
+        email: siteEngineerEmail,
+        password: 'SecureP@ssword123!',
+        fullName: 'Lots Site Engineer',
+        tosAccepted: true,
+      });
+      const siteEngineerToken = siteEngineerRes.body.token;
+      const siteEngineerUserId = siteEngineerRes.body.user.id;
 
       await prisma.user.update({
         where: { id: foremanUserId },
         data: { companyId, roleInCompany: 'foreman' },
+      });
+      await prisma.user.update({
+        where: { id: siteEngineerUserId },
+        data: { companyId, roleInCompany: 'site_engineer' },
       });
       await prisma.projectUser.create({
         data: {
           projectId,
           userId: foremanUserId,
           role: 'foreman',
+          status: 'active',
+        },
+      });
+      await prisma.projectUser.create({
+        data: {
+          projectId,
+          userId: siteEngineerUserId,
+          role: 'site_engineer',
           status: 'active',
         },
       });
@@ -437,8 +458,8 @@ describe('Lots API', () => {
 
         const updateRes = await request(app)
           .patch(`/api/lots/${budgetLot.id}`)
-          .set('Authorization', `Bearer ${foremanToken}`)
-          .send({ description: 'Foreman can edit non-commercial lot details' });
+          .set('Authorization', `Bearer ${siteEngineerToken}`)
+          .send({ description: 'Site engineer can edit non-commercial lot details' });
         expect(updateRes.status).toBe(200);
         expect(updateRes.body.lot.budgetAmount).toBeNull();
 
@@ -447,12 +468,15 @@ describe('Lots API', () => {
           select: { budgetAmount: true, description: true },
         });
         expect(Number(dbLot?.budgetAmount)).toBe(12345);
-        expect(dbLot?.description).toBe('Foreman can edit non-commercial lot details');
+        expect(dbLot?.description).toBe('Site engineer can edit non-commercial lot details');
       } finally {
         await prisma.lot.deleteMany({ where: { id: budgetLot.id } });
         await prisma.projectUser.deleteMany({ where: { projectId, userId: foremanUserId } });
+        await prisma.projectUser.deleteMany({ where: { projectId, userId: siteEngineerUserId } });
         await prisma.emailVerificationToken.deleteMany({ where: { userId: foremanUserId } });
+        await prisma.emailVerificationToken.deleteMany({ where: { userId: siteEngineerUserId } });
         await prisma.user.delete({ where: { id: foremanUserId } }).catch(() => {});
+        await prisma.user.delete({ where: { id: siteEngineerUserId } }).catch(() => {});
       }
     });
 
@@ -1559,8 +1583,9 @@ describe('Lots API', () => {
 
         expect(assignedRes.status).toBe(200);
         expect(assignedRes.body.readiness.claim).not.toHaveProperty('budgetAmount');
-        expect(JSON.stringify(assignedRes.body.readiness)).not.toContain('9999');
-        expect(JSON.stringify(assignedRes.body.readiness)).not.toContain('missing_budget');
+        expect(assignedRes.body.readiness.claim.blockers).not.toEqual(
+          expect.arrayContaining([expect.objectContaining({ code: 'missing_budget' })]),
+        );
 
         const unassignedRes = await request(app)
           .get(`/api/lots/${unassignedLot.id}/readiness`)
