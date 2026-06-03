@@ -26,11 +26,11 @@ import { useEffectiveProjectId } from '@/hooks/useEffectiveProjectId';
 
 const useEffectiveProjectIdMock = vi.mocked(useEffectiveProjectId);
 
-function renderNav(onCapturePress = vi.fn()) {
+function renderNav(onCapturePress = vi.fn(), initialPath = '/') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter>{children}</MemoryRouter>
+      <MemoryRouter initialEntries={[initialPath]}>{children}</MemoryRouter>
     </QueryClientProvider>
   );
   render(<ForemanBottomNavV2 onCapturePress={onCapturePress} />, { wrapper });
@@ -56,6 +56,25 @@ describe('ForemanBottomNavV2', () => {
     fireEvent.click(screen.getByLabelText('Today'));
 
     expect(navigateSpy).toHaveBeenCalledWith('/projects/p1/foreman/today');
+  });
+
+  it('prioritizes issues instead of docket approvals in the primary mobile nav', () => {
+    renderNav();
+
+    expect(screen.getByLabelText('Issues')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Approve')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('Issues'));
+
+    expect(navigateSpy).toHaveBeenCalledWith('/projects/p1/ncr');
+  });
+
+  it('marks the issues tab active on the project NCR route', () => {
+    renderNav(vi.fn(), '/projects/p1/ncr');
+
+    const issuesTab = screen.getByLabelText('Issues');
+
+    expect(issuesTab).toHaveClass('text-primary');
   });
 
   it('opens capture without navigating', () => {

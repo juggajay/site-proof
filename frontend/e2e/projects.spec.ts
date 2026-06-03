@@ -428,8 +428,10 @@ test.describe('Projects seeded account contract', () => {
 
     await page.goto(`/projects/${E2E_PROJECT_ID}/foreman/today`);
 
-    await page.getByRole('button', { name: 'Approve' }).click();
-    await expect(page).toHaveURL(`/projects/${E2E_PROJECT_ID}/dockets?status=pending_approval`);
+    await expect(page.getByRole('button', { name: 'Approve' })).toHaveCount(0);
+
+    await page.getByRole('button', { name: 'Issues' }).click();
+    await expect(page).toHaveURL(`/projects/${E2E_PROJECT_ID}/ncr`);
 
     await page.getByRole('button', { name: 'Diary' }).click();
     await expect(page).toHaveURL(`/projects/${E2E_PROJECT_ID}/diary`);
