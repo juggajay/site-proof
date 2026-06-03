@@ -23,7 +23,6 @@ import { Button } from '@/components/ui/button';
 import { DashboardCard, DashboardStat } from './DashboardCard';
 import { WeatherWidget } from './WeatherWidget';
 import { QuickCaptureButton } from './QuickCaptureButton';
-import { PhotoCaptureModal } from './PhotoCaptureModal';
 import { useForemanMobileStore } from '@/stores/foremanMobileStore';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { formatDateKey } from '@/lib/localDate';
@@ -84,7 +83,7 @@ export function ForemanMobileDashboard() {
   const { projectId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { isCameraOpen, setIsCameraOpen } = useForemanMobileStore();
+  const { setIsCameraOpen } = useForemanMobileStore();
   useOnlineStatus(); // Initialize online status tracking
 
   const [refreshing, setRefreshing] = useState(false);
@@ -407,7 +406,8 @@ export function ForemanMobileDashboard() {
         </DashboardCard>
       </div>
 
-      {/* Quick Capture FAB */}
+      {/* Quick Capture FAB - opens the shared CaptureModal (mounted by
+          MainLayout) via the foreman store, so there is one capture workflow. */}
       <QuickCaptureButton
         onCapturePhoto={handleCapturePhoto}
         onAddDelay={handleAddDelay}
@@ -416,12 +416,8 @@ export function ForemanMobileDashboard() {
         onRequestHoldPointRelease={handleRequestHoldPoint}
       />
 
-      {/* Photo Capture Modal */}
-      {isCameraOpen && effectiveProjectId && (
-        <PhotoCaptureModal projectId={effectiveProjectId} onClose={() => setIsCameraOpen(false)} />
-      )}
-
-      {/* Bottom Navigation is rendered by MobileNav in MainLayout for foreman users */}
+      {/* Capture modal and bottom navigation are rendered by MainLayout for
+          foreman users; this dashboard only triggers them via the store. */}
     </div>
   );
 }
