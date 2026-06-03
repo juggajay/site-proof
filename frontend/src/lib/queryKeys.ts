@@ -51,6 +51,10 @@ export const queryKeys = {
   lotAssignments: (lotId: string) => ['lot-assignments', lotId] as const,
   pendingSubcontractorInvitation: (userId: string | null | undefined) =>
     ['pending-subcontractor-invitation', userId ?? 'anonymous'] as const,
+  // Subbie-facing "My Company" read; user-scoped so one subbie's cache never
+  // leaks to another account in the same browser session (commit 9574ced).
+  myCompany: (userId: string | null | undefined, projectId: string | null | undefined) =>
+    ['my-company', userId ?? 'anonymous', projectId ?? 'default'] as const,
 
   // Users & Auth
   profile: ['profile'] as const,

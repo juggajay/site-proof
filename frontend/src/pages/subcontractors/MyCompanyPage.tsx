@@ -1,56 +1,19 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth';
 import { apiFetch } from '@/lib/api';
 import { Plus, Users, Truck, CheckCircle, Clock, X, Trash2 } from 'lucide-react';
 import { logError } from '@/lib/logger';
 import { parseRateInput } from './rateValidation';
+import { useMyCompanyQuery } from './myCompanyData';
+import { queryKeys } from '@/lib/queryKeys';
 import { useSearchParams } from 'react-router-dom';
-
-interface Employee {
-  id: string;
-  name: string;
-  phone: string;
-  role: string;
-  hourlyRate: number;
-  status: 'pending' | 'approved' | 'inactive';
-}
-
-interface Plant {
-  id: string;
-  type: string;
-  description: string;
-  idRego: string;
-  dryRate: number;
-  wetRate: number;
-  status: 'pending' | 'approved' | 'inactive';
-}
-
-interface CompanyData {
-  id: string;
-  companyName: string;
-  abn: string;
-  projectId: string;
-  projectName: string;
-  primaryContactName: string;
-  primaryContactEmail: string;
-  primaryContactPhone: string;
-  status: string;
-  availableProjects?: Array<{
-    projectId: string;
-    projectName: string;
-    companyName: string;
-    status: string;
-  }>;
-  employees: Employee[];
-  plant: Plant[];
-}
 
 export function MyCompanyPage() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedProjectId = searchParams.get('projectId');
-  const [companyData, setCompanyData] = useState<CompanyData | null>(null);
-  const [loading, setLoading] = useState(true);
   const [showAddEmployeeModal, setShowAddEmployeeModal] = useState(false);
   const [showAddPlantModal, setShowAddPlantModal] = useState(false);
   const [employeeForm, setEmployeeForm] = useState({
@@ -67,37 +30,27 @@ export function MyCompanyPage() {
     wetRate: '',
   });
   const [saving, setSaving] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   // Only subcontractor_admin can manage roster - regular subcontractor users can only view
   // Note: user.role is used (from auth context) not roleInCompany
   const canManageRoster = user?.role === 'subcontractor_admin';
 
-  const fetchCompanyData = useCallback(async () => {
-    setLoading(true);
-    setLoadError(null);
+  const companyQuery = useMyCompanyQuery(user?.id, requestedProjectId);
+  const companyData = companyQuery.data ?? null;
+  const loading = companyQuery.isLoading;
+  const loadError =
+    companyQuery.error && !companyQuery.data
+      ? 'Unable to load your subcontractor company. Please try again.'
+      : null;
 
-    try {
-      const query = requestedProjectId
-        ? `?projectId=${encodeURIComponent(requestedProjectId)}`
-        : '';
-      const data = await apiFetch<{ company: CompanyData }>(
-        `/api/subcontractors/my-company${query}`,
-      );
-      setCompanyData(data.company);
-    } catch (error) {
-      logError('Error fetching company data:', error);
-      setCompanyData(null);
-      setLoadError('Unable to load your subcontractor company. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  }, [requestedProjectId]);
-
-  useEffect(() => {
-    void fetchCompanyData();
-  }, [fetchCompanyData]);
+  // Mutations refresh the company read by invalidating its cache entry, keeping
+  // the roster/plant in sync without the page re-entering its full-screen loader.
+  const refetchCompanyData = useCallback(async () => {
+    await queryClient.invalidateQueries({
+      queryKey: queryKeys.myCompany(user?.id, requestedProjectId),
+    });
+  }, [queryClient, user?.id, requestedProjectId]);
 
   const addEmployee = async () => {
     const name = employeeForm.name.trim();
@@ -128,7 +81,7 @@ export function MyCompanyPage() {
         }),
       });
 
-      await fetchCompanyData();
+      await refetchCompanyData();
       setShowAddEmployeeModal(false);
       setEmployeeForm({ name: '', phone: '', role: '', hourlyRate: '' });
     } catch (error) {
@@ -170,7 +123,7 @@ export function MyCompanyPage() {
         }),
       });
 
-      await fetchCompanyData();
+      await refetchCompanyData();
       setShowAddPlantModal(false);
       setPlantForm({ type: '', description: '', idRego: '', dryRate: '', wetRate: '' });
     } catch (error) {
@@ -195,7 +148,7 @@ export function MyCompanyPage() {
           method: 'DELETE',
         },
       );
-      await fetchCompanyData();
+      await refetchCompanyData();
     } catch (error) {
       logError('Error deleting employee:', error);
       setActionError('Employee could not be deleted. Please try again.');
@@ -218,7 +171,7 @@ export function MyCompanyPage() {
           method: 'DELETE',
         },
       );
-      await fetchCompanyData();
+      await refetchCompanyData();
     } catch (error) {
       logError('Error deleting plant:', error);
       setActionError('Plant could not be deleted. Please try again.');
@@ -281,7 +234,7 @@ export function MyCompanyPage() {
           <p className="text-sm text-red-700 mt-1">{loadError}</p>
           <button
             type="button"
-            onClick={fetchCompanyData}
+            onClick={() => void companyQuery.refetch()}
             className="mt-3 rounded-lg bg-red-700 px-3 py-1.5 text-sm text-white hover:bg-red-800"
           >
             Retry
