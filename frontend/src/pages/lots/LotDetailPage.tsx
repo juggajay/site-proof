@@ -15,7 +15,6 @@ import { useIsMobile } from '@/hooks/useMediaQuery';
 
 // Types and constants extracted to separate files
 import type {
-  LotTab,
   Lot,
   SubcontractorCompany,
   TestResult,
@@ -25,7 +24,7 @@ import type {
   LocationState,
   LotSubcontractorAssignment,
 } from './types';
-import { LOT_TABS, LOT_OVERRIDE_STATUSES, getLotTabsForRole } from './constants';
+import { LOT_OVERRIDE_STATUSES, getLotTabsForRole } from './constants';
 import {
   buildConformanceStatusPath,
   buildLotHistoryPath,
@@ -39,6 +38,7 @@ import {
 import { useItpInstance } from './hooks/useItpInstance';
 import { useConformanceReportGeneration } from './hooks/useConformanceReportGeneration';
 import { useLotPhotoUpload } from './hooks/useLotPhotoUpload';
+import { useLotReadinessNavigation } from './hooks/useLotReadinessNavigation';
 import { TestsTabContent, NCRsTabContent, HistoryTabContent } from '@/components/lots';
 import { MarkAsNAModal } from './components/MarkAsNAModal';
 import { MarkAsFailedModal } from './components/MarkAsFailedModal';
@@ -172,70 +172,19 @@ export function LotDetailPage() {
     }
   };
 
-  // Get current tab from URL or default to 'itp'
-  const currentTab = (searchParams.get('tab') as LotTab) || 'itp';
-  const shouldOpenAssignItp = searchParams.get('action') === 'assign-itp';
-  const currentTabLabel = LOT_TABS.find((tab) => tab.id === currentTab)?.label ?? 'Lot detail';
-  const [readinessFocusTarget, setReadinessFocusTarget] = useState<{
-    tab: LotTab;
-    requestedAt: number;
-  } | null>(null);
-  const [highlightedReadinessTab, setHighlightedReadinessTab] = useState<LotTab | null>(null);
-
-  // Handle tab change
-  const handleTabChange = (tabId: LotTab) => {
-    setReadinessFocusTarget(null);
-    setHighlightedReadinessTab(null);
-    const params = new URLSearchParams(searchParams);
-    params.set('tab', tabId);
-    params.delete('action');
-    setSearchParams(params);
-  };
-
-  const handleReadinessTabChange = (tabId: LotTab, actionCode?: string) => {
-    const params = new URLSearchParams(searchParams);
-    params.set('tab', tabId);
-    if (tabId === 'itp' && (actionCode === 'no_itp_assigned' || actionCode === 'no_itp')) {
-      params.set('action', 'assign-itp');
-    } else {
-      params.delete('action');
-    }
-    setReadinessFocusTarget({ tab: tabId, requestedAt: Date.now() });
-    setHighlightedReadinessTab(tabId);
-    setSearchParams(params);
-  };
-
-  const handleAssignItpActionHandled = useCallback(() => {
-    if (searchParams.get('action') !== 'assign-itp') return;
-    const params = new URLSearchParams(searchParams);
-    params.delete('action');
-    setSearchParams(params, { replace: true });
-  }, [searchParams, setSearchParams]);
-
-  useEffect(() => {
-    if (!readinessFocusTarget || readinessFocusTarget.tab !== currentTab) return;
-
-    const frame = window.requestAnimationFrame(() => {
-      const target = tabSectionRef.current;
-      if (!target) return;
-
-      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      target.scrollIntoView({
-        block: 'start',
-        inline: 'nearest',
-        behavior: prefersReducedMotion ? 'auto' : 'smooth',
-      });
-      target.focus({ preventScroll: true });
-    });
-    const highlightTimeout = window.setTimeout(() => {
-      setHighlightedReadinessTab((tab) => (tab === readinessFocusTarget.tab ? null : tab));
-    }, 3000);
-
-    return () => {
-      window.cancelAnimationFrame(frame);
-      window.clearTimeout(highlightTimeout);
-    };
-  }, [currentTab, readinessFocusTarget]);
+  // Readiness-driven tab navigation: the URL `tab`/`action` params, the
+  // readiness focus/highlight state, and the scroll-focus-highlight effect
+  // live in the hook. The page keeps owning tabSectionRef because it renders
+  // the tab panel the hook scrolls and focuses.
+  const {
+    currentTab,
+    shouldOpenAssignItp,
+    currentTabLabel,
+    highlightedReadinessTab,
+    handleTabChange,
+    handleReadinessTabChange,
+    handleAssignItpActionHandled,
+  } = useLotReadinessNavigation({ searchParams, setSearchParams, tabSectionRef });
 
   const {
     data: readinessData,
