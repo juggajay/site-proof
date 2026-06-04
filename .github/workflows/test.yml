@@ -125,8 +125,16 @@ jobs:
       - name: Lint
         run: cd frontend && npm run lint
 
-      - name: Unit tests
-        run: cd frontend && npm run test:unit
+      - name: Unit tests with coverage
+        run: cd frontend && npm run test:coverage
+
+      - name: Upload frontend coverage report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: frontend-coverage-report
+          path: frontend/coverage/
+          retention-days: 30
 
       - name: Production readiness guardrails
         run: cd frontend && npm run test:readiness
