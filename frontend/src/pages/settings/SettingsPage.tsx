@@ -23,7 +23,7 @@ import {
   LogOut,
 } from 'lucide-react';
 import { PushNotificationSettings } from '@/components/settings/PushNotificationSettings';
-import { MfaSecuritySection } from './components/MfaSecuritySection';
+import { MfaSettingsSection } from './components/MfaSettingsSection';
 import { EmailPreferencesSection } from './components/EmailPreferencesSection';
 import { AccountDangerModals } from './components/AccountDangerModals';
 import { downloadBlob } from '@/lib/downloads';
@@ -109,25 +109,6 @@ export function SettingsPage() {
   const [isLeavingCompany, setIsLeavingCompany] = useState(false);
   const [leaveCompanyError, setLeaveCompanyError] = useState<string | null>(null);
 
-  // MFA state (Feature #22, #420, #421)
-  const [mfaEnabled, setMfaEnabled] = useState(false);
-  const [isLoadingMfa, setIsLoadingMfa] = useState(true);
-  const [mfaLoadError, setMfaLoadError] = useState('');
-  const [showMfaSetup, setShowMfaSetup] = useState(false);
-  const [mfaSetupData, setMfaSetupData] = useState<{ secret: string; qrCode: string } | null>(null);
-  const [mfaVerifyCode, setMfaVerifyCode] = useState('');
-  const [isMfaLoading, setIsMfaLoading] = useState(false);
-  const [mfaMessage, setMfaMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(
-    null,
-  );
-  const [backupCodes, setBackupCodes] = useState<string[]>([]);
-  const [showBackupCodes, setShowBackupCodes] = useState(false);
-  const [showDisableMfa, setShowDisableMfa] = useState(false);
-  const [disableMfaPassword, setDisableMfaPassword] = useState('');
-  const [showSecret, setShowSecret] = useState(false);
-  const [copiedSecret, setCopiedSecret] = useState(false);
-  const mfaActionRef = useRef(false);
-  const copiedSecretTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const exportingRef = useRef(false);
   const exportSuccessTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const deletingAccountRef = useRef(false);
@@ -144,9 +125,6 @@ export function SettingsPage() {
 
   useEffect(() => {
     return () => {
-      if (copiedSecretTimeoutRef.current) {
-        clearTimeout(copiedSecretTimeoutRef.current);
-      }
       if (exportSuccessTimeoutRef.current) {
         clearTimeout(exportSuccessTimeoutRef.current);
       }
@@ -169,164 +147,6 @@ export function SettingsPage() {
     { value: 'MM/DD/YYYY', label: 'MM/DD/YYYY', example: '12/31/2024' },
     { value: 'YYYY-MM-DD', label: 'YYYY-MM-DD', example: '2024-12-31' },
   ];
-
-  const loadMfaStatus = useCallback(async () => {
-    setIsLoadingMfa(true);
-    setMfaLoadError('');
-
-    try {
-      const data = await apiFetch<{ mfaEnabled: boolean }>('/api/mfa/status');
-      setMfaEnabled(data.mfaEnabled);
-    } catch (err) {
-      logError('Failed to load MFA status:', err);
-      setMfaLoadError(extractErrorMessage(err, 'Failed to load security settings'));
-    } finally {
-      setIsLoadingMfa(false);
-    }
-  }, []);
-
-  // Load MFA status (Feature #22)
-  useEffect(() => {
-    void loadMfaStatus();
-  }, [loadMfaStatus]);
-
-  // MFA setup handler (Feature #420)
-  const handleMfaSetup = async () => {
-    if (mfaActionRef.current) return;
-
-    mfaActionRef.current = true;
-    setIsMfaLoading(true);
-    setMfaMessage(null);
-
-    try {
-      const data = await apiFetch<{ secret: string; qrCode: string; message?: string }>(
-        '/api/mfa/setup',
-        {
-          method: 'POST',
-        },
-      );
-      setMfaSetupData({ secret: data.secret, qrCode: data.qrCode });
-      setShowMfaSetup(true);
-    } catch (error) {
-      setMfaMessage({
-        type: 'error',
-        text: extractErrorMessage(error, 'Failed to start MFA setup'),
-      });
-    } finally {
-      mfaActionRef.current = false;
-      setIsMfaLoading(false);
-    }
-  };
-
-  // MFA verify setup handler (Feature #420)
-  const handleMfaVerify = async () => {
-    if (mfaActionRef.current) return;
-
-    if (!mfaVerifyCode || mfaVerifyCode.length !== 6) {
-      setMfaMessage({ type: 'error', text: 'Please enter a 6-digit code' });
-      return;
-    }
-
-    mfaActionRef.current = true;
-    setIsMfaLoading(true);
-    setMfaMessage(null);
-
-    try {
-      const data = await apiFetch<{ backupCodes?: string[]; message?: string }>(
-        '/api/mfa/verify-setup',
-        {
-          method: 'POST',
-          body: JSON.stringify({ code: mfaVerifyCode }),
-        },
-      );
-      setMfaEnabled(true);
-      setBackupCodes(data.backupCodes || []);
-      setShowBackupCodes(true);
-      setShowMfaSetup(false);
-      setMfaSetupData(null);
-      setMfaVerifyCode('');
-      setMfaMessage({ type: 'success', text: 'Two-factor authentication enabled!' });
-    } catch (error) {
-      setMfaMessage({ type: 'error', text: extractErrorMessage(error, 'Failed to verify code') });
-    } finally {
-      mfaActionRef.current = false;
-      setIsMfaLoading(false);
-    }
-  };
-
-  // MFA disable handler (Feature #22)
-  const handleMfaDisable = async () => {
-    if (mfaActionRef.current) return;
-
-    mfaActionRef.current = true;
-    setIsMfaLoading(true);
-    setMfaMessage(null);
-
-    try {
-      await apiFetch('/api/mfa/disable', {
-        method: 'POST',
-        body: JSON.stringify({ password: disableMfaPassword }),
-      });
-      setMfaEnabled(false);
-      setShowDisableMfa(false);
-      setDisableMfaPassword('');
-      setMfaMessage({ type: 'success', text: 'Two-factor authentication disabled' });
-    } catch (error) {
-      setMfaMessage({ type: 'error', text: extractErrorMessage(error, 'Failed to disable MFA') });
-    } finally {
-      mfaActionRef.current = false;
-      setIsMfaLoading(false);
-    }
-  };
-
-  // Copy secret to clipboard
-  const copySecret = async () => {
-    if (mfaSetupData?.secret && navigator.clipboard) {
-      try {
-        await navigator.clipboard.writeText(mfaSetupData.secret);
-        setMfaMessage(null);
-      } catch (error) {
-        setMfaMessage({
-          type: 'error',
-          text: extractErrorMessage(error, 'Could not copy the setup secret'),
-        });
-        return;
-      }
-      setCopiedSecret(true);
-      if (copiedSecretTimeoutRef.current) {
-        clearTimeout(copiedSecretTimeoutRef.current);
-      }
-      copiedSecretTimeoutRef.current = setTimeout(() => setCopiedSecret(false), 2000);
-    } else {
-      setMfaMessage({ type: 'error', text: 'Clipboard is not available in this browser' });
-    }
-  };
-
-  const closeMfaSetup = useCallback(() => {
-    if (!isMfaLoading) {
-      setShowMfaSetup(false);
-      setMfaSetupData(null);
-      setMfaVerifyCode('');
-      setMfaMessage(null);
-    }
-  }, [isMfaLoading]);
-
-  const closeBackupCodes = useCallback(() => {
-    setShowBackupCodes(false);
-    setBackupCodes([]);
-  }, []);
-
-  const copyBackupCodes = useCallback(() => {
-    void navigator.clipboard.writeText(backupCodes.join('\n'));
-  }, [backupCodes]);
-
-  const closeDisableMfa = useCallback(() => {
-    if (!isMfaLoading) {
-      setShowDisableMfa(false);
-      setDisableMfaPassword('');
-      setMfaMessage(null);
-    }
-  }, [isMfaLoading]);
 
   // GDPR Data Export function
   const handleExportData = async () => {
@@ -608,35 +428,7 @@ export function SettingsPage() {
       {/* Push Notification Settings (Feature #657) */}
       <PushNotificationSettings />
 
-      <MfaSecuritySection
-        mfaEnabled={mfaEnabled}
-        isLoadingMfa={isLoadingMfa}
-        mfaLoadError={mfaLoadError}
-        mfaMessage={mfaMessage}
-        showMfaSetup={showMfaSetup}
-        mfaSetupData={mfaSetupData}
-        mfaVerifyCode={mfaVerifyCode}
-        isMfaLoading={isMfaLoading}
-        backupCodes={backupCodes}
-        showBackupCodes={showBackupCodes}
-        showDisableMfa={showDisableMfa}
-        disableMfaPassword={disableMfaPassword}
-        showSecret={showSecret}
-        copiedSecret={copiedSecret}
-        onLoadMfaStatus={() => void loadMfaStatus()}
-        onMfaSetup={handleMfaSetup}
-        onMfaVerify={handleMfaVerify}
-        onMfaSetupClose={closeMfaSetup}
-        onMfaVerifyCodeChange={setMfaVerifyCode}
-        onMfaDisable={handleMfaDisable}
-        onDisableMfaOpen={() => setShowDisableMfa(true)}
-        onDisableMfaClose={closeDisableMfa}
-        onDisableMfaPasswordChange={setDisableMfaPassword}
-        onBackupCodesClose={closeBackupCodes}
-        onBackupCodesCopy={copyBackupCodes}
-        onShowSecretToggle={() => setShowSecret(!showSecret)}
-        onCopySecret={() => void copySecret()}
-      />
+      <MfaSettingsSection />
 
       <div className="rounded-lg border bg-card p-6 space-y-4">
         <div>
