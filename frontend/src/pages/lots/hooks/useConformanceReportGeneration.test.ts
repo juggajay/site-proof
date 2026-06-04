@@ -182,6 +182,33 @@ describe('useConformanceReportGeneration', () => {
     expect(generatePdfMock).toHaveBeenCalledTimes(1);
   });
 
+  it('aborts without synthesizing project data when the project payload has no name', async () => {
+    // The report must never default a missing project to placeholder details;
+    // generation stops before the data builder and the PDF generator run.
+    apiFetchMock.mockImplementation(async (path: string) => {
+      if (path.startsWith('/api/projects/')) return { project: { projectNumber: 'PN-1' } };
+      if (path.startsWith('/api/itp/instances/lot/')) return { instance: null };
+      if (path.startsWith('/api/test-results')) return { testResults: [] };
+      if (path.startsWith('/api/ncrs')) return { ncrs: [] };
+      throw new Error(`unexpected path ${path}`);
+    });
+    const { result } = renderHook(() => useConformanceReportGeneration(baseParams));
+
+    await act(async () => {
+      await result.current.generateReport();
+    });
+
+    expect(handleApiError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: 'Project details are required before generating a conformance report.',
+      }),
+      'Failed to generate conformance report',
+    );
+    expect(buildReportDataMock).not.toHaveBeenCalled();
+    expect(generatePdfMock).not.toHaveBeenCalled();
+    await waitFor(() => expect(result.current.generatingReport).toBe(false));
+  });
+
   it('routes failures through handleApiError without generating a PDF', async () => {
     apiFetchMock.mockRejectedValue(new Error('boom'));
     const { result } = renderHook(() => useConformanceReportGeneration(baseParams));

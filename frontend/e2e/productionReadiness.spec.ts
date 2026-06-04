@@ -89,6 +89,78 @@ test.describe('production readiness guardrails', () => {
       expect(source).not.toContain('catch(() => ({ testResults: [] }))');
       expect(source).not.toContain('catch(() => ({ ncrs: [] }))');
     }
+
+    // Positive half of the same invariant: a missing project name aborts report
+    // generation instead of being defaulted. The matching runtime behavior is
+    // pinned in useConformanceReportGeneration.test.ts.
+    const [, reportHookSource] = conformanceSources;
+    expect(reportHookSource).toContain('if (!project?.name)');
+    expect(reportHookSource).toContain(
+      'Project details are required before generating a conformance report.',
+    );
+  });
+
+  test('lot detail keeps readiness navigation, comments, and commercial gating wired through extracted hooks', async () => {
+    const lotDetailPage = await readFile(
+      new URL('../src/pages/lots/LotDetailPage.tsx', import.meta.url),
+      'utf8',
+    );
+
+    // Readiness-driven tab navigation lives in the PR #582 hook. The page must
+    // keep delegating to it — and must not re-grow its own tab/action URL-param
+    // handling, which would silently fork the navigation behavior.
+    expect(lotDetailPage).toContain("from './hooks/useLotReadinessNavigation'");
+    expect(lotDetailPage).toContain(
+      'useLotReadinessNavigation({ searchParams, setSearchParams, tabSectionRef })',
+    );
+    expect(lotDetailPage).toContain('onTabChange={handleReadinessTabChange}');
+    expect(lotDetailPage).toContain('onTabChange={handleTabChange}');
+    expect(lotDetailPage).toContain('autoOpenAssignTemplate={shouldOpenAssignItp}');
+    expect(lotDetailPage).toContain(
+      'onAutoOpenAssignTemplateHandled={handleAssignItpActionHandled}',
+    );
+    expect(lotDetailPage).toContain('data-testid="lot-tab-panel"');
+    expect(lotDetailPage).not.toContain("searchParams.get('tab')");
+    expect(lotDetailPage).not.toContain("searchParams.get('action')");
+
+    // The conformance report PDF stays dynamically imported via the extracted
+    // hook; the page must not statically pull the PDF bundle back in.
+    expect(lotDetailPage).toContain("from './hooks/useConformanceReportGeneration'");
+    expect(lotDetailPage).not.toContain("'@/lib/pdfGenerator'");
+
+    // Lot comments stay mounted for the Lot entity.
+    expect(lotDetailPage).toContain('<CommentsSection entityType="Lot" entityId={lotId} />');
+
+    // Budget-gated editability goes through the commercial-access hook, not a
+    // raw role-string check.
+    expect(lotDetailPage).toContain("from '@/hooks/useCommercialAccess'");
+    expect(lotDetailPage).toContain('const { canViewBudgets } = useCommercialAccess()');
+    expect(lotDetailPage).toContain("lot.status !== 'conformed' || Boolean(canViewBudgets)");
+  });
+
+  test('force conforming a lot requires a written reason', async () => {
+    const lotDetailPage = await readFile(
+      new URL('../src/pages/lots/LotDetailPage.tsx', import.meta.url),
+      'utf8',
+    );
+    const conformDialogs = await readFile(
+      new URL('../src/pages/lots/components/ConformLotDialogs.tsx', import.meta.url),
+      'utf8',
+    );
+
+    // Page-level guard: no force-conform API call without a >= 5 character
+    // trimmed reason, and the reason travels in the request body.
+    expect(lotDetailPage).toContain('if (force && trimmedReason.length < 5)');
+    expect(lotDetailPage).toContain("title: 'Reason required'");
+    expect(lotDetailPage).toContain('body: JSON.stringify({ force: true, reason: trimmedReason })');
+
+    // Dialog-level guard: the destructive confirm stays disabled until the
+    // trimmed reason is long enough. Runtime behavior is pinned in
+    // ConformLotDialogs.test.tsx.
+    expect(conformDialogs).toContain(
+      'confirmDisabled={forceConformReason.trim().length < 5 || isConforming}',
+    );
+    expect(conformDialogs).toContain('htmlFor="force-conform-reason"');
   });
 
   test('foreman diary finish flow can acknowledge backend submission warnings', async () => {
