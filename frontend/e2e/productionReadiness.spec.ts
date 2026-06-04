@@ -1367,6 +1367,17 @@ test.describe('production readiness guardrails', () => {
     expect(frontendPackage.scripts['format:check']).toContain('vite.config.ts');
     expect(frontendPackage.scripts['format:check']).toContain('vitest.config.ts');
     expect(frontendPackage.scripts['test:unit']).toBe('vitest run');
+    expect(frontendPackage.scripts['test:coverage']).toBe('vitest run --coverage');
+
+    // Frontend unit coverage floor: the vitest config must keep v8 coverage
+    // with ratchet thresholds, and both PR-gating workflows must run the
+    // coverage variant so the thresholds actually enforce.
+    const frontendVitestConfig = await readFile(
+      new URL('../vitest.config.ts', import.meta.url),
+      'utf8',
+    );
+    expect(frontendVitestConfig).toContain("provider: 'v8'");
+    expect(frontendVitestConfig).toContain('thresholds');
 
     expect(ciWorkflow).toContain('run: npm audit --audit-level=moderate');
     expect(ciWorkflow).toContain('run: npm run format:check');
@@ -1374,7 +1385,7 @@ test.describe('production readiness guardrails', () => {
     expect(ciWorkflow).toContain('Verify database migration status');
     expect(ciWorkflow).toContain('run: npm run lint');
     expect(ciWorkflow).toContain('run: npm run type-check');
-    expect(ciWorkflow).toContain('run: npm run test:unit');
+    expect(ciWorkflow).toContain('run: npm run test:coverage');
     expect(ciWorkflow).toContain('run: npm run build');
     expect(ciWorkflow).toContain('run: docker build -t siteproof-backend-ci .');
     expect(ciWorkflow).toContain('DOCKER_BUILDKIT: "1"');
@@ -1392,7 +1403,7 @@ test.describe('production readiness guardrails', () => {
     expect(testWorkflow).toContain('run: cd backend && npm run test:coverage');
     expect(testWorkflow).toContain('run: cd frontend && npm audit --audit-level=moderate');
     expect(testWorkflow).toContain('run: cd frontend && npm run format:check');
-    expect(testWorkflow).toContain('run: cd frontend && npm run test:unit');
+    expect(testWorkflow).toContain('run: cd frontend && npm run test:coverage');
     expect(testWorkflow).not.toContain('run: cd backend && npm test');
 
     expect(ciWorkflow).not.toContain('run: npm run preflight:integrations');
