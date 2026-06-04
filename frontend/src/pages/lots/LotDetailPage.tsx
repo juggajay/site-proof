@@ -9,7 +9,6 @@ import { logError } from '@/lib/logger';
 import { formatStatusLabel } from '@/lib/statusLabels';
 import { toast } from '@/components/ui/toaster';
 import { CommentsSection } from '@/components/comments/CommentsSection';
-import { AssignSubcontractorModal } from '@/components/lots/AssignSubcontractorModal';
 import { useOfflineStatus } from '@/lib/useOfflineStatus';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 
@@ -24,7 +23,7 @@ import type {
   LocationState,
   LotSubcontractorAssignment,
 } from './types';
-import { LOT_OVERRIDE_STATUSES, getLotTabsForRole } from './constants';
+import { getLotTabsForRole } from './constants';
 import {
   buildConformanceStatusPath,
   buildLotHistoryPath,
@@ -40,20 +39,13 @@ import { useConformanceReportGeneration } from './hooks/useConformanceReportGene
 import { useLotPhotoUpload } from './hooks/useLotPhotoUpload';
 import { useLotReadinessNavigation } from './hooks/useLotReadinessNavigation';
 import { TestsTabContent, NCRsTabContent, HistoryTabContent } from '@/components/lots';
-import { MarkAsNAModal } from './components/MarkAsNAModal';
-import { MarkAsFailedModal } from './components/MarkAsFailedModal';
-import { EvidenceWarningModal } from './components/EvidenceWarningModal';
-import { WitnessPointModal } from './components/WitnessPointModal';
-import { AIClassificationModal } from './components/AIClassificationModal';
-import { StatusOverrideModal } from './components/StatusOverrideModal';
-import { LegacyAssignSubcontractorModal } from './components/LegacyAssignSubcontractorModal';
 import { QualityManagementSection } from './components/QualityManagementSection';
 import { LotHeader } from './components/LotHeader';
 import { LotTabNavigation } from './components/LotTabNavigation';
 import { LotReadinessPanel } from './components/LotReadinessPanel';
 import { PhotosTab } from './components/PhotosTab';
 import { ITPChecklistTab } from './components/ITPChecklistTab';
-import { ConformLotDialogs } from './components/ConformLotDialogs';
+import { LotDetailModals } from './components/LotDetailModals';
 import {
   LotDetailEmptyState,
   LotDetailErrorState,
@@ -973,116 +965,56 @@ export function LotDetailPage() {
         onReportFormatChange={setSelectedReportFormat}
       />
 
-      {/* Status Override Modal */}
-      <StatusOverrideModal
-        isOpen={showOverrideModal}
-        currentStatus={lot.status}
-        validStatuses={LOT_OVERRIDE_STATUSES}
-        onClose={() => setShowOverrideModal(false)}
-        onSubmit={handleOverrideStatus}
-        isSubmitting={overriding}
-      />
-
-      {/* Assign Subcontractor Modal */}
-      <LegacyAssignSubcontractorModal
-        isOpen={showSubcontractorModal}
+      <LotDetailModals
         lot={lot}
+        lotId={lotId!}
+        projectId={projectId}
+        showOverrideModal={showOverrideModal}
+        overriding={overriding}
+        setShowOverrideModal={setShowOverrideModal}
+        handleOverrideStatus={handleOverrideStatus}
+        showSubcontractorModal={showSubcontractorModal}
         subcontractors={subcontractors}
         selectedSubcontractor={selectedSubcontractor}
-        isAssigning={assigningSubcontractor}
-        onSelectedChange={setSelectedSubcontractor}
-        onClose={() => {
-          setShowSubcontractorModal(false);
-          setSelectedSubcontractor('');
+        assigningSubcontractor={assigningSubcontractor}
+        setShowSubcontractorModal={setShowSubcontractorModal}
+        setSelectedSubcontractor={setSelectedSubcontractor}
+        handleAssignSubcontractor={handleAssignSubcontractor}
+        showAssignSubcontractorModal={showAssignSubcontractorModal}
+        editingAssignment={editingAssignment}
+        setShowAssignSubcontractorModal={setShowAssignSubcontractorModal}
+        setEditingAssignment={setEditingAssignment}
+        onAssignmentSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ['lot-assignments', lotId] });
         }}
-        onSubmit={handleAssignSubcontractor}
-      />
-
-      {/* Assign Subcontractor Modal (new permission system) */}
-      {showAssignSubcontractorModal && (
-        <AssignSubcontractorModal
-          lotId={lotId!}
-          lotNumber={lot?.lotNumber || ''}
-          projectId={projectId || ''}
-          existingAssignment={editingAssignment}
-          onClose={() => {
-            setShowAssignSubcontractorModal(false);
-            setEditingAssignment(null);
-          }}
-          onSuccess={() => {
-            queryClient.invalidateQueries({ queryKey: ['lot-assignments', lotId] });
-          }}
-        />
-      )}
-
-      {/* Evidence Warning Modal */}
-      <EvidenceWarningModal
-        isOpen={!!evidenceWarning}
-        warning={evidenceWarning}
-        onClose={() => setEvidenceWarning(null)}
-        onConfirm={() => {
-          if (evidenceWarning) {
-            toggleCompletion(
-              evidenceWarning.checklistItemId,
-              false, // Currently not completed
-              evidenceWarning.currentNotes,
-              true, // Force complete without evidence
-            );
-          }
-        }}
-        isLoading={updatingCompletion === evidenceWarning?.checklistItemId}
-      />
-
-      {/* Mark as N/A Modal */}
-      <MarkAsNAModal
-        isOpen={!!naModal}
-        itemDescription={naModal?.itemDescription || ''}
-        onClose={() => setNaModal(null)}
-        onSubmit={handleSubmitNA}
-        isSubmitting={submittingNa}
-      />
-
-      {/* Mark as Failed Modal - Creates NCR */}
-      <MarkAsFailedModal
-        isOpen={!!failedModal}
-        itemDescription={failedModal?.itemDescription || ''}
-        onClose={() => setFailedModal(null)}
-        onSubmit={handleSubmitFailed}
-        isSubmitting={submittingFailed}
-      />
-
-      {/* Witness Point Completion Modal */}
-      <WitnessPointModal
-        isOpen={!!witnessModal}
-        itemDescription={witnessModal?.itemDescription || ''}
-        onClose={() => setWitnessModal(null)}
-        onSubmit={handleSubmitWitness}
-        isSubmitting={submittingWitness}
-      />
-
-      {/* Feature #247: AI Photo Classification Modal */}
-      <AIClassificationModal
-        isOpen={!!classificationModal}
-        data={classificationModal}
-        onSave={handleSaveClassification}
-        onSkip={handleSkipClassification}
-        isSaving={savingClassification}
-      />
-
-      <ConformLotDialogs
-        lotNumber={lot?.lotNumber}
+        evidenceWarning={evidenceWarning}
+        updatingCompletion={updatingCompletion}
+        setEvidenceWarning={setEvidenceWarning}
+        toggleCompletion={toggleCompletion}
+        naModal={naModal}
+        submittingNa={submittingNa}
+        setNaModal={setNaModal}
+        handleSubmitNA={handleSubmitNA}
+        failedModal={failedModal}
+        submittingFailed={submittingFailed}
+        setFailedModal={setFailedModal}
+        handleSubmitFailed={handleSubmitFailed}
+        witnessModal={witnessModal}
+        submittingWitness={submittingWitness}
+        setWitnessModal={setWitnessModal}
+        handleSubmitWitness={handleSubmitWitness}
+        classificationModal={classificationModal}
+        savingClassification={savingClassification}
+        handleSaveClassification={handleSaveClassification}
+        handleSkipClassification={handleSkipClassification}
         showConformConfirm={showConformConfirm}
-        onConformCancel={() => setShowConformConfirm(false)}
-        onConformConfirm={() => void handleConformLot(false)}
         showForceConformConfirm={showForceConformConfirm}
         forceConformReason={forceConformReason}
-        onForceConformReasonChange={setForceConformReason}
-        onForceConformCancel={() => {
-          setShowForceConformConfirm(false);
-          setForceConformReason('');
-        }}
-        onForceConformConfirm={() => void handleConformLot(true, forceConformReason)}
-        isConforming={conforming}
+        conforming={conforming}
+        setShowConformConfirm={setShowConformConfirm}
+        setShowForceConformConfirm={setShowForceConformConfirm}
+        setForceConformReason={setForceConformReason}
+        handleConformLot={handleConformLot}
       />
     </div>
   );
