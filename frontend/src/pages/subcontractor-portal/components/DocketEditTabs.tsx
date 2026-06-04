@@ -8,8 +8,9 @@ import type { Docket, Employee, Plant } from '../docketEditData';
 import { formatCurrency, formatDate } from '../docketEditDisplay';
 
 // Extracted from DocketEditPage: the labour/plant/summary tab selector and the
-// three rendered tab panels. Data fetching, mutations, and the entry sheet stay
-// in the page; this component is prop-driven and presentation-only.
+// three rendered tab panels. Data fetching and mutations stay in the page;
+// this component is prop-driven and presentation-only. The add-entry bottom
+// sheet lives in the sibling DocketEntrySheet component.
 export function DocketEditTabs({
   activeTab,
   onTabChange,
