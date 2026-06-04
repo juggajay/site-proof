@@ -352,6 +352,10 @@ test.describe('production readiness guardrails', () => {
       new URL('../src/components/comments/CommentsSection.tsx', import.meta.url),
       'utf8',
     );
+    const commentThreadItem = await readFile(
+      new URL('../src/components/comments/CommentThreadItem.tsx', import.meta.url),
+      'utf8',
+    );
     const quickPhotoCapture = await readFile(
       new URL('../src/components/QuickPhotoCapture.tsx', import.meta.url),
       'utf8',
@@ -368,8 +372,12 @@ test.describe('production readiness guardrails', () => {
     expect(commentsSection).toContain('const clearReplyDraft = useCallback');
     expect(commentsSection).toContain('const beginReply = useCallback');
     expect(commentsSection).toContain('[entityType, entityId, clearPendingDraft, clearReplyDraft]');
-    expect(commentsSection).toContain('onClick={clearReplyDraft}');
-    expect(commentsSection).toContain('onClick={() => beginReply(comment.id)}');
+    // The draft-clearing callbacks are wired into the extracted thread item,
+    // whose reply controls invoke them on cancel and on switching reply targets.
+    expect(commentsSection).toContain('onClearReplyDraft={clearReplyDraft}');
+    expect(commentsSection).toContain('onBeginReply={beginReply}');
+    expect(commentThreadItem).toContain('onClick={onClearReplyDraft}');
+    expect(commentThreadItem).toContain('onClick={() => onBeginReply(comment.id)}');
     expect(quickPhotoCapture).toContain('URL.revokeObjectURL(previewUrlRef.current)');
     expect(quickPhotoCapture).not.toContain('alert(');
     expect(offlinePhotoCompression).toContain('URL.revokeObjectURL(objectUrl)');
