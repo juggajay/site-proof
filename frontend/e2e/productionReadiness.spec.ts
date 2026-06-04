@@ -128,6 +128,10 @@ test.describe('production readiness guardrails', () => {
       new URL('../src/pages/documents/DocumentsPage.tsx', import.meta.url),
       'utf8',
     );
+    const documentGrid = await readFile(
+      new URL('../src/pages/documents/components/DocumentGrid.tsx', import.meta.url),
+      'utf8',
+    );
     const drawingsPage = await readFile(
       new URL('../src/pages/drawings/DrawingsPage.tsx', import.meta.url),
       'utf8',
@@ -155,6 +159,7 @@ test.describe('production readiness guardrails', () => {
     expect(createClaimModal).not.toContain('alert(');
     expect(disputeModal).not.toContain('alert(');
     expect(documentsPage).not.toContain('alert(');
+    expect(documentGrid).not.toContain('alert(');
     expect(drawingsPage).not.toContain('alert(');
     expect(testResultsPage).not.toContain('alert(');
     expect(uploadCertificateModal).not.toContain('alert(');
