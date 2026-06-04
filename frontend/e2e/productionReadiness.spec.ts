@@ -2010,6 +2010,13 @@ test.describe('production readiness guardrails', () => {
       new URL('../src/lib/offlineDb.ts', import.meta.url),
       'utf8',
     );
+    // The OfflinePhoto record type moved into the offline database core module;
+    // the capture options and their defaults stay with the behavior in
+    // offlineDb.ts.
+    const offlineCoreSource = await readFile(
+      new URL('../src/lib/offline/core.ts', import.meta.url),
+      'utf8',
+    );
     const offlineStatusSource = await readFile(
       new URL('../src/lib/useOfflineStatus.ts', import.meta.url),
       'utf8',
@@ -2023,7 +2030,8 @@ test.describe('production readiness guardrails', () => {
       'utf8',
     );
 
-    expect(offlineDbSource).toContain('documentType: string;');
+    expect(offlineCoreSource).toContain('documentType: string;');
+    expect(offlineCoreSource).toContain('category?: string;');
     expect(offlineDbSource).toContain('documentType?: string;');
     expect(offlineDbSource).toContain("documentType: options.documentType ?? 'photo'");
     expect(offlineDbSource).toContain('category?: string;');
