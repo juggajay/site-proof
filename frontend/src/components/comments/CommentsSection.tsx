@@ -27,16 +27,17 @@ import {
   type Comment,
   type CommentAttachment,
 } from './commentsData';
+import {
+  collectAttachmentDrafts,
+  removeAttachmentDraftAt,
+  revokeAttachmentPreviews,
+  type PendingAttachment,
+} from './commentAttachmentDrafts';
+import { CommentAttachmentDraftList } from './CommentAttachmentDraftList';
 
 interface CommentsSectionProps {
   entityType: string;
   entityId: string;
-}
-
-// Pending attachment interface (before upload)
-interface PendingAttachment {
-  file: File;
-  preview?: string;
 }
 
 export function CommentsSection({ entityType, entityId }: CommentsSectionProps) {
@@ -67,17 +68,11 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
   const pendingAttachmentsRef = useRef<PendingAttachment[]>([]);
   const replyAttachmentsRef = useRef<PendingAttachment[]>([]);
 
-  const revokeAttachmentPreviews = useCallback((attachments: PendingAttachment[]) => {
-    attachments.forEach((att) => {
-      if (att.preview) URL.revokeObjectURL(att.preview);
-    });
-  }, []);
-
   const clearPendingDraft = useCallback(() => {
     revokeAttachmentPreviews(pendingAttachmentsRef.current);
     pendingAttachmentsRef.current = [];
     setPendingAttachments([]);
-  }, [revokeAttachmentPreviews]);
+  }, []);
 
   const clearReplyDraft = useCallback(() => {
     revokeAttachmentPreviews(replyAttachmentsRef.current);
@@ -85,7 +80,7 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
     setReplyAttachments([]);
     setReplyContent('');
     setReplyingTo(null);
-  }, [revokeAttachmentPreviews]);
+  }, []);
 
   const beginReply = useCallback(
     (commentId: string) => {
@@ -98,7 +93,7 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
 
       setReplyingTo(commentId);
     },
-    [replyingTo, revokeAttachmentPreviews],
+    [replyingTo],
   );
 
   useEffect(() => {
@@ -114,7 +109,7 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
       revokeAttachmentPreviews(pendingAttachmentsRef.current);
       revokeAttachmentPreviews(replyAttachmentsRef.current);
     };
-  }, [revokeAttachmentPreviews]);
+  }, []);
 
   // Feature #736: comments behave like a chat panel — fetch fresh on mount/focus
   // and poll every 15s while the tab is visible. TanStack Query's structural
@@ -163,49 +158,12 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
     setCurrentPage(1);
   }, [entityType, entityId, clearPendingDraft, clearReplyDraft]);
 
-  // File validation constants
-  const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-  const ALLOWED_TYPES = [
-    'image/jpeg',
-    'image/png',
-    'image/gif',
-    'image/webp',
-    'application/pdf',
-    'application/msword',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'application/vnd.ms-excel',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    'text/plain',
-  ];
-
-  const validateFile = (file: File): string | null => {
-    if (file.size > MAX_FILE_SIZE) {
-      return `File "${file.name}" exceeds the 10MB size limit.`;
-    }
-    if (!ALLOWED_TYPES.includes(file.type)) {
-      return `File "${file.name}" is not a supported format. Allowed: images, PDF, Word, Excel, text files.`;
-    }
-    return null;
-  };
-
   // Handle file selection for main comment
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
 
-    const newAttachments: PendingAttachment[] = [];
-    const errors: string[] = [];
-
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      const error = validateFile(file);
-      if (error) {
-        errors.push(error);
-        continue;
-      }
-      const preview = file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined;
-      newAttachments.push({ file, preview });
-    }
+    const { accepted, errors } = collectAttachmentDrafts(files);
 
     if (errors.length > 0) {
       toast({
@@ -215,8 +173,8 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
       });
     }
 
-    if (newAttachments.length > 0) {
-      setPendingAttachments((prev) => [...prev, ...newAttachments]);
+    if (accepted.length > 0) {
+      setPendingAttachments((prev) => [...prev, ...accepted]);
     }
 
     // Reset input
@@ -230,19 +188,7 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
     const files = e.target.files;
     if (!files) return;
 
-    const newAttachments: PendingAttachment[] = [];
-    const errors: string[] = [];
-
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      const error = validateFile(file);
-      if (error) {
-        errors.push(error);
-        continue;
-      }
-      const preview = file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined;
-      newAttachments.push({ file, preview });
-    }
+    const { accepted, errors } = collectAttachmentDrafts(files);
 
     if (errors.length > 0) {
       toast({
@@ -252,8 +198,8 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
       });
     }
 
-    if (newAttachments.length > 0) {
-      setReplyAttachments((prev) => [...prev, ...newAttachments]);
+    if (accepted.length > 0) {
+      setReplyAttachments((prev) => [...prev, ...accepted]);
     }
 
     // Reset input
@@ -265,19 +211,9 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
   // Remove pending attachment
   const removePendingAttachment = (index: number, isReply = false) => {
     if (isReply) {
-      setReplyAttachments((prev) => {
-        const newArr = [...prev];
-        if (newArr[index].preview) URL.revokeObjectURL(newArr[index].preview!);
-        newArr.splice(index, 1);
-        return newArr;
-      });
+      setReplyAttachments((prev) => removeAttachmentDraftAt(prev, index));
     } else {
-      setPendingAttachments((prev) => {
-        const newArr = [...prev];
-        if (newArr[index].preview) URL.revokeObjectURL(newArr[index].preview!);
-        newArr.splice(index, 1);
-        return newArr;
-      });
+      setPendingAttachments((prev) => removeAttachmentDraftAt(prev, index));
     }
   };
 
@@ -659,40 +595,6 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
     );
   };
 
-  // Render pending attachments preview
-  const renderPendingAttachments = (
-    attachments: PendingAttachment[],
-    onRemove: (index: number) => void,
-  ) => {
-    if (attachments.length === 0) return null;
-
-    return (
-      <div className="flex flex-wrap gap-2 mt-2">
-        {attachments.map((att, index) => (
-          <div
-            key={index}
-            className="relative flex items-center gap-2 p-2 bg-muted/50 rounded-lg border max-w-[180px]"
-          >
-            {att.preview ? (
-              <img src={att.preview} alt="" className="h-8 w-8 object-cover rounded" />
-            ) : (
-              <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-            )}
-            <span className="text-xs truncate flex-1">{att.file.name}</span>
-            <button
-              type="button"
-              onClick={() => onRemove(index)}
-              aria-label={`Remove ${att.file.name}`}
-              className="p-0.5 rounded-full hover:bg-red-100 text-muted-foreground hover:text-red-600"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        ))}
-      </div>
-    );
-  };
-
   const renderComment = (comment: Comment, isReply = false) => {
     const isAuthor = user?.id === comment.authorId;
     const isEditing = editingId === comment.id;
@@ -807,9 +709,10 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
                         rows={2}
                         autoFocus
                       />
-                      {renderPendingAttachments(replyAttachments, (i) =>
-                        removePendingAttachment(i, true),
-                      )}
+                      <CommentAttachmentDraftList
+                        attachments={replyAttachments}
+                        onRemove={(i) => removePendingAttachment(i, true)}
+                      />
                     </div>
                   </div>
                   <div className="flex justify-between items-center ml-6">
@@ -928,7 +831,10 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
             Supports: **bold**, *italic*, `code`, ~~strikethrough~~, [link](url), @mentions
           </p>
         </div>
-        {renderPendingAttachments(pendingAttachments, (i) => removePendingAttachment(i, false))}
+        <CommentAttachmentDraftList
+          attachments={pendingAttachments}
+          onRemove={(i) => removePendingAttachment(i, false)}
+        />
         <div className="flex justify-between items-center">
           <div>
             <input
