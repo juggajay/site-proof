@@ -2391,6 +2391,10 @@ test.describe('production readiness guardrails', () => {
       new URL('../src/pages/lots/components/PhotosTab.tsx', import.meta.url),
       'utf8',
     );
+    const photoViewerModalSource = await readFile(
+      new URL('../src/pages/lots/components/PhotoViewerModal.tsx', import.meta.url),
+      'utf8',
+    );
     const itpPhotoLightboxSource = await readFile(
       new URL('../src/pages/lots/components/ITPPhotoLightbox.tsx', import.meta.url),
       'utf8',
@@ -2402,9 +2406,13 @@ test.describe('production readiness guardrails', () => {
     expect(photoLocationLinksSource).toContain('longitude > 180');
     expect(photoLocationLinksSource).toContain('new URLSearchParams');
     expect(photoLocationMapSource).toContain('referrerPolicy="no-referrer"');
-    expect(photosTabSource).toContain('<PhotoLocationMap');
+    expect(photosTabSource).toContain('<PhotoViewerModal');
+    expect(photoViewerModalSource).toContain('<PhotoLocationMap');
     expect(itpPhotoLightboxSource).toContain('<PhotoLocationMap');
     expect(photosTabSource).not.toContain('openstreetmap.org/export/embed.html?bbox=${Number');
+    expect(photoViewerModalSource).not.toContain(
+      'openstreetmap.org/export/embed.html?bbox=${Number',
+    );
     expect(itpPhotoLightboxSource).not.toContain(
       'openstreetmap.org/export/embed.html?bbox=${Number',
     );
