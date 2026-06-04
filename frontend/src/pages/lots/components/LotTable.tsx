@@ -10,29 +10,16 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { COLUMN_CONFIG, type ColumnId } from './lotFilterConfig';
-import type { Lot } from '../lotsPageTypes';
 import {
-  isRecord,
-  parseJsonPreference,
-  readLocalStorageItem,
-  writeLocalStorageItem,
-} from '@/lib/storagePreferences';
+  COLUMN_WIDTH_STORAGE_KEY,
+  DEFAULT_COLUMN_WIDTHS,
+  formatChainage,
+  highlightSearchTerm,
+  parseColumnWidthsPreference,
+} from './lotTableDisplay';
+import type { Lot } from '../lotsPageTypes';
+import { readLocalStorageItem, writeLocalStorageItem } from '@/lib/storagePreferences';
 import { formatStatusLabel } from '@/lib/statusLabels';
-
-// Default column widths in pixels
-const DEFAULT_COLUMN_WIDTHS: Record<string, number> = {
-  lotNumber: 140,
-  description: 200,
-  chainage: 100,
-  activityType: 130,
-  status: 110,
-  subcontractor: 140,
-  budget: 100,
-};
-
-const COLUMN_WIDTH_STORAGE_KEY = 'siteproof_lot_column_widths';
-const MIN_COLUMN_WIDTH = 60;
-const MAX_COLUMN_WIDTH = 600;
 
 // Feature #438: Okabe-Ito color-blind safe palette
 const statusColors: Record<string, string> = {
@@ -42,52 +29,6 @@ const statusColors: Record<string, string> = {
   on_hold: 'bg-orange-100 dark:bg-orange-900/40 text-orange-800 dark:text-orange-200',
   not_started: 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200',
 };
-
-// Helper function to highlight search terms in text
-function highlightSearchTerm(text: string, searchTerm: string): React.ReactNode {
-  if (!searchTerm || !text) return text;
-
-  const regex = new RegExp(`(${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-  const parts = text.split(regex);
-
-  if (parts.length === 1) return text;
-
-  return parts.map((part, index) =>
-    regex.test(part) ? (
-      <mark key={index} className="bg-yellow-200 text-yellow-900 px-0.5 rounded">
-        {part}
-      </mark>
-    ) : (
-      part
-    ),
-  );
-}
-
-// Format chainage for display
-function formatChainage(lot: Lot) {
-  if (lot.chainageStart != null && lot.chainageEnd != null) {
-    return lot.chainageStart === lot.chainageEnd
-      ? `${lot.chainageStart}`
-      : `${lot.chainageStart}-${lot.chainageEnd}`;
-  }
-  return lot.chainageStart ?? lot.chainageEnd ?? '\u2014';
-}
-
-function parseColumnWidthsPreference(raw: string | null): Record<string, number> {
-  return parseJsonPreference(raw, DEFAULT_COLUMN_WIDTHS, (value) => {
-    if (!isRecord(value)) return null;
-
-    const widths = { ...DEFAULT_COLUMN_WIDTHS };
-    for (const columnId of Object.keys(DEFAULT_COLUMN_WIDTHS)) {
-      const width = value[columnId];
-      if (typeof width === 'number' && Number.isFinite(width)) {
-        widths[columnId] = Math.min(MAX_COLUMN_WIDTH, Math.max(MIN_COLUMN_WIDTH, width));
-      }
-    }
-
-    return widths;
-  });
-}
 
 interface LotTableProps {
   displayedLots: Lot[];
