@@ -16,9 +16,9 @@
  *
  * Behavior is intentionally unchanged: same API paths, payloads, optimistic
  * merge, offline decision tree, toast wording, and polling semantics. The photo
- * / evidence upload + AI-classification handlers still live in the page (PR-D)
- * and reuse the `setUpdatingCompletion` / `updatingCompletionRef` guard this
- * hook exposes.
+ * / evidence upload + AI-classification handlers live in useLotPhotoUpload
+ * (the PR-D slice) and reuse the `setUpdatingCompletion` /
+ * `updatingCompletionRef` guard this hook exposes.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiFetch, ApiError } from '@/lib/api';
