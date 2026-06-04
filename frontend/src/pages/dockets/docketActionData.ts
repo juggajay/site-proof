@@ -5,8 +5,8 @@ import { queryKeys } from '@/lib/queryKeys';
 import type { DocketDetailResponse, LabourEntry, PlantEntry } from './docketApprovalsData';
 
 // Data + pure helpers backing the docket approve/reject/query/view action modal.
-// Extracted verbatim from DocketApprovalsPage so the create-docket flow (which
-// still lives on the page) and the action modal share one implementation.
+// Extracted verbatim from DocketApprovalsPage so the create-docket flow (page
+// submit + CreateDocketModal) and the action modal share one implementation.
 
 export type DocketActionType = 'approve' | 'reject' | 'query' | 'view';
 export type DocketActionEndpoint = 'approve' | 'reject' | 'query';
@@ -32,7 +32,8 @@ export const statusLabels: Record<string, string> = {
 };
 
 // ===== Hours validation =====
-// Shared by the create-docket form (page) and the approve adjustment inputs (modal).
+// Shared by the create-docket flow (CreateDocketModal inputs, page submit) and
+// the approve adjustment inputs (DocketActionModal).
 
 export const HOURS_INPUT_ERROR = 'Hours must be a non-negative decimal number.';
 export const HOURS_INPUT_PATTERN = /^\d+(?:\.\d+)?$/;
