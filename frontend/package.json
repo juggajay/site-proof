@@ -60,7 +60,7 @@
     "react-dom": "^18.2.0",
     "react-hook-form": "^7.49.2",
     "react-pdf": "^10.4.1",
-    "react-router-dom": "^6.21.1",
+    "react-router-dom": "^7.15.0",
     "recharts": "^2.10.3",
     "sonner": "^2.0.7",
     "tailwind-merge": "^2.6.1",
