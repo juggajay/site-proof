@@ -2,11 +2,10 @@ import { useParams, useNavigate, useSearchParams, useLocation } from 'react-rout
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCommercialAccess } from '@/hooks/useCommercialAccess';
-import { apiFetch, ApiError, authFetch } from '@/lib/api';
+import { apiFetch, ApiError } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 import { extractErrorMessage, extractErrorDetails, handleApiError } from '@/lib/errorHandling';
-import { devWarn, logError } from '@/lib/logger';
-import { formatDateTime } from '@/lib/utils';
+import { logError } from '@/lib/logger';
 import { formatStatusLabel } from '@/lib/statusLabels';
 import { toast } from '@/components/ui/toaster';
 import { CommentsSection } from '@/components/comments/CommentsSection';
@@ -21,15 +20,12 @@ import type {
   SubcontractorCompany,
   TestResult,
   NCR,
-  ITPAttachment,
-  ITPCompletion,
   ConformStatus,
   ActivityLog,
   LocationState,
   LotSubcontractorAssignment,
 } from './types';
 import { LOT_TABS, LOT_OVERRIDE_STATUSES, getLotTabsForRole } from './constants';
-import { getGPSLocation, getItpPhotoValidationError } from './lib/itpEvidence';
 import {
   buildConformanceStatusPath,
   buildLotHistoryPath,
@@ -42,12 +38,13 @@ import {
 } from './lotDetailData';
 import { useItpInstance } from './hooks/useItpInstance';
 import { useConformanceReportGeneration } from './hooks/useConformanceReportGeneration';
+import { useLotPhotoUpload } from './hooks/useLotPhotoUpload';
 import { TestsTabContent, NCRsTabContent, HistoryTabContent } from '@/components/lots';
 import { MarkAsNAModal } from './components/MarkAsNAModal';
 import { MarkAsFailedModal } from './components/MarkAsFailedModal';
 import { EvidenceWarningModal } from './components/EvidenceWarningModal';
 import { WitnessPointModal } from './components/WitnessPointModal';
-import { AIClassificationModal, ClassificationModalData } from './components/AIClassificationModal';
+import { AIClassificationModal } from './components/AIClassificationModal';
 import { StatusOverrideModal } from './components/StatusOverrideModal';
 import { LegacyAssignSubcontractorModal } from './components/LegacyAssignSubcontractorModal';
 import { QualityManagementSection } from './components/QualityManagementSection';
@@ -105,7 +102,6 @@ export function LotDetailPage() {
   const { isOnline, pendingSyncCount: _pendingSyncCount } = useOfflineStatus();
   const [conformStatus, setConformStatus] = useState<ConformStatus | null>(null);
   const [loadingConformStatus, setLoadingConformStatus] = useState(false);
-  const [_uploadingPhoto, setUploadingPhoto] = useState<string | null>(null);
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
@@ -147,13 +143,6 @@ export function LotDetailPage() {
     existingNotes: string | null;
   } | null>(null);
   const [submittingWitness, setSubmittingWitness] = useState(false);
-
-  // AI Photo Classification modal state (Feature #247)
-  const [classificationModal, setClassificationModal] = useState<ClassificationModalData | null>(
-    null,
-  );
-  const [savingClassification, setSavingClassification] = useState(false);
-  const [_classifying, setClassifying] = useState(false);
 
   // Copy link handler
   const handleCopyLink = async () => {
@@ -455,6 +444,26 @@ export function LotDetailPage() {
     refreshNcrsAfterFailure,
   });
 
+  // Photo upload + AI-classification workflow (Feature #247). Lives in a hook
+  // that owns the classification modal state; it shares useItpInstance's
+  // updatingCompletion double-submit guard and merges uploaded attachments into
+  // the same ITP instance state. The page keeps rendering the modal.
+  const {
+    classificationModal,
+    savingClassification,
+    handleMobileAddPhoto,
+    handleAddPhoto,
+    handleSaveClassification,
+    handleSkipClassification,
+  } = useLotPhotoUpload({
+    projectId,
+    lotId,
+    itpInstance,
+    setItpInstance,
+    setUpdatingCompletion,
+    updatingCompletionRef,
+  });
+
   // Conformance report generation workflow (format dialog + lazy PDF import).
   // Lives in a hook because it owns its own dialog/generating state; it reuses
   // the already-loaded itpInstance to avoid an extra fetch.
@@ -641,250 +650,6 @@ export function LotDetailPage() {
     } finally {
       setSubmittingWitness(false);
     }
-  };
-
-  const uploadItpEvidencePhoto = async (
-    completionId: string,
-    file: File,
-  ): Promise<ITPAttachment> => {
-    if (!projectId || !lotId) {
-      throw new Error('Project and lot are required to upload ITP evidence.');
-    }
-
-    const gpsLocation = await getGPSLocation();
-    const caption = `ITP Evidence Photo - ${formatDateTime(new Date())}`;
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('projectId', projectId);
-    formData.append('lotId', lotId);
-    formData.append('documentType', 'photo');
-    formData.append('category', 'itp_evidence');
-    formData.append('caption', caption);
-
-    const uploadResponse = await authFetch('/api/documents/upload', {
-      method: 'POST',
-      body: formData,
-    });
-
-    if (!uploadResponse.ok) {
-      const body = await uploadResponse.text();
-      throw new ApiError(uploadResponse.status, body);
-    }
-
-    const document = (await uploadResponse.json()) as { id: string };
-    const data = await apiFetch<{ attachment: ITPAttachment }>(
-      `/api/itp/completions/${encodeURIComponent(completionId)}/attachments`,
-      {
-        method: 'POST',
-        body: JSON.stringify({
-          documentId: document.id,
-          caption,
-          gpsLatitude: gpsLocation?.latitude ?? null,
-          gpsLongitude: gpsLocation?.longitude ?? null,
-        }),
-      },
-    );
-
-    return data.attachment;
-  };
-
-  const handleMobileAddPhoto = async (checklistItemId: string, file: File) => {
-    if (!itpInstance || updatingCompletionRef.current === checklistItemId) return;
-
-    const validationError = getItpPhotoValidationError(file);
-    if (validationError) {
-      toast({
-        title: validationError.includes('10MB') ? 'File too large' : 'Invalid file type',
-        description: validationError,
-        variant: 'error',
-      });
-      return;
-    }
-
-    try {
-      updatingCompletionRef.current = checklistItemId;
-      setUpdatingCompletion(checklistItemId);
-
-      // First ensure there's a completion for this item
-      let completion = itpInstance.completions.find((c) => c.checklistItemId === checklistItemId);
-
-      if (!completion?.id) {
-        // Create completion first
-        try {
-          const data = await apiFetch<{ completion: ITPCompletion }>('/api/itp/completions', {
-            method: 'POST',
-            body: JSON.stringify({
-              itpInstanceId: itpInstance.id,
-              checklistItemId,
-              status: 'pending',
-              notes: '',
-            }),
-          });
-          completion = data.completion;
-          // Update local state
-          setItpInstance((prev) => {
-            if (!prev) return prev;
-            return { ...prev, completions: [...prev.completions, data.completion] };
-          });
-        } catch {
-          // creation failed
-        }
-      }
-
-      if (!completion?.id) {
-        toast({
-          title: 'Cannot add photo',
-          description: 'Unable to create completion record.',
-          variant: 'error',
-        });
-        return;
-      }
-
-      const attachment = await uploadItpEvidencePhoto(completion.id, file);
-
-      // Update local state with new attachment
-      setItpInstance((prev) => {
-        if (!prev) return prev;
-        const newCompletions = prev.completions.map((c) => {
-          if (c.checklistItemId === checklistItemId) {
-            return {
-              ...c,
-              attachments: c.attachments?.some((existing) => existing.id === attachment.id)
-                ? c.attachments
-                : [...(c.attachments || []), attachment],
-            };
-          }
-          return c;
-        });
-        return { ...prev, completions: newCompletions };
-      });
-      toast({
-        title: 'Photo uploaded',
-        description: 'Photo has been attached to the checklist item.',
-      });
-    } catch (err) {
-      handleApiError(err, 'Failed to upload photo');
-    } finally {
-      updatingCompletionRef.current = null;
-      setUpdatingCompletion(null);
-    }
-  };
-
-  // Handle adding a photo to an ITP completion
-  const handleAddPhoto = async (
-    completionId: string,
-    checklistItemId: string,
-    event: React.ChangeEvent<HTMLInputElement>,
-  ) => {
-    const file = event.target.files?.[0];
-    if (!file || !itpInstance) return;
-
-    const validationError = getItpPhotoValidationError(file);
-    if (validationError) {
-      toast({
-        title: validationError.includes('10MB') ? 'File too large' : 'Invalid file type',
-        description: validationError,
-        variant: 'error',
-      });
-      event.target.value = ''; // Reset input
-      return;
-    }
-
-    setUploadingPhoto(checklistItemId);
-
-    try {
-      const attachment = await uploadItpEvidencePhoto(completionId, file);
-
-      // Update the ITP instance with the new attachment
-      setItpInstance((prev) => {
-        if (!prev) return prev;
-        const completionIndex = prev.completions.findIndex((c) => c.id === completionId);
-        if (completionIndex >= 0) {
-          const newCompletions = [...prev.completions];
-          const completion = newCompletions[completionIndex];
-          newCompletions[completionIndex] = {
-            ...completion,
-            attachments: completion.attachments?.some((existing) => existing.id === attachment.id)
-              ? completion.attachments
-              : [...(completion.attachments || []), attachment],
-          };
-          return { ...prev, completions: newCompletions };
-        }
-        return prev;
-      });
-
-      // Feature #247: AI Photo Classification
-      // Call the AI classification endpoint after successful upload
-      setClassifying(true);
-      try {
-        const classificationData = await apiFetch<ClassificationModalData>(
-          `/api/documents/${encodeURIComponent(attachment.documentId)}/classify`,
-          {
-            method: 'POST',
-          },
-        );
-
-        // Show the classification modal
-        setClassificationModal({
-          documentId: classificationData.documentId,
-          filename: file.name,
-          suggestedClassification: classificationData.suggestedClassification,
-          confidence: classificationData.confidence,
-          categories: classificationData.categories,
-        });
-      } catch (classifyErr) {
-        devWarn('AI classification error:', classifyErr);
-        toast({
-          title: 'Photo uploaded',
-          description: 'Photo was uploaded but AI classification failed.',
-        });
-      } finally {
-        setClassifying(false);
-      }
-    } catch (err) {
-      handleApiError(err, 'Failed to upload photo');
-    } finally {
-      setUploadingPhoto(null);
-      event.target.value = '';
-    }
-  };
-
-  // Feature #247: Handle saving the photo classification
-  const handleSaveClassification = async (classification: string) => {
-    if (!classificationModal) return;
-
-    setSavingClassification(true);
-
-    try {
-      await apiFetch(
-        `/api/documents/${encodeURIComponent(classificationModal.documentId)}/save-classification`,
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            classification,
-          }),
-        },
-      );
-
-      toast({
-        title: 'Classification saved',
-        description: `Photo classified as "${classification}"`,
-      });
-      setClassificationModal(null);
-    } catch (err) {
-      handleApiError(err, 'Failed to save classification');
-    } finally {
-      setSavingClassification(false);
-    }
-  };
-
-  // Skip classification and just close the modal
-  const handleSkipClassification = () => {
-    setClassificationModal(null);
-    toast({
-      title: 'Photo uploaded',
-      description: 'Photo was uploaded without classification.',
-    });
   };
 
   const handleConformLot = async (force = false, reason?: string) => {
