@@ -31,6 +31,15 @@ export interface CompanyFormData {
   logoUrl: string;
 }
 
+/** One row of GET /api/company/members; shared by the page's member load and
+ * the ownership transfer modal. */
+export interface CompanyMember {
+  id: string;
+  email: string;
+  fullName: string | null;
+  roleInCompany: string;
+}
+
 interface CompanyResponse {
   company: Company;
 }
