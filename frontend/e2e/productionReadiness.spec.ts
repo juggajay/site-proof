@@ -105,6 +105,13 @@ test.describe('production readiness guardrails', () => {
       new URL('../src/pages/lots/LotDetailPage.tsx', import.meta.url),
       'utf8',
     );
+    // The tab-panel markup moved verbatim into LotDetailTabPanel; guards on
+    // strings that moved with it are asserted against the panel source, while
+    // the page keeps the hook delegation and the panel wiring.
+    const lotDetailTabPanel = await readFile(
+      new URL('../src/pages/lots/components/LotDetailTabPanel.tsx', import.meta.url),
+      'utf8',
+    );
 
     // Readiness-driven tab navigation lives in the PR #582 hook. The page must
     // keep delegating to it — and must not re-grow its own tab/action URL-param
@@ -115,21 +122,32 @@ test.describe('production readiness guardrails', () => {
     );
     expect(lotDetailPage).toContain('onTabChange={handleReadinessTabChange}');
     expect(lotDetailPage).toContain('onTabChange={handleTabChange}');
-    expect(lotDetailPage).toContain('autoOpenAssignTemplate={shouldOpenAssignItp}');
-    expect(lotDetailPage).toContain(
+    // The page must keep forwarding the assign-itp action wiring and the panel
+    // ref into the extracted panel, and the panel must keep passing both
+    // through to ITPChecklistTab.
+    expect(lotDetailPage).toContain("from './components/LotDetailTabPanel'");
+    expect(lotDetailPage).toContain('tabSectionRef={tabSectionRef}');
+    expect(lotDetailPage).toContain('shouldOpenAssignItp={shouldOpenAssignItp}');
+    expect(lotDetailPage).toContain('handleAssignItpActionHandled={handleAssignItpActionHandled}');
+    expect(lotDetailTabPanel).toContain('autoOpenAssignTemplate={shouldOpenAssignItp}');
+    expect(lotDetailTabPanel).toContain(
       'onAutoOpenAssignTemplateHandled={handleAssignItpActionHandled}',
     );
-    expect(lotDetailPage).toContain('data-testid="lot-tab-panel"');
+    expect(lotDetailTabPanel).toContain('data-testid="lot-tab-panel"');
     expect(lotDetailPage).not.toContain("searchParams.get('tab')");
     expect(lotDetailPage).not.toContain("searchParams.get('action')");
+    expect(lotDetailTabPanel).not.toContain("searchParams.get('tab')");
+    expect(lotDetailTabPanel).not.toContain("searchParams.get('action')");
 
     // The conformance report PDF stays dynamically imported via the extracted
-    // hook; the page must not statically pull the PDF bundle back in.
+    // hook; neither the page nor the tab panel may statically pull the PDF
+    // bundle back in.
     expect(lotDetailPage).toContain("from './hooks/useConformanceReportGeneration'");
     expect(lotDetailPage).not.toContain("'@/lib/pdfGenerator'");
+    expect(lotDetailTabPanel).not.toContain("'@/lib/pdfGenerator'");
 
     // Lot comments stay mounted for the Lot entity.
-    expect(lotDetailPage).toContain('<CommentsSection entityType="Lot" entityId={lotId} />');
+    expect(lotDetailTabPanel).toContain('<CommentsSection entityType="Lot" entityId={lotId} />');
 
     // Budget-gated editability goes through the commercial-access hook, not a
     // raw role-string check.
