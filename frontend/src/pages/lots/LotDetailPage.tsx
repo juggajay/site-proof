@@ -8,7 +8,6 @@ import { extractErrorMessage, extractErrorDetails, handleApiError } from '@/lib/
 import { logError } from '@/lib/logger';
 import { formatStatusLabel } from '@/lib/statusLabels';
 import { toast } from '@/components/ui/toaster';
-import { CommentsSection } from '@/components/comments/CommentsSection';
 import { useOfflineStatus } from '@/lib/useOfflineStatus';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 
@@ -38,13 +37,11 @@ import { useItpInstance } from './hooks/useItpInstance';
 import { useConformanceReportGeneration } from './hooks/useConformanceReportGeneration';
 import { useLotPhotoUpload } from './hooks/useLotPhotoUpload';
 import { useLotReadinessNavigation } from './hooks/useLotReadinessNavigation';
-import { TestsTabContent, NCRsTabContent, HistoryTabContent } from '@/components/lots';
 import { QualityManagementSection } from './components/QualityManagementSection';
 import { LotHeader } from './components/LotHeader';
 import { LotTabNavigation } from './components/LotTabNavigation';
 import { LotReadinessPanel } from './components/LotReadinessPanel';
-import { PhotosTab } from './components/PhotosTab';
-import { ITPChecklistTab } from './components/ITPChecklistTab';
+import { LotDetailTabPanel } from './components/LotDetailTabPanel';
 import { LotDetailModals } from './components/LotDetailModals';
 import {
   LotDetailEmptyState,
@@ -812,137 +809,47 @@ export function LotDetailPage() {
       />
 
       {/* Tab Content */}
-      <div
-        ref={tabSectionRef}
-        className={`min-h-[300px] rounded-lg outline-none transition-shadow duration-200 ${
-          highlightedReadinessTab === currentTab
-            ? 'ring-2 ring-primary/50 ring-offset-2 ring-offset-background'
-            : ''
-        }`}
-        role="tabpanel"
-        tabIndex={-1}
-        aria-label={`${currentTabLabel} section`}
-        data-testid="lot-tab-panel"
-        data-readiness-highlighted={highlightedReadinessTab === currentTab ? 'true' : 'false'}
-      >
-        {/* ITP Checklist Tab */}
-        {currentTab === 'itp' && lot && (
-          <div className="space-y-4 animate-in fade-in duration-200">
-            <ITPChecklistTab
-              lot={lot}
-              projectId={projectId!}
-              itpInstance={itpInstance}
-              setItpInstance={setItpInstance}
-              templates={templates}
-              loadingItp={loadingItp}
-              itpLoadError={itpLoadError}
-              isOnline={isOnline}
-              isOfflineData={isOfflineData}
-              offlinePendingCount={offlinePendingCount}
-              isMobile={isMobile}
-              updatingCompletion={updatingCompletion}
-              canCompleteITPItems={canCompleteITPItems}
-              canAssignITPTemplate={canAssignITPTemplate}
-              onToggleCompletion={toggleCompletion}
-              onUpdateNotes={updateNotes}
-              onMarkAsNA={mobileMarkNA}
-              onMarkAsFailed={mobileMarkFailed}
-              onAddPhoto={handleMobileAddPhoto}
-              onAddPhotoDesktop={handleAddPhoto}
-              onAssignTemplate={assignTemplate}
-              onRetryItp={() => void refetchItp()}
-              assigningTemplate={assigningTemplate}
-              autoOpenAssignTemplate={shouldOpenAssignItp}
-              onAutoOpenAssignTemplateHandled={handleAssignItpActionHandled}
-              onOpenNaModal={(data) => setNaModal(data)}
-              onOpenFailedModal={(data) => setFailedModal(data)}
-            />
-          </div>
-        )}
-
-        {/* Test Results Tab */}
-        {currentTab === 'tests' && (
-          <div className="space-y-4 animate-in fade-in duration-200">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">Test Results</h2>
-              <button
-                onClick={() => navigate(`/projects/${encodeURIComponent(projectId || '')}/tests`)}
-                className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
-              >
-                View All Tests
-              </button>
-            </div>
-            <TestsTabContent
-              projectId={projectId!}
-              testResults={testResults}
-              loading={loadingTests}
-            />
-          </div>
-        )}
-
-        {/* NCRs Tab */}
-        {currentTab === 'ncrs' && (
-          <div className="space-y-4 animate-in fade-in duration-200">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">Non-Conformance Reports</h2>
-              <button
-                onClick={() => navigate(`/projects/${encodeURIComponent(projectId || '')}/ncr`)}
-                className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
-              >
-                View All NCRs
-              </button>
-            </div>
-            <NCRsTabContent projectId={projectId!} ncrs={ncrs} loading={loadingNcrs} />
-          </div>
-        )}
-
-        {/* Photos Tab */}
-        {currentTab === 'photos' && lotId && (
-          <PhotosTab
-            itpInstance={itpInstance}
-            lotId={lotId}
-            onTabChange={handleTabChange}
-            onItpInstanceUpdate={setItpInstance}
-          />
-        )}
-
-        {/* Documents Tab */}
-        {currentTab === 'documents' && (
-          <div className="space-y-4 animate-in fade-in duration-200">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">Documents</h2>
-              <button className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90">
-                Upload Document
-              </button>
-            </div>
-            <div className="rounded-lg border p-6 text-center">
-              <div className="text-4xl mb-2">📄</div>
-              <h3 className="text-lg font-semibold mb-2">No Documents</h3>
-              <p className="text-muted-foreground">
-                No documents have been attached to this lot yet. Upload drawings, specifications, or
-                other documents.
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Comments Tab */}
-        {currentTab === 'comments' && lotId && (
-          <div className="animate-in fade-in duration-200">
-            <CommentsSection entityType="Lot" entityId={lotId} />
-          </div>
-        )}
-
-        {/* History Tab */}
-        {currentTab === 'history' && (
-          <div className="space-y-4 animate-in fade-in duration-200">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold">Activity History</h2>
-            </div>
-            <HistoryTabContent activityLogs={activityLogs} loading={loadingHistory} />
-          </div>
-        )}
-      </div>
+      <LotDetailTabPanel
+        tabSectionRef={tabSectionRef}
+        currentTab={currentTab}
+        currentTabLabel={currentTabLabel}
+        highlightedReadinessTab={highlightedReadinessTab}
+        lot={lot}
+        projectId={projectId}
+        lotId={lotId}
+        itpInstance={itpInstance}
+        setItpInstance={setItpInstance}
+        templates={templates}
+        loadingItp={loadingItp}
+        itpLoadError={itpLoadError}
+        isOnline={isOnline}
+        isOfflineData={isOfflineData}
+        offlinePendingCount={offlinePendingCount}
+        isMobile={isMobile}
+        updatingCompletion={updatingCompletion}
+        canCompleteITPItems={canCompleteITPItems}
+        canAssignITPTemplate={canAssignITPTemplate}
+        toggleCompletion={toggleCompletion}
+        updateNotes={updateNotes}
+        mobileMarkNA={mobileMarkNA}
+        mobileMarkFailed={mobileMarkFailed}
+        handleMobileAddPhoto={handleMobileAddPhoto}
+        handleAddPhoto={handleAddPhoto}
+        assignTemplate={assignTemplate}
+        refetchItp={refetchItp}
+        assigningTemplate={assigningTemplate}
+        shouldOpenAssignItp={shouldOpenAssignItp}
+        handleAssignItpActionHandled={handleAssignItpActionHandled}
+        setNaModal={setNaModal}
+        setFailedModal={setFailedModal}
+        testResults={testResults}
+        loadingTests={loadingTests}
+        ncrs={ncrs}
+        loadingNcrs={loadingNcrs}
+        handleTabChange={handleTabChange}
+        activityLogs={activityLogs}
+        loadingHistory={loadingHistory}
+      />
 
       {/* Quality Management Section */}
       <QualityManagementSection
