@@ -35,6 +35,7 @@ import {
   type CompanyFormData,
   type CompanyMember,
 } from './companySettingsData';
+import { CompanyTeamMembersSection } from './components/CompanyTeamMembersSection';
 import { OwnershipTransferModal } from './components/OwnershipTransferModal';
 
 interface LogoUploadResponse {
@@ -52,6 +53,11 @@ export function CompanySettingsPage() {
   const [company, setCompany] = useState<Company | null>(null);
   const [supportEmail, setSupportEmail] = useState(DEFAULT_SUPPORT_EMAIL);
   const isCompanyOwner = user?.roleInCompany === 'owner' || user?.role === 'owner';
+  const canManageCompanyTeam =
+    user?.roleInCompany === 'owner' ||
+    user?.roleInCompany === 'admin' ||
+    user?.role === 'owner' ||
+    user?.role === 'admin';
 
   // Spinner while the first load is in flight, including each "Try again"
   // refetch (which has no cached data yet). Mirrors the previous
@@ -630,6 +636,8 @@ export function CompanySettingsPage() {
           </div>
         </div>
       </div>
+
+      {canManageCompanyTeam && <CompanyTeamMembersSection currentUserId={user?.id} />}
 
       {/* Billing & Subscription - Only visible to owners (Feature #703) */}
       {isCompanyOwner && (

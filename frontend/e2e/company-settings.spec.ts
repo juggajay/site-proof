@@ -323,7 +323,7 @@ test.describe('Company settings seeded owner contract', () => {
   });
 
   test('shows member load failure before empty transfer state and retries', async ({ page }) => {
-    const api = await mockCompanySettingsApi(page, { failMemberLoadsUntil: 2 });
+    const api = await mockCompanySettingsApi(page, { failMemberLoadsUntil: 3 });
 
     await page.goto('/company-settings');
     await page.getByRole('button', { name: 'Transfer Ownership' }).click();
@@ -350,7 +350,7 @@ test.describe('Company settings seeded owner contract', () => {
     }
 
     await expect(transferDialog.getByLabel('Select New Owner')).toBeVisible();
-    await expect.poll(() => api.getMemberLoadCount()).toBeGreaterThan(2);
+    await expect.poll(() => api.getMemberLoadCount()).toBeGreaterThan(3);
   });
 
   test('recovers from company settings load failure without false settings content', async ({

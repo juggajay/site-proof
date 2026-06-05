@@ -38,6 +38,40 @@ export interface CompanyMember {
   email: string;
   fullName: string | null;
   roleInCompany: string;
+  hasPassword?: boolean;
+  status?: 'active' | 'pending';
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CompanyMemberInviteRequest {
+  email: string;
+  fullName?: string;
+  roleInCompany: string;
+}
+
+export interface CompanyMemberInviteResponse {
+  message: string;
+  member: CompanyMember;
+  invitation: {
+    setupRequired: boolean;
+    expiresAt: string | null;
+  };
+}
+
+export const COMPANY_MEMBER_ROLE_OPTIONS = [
+  { value: 'admin', label: 'Admin' },
+  { value: 'project_manager', label: 'Project Manager' },
+  { value: 'quality_manager', label: 'Quality Manager' },
+  { value: 'site_manager', label: 'Site Manager' },
+  { value: 'foreman', label: 'Foreman' },
+  { value: 'site_engineer', label: 'Site Engineer' },
+  { value: 'viewer', label: 'Viewer' },
+  { value: 'member', label: 'Member' },
+] as const;
+
+export function formatCompanyRoleLabel(role: string): string {
+  return COMPANY_MEMBER_ROLE_OPTIONS.find((option) => option.value === role)?.label ?? role;
 }
 
 interface CompanyResponse {

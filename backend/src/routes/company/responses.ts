@@ -32,6 +32,9 @@ type CompanyMember = {
   email: string;
   fullName: string | null;
   roleInCompany: string;
+  passwordHash?: string | null;
+  createdAt?: Date;
+  updatedAt?: Date;
 };
 
 type NewOwner = {
@@ -78,7 +81,43 @@ export function buildCompanyLeftResponse(leftAt: Date) {
 }
 
 export function buildCompanyMembersResponse(members: CompanyMember[]) {
-  return { members };
+  return {
+    members: members.map((member) => ({
+      id: member.id,
+      email: member.email,
+      fullName: member.fullName,
+      roleInCompany: member.roleInCompany,
+      hasPassword: Boolean(member.passwordHash),
+      status: member.passwordHash ? 'active' : 'pending',
+      ...(member.createdAt ? { createdAt: member.createdAt.toISOString() } : {}),
+      ...(member.updatedAt ? { updatedAt: member.updatedAt.toISOString() } : {}),
+    })),
+  };
+}
+
+export function buildCompanyMemberInvitedResponse(
+  member: CompanyMember,
+  invitation: { expiresAt: Date | null },
+) {
+  return {
+    message: member.passwordHash
+      ? 'Company member updated successfully'
+      : 'Company invitation sent successfully',
+    member: {
+      id: member.id,
+      email: member.email,
+      fullName: member.fullName,
+      roleInCompany: member.roleInCompany,
+      hasPassword: Boolean(member.passwordHash),
+      status: member.passwordHash ? 'active' : 'pending',
+      ...(member.createdAt ? { createdAt: member.createdAt.toISOString() } : {}),
+      ...(member.updatedAt ? { updatedAt: member.updatedAt.toISOString() } : {}),
+    },
+    invitation: {
+      setupRequired: !member.passwordHash,
+      expiresAt: invitation.expiresAt?.toISOString() ?? null,
+    },
+  };
 }
 
 export function buildCompanyOwnershipTransferredResponse(newOwner: NewOwner, transferredAt: Date) {
