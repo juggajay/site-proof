@@ -230,6 +230,10 @@ test.describe('production readiness guardrails', () => {
       new URL('../src/pages/drawings/DrawingsPage.tsx', import.meta.url),
       'utf8',
     );
+    const drawingRegisterTable = await readFile(
+      new URL('../src/pages/drawings/components/DrawingRegisterTable.tsx', import.meta.url),
+      'utf8',
+    );
     const testResultsPage = await readFile(
       new URL('../src/pages/tests/TestResultsPage.tsx', import.meta.url),
       'utf8',
@@ -256,6 +260,7 @@ test.describe('production readiness guardrails', () => {
     expect(documentFiltersPanel).not.toContain('alert(');
     expect(documentGrid).not.toContain('alert(');
     expect(drawingsPage).not.toContain('alert(');
+    expect(drawingRegisterTable).not.toContain('alert(');
     expect(testResultsPage).not.toContain('alert(');
     expect(uploadCertificateModal).not.toContain('alert(');
     expect(batchUploadModal).not.toContain('alert(');
