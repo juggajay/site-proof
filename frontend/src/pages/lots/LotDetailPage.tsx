@@ -37,6 +37,7 @@ import { useItpInstance } from './hooks/useItpInstance';
 import { useConformanceReportGeneration } from './hooks/useConformanceReportGeneration';
 import { useLotPhotoUpload } from './hooks/useLotPhotoUpload';
 import { useLotReadinessNavigation } from './hooks/useLotReadinessNavigation';
+import { useLotLinkCopy } from './hooks/useLotLinkCopy';
 import { QualityManagementSection } from './components/QualityManagementSection';
 import { LotHeader } from './components/LotHeader';
 import { LotTabNavigation } from './components/LotTabNavigation';
@@ -93,7 +94,6 @@ export function LotDetailPage() {
   const [loadingConformStatus, setLoadingConformStatus] = useState(false);
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
-  const [linkCopied, setLinkCopied] = useState(false);
   const [showOverrideModal, setShowOverrideModal] = useState(false);
   const [overriding, setOverriding] = useState(false);
   const [showSubcontractorModal, setShowSubcontractorModal] = useState(false);
@@ -133,33 +133,10 @@ export function LotDetailPage() {
   } | null>(null);
   const [submittingWitness, setSubmittingWitness] = useState(false);
 
-  // Copy link handler
-  const handleCopyLink = async () => {
-    const url = `${window.location.origin}/projects/${encodeURIComponent(projectId || '')}/lots/${encodeURIComponent(lotId || '')}`;
-    try {
-      await navigator.clipboard.writeText(url);
-      setLinkCopied(true);
-      toast({
-        title: 'Link copied!',
-        description: 'The lot link has been copied to your clipboard.',
-      });
-      setTimeout(() => setLinkCopied(false), 2000);
-    } catch {
-      // Fallback for older browsers
-      const textArea = document.createElement('textarea');
-      textArea.value = url;
-      document.body.appendChild(textArea);
-      textArea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textArea);
-      setLinkCopied(true);
-      toast({
-        title: 'Link copied!',
-        description: 'The lot link has been copied to your clipboard.',
-      });
-      setTimeout(() => setLinkCopied(false), 2000);
-    }
-  };
+  // Copy-link workflow (URL build, clipboard write + textarea fallback, toast,
+  // 2-second reset) lives in useLotLinkCopy; the page only wires it into the
+  // header button.
+  const { linkCopied, copyLotLink } = useLotLinkCopy({ projectId, lotId });
 
   // Readiness-driven tab navigation: the URL `tab`/`action` params, the
   // readiness focus/highlight state, and the scroll-focus-highlight effect
@@ -771,7 +748,7 @@ export function LotDetailPage() {
         linkCopied={linkCopied}
         assignments={assignments}
         removeAssignmentPending={removeAssignmentMutation.isPending}
-        onCopyLink={handleCopyLink}
+        onCopyLink={copyLotLink}
         onPrint={() => window.print()}
         onEdit={() =>
           navigate(
