@@ -8,7 +8,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
-import { buildApiUrl } from '../lib/runtimeConfig.js';
+import { buildApiUrl, buildFrontendUrl } from '../lib/runtimeConfig.js';
 import {
   assertUploadedImageFile,
   getSafeImageExtensionForMimeType,
@@ -17,6 +17,7 @@ import { ensureUploadSubdirectory, getUploadSubdirectoryPath } from '../lib/uplo
 import { assertCanRemoveUserFromProjectAdminRoles } from '../lib/projectAdminInvariant.js';
 import { logError, logWarn } from '../lib/serverLogger.js';
 import { AuditAction, createAuditLog } from '../lib/auditLog.js';
+import { sendCompanyMemberInvitationEmail } from '../lib/email.js';
 import {
   DOCUMENTS_BUCKET,
   getSupabaseClient,
@@ -28,6 +29,7 @@ import {
   buildCompanyCreatedResponse,
   buildCompanyLeftResponse,
   buildCompanyLogoUploadedResponse,
+  buildCompanyMemberInvitedResponse,
   buildCompanyMembersResponse,
   buildCompanyOwnershipTransferredResponse,
   buildCompanyProfileResponse,
@@ -42,8 +44,23 @@ const COMPANY_NAME_MAX_LENGTH = 120;
 const COMPANY_ABN_MAX_LENGTH = 32;
 const COMPANY_ADDRESS_MAX_LENGTH = 300;
 const COMPANY_LOGO_URL_MAX_LENGTH = 2048;
+const COMPANY_MEMBER_FULL_NAME_MAX_LENGTH = 120;
+const COMPANY_MEMBER_EMAIL_MAX_LENGTH = 254;
+const COMPANY_MEMBER_INVITATION_EXPIRES_DAYS = 7;
+const ONE_TIME_TOKEN_HASH_PREFIX = 'sha256:';
 const COMPANY_LOGO_PATH_PREFIX = '/uploads/company-logos/';
 const COMPANY_SUBCONTRACTOR_ROLES = new Set(['subcontractor', 'subcontractor_admin']);
+const COMPANY_MEMBER_INVITE_ROLES = new Set([
+  'admin',
+  'project_manager',
+  'quality_manager',
+  'site_manager',
+  'foreman',
+  'site_engineer',
+  'viewer',
+  'member',
+]);
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const companyLogoUploadDir = getUploadSubdirectoryPath('company-logos');
 
@@ -285,6 +302,34 @@ function requireCompanyAdmin(user: NonNullable<Express.Request['user']>): string
 
 function isSubcontractorCompanyRole(user: NonNullable<Express.Request['user']>): boolean {
   return COMPANY_SUBCONTRACTOR_ROLES.has(user.roleInCompany || '');
+}
+
+function normalizeCompanyMemberEmail(value: unknown): string {
+  const normalized = normalizeCompanyString(value, 'Email', COMPANY_MEMBER_EMAIL_MAX_LENGTH, {
+    required: true,
+  })!.toLowerCase();
+
+  if (!EMAIL_PATTERN.test(normalized)) {
+    throw AppError.badRequest('Enter a valid email address');
+  }
+
+  return normalized;
+}
+
+function normalizeCompanyMemberRole(value: unknown): string {
+  const normalized = normalizeCompanyString(value, 'Company member role', 64, {
+    required: true,
+  })!;
+
+  if (!COMPANY_MEMBER_INVITE_ROLES.has(normalized)) {
+    throw AppError.badRequest('Company member role is not supported');
+  }
+
+  return normalized;
+}
+
+function hashOneTimeToken(token: string): string {
+  return `${ONE_TIME_TOKEN_HASH_PREFIX}${crypto.createHash('sha256').update(token).digest('hex')}`;
 }
 
 function normalizeCompanyString(
@@ -622,9 +667,10 @@ companyRouter.get(
       throw AppError.notFound('Company');
     }
 
-    // Only owners can view members for transfer purposes
-    if (user.roleInCompany !== 'owner') {
-      throw AppError.forbidden('Only company owners can view members for ownership transfer');
+    // Owners/admins can view members for team management. Ownership transfer
+    // remains owner-only in POST /transfer-ownership.
+    if (!['owner', 'admin'].includes(user.roleInCompany || '')) {
+      throw AppError.forbidden('Only company owners and admins can view company members');
     }
 
     const members = await prisma.user.findMany({
@@ -634,11 +680,201 @@ companyRouter.get(
         email: true,
         fullName: true,
         roleInCompany: true,
+        passwordHash: true,
+        createdAt: true,
+        updatedAt: true,
       },
       orderBy: { fullName: 'asc' },
     });
 
     res.json(buildCompanyMembersResponse(members));
+  }),
+);
+
+// POST /api/company/members/invite - Invite or attach a user to the current company
+companyRouter.post(
+  '/members/invite',
+  asyncHandler(async (req, res) => {
+    const user = req.user!;
+    requireBrowserSession(req, 'Company member invitation');
+    const companyId = requireCompanyAdmin(user);
+    const email = normalizeCompanyMemberEmail(req.body.email);
+    const roleInCompany = normalizeCompanyMemberRole(req.body.roleInCompany ?? req.body.role);
+    const fullName = normalizeCompanyString(
+      req.body.fullName,
+      'Full name',
+      COMPANY_MEMBER_FULL_NAME_MAX_LENGTH,
+    );
+
+    const setupToken = crypto.randomBytes(32).toString('hex');
+    const setupExpiresAt = new Date(
+      Date.now() + COMPANY_MEMBER_INVITATION_EXPIRES_DAYS * 24 * 60 * 60 * 1000,
+    );
+
+    const { company, member, setupRequired } = await prisma.$transaction(async (tx) => {
+      const currentUser = await tx.user.findUnique({
+        where: { id: user.userId },
+        select: { companyId: true, roleInCompany: true },
+      });
+
+      if (!currentUser?.companyId) {
+        throw AppError.notFound('Company');
+      }
+
+      if (currentUser.companyId !== companyId) {
+        throw AppError.forbidden('Invalid company session');
+      }
+
+      if (!['owner', 'admin'].includes(currentUser.roleInCompany || '')) {
+        throw AppError.forbidden('Only company owners and admins can invite company members');
+      }
+
+      const company = await tx.company.findUnique({
+        where: { id: companyId },
+        select: { id: true, name: true },
+      });
+
+      if (!company) {
+        throw AppError.notFound('Company');
+      }
+
+      const existingUser = await tx.user.findUnique({
+        where: { email },
+        select: {
+          id: true,
+          email: true,
+          fullName: true,
+          companyId: true,
+          roleInCompany: true,
+          passwordHash: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+
+      if (existingUser?.companyId && existingUser.companyId !== companyId) {
+        throw AppError.conflict('This user already belongs to another company');
+      }
+
+      if (
+        existingUser &&
+        (COMPANY_SUBCONTRACTOR_ROLES.has(existingUser.roleInCompany || '') ||
+          (await tx.subcontractorUser.findFirst({
+            where: {
+              userId: existingUser.id,
+              subcontractorCompany: { status: { not: 'removed' } },
+            },
+            select: { id: true },
+          })))
+      ) {
+        throw AppError.forbidden(
+          'Subcontractor portal accounts cannot be added as company members',
+        );
+      }
+
+      if (existingUser?.roleInCompany === 'owner') {
+        throw AppError.badRequest('Company owners are managed through ownership transfer');
+      }
+
+      const member = existingUser
+        ? await tx.user.update({
+            where: { id: existingUser.id },
+            data: {
+              companyId,
+              roleInCompany,
+              emailVerified: true,
+              emailVerifiedAt: existingUser.passwordHash ? existingUser.updatedAt : new Date(),
+              ...(fullName !== undefined ? { fullName } : {}),
+            },
+            select: {
+              id: true,
+              email: true,
+              fullName: true,
+              roleInCompany: true,
+              passwordHash: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+          })
+        : await tx.user.create({
+            data: {
+              email,
+              fullName: fullName ?? null,
+              companyId,
+              roleInCompany,
+              emailVerified: true,
+              emailVerifiedAt: new Date(),
+            },
+            select: {
+              id: true,
+              email: true,
+              fullName: true,
+              roleInCompany: true,
+              passwordHash: true,
+              createdAt: true,
+              updatedAt: true,
+            },
+          });
+
+      const setupRequired = !member.passwordHash;
+      if (setupRequired) {
+        await tx.passwordResetToken.updateMany({
+          where: {
+            userId: member.id,
+            usedAt: null,
+            expiresAt: { gt: new Date() },
+          },
+          data: { usedAt: new Date() },
+        });
+
+        await tx.passwordResetToken.create({
+          data: {
+            userId: member.id,
+            token: hashOneTimeToken(setupToken),
+            expiresAt: setupExpiresAt,
+          },
+        });
+      }
+
+      return { company, member, setupRequired };
+    });
+
+    await createAuditLog({
+      userId: user.userId,
+      entityType: 'user',
+      entityId: member.id,
+      action: AuditAction.USER_INVITED,
+      changes: {
+        invitedUserId: member.id,
+        invitedUserEmail: member.email,
+        roleInCompany,
+        companyId,
+        status: setupRequired ? 'pending' : 'active',
+      },
+      req,
+    });
+
+    if (setupRequired) {
+      const setupUrl = buildFrontendUrl(`/reset-password?token=${setupToken}`);
+      try {
+        await sendCompanyMemberInvitationEmail({
+          to: member.email,
+          userName: member.fullName,
+          companyName: company.name,
+          inviterEmail: user.email,
+          setupUrl,
+          expiresInDays: COMPANY_MEMBER_INVITATION_EXPIRES_DAYS,
+        });
+      } catch (emailError) {
+        logError('[Company Member Invite] Failed to send email:', emailError);
+      }
+    }
+
+    res.status(201).json(
+      buildCompanyMemberInvitedResponse(member, {
+        expiresAt: setupRequired ? setupExpiresAt : null,
+      }),
+    );
   }),
 );
 

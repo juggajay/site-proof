@@ -1,0 +1,303 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Loader2, Mail, RefreshCw, UserPlus, Users } from 'lucide-react';
+import { apiFetch } from '@/lib/api';
+import { extractErrorMessage } from '@/lib/errorHandling';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Modal, ModalBody, ModalFooter, ModalHeader } from '@/components/ui/Modal';
+import {
+  COMPANY_MEMBER_ROLE_OPTIONS,
+  formatCompanyRoleLabel,
+  type CompanyMember,
+  type CompanyMemberInviteResponse,
+} from '../companySettingsData';
+
+interface CompanyMembersResponse {
+  members: CompanyMember[];
+}
+
+interface CompanyTeamMembersSectionProps {
+  currentUserId?: string;
+}
+
+const defaultInviteForm = {
+  email: '',
+  fullName: '',
+  roleInCompany: 'foreman',
+};
+
+function getMemberStatus(member: CompanyMember): 'active' | 'pending' {
+  if (member.status === 'active' || member.status === 'pending') {
+    return member.status;
+  }
+  return member.hasPassword === false ? 'pending' : 'active';
+}
+
+export function CompanyTeamMembersSection({ currentUserId }: CompanyTeamMembersSectionProps) {
+  const [members, setMembers] = useState<CompanyMember[]>([]);
+  const [loadingMembers, setLoadingMembers] = useState(true);
+  const [membersError, setMembersError] = useState('');
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteForm, setInviteForm] = useState(defaultInviteForm);
+  const [inviteError, setInviteError] = useState('');
+  const [inviteSuccess, setInviteSuccess] = useState('');
+  const [inviting, setInviting] = useState(false);
+  const invitingRef = useRef(false);
+
+  const loadMembers = useCallback(async () => {
+    setLoadingMembers(true);
+    setMembersError('');
+
+    try {
+      const data = await apiFetch<CompanyMembersResponse>('/api/company/members');
+      setMembers(data.members);
+    } catch (error) {
+      setMembers([]);
+      setMembersError(extractErrorMessage(error, 'Failed to load company members'));
+    } finally {
+      setLoadingMembers(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadMembers();
+  }, [loadMembers]);
+
+  const openInviteModal = () => {
+    setInviteForm(defaultInviteForm);
+    setInviteError('');
+    setInviteSuccess('');
+    setShowInviteModal(true);
+  };
+
+  const closeInviteModal = () => {
+    if (invitingRef.current) return;
+    setShowInviteModal(false);
+    setInviteError('');
+    setInviteSuccess('');
+  };
+
+  const handleInvite = async () => {
+    if (invitingRef.current) return;
+
+    const email = inviteForm.email.trim().toLowerCase();
+    const fullName = inviteForm.fullName.trim();
+    if (!email) {
+      setInviteError('Email is required');
+      return;
+    }
+
+    invitingRef.current = true;
+    setInviting(true);
+    setInviteError('');
+    setInviteSuccess('');
+
+    try {
+      const data = await apiFetch<CompanyMemberInviteResponse>('/api/company/members/invite', {
+        method: 'POST',
+        body: JSON.stringify({
+          email,
+          fullName: fullName || undefined,
+          roleInCompany: inviteForm.roleInCompany,
+        }),
+      });
+
+      setMembers((current) => {
+        const next = current.filter((member) => member.id !== data.member.id);
+        return [...next, data.member].sort((a, b) =>
+          (a.fullName || a.email).localeCompare(b.fullName || b.email),
+        );
+      });
+      setInviteSuccess(
+        data.invitation.setupRequired
+          ? `Invitation sent to ${email}. They'll appear as pending until they set a password.`
+          : `${email} is already active in your company.`,
+      );
+      setInviteForm(defaultInviteForm);
+    } catch (error) {
+      setInviteError(extractErrorMessage(error, 'Failed to invite company member'));
+    } finally {
+      invitingRef.current = false;
+      setInviting(false);
+    }
+  };
+
+  return (
+    <div className="rounded-lg border bg-card p-6 space-y-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 className="text-xl font-semibold flex items-center gap-2">
+            <Users className="h-5 w-5" />
+            Team Members
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Add people to your company before assigning them to projects.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button type="button" variant="outline" onClick={() => void loadMembers()}>
+            <RefreshCw className="h-4 w-4" />
+            Refresh
+          </Button>
+          <Button type="button" onClick={openInviteModal}>
+            <UserPlus className="h-4 w-4" />
+            Invite Member
+          </Button>
+        </div>
+      </div>
+
+      {membersError && (
+        <div role="alert" className="rounded-md bg-red-50 p-3 text-sm text-red-800">
+          {membersError}
+        </div>
+      )}
+
+      {loadingMembers ? (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading team members...
+        </div>
+      ) : members.length === 0 ? (
+        <div className="rounded-lg border border-dashed p-6 text-center">
+          <Mail className="mx-auto h-8 w-8 text-muted-foreground" />
+          <p className="mt-2 font-medium">No team members yet</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Invite your first project manager, foreman, or site engineer.
+          </p>
+          <Button type="button" onClick={openInviteModal} className="mt-4">
+            <UserPlus className="h-4 w-4" />
+            Invite Member
+          </Button>
+        </div>
+      ) : (
+        <div className="overflow-hidden rounded-lg border">
+          <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(120px,0.7fr)_minmax(96px,0.5fr)] bg-muted/50 px-4 py-2 text-xs font-medium uppercase text-muted-foreground">
+            <span>Member</span>
+            <span>Role</span>
+            <span>Status</span>
+          </div>
+          <div className="divide-y">
+            {members.map((member) => {
+              const status = getMemberStatus(member);
+              const isCurrentUser = member.id === currentUserId;
+              return (
+                <div
+                  key={member.id}
+                  className="grid grid-cols-[minmax(0,1.4fr)_minmax(120px,0.7fr)_minmax(96px,0.5fr)] items-center gap-3 px-4 py-3 text-sm"
+                >
+                  <div className="min-w-0">
+                    <div className="truncate font-medium">
+                      {member.fullName || member.email}
+                      {isCurrentUser ? (
+                        <span className="ml-2 text-xs font-normal text-muted-foreground">
+                          (you)
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="truncate text-xs text-muted-foreground">{member.email}</div>
+                  </div>
+                  <div>{formatCompanyRoleLabel(member.roleInCompany)}</div>
+                  <div>
+                    <span
+                      className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${
+                        status === 'active'
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-amber-100 text-amber-700'
+                      }`}
+                    >
+                      {status === 'active' ? 'Active' : 'Pending'}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {showInviteModal && (
+        <Modal onClose={closeInviteModal} className="max-w-md">
+          <ModalHeader>Invite Company Member</ModalHeader>
+          <ModalBody>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="company-member-email">Email *</Label>
+                <Input
+                  id="company-member-email"
+                  type="email"
+                  value={inviteForm.email}
+                  onChange={(event) =>
+                    setInviteForm((current) => ({ ...current, email: event.target.value }))
+                  }
+                  placeholder="person@example.com"
+                  disabled={inviting}
+                />
+              </div>
+              <div>
+                <Label htmlFor="company-member-full-name">Full Name</Label>
+                <Input
+                  id="company-member-full-name"
+                  type="text"
+                  value={inviteForm.fullName}
+                  onChange={(event) =>
+                    setInviteForm((current) => ({ ...current, fullName: event.target.value }))
+                  }
+                  placeholder="Optional"
+                  disabled={inviting}
+                />
+              </div>
+              <div>
+                <Label htmlFor="company-member-role">Company Role</Label>
+                <select
+                  id="company-member-role"
+                  className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={inviteForm.roleInCompany}
+                  onChange={(event) =>
+                    setInviteForm((current) => ({
+                      ...current,
+                      roleInCompany: event.target.value,
+                    }))
+                  }
+                  disabled={inviting}
+                >
+                  {COMPANY_MEMBER_ROLE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                The invitee will receive a setup link and appear as pending until they set their
+                password.
+              </p>
+              {inviteError && (
+                <div role="alert" className="rounded-md bg-red-50 p-3 text-sm text-red-800">
+                  {inviteError}
+                </div>
+              )}
+              {inviteSuccess && (
+                <div role="status" className="rounded-md bg-green-50 p-3 text-sm text-green-800">
+                  {inviteSuccess}
+                </div>
+              )}
+            </div>
+          </ModalBody>
+          <ModalFooter>
+            <Button type="button" variant="outline" onClick={closeInviteModal} disabled={inviting}>
+              Close
+            </Button>
+            <Button
+              type="button"
+              onClick={handleInvite}
+              disabled={inviting || !inviteForm.email.trim()}
+            >
+              {inviting ? 'Sending...' : 'Send Invite'}
+            </Button>
+          </ModalFooter>
+        </Modal>
+      )}
+    </div>
+  );
+}

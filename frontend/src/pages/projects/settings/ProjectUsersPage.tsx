@@ -52,6 +52,17 @@ function normalizeInviteEmail(email: string) {
   return email.trim().toLowerCase();
 }
 
+function getProjectUserInviteErrorMessage(error: unknown): string {
+  const message = extractErrorMessage(error, 'Please try again.');
+  if (
+    message.includes('must belong to this company') ||
+    message.toLowerCase().includes('user not found')
+  ) {
+    return 'Invite this person to your company in Company Settings → Team Members first, then add them to this project.';
+  }
+  return message;
+}
+
 export function ProjectUsersPage() {
   const { projectId } = useParams();
   const { user: currentUser } = useAuth();
@@ -138,7 +149,7 @@ export function ProjectUsersPage() {
       logError('Failed to invite project user:', error);
       toast({
         title: 'Failed to invite user',
-        description: extractErrorMessage(error, 'Please try again.'),
+        description: getProjectUserInviteErrorMessage(error),
         variant: 'error',
       });
     } finally {

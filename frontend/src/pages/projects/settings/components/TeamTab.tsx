@@ -17,6 +17,17 @@ interface TeamTabProps {
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+function getProjectInviteErrorMessage(error: unknown): string {
+  const message = extractErrorMessage(error, 'Failed to invite team member');
+  if (
+    message.includes('must belong to this company') ||
+    message.toLowerCase().includes('user not found')
+  ) {
+    return 'Invite this person to your company in Company Settings → Team Members first, then add them to this project.';
+  }
+  return message;
+}
+
 export function TeamTab({ projectId }: TeamTabProps) {
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [loadingTeam, setLoadingTeam] = useState(false);
@@ -135,7 +146,7 @@ export function TeamTab({ projectId }: TeamTabProps) {
       }, 2000);
     } catch (error) {
       logError('Failed to invite team member:', error);
-      setInviteError(extractErrorMessage(error, 'Failed to invite team member'));
+      setInviteError(getProjectInviteErrorMessage(error));
     } finally {
       invitingRef.current = false;
       setInviting(false);

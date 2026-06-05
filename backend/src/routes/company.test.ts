@@ -1091,31 +1091,30 @@ describe('Company API', () => {
       expect(names).toEqual(sortedNames);
     });
 
-    it('should reject non-owner users', async () => {
-      // Create a non-owner user
-      const adminEmail = `admin-list-${Date.now()}@example.com`;
-      const adminRes = await request(app).post('/api/auth/register').send({
-        email: adminEmail,
+    it('should reject field users', async () => {
+      const fieldEmail = `field-list-${Date.now()}@example.com`;
+      const fieldRes = await request(app).post('/api/auth/register').send({
+        email: fieldEmail,
         password: 'SecureP@ssword123!',
-        fullName: 'Admin User',
+        fullName: 'Field User',
         tosAccepted: true,
       });
 
       await prisma.user.update({
-        where: { id: adminRes.body.user.id },
-        data: { companyId, roleInCompany: 'admin' },
+        where: { id: fieldRes.body.user.id },
+        data: { companyId, roleInCompany: 'foreman' },
       });
 
       const res = await request(app)
         .get('/api/company/members')
-        .set('Authorization', `Bearer ${adminRes.body.token}`);
+        .set('Authorization', `Bearer ${fieldRes.body.token}`);
 
       expect(res.status).toBe(403);
-      expect(res.body.error.message).toContain('Only company owners');
+      expect(res.body.error.message).toContain('Only company owners and admins');
 
       // Cleanup
-      await prisma.emailVerificationToken.deleteMany({ where: { userId: adminRes.body.user.id } });
-      await prisma.user.delete({ where: { id: adminRes.body.user.id } });
+      await prisma.emailVerificationToken.deleteMany({ where: { userId: fieldRes.body.user.id } });
+      await prisma.user.delete({ where: { id: fieldRes.body.user.id } });
     });
 
     it('should require authentication', async () => {
@@ -1150,6 +1149,204 @@ describe('Company API', () => {
       // Cleanup
       await prisma.emailVerificationToken.deleteMany({ where: { userId: regRes.body.user.id } });
       await prisma.user.delete({ where: { id: regRes.body.user.id } });
+    });
+  });
+
+  describe('POST /api/company/members/invite', () => {
+    const invitedUserIds: string[] = [];
+    const invitedCompanyIds: string[] = [];
+
+    afterEach(async () => {
+      if (invitedUserIds.length > 0) {
+        await prisma.auditLog.deleteMany({
+          where: {
+            OR: [{ userId: { in: invitedUserIds } }, { entityId: { in: invitedUserIds } }],
+          },
+        });
+        await prisma.passwordResetToken.deleteMany({ where: { userId: { in: invitedUserIds } } });
+        await prisma.emailVerificationToken.deleteMany({
+          where: { userId: { in: invitedUserIds } },
+        });
+        await prisma.projectUser.deleteMany({ where: { userId: { in: invitedUserIds } } });
+        await prisma.user.deleteMany({ where: { id: { in: invitedUserIds } } });
+        invitedUserIds.length = 0;
+      }
+
+      if (invitedCompanyIds.length > 0) {
+        await prisma.company.deleteMany({ where: { id: { in: invitedCompanyIds } } });
+        invitedCompanyIds.length = 0;
+      }
+    });
+
+    it('creates a pending company member and one-time setup token', async () => {
+      const email = `company-invite-${Date.now()}@example.com`;
+
+      const res = await request(app)
+        .post('/api/company/members/invite')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          email,
+          fullName: 'Pending Company Member',
+          roleInCompany: 'foreman',
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.member).toMatchObject({
+        email,
+        fullName: 'Pending Company Member',
+        roleInCompany: 'foreman',
+        status: 'pending',
+        hasPassword: false,
+      });
+      expect(JSON.stringify(res.body)).not.toContain('token=');
+
+      invitedUserIds.push(res.body.member.id);
+
+      const invitedUser = await prisma.user.findUnique({
+        where: { email },
+        select: {
+          id: true,
+          companyId: true,
+          roleInCompany: true,
+          passwordHash: true,
+          emailVerified: true,
+        },
+      });
+      expect(invitedUser).toMatchObject({
+        id: res.body.member.id,
+        companyId,
+        roleInCompany: 'foreman',
+        passwordHash: null,
+        emailVerified: true,
+      });
+
+      const setupTokens = await prisma.passwordResetToken.findMany({
+        where: { userId: res.body.member.id, usedAt: null },
+      });
+      expect(setupTokens).toHaveLength(1);
+      expect(setupTokens[0].token).toMatch(/^sha256:/);
+    });
+
+    it('includes pending members in the company member list', async () => {
+      const email = `company-invite-list-${Date.now()}@example.com`;
+      const inviteRes = await request(app)
+        .post('/api/company/members/invite')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          email,
+          fullName: 'Pending Listed Member',
+          roleInCompany: 'site_engineer',
+        });
+      expect(inviteRes.status).toBe(201);
+      invitedUserIds.push(inviteRes.body.member.id);
+
+      const listRes = await request(app)
+        .get('/api/company/members')
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(listRes.status).toBe(200);
+      const member = listRes.body.members.find((m: any) => m.email === email);
+      expect(member).toMatchObject({
+        id: inviteRes.body.member.id,
+        email,
+        fullName: 'Pending Listed Member',
+        roleInCompany: 'site_engineer',
+        status: 'pending',
+        hasPassword: false,
+      });
+    });
+
+    it('lets admins invite company members but rejects field users', async () => {
+      const adminEmail = `company-invite-admin-${Date.now()}@example.com`;
+      const adminRes = await request(app).post('/api/auth/register').send({
+        email: adminEmail,
+        password: 'SecureP@ssword123!',
+        fullName: 'Company Invite Admin',
+        tosAccepted: true,
+      });
+      invitedUserIds.push(adminRes.body.user.id);
+
+      await prisma.user.update({
+        where: { id: adminRes.body.user.id },
+        data: { companyId, roleInCompany: 'admin' },
+      });
+
+      const invitedEmail = `company-invite-by-admin-${Date.now()}@example.com`;
+      const adminInviteRes = await request(app)
+        .post('/api/company/members/invite')
+        .set('Authorization', `Bearer ${adminRes.body.token}`)
+        .send({ email: invitedEmail, roleInCompany: 'project_manager' });
+      expect(adminInviteRes.status).toBe(201);
+      invitedUserIds.push(adminInviteRes.body.member.id);
+
+      const fieldEmail = `company-invite-field-${Date.now()}@example.com`;
+      const fieldRes = await request(app).post('/api/auth/register').send({
+        email: fieldEmail,
+        password: 'SecureP@ssword123!',
+        fullName: 'Company Invite Field',
+        tosAccepted: true,
+      });
+      invitedUserIds.push(fieldRes.body.user.id);
+
+      await prisma.user.update({
+        where: { id: fieldRes.body.user.id },
+        data: { companyId, roleInCompany: 'foreman' },
+      });
+
+      const rejectedRes = await request(app)
+        .post('/api/company/members/invite')
+        .set('Authorization', `Bearer ${fieldRes.body.token}`)
+        .send({
+          email: `company-invite-rejected-${Date.now()}@example.com`,
+          roleInCompany: 'foreman',
+        });
+
+      expect(rejectedRes.status).toBe(403);
+      expect(rejectedRes.body.error.message).toContain('Only company owners and admins');
+    });
+
+    it('rejects owner and subcontractor roles for company member invitations', async () => {
+      for (const roleInCompany of ['owner', 'subcontractor', 'subcontractor_admin']) {
+        const res = await request(app)
+          .post('/api/company/members/invite')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            email: `company-invite-${roleInCompany}-${Date.now()}@example.com`,
+            roleInCompany,
+          });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.message).toContain('Company member role is not supported');
+      }
+    });
+
+    it('rejects users who already belong to a different company', async () => {
+      const otherCompany = await prisma.company.create({
+        data: { name: `Other Invite Company ${Date.now()}` },
+      });
+      invitedCompanyIds.push(otherCompany.id);
+
+      const otherEmail = `company-invite-other-${Date.now()}@example.com`;
+      const otherRes = await request(app).post('/api/auth/register').send({
+        email: otherEmail,
+        password: 'SecureP@ssword123!',
+        fullName: 'Other Company User',
+        tosAccepted: true,
+      });
+      invitedUserIds.push(otherRes.body.user.id);
+
+      await prisma.user.update({
+        where: { id: otherRes.body.user.id },
+        data: { companyId: otherCompany.id, roleInCompany: 'admin' },
+      });
+
+      const res = await request(app)
+        .post('/api/company/members/invite')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ email: otherEmail, roleInCompany: 'foreman' });
+
+      expect(res.status).toBe(409);
+      expect(res.body.error.message).toContain('already belongs to another company');
     });
   });
 
