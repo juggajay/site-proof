@@ -26,59 +26,13 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-
-interface AttentionItem {
-  id: string;
-  type: 'ncr' | 'holdpoint';
-  title: string;
-  description: string;
-  urgency: 'critical' | 'warning';
-  daysOverdue: number;
-  link: string;
-}
-
-interface ProjectDashboardData {
-  project: {
-    id: string;
-    name: string;
-    projectNumber: string;
-    status: string;
-    client?: string;
-    state?: string;
-  };
-  stats: {
-    lots: {
-      total: number;
-      completed: number;
-      inProgress: number;
-      notStarted: number;
-      onHold: number;
-      progressPct: number;
-    };
-    ncrs: {
-      open: number;
-      total: number;
-      overdue: number;
-      major: number;
-      minor: number;
-      observation: number;
-    };
-    holdPoints: { pending: number; released: number };
-    itps: { pending: number; completed: number };
-    dockets: { pendingApproval: number };
-    tests: { total: number };
-    documents: { total: number };
-    diary: { todayStatus: 'not_started' | 'draft' | 'submitted' | null };
-  };
-  attentionItems: AttentionItem[];
-  recentActivity: Array<{
-    id: string;
-    type: 'lot' | 'ncr' | 'holdpoint' | 'diary' | 'docket';
-    description: string;
-    timestamp: string;
-    link?: string;
-  }>;
-}
+import { ActivityRow, NCRCategoryBar, StatPill, StatusCount } from './ProjectDashboardParts';
+import {
+  formatStatusLabel,
+  getAttentionFallbackRoute,
+  getSafeProjectLink,
+  type ProjectDashboardData,
+} from './ProjectDashboardHelpers';
 
 export function ProjectDashboard() {
   const { projectId } = useParams();
@@ -540,34 +494,7 @@ export function ProjectDashboard() {
             ) : (
               recentActivity.slice(0, 10).map((activity) => (
                 <div key={activity.id} className="hover:bg-muted/50 transition-colors">
-                  {activity.link ? (
-                    <Link
-                      to={getSafeProjectLink(
-                        activity.link,
-                        projectRouteBase,
-                        getActivityFallbackRoute(activity.type, projectRouteBase),
-                      )}
-                      className="flex items-start gap-3 p-3"
-                    >
-                      <ActivityIcon type={activity.type} />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm truncate">{activity.description}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          {formatRelativeTime(activity.timestamp)}
-                        </p>
-                      </div>
-                    </Link>
-                  ) : (
-                    <div className="flex items-start gap-3 p-3">
-                      <ActivityIcon type={activity.type} />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm truncate">{activity.description}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          {formatRelativeTime(activity.timestamp)}
-                        </p>
-                      </div>
-                    </div>
-                  )}
+                  <ActivityRow activity={activity} projectRouteBase={projectRouteBase} />
                 </div>
               ))
             )}
@@ -576,164 +503,4 @@ export function ProjectDashboard() {
       </div>
     </div>
   );
-}
-
-// --- Sub-components ---
-
-function StatPill({
-  label,
-  value,
-  sub,
-  icon,
-  color,
-  alert,
-}: {
-  label: string;
-  value: string | number;
-  sub?: string;
-  icon: React.ReactNode;
-  color: string;
-  alert?: boolean;
-}) {
-  const labelText = label.trim();
-
-  return (
-    <div
-      className={cn(
-        'bg-card px-3 py-2.5 text-center',
-        alert && 'ring-1 ring-inset ring-red-200 dark:ring-red-800',
-      )}
-    >
-      <div className={cn('flex items-center justify-center mb-1', color)}>{icon}</div>
-      <p
-        className={cn('text-lg font-bold leading-tight', alert && 'text-red-600 dark:text-red-400')}
-      >
-        <span>{value}</span>
-        {labelText && <span className="ml-1 text-sm font-semibold"> {labelText}</span>}
-      </p>
-      {sub && <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{sub}</p>}
-    </div>
-  );
-}
-
-function StatusCount({ label, count, color }: { label: string; count: number; color: string }) {
-  return (
-    <div>
-      <div className="flex items-center justify-center gap-1.5 mb-0.5">
-        <div className={cn('w-2 h-2 rounded-full', color)} />
-        <span className="text-lg font-semibold">{count}</span>
-      </div>
-      <p className="text-[10px] text-muted-foreground">{label}</p>
-    </div>
-  );
-}
-
-function NCRCategoryBar({
-  label,
-  count,
-  total,
-  color,
-}: {
-  label: string;
-  count: number;
-  total: number;
-  color: string;
-}) {
-  const pct = total > 0 ? (count / total) * 100 : 0;
-  return (
-    <div className="flex items-center gap-3">
-      <span className="text-xs w-20 text-muted-foreground">{label}</span>
-      <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
-        <div className={cn('h-full rounded-full', color)} style={{ width: `${pct}%` }} />
-      </div>
-      <span className="text-xs font-medium w-6 text-right">{count}</span>
-    </div>
-  );
-}
-
-function ActivityIcon({ type }: { type: string }) {
-  const base = 'h-4 w-4 mt-0.5 flex-shrink-0';
-  switch (type) {
-    case 'ncr':
-      return <AlertTriangle className={cn(base, 'text-red-500')} />;
-    case 'lot':
-      return <MapPin className={cn(base, 'text-blue-500')} />;
-    case 'holdpoint':
-      return <Clock className={cn(base, 'text-orange-500')} />;
-    case 'docket':
-      return <FileCheck className={cn(base, 'text-amber-500')} />;
-    case 'diary':
-      return <Calendar className={cn(base, 'text-purple-500')} />;
-    default:
-      return <Activity className={cn(base, 'text-muted-foreground')} />;
-  }
-}
-
-function getSafeProjectLink(
-  link: string | undefined,
-  projectRouteBase: string,
-  fallback: string,
-): string {
-  if (
-    link &&
-    (link === projectRouteBase || link.startsWith(`${projectRouteBase}/`)) &&
-    !link.startsWith('//')
-  ) {
-    return link;
-  }
-  return fallback;
-}
-
-function getAttentionFallbackRoute(type: AttentionItem['type'], projectRouteBase: string): string {
-  if (type === 'ncr') {
-    return `${projectRouteBase}/ncr`;
-  }
-  return `${projectRouteBase}/hold-points`;
-}
-
-function getActivityFallbackRoute(
-  type: ProjectDashboardData['recentActivity'][number]['type'],
-  projectRouteBase: string,
-): string {
-  switch (type) {
-    case 'lot':
-      return `${projectRouteBase}/lots`;
-    case 'ncr':
-      return `${projectRouteBase}/ncr`;
-    case 'holdpoint':
-      return `${projectRouteBase}/hold-points`;
-    case 'diary':
-      return `${projectRouteBase}/diary`;
-    case 'docket':
-      return `${projectRouteBase}/dockets`;
-    default:
-      return projectRouteBase;
-  }
-}
-
-function formatStatusLabel(status: string | null | undefined): string {
-  const normalized = status?.trim();
-  if (!normalized) return 'Draft';
-
-  return normalized
-    .replace(/[_-]+/g, ' ')
-    .replace(/\w\S*/g, (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase());
-}
-
-function formatRelativeTime(timestamp: string): string {
-  const now = new Date();
-  const date = new Date(timestamp);
-  if (Number.isNaN(date.getTime())) {
-    return 'Unknown time';
-  }
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / (1000 * 60));
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-  if (diffMins < 1) return 'Just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays < 7) return `${diffDays}d ago`;
-  return date.toLocaleDateString('en-AU');
 }
