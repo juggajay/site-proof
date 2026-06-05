@@ -90,7 +90,15 @@ describe('company response helpers', () => {
       },
     ];
 
-    expect(buildCompanyMembersResponse(members)).toEqual({ members });
+    expect(buildCompanyMembersResponse(members)).toEqual({
+      members: [
+        {
+          ...members[0],
+          hasPassword: false,
+          status: 'pending',
+        },
+      ],
+    });
   });
 
   it('preserves ownership transfer response', () => {
