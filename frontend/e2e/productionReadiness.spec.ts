@@ -2028,11 +2028,15 @@ test.describe('production readiness guardrails', () => {
       new URL('../src/lib/offlineDb.ts', import.meta.url),
       'utf8',
     );
-    // The OfflinePhoto record type moved into the offline database core module;
-    // the capture options and their defaults stay with the behavior in
-    // offlineDb.ts.
+    // The OfflinePhoto record type lives in the offline database core module;
+    // the capture options and their defaults moved with the photo behavior
+    // into offline/photos.ts, which offlineDb.ts re-exports.
     const offlineCoreSource = await readFile(
       new URL('../src/lib/offline/core.ts', import.meta.url),
+      'utf8',
+    );
+    const offlinePhotosSource = await readFile(
+      new URL('../src/lib/offline/photos.ts', import.meta.url),
       'utf8',
     );
     const offlineStatusSource = await readFile(
@@ -2050,9 +2054,13 @@ test.describe('production readiness guardrails', () => {
 
     expect(offlineCoreSource).toContain('documentType: string;');
     expect(offlineCoreSource).toContain('category?: string;');
-    expect(offlineDbSource).toContain('documentType?: string;');
-    expect(offlineDbSource).toContain("documentType: options.documentType ?? 'photo'");
-    expect(offlineDbSource).toContain('category?: string;');
+    // offlineDb.ts must keep forwarding the photo behavior so callers can
+    // keep importing it from '@/lib/offlineDb'.
+    expect(offlineDbSource).toContain('capturePhotoOffline,');
+    expect(offlineDbSource).toContain("} from './offline/photos';");
+    expect(offlinePhotosSource).toContain('documentType?: string;');
+    expect(offlinePhotosSource).toContain("documentType: options.documentType ?? 'photo'");
+    expect(offlinePhotosSource).toContain('category?: string;');
     expect(offlineStatusSource).toContain("formData.append('documentType', photo.documentType);");
     expect(offlineStatusSource).toContain("formData.append('category', photo.category);");
     expect(offlineStatusSource).toContain('photo.gpsLatitude !== undefined');
