@@ -1,17 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useAuth, getAuthToken } from '@/lib/auth';
-import {
-  Mail,
-  Shield,
-  Calendar,
-  Building2,
-  Phone,
-  Lock,
-  LogOut,
-  Camera,
-  Trash2,
-} from 'lucide-react';
+import { Lock, Camera, Trash2 } from 'lucide-react';
 import { toast } from '@/components/ui/toaster';
 import { apiFetch, authFetch } from '@/lib/api';
 import {
@@ -30,6 +20,7 @@ import {
   ModalFooter,
 } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { ProfileOverview } from './components/ProfileOverview';
 
 const PASSWORD_MIN_LENGTH = 12;
 
@@ -129,14 +120,6 @@ export function ProfilePage() {
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
   }, [editModalOpen, passwordModalOpen]);
-
-  // Format the role for display
-  const formatRole = (role: string) => {
-    return role
-      .split('_')
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ');
-  };
 
   // Profile update mutation
   const saveProfileMutation = useMutation({
@@ -378,109 +361,13 @@ export function ProfilePage() {
         <p className="text-sm text-muted-foreground">View and manage your account information</p>
       </div>
 
-      {/* Profile Card */}
-      <div className="rounded-lg border bg-card">
-        <div className="p-6">
-          <div className="flex items-start gap-6">
-            {/* Avatar */}
-            {user?.avatarUrl ? (
-              <img src={user.avatarUrl} alt="" className="h-20 w-20 rounded-full object-cover" />
-            ) : (
-              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                <span className="text-3xl font-bold">
-                  {(user?.fullName || user?.name || user?.email || 'U').charAt(0).toUpperCase()}
-                </span>
-              </div>
-            )}
-
-            {/* User Info */}
-            <div className="flex-1 space-y-1">
-              <h2 className="text-xl font-semibold">
-                {user?.name || user?.fullName || user?.email?.split('@')[0]}
-              </h2>
-              <p className="text-muted-foreground">{user?.email}</p>
-              <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-primary/10 px-3 py-1 text-sm text-primary">
-                <Shield className="h-3 w-3" />
-                {user?.role ? formatRole(user.role) : 'User'}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Profile Details */}
-        <div className="border-t">
-          <dl className="divide-y">
-            <div className="flex items-center gap-4 px-6 py-4">
-              <dt className="flex items-center gap-2 text-sm font-medium text-muted-foreground w-32">
-                <Mail className="h-4 w-4" />
-                Email
-              </dt>
-              <dd className="text-sm">{user?.email}</dd>
-            </div>
-            <div className="flex items-center gap-4 px-6 py-4">
-              <dt className="flex items-center gap-2 text-sm font-medium text-muted-foreground w-32">
-                <Phone className="h-4 w-4" />
-                Phone
-              </dt>
-              <dd className="text-sm">{user?.phone || 'Not set'}</dd>
-            </div>
-            <div className="flex items-center gap-4 px-6 py-4">
-              <dt className="flex items-center gap-2 text-sm font-medium text-muted-foreground w-32">
-                <Shield className="h-4 w-4" />
-                Role
-              </dt>
-              <dd className="text-sm">{user?.role ? formatRole(user.role) : 'User'}</dd>
-            </div>
-            <div className="flex items-center gap-4 px-6 py-4">
-              <dt className="flex items-center gap-2 text-sm font-medium text-muted-foreground w-32">
-                <Building2 className="h-4 w-4" />
-                Company
-              </dt>
-              <dd className="text-sm">
-                {user?.companyName ||
-                  (user?.companyId ? 'Company assigned' : 'No company assigned')}
-              </dd>
-            </div>
-            <div className="flex items-center gap-4 px-6 py-4">
-              <dt className="flex items-center gap-2 text-sm font-medium text-muted-foreground w-32">
-                <Calendar className="h-4 w-4" />
-                Member since
-              </dt>
-              <dd className="text-sm">
-                {user?.createdAt
-                  ? new Date(user.createdAt).toLocaleDateString('en-AU', {
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric',
-                    })
-                  : 'Unknown'}
-              </dd>
-            </div>
-          </dl>
-        </div>
-      </div>
-
-      {/* Actions */}
-      <div className="rounded-lg border bg-card p-6">
-        <h3 className="text-lg font-semibold mb-4">Account Actions</h3>
-        <div className="flex flex-wrap gap-3">
-          <Button type="button" variant="outline" onClick={() => setPasswordModalOpen(true)}>
-            Change Password
-          </Button>
-          <Button type="button" variant="outline" onClick={() => setEditModalOpen(true)}>
-            Edit Profile
-          </Button>
-          <Button
-            type="button"
-            variant="destructive"
-            onClick={() => setPendingConfirmation('logout-all')}
-            disabled={loggingOutAll}
-          >
-            <LogOut className="h-4 w-4" />
-            {loggingOutAll ? 'Logging out...' : 'Logout All Devices'}
-          </Button>
-        </div>
-      </div>
+      <ProfileOverview
+        user={user}
+        loggingOutAll={loggingOutAll}
+        onChangePassword={() => setPasswordModalOpen(true)}
+        onEditProfile={() => setEditModalOpen(true)}
+        onLogoutAllDevices={() => setPendingConfirmation('logout-all')}
+      />
 
       {/* Edit Profile Modal */}
       {editModalOpen && (
