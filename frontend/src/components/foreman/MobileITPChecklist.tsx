@@ -5,6 +5,14 @@ import { BottomSheet } from './sheets/BottomSheet';
 import { useHaptics } from '@/hooks/useHaptics';
 import { Camera, MessageSquare, Image, ChevronRight, ChevronDown } from 'lucide-react';
 import { SecureDocumentImage } from '@/components/documents/SecureDocumentImage';
+import {
+  calculateItpProgressPercent,
+  countCompletedItpItems,
+  findItpCompletion,
+  getItpCategoryStats,
+  getItpItemStatus,
+  groupItpItemsByCategory,
+} from './mobileItpChecklistHelpers';
 
 interface ITPChecklistItem {
   id: string;
@@ -79,39 +87,19 @@ export function MobileITPChecklist({
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const { trigger } = useHaptics();
 
-  const getCompletion = (itemId: string) => completions.find((c) => c.checklistItemId === itemId);
+  const getCompletion = (itemId: string) => findItpCompletion(completions, itemId);
 
-  const getItemStatus = (itemId: string): 'pending' | 'completed' | 'na' | 'failed' => {
-    const completion = getCompletion(itemId);
-    if (!completion) return 'pending';
-    if (completion.isFailed) return 'failed';
-    if (completion.isNotApplicable) return 'na';
-    if (completion.isCompleted) return 'completed';
-    return 'pending';
-  };
+  const getItemStatus = (itemId: string): 'pending' | 'completed' | 'na' | 'failed' =>
+    getItpItemStatus(getCompletion(itemId));
 
   // Group items by category
-  const categorizedItems = useMemo(() => {
-    const groups: Record<string, ITPChecklistItem[]> = {};
-    checklistItems.forEach((item) => {
-      const category = item.category || 'General';
-      if (!groups[category]) groups[category] = [];
-      groups[category].push(item);
-    });
-    return groups;
-  }, [checklistItems]);
+  const categorizedItems = useMemo(() => groupItpItemsByCategory(checklistItems), [checklistItems]);
 
   const categories = Object.keys(categorizedItems);
 
   // Get category completion stats
-  const getCategoryStats = (category: string) => {
-    const items = categorizedItems[category] || [];
-    const completed = items.filter((item) => {
-      const completion = getCompletion(item.id);
-      return completion?.isCompleted || completion?.isNotApplicable;
-    }).length;
-    return { completed, total: items.length };
-  };
+  const getCategoryStats = (category: string) =>
+    getItpCategoryStats(categorizedItems[category] || [], completions);
 
   const toggleCategory = (category: string) => {
     trigger('light');
@@ -126,9 +114,9 @@ export function MobileITPChecklist({
     });
   };
 
-  const completedCount = completions.filter((c) => c.isCompleted || c.isNotApplicable).length;
+  const completedCount = countCompletedItpItems(completions);
   const totalCount = checklistItems.length;
-  const progress = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+  const progress = calculateItpProgressPercent(completedCount, totalCount);
 
   return (
     <div className="flex flex-col h-full bg-background">
