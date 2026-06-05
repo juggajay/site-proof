@@ -6,7 +6,6 @@ import {
   Search,
   Filter,
   Calendar,
-  User,
   ChevronLeft,
   ChevronRight,
   X,
@@ -18,36 +17,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { NativeSelect } from '@/components/ui/native-select';
-import {
-  Modal,
-  ModalHeader,
-  ModalDescription,
-  ModalBody,
-  ModalFooter,
-} from '@/components/ui/Modal';
 import { downloadCsv } from '@/lib/csv';
 import { formatDateKey } from '@/lib/localDate';
-
-interface AuditLog {
-  id: string;
-  action: string;
-  entityType: string;
-  entityId: string;
-  changes: unknown;
-  ipAddress: string | null;
-  userAgent: string | null;
-  createdAt: string;
-  user: {
-    id: string;
-    email: string;
-    fullName: string | null;
-  } | null;
-  project: {
-    id: string;
-    name: string;
-    projectNumber: string;
-  } | null;
-}
+import { type AuditLog, formatAuditAction, formatChanges, formatDateTime } from './auditLogDisplay';
+import { AuditLogDetailsModal } from './components/AuditLogDetailsModal';
+import { AuditLogTable } from './components/AuditLogTable';
 
 interface AuditLogResponse {
   logs: AuditLog[];
@@ -67,123 +41,6 @@ interface FilterState {
   search: string;
   startDate: string;
   endDate: string;
-}
-
-const ACTION_LABELS: Record<string, string> = {
-  account_deletion_requested: 'Account deletion requested',
-  api_key_created: 'API key created',
-  api_key_revoked: 'API key revoked',
-  claim_certified: 'Claim certified',
-  claim_created: 'Claim created',
-  claim_payment_recorded: 'Claim payment recorded',
-  claim_status_changed: 'Claim status changed',
-  company_logo_updated: 'Company logo updated',
-  company_member_left: 'Company member left',
-  company_ownership_transferred: 'Company ownership transferred',
-  company_updated: 'Company updated',
-  company_created: 'Company created',
-  diary_addendum_added: 'Diary addendum added',
-  diary_submitted: 'Diary submitted',
-  docket_approved: 'Docket approved',
-  docket_queried: 'Docket queried',
-  docket_query_responded: 'Docket query responded',
-  docket_rejected: 'Docket rejected',
-  docket_submitted: 'Docket submitted',
-  document_deleted: 'Document deleted',
-  hp_chased: 'Hold point chased',
-  hp_escalated: 'Hold point escalated',
-  hp_escalation_resolved: 'Hold point escalation resolved',
-  hp_public_released: 'Hold point publicly released',
-  hp_release_requested: 'Hold point release requested',
-  hp_released: 'Hold point released',
-  itp_item_completed: 'ITP item completed',
-  itp_item_rejected: 'ITP item rejected',
-  itp_item_updated: 'ITP item updated',
-  itp_item_verified: 'ITP item verified',
-  lot_created: 'Lot created',
-  lot_force_conformed: 'Lot force conformed',
-  lot_status_changed: 'Lot status changed',
-  lot_updated: 'Lot updated',
-  lot_subcontractor_assigned: 'Lot subcontractor assigned',
-  lot_subcontractor_assignment_updated: 'Lot subcontractor assignment updated',
-  lot_subcontractor_assignment_removed: 'Lot subcontractor assignment removed',
-  magic_link_requested: 'Magic link requested',
-  mfa_disabled: 'MFA disabled',
-  mfa_enabled: 'MFA enabled',
-  ncr_client_notified: 'NCR client notified',
-  ncr_created: 'NCR created',
-  ncr_evidence_added: 'NCR evidence added',
-  ncr_evidence_removed: 'NCR evidence removed',
-  ncr_qm_approved: 'NCR QM approved',
-  ncr_status_changed: 'NCR status changed',
-  password_changed: 'Password changed',
-  password_reset_requested: 'Password reset requested',
-  project_created: 'Project created',
-  project_updated: 'Project updated',
-  project_deleted: 'Project deleted',
-  subcontractor_invitation_accepted: 'Subcontractor invitation accepted',
-  subcontractor_invited: 'Subcontractor invited',
-  subcontractor_portal_access_changed: 'Subcontractor portal access changed',
-  subcontractor_employee_rate_approved: 'Subcontractor employee rate approved',
-  subcontractor_plant_rate_approved: 'Subcontractor plant rate approved',
-  subcontractor_status_changed: 'Subcontractor status changed',
-  test_result_created: 'Test result created',
-  test_result_deleted: 'Test result deleted',
-  test_result_rejected: 'Test result rejected',
-  test_result_status_changed: 'Test result status changed',
-  test_result_updated: 'Test result updated',
-  test_result_verified: 'Test result verified',
-  user_approved: 'User approved',
-  user_avatar_removed: 'User avatar removed',
-  user_avatar_updated: 'User avatar updated',
-  user_email_verified: 'User email verified',
-  user_invited: 'User invited',
-  user_login: 'User login',
-  user_login_failed: 'User login failed',
-  user_logout: 'User logout',
-  user_profile_updated: 'User profile updated',
-  user_registered: 'User registered',
-  user_removed: 'User removed',
-  user_role_changed: 'User role changed',
-  user_suspended: 'User suspended',
-  webhook_created: 'Webhook created',
-  webhook_deleted: 'Webhook deleted',
-  webhook_secret_regenerated: 'Webhook secret regenerated',
-  webhook_updated: 'Webhook updated',
-};
-
-function formatAuditAction(action: string): string {
-  if (ACTION_LABELS[action]) return ACTION_LABELS[action];
-
-  return action
-    .replace(/[._-]+/g, ' ')
-    .trim()
-    .replace(/\s+/g, ' ')
-    .replace(/^\w/, (char) => char.toUpperCase());
-}
-
-function asAuditChangeRecord(changes: unknown): Record<string, unknown> | null {
-  if (!changes || typeof changes !== 'object' || Array.isArray(changes)) return null;
-  return changes as Record<string, unknown>;
-}
-
-function stringChangeValue(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() ? value.trim() : null;
-}
-
-function auditChangeSummary(log: AuditLog): string | null {
-  const changes = asAuditChangeRecord(log.changes);
-  if (!changes) return null;
-
-  if (log.action === 'lot_force_conformed') {
-    const reason = stringChangeValue(changes.reason);
-    return reason ? `Reason: ${reason}` : 'Force conform recorded without a reason payload.';
-  }
-
-  const reason = stringChangeValue(changes.reason);
-  if (reason) return `Reason: ${reason}`;
-
-  return null;
 }
 
 export function AuditLogPage() {
@@ -316,30 +173,6 @@ export function AuditLogPage() {
   };
 
   const hasActiveFilters = Object.values(filters).some((v) => v !== '');
-
-  const formatDateTime = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleString('en-AU', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-
-  const formatChanges = (changes: unknown) => {
-    if (changes == null) return '';
-    const formatted = JSON.stringify(changes, null, 2);
-    return formatted ?? String(changes);
-  };
-
-  const getActionColor = (action: string) => {
-    if (action.includes('create') || action.includes('add')) return 'text-green-600 bg-green-50';
-    if (action.includes('delete') || action.includes('remove')) return 'text-red-600 bg-red-50';
-    if (action.includes('update') || action.includes('edit')) return 'text-primary bg-primary/5';
-    return 'text-muted-foreground bg-muted/50';
-  };
 
   const fetchAllLogsForExport = async () => {
     const exportedLogs: AuditLog[] = [];
@@ -686,84 +519,7 @@ export function AuditLogPage() {
       ) : (
         <>
           {/* Logs Table */}
-          <div className="rounded-lg border bg-card overflow-hidden">
-            <table className="w-full">
-              <thead className="bg-muted/50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-sm font-medium">Date/Time</th>
-                  <th className="px-4 py-3 text-left text-sm font-medium">Action</th>
-                  <th className="px-4 py-3 text-left text-sm font-medium">Entity</th>
-                  <th className="px-4 py-3 text-left text-sm font-medium">User</th>
-                  <th className="px-4 py-3 text-left text-sm font-medium">Project</th>
-                  <th className="px-4 py-3 text-left text-sm font-medium"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {logs.map((log) => {
-                  const changeSummary = auditChangeSummary(log);
-
-                  return (
-                    <tr key={log.id} className="hover:bg-muted/30">
-                      <td className="px-4 py-3 text-sm">
-                        <span className="text-muted-foreground">
-                          {formatDateTime(log.createdAt)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getActionColor(
-                            log.action,
-                          )}`}
-                        >
-                          {formatAuditAction(log.action)}
-                        </span>
-                        {changeSummary && (
-                          <p className="mt-1 max-w-xs text-xs text-muted-foreground">
-                            {changeSummary}
-                          </p>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-sm">
-                        <span className="font-medium">{log.entityType}</span>
-                        <span className="text-muted-foreground ml-1 text-xs">
-                          #{log.entityId.slice(0, 8)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-sm">
-                        {log.user ? (
-                          <div className="flex items-center gap-2">
-                            <User className="h-4 w-4 text-muted-foreground" />
-                            <span>{log.user.fullName || log.user.email}</span>
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">System</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-sm">
-                        {log.project ? (
-                          <span className="text-muted-foreground">{log.project.name}</span>
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <Button
-                          type="button"
-                          variant="link"
-                          size="sm"
-                          onClick={() => setSelectedLog(log)}
-                          className="text-xs p-0 h-auto"
-                          aria-label={`View details for ${formatAuditAction(log.action)} ${log.entityType} ${log.entityId.slice(0, 8)}`}
-                        >
-                          Details
-                        </Button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <AuditLogTable logs={logs} onViewDetails={(log) => setSelectedLog(log)} />
 
           {/* Pagination */}
           {renderPaginationControls()}
@@ -772,76 +528,7 @@ export function AuditLogPage() {
 
       {/* Detail Modal */}
       {selectedLog && (
-        <Modal onClose={() => setSelectedLog(null)} className="max-w-2xl">
-          <ModalHeader>Audit Log Details</ModalHeader>
-          <ModalDescription>
-            Review the selected activity record and captured change payload.
-          </ModalDescription>
-          <ModalBody>
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-muted-foreground">Date/Time</Label>
-                  <p>{formatDateTime(selectedLog.createdAt)}</p>
-                </div>
-                <div>
-                  <Label className="text-muted-foreground">Action</Label>
-                  <span
-                    className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getActionColor(
-                      selectedLog.action,
-                    )}`}
-                  >
-                    {formatAuditAction(selectedLog.action)}
-                  </span>
-                </div>
-                <div>
-                  <Label className="text-muted-foreground">Entity Type</Label>
-                  <p>{selectedLog.entityType}</p>
-                </div>
-                <div>
-                  <Label className="text-muted-foreground">Entity ID</Label>
-                  <p className="font-mono text-sm">{selectedLog.entityId}</p>
-                </div>
-                <div>
-                  <Label className="text-muted-foreground">User</Label>
-                  <p>{selectedLog.user?.fullName || selectedLog.user?.email || 'System'}</p>
-                </div>
-                <div>
-                  <Label className="text-muted-foreground">Project</Label>
-                  <p>{selectedLog.project?.name || '-'}</p>
-                </div>
-              </div>
-
-              {selectedLog.ipAddress && (
-                <div>
-                  <Label className="text-muted-foreground">IP Address</Label>
-                  <p className="font-mono text-sm">{selectedLog.ipAddress}</p>
-                </div>
-              )}
-
-              {auditChangeSummary(selectedLog) && (
-                <div>
-                  <Label className="text-muted-foreground">Audit Summary</Label>
-                  <p>{auditChangeSummary(selectedLog)}</p>
-                </div>
-              )}
-
-              {selectedLog.changes != null && (
-                <div>
-                  <Label className="text-muted-foreground mb-2">Changes</Label>
-                  <pre className="p-4 bg-muted rounded-lg text-sm overflow-auto max-h-64">
-                    {formatChanges(selectedLog.changes)}
-                  </pre>
-                </div>
-              )}
-            </div>
-          </ModalBody>
-          <ModalFooter>
-            <Button type="button" variant="outline" onClick={() => setSelectedLog(null)}>
-              Close
-            </Button>
-          </ModalFooter>
-        </Modal>
+        <AuditLogDetailsModal log={selectedLog} onClose={() => setSelectedLog(null)} />
       )}
     </div>
   );
