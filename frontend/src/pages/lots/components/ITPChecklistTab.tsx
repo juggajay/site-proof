@@ -11,6 +11,18 @@ import { MobileITPChecklist } from '@/components/foreman/MobileITPChecklist';
 import type { ITPInstance, ITPTemplate, ITPAttachment, Lot } from '../types';
 import { ITPChecklistItemRow } from './ITPChecklistItemRow';
 import { PhotoLightbox } from './ITPPhotoLightbox';
+import {
+  filterItpChecklistItems,
+  getAdjacentItpAttachment,
+  getItpAttachments,
+  getItpCategoryProgress,
+  getItpChecklistProgress,
+  groupItpChecklistItemsByCategory,
+  isItpTemplateActivityMatch,
+  sortItpTemplatesForLotActivity,
+  toggleExpandedItpCategory,
+  type ItpStatusFilter,
+} from './itpChecklistTabHelpers';
 
 // Main ITPChecklistTab props
 export interface ITPChecklistTabProps {
@@ -89,9 +101,7 @@ export function ITPChecklistTab({
 
   // Local state for ITP tab
   const [showIncompleteOnly, setShowIncompleteOnly] = useState(false);
-  const [itpStatusFilter, setItpStatusFilter] = useState<
-    'all' | 'pending' | 'completed' | 'na' | 'failed'
-  >('all');
+  const [itpStatusFilter, setItpStatusFilter] = useState<ItpStatusFilter>('all');
   const [expandedItpCategories, setExpandedItpCategories] = useState<Set<string>>(new Set());
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState<ITPAttachment | null>(null);
@@ -120,35 +130,24 @@ export function ITPChecklistTab({
 
   // Photo navigation handlers
   const getAllPhotos = (): ITPAttachment[] => {
-    const allPhotos: ITPAttachment[] = [];
-    if (itpInstance) {
-      itpInstance.completions.forEach((completion) => {
-        if (completion.attachments && completion.attachments.length > 0) {
-          completion.attachments.forEach((attachment) => {
-            allPhotos.push(attachment);
-          });
-        }
-      });
-    }
-    return allPhotos;
+    if (!itpInstance) return [];
+    return getItpAttachments(itpInstance.completions);
   };
 
   const handlePrevPhoto = () => {
     if (!selectedPhoto) return;
-    const allPhotos = getAllPhotos();
-    const currentIndex = allPhotos.findIndex((p) => p.id === selectedPhoto.id);
-    if (currentIndex > 0) {
-      setSelectedPhoto(allPhotos[currentIndex - 1]);
+    const previousPhoto = getAdjacentItpAttachment(getAllPhotos(), selectedPhoto.id, 'previous');
+    if (previousPhoto) {
+      setSelectedPhoto(previousPhoto);
       setPhotoZoom(1);
     }
   };
 
   const handleNextPhoto = () => {
     if (!selectedPhoto) return;
-    const allPhotos = getAllPhotos();
-    const currentIndex = allPhotos.findIndex((p) => p.id === selectedPhoto.id);
-    if (currentIndex < allPhotos.length - 1) {
-      setSelectedPhoto(allPhotos[currentIndex + 1]);
+    const nextPhoto = getAdjacentItpAttachment(getAllPhotos(), selectedPhoto.id, 'next');
+    if (nextPhoto) {
+      setSelectedPhoto(nextPhoto);
       setPhotoZoom(1);
     }
   };
@@ -205,19 +204,11 @@ export function ITPChecklistTab({
 
   // Desktop ITP Checklist
   if (itpInstance) {
-    const totalItems = itpInstance.template.checklistItems.length;
-    const completedItems = itpInstance.completions.filter((c) => c.isCompleted).length;
-    const naItems = itpInstance.completions.filter((c) => c.isNotApplicable).length;
-    const finishedItems = completedItems + naItems;
-    const percentage = totalItems > 0 ? Math.round((finishedItems / totalItems) * 100) : 0;
-
-    // Group items by category
-    const categorizedItems: Record<string, typeof itpInstance.template.checklistItems> = {};
-    itpInstance.template.checklistItems.forEach((item) => {
-      const category = item.category || 'General';
-      if (!categorizedItems[category]) categorizedItems[category] = [];
-      categorizedItems[category].push(item);
-    });
+    const { totalItems, naItems, finishedItems, percentage } = getItpChecklistProgress(
+      itpInstance.template.checklistItems,
+      itpInstance.completions,
+    );
+    const categorizedItems = groupItpChecklistItemsByCategory(itpInstance.template.checklistItems);
     const categories = Object.keys(categorizedItems);
 
     return (
@@ -322,35 +313,14 @@ export function ITPChecklistTab({
             {categories.map((category) => {
               const categoryItems = categorizedItems[category];
               const isExpanded = expandedItpCategories.has(category);
-
-              // Filter items for display
-              const filteredItems = categoryItems.filter((item) => {
-                const completion = itpInstance.completions.find(
-                  (c) => c.checklistItemId === item.id,
-                );
-                const isCompleted = completion?.isCompleted || false;
-                const isNotApplicable = completion?.isNotApplicable || false;
-                const isFailed = completion?.isFailed || false;
-                const isPending = !isCompleted && !isNotApplicable && !isFailed;
-
-                if (itpStatusFilter === 'pending' && !isPending) return false;
-                if (itpStatusFilter === 'completed' && !isCompleted) return false;
-                if (itpStatusFilter === 'na' && !isNotApplicable) return false;
-                if (itpStatusFilter === 'failed' && !isFailed) return false;
-                if (showIncompleteOnly && !isPending) return false;
-
-                return true;
-              });
-
-              // Category stats
-              const completedInCategory = categoryItems.filter((item) => {
-                const completion = itpInstance.completions.find(
-                  (c) => c.checklistItemId === item.id,
-                );
-                return completion?.isCompleted || completion?.isNotApplicable;
-              }).length;
-              const totalInCategory = categoryItems.length;
-              const isCategoryComplete = completedInCategory === totalInCategory;
+              const filteredItems = filterItpChecklistItems(
+                categoryItems,
+                itpInstance.completions,
+                itpStatusFilter,
+                showIncompleteOnly,
+              );
+              const { completedInCategory, totalInCategory, isCategoryComplete } =
+                getItpCategoryProgress(categoryItems, itpInstance.completions);
 
               // Skip category if no items match filter
               if (filteredItems.length === 0 && (itpStatusFilter !== 'all' || showIncompleteOnly)) {
@@ -362,15 +332,7 @@ export function ITPChecklistTab({
                   {/* Category header - collapsible */}
                   <button
                     onClick={() => {
-                      setExpandedItpCategories((prev) => {
-                        const next = new Set(prev);
-                        if (next.has(category)) {
-                          next.delete(category);
-                        } else {
-                          next.add(category);
-                        }
-                        return next;
-                      });
+                      setExpandedItpCategories((prev) => toggleExpandedItpCategory(prev, category));
                     }}
                     className="w-full flex items-center justify-between p-4 bg-muted/30 hover:bg-muted/50 transition-colors text-left"
                   >
@@ -507,50 +469,36 @@ export function ITPChecklistTab({
             )}
             <div className="space-y-2 max-h-60 overflow-y-auto">
               {/* Sort templates: matching activity type first, then others */}
-              {[...templates]
-                .sort((a, b) => {
-                  const aMatches =
-                    lot.activityType &&
-                    a.activityType?.toLowerCase() === lot.activityType.toLowerCase();
-                  const bMatches =
-                    lot.activityType &&
-                    b.activityType?.toLowerCase() === lot.activityType.toLowerCase();
-                  if (aMatches && !bMatches) return -1;
-                  if (!aMatches && bMatches) return 1;
-                  return 0;
-                })
-                .map((template) => {
-                  const isMatch =
-                    lot.activityType &&
-                    template.activityType?.toLowerCase() === lot.activityType.toLowerCase();
-                  return (
-                    <button
-                      key={template.id}
-                      onClick={async () => {
-                        const assigned = await onAssignTemplate(template.id);
-                        if (assigned) {
-                          setShowAssignModal(false);
-                        }
-                      }}
-                      disabled={assigningTemplate}
-                      className={`w-full text-left p-3 border rounded-lg hover:border-primary/50 transition-colors disabled:opacity-50 ${
-                        isMatch ? 'border-green-500 bg-green-50 dark:bg-green-950/20' : ''
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{template.name}</span>
-                        {isMatch && (
-                          <span className="text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 px-2 py-0.5 rounded-full">
-                            Suggested
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        {template.activityType} - {template.checklistItems.length} items
-                      </div>
-                    </button>
-                  );
-                })}
+              {sortItpTemplatesForLotActivity(templates, lot.activityType).map((template) => {
+                const isMatch = isItpTemplateActivityMatch(template, lot.activityType);
+                return (
+                  <button
+                    key={template.id}
+                    onClick={async () => {
+                      const assigned = await onAssignTemplate(template.id);
+                      if (assigned) {
+                        setShowAssignModal(false);
+                      }
+                    }}
+                    disabled={assigningTemplate}
+                    className={`w-full text-left p-3 border rounded-lg hover:border-primary/50 transition-colors disabled:opacity-50 ${
+                      isMatch ? 'border-green-500 bg-green-50 dark:bg-green-950/20' : ''
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium">{template.name}</span>
+                      {isMatch && (
+                        <span className="text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 px-2 py-0.5 rounded-full">
+                          Suggested
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      {template.activityType} - {template.checklistItems.length} items
+                    </div>
+                  </button>
+                );
+              })}
             </div>
             <div className="flex justify-end mt-4">
               <button
