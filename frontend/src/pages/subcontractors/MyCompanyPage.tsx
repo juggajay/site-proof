@@ -2,15 +2,19 @@ import { useState, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth';
 import { apiFetch } from '@/lib/api';
-import { Plus, Users, Truck, Trash2 } from 'lucide-react';
 import { logError } from '@/lib/logger';
 import { parseRateInput } from './rateValidation';
 import { useMyCompanyQuery } from './myCompanyData';
 import { queryKeys } from '@/lib/queryKeys';
 import { useSearchParams } from 'react-router-dom';
 import { AddEmployeeModal, AddPlantModal } from './MyCompanyFormModals';
-import { StatusBadge } from './myCompanyDisplay';
-import { formatCompanyRate } from './myCompanyDisplayHelpers';
+import {
+  EmployeeRosterSection,
+  MyCompanyInfoCard,
+  MyCompanyProjectSwitcher,
+  PendingApprovalsAlert,
+  PlantRegisterSection,
+} from './MyCompanySections';
 
 export function MyCompanyPage() {
   const { user } = useAuth();
@@ -224,8 +228,6 @@ export function MyCompanyPage() {
 
   const pendingEmployees = companyData.employees.filter((e) => e.status === 'pending').length;
   const pendingPlant = companyData.plant.filter((p) => p.status === 'pending').length;
-  const availableProjects = companyData.availableProjects || [];
-  const showProjectSwitcher = availableProjects.length > 1;
 
   return (
     <div className="space-y-6">
@@ -239,32 +241,11 @@ export function MyCompanyPage() {
         </p>
       </div>
 
-      {showProjectSwitcher && (
-        <div className="rounded-lg border bg-card p-4">
-          <label htmlFor="my-company-project" className="block text-sm font-medium mb-2">
-            Project
-          </label>
-          <select
-            id="my-company-project"
-            value={companyData.projectId}
-            onChange={(event) => {
-              const nextParams = new URLSearchParams(searchParams);
-              nextParams.set('projectId', event.target.value);
-              setSearchParams(nextParams);
-            }}
-            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-          >
-            {availableProjects.map((project) => (
-              <option key={project.projectId} value={project.projectId}>
-                {project.projectName || project.companyName}
-              </option>
-            ))}
-          </select>
-          <p className="mt-2 text-xs text-muted-foreground">
-            Roster and plant rates are approved per head-contractor project.
-          </p>
-        </div>
-      )}
+      <MyCompanyProjectSwitcher
+        companyData={companyData}
+        searchParams={searchParams}
+        onSearchParamsChange={setSearchParams}
+      />
 
       {actionError && (
         <div
@@ -275,207 +256,25 @@ export function MyCompanyPage() {
         </div>
       )}
 
-      {/* Company Info Card */}
-      <div className="rounded-lg border bg-card p-6">
-        <div className="flex items-start justify-between">
-          <div>
-            <h2 className="text-xl font-semibold">{companyData.companyName}</h2>
-            {companyData.projectName && (
-              <p className="text-sm text-muted-foreground mt-1">
-                Project: {companyData.projectName}
-              </p>
-            )}
-            <p className="text-sm text-muted-foreground mt-1">ABN: {companyData.abn}</p>
-          </div>
-          <StatusBadge status={companyData.status} />
-        </div>
-        <div className="grid gap-4 md:grid-cols-3 mt-4 pt-4 border-t">
-          <div>
-            <p className="text-sm text-muted-foreground">Primary Contact</p>
-            <p className="font-medium">{companyData.primaryContactName}</p>
-          </div>
-          <div>
-            <p className="text-sm text-muted-foreground">Email</p>
-            <p className="font-medium">{companyData.primaryContactEmail}</p>
-          </div>
-          <div>
-            <p className="text-sm text-muted-foreground">Phone</p>
-            <p className="font-medium">{companyData.primaryContactPhone}</p>
-          </div>
-        </div>
-      </div>
+      <MyCompanyInfoCard companyData={companyData} />
 
-      {/* Pending Approvals Alert */}
-      {(pendingEmployees > 0 || pendingPlant > 0) && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
-          <h3 className="font-semibold text-amber-800">Pending Approvals</h3>
-          <p className="text-sm text-amber-700 mt-1">
-            {pendingEmployees > 0 && `${pendingEmployees} employee rate(s) pending approval`}
-            {pendingEmployees > 0 && pendingPlant > 0 && ' • '}
-            {pendingPlant > 0 && `${pendingPlant} plant rate(s) pending approval`}
-          </p>
-          <p className="text-xs text-amber-600 mt-2">
-            Pending items need to be approved by the head contractor before they can be used in
-            dockets.
-          </p>
-        </div>
-      )}
+      <PendingApprovalsAlert pendingEmployees={pendingEmployees} pendingPlant={pendingPlant} />
 
-      {/* Employee Roster */}
-      <div className="rounded-lg border bg-card">
-        <div className="flex items-center justify-between p-4 border-b">
-          <div className="flex items-center gap-2">
-            <Users className="h-5 w-5 text-primary" />
-            <h3 className="font-semibold">Employee Roster</h3>
-            <span className="text-sm text-muted-foreground">({companyData.employees.length})</span>
-          </div>
-          {canManageRoster && (
-            <button
-              onClick={() => setShowAddEmployeeModal(true)}
-              className="flex items-center gap-2 rounded-lg bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-primary/90"
-            >
-              <Plus className="h-4 w-4" />
-              Add Employee
-            </button>
-          )}
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-muted/50">
-              <tr>
-                <th className="text-left p-3 text-sm font-medium">Name</th>
-                <th className="text-left p-3 text-sm font-medium">Phone</th>
-                <th className="text-left p-3 text-sm font-medium">Role</th>
-                <th className="text-right p-3 text-sm font-medium">Hourly Rate</th>
-                <th className="text-center p-3 text-sm font-medium">Status</th>
-                {canManageRoster && <th className="text-right p-3 text-sm font-medium">Actions</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {companyData.employees.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={canManageRoster ? 6 : 5}
-                    className="p-6 text-center text-muted-foreground"
-                  >
-                    {canManageRoster
-                      ? 'No employees added yet. Click "Add Employee" to get started.'
-                      : 'No employees registered yet.'}
-                  </td>
-                </tr>
-              ) : (
-                companyData.employees.map((emp) => (
-                  <tr key={emp.id} className="border-t">
-                    <td className="p-3 font-medium">{emp.name}</td>
-                    <td className="p-3">{emp.phone || '-'}</td>
-                    <td className="p-3">{emp.role}</td>
-                    <td className="p-3 text-right font-semibold">
-                      {formatCompanyRate(emp.hourlyRate)}/hr
-                    </td>
-                    <td className="p-3 text-center">
-                      <StatusBadge status={emp.status} />
-                    </td>
-                    {canManageRoster && (
-                      <td className="p-3 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => void deleteEmployee(emp.id)}
-                            disabled={saving}
-                            className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
-                            title="Delete"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </td>
-                    )}
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <EmployeeRosterSection
+        employees={companyData.employees}
+        canManageRoster={canManageRoster}
+        saving={saving}
+        onAddEmployee={() => setShowAddEmployeeModal(true)}
+        onDeleteEmployee={(employeeId) => void deleteEmployee(employeeId)}
+      />
 
-      {/* Plant Register */}
-      <div className="rounded-lg border bg-card">
-        <div className="flex items-center justify-between p-4 border-b">
-          <div className="flex items-center gap-2">
-            <Truck className="h-5 w-5 text-primary" />
-            <h3 className="font-semibold">Plant Register</h3>
-            <span className="text-sm text-muted-foreground">({companyData.plant.length})</span>
-          </div>
-          {canManageRoster && (
-            <button
-              onClick={() => setShowAddPlantModal(true)}
-              className="flex items-center gap-2 rounded-lg bg-primary px-3 py-1.5 text-sm text-primary-foreground hover:bg-primary/90"
-            >
-              <Plus className="h-4 w-4" />
-              Add Plant
-            </button>
-          )}
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-muted/50">
-              <tr>
-                <th className="text-left p-3 text-sm font-medium">Type</th>
-                <th className="text-left p-3 text-sm font-medium">Description</th>
-                <th className="text-left p-3 text-sm font-medium">ID/Rego</th>
-                <th className="text-right p-3 text-sm font-medium">Dry Rate</th>
-                <th className="text-right p-3 text-sm font-medium">Wet Rate</th>
-                <th className="text-center p-3 text-sm font-medium">Status</th>
-                {canManageRoster && <th className="text-right p-3 text-sm font-medium">Actions</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {companyData.plant.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={canManageRoster ? 7 : 6}
-                    className="p-6 text-center text-muted-foreground"
-                  >
-                    {canManageRoster
-                      ? 'No plant registered yet. Click "Add Plant" to get started.'
-                      : 'No plant registered yet.'}
-                  </td>
-                </tr>
-              ) : (
-                companyData.plant.map((p) => (
-                  <tr key={p.id} className="border-t">
-                    <td className="p-3 font-medium">{p.type}</td>
-                    <td className="p-3">{p.description}</td>
-                    <td className="p-3">{p.idRego || '-'}</td>
-                    <td className="p-3 text-right font-semibold">
-                      {formatCompanyRate(p.dryRate)}/hr
-                    </td>
-                    <td className="p-3 text-right font-semibold">
-                      {p.wetRate > 0 ? `${formatCompanyRate(p.wetRate)}/hr` : '-'}
-                    </td>
-                    <td className="p-3 text-center">
-                      <StatusBadge status={p.status} />
-                    </td>
-                    {canManageRoster && (
-                      <td className="p-3 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => void deletePlant(p.id)}
-                            disabled={saving}
-                            className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
-                            title="Delete"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </td>
-                    )}
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <PlantRegisterSection
+        plant={companyData.plant}
+        canManageRoster={canManageRoster}
+        saving={saving}
+        onAddPlant={() => setShowAddPlantModal(true)}
+        onDeletePlant={(plantId) => void deletePlant(plantId)}
+      />
 
       {/* Add Employee Modal */}
       {showAddEmployeeModal && (
