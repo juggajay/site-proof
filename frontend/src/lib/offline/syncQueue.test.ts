@@ -1,0 +1,102 @@
+// DB-free behavior characterization for generic offline sync helpers. The
+// Dexie singleton is replaced with a focused module mock; functions are
+// imported through '@/lib/offlineDb' to pin the public re-export surface.
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('./core', () => ({
+  offlineDb: {
+    itpChecklists: { clear: vi.fn() },
+    itpCompletions: { clear: vi.fn() },
+    photos: { clear: vi.fn() },
+    diaries: { clear: vi.fn() },
+    dockets: { clear: vi.fn() },
+    lots: { clear: vi.fn() },
+    diaryDeliveries: { clear: vi.fn() },
+    diaryEvents: { clear: vi.fn() },
+    syncQueue: {
+      toArray: vi.fn(),
+      count: vi.fn(),
+      delete: vi.fn(),
+      get: vi.fn(),
+      update: vi.fn(),
+      clear: vi.fn(),
+    },
+  },
+}));
+
+import {
+  clearAllOfflineData,
+  getPendingSyncCount,
+  getPendingSyncItems,
+  markSyncItemError,
+  offlineDb,
+  removeSyncQueueItem,
+  type SyncQueueItem,
+} from '@/lib/offlineDb';
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
+describe('sync queue queries', () => {
+  it('returns queued sync items', async () => {
+    const items = [{ id: 1, type: 'photo_upload', attempts: 0 } as SyncQueueItem];
+    vi.mocked(offlineDb.syncQueue.toArray).mockResolvedValue(items);
+
+    await expect(getPendingSyncItems()).resolves.toBe(items);
+    expect(offlineDb.syncQueue.toArray).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns the queue count', async () => {
+    vi.mocked(offlineDb.syncQueue.count).mockResolvedValue(3);
+
+    await expect(getPendingSyncCount()).resolves.toBe(3);
+    expect(offlineDb.syncQueue.count).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('sync queue mutations', () => {
+  it('removes a queue item by id', async () => {
+    await removeSyncQueueItem(9);
+    expect(offlineDb.syncQueue.delete).toHaveBeenCalledWith(9);
+  });
+
+  it('increments attempts and stores the last error when the item exists', async () => {
+    vi.mocked(offlineDb.syncQueue.get).mockResolvedValue({
+      id: 2,
+      type: 'photo_upload',
+      attempts: 4,
+    } as SyncQueueItem);
+
+    await markSyncItemError(2, 'Upload failed');
+
+    expect(offlineDb.syncQueue.update).toHaveBeenCalledWith(2, {
+      attempts: 5,
+      lastError: 'Upload failed',
+    });
+  });
+
+  it('does not update when the queue item is already gone', async () => {
+    vi.mocked(offlineDb.syncQueue.get).mockResolvedValue(undefined);
+
+    await markSyncItemError(2, 'Upload failed');
+
+    expect(offlineDb.syncQueue.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('clearAllOfflineData', () => {
+  it('clears every offline table in the same order as the original helper', async () => {
+    await clearAllOfflineData();
+
+    expect(offlineDb.itpChecklists.clear).toHaveBeenCalledTimes(1);
+    expect(offlineDb.itpCompletions.clear).toHaveBeenCalledTimes(1);
+    expect(offlineDb.syncQueue.clear).toHaveBeenCalledTimes(1);
+    expect(offlineDb.photos.clear).toHaveBeenCalledTimes(1);
+    expect(offlineDb.diaries.clear).toHaveBeenCalledTimes(1);
+    expect(offlineDb.dockets.clear).toHaveBeenCalledTimes(1);
+    expect(offlineDb.lots.clear).toHaveBeenCalledTimes(1);
+    expect(offlineDb.diaryDeliveries.clear).toHaveBeenCalledTimes(1);
+    expect(offlineDb.diaryEvents.clear).toHaveBeenCalledTimes(1);
+  });
+});
