@@ -12,8 +12,6 @@ import {
   DollarSign,
   TrendingUp,
   RefreshCw,
-  ChevronRight,
-  AlertCircle,
   FileText,
   Layers,
 } from 'lucide-react';
@@ -29,6 +27,7 @@ import {
   ProjectManagerProjectContext,
   ProjectManagerQuickActions,
 } from './ProjectManagerDashboardChrome';
+import { ProjectManagerAttentionItems } from './ProjectManagerAttentionItems';
 
 export function ProjectManagerDashboard() {
   useAuth(); // Auth check
@@ -126,48 +125,10 @@ export function ProjectManagerDashboard() {
       {/* Project Context */}
       {data.project && <ProjectManagerProjectContext project={data.project} />}
 
-      {/* Items Requiring Attention */}
-      {data.attentionItems.length > 0 && (
-        <div className="bg-red-50 border border-red-200 rounded-lg">
-          <div className="p-4 border-b border-red-200 flex items-center gap-2">
-            <AlertCircle className="h-5 w-5 text-red-500" />
-            <h2 className="text-lg font-semibold text-red-700">Items Requiring Attention</h2>
-            <span className="ml-auto bg-red-100 text-red-700 text-sm font-medium px-2.5 py-0.5 rounded-full">
-              {data.attentionItems.length}
-            </span>
-          </div>
-          <div className="divide-y divide-red-100">
-            {data.attentionItems.slice(0, 5).map((item) => (
-              <button
-                key={item.id}
-                onClick={() =>
-                  navigate(getSafeInternalLink(item.link, getProjectRoute(projectId, '')))
-                }
-                className="w-full flex items-center justify-between p-3 hover:bg-red-100/50 transition-colors text-left"
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`px-2 py-0.5 rounded text-xs ${
-                        item.urgency === 'critical'
-                          ? 'bg-red-100 text-red-700'
-                          : item.urgency === 'warning'
-                            ? 'bg-yellow-100 text-yellow-700'
-                            : 'bg-blue-100 text-blue-700'
-                      }`}
-                    >
-                      {item.type.toUpperCase()}
-                    </span>
-                    <span className="font-medium text-sm">{item.title}</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground truncate mt-1">{item.description}</p>
-                </div>
-                <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+      <ProjectManagerAttentionItems
+        items={data.attentionItems}
+        onOpenItem={(link) => navigate(getSafeInternalLink(link, getProjectRoute(projectId, '')))}
+      />
 
       {/* Top Metrics Row */}
       <div className="grid gap-4 md:grid-cols-4">
