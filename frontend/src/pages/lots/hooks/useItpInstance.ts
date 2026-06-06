@@ -22,7 +22,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiFetch, ApiError } from '@/lib/api';
-import { devLog, logError } from '@/lib/logger';
+import { logError } from '@/lib/logger';
 import { extractErrorMessage, handleApiError } from '@/lib/errorHandling';
 import { toast } from '@/components/ui/toaster';
 import {
@@ -34,6 +34,9 @@ import {
 import type { ITPCompletion, ITPInstance, ITPTemplate, LotTab } from '../types';
 import { mergeCompletionIntoInstance } from '../lib/itpCompletionState';
 import { mapCachedToItpInstance, mapInstanceToOfflineItems } from '../lib/itpOfflineMapping';
+import { useItpMobileActions } from './useItpMobileActions';
+import { useItpReleasePolling } from './useItpReleasePolling';
+import { useItpTemplateAssignment } from './useItpTemplateAssignment';
 
 /** Prompt payload for the page's witness-point modal (gate before completing). */
 export interface WitnessPrompt {
@@ -100,7 +103,6 @@ export function useItpInstance({
   const [templates, setTemplates] = useState<ITPTemplate[]>([]);
   const [isOfflineData, setIsOfflineData] = useState(false);
   const [offlinePendingCount, setOfflinePendingCount] = useState(0);
-  const [assigningTemplate, setAssigningTemplate] = useState(false);
   // Per-item in-flight id (disables the row) + a synchronous double-submit guard.
   const [updatingCompletion, setUpdatingCompletion] = useState<string | null>(null);
   const updatingCompletionRef = useRef<string | null>(null);
@@ -192,100 +194,24 @@ export function useItpInstance({
   }, [fetchItpInstance, isOnline]);
 
   // Feature #734: Real-time HP release notification polling
-  // Poll for ITP updates every 20 seconds to catch holdpoint releases quickly
-  useEffect(() => {
-    if (!lotId || currentTab !== 'itp' || !isOnline) return;
+  // Poll for ITP updates every 20 seconds to catch holdpoint releases quickly.
+  useItpReleasePolling({ lotId, currentTab, isOnline, setItpInstance });
 
-    let pollInterval: NodeJS.Timeout | null = null;
+  const { assigningTemplate, assignTemplate } = useItpTemplateAssignment({
+    lotId,
+    setItpInstance,
+    setItpLoadError,
+    refetchReadiness,
+    refetchConformStatus,
+  });
 
-    const silentFetchItpUpdates = async () => {
-      try {
-        const data = await apiFetch<{ instance: ITPInstance | null }>(
-          `/api/itp/instances/lot/${encodeURIComponent(lotId)}`,
-        );
-        // Only update if there are actual changes in completions
-        setItpInstance((prevInstance) => {
-          if (!data.instance) return null;
-          if (!prevInstance) return data.instance;
-
-          const prevCompletions = prevInstance.completions || [];
-          const newCompletions = data.instance.completions || [];
-
-          // Check if completions have changed
-          const hasChanges =
-            newCompletions.length !== prevCompletions.length ||
-            newCompletions.some((newComp: ITPCompletion) => {
-              const prevComp = prevCompletions.find(
-                (p) => p.checklistItemId === newComp.checklistItemId,
-              );
-              return (
-                !prevComp ||
-                prevComp.isCompleted !== newComp.isCompleted ||
-                prevComp.isVerified !== newComp.isVerified ||
-                prevComp.completedAt !== newComp.completedAt
-              );
-            });
-
-          return hasChanges ? data.instance : prevInstance;
-        });
-      } catch (err) {
-        // Silent fail for background polling
-        devLog('Background ITP fetch failed:', err);
-      }
-    };
-
-    const startPolling = () => {
-      // Poll every 20 seconds for ITP (more frequent for HP releases)
-      pollInterval = setInterval(() => {
-        if (document.visibilityState === 'visible') {
-          silentFetchItpUpdates();
-        }
-      }, 20000);
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        silentFetchItpUpdates();
-      }
-    };
-
-    startPolling();
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    return () => {
-      if (pollInterval) clearInterval(pollInterval);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [lotId, currentTab, isOnline]);
-
-  const assignTemplate = async (templateId: string) => {
-    if (!lotId || assigningTemplate) return false;
-
-    setAssigningTemplate(true);
-    setItpLoadError(null);
-
-    try {
-      const data = await apiFetch<{ instance: ITPInstance }>('/api/itp/instances', {
-        method: 'POST',
-        body: JSON.stringify({ lotId, templateId }),
-      });
-      setItpInstance(data.instance);
-      void refetchReadiness();
-      void refetchConformStatus();
-      // Modal closing is handled by the ITPChecklistTab component
-      return true;
-    } catch (err) {
-      logError('Failed to assign template:', err);
-      toast({
-        title: 'Failed to assign ITP template',
-        description: extractErrorMessage(err, 'Please try again.'),
-        variant: 'error',
-      });
-      return false;
-    } finally {
-      setAssigningTemplate(false);
-    }
-  };
+  const { mobileMarkNA, mobileMarkFailed } = useItpMobileActions({
+    itpInstance,
+    setItpInstance,
+    updatingCompletionRef,
+    setUpdatingCompletion,
+    refreshNcrsAfterFailure,
+  });
 
   const toggleCompletion = async (
     checklistItemId: string,
@@ -529,77 +455,6 @@ export function useItpInstance({
     } catch (err) {
       handleApiError(err, 'Failed to mark item');
       return false;
-    }
-  };
-
-  // Mobile-specific handlers for MobileITPChecklist
-  const mobileMarkNA = async (checklistItemId: string, reason: string) => {
-    if (!itpInstance || updatingCompletionRef.current === checklistItemId) return;
-
-    try {
-      updatingCompletionRef.current = checklistItemId;
-      setUpdatingCompletion(checklistItemId);
-      const data = await apiFetch<{ completion: ITPCompletion }>('/api/itp/completions', {
-        method: 'POST',
-        body: JSON.stringify({
-          itpInstanceId: itpInstance.id,
-          checklistItemId,
-          status: 'not_applicable',
-          notes: reason.trim() || 'Marked as N/A',
-        }),
-      });
-
-      setItpInstance((prev) => mergeCompletionIntoInstance(prev, data.completion));
-      toast({
-        title: 'Item marked as N/A',
-        description: 'The checklist item has been marked as not applicable.',
-      });
-    } catch (err) {
-      handleApiError(err, 'Failed to mark as N/A');
-    } finally {
-      updatingCompletionRef.current = null;
-      setUpdatingCompletion(null);
-    }
-  };
-
-  const mobileMarkFailed = async (checklistItemId: string, reason: string) => {
-    if (!itpInstance || updatingCompletionRef.current === checklistItemId) return;
-
-    try {
-      updatingCompletionRef.current = checklistItemId;
-      setUpdatingCompletion(checklistItemId);
-      const data = await apiFetch<{ completion: ITPCompletion; ncr?: { ncrNumber: string } }>(
-        '/api/itp/completions',
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            itpInstanceId: itpInstance.id,
-            checklistItemId,
-            status: 'failed',
-            notes: `Failed: ${reason.trim() || 'Item failed inspection'}`,
-            ncrDescription: reason.trim() || 'Item failed ITP inspection',
-            ncrCategory: 'workmanship',
-            ncrSeverity: 'minor',
-          }),
-        },
-      );
-
-      setItpInstance((prev) => mergeCompletionIntoInstance(prev, data.completion));
-
-      // Refresh page-owned NCR state
-      await refreshNcrsAfterFailure();
-
-      toast({
-        title: 'Item marked as Failed',
-        description: data.ncr
-          ? `NCR ${data.ncr.ncrNumber} has been raised for this item.`
-          : 'The item has been marked as failed.',
-      });
-    } catch (err) {
-      handleApiError(err, 'Failed to mark item');
-    } finally {
-      updatingCompletionRef.current = null;
-      setUpdatingCompletion(null);
     }
   };
 
