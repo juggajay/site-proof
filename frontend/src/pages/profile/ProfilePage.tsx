@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { useAuth, getAuthToken } from '@/lib/auth';
-import { Lock, Camera, Trash2 } from 'lucide-react';
+import { Lock } from 'lucide-react';
 import { toast } from '@/components/ui/toaster';
 import { apiFetch, authFetch } from '@/lib/api';
 import {
@@ -20,28 +20,14 @@ import {
   ModalFooter,
 } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { ProfileEditModal } from './components/ProfileEditModal';
 import { ProfileOverview } from './components/ProfileOverview';
-
-const PASSWORD_MIN_LENGTH = 12;
-
-function validateNewPassword(password: string): string | null {
-  if (password.length < PASSWORD_MIN_LENGTH) {
-    return `New password must be at least ${PASSWORD_MIN_LENGTH} characters long`;
-  }
-  if (!/[A-Z]/.test(password)) {
-    return 'New password must include an uppercase letter';
-  }
-  if (!/[a-z]/.test(password)) {
-    return 'New password must include a lowercase letter';
-  }
-  if (!/[0-9]/.test(password)) {
-    return 'New password must include a number';
-  }
-  if (!/[^A-Za-z0-9]/.test(password)) {
-    return 'New password must include a special character';
-  }
-  return null;
-}
+import {
+  buildEmptyPasswordFormData,
+  buildProfileFormData,
+  validateAvatarFile,
+  validatePasswordChange,
+} from './profilePageHelpers';
 
 async function responseErrorMessage(response: Response, fallbackMessage: string): Promise<string> {
   const responseBody = await response.text();
@@ -82,10 +68,7 @@ export function ProfilePage() {
   // Initialize form data when modal opens
   useEffect(() => {
     if (editModalOpen && user) {
-      setFormData({
-        fullName: user.name || user.fullName || '',
-        phone: user.phone || '',
-      });
+      setFormData(buildProfileFormData(user));
       setAvatarPreview(null); // Reset preview
     }
   }, [editModalOpen, user]);
@@ -93,11 +76,7 @@ export function ProfilePage() {
   // Reset password form when modal opens
   useEffect(() => {
     if (passwordModalOpen) {
-      setPasswordData({
-        currentPassword: '',
-        newPassword: '',
-        confirmPassword: '',
-      });
+      setPasswordData(buildEmptyPasswordFormData());
       setPasswordError('');
     }
   }, [passwordModalOpen]);
@@ -194,19 +173,7 @@ export function ProfilePage() {
   const handleChangePassword = () => {
     if (changingPasswordRef.current) return;
 
-    if (
-      !passwordData.currentPassword ||
-      !passwordData.newPassword ||
-      !passwordData.confirmPassword
-    ) {
-      setPasswordError('All fields are required');
-      return;
-    }
-    if (passwordData.newPassword !== passwordData.confirmPassword) {
-      setPasswordError('New password and confirm password do not match');
-      return;
-    }
-    const passwordValidationError = validateNewPassword(passwordData.newPassword);
+    const passwordValidationError = validatePasswordChange(passwordData);
     if (passwordValidationError) {
       setPasswordError(passwordValidationError);
       return;
@@ -303,21 +270,11 @@ export function ProfilePage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-    if (!allowedTypes.includes(file.type)) {
+    const avatarValidationError = validateAvatarFile(file);
+    if (avatarValidationError) {
       toast({
-        title: 'Invalid File Type',
-        description: 'Please select a JPEG, PNG, GIF, or WebP image.',
-        variant: 'error',
-      });
-      e.target.value = '';
-      return;
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      toast({
-        title: 'File Too Large',
-        description: 'Please select an image under 5MB.',
+        title: avatarValidationError.title,
+        description: avatarValidationError.description,
         variant: 'error',
       });
       e.target.value = '';
@@ -369,142 +326,25 @@ export function ProfilePage() {
         onLogoutAllDevices={() => setPendingConfirmation('logout-all')}
       />
 
-      {/* Edit Profile Modal */}
       {editModalOpen && (
-        <Modal
+        <ProfileEditModal
+          user={user}
+          formData={formData}
+          avatarPreview={avatarPreview}
+          avatarInputRef={avatarInputRef}
+          saving={saving}
+          uploadingAvatar={uploadingAvatar}
           onClose={() => {
             if (!saving && !uploadingAvatar) {
               setEditModalOpen(false);
             }
           }}
-          className="max-w-md"
-        >
-          <ModalHeader>Edit Profile</ModalHeader>
-          <ModalDescription>Update your profile details and profile picture.</ModalDescription>
-          <ModalBody>
-            {/* Avatar Upload Section */}
-            <div className="mb-6">
-              <Label className="mb-3">Profile Picture</Label>
-              <div className="flex items-center gap-4">
-                {/* Avatar Preview */}
-                <div className="relative">
-                  {avatarPreview ? (
-                    <img
-                      src={avatarPreview}
-                      alt="Avatar preview"
-                      className="h-20 w-20 rounded-full object-cover border-2 border-border"
-                    />
-                  ) : user?.avatarUrl ? (
-                    <img
-                      src={user.avatarUrl}
-                      alt="Current avatar"
-                      className="h-20 w-20 rounded-full object-cover border-2 border-border"
-                    />
-                  ) : (
-                    <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary text-primary-foreground border-2 border-border">
-                      <span className="text-2xl font-bold">
-                        {(user?.fullName || user?.name || user?.email || 'U')
-                          .charAt(0)
-                          .toUpperCase()}
-                      </span>
-                    </div>
-                  )}
-                  <Button
-                    type="button"
-                    size="icon"
-                    onClick={() => avatarInputRef.current?.click()}
-                    disabled={uploadingAvatar}
-                    className="absolute -bottom-1 -right-1 rounded-full h-7 w-7"
-                    aria-label="Change avatar"
-                    title="Change avatar"
-                  >
-                    <Camera className="h-4 w-4" />
-                  </Button>
-                </div>
-
-                <input
-                  ref={avatarInputRef}
-                  type="file"
-                  aria-label="Avatar image file"
-                  accept="image/jpeg,image/png,image/gif,image/webp"
-                  onChange={handleAvatarSelect}
-                  className="hidden"
-                />
-
-                <div className="flex flex-col gap-2">
-                  {avatarPreview && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={handleAvatarUpload}
-                      disabled={uploadingAvatar}
-                    >
-                      {uploadingAvatar ? 'Uploading...' : 'Save Avatar'}
-                    </Button>
-                  )}
-                  {user?.avatarUrl && !avatarPreview && (
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => setPendingConfirmation('remove-avatar')}
-                      disabled={uploadingAvatar}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                      Remove
-                    </Button>
-                  )}
-                  <span className="text-xs text-muted-foreground">
-                    JPEG, PNG, GIF or WebP. Max 5MB.
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="fullName" className="mb-1">
-                  Full Name
-                </Label>
-                <Input
-                  id="fullName"
-                  type="text"
-                  value={formData.fullName}
-                  onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                  placeholder="Enter your full name"
-                  disabled={saving}
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="phone" className="mb-1">
-                  Phone Number
-                </Label>
-                <Input
-                  id="phone"
-                  type="tel"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  placeholder="e.g., +61 400 000 000"
-                  disabled={saving}
-                />
-              </div>
-            </div>
-          </ModalBody>
-          <ModalFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setEditModalOpen(false)}
-              disabled={saving}
-            >
-              Cancel
-            </Button>
-            <Button type="button" onClick={handleSaveProfile} disabled={saving}>
-              {saving ? 'Saving...' : 'Save Changes'}
-            </Button>
-          </ModalFooter>
-        </Modal>
+          onSaveProfile={handleSaveProfile}
+          onFormDataChange={setFormData}
+          onAvatarSelect={handleAvatarSelect}
+          onAvatarUpload={handleAvatarUpload}
+          onRemoveAvatarClick={() => setPendingConfirmation('remove-avatar')}
+        />
       )}
 
       {/* Change Password Modal */}
