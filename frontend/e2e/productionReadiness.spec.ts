@@ -1086,6 +1086,10 @@ test.describe('production readiness guardrails', () => {
       new URL('../src/components/reports/ScheduleReportModal.tsx', import.meta.url),
       'utf8',
     );
+    const scheduleModalHelpers = await readFile(
+      new URL('../src/components/reports/scheduleReportModalHelpers.ts', import.meta.url),
+      'utf8',
+    );
 
     expect(scheduledReportsLib).toContain('export const MAX_SCHEDULED_REPORTS_PER_PROJECT = 25');
     expect(reportsRoute).toContain('createScheduledReportRouter');
@@ -1099,7 +1103,8 @@ test.describe('production readiness guardrails', () => {
     expect(scheduledReportsLib).toContain('pdfBuffer');
     expect(backendServer).toContain('startScheduledReportWorker');
     expect(backendPackage).toContain('reports:send-due');
-    expect(scheduleModal).toContain('const DEFAULT_MAX_SCHEDULED_REPORTS = 25');
+    expect(scheduleModalHelpers).toContain('export const DEFAULT_MAX_SCHEDULED_REPORTS = 25');
+    expect(scheduleModal).toContain('DEFAULT_MAX_SCHEDULED_REPORTS');
     expect(scheduleModal).toContain('disabled={hasReachedScheduleLimit}');
     expect(scheduleModal).toContain('A project can have up to ${maxSchedules} scheduled reports');
   });

@@ -1,7 +1,6 @@
 import { useRef, useState, useEffect, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import { Calendar, Clock, Mail, AlertCircle } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 import { extractErrorMessage } from '@/lib/errorHandling';
@@ -19,99 +18,21 @@ import { NativeSelect } from '@/components/ui/native-select';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { logError } from '@/lib/logger';
 import { toast } from '@/components/ui/toaster';
-
-const MAX_SCHEDULE_RECIPIENTS = 50;
-const DEFAULT_MAX_SCHEDULED_REPORTS = 25;
-const recipientEmailSchema = z.string().trim().email().max(254);
-
-function parseRecipientList(value: string): string[] {
-  return value
-    .split(/[,;\n]/)
-    .map((email) => email.trim())
-    .filter(Boolean);
-}
-
-function normalizeRecipientList(value: string): string[] {
-  return Array.from(new Set(parseRecipientList(value).map((email) => email.toLowerCase())));
-}
-
-function getRecipientValidationError(value: string): string | null {
-  const recipients = parseRecipientList(value);
-
-  if (recipients.length === 0) {
-    return 'At least one recipient is required';
-  }
-
-  if (normalizeRecipientList(value).length > MAX_SCHEDULE_RECIPIENTS) {
-    return `Use ${MAX_SCHEDULE_RECIPIENTS} or fewer recipients`;
-  }
-
-  if (recipients.some((email) => !recipientEmailSchema.safeParse(email).success)) {
-    return 'Enter valid email addresses';
-  }
-
-  return null;
-}
-
-const scheduleFormSchema = z.object({
-  reportType: z.enum(['lot-status', 'ncr', 'test', 'diary']),
-  frequency: z.enum(['daily', 'weekly', 'monthly']),
-  dayOfWeek: z.number().int().min(0).max(6),
-  dayOfMonth: z.number().int().min(1).max(31),
-  timeOfDay: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Enter a valid time'),
-  recipients: z.string().superRefine((value, ctx) => {
-    const error = getRecipientValidationError(value);
-    if (error) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: error,
-      });
-    }
-  }),
-});
-
-type ScheduleFormData = z.infer<typeof scheduleFormSchema>;
-
-interface ScheduledReport {
-  id: string;
-  reportType: string;
-  frequency: string;
-  dayOfWeek: number | null;
-  dayOfMonth: number | null;
-  timeOfDay: string;
-  recipients: string;
-  isActive: boolean;
-  nextRunAt: string | null;
-  lastSentAt: string | null;
-}
+import {
+  DAYS_OF_WEEK,
+  DEFAULT_MAX_SCHEDULED_REPORTS,
+  FREQUENCIES,
+  REPORT_TYPES,
+  normalizeRecipientList,
+  scheduleFormSchema,
+  type ScheduledReport,
+  type ScheduleFormData,
+} from './scheduleReportModalHelpers';
 
 interface ScheduleReportModalProps {
   projectId: string;
   onClose: () => void;
 }
-
-const REPORT_TYPES = [
-  { value: 'lot-status', label: 'Lot Status Report' },
-  { value: 'ncr', label: 'NCR Report' },
-  { value: 'test', label: 'Test Results Report' },
-  { value: 'diary', label: 'Daily Diary Report' },
-];
-
-const FREQUENCIES = [
-  { value: 'daily', label: 'Daily' },
-  { value: 'weekly', label: 'Weekly' },
-  { value: 'monthly', label: 'Monthly' },
-];
-
-const DAYS_OF_WEEK = [
-  { value: 0, label: 'Sunday' },
-  { value: 1, label: 'Monday' },
-  { value: 2, label: 'Tuesday' },
-  { value: 3, label: 'Wednesday' },
-  { value: 4, label: 'Thursday' },
-  { value: 5, label: 'Friday' },
-  { value: 6, label: 'Saturday' },
-];
 
 export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalProps) {
   const [schedules, setSchedules] = useState<ScheduledReport[]>([]);
