@@ -1,7 +1,7 @@
 import { useParams } from 'react-router-dom';
 import { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { apiFetch } from '@/lib/api';
-import { Plus, Users, Building2, CheckCircle, Clock, X, DollarSign } from 'lucide-react';
+import { CheckCircle, Clock, X } from 'lucide-react';
 import type { Subcontractor, Employee, Plant, PortalAccess } from './types';
 import { formatCurrency } from './types';
 import { SubcontractorList } from './components/SubcontractorList';
@@ -14,6 +14,13 @@ import { extractErrorMessage } from '@/lib/errorHandling';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { logError } from '@/lib/logger';
 import { formatStatusLabel } from '@/lib/statusLabels';
+import {
+  PendingApprovalsAlert,
+  SubcontractorSummaryCards,
+  SubcontractorsLoadErrorAlert,
+  SubcontractorsPageHeader,
+} from './SubcontractorsPageSections';
+import { buildSubcontractorPageMetrics } from './subcontractorsPageData';
 
 type PendingConfirmation =
   | { type: 'suspend-subcontractor'; id: string }
@@ -391,67 +398,11 @@ export function SubcontractorsPage() {
   }, []);
 
   // --- Computed Values ---
-  const pendingApprovalCount = useMemo(
-    () => subcontractors.filter((s) => s.status === 'pending_approval').length,
-    [subcontractors],
-  );
-  const pendingEmployees = useMemo(
-    () =>
-      subcontractors.reduce(
-        (sum, s) => sum + s.employees.filter((e) => e.status === 'pending').length,
-        0,
-      ),
-    [subcontractors],
-  );
-  const pendingPlant = useMemo(
-    () =>
-      subcontractors.reduce(
-        (sum, s) => sum + s.plant.filter((p) => p.status === 'pending').length,
-        0,
-      ),
-    [subcontractors],
-  );
-  const firstPendingApprovalSubcontractor = useMemo(() => {
-    const pendingCompany = subcontractors.find((s) => s.status === 'pending_approval');
-    if (pendingCompany) return pendingCompany;
-
-    return (
-      subcontractors.find(
-        (s) =>
-          s.employees.some((employee) => employee.status === 'pending') ||
-          s.plant.some((plant) => plant.status === 'pending'),
-      ) ?? null
-    );
-  }, [subcontractors]);
-  const totalEmployees = useMemo(
-    () => subcontractors.reduce((sum, s) => sum + s.employees.length, 0),
-    [subcontractors],
-  );
-  const totalCost = useMemo(
-    () => subcontractors.reduce((sum, s) => sum + s.totalCost, 0),
-    [subcontractors],
-  );
+  const metrics = useMemo(() => buildSubcontractorPageMetrics(subcontractors), [subcontractors]);
   const handleReviewPendingApprovals = useCallback(() => {
-    if (!firstPendingApprovalSubcontractor) return;
-    setExpandedId(firstPendingApprovalSubcontractor.id);
-  }, [firstPendingApprovalSubcontractor]);
-  const pendingApprovalSummary = useMemo(() => {
-    const parts: string[] = [];
-    if (pendingApprovalCount > 0) {
-      parts.push(
-        `${pendingApprovalCount} subcontractor${pendingApprovalCount === 1 ? '' : 's'} pending approval`,
-      );
-    }
-    if (pendingEmployees > 0) {
-      parts.push(
-        `${pendingEmployees} employee rate${pendingEmployees === 1 ? '' : 's'} pending approval`,
-      );
-    }
-    if (pendingPlant > 0) {
-      parts.push(`${pendingPlant} plant rate${pendingPlant === 1 ? '' : 's'} pending approval`);
-    }
-    return parts.join(' • ');
-  }, [pendingApprovalCount, pendingEmployees, pendingPlant]);
+    if (!metrics.firstPendingApprovalSubcontractor) return;
+    setExpandedId(metrics.firstPendingApprovalSubcontractor.id);
+  }, [metrics.firstPendingApprovalSubcontractor]);
 
   if (loading) {
     return (
@@ -463,102 +414,30 @@ export function SubcontractorsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Subcontractors</h1>
-          <p className="text-muted-foreground mt-1">
-            Manage subcontractor companies, employees, and rates
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <label className="flex items-center gap-2 cursor-pointer text-sm">
-            <button
-              type="button"
-              role="switch"
-              aria-checked={showRemoved}
-              aria-label="Show removed subcontractors"
-              onClick={() => setShowRemoved(!showRemoved)}
-              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${showRemoved ? 'bg-red-500' : 'bg-muted-foreground/30'}`}
-            >
-              <span
-                className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${showRemoved ? 'translate-x-[18px]' : 'translate-x-[3px]'}`}
-              />
-            </button>
-            <span className="text-muted-foreground">
-              Show removed{removedCount > 0 && showRemoved ? ` (${removedCount})` : ''}
-            </span>
-          </label>
-          <button
-            type="button"
-            onClick={() => setShowInviteModal(true)}
-            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
-          >
-            <Plus className="h-4 w-4" />
-            Invite Subcontractor
-          </button>
-        </div>
-      </div>
+      <SubcontractorsPageHeader
+        showRemoved={showRemoved}
+        removedCount={removedCount}
+        onShowRemovedChange={setShowRemoved}
+        onInviteSubcontractor={() => setShowInviteModal(true)}
+      />
 
-      {loadError && (
-        <div
-          className="flex items-center justify-between gap-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700"
-          role="alert"
-        >
-          <span>{loadError}</span>
-          <button
-            type="button"
-            onClick={() => void fetchSubcontractors()}
-            className="rounded-md border border-red-200 bg-white px-3 py-1 font-medium text-red-700 hover:bg-red-100"
-          >
-            Try again
-          </button>
-        </div>
-      )}
+      <SubcontractorsLoadErrorAlert
+        loadError={loadError}
+        onRetry={() => void fetchSubcontractors()}
+      />
 
       {!loadError && (
         <>
-          {/* Pending Approvals Alert */}
-          {(pendingApprovalCount > 0 || pendingEmployees > 0 || pendingPlant > 0) && (
-            <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h3 className="font-semibold text-amber-800">Pending Approvals</h3>
-                <p className="text-sm text-amber-700 mt-1">{pendingApprovalSummary}</p>
-              </div>
-              <button
-                type="button"
-                onClick={handleReviewPendingApprovals}
-                className="self-start rounded-md border border-amber-300 bg-white px-3 py-2 text-sm font-medium text-amber-800 hover:bg-amber-100 sm:self-auto"
-              >
-                Review pending approvals
-              </button>
-            </div>
-          )}
+          <PendingApprovalsAlert
+            summary={metrics.pendingApprovalSummary}
+            onReviewPendingApprovals={handleReviewPendingApprovals}
+          />
 
-          {/* Summary Cards */}
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="rounded-lg border bg-card p-4">
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Building2 className="h-4 w-4" />
-                <span className="text-sm">Total Subcontractors</span>
-              </div>
-              <p className="text-2xl font-bold mt-2">{subcontractors.length}</p>
-            </div>
-            <div className="rounded-lg border bg-card p-4">
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Users className="h-4 w-4" />
-                <span className="text-sm">Total Employees</span>
-              </div>
-              <p className="text-2xl font-bold mt-2">{totalEmployees}</p>
-            </div>
-            <div className="rounded-lg border bg-card p-4">
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <DollarSign className="h-4 w-4" />
-                <span className="text-sm">Total Cost to Date</span>
-              </div>
-              <p className="text-2xl font-bold mt-2">{formatCurrency(totalCost)}</p>
-            </div>
-          </div>
+          <SubcontractorSummaryCards
+            subcontractorCount={subcontractors.length}
+            totalEmployees={metrics.totalEmployees}
+            totalCostLabel={formatCurrency(metrics.totalCost)}
+          />
 
           {/* Subcontractor List */}
           <SubcontractorList
