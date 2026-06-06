@@ -693,6 +693,10 @@ test.describe('production readiness guardrails', () => {
       new URL('../../backend/src/routes/oauth.ts', import.meta.url),
       'utf8',
     );
+    const oauthHelpers = await readFile(
+      new URL('../../backend/src/routes/oauth/helpers.ts', import.meta.url),
+      'utf8',
+    );
     const runtimeConfig = await readFile(
       new URL('../../backend/src/lib/runtimeConfig.ts', import.meta.url),
       'utf8',
@@ -703,7 +707,7 @@ test.describe('production readiness guardrails', () => {
     );
     expect(appSource).toContain('const OAuthMockPage = ENABLE_MOCK_OAUTH_ROUTE');
     expect(appSource).toContain('{ENABLE_MOCK_OAUTH_ROUTE && OAuthMockPage && (');
-    expect(oauthRoute).toContain(
+    expect(oauthHelpers).toContain(
       "process.env.NODE_ENV !== 'production' && process.env.ALLOW_MOCK_OAUTH === 'true'",
     );
     expect(oauthRoute).toContain('if (!isMockOAuthEnabled())');
