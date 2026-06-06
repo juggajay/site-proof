@@ -1,4 +1,3 @@
-import crypto from 'crypto';
 import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { generateToken } from '../lib/auth.js';
@@ -6,7 +5,7 @@ import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
 import { getFrontendUrl, getGoogleRedirectUri } from '../lib/runtimeConfig.js';
 import { fetchWithTimeout } from '../lib/fetchWithTimeout.js';
-import { logError, logWarn } from '../lib/serverLogger.js';
+import { logWarn } from '../lib/serverLogger.js';
 import { authRateLimiter } from '../middleware/rateLimiter.js';
 import {
   buildGoogleOAuthLoginResponse,
@@ -18,133 +17,20 @@ import {
   decodeJwtPayload,
   formatOAuthProviderStatus,
   getMfaRequiredError,
-  hashOAuthCallbackCode,
-  hashOAuthState,
   isMockOAuthEnabled,
   isVerifiedEmail,
   normalizeOAuthEmail,
   parseOAuthCallbackQueryParam,
   type GoogleCredentialPayload,
 } from './oauth/helpers.js';
+import {
+  consumeOAuthCallbackCode,
+  createOAuthCallbackCode,
+  createOAuthState,
+  verifyOAuthState,
+} from './oauth/stateStore.js';
 
 export const oauthRouter = Router();
-
-// ============================================================================
-// Database-backed OAuth State Storage
-// State values are hashed at rest and stored through Prisma-managed migrations.
-// ============================================================================
-
-const OAUTH_STATE_EXPIRY_MS = 10 * 60 * 1000;
-const OAUTH_CALLBACK_CODE_EXPIRY_MS = 2 * 60 * 1000;
-const OAUTH_STATE_CLEANUP_MS = 5 * 60 * 1000;
-
-/**
- * Create a new OAuth state token in the database
- * @param redirectUri Optional redirect URI to store with the state
- * @returns The generated state token
- */
-async function createOAuthState(redirectUri?: string): Promise<string> {
-  const state = crypto.randomBytes(32).toString('hex');
-
-  await prisma.oauthState.create({
-    data: {
-      stateHash: hashOAuthState(state),
-      redirectUri: redirectUri || null,
-      expiresAt: new Date(Date.now() + OAUTH_STATE_EXPIRY_MS),
-    },
-  });
-
-  return state;
-}
-
-/**
- * Verify and consume an OAuth state token
- * @param state The state token to verify
- * @returns The stored redirect URI if valid, null if invalid or expired
- */
-async function verifyOAuthState(state: string): Promise<{ valid: boolean; redirectUri?: string }> {
-  await cleanupExpiredStates();
-
-  const record = await prisma.oauthState.findUnique({
-    where: { stateHash: hashOAuthState(state) },
-  });
-
-  if (!record) {
-    return { valid: false };
-  }
-
-  if (record.expiresAt < new Date()) {
-    await prisma.oauthState.delete({ where: { id: record.id } });
-    return { valid: false };
-  }
-
-  await prisma.oauthState.delete({ where: { id: record.id } });
-
-  return {
-    valid: true,
-    redirectUri: record.redirectUri || undefined,
-  };
-}
-
-/**
- * Clean up expired OAuth states from the database
- */
-async function cleanupExpiredStates(): Promise<void> {
-  const now = new Date();
-  await Promise.all([
-    prisma.oauthState.deleteMany({
-      where: { expiresAt: { lt: now } },
-    }),
-    prisma.oauthCallbackCode.deleteMany({
-      where: { expiresAt: { lt: now } },
-    }),
-  ]);
-}
-
-async function createOAuthCallbackCode(userId: string, provider: string): Promise<string> {
-  const code = crypto.randomBytes(32).toString('hex');
-
-  await prisma.oauthCallbackCode.create({
-    data: {
-      codeHash: hashOAuthCallbackCode(code),
-      userId,
-      provider,
-      expiresAt: new Date(Date.now() + OAUTH_CALLBACK_CODE_EXPIRY_MS),
-    },
-  });
-
-  return code;
-}
-
-async function consumeOAuthCallbackCode(
-  code: string,
-): Promise<{ userId: string; provider: string } | null> {
-  await cleanupExpiredStates();
-
-  const rows = await prisma.$queryRaw<Array<{ user_id: string; provider: string }>>`
-    DELETE FROM "oauth_callback_codes"
-    WHERE "code_hash" = ${hashOAuthCallbackCode(code)}
-      AND "expires_at" > (now() AT TIME ZONE 'UTC')
-    RETURNING "user_id", "provider";
-  `;
-
-  const row = rows[0];
-  if (!row) {
-    return null;
-  }
-
-  return {
-    userId: row.user_id,
-    provider: row.provider,
-  };
-}
-
-// Schedule periodic cleanup every 5 minutes
-setInterval(() => {
-  cleanupExpiredStates().catch((err) => {
-    logError('[OAuth] Failed to cleanup expired states:', err);
-  });
-}, OAUTH_STATE_CLEANUP_MS).unref?.();
 
 // GET /api/auth/google - Initiate Google OAuth flow
 oauthRouter.get(
