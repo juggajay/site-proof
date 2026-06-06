@@ -25,7 +25,14 @@ import { useAuth } from '@/lib/auth';
 import { apiFetch } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { isPortalModuleEnabled } from './portalAccessModel';
-import { formatDateKey } from '@/lib/localDate';
+import {
+  buildNeedsAttentionItems,
+  formatCurrency,
+  formatDate,
+  getDocketStatusMeta,
+  getGreeting,
+  getToday,
+} from './subcontractorDashboardHelpers';
 
 interface PortalAccess {
   lots: boolean;
@@ -91,36 +98,6 @@ interface Notification {
   linkUrl?: string;
 }
 
-function formatDate(dateString: string) {
-  const date = new Date(dateString);
-  return date.toLocaleDateString('en-AU', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
-}
-
-function formatCurrency(amount: number) {
-  return new Intl.NumberFormat('en-AU', {
-    style: 'currency',
-    currency: 'AUD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
-
-function getGreeting() {
-  const hour = new Date().getHours();
-  if (hour < 12) return 'Good morning';
-  if (hour < 17) return 'Good afternoon';
-  return 'Good evening';
-}
-
-function getToday() {
-  return formatDateKey();
-}
-
 function getDocketStatusIcon(status: string) {
   switch (status) {
     case 'draft':
@@ -139,29 +116,9 @@ function getDocketStatusIcon(status: string) {
 }
 
 function getDocketStatusBadge(status: string) {
-  const variants: Record<string, string> = {
-    draft: 'bg-muted text-foreground',
-    pending_approval: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100',
-    approved: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100',
-    rejected: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100',
-    queried: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100',
-  };
-  const labels: Record<string, string> = {
-    draft: 'Draft',
-    pending_approval: 'Pending',
-    approved: 'Approved',
-    rejected: 'Rejected',
-    queried: 'Queried',
-  };
+  const { label, className } = getDocketStatusMeta(status);
   return (
-    <span
-      className={cn(
-        'px-2 py-1 text-xs font-medium rounded-full',
-        variants[status] || variants.draft,
-      )}
-    >
-      {labels[status] || status}
-    </span>
+    <span className={cn('px-2 py-1 text-xs font-medium rounded-full', className)}>{label}</span>
   );
 }
 
@@ -261,41 +218,11 @@ export function SubcontractorDashboard() {
   };
 
   // Get items needing attention
-  const needsAttention = [
-    // Queried dockets
-    ...recentDockets
-      .filter((d) => d.status === 'queried')
-      .map((d) => ({
-        id: d.id,
-        type: 'docket_queried',
-        title: 'Docket Queried',
-        message: d.foremanNotes || 'Please review and respond',
-        date: d.date,
-        link: `/subcontractor-portal/docket/${d.id}`,
-      })),
-    // Rejected dockets
-    ...recentDockets
-      .filter((d) => d.status === 'rejected')
-      .map((d) => ({
-        id: d.id,
-        type: 'docket_rejected',
-        title: 'Docket Rejected',
-        message: d.foremanNotes || 'Please review and resubmit',
-        date: d.date,
-        link: `/subcontractor-portal/docket/${d.id}`,
-      })),
-    // Rate counter-proposals from notifications
-    ...notifications
-      .filter((n) => n.type === 'rate_counter' && !n.isRead)
-      .map((n) => ({
-        id: n.id,
-        type: 'rate_counter',
-        title: n.title,
-        message: n.message,
-        date: n.createdAt,
-        link: myCompanyLink,
-      })),
-  ];
+  const needsAttention = buildNeedsAttentionItems({
+    recentDockets,
+    notifications,
+    myCompanyLink,
+  });
 
   if (loading) {
     return (
