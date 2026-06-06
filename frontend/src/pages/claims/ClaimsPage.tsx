@@ -1,9 +1,6 @@
 import { useParams } from 'react-router-dom';
 import { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { apiFetch } from '@/lib/api';
-import { Plus } from 'lucide-react';
-import { LazyCumulativeChart, LazyMonthlyChart } from '@/components/charts/LazyCharts';
-import { AccessDeniedState } from '@/components/AccessDeniedState';
 import { downloadCsv } from '@/lib/csv';
 import { formatDateKey } from '@/lib/localDate';
 import { toast } from '@/components/ui/toaster';
@@ -17,10 +14,8 @@ import type {
   CompletenessData,
   SubmitMethod,
 } from './types';
-import { formatCurrency, calculatePaymentDueDate, exportChartDataToCSV } from './utils';
+import { calculatePaymentDueDate, exportChartDataToCSV } from './utils';
 
-import { ClaimsSummary } from './components/ClaimsSummary';
-import { ClaimsTable } from './components/ClaimsTable';
 import { CreateClaimModal } from './components/CreateClaimModal';
 import { SubmitClaimModal } from './components/SubmitClaimModal';
 import { DisputeModal } from './components/DisputeModal';
@@ -30,6 +25,19 @@ import { CompletenessCheckModal } from './components/CompletenessCheckModal';
 import { EvidencePackageModal } from './components/EvidencePackageModal';
 import { logError } from '@/lib/logger';
 import { CLAIM_DISPUTE_NOTES_MAX_LENGTH } from './constants';
+import {
+  buildClaimSummaryTotals,
+  buildCumulativeClaimChartData,
+  buildMonthlyClaimBreakdownData,
+  findClaimById,
+} from './claimsPageData';
+import {
+  ClaimsAccessDeniedState,
+  ClaimsLoadErrorAlert,
+  ClaimsLoadingState,
+  ClaimsMainContent,
+  ClaimsPageHeader,
+} from './ClaimsPageSections';
 
 export function ClaimsPage() {
   const { projectId } = useParams();
@@ -88,66 +96,11 @@ export function ClaimsPage() {
     fetchClaims();
   }, [fetchClaims]);
 
-  // --- Summary computations ---
-  const totalClaimed = useMemo(
-    () => claims.reduce((sum, c) => sum + c.totalClaimedAmount, 0),
-    [claims],
-  );
-  const totalCertified = useMemo(
-    () => claims.reduce((sum, c) => sum + (c.certifiedAmount || 0), 0),
-    [claims],
-  );
-  const totalPaid = useMemo(
-    () => claims.reduce((sum, c) => sum + (c.paidAmount || 0), 0),
-    [claims],
-  );
-  const outstanding = useMemo(() => totalCertified - totalPaid, [totalCertified, totalPaid]);
+  const totals = useMemo(() => buildClaimSummaryTotals(claims), [claims]);
 
-  // --- Chart data ---
-  const cumulativeChartData = useMemo(() => {
-    if (claims.length === 0) return [];
-    const sorted = [...claims].sort(
-      (a, b) => new Date(a.periodEnd).getTime() - new Date(b.periodEnd).getTime(),
-    );
-    let cumClaimed = 0,
-      cumCertified = 0,
-      cumPaid = 0;
-    return sorted.map((c) => {
-      cumClaimed += c.totalClaimedAmount;
-      cumCertified += c.certifiedAmount || 0;
-      cumPaid += c.paidAmount || 0;
-      return {
-        name: new Date(c.periodEnd).toLocaleDateString('en-AU', {
-          month: 'short',
-          year: '2-digit',
-        }),
-        claimNumber: c.claimNumber,
-        claimed: cumClaimed,
-        certified: cumCertified,
-        paid: cumPaid,
-        claimAmount: c.totalClaimedAmount,
-        certifiedAmount: c.certifiedAmount,
-        paidAmount: c.paidAmount,
-      };
-    });
-  }, [claims]);
+  const cumulativeChartData = useMemo(() => buildCumulativeClaimChartData(claims), [claims]);
 
-  const monthlyBreakdownData = useMemo(() => {
-    if (claims.length === 0) return [];
-    return [...claims]
-      .sort((a, b) => new Date(a.periodEnd).getTime() - new Date(b.periodEnd).getTime())
-      .map((c) => ({
-        name: new Date(c.periodEnd).toLocaleDateString('en-AU', {
-          month: 'short',
-          year: '2-digit',
-        }),
-        claimNumber: c.claimNumber,
-        claimed: c.totalClaimedAmount,
-        certified: c.certifiedAmount || 0,
-        paid: c.paidAmount || 0,
-        status: c.status,
-      }));
-  }, [claims]);
+  const monthlyBreakdownData = useMemo(() => buildMonthlyClaimBreakdownData(claims), [claims]);
 
   // --- Handlers ---
   const handleExportCSV = useCallback(() => {
@@ -468,112 +421,57 @@ export function ClaimsPage() {
     [projectId],
   );
 
-  // --- Find claim for submit modal ---
   const submitClaim = useMemo(
-    () => (showSubmitModal ? claims.find((c) => c.id === showSubmitModal) : null),
-    [showSubmitModal, claims],
+    () => findClaimById(claims, showSubmitModal),
+    [claims, showSubmitModal],
   );
   const paymentClaim = useMemo(
-    () => (showPaymentModal ? claims.find((c) => c.id === showPaymentModal) : null),
-    [showPaymentModal, claims],
+    () => findClaimById(claims, showPaymentModal),
+    [claims, showPaymentModal],
   );
   const certificationClaim = useMemo(
-    () => (showCertificationModal ? claims.find((c) => c.id === showCertificationModal) : null),
-    [showCertificationModal, claims],
+    () => findClaimById(claims, showCertificationModal),
+    [claims, showCertificationModal],
   );
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-      </div>
-    );
+    return <ClaimsLoadingState />;
   }
 
   if (accessDenied) {
-    return <AccessDeniedState message={loadError ?? undefined} />;
+    return <ClaimsAccessDeniedState message={loadError ?? undefined} />;
   }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Progress Claims</h1>
-          <p className="text-muted-foreground mt-1">
-            SOPA-compliant progress claims and payment tracking
-          </p>
-        </div>
-        <div className="flex gap-2">
-          {claims.length > 0 && (
-            <button
-              onClick={handleExportCSV}
-              className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-foreground hover:bg-muted/50"
-            >
-              Export CSV
-            </button>
-          )}
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
-          >
-            <Plus className="h-4 w-4" /> New Claim
-          </button>
-        </div>
-      </div>
-      {loadError && (
-        <div
-          className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700"
-          role="alert"
-        >
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="font-medium">{loadError}</p>
-            <button
-              type="button"
-              onClick={() => void fetchClaims()}
-              className="rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50"
-            >
-              Try again
-            </button>
-          </div>
-        </div>
-      )}
+      <ClaimsPageHeader
+        claimCount={claims.length}
+        onExportCSV={handleExportCSV}
+        onCreateClaim={() => setShowCreateModal(true)}
+      />
 
-      {!loadError && (
-        <>
-          <ClaimsSummary
-            totalClaimed={totalClaimed}
-            totalCertified={totalCertified}
-            totalPaid={totalPaid}
-            outstanding={outstanding}
-          />
-          <LazyCumulativeChart
-            data={cumulativeChartData}
-            formatCurrency={formatCurrency}
-            onExport={handleExportCumulativeData}
-          />
-          <LazyMonthlyChart
-            data={monthlyBreakdownData}
-            formatCurrency={formatCurrency}
-            onExport={handleExportMonthlyData}
-          />
-          <ClaimsTable
-            claims={claims}
-            loadingCompleteness={loadingCompleteness}
-            showCompletenessModal={showCompletenessModal}
-            generatingEvidence={generatingEvidence}
-            onCreateClaim={() => setShowCreateModal(true)}
-            onSubmitClaim={setShowSubmitModal}
-            onDisputeClaim={setShowDisputeModal}
-            onCertifyClaim={setShowCertificationModal}
-            onRecordPayment={setShowPaymentModal}
-            onCompletenessCheck={handleCompletenessCheck}
-            onEvidencePackage={setShowPackageModal}
-          />
-        </>
-      )}
+      <ClaimsLoadErrorAlert loadError={loadError} onRetry={() => void fetchClaims()} />
 
-      {/* Modals */}
+      <ClaimsMainContent
+        loadError={loadError}
+        totals={totals}
+        cumulativeChartData={cumulativeChartData}
+        monthlyBreakdownData={monthlyBreakdownData}
+        claims={claims}
+        loadingCompleteness={loadingCompleteness}
+        showCompletenessModal={showCompletenessModal}
+        generatingEvidence={generatingEvidence}
+        onExportCumulativeData={handleExportCumulativeData}
+        onExportMonthlyData={handleExportMonthlyData}
+        onCreateClaim={() => setShowCreateModal(true)}
+        onSubmitClaim={setShowSubmitModal}
+        onDisputeClaim={setShowDisputeModal}
+        onCertifyClaim={setShowCertificationModal}
+        onRecordPayment={setShowPaymentModal}
+        onCompletenessCheck={handleCompletenessCheck}
+        onEvidencePackage={setShowPackageModal}
+      />
+
       {showCreateModal && projectId && (
         <CreateClaimModal
           projectId={projectId}
