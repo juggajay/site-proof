@@ -2448,6 +2448,10 @@ test.describe('production readiness guardrails', () => {
       new URL('../../backend/src/routes/pushNotifications.ts', import.meta.url),
       'utf8',
     );
+    const backendPushVapidSource = await readFile(
+      new URL('../../backend/src/routes/pushNotifications/vapid.ts', import.meta.url),
+      'utf8',
+    );
 
     expect(pushSource).toContain("'Notification' in window");
     expect(pushSource).toContain('function readPushResponseError');
@@ -2467,10 +2471,10 @@ test.describe('production readiness guardrails', () => {
     expect(serviceWorkerSource).not.toContain('console.');
     expect(serviceWorkerSource).not.toContain('client.navigate(url)');
     expect(serviceWorkerSource).not.toContain('clients.openWindow(url)');
-    expect(backendPushSource).toContain('function getConfiguredVapidKeys');
+    expect(backendPushVapidSource).toContain('function getConfiguredVapidKeys');
     expect(backendPushSource).toContain('parseOptionalSubscriptionId');
     expect(backendPushSource).toContain('currentDeviceSubscribed');
-    expect(backendPushSource).toContain('process.env.VAPID_PUBLIC_KEY?.trim()');
+    expect(backendPushVapidSource).toContain('process.env.VAPID_PUBLIC_KEY?.trim()');
     expect(backendPushSource).not.toContain(
       'const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY',
     );
