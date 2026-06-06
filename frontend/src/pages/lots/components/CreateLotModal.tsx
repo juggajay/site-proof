@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import { apiFetch } from '@/lib/api';
 import { toast } from '@/components/ui/toaster';
 import { extractErrorMessage, handleApiError } from '@/lib/errorHandling';
@@ -16,90 +15,18 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { NativeSelect } from '@/components/ui/native-select';
-import { parseOptionalNonNegativeDecimalInput } from '@/lib/numericInput';
 import type { Lot } from '../lotsPageTypes';
 import { logError } from '@/lib/logger';
-
-// Lot number length constraints
-const LOT_NUMBER_MIN_LENGTH = 3;
-const LOT_NUMBER_MAX_LENGTH = 50;
-
-// Chainage min/max constraints
-const CHAINAGE_MIN = 0;
-const CHAINAGE_MAX = 999999;
-
-const parseChainageInput = (value: string): number | null => {
-  return parseOptionalNonNegativeDecimalInput(value);
-};
-
-const isValidOptionalChainage = (value: string): boolean => {
-  return value.trim() === '' || parseChainageInput(value) !== null;
-};
-
-const createLotSchema = z
-  .object({
-    lotNumber: z
-      .string()
-      .trim()
-      .min(1, 'Lot Number is required')
-      .min(LOT_NUMBER_MIN_LENGTH, `Lot Number must be at least ${LOT_NUMBER_MIN_LENGTH} characters`)
-      .max(LOT_NUMBER_MAX_LENGTH, `Lot Number must be at most ${LOT_NUMBER_MAX_LENGTH} characters`),
-    description: z.string().trim(),
-    activityType: z.string().trim(),
-    chainageStart: z
-      .string()
-      .trim()
-      .refine(isValidOptionalChainage, 'Chainage Start must be a valid number'),
-    chainageEnd: z
-      .string()
-      .trim()
-      .refine(isValidOptionalChainage, 'Chainage End must be a valid number'),
-    assignedSubcontractorId: z.string().trim(),
-    canCompleteITP: z.boolean(),
-    itpRequiresVerification: z.boolean(),
-  })
-  .refine(
-    (data) => {
-      const startNum = parseChainageInput(data.chainageStart);
-      const endNum = parseChainageInput(data.chainageEnd);
-      if (startNum !== null && endNum !== null && endNum < startNum) {
-        return false;
-      }
-      return true;
-    },
-    {
-      message: 'Chainage End must be greater than or equal to Chainage Start',
-      path: ['chainageEnd'],
-    },
-  )
-  .refine(
-    (data) => {
-      const startNum = parseChainageInput(data.chainageStart);
-      if (startNum !== null && (startNum < CHAINAGE_MIN || startNum > CHAINAGE_MAX)) {
-        return false;
-      }
-      return true;
-    },
-    {
-      message: `Chainage Start must be between ${CHAINAGE_MIN} and ${CHAINAGE_MAX}`,
-      path: ['chainageStart'],
-    },
-  )
-  .refine(
-    (data) => {
-      const endNum = parseChainageInput(data.chainageEnd);
-      if (endNum !== null && (endNum < CHAINAGE_MIN || endNum > CHAINAGE_MAX)) {
-        return false;
-      }
-      return true;
-    },
-    {
-      message: `Chainage End must be between ${CHAINAGE_MIN} and ${CHAINAGE_MAX}`,
-      path: ['chainageEnd'],
-    },
-  );
-
-type CreateLotFormData = z.infer<typeof createLotSchema>;
+import {
+  CHAINAGE_MAX,
+  CHAINAGE_MIN,
+  CREATE_LOT_DEFAULT_VALUES,
+  LOT_NUMBER_MAX_LENGTH,
+  LOT_NUMBER_MIN_LENGTH,
+  createLotSchema,
+  parseChainageInput,
+  type CreateLotFormData,
+} from './createLotForm';
 
 interface CreateLotModalProps {
   isOpen: boolean;
@@ -146,16 +73,7 @@ export function CreateLotModal({ isOpen, onClose, onSuccess, projectId }: Create
   } = useForm<CreateLotFormData>({
     resolver: zodResolver(createLotSchema),
     mode: 'onBlur',
-    defaultValues: {
-      lotNumber: '',
-      description: '',
-      activityType: 'Earthworks',
-      chainageStart: '',
-      chainageEnd: '',
-      assignedSubcontractorId: '',
-      canCompleteITP: false,
-      itpRequiresVerification: true,
-    },
+    defaultValues: CREATE_LOT_DEFAULT_VALUES,
   });
 
   const activityType = watch('activityType');
@@ -163,16 +81,7 @@ export function CreateLotModal({ isOpen, onClose, onSuccess, projectId }: Create
   const canCompleteITP = watch('canCompleteITP');
 
   const resetFormState = useCallback(() => {
-    reset({
-      lotNumber: '',
-      description: '',
-      activityType: 'Earthworks',
-      chainageStart: '',
-      chainageEnd: '',
-      assignedSubcontractorId: '',
-      canCompleteITP: false,
-      itpRequiresVerification: true,
-    });
+    reset(CREATE_LOT_DEFAULT_VALUES);
     setSuggestedTemplate(null);
     setSelectedTemplateId('');
     setLookupError(null);
