@@ -15,10 +15,18 @@ import { extractErrorMessage } from '@/lib/errorHandling';
 import { AddHpRecipientModal } from './AddHpRecipientModal';
 import {
   EMAIL_PATTERN,
+  NOTIFICATION_PREFERENCES,
+  NOTICE_DAY_OPTIONS,
+  WITNESS_TRIGGER_OPTIONS,
   isDuplicateHpRecipient,
   isValidEmail,
   normalizeHpRecipient,
 } from './notificationSettingsHelpers';
+import {
+  HoldPointRecipientsSection,
+  SettingsFeedbackMessages,
+  SubcontractorVerificationSection,
+} from './NotificationsTabSections';
 
 interface NotificationsTabProps {
   projectId: string;
@@ -29,37 +37,6 @@ interface NotificationsTabProps {
   initialWitnessPointNotifications: WitnessPointNotificationSettings;
   initialHpMinimumNoticeDays: number;
 }
-
-const NOTIFICATION_PREFERENCES = [
-  {
-    key: 'holdPointReleases' as const,
-    label: 'Hold Point Releases',
-    description: 'Notify when a hold point is released',
-  },
-  {
-    key: 'ncrAssignments' as const,
-    label: 'NCR Assignments',
-    description: 'Notify when an NCR is assigned to you',
-  },
-  {
-    key: 'testResults' as const,
-    label: 'Test Results',
-    description: 'Notify when test results are uploaded',
-  },
-  {
-    key: 'dailyDiaryReminders' as const,
-    label: 'Daily Diary Reminders',
-    description: 'Remind to complete daily diary',
-  },
-] as const;
-
-const WITNESS_TRIGGER_OPTIONS: Array<{ value: WitnessPointNotificationTrigger; label: string }> = [
-  { value: 'previous_item', label: 'When previous checklist item is completed' },
-  { value: '2_items_before', label: 'When 2 items before witness point is completed' },
-  { value: 'same_day', label: 'Same day notification (at start of working day)' },
-];
-
-const NOTICE_DAY_OPTIONS = [0, 1, 2, 3, 5] as const;
 
 export function NotificationsTab({
   projectId,
@@ -303,16 +280,7 @@ export function NotificationsTab({
   return (
     <>
       <div className="space-y-6">
-        {settingsError && (
-          <div role="alert" className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive">
-            {settingsError}
-          </div>
-        )}
-        {settingsStatus && (
-          <div role="status" className="rounded-lg bg-green-100 p-3 text-sm text-green-700">
-            {settingsStatus}
-          </div>
-        )}
+        <SettingsFeedbackMessages error={settingsError} status={settingsStatus} />
 
         <div className="rounded-lg border p-4">
           <h2 className="text-lg font-semibold mb-2">Notification Preferences</h2>
@@ -517,81 +485,19 @@ export function NotificationsTab({
           </div>
         </div>
 
-        <div className="rounded-lg border p-4">
-          <h2 className="text-lg font-semibold mb-2">Hold Point Recipients</h2>
-          <p className="text-sm text-muted-foreground mb-4">
-            Default recipients for hold point notifications. These will be pre-filled when
-            requesting a hold point release.
-          </p>
-          <div className="space-y-2">
-            {hpRecipients.length === 0 ? (
-              <p className="text-sm text-muted-foreground italic">
-                No default recipients configured.
-              </p>
-            ) : (
-              hpRecipients.map((recipient, index) => (
-                <div
-                  key={`${recipient.role}-${recipient.email}`}
-                  className="flex items-center justify-between gap-2 p-2 rounded bg-muted/50 text-sm"
-                >
-                  <div>
-                    <span className="font-medium">{recipient.role}:</span>
-                    <span className="text-muted-foreground ml-2">{recipient.email}</span>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="text-red-500 hover:text-red-700 text-xs h-auto p-1"
-                    onClick={() => void handleRemoveRecipient(index)}
-                    disabled={savingSetting === `removeRecipient-${index}`}
-                  >
-                    Remove {recipient.role}
-                  </Button>
-                </div>
-              ))
-            )}
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setShowAddRecipientModal(true)}
-            className="mt-4"
-            disabled={savingRecipients}
-          >
-            Add Recipient
-          </Button>
-        </div>
+        <HoldPointRecipientsSection
+          hpRecipients={hpRecipients}
+          savingRecipients={savingRecipients}
+          savingSetting={savingSetting}
+          onAddRecipient={() => setShowAddRecipientModal(true)}
+          onRemoveRecipient={(index) => void handleRemoveRecipient(index)}
+        />
 
-        <div className="rounded-lg border p-4">
-          <h2 className="text-lg font-semibold mb-2">Subcontractor ITP Verification</h2>
-          <p className="text-sm text-muted-foreground mb-4">
-            Configure whether subcontractor ITP completions require verification by a supervisor.
-          </p>
-          <div className="space-y-4">
-            <label
-              htmlFor="require-subcontractor-verification"
-              className="flex items-center justify-between p-3 rounded-lg bg-muted/30 cursor-pointer hover:bg-muted/50"
-            >
-              <div>
-                <p className="font-medium">Require Verification</p>
-                <p className="text-sm text-muted-foreground">
-                  {requireSubcontractorVerification
-                    ? 'Subcontractor completions need supervisor verification'
-                    : 'Subcontractor completions are automatically verified'}
-                </p>
-              </div>
-              <input
-                id="require-subcontractor-verification"
-                type="checkbox"
-                checked={requireSubcontractorVerification}
-                onChange={handleVerificationToggle}
-                disabled={savingSetting !== null}
-                className="h-5 w-5 cursor-pointer"
-              />
-            </label>
-          </div>
-        </div>
+        <SubcontractorVerificationSection
+          requireSubcontractorVerification={requireSubcontractorVerification}
+          savingSetting={savingSetting}
+          onToggle={handleVerificationToggle}
+        />
       </div>
 
       {showAddRecipientModal && (
