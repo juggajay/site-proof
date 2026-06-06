@@ -31,6 +31,7 @@ import {
   buildDocketRejectedResponse,
 } from './reviewResponses.js';
 import { notifyDocketSubcontractorUsers } from './reviewNotificationDelivery.js';
+import { parseDocketReviewRequest, requireNonBlankReviewText } from './reviewRequest.js';
 
 export const docketReviewRouter = Router();
 
@@ -41,14 +42,8 @@ docketReviewRouter.post(
     const id = parseDocketRouteParam(req.params.id, 'id');
     const user = req.user!;
 
-    // Validate request body
-    const parseResult = approveDocketSchema.safeParse(req.body);
-    if (!parseResult.success) {
-      throw AppError.badRequest(parseResult.error.errors[0]?.message || 'Invalid request body');
-    }
-
     const { foremanNotes, adjustmentReason, adjustedLabourHours, adjustedPlantHours } =
-      parseResult.data;
+      parseDocketReviewRequest(approveDocketSchema, req.body, 'Invalid request body');
 
     const docket = await prisma.dailyDocket.findUnique({
       where: { id },
@@ -231,13 +226,11 @@ docketReviewRouter.post(
     const id = parseDocketRouteParam(req.params.id, 'id');
     const user = req.user!;
 
-    // Validate request body
-    const parseResult = rejectDocketSchema.safeParse(req.body);
-    if (!parseResult.success) {
-      throw AppError.badRequest(parseResult.error.errors[0]?.message || 'Invalid request body');
-    }
-
-    const { reason } = parseResult.data;
+    const { reason } = parseDocketReviewRequest(
+      rejectDocketSchema,
+      req.body,
+      'Invalid request body',
+    );
 
     const docket = await prisma.dailyDocket.findUnique({
       where: { id },
@@ -315,19 +308,12 @@ docketReviewRouter.post(
     const id = parseDocketRouteParam(req.params.id, 'id');
     const user = req.user!;
 
-    // Validate request body
-    const parseResult = queryDocketSchema.safeParse(req.body);
-    if (!parseResult.success) {
-      throw AppError.badRequest(
-        parseResult.error.errors[0]?.message || 'Questions/issues are required',
-      );
-    }
-
-    const { questions } = parseResult.data;
-
-    if (questions.trim() === '') {
-      throw AppError.badRequest('Questions/issues are required');
-    }
+    const { questions } = parseDocketReviewRequest(
+      queryDocketSchema,
+      req.body,
+      'Questions/issues are required',
+    );
+    requireNonBlankReviewText(questions, 'Questions/issues are required');
 
     const docket = await prisma.dailyDocket.findUnique({
       where: { id },
@@ -404,17 +390,12 @@ docketReviewRouter.post(
     const id = parseDocketRouteParam(req.params.id, 'id');
     const user = req.user!;
 
-    // Validate request body
-    const parseResult = respondDocketSchema.safeParse(req.body);
-    if (!parseResult.success) {
-      throw AppError.badRequest(parseResult.error.errors[0]?.message || 'Response is required');
-    }
-
-    const { response } = parseResult.data;
-
-    if (response.trim() === '') {
-      throw AppError.badRequest('Response is required');
-    }
+    const { response } = parseDocketReviewRequest(
+      respondDocketSchema,
+      req.body,
+      'Response is required',
+    );
+    requireNonBlankReviewText(response, 'Response is required');
 
     const docket = await prisma.dailyDocket.findUnique({
       where: { id },
