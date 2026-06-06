@@ -3,16 +3,7 @@ import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import {
-  Building2,
-  ClipboardCheck,
-  User,
-  AlertCircle,
-  Loader2,
-  Check,
-  Eye,
-  EyeOff,
-} from 'lucide-react';
+import { Loader2, Check, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { apiFetch } from '@/lib/api';
 import { toast } from '@/components/ui/toaster';
@@ -22,6 +13,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { logError } from '@/lib/logger';
+import {
+  AcceptInviteAlreadyAcceptedState,
+  AcceptInviteErrorState,
+  AcceptInviteFormError,
+  AcceptInviteLoadingState,
+  InvitationSummaryCard,
+  PasswordRequirementsList,
+} from './AcceptInvitePageSections';
 
 type AcceptInviteFormData = z.infer<typeof acceptInviteSchema>;
 
@@ -35,7 +34,7 @@ interface RegisteredInviteUser {
   companyName?: string | null;
 }
 
-interface Invitation {
+export interface Invitation {
   id: string;
   companyName: string;
   projectName: string;
@@ -239,77 +238,19 @@ export function AcceptInvitePage() {
 
   // Loading state
   if (loading || authLoading) {
-    return (
-      <div className="min-h-screen bg-muted/50 flex items-center justify-center p-4">
-        <div className="flex items-center gap-3 text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin" />
-          <span>Loading invitation...</span>
-        </div>
-      </div>
-    );
+    return <AcceptInviteLoadingState />;
   }
 
   // Error state
   if (error || !invitation) {
-    return (
-      <div className="min-h-screen bg-muted/50 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-card rounded-lg shadow-md p-6">
-          <div className="text-center">
-            <div className="mx-auto w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mb-4">
-              <AlertCircle className="h-6 w-6 text-red-600" />
-            </div>
-            <h2 className="text-xl font-semibold mb-2">Invitation Not Found</h2>
-            <p className="text-muted-foreground mb-4">
-              {error || 'This invitation link is invalid or has expired.'}
-            </p>
-            <p className="text-sm text-muted-foreground mb-4">
-              If you believe this is an error, please contact the head contractor who sent you the
-              invitation.
-            </p>
-            <Link
-              to="/login"
-              className="inline-block px-4 py-2 border border-border rounded-md text-foreground hover:bg-muted/50"
-            >
-              Go to Login
-            </Link>
-          </div>
-        </div>
-      </div>
-    );
+    return <AcceptInviteErrorState error={error} />;
   }
 
   // Already accepted. A head contractor can approve the row before any portal user
   // accepts it, so only treat approved invites as closed when the API says they
   // are not acceptable.
   if (invitation.status === 'active' || invitation.canAccept === false) {
-    return (
-      <div className="min-h-screen bg-muted/50 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-card rounded-lg shadow-md p-6">
-          <div className="text-center">
-            <div className="mx-auto w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mb-4">
-              <Check className="h-6 w-6 text-green-600" />
-            </div>
-            <h2 className="text-xl font-semibold mb-2">Invitation Already Accepted</h2>
-            <p className="text-muted-foreground mb-4">This invitation has already been accepted.</p>
-            {user ? (
-              <Link
-                to="/subcontractor-portal"
-                className="inline-block px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90"
-              >
-                Go to Portal
-              </Link>
-            ) : (
-              <Link
-                to="/login"
-                className="inline-block px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90"
-              >
-                Log In
-              </Link>
-            )}
-          </div>
-        </div>
-      </div>
-    );
+    return <AcceptInviteAlreadyAcceptedState isLoggedIn={Boolean(user)} />;
   }
 
   return (
@@ -320,39 +261,7 @@ export function AcceptInvitePage() {
           <span className="text-2xl font-bold text-primary">SiteProof</span>
         </div>
 
-        {/* Invitation Card */}
-        <div className="bg-card dark:bg-card rounded-lg shadow-md p-6">
-          <div className="text-center mb-4">
-            <h2 className="text-xl font-semibold dark:text-foreground">You've been invited!</h2>
-            <p className="text-muted-foreground dark:text-muted-foreground text-sm">
-              Join as a subcontractor on the following project
-            </p>
-          </div>
-
-          <div className="bg-muted/50 dark:bg-muted rounded-lg p-4 space-y-3">
-            <div className="flex items-center gap-3">
-              <Building2 className="h-5 w-5 text-muted-foreground shrink-0" />
-              <div>
-                <p className="text-xs text-muted-foreground">Your Company</p>
-                <p className="font-medium dark:text-foreground">{invitation.companyName}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <ClipboardCheck className="h-5 w-5 text-muted-foreground shrink-0" />
-              <div>
-                <p className="text-xs text-muted-foreground">Project</p>
-                <p className="font-medium dark:text-foreground">{invitation.projectName}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <User className="h-5 w-5 text-muted-foreground shrink-0" />
-              <div>
-                <p className="text-xs text-muted-foreground">Invited by</p>
-                <p className="font-medium dark:text-foreground">{invitation.headContractorName}</p>
-              </div>
-            </div>
-          </div>
-        </div>
+        <InvitationSummaryCard invitation={invitation} />
 
         {/* Action Card */}
         <div className="bg-card dark:bg-card rounded-lg shadow-md p-6">
@@ -362,12 +271,7 @@ export function AcceptInvitePage() {
               <p className="text-center text-sm text-muted-foreground dark:text-muted-foreground mb-4">
                 Logged in as <strong className="dark:text-foreground">{user.email}</strong>
               </p>
-              {formError && (
-                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md flex items-start gap-2">
-                  <AlertCircle className="h-4 w-4 text-red-600 mt-0.5 shrink-0" />
-                  <p className="text-sm text-red-600">{formError}</p>
-                </div>
-              )}
+              {formError && <AcceptInviteFormError message={formError} />}
               <Button onClick={handleAcceptAsLoggedIn} disabled={accepting} className="w-full py-3">
                 {accepting ? (
                   <>
@@ -393,12 +297,7 @@ export function AcceptInvitePage() {
                 Create your account to accept this invitation
               </p>
 
-              {formError && (
-                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md flex items-start gap-2">
-                  <AlertCircle className="h-4 w-4 text-red-600 mt-0.5 shrink-0" />
-                  <p className="text-sm text-red-600">{formError}</p>
-                </div>
-              )}
+              {formError && <AcceptInviteFormError message={formError} />}
 
               <div className="space-y-4">
                 <div>
@@ -474,44 +373,10 @@ export function AcceptInvitePage() {
                   </div>
                   {/* Password requirements */}
                   {password && (
-                    <div className="text-xs space-y-1 mt-2">
-                      <p
-                        className={
-                          passwordChecks.minLength ? 'text-green-600' : 'text-muted-foreground'
-                        }
-                      >
-                        {passwordChecks.minLength ? '✓' : '○'} At least {MIN_PASSWORD_LENGTH}{' '}
-                        characters
-                      </p>
-                      <p
-                        className={
-                          passwordChecks.hasUppercase ? 'text-green-600' : 'text-muted-foreground'
-                        }
-                      >
-                        {passwordChecks.hasUppercase ? '✓' : '○'} One uppercase letter
-                      </p>
-                      <p
-                        className={
-                          passwordChecks.hasLowercase ? 'text-green-600' : 'text-muted-foreground'
-                        }
-                      >
-                        {passwordChecks.hasLowercase ? '✓' : '○'} One lowercase letter
-                      </p>
-                      <p
-                        className={
-                          passwordChecks.hasNumber ? 'text-green-600' : 'text-muted-foreground'
-                        }
-                      >
-                        {passwordChecks.hasNumber ? '✓' : '○'} One number
-                      </p>
-                      <p
-                        className={
-                          passwordChecks.hasSpecial ? 'text-green-600' : 'text-muted-foreground'
-                        }
-                      >
-                        {passwordChecks.hasSpecial ? '✓' : '○'} One special character
-                      </p>
-                    </div>
+                    <PasswordRequirementsList
+                      checks={passwordChecks}
+                      minPasswordLength={MIN_PASSWORD_LENGTH}
+                    />
                   )}
                   {errors.password && (
                     <p className="mt-1 text-sm text-destructive" role="alert">
