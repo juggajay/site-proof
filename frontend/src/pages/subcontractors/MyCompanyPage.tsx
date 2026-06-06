@@ -2,13 +2,15 @@ import { useState, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/lib/auth';
 import { apiFetch } from '@/lib/api';
-import { Plus, Users, Truck, CheckCircle, Clock, X, Trash2 } from 'lucide-react';
+import { Plus, Users, Truck, Trash2 } from 'lucide-react';
 import { logError } from '@/lib/logger';
 import { parseRateInput } from './rateValidation';
 import { useMyCompanyQuery } from './myCompanyData';
 import { queryKeys } from '@/lib/queryKeys';
 import { useSearchParams } from 'react-router-dom';
 import { AddEmployeeModal, AddPlantModal } from './MyCompanyFormModals';
+import { StatusBadge } from './myCompanyDisplay';
+import { formatCompanyRate } from './myCompanyDisplayHelpers';
 
 export function MyCompanyPage() {
   const { user } = useAuth();
@@ -181,44 +183,6 @@ export function MyCompanyPage() {
     }
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-AU', {
-      style: 'currency',
-      currency: 'AUD',
-      minimumFractionDigits: 0,
-    }).format(amount);
-  };
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'pending':
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
-            <Clock className="h-3 w-3" /> Pending Approval
-          </span>
-        );
-      case 'approved':
-      case 'active':
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
-            <CheckCircle className="h-3 w-3" /> Approved
-          </span>
-        );
-      case 'inactive':
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-muted text-foreground">
-            <X className="h-3 w-3" /> Inactive
-          </span>
-        );
-      default:
-        return (
-          <span className="px-2 py-1 rounded-full text-xs font-medium bg-muted text-foreground">
-            {status}
-          </span>
-        );
-    }
-  };
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -323,7 +287,7 @@ export function MyCompanyPage() {
             )}
             <p className="text-sm text-muted-foreground mt-1">ABN: {companyData.abn}</p>
           </div>
-          {getStatusBadge(companyData.status)}
+          <StatusBadge status={companyData.status} />
         </div>
         <div className="grid gap-4 md:grid-cols-3 mt-4 pt-4 border-t">
           <div>
@@ -406,9 +370,11 @@ export function MyCompanyPage() {
                     <td className="p-3">{emp.phone || '-'}</td>
                     <td className="p-3">{emp.role}</td>
                     <td className="p-3 text-right font-semibold">
-                      {formatCurrency(emp.hourlyRate)}/hr
+                      {formatCompanyRate(emp.hourlyRate)}/hr
                     </td>
-                    <td className="p-3 text-center">{getStatusBadge(emp.status)}</td>
+                    <td className="p-3 text-center">
+                      <StatusBadge status={emp.status} />
+                    </td>
                     {canManageRoster && (
                       <td className="p-3 text-right">
                         <div className="flex items-center justify-end gap-2">
@@ -480,11 +446,15 @@ export function MyCompanyPage() {
                     <td className="p-3 font-medium">{p.type}</td>
                     <td className="p-3">{p.description}</td>
                     <td className="p-3">{p.idRego || '-'}</td>
-                    <td className="p-3 text-right font-semibold">{formatCurrency(p.dryRate)}/hr</td>
                     <td className="p-3 text-right font-semibold">
-                      {p.wetRate > 0 ? `${formatCurrency(p.wetRate)}/hr` : '-'}
+                      {formatCompanyRate(p.dryRate)}/hr
                     </td>
-                    <td className="p-3 text-center">{getStatusBadge(p.status)}</td>
+                    <td className="p-3 text-right font-semibold">
+                      {p.wetRate > 0 ? `${formatCompanyRate(p.wetRate)}/hr` : '-'}
+                    </td>
+                    <td className="p-3 text-center">
+                      <StatusBadge status={p.status} />
+                    </td>
                     {canManageRoster && (
                       <td className="p-3 text-right">
                         <div className="flex items-center justify-end gap-2">
