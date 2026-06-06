@@ -1,0 +1,151 @@
+import { Router } from 'express';
+import type { PrismaClient } from '@prisma/client';
+
+import { verifyPassword } from '../../lib/auth.js';
+import { AuditAction } from '../../lib/auditLog.js';
+import { AppError } from '../../lib/AppError.js';
+import { asyncHandler } from '../../lib/asyncHandler.js';
+import { assertCanRemoveUserFromProjectAdminRoles } from '../../lib/projectAdminInvariant.js';
+
+type NormalizePasswordInput = (value: unknown, fieldName?: string) => string;
+
+type CreateAccountDeletionRouterDependencies = {
+  prisma: PrismaClient;
+  normalizePasswordInput: NormalizePasswordInput;
+};
+
+export function createAccountDeletionRouter({
+  prisma,
+  normalizePasswordInput,
+}: CreateAccountDeletionRouterDependencies) {
+  const accountDeletionRouter = Router();
+
+  // GDPR Data Deletion endpoint
+  accountDeletionRouter.delete(
+    '/delete-account',
+    asyncHandler(async (req, res) => {
+      const authHeader = req.headers.authorization;
+      if (!authHeader?.startsWith('Bearer ')) {
+        throw AppError.unauthorized();
+      }
+
+      const token = authHeader.substring(7);
+      const { verifyToken } = await import('../../lib/auth.js');
+      const userData = await verifyToken(token);
+
+      if (!userData) {
+        throw AppError.unauthorized('Invalid token');
+      }
+
+      const userId = userData.userId || userData.id;
+
+      // Get the confirmation password from request body
+      const { password, confirmEmail } = req.body;
+
+      if (typeof confirmEmail !== 'string' || !confirmEmail.trim()) {
+        throw AppError.badRequest('Email confirmation required');
+      }
+
+      // Verify the user exists and get their data
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          id: true,
+          email: true,
+          passwordHash: true,
+          companyId: true,
+          roleInCompany: true,
+        },
+      });
+
+      if (!user) {
+        throw AppError.notFound('User');
+      }
+
+      // Verify email matches
+      if (confirmEmail.trim().toLowerCase() !== user.email.toLowerCase()) {
+        throw AppError.badRequest('Email confirmation does not match');
+      }
+
+      if (user.companyId && user.roleInCompany === 'owner') {
+        throw AppError.forbidden(
+          'Company owners must transfer ownership before deleting their account',
+        );
+      }
+
+      // Verify password if the user has one set
+      if (user.passwordHash && !password) {
+        throw AppError.badRequest('Password is required to delete this account');
+      }
+
+      if (user.passwordHash && password) {
+        const normalizedPassword = normalizePasswordInput(password);
+        const isValidPassword = verifyPassword(normalizedPassword, user.passwordHash);
+        if (!isValidPassword) {
+          throw AppError.badRequest('Invalid password');
+        }
+      }
+
+      await prisma.$transaction(async (tx) => {
+        await assertCanRemoveUserFromProjectAdminRoles(user.id, { client: tx });
+
+        // Create a non-PII audit log entry before deletion (for compliance)
+        await tx.auditLog.create({
+          data: {
+            entityType: 'user',
+            entityId: user.id,
+            action: AuditAction.ACCOUNT_DELETION_REQUESTED,
+            changes: JSON.stringify({
+              deletedAt: new Date().toISOString(),
+              reason: 'GDPR deletion request',
+            }),
+            userId,
+            ipAddress: req.ip || req.socket.remoteAddress || 'unknown',
+            userAgent: req.headers['user-agent'] || 'unknown',
+          },
+        });
+
+        // Delete all user-related data in order (respecting foreign key constraints)
+        // The order matters due to foreign key relationships
+
+        // 1. Delete ITP completions by user
+        await tx.iTPCompletion.deleteMany({
+          where: { completedById: userId },
+        });
+
+        // 2. Delete email verification tokens
+        await tx.emailVerificationToken.deleteMany({
+          where: { userId },
+        });
+
+        // 3. Delete password reset tokens
+        await tx.passwordResetToken.deleteMany({
+          where: { userId },
+        });
+
+        // 4. Delete project user memberships (this removes the user from all projects)
+        await tx.projectUser.deleteMany({
+          where: { userId },
+        });
+
+        // 5. Delete the audit log for this user (anonymize - the account_deletion audit remains)
+        await tx.auditLog.updateMany({
+          where: { userId },
+          data: { userId: null },
+        });
+
+        // 6. Finally, delete the user record
+        await tx.user.delete({
+          where: { id: userId },
+        });
+      });
+
+      res.json({
+        success: true,
+        message: 'Your account and associated data have been permanently deleted.',
+      });
+    }),
+  );
+
+  return accountDeletionRouter;
+}
