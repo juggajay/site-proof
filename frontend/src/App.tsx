@@ -1,17 +1,80 @@
 import { Suspense, lazy } from 'react';
-import { Routes, Route, Navigate, useParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from '@/components/ui/toaster';
-import { AuthProvider, useAuth } from '@/lib/auth';
+import { AuthProvider } from '@/lib/auth';
 import { RoleProtectedRoute } from '@/components/auth/RoleProtectedRoute';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { DeferredOfflineIndicator } from '@/components/DeferredOfflineIndicator';
 import { CookieConsentBanner } from '@/components/CookieConsentBanner';
 import { PageSkeleton } from '@/components/ui/Skeleton';
-import { hasSubcontractorPortalIdentity } from '@/lib/subcontractorIdentity';
-import { AccessDeniedState } from '@/components/AccessDeniedState';
-import { apiFetch } from '@/lib/api';
-import { extractErrorMessage } from '@/lib/errorHandling';
+import {
+  ADMIN_ROLES,
+  COMMERCIAL_ROLES,
+  INTERNAL_ROLES,
+  MANAGEMENT_ROLES,
+  PROJECT_WORKSPACE_ROLES,
+  REPORT_ROLES,
+  SUBCONTRACTOR_ROLES,
+} from './appRouteRoles';
+import {
+  AcceptInvitePage,
+  AssignedWorkPage,
+  AuditLogPage,
+  ClaimsPage,
+  CompanyOnboardingPage,
+  CompanySettingsPage,
+  CostsPage,
+  DailyDiaryPage,
+  DashboardPage,
+  DelayRegisterPage,
+  DocketApprovalsPage,
+  DocketEditPage,
+  DocketsListPage,
+  DocumentationPage,
+  DocumentsPage,
+  DrawingsPage,
+  ForemanMobileShell,
+  ForgotPasswordPage,
+  HoldPointsPage,
+  ITPPage,
+  LandingPage,
+  LoginPage,
+  LotDetailPage,
+  LotEditPage,
+  LotsPage,
+  MagicLinkPage,
+  MyCompanyPage,
+  NCRPage,
+  NotFoundPage,
+  NotificationsPage,
+  OAuthCallbackPage,
+  PortfolioPage,
+  PrivacyPolicyPage,
+  ProfilePage,
+  ProjectAreasPage,
+  ProjectsPage,
+  ProjectSettingsPage,
+  ProjectUsersPage,
+  PublicHoldPointReleasePage,
+  RegisterPage,
+  ReportsPage,
+  ResetPasswordPage,
+  SettingsPage,
+  SubcontractorDashboard,
+  SubcontractorDocumentsPage,
+  SubcontractorHoldPointsPage,
+  SubcontractorITPsPage,
+  SubcontractorLotITPPage,
+  SubcontractorNCRsPage,
+  SubcontractorTestResultsPage,
+  SubcontractorsPage,
+  SupportPage,
+  TermsOfServicePage,
+  TestResultsPage,
+  TodayWorklist,
+  VerifyEmailPage,
+} from './appLazyPages';
+import { ProjectDetailRoute } from './appProjectRoutes';
 
 const ENABLE_DEV_TOOLS = import.meta.env.DEV;
 const ENABLE_MOCK_OAUTH_ROUTE =
@@ -25,312 +88,12 @@ const ProtectedAppShell = lazy(() =>
   })),
 );
 
-// Lazy load Auth Pages
-const LoginPage = lazy(() =>
-  import('@/pages/auth/LoginPage').then((m) => ({ default: m.LoginPage })),
-);
-const RegisterPage = lazy(() =>
-  import('@/pages/auth/RegisterPage').then((m) => ({ default: m.RegisterPage })),
-);
-const ForgotPasswordPage = lazy(() =>
-  import('@/pages/auth/ForgotPasswordPage').then((m) => ({ default: m.ForgotPasswordPage })),
-);
-const ResetPasswordPage = lazy(() =>
-  import('@/pages/auth/ResetPasswordPage').then((m) => ({ default: m.ResetPasswordPage })),
-);
-const VerifyEmailPage = lazy(() =>
-  import('@/pages/auth/VerifyEmailPage').then((m) => ({ default: m.VerifyEmailPage })),
-);
-const MagicLinkPage = lazy(() =>
-  import('@/pages/auth/MagicLinkPage').then((m) => ({ default: m.MagicLinkPage })),
-);
-const OAuthCallbackPage = lazy(() =>
-  import('@/pages/auth/OAuthCallbackPage').then((m) => ({ default: m.OAuthCallbackPage })),
-);
 const OAuthMockPage = ENABLE_MOCK_OAUTH_ROUTE
   ? lazy(() => import('@/pages/auth/OAuthMockPage').then((m) => ({ default: m.OAuthMockPage })))
   : null;
 const RoleSwitcher = ENABLE_DEV_TOOLS
   ? lazy(() => import('@/components/dev/RoleSwitcher').then((m) => ({ default: m.RoleSwitcher })))
   : null;
-
-// Landing Page
-const LandingPage = lazy(() =>
-  import('@/pages/LandingPage').then((m) => ({ default: m.LandingPage })),
-);
-
-// Lazy load Main Pages
-const DashboardPage = lazy(() =>
-  import('@/pages/DashboardPage').then((m) => ({ default: m.DashboardPage })),
-);
-const ProjectsPage = lazy(() =>
-  import('@/pages/projects/ProjectsPage').then((m) => ({ default: m.ProjectsPage })),
-);
-const ProjectDetailPage = lazy(() =>
-  import('@/pages/projects/ProjectDetailPage').then((m) => ({ default: m.ProjectDetailPage })),
-);
-const ProjectSettingsPage = lazy(() =>
-  import('@/pages/projects/settings/ProjectSettingsPage').then((m) => ({
-    default: m.ProjectSettingsPage,
-  })),
-);
-const ProjectUsersPage = lazy(() =>
-  import('@/pages/projects/settings/ProjectUsersPage').then((m) => ({
-    default: m.ProjectUsersPage,
-  })),
-);
-const ProjectAreasPage = lazy(() =>
-  import('@/pages/projects/settings/ProjectAreasPage').then((m) => ({
-    default: m.ProjectAreasPage,
-  })),
-);
-const LotsPage = lazy(() => import('@/pages/lots/LotsPage').then((m) => ({ default: m.LotsPage })));
-const LotDetailPage = lazy(() =>
-  import('@/pages/lots/LotDetailPage').then((m) => ({ default: m.LotDetailPage })),
-);
-const LotEditPage = lazy(() =>
-  import('@/pages/lots/LotEditPage').then((m) => ({ default: m.LotEditPage })),
-);
-const ITPPage = lazy(() => import('@/pages/itp/ITPPage').then((m) => ({ default: m.ITPPage })));
-const HoldPointsPage = lazy(() =>
-  import('@/pages/holdpoints/HoldPointsPage').then((m) => ({ default: m.HoldPointsPage })),
-);
-const PublicHoldPointReleasePage = lazy(() =>
-  import('@/pages/holdpoints/PublicHoldPointReleasePage').then((m) => ({
-    default: m.PublicHoldPointReleasePage,
-  })),
-);
-const TestResultsPage = lazy(() =>
-  import('@/pages/tests/TestResultsPage').then((m) => ({ default: m.TestResultsPage })),
-);
-const NCRPage = lazy(() => import('@/pages/ncr/NCRPage').then((m) => ({ default: m.NCRPage })));
-const DailyDiaryPage = lazy(() =>
-  import('@/pages/diary/DailyDiaryPage').then((m) => ({ default: m.DailyDiaryPage })),
-);
-const DelayRegisterPage = lazy(() =>
-  import('@/pages/diary/DelayRegisterPage').then((m) => ({ default: m.DelayRegisterPage })),
-);
-const DocketApprovalsPage = lazy(() =>
-  import('@/pages/dockets/DocketApprovalsPage').then((m) => ({ default: m.DocketApprovalsPage })),
-);
-const ClaimsPage = lazy(() =>
-  import('@/pages/claims/ClaimsPage').then((m) => ({ default: m.ClaimsPage })),
-);
-const DocumentsPage = lazy(() =>
-  import('@/pages/documents/DocumentsPage').then((m) => ({ default: m.DocumentsPage })),
-);
-const DrawingsPage = lazy(() =>
-  import('@/pages/drawings/DrawingsPage').then((m) => ({ default: m.DrawingsPage })),
-);
-const SubcontractorsPage = lazy(() =>
-  import('@/pages/subcontractors/SubcontractorsPage').then((m) => ({
-    default: m.SubcontractorsPage,
-  })),
-);
-const MyCompanyPage = lazy(() =>
-  import('@/pages/subcontractors/MyCompanyPage').then((m) => ({ default: m.MyCompanyPage })),
-);
-const ReportsPage = lazy(() =>
-  import('@/pages/reports/ReportsPage').then((m) => ({ default: m.ReportsPage })),
-);
-const SettingsPage = lazy(() =>
-  import('@/pages/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })),
-);
-const ProfilePage = lazy(() =>
-  import('@/pages/profile/ProfilePage').then((m) => ({ default: m.ProfilePage })),
-);
-const NotificationsPage = lazy(() =>
-  import('@/pages/NotificationsPage').then((m) => ({ default: m.NotificationsPage })),
-);
-const NotFoundPage = lazy(() =>
-  import('@/pages/NotFoundPage').then((m) => ({ default: m.NotFoundPage })),
-);
-const CostsPage = lazy(() =>
-  import('@/pages/costs/CostsPage').then((m) => ({ default: m.CostsPage })),
-);
-const CompanySettingsPage = lazy(() =>
-  import('@/pages/company/CompanySettingsPage').then((m) => ({ default: m.CompanySettingsPage })),
-);
-const CompanyOnboardingPage = lazy(() =>
-  import('@/pages/onboarding/CompanyOnboardingPage').then((m) => ({
-    default: m.CompanyOnboardingPage,
-  })),
-);
-const PortfolioPage = lazy(() =>
-  import('@/pages/portfolio/PortfolioPage').then((m) => ({ default: m.PortfolioPage })),
-);
-
-// Lazy load Foreman Mobile Components
-const ForemanMobileShell = lazy(() =>
-  import('@/components/foreman/ForemanMobileShell').then((m) => ({
-    default: m.ForemanMobileShell,
-  })),
-);
-const TodayWorklist = lazy(() =>
-  import('@/components/foreman/TodayWorklist').then((m) => ({ default: m.TodayWorklist })),
-);
-
-// Lazy load Legal Pages
-const PrivacyPolicyPage = lazy(() =>
-  import('@/pages/legal/PrivacyPolicyPage').then((m) => ({ default: m.PrivacyPolicyPage })),
-);
-const TermsOfServicePage = lazy(() =>
-  import('@/pages/legal/TermsOfServicePage').then((m) => ({ default: m.TermsOfServicePage })),
-);
-
-// Lazy load Support Pages
-const SupportPage = lazy(() =>
-  import('@/pages/support/SupportPage').then((m) => ({ default: m.SupportPage })),
-);
-const DocumentationPage = lazy(() =>
-  import('@/pages/docs/DocumentationPage').then((m) => ({ default: m.DocumentationPage })),
-);
-
-// Lazy load Admin Pages
-const AuditLogPage = lazy(() =>
-  import('@/pages/admin/AuditLogPage').then((m) => ({ default: m.AuditLogPage })),
-);
-
-// Lazy load Subcontractor Portal Pages
-const AcceptInvitePage = lazy(() =>
-  import('@/pages/subcontractor-portal/AcceptInvitePage').then((m) => ({
-    default: m.AcceptInvitePage,
-  })),
-);
-const SubcontractorDashboard = lazy(() =>
-  import('@/pages/subcontractor-portal/SubcontractorDashboard').then((m) => ({
-    default: m.SubcontractorDashboard,
-  })),
-);
-const DocketEditPage = lazy(() =>
-  import('@/pages/subcontractor-portal/DocketEditPage').then((m) => ({
-    default: m.DocketEditPage,
-  })),
-);
-const DocketsListPage = lazy(() =>
-  import('@/pages/subcontractor-portal/DocketsListPage').then((m) => ({
-    default: m.DocketsListPage,
-  })),
-);
-const AssignedWorkPage = lazy(() =>
-  import('@/pages/subcontractor-portal/AssignedWorkPage').then((m) => ({
-    default: m.AssignedWorkPage,
-  })),
-);
-const SubcontractorITPsPage = lazy(() =>
-  import('@/pages/subcontractor-portal/SubcontractorITPsPage').then((m) => ({
-    default: m.SubcontractorITPsPage,
-  })),
-);
-const SubcontractorLotITPPage = lazy(() =>
-  import('@/pages/subcontractor-portal/SubcontractorLotITPPage').then((m) => ({
-    default: m.SubcontractorLotITPPage,
-  })),
-);
-const SubcontractorHoldPointsPage = lazy(() =>
-  import('@/pages/subcontractor-portal/SubcontractorHoldPointsPage').then((m) => ({
-    default: m.SubcontractorHoldPointsPage,
-  })),
-);
-const SubcontractorTestResultsPage = lazy(() =>
-  import('@/pages/subcontractor-portal/SubcontractorTestResultsPage').then((m) => ({
-    default: m.SubcontractorTestResultsPage,
-  })),
-);
-const SubcontractorNCRsPage = lazy(() =>
-  import('@/pages/subcontractor-portal/SubcontractorNCRsPage').then((m) => ({
-    default: m.SubcontractorNCRsPage,
-  })),
-);
-const SubcontractorDocumentsPage = lazy(() =>
-  import('@/pages/subcontractor-portal/SubcontractorDocumentsPage').then((m) => ({
-    default: m.SubcontractorDocumentsPage,
-  })),
-);
-
-// Admin-only roles
-const ADMIN_ROLES = ['owner', 'admin', 'project_manager'];
-
-// Commercial data roles (can view claims, costs, budgets)
-const COMMERCIAL_ROLES = ['owner', 'admin', 'project_manager'];
-
-// Management roles (can manage subcontractors)
-const MANAGEMENT_ROLES = ['owner', 'admin', 'project_manager', 'site_manager'];
-
-// Subcontractor roles
-const SUBCONTRACTOR_ROLES = ['subcontractor', 'subcontractor_admin'];
-
-// All internal (non-subcontractor) roles
-const INTERNAL_ROLES = [
-  'owner',
-  'admin',
-  'project_manager',
-  'site_manager',
-  'quality_manager',
-  'site_engineer',
-  'foreman',
-];
-
-const REPORT_ROLES = [...INTERNAL_ROLES, 'viewer'];
-const PROJECT_WORKSPACE_ROLES = [...INTERNAL_ROLES, 'viewer'];
-
-function SubcontractorProjectAccessRoute({ projectId }: { projectId?: string }) {
-  const { user } = useAuth();
-  const { isLoading, error } = useQuery({
-    queryKey: ['subcontractor-project-route-access', user?.id, projectId],
-    queryFn: async () => {
-      await apiFetch(
-        `/api/subcontractors/my-company?projectId=${encodeURIComponent(projectId || '')}`,
-      );
-      return true;
-    },
-    enabled: !!user?.id && !!projectId,
-    retry: false,
-  });
-
-  if (!projectId) {
-    return <Navigate to="/subcontractor-portal/work" replace />;
-  }
-
-  if (isLoading) {
-    return <PageSkeleton />;
-  }
-
-  if (error) {
-    return (
-      <AccessDeniedState
-        message={extractErrorMessage(
-          error,
-          'You do not have subcontractor portal access to this project.',
-        )}
-        backTo="/subcontractor-portal/work"
-        backLabel="Back to Assigned Work"
-      />
-    );
-  }
-
-  return (
-    <Navigate
-      to={`/subcontractor-portal/work?projectId=${encodeURIComponent(projectId)}`}
-      replace
-    />
-  );
-}
-
-function ProjectDetailRoute() {
-  const { user, loading } = useAuth();
-  const { projectId } = useParams();
-
-  if (!loading && hasSubcontractorPortalIdentity(user)) {
-    return <SubcontractorProjectAccessRoute projectId={projectId} />;
-  }
-
-  return (
-    <RoleProtectedRoute allowedRoles={PROJECT_WORKSPACE_ROLES}>
-      <ProjectDetailPage />
-    </RoleProtectedRoute>
-  );
-}
 
 function App() {
   return (
