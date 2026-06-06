@@ -6,7 +6,6 @@ import { apiFetch, ApiError } from '@/lib/api';
 import { extractErrorMessage, extractErrorDetails, hasStatus } from '@/lib/errorHandling';
 import { useOfflineStatus } from '@/lib/useOfflineStatus';
 import { cacheLotForOfflineEdit, saveLotEditOffline, getOfflineLot } from '@/lib/offlineDb';
-import { SyncStatusBadge } from '@/components/OfflineIndicator';
 import { toast } from '@/components/ui/toaster';
 import { parseOptionalNonNegativeDecimalInput } from '@/lib/numericInput';
 import {
@@ -26,6 +25,15 @@ import {
 } from './lotEditData';
 import { LotEditFormFields } from './components/LotEditFormFields';
 import { LotEditDialogs } from './components/LotEditDialogs';
+import {
+  LotEditErrorState,
+  LotEditFormActions,
+  LotEditHeader,
+  LotEditLoadingState,
+  LotEditLockedWarning,
+  LotEditSaveError,
+  type LotEditOfflineSyncStatus,
+} from './components/LotEditPageChrome';
 
 export function LotEditPage() {
   const { projectId, lotId } = useParams();
@@ -39,9 +47,7 @@ export function LotEditPage() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const subcontractorsQuery = useProjectSubcontractorsQuery(projectId);
   const subcontractors = subcontractorsQuery.data ?? [];
-  const [offlineSyncStatus, setOfflineSyncStatus] = useState<
-    'synced' | 'pending' | 'conflict' | 'error'
-  >('synced');
+  const [offlineSyncStatus, setOfflineSyncStatus] = useState<LotEditOfflineSyncStatus>('synced');
   const [serverUpdatedAt, setServerUpdatedAt] = useState<string | null>(null);
 
   // Form state
@@ -381,28 +387,11 @@ export function LotEditPage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex h-full items-center justify-center p-6">
-        <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-      </div>
-    );
+    return <LotEditLoadingState />;
   }
 
   if (error) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-4 p-6">
-        <div className="text-6xl">!</div>
-        <h1 className="text-2xl font-bold text-destructive">Error</h1>
-        <p className="text-muted-foreground text-center max-w-md">{error}</p>
-        <button
-          type="button"
-          onClick={() => navigate(-1)}
-          className="mt-4 rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
-        >
-          Go Back
-        </button>
-      </div>
-    );
+    return <LotEditErrorState error={error} onGoBack={() => navigate(-1)} />;
   }
 
   if (!lot) {
@@ -417,45 +406,19 @@ export function LotEditPage() {
 
   return (
     <div className="space-y-6 p-6 max-w-3xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold">Edit Lot</h1>
-            {offlineSyncStatus !== 'synced' && <SyncStatusBadge status={offlineSyncStatus} />}
-            {!isOnline && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
-                Offline Mode
-              </span>
-            )}
-          </div>
-          <p className="text-sm text-muted-foreground">Editing lot {lot.lotNumber}</p>
-        </div>
-        <button
-          type="button"
-          onClick={() => safeNavigate(`/projects/${projectId}/lots/${lotId}`)}
-          className="rounded-lg border px-4 py-2 text-sm hover:bg-muted"
-        >
-          Cancel
-        </button>
-      </div>
+      <LotEditHeader
+        lotNumber={lot.lotNumber}
+        offlineSyncStatus={offlineSyncStatus}
+        isOnline={isOnline}
+        onCancel={() => safeNavigate(`/projects/${projectId}/lots/${lotId}`)}
+      />
 
-      {/* Locked Warning */}
-      {detailsLocked && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-800">
-          <strong>Note:</strong>{' '}
-          {canEditConformedBudget
-            ? 'Only the commercial budget can be edited on this conformed lot before it is claimed.'
-            : `This lot is ${lot.status} and cannot be edited.`}
-        </div>
-      )}
-
-      {/* Save Error */}
-      {saveError && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
-          {saveError}
-        </div>
-      )}
+      <LotEditLockedWarning
+        detailsLocked={detailsLocked}
+        canEditConformedBudget={canEditConformedBudget}
+        lotStatus={lot.status}
+      />
+      <LotEditSaveError saveError={saveError} />
 
       <LotEditDialogs
         showUnsavedDialog={showUnsavedDialog}
@@ -478,23 +441,11 @@ export function LotEditPage() {
           subcontractors={subcontractors}
         />
 
-        {/* Actions */}
-        <div className="flex justify-end gap-4">
-          <button
-            type="button"
-            onClick={() => safeNavigate(`/projects/${projectId}/lots/${lotId}`)}
-            className="rounded-lg border px-6 py-2 hover:bg-muted"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={!canSubmit || saving}
-            className="rounded-lg bg-primary px-6 py-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {saving ? 'Saving...' : 'Save Changes'}
-          </button>
-        </div>
+        <LotEditFormActions
+          canSubmit={canSubmit}
+          saving={saving}
+          onCancel={() => safeNavigate(`/projects/${projectId}/lots/${lotId}`)}
+        />
       </form>
     </div>
   );
