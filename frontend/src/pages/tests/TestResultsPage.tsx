@@ -16,7 +16,15 @@ import { downloadCsv } from '@/lib/csv';
 import { formatDateKey } from '@/lib/localDate';
 import { toast } from '@/components/ui/toaster';
 import { extractErrorMessage } from '@/lib/errorHandling';
-import { formatTestDate, TEST_REJECTION_REASON_MAX_LENGTH } from './constants';
+import { TEST_REJECTION_REASON_MAX_LENGTH } from './constants';
+import {
+  buildTestResultsCsvRows,
+  filterTestResults,
+  getUniqueTestTypes,
+  hasActiveTestFilters,
+  TEST_RESULTS_CSV_HEADERS,
+  type TestResultFilterState,
+} from './testResultsPageHelpers';
 
 export function TestResultsPage() {
   const { projectId } = useParams();
@@ -114,78 +122,36 @@ export function TestResultsPage() {
   }, [projectId]);
 
   // Filtered and sorted results
-  const filteredTestResults = useMemo(() => {
-    return testResults.filter((test) => {
-      if (searchQuery) {
-        const query = searchQuery.toLowerCase();
-        const matchesTestType = test.testType.toLowerCase().includes(query);
-        const matchesReportNumber = test.testRequestNumber?.toLowerCase().includes(query) || false;
-        const matchesLabReportNumber =
-          test.laboratoryReportNumber?.toLowerCase().includes(query) || false;
-        const matchesLotNumber = test.lot?.lotNumber?.toLowerCase().includes(query) || false;
-        const matchesLabName = test.laboratoryName?.toLowerCase().includes(query) || false;
-        const matchesSampleLocation = test.sampleLocation?.toLowerCase().includes(query) || false;
+  const filterState = useMemo<TestResultFilterState>(
+    () => ({
+      searchQuery,
+      filterTestType,
+      filterStatus,
+      filterPassFail,
+      filterLot,
+      filterDateFrom,
+      filterDateTo,
+    }),
+    [
+      searchQuery,
+      filterTestType,
+      filterStatus,
+      filterPassFail,
+      filterLot,
+      filterDateFrom,
+      filterDateTo,
+    ],
+  );
 
-        if (
-          !matchesTestType &&
-          !matchesReportNumber &&
-          !matchesLabReportNumber &&
-          !matchesLotNumber &&
-          !matchesLabName &&
-          !matchesSampleLocation
-        ) {
-          return false;
-        }
-      }
-      if (filterTestType && !test.testType.toLowerCase().includes(filterTestType.toLowerCase())) {
-        return false;
-      }
-      if (filterStatus && test.status !== filterStatus) {
-        return false;
-      }
-      if (filterPassFail && test.passFail !== filterPassFail) {
-        return false;
-      }
-      if (filterLot && test.lot?.id !== filterLot) {
-        return false;
-      }
-      if (filterDateFrom) {
-        const testDate = test.sampleDate ? new Date(test.sampleDate) : new Date(test.createdAt);
-        const fromDate = new Date(filterDateFrom);
-        if (testDate < fromDate) return false;
-      }
-      if (filterDateTo) {
-        const testDate = test.sampleDate ? new Date(test.sampleDate) : new Date(test.createdAt);
-        const toDate = new Date(filterDateTo);
-        toDate.setHours(23, 59, 59, 999);
-        if (testDate > toDate) return false;
-      }
-      return true;
-    });
-  }, [
-    testResults,
-    searchQuery,
-    filterTestType,
-    filterStatus,
-    filterPassFail,
-    filterLot,
-    filterDateFrom,
-    filterDateTo,
-  ]);
+  const filteredTestResults = useMemo(() => {
+    return filterTestResults(testResults, filterState);
+  }, [testResults, filterState]);
 
   const uniqueTestTypes = useMemo(() => {
-    return [...new Set(testResults.map((t) => t.testType))].sort();
+    return getUniqueTestTypes(testResults);
   }, [testResults]);
 
-  const hasActiveFilters = !!(
-    filterTestType ||
-    filterStatus ||
-    filterPassFail ||
-    filterLot ||
-    filterDateFrom ||
-    filterDateTo ||
-    searchQuery
-  );
+  const hasActiveFilters = hasActiveTestFilters(filterState);
 
   const clearFilters = useCallback(() => {
     setFilterTestType('');
@@ -370,36 +336,10 @@ export function TestResultsPage() {
 
   // Export CSV handler
   const handleExportCSV = useCallback(() => {
-    const headers = [
-      'Test Type',
-      'Request #',
-      'Linked Lot',
-      'Laboratory',
-      'Sample Location',
-      'Result',
-      'Spec Min',
-      'Spec Max',
-      'Pass/Fail',
-      'Status',
-      'Test Date',
-    ];
-    const rows = testResults.map((test) => [
-      test.testType,
-      test.testRequestNumber || '-',
-      test.lot?.lotNumber || '-',
-      test.laboratoryName || '-',
-      test.sampleLocation || '-',
-      test.resultValue != null
-        ? `${test.resultValue}${test.resultUnit ? ' ' + test.resultUnit : ''}`
-        : '-',
-      test.specificationMin != null ? test.specificationMin : '-',
-      test.specificationMax != null ? test.specificationMax : '-',
-      test.passFail,
-      test.status,
-      formatTestDate(test.testDate),
+    downloadCsv(`test-results-${projectId}-${formatDateKey()}.csv`, [
+      TEST_RESULTS_CSV_HEADERS,
+      ...buildTestResultsCsvRows(testResults),
     ]);
-
-    downloadCsv(`test-results-${projectId}-${formatDateKey()}.csv`, [headers, ...rows]);
   }, [testResults, projectId]);
 
   // Loading state
