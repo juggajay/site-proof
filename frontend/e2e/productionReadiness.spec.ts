@@ -1109,6 +1109,10 @@ test.describe('production readiness guardrails', () => {
       new URL('../../backend/src/lib/scheduledReports.ts', import.meta.url),
       'utf8',
     );
+    const scheduledReportsCore = await readFile(
+      new URL('../../backend/src/lib/scheduledReports/core.ts', import.meta.url),
+      'utf8',
+    );
     const backendServer = await readFile(
       new URL('../../backend/src/server.ts', import.meta.url),
       'utf8',
@@ -1126,7 +1130,8 @@ test.describe('production readiness guardrails', () => {
       'utf8',
     );
 
-    expect(scheduledReportsLib).toContain('export const MAX_SCHEDULED_REPORTS_PER_PROJECT = 25');
+    expect(scheduledReportsCore).toContain('export const MAX_SCHEDULED_REPORTS_PER_PROJECT = 25');
+    expect(scheduledReportsLib).toContain('MAX_SCHEDULED_REPORTS_PER_PROJECT');
     expect(reportsRoute).toContain('createScheduledReportRouter');
     expect(scheduledReportsRoute).toContain('take: MAX_SCHEDULED_REPORTS_PER_PROJECT');
     expect(scheduledReportsRoute).toContain(
