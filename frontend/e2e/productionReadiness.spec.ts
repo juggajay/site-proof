@@ -452,12 +452,19 @@ test.describe('production readiness guardrails', () => {
       new URL('../src/components/comments/CommentsSection.tsx', import.meta.url),
       'utf8',
     );
+    const commentsSectionHelpers = await readFile(
+      new URL('../src/components/comments/commentsSectionHelpers.ts', import.meta.url),
+      'utf8',
+    );
     const configSource = await readFile(new URL('../src/lib/config.ts', import.meta.url), 'utf8');
 
     expect(configSource).toContain('export const SUPABASE_URL');
     expect(commentsSection).toContain("import { SUPABASE_URL } from '@/lib/config'");
-    expect(commentsSection).toContain('if (!SUPABASE_URL) return false');
-    expect(commentsSection).toContain('if (url.origin !== expectedOrigin) return false');
+    expect(commentsSection).toContain(
+      'isSupabaseCommentAttachmentUrl(attachment.fileUrl, SUPABASE_URL)',
+    );
+    expect(commentsSectionHelpers).toContain('if (!supabaseUrl) return false');
+    expect(commentsSectionHelpers).toContain('if (url.origin !== expectedOrigin) return false');
   });
 
   test('comment submissions with files use a single multipart create request', async () => {
@@ -465,10 +472,14 @@ test.describe('production readiness guardrails', () => {
       new URL('../src/components/comments/CommentsSection.tsx', import.meta.url),
       'utf8',
     );
+    const commentsSectionHelpers = await readFile(
+      new URL('../src/components/comments/commentsSectionHelpers.ts', import.meta.url),
+      'utf8',
+    );
 
     expect(commentsSection).not.toContain('/api/comments/attachments/upload');
-    expect(commentsSection).toContain('const buildCommentFormData =');
-    expect(commentsSection).toContain("formData.append('files', file)");
+    expect(commentsSectionHelpers).toContain('function buildCommentFormData');
+    expect(commentsSectionHelpers).toContain("formData.append('files', file)");
     expect(commentsSection).toContain("authFetch('/api/comments'");
   });
 
@@ -588,6 +599,10 @@ test.describe('production readiness guardrails', () => {
       new URL('../src/components/comments/commentsData.ts', import.meta.url),
       'utf8',
     );
+    const commentsSectionHelpers = await readFile(
+      new URL('../src/components/comments/commentsSectionHelpers.ts', import.meta.url),
+      'utf8',
+    );
 
     // The comments path builder now lives in the Query-backed data module; assert
     // the safe String() coercion there, while the timestamp guard and the error
@@ -598,7 +613,7 @@ test.describe('production readiness guardrails', () => {
     expect(commentsData).not.toContain(
       '`/api/comments?entityType=${entityType}&entityId=${entityId}`',
     );
-    expect(commentsSection).toContain("return 'Unknown date'");
+    expect(commentsSectionHelpers).toContain("return 'Unknown date'");
     expect(commentsSection).toContain('extractResponseError(responseText');
     expect(commentsSection).not.toContain(
       '`/api/comments?entityType=${entityType}&entityId=${entityId}`',

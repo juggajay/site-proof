@@ -22,6 +22,11 @@ import {
   type PendingAttachment,
 } from './commentAttachmentDrafts';
 import { CommentAttachmentDraftList } from './CommentAttachmentDraftList';
+import {
+  buildCommentFormData,
+  formatCommentDate,
+  isSupabaseCommentAttachmentUrl,
+} from './commentsSectionHelpers';
 
 interface CommentsSectionProps {
   entityType: string;
@@ -205,26 +210,6 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
     }
   };
 
-  const buildCommentFormData = (
-    content: string,
-    files: PendingAttachment[],
-    parentId?: string,
-  ): FormData => {
-    const formData = new FormData();
-    formData.append('entityType', entityType);
-    formData.append('entityId', entityId);
-    formData.append('content', content);
-    if (parentId) {
-      formData.append('parentId', parentId);
-    }
-
-    for (const { file } of files) {
-      formData.append('files', file);
-    }
-
-    return formData;
-  };
-
   const createComment = async (
     content: string,
     files: PendingAttachment[],
@@ -245,7 +230,7 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
 
     const response = await authFetch('/api/comments', {
       method: 'POST',
-      body: buildCommentFormData(content, files, parentId),
+      body: buildCommentFormData({ entityType, entityId, content, files, parentId }),
     });
 
     if (!response.ok) {
@@ -335,25 +320,9 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
     }
   };
 
-  const isSupabaseCommentAttachmentUrl = (fileUrl: string) => {
-    if (!/^https?:\/\//i.test(fileUrl)) return false;
-    if (!SUPABASE_URL) return false;
-
-    try {
-      const url = new URL(fileUrl);
-      const expectedOrigin = new URL(SUPABASE_URL).origin;
-      if (url.origin !== expectedOrigin) return false;
-
-      const pathname = decodeURIComponent(url.pathname);
-      return pathname.includes('/storage/v1/object/public/') && pathname.includes('/comments/');
-    } catch {
-      return false;
-    }
-  };
-
   const downloadAttachment = async (attachment: CommentAttachment) => {
     try {
-      if (isSupabaseCommentAttachmentUrl(attachment.fileUrl)) {
+      if (isSupabaseCommentAttachmentUrl(attachment.fileUrl, SUPABASE_URL)) {
         window.open(attachment.fileUrl, '_blank', 'noopener,noreferrer');
         return;
       }
@@ -374,21 +343,6 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
         variant: 'error',
       });
     }
-  };
-
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    if (Number.isNaN(date.getTime())) {
-      return 'Unknown date';
-    }
-
-    return date.toLocaleString('en-AU', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
   };
 
   const totalCommentCount = pagination?.total ?? comments.length;
@@ -503,7 +457,7 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
               replyContent={replyContent}
               replyAttachments={replyAttachments}
               replyFileInputRef={replyFileInputRef}
-              formatDate={formatDate}
+              formatDate={formatCommentDate}
               onStartEdit={(target) => {
                 setEditingId(target.id);
                 setEditContent(target.content);
