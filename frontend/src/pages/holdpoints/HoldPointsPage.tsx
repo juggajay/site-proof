@@ -11,7 +11,6 @@ import {
 } from '@/lib/errorHandling';
 import type { HPEvidencePackageData } from '@/lib/pdfGenerator';
 import { LazyHoldPointsChart } from '@/components/charts/LazyCharts';
-import { Button } from '@/components/ui/button';
 import { formatDateKey } from '@/lib/localDate';
 import { logError } from '@/lib/logger';
 
@@ -52,10 +51,12 @@ interface UploadedEvidenceDocument {
 const HOLD_POINTS_PAGE_LIMIT = 100;
 
 // Extracted components
-import { HoldPointStatusFilter, HoldPointSummaryCards } from './components/HoldPointStatusFilter';
+import { HoldPointSummaryCards } from './components/HoldPointStatusFilter';
+import { HoldPointsLoadErrorAlert, HoldPointsPageHeader } from './HoldPointsPageSections';
 import { HoldPointsTable } from './components/HoldPointsTable';
 import { HoldPointsMobileList } from './components/HoldPointsMobileList';
-import { formatHoldPointDate, getStatusLabel, isOverdue } from './components/holdPointTableUtils';
+import { formatHoldPointDate, getStatusLabel } from './components/holdPointTableUtils';
+import { buildHoldPointChartData, buildHoldPointStats } from './holdPointsPageData';
 import { RequestReleaseModal } from './components/RequestReleaseModal';
 import { RecordReleaseModal } from './components/RecordReleaseModal';
 import { downloadCsv } from '@/lib/csv';
@@ -169,54 +170,9 @@ export function HoldPointsPage() {
     [holdPoints, statusFilter],
   );
 
-  const stats = useMemo(
-    () => ({
-      total: holdPoints.length,
-      pending: holdPoints.filter((hp) => hp.status === 'pending').length,
-      notified: holdPoints.filter((hp) => hp.status === 'notified').length,
-      releasedThisWeek: holdPoints.filter((hp) => {
-        if (hp.status !== 'released' || !hp.releasedAt) return false;
-        const releasedDate = new Date(hp.releasedAt);
-        const weekAgo = new Date();
-        weekAgo.setDate(weekAgo.getDate() - 7);
-        return releasedDate >= weekAgo;
-      }).length,
-      overdue: holdPoints.filter((hp) => isOverdue(hp)).length,
-    }),
-    [holdPoints],
-  );
+  const stats = useMemo(() => buildHoldPointStats(holdPoints), [holdPoints]);
 
-  const chartData = useMemo(() => {
-    const releasesOverTime: { date: string; releases: number }[] = [];
-    for (let i = 6; i >= 0; i--) {
-      const date = new Date();
-      date.setDate(date.getDate() - i);
-      const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      const dayStart = new Date(date);
-      dayStart.setHours(0, 0, 0, 0);
-      const dayEnd = new Date(date);
-      dayEnd.setHours(23, 59, 59, 999);
-      const releases = holdPoints.filter((hp) => {
-        if (!hp.releasedAt) return false;
-        const releasedDate = new Date(hp.releasedAt);
-        return releasedDate >= dayStart && releasedDate <= dayEnd;
-      }).length;
-      releasesOverTime.push({ date: dateStr, releases });
-    }
-    const releasedHPs = holdPoints.filter(
-      (hp) => hp.status === 'released' && hp.notificationSentAt && hp.releasedAt,
-    );
-    let avgTimeToRelease = 0;
-    if (releasedHPs.length > 0) {
-      const totalHours = releasedHPs.reduce((sum, hp) => {
-        const notified = new Date(hp.notificationSentAt!).getTime();
-        const released = new Date(hp.releasedAt!).getTime();
-        return sum + (released - notified) / (1000 * 60 * 60);
-      }, 0);
-      avgTimeToRelease = Math.round(totalHours / releasedHPs.length);
-    }
-    return { releasesOverTime, avgTimeToRelease };
-  }, [holdPoints]);
+  const chartData = useMemo(() => buildHoldPointChartData(holdPoints), [holdPoints]);
 
   // --- Handlers ---
 
@@ -508,33 +464,15 @@ export function HoldPointsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Hold Points</h1>
-          <p className="text-muted-foreground mt-1">
-            Track and release hold points requiring third-party inspection
-          </p>
-        </div>
-        {holdPoints.length > 0 && (
-          <HoldPointStatusFilter
-            statusFilter={statusFilter}
-            onStatusFilterChange={setStatusFilter}
-            onExportCSV={handleExportCSV}
-            showExport={!isMobile}
-          />
-        )}
-      </div>
+      <HoldPointsPageHeader
+        holdPointCount={holdPoints.length}
+        isMobile={isMobile}
+        statusFilter={statusFilter}
+        onStatusFilterChange={setStatusFilter}
+        onExportCSV={handleExportCSV}
+      />
 
-      {loadError && (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-4" role="alert">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm font-medium text-destructive">{loadError}</p>
-            <Button type="button" variant="outline" onClick={fetchHoldPoints}>
-              Try again
-            </Button>
-          </div>
-        </div>
-      )}
+      <HoldPointsLoadErrorAlert loadError={loadError} onRetry={fetchHoldPoints} />
 
       {!loading && !loadError && holdPoints.length > 0 && <HoldPointSummaryCards stats={stats} />}
 
