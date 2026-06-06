@@ -1,50 +1,58 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { LayoutGrid, LayoutList, MapPin } from 'lucide-react';
 import {
   FilterBottomSheet,
   FilterTriggerButton,
-  type FilterConfig,
   type FilterValues,
 } from '@/components/mobile/FilterBottomSheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { NativeSelect } from '@/components/ui/native-select';
-import {
-  isRecord,
-  parseJsonPreference,
-  readLocalStorageItem,
-  writeLocalStorageItem,
-} from '@/lib/storagePreferences';
+import { readLocalStorageItem, writeLocalStorageItem } from '@/lib/storagePreferences';
 import { LotColumnSettingsMenu } from './LotColumnSettingsMenu';
 import { LotSavedFiltersMenu } from './LotSavedFiltersMenu';
 import { LotStatusFilterMenu } from './LotStatusFilterMenu';
+import { SAVED_FILTERS_STORAGE_KEY, type ColumnId, type SavedFilter } from './lotFilterConfig';
 import {
-  SAVED_FILTERS_STORAGE_KEY,
-  STATUS_OPTIONS,
-  type ColumnId,
-  type SavedFilter,
-} from './lotFilterConfig';
+  buildMobileLotFilterConfigs,
+  countActiveLotFilters,
+  createSavedFilterSnapshot,
+  parseSavedFiltersPreference,
+} from './lotFiltersBarHelpers';
 
-function isSavedFilter(value: unknown): value is SavedFilter {
-  return (
-    isRecord(value) &&
-    typeof value.id === 'string' &&
-    typeof value.name === 'string' &&
-    typeof value.status === 'string' &&
-    typeof value.activity === 'string' &&
-    typeof value.search === 'string' &&
-    typeof value.createdAt === 'string' &&
-    (value.subcontractor === undefined || typeof value.subcontractor === 'string') &&
-    (value.areaZone === undefined || typeof value.areaZone === 'string')
-  );
+interface ClearFilterButtonProps {
+  onClick: () => void;
+  title: string;
+  ariaLabel: string;
 }
 
-function parseSavedFiltersPreference(raw: string | null): SavedFilter[] {
-  return parseJsonPreference(raw, [], (value) => {
-    if (!Array.isArray(value)) return null;
-    return value.filter(isSavedFilter);
-  });
+function ClearFilterButton({ onClick, title, ariaLabel }: ClearFilterButtonProps) {
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      onClick={onClick}
+      className="ml-1 h-7 w-7 text-muted-foreground hover:text-foreground"
+      title={title}
+      aria-label={ariaLabel}
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+      </svg>
+    </Button>
+  );
 }
 
 interface LotFiltersBarProps {
@@ -118,17 +126,7 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
     areaZone: areaZoneFilter || null,
   });
 
-  // Calculate active filter count
-  const activeFilterCount = useMemo(() => {
-    let count = 0;
-    if (statusFilters.length > 0) count++;
-    if (activityFilter) count++;
-    if (searchQuery) count++;
-    if (chainageMinFilter || chainageMaxFilter) count++;
-    if (subcontractorFilter) count++;
-    if (areaZoneFilter) count++;
-    return count;
-  }, [
+  const activeFilterCount = countActiveLotFilters({
     statusFilters,
     activityFilter,
     searchQuery,
@@ -136,7 +134,18 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
     chainageMaxFilter,
     subcontractorFilter,
     areaZoneFilter,
-  ]);
+  });
+
+  const mobileFilters = buildMobileLotFilterConfigs({
+    statusFilters,
+    activityFilter,
+    activityTypes,
+    isSubcontractor,
+    subcontractors,
+    subcontractorFilter,
+    areaZones,
+    areaZoneFilter,
+  });
 
   const handleSearch = (query: string) => {
     onUpdateFilters({ search: query });
@@ -158,16 +167,17 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
   const saveCurrentFilter = (filterName: string) => {
     if (!filterName.trim()) return;
 
-    const newFilter: SavedFilter = {
+    const newFilter = createSavedFilterSnapshot({
+      name: filterName,
       id: crypto.randomUUID(),
-      name: filterName.trim(),
-      status: statusFilters.join(','),
-      activity: activityFilter,
-      search: searchQuery,
-      subcontractor: subcontractorFilter,
-      areaZone: areaZoneFilter,
       createdAt: new Date().toISOString(),
-    };
+      statusFilters,
+      activityFilter,
+      searchQuery,
+      subcontractorFilter,
+      areaZoneFilter,
+    });
+    if (!newFilter) return;
 
     const updatedFilters = [...savedFilters, newFilter];
     setSavedFilters(updatedFilters);
@@ -217,54 +227,7 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
           isOpen={filterSheetOpen}
           onClose={() => setFilterSheetOpen(false)}
           title="Filter Lots"
-          filters={
-            [
-              {
-                type: 'multiselect',
-                id: 'status',
-                label: 'Status',
-                options: STATUS_OPTIONS,
-                value: statusFilters,
-              },
-              {
-                type: 'select',
-                id: 'activity',
-                label: 'Activity Type',
-                options: activityTypes
-                  .filter((t): t is string => t !== null && t !== undefined)
-                  .map((t) => ({ value: t, label: t.charAt(0).toUpperCase() + t.slice(1) })),
-                value: activityFilter || null,
-              },
-              ...(!isSubcontractor && subcontractors.length > 0
-                ? [
-                    {
-                      type: 'select' as const,
-                      id: 'subcontractor',
-                      label: 'Subcontractor',
-                      options: [
-                        { value: 'unassigned', label: 'Unassigned' },
-                        ...subcontractors.map((s) => ({ value: s.id, label: s.companyName })),
-                      ],
-                      value: subcontractorFilter || null,
-                    },
-                  ]
-                : []),
-              ...(areaZones.length > 0
-                ? [
-                    {
-                      type: 'select' as const,
-                      id: 'areaZone',
-                      label: 'Area/Zone',
-                      options: [
-                        { value: 'unassigned', label: 'Unassigned' },
-                        ...areaZones.map((z) => ({ value: z, label: z })),
-                      ],
-                      value: areaZoneFilter || null,
-                    },
-                  ]
-                : []),
-            ] as FilterConfig[]
-          }
+          filters={mobileFilters}
           values={mobileFilterValues}
           onChange={(values) => setMobileFilterValues(values)}
           onApply={(values) => {
@@ -319,29 +282,11 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
               className="h-8 w-48"
             />
             {searchQuery && (
-              <Button
-                variant="ghost"
-                size="icon"
+              <ClearFilterButton
                 onClick={() => handleSearch('')}
-                className="ml-1 h-7 w-7 text-muted-foreground hover:text-foreground"
                 title="Clear search"
-                aria-label="Clear search"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <line x1="18" y1="6" x2="6" y2="18"></line>
-                  <line x1="6" y1="6" x2="18" y2="18"></line>
-                </svg>
-              </Button>
+                ariaLabel="Clear search"
+              />
             )}
           </div>
         </div>
@@ -363,29 +308,11 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
               ))}
             </NativeSelect>
             {activityFilter && (
-              <Button
-                variant="ghost"
-                size="icon"
+              <ClearFilterButton
                 onClick={() => handleActivityFilter('')}
-                className="ml-1 h-7 w-7 text-muted-foreground hover:text-foreground"
                 title="Clear activity filter"
-                aria-label="Clear activity filter"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <line x1="18" y1="6" x2="6" y2="18"></line>
-                  <line x1="6" y1="6" x2="18" y2="18"></line>
-                </svg>
-              </Button>
+                ariaLabel="Clear activity filter"
+              />
             )}
           </div>
         </div>
@@ -411,29 +338,11 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
               aria-label="Maximum chainage"
             />
             {(chainageMinFilter || chainageMaxFilter) && (
-              <Button
-                variant="ghost"
-                size="icon"
+              <ClearFilterButton
                 onClick={() => onUpdateFilters({ chMin: '', chMax: '' })}
-                className="ml-1 h-7 w-7 text-muted-foreground hover:text-foreground"
                 title="Clear chainage filter"
-                aria-label="Clear chainage filter"
-              >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <line x1="18" y1="6" x2="6" y2="18"></line>
-                  <line x1="6" y1="6" x2="18" y2="18"></line>
-                </svg>
-              </Button>
+                ariaLabel="Clear chainage filter"
+              />
             )}
           </div>
         </div>
@@ -457,29 +366,11 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
                 ))}
               </NativeSelect>
               {subcontractorFilter && (
-                <Button
-                  variant="ghost"
-                  size="icon"
+                <ClearFilterButton
                   onClick={() => handleSubcontractorFilter('')}
-                  className="ml-1 h-7 w-7 text-muted-foreground hover:text-foreground"
                   title="Clear subcontractor filter"
-                  aria-label="Clear subcontractor filter"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                    <line x1="6" y1="6" x2="18" y2="18"></line>
-                  </svg>
-                </Button>
+                  ariaLabel="Clear subcontractor filter"
+                />
               )}
             </div>
           </div>
@@ -504,29 +395,11 @@ export const LotFiltersBar = React.memo(function LotFiltersBar({
                 ))}
               </NativeSelect>
               {areaZoneFilter && (
-                <Button
-                  variant="ghost"
-                  size="icon"
+                <ClearFilterButton
                   onClick={() => handleAreaZoneFilter('')}
-                  className="ml-1 h-7 w-7 text-muted-foreground hover:text-foreground"
                   title="Clear area/zone filter"
-                  aria-label="Clear area/zone filter"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                    <line x1="6" y1="6" x2="18" y2="18"></line>
-                  </svg>
-                </Button>
+                  ariaLabel="Clear area/zone filter"
+                />
               )}
             </div>
           </div>
