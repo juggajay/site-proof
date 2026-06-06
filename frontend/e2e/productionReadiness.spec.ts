@@ -2110,6 +2110,10 @@ test.describe('production readiness guardrails', () => {
       new URL('../src/lib/useOfflineStatus.ts', import.meta.url),
       'utf8',
     );
+    const syncClientSource = await readFile(
+      new URL('../src/lib/offline/syncClient.ts', import.meta.url),
+      'utf8',
+    );
     const offlineIndicatorSource = await readFile(
       new URL('../src/components/OfflineIndicator.tsx', import.meta.url),
       'utf8',
@@ -2117,12 +2121,12 @@ test.describe('production readiness guardrails', () => {
 
     expect(offlineStatusSource).toContain('enableSyncWorker?: boolean');
     expect(offlineStatusSource).toContain('enableSyncWorker = false');
-    expect(offlineStatusSource).toContain('activeOfflineSyncPromise');
-    expect(offlineStatusSource).toContain('siteproof-offline-sync');
-    expect(offlineStatusSource).toContain('getBrowserLockManager()');
     expect(offlineStatusSource).toContain(
       'if (!enableSyncWorker || !isOnline || isSyncing) return;',
     );
+    expect(syncClientSource).toContain('activeOfflineSyncPromise');
+    expect(syncClientSource).toContain('siteproof-offline-sync');
+    expect(syncClientSource).toContain('getBrowserLockManager()');
     expect(offlineIndicatorSource).toContain('enableSyncWorker: true');
   });
 
