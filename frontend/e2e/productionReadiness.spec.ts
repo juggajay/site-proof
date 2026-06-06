@@ -161,6 +161,10 @@ test.describe('production readiness guardrails', () => {
       new URL('../src/pages/lots/LotDetailPage.tsx', import.meta.url),
       'utf8',
     );
+    const lotConformanceActions = await readFile(
+      new URL('../src/pages/lots/hooks/useLotConformanceActions.ts', import.meta.url),
+      'utf8',
+    );
     const conformDialogs = await readFile(
       new URL('../src/pages/lots/components/ConformLotDialogs.tsx', import.meta.url),
       'utf8',
@@ -168,9 +172,12 @@ test.describe('production readiness guardrails', () => {
 
     // Page-level guard: no force-conform API call without a >= 5 character
     // trimmed reason, and the reason travels in the request body.
-    expect(lotDetailPage).toContain('if (force && trimmedReason.length < 5)');
-    expect(lotDetailPage).toContain("title: 'Reason required'");
-    expect(lotDetailPage).toContain('body: JSON.stringify({ force: true, reason: trimmedReason })');
+    expect(lotDetailPage).toContain('useLotConformanceActions');
+    expect(lotConformanceActions).toContain('if (force && trimmedReason.length < 5)');
+    expect(lotConformanceActions).toContain("title: 'Reason required'");
+    expect(lotConformanceActions).toContain(
+      'body: JSON.stringify({ force: true, reason: trimmedReason })',
+    );
 
     // Dialog-level guard: the destructive confirm stays disabled until the
     // trimmed reason is long enough. Runtime behavior is pinned in
