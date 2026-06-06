@@ -25,45 +25,15 @@ import {
   type PlantEntry,
 } from './docketEditData';
 import { formatCurrency, formatDate } from './docketEditDisplay';
+import {
+  calculateHours,
+  getPlantHoursError,
+  isEditableDocketStatus,
+  parseDailyHoursInput,
+  PLANT_HOURS_INPUT_ERROR,
+} from './docketEditHelpers';
 import { DocketEditTabs } from './components/DocketEditTabs';
 import { DocketEntrySheet } from './components/DocketEntrySheet';
-
-function calculateHours(startTime: string, finishTime: string): number {
-  if (!startTime || !finishTime) return 0;
-  const [startH, startM] = startTime.split(':').map(Number);
-  const [finishH, finishM] = finishTime.split(':').map(Number);
-  let hours = finishH + finishM / 60 - (startH + startM / 60);
-  if (hours < 0) hours += 24; // Handle overnight
-  return Math.round(hours * 10) / 10; // Round to 1 decimal
-}
-
-const DAILY_HOURS_PATTERN = /^\d+(?:\.\d+)?$/;
-const PLANT_HOURS_INPUT_ERROR = 'Hours operated must be greater than 0 and 24 or less.';
-
-function parseDailyHoursInput(value: string): number | null {
-  const normalized = value.trim();
-  if (!normalized || !DAILY_HOURS_PATTERN.test(normalized)) {
-    return null;
-  }
-
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) && parsed > 0 && parsed <= 24 ? parsed : null;
-}
-
-function getPlantHoursError(value: string): string | null {
-  const normalized = value.trim();
-  if (!normalized) {
-    return 'Hours operated is required.';
-  }
-  if (normalized.startsWith('-')) {
-    return 'Hours operated cannot be negative.';
-  }
-  return parseDailyHoursInput(value) === null ? PLANT_HOURS_INPUT_ERROR : null;
-}
-
-function isEditableDocketStatus(status?: string) {
-  return !status || status === 'draft' || status === 'queried' || status === 'rejected';
-}
 
 // Stable empty reference so an empty lot list keeps the same identity per render.
 const EMPTY_LOTS: Lot[] = [];
