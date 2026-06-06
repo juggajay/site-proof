@@ -1,9 +1,17 @@
 // Feature #742: API rate limiting middleware
-import crypto from 'crypto';
 import { Request, Response, NextFunction } from 'express';
 import { AppError } from '../lib/AppError.js';
 import { prisma } from '../lib/prisma.js';
 import { logInfo } from '../lib/serverLogger.js';
+import {
+  getClientIp,
+  getPrincipalLockoutKey,
+  getSourceLockoutKey,
+  hashStorageKey,
+  readPositiveIntegerEnv,
+} from './rateLimiter/identity.js';
+
+export { getClientIp } from './rateLimiter/identity.js';
 
 interface RateLimitEntry {
   count: number;
@@ -29,24 +37,6 @@ const rateLimitStore = new Map<string, RateLimitEntry>();
 const authRateLimitStore = new Map<string, RateLimitEntry>();
 const verificationResendRateLimitStore = new Map<string, RateLimitEntry>();
 const lockoutStore = new Map<string, LockoutEntry>();
-
-function readPositiveIntegerEnv(name: string, fallback: number): number {
-  const rawValue = process.env[name]?.trim();
-  if (!rawValue) {
-    return fallback;
-  }
-
-  const value = Number(rawValue);
-  if (!Number.isInteger(value) || value <= 0) {
-    if (process.env.NODE_ENV === 'production') {
-      throw new Error(`FATAL: ${name} must be a positive integer`);
-    }
-
-    return fallback;
-  }
-
-  return value;
-}
 
 const WINDOW_MS = 60 * 1000;
 const MAX_REQUESTS = readPositiveIntegerEnv('API_RATE_LIMIT_MAX', 1000);
@@ -85,29 +75,6 @@ function usesDatabaseRateLimitStore(): boolean {
     return false;
   }
   return process.env.NODE_ENV === 'production';
-}
-
-function hashStorageKey(scope: string, identifier: string): string {
-  const salt = process.env.RATE_LIMIT_KEY_SALT || process.env.JWT_SECRET || '';
-  return `${scope}:${crypto.createHash('sha256').update(`${scope}:${identifier}:${salt}`).digest('hex')}`;
-}
-
-function normalizeAuthPrincipal(principal: string | null | undefined): string | null {
-  const normalized = principal?.trim().toLowerCase();
-  return normalized || null;
-}
-
-function getSourceLockoutKey(ip: string): string {
-  return hashStorageKey('auth-lockout', ip);
-}
-
-function getPrincipalLockoutKey(ip: string, principal: string | null | undefined): string | null {
-  const normalizedPrincipal = normalizeAuthPrincipal(principal);
-  if (!normalizedPrincipal) {
-    return null;
-  }
-
-  return hashStorageKey('auth-lockout-principal', `${ip}:${normalizedPrincipal}`);
 }
 
 function cleanupRateLimitMap(store: Map<string, RateLimitEntry>, windowMs: number) {
@@ -155,23 +122,6 @@ async function cleanupDatabaseStores(now: Date) {
       where: { lastAttemptAt: { lt: new Date(now.getTime() - LOCKOUT_STALE_MS) } },
     }),
   ]);
-}
-
-/**
- * Get client IP address from request.
- */
-export function getClientIp(req: Request): string {
-  const forwardedFor = req.headers['x-forwarded-for'];
-  // In production, Express owns proxy trust and exposes the sanitized client address via req.ip.
-  if (process.env.NODE_ENV !== 'production' && forwardedFor) {
-    const ips = (Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor).split(',');
-    const firstIp = ips[0]?.trim();
-    if (firstIp) {
-      return firstIp;
-    }
-  }
-
-  return req.ip || req.socket?.remoteAddress || 'unknown';
 }
 
 function consumeMemoryRateLimit(
