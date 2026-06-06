@@ -3,7 +3,6 @@ import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { createAuditLog, AuditAction } from '../../lib/auditLog.js';
-import { sendNotificationIfEnabled } from '../notifications.js';
 import { requireEditableDiaryForWrite } from '../diary/diaryAccess.js';
 import {
   DOCKET_APPROVERS,
@@ -31,6 +30,7 @@ import {
   buildDocketQueryResponseSubmittedResponse,
   buildDocketRejectedResponse,
 } from './reviewResponses.js';
+import { notifyDocketSubcontractorUsers } from './reviewNotificationDelivery.js';
 
 export const docketReviewRouter = Router();
 
@@ -204,24 +204,6 @@ docketReviewRouter.post(
     const docketDate = formatDocketDate(docket.date);
     const approverName = formatDocketUserName(user);
 
-    // Get all subcontractor users linked to this subcontractor company
-    const subcontractorUserLinks = await prisma.subcontractorUser.findMany({
-      where: {
-        subcontractorCompanyId: docket.subcontractorCompanyId,
-      },
-    });
-
-    // Get user details for these subcontractor users
-    const subcontractorUserIds = subcontractorUserLinks.map((su) => su.userId);
-    const subcontractorUsers =
-      subcontractorUserIds.length > 0
-        ? await prisma.user.findMany({
-            where: { id: { in: subcontractorUserIds } },
-            select: { id: true, email: true, fullName: true },
-          })
-        : [];
-
-    // Create notifications for subcontractor users
     const { inApp: approvedInApp, email: approvedEmail } = buildDocketApprovedNotifications({
       projectId: docket.projectId,
       projectName: docket.project.name,
@@ -232,25 +214,11 @@ docketReviewRouter.post(
       adjustmentReason,
     });
 
-    const notificationsToCreate = subcontractorUsers.map((su) => ({
-      userId: su.id,
-      ...approvedInApp,
-    }));
-
-    if (notificationsToCreate.length > 0) {
-      await prisma.notification.createMany({
-        data: notificationsToCreate,
-      });
-    }
-
-    // Send email notifications to subcontractor users
-    for (const su of subcontractorUsers) {
-      try {
-        await sendNotificationIfEnabled(su.id, 'enabled', approvedEmail);
-      } catch {
-        // Non-critical: don't fail the main request if email fails
-      }
-    }
+    const subcontractorUsers = await notifyDocketSubcontractorUsers({
+      subcontractorCompanyId: docket.subcontractorCompanyId,
+      inApp: approvedInApp,
+      email: approvedEmail,
+    });
 
     res.json(buildDocketApprovedResponse({ updatedDocket, subcontractorUsers }));
   }),
@@ -321,24 +289,6 @@ docketReviewRouter.post(
     const docketDate = formatDocketDate(docket.date);
     const rejectorName = formatDocketUserName(user);
 
-    // Get all subcontractor users linked to this subcontractor company
-    const subcontractorUserLinks = await prisma.subcontractorUser.findMany({
-      where: {
-        subcontractorCompanyId: docket.subcontractorCompanyId,
-      },
-    });
-
-    // Get user details for these subcontractor users
-    const subcontractorUserIds = subcontractorUserLinks.map((su) => su.userId);
-    const subcontractorUsers =
-      subcontractorUserIds.length > 0
-        ? await prisma.user.findMany({
-            where: { id: { in: subcontractorUserIds } },
-            select: { id: true, email: true, fullName: true },
-          })
-        : [];
-
-    // Create notifications for subcontractor users
     const { inApp: rejectedInApp, email: rejectedEmail } = buildDocketRejectedNotifications({
       projectId: docket.projectId,
       projectName: docket.project.name,
@@ -348,25 +298,11 @@ docketReviewRouter.post(
       reason,
     });
 
-    const notificationsToCreate = subcontractorUsers.map((su) => ({
-      userId: su.id,
-      ...rejectedInApp,
-    }));
-
-    if (notificationsToCreate.length > 0) {
-      await prisma.notification.createMany({
-        data: notificationsToCreate,
-      });
-    }
-
-    // Send email notifications to subcontractor users
-    for (const su of subcontractorUsers) {
-      try {
-        await sendNotificationIfEnabled(su.id, 'enabled', rejectedEmail);
-      } catch {
-        // Non-critical: don't fail the main request if email fails
-      }
-    }
+    const subcontractorUsers = await notifyDocketSubcontractorUsers({
+      subcontractorCompanyId: docket.subcontractorCompanyId,
+      inApp: rejectedInApp,
+      email: rejectedEmail,
+    });
 
     res.json(buildDocketRejectedResponse(updatedDocket, subcontractorUsers));
   }),
@@ -442,23 +378,6 @@ docketReviewRouter.post(
     const docketDate = formatDocketDate(docket.date);
     const querierName = formatDocketUserName(user);
 
-    // Get all subcontractor users linked to this subcontractor company
-    const subcontractorUserLinks = await prisma.subcontractorUser.findMany({
-      where: {
-        subcontractorCompanyId: docket.subcontractorCompanyId,
-      },
-    });
-
-    const subcontractorUserIds = subcontractorUserLinks.map((su) => su.userId);
-    const subcontractorUsers =
-      subcontractorUserIds.length > 0
-        ? await prisma.user.findMany({
-            where: { id: { in: subcontractorUserIds } },
-            select: { id: true, email: true, fullName: true },
-          })
-        : [];
-
-    // Create notifications for subcontractor users
     const { inApp: queriedInApp, email: queriedEmail } = buildDocketQueriedNotifications({
       projectId: docket.projectId,
       projectName: docket.project.name,
@@ -468,25 +387,11 @@ docketReviewRouter.post(
       questions,
     });
 
-    const notificationsToCreate = subcontractorUsers.map((su) => ({
-      userId: su.id,
-      ...queriedInApp,
-    }));
-
-    if (notificationsToCreate.length > 0) {
-      await prisma.notification.createMany({
-        data: notificationsToCreate,
-      });
-    }
-
-    // Send email notifications to subcontractor users
-    for (const su of subcontractorUsers) {
-      try {
-        await sendNotificationIfEnabled(su.id, 'enabled', queriedEmail);
-      } catch {
-        // Non-critical: don't fail the main request if email fails
-      }
-    }
+    const subcontractorUsers = await notifyDocketSubcontractorUsers({
+      subcontractorCompanyId: docket.subcontractorCompanyId,
+      inApp: queriedInApp,
+      email: queriedEmail,
+    });
 
     res.json(buildDocketQueriedResponse(updatedDocket, subcontractorUsers));
   }),
