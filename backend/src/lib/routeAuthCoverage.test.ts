@@ -15,6 +15,7 @@ const allowedPublicRouteFiles = new Set([
   'auth/passwordResetRoutes.ts',
   'auth/emailVerificationRoutes.ts',
   'auth/accountPrivacyRoutes.ts',
+  'auth/accountDeletionRoutes.ts',
   'oauth.ts',
   'support.ts',
   'documents.ts',
@@ -273,6 +274,10 @@ describe('route authentication coverage', () => {
       path.join(routesDir, 'auth/accountPrivacyRoutes.ts'),
       'utf8',
     );
+    const accountDeletionRoutesSource = await readFile(
+      path.join(routesDir, 'auth/accountDeletionRoutes.ts'),
+      'utf8',
+    );
     const oauthSource = await readFile(path.join(routesDir, 'oauth.ts'), 'utf8');
     const documentsSource = await readFile(path.join(routesDir, 'documents.ts'), 'utf8');
     const documentsPublicRoutesSource = await readFile(
@@ -340,6 +345,9 @@ describe('route authentication coverage', () => {
     const accountPrivacyRouteDescriptors = extractedAccountPrivacyRouteDescriptors(
       accountPrivacyRoutesSource,
     );
+    const accountDeletionRouteDescriptors = extractedAccountPrivacyRouteDescriptors(
+      accountDeletionRoutesSource,
+    );
     expect(testExpiredTokenIndex).toBeGreaterThan(-1);
     expect([
       ...extractedRegistrationRouteDescriptors(registrationRoutesSource),
@@ -351,6 +359,7 @@ describe('route authentication coverage', () => {
       ...emailVerificationRouteDescriptors,
       ...authRouteDescriptors.slice(testExpiredTokenIndex),
       ...accountPrivacyRouteDescriptors,
+      ...accountDeletionRouteDescriptors,
     ]).toEqual([
       'POST /register',
       'POST /register-and-accept-invitation',
@@ -537,6 +546,8 @@ describe('route authentication coverage', () => {
     );
     expect(extractedAccountPrivacyRouteDescriptors(accountPrivacyRoutesSource)).toEqual([
       'GET /export-data',
+    ]);
+    expect(extractedAccountPrivacyRouteDescriptors(accountDeletionRoutesSource)).toEqual([
       'DELETE /delete-account',
     ]);
     expect(routeSourceForDescriptor(accountPrivacyRoutesSource, 'GET /export-data')).toContain(
@@ -558,34 +569,34 @@ describe('route authentication coverage', () => {
       'keyHash',
     );
     expect(
-      routeSourceForDescriptor(accountPrivacyRoutesSource, 'DELETE /delete-account'),
+      routeSourceForDescriptor(accountDeletionRoutesSource, 'DELETE /delete-account'),
     ).toContain("await import('../../lib/auth.js')");
     expect(
-      routeSourceForDescriptor(accountPrivacyRoutesSource, 'DELETE /delete-account'),
+      routeSourceForDescriptor(accountDeletionRoutesSource, 'DELETE /delete-account'),
     ).toContain('verifyToken(token)');
     expect(
-      routeSourceForDescriptor(accountPrivacyRoutesSource, 'DELETE /delete-account'),
+      routeSourceForDescriptor(accountDeletionRoutesSource, 'DELETE /delete-account'),
     ).toContain('confirmEmail.trim().toLowerCase()');
     expect(
-      routeSourceForDescriptor(accountPrivacyRoutesSource, 'DELETE /delete-account'),
+      routeSourceForDescriptor(accountDeletionRoutesSource, 'DELETE /delete-account'),
     ).toContain('Company owners must transfer ownership before deleting their account');
     expect(
-      routeSourceForDescriptor(accountPrivacyRoutesSource, 'DELETE /delete-account'),
+      routeSourceForDescriptor(accountDeletionRoutesSource, 'DELETE /delete-account'),
     ).toContain('verifyPassword(normalizedPassword, user.passwordHash)');
     expect(
-      routeSourceForDescriptor(accountPrivacyRoutesSource, 'DELETE /delete-account'),
+      routeSourceForDescriptor(accountDeletionRoutesSource, 'DELETE /delete-account'),
     ).toContain('assertCanRemoveUserFromProjectAdminRoles(user.id, { client: tx })');
     expect(
-      routeSourceForDescriptor(accountPrivacyRoutesSource, 'DELETE /delete-account'),
+      routeSourceForDescriptor(accountDeletionRoutesSource, 'DELETE /delete-account'),
     ).toContain('AuditAction.ACCOUNT_DELETION_REQUESTED');
     expect(
-      routeSourceForDescriptor(accountPrivacyRoutesSource, 'DELETE /delete-account'),
+      routeSourceForDescriptor(accountDeletionRoutesSource, 'DELETE /delete-account'),
     ).toContain('tx.iTPCompletion.deleteMany');
     expect(
-      routeSourceForDescriptor(accountPrivacyRoutesSource, 'DELETE /delete-account'),
+      routeSourceForDescriptor(accountDeletionRoutesSource, 'DELETE /delete-account'),
     ).toContain('tx.user.delete');
     expect(
-      routeSourceForDescriptor(accountPrivacyRoutesSource, 'DELETE /delete-account'),
+      routeSourceForDescriptor(accountDeletionRoutesSource, 'DELETE /delete-account'),
     ).toContain('Your account and associated data have been permanently deleted.');
     expect(serverSource).toContain("app.use('/api/auth', authRateLimiter, authRouter)");
 
