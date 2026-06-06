@@ -14,21 +14,20 @@ import {
   useExistingDocketsQuery,
   useMyCompanyQuery,
   type Docket,
-  type Employee,
   type LabourEntry,
   type Lot,
-  type Plant,
   type PlantEntry,
 } from './docketEditData';
 import {
   calculateHours,
-  getPlantHoursError,
   isEditableDocketStatus,
   parseDailyHoursInput,
   PLANT_HOURS_INPUT_ERROR,
 } from './docketEditHelpers';
+import { useDocketEntrySheetState } from './useDocketEntrySheetState';
 import { DocketEditTabs } from './components/DocketEditTabs';
 import { DocketEntrySheet } from './components/DocketEntrySheet';
+import { useDocketSubmitActions } from './useDocketSubmitActions';
 import {
   DocketEditActionBar,
   DocketEditError,
@@ -50,7 +49,6 @@ export function DocketEditPage() {
   const isNewDocket = !docketId || docketId === 'new';
 
   const [saving, setSaving] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
 
   const [docket, setDocket] = useState<Docket | null>(null);
   const [notes, setNotes] = useState('');
@@ -58,18 +56,6 @@ export function DocketEditPage() {
 
   // Query response state
   const [queryResponse, setQueryResponse] = useState('');
-  const [respondingToQuery, setRespondingToQuery] = useState(false);
-
-  // Entry sheet state
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const [sheetType, setSheetType] = useState<'labour' | 'plant'>('labour');
-  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
-  const [selectedPlant, setSelectedPlant] = useState<Plant | null>(null);
-  const [startTime, setStartTime] = useState('07:00');
-  const [finishTime, setFinishTime] = useState('15:30');
-  const [hoursOperated, setHoursOperated] = useState('8');
-  const [wetOrDry, setWetOrDry] = useState<'dry' | 'wet'>('dry');
-  const [selectedLotId, setSelectedLotId] = useState<string>('');
 
   const today = formatDateKey();
 
@@ -81,6 +67,29 @@ export function DocketEditPage() {
 
   const lotsQuery = useAssignedLotsQuery(userId, company?.projectId);
   const assignedLots = lotsQuery.data ?? EMPTY_LOTS;
+  const {
+    sheetOpen,
+    sheetType,
+    selectedEmployee,
+    selectedPlant,
+    startTime,
+    finishTime,
+    hoursOperated,
+    wetOrDry,
+    selectedLotId,
+    plantHoursError,
+    previewHours,
+    previewCost,
+    setStartTime,
+    setFinishTime,
+    setHoursOperated,
+    setWetOrDry,
+    setSelectedLotId,
+    resetSheetState,
+    openAddLabour,
+    openAddPlant,
+    closeSheet,
+  } = useDocketEntrySheetState(assignedLots);
 
   const docketQuery = useDocketEditQuery(userId, docketId, !isNewDocket);
   const existingDocketsQuery = useExistingDocketsQuery(userId, company?.projectId, isNewDocket);
@@ -99,13 +108,6 @@ export function DocketEditPage() {
       setNotes(docketQuery.data.notes || '');
     }
   }, [docketQuery.data]);
-
-  // Auto-select the lot when the subbie is assigned exactly one.
-  useEffect(() => {
-    if (lotsQuery.data && lotsQuery.data.length === 1) {
-      setSelectedLotId(lotsQuery.data[0].id);
-    }
-  }, [lotsQuery.data]);
 
   // A docket already exists for today: send the subbie to it instead of a new one.
   useEffect(() => {
@@ -238,7 +240,7 @@ export function DocketEditPage() {
         };
       });
 
-      setSheetOpen(false);
+      closeSheet();
       resetSheetState();
       toast({ title: 'Labour entry added', variant: 'success' });
     } catch (err) {
@@ -295,7 +297,7 @@ export function DocketEditPage() {
         };
       });
 
-      setSheetOpen(false);
+      closeSheet();
       resetSheetState();
       toast({ title: 'Plant entry added', variant: 'success' });
     } catch (err) {
@@ -359,90 +361,12 @@ export function DocketEditPage() {
     }
   };
 
-  // Submit docket
-  const submitDocket = async () => {
-    if (!docket) return;
-
-    // Validation
-    if (docket.labourEntries.length === 0 && docket.plantEntries.length === 0) {
-      toast({
-        title: 'Cannot submit',
-        description: 'Add at least one labour or plant entry',
-        variant: 'error',
-      });
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      await saveDocketNotes(docket);
-      await apiFetch(`/api/dockets/${docket.id}/submit`, {
-        method: 'POST',
-      });
-
-      toast({
-        title: 'Docket submitted',
-        description: 'Your docket has been sent for approval',
-        variant: 'success',
-      });
-
-      navigate('/subcontractor-portal');
-    } catch (err) {
-      handleApiError(err, 'Failed to submit docket');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  // Respond to a query
-  const respondToQuery = async () => {
-    if (!docket || !queryResponse.trim()) return;
-
-    setRespondingToQuery(true);
-    try {
-      await saveDocketNotes(docket);
-      await apiFetch(`/api/dockets/${docket.id}/respond`, {
-        method: 'POST',
-        body: JSON.stringify({ response: queryResponse.trim() }),
-      });
-
-      toast({
-        title: 'Response sent',
-        description: 'Your docket has been resubmitted for approval',
-        variant: 'success',
-      });
-
-      navigate('/subcontractor-portal');
-    } catch (err) {
-      handleApiError(err, 'Failed to respond to query');
-    } finally {
-      setRespondingToQuery(false);
-    }
-  };
-
-  const resetSheetState = () => {
-    setSelectedEmployee(null);
-    setSelectedPlant(null);
-    setStartTime('07:00');
-    setFinishTime('15:30');
-    setHoursOperated('8');
-    setWetOrDry('dry');
-    setSelectedLotId(assignedLots.length === 1 ? assignedLots[0].id : '');
-  };
-
-  const openAddLabour = (emp?: Employee) => {
-    resetSheetState();
-    if (emp) setSelectedEmployee(emp);
-    setSheetType('labour');
-    setSheetOpen(true);
-  };
-
-  const openAddPlant = (plant?: Plant) => {
-    resetSheetState();
-    if (plant) setSelectedPlant(plant);
-    setSheetType('plant');
-    setSheetOpen(true);
-  };
+  const { submitting, respondingToQuery, submitDocket, respondToQuery } = useDocketSubmitActions({
+    docket,
+    queryResponse,
+    saveDocketNotes,
+    navigate,
+  });
 
   // Get approved employees/plant only
   const approvedEmployees = company?.employees.filter((e) => e.status === 'approved') || [];
@@ -450,21 +374,6 @@ export function DocketEditPage() {
   const myCompanyLink = company?.projectId
     ? `/my-company?projectId=${encodeURIComponent(company.projectId)}`
     : '/my-company';
-  const plantHoursError = sheetType === 'plant' ? getPlantHoursError(hoursOperated) : null;
-
-  // Calculate sheet preview
-  const previewHours =
-    sheetType === 'labour'
-      ? calculateHours(startTime, finishTime)
-      : parseDailyHoursInput(hoursOperated) || 0;
-
-  const previewCost =
-    sheetType === 'labour'
-      ? previewHours * (selectedEmployee?.hourlyRate || 0)
-      : previewHours *
-        (wetOrDry === 'wet'
-          ? selectedPlant?.wetRate || selectedPlant?.dryRate || 0
-          : selectedPlant?.dryRate || 0);
 
   // Total cost
   const totalCost = (docket?.totalLabourSubmitted || 0) + (docket?.totalPlantSubmitted || 0);
@@ -552,7 +461,7 @@ export function DocketEditPage() {
           onHoursOperatedChange={setHoursOperated}
           onWetOrDryChange={setWetOrDry}
           onSelectedLotIdChange={setSelectedLotId}
-          onClose={() => setSheetOpen(false)}
+          onClose={closeSheet}
           onAddLabourEntry={addLabourEntry}
           onAddPlantEntry={addPlantEntry}
         />
