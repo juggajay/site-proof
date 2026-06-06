@@ -1,24 +1,16 @@
 import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useCommercialAccess } from '@/hooks/useCommercialAccess';
 import { apiFetch, ApiError } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
-import { extractErrorMessage, extractErrorDetails, handleApiError } from '@/lib/errorHandling';
+import { extractErrorMessage } from '@/lib/errorHandling';
 import { logError } from '@/lib/logger';
-import { formatStatusLabel } from '@/lib/statusLabels';
-import { toast } from '@/components/ui/toaster';
 import { useOfflineStatus } from '@/lib/useOfflineStatus';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 
 // Types and constants extracted to separate files
-import type {
-  Lot,
-  SubcontractorCompany,
-  ConformStatus,
-  LocationState,
-  LotSubcontractorAssignment,
-} from './types';
+import type { Lot, ConformStatus, LocationState, LotSubcontractorAssignment } from './types';
 import { getLotTabsForRole } from './constants';
 import { buildConformanceStatusPath, useLotQualityAccessQuery } from './lotDetailData';
 import { useItpInstance } from './hooks/useItpInstance';
@@ -27,6 +19,9 @@ import { useLotPhotoUpload } from './hooks/useLotPhotoUpload';
 import { useLotReadinessNavigation } from './hooks/useLotReadinessNavigation';
 import { useLotLinkCopy } from './hooks/useLotLinkCopy';
 import { useLotTabData } from './hooks/useLotTabData';
+import { useLotConformanceActions } from './hooks/useLotConformanceActions';
+import { useLotSubcontractorAssignments } from './hooks/useLotSubcontractorAssignments';
+import { useItpActionModals, type ItpActionModalHandlers } from './hooks/useItpActionModals';
 import { QualityManagementSection } from './components/QualityManagementSection';
 import { LotHeader } from './components/LotHeader';
 import { LotTabNavigation } from './components/LotTabNavigation';
@@ -66,53 +61,10 @@ export function LotDetailPage() {
   const [lot, setLot] = useState<Lot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<LotDetailPageError | null>(null);
-  const [conforming, setConforming] = useState(false);
-  const [showConformConfirm, setShowConformConfirm] = useState(false);
-  const [showForceConformConfirm, setShowForceConformConfirm] = useState(false);
-  const [forceConformReason, setForceConformReason] = useState('');
   // Offline state
   const { isOnline, pendingSyncCount: _pendingSyncCount } = useOfflineStatus();
   const [conformStatus, setConformStatus] = useState<ConformStatus | null>(null);
   const [loadingConformStatus, setLoadingConformStatus] = useState(false);
-  const [showOverrideModal, setShowOverrideModal] = useState(false);
-  const [overriding, setOverriding] = useState(false);
-  const [showSubcontractorModal, setShowSubcontractorModal] = useState(false);
-  const [subcontractors, setSubcontractors] = useState<SubcontractorCompany[]>([]);
-  const [selectedSubcontractor, setSelectedSubcontractor] = useState<string>('');
-  const [assigningSubcontractor, setAssigningSubcontractor] = useState(false);
-  // Subcontractor assignments (new permission system)
-  const [showAssignSubcontractorModal, setShowAssignSubcontractorModal] = useState(false);
-  const [editingAssignment, setEditingAssignment] = useState<LotSubcontractorAssignment | null>(
-    null,
-  );
-  const queryClient = useQueryClient();
-  const [evidenceWarning, setEvidenceWarning] = useState<{
-    checklistItemId: string;
-    itemDescription: string;
-    evidenceType: string;
-    currentNotes: string | null;
-  } | null>(null);
-  const [naModal, setNaModal] = useState<{
-    checklistItemId: string;
-    itemDescription: string;
-  } | null>(null);
-  const [submittingNa, setSubmittingNa] = useState(false);
-
-  // Failed modal state for NCR creation
-  const [failedModal, setFailedModal] = useState<{
-    checklistItemId: string;
-    itemDescription: string;
-  } | null>(null);
-  const [submittingFailed, setSubmittingFailed] = useState(false);
-
-  // Witness point modal state
-  const [witnessModal, setWitnessModal] = useState<{
-    checklistItemId: string;
-    itemDescription: string;
-    existingNotes: string | null;
-  } | null>(null);
-  const [submittingWitness, setSubmittingWitness] = useState(false);
-
   // Copy-link workflow (URL build, clipboard write + textarea fallback, toast,
   // 2-second reset) lives in useLotLinkCopy; the page only wires it into the
   // header button.
@@ -232,6 +184,24 @@ export function LotDetailPage() {
     }
   }, [lotId]);
 
+  const itpActionHandlersRef = useRef<Partial<ItpActionModalHandlers>>({});
+  const {
+    evidenceWarning,
+    setEvidenceWarning,
+    naModal,
+    setNaModal,
+    submittingNa,
+    failedModal,
+    setFailedModal,
+    submittingFailed,
+    witnessModal,
+    setWitnessModal,
+    submittingWitness,
+    handleSubmitNA,
+    handleSubmitFailed,
+    handleSubmitWitness,
+  } = useItpActionModals(itpActionHandlersRef);
+
   const {
     itpInstance,
     setItpInstance,
@@ -267,6 +237,8 @@ export function LotDetailPage() {
     refreshNcrsAfterFailure,
   });
 
+  itpActionHandlersRef.current = { markAsNA, markAsFailed, completeWitnessPoint };
+
   // Photo upload + AI-classification workflow (Feature #247). Lives in a hook
   // that owns the classification modal state; it shares useItpInstance's
   // updatingCompletion double-submit guard and merges uploaded attachments into
@@ -300,22 +272,28 @@ export function LotDetailPage() {
     generateReport,
   } = useConformanceReportGeneration({ lot, projectId, lotId, itpInstance });
 
-  // Fetch subcontractors when assign modal opens
-  useEffect(() => {
-    if (showSubcontractorModal && projectId) {
-      const fetchSubcontractors = async () => {
-        try {
-          const data = await apiFetch<{ subcontractors: SubcontractorCompany[] }>(
-            `/api/subcontractors/for-project/${encodeURIComponent(projectId)}`,
-          );
-          setSubcontractors(data.subcontractors || []);
-        } catch (err) {
-          logError('Failed to fetch subcontractors:', err);
-        }
-      };
-      fetchSubcontractors();
-    }
-  }, [showSubcontractorModal, projectId]);
+  const {
+    conforming,
+    showConformConfirm,
+    setShowConformConfirm,
+    showForceConformConfirm,
+    setShowForceConformConfirm,
+    forceConformReason,
+    setForceConformReason,
+    showOverrideModal,
+    setShowOverrideModal,
+    overriding,
+    handleConformLot,
+    handleOverrideStatus,
+  } = useLotConformanceActions({
+    lotId,
+    projectId,
+    currentTab,
+    setLot,
+    setConformStatus,
+    refetchReadiness,
+    refreshActivityHistory,
+  });
 
   // Extract quality access permissions
   const canConformLots = qualityAccess?.canConformLots || false;
@@ -338,48 +316,27 @@ export function LotDetailPage() {
     qualityAccess?.role || '',
   );
 
-  // Fetch subcontractor assignments for this lot
-  const { data: assignments = [] } = useQuery({
-    queryKey: ['lot-assignments', lotId],
-    queryFn: () =>
-      apiFetch<LotSubcontractorAssignment[]>(
-        `/api/lots/${encodeURIComponent(lotId || '')}/subcontractors`,
-      ),
-    enabled: !!lotId,
-  });
-
-  // Fetch current user's assignment (for subcontractors)
-  const { data: myAssignment } = useQuery({
-    queryKey: ['my-lot-assignment', lotId],
-    queryFn: () =>
-      apiFetch<LotSubcontractorAssignment>(
-        `/api/lots/${encodeURIComponent(lotId || '')}/subcontractors/mine`,
-      ).catch(() => null),
-    enabled: !!lotId && isSubcontractor,
-  });
+  const {
+    assignments,
+    myAssignment,
+    showSubcontractorModal,
+    setShowSubcontractorModal,
+    subcontractors,
+    selectedSubcontractor,
+    setSelectedSubcontractor,
+    assigningSubcontractor,
+    showAssignSubcontractorModal,
+    setShowAssignSubcontractorModal,
+    editingAssignment,
+    setEditingAssignment,
+    removeAssignmentPending,
+    removeAssignment,
+    handleAssignSubcontractor,
+    handleAssignmentSuccess,
+  } = useLotSubcontractorAssignments({ projectId, lotId, lot, isSubcontractor, setLot });
 
   // Subcontractors need canCompleteITP permission, others can complete by default
   const canCompleteITPItems = isSubcontractor ? (myAssignment?.canCompleteITP ?? false) : true;
-
-  // Remove assignment mutation
-  const removeAssignmentMutation = useMutation({
-    mutationFn: (assignmentId: string) =>
-      apiFetch(
-        `/api/lots/${encodeURIComponent(lotId || '')}/subcontractors/${encodeURIComponent(assignmentId)}`,
-        { method: 'DELETE' },
-      ),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['lot-assignments', lotId] });
-      toast({ title: 'Subcontractor removed from lot' });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to remove subcontractor',
-        variant: 'error',
-      });
-    },
-  });
 
   if (loading) {
     return <LotDetailLoadingState />;
@@ -403,218 +360,6 @@ export function LotDetailPage() {
   const isEditable =
     lot.status !== 'claimed' && (lot.status !== 'conformed' || Boolean(canViewBudgets));
 
-  // Thin modal-confirm wrappers: the hook owns the mutation + toasts; the page
-  // keeps the modal open/close state and the submitting flags.
-  const handleSubmitNA = async (reason: string) => {
-    if (!naModal) return;
-    setSubmittingNa(true);
-    try {
-      const ok = await markAsNA(naModal.checklistItemId, reason);
-      if (ok) setNaModal(null);
-    } finally {
-      setSubmittingNa(false);
-    }
-  };
-
-  const handleSubmitFailed = async (description: string, category: string, severity: string) => {
-    if (!failedModal) return;
-    setSubmittingFailed(true);
-    try {
-      const ok = await markAsFailed({
-        checklistItemId: failedModal.checklistItemId,
-        description,
-        category,
-        severity,
-      });
-      if (ok) setFailedModal(null);
-    } finally {
-      setSubmittingFailed(false);
-    }
-  };
-
-  const handleSubmitWitness = async (
-    witnessPresent: boolean,
-    witnessName?: string,
-    witnessCompany?: string,
-  ) => {
-    if (!witnessModal) return;
-    setSubmittingWitness(true);
-    try {
-      await completeWitnessPoint({
-        checklistItemId: witnessModal.checklistItemId,
-        existingNotes: witnessModal.existingNotes,
-        witnessPresent,
-        witnessName,
-        witnessCompany,
-      });
-      setWitnessModal(null);
-    } catch (err) {
-      handleApiError(err, 'Failed to complete witness point');
-    } finally {
-      setSubmittingWitness(false);
-    }
-  };
-
-  const handleConformLot = async (force = false, reason?: string) => {
-    if (conforming || !lotId) return;
-
-    const trimmedReason = reason?.trim() ?? '';
-    if (force && trimmedReason.length < 5) {
-      toast({
-        title: 'Reason required',
-        description: 'Please provide a reason before force conforming this lot.',
-        variant: 'error',
-      });
-      return;
-    }
-
-    setConforming(true);
-    try {
-      await apiFetch(`/api/lots/${encodeURIComponent(lotId)}/conform`, {
-        method: 'POST',
-        ...(force ? { body: JSON.stringify({ force: true, reason: trimmedReason }) } : {}),
-      });
-      setShowConformConfirm(false);
-      setShowForceConformConfirm(false);
-      setForceConformReason('');
-      setLot((prev) => (prev ? { ...prev, status: 'conformed' } : null));
-      setConformStatus(null);
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.lotReadiness(lotId) }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.lot(lotId) }),
-        ...(projectId
-          ? [
-              queryClient.invalidateQueries({ queryKey: queryKeys.lots(projectId) }),
-              queryClient.invalidateQueries({ queryKey: queryKeys.claimReadiness(projectId) }),
-            ]
-          : []),
-      ]);
-      await refetchReadiness();
-      toast({
-        title: 'Lot conformed',
-        description: force
-          ? 'The lot has been force conformed and marked as quality-approved.'
-          : 'The lot has been marked as quality-approved.',
-        variant: 'success',
-      });
-    } catch (err) {
-      const details = extractErrorDetails(err);
-      const blockingReasons = Array.isArray(details?.blockingReasons)
-        ? details.blockingReasons.filter((reason): reason is string => typeof reason === 'string')
-        : [];
-      if (blockingReasons.length > 0) {
-        toast({
-          title: 'Cannot conform lot',
-          description: blockingReasons.join('\n'),
-          variant: 'error',
-        });
-      } else {
-        toast({
-          title: 'Failed to conform lot',
-          description: extractErrorMessage(err, 'Please try again.'),
-          variant: 'error',
-        });
-      }
-    } finally {
-      setConforming(false);
-    }
-  };
-
-  // Handle status override
-  const handleOverrideStatus = async (newStatus: string, reason: string) => {
-    if (!newStatus || !reason.trim()) {
-      toast({
-        title: 'Missing fields',
-        description: 'Please select a status and provide a reason.',
-        variant: 'error',
-      });
-      return;
-    }
-
-    if (reason.trim().length < 5) {
-      toast({
-        title: 'Reason too short',
-        description: 'Please provide a more detailed reason (at least 5 characters).',
-        variant: 'error',
-      });
-      return;
-    }
-
-    setOverriding(true);
-
-    try {
-      const data = await apiFetch<{ lot: Lot; previousStatus: string }>(
-        `/api/lots/${encodeURIComponent(lotId || '')}/override-status`,
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            status: newStatus,
-            reason: reason.trim(),
-          }),
-        },
-      );
-
-      setLot((prev) => (prev ? { ...prev, status: data.lot.status } : null));
-      setShowOverrideModal(false);
-      toast({
-        title: 'Status overridden',
-        description: `Status changed from "${formatStatusLabel(data.previousStatus)}" to "${formatStatusLabel(data.lot.status)}".`,
-      });
-      // Refresh history if we're on that tab
-      if (currentTab === 'history') {
-        await refreshActivityHistory();
-      }
-    } catch (err) {
-      handleApiError(err, 'Failed to override status');
-    } finally {
-      setOverriding(false);
-    }
-  };
-
-  // Handle assigning subcontractor to lot
-  const handleAssignSubcontractor = async () => {
-    if (!lot) return;
-
-    setAssigningSubcontractor(true);
-
-    try {
-      const data = await apiFetch<{ message: string }>(
-        `/api/lots/${encodeURIComponent(lot.id)}/assign`,
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            subcontractorId: selectedSubcontractor || null,
-          }),
-        },
-      );
-
-      toast({
-        title: selectedSubcontractor ? 'Subcontractor assigned' : 'Subcontractor unassigned',
-        description: data.message,
-      });
-
-      // Refresh lot data
-      setShowSubcontractorModal(false);
-      setSelectedSubcontractor('');
-      // Refetch lot data
-      try {
-        const lotData = await apiFetch<{ lot: Lot }>(`/api/lots/${encodeURIComponent(lot.id)}`);
-        setLot(lotData.lot);
-      } catch {
-        /* ignore */
-      }
-    } catch (err) {
-      logError('Failed to assign subcontractor:', err);
-      toast({
-        title: 'Assignment failed',
-        description: extractErrorMessage(err, 'An error occurred'),
-        variant: 'error',
-      });
-    } finally {
-      setAssigningSubcontractor(false);
-    }
-  };
-
   return (
     <div className="space-y-6 p-6">
       <LotHeader
@@ -626,7 +371,7 @@ export function LotDetailPage() {
         isEditable={isEditable}
         linkCopied={linkCopied}
         assignments={assignments}
-        removeAssignmentPending={removeAssignmentMutation.isPending}
+        removeAssignmentPending={removeAssignmentPending}
         onCopyLink={copyLotLink}
         onPrint={() => window.print()}
         onEdit={() =>
@@ -644,7 +389,7 @@ export function LotDetailPage() {
           setEditingAssignment(assignment);
           setShowAssignSubcontractorModal(true);
         }}
-        onRemoveAssignment={(assignmentId: string) => removeAssignmentMutation.mutate(assignmentId)}
+        onRemoveAssignment={removeAssignment}
       />
 
       <LotReadinessPanel
@@ -747,9 +492,7 @@ export function LotDetailPage() {
         editingAssignment={editingAssignment}
         setShowAssignSubcontractorModal={setShowAssignSubcontractorModal}
         setEditingAssignment={setEditingAssignment}
-        onAssignmentSuccess={() => {
-          queryClient.invalidateQueries({ queryKey: ['lot-assignments', lotId] });
-        }}
+        onAssignmentSuccess={handleAssignmentSuccess}
         evidenceWarning={evidenceWarning}
         updatingCompletion={updatingCompletion}
         setEvidenceWarning={setEvidenceWarning}
