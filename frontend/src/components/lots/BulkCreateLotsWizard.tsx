@@ -2,69 +2,20 @@ import { useState } from 'react';
 import { apiFetch } from '@/lib/api';
 import { toast } from '@/components/ui/toaster';
 import { handleApiError } from '@/lib/errorHandling';
-import { parseOptionalNonNegativeDecimalInput } from '@/lib/numericInput';
+import {
+  ACTIVITY_TYPES,
+  LAYERS,
+  buildBulkLotPreview,
+  parseChainageInput,
+  validateBulkLotRange,
+  type LotPreview,
+  type WizardStep,
+} from './bulkCreateLots';
 
 interface BulkCreateLotsWizardProps {
   projectId: string;
   onClose: () => void;
   onSuccess: () => void;
-}
-
-interface LotPreview {
-  lotNumber: string;
-  description: string;
-  chainageStart: number;
-  chainageEnd: number;
-  activityType: string;
-  layer: string;
-}
-
-type WizardStep = 'chainage' | 'parameters' | 'preview' | 'confirm';
-
-const ACTIVITY_TYPES = ['Earthworks', 'Pavement', 'Drainage', 'Concrete', 'Structures'];
-const LAYERS = ['Subgrade', 'Subbase', 'Base', 'Surface', 'Wearing Course'];
-const MAX_BULK_LOTS = 500;
-const INTERVAL_TOO_SMALL_MESSAGE = 'Lot interval is too small to create distinct chainage ranges.';
-
-interface BulkLotRangeValidation {
-  lotCount: number | null;
-  error: string | null;
-}
-
-function parseChainageInput(value: string): number | null {
-  return parseOptionalNonNegativeDecimalInput(value);
-}
-
-function roundChainage(value: number): number {
-  return Number(value.toFixed(6));
-}
-
-function validateBulkLotRange(
-  start: number | null,
-  end: number | null,
-  interval: number | null,
-): BulkLotRangeValidation {
-  if (start === null || end === null || interval === null || interval <= 0 || end <= start) {
-    return { lotCount: null, error: null };
-  }
-
-  const lotCount = Math.ceil((end - start) / interval);
-  if (!Number.isFinite(lotCount) || lotCount <= 0) {
-    return { lotCount: null, error: 'Invalid chainage values' };
-  }
-
-  if (roundChainage(start + interval) <= roundChainage(start)) {
-    return { lotCount, error: INTERVAL_TOO_SMALL_MESSAGE };
-  }
-
-  if (lotCount > MAX_BULK_LOTS) {
-    return {
-      lotCount,
-      error: `Bulk create supports up to ${MAX_BULK_LOTS} lots. Increase the interval or narrow the chainage range.`,
-    };
-  }
-
-  return { lotCount, error: null };
 }
 
 export function BulkCreateLotsWizard({ projectId, onClose, onSuccess }: BulkCreateLotsWizardProps) {
@@ -101,41 +52,18 @@ export function BulkCreateLotsWizard({ projectId, onClose, onSuccess }: BulkCrea
       return;
     }
 
-    const rangeValidation = validateBulkLotRange(start, end, interval);
-    if (rangeValidation.error) {
-      toast({ variant: 'error', description: rangeValidation.error });
+    const { lots, error } = buildBulkLotPreview({
+      start,
+      end,
+      interval,
+      lotPrefix,
+      descriptionTemplate,
+      activityType,
+      layer,
+    });
+    if (error) {
+      toast({ variant: 'error', description: error });
       return;
-    }
-    if (rangeValidation.lotCount === null) {
-      toast({ variant: 'error', description: 'Invalid chainage values' });
-      return;
-    }
-
-    const lots: LotPreview[] = [];
-    for (let index = 0; index < rangeValidation.lotCount; index++) {
-      const lotNum = index + 1;
-      const ch = roundChainage(start + index * interval);
-      const lotEnd = roundChainage(Math.min(start + lotNum * interval, end));
-      if (lotEnd <= ch) {
-        toast({ variant: 'error', description: INTERVAL_TOO_SMALL_MESSAGE });
-        return;
-      }
-
-      const lotNumber = `${lotPrefix}-${String(lotNum).padStart(3, '0')}`;
-      const description = descriptionTemplate
-        .replace('{prefix}', lotPrefix)
-        .replace('{start}', String(ch))
-        .replace('{end}', String(lotEnd))
-        .replace('{num}', String(lotNum));
-
-      lots.push({
-        lotNumber,
-        description,
-        chainageStart: ch,
-        chainageEnd: lotEnd,
-        activityType,
-        layer,
-      });
     }
 
     setLotsPreview(lots);
