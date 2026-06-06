@@ -1755,6 +1755,7 @@ test.describe('production readiness guardrails', () => {
       '../../backend/src/routes/auth.ts',
       '../../backend/src/routes/auth/profileRoutes.ts',
       '../../backend/src/routes/company.ts',
+      '../../backend/src/routes/company/logoStorage.ts',
       '../../backend/src/routes/comments.ts',
       '../../backend/src/routes/comments/attachmentStorage.ts',
       '../../backend/src/routes/documents.ts',
