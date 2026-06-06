@@ -15,6 +15,10 @@ import {
   buildEmptyQualityManagerDashboardResponse,
   buildQualityManagerDashboardResponse,
 } from '../dashboardResponses.js';
+import {
+  buildEmptyProjectManagerDashboardResponse,
+  buildProjectManagerDashboardResponse,
+} from './roleDashboardResponses.js';
 
 // =============================================================================
 // Role-specific dashboard read routes, moved verbatim from dashboard.ts:
@@ -476,48 +480,8 @@ dashboardRoleDashboardsRouter.get(
     const primaryProject = activeProjects[0] || eligibleProjectAccess[0]?.project || null;
     const projectId = primaryProject?.id;
 
-    // Default empty response
-    const emptyResponse = {
-      lotProgress: {
-        total: 0,
-        notStarted: 0,
-        inProgress: 0,
-        onHold: 0,
-        completed: 0,
-        progressPercentage: 0,
-      },
-      openNCRs: { total: 0, major: 0, minor: 0, overdue: 0, items: [] },
-      holdPointPipeline: {
-        pending: 0,
-        scheduled: 0,
-        requested: 0,
-        released: 0,
-        thisWeek: 0,
-        items: [],
-      },
-      claimStatus: {
-        totalClaimed: 0,
-        totalCertified: 0,
-        totalPaid: 0,
-        outstanding: 0,
-        pendingClaims: 0,
-        recentClaims: [],
-      },
-      costTracking: {
-        budgetTotal: 0,
-        actualSpend: 0,
-        variance: 0,
-        variancePercentage: 0,
-        labourCost: 0,
-        plantCost: 0,
-        trend: 'on_track' as const,
-      },
-      attentionItems: [],
-      project: null,
-    };
-
-    if (!projectId) {
-      return res.json(emptyResponse);
+    if (!projectId || !primaryProject) {
+      return res.json(buildEmptyProjectManagerDashboardResponse());
     }
 
     // 1. Lot Progress
@@ -671,124 +635,28 @@ dashboardRoleDashboardsRouter.get(
       }),
     ]);
 
-    // Derive claims totals
-    let totalClaimed = 0;
-    let totalCertified = 0;
-    let totalPaid = 0;
-    let pendingClaims = 0;
-
-    claims.forEach((claim) => {
-      totalClaimed += Number(claim.totalClaimedAmount || 0);
-      totalCertified += Number(claim.certifiedAmount || 0);
-      totalPaid += Number(claim.paidAmount || 0);
-      if (claim.status === 'submitted' || claim.status === 'pending') {
-        pendingClaims++;
-      }
-    });
-
-    // Derive cost tracking
-    let labourCost = 0;
-    let plantCost = 0;
-    dockets.forEach((d) => {
-      labourCost += Number(d.totalLabourSubmitted || 0);
-      plantCost += Number(d.totalPlantSubmitted || 0);
-    });
-
-    const budgetTotal = Number(project?.contractValue || 0);
-    const actualSpend = labourCost + plantCost;
-    const variance = actualSpend - budgetTotal;
-    const variancePercentage = budgetTotal > 0 ? (variance / budgetTotal) * 100 : 0;
-    const trend = variancePercentage < -5 ? 'under' : variancePercentage > 5 ? 'over' : 'on_track';
-
-    // Build attention items
-    const attentionItems: Array<{
-      id: string;
-      type: 'ncr' | 'holdpoint' | 'claim' | 'diary';
-      title: string;
-      description: string;
-      urgency: 'critical' | 'warning' | 'info';
-      link: string;
-    }> = [];
-
-    overdueNCRList.forEach((ncr) => {
-      attentionItems.push({
-        id: `ncr-${ncr.id}`,
-        type: 'ncr',
-        title: `NCR ${ncr.ncrNumber} overdue`,
-        description: ncr.description,
-        urgency: 'critical',
-        link: `/projects/${projectId}/ncr?ncrId=${ncr.id}`,
-      });
-    });
-
-    majorNCRList.forEach((ncr) => {
-      attentionItems.push({
-        id: `ncr-major-${ncr.id}`,
-        type: 'ncr',
-        title: `Major NCR: ${ncr.ncrNumber}`,
-        description: ncr.description,
-        urgency: 'warning',
-        link: `/projects/${projectId}/ncr?ncrId=${ncr.id}`,
-      });
-    });
-
-    res.json({
-      lotProgress,
-      openNCRs: {
-        total: majorNCRs + minorNCRs,
-        major: majorNCRs,
-        minor: minorNCRs,
-        overdue: overdueNCRs,
-        items: recentNCRs.map((ncr) => ({
-          id: ncr.id,
-          ncrNumber: ncr.ncrNumber,
-          description: ncr.description,
-          category: ncr.category,
-          status: ncr.status,
-          daysOpen: Math.floor((Date.now() - ncr.createdAt.getTime()) / (1000 * 60 * 60 * 24)),
-          link: `/projects/${projectId}/ncr?ncrId=${ncr.id}`,
-        })),
-      },
-      holdPointPipeline: {
-        pending: hpPending,
-        scheduled: hpScheduled,
-        requested: hpRequested,
-        released: hpReleased,
-        thisWeek: hpThisWeek,
-        items: upcomingHPs.map((hp) => ({
-          id: hp.id,
-          description: hp.description || 'Hold Point',
-          lotNumber: hp.lot.lotNumber,
-          status: hp.status,
-          scheduledDate: hp.scheduledDate?.toISOString() || null,
-          link: `/projects/${hp.lot.projectId}/lots/${hp.lot.id}/holdpoints?hp=${hp.id}`,
-        })),
-      },
-      claimStatus: {
-        totalClaimed,
-        totalCertified,
-        totalPaid,
-        outstanding: totalCertified - totalPaid,
-        pendingClaims,
-        recentClaims: recentClaims.map((c) => ({
-          id: c.id,
-          claimNumber: c.claimNumber,
-          amount: Number(c.totalClaimedAmount || 0),
-          status: c.status,
-          link: `/projects/${projectId}/claims/${c.id}`,
-        })),
-      },
-      costTracking: {
-        budgetTotal,
-        actualSpend,
-        variance,
-        variancePercentage: Math.round(variancePercentage * 10) / 10,
-        labourCost,
-        plantCost,
-        trend,
-      },
-      attentionItems,
-      project: primaryProject,
-    });
+    res.json(
+      buildProjectManagerDashboardResponse({
+        projectId,
+        lotStats,
+        majorNCRs,
+        minorNCRs,
+        overdueNCRs,
+        recentNCRs,
+        hpPending,
+        hpScheduled,
+        hpRequested,
+        hpReleased,
+        hpThisWeek,
+        upcomingHPs,
+        claims,
+        recentClaims,
+        project,
+        dockets,
+        overdueNCRList,
+        majorNCRList,
+        primaryProject,
+      }),
+    );
   }),
 );
