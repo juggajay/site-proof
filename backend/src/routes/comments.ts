@@ -4,8 +4,7 @@ import { requireAuth, AuthRequest } from '../middleware/authMiddleware.js';
 import { createMentionNotifications } from './notifications.js';
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
-import { assertUploadedFileMatchesDeclaredType } from '../lib/imageValidation.js';
-import { logError, logWarn } from '../lib/serverLogger.js';
+import { logError } from '../lib/serverLogger.js';
 import { getPrismaSkipTake, parsePagination } from '../lib/pagination.js';
 import {
   buildCommentAttachmentsCreatedResponse,
@@ -24,10 +23,19 @@ import {
   cleanupStoredCommentAttachments,
   commentAttachmentUpload,
   getValidAttachments,
-  removeStoredCommentAttachment,
   sendCommentAttachmentFile,
   storeCommentAttachmentFiles,
 } from './comments/attachmentStorage.js';
+import {
+  assertCommentAttachmentLimit,
+  cleanupDeletedCommentAttachmentFile,
+  cleanupDeletedCommentAttachmentFiles,
+  requireCommentAttachmentArray,
+  requireCommentAuthor,
+  requireCommentUserId,
+  validateUploadedCommentFiles,
+} from './comments/routeGuards.js';
+import { commentAttachmentSelect, commentAuthorSelect } from './comments/selects.js';
 import { getSingleString, parseCommentRouteParam, requireContent } from './comments/validation.js';
 
 export const commentsRouter = Router();
@@ -41,11 +49,7 @@ commentsRouter.get(
   asyncHandler(async (req: AuthRequest, res) => {
     const entityType = getSingleString(req.query.entityType);
     const entityId = getSingleString(req.query.entityId);
-    const userId = req.user?.id;
-
-    if (!userId) {
-      throw AppError.unauthorized();
-    }
+    requireCommentUserId(req.user?.id);
 
     if (!entityType || !entityId) {
       throw AppError.badRequest('entityType and entityId are required');
@@ -66,44 +70,16 @@ commentsRouter.get(
       prisma.comment.findMany({
         where,
         include: {
-          author: {
-            select: {
-              id: true,
-              email: true,
-              fullName: true,
-              avatarUrl: true,
-            },
-          },
+          author: { select: commentAuthorSelect },
           attachments: {
-            select: {
-              id: true,
-              filename: true,
-              fileUrl: true,
-              fileSize: true,
-              mimeType: true,
-              createdAt: true,
-            },
+            select: commentAttachmentSelect,
           },
           replies: {
             where: { deletedAt: null },
             include: {
-              author: {
-                select: {
-                  id: true,
-                  email: true,
-                  fullName: true,
-                  avatarUrl: true,
-                },
-              },
+              author: { select: commentAuthorSelect },
               attachments: {
-                select: {
-                  id: true,
-                  filename: true,
-                  fileUrl: true,
-                  fileSize: true,
-                  mimeType: true,
-                  createdAt: true,
-                },
+                select: commentAttachmentSelect,
               },
             },
             orderBy: { createdAt: 'asc' },
@@ -128,9 +104,7 @@ commentsRouter.post(
     const entityType = getSingleString(req.body.entityType);
     const entityId = getSingleString(req.body.entityId);
 
-    if (!userId) {
-      throw AppError.unauthorized();
-    }
+    requireCommentUserId(userId);
 
     if (!entityType || !entityId) {
       throw AppError.badRequest('entityType and entityId are required');
@@ -143,9 +117,7 @@ commentsRouter.post(
       throw AppError.badRequest('At least one attachment file is required');
     }
 
-    for (const file of files) {
-      assertUploadedFileMatchesDeclaredType(file);
-    }
+    validateUploadedCommentFiles(files);
 
     const attachments = await storeCommentAttachmentFiles(files, projectId);
 
@@ -191,11 +163,7 @@ commentsRouter.post(
     const entityType = getSingleString(req.body.entityType);
     const entityId = getSingleString(req.body.entityId);
     const parentId = getSingleString(req.body.parentId);
-    const userId = req.user?.id;
-
-    if (!userId) {
-      throw AppError.unauthorized();
-    }
+    const userId = requireCommentUserId(req.user?.id);
 
     if (!entityType || !entityId) {
       throw AppError.badRequest('entityType, entityId, and content are required');
@@ -226,16 +194,10 @@ commentsRouter.post(
     }
 
     // Validate attachments if provided
-    if (Array.isArray(attachments) && attachments.length > COMMENT_ATTACHMENT_MAX_FILES) {
-      throw AppError.badRequest(
-        `attachments cannot include more than ${COMMENT_ATTACHMENT_MAX_FILES} files`,
-      );
-    }
+    assertCommentAttachmentLimit(attachments);
 
     const files = req.files as Express.Multer.File[] | undefined;
-    for (const file of files || []) {
-      assertUploadedFileMatchesDeclaredType(file);
-    }
+    validateUploadedCommentFiles(files);
 
     const uploadedAttachments =
       files && files.length > 0 ? await storeCommentAttachmentFiles(files, projectId) : [];
@@ -262,23 +224,9 @@ commentsRouter.post(
           },
         },
         include: {
-          author: {
-            select: {
-              id: true,
-              email: true,
-              fullName: true,
-              avatarUrl: true,
-            },
-          },
+          author: { select: commentAuthorSelect },
           attachments: {
-            select: {
-              id: true,
-              filename: true,
-              fileUrl: true,
-              fileSize: true,
-              mimeType: true,
-              createdAt: true,
-            },
+            select: commentAttachmentSelect,
           },
         },
       });
@@ -317,11 +265,7 @@ commentsRouter.put(
   '/:id',
   asyncHandler(async (req: AuthRequest, res) => {
     const id = parseCommentRouteParam(req.params.id, 'id');
-    const userId = req.user?.id;
-
-    if (!userId) {
-      throw AppError.unauthorized();
-    }
+    const userId = requireCommentUserId(req.user?.id);
 
     const content = requireContent(req.body.content);
 
@@ -337,9 +281,7 @@ commentsRouter.put(
     await requireCommentEntityAccess(req.user!, existing.entityType, existing.entityId);
 
     // Only author can edit
-    if (existing.authorId !== userId) {
-      throw AppError.forbidden('You can only edit your own comments');
-    }
+    requireCommentAuthor(existing.authorId, userId, 'You can only edit your own comments');
 
     const comment = await prisma.comment.update({
       where: { id },
@@ -349,14 +291,7 @@ commentsRouter.put(
         editedAt: new Date(),
       },
       include: {
-        author: {
-          select: {
-            id: true,
-            email: true,
-            fullName: true,
-            avatarUrl: true,
-          },
-        },
+        author: { select: commentAuthorSelect },
       },
     });
 
@@ -369,11 +304,7 @@ commentsRouter.delete(
   '/:id',
   asyncHandler(async (req: AuthRequest, res) => {
     const id = parseCommentRouteParam(req.params.id, 'id');
-    const userId = req.user?.id;
-
-    if (!userId) {
-      throw AppError.unauthorized();
-    }
+    const userId = requireCommentUserId(req.user?.id);
 
     // Find the comment
     const existing = await prisma.comment.findUnique({
@@ -391,9 +322,7 @@ commentsRouter.delete(
     );
 
     // Only author can delete
-    if (existing.authorId !== userId) {
-      throw AppError.forbidden('You can only delete your own comments');
-    }
+    requireCommentAuthor(existing.authorId, userId, 'You can only delete your own comments');
 
     const attachments = await prisma.commentAttachment.findMany({
       where: { commentId: id },
@@ -415,15 +344,7 @@ commentsRouter.delete(
     // Best-effort storage cleanup after the DB transaction commits. Each
     // attachment is removed independently; failures are logged so the
     // response still succeeds (DB is the source of truth).
-    await Promise.all(
-      attachments.map(async (attachment) => {
-        try {
-          await removeStoredCommentAttachment(attachment.fileUrl, projectId);
-        } catch (cleanupError) {
-          logWarn('Failed to remove comment attachment file after comment delete:', cleanupError);
-        }
-      }),
-    );
+    await cleanupDeletedCommentAttachmentFiles(attachments, projectId);
 
     res.json(buildCommentSuccessResponse());
   }),
@@ -435,11 +356,7 @@ commentsRouter.post(
   asyncHandler(async (req: AuthRequest, res) => {
     const id = parseCommentRouteParam(req.params.id, 'id');
     const { attachments } = req.body;
-    const userId = req.user?.id;
-
-    if (!userId) {
-      throw AppError.unauthorized();
-    }
+    const userId = requireCommentUserId(req.user?.id);
 
     // Find the comment
     const comment = await prisma.comment.findUnique({
@@ -457,22 +374,16 @@ commentsRouter.post(
     );
 
     // Only author can add attachments
-    if (comment.authorId !== userId) {
-      throw AppError.forbidden('You can only add attachments to your own comments');
-    }
+    requireCommentAuthor(
+      comment.authorId,
+      userId,
+      'You can only add attachments to your own comments',
+    );
 
-    // Validate attachments
-    if (!attachments || !Array.isArray(attachments) || attachments.length === 0) {
-      throw AppError.badRequest('attachments array is required');
-    }
-
-    if (attachments.length > COMMENT_ATTACHMENT_MAX_FILES) {
-      throw AppError.badRequest(
-        `attachments cannot include more than ${COMMENT_ATTACHMENT_MAX_FILES} files`,
-      );
-    }
-
-    const validAttachments = getValidAttachments(attachments, projectId);
+    const validAttachments = getValidAttachments(
+      requireCommentAttachmentArray(attachments),
+      projectId,
+    );
 
     if (validAttachments.length === 0) {
       throw AppError.badRequest('No valid attachments provided');
@@ -491,14 +402,7 @@ commentsRouter.post(
       where: { id },
       include: {
         attachments: {
-          select: {
-            id: true,
-            filename: true,
-            fileUrl: true,
-            fileSize: true,
-            mimeType: true,
-            createdAt: true,
-          },
+          select: commentAttachmentSelect,
         },
       },
     });
@@ -517,11 +421,7 @@ commentsRouter.delete(
   asyncHandler(async (req: AuthRequest, res) => {
     const commentId = parseCommentRouteParam(req.params.commentId, 'commentId');
     const attachmentId = parseCommentRouteParam(req.params.attachmentId, 'attachmentId');
-    const userId = req.user?.id;
-
-    if (!userId) {
-      throw AppError.unauthorized();
-    }
+    const userId = requireCommentUserId(req.user?.id);
 
     // Find the comment
     const comment = await prisma.comment.findUnique({
@@ -539,9 +439,11 @@ commentsRouter.delete(
     );
 
     // Only author can delete attachments
-    if (comment.authorId !== userId) {
-      throw AppError.forbidden('You can only delete attachments from your own comments');
-    }
+    requireCommentAuthor(
+      comment.authorId,
+      userId,
+      'You can only delete attachments from your own comments',
+    );
 
     // Find and delete the attachment
     const attachment = await prisma.commentAttachment.findFirst({
@@ -559,11 +461,7 @@ commentsRouter.delete(
       where: { id: attachmentId },
     });
 
-    try {
-      await removeStoredCommentAttachment(attachment.fileUrl, projectId);
-    } catch (cleanupError) {
-      logWarn('Failed to remove comment attachment file after attachment delete:', cleanupError);
-    }
+    await cleanupDeletedCommentAttachmentFile(attachment.fileUrl, projectId);
 
     res.json(buildCommentSuccessResponse());
   }),
