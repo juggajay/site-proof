@@ -4,13 +4,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { NativeSelect } from '@/components/ui/native-select';
-import {
-  Modal,
-  ModalHeader,
-  ModalDescription,
-  ModalBody,
-  ModalFooter,
-} from '@/components/ui/Modal';
 import type {
   HpRecipient,
   ProjectNotificationPreferences,
@@ -19,6 +12,13 @@ import type {
 } from '../types';
 import { logError } from '@/lib/logger';
 import { extractErrorMessage } from '@/lib/errorHandling';
+import { AddHpRecipientModal } from './AddHpRecipientModal';
+import {
+  EMAIL_PATTERN,
+  isDuplicateHpRecipient,
+  isValidEmail,
+  normalizeHpRecipient,
+} from './notificationSettingsHelpers';
 
 interface NotificationsTabProps {
   projectId: string;
@@ -60,7 +60,6 @@ const WITNESS_TRIGGER_OPTIONS: Array<{ value: WitnessPointNotificationTrigger; l
 ];
 
 const NOTICE_DAY_OPTIONS = [0, 1, 2, 3, 5] as const;
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function NotificationsTab({
   projectId,
@@ -238,15 +237,17 @@ export function NotificationsTab({
   const handleAddRecipient = async () => {
     if (savingRecipientsRef.current) return;
 
-    const role = newRecipientRole.trim();
-    const email = newRecipientEmail.trim().toLowerCase();
+    const { role, email } = normalizeHpRecipient({
+      role: newRecipientRole,
+      email: newRecipientEmail,
+    });
 
     if (!role || !email) {
       setRecipientError('Role and email are required.');
       return;
     }
 
-    if (!EMAIL_PATTERN.test(email)) {
+    if (!isValidEmail(email)) {
       setRecipientError('Enter a valid recipient email.');
       return;
     }
@@ -256,11 +257,7 @@ export function NotificationsTab({
       return;
     }
 
-    if (
-      hpRecipients.some(
-        (recipient) => recipient.role === role && recipient.email.toLowerCase() === email,
-      )
-    ) {
+    if (isDuplicateHpRecipient(hpRecipients, { role, email })) {
       setRecipientError('Recipient already exists.');
       return;
     }
@@ -598,68 +595,16 @@ export function NotificationsTab({
       </div>
 
       {showAddRecipientModal && (
-        <Modal onClose={closeRecipientModal}>
-          <ModalHeader>Add HP Recipient</ModalHeader>
-          <ModalDescription>
-            Add a default recipient for hold point release notifications.
-          </ModalDescription>
-          <ModalBody>
-            {recipientError && (
-              <div
-                role="alert"
-                className="rounded-lg bg-destructive/10 p-3 text-sm text-destructive mb-4"
-              >
-                {recipientError}
-              </div>
-            )}
-
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="hp-recipient-role" className="mb-1">
-                  Role/Title
-                </Label>
-                <Input
-                  id="hp-recipient-role"
-                  type="text"
-                  value={newRecipientRole}
-                  onChange={(e) => setNewRecipientRole(e.target.value)}
-                  placeholder="e.g., Superintendent, Quality Manager"
-                  disabled={savingRecipients}
-                />
-              </div>
-              <div>
-                <Label htmlFor="hp-recipient-email" className="mb-1">
-                  Email Address
-                </Label>
-                <Input
-                  id="hp-recipient-email"
-                  type="email"
-                  value={newRecipientEmail}
-                  onChange={(e) => setNewRecipientEmail(e.target.value)}
-                  placeholder="email@example.com"
-                  disabled={savingRecipients}
-                />
-              </div>
-            </div>
-          </ModalBody>
-          <ModalFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => closeRecipientModal()}
-              disabled={savingRecipients}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              onClick={() => void handleAddRecipient()}
-              disabled={savingRecipients || !newRecipientRole.trim() || !newRecipientEmail.trim()}
-            >
-              {savingRecipients ? 'Adding...' : 'Add Recipient'}
-            </Button>
-          </ModalFooter>
-        </Modal>
+        <AddHpRecipientModal
+          newRecipientRole={newRecipientRole}
+          setNewRecipientRole={setNewRecipientRole}
+          newRecipientEmail={newRecipientEmail}
+          setNewRecipientEmail={setNewRecipientEmail}
+          recipientError={recipientError}
+          savingRecipients={savingRecipients}
+          closeRecipientModal={closeRecipientModal}
+          handleAddRecipient={handleAddRecipient}
+        />
       )}
     </>
   );
