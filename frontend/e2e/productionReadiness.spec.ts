@@ -1946,6 +1946,10 @@ test.describe('production readiness guardrails', () => {
       new URL('../../backend/src/routes/testResults/certificateExtraction.ts', import.meta.url),
       'utf8',
     );
+    const webhookDeliverySource = await readFile(
+      new URL('../../backend/src/routes/webhooks/delivery.ts', import.meta.url),
+      'utf8',
+    );
 
     expect(frontendFetchSource).toContain('DEFAULT_FETCH_TIMEOUT_MS = 30000');
     expect(frontendFetchSource).toContain('new AbortController()');
@@ -1970,6 +1974,9 @@ test.describe('production readiness guardrails', () => {
     expect(testCertificateExtractionSource).toContain(
       "fetchWithTimeout('https://api.anthropic.com/v1/messages'",
     );
+    expect(webhookDeliverySource).toContain('const timeout = setTimeout(');
+    expect(webhookDeliverySource).toContain('new AbortController()');
+    expect(webhookDeliverySource).toContain('clearTimeout(timeout)');
 
     const frontendSourceFiles = await collectSourceFiles(new URL('../src/', import.meta.url));
     const backendSourceFiles = await collectSourceFiles(
@@ -1980,6 +1987,7 @@ test.describe('production readiness guardrails', () => {
       '/frontend/src/lib/useOfflineStatus.ts',
       '/backend/src/lib/fetchWithTimeout.ts',
       '/backend/src/routes/webhooks.ts',
+      '/backend/src/routes/webhooks/delivery.ts',
     ];
     const rawFetchOffenders: string[] = [];
 
