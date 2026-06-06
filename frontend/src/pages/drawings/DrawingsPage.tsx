@@ -8,20 +8,22 @@ import { getDocumentAccessUrl, openDocumentAccessUrl } from '@/lib/documentAcces
 import { queryKeys } from '@/lib/queryKeys';
 import { createMutationErrorHandler, extractErrorMessage } from '@/lib/errorHandling';
 import { toast } from '@/components/ui/toaster';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { NativeSelect } from '@/components/ui/native-select';
-import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { logError } from '@/lib/logger';
 import { sanitizeDownloadFilename } from '@/lib/downloads';
+import {
+  DrawingDeleteConfirmDialog,
+  DrawingFilters,
+  DrawingLoadErrorAlert,
+  DrawingPagination,
+  DrawingRegisterHeader,
+  DrawingStatsCards,
+} from './components/DrawingPageSections';
 import { DrawingUploadModal } from './components/DrawingUploadModal';
 import { DrawingRevisionModal } from './components/DrawingRevisionModal';
 import { DrawingRegisterTable } from './components/DrawingRegisterTable';
 import {
   DEFAULT_REVISION_FORM,
   DEFAULT_UPLOAD_FORM,
-  DRAWING_STATUSES,
   buildDrawingRevisionFormData,
   buildDrawingSupersedePath,
   buildDrawingUploadFormData,
@@ -402,122 +404,28 @@ export function DrawingsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Drawing Register</h1>
-          <p className="text-muted-foreground">Manage project drawings and revisions</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            onClick={downloadCurrentSet}
-            disabled={downloadingCurrentSet || loading || Boolean(drawingsError) || !projectId}
-            title="Download all current (non-superseded) drawings"
-          >
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-              />
-            </svg>
-            {downloadingCurrentSet ? 'Downloading...' : 'Download Current Set'}
-          </Button>
-          {canManageDrawings && (
-            <Button
-              onClick={() => setShowUploadModal(true)}
-              disabled={loading || Boolean(drawingsError)}
-            >
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 4v16m8-8H4"
-                />
-              </svg>
-              Add Drawing
-            </Button>
-          )}
-        </div>
-      </div>
+      <DrawingRegisterHeader
+        canManageDrawings={canManageDrawings}
+        downloadingCurrentSet={downloadingCurrentSet}
+        loading={loading}
+        hasDrawingError={Boolean(drawingsError)}
+        hasProjectId={Boolean(projectId)}
+        onDownloadCurrentSet={downloadCurrentSet}
+        onAddDrawing={() => setShowUploadModal(true)}
+      />
 
-      {/* Stats */}
-      {stats && (
-        <div className="grid grid-cols-4 gap-4">
-          <div className="rounded-lg border bg-card p-4">
-            <div className="text-2xl font-bold">{stats.total}</div>
-            <div className="text-sm text-muted-foreground">Total Drawings</div>
-          </div>
-          <div className="rounded-lg border bg-card p-4">
-            <div className="text-2xl font-bold text-yellow-600">{stats.preliminary}</div>
-            <div className="text-sm text-muted-foreground">Preliminary</div>
-          </div>
-          <div className="rounded-lg border bg-card p-4">
-            <div className="text-2xl font-bold text-primary">{stats.forConstruction}</div>
-            <div className="text-sm text-muted-foreground">For Construction</div>
-          </div>
-          <div className="rounded-lg border bg-card p-4">
-            <div className="text-2xl font-bold text-green-600">{stats.asBuilt}</div>
-            <div className="text-sm text-muted-foreground">As-Built</div>
-          </div>
-        </div>
-      )}
+      {stats && <DrawingStatsCards stats={stats} />}
 
-      {/* Filters */}
-      <div className="rounded-lg border bg-card p-4">
-        <div className="flex flex-wrap items-end gap-4">
-          <div>
-            <Label htmlFor="drawing-status-filter" className="mb-1">
-              Status
-            </Label>
-            <NativeSelect
-              id="drawing-status-filter"
-              value={filterStatus}
-              onChange={(e) => handleStatusFilterChange(e.target.value)}
-            >
-              <option value="">All Statuses</option>
-              {DRAWING_STATUSES.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.label}
-                </option>
-              ))}
-            </NativeSelect>
-          </div>
-          <div className="flex-1">
-            <Label htmlFor="drawing-search" className="mb-1">
-              Search
-            </Label>
-            <Input
-              id="drawing-search"
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && triggerSearch()}
-              placeholder="Search by drawing number or title..."
-            />
-          </div>
-          <Button type="button" variant="secondary" onClick={triggerSearch}>
-            Search
-          </Button>
-        </div>
-      </div>
+      <DrawingFilters
+        filterStatus={filterStatus}
+        searchQuery={searchQuery}
+        onStatusFilterChange={handleStatusFilterChange}
+        onSearchQueryChange={setSearchQuery}
+        onSearch={triggerSearch}
+      />
 
-      {error && (
-        <div
-          role="alert"
-          className="flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-red-700"
-        >
-          <span>{error}</span>
-          <Button type="button" variant="outline" size="sm" onClick={() => void refetchDrawings()}>
-            Retry
-          </Button>
-        </div>
-      )}
+      {error && <DrawingLoadErrorAlert error={error} onRetry={() => void refetchDrawings()} />}
 
-      {/* Drawings Table */}
       <div className="rounded-lg border bg-card">
         <DrawingRegisterTable
           loading={loading}
@@ -532,34 +440,17 @@ export function DrawingsPage() {
           setDrawingPendingDelete={setDrawingPendingDelete}
         />
         {!loading && !error && drawings.length > 0 && pagination && pagination.totalPages > 1 && (
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-3 text-sm">
-            <span className="text-muted-foreground">
-              Showing {showingFrom}-{showingTo} of {pagination.total}
-            </span>
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={!pagination.hasPrevPage}
-                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-              >
-                Previous
-              </Button>
-              <span className="text-muted-foreground">
-                Page {pagination.page} of {pagination.totalPages}
-              </span>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={!pagination.hasNextPage}
-                onClick={() => setCurrentPage((page) => page + 1)}
-              >
-                Next
-              </Button>
-            </div>
-          </div>
+          <DrawingPagination
+            page={pagination.page}
+            totalPages={pagination.totalPages}
+            total={pagination.total}
+            hasPrevPage={pagination.hasPrevPage}
+            hasNextPage={pagination.hasNextPage}
+            showingFrom={showingFrom}
+            showingTo={showingTo}
+            onPreviousPage={() => setCurrentPage((page) => Math.max(1, page - 1))}
+            onNextPage={() => setCurrentPage((page) => page + 1)}
+          />
         )}
       </div>
 
@@ -592,26 +483,12 @@ export function DrawingsPage() {
         />
       )}
 
-      <ConfirmDialog
-        open={Boolean(drawingPendingDelete)}
-        title="Delete Drawing"
-        description={
-          <>
-            <p>
-              Delete drawing {drawingPendingDelete?.drawingNumber}
-              {drawingPendingDelete?.revision ? ` Rev ${drawingPendingDelete.revision}` : ''}?
-            </p>
-            <p>This removes the drawing from the register.</p>
-          </>
-        }
-        confirmLabel="Delete"
-        variant="destructive"
+      <DrawingDeleteConfirmDialog
+        drawing={drawingPendingDelete}
         onCancel={() => setDrawingPendingDelete(null)}
-        onConfirm={() => {
-          if (drawingPendingDelete) {
-            handleDelete(drawingPendingDelete.id);
-            setDrawingPendingDelete(null);
-          }
+        onConfirm={(drawingId) => {
+          handleDelete(drawingId);
+          setDrawingPendingDelete(null);
         }}
       />
     </div>
