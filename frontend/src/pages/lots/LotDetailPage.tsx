@@ -15,29 +15,18 @@ import { useIsMobile } from '@/hooks/useMediaQuery';
 import type {
   Lot,
   SubcontractorCompany,
-  TestResult,
-  NCR,
   ConformStatus,
-  ActivityLog,
   LocationState,
   LotSubcontractorAssignment,
 } from './types';
 import { getLotTabsForRole } from './constants';
-import {
-  buildConformanceStatusPath,
-  buildLotHistoryPath,
-  buildLotNcrsPath,
-  buildLotTestResultsPath,
-  normalizeActivityLogs,
-  normalizeNcrs,
-  normalizeTestResults,
-  useLotQualityAccessQuery,
-} from './lotDetailData';
+import { buildConformanceStatusPath, useLotQualityAccessQuery } from './lotDetailData';
 import { useItpInstance } from './hooks/useItpInstance';
 import { useConformanceReportGeneration } from './hooks/useConformanceReportGeneration';
 import { useLotPhotoUpload } from './hooks/useLotPhotoUpload';
 import { useLotReadinessNavigation } from './hooks/useLotReadinessNavigation';
 import { useLotLinkCopy } from './hooks/useLotLinkCopy';
+import { useLotTabData } from './hooks/useLotTabData';
 import { QualityManagementSection } from './components/QualityManagementSection';
 import { LotHeader } from './components/LotHeader';
 import { LotTabNavigation } from './components/LotTabNavigation';
@@ -81,19 +70,10 @@ export function LotDetailPage() {
   const [showConformConfirm, setShowConformConfirm] = useState(false);
   const [showForceConformConfirm, setShowForceConformConfirm] = useState(false);
   const [forceConformReason, setForceConformReason] = useState('');
-  const [testResults, setTestResults] = useState<TestResult[]>([]);
-  const [loadingTests, setLoadingTests] = useState(false);
-  const [ncrs, setNcrs] = useState<NCR[]>([]);
-  const [loadingNcrs, setLoadingNcrs] = useState(false);
-  // Tab counts for badges
-  const [testsCount, setTestsCount] = useState<number | null>(null);
-  const [ncrsCount, setNcrsCount] = useState<number | null>(null);
   // Offline state
   const { isOnline, pendingSyncCount: _pendingSyncCount } = useOfflineStatus();
   const [conformStatus, setConformStatus] = useState<ConformStatus | null>(null);
   const [loadingConformStatus, setLoadingConformStatus] = useState(false);
-  const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
-  const [loadingHistory, setLoadingHistory] = useState(false);
   const [showOverrideModal, setShowOverrideModal] = useState(false);
   const [overriding, setOverriding] = useState(false);
   const [showSubcontractorModal, setShowSubcontractorModal] = useState(false);
@@ -151,6 +131,19 @@ export function LotDetailPage() {
     handleReadinessTabChange,
     handleAssignItpActionHandled,
   } = useLotReadinessNavigation({ searchParams, setSearchParams, tabSectionRef });
+
+  const {
+    testResults,
+    loadingTests,
+    ncrs,
+    loadingNcrs,
+    testsCount,
+    ncrsCount,
+    activityLogs,
+    loadingHistory,
+    refreshNcrsAfterFailure,
+    refreshActivityHistory,
+  } = useLotTabData({ projectId, lotId, currentTab });
 
   const {
     data: readinessData,
@@ -227,79 +220,6 @@ export function LotDetailPage() {
     void fetchConformStatus();
   }, [fetchConformStatus]);
 
-  // Fetch tab counts on initial load for badges
-  useEffect(() => {
-    async function fetchTabCounts() {
-      if (!projectId || !lotId) return;
-
-      // Fetch test results count
-      try {
-        const testsData = await apiFetch<{ testResults: TestResult[] }>(
-          buildLotTestResultsPath(projectId, lotId),
-        );
-        setTestsCount(normalizeTestResults(testsData).length);
-      } catch (err) {
-        logError('Failed to fetch tests count:', err);
-      }
-
-      // Fetch NCRs count
-      try {
-        const ncrsData = await apiFetch<{ ncrs: NCR[] }>(buildLotNcrsPath(projectId, lotId));
-        setNcrsCount(normalizeNcrs(ncrsData).length);
-      } catch (err) {
-        logError('Failed to fetch NCRs count:', err);
-      }
-    }
-
-    fetchTabCounts();
-  }, [projectId, lotId]);
-
-  // Fetch test results when Tests tab is selected
-  useEffect(() => {
-    async function fetchTestResults() {
-      if (!projectId || !lotId || currentTab !== 'tests') return;
-
-      setLoadingTests(true);
-
-      try {
-        const data = await apiFetch<{ testResults: TestResult[] }>(
-          buildLotTestResultsPath(projectId, lotId),
-        );
-        const results = normalizeTestResults(data);
-        setTestResults(results);
-        setTestsCount(results.length);
-      } catch (err) {
-        logError('Failed to fetch test results:', err);
-      } finally {
-        setLoadingTests(false);
-      }
-    }
-
-    fetchTestResults();
-  }, [projectId, lotId, currentTab]);
-
-  // Fetch NCRs when NCRs tab is selected
-  useEffect(() => {
-    async function fetchNcrs() {
-      if (!projectId || !lotId || currentTab !== 'ncrs') return;
-
-      setLoadingNcrs(true);
-
-      try {
-        const data = await apiFetch<{ ncrs: NCR[] }>(buildLotNcrsPath(projectId, lotId));
-        const ncrList = normalizeNcrs(data);
-        setNcrs(ncrList);
-        setNcrsCount(ncrList.length);
-      } catch (err) {
-        logError('Failed to fetch NCRs:', err);
-      } finally {
-        setLoadingNcrs(false);
-      }
-    }
-
-    fetchNcrs();
-  }, [projectId, lotId, currentTab]);
-
   // Lightweight page-owned refreshers run after an ITP item is marked failed.
   // Each swallows its own errors (matching the original inline refreshes) so the
   // failed-item toast still fires even if a refresh fails.
@@ -311,18 +231,6 @@ export function LotDetailPage() {
       /* ignore */
     }
   }, [lotId]);
-
-  const refreshNcrsAfterFailure = useCallback(async () => {
-    try {
-      const ncrsData = await apiFetch<{ ncrs: NCR[] }>(
-        `/api/ncrs?projectId=${encodeURIComponent(projectId || '')}&lotId=${encodeURIComponent(lotId || '')}`,
-      );
-      setNcrs(ncrsData.ncrs || []);
-      setNcrsCount(ncrsData.ncrs?.length || 0);
-    } catch {
-      /* ignore */
-    }
-  }, [projectId, lotId]);
 
   const {
     itpInstance,
@@ -391,26 +299,6 @@ export function LotDetailPage() {
     showReportDialog,
     generateReport,
   } = useConformanceReportGeneration({ lot, projectId, lotId, itpInstance });
-
-  // Fetch activity history when History tab is selected
-  useEffect(() => {
-    async function fetchActivityHistory() {
-      if (!lotId || currentTab !== 'history') return;
-
-      setLoadingHistory(true);
-
-      try {
-        const data = await apiFetch<{ logs: ActivityLog[] }>(buildLotHistoryPath(lotId));
-        setActivityLogs(normalizeActivityLogs(data));
-      } catch (err) {
-        logError('Failed to fetch activity history:', err);
-      } finally {
-        setLoadingHistory(false);
-      }
-    }
-
-    fetchActivityHistory();
-  }, [lotId, currentTab]);
 
   // Fetch subcontractors when assign modal opens
   useEffect(() => {
@@ -674,16 +562,7 @@ export function LotDetailPage() {
       });
       // Refresh history if we're on that tab
       if (currentTab === 'history') {
-        setLoadingHistory(true);
-        try {
-          const historyData = await apiFetch<{ logs: ActivityLog[] }>(
-            `/api/audit-logs?entityType=Lot&search=${encodeURIComponent(lotId || '')}&limit=100`,
-          );
-          setActivityLogs(historyData.logs || []);
-        } catch {
-          /* ignore */
-        }
-        setLoadingHistory(false);
+        await refreshActivityHistory();
       }
     } catch (err) {
       handleApiError(err, 'Failed to override status');
