@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { MessageSquare, Send, Paperclip } from 'lucide-react';
+import { MessageSquare } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { apiFetch, authFetch } from '@/lib/api';
 import { SUPABASE_URL } from '@/lib/config';
@@ -21,7 +21,7 @@ import {
   revokeAttachmentPreviews,
   type PendingAttachment,
 } from './commentAttachmentDrafts';
-import { CommentAttachmentDraftList } from './CommentAttachmentDraftList';
+import { NewCommentForm } from './NewCommentForm';
 import {
   buildCommentFormData,
   formatCommentDate,
@@ -384,54 +384,16 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
         </div>
       )}
 
-      {/* New Comment Form */}
-      <form onSubmit={handleSubmitComment} className="space-y-2">
-        <div className="relative">
-          <textarea
-            value={newComment}
-            onChange={(e) => setNewComment(e.target.value)}
-            placeholder="Add a comment... (supports **bold**, *italic*, `code`, [links](url))"
-            className="w-full px-3 py-2 border rounded-lg bg-background resize-none"
-            rows={3}
-          />
-          <p className="text-xs text-muted-foreground mt-1">
-            Supports: **bold**, *italic*, `code`, ~~strikethrough~~, [link](url), @mentions
-          </p>
-        </div>
-        <CommentAttachmentDraftList
-          attachments={pendingAttachments}
-          onRemove={(i) => removePendingAttachment(i, false)}
-        />
-        <div className="flex justify-between items-center">
-          <div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              onChange={handleFileSelect}
-              className="hidden"
-              accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
-            />
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg"
-              title="Attach file"
-            >
-              <Paperclip className="h-4 w-4" />
-              Attach
-            </button>
-          </div>
-          <button
-            type="submit"
-            disabled={!newComment.trim() || submitting}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50"
-          >
-            <Send className="h-4 w-4" />
-            {submitting ? 'Posting...' : 'Post Comment'}
-          </button>
-        </div>
-      </form>
+      <NewCommentForm
+        comment={newComment}
+        submitting={submitting}
+        attachments={pendingAttachments}
+        fileInputRef={fileInputRef}
+        onCommentChange={setNewComment}
+        onSubmit={handleSubmitComment}
+        onFileSelect={handleFileSelect}
+        onRemoveAttachment={(i) => removePendingAttachment(i, false)}
+      />
 
       {/* Comments List */}
       {loading ? (
