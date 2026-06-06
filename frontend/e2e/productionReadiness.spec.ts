@@ -198,6 +198,10 @@ test.describe('production readiness guardrails', () => {
       new URL('../src/pages/company/CompanySettingsPage.tsx', import.meta.url),
       'utf8',
     );
+    const companySettingsSections = await readFile(
+      new URL('../src/pages/company/components/CompanySettingsSections.tsx', import.meta.url),
+      'utf8',
+    );
     const claimsPage = await readFile(
       new URL('../src/pages/claims/ClaimsPage.tsx', import.meta.url),
       'utf8',
@@ -252,7 +256,7 @@ test.describe('production readiness guardrails', () => {
     expect(companySettings).not.toContain('sales@siteproof.com');
     expect(companySettings).not.toContain('billing@siteproof.com');
     expect(companySettings).toContain('/api/support/contact');
-    expect(companySettings).toContain('supportMailtoHref');
+    expect(companySettingsSections).toContain('supportMailtoHref');
     expect(claimsPage).not.toContain('alert(');
     expect(createClaimModal).not.toContain('alert(');
     expect(disputeModal).not.toContain('alert(');
