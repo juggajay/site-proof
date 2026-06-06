@@ -1,15 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import {
-  ChevronDown,
-  ChevronRight,
-  Calendar,
-  FileText,
-  TestTube,
-  AlertTriangle,
-} from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { COLUMN_CONFIG, type ColumnId } from './lotFilterConfig';
+import {
+  LotExpandedDetailsRow,
+  LotTableEmptyState,
+  LotTableLoadMoreIndicator,
+} from './LotTableSections';
 import {
   COLUMN_WIDTH_STORAGE_KEY,
   DEFAULT_COLUMN_WIDTHS,
@@ -290,35 +288,13 @@ export const LotTable = React.memo(function LotTable({
         </thead>
         <tbody>
           {displayedLots.length === 0 ? (
-            <tr>
-              <td colSpan={colSpanCount} className="p-12 text-center">
-                {allLots.length === 0 ? (
-                  <div className="flex flex-col items-center gap-4">
-                    <div className="text-5xl">📋</div>
-                    <div>
-                      <h3 className="text-lg font-semibold text-foreground">
-                        {isSubcontractor ? 'No lots assigned yet' : 'No lots yet'}
-                      </h3>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {isSubcontractor
-                          ? 'No lots have been assigned to your company for this project.'
-                          : 'Get started by creating your first lot for this project.'}
-                      </p>
-                    </div>
-                    {!isSubcontractor && canCreate && (
-                      <button
-                        onClick={onOpenCreateModal}
-                        className="mt-2 rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
-                      >
-                        Create your first lot
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  <span className="text-muted-foreground">No lots match the current filters.</span>
-                )}
-              </td>
-            </tr>
+            <LotTableEmptyState
+              allLotsCount={allLots.length}
+              colSpanCount={colSpanCount}
+              canCreate={canCreate}
+              isSubcontractor={isSubcontractor}
+              onOpenCreateModal={onOpenCreateModal}
+            />
           ) : (
             <>
               {/* Spacer row to push content to correct virtual position */}
@@ -490,73 +466,7 @@ export const LotTable = React.memo(function LotTable({
                     </tr>
                     {/* Expanded detail row */}
                     {expandedRows.has(lot.id) && (
-                      <tr
-                        className="bg-muted/30 border-b animate-in fade-in slide-in-from-top-2 duration-200"
-                        data-testid={`expanded-row-${lot.id}`}
-                      >
-                        <td colSpan={colSpanCount} className="p-4">
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                            {/* Dates Section */}
-                            <div className="space-y-2">
-                              <h4 className="font-semibold flex items-center gap-2">
-                                <Calendar className="h-4 w-4" />
-                                Dates
-                              </h4>
-                              <div className="space-y-1 text-muted-foreground">
-                                <p>
-                                  Created:{' '}
-                                  {lot.createdAt
-                                    ? new Date(lot.createdAt).toLocaleDateString('en-AU')
-                                    : '\u2014'}
-                                </p>
-                                <p>
-                                  Updated:{' '}
-                                  {lot.updatedAt
-                                    ? new Date(lot.updatedAt).toLocaleDateString('en-AU')
-                                    : '\u2014'}
-                                </p>
-                              </div>
-                            </div>
-
-                            {/* Linked Items Section */}
-                            <div className="space-y-2">
-                              <h4 className="font-semibold flex items-center gap-2">
-                                <FileText className="h-4 w-4" />
-                                Linked Items
-                              </h4>
-                              <div className="space-y-1 text-muted-foreground">
-                                <p>ITPs: {lot.itpCount ?? 0}</p>
-                                <p>Test Results: {lot.testCount ?? 0}</p>
-                                <p>Documents: {lot.documentCount ?? 0}</p>
-                              </div>
-                            </div>
-
-                            {/* Status & Quality Section */}
-                            <div className="space-y-2">
-                              <h4 className="font-semibold flex items-center gap-2">
-                                <TestTube className="h-4 w-4" />
-                                Quality
-                              </h4>
-                              <div className="space-y-1 text-muted-foreground">
-                                <p className="flex items-center gap-1">
-                                  {(lot.ncrCount ?? 0) > 0 && (
-                                    <AlertTriangle className="h-3 w-3 text-amber-500" />
-                                  )}
-                                  NCRs: {lot.ncrCount ?? 0}
-                                </p>
-                                <p>Hold Points: {lot.holdPointCount ?? 0}</p>
-                                {lot.areaZone && <p>Area/Zone: {lot.areaZone}</p>}
-                              </div>
-                            </div>
-                          </div>
-                          {lot.notes && (
-                            <div className="mt-3 pt-3 border-t">
-                              <h4 className="font-semibold text-sm mb-1">Notes</h4>
-                              <p className="text-sm text-muted-foreground">{lot.notes}</p>
-                            </div>
-                          )}
-                        </td>
-                      </tr>
+                      <LotExpandedDetailsRow lot={lot} colSpanCount={colSpanCount} />
                     )}
                   </React.Fragment>
                 );
@@ -580,38 +490,13 @@ export const LotTable = React.memo(function LotTable({
       </table>
 
       {/* Infinite Scroll - Load More Indicator */}
-      <div ref={loadMoreRef as React.RefObject<HTMLDivElement>} className="border-t p-4">
-        {loadingMore && (
-          <div className="flex items-center justify-center gap-2 text-muted-foreground">
-            <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24" fill="none">
-              <circle
-                className="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                strokeWidth="4"
-              />
-              <path
-                className="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-              />
-            </svg>
-            <span className="text-sm">Loading more lots...</span>
-          </div>
-        )}
-        {!loadingMore && hasMore && (
-          <div className="text-center text-sm text-muted-foreground">
-            Showing {displayedLots.length} of {filteredLots.length} lots - Scroll down to load more
-          </div>
-        )}
-        {!hasMore && filteredLots.length > 0 && (
-          <div className="text-center text-sm text-muted-foreground">
-            Showing all {filteredLots.length} lots
-          </div>
-        )}
-      </div>
+      <LotTableLoadMoreIndicator
+        displayedCount={displayedLots.length}
+        filteredCount={filteredLots.length}
+        hasMore={hasMore}
+        loadingMore={loadingMore}
+        loadMoreRef={loadMoreRef as React.RefObject<HTMLDivElement>}
+      />
     </div>
   );
 });
