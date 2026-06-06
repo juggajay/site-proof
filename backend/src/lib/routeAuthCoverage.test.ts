@@ -31,6 +31,7 @@ const parentProtectedRoutePrefixes = new Set([
   'dockets/',
   'documents/fileAccessRoutes.ts',
   'documents/classificationRoutes.ts',
+  'drawings/',
   'notifications/',
   'lots/',
   'projects/projectOverviewRoute.ts',

@@ -7,13 +7,9 @@ import { asyncHandler } from '../lib/asyncHandler.js';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-import crypto from 'crypto';
-import type { Prisma } from '@prisma/client';
 import { ensureUploadSubdirectory, resolveUploadPath } from '../lib/uploadPaths.js';
 import { assertUploadedFileMatchesDeclaredType } from '../lib/imageValidation.js';
-import { getPrismaSkipTake, parsePagination } from '../lib/pagination.js';
 import { logError, logWarn } from '../lib/serverLogger.js';
-import { getEffectiveProjectRole } from '../lib/projectAccess.js';
 import {
   DOCUMENTS_BUCKET,
   getSupabaseClient,
@@ -21,16 +17,8 @@ import {
   getSupabaseStoragePath,
   isSupabaseConfigured,
 } from '../lib/supabase.js';
-import { buildCurrentDrawingSetResponse, buildDrawingListResponse } from './drawings/responses.js';
 import {
-  containsInsensitive,
   createDrawingSchema,
-  DRAWING_STATUSES,
-  getOptionalQueryString,
-  getOptionalStatusQuery,
-  MAX_CURRENT_SET_DOWNLOAD_DRAWINGS,
-  MAX_FILENAME_LENGTH,
-  MAX_SEARCH_LENGTH,
   parseDrawingDate,
   parseDrawingRouteParam,
   requireValidDrawingRouteParam,
@@ -38,26 +26,17 @@ import {
   updateDrawingSchema,
   zodValidationMessage,
 } from './drawings/validation.js';
+import { drawingReadRoutes } from './drawings/readRoutes.js';
+import { requireDrawingWriteAccess } from './drawings/access.js';
+import { buildStoredFilename, sanitizeUploadFilename } from './drawings/filenames.js';
 
 const DRAWINGS_STORAGE_PREFIX = 'drawings';
 
 const router = Router();
-const DRAWING_WRITE_ROLES = [
-  'owner',
-  'admin',
-  'project_manager',
-  'quality_manager',
-  'site_manager',
-  'site_engineer',
-  'foreman',
-];
-const SUBCONTRACTOR_DRAWING_ROLES = ['subcontractor_admin', 'subcontractor'];
-const MAX_REVISION_LENGTH = 40;
-
-type AuthUser = NonNullable<Express.Request['user']>;
 
 // Apply auth middleware
 router.use(requireAuth);
+router.use(drawingReadRoutes);
 
 // Configure multer for drawing file uploads.
 // When Supabase Storage is configured we keep uploads in memory and stream
@@ -113,24 +92,6 @@ function cleanupUploadedFile(file?: Express.Multer.File): void {
   if (file?.path && fs.existsSync(file.path)) {
     fs.unlinkSync(file.path);
   }
-}
-
-function sanitizeUploadFilename(filename: string): string {
-  const basename = path.basename(filename.replace(/\\/g, '/'));
-  const sanitized = basename
-    .split('')
-    .map((char) => (char.charCodeAt(0) < 32 || '<>:"/\\|?*'.includes(char) ? '_' : char))
-    .join('')
-    .replace(/^\.+/, '')
-    .trim()
-    .slice(0, MAX_FILENAME_LENGTH);
-
-  return sanitized || 'upload';
-}
-
-function buildStoredFilename(originalName: string): string {
-  const uniqueSuffix = `${Date.now()}-${crypto.randomUUID()}`;
-  return `${uniqueSuffix}-${sanitizeUploadFilename(originalName)}`;
 }
 
 async function uploadDrawingToSupabase(
@@ -195,27 +156,6 @@ async function cleanupStoredDrawingUpload(
   cleanupUploadedFile(file);
 }
 
-async function requireDrawingReadAccess(user: AuthUser, projectId: string): Promise<string> {
-  if (SUBCONTRACTOR_DRAWING_ROLES.includes(user.roleInCompany || '')) {
-    throw AppError.forbidden('Internal drawing access required');
-  }
-
-  const effectiveRole = await getEffectiveProjectRole(user, projectId);
-  if (!effectiveRole || SUBCONTRACTOR_DRAWING_ROLES.includes(effectiveRole)) {
-    throw AppError.forbidden('Access denied');
-  }
-
-  return effectiveRole;
-}
-
-async function requireDrawingWriteAccess(user: AuthUser, projectId: string): Promise<void> {
-  const effectiveRole = await requireDrawingReadAccess(user, projectId);
-
-  if (!DRAWING_WRITE_ROLES.includes(effectiveRole)) {
-    throw AppError.forbidden('Drawing write access required');
-  }
-}
-
 async function requireSupersededByInProject(
   projectId: string,
   drawingId: string,
@@ -236,78 +176,6 @@ async function requireSupersededByInProject(
     throw AppError.badRequest('supersededById must reference a drawing in the same project');
   }
 }
-
-// GET /api/drawings/:projectId - List drawings for a project
-router.get(
-  '/:projectId',
-  asyncHandler(async (req: Request, res: Response) => {
-    const projectId = parseDrawingRouteParam(req.params.projectId, 'projectId');
-    const userId = req.user!.id;
-
-    if (!userId) {
-      throw AppError.unauthorized();
-    }
-
-    await requireDrawingReadAccess(req.user!, projectId);
-
-    const { page, limit } = parsePagination(req.query);
-    const status = getOptionalStatusQuery(req.query);
-    const search = getOptionalQueryString(req.query, 'search', MAX_SEARCH_LENGTH);
-    const revision = getOptionalQueryString(req.query, 'revision', MAX_REVISION_LENGTH);
-    const where: Prisma.DrawingWhereInput = { projectId };
-    if (status) where.status = status;
-    if (revision) where.revision = revision;
-    if (search) {
-      where.OR = [
-        { drawingNumber: containsInsensitive(search) },
-        { title: containsInsensitive(search) },
-        { revision: containsInsensitive(search) },
-      ];
-    }
-
-    const statusCountWhere = (
-      drawingStatus: (typeof DRAWING_STATUSES)[number],
-    ): Prisma.DrawingWhereInput => ({
-      AND: [where, { status: drawingStatus }],
-    });
-
-    const [drawings, total, preliminary, forConstruction, asBuilt] = await prisma.$transaction([
-      prisma.drawing.findMany({
-        where,
-        include: {
-          document: {
-            select: {
-              id: true,
-              filename: true,
-              fileUrl: true,
-              fileSize: true,
-              mimeType: true,
-              uploadedAt: true,
-              uploadedBy: { select: { id: true, fullName: true, email: true } },
-            },
-          },
-          supersededBy: { select: { id: true, drawingNumber: true, revision: true } },
-          supersedes: { select: { id: true, drawingNumber: true, revision: true } },
-        },
-        orderBy: [{ drawingNumber: 'asc' }, { revision: 'desc' }],
-        ...getPrismaSkipTake(page, limit),
-      }),
-      prisma.drawing.count({ where }),
-      prisma.drawing.count({ where: statusCountWhere('preliminary') }),
-      prisma.drawing.count({ where: statusCountWhere('for_construction') }),
-      prisma.drawing.count({ where: statusCountWhere('as_built') }),
-    ]);
-
-    const stats = {
-      total,
-      preliminary,
-      forConstruction,
-      asBuilt,
-    };
-
-    res.json(buildDrawingListResponse(drawings, stats, page, limit));
-  }),
-);
 
 // POST /api/drawings - Create a new drawing with file upload
 router.post(
@@ -685,50 +553,6 @@ router.post(
     }
 
     res.status(201).json(newDrawing);
-  }),
-);
-
-// GET /api/drawings/:projectId/current-set - Get current (non-superseded) drawings for download
-router.get(
-  '/:projectId/current-set',
-  asyncHandler(async (req: Request, res: Response) => {
-    const projectId = parseDrawingRouteParam(req.params.projectId, 'projectId');
-    const userId = req.user!.id;
-
-    if (!userId) {
-      throw AppError.unauthorized();
-    }
-
-    await requireDrawingReadAccess(req.user!, projectId);
-
-    const currentSetWhere: Prisma.DrawingWhereInput = {
-      projectId,
-      supersededById: null, // Only current versions (not superseded)
-    };
-    const currentDrawingCount = await prisma.drawing.count({ where: currentSetWhere });
-    if (currentDrawingCount > MAX_CURRENT_SET_DOWNLOAD_DRAWINGS) {
-      throw AppError.badRequest(
-        `Current drawing set exceeds the ${MAX_CURRENT_SET_DOWNLOAD_DRAWINGS} drawing download limit`,
-      );
-    }
-
-    const currentDrawings = await prisma.drawing.findMany({
-      where: currentSetWhere,
-      include: {
-        document: {
-          select: {
-            id: true,
-            filename: true,
-            fileUrl: true,
-            fileSize: true,
-            mimeType: true,
-          },
-        },
-      },
-      orderBy: [{ drawingNumber: 'asc' }, { revision: 'desc' }],
-    });
-
-    res.json(buildCurrentDrawingSetResponse(currentDrawings, currentDrawingCount));
   }),
 );
 
