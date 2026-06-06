@@ -1,6 +1,5 @@
 // NCR workflow transitions: respond, rectify, review, reject, close, notify, reopen
 import { Router, type Request, type Response } from 'express';
-import { z } from 'zod';
 import { prisma } from '../../lib/prisma.js';
 import { type AuthUser } from '../../lib/auth.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
@@ -20,123 +19,22 @@ import {
   buildNcrWorkflowMessageResponse,
   buildNcrWorkflowResponse,
 } from './ncrWorkflowResponses.js';
-
-const NCR_WORKFLOW_SHORT_TEXT_MAX_LENGTH = 160;
-const NCR_WORKFLOW_TEXT_MAX_LENGTH = 5000;
-const NCR_WORKFLOW_MESSAGE_MAX_LENGTH = 3000;
-const NCR_WORKFLOW_EMAIL_MAX_LENGTH = 254;
-
-function optionalTrimmedWorkflowString(fieldName: string, maxLength: number) {
-  return z.preprocess(
-    (value) => {
-      if (typeof value !== 'string') {
-        return value;
-      }
-
-      const trimmed = value.trim();
-      return trimmed.length > 0 ? trimmed : undefined;
-    },
-    z
-      .string({ invalid_type_error: `${fieldName} must be text` })
-      .max(maxLength, `${fieldName} must be ${maxLength} characters or less`)
-      .optional(),
-  );
-}
-
-function requiredTrimmedWorkflowString(
-  fieldName: string,
-  maxLength: number,
-  requiredMessage: string,
-) {
-  return z
-    .string({
-      required_error: requiredMessage,
-      invalid_type_error: requiredMessage,
-    })
-    .trim()
-    .min(1, requiredMessage)
-    .max(maxLength, `${fieldName} must be ${maxLength} characters or less`);
-}
-
-const respondNcrSchema = z.object({
-  rootCauseCategory: optionalTrimmedWorkflowString(
-    'Root cause category',
-    NCR_WORKFLOW_SHORT_TEXT_MAX_LENGTH,
-  ),
-  rootCauseDescription: optionalTrimmedWorkflowString(
-    'Root cause description',
-    NCR_WORKFLOW_TEXT_MAX_LENGTH,
-  ),
-  proposedCorrectiveAction: optionalTrimmedWorkflowString(
-    'Proposed corrective action',
-    NCR_WORKFLOW_TEXT_MAX_LENGTH,
-  ),
-});
-
-const qmReviewSchema = z.object({
-  action: z.enum(['accept', 'request_revision']),
-  comments: optionalTrimmedWorkflowString('Comments', NCR_WORKFLOW_TEXT_MAX_LENGTH),
-});
+import {
+  closeNcrSchema,
+  notifyClientSchema,
+  qmReviewSchema,
+  rectifyNcrSchema,
+  rejectRectificationSchema,
+  reopenNcrSchema,
+  respondNcrSchema,
+  submitForVerificationSchema,
+} from './ncrWorkflowValidation.js';
 
 const qmReviewedNcrInclude = {
   project: { select: { name: true } },
   raisedBy: { select: { fullName: true, email: true } },
   responsibleUser: { select: { fullName: true, email: true } },
 } as const;
-
-const rectifyNcrSchema = z.object({
-  rectificationNotes: optionalTrimmedWorkflowString(
-    'Rectification notes',
-    NCR_WORKFLOW_TEXT_MAX_LENGTH,
-  ),
-});
-
-const rejectRectificationSchema = z.object({
-  feedback: requiredTrimmedWorkflowString(
-    'Feedback',
-    NCR_WORKFLOW_MESSAGE_MAX_LENGTH,
-    'Feedback is required when rejecting rectification',
-  ),
-});
-
-const closeNcrSchema = z.object({
-  verificationNotes: optionalTrimmedWorkflowString(
-    'Verification notes',
-    NCR_WORKFLOW_TEXT_MAX_LENGTH,
-  ),
-  lessonsLearned: optionalTrimmedWorkflowString('Lessons learned', NCR_WORKFLOW_TEXT_MAX_LENGTH),
-  withConcession: z.boolean().optional(),
-  concessionJustification: optionalTrimmedWorkflowString(
-    'Concession justification',
-    NCR_WORKFLOW_TEXT_MAX_LENGTH,
-  ),
-  concessionRiskAssessment: optionalTrimmedWorkflowString(
-    'Concession risk assessment',
-    NCR_WORKFLOW_TEXT_MAX_LENGTH,
-  ),
-});
-
-const notifyClientSchema = z.object({
-  recipientEmail: optionalTrimmedWorkflowString(
-    'Recipient email',
-    NCR_WORKFLOW_EMAIL_MAX_LENGTH,
-  ).pipe(z.string().email().optional()),
-  additionalMessage: optionalTrimmedWorkflowString(
-    'Additional message',
-    NCR_WORKFLOW_MESSAGE_MAX_LENGTH,
-  ),
-});
-
-const reopenNcrSchema = z.object({
-  reason: optionalTrimmedWorkflowString('Reason', NCR_WORKFLOW_MESSAGE_MAX_LENGTH),
-});
-
-const submitForVerificationSchema = z.object({
-  rectificationNotes: optionalTrimmedWorkflowString(
-    'Rectification notes',
-    NCR_WORKFLOW_TEXT_MAX_LENGTH,
-  ),
-});
 
 export const ncrWorkflowRouter = Router();
 
