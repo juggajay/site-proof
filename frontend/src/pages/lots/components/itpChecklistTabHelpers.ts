@@ -1,0 +1,148 @@
+import type { ITPAttachment, ITPChecklistItem, ITPCompletion, ITPTemplate } from '../types';
+
+export type ItpStatusFilter = 'all' | 'pending' | 'completed' | 'na' | 'failed';
+
+export interface ItpChecklistProgress {
+  totalItems: number;
+  completedItems: number;
+  naItems: number;
+  finishedItems: number;
+  percentage: number;
+}
+
+export interface ItpCategoryProgress {
+  completedInCategory: number;
+  totalInCategory: number;
+  isCategoryComplete: boolean;
+}
+
+export function getItpChecklistProgress(
+  checklistItems: ITPChecklistItem[],
+  completions: ITPCompletion[],
+): ItpChecklistProgress {
+  const totalItems = checklistItems.length;
+  const completedItems = completions.filter((completion) => completion.isCompleted).length;
+  const naItems = completions.filter((completion) => completion.isNotApplicable).length;
+  const finishedItems = completedItems + naItems;
+  const percentage = totalItems > 0 ? Math.round((finishedItems / totalItems) * 100) : 0;
+
+  return { totalItems, completedItems, naItems, finishedItems, percentage };
+}
+
+export function groupItpChecklistItemsByCategory(
+  checklistItems: ITPChecklistItem[],
+): Record<string, ITPChecklistItem[]> {
+  const categorizedItems: Record<string, ITPChecklistItem[]> = {};
+
+  checklistItems.forEach((item) => {
+    const category = item.category || 'General';
+    if (!categorizedItems[category]) categorizedItems[category] = [];
+    categorizedItems[category].push(item);
+  });
+
+  return categorizedItems;
+}
+
+export function filterItpChecklistItems(
+  checklistItems: ITPChecklistItem[],
+  completions: ITPCompletion[],
+  statusFilter: ItpStatusFilter,
+  showIncompleteOnly: boolean,
+): ITPChecklistItem[] {
+  return checklistItems.filter((item) => {
+    const completion = completions.find((entry) => entry.checklistItemId === item.id);
+    const isCompleted = completion?.isCompleted || false;
+    const isNotApplicable = completion?.isNotApplicable || false;
+    const isFailed = completion?.isFailed || false;
+    const isPending = !isCompleted && !isNotApplicable && !isFailed;
+
+    if (statusFilter === 'pending' && !isPending) return false;
+    if (statusFilter === 'completed' && !isCompleted) return false;
+    if (statusFilter === 'na' && !isNotApplicable) return false;
+    if (statusFilter === 'failed' && !isFailed) return false;
+    if (showIncompleteOnly && !isPending) return false;
+
+    return true;
+  });
+}
+
+export function getItpCategoryProgress(
+  checklistItems: ITPChecklistItem[],
+  completions: ITPCompletion[],
+): ItpCategoryProgress {
+  const completedInCategory = checklistItems.filter((item) => {
+    const completion = completions.find((entry) => entry.checklistItemId === item.id);
+    return completion?.isCompleted || completion?.isNotApplicable;
+  }).length;
+  const totalInCategory = checklistItems.length;
+  const isCategoryComplete = completedInCategory === totalInCategory;
+
+  return { completedInCategory, totalInCategory, isCategoryComplete };
+}
+
+export function getItpAttachments(completions: ITPCompletion[]): ITPAttachment[] {
+  const allPhotos: ITPAttachment[] = [];
+
+  completions.forEach((completion) => {
+    if (completion.attachments && completion.attachments.length > 0) {
+      completion.attachments.forEach((attachment) => {
+        allPhotos.push(attachment);
+      });
+    }
+  });
+
+  return allPhotos;
+}
+
+export function getAdjacentItpAttachment(
+  attachments: ITPAttachment[],
+  selectedPhotoId: string,
+  direction: 'previous' | 'next',
+): ITPAttachment | null {
+  const currentIndex = attachments.findIndex((attachment) => attachment.id === selectedPhotoId);
+
+  if (direction === 'previous' && currentIndex > 0) {
+    return attachments[currentIndex - 1];
+  }
+
+  if (direction === 'next' && currentIndex >= 0 && currentIndex < attachments.length - 1) {
+    return attachments[currentIndex + 1];
+  }
+
+  return null;
+}
+
+export function isItpTemplateActivityMatch(
+  template: ITPTemplate,
+  lotActivityType: string | null,
+): boolean {
+  return Boolean(
+    lotActivityType && template.activityType?.toLowerCase() === lotActivityType.toLowerCase(),
+  );
+}
+
+export function sortItpTemplatesForLotActivity(
+  templates: ITPTemplate[],
+  lotActivityType: string | null,
+): ITPTemplate[] {
+  return [...templates].sort((a, b) => {
+    const aMatches = isItpTemplateActivityMatch(a, lotActivityType);
+    const bMatches = isItpTemplateActivityMatch(b, lotActivityType);
+    if (aMatches && !bMatches) return -1;
+    if (!aMatches && bMatches) return 1;
+    return 0;
+  });
+}
+
+export function toggleExpandedItpCategory(
+  expandedCategories: Set<string>,
+  category: string,
+): Set<string> {
+  const next = new Set(expandedCategories);
+  if (next.has(category)) {
+    next.delete(category);
+  } else {
+    next.add(category);
+  }
+  return next;
+}
