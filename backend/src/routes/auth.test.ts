@@ -2396,7 +2396,8 @@ describe('GET /api/auth/export-data', () => {
           userId: createdUserId,
           documentId: document.id,
           tokenHash: 'secret-signed-url-token-hash-should-not-export',
-          expiresAt: new Date('2026-01-06T00:00:00.000Z'),
+          // Keep this fixture unexpired so parallel document tests cannot purge it.
+          expiresAt: new Date('2099-01-06T00:00:00.000Z'),
         },
       });
 
