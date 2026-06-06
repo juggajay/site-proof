@@ -1,13 +1,4 @@
-import { createLocalId } from './localIds';
-import {
-  offlineDb,
-  type OfflineChecklistItem,
-  type OfflineDocket,
-  type OfflineITPChecklist,
-  type OfflineITPCompletion,
-  type OfflineLotEditTable,
-  type SyncQueueItem,
-} from './offline/core';
+import { offlineDb, type OfflineLotEditTable, type SyncQueueItem } from './offline/core';
 
 export { compressImage, fileToDataUrl } from './offlinePhotoCompression';
 
@@ -58,108 +49,43 @@ export {
   submitDiaryOffline,
 } from './offline/diaries';
 
+// The offline ITP checklist/completion helpers live in ./offline/itp.
+// Re-exported so callers keep importing from '@/lib/offlineDb'.
+export {
+  cacheITPChecklist,
+  getCachedITPChecklist,
+  markCompletionSynced,
+  updateChecklistItemOffline,
+} from './offline/itp';
+
+// The offline docket persistence (create/submit/update/query and sync-status
+// markers) lives in ./offline/dockets. Re-exported for the same reason:
+// callers keep importing from '@/lib/offlineDb'.
+export {
+  createDocketOffline,
+  deleteOfflineDocket,
+  getOfflineDocket,
+  getOfflineDocketsForProject,
+  getOfflineDocketsForSubcontractor,
+  getPendingDockets,
+  markDocketServerId,
+  markDocketSynced,
+  markDocketSyncError,
+  submitDocketOffline,
+  updateDocketOffline,
+} from './offline/dockets';
+
+// Generic sync queue and maintenance helpers live in ./offline/syncQueue.
+// Re-exported so callers keep importing from '@/lib/offlineDb'.
+export {
+  clearAllOfflineData,
+  getPendingSyncCount,
+  getPendingSyncItems,
+  markSyncItemError,
+  removeSyncQueueItem,
+} from './offline/syncQueue';
+
 type LotEditSyncQueueItem = Extract<SyncQueueItem, { type: 'lot_edit' }>;
-
-// Utility functions for offline ITP management
-export async function cacheITPChecklist(
-  lotId: string,
-  templateId: string,
-  templateName: string,
-  items: OfflineChecklistItem[],
-): Promise<void> {
-  const checklist: OfflineITPChecklist = {
-    id: `${lotId}-${templateId}`,
-    lotId,
-    templateId,
-    templateName,
-    items,
-    cachedAt: new Date().toISOString(),
-  };
-
-  await offlineDb.itpChecklists.put(checklist);
-}
-
-export async function getCachedITPChecklist(
-  lotId: string,
-): Promise<OfflineITPChecklist | undefined> {
-  return offlineDb.itpChecklists.where('lotId').equals(lotId).first();
-}
-
-export async function updateChecklistItemOffline(
-  lotId: string,
-  checklistItemId: string,
-  status: 'pending' | 'completed' | 'na' | 'failed',
-  notes?: string,
-  completedBy?: string,
-): Promise<void> {
-  const completion: OfflineITPCompletion = {
-    id: `${lotId}-${checklistItemId}`,
-    lotId,
-    checklistItemId,
-    status,
-    notes,
-    completedAt: status === 'completed' ? new Date().toISOString() : undefined,
-    completedBy,
-    syncStatus: 'pending',
-    localUpdatedAt: new Date().toISOString(),
-  };
-
-  // Store the completion
-  await offlineDb.itpCompletions.put(completion);
-
-  // Add to sync queue
-  await offlineDb.syncQueue.add({
-    type: 'itp_completion',
-    action: 'update',
-    data: completion,
-    createdAt: new Date().toISOString(),
-    attempts: 0,
-  });
-
-  // Update the cached checklist item
-  const cachedChecklist = await getCachedITPChecklist(lotId);
-  if (cachedChecklist) {
-    const updatedItems = cachedChecklist.items.map((item) => {
-      if (item.id === checklistItemId) {
-        return {
-          ...item,
-          status,
-          notes,
-          completedAt: status === 'completed' ? new Date().toISOString() : undefined,
-          completedBy,
-        };
-      }
-      return item;
-    });
-
-    await offlineDb.itpChecklists.update(cachedChecklist.id, {
-      items: updatedItems,
-      cachedAt: new Date().toISOString(),
-    });
-  }
-}
-
-export async function getPendingSyncItems(): Promise<SyncQueueItem[]> {
-  return offlineDb.syncQueue.toArray();
-}
-
-export async function getPendingSyncCount(): Promise<number> {
-  return offlineDb.syncQueue.count();
-}
-
-export async function removeSyncQueueItem(id: number): Promise<void> {
-  await offlineDb.syncQueue.delete(id);
-}
-
-export async function markSyncItemError(id: number, error: string): Promise<void> {
-  const item = await offlineDb.syncQueue.get(id);
-  if (item) {
-    await offlineDb.syncQueue.update(id, {
-      attempts: item.attempts + 1,
-      lastError: error,
-    });
-  }
-}
 
 function isLotEditSyncQueueItem(item: SyncQueueItem): item is LotEditSyncQueueItem {
   return item.type === 'lot_edit';
@@ -220,169 +146,6 @@ async function queueLatestLotEditSync(
     createdAt: new Date().toISOString(),
     attempts: 0,
   });
-}
-
-export async function markCompletionSynced(lotId: string, checklistItemId: string): Promise<void> {
-  const id = `${lotId}-${checklistItemId}`;
-  await offlineDb.itpCompletions.update(id, { syncStatus: 'synced' });
-}
-
-export async function clearAllOfflineData(): Promise<void> {
-  await offlineDb.itpChecklists.clear();
-  await offlineDb.itpCompletions.clear();
-  await offlineDb.syncQueue.clear();
-  await offlineDb.photos.clear();
-  await offlineDb.diaries.clear();
-  await offlineDb.dockets.clear();
-  await offlineDb.lots.clear();
-  await offlineDb.diaryDeliveries.clear();
-  await offlineDb.diaryEvents.clear();
-}
-
-// ============================================================================
-// Feature #313: Offline Docket Creation Functions
-// ============================================================================
-
-// Generate docket ID
-function generateDocketId(): string {
-  return createLocalId('docket');
-}
-
-// Create docket offline
-export async function createDocketOffline(
-  projectId: string,
-  subcontractorCompanyId: string,
-  date: string,
-  data: {
-    labourEntries: OfflineDocket['labourEntries'];
-    plantEntries: OfflineDocket['plantEntries'];
-    notes?: string;
-  },
-  userId: string,
-): Promise<OfflineDocket> {
-  const id = generateDocketId();
-
-  const docket: OfflineDocket = {
-    id,
-    projectId,
-    subcontractorCompanyId,
-    date,
-    status: 'draft',
-    labourEntries: data.labourEntries,
-    plantEntries: data.plantEntries,
-    notes: data.notes,
-    createdBy: userId,
-    syncStatus: 'pending',
-    localUpdatedAt: new Date().toISOString(),
-  };
-
-  // Store the docket
-  await offlineDb.dockets.put(docket);
-
-  // Add to sync queue
-  await offlineDb.syncQueue.add({
-    type: 'docket_create',
-    action: 'create',
-    data: { docketId: id },
-    createdAt: new Date().toISOString(),
-    attempts: 0,
-  });
-
-  return docket;
-}
-
-// Submit docket offline
-export async function submitDocketOffline(docketId: string): Promise<void> {
-  // Update status to pending_approval
-  await offlineDb.dockets.update(docketId, {
-    status: 'pending_approval',
-    syncStatus: 'pending',
-    localUpdatedAt: new Date().toISOString(),
-  });
-
-  // Add submission to sync queue
-  await offlineDb.syncQueue.add({
-    type: 'docket_submit',
-    action: 'update',
-    data: { docketId },
-    createdAt: new Date().toISOString(),
-    attempts: 0,
-  });
-}
-
-// Update docket offline
-export async function updateDocketOffline(
-  docketId: string,
-  updates: Partial<Pick<OfflineDocket, 'labourEntries' | 'plantEntries' | 'notes'>>,
-): Promise<void> {
-  await offlineDb.dockets.update(docketId, {
-    ...updates,
-    syncStatus: 'pending',
-    localUpdatedAt: new Date().toISOString(),
-  });
-
-  // Add update to sync queue
-  await offlineDb.syncQueue.add({
-    type: 'docket_create', // Reuse create for updates
-    action: 'update',
-    data: { docketId },
-    createdAt: new Date().toISOString(),
-    attempts: 0,
-  });
-}
-
-// Get docket by ID
-export async function getOfflineDocket(docketId: string): Promise<OfflineDocket | undefined> {
-  return offlineDb.dockets.get(docketId);
-}
-
-// Get all offline dockets for a project
-export async function getOfflineDocketsForProject(projectId: string): Promise<OfflineDocket[]> {
-  return offlineDb.dockets.where('projectId').equals(projectId).toArray();
-}
-
-// Get offline dockets for a subcontractor
-export async function getOfflineDocketsForSubcontractor(
-  subcontractorCompanyId: string,
-): Promise<OfflineDocket[]> {
-  return offlineDb.dockets.where('subcontractorCompanyId').equals(subcontractorCompanyId).toArray();
-}
-
-// Get all pending docket syncs
-export async function getPendingDockets(): Promise<OfflineDocket[]> {
-  return offlineDb.dockets.where('syncStatus').equals('pending').toArray();
-}
-
-// Mark docket as synced
-export async function markDocketServerId(docketId: string, serverId?: string): Promise<void> {
-  if (!serverId) {
-    return;
-  }
-
-  await offlineDb.dockets.update(docketId, {
-    serverId,
-  });
-}
-
-export async function markDocketSynced(docketId: string, serverId?: string): Promise<void> {
-  await offlineDb.dockets.update(docketId, {
-    ...(serverId ? { serverId } : {}),
-    syncStatus: 'synced',
-    localUpdatedAt: new Date().toISOString(),
-  });
-}
-
-// Mark docket sync error
-export async function markDocketSyncError(docketId: string): Promise<void> {
-  await offlineDb.dockets.update(docketId, {
-    syncStatus: 'error',
-    localUpdatedAt: new Date().toISOString(),
-  });
-}
-
-// Delete offline docket
-export async function deleteOfflineDocket(docketId: string): Promise<void> {
-  await offlineDb.dockets.delete(docketId);
 }
 
 // ============================================================================
