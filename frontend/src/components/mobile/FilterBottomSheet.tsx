@@ -14,6 +14,11 @@ import {
   RangeFilterComponent,
   DateFilterComponent,
 } from './filterControls';
+import {
+  buildClearedFilterValues,
+  buildInitialFilterValues,
+  countActiveFilters,
+} from './filterSheetHelpers';
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -281,33 +286,7 @@ export function FilterBottomSheet({
     });
   };
 
-  // Count active filters
-  const getActiveFilterCount = (): number => {
-    return filters.reduce((count, filter) => {
-      const val = values[filter.id];
-      if (filter.type === 'select' && val !== null && val !== '') {
-        return count + 1;
-      }
-      if (filter.type === 'multiselect' && Array.isArray(val) && val.length > 0) {
-        return count + 1;
-      }
-      if (filter.type === 'range') {
-        const rangeVal = val as { min: number; max: number };
-        if (rangeVal && (rangeVal.min !== filter.min || rangeVal.max !== filter.max)) {
-          return count + 1;
-        }
-      }
-      if (filter.type === 'date') {
-        const dateVal = val as { start: string | null; end: string | null };
-        if (dateVal && (dateVal.start || dateVal.end)) {
-          return count + 1;
-        }
-      }
-      return count;
-    }, 0);
-  };
-
-  const activeCount = getActiveFilterCount();
+  const activeCount = countActiveFilters(filters, values);
 
   if (!isVisible) return null;
 
@@ -495,27 +474,9 @@ export interface UseFilterSheetOptions {
 
 export function useFilterSheet({ filters, initialValues, onApply }: UseFilterSheetOptions) {
   const [isOpen, setIsOpen] = useState(false);
-  const [values, setValues] = useState<FilterValues>(() => {
-    if (initialValues) return initialValues;
-    // Initialize with default values
-    return filters.reduce<FilterValues>((acc, filter) => {
-      switch (filter.type) {
-        case 'select':
-          acc[filter.id] = filter.value;
-          break;
-        case 'multiselect':
-          acc[filter.id] = filter.value;
-          break;
-        case 'range':
-          acc[filter.id] = filter.value;
-          break;
-        case 'date':
-          acc[filter.id] = filter.value;
-          break;
-      }
-      return acc;
-    }, {});
-  });
+  const [values, setValues] = useState<FilterValues>(() =>
+    buildInitialFilterValues(filters, initialValues),
+  );
 
   const open = useCallback(() => setIsOpen(true), []);
   const close = useCallback(() => setIsOpen(false), []);
@@ -530,48 +491,10 @@ export function useFilterSheet({ filters, initialValues, onApply }: UseFilterShe
   );
 
   const handleClear = useCallback(() => {
-    const clearedValues = filters.reduce<FilterValues>((acc, filter) => {
-      switch (filter.type) {
-        case 'select':
-          acc[filter.id] = null;
-          break;
-        case 'multiselect':
-          acc[filter.id] = [];
-          break;
-        case 'range':
-          acc[filter.id] = { min: filter.min, max: filter.max };
-          break;
-        case 'date':
-          acc[filter.id] = { start: null, end: null };
-          break;
-      }
-      return acc;
-    }, {});
-    setValues(clearedValues);
+    setValues(buildClearedFilterValues(filters));
   }, [filters]);
 
-  const activeCount = filters.reduce((count, filter) => {
-    const val = values[filter.id];
-    if (filter.type === 'select' && val !== null && val !== '') {
-      return count + 1;
-    }
-    if (filter.type === 'multiselect' && Array.isArray(val) && val.length > 0) {
-      return count + 1;
-    }
-    if (filter.type === 'range') {
-      const rangeVal = val as { min: number; max: number };
-      if (rangeVal && (rangeVal.min !== filter.min || rangeVal.max !== filter.max)) {
-        return count + 1;
-      }
-    }
-    if (filter.type === 'date') {
-      const dateVal = val as { start: string | null; end: string | null };
-      if (dateVal && (dateVal.start || dateVal.end)) {
-        return count + 1;
-      }
-    }
-    return count;
-  }, 0);
+  const activeCount = countActiveFilters(filters, values);
 
   return {
     isOpen,
