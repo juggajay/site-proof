@@ -1,19 +1,31 @@
-import { Router, type Request } from 'express';
+import crypto from 'crypto';
+import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { generateToken } from '../lib/auth.js';
-import crypto from 'crypto';
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
 import { getFrontendUrl, getGoogleRedirectUri } from '../lib/runtimeConfig.js';
 import { fetchWithTimeout } from '../lib/fetchWithTimeout.js';
 import { logError, logWarn } from '../lib/serverLogger.js';
 import { authRateLimiter } from '../middleware/rateLimiter.js';
-import { AuditAction, createAuditLog } from '../lib/auditLog.js';
 import {
   buildGoogleOAuthLoginResponse,
   buildMockOAuthLoginResponse,
   buildOAuthExchangeResponse,
 } from './oauth/responses.js';
+import { auditOAuthLogin, auditOAuthRegistration } from './oauth/audit.js';
+import {
+  decodeJwtPayload,
+  formatOAuthProviderStatus,
+  getMfaRequiredError,
+  hashOAuthCallbackCode,
+  hashOAuthState,
+  isMockOAuthEnabled,
+  isVerifiedEmail,
+  normalizeOAuthEmail,
+  parseOAuthCallbackQueryParam,
+  type GoogleCredentialPayload,
+} from './oauth/helpers.js';
 
 export const oauthRouter = Router();
 
@@ -25,78 +37,6 @@ export const oauthRouter = Router();
 const OAUTH_STATE_EXPIRY_MS = 10 * 60 * 1000;
 const OAUTH_CALLBACK_CODE_EXPIRY_MS = 2 * 60 * 1000;
 const OAUTH_STATE_CLEANUP_MS = 5 * 60 * 1000;
-const EMAIL_MAX_LENGTH = 254;
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-function hashOAuthState(state: string): string {
-  const salt = process.env.OAUTH_STATE_SALT || process.env.JWT_SECRET || '';
-  return crypto.createHash('sha256').update(`${state}:${salt}`).digest('hex');
-}
-
-function hashOAuthCallbackCode(code: string): string {
-  const salt = process.env.OAUTH_CALLBACK_CODE_SALT || process.env.JWT_SECRET || '';
-  return crypto.createHash('sha256').update(`${code}:${salt}`).digest('hex');
-}
-
-function isMockOAuthEnabled(): boolean {
-  return process.env.NODE_ENV !== 'production' && process.env.ALLOW_MOCK_OAUTH === 'true';
-}
-
-function normalizeOAuthEmail(email: string): string {
-  const normalizedEmail = email.trim().toLowerCase();
-
-  if (
-    !normalizedEmail ||
-    normalizedEmail.length > EMAIL_MAX_LENGTH ||
-    !EMAIL_PATTERN.test(normalizedEmail)
-  ) {
-    throw AppError.badRequest('Invalid email address');
-  }
-
-  return normalizedEmail;
-}
-
-async function auditOAuthLogin(
-  req: Request,
-  userId: string,
-  provider: string,
-  flow: 'google_identity' | 'oauth_callback' | 'mock_oauth',
-) {
-  await createAuditLog({
-    userId,
-    entityType: 'user',
-    entityId: userId,
-    action: AuditAction.USER_LOGIN,
-    changes: {
-      method: 'oauth',
-      provider,
-      flow,
-    },
-    req,
-  });
-}
-
-async function auditOAuthRegistration(
-  req: Request,
-  userId: string,
-  provider: string,
-  flow: 'google_identity' | 'oauth_callback' | 'mock_oauth',
-  emailVerified: boolean,
-) {
-  await createAuditLog({
-    userId,
-    entityType: 'user',
-    entityId: userId,
-    action: AuditAction.USER_REGISTERED,
-    changes: {
-      method: 'oauth',
-      provider,
-      flow,
-      emailVerified,
-    },
-    req,
-  });
-}
 
 /**
  * Create a new OAuth state token in the database
@@ -205,35 +145,6 @@ setInterval(() => {
     logError('[OAuth] Failed to cleanup expired states:', err);
   });
 }, OAUTH_STATE_CLEANUP_MS).unref?.();
-
-function getMfaRequiredError() {
-  return AppError.forbidden(
-    'MFA verification required. Sign in with email and password to complete MFA.',
-  );
-}
-
-function formatOAuthProviderStatus(response: Response): string {
-  const status =
-    typeof response.status === 'number' && response.status > 0
-      ? String(response.status)
-      : 'unknown';
-  const statusText = typeof response.statusText === 'string' ? response.statusText.trim() : '';
-
-  return statusText ? `${status} ${statusText}` : status;
-}
-
-function parseOAuthCallbackQueryParam(value: unknown): string | undefined | null {
-  if (value === undefined) {
-    return undefined;
-  }
-
-  if (typeof value !== 'string') {
-    return null;
-  }
-
-  const normalized = value.trim();
-  return normalized || undefined;
-}
 
 // GET /api/auth/google - Initiate Google OAuth flow
 oauthRouter.get(
@@ -401,37 +312,6 @@ oauthRouter.get(
   }),
 );
 
-interface GoogleCredentialPayload {
-  sub?: string;
-  email?: string;
-  name?: string;
-  picture?: string;
-  email_verified?: boolean | string;
-  aud?: string;
-  iss?: string;
-  exp?: number | string;
-}
-
-function decodeJwtPayload(credential: string): GoogleCredentialPayload {
-  const parts = credential.split('.');
-  if (parts.length !== 3) {
-    throw AppError.badRequest('Invalid credential format');
-  }
-
-  try {
-    const normalizedPayload = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-    const paddedPayload = normalizedPayload.padEnd(
-      normalizedPayload.length + ((4 - (normalizedPayload.length % 4)) % 4),
-      '=',
-    );
-    return JSON.parse(
-      Buffer.from(paddedPayload, 'base64').toString('utf8'),
-    ) as GoogleCredentialPayload;
-  } catch {
-    throw AppError.badRequest('Invalid credential payload');
-  }
-}
-
 async function verifyProductionGoogleCredential(
   credential: string,
 ): Promise<GoogleCredentialPayload> {
@@ -447,10 +327,6 @@ async function verifyProductionGoogleCredential(
   }
 
   return (await response.json()) as GoogleCredentialPayload;
-}
-
-function isVerifiedEmail(value: boolean | string | undefined): boolean {
-  return value === true || value === 'true';
 }
 
 function validateGoogleCredentialPayload(
