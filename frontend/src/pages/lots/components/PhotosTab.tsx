@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { FileText, Plus, CheckCircle } from 'lucide-react';
+import { CheckCircle } from 'lucide-react';
 import { toast } from '@/components/ui/toaster';
 import { authFetch } from '@/lib/api';
 import { SecureDocumentImage } from '@/components/documents/SecureDocumentImage';
@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import type { ITPAttachment, ITPChecklistItem, ITPCompletion, ITPInstance, LotTab } from '../types';
 import { logError } from '@/lib/logger';
 import { PhotoViewerModal } from './PhotoViewerModal';
+import { PhotosEmptyState, PhotosSelectionToolbar } from './PhotosTabSections';
 
 interface PhotosTabProps {
   itpInstance: ITPInstance | null;
@@ -247,24 +248,7 @@ export function PhotosTab({
 
   // Empty state
   if (itpPhotos.length === 0) {
-    return (
-      <div className="space-y-4 animate-in fade-in duration-200">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Photos</h2>
-        </div>
-        <div className="rounded-lg border p-6 text-center">
-          <div className="text-4xl mb-2">📷</div>
-          <h3 className="text-lg font-semibold mb-2">No Photos</h3>
-          <p className="text-muted-foreground">
-            No photos have been uploaded for this lot yet. Add photos to ITP checklist items to
-            document work progress.
-          </p>
-          <Button variant="outline" onClick={() => onTabChange('itp')} className="mt-4">
-            Go to ITP Checklist
-          </Button>
-        </div>
-      </div>
-    );
+    return <PhotosEmptyState onOpenItpChecklist={() => onTabChange('itp')} />;
   }
 
   return (
@@ -275,37 +259,14 @@ export function PhotosTab({
 
       <div className="space-y-4">
         {/* Header with selection controls */}
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">
-            {itpPhotos.length} photo{itpPhotos.length !== 1 ? 's' : ''} attached to ITP checklist
-            items
-          </p>
-          <div className="flex items-center gap-2">
-            {/* Select All checkbox */}
-            <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input
-                type="checkbox"
-                checked={selectedPhotos.size === itpPhotos.length && itpPhotos.length > 0}
-                onChange={toggleSelectAll}
-                className="h-4 w-4 rounded border-border"
-              />
-              Select All
-            </label>
-            {/* Bulk Caption button - only show when photos selected */}
-            {selectedPhotos.size > 0 && (
-              <>
-                <Button size="sm" onClick={() => setShowBatchCaptionModal(true)}>
-                  <FileText className="h-4 w-4" />
-                  Bulk Caption ({selectedPhotos.size})
-                </Button>
-                <Button variant="success" size="sm" onClick={() => setShowAddToEvidenceModal(true)}>
-                  <Plus className="h-4 w-4" />
-                  Add to Evidence ({selectedPhotos.size})
-                </Button>
-              </>
-            )}
-          </div>
-        </div>
+        <PhotosSelectionToolbar
+          photoCount={itpPhotos.length}
+          selectedCount={selectedPhotos.size}
+          allSelected={selectedPhotos.size === itpPhotos.length && itpPhotos.length > 0}
+          onToggleSelectAll={toggleSelectAll}
+          onOpenBatchCaption={() => setShowBatchCaptionModal(true)}
+          onOpenAddToEvidence={() => setShowAddToEvidenceModal(true)}
+        />
 
         {/* Photo grid */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
