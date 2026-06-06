@@ -6,7 +6,6 @@ import { apiFetch } from '../../lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 import { createMutationErrorHandler, extractErrorMessage } from '@/lib/errorHandling';
 import { toast } from '@/components/ui/toaster';
-import { Button } from '@/components/ui/button';
 import {
   getDocumentAccess,
   getDocumentAccessUrl,
@@ -14,12 +13,18 @@ import {
   openDocumentAccessUrl,
   type DocumentAccessUrl,
 } from '@/lib/documentAccess';
-import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { logError } from '@/lib/logger';
 import { DocumentFiltersPanel } from './components/DocumentFiltersPanel';
 import { DocumentGrid } from './components/DocumentGrid';
 import { DocumentUploadModal } from './components/DocumentUploadModal';
 import { DocumentViewerModal } from './components/DocumentViewerModal';
+import {
+  DeleteDocumentDialog,
+  DocumentCategorySummary,
+  DocumentDragOverlay,
+  DocumentsLoadErrorAlert,
+  DocumentsPageHeader,
+} from './components/DocumentsPageChrome';
 import { useDocumentUpload } from './useDocumentUpload';
 import {
   formatDocumentFileSize as formatFileSize,
@@ -332,47 +337,8 @@ export function DocumentsPage() {
 
   return (
     <div ref={upload.dropZoneRef} className="space-y-6 relative" {...upload.containerDragHandlers}>
-      {/* Drag overlay */}
-      {upload.isDragging && (
-        <div className="fixed inset-0 z-50 bg-primary/20 backdrop-blur-sm flex items-center justify-center pointer-events-none">
-          <div className="rounded-xl border-4 border-dashed border-primary bg-card/90 p-12 text-center shadow-2xl">
-            <svg
-              className="mx-auto h-16 w-16 text-primary"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-              />
-            </svg>
-            <h3 className="mt-4 text-xl font-bold text-primary">Drop file here to upload</h3>
-            <p className="mt-2 text-primary/80">Release to start uploading your document</p>
-          </div>
-        </div>
-      )}
-
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Documents & Photos</h1>
-          <p className="text-muted-foreground">Upload and manage project documents and photos</p>
-        </div>
-        <Button onClick={upload.openUploadModal}>
-          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
-            />
-          </svg>
-          Upload Document
-        </Button>
-      </div>
+      <DocumentDragOverlay isDragging={upload.isDragging} />
+      <DocumentsPageHeader onUpload={upload.openUploadModal} />
 
       {/* Filters */}
       <DocumentFiltersPanel
@@ -404,36 +370,9 @@ export function DocumentsPage() {
         }}
       />
 
-      {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700" role="alert">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <span>{error}</span>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => void refetchDocuments()}
-            >
-              Try again
-            </Button>
-          </div>
-        </div>
-      )}
+      <DocumentsLoadErrorAlert error={error} onRetry={() => void refetchDocuments()} />
 
-      {/* Category Summary */}
-      {Object.keys(categories).length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {Object.entries(categories).map(([cat, count]) => (
-            <span
-              key={cat}
-              onClick={() => setFilterCategory(cat.toLowerCase())}
-              className="cursor-pointer rounded-full bg-muted px-3 py-1 text-sm hover:bg-primary hover:text-primary-foreground"
-            >
-              {cat}: {count}
-            </span>
-          ))}
-        </div>
-      )}
+      <DocumentCategorySummary categories={categories} onSelectCategory={setFilterCategory} />
 
       {/* Documents Grid */}
       <DocumentGrid
@@ -489,29 +428,12 @@ export function DocumentsPage() {
         />
       )}
 
-      <ConfirmDialog
-        open={Boolean(documentPendingDelete)}
-        title="Delete Document"
-        description={
-          <>
-            <p>
-              Delete{' '}
-              {documentPendingDelete?.filename
-                ? `"${documentPendingDelete.filename}"`
-                : 'this document'}
-              ?
-            </p>
-            <p>This removes it from the project document register.</p>
-          </>
-        }
-        confirmLabel="Delete"
-        variant="destructive"
+      <DeleteDocumentDialog
+        documentPendingDelete={documentPendingDelete}
         onCancel={() => setDocumentPendingDelete(null)}
-        onConfirm={() => {
-          if (documentPendingDelete) {
-            handleDelete(documentPendingDelete.id);
-            setDocumentPendingDelete(null);
-          }
+        onConfirmDelete={(documentId) => {
+          handleDelete(documentId);
+          setDocumentPendingDelete(null);
         }}
       />
     </div>

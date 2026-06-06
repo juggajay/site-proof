@@ -1030,17 +1030,22 @@ test.describe('production readiness guardrails', () => {
       new URL('../src/pages/documents/DocumentsPage.tsx', import.meta.url),
       'utf8',
     );
+    const documentsPageChrome = await readFile(
+      new URL('../src/pages/documents/components/DocumentsPageChrome.tsx', import.meta.url),
+      'utf8',
+    );
     const diaryPage = await readFile(
       new URL('../src/pages/diary/DailyDiaryPage.tsx', import.meta.url),
       'utf8',
     );
 
-    expect(documentsPage).toContain(
+    expect(documentsPage).toContain('DeleteDocumentDialog');
+    expect(documentsPageChrome).toContain(
       "import { ConfirmDialog } from '@/components/ui/ConfirmDialog'",
     );
     expect(documentsPage).toContain('const [documentPendingDelete, setDocumentPendingDelete]');
     expect(documentsPage).toContain('setDocumentPendingDelete(doc)');
-    expect(documentsPage).toContain('title="Delete Document"');
+    expect(documentsPageChrome).toContain('title="Delete Document"');
 
     expect(diaryPage).toContain("import { ConfirmDialog } from '@/components/ui/ConfirmDialog'");
     expect(diaryPage).toContain('const [entryPendingDelete, setEntryPendingDelete]');
