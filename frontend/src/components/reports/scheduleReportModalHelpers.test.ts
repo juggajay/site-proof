@@ -5,10 +5,13 @@ import {
   FREQUENCIES,
   MAX_SCHEDULE_RECIPIENTS,
   REPORT_TYPES,
+  formatNextRun,
+  getFrequencyLabel,
   getRecipientValidationError,
   normalizeRecipientList,
   parseRecipientList,
   scheduleFormSchema,
+  type ScheduledReport,
 } from './scheduleReportModalHelpers';
 
 describe('schedule report modal helpers', () => {
@@ -85,5 +88,48 @@ describe('schedule report modal helpers', () => {
       'Friday',
       'Saturday',
     ]);
+  });
+
+  it('formats schedule frequencies for list display', () => {
+    const baseSchedule: ScheduledReport = {
+      id: 'schedule-1',
+      reportType: 'lot-status',
+      frequency: 'daily',
+      dayOfWeek: null,
+      dayOfMonth: null,
+      timeOfDay: '09:00',
+      recipients: 'owner@example.com',
+      isActive: true,
+      nextRunAt: null,
+      lastSentAt: null,
+    };
+
+    expect(getFrequencyLabel(baseSchedule)).toBe('Daily at 09:00');
+    expect(
+      getFrequencyLabel({
+        ...baseSchedule,
+        frequency: 'weekly',
+        dayOfWeek: 3,
+        timeOfDay: '14:30',
+      }),
+    ).toBe('Weekly on Wednesday at 14:30');
+    expect(
+      getFrequencyLabel({
+        ...baseSchedule,
+        frequency: 'monthly',
+        dayOfMonth: 12,
+        timeOfDay: '07:15',
+      }),
+    ).toBe('Monthly on day 12 at 07:15');
+    expect(getFrequencyLabel({ ...baseSchedule, frequency: 'custom' })).toBe('custom');
+  });
+
+  it('formats next-run dates without scheduling null values', () => {
+    expect(formatNextRun(null)).toBe('Not scheduled');
+
+    const nextRun = formatNextRun('2026-06-06T12:00:00.000Z');
+    expect(nextRun).toContain('Sat');
+    expect(nextRun).toContain('6 Jun');
+    expect(nextRun).toMatch(/\d{1,2}:\d{2}/);
   });
 });

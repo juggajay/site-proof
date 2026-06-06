@@ -66,6 +66,33 @@ export interface ScheduledReport {
   lastSentAt: string | null;
 }
 
+export function formatNextRun(dateStr: string | null): string {
+  if (!dateStr) return 'Not scheduled';
+  const date = new Date(dateStr);
+  return date.toLocaleString('en-AU', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+export function getFrequencyLabel(schedule: ScheduledReport): string {
+  switch (schedule.frequency) {
+    case 'daily':
+      return `Daily at ${schedule.timeOfDay}`;
+    case 'weekly': {
+      const day = DAYS_OF_WEEK.find((d) => d.value === schedule.dayOfWeek)?.label || 'Monday';
+      return `Weekly on ${day} at ${schedule.timeOfDay}`;
+    }
+    case 'monthly':
+      return `Monthly on day ${schedule.dayOfMonth} at ${schedule.timeOfDay}`;
+    default:
+      return schedule.frequency;
+  }
+}
+
 export const REPORT_TYPES = [
   { value: 'lot-status', label: 'Lot Status Report' },
   { value: 'ncr', label: 'NCR Report' },
