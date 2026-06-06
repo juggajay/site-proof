@@ -32,6 +32,7 @@ import {
   updateChecklistItemOffline,
 } from '@/lib/offlineDb';
 import type { ITPCompletion, ITPInstance, ITPTemplate, LotTab } from '../types';
+import { mergeCompletionIntoInstance } from '../lib/itpCompletionState';
 import { mapCachedToItpInstance, mapInstanceToOfflineItems } from '../lib/itpOfflineMapping';
 
 /** Prompt payload for the page's witness-point modal (gate before completing). */
@@ -354,19 +355,7 @@ export function useItpInstance({
       });
 
       // Update the completions in state
-      setItpInstance((prev) => {
-        if (!prev) return prev;
-        const existingIndex = prev.completions.findIndex(
-          (c) => c.checklistItemId === checklistItemId,
-        );
-        const newCompletions = [...prev.completions];
-        if (existingIndex >= 0) {
-          newCompletions[existingIndex] = data.completion;
-        } else {
-          newCompletions.push(data.completion);
-        }
-        return { ...prev, completions: newCompletions };
-      });
+      setItpInstance((prev) => mergeCompletionIntoInstance(prev, data.completion));
 
       // Update offline cache with the new completion status
       if (lotId) {
@@ -394,35 +383,23 @@ export function useItpInstance({
         );
 
         // Update local state optimistically
-        setItpInstance((prev) => {
-          if (!prev) return prev;
-          const existingIndex = prev.completions.findIndex(
-            (c) => c.checklistItemId === checklistItemId,
-          );
-          const newCompletions = [...prev.completions];
-          const newCompletion: ITPCompletion = {
-            id: `offline-${checklistItemId}-${Date.now()}`,
-            checklistItemId,
-            isCompleted: !currentlyCompleted,
-            isNotApplicable: false,
-            isFailed: false,
-            notes: existingNotes,
-            completedAt: !currentlyCompleted ? new Date().toISOString() : null,
-            completedBy: !currentlyCompleted
-              ? { id: 'offline', fullName: 'You (Offline)', email: '' }
-              : null,
-            isVerified: false,
-            verifiedAt: null,
-            verifiedBy: null,
-            attachments: [],
-          };
-          if (existingIndex >= 0) {
-            newCompletions[existingIndex] = newCompletion;
-          } else {
-            newCompletions.push(newCompletion);
-          }
-          return { ...prev, completions: newCompletions };
-        });
+        const newCompletion: ITPCompletion = {
+          id: `offline-${checklistItemId}-${Date.now()}`,
+          checklistItemId,
+          isCompleted: !currentlyCompleted,
+          isNotApplicable: false,
+          isFailed: false,
+          notes: existingNotes,
+          completedAt: !currentlyCompleted ? new Date().toISOString() : null,
+          completedBy: !currentlyCompleted
+            ? { id: 'offline', fullName: 'You (Offline)', email: '' }
+            : null,
+          isVerified: false,
+          verifiedAt: null,
+          verifiedBy: null,
+          attachments: [],
+        };
+        setItpInstance((prev) => mergeCompletionIntoInstance(prev, newCompletion));
 
         // Update offline pending count
         const pendingCount = await getPendingSyncCount();
@@ -465,19 +442,7 @@ export function useItpInstance({
         }),
       });
 
-      setItpInstance((prev) => {
-        if (!prev) return prev;
-        const existingIndex = prev.completions.findIndex(
-          (c) => c.checklistItemId === checklistItemId,
-        );
-        const newCompletions = [...prev.completions];
-        if (existingIndex >= 0) {
-          newCompletions[existingIndex] = data.completion;
-        } else {
-          newCompletions.push(data.completion);
-        }
-        return { ...prev, completions: newCompletions };
-      });
+      setItpInstance((prev) => mergeCompletionIntoInstance(prev, data.completion));
     } catch (err) {
       logError('Failed to update notes:', err);
     }
@@ -507,19 +472,7 @@ export function useItpInstance({
       });
 
       // Update the completions in state
-      setItpInstance((prev) => {
-        if (!prev) return prev;
-        const existingIndex = prev.completions.findIndex(
-          (c) => c.checklistItemId === checklistItemId,
-        );
-        const newCompletions = [...prev.completions];
-        if (existingIndex >= 0) {
-          newCompletions[existingIndex] = data.completion;
-        } else {
-          newCompletions.push(data.completion);
-        }
-        return { ...prev, completions: newCompletions };
-      });
+      setItpInstance((prev) => mergeCompletionIntoInstance(prev, data.completion));
       toast({
         title: 'Item marked as N/A',
         description: 'The checklist item has been marked as not applicable.',
@@ -560,19 +513,7 @@ export function useItpInstance({
       );
 
       // Update the completions in state
-      setItpInstance((prev) => {
-        if (!prev) return prev;
-        const existingIndex = prev.completions.findIndex(
-          (c) => c.checklistItemId === input.checklistItemId,
-        );
-        const newCompletions = [...prev.completions];
-        if (existingIndex >= 0) {
-          newCompletions[existingIndex] = data.completion;
-        } else {
-          newCompletions.push(data.completion);
-        }
-        return { ...prev, completions: newCompletions };
-      });
+      setItpInstance((prev) => mergeCompletionIntoInstance(prev, data.completion));
 
       // Refresh page-owned lot + NCR state to reflect the status change.
       await refreshLotAfterFailure();
@@ -608,19 +549,7 @@ export function useItpInstance({
         }),
       });
 
-      setItpInstance((prev) => {
-        if (!prev) return prev;
-        const existingIndex = prev.completions.findIndex(
-          (c) => c.checklistItemId === checklistItemId,
-        );
-        const newCompletions = [...prev.completions];
-        if (existingIndex >= 0) {
-          newCompletions[existingIndex] = data.completion;
-        } else {
-          newCompletions.push(data.completion);
-        }
-        return { ...prev, completions: newCompletions };
-      });
+      setItpInstance((prev) => mergeCompletionIntoInstance(prev, data.completion));
       toast({
         title: 'Item marked as N/A',
         description: 'The checklist item has been marked as not applicable.',
@@ -655,19 +584,7 @@ export function useItpInstance({
         },
       );
 
-      setItpInstance((prev) => {
-        if (!prev) return prev;
-        const existingIndex = prev.completions.findIndex(
-          (c) => c.checklistItemId === checklistItemId,
-        );
-        const newCompletions = [...prev.completions];
-        if (existingIndex >= 0) {
-          newCompletions[existingIndex] = data.completion;
-        } else {
-          newCompletions.push(data.completion);
-        }
-        return { ...prev, completions: newCompletions };
-      });
+      setItpInstance((prev) => mergeCompletionIntoInstance(prev, data.completion));
 
       // Refresh page-owned NCR state
       await refreshNcrsAfterFailure();
