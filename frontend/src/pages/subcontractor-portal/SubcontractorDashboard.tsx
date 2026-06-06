@@ -12,10 +12,6 @@ import {
   RefreshCw,
   Building2,
   Calendar,
-  ClipboardList,
-  FlaskConical,
-  FolderOpen,
-  Hand,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -33,6 +29,7 @@ import {
   getGreeting,
   getToday,
 } from './subcontractorDashboardHelpers';
+import { PortalQuickLinks } from './SubcontractorDashboardSections';
 
 interface PortalAccess {
   lots: boolean;
@@ -52,7 +49,7 @@ interface PortalProjectOption {
   portalAccess?: PortalAccess;
 }
 
-interface Company {
+export interface Company {
   id: string;
   companyName: string;
   projectId: string;
@@ -498,108 +495,7 @@ export function SubcontractorDashboard() {
         </div>
       </div>
 
-      {/* Quick Links */}
-      <div className="grid grid-cols-2 gap-3">
-        <Link
-          to={myCompanyLink}
-          className="border border-border rounded-lg bg-card hover:border-primary transition-colors cursor-pointer"
-        >
-          <div className="p-4 flex items-center gap-3">
-            <Building2 className="h-5 w-5 text-muted-foreground" />
-            <div>
-              <p className="font-medium text-foreground">My Company</p>
-              <p className="text-xs text-muted-foreground">Manage roster & plant</p>
-            </div>
-          </div>
-        </Link>
-        <Link
-          to="/subcontractor-portal/dockets"
-          className="border border-border rounded-lg bg-card hover:border-primary transition-colors cursor-pointer"
-        >
-          <div className="p-4 flex items-center gap-3">
-            <Calendar className="h-5 w-5 text-muted-foreground" />
-            <div>
-              <p className="font-medium text-foreground">All Dockets</p>
-              <p className="text-xs text-muted-foreground">View history</p>
-            </div>
-          </div>
-        </Link>
-        {/* Portal Access - ITPs */}
-        {isPortalModuleEnabled(company, 'itps') && (
-          <Link
-            to="/subcontractor-portal/itps"
-            className="border border-border rounded-lg bg-card hover:border-primary transition-colors cursor-pointer"
-          >
-            <div className="p-4 flex items-center gap-3">
-              <ClipboardList className="h-5 w-5 text-green-500" />
-              <div>
-                <p className="font-medium text-foreground">ITPs</p>
-                <p className="text-xs text-muted-foreground">Inspection & Test Plans</p>
-              </div>
-            </div>
-          </Link>
-        )}
-        {/* Portal Access - Hold Points */}
-        {isPortalModuleEnabled(company, 'holdPoints') && (
-          <Link
-            to="/subcontractor-portal/holdpoints"
-            className="border border-border rounded-lg bg-card hover:border-primary transition-colors cursor-pointer"
-          >
-            <div className="p-4 flex items-center gap-3">
-              <Hand className="h-5 w-5 text-amber-500" />
-              <div>
-                <p className="font-medium text-foreground">Hold Points</p>
-                <p className="text-xs text-muted-foreground">View hold points</p>
-              </div>
-            </div>
-          </Link>
-        )}
-        {/* Portal Access - Test Results */}
-        {isPortalModuleEnabled(company, 'testResults') && (
-          <Link
-            to="/subcontractor-portal/tests"
-            className="border border-border rounded-lg bg-card hover:border-primary transition-colors cursor-pointer"
-          >
-            <div className="p-4 flex items-center gap-3">
-              <FlaskConical className="h-5 w-5 text-blue-500" />
-              <div>
-                <p className="font-medium text-foreground">Test Results</p>
-                <p className="text-xs text-muted-foreground">View test results</p>
-              </div>
-            </div>
-          </Link>
-        )}
-        {/* Portal Access - NCRs */}
-        {isPortalModuleEnabled(company, 'ncrs') && (
-          <Link
-            to="/subcontractor-portal/ncrs"
-            className="border border-border rounded-lg bg-card hover:border-primary transition-colors cursor-pointer"
-          >
-            <div className="p-4 flex items-center gap-3">
-              <AlertTriangle className="h-5 w-5 text-red-500" />
-              <div>
-                <p className="font-medium text-foreground">NCRs</p>
-                <p className="text-xs text-muted-foreground">Non-conformance reports</p>
-              </div>
-            </div>
-          </Link>
-        )}
-        {/* Portal Access - Documents */}
-        {isPortalModuleEnabled(company, 'documents') && (
-          <Link
-            to="/subcontractor-portal/documents"
-            className="border border-border rounded-lg bg-card hover:border-primary transition-colors cursor-pointer"
-          >
-            <div className="p-4 flex items-center gap-3">
-              <FolderOpen className="h-5 w-5 text-purple-500" />
-              <div>
-                <p className="font-medium text-foreground">Documents</p>
-                <p className="text-xs text-muted-foreground">Project documents</p>
-              </div>
-            </div>
-          </Link>
-        )}
-      </div>
+      <PortalQuickLinks company={company} myCompanyLink={myCompanyLink} />
     </div>
   );
 }
