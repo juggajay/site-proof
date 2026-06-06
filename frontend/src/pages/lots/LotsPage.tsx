@@ -16,14 +16,13 @@ import { Button } from '@/components/ui/button';
 import { ContextFAB } from '@/components/mobile/ContextFAB';
 import { ContextHelp, HELP_CONTENT } from '@/components/ContextHelp';
 import { AccessDeniedState } from '@/components/AccessDeniedState';
-import { parseJsonPreference, readLocalStorageItem } from '@/lib/storagePreferences';
+import { readLocalStorageItem } from '@/lib/storagePreferences';
 
 // Extracted components
 import { LotFiltersBar } from './components/LotFiltersBar';
 import {
   COLUMN_ORDER_STORAGE_KEY,
   COLUMN_STORAGE_KEY,
-  DEFAULT_COLUMN_ORDER,
   type ColumnId,
 } from './components/lotFilterConfig';
 import { LotTable } from './components/LotTable';
@@ -36,53 +35,13 @@ import { BulkDeleteModal, BulkStatusModal, BulkAssignModal } from './components/
 // Extracted hooks
 import { useLotsData } from './hooks/useLotsData';
 import { useLotsActions } from './hooks/useLotsActions';
+import { LOT_STATUS_COLORS } from './lotsPageDisplay';
+import { parseColumnOrderPreference, parseColumnPreference } from './lotsPagePreferences';
 
 // Roles that can delete lots
 const LOT_DELETE_ROLES = ['owner', 'admin', 'project_manager'];
 
 const LOT_VIEW_MODE_STORAGE_KEY = 'siteproof_lot_view_mode';
-const VALID_COLUMN_IDS = new Set<ColumnId>(DEFAULT_COLUMN_ORDER);
-
-// Feature #438: Okabe-Ito color-blind safe palette (shared with LinearMapView)
-const statusColors: Record<string, string> = {
-  pending: 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200',
-  in_progress: 'bg-sky-100 dark:bg-sky-900/40 text-sky-800 dark:text-sky-200',
-  completed: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-200',
-  on_hold: 'bg-orange-100 dark:bg-orange-900/40 text-orange-800 dark:text-orange-200',
-  not_started: 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200',
-};
-
-function getValidColumnIds(value: unknown): ColumnId[] | null {
-  if (!Array.isArray(value)) return null;
-
-  const columns = value.filter(
-    (item): item is ColumnId => typeof item === 'string' && VALID_COLUMN_IDS.has(item as ColumnId),
-  );
-
-  return Array.from(new Set(columns));
-}
-
-function parseColumnPreference(raw: string | null): ColumnId[] {
-  return parseJsonPreference(raw, DEFAULT_COLUMN_ORDER, (value) => {
-    const columns = getValidColumnIds(value);
-    if (!columns) return null;
-    return columns.includes('lotNumber') ? columns : ['lotNumber', ...columns];
-  });
-}
-
-function parseColumnOrderPreference(raw: string | null): ColumnId[] {
-  return parseJsonPreference(raw, DEFAULT_COLUMN_ORDER, (value) => {
-    const columns = getValidColumnIds(value);
-    if (!columns) return null;
-
-    const withoutRequiredColumn = columns.filter((column) => column !== 'lotNumber');
-    const orderedColumns = ['lotNumber', ...withoutRequiredColumn] as ColumnId[];
-    const missingColumns = DEFAULT_COLUMN_ORDER.filter(
-      (column) => !orderedColumns.includes(column),
-    );
-    return [...orderedColumns, ...missingColumns];
-  });
-}
 
 export function LotsPage() {
   const { projectId } = useParams();
@@ -432,7 +391,7 @@ export function LotsPage() {
                   `/projects/${encodeURIComponent(projectId || '')}/lots/${encodeURIComponent(lot.id)}`,
                 )
               }
-              statusColors={statusColors}
+              statusColors={LOT_STATUS_COLORS}
               areas={projectAreas}
             />
           )}
