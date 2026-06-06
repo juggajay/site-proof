@@ -4,19 +4,7 @@ import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
-import multer from 'multer';
-import path from 'path';
-import fs from 'fs';
-import { ensureUploadSubdirectory, resolveUploadPath } from '../lib/uploadPaths.js';
 import { assertUploadedFileMatchesDeclaredType } from '../lib/imageValidation.js';
-import { logError, logWarn } from '../lib/serverLogger.js';
-import {
-  DOCUMENTS_BUCKET,
-  getSupabaseClient,
-  getSupabasePublicUrl,
-  getSupabaseStoragePath,
-  isSupabaseConfigured,
-} from '../lib/supabase.js';
 import {
   createDrawingSchema,
   parseDrawingDate,
@@ -28,133 +16,20 @@ import {
 } from './drawings/validation.js';
 import { drawingReadRoutes } from './drawings/readRoutes.js';
 import { requireDrawingWriteAccess } from './drawings/access.js';
-import { buildStoredFilename, sanitizeUploadFilename } from './drawings/filenames.js';
-
-const DRAWINGS_STORAGE_PREFIX = 'drawings';
+import { sanitizeUploadFilename } from './drawings/filenames.js';
+import {
+  cleanupStoredDrawingUpload,
+  cleanupUploadedFile,
+  prepareStoredDrawingFileCleanup,
+  storeDrawingUpload,
+  upload,
+} from './drawings/storage.js';
 
 const router = Router();
 
 // Apply auth middleware
 router.use(requireAuth);
 router.use(drawingReadRoutes);
-
-// Configure multer for drawing file uploads.
-// When Supabase Storage is configured we keep uploads in memory and stream
-// them to the `documents` bucket under a `drawings/<projectId>/...` prefix.
-// Otherwise we fall back to the local filesystem (dev only — Railway's
-// filesystem is ephemeral).
-const diskStorage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    try {
-      cb(null, ensureUploadSubdirectory('drawings'));
-    } catch (error) {
-      cb(
-        error instanceof Error ? error : new Error('Failed to prepare drawing upload directory'),
-        '',
-      );
-    }
-  },
-  filename: (_req, file, cb) => {
-    cb(null, buildStoredFilename(file.originalname));
-  },
-});
-
-const memoryStorage = multer.memoryStorage();
-
-const upload = multer({
-  storage: isSupabaseConfigured() ? memoryStorage : diskStorage,
-  limits: { fileSize: 100 * 1024 * 1024 }, // 100MB limit for drawings
-  fileFilter: (_req, file, cb) => {
-    // Accept common drawing types
-    const allowedTypes = [
-      'application/pdf',
-      'image/jpeg',
-      'image/png',
-      'image/tiff',
-      'application/dxf',
-      'application/dwg',
-      'application/vnd.dwg',
-    ];
-    // Also accept by extension for CAD files
-    const ext = path.extname(file.originalname).toLowerCase();
-    if (
-      allowedTypes.includes(file.mimetype) ||
-      ['.pdf', '.dwg', '.dxf', '.jpg', '.jpeg', '.png', '.tiff', '.tif'].includes(ext)
-    ) {
-      cb(null, true);
-    } else {
-      cb(new Error('Invalid file type'));
-    }
-  },
-});
-
-function cleanupUploadedFile(file?: Express.Multer.File): void {
-  if (file?.path && fs.existsSync(file.path)) {
-    fs.unlinkSync(file.path);
-  }
-}
-
-async function uploadDrawingToSupabase(
-  file: Express.Multer.File,
-  projectId: string,
-): Promise<{ url: string; storagePath: string }> {
-  const storagePath = `${DRAWINGS_STORAGE_PREFIX}/${projectId}/${buildStoredFilename(file.originalname)}`;
-
-  const { error } = await getSupabaseClient()
-    .storage.from(DOCUMENTS_BUCKET)
-    .upload(storagePath, file.buffer, {
-      contentType: file.mimetype,
-      upsert: false,
-    });
-
-  if (error) {
-    logError('Supabase drawing upload failed:', error);
-    throw AppError.internal('Failed to upload drawing');
-  }
-
-  return {
-    url: getSupabasePublicUrl(DOCUMENTS_BUCKET, storagePath),
-    storagePath,
-  };
-}
-
-function getDrawingStoragePrefix(projectId: string): string {
-  return `${DRAWINGS_STORAGE_PREFIX}/${projectId}/`;
-}
-
-function getOwnedDrawingStoragePath(fileUrl: string, projectId: string): string | null {
-  return getSupabaseStoragePath(fileUrl, {
-    bucket: DOCUMENTS_BUCKET,
-    expectedPrefix: getDrawingStoragePrefix(projectId),
-  });
-}
-
-async function deleteDrawingFromSupabase(fileUrl: string, projectId: string): Promise<void> {
-  const storagePath = getOwnedDrawingStoragePath(fileUrl, projectId);
-  if (!storagePath) {
-    return;
-  }
-
-  const { error } = await getSupabaseClient().storage.from(DOCUMENTS_BUCKET).remove([storagePath]);
-
-  if (error) {
-    logError('Supabase drawing delete failed:', error);
-  }
-}
-
-// Best-effort cleanup after a failed drawing upload. Removes either the
-// Supabase object (if we already uploaded) or the local temp file.
-async function cleanupStoredDrawingUpload(
-  fileUrl: string | null,
-  file: Express.Multer.File,
-  projectId: string,
-): Promise<void> {
-  if (fileUrl && isSupabaseConfigured() && getOwnedDrawingStoragePath(fileUrl, projectId)) {
-    await deleteDrawingFromSupabase(fileUrl, projectId);
-    return;
-  }
-  cleanupUploadedFile(file);
-}
 
 async function requireSupersededByInProject(
   projectId: string,
@@ -234,16 +109,9 @@ router.post(
       throw AppError.badRequest('Drawing with this number and revision already exists');
     }
 
-    // Upload to Supabase if configured; otherwise the file is already on the
-    // local disk via multer.diskStorage and we just record its relative path.
     let fileUrl: string | null = null;
     try {
-      if (isSupabaseConfigured() && uploadedFile.buffer) {
-        const uploaded = await uploadDrawingToSupabase(uploadedFile, projectId);
-        fileUrl = uploaded.url;
-      } else {
-        fileUrl = `/uploads/drawings/${uploadedFile.filename}`;
-      }
+      fileUrl = await storeDrawingUpload(uploadedFile, projectId);
     } catch (error) {
       cleanupUploadedFile(uploadedFile);
       throw error;
@@ -379,41 +247,17 @@ router.delete(
 
     await requireDrawingWriteAccess(req.user!, drawing.projectId);
 
-    const existingFileUrl = drawing.document.fileUrl;
-    const isSupabaseStored =
-      isSupabaseConfigured() &&
-      typeof existingFileUrl === 'string' &&
-      getOwnedDrawingStoragePath(existingFileUrl, drawing.projectId) !== null;
-
-    let filePath: string | null = null;
-    if (!isSupabaseStored) {
-      try {
-        filePath = resolveUploadPath(existingFileUrl, 'drawings');
-      } catch (error) {
-        logWarn('Skipping drawing file cleanup for invalid file path:', error);
-      }
-    }
+    const cleanupStoredFile = prepareStoredDrawingFileCleanup(
+      drawing.document.fileUrl,
+      drawing.projectId,
+    );
 
     await prisma.$transaction([
       prisma.drawing.delete({ where: { id: drawingId } }),
       prisma.document.delete({ where: { id: drawing.documentId } }),
     ]);
 
-    if (isSupabaseStored) {
-      try {
-        await deleteDrawingFromSupabase(existingFileUrl, drawing.projectId);
-      } catch (error) {
-        logWarn('Failed to delete drawing file from Supabase after database delete:', error);
-      }
-    } else if (filePath) {
-      try {
-        if (fs.existsSync(filePath)) {
-          fs.unlinkSync(filePath);
-        }
-      } catch (error) {
-        logWarn('Failed to delete drawing file after database delete:', error);
-      }
-    }
+    await cleanupStoredFile();
 
     res.status(204).send();
   }),
@@ -489,12 +333,7 @@ router.post(
 
     let fileUrl: string | null = null;
     try {
-      if (isSupabaseConfigured() && uploadedFile.buffer) {
-        const uploaded = await uploadDrawingToSupabase(uploadedFile, oldDrawing.projectId);
-        fileUrl = uploaded.url;
-      } else {
-        fileUrl = `/uploads/drawings/${uploadedFile.filename}`;
-      }
+      fileUrl = await storeDrawingUpload(uploadedFile, oldDrawing.projectId);
     } catch (error) {
       cleanupUploadedFile(uploadedFile);
       throw error;
