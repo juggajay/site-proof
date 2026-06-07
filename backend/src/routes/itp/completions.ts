@@ -20,6 +20,16 @@ import { logError } from '../../lib/serverLogger.js';
 import { createNcrWithAllocatedNumber } from '../ncrs/ncrNumberAllocation.js';
 import { buildChecklistItemNcrMarker } from './instances/ncrLinks.js';
 import { buildItpCompletionResultResponse } from './completionResponses.js';
+import {
+  buildItpCompletionTransform,
+  buildItpCompletionWitnessData,
+  buildItpSubbieCompletionNotifications,
+  deriveItpCompletionStatus,
+  isItpCompletionFinished,
+  parseProjectRequiresSubcontractorVerification,
+  resolveSubcontractorVerificationStatus,
+  shouldCreateFailedItpNcr,
+} from './completionWorkflow.js';
 import { completionAttachmentRoutes } from './completionAttachmentRoutes.js';
 import { completionUpdateRoutes } from './completionUpdateRoutes.js';
 import { completionVerificationRoutes } from './completionVerificationRoutes.js';
@@ -119,23 +129,14 @@ completionsRouter.post(
       signatureDataUrl,
     } = parseResult.data;
 
-    // Validate N/A status requires a reason
-    if (directStatus === 'not_applicable' && !notes?.trim()) {
-      throw AppError.badRequest('A reason is required when marking an item as N/A');
-    }
-
-    // Validate failed status requires NCR description
-    if (directStatus === 'failed' && !ncrDescription?.trim()) {
-      throw AppError.badRequest('NCR description is required when marking an item as Failed');
-    }
-
-    // Determine status - direct status takes precedence, then isCompleted flag
-    let newStatus: string;
-    if (directStatus) {
-      newStatus = directStatus;
-    } else {
-      newStatus = isCompleted ? 'completed' : 'pending';
-    }
+    // Validate required reasons and derive the completion status (direct status
+    // takes precedence over the isCompleted flag). See completionWorkflow.ts.
+    const newStatus = deriveItpCompletionStatus({
+      directStatus,
+      isCompleted,
+      notes,
+      ncrDescription,
+    });
 
     const itpInstanceForAccess = await prisma.iTPInstance.findUnique({
       where: { id: itpInstanceId },
@@ -203,8 +204,7 @@ completionsRouter.post(
     const isSubcontractor = !!subcontractorUser;
 
     // Determine completedAt and completedById based on status
-    const isFinished =
-      newStatus === 'completed' || newStatus === 'not_applicable' || newStatus === 'failed';
+    const isFinished = isItpCompletionFinished(newStatus);
 
     // Feature #271: Subcontractor completions - check lot assignment for ITP permissions
     let verificationStatus: string | undefined;
@@ -229,29 +229,16 @@ completionsRouter.post(
           throw AppError.forbidden('Not authorized to complete ITP items on this lot');
         }
 
-        // Check project-level setting for subcontractor verification
-        let projectRequiresVerification = false; // Default: no verification needed
-        const projectSettings = itpInstanceForPermCheck.lot?.project?.settings;
-        if (projectSettings) {
-          try {
-            const settings =
-              typeof projectSettings === 'string' ? JSON.parse(projectSettings) : projectSettings;
-            projectRequiresVerification = settings.requireSubcontractorVerification === true;
-          } catch (_e) {
-            // Invalid JSON, use default (no verification)
-          }
-        }
+        // Check project-level setting for subcontractor verification, then let the
+        // lot assignment override it when the project requires verification.
+        const projectRequiresVerification = parseProjectRequiresSubcontractorVerification(
+          itpInstanceForPermCheck.lot?.project?.settings,
+        );
 
-        // Set verification status: project setting controls default, lot assignment can override
-        // If project doesn't require verification, auto-verify
-        // If project requires verification, use lot assignment setting
-        if (!projectRequiresVerification) {
-          verificationStatus = 'verified';
-        } else {
-          verificationStatus = subcontractorCompletionAssignment.itpRequiresVerification
-            ? 'pending_verification'
-            : 'verified';
-        }
+        verificationStatus = resolveSubcontractorVerificationStatus({
+          projectRequiresVerification,
+          itpRequiresVerification: subcontractorCompletionAssignment.itpRequiresVerification,
+        });
       } else {
         // Fallback to auto-verify if no assignment found (project default is no verification)
         verificationStatus = 'verified';
@@ -259,16 +246,11 @@ completionsRouter.post(
     }
 
     // Build witness data object (only include if values provided)
-    const witnessData: Record<string, unknown> = {};
-    if (witnessPresent !== undefined) {
-      witnessData.witnessPresent = witnessPresent;
-    }
-    if (witnessName !== undefined) {
-      witnessData.witnessName = witnessName || null;
-    }
-    if (witnessCompany !== undefined) {
-      witnessData.witnessCompany = witnessCompany || null;
-    }
+    const witnessData = buildItpCompletionWitnessData({
+      witnessPresent,
+      witnessName,
+      witnessCompany,
+    });
 
     const completionInclude = {
       completedBy: {
@@ -299,8 +281,7 @@ completionsRouter.post(
           checklistItemId,
         },
       });
-      const shouldCreateFailedNcr =
-        newStatus === 'failed' && existingCompletion?.status !== 'failed';
+      const shouldCreateFailedNcr = shouldCreateFailedItpNcr(newStatus, existingCompletion?.status);
 
       if (existingCompletion) {
         // Update existing completion
@@ -471,24 +452,20 @@ completionsRouter.post(
           });
 
           // Create notifications for head contractor team
-          if (projectManagers.length > 0) {
+          const subbieNotifications = buildItpSubbieCompletionNotifications(projectManagers, {
+            projectId: project.id,
+            lotId: lot.id,
+            lotNumber: lot.lotNumber,
+            checklistItemId,
+            itemDescription,
+            subbieName,
+          });
+          if (subbieNotifications) {
             await prisma.notification.createMany({
-              data: projectManagers.map((pm) => ({
-                userId: pm.userId,
-                projectId: project.id,
-                type: 'itp_subbie_completion',
-                title: 'Subcontractor ITP Item Completed',
-                message: `${subbieName} has completed ITP item "${itemDescription}" on lot ${lot.lotNumber}. Verification required.`,
-                linkUrl: `/projects/${project.id}/lots/${lot.id}?tab=itp&highlight=${checklistItemId}`,
-              })),
+              data: subbieNotifications.rows,
             });
 
-            subbieCompletionNotification = {
-              notificationsSent: projectManagers.length,
-              subcontractorCompany: subbieName,
-              lotNumber: lot.lotNumber,
-              itemDescription,
-            };
+            subbieCompletionNotification = subbieNotifications.summary;
           }
         }
       } catch (notifError) {
@@ -512,16 +489,7 @@ completionsRouter.post(
     });
 
     // Transform to frontend-friendly format
-    const transformedCompletion = {
-      ...completion,
-      isCompleted: completion.status === 'completed' || completion.status === 'not_applicable',
-      isNotApplicable: completion.status === 'not_applicable',
-      isFailed: completion.status === 'failed',
-      isVerified: completion.verificationStatus === 'verified',
-      isPendingVerification: completion.verificationStatus === 'pending_verification',
-      attachments: completion.attachments || [],
-      linkedNcr: createdNcr,
-    };
+    const transformedCompletion = buildItpCompletionTransform(completion, createdNcr);
 
     res.json(
       buildItpCompletionResultResponse(
