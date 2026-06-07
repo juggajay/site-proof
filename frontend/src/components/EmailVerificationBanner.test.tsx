@@ -10,21 +10,27 @@ vi.mock('@/lib/api', async (importOriginal) => {
 import { EmailVerificationBanner } from './EmailVerificationBanner';
 import { useAuth } from '@/lib/auth';
 import { apiFetch } from '@/lib/api';
+import { removeSessionStorageItem } from '@/lib/storagePreferences';
 
 const useAuthMock = vi.mocked(useAuth);
 const apiFetchMock = vi.mocked(apiFetch);
+
+// The banner persists its dismissal under this session-storage key (see
+// EmailVerificationBanner.tsx). Reset only that key between tests via the safe
+// storage helper so we keep direct sessionStorage access out of source files.
+const DISMISS_KEY = 'email_verification_banner_dismissed';
 
 function setUser(user: unknown) {
   useAuthMock.mockReturnValue({ user } as unknown as ReturnType<typeof useAuth>);
 }
 
 beforeEach(() => {
-  sessionStorage.clear();
+  removeSessionStorageItem(DISMISS_KEY);
   apiFetchMock.mockResolvedValue(undefined as never);
 });
 
 afterEach(() => {
-  sessionStorage.clear();
+  removeSessionStorageItem(DISMISS_KEY);
   vi.clearAllMocks();
 });
 
