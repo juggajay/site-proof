@@ -1,16 +1,24 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { ITPTemplate } from './itpPageData';
-import { renderWithProviders, screen } from '@/test/renderWithProviders';
+import { renderWithProviders, screen, fireEvent } from '@/test/renderWithProviders';
 
 // Mutable auth role + a controllable bootstrap query, hoisted so the vi.mock
 // factories below (which run before the imports) can close over them.
 const authState = vi.hoisted(() => ({ actualRole: null as string | null }));
 const useItpTemplatesQueryMock = vi.hoisted(() => vi.fn());
+const apiFetchMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/lib/auth', () => ({
   useAuth: () => ({ actualRole: authState.actualRole }),
   getAuthToken: () => 'test-token',
 }));
+
+// Keep the real ApiError (so extractErrorMessage parses the server body) but
+// drive apiFetch directly to exercise the template-save error path.
+vi.mock('@/lib/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/api')>();
+  return { ...actual, apiFetch: apiFetchMock };
+});
 
 // Keep the real router (MemoryRouter, Link) but pin the project route param so
 // the page renders as if mounted at /projects/p1/itp.
@@ -27,6 +35,7 @@ vi.mock('./itpPageData', async (importOriginal) => {
 });
 
 import { ITPPage } from './ITPPage';
+import { ApiError } from '@/lib/api';
 
 const LOCAL_TEMPLATE: ITPTemplate = {
   id: 't1',
@@ -62,6 +71,7 @@ function mockTemplates(templates: ITPTemplate[]) {
 
 beforeEach(() => {
   useItpTemplatesQueryMock.mockReset();
+  apiFetchMock.mockReset();
   authState.actualRole = null;
 });
 
@@ -134,5 +144,38 @@ describe('ITPPage role-aware template management', () => {
     renderWithProviders(<ITPPage />);
 
     expect(screen.getByRole('button', { name: 'Create Your First Template' })).toBeInTheDocument();
+  });
+});
+
+describe('ITPPage template edit error handling', () => {
+  const TEMPLATE_IN_USE_MESSAGE =
+    "This template is in use by 2 lots with recorded sign-offs, so its checklist items can't be changed. Duplicate the template and edit the copy.";
+
+  it('surfaces the 409 TEMPLATE_IN_USE message inside the edit modal and keeps it open', async () => {
+    authState.actualRole = 'project_manager';
+    mockTemplates([LOCAL_TEMPLATE]);
+    apiFetchMock.mockRejectedValue(
+      new ApiError(
+        409,
+        JSON.stringify({
+          error: { message: TEMPLATE_IN_USE_MESSAGE, code: 'TEMPLATE_IN_USE' },
+        }),
+      ),
+    );
+
+    renderWithProviders(<ITPPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    expect(screen.getByRole('heading', { name: 'Edit ITP Template' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+
+    // The server's explanation appears verbatim, in an alert, inside the modal.
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(TEMPLATE_IN_USE_MESSAGE);
+
+    // The modal stays open so the admin can read the next step.
+    expect(screen.getByRole('heading', { name: 'Edit ITP Template' })).toBeInTheDocument();
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
   });
 });

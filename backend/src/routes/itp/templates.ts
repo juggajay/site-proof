@@ -24,6 +24,7 @@ import {
   requireProjectTemplateAccess,
   requireTemplateProjectAccess,
 } from './templateAccess.js';
+import { assertTemplateItemsReplaceable } from './templateUsage.js';
 import { templateLifecycleRouter } from './templateLifecycleRoutes.js';
 
 export const templatesRouter = Router();
@@ -366,6 +367,15 @@ templatesRouter.patch(
     const { name, description, activityType, checklistItems, isActive } = parseResult.data;
 
     await requireTemplateProjectAccess(id, user, true);
+
+    // Replacing checklist items deletes and re-creates them. Sign-off records reference
+    // those items with onDelete: Restrict, so if any have been signed off the delete is
+    // rejected and the whole transaction aborts with an opaque 500. Refuse up-front with a
+    // clear 409 instead. Metadata-only edits (no checklistItems) are always allowed, even
+    // for in-use templates.
+    if (checklistItems !== undefined) {
+      await assertTemplateItemsReplaceable(prisma, id);
+    }
 
     const updateData: Record<string, unknown> = {};
     if (name !== undefined) updateData.name = name;

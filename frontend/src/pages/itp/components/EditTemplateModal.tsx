@@ -15,6 +15,7 @@ export function EditTemplateModal({
   onClose,
   onSubmit,
   loading,
+  errorMessage,
 }: {
   template: ITPTemplate;
   onClose: () => void;
@@ -25,6 +26,7 @@ export function EditTemplateModal({
     checklistItems: EditableChecklistItem[];
   }) => void | Promise<void>;
   loading: boolean;
+  errorMessage?: string | null;
 }) {
   const [name, setName] = useState(template.name);
   const [description, setDescription] = useState(template.description || '');
@@ -162,6 +164,15 @@ export function EditTemplateModal({
             onMoveUp={handleMoveUp}
             onMoveDown={handleMoveDown}
           />
+
+          {errorMessage && (
+            <div
+              className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
+              role="alert"
+            >
+              {errorMessage}
+            </div>
+          )}
 
           <div className="flex justify-end gap-2 pt-4 border-t">
             <button
