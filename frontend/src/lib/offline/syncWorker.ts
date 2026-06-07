@@ -1,26 +1,24 @@
-// Per-item sync dispatch + the low-risk per-type executors, extracted verbatim
-// from the `runExclusiveOfflineSync(async () => {...})` worker loop in
+// Per-item sync dispatch + the per-type executors, extracted verbatim from the
+// `runExclusiveOfflineSync(async () => {...})` worker loop in
 // ../useOfflineStatus.ts (see
-// .gstack/dev-browser/offline-worker-restructure-plan-2026-06-07.md, Slice 2).
+// .gstack/dev-browser/offline-worker-restructure-plan-2026-06-07.md, Slices 2-3).
 //
 // The hook's loop now delegates each queue item to `syncSingleItem`, which
-// dispatches on `item.type`. Each executor is moved byte-for-byte (same fetch
+// dispatches on `item.type`. Each executor is moved byte-for-byte (same network
 // calls, same offlineDb marker calls, same error-message sources, same log
 // strings) so the characterization suite (useOfflineStatus.test.tsx) stays
-// green untouched. A shared `runSyncStep` wrapper collapses the five identical
+// green untouched. A shared `runSyncStep` wrapper collapses the identical
 // `error instanceof Error ? error.message : 'Unknown error'` catch ternaries
 // into one place.
 //
-// Deferred to later slices (their branches still run inline in the hook):
-//  - photo_upload: productionReadiness.spec.ts pins its formData/GPS strings
-//    and its bare dataUrl read (the raw-fetch allow-list) to useOfflineStatus.ts,
-//    so moving it would require editing the readiness guard.
-//  - lot_edit: Slice 3. Its stale-skip literals are readiness-pinned to
-//    useOfflineStatus.ts (productionReadiness.spec.ts:2078-2080).
-// Both are reported back to the loop as `deferred` so it runs its inline branch.
+// Slice 3 finished the move: photo_upload and lot_edit now live here too, so no
+// queue type defers back to the hook. The readiness assertions for their pinned
+// strings (productionReadiness.spec.ts) were repointed from useOfflineStatus.ts
+// to this module, and the raw-network allow-list entry moved with the
+// photo_upload dataUrl read that this module now owns.
 
 import { apiUrl, authFetch } from '../api';
-import { devWarn } from '../logger';
+import { devLog, devWarn } from '../logger';
 import {
   offlineDb,
   removeSyncQueueItem,
@@ -31,21 +29,33 @@ import {
   markDocketSynced,
   markDocketServerId,
   markDocketSyncError,
+  getOfflinePhoto,
+  markPhotoSynced,
+  markPhotoSyncError,
+  getOfflineLot,
+  detectLotSyncConflict,
+  markLotSynced,
+  markLotSyncError,
   type SyncQueueItem,
 } from '../offlineDb';
 import { readResponseError, syncOfflineDiarySnapshot, syncOfflineDocketDraft } from './syncClient';
+import { buildOfflineLotEditPayload } from './syncPayloads';
 
 // Outcome of dispatching a single queue item.
 //  - 'synced'  : a per-type success path that the loop counts (syncedCount++).
 //  - 'handled' : fully processed by the worker (error-marked / removed / GC'd /
 //                deliberately not-synced), no count and no further loop work.
-//  - 'deferred': the item's branch is not (yet) owned here; the hook runs its
-//                existing inline branch for it.
-export type SyncItemResult = { status: 'synced' | 'handled' | 'deferred' };
+export type SyncItemResult = { status: 'synced' | 'handled' };
+
+// Conflict-notification callback threaded from the hook's caller so the
+// lot_edit executor can surface a sync conflict to the UI. Only the callback
+// truly needs threading; everything else is a direct module import.
+export interface SyncWorkerCallbacks {
+  onConflictDetected?: (lotId: string, lotNumber: string, message: string) => void;
+}
 
 const SYNCED: SyncItemResult = { status: 'synced' };
 const HANDLED: SyncItemResult = { status: 'handled' };
-const DEFERRED: SyncItemResult = { status: 'deferred' };
 
 // Known queue types the worker recognizes. Unrecognized types are garbage
 // collected (see the dispatcher default) so the queue can't wedge. NOTE:
@@ -86,6 +96,8 @@ async function runSyncStep(
 type ItpCompletionItem = Extract<SyncQueueItem, { type: 'itp_completion' }>;
 type DiaryItem = Extract<SyncQueueItem, { type: 'diary_save' | 'diary_submit' }>;
 type DocketItem = Extract<SyncQueueItem, { type: 'docket_create' | 'docket_submit' }>;
+type PhotoUploadItem = Extract<SyncQueueItem, { type: 'photo_upload' }>;
+type LotEditItem = Extract<SyncQueueItem, { type: 'lot_edit' }>;
 
 async function syncItpCompletion(item: ItpCompletionItem, itemId: number): Promise<SyncItemResult> {
   return runSyncStep(item, async () => {
@@ -241,16 +253,200 @@ async function syncDocket(item: DocketItem, itemId: number): Promise<SyncItemRes
   );
 }
 
+// Feature #311: Sync offline photos
+async function syncPhoto(item: PhotoUploadItem, itemId: number): Promise<SyncItemResult> {
+  return runSyncStep(
+    item,
+    async () => {
+      const { photoId } = item.data;
+      const photo = await getOfflinePhoto(photoId);
+
+      if (!photo) {
+        // Photo was deleted, remove from queue
+        await removeSyncQueueItem(itemId);
+        return HANDLED;
+      }
+
+      // Convert base64 to blob for upload
+      const response = await fetch(photo.dataUrl);
+      const blob = await response.blob();
+
+      // Create FormData for multipart upload
+      const formData = new FormData();
+      formData.append('file', blob, photo.fileName);
+      formData.append('projectId', photo.projectId);
+      if (photo.lotId) formData.append('lotId', photo.lotId);
+      formData.append('documentType', photo.documentType);
+      if (photo.category) formData.append('category', photo.category);
+      formData.append('entityType', photo.entityType);
+      if (photo.entityId) formData.append('entityId', photo.entityId);
+      if (photo.caption) formData.append('caption', photo.caption);
+      if (photo.tags) formData.append('tags', JSON.stringify(photo.tags));
+      if (photo.gpsLatitude !== undefined) {
+        formData.append('gpsLatitude', String(photo.gpsLatitude));
+      }
+      if (photo.gpsLongitude !== undefined) {
+        formData.append('gpsLongitude', String(photo.gpsLongitude));
+      }
+      formData.append('capturedAt', photo.capturedAt);
+
+      // Upload to server
+      const uploadResponse = await authFetch(apiUrl('/api/documents/upload'), {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (uploadResponse.ok) {
+        const result = await uploadResponse.json();
+        // Remove from sync queue
+        await removeSyncQueueItem(itemId);
+        // Mark photo as synced
+        await markPhotoSynced(photoId, result.document?.id);
+        return SYNCED;
+      } else {
+        const errorText = await uploadResponse.text();
+        await markSyncItemError(itemId, errorText);
+        await markPhotoSyncError(photoId);
+        return HANDLED;
+      }
+    },
+    async () => {
+      if (item.data?.photoId) {
+        await markPhotoSyncError(item.data.photoId);
+      }
+    },
+  );
+}
+
+// Feature #314: Sync offline lot edits with conflict detection
+async function syncLotEdit(
+  item: LotEditItem,
+  itemId: number,
+  callbacks?: SyncWorkerCallbacks,
+): Promise<SyncItemResult> {
+  return runSyncStep(
+    item,
+    async () => {
+      const { lotId, forceOverwrite } = item.data;
+      const lot = await getOfflineLot(lotId);
+
+      if (!lot) {
+        // Lot was deleted, remove from queue
+        await removeSyncQueueItem(itemId);
+        return HANDLED;
+      }
+
+      if (!forceOverwrite && lot.syncStatus === 'conflict') {
+        devWarn('[Sync] Removing stale lot edit queue item for conflicted lot:', lotId);
+        await removeSyncQueueItem(itemId);
+        return HANDLED;
+      }
+
+      if (!forceOverwrite && lot.syncStatus === 'synced') {
+        devLog('[Sync] Removing stale lot edit queue item for synced lot:', lotId);
+        await removeSyncQueueItem(itemId);
+        return HANDLED;
+      }
+
+      // First, fetch current server state to check for conflicts
+      const serverCheckResponse = await authFetch(apiUrl(`/api/lots/${lotId}`), {
+        method: 'GET',
+      });
+
+      if (!serverCheckResponse.ok) {
+        const errorText = await serverCheckResponse.text();
+        await markSyncItemError(itemId, errorText);
+        await markLotSyncError(lotId);
+        return HANDLED;
+      }
+
+      const serverLot = await serverCheckResponse.json();
+
+      // Check for conflict (unless force overwrite is set)
+      if (!forceOverwrite) {
+        const conflictResult = await detectLotSyncConflict(lotId, {
+          updatedAt: serverLot.lot?.updatedAt || serverLot.updatedAt,
+          lotNumber: serverLot.lot?.lotNumber || serverLot.lotNumber,
+          description: serverLot.lot?.description || serverLot.description,
+          chainage: serverLot.lot?.chainage || serverLot.chainage,
+          chainageStart: serverLot.lot?.chainageStart || serverLot.chainageStart,
+          chainageEnd: serverLot.lot?.chainageEnd || serverLot.chainageEnd,
+          offset: serverLot.lot?.offset || serverLot.offset,
+          offsetLeft: serverLot.lot?.offsetLeft || serverLot.offsetLeft,
+          offsetRight: serverLot.lot?.offsetRight || serverLot.offsetRight,
+          layer: serverLot.lot?.layer || serverLot.layer,
+          areaZone: serverLot.lot?.areaZone || serverLot.areaZone,
+          activityType: serverLot.lot?.activityType || serverLot.activityType,
+          status: serverLot.lot?.status || serverLot.status,
+          // Server returns the budget under `budgetAmount`; map it to the
+          // internal `budget` field detectLotSyncConflict expects so the
+          // conflict snapshot shows the correct server-side budget.
+          budget: serverLot.lot?.budgetAmount ?? serverLot.budgetAmount,
+        });
+
+        if (conflictResult.hasConflict) {
+          // Conflict detected - notify and skip this sync item
+          devLog('[Sync] Conflict detected for lot:', lotId, lot.lotNumber);
+
+          // Call the conflict callback if provided
+          if (callbacks?.onConflictDetected) {
+            callbacks.onConflictDetected(
+              lotId,
+              lot.lotNumber,
+              `Sync conflict detected for lot ${lot.lotNumber}. Another user edited this lot while you were offline.`,
+            );
+          }
+
+          // Remove from sync queue - conflict is tracked separately
+          await removeSyncQueueItem(itemId);
+          return HANDLED;
+        }
+      }
+
+      // No conflict (or force overwrite) - proceed with sync
+      const syncResponse = await authFetch(apiUrl(`/api/lots/${lotId}`), {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(buildOfflineLotEditPayload(lot)),
+      });
+
+      if (syncResponse.ok) {
+        const result = await syncResponse.json();
+        // Remove from sync queue
+        await removeSyncQueueItem(itemId);
+        // Mark lot as synced with new server timestamp
+        await markLotSynced(lotId, result.lot?.updatedAt || new Date().toISOString());
+        devLog('[Sync] Lot synced successfully:', lotId);
+        return SYNCED;
+      } else {
+        const errorText = await syncResponse.text();
+        await markSyncItemError(itemId, errorText);
+        await markLotSyncError(lotId);
+        return HANDLED;
+      }
+    },
+    async () => {
+      if (item.data?.lotId) {
+        await markLotSyncError(item.data.lotId);
+      }
+    },
+  );
+}
+
 async function syncLotConflict(itemId: number): Promise<SyncItemResult> {
   // Conflict notification item - just remove it, conflict is tracked in lot record
   await removeSyncQueueItem(itemId);
   return HANDLED;
 }
 
-// Dispatch a single queue item to its per-type executor. Items whose branch is
-// not owned here (photo_upload, lot_edit) return `deferred` so the hook runs
-// its inline branch; unrecognized types are garbage collected.
-export async function syncSingleItem(item: SyncQueueItem): Promise<SyncItemResult> {
+// Dispatch a single queue item to its per-type executor. Every recognized type
+// is owned here; unrecognized types are garbage collected.
+export async function syncSingleItem(
+  item: SyncQueueItem,
+  callbacks?: SyncWorkerCallbacks,
+): Promise<SyncItemResult> {
   if (item.type === 'itp_completion' && item.id) {
     return syncItpCompletion(item, item.id);
   }
@@ -265,10 +461,14 @@ export async function syncSingleItem(item: SyncQueueItem): Promise<SyncItemResul
     return syncDocket(item, item.id);
   }
 
-  // Feature #311 (photo_upload) and Feature #314 (lot_edit) still run inline in
-  // the hook; defer to it.
-  if (item.type === 'photo_upload' || item.type === 'lot_edit') {
-    return DEFERRED;
+  // Feature #311: Sync offline photos
+  if (item.type === 'photo_upload' && item.id) {
+    return syncPhoto(item, item.id);
+  }
+
+  // Feature #314: Sync offline lot edits with conflict detection
+  if (item.type === 'lot_edit' && item.id) {
+    return syncLotEdit(item, item.id, callbacks);
   }
 
   // Feature #314: Handle conflict notifications (just remove from queue after processing)
