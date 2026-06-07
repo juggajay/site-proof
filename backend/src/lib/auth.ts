@@ -42,6 +42,7 @@ export interface AuthUser {
   companyName?: string | null;
   createdAt?: Date;
   avatarUrl?: string | null;
+  emailVerified?: boolean;
   hasPassword?: boolean;
   hasSubcontractorPortalAccess?: boolean;
   dashboardRole?: DashboardRole | null;
@@ -64,10 +65,11 @@ export async function verifyToken(token: string): Promise<AuthUser | null> {
         created_at: Date;
         avatar_url: string | null;
         token_invalidated_at: Date | null;
+        email_verified: boolean;
         has_password: boolean;
         has_subcontractor_portal_access: boolean;
       }>
-    >`SELECT users.id, users.email, users.full_name, users.phone, users.role_in_company, users.company_id, companies.name AS company_name, users.created_at, users.avatar_url, users.token_invalidated_at, users.password_hash IS NOT NULL AS has_password,
+    >`SELECT users.id, users.email, users.full_name, users.phone, users.role_in_company, users.company_id, companies.name AS company_name, users.created_at, users.avatar_url, users.token_invalidated_at, users.email_verified, users.password_hash IS NOT NULL AS has_password,
         users.company_id IS NULL
         AND users.role_in_company IN ('subcontractor', 'subcontractor_admin')
         AND EXISTS (
@@ -119,6 +121,7 @@ export async function verifyToken(token: string): Promise<AuthUser | null> {
       role: user.role_in_company,
       createdAt: user.created_at,
       avatarUrl: user.avatar_url,
+      emailVerified: Boolean(user.email_verified),
       hasPassword: Boolean(user.has_password),
       hasSubcontractorPortalAccess: Boolean(user.has_subcontractor_portal_access),
       dashboardRole: await resolveDashboardRoleForUser({

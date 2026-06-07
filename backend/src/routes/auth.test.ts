@@ -731,6 +731,55 @@ describe('POST /api/auth/login', () => {
     expect(JSON.stringify(changes)).not.toMatch(/token|secret|code/i);
   });
 
+  it('exposes email verification state on the login payload and refreshes it via /me', async () => {
+    const email = `login-verification-${Date.now()}@example.com`;
+    const password = 'SecureP@ssword123!';
+
+    const registerRes = await request(app).post('/api/auth/register').send({
+      email,
+      password,
+      fullName: 'Verification Login User',
+      tosAccepted: true,
+    });
+    const userId = registerRes.body.user.id as string;
+
+    try {
+      // Default @example.com accounts are not auto-verified, so the freshly
+      // registered user can sign in but is flagged unverified - this is what the
+      // dismissible "verify your email" nudge keys off.
+      const unverifiedLogin = await request(app).post('/api/auth/login').send({ email, password });
+      expect(unverifiedLogin.status).toBe(200);
+      expect(unverifiedLogin.body.user.emailVerified).toBe(false);
+
+      const unverifiedMe = await request(app)
+        .get('/api/auth/me')
+        .set('Authorization', `Bearer ${unverifiedLogin.body.token}`);
+      expect(unverifiedMe.status).toBe(200);
+      expect(unverifiedMe.body.user.emailVerified).toBe(false);
+
+      // Once the address is confirmed, both hydration paths report it verified
+      // so the nudge stops showing.
+      await prisma.user.update({
+        where: { id: userId },
+        data: { emailVerified: true, emailVerifiedAt: new Date() },
+      });
+
+      const verifiedLogin = await request(app).post('/api/auth/login').send({ email, password });
+      expect(verifiedLogin.status).toBe(200);
+      expect(verifiedLogin.body.user.emailVerified).toBe(true);
+
+      const verifiedMe = await request(app)
+        .get('/api/auth/me')
+        .set('Authorization', `Bearer ${verifiedLogin.body.token}`);
+      expect(verifiedMe.status).toBe(200);
+      expect(verifiedMe.body.user.emailVerified).toBe(true);
+    } finally {
+      await prisma.emailVerificationToken.deleteMany({ where: { userId } });
+      await clearUserAuditLogs(userId);
+      await prisma.user.delete({ where: { id: userId } }).catch(() => {});
+    }
+  });
+
   it('should login with normalized email casing and whitespace', async () => {
     const res = await request(app)
       .post('/api/auth/login')

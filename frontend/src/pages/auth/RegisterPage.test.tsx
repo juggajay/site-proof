@@ -1,0 +1,65 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { fireEvent, renderWithProviders, screen, waitFor } from '@/test/renderWithProviders';
+
+// RegisterPage only needs signUp from the auth context here.
+const signUpMock = vi.fn();
+vi.mock('@/lib/auth', () => ({
+  useAuth: () => ({ signUp: signUpMock }),
+}));
+
+import { RegisterPage } from './RegisterPage';
+
+const strongPassword = 'SecureP@ssword123!';
+
+async function fillAndSubmitRegistration() {
+  fireEvent.input(screen.getByLabelText(/first name/i), { target: { value: 'New' } });
+  fireEvent.input(screen.getByLabelText(/last name/i), { target: { value: 'User' } });
+  fireEvent.input(screen.getByLabelText(/^email$/i), {
+    target: { value: 'new-user@example.com' },
+  });
+  fireEvent.input(screen.getByLabelText(/^password$/i), { target: { value: strongPassword } });
+  fireEvent.input(screen.getByLabelText(/confirm password/i), {
+    target: { value: strongPassword },
+  });
+  fireEvent.click(screen.getByRole('checkbox', { name: /agree/i }));
+  fireEvent.click(screen.getByRole('button', { name: /create account/i }));
+}
+
+afterEach(() => {
+  vi.clearAllMocks();
+});
+
+describe('RegisterPage success screen', () => {
+  it('tells the new user they can sign in now instead of implying they are blocked', async () => {
+    signUpMock.mockResolvedValue(undefined);
+
+    renderWithProviders(<RegisterPage />);
+    await fillAndSubmitRegistration();
+
+    // Truth-first heading: the account exists, they are not waiting on an email.
+    expect(await screen.findByRole('heading', { name: 'Account created' })).toBeInTheDocument();
+
+    // The body must say sign-in is available now (no "verify before you can use it").
+    expect(screen.getByText(/you can sign in now/i)).toBeInTheDocument();
+    expect(screen.getByText(/new-user@example.com/)).toBeInTheDocument();
+
+    // The misleading old copy must be gone.
+    expect(screen.queryByRole('heading', { name: 'Check Your Email' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/click the link to verify your account/i)).not.toBeInTheDocument();
+
+    // Both actions remain available.
+    expect(screen.getByRole('link', { name: /go to login/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /resend verification email/i })).toBeInTheDocument();
+  });
+
+  it('does not show the success screen until registration succeeds', async () => {
+    signUpMock.mockRejectedValue(new Error('Email already in use'));
+
+    renderWithProviders(<RegisterPage />);
+    await fillAndSubmitRegistration();
+
+    await waitFor(() => expect(signUpMock).toHaveBeenCalled());
+    expect(screen.queryByRole('heading', { name: 'Account created' })).not.toBeInTheDocument();
+    expect(await screen.findByText('Email already in use')).toBeInTheDocument();
+  });
+});
