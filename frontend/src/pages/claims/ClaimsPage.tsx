@@ -129,7 +129,11 @@ export function ClaimsPage() {
       c.paymentDueDate
         ? new Date(c.paymentDueDate).toLocaleDateString('en-AU')
         : c.submittedAt
-          ? new Date(calculatePaymentDueDate(c.submittedAt)).toLocaleDateString('en-AU')
+          ? new Date(
+              // Project jurisdiction drives SOPA timeframes; falls back to NSW
+              // inside calculatePaymentDueDate when state is absent.
+              calculatePaymentDueDate(c.submittedAt, c.projectState ?? undefined),
+            ).toLocaleDateString('en-AU')
           : '-',
     ]);
     downloadCsv(`progress-claims-${projectId}-${formatDateKey()}.csv`, [headers, ...rows]);

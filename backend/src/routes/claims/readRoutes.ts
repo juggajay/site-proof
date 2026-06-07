@@ -259,17 +259,29 @@ export function createClaimReadRouter({
       const projectId = parseClaimRouteParam(req.params.projectId, 'projectId');
       await requireCommercialProjectAccess(req.user!, projectId);
 
-      const claims = await prisma.progressClaim.findMany({
-        where: { projectId },
-        orderBy: { claimNumber: 'desc' },
-        include: {
-          _count: {
-            select: { claimedLots: true },
+      // The project's state drives the per-jurisdiction SOPA certification and
+      // payment-due timeframes the frontend renders. Select it cheaply alongside
+      // the claims so every row reports the correct (e.g. WA) due dates instead
+      // of silently defaulting to NSW.
+      const [project, claims] = await Promise.all([
+        prisma.project.findUnique({
+          where: { id: projectId },
+          select: { state: true },
+        }),
+        prisma.progressClaim.findMany({
+          where: { projectId },
+          orderBy: { claimNumber: 'desc' },
+          include: {
+            _count: {
+              select: { claimedLots: true },
+            },
           },
-        },
-      });
+        }),
+      ]);
 
-      const transformedClaims = claims.map((claim) => mapClaimListItem(claim));
+      const transformedClaims = claims.map((claim) =>
+        mapClaimListItem(claim, project?.state ?? null),
+      );
 
       res.json(buildClaimsListResponse(transformedClaims));
     }),

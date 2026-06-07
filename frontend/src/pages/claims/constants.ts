@@ -31,12 +31,20 @@ export const SOPA_TIMEFRAMES: Record<
     label: 'QLD (Building Industry Fairness (Security of Payment) Act 2017)',
   },
   WA: {
-    responseTime: 14,
-    paymentTime: 28,
+    // WA SOPA Act 2021: payment schedule due within 15 business days; principal
+    // must pay a head contractor within 20 business days (28 calendar days) of
+    // the claim. addBusinessDays counts business days, so the payment figure is
+    // 20 business days here (the previous 28 conflated calendar with business
+    // days and overstated the WA due date).
+    responseTime: 15,
+    paymentTime: 20,
     label: 'WA (Building and Construction Industry (Security of Payment) Act 2021)',
   },
   SA: {
-    responseTime: 10,
+    // SA SOPA Act 2009: payment schedule due within 15 business days; if the
+    // contract is silent the progress payment is due 15 business days after the
+    // claim (the previous response value of 10 was incorrect).
+    responseTime: 15,
     paymentTime: 15,
     label: 'SA (Building and Construction Industry Security of Payment Act 2009)',
   },

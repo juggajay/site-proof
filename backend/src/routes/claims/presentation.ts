@@ -89,7 +89,7 @@ export function mapClaimableLot(lot: ClaimableLot) {
   };
 }
 
-export function mapClaimListItem(claim: ClaimListItem) {
+export function mapClaimListItem(claim: ClaimListItem, projectState?: string | null) {
   return {
     id: claim.id,
     claimNumber: claim.claimNumber,
@@ -103,6 +103,10 @@ export function mapClaimListItem(claim: ClaimListItem) {
     disputeNotes: claim.disputeNotes || null,
     disputedAt: claim.disputedAt ? formatClaimDateKey(claim.disputedAt) : null,
     lotCount: claim._count.claimedLots,
+    // The project's jurisdiction drives the SOPA certification/payment-due
+    // timeframes the frontend renders. Null when unknown so the client can
+    // fall back to NSW (its historical default).
+    projectState: projectState ?? null,
   };
 }
 
