@@ -48,22 +48,25 @@ describe('mapClaimableLot', () => {
 });
 
 describe('mapClaimListItem', () => {
-  it('preserves list item date and amount formatting', () => {
+  it('preserves list item date and amount formatting and carries the project state', () => {
     expect(
-      mapClaimListItem({
-        id: 'claim-1',
-        claimNumber: 7,
-        claimPeriodStart: new Date('2026-05-01T10:00:00.000Z'),
-        claimPeriodEnd: new Date('2026-05-31T10:00:00.000Z'),
-        status: 'certified',
-        totalClaimedAmount: '48000.25',
-        certifiedAmount: '47000.10',
-        paidAmount: '1000',
-        submittedAt: new Date('2026-06-01T12:00:00.000Z'),
-        disputeNotes: 'Variation pending',
-        disputedAt: new Date('2026-06-02T12:00:00.000Z'),
-        _count: { claimedLots: 3 },
-      }),
+      mapClaimListItem(
+        {
+          id: 'claim-1',
+          claimNumber: 7,
+          claimPeriodStart: new Date('2026-05-01T10:00:00.000Z'),
+          claimPeriodEnd: new Date('2026-05-31T10:00:00.000Z'),
+          status: 'certified',
+          totalClaimedAmount: '48000.25',
+          certifiedAmount: '47000.10',
+          paidAmount: '1000',
+          submittedAt: new Date('2026-06-01T12:00:00.000Z'),
+          disputeNotes: 'Variation pending',
+          disputedAt: new Date('2026-06-02T12:00:00.000Z'),
+          _count: { claimedLots: 3 },
+        },
+        'WA',
+      ),
     ).toEqual({
       id: 'claim-1',
       claimNumber: 7,
@@ -77,7 +80,27 @@ describe('mapClaimListItem', () => {
       disputeNotes: 'Variation pending',
       disputedAt: '2026-06-02',
       lotCount: 3,
+      projectState: 'WA',
     });
+  });
+
+  it('defaults projectState to null when the project state is unknown', () => {
+    expect(
+      mapClaimListItem({
+        id: 'claim-9',
+        claimNumber: 1,
+        claimPeriodStart: new Date('2026-05-01T10:00:00.000Z'),
+        claimPeriodEnd: new Date('2026-05-31T10:00:00.000Z'),
+        status: 'submitted',
+        totalClaimedAmount: '100',
+        certifiedAmount: null,
+        paidAmount: null,
+        submittedAt: new Date('2026-06-01T12:00:00.000Z'),
+        disputeNotes: null,
+        disputedAt: null,
+        _count: { claimedLots: 1 },
+      }).projectState,
+    ).toBeNull();
   });
 
   it('preserves nullish optional commercial fields', () => {
