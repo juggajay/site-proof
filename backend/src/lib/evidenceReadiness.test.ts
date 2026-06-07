@@ -302,4 +302,109 @@ describe('evidence readiness helpers', () => {
       review.lots[1].claim.blockers.every((readinessItem) => !readinessItem.blocksAction),
     ).toBe(true);
   });
+
+  it('treats an unverified passing test as a pending warning, not claim support', () => {
+    const review = buildClaimEvidenceReviewFromInputs({
+      analyzedAt: '2026-06-07T00:00:00.000Z',
+      claim: {
+        id: 'claim-pending',
+        claimNumber: 8,
+        totalClaimedAmount: 1000,
+        claimedLots: [
+          {
+            amountClaimed: 1000,
+            lot: {
+              id: 'lot-unverified',
+              lotNumber: 'LOT-UNVERIFIED',
+              activityType: 'Earthworks',
+              // Lab certificate received and marked pass, but not yet verified.
+              testResults: [{ id: 'test-1', status: 'results_received', passFail: 'pass' }],
+              ncrLots: [],
+              documents: [
+                { id: 'photo-1', documentType: 'photo' },
+                { id: 'photo-2', documentType: 'photo' },
+                { id: 'photo-3', documentType: 'photo' },
+              ],
+              itpInstance: {
+                template: {
+                  checklistItems: [{ id: 'item-1', pointType: 'standard' }],
+                },
+                completions: [
+                  {
+                    id: 'completion-1',
+                    status: 'completed',
+                    verificationStatus: 'verified',
+                    checklistItemId: 'item-1',
+                  },
+                ],
+              },
+              holdPoints: [],
+            },
+          },
+        ],
+      },
+    });
+
+    const lot = review.lots[0];
+    const codes = (bucket: { code: string }[]) => bucket.map((readinessItem) => readinessItem.code);
+
+    // Unverified pass raises the (previously dead) pending warning...
+    expect(codes(lot.claim.warnings)).toContain('pending_tests');
+    // ...and must NOT be counted as supporting evidence.
+    expect(codes(lot.claim.support)).not.toContain('passing_tests');
+    // A warning (and no blocker) downgrades the line out of "ready".
+    expect(lot.claim.state).toBe('warning');
+    expect(review.summary.readyCount).toBe(0);
+    expect(review.summary.reviewCount).toBe(1);
+  });
+
+  it('counts a verified passing test as support with no pending warning', () => {
+    const review = buildClaimEvidenceReviewFromInputs({
+      analyzedAt: '2026-06-07T00:00:00.000Z',
+      claim: {
+        id: 'claim-verified',
+        claimNumber: 9,
+        totalClaimedAmount: 1000,
+        claimedLots: [
+          {
+            amountClaimed: 1000,
+            lot: {
+              id: 'lot-verified',
+              lotNumber: 'LOT-VERIFIED',
+              activityType: 'Earthworks',
+              testResults: [{ id: 'test-1', status: 'verified', passFail: 'pass' }],
+              ncrLots: [],
+              documents: [
+                { id: 'photo-1', documentType: 'photo' },
+                { id: 'photo-2', documentType: 'photo' },
+                { id: 'photo-3', documentType: 'photo' },
+              ],
+              itpInstance: {
+                template: {
+                  checklistItems: [{ id: 'item-1', pointType: 'standard' }],
+                },
+                completions: [
+                  {
+                    id: 'completion-1',
+                    status: 'completed',
+                    verificationStatus: 'verified',
+                    checklistItemId: 'item-1',
+                  },
+                ],
+              },
+              holdPoints: [],
+            },
+          },
+        ],
+      },
+    });
+
+    const lot = review.lots[0];
+    const codes = (bucket: { code: string }[]) => bucket.map((readinessItem) => readinessItem.code);
+
+    expect(codes(lot.claim.support)).toContain('passing_tests');
+    expect(codes(lot.claim.warnings)).not.toContain('pending_tests');
+    expect(lot.claim.state).toBe('ready');
+    expect(review.summary.readyCount).toBe(1);
+  });
 });
