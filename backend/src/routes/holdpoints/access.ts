@@ -24,6 +24,7 @@ export const HP_REQUEST_ROLES = [
   'owner',
   'admin',
   'project_manager',
+  'site_manager',
   'site_engineer',
   'foreman',
   'quality_manager',
