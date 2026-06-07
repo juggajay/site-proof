@@ -120,10 +120,34 @@ export function CaptureModal({
       const entityType =
         captureType === 'ncr' ? 'ncr' : captureType === 'note' ? 'general' : 'general';
 
+      // For a defect, try to raise a real NCR first (online only) so the issue
+      // actually lands in the NCR register. If that succeeds we link the photo to
+      // the new NCR; otherwise we still keep the photo and tell the foreman the
+      // truth - they need to raise the NCR from the register when back online.
+      let raisedNcr: { id: string; ncrNumber: string } | null = null;
+      if (captureType === 'ncr' && navigator.onLine) {
+        try {
+          const response = await apiFetch<{ ncr: { id: string; ncrNumber: string } }>('/api/ncrs', {
+            method: 'POST',
+            body: JSON.stringify({
+              projectId,
+              description: description.trim() || 'Defect captured on site - details pending',
+              category: 'general',
+              lotIds: linkedLot ? [linkedLot] : undefined,
+            }),
+          });
+          raisedNcr = response.ncr;
+        } catch (error) {
+          // Online but NCR creation failed - fall through to the offline wording
+          // so we never claim an NCR was raised when it wasn't.
+          logError('Failed to raise NCR from capture:', error);
+        }
+      }
+
       const photo = await capturePhotoOffline(projectId, capturedFile, {
         lotId: linkedLot || undefined,
         entityType,
-        entityId: linkedItp || undefined,
+        entityId: raisedNcr ? raisedNcr.id : linkedItp || undefined,
         documentType: captureType === 'ncr' ? 'ncr_evidence' : 'photo',
         caption: description.trim() || undefined,
         capturedBy: user.id,
@@ -132,12 +156,19 @@ export function CaptureModal({
       });
 
       if (captureType === 'ncr') {
-        // This only saves a defect-tagged photo - it does NOT raise an NCR
-        // record. Keep the copy honest and point at the real NCR flow.
-        toast({
-          description: 'Defect photo saved. Raise an NCR from the lot to log it formally.',
-          variant: 'success',
-        });
+        if (raisedNcr) {
+          toast({
+            description: `NCR ${raisedNcr.ncrNumber} raised - add details from the NCR register.`,
+            variant: 'success',
+          });
+        } else {
+          // Offline (or creation failed): the photo is saved, but no NCR exists yet.
+          toast({
+            description:
+              "Photo saved offline - raise the NCR from the NCR register when you're back online.",
+            variant: 'success',
+          });
+        }
       } else {
         toast({ description: 'Photo saved', variant: 'success' });
       }
