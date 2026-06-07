@@ -23,8 +23,20 @@ export interface TemplateSnapshot {
   checklistItems: ChecklistItem[];
 }
 
+// Nested witness point notification settings as saved by the project settings UI
+// (frontend/src/pages/projects/settings). This is the shape the frontend writes.
+export interface NestedWitnessPointNotificationSettings {
+  enabled?: boolean;
+  trigger?: string;
+  clientEmail?: string | null;
+  clientName?: string;
+}
+
 // Type for project settings
 export interface ProjectSettings {
+  // Current (nested) shape written by the settings UI.
+  witnessPointNotifications?: NestedWitnessPointNotificationSettings;
+  // Legacy flat keys (kept for backwards compatibility with older saved settings).
   witnessPointNotificationTrigger?: string;
   witnessPointNotificationEnabled?: boolean;
   witnessPointClientEmail?: string | null;
@@ -32,6 +44,44 @@ export interface ProjectSettings {
   requireSubcontractorVerification?: boolean;
   hpRecipients?: Array<{ email: string }>;
   hpApprovalRequirement?: string;
+}
+
+// Resolved witness point notification config used by the sender.
+export interface ResolvedWitnessPointNotificationSettings {
+  enabled: boolean;
+  trigger: string;
+  clientEmail: string | null;
+  clientName: string;
+}
+
+/**
+ * Resolve witness point notification settings from a project's saved settings.
+ *
+ * The settings UI writes a nested `witnessPointNotifications` object, while older
+ * saved settings used flat keys. This prefers the nested values and falls back to
+ * the legacy flat keys, preserving the historical defaults (missing config =>
+ * enabled, no client email, "previous_item" trigger).
+ */
+export function resolveWitnessPointNotificationSettings(
+  settings: ProjectSettings,
+): ResolvedWitnessPointNotificationSettings {
+  const nested = settings.witnessPointNotifications;
+
+  // enabled: default true; only disabled when explicitly set to false.
+  const enabled =
+    nested?.enabled !== undefined
+      ? nested.enabled !== false
+      : settings.witnessPointNotificationEnabled !== false;
+
+  const trigger = nested?.trigger || settings.witnessPointNotificationTrigger || 'previous_item';
+
+  // Treat empty-string email (UI default) the same as "not configured".
+  const clientEmail = nested?.clientEmail || settings.witnessPointClientEmail || null;
+
+  const clientName =
+    nested?.clientName || settings.witnessPointClientName || 'Client Representative';
+
+  return { enabled, trigger, clientEmail, clientName };
 }
 
 /**
@@ -96,11 +146,14 @@ export async function checkAndNotifyWitnessPoint(
       }
     }
 
-    // Default: notify when previous item is completed
-    const notificationTrigger = settings.witnessPointNotificationTrigger || 'previous_item';
-    const witnessNotificationEnabled = settings.witnessPointNotificationEnabled !== false; // default true
-    const clientEmail = settings.witnessPointClientEmail || null;
-    const clientName = settings.witnessPointClientName || 'Client Representative';
+    // Resolve config from nested (settings UI) shape with legacy flat-key fallback.
+    // Default: notify when previous item is completed.
+    const {
+      enabled: witnessNotificationEnabled,
+      trigger: notificationTrigger,
+      clientEmail,
+      clientName,
+    } = resolveWitnessPointNotificationSettings(settings);
 
     if (!witnessNotificationEnabled) {
       return null;
