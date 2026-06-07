@@ -122,10 +122,16 @@ export function buildClaimEvidenceReviewFromInputs(
     }
 
     const failedTests = lot.testResults.filter((testResult) => testResult.passFail === 'fail');
-    const pendingTests = lot.testResults.filter((testResult) =>
-      ['pending', 'submitted'].includes(testResult.status),
+    // A test only supports a claim line once it has been verified (the terminal
+    // status in the requested -> at_lab -> results_received -> entered -> verified
+    // workflow). Anything that has not failed and is not yet verified is still
+    // pending verification and must surface as a warning, not as evidence.
+    const pendingTests = lot.testResults.filter(
+      (testResult) => testResult.passFail !== 'fail' && testResult.status !== 'verified',
     );
-    const passingTests = lot.testResults.filter((testResult) => testResult.passFail === 'pass');
+    const passingTests = lot.testResults.filter(
+      (testResult) => testResult.passFail === 'pass' && testResult.status === 'verified',
+    );
 
     if (lot.testResults.length === 0) {
       items.push(
