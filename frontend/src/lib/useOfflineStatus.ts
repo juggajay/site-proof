@@ -28,6 +28,7 @@ import {
   syncOfflineDiarySnapshot,
   syncOfflineDocketDraft,
 } from './offline/syncClient';
+import { buildOfflineLotEditPayload } from './offline/syncPayloads';
 
 // Type for sync notification callbacks
 export interface SyncCallbacks {
@@ -379,8 +380,10 @@ export function useOfflineStatus(callbacks?: SyncCallbacks) {
                   areaZone: serverLot.lot?.areaZone || serverLot.areaZone,
                   activityType: serverLot.lot?.activityType || serverLot.activityType,
                   status: serverLot.lot?.status || serverLot.status,
-                  budget: serverLot.lot?.budget || serverLot.budget,
-                  notes: serverLot.lot?.notes || serverLot.notes,
+                  // Server returns the budget under `budgetAmount`; map it to the
+                  // internal `budget` field detectLotSyncConflict expects so the
+                  // conflict snapshot shows the correct server-side budget.
+                  budget: serverLot.lot?.budgetAmount ?? serverLot.budgetAmount,
                 });
 
                 if (conflictResult.hasConflict) {
@@ -408,22 +411,7 @@ export function useOfflineStatus(callbacks?: SyncCallbacks) {
                 headers: {
                   'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({
-                  lotNumber: lot.lotNumber,
-                  description: lot.description,
-                  chainage: lot.chainage,
-                  chainageStart: lot.chainageStart,
-                  chainageEnd: lot.chainageEnd,
-                  offset: lot.offset,
-                  offsetLeft: lot.offsetLeft,
-                  offsetRight: lot.offsetRight,
-                  layer: lot.layer,
-                  areaZone: lot.areaZone,
-                  activityType: lot.activityType,
-                  status: lot.status,
-                  budget: lot.budget,
-                  notes: lot.notes,
-                }),
+                body: JSON.stringify(buildOfflineLotEditPayload(lot)),
               });
 
               if (syncResponse.ok) {

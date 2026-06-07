@@ -4,10 +4,11 @@
 
 import { describe, expect, it } from 'vitest';
 
-import type { OfflineDailyDiary, OfflineDocket } from './core';
+import type { OfflineDailyDiary, OfflineDocket, OfflineLotEditTable } from './core';
 import {
   buildOfflineDiaryPayload,
   buildOfflineDocketNotes,
+  buildOfflineLotEditPayload,
   compactText,
   sumDocketLabourHours,
   sumDocketPlantHours,
@@ -45,6 +46,18 @@ function makeDocket(overrides: Partial<OfflineDocket> = {}): OfflineDocket {
     createdBy: 'user-1',
     syncStatus: 'pending',
     localUpdatedAt: '2026-06-04T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function makeOfflineLot(overrides: Partial<OfflineLotEditTable> = {}): OfflineLotEditTable {
+  return {
+    id: 'lot-1',
+    projectId: 'project-1',
+    lotNumber: 'LOT-001',
+    syncStatus: 'pending',
+    localUpdatedAt: '2026-06-04T00:00:00.000Z',
+    editedBy: 'user-1',
     ...overrides,
   };
 }
@@ -212,5 +225,59 @@ describe('buildOfflineDocketNotes', () => {
 
   it('returns undefined when there is nothing to summarise', () => {
     expect(buildOfflineDocketNotes(makeDocket())).toBeUndefined();
+  });
+});
+
+describe('buildOfflineLotEditPayload', () => {
+  it('sends the budget under the server field name budgetAmount, never budget', () => {
+    const payload = buildOfflineLotEditPayload(makeOfflineLot({ budget: 125000 }));
+
+    // Regression guard: the backend updateLotSchema strips unknown keys, so an
+    // offline budget edit sent as `budget` silently vanished on sync. It must be
+    // mapped to `budgetAmount` (the schema's field) to actually reach the DB.
+    expect(payload.budgetAmount).toBe(125000);
+    expect(payload).not.toHaveProperty('budget');
+  });
+
+  it('omits notes, which the lot update schema does not accept', () => {
+    const payload = buildOfflineLotEditPayload(makeOfflineLot({ notes: 'should be dropped' }));
+
+    expect(payload).not.toHaveProperty('notes');
+  });
+
+  it('maps the remaining editable fields straight through', () => {
+    const payload = buildOfflineLotEditPayload(
+      makeOfflineLot({
+        lotNumber: 'LOT-042',
+        description: 'Subgrade prep',
+        chainage: 100,
+        chainageStart: 100,
+        chainageEnd: 200,
+        offset: 1.5,
+        offsetLeft: 1,
+        offsetRight: 2,
+        layer: 'Subgrade',
+        areaZone: 'Zone A',
+        activityType: 'earthworks',
+        status: 'in_progress',
+        budget: 5000,
+      }),
+    );
+
+    expect(payload).toEqual({
+      lotNumber: 'LOT-042',
+      description: 'Subgrade prep',
+      chainage: 100,
+      chainageStart: 100,
+      chainageEnd: 200,
+      offset: 1.5,
+      offsetLeft: 1,
+      offsetRight: 2,
+      layer: 'Subgrade',
+      areaZone: 'Zone A',
+      activityType: 'earthworks',
+      status: 'in_progress',
+      budgetAmount: 5000,
+    });
   });
 });
