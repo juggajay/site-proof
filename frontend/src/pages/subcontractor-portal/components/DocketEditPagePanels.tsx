@@ -204,7 +204,7 @@ export function DocketEditActionBar({
           <p className="text-sm text-muted-foreground">Total</p>
           <p className="text-xl font-bold text-foreground">{formatCurrency(totalCost)}</p>
         </div>
-        {canEdit && (
+        {canEdit && docketStatus !== 'queried' && (
           <Button
             onClick={onSubmit}
             disabled={!canSubmit || submitting}
@@ -225,6 +225,11 @@ export function DocketEditActionBar({
               </>
             )}
           </Button>
+        )}
+        {canEdit && docketStatus === 'queried' && (
+          <p className="text-sm text-amber-700 dark:text-amber-300 text-right">
+            Respond to the query above to resubmit.
+          </p>
         )}
         {!canEdit && docketStatus === 'pending_approval' && (
           <span className="px-4 py-2 text-base bg-muted text-muted-foreground rounded-lg">

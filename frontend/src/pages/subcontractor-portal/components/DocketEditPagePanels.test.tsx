@@ -128,4 +128,44 @@ describe('DocketEditPagePanels', () => {
     expect(screen.getByText('Approved')).toBeInTheDocument();
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
+
+  it('hides the dead Submit button on a queried docket and points to the resubmit flow', () => {
+    const onSubmit = vi.fn();
+
+    renderInRouter(
+      <DocketEditActionBar
+        canEdit
+        canSubmit={false}
+        docketStatus="queried"
+        submitting={false}
+        totalCost={731.25}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    // The permanently-disabled "Submit for Approval" button must not render for
+    // a queried docket; the real path is "Respond & Resubmit" in the notices.
+    expect(screen.queryByRole('button', { name: /submit for approval/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/respond to the query above to resubmit/i)).toBeInTheDocument();
+  });
+
+  it('still shows an enabled Submit button on a valid draft docket', () => {
+    const onSubmit = vi.fn();
+
+    renderInRouter(
+      <DocketEditActionBar
+        canEdit
+        canSubmit
+        docketStatus="draft"
+        submitting={false}
+        totalCost={731.25}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    const submitButton = screen.getByRole('button', { name: /submit for approval/i });
+    expect(submitButton).toBeEnabled();
+    fireEvent.click(submitButton);
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+  });
 });
