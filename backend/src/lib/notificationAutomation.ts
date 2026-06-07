@@ -45,6 +45,7 @@ type ProjectForAutomation = {
   companyId: string;
   workingHoursEnd: string | null;
   workingDays: string | null;
+  settings: string | null;
 };
 
 type NotificationRecipient = {
@@ -186,6 +187,7 @@ async function findActiveProjects(
       companyId: true,
       workingHoursEnd: true,
       workingDays: true,
+      settings: true,
     },
     orderBy: { createdAt: 'asc' },
     take: parsePositiveInteger(options.limit, DEFAULT_JOB_LIMIT),

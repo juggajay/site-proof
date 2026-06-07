@@ -363,6 +363,55 @@ describe('Hold Points API', () => {
       expect(res.body.holdPoint.releaseSignatureUrl).toBeNull();
     });
 
+    it('suppresses hold point release notifications when the project toggle is off', async () => {
+      const hp = await prisma.holdPoint.create({
+        data: {
+          lotId,
+          itpChecklistItemId: checklistItemId,
+          pointType: 'hold_point',
+          status: 'notified',
+        },
+      });
+
+      // Admin turned the "Hold Point Releases" category off for this project.
+      await prisma.project.update({
+        where: { id: projectId },
+        data: {
+          settings: JSON.stringify({ notificationPreferences: { holdPointReleases: false } }),
+        },
+      });
+
+      try {
+        clearEmailQueue();
+        const res = await request(app)
+          .post(`/api/holdpoints/${hp.id}/release`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            releasedByName: 'Toggle Off Releaser',
+            releaseDate: '2026-01-22',
+            releaseTime: '11:00',
+            releaseNotes: 'Should not notify the team',
+          });
+
+        // The release still succeeds; only the team notifications are suppressed.
+        expect(res.status).toBe(200);
+        expect(res.body.holdPoint.status).toBe('released');
+
+        const notifications = await prisma.notification.findMany({
+          where: { projectId, type: 'hold_point_release' },
+        });
+        expect(notifications).toHaveLength(0);
+      } finally {
+        await prisma.project.update({
+          where: { id: projectId },
+          data: { settings: null },
+        });
+        await prisma.notification.deleteMany({ where: { projectId, type: 'hold_point_release' } });
+        await prisma.holdPoint.delete({ where: { id: hp.id } }).catch(() => {});
+        clearEmailQueue();
+      }
+    });
+
     it('should reject releasing an already released hold point', async () => {
       const res = await request(app)
         .post(`/api/holdpoints/${holdPointId}/release`)

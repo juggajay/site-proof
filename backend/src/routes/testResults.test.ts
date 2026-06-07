@@ -2421,6 +2421,72 @@ describe('Test Results API', () => {
       }
     });
 
+    it('suppresses test-result notifications when the project toggle is off', async () => {
+      const siteEngineer = await registerTestUser(
+        'Test Result Toggle-Off Engineer',
+        'site_engineer',
+        companyId,
+      );
+      const testResult = await prisma.testResult.create({
+        data: {
+          projectId,
+          lotId,
+          testType: 'Compaction Test',
+          testRequestNumber: 'TRN-2002',
+          laboratoryName: 'Geo Lab',
+          status: 'at_lab',
+        },
+      });
+
+      await prisma.projectUser.create({
+        data: {
+          projectId,
+          userId: siteEngineer.userId,
+          role: 'site_engineer',
+          status: 'active',
+        },
+      });
+
+      // Admin turned the "Test Results" category off for this project.
+      await prisma.project.update({
+        where: { id: projectId },
+        data: {
+          settings: JSON.stringify({ notificationPreferences: { testResults: false } }),
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .post(`/api/test-results/${testResult.id}/status`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            status: 'results_received',
+          });
+
+        // The status change still succeeds; only the notification is suppressed.
+        expect(res.status).toBe(200);
+        expect(res.body.testResult.status).toBe('results_received');
+
+        const notification = await prisma.notification.findFirst({
+          where: {
+            userId: siteEngineer.userId,
+            projectId,
+            type: 'test_result_received',
+          },
+        });
+        expect(notification).toBeNull();
+        expect(mockSendNotificationIfEnabled).not.toHaveBeenCalled();
+      } finally {
+        await prisma.project.update({
+          where: { id: projectId },
+          data: { settings: null },
+        });
+        await prisma.notification.deleteMany({ where: { userId: siteEngineer.userId } });
+        await prisma.testResult.deleteMany({ where: { id: testResult.id } });
+        await cleanupTestUser(siteEngineer.userId);
+      }
+    });
+
     it('should reject invalid status transition', async () => {
       const res = await request(app)
         .post(`/api/test-results/${testResultId}/status`)

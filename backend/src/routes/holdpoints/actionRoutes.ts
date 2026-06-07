@@ -24,6 +24,7 @@ import {
 import { buildHoldPointChaseEmail, selectHoldPointChaseRecipients } from './chaseNotifications.js';
 import { buildHoldPointChaseResponse, buildHoldPointReleasedResponse } from './actionResponses.js';
 import { holdPointEscalationRouter } from './escalationRoutes.js';
+import { isProjectNotificationEnabled } from '../../lib/projectNotificationPreferences.js';
 
 // =============================================================================
 // Authenticated hold point ACTION routes (release, chase, escalate,
@@ -166,43 +167,48 @@ holdPointActionRouter.post(
       },
     });
 
-    // Create in-app notifications for all project team members
-    const notificationsToCreate = buildHoldPointReleaseNotifications(projectUsers, {
-      projectId: existingHP.lot.projectId,
-      holdPointDescription: holdPoint.description,
-      lotNumber: holdPoint.lot.lotNumber,
-      releasedByName,
-    });
+    // Respect the project-level "Hold Point Releases" notification toggle. When
+    // an admin turns this category off, suppress both the in-app records and the
+    // emails for everyone on the project. Absent/missing settings default to on.
+    if (isProjectNotificationEnabled(existingHP.lot.project.settings, 'holdPointReleases')) {
+      // Create in-app notifications for all project team members
+      const notificationsToCreate = buildHoldPointReleaseNotifications(projectUsers, {
+        projectId: existingHP.lot.projectId,
+        holdPointDescription: holdPoint.description,
+        lotNumber: holdPoint.lot.lotNumber,
+        releasedByName,
+      });
 
-    if (notificationsToCreate.length > 0) {
-      try {
-        await prisma.notification.createMany({
-          data: notificationsToCreate,
-        });
-      } catch (notificationError) {
-        logError('[HP Release] Failed to create in-app notifications:', notificationError);
-        // The release already committed above; don't fail the request if the
-        // post-commit notification insert throws.
+      if (notificationsToCreate.length > 0) {
+        try {
+          await prisma.notification.createMany({
+            data: notificationsToCreate,
+          });
+        } catch (notificationError) {
+          logError('[HP Release] Failed to create in-app notifications:', notificationError);
+          // The release already committed above; don't fail the request if the
+          // post-commit notification insert throws.
+        }
       }
-    }
 
-    // Send email notifications to team members (if configured). The payload is
-    // the same for every recipient, so build it once.
-    const releaseEmailNotification = buildHoldPointReleaseEmailNotification({
-      projectId: existingHP.lot.projectId,
-      holdPointDescription: holdPoint.description,
-      lotNumber: holdPoint.lot.lotNumber,
-      releasedByName,
-      projectName: existingHP.lot.project.name,
-      releaseMethod,
-      releaseNotes,
-    });
-    for (const pu of projectUsers) {
-      try {
-        await sendNotificationIfEnabled(pu.userId, 'holdPointRelease', releaseEmailNotification);
-      } catch (emailError) {
-        logError(`[HP Release] Failed to send email to user ${pu.userId}:`, emailError);
-        // Continue with other notifications even if one fails
+      // Send email notifications to team members (if configured). The payload is
+      // the same for every recipient, so build it once.
+      const releaseEmailNotification = buildHoldPointReleaseEmailNotification({
+        projectId: existingHP.lot.projectId,
+        holdPointDescription: holdPoint.description,
+        lotNumber: holdPoint.lot.lotNumber,
+        releasedByName,
+        projectName: existingHP.lot.project.name,
+        releaseMethod,
+        releaseNotes,
+      });
+      for (const pu of projectUsers) {
+        try {
+          await sendNotificationIfEnabled(pu.userId, 'holdPointRelease', releaseEmailNotification);
+        } catch (emailError) {
+          logError(`[HP Release] Failed to send email to user ${pu.userId}:`, emailError);
+          // Continue with other notifications even if one fails
+        }
       }
     }
 

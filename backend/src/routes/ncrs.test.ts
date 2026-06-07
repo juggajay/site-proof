@@ -495,6 +495,91 @@ describe('NCR API', () => {
       await prisma.emailVerificationToken.deleteMany({ where: { userId: pendingUserId } });
       await prisma.user.delete({ where: { id: pendingUserId } }).catch(() => {});
     });
+
+    it('notifies the responsible party when NCR Assignments is enabled (default)', async () => {
+      const assignee = await registerTestUser('ncr-assign-on', 'NCR Assignee On');
+      await prisma.user.update({
+        where: { id: assignee.userId },
+        data: { companyId, roleInCompany: 'quality_manager' },
+      });
+      await prisma.projectUser.create({
+        data: { projectId, userId: assignee.userId, role: 'quality_manager', status: 'active' },
+      });
+
+      try {
+        const res = await request(app)
+          .post('/api/ncrs')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            projectId,
+            description: 'Assignment notification should fire by default',
+            category: 'Workmanship',
+            severity: 'minor',
+            responsibleUserId: assignee.userId,
+            lotIds: [lotId],
+          });
+
+        expect(res.status).toBe(201);
+
+        const notification = await prisma.notification.findFirst({
+          where: { userId: assignee.userId, projectId, type: 'ncr_assigned' },
+        });
+        expect(notification).not.toBeNull();
+      } finally {
+        await prisma.notification.deleteMany({ where: { userId: assignee.userId } });
+        await prisma.nCRLot.deleteMany({ where: { ncr: { projectId } } });
+        await prisma.nCR.deleteMany({ where: { responsibleUserId: assignee.userId } });
+        await prisma.projectUser.deleteMany({ where: { projectId, userId: assignee.userId } });
+        await cleanupTestUser(assignee.userId);
+      }
+    });
+
+    it('suppresses the assignment notification when the project toggle is off', async () => {
+      const assignee = await registerTestUser('ncr-assign-off', 'NCR Assignee Off');
+      await prisma.user.update({
+        where: { id: assignee.userId },
+        data: { companyId, roleInCompany: 'quality_manager' },
+      });
+      await prisma.projectUser.create({
+        data: { projectId, userId: assignee.userId, role: 'quality_manager', status: 'active' },
+      });
+
+      await prisma.project.update({
+        where: { id: projectId },
+        data: {
+          settings: JSON.stringify({ notificationPreferences: { ncrAssignments: false } }),
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .post('/api/ncrs')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            projectId,
+            description: 'Assignment notification should be suppressed',
+            category: 'Workmanship',
+            severity: 'minor',
+            responsibleUserId: assignee.userId,
+            lotIds: [lotId],
+          });
+
+        // The NCR is still created; only the assignment notification is suppressed.
+        expect(res.status).toBe(201);
+
+        const notification = await prisma.notification.findFirst({
+          where: { userId: assignee.userId, projectId, type: 'ncr_assigned' },
+        });
+        expect(notification).toBeNull();
+      } finally {
+        await prisma.project.update({ where: { id: projectId }, data: { settings: null } });
+        await prisma.notification.deleteMany({ where: { userId: assignee.userId } });
+        await prisma.nCRLot.deleteMany({ where: { ncr: { projectId } } });
+        await prisma.nCR.deleteMany({ where: { responsibleUserId: assignee.userId } });
+        await prisma.projectUser.deleteMany({ where: { projectId, userId: assignee.userId } });
+        await cleanupTestUser(assignee.userId);
+      }
+    });
   });
 
   describe('GET /api/ncrs', () => {
