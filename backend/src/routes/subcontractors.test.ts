@@ -1334,7 +1334,7 @@ describe('Subcontractors API', () => {
       subcontractorUserId = acceptRes.body.user.id;
     });
 
-    it('should reject logged-in users whose email does not match the invitation', async () => {
+    it('should offer an email-mismatch confirmation instead of hard-blocking logged-in users', async () => {
       const wrongUser = await registerTestUser('sub-wrong-invite', 'Wrong Invite User');
 
       try {
@@ -1342,7 +1342,13 @@ describe('Subcontractors API', () => {
           .post(`/api/subcontractors/invitation/${invitationSubId}/accept`)
           .set('Authorization', `Bearer ${wrongUser.token}`);
 
-        expect(res.status).toBe(403);
+        expect(res.status).toBe(409);
+        expect(res.body.error.code).toBe('EMAIL_MISMATCH');
+        // The invited address is masked so it is not leaked to a different account.
+        expect(res.body.error.details.invitedEmailMasked).toBe(
+          `${invitationContactEmail[0]}***@${invitationContactEmail.split('@')[1]}`,
+        );
+        expect(res.body.error.details.invitedEmailMasked).not.toBe(invitationContactEmail);
 
         const link = await prisma.subcontractorUser.findFirst({
           where: {
@@ -1353,6 +1359,75 @@ describe('Subcontractors API', () => {
         expect(link).toBeNull();
       } finally {
         await cleanupTestUser(wrongUser.userId);
+      }
+    });
+
+    it('should accept a mismatched-email invitation once the user acknowledges it', async () => {
+      const ackEmail = `mismatch-ack-${Date.now()}@example.com`;
+      const ackSub = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `Mismatch Ack Invite ${Date.now()}`,
+          primaryContactName: 'Mismatch Ack User',
+          primaryContactEmail: ackEmail,
+          status: 'pending_approval',
+        },
+      });
+      // A logged-in account whose email differs from the invited contact email.
+      const wrongUser = await registerTestUser('sub-mismatch-ack', 'Mismatch Ack User');
+
+      try {
+        const res = await request(app)
+          .post(`/api/subcontractors/invitation/${ackSub.id}/accept`)
+          .set('Authorization', `Bearer ${wrongUser.token}`)
+          .send({ acknowledgeEmailMismatch: true });
+
+        expect(res.status).toBe(200);
+        expect(res.body.subcontractor.status).toBe('approved');
+
+        // Link created exactly as for a matching-email acceptance.
+        const link = await prisma.subcontractorUser.findFirst({
+          where: { userId: wrongUser.userId, subcontractorCompanyId: ackSub.id },
+        });
+        expect(link).not.toBeNull();
+        expect(link?.role).toBe('admin');
+      } finally {
+        await prisma.subcontractorUser.deleteMany({ where: { subcontractorCompanyId: ackSub.id } });
+        await cleanupTestUser(wrongUser.userId);
+        await prisma.subcontractorCompany.delete({ where: { id: ackSub.id } }).catch(() => {});
+      }
+    });
+
+    it('should keep register-and-accept strict on email mismatch (no self-service override)', async () => {
+      const invitedEmail = `register-mismatch-invited-${Date.now()}@example.com`;
+      const typedEmail = `register-mismatch-typed-${Date.now()}@example.com`;
+      const mismatchSub = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `Register Mismatch Invite ${Date.now()}`,
+          primaryContactName: 'Register Mismatch User',
+          primaryContactEmail: invitedEmail,
+          status: 'pending_approval',
+        },
+      });
+
+      try {
+        const res = await request(app).post('/api/auth/register-and-accept-invitation').send({
+          email: typedEmail,
+          password: 'SecureP@ssword123!',
+          fullName: 'Register Mismatch User',
+          invitationId: mismatchSub.id,
+          tosAccepted: true,
+        });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.message).toContain('Email does not match the invitation');
+
+        const createdUser = await prisma.user.findUnique({ where: { email: typedEmail } });
+        expect(createdUser).toBeNull();
+      } finally {
+        await prisma.user.deleteMany({ where: { email: typedEmail } });
+        await prisma.subcontractorCompany.delete({ where: { id: mismatchSub.id } }).catch(() => {});
       }
     });
 
