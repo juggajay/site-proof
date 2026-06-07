@@ -7,7 +7,12 @@ import { Loader2, Check, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { apiFetch } from '@/lib/api';
 import { toast } from '@/components/ui/toaster';
-import { extractErrorMessage, isNotFound } from '@/lib/errorHandling';
+import {
+  extractErrorCode,
+  extractErrorDetails,
+  extractErrorMessage,
+  isNotFound,
+} from '@/lib/errorHandling';
 import { acceptInviteSchema, MIN_PASSWORD_LENGTH } from '@/lib/validation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -58,6 +63,7 @@ export function AcceptInvitePage() {
   const [accepting, setAccepting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [mismatchInvitedEmail, setMismatchInvitedEmail] = useState<string | null>(null);
   const invitationId = explicitInvitationId || discoveredInvitationId;
 
   const {
@@ -172,8 +178,11 @@ export function AcceptInvitePage() {
     };
   }, [authLoading, explicitInvitationId, setValue, user]);
 
-  // Handle accepting invitation for logged-in users
-  const handleAcceptAsLoggedIn = async () => {
+  // Handle accepting invitation for logged-in users.
+  // `acknowledgeEmailMismatch` is sent on the second attempt after the user
+  // confirms they want to use the account they're signed in with, even though
+  // it differs from the invited contact email.
+  const handleAcceptAsLoggedIn = async (acknowledgeEmailMismatch = false) => {
     if (!invitationId) return;
 
     setAccepting(true);
@@ -182,6 +191,7 @@ export function AcceptInvitePage() {
     try {
       await apiFetch(`/api/subcontractors/invitation/${encodeURIComponent(invitationId)}/accept`, {
         method: 'POST',
+        body: JSON.stringify({ acknowledgeEmailMismatch }),
       });
 
       // Refresh auth to get updated role
@@ -194,6 +204,19 @@ export function AcceptInvitePage() {
       });
       navigate('/subcontractor-portal');
     } catch (err) {
+      // The invite was sent to a different email. Possession of the link is the
+      // real check, so offer to accept with the signed-in account instead of a
+      // dead-end.
+      if (extractErrorCode(err) === 'EMAIL_MISMATCH') {
+        const details = extractErrorDetails(err);
+        const invitedEmailMasked = details?.invitedEmailMasked;
+        setMismatchInvitedEmail(
+          typeof invitedEmailMasked === 'string' && invitedEmailMasked ? invitedEmailMasked : null,
+        );
+        setAccepting(false);
+        return;
+      }
+
       logError('Error accepting invitation:', err);
       setFormError(extractErrorMessage(err, 'Failed to accept invitation. Please try again.'));
       setAccepting(false);
@@ -266,29 +289,66 @@ export function AcceptInvitePage() {
         {/* Action Card */}
         <div className="bg-card dark:bg-card rounded-lg shadow-md p-6">
           {user ? (
-            // Logged in - just accept
-            <div>
-              <p className="text-center text-sm text-muted-foreground dark:text-muted-foreground mb-4">
-                Logged in as <strong className="dark:text-foreground">{user.email}</strong>
-              </p>
-              {formError && <AcceptInviteFormError message={formError} />}
-              <Button onClick={handleAcceptAsLoggedIn} disabled={accepting} className="w-full py-3">
-                {accepting ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Accepting...
-                  </>
-                ) : (
-                  'Accept Invitation'
-                )}
-              </Button>
-              <p className="text-center text-sm text-muted-foreground mt-4">
-                Not you?{' '}
-                <Link to="/login" className="text-primary hover:underline">
-                  Log in with a different account
-                </Link>
-              </p>
-            </div>
+            mismatchInvitedEmail ? (
+              // Invite was sent to a different email — confirm using this account.
+              <div>
+                <p className="text-sm text-muted-foreground dark:text-muted-foreground mb-4">
+                  This invitation was sent to{' '}
+                  <strong className="dark:text-foreground">{mismatchInvitedEmail}</strong>. You're
+                  signed in as <strong className="dark:text-foreground">{user.email}</strong>.
+                  Accept the invitation with this account?
+                </p>
+                {formError && <AcceptInviteFormError message={formError} />}
+                <Button
+                  onClick={() => handleAcceptAsLoggedIn(true)}
+                  disabled={accepting}
+                  className="w-full py-3"
+                >
+                  {accepting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Accepting...
+                    </>
+                  ) : (
+                    'Yes, accept with this account'
+                  )}
+                </Button>
+                <p className="text-center text-sm text-muted-foreground mt-4">
+                  Wrong account?{' '}
+                  <Link to="/login" className="text-primary hover:underline">
+                    Log in with a different account
+                  </Link>
+                </p>
+              </div>
+            ) : (
+              // Logged in - just accept
+              <div>
+                <p className="text-center text-sm text-muted-foreground dark:text-muted-foreground mb-4">
+                  Logged in as <strong className="dark:text-foreground">{user.email}</strong>
+                </p>
+                {formError && <AcceptInviteFormError message={formError} />}
+                <Button
+                  onClick={() => handleAcceptAsLoggedIn()}
+                  disabled={accepting}
+                  className="w-full py-3"
+                >
+                  {accepting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Accepting...
+                    </>
+                  ) : (
+                    'Accept Invitation'
+                  )}
+                </Button>
+                <p className="text-center text-sm text-muted-foreground mt-4">
+                  Not you?{' '}
+                  <Link to="/login" className="text-primary hover:underline">
+                    Log in with a different account
+                  </Link>
+                </p>
+              </div>
+            )
           ) : (
             // Not logged in - show registration form
             <form onSubmit={handleSubmit(onRegisterSubmit)}>

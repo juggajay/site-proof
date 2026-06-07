@@ -11,6 +11,7 @@ import {
   getSubcontractorInvitationExpiresAt,
   isSubcontractorInvitationAcceptableStatus,
   isSubcontractorInvitationExpired,
+  maskInvitedEmail,
 } from '../../lib/subcontractorInvitations.js';
 import {
   buildEmptyPendingSubcontractorInvitationResponse,
@@ -409,9 +410,26 @@ export function createSubcontractorInvitationRouters({
         throw AppError.notFound('Invitation');
       }
 
+      // Possession of the invitation link is the security boundary, not email
+      // equality — head contractors typo addresses and subbies often already
+      // have an account under another email. On a mismatch we surface a distinct
+      // EMAIL_MISMATCH error (with the invited address masked so it isn't leaked
+      // to a different logged-in account) so the UI can offer an explicit,
+      // audited confirmation instead of a dead-end.
       const invitedEmail = subcontractor.primaryContactEmail?.trim().toLowerCase();
-      if (invitedEmail && invitedEmail !== user.email.trim().toLowerCase()) {
-        throw AppError.forbidden('This invitation was sent to a different email address');
+      const actualEmail = user.email.trim().toLowerCase();
+      const emailMismatch = Boolean(invitedEmail && invitedEmail !== actualEmail);
+      const acknowledgeEmailMismatch =
+        (req.body as { acknowledgeEmailMismatch?: unknown } | undefined)
+          ?.acknowledgeEmailMismatch === true;
+
+      if (emailMismatch && !acknowledgeEmailMismatch) {
+        throw new AppError(
+          409,
+          `This invitation was sent to ${maskInvitedEmail(subcontractor.primaryContactEmail ?? '')}. You're signed in as ${user.email}. Accept it with this account?`,
+          'EMAIL_MISMATCH',
+          { invitedEmailMasked: maskInvitedEmail(subcontractor.primaryContactEmail ?? '') },
+        );
       }
 
       await prisma.$transaction(async (tx) => {
@@ -476,14 +494,24 @@ export function createSubcontractorInvitationRouters({
         }
       });
 
-      // Audit log for subcontractor invitation acceptance
+      // Audit log for subcontractor invitation acceptance. When the accepting
+      // account's email differs from the invited contact, record both addresses
+      // (full values are fine in the audit trail) so the reconciliation is
+      // traceable.
       await createAuditLog({
         projectId: subcontractor.project.id,
         userId: user.id,
         entityType: 'subcontractor',
         entityId: id,
         action: AuditAction.SUBCONTRACTOR_INVITATION_ACCEPTED,
-        changes: { companyName: subcontractor.companyName },
+        changes: {
+          companyName: subcontractor.companyName,
+          ...(emailMismatch && {
+            emailMismatchAcknowledged: true,
+            invitedEmail: subcontractor.primaryContactEmail,
+            acceptedEmail: user.email,
+          }),
+        },
         req,
       });
 
