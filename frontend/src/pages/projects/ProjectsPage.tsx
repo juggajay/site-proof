@@ -190,6 +190,13 @@ export function ProjectsPage() {
     formData.name.trim() && formData.projectNumber.trim() && !scheduleError && !contractValueError,
   );
 
+  // Self-signup users have no company yet, so the backend rejects project
+  // creation. Send them to set up their company first instead of letting them
+  // fill in the form and hit a raw 403. Subcontractors join via invites and are
+  // redirected to their portal below, so they never see this.
+  const needsCompanySetup = !isSubcontractor && !user?.companyId;
+  const goToCompanySetup = () => navigate('/onboarding');
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -248,7 +255,11 @@ export function ProjectsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Projects</h1>
-        <Button onClick={openCreateModal}>New Project</Button>
+        {needsCompanySetup ? (
+          <Button onClick={goToCompanySetup}>Set up your company</Button>
+        ) : (
+          <Button onClick={openCreateModal}>New Project</Button>
+        )}
       </div>
       <p className="text-muted-foreground">Manage your civil construction projects.</p>
 
@@ -434,7 +445,17 @@ export function ProjectsPage() {
         </div>
       )}
 
-      {!error && projects.length === 0 ? (
+      {!error && needsCompanySetup ? (
+        <div className="text-center py-12 bg-card rounded-lg border">
+          <h3 className="text-lg font-medium">Set up your company to get started</h3>
+          <p className="mt-1 text-muted-foreground">
+            Create your company profile first. It will own your projects, team, and quality records.
+          </p>
+          <Button className="mt-4" onClick={goToCompanySetup}>
+            Set up your company
+          </Button>
+        </div>
+      ) : !error && projects.length === 0 ? (
         <div className="text-center py-12 bg-card rounded-lg border">
           <h3 className="text-lg font-medium">No projects found</h3>
           <p className="mt-1 text-muted-foreground">Create a new project to get started.</p>
