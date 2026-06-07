@@ -1,0 +1,223 @@
+// Pure decision/builder helpers for the POST /api/itp/completions handler.
+//
+// These are extracted verbatim from the route so the branchy "what status, does
+// this need verification, what NCR/notifications get built" logic can be unit
+// tested without a database, mirroring the sibling pure-helper modules
+// (completionValidation.ts, completionResponses.ts, instances/ncrLinks.ts).
+//
+// Every function here is side-effect free: the express handler still owns all
+// Prisma reads/writes, the transaction, and the response. Inputs are structural
+// (plain shapes) rather than Prisma row types so the helpers stay DB-free.
+import { AppError } from '../../lib/AppError.js';
+
+/**
+ * Resolve the completion status from the request, applying the two
+ * required-reason validations first.
+ *
+ * - `not_applicable` requires a non-blank `notes` reason.
+ * - `failed` requires a non-blank `ncrDescription`.
+ *
+ * The explicit `status` (directStatus) takes precedence; otherwise the boolean
+ * `isCompleted` flag maps to `completed` / `pending`.
+ */
+export function deriveItpCompletionStatus(input: {
+  directStatus?: string;
+  isCompleted?: boolean;
+  notes?: string | null;
+  ncrDescription?: string;
+}): string {
+  const { directStatus, isCompleted, notes, ncrDescription } = input;
+
+  // Validate N/A status requires a reason
+  if (directStatus === 'not_applicable' && !notes?.trim()) {
+    throw AppError.badRequest('A reason is required when marking an item as N/A');
+  }
+
+  // Validate failed status requires NCR description
+  if (directStatus === 'failed' && !ncrDescription?.trim()) {
+    throw AppError.badRequest('NCR description is required when marking an item as Failed');
+  }
+
+  // Determine status - direct status takes precedence, then isCompleted flag
+  let newStatus: string;
+  if (directStatus) {
+    newStatus = directStatus;
+  } else {
+    newStatus = isCompleted ? 'completed' : 'pending';
+  }
+
+  return newStatus;
+}
+
+/** A completion is "finished" (stamps completedAt/By) for completed/N-A/failed. */
+export function isItpCompletionFinished(status: string): boolean {
+  return status === 'completed' || status === 'not_applicable' || status === 'failed';
+}
+
+/**
+ * Read the project-level `requireSubcontractorVerification` flag from the
+ * project's `settings` column. Settings may be a JSON string or an already
+ * parsed object; invalid JSON falls back to the default (no verification).
+ */
+export function parseProjectRequiresSubcontractorVerification(projectSettings: unknown): boolean {
+  let projectRequiresVerification = false; // Default: no verification needed
+  if (projectSettings) {
+    try {
+      const settings =
+        typeof projectSettings === 'string' ? JSON.parse(projectSettings) : projectSettings;
+      projectRequiresVerification = settings.requireSubcontractorVerification === true;
+    } catch (_e) {
+      // Invalid JSON, use default (no verification)
+    }
+  }
+  return projectRequiresVerification;
+}
+
+/**
+ * Resolve the verification status for a subcontractor completion.
+ *
+ * - If the project does not require verification, auto-verify.
+ * - If the project requires verification, the lot assignment's
+ *   `itpRequiresVerification` decides between pending_verification and verified.
+ */
+export function resolveSubcontractorVerificationStatus(input: {
+  projectRequiresVerification: boolean;
+  itpRequiresVerification: boolean;
+}): 'verified' | 'pending_verification' {
+  // Set verification status: project setting controls default, lot assignment can override
+  // If project doesn't require verification, auto-verify
+  // If project requires verification, use lot assignment setting
+  if (!input.projectRequiresVerification) {
+    return 'verified';
+  }
+  return input.itpRequiresVerification ? 'pending_verification' : 'verified';
+}
+
+/**
+ * Build the witness data patch applied to the completion write. Only fields that
+ * were supplied in the request are included; empty strings coerce to null.
+ */
+export function buildItpCompletionWitnessData(input: {
+  witnessPresent?: boolean;
+  witnessName?: string | null;
+  witnessCompany?: string | null;
+}): Record<string, unknown> {
+  const { witnessPresent, witnessName, witnessCompany } = input;
+  const witnessData: Record<string, unknown> = {};
+  if (witnessPresent !== undefined) {
+    witnessData.witnessPresent = witnessPresent;
+  }
+  if (witnessName !== undefined) {
+    witnessData.witnessName = witnessName || null;
+  }
+  if (witnessCompany !== undefined) {
+    witnessData.witnessCompany = witnessCompany || null;
+  }
+  return witnessData;
+}
+
+/**
+ * An NCR is created only on the first transition into `failed` — a completion
+ * that is already `failed` must not raise a duplicate NCR.
+ */
+export function shouldCreateFailedItpNcr(
+  newStatus: string,
+  existingStatus: string | null | undefined,
+): boolean {
+  return newStatus === 'failed' && existingStatus !== 'failed';
+}
+
+/** A project manager / superintendent recipient of the subbie completion notice. */
+export interface ItpSubbieNotificationRecipient {
+  userId: string;
+}
+
+export interface ItpSubbieNotificationContext {
+  projectId: string;
+  lotId: string;
+  lotNumber: string;
+  checklistItemId: string;
+  itemDescription: string;
+  subbieName: string;
+}
+
+export interface ItpSubbieNotificationRow {
+  userId: string;
+  projectId: string;
+  type: string;
+  title: string;
+  message: string;
+  linkUrl: string;
+}
+
+export interface ItpSubbieNotificationSummary {
+  notificationsSent: number;
+  subcontractorCompany: string;
+  lotNumber: string;
+  itemDescription: string;
+}
+
+/**
+ * Build the `notification.createMany` rows and the response summary for a
+ * subcontractor completion that requires head-contractor verification.
+ *
+ * Returns `null` when there are no recipients, matching the route's behaviour of
+ * leaving `subbieCompletionNotification` null and skipping the createMany.
+ */
+export function buildItpSubbieCompletionNotifications(
+  recipients: ItpSubbieNotificationRecipient[],
+  ctx: ItpSubbieNotificationContext,
+): { rows: ItpSubbieNotificationRow[]; summary: ItpSubbieNotificationSummary } | null {
+  if (recipients.length === 0) {
+    return null;
+  }
+
+  const rows = recipients.map((pm) => ({
+    userId: pm.userId,
+    projectId: ctx.projectId,
+    type: 'itp_subbie_completion',
+    title: 'Subcontractor ITP Item Completed',
+    message: `${ctx.subbieName} has completed ITP item "${ctx.itemDescription}" on lot ${ctx.lotNumber}. Verification required.`,
+    linkUrl: `/projects/${ctx.projectId}/lots/${ctx.lotId}?tab=itp&highlight=${ctx.checklistItemId}`,
+  }));
+
+  const summary: ItpSubbieNotificationSummary = {
+    notificationsSent: recipients.length,
+    subcontractorCompany: ctx.subbieName,
+    lotNumber: ctx.lotNumber,
+    itemDescription: ctx.itemDescription,
+  };
+
+  return { rows, summary };
+}
+
+/**
+ * Shape of the persisted completion needed to derive the frontend-friendly flags.
+ * Kept structural so the builder stays DB-free.
+ */
+export interface ItpCompletionForTransform {
+  status: string;
+  verificationStatus?: string | null;
+  attachments?: unknown[] | null;
+}
+
+/**
+ * Build the frontend-friendly completion object returned by POST /completions:
+ * the persisted completion spread with derived booleans, normalised attachments,
+ * and the (optional) linked NCR from the failed-item path.
+ */
+export function buildItpCompletionTransform<T extends ItpCompletionForTransform>(
+  completion: T,
+  createdNcr: unknown,
+) {
+  return {
+    ...completion,
+    isCompleted: completion.status === 'completed' || completion.status === 'not_applicable',
+    isNotApplicable: completion.status === 'not_applicable',
+    isFailed: completion.status === 'failed',
+    isVerified: completion.verificationStatus === 'verified',
+    isPendingVerification: completion.verificationStatus === 'pending_verification',
+    attachments: completion.attachments || [],
+    linkedNcr: createdNcr,
+  };
+}
