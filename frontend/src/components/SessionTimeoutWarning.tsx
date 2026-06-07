@@ -37,7 +37,10 @@ export function SessionTimeoutWarning({ enabled = true }: SessionTimeoutWarningP
   const countdownTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastActivityRef = useRef<number>(Date.now());
 
-  // Logout function
+  // Logout function. This is an AUTOMATIC sign-out (inactivity / countdown
+  // expiry), so we preserve any unsynced offline work — the user never chose to
+  // discard it. A same-user re-login resumes it; a different user still gets the
+  // privacy wipe on login.
   const handleLogout = useCallback(async () => {
     setShowWarning(false);
     if (countdownTimerRef.current) {
@@ -46,7 +49,7 @@ export function SessionTimeoutWarning({ enabled = true }: SessionTimeoutWarningP
     if (inactivityTimerRef.current) {
       clearTimeout(inactivityTimerRef.current);
     }
-    await signOut();
+    await signOut({ preserveOfflineData: true });
   }, [signOut]);
 
   // Reset the inactivity timer

@@ -25,12 +25,16 @@ vi.mock('./core', () => ({
 }));
 
 import {
+  MAX_SYNC_ATTEMPTS,
   clearAllOfflineData,
+  getFailedSyncCount,
+  getLiveSyncCount,
   getPendingSyncCount,
   getPendingSyncItems,
   markSyncItemError,
   offlineDb,
   removeSyncQueueItem,
+  resetFailedSyncItems,
   type SyncQueueItem,
 } from '@/lib/offlineDb';
 
@@ -47,11 +51,68 @@ describe('sync queue queries', () => {
     expect(offlineDb.syncQueue.toArray).toHaveBeenCalledTimes(1);
   });
 
-  it('returns the queue count', async () => {
+  it('returns the queue count (including dead-lettered items)', async () => {
     vi.mocked(offlineDb.syncQueue.count).mockResolvedValue(3);
 
     await expect(getPendingSyncCount()).resolves.toBe(3);
     expect(offlineDb.syncQueue.count).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('live vs failed split', () => {
+  const item = (id: number, attempts: number): SyncQueueItem =>
+    ({ id, type: 'photo_upload', attempts }) as SyncQueueItem;
+
+  it('counts only items below the dead-letter threshold as live', async () => {
+    vi.mocked(offlineDb.syncQueue.toArray).mockResolvedValue([
+      item(1, 0),
+      item(2, MAX_SYNC_ATTEMPTS - 1),
+      item(3, MAX_SYNC_ATTEMPTS),
+      item(4, MAX_SYNC_ATTEMPTS + 2),
+    ]);
+
+    await expect(getLiveSyncCount()).resolves.toBe(2);
+  });
+
+  it('counts only items at or beyond the dead-letter threshold as failed', async () => {
+    vi.mocked(offlineDb.syncQueue.toArray).mockResolvedValue([
+      item(1, 0),
+      item(2, MAX_SYNC_ATTEMPTS - 1),
+      item(3, MAX_SYNC_ATTEMPTS),
+      item(4, MAX_SYNC_ATTEMPTS + 2),
+    ]);
+
+    await expect(getFailedSyncCount()).resolves.toBe(2);
+  });
+});
+
+describe('resetFailedSyncItems', () => {
+  const item = (id: number | undefined, attempts: number): SyncQueueItem =>
+    ({ id, type: 'photo_upload', attempts }) as SyncQueueItem;
+
+  it('resets attempts to zero only for dead-lettered items and reports how many were revived', async () => {
+    vi.mocked(offlineDb.syncQueue.toArray).mockResolvedValue([
+      item(1, 0),
+      item(2, MAX_SYNC_ATTEMPTS),
+      item(3, MAX_SYNC_ATTEMPTS + 1),
+    ]);
+
+    await expect(resetFailedSyncItems()).resolves.toBe(2);
+
+    expect(offlineDb.syncQueue.update).toHaveBeenCalledTimes(2);
+    expect(offlineDb.syncQueue.update).toHaveBeenCalledWith(2, { attempts: 0 });
+    expect(offlineDb.syncQueue.update).toHaveBeenCalledWith(3, { attempts: 0 });
+    // The live item is left untouched.
+    expect(offlineDb.syncQueue.update).not.toHaveBeenCalledWith(1, { attempts: 0 });
+  });
+
+  it('skips dead items without a persisted id and never deletes anything', async () => {
+    vi.mocked(offlineDb.syncQueue.toArray).mockResolvedValue([item(undefined, MAX_SYNC_ATTEMPTS)]);
+
+    await expect(resetFailedSyncItems()).resolves.toBe(0);
+
+    expect(offlineDb.syncQueue.update).not.toHaveBeenCalled();
+    expect(offlineDb.syncQueue.delete).not.toHaveBeenCalled();
   });
 });
 

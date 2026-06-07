@@ -64,6 +64,16 @@ type CurrentUserResult =
   | { status: 'invalid' }
   | { status: 'unavailable' };
 
+export interface SignOutOptions {
+  // When true, end the session WITHOUT clearing locally stored offline work
+  // (queued photos, diary/docket/lot edits). Used by automatic sign-outs such
+  // as the inactivity timeout, where the user never chose to discard anything.
+  // The offline-data owner id is preserved so a same-user re-login resumes the
+  // pending work, while a different user logging in still triggers the privacy
+  // wipe in prepareOfflineDataForUser (shared site tablets stay safe).
+  preserveOfflineData?: boolean;
+}
+
 // Role override key for dev testing
 const ROLE_OVERRIDE_KEY = 'siteproof_role_override';
 
@@ -86,7 +96,7 @@ interface AuthContextType {
     mfaCode?: string,
   ) => Promise<User>;
   signUp: (email: string, password: string, metadata?: object) => Promise<void>;
-  signOut: () => Promise<void>;
+  signOut: (options?: SignOutOptions) => Promise<void>;
   handleSessionExpired: () => void;
   refreshUser: () => Promise<void>;
   setToken: (token: string) => Promise<void>; // Feature #414: OAuth callback support
@@ -384,10 +394,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSessionExpired(false);
   };
 
-  const signOut = async () => {
+  const signOut = async (options?: SignOutOptions) => {
     clearAuthFromAllStorages();
     queryClient.clear();
-    await clearOfflineDataForSignOut();
+    // Automatic sign-outs (e.g. inactivity timeout) keep offline work so a
+    // foreman who steps away doesn't lose unsynced photos/edits. Manual
+    // sign-outs (and account-ending flows) still wipe via the default path.
+    if (!options?.preserveOfflineData) {
+      await clearOfflineDataForSignOut();
+    }
     setActualUser(null);
   };
 
