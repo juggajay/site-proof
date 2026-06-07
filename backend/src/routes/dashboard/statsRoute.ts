@@ -89,18 +89,22 @@ dashboardStatsRouter.get(
         },
       }),
       prisma.nCR.count({
+        // Open-NCR count reflects ALL current compliance debt, independent of the
+        // dashboard date-range window. Filtering by createdAt here would hide the
+        // oldest open NCRs and make a manager believe compliance debt is handled.
         where: {
           projectId: { in: projectIds },
           status: { notIn: ['closed', 'closed_concession'] },
-          ...(createdAtDateFilter && { createdAt: createdAtDateFilter }),
         },
       }),
       prisma.nCR.findMany({
+        // Overdue-NCR attention items must surface the most-overdue NCRs regardless
+        // of the date-range window — the date filter previously hid the oldest
+        // (and most urgent) overdue NCRs from the very panel meant to surface them.
         where: {
           projectId: { in: projectIds },
           status: { notIn: ['closed', 'closed_concession'] },
           dueDate: { lt: today },
-          ...(createdAtDateFilter && { createdAt: createdAtDateFilter }),
         },
         select: {
           id: true,
@@ -121,13 +125,14 @@ dashboardStatsRouter.get(
         take: 10,
       }),
       prisma.holdPoint.findMany({
+        // Stale hold points are, by definition, older than the staleHPThreshold
+        // (7 days). Layering the dashboard date-range window on top is doubly
+        // contradictory and hid the longest-stale hold points from the attention
+        // panel, so it must reflect ALL stale hold points regardless of the window.
         where: {
           lot: { projectId: { in: projectIds } },
           status: { in: ['pending', 'scheduled', 'requested'] },
-          AND: [
-            { createdAt: { lt: staleHPThreshold } },
-            ...(createdAtDateFilter ? [{ createdAt: createdAtDateFilter }] : []),
-          ],
+          createdAt: { lt: staleHPThreshold },
         },
         select: {
           id: true,

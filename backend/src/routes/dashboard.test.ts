@@ -400,7 +400,7 @@ describe('Dashboard Stats API', () => {
       expect(res.status).toBe(401);
     });
 
-    it('should apply startDate and endDate to date-sensitive dashboard stats', async () => {
+    it('keeps compliance debt (open/overdue NCRs, stale hold points) independent of the date range', async () => {
       const dateCompany = await prisma.company.create({
         data: { name: `Dashboard Date Range Company ${Date.now()}` },
       });
@@ -432,13 +432,43 @@ describe('Dashboard Stats API', () => {
       });
 
       try {
-        await prisma.lot.create({
+        const oldLot = await prisma.lot.create({
           data: {
             projectId: dateProject.id,
             lotNumber: 'LOT-DATE-OLD',
             lotType: 'general',
             activityType: 'earthworks',
             status: 'not_started',
+            createdAt: oldDate,
+          },
+        });
+
+        const dateItpTemplate = await prisma.iTPTemplate.create({
+          data: {
+            projectId: dateProject.id,
+            name: 'Date Range ITP Template',
+            activityType: 'earthworks',
+          },
+        });
+        const dateChecklistItem = await prisma.iTPChecklistItem.create({
+          data: {
+            templateId: dateItpTemplate.id,
+            sequenceNumber: 1,
+            description: 'Date range hold point item',
+            pointType: 'hold_point',
+          },
+        });
+
+        // Hold point created 45 days ago (older than the 7-day stale threshold AND
+        // outside the requested single-day window). It must still surface as a
+        // stale hold point — the date range must not hide it.
+        await prisma.holdPoint.create({
+          data: {
+            lotId: oldLot.id,
+            itpChecklistItemId: dateChecklistItem.id,
+            pointType: 'hold_point',
+            description: 'Old stale hold point',
+            status: 'pending',
             createdAt: oldDate,
           },
         });
@@ -479,11 +509,29 @@ describe('Dashboard Stats API', () => {
         expect(res.body.totalProjects).toBe(1);
         expect(res.body.activeProjects).toBe(1);
         expect(res.body.totalLots).toBe(1);
-        expect(res.body.openNCRs).toBe(1);
-        expect(res.body.attentionItems.overdueNCRs).toHaveLength(1);
-        expect(res.body.attentionItems.overdueNCRs[0]).toMatchObject({
-          title: 'NCR NCR-RANGE-IN',
-        });
+
+        // Compliance debt counts/attention items must reflect ALL current debt,
+        // independent of the date-range window. Both the in-range and the
+        // 45-day-old open+overdue NCRs must be surfaced.
+        expect(res.body.openNCRs).toBe(2);
+        expect(res.body.attentionItems.overdueNCRs).toHaveLength(2);
+        const overdueTitles = res.body.attentionItems.overdueNCRs.map(
+          (ncr: { title: string }) => ncr.title,
+        );
+        expect(overdueTitles).toEqual(
+          expect.arrayContaining(['NCR NCR-RANGE-IN', 'NCR NCR-RANGE-OLD']),
+        );
+
+        // The 45-day-old stale hold point must still appear even though it was
+        // created outside the requested single-day window.
+        expect(
+          res.body.attentionItems.staleHoldPoints.some(
+            (hp: { title: string }) => hp.title === 'Old stale hold point',
+          ),
+        ).toBe(true);
+
+        // recentActivities legitimately stays scoped to the date-range window
+        // (it reflects activity *within* the window, not outstanding debt).
         expect(
           res.body.recentActivities.some((activity: { description: string }) =>
             activity.description.includes('NCR-RANGE-OLD'),
@@ -491,7 +539,14 @@ describe('Dashboard Stats API', () => {
         ).toBe(false);
       } finally {
         await prisma.nCR.deleteMany({ where: { projectId: dateProject.id } });
+        // Lots cascade-delete their hold points (Lot -> HoldPoint onDelete: Cascade),
+        // so delete lots first, then the ITP template/checklist item the hold point
+        // referenced (ITPChecklistItem -> HoldPoint is onDelete: Restrict).
         await prisma.lot.deleteMany({ where: { projectId: dateProject.id } });
+        await prisma.iTPChecklistItem.deleteMany({
+          where: { template: { projectId: dateProject.id } },
+        });
+        await prisma.iTPTemplate.deleteMany({ where: { projectId: dateProject.id } });
         await prisma.project.delete({ where: { id: dateProject.id } }).catch(() => {});
         await cleanupDashboardUser(dateUser.userId);
         await prisma.company.delete({ where: { id: dateCompany.id } }).catch(() => {});
