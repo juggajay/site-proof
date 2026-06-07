@@ -17,6 +17,7 @@ import {
   requireItpSubcontractorCompletionPermission,
 } from './helpers/access.js';
 import { logError } from '../../lib/serverLogger.js';
+import { createNcrWithAllocatedNumber } from '../ncrs/ncrNumberAllocation.js';
 import { buildItpCompletionResultResponse } from './completionResponses.js';
 import { completionAttachmentRoutes } from './completionAttachmentRoutes.js';
 import { completionUpdateRoutes } from './completionUpdateRoutes.js';
@@ -361,51 +362,53 @@ completionsRouter.post(
         const checklistItemDescription =
           completion.checklistItem?.description || 'ITP checklist item';
 
-        // Generate NCR number
-        const existingNcrCount = await prisma.nCR.count({
-          where: { projectId: lot.projectId },
-        });
-        const ncrNumber = `NCR-${String(existingNcrCount + 1).padStart(4, '0')}`;
-
         // Determine if major NCR requires QM approval
         const isMajor = ncrSeverity === 'major';
 
-        // Create the NCR
-        createdNcr = await prisma.nCR.create({
-          data: {
-            projectId: lot.projectId,
-            ncrNumber,
-            description: ncrDescription || `ITP item failed: ${checklistItemDescription}`,
-            specificationReference: itpInstance.template?.specificationReference || null,
-            category: ncrCategory || 'workmanship',
-            severity: ncrSeverity || 'minor',
-            qmApprovalRequired: isMajor,
-            raisedById: user.userId,
-            // Store ITP item reference in rectification notes for traceability
-            rectificationNotes: `Raised from ITP checklist item: ${checklistItemDescription} (Item ID: ${checklistItemId})`,
-            ncrLots: {
-              create: [
-                {
-                  lotId: lot.id,
-                },
-              ],
-            },
-          },
-          include: {
-            project: { select: { name: true } },
-            raisedBy: { select: { fullName: true, email: true } },
-            ncrLots: {
-              include: {
-                lot: { select: { lotNumber: true } },
+        // Allocate the NCR number and create the NCR using the canonical race-safe
+        // path (max sequence + 1 inside a transaction with retry on the
+        // [projectId, ncrNumber] unique constraint). Computing the number with a
+        // plain count outside a transaction lets two concurrent "Mark as Failed"
+        // submissions derive the same number, so the second one 500s on P2002.
+        createdNcr = await createNcrWithAllocatedNumber(lot.projectId, async (tx, ncrNumber) => {
+          const ncr = await tx.nCR.create({
+            data: {
+              projectId: lot.projectId,
+              ncrNumber,
+              description: ncrDescription || `ITP item failed: ${checklistItemDescription}`,
+              specificationReference: itpInstance.template?.specificationReference || null,
+              category: ncrCategory || 'workmanship',
+              severity: ncrSeverity || 'minor',
+              qmApprovalRequired: isMajor,
+              raisedById: user.userId,
+              // Store ITP item reference in rectification notes for traceability
+              rectificationNotes: `Raised from ITP checklist item: ${checklistItemDescription} (Item ID: ${checklistItemId})`,
+              ncrLots: {
+                create: [
+                  {
+                    lotId: lot.id,
+                  },
+                ],
               },
             },
-          },
-        });
+            include: {
+              project: { select: { name: true } },
+              raisedBy: { select: { fullName: true, email: true } },
+              ncrLots: {
+                include: {
+                  lot: { select: { lotNumber: true } },
+                },
+              },
+            },
+          });
 
-        // Update lot status to ncr_raised
-        await prisma.lot.update({
-          where: { id: lot.id },
-          data: { status: 'ncr_raised' },
+          // Update lot status to ncr_raised in the same transaction as the NCR.
+          await tx.lot.update({
+            where: { id: lot.id },
+            data: { status: 'ncr_raised' },
+          });
+
+          return ncr;
         });
       }
     }

@@ -15,17 +15,11 @@ import {
 } from './ncrAccess.js';
 import { logError } from '../../lib/serverLogger.js';
 import { buildNcrResponse, buildNcrUpdatedResponse } from './ncrCoreResponses.js';
-import {
-  createNcrSchema,
-  getNextNcrNumber,
-  isUniqueConstraintOn,
-  parseOptionalNcrDueDate,
-  updateNcrSchema,
-} from './ncrCoreValidation.js';
+import { createNcrSchema, parseOptionalNcrDueDate, updateNcrSchema } from './ncrCoreValidation.js';
+import { createNcrWithAllocatedNumber } from './ncrNumberAllocation.js';
 import { ncrListRouter } from './ncrListRoute.js';
 
 export const ncrCoreRouter = Router();
-const NCR_NUMBER_RETRY_LIMIT = 5;
 
 async function requireNcrLotsInProject(projectId: string, lotIds: string[]): Promise<string[]> {
   const uniqueLotIds = [...new Set(lotIds)];
@@ -150,85 +144,49 @@ ncrCoreRouter.post(
     // Major NCRs require QM approval to close and client notification
     const isMajor = severity === 'major';
 
-    let ncr:
-      | Prisma.NCRGetPayload<{
-          include: {
-            project: { select: { name: true } };
-            raisedBy: { select: { fullName: true; email: true } };
-            ncrLots: { include: { lot: { select: { lotNumber: true } } } };
-          };
-        }>
-      | undefined;
-
-    for (let attempt = 1; attempt <= NCR_NUMBER_RETRY_LIMIT; attempt += 1) {
-      try {
-        ncr = await prisma.$transaction(async (tx) => {
-          const existingNcrNumbers = await tx.nCR.findMany({
-            where: {
-              projectId,
-              ncrNumber: { startsWith: 'NCR-' },
-            },
-            select: { ncrNumber: true },
-          });
-          const ncrNumber = getNextNcrNumber(existingNcrNumbers);
-
-          const createdNcr = await tx.nCR.create({
-            data: {
-              projectId,
-              ncrNumber,
-              description,
-              specificationReference,
-              category,
-              severity: severity || 'minor',
-              qmApprovalRequired: isMajor,
-              clientNotificationRequired: isMajor, // Feature #213: Major NCRs require client notification
-              raisedById: user.userId,
-              responsibleUserId,
-              dueDate: parsedDueDate,
-              ncrLots: ncrLotIds.length
-                ? {
-                    create: ncrLotIds.map((lotId: string) => ({
-                      lotId,
-                    })),
-                  }
-                : undefined,
-            },
+    const ncr = await createNcrWithAllocatedNumber(projectId, async (tx, ncrNumber) => {
+      const createdNcr = await tx.nCR.create({
+        data: {
+          projectId,
+          ncrNumber,
+          description,
+          specificationReference,
+          category,
+          severity: severity || 'minor',
+          qmApprovalRequired: isMajor,
+          clientNotificationRequired: isMajor, // Feature #213: Major NCRs require client notification
+          raisedById: user.userId,
+          responsibleUserId,
+          dueDate: parsedDueDate,
+          ncrLots: ncrLotIds.length
+            ? {
+                create: ncrLotIds.map((lotId: string) => ({
+                  lotId,
+                })),
+              }
+            : undefined,
+        },
+        include: {
+          project: { select: { name: true } },
+          raisedBy: { select: { fullName: true, email: true } },
+          ncrLots: {
             include: {
-              project: { select: { name: true } },
-              raisedBy: { select: { fullName: true, email: true } },
-              ncrLots: {
-                include: {
-                  lot: { select: { lotNumber: true } },
-                },
-              },
+              lot: { select: { lotNumber: true } },
             },
-          });
+          },
+        },
+      });
 
-          // Update affected lots status in the same transaction as the NCR record.
-          if (ncrLotIds.length) {
-            await tx.lot.updateMany({
-              where: { id: { in: ncrLotIds }, projectId },
-              data: { status: 'ncr_raised' },
-            });
-          }
-
-          return createdNcr;
+      // Update affected lots status in the same transaction as the NCR record.
+      if (ncrLotIds.length) {
+        await tx.lot.updateMany({
+          where: { id: { in: ncrLotIds }, projectId },
+          data: { status: 'ncr_raised' },
         });
-        break;
-      } catch (error) {
-        if (
-          attempt < NCR_NUMBER_RETRY_LIMIT &&
-          isUniqueConstraintOn(error, ['projectId', 'ncrNumber'])
-        ) {
-          continue;
-        }
-        throw error;
       }
-    }
 
-    if (!ncr) {
-      throw AppError.conflict('Could not allocate an NCR number. Please try again.');
-    }
+      return createdNcr;
+    });
 
     await createAuditLog({
       projectId,
