@@ -323,22 +323,25 @@ export function MobileNav() {
               </NavLink>
             );
           })}
+
+          {/* Menu opens the slide-out drawer so non-foreman users can reach the
+              full project/global nav (Test Results, Documents, Reports, etc.)
+              that does not fit in the bottom bar. Subcontractors keep their
+              dedicated 3-tab bar, which already covers their navigation. */}
+          {!isSubcontractor && (
+            <button
+              type="button"
+              onClick={() => setIsOpen(true)}
+              aria-label="Open menu"
+              aria-expanded={isOpen}
+              className="flex flex-col items-center justify-center w-full h-full gap-1 text-xs text-muted-foreground transition-colors"
+            >
+              <Menu className="h-5 w-5" />
+              <span>Menu</span>
+            </button>
+          )}
         </div>
       </nav>
     </>
-  );
-}
-
-export function MobileMenuButton() {
-  const [isOpen, setIsOpen] = useState(false);
-
-  return (
-    <button
-      onClick={() => setIsOpen(!isOpen)}
-      className="md:hidden p-2 rounded-lg hover:bg-muted"
-      aria-label="Toggle menu"
-    >
-      <Menu className="h-6 w-6" />
-    </button>
   );
 }
