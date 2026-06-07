@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { apiFetch } from '@/lib/api';
 import { toast } from '@/components/ui/toaster';
-import { extractErrorMessage, handleApiError } from '@/lib/errorHandling';
+import { extractErrorMessage, handleApiError, isForbidden } from '@/lib/errorHandling';
 import { logError } from '@/lib/logger';
 import { formatDateKey } from '@/lib/localDate';
 import { useAuth } from '@/lib/auth';
@@ -67,6 +67,10 @@ export function DocketEditPage() {
 
   const lotsQuery = useAssignedLotsQuery(userId, company?.projectId);
   const assignedLots = lotsQuery.data ?? EMPTY_LOTS;
+  // The lot list 403s when the HC has turned off the subbie's "Assigned Work"
+  // (lots) portal module. Labour lines require a lot, so surface a plain-language
+  // notice instead of an inexplicably empty lot dropdown.
+  const lotsModuleDisabled = isForbidden(lotsQuery.error);
   const {
     sheetOpen,
     sheetType,
@@ -407,6 +411,7 @@ export function DocketEditPage() {
         queryResponse={queryResponse}
         respondingToQuery={respondingToQuery}
         assignedLotCount={assignedLots.length}
+        lotsModuleDisabled={lotsModuleDisabled}
         onQueryResponseChange={setQueryResponse}
         onRespondToQuery={respondToQuery}
       />

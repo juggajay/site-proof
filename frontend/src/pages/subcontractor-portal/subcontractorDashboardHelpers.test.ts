@@ -4,6 +4,7 @@ import {
   buildNeedsAttentionItems,
   formatCurrency,
   formatDate,
+  getDocketPrerequisiteState,
   getDocketStatusMeta,
   getGreeting,
   getToday,
@@ -96,6 +97,68 @@ describe('subcontractor dashboard – getDocketStatusMeta', () => {
       label: 'some_new_status',
       className: 'bg-muted text-foreground',
     });
+  });
+});
+
+describe('subcontractor dashboard – getDocketPrerequisiteState', () => {
+  it('is ready when there are resources, the lots module is on, and a lot is assigned', () => {
+    expect(
+      getDocketPrerequisiteState({
+        approvedEmployeeCount: 2,
+        approvedPlantCount: 0,
+        lotsModuleEnabled: true,
+        assignedLotCount: 1,
+      }),
+    ).toEqual({
+      hasDocketResources: true,
+      needsLotAssignment: false,
+      lotsModuleDisabled: false,
+      prerequisitesMet: true,
+    });
+  });
+
+  it('needs a lot assignment when the lots module is on but no lots are assigned', () => {
+    const state = getDocketPrerequisiteState({
+      approvedEmployeeCount: 1,
+      approvedPlantCount: 0,
+      lotsModuleEnabled: true,
+      assignedLotCount: 0,
+    });
+
+    expect(state.needsLotAssignment).toBe(true);
+    expect(state.lotsModuleDisabled).toBe(false);
+    expect(state.prerequisitesMet).toBe(false);
+  });
+
+  it('is not ready and flags the disabled module when the lots module is off, even with resources', () => {
+    // The core regression: lots-off previously skipped the lot check and made
+    // the dashboard claim the subbie was ready, despite labour dockets being
+    // impossible without lot access.
+    const state = getDocketPrerequisiteState({
+      approvedEmployeeCount: 3,
+      approvedPlantCount: 1,
+      lotsModuleEnabled: false,
+      assignedLotCount: 0,
+    });
+
+    expect(state.hasDocketResources).toBe(true);
+    expect(state.lotsModuleDisabled).toBe(true);
+    // needsLotAssignment stays false because the "assign a lot" remedy does not
+    // apply — the HC must turn the module back on.
+    expect(state.needsLotAssignment).toBe(false);
+    expect(state.prerequisitesMet).toBe(false);
+  });
+
+  it('is not ready when there are no approved employees or plant', () => {
+    const state = getDocketPrerequisiteState({
+      approvedEmployeeCount: 0,
+      approvedPlantCount: 0,
+      lotsModuleEnabled: true,
+      assignedLotCount: 2,
+    });
+
+    expect(state.hasDocketResources).toBe(false);
+    expect(state.prerequisitesMet).toBe(false);
   });
 });
 
