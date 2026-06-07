@@ -15,6 +15,7 @@ import {
 } from './helpers/access.js';
 import { requireSubcontractorPortalModuleAccess } from '../../lib/projectAccess.js';
 import { buildItpInstanceResponse } from './instances/responses.js';
+import { findLinkedNcrsForChecklistItems, type NcrLinkClient } from './instances/ncrLinks.js';
 
 // Type for ITP completion with attachments
 interface CompletionWithAttachments {
@@ -347,27 +348,43 @@ instancesRouter.get(
     // Get item IDs for filtered items (used to filter completions)
     const filteredItemIds = new Set(templateData.checklistItems.map((item) => item.id));
 
+    const visibleCompletions = instance.completions.filter(
+      (c) => !useSubcontractorView || filteredItemIds.has(c.checklistItemId),
+    );
+
+    // Reconstruct the failed-item -> NCR traceability link that the create response
+    // returns inline. There is no NCR<->completion relation in the schema, so we match
+    // the lot's NCRs against the marker stored in NCR.rectificationNotes. One scoped
+    // query covers every failed completion (batched, not per-completion).
+    const failedChecklistItemIds = visibleCompletions
+      .filter((c) => c.status === 'failed')
+      .map((c) => c.checklistItemId);
+    const linkedNcrsByItem = await findLinkedNcrsForChecklistItems(
+      prisma as unknown as NcrLinkClient,
+      lotId,
+      failedChecklistItemIds,
+    );
+
     // Transform to frontend-friendly format
     const transformedInstance = {
       ...instance,
       templateSnapshot: useSubcontractorView ? undefined : instance.templateSnapshot,
       template: templateData,
-      completions: instance.completions
-        .filter((c) => !useSubcontractorView || filteredItemIds.has(c.checklistItemId))
-        .map((c) => ({
-          ...c,
-          isCompleted: c.status === 'completed' || c.status === 'not_applicable',
-          isNotApplicable: c.status === 'not_applicable',
-          isFailed: c.status === 'failed',
-          isVerified: c.verificationStatus === 'verified',
-          isPendingVerification: c.verificationStatus === 'pending_verification',
-          attachments:
-            (c as unknown as CompletionWithAttachments).attachments?.map((a) => ({
-              id: a.id,
-              documentId: a.documentId,
-              document: a.document,
-            })) || [],
-        })),
+      completions: visibleCompletions.map((c) => ({
+        ...c,
+        isCompleted: c.status === 'completed' || c.status === 'not_applicable',
+        isNotApplicable: c.status === 'not_applicable',
+        isFailed: c.status === 'failed',
+        isVerified: c.verificationStatus === 'verified',
+        isPendingVerification: c.verificationStatus === 'pending_verification',
+        linkedNcr: c.status === 'failed' ? (linkedNcrsByItem.get(c.checklistItemId) ?? null) : null,
+        attachments:
+          (c as unknown as CompletionWithAttachments).attachments?.map((a) => ({
+            id: a.id,
+            documentId: a.documentId,
+            document: a.document,
+          })) || [],
+      })),
     };
 
     res.json(buildItpInstanceResponse(transformedInstance));
