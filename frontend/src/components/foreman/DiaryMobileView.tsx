@@ -44,7 +44,8 @@ interface DiaryMobileViewProps {
   onEditEntry: (entry: TimelineEntry) => void;
   onDeleteEntry: (entry: TimelineEntry) => void;
   // Opens the end-of-day finish/submit flow. Shown as a persistent button while
-  // today's diary is still a draft so submit is one tap, not buried in the timeline.
+  // the selected date's diary is still a draft so submit is one tap, not buried
+  // in the timeline (including a forgotten past-day draft).
   onReviewSubmit?: () => void;
 }
 
@@ -80,9 +81,10 @@ export function DiaryMobileView(props: DiaryMobileViewProps) {
   const todayStr = formatDateKey();
   const isToday = selectedDate === todayStr;
   const isSubmitted = diary?.status === 'submitted';
-  // Only offer one-tap submit for today's draft: DiaryFinishFlow finalises today's
-  // diary, so showing it for a past-date draft would target the wrong day.
-  const canReviewSubmit = Boolean(onReviewSubmit) && isToday && diary?.status === 'draft';
+  // Offer one-tap submit for ANY draft, regardless of date. DiaryFinishFlow now
+  // finalises the selected date's diary, so a forgotten past-day draft can be
+  // submitted from a phone instead of being stuck until the foreman finds a desktop.
+  const canReviewSubmit = Boolean(onReviewSubmit) && diary?.status === 'draft';
 
   const dateLabel = new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-AU', {
     weekday: 'short',
