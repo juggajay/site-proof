@@ -1,5 +1,63 @@
 import { prisma } from './prisma.js';
 
+// A checklist item counts as finished for conformance when its completion is
+// either 'completed' or 'not_applicable'. N/A is a first-class status that the
+// app requires a reason for (itp/completions.ts) and renders as done; treating
+// it as unfinished would make a lot with any N/A item impossible to conform.
+// 'failed' and missing completions remain unfinished (they still block). This
+// mirrors the isFinished semantics in routes/itp/helpers/lotProgression.ts.
+export function isItpCompletionFinished(status: string | null | undefined): boolean {
+  return status === 'completed' || status === 'not_applicable';
+}
+
+interface ChecklistCompletenessItem {
+  id: string;
+  description: string;
+  pointType: string;
+}
+
+interface ChecklistCompletenessCompletion {
+  checklistItemId: string;
+  status: string;
+}
+
+export interface ChecklistCompleteness {
+  completedCount: number;
+  totalCount: number;
+  completed: boolean;
+  incompleteItems: { id: string; description: string; pointType: string }[];
+}
+
+// Pure (DB-free) computation of ITP checklist completeness for conformance.
+// An item is "finished" when its completion status is 'completed' or
+// 'not_applicable'. Extracted so the conformance gate can be unit-tested with
+// mocked completions and so the N/A semantics stay in one place.
+export function buildItpChecklistCompleteness(
+  checklistItems: ChecklistCompletenessItem[],
+  completions: ChecklistCompletenessCompletion[],
+): ChecklistCompleteness {
+  const finishedItemIds = new Set(
+    completions.filter((c) => isItpCompletionFinished(c.status)).map((c) => c.checklistItemId),
+  );
+
+  const incompleteItems = checklistItems
+    .filter((item) => !finishedItemIds.has(item.id))
+    .map((item) => ({
+      id: item.id,
+      description: item.description,
+      pointType: item.pointType,
+    }));
+
+  const completedCount = checklistItems.length - incompleteItems.length;
+
+  return {
+    completedCount,
+    totalCount: checklistItems.length,
+    completed: incompleteItems.length === 0 && checklistItems.length > 0,
+    incompleteItems,
+  };
+}
+
 interface ConformancePrerequisites {
   itpAssigned: boolean;
   itpCompleted: boolean;
@@ -66,29 +124,19 @@ export async function checkConformancePrerequisites(
     openNcrs: [],
   };
 
-  // Check ITP completion
+  // Check ITP completion. N/A items count as finished (see
+  // buildItpChecklistCompleteness / isItpCompletionFinished above) so a lot
+  // with an N/A item can still be conformed; 'failed' and missing items block.
   if (lot.itpInstance) {
     prerequisites.itpAssigned = true;
     const checklistItems = lot.itpInstance.template.checklistItems;
-    prerequisites.itpTotalCount = checklistItems.length;
 
-    // Check which items are completed
-    const completedItemIds = lot.itpInstance.completions
-      .filter((c) => c.status === 'completed')
-      .map((c) => c.checklistItemId);
+    const completeness = buildItpChecklistCompleteness(checklistItems, lot.itpInstance.completions);
 
-    prerequisites.itpCompletedCount = completedItemIds.length;
-    prerequisites.itpCompleted =
-      completedItemIds.length === checklistItems.length && checklistItems.length > 0;
-
-    // Find incomplete items
-    prerequisites.itpIncompleteItems = checklistItems
-      .filter((item) => !completedItemIds.includes(item.id))
-      .map((item) => ({
-        id: item.id,
-        description: item.description,
-        pointType: item.pointType,
-      }));
+    prerequisites.itpTotalCount = completeness.totalCount;
+    prerequisites.itpCompletedCount = completeness.completedCount;
+    prerequisites.itpCompleted = completeness.completed;
+    prerequisites.itpIncompleteItems = completeness.incompleteItems;
   }
 
   // Check test results - need at least one passing and verified test
