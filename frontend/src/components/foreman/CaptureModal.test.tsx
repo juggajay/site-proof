@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, renderWithProviders, screen, waitFor } from '@/test/renderWithProviders';
 
-// CaptureModal's "Defect" mode only saves a defect-tagged photo/document; it does
-// NOT raise an NCR record. These tests lock the copy so the UI never claims an NCR
-// was created. Boundary modules are mocked so the test is about wording + payload.
+// CaptureModal's "Defect" mode now raises a REAL NCR via POST /api/ncrs when the
+// device is online, then keeps the photo (linked to the new NCR). When offline -
+// or if NCR creation fails - it keeps the photo but tells the truth: no NCR was
+// raised. Boundary modules are mocked so the test is about wording + payload.
 vi.mock('@/hooks/useGeoLocation', () => ({
   useGeoLocation: () => ({
     latitude: null,
@@ -35,6 +36,22 @@ const toastMock = vi.mocked(toast);
 const useAuthMock = vi.mocked(useAuth);
 const apiFetchMock = vi.mocked(apiFetch);
 
+function setOnline(value: boolean) {
+  Object.defineProperty(navigator, 'onLine', { configurable: true, value });
+}
+
+// apiFetch is used both for the lot dropdown read (GET /api/lots...) and the NCR
+// create (POST /api/ncrs). Route by path so each test asserts the create payload.
+function mockApi({ ncr }: { ncr?: { id: string; ncrNumber: string } } = {}) {
+  apiFetchMock.mockImplementation(((path: string) => {
+    if (typeof path === 'string' && path === '/api/ncrs') {
+      if (!ncr) return Promise.reject(new Error('NCR create failed'));
+      return Promise.resolve({ ncr });
+    }
+    return Promise.resolve({ lots: [] });
+  }) as unknown as typeof apiFetch);
+}
+
 // Simulate the native camera/file pick, which advances the modal from the
 // "capture" phase to the "categorize" phase (via FileReader onload).
 async function captureAPhoto(container: HTMLElement) {
@@ -44,40 +61,44 @@ async function captureAPhoto(container: HTMLElement) {
   await screen.findByText('Captured');
 }
 
+function descriptionsFromToasts() {
+  return toastMock.mock.calls.map(([arg]) => (arg as { description?: string }).description ?? '');
+}
+
 beforeEach(() => {
+  setOnline(true);
   useAuthMock.mockReturnValue({
     user: { id: 'u1', fullName: 'Fred Foreman' },
   } as unknown as ReturnType<typeof useAuth>);
-  apiFetchMock.mockResolvedValue({ lots: [] });
+  mockApi({ ncr: { id: 'ncr-1', ncrNumber: 'NCR-0007' } });
   capturePhotoOfflineMock.mockResolvedValue({ id: 'photo-1' } as unknown as Awaited<
     ReturnType<typeof capturePhotoOffline>
   >);
 });
 
 afterEach(() => {
+  setOnline(true);
   vi.clearAllMocks();
 });
 
-describe('CaptureModal issue wording is honest', () => {
-  it('labels the issue mode as a Defect photo, never an NCR record', async () => {
+describe('CaptureModal defect mode', () => {
+  it('labels the issue mode as a Defect, with an honest save affordance', async () => {
     const { container } = renderWithProviders(
       <CaptureModal projectId="p1" isOpen onClose={vi.fn()} />,
     );
     await captureAPhoto(container);
 
-    // The mode chip no longer implies an NCR is created.
     expect(screen.getByText('Defect')).toBeInTheDocument();
     expect(screen.queryByText('NCR/Defect')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByText('Defect'));
 
-    // Honest save affordance + placeholder; the old "Save NCR" copy is gone.
     expect(screen.getByRole('button', { name: 'Save Defect Photo' })).toBeInTheDocument();
     expect(screen.getByPlaceholderText('Brief defect description')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Save NCR' })).not.toBeInTheDocument();
   });
 
-  it('saves a defect-tagged photo and shows an honest toast (no false "NCR captured")', async () => {
+  it('online: raises a real NCR, links the photo to it, and toasts the real number', async () => {
     const onClose = vi.fn();
     const { container } = renderWithProviders(
       <CaptureModal projectId="p1" isOpen onClose={onClose} />,
@@ -87,23 +108,131 @@ describe('CaptureModal issue wording is honest', () => {
     fireEvent.click(screen.getByText('Defect'));
     fireEvent.click(screen.getByRole('button', { name: 'Save Defect Photo' }));
 
-    // Payload is unchanged: still stored as a defect-tagged photo/document.
+    // A real NCR is created first via the existing POST /api/ncrs contract.
+    await waitFor(() =>
+      expect(apiFetchMock).toHaveBeenCalledWith(
+        '/api/ncrs',
+        expect.objectContaining({ method: 'POST' }),
+      ),
+    );
+    const ncrCall = apiFetchMock.mock.calls.find(([path]) => path === '/api/ncrs');
+    const sentBody = JSON.parse((ncrCall?.[1] as { body: string }).body);
+    expect(sentBody).toMatchObject({
+      projectId: 'p1',
+      description: 'Defect captured on site - details pending',
+      category: 'general',
+    });
+
+    // The photo is captured and linked to the new NCR (entityType ncr + its id).
     await waitFor(() => expect(capturePhotoOfflineMock).toHaveBeenCalledTimes(1));
     expect(capturePhotoOfflineMock).toHaveBeenCalledWith(
       'p1',
       expect.any(File),
-      expect.objectContaining({ entityType: 'ncr', documentType: 'ncr_evidence' }),
+      expect.objectContaining({
+        entityType: 'ncr',
+        entityId: 'ncr-1',
+        documentType: 'ncr_evidence',
+      }),
     );
 
-    // The success toast must not claim an NCR record was raised.
+    // The toast carries the real NCR number from the response.
     await waitFor(() => expect(toastMock).toHaveBeenCalled());
-    const descriptions = toastMock.mock.calls.map(
-      ([arg]) => (arg as { description?: string }).description ?? '',
-    );
-    expect(descriptions.some((d) => d.includes('NCR captured'))).toBe(false);
     expect(toastMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        description: 'Defect photo saved. Raise an NCR from the lot to log it formally.',
+        description: 'NCR NCR-0007 raised - add details from the NCR register.',
+        variant: 'success',
+      }),
+    );
+    expect(descriptionsFromToasts().some((d) => d.includes('Photo saved offline'))).toBe(false);
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+  });
+
+  it('offline: keeps the photo but never claims an NCR was raised (no API call)', async () => {
+    setOnline(false);
+    const onClose = vi.fn();
+    const { container } = renderWithProviders(
+      <CaptureModal projectId="p1" isOpen onClose={onClose} />,
+    );
+    await captureAPhoto(container);
+
+    fireEvent.click(screen.getByText('Defect'));
+    fireEvent.click(screen.getByRole('button', { name: 'Save Defect Photo' }));
+
+    // The photo is still saved offline-first.
+    await waitFor(() => expect(capturePhotoOfflineMock).toHaveBeenCalledTimes(1));
+
+    // No NCR create is attempted while offline.
+    expect(apiFetchMock.mock.calls.some(([path]) => path === '/api/ncrs')).toBe(false);
+
+    // Honest toast: no false "NCR raised".
+    await waitFor(() => expect(toastMock).toHaveBeenCalled());
+    expect(toastMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description:
+          "Photo saved offline - raise the NCR from the NCR register when you're back online.",
+        variant: 'success',
+      }),
+    );
+    expect(descriptionsFromToasts().some((d) => d.includes('raised'))).toBe(false);
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+  });
+
+  it('online NCR-create failure: keeps the photo, falls back to honest offline wording', async () => {
+    mockApi({ ncr: undefined }); // POST /api/ncrs rejects
+    const onClose = vi.fn();
+    const { container } = renderWithProviders(
+      <CaptureModal projectId="p1" isOpen onClose={onClose} />,
+    );
+    await captureAPhoto(container);
+
+    fireEvent.click(screen.getByText('Defect'));
+    fireEvent.click(screen.getByRole('button', { name: 'Save Defect Photo' }));
+
+    // The create was attempted but failed - photo is still saved.
+    await waitFor(() => expect(capturePhotoOfflineMock).toHaveBeenCalledTimes(1));
+    expect(apiFetchMock.mock.calls.some(([path]) => path === '/api/ncrs')).toBe(true);
+
+    // Not linked to a non-existent NCR; falls back to optional ITP linkage (none here).
+    expect(capturePhotoOfflineMock).toHaveBeenCalledWith(
+      'p1',
+      expect.any(File),
+      expect.objectContaining({ entityType: 'ncr', entityId: undefined }),
+    );
+
+    // Honest fallback wording - never a false success number.
+    await waitFor(() => expect(toastMock).toHaveBeenCalled());
+    expect(toastMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description:
+          "Photo saved offline - raise the NCR from the NCR register when you're back online.",
+        variant: 'success',
+      }),
+    );
+    expect(descriptionsFromToasts().some((d) => d.includes('raised'))).toBe(false);
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+  });
+
+  it('non-defect photo capture is unchanged: no NCR call, plain "Photo saved" toast', async () => {
+    const onClose = vi.fn();
+    const { container } = renderWithProviders(
+      <CaptureModal projectId="p1" isOpen onClose={onClose} />,
+    );
+    await captureAPhoto(container);
+
+    // Default type is Photo; save via the categorize-phase Save button.
+    fireEvent.click(screen.getByRole('button', { name: 'Save Photo' }));
+
+    await waitFor(() => expect(capturePhotoOfflineMock).toHaveBeenCalledTimes(1));
+    expect(capturePhotoOfflineMock).toHaveBeenCalledWith(
+      'p1',
+      expect.any(File),
+      expect.objectContaining({ entityType: 'general', documentType: 'photo' }),
+    );
+    // No NCR is raised for a plain photo.
+    expect(apiFetchMock.mock.calls.some(([path]) => path === '/api/ncrs')).toBe(false);
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith({
+        description: 'Photo saved',
         variant: 'success',
       }),
     );
