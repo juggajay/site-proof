@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderWithProviders, screen, waitFor } from '@/test/renderWithProviders';
+import { Route, Routes } from 'react-router-dom';
+import { renderWithProviders, screen } from '@/test/renderWithProviders';
 
 // Mutable auth user, hoisted so the vi.mock factory below (which runs before the
 // imports) can close over it. ProjectsPage only reads `user` from useAuth.
@@ -65,7 +66,7 @@ describe('ProjectsPage company-onboarding gating', () => {
     expect(screen.queryByRole('button', { name: 'Set up your company' })).not.toBeInTheDocument();
   });
 
-  it('does not show the company-setup CTA to subcontractor portal users', async () => {
+  it('redirects subcontractor portal users away instead of offering the company-setup CTA', async () => {
     authState.user = {
       id: 'u3',
       email: 'subbie@example.com',
@@ -74,13 +75,33 @@ describe('ProjectsPage company-onboarding gating', () => {
       hasSubcontractorPortalAccess: true,
     };
 
-    renderWithProviders(<ProjectsPage />);
+    // Render inside a real route table so the component's <Navigate> redirect
+    // actually resolves against the router. The /subcontractor-portal sentinel
+    // only appears if ProjectsPage hits its `if (isSubcontractor) return
+    // <Navigate>` branch.
+    renderWithProviders(
+      <Routes>
+        <Route path="/projects" element={<ProjectsPage />} />
+        <Route
+          path="/subcontractor-portal"
+          element={<div data-testid="portal-sentinel">Subcontractor portal</div>}
+        />
+      </Routes>,
+      { initialEntries: ['/projects'] },
+    );
 
-    // Subcontractors are redirected to their portal and must not be offered the
-    // head-contractor company-setup CTA.
-    await waitFor(() => {
-      expect(screen.queryByRole('button', { name: 'Set up your company' })).not.toBeInTheDocument();
-    });
+    // Pin the REAL exclusion path: subcontractors land on the portal route via
+    // the <Navigate> redirect. This fails if the redirect ever stops firing
+    // (e.g. if it were gated behind the perpetual loading skeleton, or removed).
+    // Asserting only the absence of the CTA would pass even if subbies were
+    // wrongly offered it, because their projects query is disabled and isLoading
+    // stays true forever on TanStack Query v4 -> the page would otherwise sit on
+    // the skeleton and render no buttons regardless of the gating.
+    expect(await screen.findByTestId('portal-sentinel')).toBeInTheDocument();
+
+    // And they are never offered the head-contractor company-setup CTA or the
+    // New Project button while being redirected.
+    expect(screen.queryByRole('button', { name: 'Set up your company' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'New Project' })).not.toBeInTheDocument();
   });
 });

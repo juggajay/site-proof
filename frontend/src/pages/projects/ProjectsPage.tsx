@@ -214,6 +214,15 @@ export function ProjectsPage() {
     setFormData(EMPTY_PROJECT_FORM);
   };
 
+  // Subcontractors don't have a head-contractor projects list; send them to
+  // their portal. This must run before the loading branch: their projects query
+  // is disabled (enabled: false), which keeps isLoading true forever on
+  // TanStack Query v4, so gating the redirect behind `loading` would trap them
+  // on a perpetual skeleton instead of redirecting.
+  if (isSubcontractor) {
+    return <Navigate to="/subcontractor-portal" replace />;
+  }
+
   if (loading) {
     return (
       <div className="space-y-6" role="status" aria-label="Loading projects">
@@ -245,10 +254,6 @@ export function ProjectsPage() {
         </div>
       </div>
     );
-  }
-
-  if (isSubcontractor) {
-    return <Navigate to="/subcontractor-portal" replace />;
   }
 
   return (
