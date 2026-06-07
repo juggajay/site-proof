@@ -66,6 +66,83 @@ describe('ProjectsPage company-onboarding gating', () => {
     expect(screen.queryByRole('button', { name: 'Set up your company' })).not.toBeInTheDocument();
   });
 
+  it('shows honest guidance (no New Project button) for a company member who cannot create projects and has no project membership', async () => {
+    // Invited foreman/member: has a company, but roleInCompany is not in the
+    // backend PROJECT_CREATOR_ROLES, and GET /api/projects returns nothing
+    // because they are on no project team yet.
+    authState.user = {
+      id: 'u4',
+      email: 'foreman@example.com',
+      role: 'foreman',
+      roleInCompany: 'foreman',
+      companyId: 'c1',
+      companyName: 'Acme Civil',
+    };
+    apiFetchMock.mockResolvedValue({ projects: [] });
+
+    renderWithProviders(<ProjectsPage />);
+
+    // The guidance empty state names the company and explains the recovery path,
+    // instead of a dead-end create button on a blank page.
+    expect(await screen.findByText('No projects yet')).toBeInTheDocument();
+    expect(screen.getByText(/Acme Civil/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Ask your project admin to add you to a project team/),
+    ).toBeInTheDocument();
+
+    // No create affordance anywhere (header or empty state) since the API would
+    // reject their POST /api/projects.
+    expect(screen.queryByRole('button', { name: 'New Project' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Create Project' })).not.toBeInTheDocument();
+  });
+
+  it('falls back to "your company" guidance when the member has no company name', async () => {
+    authState.user = {
+      id: 'u5',
+      email: 'member@example.com',
+      role: 'member',
+      roleInCompany: 'member',
+      companyId: 'c1',
+      companyName: null,
+    };
+    apiFetchMock.mockResolvedValue({ projects: [] });
+
+    renderWithProviders(<ProjectsPage />);
+
+    expect(await screen.findByText('No projects yet')).toBeInTheDocument();
+    // Fallback copy reads "...part of your company, but you haven't been added...".
+    // The company name is interpolated as its own text node, so match against the
+    // paragraph's full textContent (and use a curly-quote-tolerant fragment).
+    expect(
+      screen.getByText(
+        (_content, element) =>
+          element?.tagName === 'P' && (element.textContent ?? '').includes('part of your company'),
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'New Project' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Create Project' })).not.toBeInTheDocument();
+  });
+
+  it('shows the create-project empty state for an admin/PM with zero projects', async () => {
+    authState.user = {
+      id: 'u6',
+      email: 'pm@example.com',
+      role: 'project_manager',
+      roleInCompany: 'project_manager',
+      companyId: 'c1',
+    };
+    apiFetchMock.mockResolvedValue({ projects: [] });
+
+    renderWithProviders(<ProjectsPage />);
+
+    // Project creators keep the existing New Project / Create Project empty
+    // state and never see the "added to a project team" guidance.
+    expect(await screen.findByText('No projects found')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'New Project' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create Project' })).toBeInTheDocument();
+    expect(screen.queryByText('No projects yet')).not.toBeInTheDocument();
+  });
+
   it('redirects subcontractor portal users away instead of offering the company-setup CTA', async () => {
     authState.user = {
       id: 'u3',

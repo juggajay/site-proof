@@ -14,7 +14,8 @@ import {
   isOptionalNonNegativeDecimalInput,
   parseOptionalNonNegativeDecimalInput,
 } from '@/lib/numericInput';
-import { hasSubcontractorPortalIdentity } from '@/lib/subcontractorIdentity';
+import { getCompanyRole, hasSubcontractorPortalIdentity } from '@/lib/subcontractorIdentity';
+import { ROLE_GROUPS, hasRoleInGroup } from '@/lib/roles';
 
 interface Project {
   id: string;
@@ -197,6 +198,14 @@ export function ProjectsPage() {
   const needsCompanySetup = !isSubcontractor && !user?.companyId;
   const goToCompanySetup = () => navigate('/onboarding');
 
+  // Mirrors the backend PROJECT_CREATOR_ROLES (owner/admin/project_manager) so
+  // we never offer a "New Project"/"Create Project" button to a company member
+  // (e.g. an invited foreman) whose POST /api/projects the API would reject.
+  // Such members instead get an honest empty state when they have no project
+  // membership yet, rather than a dead-end create button or a blank page.
+  const canCreateProjects = hasRoleInGroup(getCompanyRole(user), ROLE_GROUPS.ADMIN);
+  const companyLabel = user?.companyName?.trim() || 'your company';
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -262,9 +271,9 @@ export function ProjectsPage() {
         <h1 className="text-3xl font-bold">Projects</h1>
         {needsCompanySetup ? (
           <Button onClick={goToCompanySetup}>Set up your company</Button>
-        ) : (
+        ) : canCreateProjects ? (
           <Button onClick={openCreateModal}>New Project</Button>
-        )}
+        ) : null}
       </div>
       <p className="text-muted-foreground">Manage your civil construction projects.</p>
 
@@ -460,12 +469,32 @@ export function ProjectsPage() {
             Set up your company
           </Button>
         </div>
-      ) : !error && projects.length === 0 ? (
+      ) : !error && projects.length === 0 && canCreateProjects ? (
         <div className="text-center py-12 bg-card rounded-lg border">
           <h3 className="text-lg font-medium">No projects found</h3>
           <p className="mt-1 text-muted-foreground">Create a new project to get started.</p>
           <Button className="mt-4" onClick={openCreateModal}>
             Create Project
+          </Button>
+        </div>
+      ) : !error && projects.length === 0 ? (
+        // Company member (e.g. an invited foreman) who can't create projects and
+        // hasn't been added to a project team yet. Without this, they'd land on a
+        // blank Projects page with a create button the API rejects, and the app
+        // would look broken at first touch. Give honest guidance instead of a void.
+        <div className="text-center py-12 bg-card rounded-lg border">
+          <h3 className="text-lg font-medium">No projects yet</h3>
+          <p className="mt-1 text-muted-foreground">
+            You&rsquo;re part of {companyLabel}, but you haven&rsquo;t been added to a project yet.
+            Ask your project admin to add you to a project team &mdash; then it will show up here.
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            className="mt-4"
+            onClick={() => void refetchProjects()}
+          >
+            Refresh
           </Button>
         </div>
       ) : !error ? (
