@@ -7,6 +7,7 @@ import {
   startOfDay,
 } from './helpers.js';
 import type { NotificationTypeWithTiming } from './preferences.js';
+import { isProjectNotificationEnabled } from '../projectNotificationPreferences.js';
 
 type DiaryAutomationPrisma = Pick<PrismaClient, 'dailyDiary' | 'notification'>;
 
@@ -16,6 +17,7 @@ type DiaryProjectForAutomation = {
   companyId: string;
   workingHoursEnd: string | null;
   workingDays: string | null;
+  settings: string | null;
 };
 
 type DiaryNotificationRecipient = {
@@ -103,6 +105,14 @@ export async function processDueDiaryReminders(
   };
 
   for (const project of projects) {
+    // Respect the project-level "Daily Diary Reminders" toggle. When an admin
+    // turns it off, skip reminders for that project entirely (in-app + email).
+    // Absent/missing settings default to on.
+    if (!isProjectNotificationEnabled(project.settings, 'dailyDiaryReminders')) {
+      result.skippedProjects += 1;
+      continue;
+    }
+
     if (!isWorkingDay(project, targetDate) || !isDueForProjectTime(now, project.workingHoursEnd)) {
       result.skippedProjects += 1;
       continue;

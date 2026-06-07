@@ -24,6 +24,7 @@ import {
 import { buildHoldPointChaseEmail, selectHoldPointChaseRecipients } from './chaseNotifications.js';
 import { buildHoldPointChaseResponse, buildHoldPointReleasedResponse } from './actionResponses.js';
 import { holdPointEscalationRouter } from './escalationRoutes.js';
+import { isProjectNotificationEnabled } from '../../lib/projectNotificationPreferences.js';
 
 // =============================================================================
 // Authenticated hold point ACTION routes (release, chase, escalate,
@@ -166,94 +167,105 @@ holdPointActionRouter.post(
       },
     });
 
-    // Create in-app notifications for all project team members
-    const notificationsToCreate = buildHoldPointReleaseNotifications(projectUsers, {
-      projectId: existingHP.lot.projectId,
-      holdPointDescription: holdPoint.description,
-      lotNumber: holdPoint.lot.lotNumber,
-      releasedByName,
-    });
-
-    if (notificationsToCreate.length > 0) {
-      try {
-        await prisma.notification.createMany({
-          data: notificationsToCreate,
-        });
-      } catch (notificationError) {
-        logError('[HP Release] Failed to create in-app notifications:', notificationError);
-        // The release already committed above; don't fail the request if the
-        // post-commit notification insert throws.
-      }
-    }
-
-    // Send email notifications to team members (if configured). The payload is
-    // the same for every recipient, so build it once.
-    const releaseEmailNotification = buildHoldPointReleaseEmailNotification({
-      projectId: existingHP.lot.projectId,
-      holdPointDescription: holdPoint.description,
-      lotNumber: holdPoint.lot.lotNumber,
-      releasedByName,
-      projectName: existingHP.lot.project.name,
-      releaseMethod,
-      releaseNotes,
-    });
-    for (const pu of projectUsers) {
-      try {
-        await sendNotificationIfEnabled(pu.userId, 'holdPointRelease', releaseEmailNotification);
-      } catch (emailError) {
-        logError(`[HP Release] Failed to send email to user ${pu.userId}:`, emailError);
-        // Continue with other notifications even if one fails
-      }
-    }
-
-    // Feature #948 - Send HP release confirmation emails to contractor and superintendent
-    try {
-      const lotUrl = buildFrontendUrl(
-        `/projects/${existingHP.lot.projectId}/lots/${existingHP.lot.id}`,
-      );
-      const releasedAtDisplay = releasedAt.toLocaleString('en-AU', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
+    // Respect the project-level "Hold Point Releases" notification toggle. When
+    // an admin turns this category off, suppress both the in-app records and the
+    // emails for everyone on the project. Absent/missing settings default to on.
+    if (isProjectNotificationEnabled(existingHP.lot.project.settings, 'holdPointReleases')) {
+      // Create in-app notifications for all project team members
+      const notificationsToCreate = buildHoldPointReleaseNotifications(projectUsers, {
+        projectId: existingHP.lot.projectId,
+        holdPointDescription: holdPoint.description,
+        lotNumber: holdPoint.lot.lotNumber,
+        releasedByName,
       });
 
-      const confirmationContext = {
-        projectName: existingHP.lot.project.name,
-        lotNumber: holdPoint.lot.lotNumber,
+      if (notificationsToCreate.length > 0) {
+        try {
+          await prisma.notification.createMany({
+            data: notificationsToCreate,
+          });
+        } catch (notificationError) {
+          logError('[HP Release] Failed to create in-app notifications:', notificationError);
+          // The release already committed above; don't fail the request if the
+          // post-commit notification insert throws.
+        }
+      }
+
+      // Send email notifications to team members (if configured). The payload is
+      // the same for every recipient, so build it once.
+      const releaseEmailNotification = buildHoldPointReleaseEmailNotification({
+        projectId: existingHP.lot.projectId,
         holdPointDescription: holdPoint.description,
+        lotNumber: holdPoint.lot.lotNumber,
         releasedByName,
-        releasedByOrg,
+        projectName: existingHP.lot.project.name,
         releaseMethod,
         releaseNotes,
-        releasedAt: releasedAtDisplay,
-        lotUrl,
-      };
-
-      // Send to contractors (site_engineer, foreman roles)
-      const contractors = selectHoldPointReleaseContractors(projectUsers);
-      for (const contractor of contractors) {
-        await sendHPReleaseConfirmationEmail(
-          buildHoldPointReleaseConfirmationEmail(contractor, 'contractor', confirmationContext),
-        );
+      });
+      for (const pu of projectUsers) {
+        try {
+          await sendNotificationIfEnabled(pu.userId, 'holdPointRelease', releaseEmailNotification);
+        } catch (emailError) {
+          logError(`[HP Release] Failed to send email to user ${pu.userId}:`, emailError);
+          // Continue with other notifications even if one fails
+        }
       }
 
-      // Send to superintendents
-      const superintendents = selectHoldPointReleaseSuperintendents(projectUsers);
-      for (const superintendent of superintendents) {
-        await sendHPReleaseConfirmationEmail(
-          buildHoldPointReleaseConfirmationEmail(
-            superintendent,
-            'superintendent',
-            confirmationContext,
-          ),
+      // Feature #948 - Send HP release confirmation emails to contractor and
+      // superintendent. These are part of the same "Hold Point Releases"
+      // category (they fire on the same release event, to project users), so
+      // they live under the same toggle as the in-app records and the primary
+      // release emails above. sendHPReleaseConfirmationEmail is a direct `to:`
+      // send that bypasses the per-user email preference system, so this
+      // project-level gate is the only thing that can suppress it.
+      try {
+        const lotUrl = buildFrontendUrl(
+          `/projects/${existingHP.lot.projectId}/lots/${existingHP.lot.id}`,
         );
+        const releasedAtDisplay = releasedAt.toLocaleString('en-AU', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+
+        const confirmationContext = {
+          projectName: existingHP.lot.project.name,
+          lotNumber: holdPoint.lot.lotNumber,
+          holdPointDescription: holdPoint.description,
+          releasedByName,
+          releasedByOrg,
+          releaseMethod,
+          releaseNotes,
+          releasedAt: releasedAtDisplay,
+          lotUrl,
+        };
+
+        // Send to contractors (site_engineer, foreman roles)
+        const contractors = selectHoldPointReleaseContractors(projectUsers);
+        for (const contractor of contractors) {
+          await sendHPReleaseConfirmationEmail(
+            buildHoldPointReleaseConfirmationEmail(contractor, 'contractor', confirmationContext),
+          );
+        }
+
+        // Send to superintendents
+        const superintendents = selectHoldPointReleaseSuperintendents(projectUsers);
+        for (const superintendent of superintendents) {
+          await sendHPReleaseConfirmationEmail(
+            buildHoldPointReleaseConfirmationEmail(
+              superintendent,
+              'superintendent',
+              confirmationContext,
+            ),
+          );
+        }
+      } catch (emailError) {
+        logError('[HP Release] Failed to send confirmation emails:', emailError);
+        // Don't fail the main request
       }
-    } catch (emailError) {
-      logError('[HP Release] Failed to send confirmation emails:', emailError);
-      // Don't fail the main request
     }
 
     // Audit log for HP release

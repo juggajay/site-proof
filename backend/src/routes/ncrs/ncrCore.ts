@@ -14,6 +14,7 @@ import {
   requireActiveProjectUser,
 } from './ncrAccess.js';
 import { logError } from '../../lib/serverLogger.js';
+import { isProjectNotificationEnabled } from '../../lib/projectNotificationPreferences.js';
 import { buildNcrResponse, buildNcrUpdatedResponse } from './ncrCoreResponses.js';
 import { createNcrSchema, parseOptionalNcrDueDate, updateNcrSchema } from './ncrCoreValidation.js';
 import { createNcrWithAllocatedNumber } from './ncrNumberAllocation.js';
@@ -204,24 +205,34 @@ ncrCoreRouter.post(
       req,
     });
 
-    // Feature #212: Notify responsible party when assigned to NCR
+    // Feature #212: Notify responsible party when assigned to NCR.
+    // Respect the project-level "NCR Assignments" notification toggle: when an
+    // admin turns this category off, suppress the assignment notification for
+    // the whole project. Absent/missing settings default to on.
     if (responsibleUserId && responsibleUserId !== user.userId) {
-      const raisedByUser = await prisma.user.findUnique({
-        where: { id: user.userId },
-        select: { fullName: true, email: true },
+      const project = await prisma.project.findUnique({
+        where: { id: projectId },
+        select: { settings: true },
       });
-      const raisedByName = raisedByUser?.fullName || raisedByUser?.email || 'Someone';
 
-      await prisma.notification.create({
-        data: {
-          userId: responsibleUserId,
-          projectId,
-          type: 'ncr_assigned',
-          title: `NCR Assigned to You`,
-          message: `${raisedByName} assigned ${ncr.ncrNumber} to you: ${description.substring(0, 100)}${description.length > 100 ? '...' : ''}`,
-          linkUrl: `/projects/${projectId}/ncr`,
-        },
-      });
+      if (isProjectNotificationEnabled(project?.settings, 'ncrAssignments')) {
+        const raisedByUser = await prisma.user.findUnique({
+          where: { id: user.userId },
+          select: { fullName: true, email: true },
+        });
+        const raisedByName = raisedByUser?.fullName || raisedByUser?.email || 'Someone';
+
+        await prisma.notification.create({
+          data: {
+            userId: responsibleUserId,
+            projectId,
+            type: 'ncr_assigned',
+            title: `NCR Assigned to You`,
+            message: `${raisedByName} assigned ${ncr.ncrNumber} to you: ${description.substring(0, 100)}${description.length > 100 ? '...' : ''}`,
+            linkUrl: `/projects/${projectId}/ncr`,
+          },
+        });
+      }
     }
 
     // Notify head contractor users when a subcontractor raises an NCR
@@ -311,8 +322,13 @@ ncrCoreRouter.patch(
 
       updateData.responsibleUserId = responsibleUserId || null;
 
-      // If redirecting to a new user, create a notification
-      if (responsibleUserId) {
+      // If redirecting to a new user, create a notification. Respect the
+      // project-level "NCR Assignments" notification toggle (a redirect is an
+      // assignment): when off, suppress it. Absent/missing settings default on.
+      if (
+        responsibleUserId &&
+        isProjectNotificationEnabled(ncr.project.settings, 'ncrAssignments')
+      ) {
         try {
           await prisma.notification.create({
             data: {

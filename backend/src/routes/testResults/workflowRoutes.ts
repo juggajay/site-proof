@@ -6,6 +6,7 @@ import { createAuditLog, AuditAction } from '../../lib/auditLog.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { getEffectiveProjectRole } from '../../lib/projectAccess.js';
+import { isProjectNotificationEnabled } from '../../lib/projectNotificationPreferences.js';
 import {
   TEST_CREATORS,
   TEST_VERIFIERS,
@@ -321,66 +322,72 @@ workflowRoutes.post(
         // Get project info
         const project = await prisma.project.findUnique({
           where: { id: testResult.projectId },
-          select: { id: true, name: true },
+          select: { id: true, name: true, settings: true },
         });
 
-        // Get active site engineers
-        const siteEngineers = await prisma.projectUser.findMany({
-          where: {
-            projectId: testResult.projectId,
-            role: 'site_engineer',
-            status: 'active',
-          },
-        });
-
-        // Get user details for engineers
-        const engineerUserIds = siteEngineers.map((se) => se.userId);
-        const engineerUsers =
-          engineerUserIds.length > 0
-            ? await prisma.user.findMany({
-                where: { id: { in: engineerUserIds } },
-                select: { id: true, email: true, fullName: true },
-              })
-            : [];
-
-        // Get laboratory name for more context
-        const testWithLab = await prisma.testResult.findUnique({
-          where: { id },
-          select: { laboratoryName: true, testRequestNumber: true },
-        });
-        const labName = testWithLab?.laboratoryName || 'laboratory';
-        const requestNum = testWithLab?.testRequestNumber || id.substring(0, 8).toUpperCase();
-
-        // Create in-app notifications for site engineers
-        const notificationsToCreate = engineerUsers.map((eng) =>
-          buildTestResultReceivedNotification({
-            userId: eng.id,
-            projectId: testResult.projectId,
-            testType: testResult.testType,
-            requestNumber: requestNum,
-            labName,
-          }),
-        );
-
-        if (notificationsToCreate.length > 0) {
-          await prisma.notification.createMany({
-            data: notificationsToCreate,
-          });
-        }
-
-        // Send email notifications
-        for (const eng of engineerUsers) {
-          await sendNotificationIfEnabled(
-            eng.id,
-            'enabled',
-            buildTestResultReceivedEmail({
+        // Respect the project-level "Test Results" notification toggle. When an
+        // admin turns this category off, skip both the in-app records and the
+        // emails for everyone. Absent/missing settings default to on. The audit
+        // log below still runs regardless.
+        if (isProjectNotificationEnabled(project?.settings, 'testResults')) {
+          // Get active site engineers
+          const siteEngineers = await prisma.projectUser.findMany({
+            where: {
               projectId: testResult.projectId,
-              projectName: project?.name,
+              role: 'site_engineer',
+              status: 'active',
+            },
+          });
+
+          // Get user details for engineers
+          const engineerUserIds = siteEngineers.map((se) => se.userId);
+          const engineerUsers =
+            engineerUserIds.length > 0
+              ? await prisma.user.findMany({
+                  where: { id: { in: engineerUserIds } },
+                  select: { id: true, email: true, fullName: true },
+                })
+              : [];
+
+          // Get laboratory name for more context
+          const testWithLab = await prisma.testResult.findUnique({
+            where: { id },
+            select: { laboratoryName: true, testRequestNumber: true },
+          });
+          const labName = testWithLab?.laboratoryName || 'laboratory';
+          const requestNum = testWithLab?.testRequestNumber || id.substring(0, 8).toUpperCase();
+
+          // Create in-app notifications for site engineers
+          const notificationsToCreate = engineerUsers.map((eng) =>
+            buildTestResultReceivedNotification({
+              userId: eng.id,
+              projectId: testResult.projectId,
               testType: testResult.testType,
               requestNumber: requestNum,
               labName,
             }),
           );
+
+          if (notificationsToCreate.length > 0) {
+            await prisma.notification.createMany({
+              data: notificationsToCreate,
+            });
+          }
+
+          // Send email notifications
+          for (const eng of engineerUsers) {
+            await sendNotificationIfEnabled(
+              eng.id,
+              'enabled',
+              buildTestResultReceivedEmail({
+                projectId: testResult.projectId,
+                projectName: project?.name,
+                testType: testResult.testType,
+                requestNumber: requestNum,
+                labName,
+              }),
+            );
+          }
         }
       } catch {
         // Don't fail the main request if notifications fail
