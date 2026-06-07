@@ -6,16 +6,9 @@ import {
   getPendingSyncItems,
   removeSyncQueueItem,
   markSyncItemError,
-  markCompletionSynced,
   getOfflinePhoto,
   markPhotoSynced,
   markPhotoSyncError,
-  offlineDb,
-  markDiarySynced,
-  markDiarySyncError,
-  markDocketSynced,
-  markDocketServerId,
-  markDocketSyncError,
   getOfflineLot,
   detectLotSyncConflict,
   markLotSynced,
@@ -25,13 +18,9 @@ import {
 } from './offlineDb';
 import { apiUrl, authFetch } from './api';
 import { devLog, devWarn } from './logger';
-import {
-  readResponseError,
-  runExclusiveOfflineSync,
-  syncOfflineDiarySnapshot,
-  syncOfflineDocketDraft,
-} from './offline/syncClient';
+import { runExclusiveOfflineSync } from './offline/syncClient';
 import { buildOfflineLotEditPayload } from './offline/syncPayloads';
+import { syncSingleItem } from './offline/syncWorker';
 
 // Type for sync notification callbacks
 export interface SyncCompleteResult {
@@ -108,171 +97,17 @@ export function useOfflineStatus(callbacks?: SyncCallbacks) {
             continue;
           }
 
-          if (item.type === 'itp_completion' && item.id) {
-            try {
-              const completion = item.data;
-
-              // First, get the ITP instance for this lot
-              const instanceResponse = await authFetch(
-                apiUrl(`/api/itp/instances/lot/${completion.lotId}`),
-              );
-
-              if (!instanceResponse.ok) {
-                await markSyncItemError(item.id, 'Could not find ITP instance for lot');
-                continue;
-              }
-
-              const instanceData = await instanceResponse.json();
-              const itpInstanceId = instanceData.instance?.id;
-
-              if (!itpInstanceId) {
-                await markSyncItemError(item.id, 'No ITP instance found for lot');
-                continue;
-              }
-
-              // Convert status to backend expected format
-              const isCompleted = completion.status === 'completed';
-              const directStatus =
-                completion.status === 'na'
-                  ? 'not_applicable'
-                  : completion.status === 'failed'
-                    ? 'failed'
-                    : undefined;
-
-              // Sync to server
-              const response = await authFetch(apiUrl('/api/itp/completions'), {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  itpInstanceId,
-                  checklistItemId: completion.checklistItemId,
-                  isCompleted,
-                  status: directStatus,
-                  notes: completion.notes,
-                }),
-              });
-
-              if (response.ok) {
-                // Remove from sync queue
-                await removeSyncQueueItem(item.id);
-                // Mark as synced
-                await markCompletionSynced(completion.lotId, completion.checklistItemId);
-                syncedCount++;
-              } else {
-                const errorText = await response.text();
-                await markSyncItemError(item.id, errorText);
-              }
-            } catch (error) {
-              if (item.id) {
-                await markSyncItemError(
-                  item.id,
-                  error instanceof Error ? error.message : 'Unknown error',
-                );
-              }
-            }
+          // Dispatch to the per-type executors that the worker now owns
+          // (itp_completion, diary_*, docket_*, lot_conflict, unknown-type GC).
+          // A 'synced' result feeds the tally; 'handled' means the worker fully
+          // processed the item; 'deferred' means the item's branch still runs
+          // inline below (photo_upload and, until Slice 3, lot_edit).
+          const dispatch = await syncSingleItem(item);
+          if (dispatch.status === 'synced') {
+            syncedCount++;
           }
-
-          // Feature #312: Sync offline diaries
-          if ((item.type === 'diary_save' || item.type === 'diary_submit') && item.id) {
-            try {
-              const { diaryId } = item.data;
-              const diary = await offlineDb.diaries.get(diaryId);
-
-              if (!diary) {
-                // Diary was deleted, remove from queue
-                await removeSyncQueueItem(item.id);
-                continue;
-              }
-
-              const serverDiaryId = await syncOfflineDiarySnapshot(diary);
-
-              if (item.type === 'diary_submit') {
-                const response = await authFetch(apiUrl(`/api/diary/${serverDiaryId}/submit`), {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify({ acknowledgeWarnings: true }),
-                });
-
-                if (!response.ok) {
-                  const errorText = await readResponseError(response);
-                  if (!errorText.includes('Diary already submitted')) {
-                    await markSyncItemError(item.id, errorText);
-                    await markDiarySyncError(diaryId);
-                    continue;
-                  }
-                }
-              }
-
-              // Remove from sync queue
-              await removeSyncQueueItem(item.id);
-              // Mark diary as synced
-              await markDiarySynced(diaryId);
-              syncedCount++;
-            } catch (error) {
-              if (item.id) {
-                await markSyncItemError(
-                  item.id,
-                  error instanceof Error ? error.message : 'Unknown error',
-                );
-              }
-              if (item.data?.diaryId) {
-                await markDiarySyncError(item.data.diaryId);
-              }
-            }
-          }
-
-          // Feature #313: Sync offline dockets
-          if ((item.type === 'docket_create' || item.type === 'docket_submit') && item.id) {
-            try {
-              const { docketId } = item.data;
-              const docket = await offlineDb.dockets.get(docketId);
-
-              if (!docket) {
-                // Docket was deleted, remove from queue
-                await removeSyncQueueItem(item.id);
-                continue;
-              }
-
-              if (item.type === 'docket_create' && docket.serverId) {
-                await markSyncItemError(
-                  item.id,
-                  'This offline docket is already synced. Open it online to make further changes.',
-                );
-                await markDocketSyncError(docketId);
-                continue;
-              }
-
-              const serverId = await syncOfflineDocketDraft(docket);
-
-              if (item.type === 'docket_create') {
-                // Remove from sync queue
-                await removeSyncQueueItem(item.id);
-                // Mark docket as synced
-                await markDocketSynced(docketId, serverId);
-                syncedCount++;
-              } else {
-                await markDocketServerId(docketId, serverId);
-                await markSyncItemError(
-                  item.id,
-                  'Offline docket draft synced. Submission requires online review so labour, plant, and lot allocations can be validated before approval.',
-                );
-                await markDocketSyncError(docketId);
-              }
-            } catch (error) {
-              if (item.id) {
-                await markSyncItemError(
-                  item.id,
-                  error instanceof Error ? error.message : 'Unknown error',
-                );
-              }
-              if (item.data?.docketId) {
-                await markDocketSyncError(item.data.docketId);
-              }
-            }
+          if (dispatch.status !== 'deferred') {
+            continue;
           }
 
           // Feature #311: Sync offline photos
@@ -453,29 +288,6 @@ export function useOfflineStatus(callbacks?: SyncCallbacks) {
                 await markLotSyncError(item.data.lotId);
               }
             }
-          }
-
-          // Feature #314: Handle conflict notifications (just remove from queue after processing)
-          if (item.type === 'lot_conflict' && item.id) {
-            // Conflict notification item - just remove it, conflict is tracked in lot record
-            await removeSyncQueueItem(item.id);
-            continue;
-          }
-
-          // Remove unrecognized item types to prevent queue buildup
-          const knownTypes = [
-            'itp_completion',
-            'photo_upload',
-            'diary_save',
-            'diary_submit',
-            'docket_create',
-            'docket_submit',
-            'lot_edit',
-            'lot_conflict',
-          ];
-          if (!knownTypes.includes(item.type) && item.id) {
-            devWarn('[Sync] Removing unknown item type:', item.type);
-            await removeSyncQueueItem(item.id);
           }
         }
 
