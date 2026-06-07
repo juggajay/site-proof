@@ -123,9 +123,17 @@ function buildConformanceItems(input: LotReadinessInput): EvidenceReadinessItem[
   return items;
 }
 
+// Round a percentage for display without exposing floating-point noise.
+function roundReadinessPercentage(value: number): number {
+  return Number(Math.max(0, Math.min(100, value)).toFixed(2));
+}
+
 function buildClaimItems(input: LotReadinessInput): EvidenceReadinessItem[] {
   const { lot, evidenceCounts, canViewCommercial } = input;
   const items: EvidenceReadinessItem[] = [];
+
+  const claimedPercentage = roundReadinessPercentage(lot.claimedPercentage ?? 0);
+  const remainingPercentage = roundReadinessPercentage(100 - claimedPercentage);
 
   if (lot.status === 'claimed' || lot.claimedInId) {
     items.push(
@@ -133,9 +141,22 @@ function buildClaimItems(input: LotReadinessInput): EvidenceReadinessItem[] {
         code: 'already_claimed',
         severity: 'blocker',
         area: 'claim',
-        title: 'Already claimed',
-        detail: 'This lot is already attached to a progress claim.',
+        title: 'Fully claimed',
+        detail: 'This lot has been claimed in full and cannot be claimed again.',
         blocksAction: true,
+      }),
+    );
+  } else if (lot.status === 'conformed' && claimedPercentage > 0) {
+    // Cumulative claiming: a partially-claimed conformed lot stays selectable.
+    items.push(
+      item({
+        code: 'partially_claimed',
+        severity: 'support',
+        area: 'claim',
+        title: `Previously claimed ${claimedPercentage}%`,
+        detail: `${remainingPercentage}% of this lot is still available to claim.`,
+        blocksAction: false,
+        count: remainingPercentage,
       }),
     );
   } else if (lot.status !== 'conformed') {
@@ -255,6 +276,9 @@ export function buildLotReadinessFromInputs(input: LotReadinessInput): LotEviden
   const conformanceSplit = splitItems(conformanceItems);
   const claimSplit = splitItems(claimItems);
 
+  const claimedPercentage = roundReadinessPercentage(input.lot.claimedPercentage ?? 0);
+  const remainingPercentage = roundReadinessPercentage(100 - claimedPercentage);
+
   const conformanceState =
     input.lot.status === 'claimed'
       ? 'already_claimed'
@@ -282,6 +306,8 @@ export function buildLotReadinessFromInputs(input: LotReadinessInput): LotEviden
       ...claimSplit,
       ...(input.canViewCommercial ? { budgetAmount: input.lot.budgetAmount } : {}),
       claimedInId: input.lot.claimedInId,
+      claimedPercentage: claimedPercentage,
+      remainingPercentage: remainingPercentage,
     },
     summary: summarize(conformanceSplit, claimSplit),
   };
@@ -306,6 +332,8 @@ export function filterCommercialReadiness(readiness: LotEvidenceReadiness): LotE
     warnings: filterItems(readiness.claim.warnings),
     support: filterItems(readiness.claim.support),
     claimedInId: readiness.claim.claimedInId,
+    claimedPercentage: readiness.claim.claimedPercentage,
+    remainingPercentage: readiness.claim.remainingPercentage,
   };
 
   return {

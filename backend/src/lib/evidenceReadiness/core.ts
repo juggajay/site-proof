@@ -47,6 +47,10 @@ export interface LotEvidenceReadiness {
   claim: ReadinessBucket & {
     budgetAmount?: number | null;
     claimedInId?: string | null;
+    // Cumulative percentage already claimed (0-100) and the percentage still
+    // available to claim. Lets the UI show "previously claimed X%".
+    claimedPercentage?: number;
+    remainingPercentage?: number;
   };
   summary: {
     blockerCount: number;
@@ -75,6 +79,9 @@ export interface LotReadinessInput {
     status: string;
     budgetAmount: number | null;
     claimedInId: string | null;
+    // Cumulative percentage already claimed across all prior claims (0-100).
+    // Defaults to 0 when omitted, preserving legacy single-claim behaviour.
+    claimedPercentage?: number;
   };
   canViewCommercial: boolean;
   conformStatus: {

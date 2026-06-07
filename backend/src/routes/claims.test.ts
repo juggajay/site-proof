@@ -669,7 +669,7 @@ describe('Progress Claims API', () => {
       expect(claimNumbers).toEqual([2, 3]);
     });
 
-    it('should persist partial claim percentages and amounts', async () => {
+    it('should persist partial claim percentages and amounts and keep the lot claimable', async () => {
       const partialLot = await prisma.lot.create({
         data: {
           projectId,
@@ -704,9 +704,169 @@ describe('Progress Claims API', () => {
       expect(Number(claimedLot?.amountClaimed)).toBe(5050);
       expect(Number(claimedLot?.percentageComplete)).toBe(50.5);
 
+      // Cumulative claiming: a partial claim must NOT lock the lot. It stays
+      // conformed (claimedInId null) so the remaining 49.5% can be claimed
+      // on a later claim.
       const updatedLot = await prisma.lot.findUnique({ where: { id: partialLot.id } });
-      expect(updatedLot?.status).toBe('claimed');
-      expect(updatedLot?.claimedInId).toBe(res.body.claim.id);
+      expect(updatedLot?.status).toBe('conformed');
+      expect(updatedLot?.claimedInId).toBeNull();
+    });
+  });
+
+  describe('Cumulative progress claims', () => {
+    async function createCumulativeLot(budgetAmount: number) {
+      return prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `CUMULATIVE-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          status: 'conformed',
+          lotType: 'chainage',
+          activityType: 'Earthworks',
+          budgetAmount,
+          conformedAt: new Date(),
+          conformedById: userId,
+        },
+      });
+    }
+
+    async function claimLot(lotId: string, percentageComplete: number) {
+      return request(app)
+        .post(`/api/projects/${projectId}/claims`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          periodStart: '2025-09-01',
+          periodEnd: '2025-09-30',
+          lots: [{ lotId, percentageComplete }],
+        });
+    }
+
+    it('lets a lot be claimed across successive claims until it reaches 100%', async () => {
+      const lot = await createCumulativeLot(200000);
+
+      const first = await claimLot(lot.id, 50);
+      expect(first.status).toBe(201);
+      expect(first.body.claim.totalClaimedAmount).toBe(100000);
+
+      const afterFirst = await prisma.lot.findUnique({ where: { id: lot.id } });
+      expect(afterFirst?.status).toBe('conformed');
+      expect(afterFirst?.claimedInId).toBeNull();
+
+      const second = await claimLot(lot.id, 30);
+      expect(second.status).toBe(201);
+      expect(second.body.claim.totalClaimedAmount).toBe(60000);
+
+      const afterSecond = await prisma.lot.findUnique({ where: { id: lot.id } });
+      expect(afterSecond?.status).toBe('conformed');
+      expect(afterSecond?.claimedInId).toBeNull();
+
+      const third = await claimLot(lot.id, 20);
+      expect(third.status).toBe(201);
+      expect(third.body.claim.totalClaimedAmount).toBe(40000);
+
+      // Cumulative now reaches 100% so the lot is finally locked to the
+      // completing claim.
+      const afterThird = await prisma.lot.findUnique({ where: { id: lot.id } });
+      expect(afterThird?.status).toBe('claimed');
+      expect(afterThird?.claimedInId).toBe(third.body.claim.id);
+
+      const claimedLots = await prisma.claimedLot.findMany({ where: { lotId: lot.id } });
+      const totalClaimed = claimedLots.reduce((sum, cl) => sum + Number(cl.amountClaimed ?? 0), 0);
+      expect(totalClaimed).toBe(200000);
+    });
+
+    it('rejects an increment that would push cumulative progress past 100%', async () => {
+      const lot = await createCumulativeLot(100000);
+
+      const first = await claimLot(lot.id, 70);
+      expect(first.status).toBe(201);
+
+      const overClaim = await claimLot(lot.id, 40);
+      expect(overClaim.status).toBe(400);
+      expect(overClaim.body.error.details?.code).toBe('OVER_CLAIM');
+
+      // The rejected claim must not have mutated the lot or created a row.
+      const unchangedLot = await prisma.lot.findUnique({ where: { id: lot.id } });
+      expect(unchangedLot?.status).toBe('conformed');
+      expect(unchangedLot?.claimedInId).toBeNull();
+      const claimedLots = await prisma.claimedLot.findMany({ where: { lotId: lot.id } });
+      expect(claimedLots).toHaveLength(1);
+    });
+
+    it('allows claiming exactly the remaining percentage at the 100% boundary', async () => {
+      const lot = await createCumulativeLot(100000);
+
+      expect((await claimLot(lot.id, 60)).status).toBe(201);
+      const final = await claimLot(lot.id, 40);
+      expect(final.status).toBe(201);
+
+      const finalLot = await prisma.lot.findUnique({ where: { id: lot.id } });
+      expect(finalLot?.status).toBe('claimed');
+      expect(finalLot?.claimedInId).toBe(final.body.claim.id);
+    });
+
+    it('rejects re-claiming a fully claimed lot', async () => {
+      const lot = await createCumulativeLot(100000);
+
+      expect((await claimLot(lot.id, 100)).status).toBe(201);
+
+      const retry = await claimLot(lot.id, 10);
+      // A fully claimed lot is status `claimed`, so it is no longer a valid
+      // conformed lot for a new claim.
+      expect(retry.status).toBe(400);
+    });
+
+    it('releases increments when a draft claim is deleted so the lot is claimable again', async () => {
+      const lot = await createCumulativeLot(100000);
+
+      expect((await claimLot(lot.id, 40)).status).toBe(201);
+      const completing = await claimLot(lot.id, 60);
+      expect(completing.status).toBe(201);
+
+      const lockedLot = await prisma.lot.findUnique({ where: { id: lot.id } });
+      expect(lockedLot?.status).toBe('claimed');
+      expect(lockedLot?.claimedInId).toBe(completing.body.claim.id);
+
+      // Deleting the completing draft claim must release its 60% increment and
+      // return the lot to conformed so it can be claimed again.
+      const del = await request(app)
+        .delete(`/api/projects/${projectId}/claims/${completing.body.claim.id}`)
+        .set('Authorization', `Bearer ${authToken}`);
+      expect(del.status).toBe(200);
+
+      const releasedLot = await prisma.lot.findUnique({ where: { id: lot.id } });
+      expect(releasedLot?.status).toBe('conformed');
+      expect(releasedLot?.claimedInId).toBeNull();
+
+      // Cumulative now back to 40%, so a further 60% is allowed again.
+      const reclaim = await claimLot(lot.id, 60);
+      expect(reclaim.status).toBe(201);
+
+      const relockedLot = await prisma.lot.findUnique({ where: { id: lot.id } });
+      expect(relockedLot?.status).toBe('claimed');
+      expect(relockedLot?.claimedInId).toBe(reclaim.body.claim.id);
+    });
+
+    it('reports remaining percentage in claim readiness for a partially claimed lot', async () => {
+      const lot = await createCumulativeLot(100000);
+      expect((await claimLot(lot.id, 25)).status).toBe(201);
+
+      const readiness = await request(app)
+        .get(`/api/projects/${projectId}/claim-readiness`)
+        .set('Authorization', `Bearer ${authToken}`);
+      expect(readiness.status).toBe(200);
+
+      const readinessLot = readiness.body.lots.find(
+        (item: { lotId: string }) => item.lotId === lot.id,
+      );
+      expect(readinessLot).toBeDefined();
+      expect(readinessLot.claim.claimedPercentage).toBe(25);
+      expect(readinessLot.claim.remainingPercentage).toBe(75);
+      // A partially claimed conformed lot is selectable (no action blocker).
+      expect(
+        readinessLot.claim.blockers.some(
+          (blocker: { blocksAction: boolean }) => blocker.blocksAction,
+        ),
+      ).toBe(false);
     });
   });
 

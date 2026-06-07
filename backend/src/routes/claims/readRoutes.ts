@@ -6,6 +6,7 @@ import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { buildLotReadinessFromInputs } from '../../lib/evidenceReadiness.js';
 import { checkConformancePrerequisites } from '../../lib/conformancePrerequisites.js';
+import { getCumulativeClaimedPercentByLot } from './cumulativeClaims.js';
 import {
   buildClaimDetailResponse,
   buildClaimReadinessResponse,
@@ -198,6 +199,12 @@ export function createClaimReadRouter({
         orderBy: { lotNumber: 'asc' },
       });
 
+      // Cumulative claiming: a conformed lot can appear on multiple claims, so
+      // its readiness must reflect how much has already been claimed.
+      const cumulativeClaimedByLotId = await getCumulativeClaimedPercentByLot(
+        lots.map((lot) => lot.id),
+      );
+
       const readinessLots = await Promise.all(
         lots.map(async (lot) => {
           const conformStatus = await checkConformancePrerequisites(lot.id);
@@ -212,6 +219,7 @@ export function createClaimReadRouter({
               status: lot.status,
               budgetAmount: lot.budgetAmount ? Number(lot.budgetAmount) : null,
               claimedInId: lot.claimedInId,
+              claimedPercentage: cumulativeClaimedByLotId.get(lot.id) ?? 0,
             },
             canViewCommercial: true,
             conformStatus: {

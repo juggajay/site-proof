@@ -125,6 +125,22 @@ export function getClaimPercentageError(value: string): string | null {
     : null;
 }
 
+/**
+ * Validate a lot's claim increment, accounting for what has already been
+ * claimed on prior claims. `remainingPercentage` is the cap for this claim.
+ */
+export function getClaimIncrementError(value: string, remainingPercentage: number): string | null {
+  const baseError = getClaimPercentageError(value);
+  if (baseError) return baseError;
+
+  const parsed = parseClaimPercentageInput(value);
+  if (parsed !== null && parsed - remainingPercentage > 0.0001) {
+    const cap = Number(remainingPercentage.toFixed(2));
+    return `Only ${cap}% of this lot is left to claim.`;
+  }
+  return null;
+}
+
 /** Export data as CSV file download */
 export function exportChartDataToCSV(
   data: Record<string, unknown>[],

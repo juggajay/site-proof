@@ -136,6 +136,67 @@ export const recordPaymentSchema = z.object({
 });
 
 export const CLAIM_AMOUNT_EPSILON = 0.000001;
+
+// A lot is considered fully claimed once its cumulative claimed percentage
+// (summed across every non-deleted claim it appears on) reaches 100%.
+export const LOT_FULLY_CLAIMED_PERCENTAGE = 100;
+
+// Cumulative percentages are summed across claims, so we tolerate a tiny
+// floating-point drift when checking the 0-100 boundary (e.g. 33.33 * 3).
+export const CLAIM_PERCENTAGE_EPSILON = 0.0001;
+
+/** Round a money value to whole cents so claim line totals stay exact. */
+export function roundClaimAmountToCents(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+/**
+ * Sum a lot's already-claimed percentage from its existing claim line items.
+ * Deleting/voiding a draft claim cascades its ClaimedLot rows, so any rows that
+ * remain are the authoritative record of what has already been claimed.
+ */
+export function sumClaimedPercentages(rows: Array<{ percentageComplete: unknown }>): number {
+  return rows.reduce((sum, row) => {
+    const value = Number(row.percentageComplete);
+    return sum + (Number.isFinite(value) ? value : 0);
+  }, 0);
+}
+
+/** Percentage still available to claim on a lot (never below zero). */
+export function remainingClaimablePercentage(priorCumulative: number): number {
+  return Math.max(0, LOT_FULLY_CLAIMED_PERCENTAGE - priorCumulative);
+}
+
+/** True once a lot's cumulative claimed percentage has reached 100%. */
+export function isLotFullyClaimed(cumulativePercentage: number): boolean {
+  return cumulativePercentage >= LOT_FULLY_CLAIMED_PERCENTAGE - CLAIM_PERCENTAGE_EPSILON;
+}
+
+/**
+ * Reject an increment that would push a lot's cumulative claimed percentage
+ * past 100%. `increment` is THIS claim's percentage (not cumulative-to-date).
+ */
+export function assertClaimIncrementWithinRemaining(
+  priorCumulative: number,
+  increment: number,
+  lotNumber: string,
+): void {
+  if (priorCumulative + increment - LOT_FULLY_CLAIMED_PERCENTAGE > CLAIM_PERCENTAGE_EPSILON) {
+    const remaining = remainingClaimablePercentage(priorCumulative);
+    throw AppError.badRequest(
+      `Lot ${lotNumber} has already been claimed up to ${priorCumulative}%. ` +
+        `You can only claim up to a further ${Number(remaining.toFixed(2))}% this claim.`,
+      {
+        code: 'OVER_CLAIM',
+        lotNumber,
+        priorCumulative,
+        increment,
+        remaining,
+      },
+    );
+  }
+}
+
 const CLAIM_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 const GENERIC_CLAIM_STATUS_TRANSITIONS: Record<string, readonly string[]> = {
   draft: ['submitted'],

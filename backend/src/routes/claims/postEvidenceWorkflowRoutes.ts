@@ -506,16 +506,26 @@ export function createClaimPostEvidenceWorkflowRouter({
         throw AppError.badRequest('Can only delete draft claims');
       }
 
-      // Unlink lots from this claim
-      await prisma.lot.updateMany({
-        where: { claimedInId: claimId, projectId },
-        data: { claimedInId: null },
-      });
-
-      // Delete the claim (cascades to claimedLots)
-      await prisma.progressClaim.delete({
-        where: { id: claimId },
-      });
+      // Release this claim's increments. Deleting the claim cascades its
+      // ClaimedLot rows, so cumulative claimed percentages recover on their
+      // own. Lots this claim had taken to 100% (status `claimed`, linked via
+      // claimedInId) must be returned to `conformed` so they can be claimed
+      // again.
+      await prisma.$transaction([
+        prisma.lot.updateMany({
+          where: { claimedInId: claimId, projectId, status: 'claimed' },
+          data: { claimedInId: null, status: 'conformed' },
+        }),
+        // Defensive: clear any stale link left without the claimed status.
+        prisma.lot.updateMany({
+          where: { claimedInId: claimId, projectId },
+          data: { claimedInId: null },
+        }),
+        // Delete the claim (cascades to claimedLots)
+        prisma.progressClaim.delete({
+          where: { id: claimId },
+        }),
+      ]);
 
       res.json(buildClaimDeletedResponse());
     }),
