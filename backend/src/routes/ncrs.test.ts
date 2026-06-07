@@ -527,7 +527,7 @@ describe('NCR API', () => {
         expect(notification).not.toBeNull();
       } finally {
         await prisma.notification.deleteMany({ where: { userId: assignee.userId } });
-        await prisma.nCRLot.deleteMany({ where: { ncr: { projectId } } });
+        await prisma.nCRLot.deleteMany({ where: { ncr: { responsibleUserId: assignee.userId } } });
         await prisma.nCR.deleteMany({ where: { responsibleUserId: assignee.userId } });
         await prisma.projectUser.deleteMany({ where: { projectId, userId: assignee.userId } });
         await cleanupTestUser(assignee.userId);
@@ -574,7 +574,7 @@ describe('NCR API', () => {
       } finally {
         await prisma.project.update({ where: { id: projectId }, data: { settings: null } });
         await prisma.notification.deleteMany({ where: { userId: assignee.userId } });
-        await prisma.nCRLot.deleteMany({ where: { ncr: { projectId } } });
+        await prisma.nCRLot.deleteMany({ where: { ncr: { responsibleUserId: assignee.userId } } });
         await prisma.nCR.deleteMany({ where: { responsibleUserId: assignee.userId } });
         await prisma.projectUser.deleteMany({ where: { projectId, userId: assignee.userId } });
         await cleanupTestUser(assignee.userId);
