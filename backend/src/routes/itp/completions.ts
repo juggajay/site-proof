@@ -18,6 +18,7 @@ import {
 } from './helpers/access.js';
 import { logError } from '../../lib/serverLogger.js';
 import { createNcrWithAllocatedNumber } from '../ncrs/ncrNumberAllocation.js';
+import { buildChecklistItemNcrMarker } from './instances/ncrLinks.js';
 import { buildItpCompletionResultResponse } from './completionResponses.js';
 import { completionAttachmentRoutes } from './completionAttachmentRoutes.js';
 import { completionUpdateRoutes } from './completionUpdateRoutes.js';
@@ -381,8 +382,11 @@ completionsRouter.post(
               severity: ncrSeverity || 'minor',
               qmApprovalRequired: isMajor,
               raisedById: user.userId,
-              // Store ITP item reference in rectification notes for traceability
-              rectificationNotes: `Raised from ITP checklist item: ${checklistItemDescription} (Item ID: ${checklistItemId})`,
+              // Store ITP item reference in rectification notes for traceability. The
+              // human-readable sentence keeps context for reviewers; the trailing
+              // machine-parseable marker lets the GET ITP instance endpoint re-attach
+              // this NCR as the failed item's linkedNcr after a page reload.
+              rectificationNotes: `Raised from ITP checklist item: ${checklistItemDescription} (Item ID: ${checklistItemId}) ${buildChecklistItemNcrMarker(checklistItemId)}`,
               ncrLots: {
                 create: [
                   {
