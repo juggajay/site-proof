@@ -142,7 +142,7 @@ export const LotMobileList = React.memo(function LotMobileList({
                     ? `border-l-4 ${statusBorderColors[lot.status] || 'border-l-gray-400'}`
                     : ''
                 }`}
-                onClick={() => !isMobile && navigate(`/projects/${projectId}/lots/${lot.id}`)}
+                onClick={() => navigate(`/projects/${projectId}/lots/${lot.id}`)}
                 onContextMenu={(e) => onContextMenu(e, lot)}
                 data-testid={`lot-card-${lot.id}`}
               >
