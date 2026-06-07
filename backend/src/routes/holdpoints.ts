@@ -373,9 +373,15 @@ holdpointsRouter.post(
     }));
 
     if (notificationsToCreate.length > 0) {
-      await prisma.notification.createMany({
-        data: notificationsToCreate,
-      });
+      try {
+        await prisma.notification.createMany({
+          data: notificationsToCreate,
+        });
+      } catch (notificationError) {
+        logError('[HP Secure Release] Failed to create in-app notifications:', notificationError);
+        // The release already committed above; don't fail the request if the
+        // post-commit notification insert throws.
+      }
     }
 
     // Send confirmation emails
