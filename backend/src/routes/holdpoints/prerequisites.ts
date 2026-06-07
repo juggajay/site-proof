@@ -10,10 +10,12 @@
  * pieces shared by both: find the preceding items, map each one's completion
  * status, compute which are incomplete, and trim the incomplete ones to the
  * error-detail shape. No DB, no auth, no request. Behaviour — the `<` sequence
- * cutoff, the status derivations (`isCompleted`/`isVerified`/`completedAt`), the
- * "incomplete = not completed (incl. missing completion)" rule, and the
- * `{ id, description, sequenceNumber, isHoldPoint }` error shape — is preserved
- * exactly as it was inline. Unit-tested DB-free in prerequisites.test.ts.
+ * cutoff, the status derivations (`isCompleted`/`isNotApplicable`/`isVerified`/
+ * `completedAt`), the "incomplete = not completed and not N/A (a missing or
+ * 'failed' completion still counts as incomplete)" rule, and the
+ * `{ id, description, sequenceNumber, isHoldPoint }` error shape — are unit-tested
+ * DB-free in prerequisites.test.ts. N/A items satisfy a preceding item because
+ * N/A is a first-class ITP status (requires a reason, renders as done).
  */
 
 export type PrerequisiteChecklistItem = {
@@ -51,6 +53,9 @@ export function buildHoldPointPrerequisites(
       sequenceNumber: item.sequenceNumber,
       isHoldPoint: item.pointType === 'hold_point',
       isCompleted: completion?.status === 'completed',
+      // N/A is a first-class status (requires a reason, renders as done) so it
+      // satisfies a preceding item even though it is not literally 'completed'.
+      isNotApplicable: completion?.status === 'not_applicable',
       isVerified: completion?.verificationStatus === 'verified',
       completedAt: completion?.completedAt,
     };
@@ -59,11 +64,13 @@ export function buildHoldPointPrerequisites(
 
 type HoldPointPrerequisite = ReturnType<typeof buildHoldPointPrerequisites>[number];
 
-// Prerequisites that are not completed (a missing completion counts as incomplete).
+// Prerequisites that are not satisfied. A preceding item is satisfied when it is
+// completed OR marked N/A; a missing completion or a 'failed' status counts as
+// incomplete and still blocks the hold-point release request.
 export function getIncompletePrerequisites(
   prerequisites: HoldPointPrerequisite[],
 ): HoldPointPrerequisite[] {
-  return prerequisites.filter((p) => !p.isCompleted);
+  return prerequisites.filter((p) => !p.isCompleted && !p.isNotApplicable);
 }
 
 // Trim prerequisites to the error-details shape returned by /request-release,

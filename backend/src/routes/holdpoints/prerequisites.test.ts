@@ -46,7 +46,7 @@ describe('getPrecedingChecklistItems', () => {
 });
 
 describe('buildHoldPointPrerequisites', () => {
-  it('maps isCompleted, isVerified, completedAt, and isHoldPoint exactly', () => {
+  it('maps isCompleted, isNotApplicable, isVerified, completedAt, and isHoldPoint exactly', () => {
     const preceding = getPrecedingChecklistItems(items, 4);
     const completions: PrerequisiteCompletion[] = [
       {
@@ -73,6 +73,7 @@ describe('buildHoldPointPrerequisites', () => {
         sequenceNumber: 1,
         isHoldPoint: false,
         isCompleted: true,
+        isNotApplicable: false,
         isVerified: true,
         completedAt: COMPLETED_AT,
       },
@@ -82,6 +83,7 @@ describe('buildHoldPointPrerequisites', () => {
         sequenceNumber: 2,
         isHoldPoint: false,
         isCompleted: false,
+        isNotApplicable: false,
         isVerified: false,
         completedAt: null,
       },
@@ -91,10 +93,28 @@ describe('buildHoldPointPrerequisites', () => {
         sequenceNumber: 3,
         isHoldPoint: true, // pointType === 'hold_point'
         isCompleted: false,
+        isNotApplicable: false,
         isVerified: false,
         completedAt: undefined, // no completion record
       },
     ]);
+  });
+
+  it('marks an N/A completion as isNotApplicable (and not isCompleted)', () => {
+    const preceding = getPrecedingChecklistItems(items, 4);
+    const completions: PrerequisiteCompletion[] = [
+      {
+        checklistItemId: 'i1',
+        status: 'not_applicable',
+        verificationStatus: 'none',
+        completedAt: COMPLETED_AT,
+      },
+    ];
+
+    const [first] = buildHoldPointPrerequisites(preceding, completions);
+
+    expect(first.isCompleted).toBe(false);
+    expect(first.isNotApplicable).toBe(true);
   });
 });
 
@@ -121,6 +141,63 @@ describe('getIncompletePrerequisites', () => {
     const incomplete = getIncompletePrerequisites(prerequisites);
 
     expect(incomplete.map((p) => p.id)).toEqual(['i2', 'i3']); // i1 (completed) excluded
+  });
+
+  it('treats an N/A preceding item as satisfied (does not block release)', () => {
+    const preceding = getPrecedingChecklistItems(items, 4);
+    const completions: PrerequisiteCompletion[] = [
+      {
+        checklistItemId: 'i1',
+        status: 'completed',
+        verificationStatus: 'verified',
+        completedAt: COMPLETED_AT,
+      },
+      {
+        checklistItemId: 'i2',
+        status: 'not_applicable',
+        verificationStatus: 'none',
+        completedAt: COMPLETED_AT,
+      },
+      {
+        checklistItemId: 'i3',
+        status: 'completed',
+        verificationStatus: 'verified',
+        completedAt: COMPLETED_AT,
+      },
+    ];
+
+    const prerequisites = buildHoldPointPrerequisites(preceding, completions);
+
+    expect(getIncompletePrerequisites(prerequisites)).toEqual([]); // N/A i2 does not block
+  });
+
+  it('still blocks on a failed preceding item', () => {
+    const preceding = getPrecedingChecklistItems(items, 4);
+    const completions: PrerequisiteCompletion[] = [
+      {
+        checklistItemId: 'i1',
+        status: 'completed',
+        verificationStatus: 'verified',
+        completedAt: COMPLETED_AT,
+      },
+      {
+        checklistItemId: 'i2',
+        status: 'failed',
+        verificationStatus: 'none',
+        completedAt: COMPLETED_AT,
+      },
+      {
+        checklistItemId: 'i3',
+        status: 'not_applicable',
+        verificationStatus: 'none',
+        completedAt: COMPLETED_AT,
+      },
+    ];
+
+    const prerequisites = buildHoldPointPrerequisites(preceding, completions);
+    const incomplete = getIncompletePrerequisites(prerequisites);
+
+    expect(incomplete.map((p) => p.id)).toEqual(['i2']); // failed i2 blocks; N/A i3 does not
   });
 });
 
