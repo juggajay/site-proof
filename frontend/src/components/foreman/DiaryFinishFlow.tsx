@@ -60,6 +60,10 @@ interface DiaryFinishFlowProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit?: () => void;
+  // Date key (YYYY-MM-DD) of the diary to finalise. Defaults to today so a
+  // forgotten past-day draft can be submitted from the date the foreman has
+  // selected, not just the current day.
+  date?: string;
 }
 
 function getLocalDateString(date = new Date()): string {
@@ -130,16 +134,18 @@ function extractSubmitWarnings(error: unknown): string[] | null {
   return warnings.length > 0 ? warnings : null;
 }
 
-export function DiaryFinishFlow({ isOpen, onClose, onSubmit }: DiaryFinishFlowProps) {
+export function DiaryFinishFlow({ isOpen, onClose, onSubmit, date }: DiaryFinishFlowProps) {
   const { projectId } = useParams();
   const navigate = useNavigate();
+  // The diary day to load/submit: the supplied selected date, or today as a fallback.
+  const diaryDate = date || getLocalDateString();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [diary, setDiary] = useState<DiaryDraft | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitWarnings, setSubmitWarnings] = useState<string[]>([]);
 
-  // Fetch today's diary draft with auto-filled data
+  // Fetch the selected day's diary draft with auto-filled data
   const fetchDiary = useCallback(async () => {
     if (!projectId) {
       setLoading(false);
@@ -148,13 +154,12 @@ export function DiaryFinishFlow({ isOpen, onClose, onSubmit }: DiaryFinishFlowPr
 
     setError(null);
     try {
-      const today = getLocalDateString();
-      const data = await apiFetch<ApiDiary>(`/api/diary/${projectId}/${today}`);
+      const data = await apiFetch<ApiDiary>(`/api/diary/${projectId}/${diaryDate}`);
       setDiary(normalizeDiaryDraft(data));
       setSubmitWarnings([]);
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) {
-        // No diary for today - that's ok
+        // No diary for this date - that's ok
         setDiary(null);
         setSubmitWarnings([]);
       } else {
@@ -164,7 +169,7 @@ export function DiaryFinishFlow({ isOpen, onClose, onSubmit }: DiaryFinishFlowPr
     } finally {
       setLoading(false);
     }
-  }, [projectId]);
+  }, [projectId, diaryDate]);
 
   useEffect(() => {
     if (isOpen) {
@@ -215,8 +220,8 @@ export function DiaryFinishFlow({ isOpen, onClose, onSubmit }: DiaryFinishFlowPr
 
   if (!isOpen) return null;
 
-  // Get today's date for display
-  const today = new Date().toLocaleDateString('en-AU', {
+  // Format the selected diary date for display (parsed as a local day, not UTC).
+  const dateLabel = new Date(diaryDate + 'T00:00:00').toLocaleDateString('en-AU', {
     weekday: 'long',
     day: 'numeric',
     month: 'long',
@@ -232,7 +237,7 @@ export function DiaryFinishFlow({ isOpen, onClose, onSubmit }: DiaryFinishFlowPr
         <div className="sticky top-0 bg-background border-b p-4 flex items-center justify-between flex-shrink-0">
           <div>
             <h2 className="text-lg font-bold">Finish Diary</h2>
-            <p className="text-sm text-muted-foreground">{today}</p>
+            <p className="text-sm text-muted-foreground">{dateLabel}</p>
           </div>
           <button
             onClick={onClose}
@@ -356,7 +361,7 @@ export function DiaryFinishFlow({ isOpen, onClose, onSubmit }: DiaryFinishFlowPr
           ) : (
             <div className="p-8 text-center">
               <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground mb-4">No diary entry for today</p>
+              <p className="text-muted-foreground mb-4">No diary entry for this date</p>
               <button
                 onClick={() => {
                   navigate(`/projects/${projectId}/diary`);

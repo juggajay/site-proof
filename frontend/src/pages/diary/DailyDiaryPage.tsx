@@ -106,6 +106,7 @@ export function DailyDiaryPage() {
         />
         <DiaryFinishFlow
           isOpen={showFinishFlow}
+          date={data.selectedDate}
           onClose={() => setShowFinishFlow(false)}
           onSubmit={() => {
             // Reflect the submitted status without a second submit path: the finish

@@ -55,10 +55,23 @@ describe('DiaryMobileView review & submit action', () => {
     expect(screen.getByText('Submitted')).toBeInTheDocument();
   });
 
-  it("does not offer submit for a past date (the finish flow only finalises today's diary)", () => {
-    renderView({ selectedDate: PAST_DATE });
+  it('offers submit for a forgotten past-date draft so it is not stuck on mobile', () => {
+    const { onReviewSubmit } = renderView({ selectedDate: PAST_DATE });
+
+    // The header still flags that this is not today...
+    expect(screen.getByText('Not today')).toBeInTheDocument();
+
+    // ...but the draft can still be reviewed and submitted from the phone.
+    const button = screen.getByRole('button', { name: 'Review & submit' });
+    expect(button).toBeInTheDocument();
+
+    fireEvent.click(button);
+    expect(onReviewSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not offer submit for a past date when there is no draft diary', () => {
+    renderView({ selectedDate: PAST_DATE, diary: null });
 
     expect(screen.queryByRole('button', { name: 'Review & submit' })).not.toBeInTheDocument();
-    expect(screen.getByText('Not today')).toBeInTheDocument();
   });
 });
