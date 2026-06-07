@@ -209,8 +209,8 @@ export function ForemanMobileDashboard() {
             </div>
             <h2 className="text-lg font-semibold mb-2">No Project Assigned</h2>
             <p className="text-muted-foreground mb-4">
-              You need to be assigned to a project before you can access the foreman dashboard
-              features.
+              You haven&rsquo;t been added to a project yet. Ask your site manager or admin to add
+              you to a project team &mdash; then your foreman dashboard will appear here.
             </p>
             <Button
               onClick={() => navigate('/projects')}
