@@ -3,7 +3,7 @@
 // core. The sync worker (queue, retry, locking, API calls) stays in
 // useOfflineStatus.ts and imports these helpers.
 
-import type { OfflineDailyDiary, OfflineDocket } from './core';
+import type { OfflineDailyDiary, OfflineDocket, OfflineLotEditTable } from './core';
 
 export function toFiniteNumber(value: number | string | null | undefined): number | undefined {
   if (value === null || value === undefined || value === '') {
@@ -112,4 +112,33 @@ export function buildOfflineDocketNotes(docket: OfflineDocket): string | undefin
   }
 
   return sections.join('\n\n') || undefined;
+}
+
+// Shape the PATCH body sent to /api/lots/:id when an offline lot edit syncs.
+//
+// The offline record stores the budget under the internal key `budget`, but the
+// backend updateLotSchema field is `budgetAmount` and Zod silently strips any
+// unknown key. Sending `budget` therefore discarded offline budget edits on
+// sync (the value never reached the database). This builder maps the internal
+// field name to the server's API field name so the budget actually lands.
+//
+// `notes` is intentionally omitted: the lot update route's schema does not
+// accept a `notes` key (it is stripped server-side today), so sending it was a
+// no-op. The offline lot-edit form never populates `notes` either.
+export function buildOfflineLotEditPayload(lot: OfflineLotEditTable) {
+  return {
+    lotNumber: lot.lotNumber,
+    description: lot.description,
+    chainage: lot.chainage,
+    chainageStart: lot.chainageStart,
+    chainageEnd: lot.chainageEnd,
+    offset: lot.offset,
+    offsetLeft: lot.offsetLeft,
+    offsetRight: lot.offsetRight,
+    layer: lot.layer,
+    areaZone: lot.areaZone,
+    activityType: lot.activityType,
+    status: lot.status,
+    budgetAmount: lot.budget,
+  };
 }
