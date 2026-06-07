@@ -47,6 +47,8 @@ export interface LotEvidenceReadiness {
   claim: ReadinessBucket & {
     budgetAmount?: number | null;
     claimedInId?: string | null;
+    claimedPercentage?: number;
+    remainingPercentage?: number;
   };
   summary: {
     blockerCount: number;
@@ -63,6 +65,8 @@ export interface ClaimReadinessLot {
   claim: ReadinessBucket & {
     budgetAmount?: number | null;
     claimedInId?: string | null;
+    claimedPercentage?: number;
+    remainingPercentage?: number;
   };
 }
 

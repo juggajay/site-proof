@@ -12,16 +12,20 @@ import {
   buildClaimDetailResponse,
   mapClaimCreateItem,
 } from './presentation.js';
+import { getCumulativeClaimedPercentByLot } from './cumulativeClaims.js';
 import {
   CLAIM_AMOUNT_EPSILON,
   CLAIM_LOT_PERCENTAGE_REQUIRED_MESSAGE,
   CLAIM_NUMBER_RETRY_LIMIT,
   assertCertifiedAmountWithinClaimTotal,
+  assertClaimIncrementWithinRemaining,
   assertGenericClaimStatusTransition,
   createClaimSchema,
   getRequestedClaimLots,
   getRequestedClaimPercentage,
+  isLotFullyClaimed,
   parseClaimDate,
+  roundClaimAmountToCents,
   updateClaimSchema,
 } from './workflowValidation.js';
 
@@ -115,7 +119,11 @@ export function createClaimWorkflowRouter({
             });
             const nextClaimNumber = (lastClaim?.claimNumber || 0) + 1;
 
-            // Get the lots to calculate total amount
+            // Get the lots to calculate total amount. Progress claims are
+            // cumulative, so a partially-claimed lot stays `conformed`
+            // (claimedInId null) and remains selectable until its cumulative
+            // claimed percentage reaches 100%. Only fully-claimed lots are
+            // flipped to `claimed`.
             const lots = await tx.lot.findMany({
               where: {
                 id: { in: uniqueLotIds },
@@ -152,12 +160,24 @@ export function createClaimWorkflowRouter({
               );
             }
 
-            // Calculate total claimed amount from lot budget amounts and requested progress.
-            const totalClaimedAmount = lots.reduce((sum, lot) => {
-              const percentageComplete = getRequestedClaimPercentage(percentageByLotId, lot.id);
-              const budgetAmount = lot.budgetAmount ? Number(lot.budgetAmount) : 0;
-              return sum + (budgetAmount * percentageComplete) / 100;
-            }, 0);
+            // Cumulative claiming: reject any increment that would push a lot
+            // past 100% of its budget across all of its claims so far.
+            const priorCumulativeByLotId = await getCumulativeClaimedPercentByLot(uniqueLotIds, tx);
+            for (const lot of lots) {
+              const increment = getRequestedClaimPercentage(percentageByLotId, lot.id);
+              const priorCumulative = priorCumulativeByLotId.get(lot.id) ?? 0;
+              assertClaimIncrementWithinRemaining(priorCumulative, increment, lot.lotNumber);
+            }
+
+            // The line amount for each lot is THIS claim's increment percentage
+            // of its budget, so claim totals always reconcile to the budget.
+            const totalClaimedAmount = roundClaimAmountToCents(
+              lots.reduce((sum, lot) => {
+                const percentageComplete = getRequestedClaimPercentage(percentageByLotId, lot.id);
+                const budgetAmount = lot.budgetAmount ? Number(lot.budgetAmount) : 0;
+                return sum + roundClaimAmountToCents((budgetAmount * percentageComplete) / 100);
+              }, 0),
+            );
 
             // Create the claim with claimed lots
             const claim = await tx.progressClaim.create({
@@ -183,7 +203,9 @@ export function createClaimWorkflowRouter({
                       quantity: 1,
                       unit: 'ea',
                       rate: lot.budgetAmount,
-                      amountClaimed: (budgetAmount * percentageComplete) / 100,
+                      amountClaimed: roundClaimAmountToCents(
+                        (budgetAmount * percentageComplete) / 100,
+                      ),
                       percentageComplete,
                     };
                   }),
@@ -196,24 +218,37 @@ export function createClaimWorkflowRouter({
               },
             });
 
-            // Update only the eligible project lots to link them to this claim and set status to claimed.
-            const updateResult = await tx.lot.updateMany({
-              where: {
-                id: { in: uniqueLotIds },
-                projectId,
-                status: 'conformed',
-                claimedInId: null,
-              },
-              data: {
-                claimedInId: claim.id,
-                status: 'claimed',
-              },
-            });
+            // Flip only the lots that this claim takes to 100% cumulative into
+            // the terminal `claimed` state, linking them to this completing
+            // claim. Lots below 100% stay `conformed` so they can be claimed
+            // again on a future claim.
+            const fullyClaimedLotIds = lots
+              .filter((lot) => {
+                const increment = getRequestedClaimPercentage(percentageByLotId, lot.id);
+                const priorCumulative = priorCumulativeByLotId.get(lot.id) ?? 0;
+                return isLotFullyClaimed(priorCumulative + increment);
+              })
+              .map((lot) => lot.id);
 
-            if (updateResult.count !== lots.length) {
-              throw AppError.badRequest(
-                'One or more selected lots are no longer available to claim',
-              );
+            if (fullyClaimedLotIds.length > 0) {
+              const updateResult = await tx.lot.updateMany({
+                where: {
+                  id: { in: fullyClaimedLotIds },
+                  projectId,
+                  status: 'conformed',
+                  claimedInId: null,
+                },
+                data: {
+                  claimedInId: claim.id,
+                  status: 'claimed',
+                },
+              });
+
+              if (updateResult.count !== fullyClaimedLotIds.length) {
+                throw AppError.badRequest(
+                  'One or more selected lots are no longer available to claim',
+                );
+              }
             }
 
             return { claim, totalClaimedAmount, nextClaimNumber, lotCount: lots.length };

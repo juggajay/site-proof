@@ -10,7 +10,7 @@ import type {
 import {
   calculateLotClaimAmount,
   formatCurrency,
-  getClaimPercentageError,
+  getClaimIncrementError,
   parseClaimPercentageInput,
 } from '../utils';
 import {
@@ -44,6 +44,8 @@ function readinessItems(lot: ClaimReadinessLot): EvidenceReadinessItem[] {
 
 function mapReadinessLot(lot: ClaimReadinessLot): ClaimableLot {
   const items = readinessItems(lot);
+  const claimedPercentage = lot.claim.claimedPercentage ?? 0;
+  const remainingPercentage = lot.claim.remainingPercentage ?? 100 - claimedPercentage;
 
   return {
     id: lot.lotId,
@@ -51,7 +53,10 @@ function mapReadinessLot(lot: ClaimReadinessLot): ClaimableLot {
     activity: lot.activityType ?? 'Unknown',
     budgetAmount: lot.claim.budgetAmount ?? null,
     selected: false,
-    percentComplete: '100',
+    // Default to whatever is left to claim on this lot, not always 100%.
+    percentComplete: String(Number(remainingPercentage.toFixed(2))),
+    claimedPercentage,
+    remainingPercentage,
     actionBlocked: lot.claim.blockers.some((item) => item.blocksAction),
     readinessItems: items,
   };
@@ -135,6 +140,16 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
       setCreateError('Percent complete must be a decimal between 0 and 100.');
       return;
     }
+    if (
+      selectedLots.some((lot) =>
+        Boolean(getClaimIncrementError(lot.percentComplete, lot.remainingPercentage)),
+      )
+    ) {
+      setCreateError(
+        'One or more lots are claiming more than the percentage that is still available.',
+      );
+      return;
+    }
 
     creatingRef.current = true;
     setCreating(true);
@@ -173,7 +188,7 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
     (l) => (parseClaimPercentageInput(l.percentComplete) ?? 0) < 100,
   );
   const hasPercentageErrors = selectedLots.some((lot) =>
-    Boolean(getClaimPercentageError(lot.percentComplete)),
+    Boolean(getClaimIncrementError(lot.percentComplete, lot.remainingPercentage)),
   );
 
   return (
@@ -261,6 +276,12 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
                           {formatCurrency(lot.budgetAmount)}
                         </span>
                       </div>
+                      {lot.claimedPercentage > 0 && (
+                        <p className="mt-1 ml-7 text-xs text-muted-foreground">
+                          Previously claimed {Number(lot.claimedPercentage.toFixed(2))}% -{' '}
+                          {Number(lot.remainingPercentage.toFixed(2))}% still available
+                        </p>
+                      )}
                       {(actionBlockers.length > 0 || evidenceIssues.length > 0) && (
                         <div className="mt-2 ml-7 space-y-1">
                           {[...actionBlockers, ...evidenceIssues].slice(0, 3).map((item) => (
@@ -289,30 +310,34 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
                         )}
                       {lot.selected && (
                         <div className="mt-2 ml-7 flex items-center gap-3">
-                          <label className="text-sm text-muted-foreground">% Complete:</label>
+                          <label className="text-sm text-muted-foreground">
+                            % to claim this time:
+                          </label>
                           <Input
                             type="number"
                             min={0}
-                            max={100}
+                            max={lot.remainingPercentage}
                             step="0.01"
                             required
                             value={lot.percentComplete}
                             onChange={(e) => updateLotPercentage(lot.id, e.target.value)}
                             className={`w-20 h-8 text-sm text-center ${
-                              getClaimPercentageError(lot.percentComplete) ? 'border-red-500' : ''
+                              getClaimIncrementError(lot.percentComplete, lot.remainingPercentage)
+                                ? 'border-red-500'
+                                : ''
                             }`}
                           />
                           <span className="text-sm">%</span>
                           <span className="ml-auto font-semibold text-primary">
                             {formatCurrency(calculateLotClaimAmount(lot))}
                           </span>
-                          {getClaimPercentageError(lot.percentComplete) && (
+                          {getClaimIncrementError(lot.percentComplete, lot.remainingPercentage) && (
                             <span
                               className="text-sm text-red-600"
                               role="alert"
                               aria-live="assertive"
                             >
-                              {getClaimPercentageError(lot.percentComplete)}
+                              {getClaimIncrementError(lot.percentComplete, lot.remainingPercentage)}
                             </span>
                           )}
                         </div>

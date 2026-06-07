@@ -3,11 +3,16 @@ import { describe, expect, it } from 'vitest';
 import {
   CLAIM_LOT_PERCENTAGE_REQUIRED_MESSAGE,
   assertCertifiedAmountWithinClaimTotal,
+  assertClaimIncrementWithinRemaining,
   assertGenericClaimStatusTransition,
   createClaimSchema,
+  isLotFullyClaimed,
   normalizeCertificationDocumentUrl,
   parseClaimDate,
+  remainingClaimablePercentage,
+  roundClaimAmountToCents,
   sanitizeCertificationDocumentFilename,
+  sumClaimedPercentages,
 } from './workflowValidation.js';
 
 describe('claims workflow validation', () => {
@@ -75,5 +80,59 @@ describe('claims workflow validation', () => {
 
     expect(sanitizeCertificationDocumentFilename('../bad:<name>.pdf', 42)).toBe('bad__name_.pdf');
     expect(sanitizeCertificationDocumentFilename('', 42)).toBe('certification-claim-42.pdf');
+  });
+});
+
+describe('cumulative claim math', () => {
+  it('sums prior claimed percentages from claim line items', () => {
+    expect(
+      sumClaimedPercentages([
+        { percentageComplete: 50 },
+        { percentageComplete: '20.5' },
+        { percentageComplete: null },
+      ]),
+    ).toBe(70.5);
+    expect(sumClaimedPercentages([])).toBe(0);
+  });
+
+  it('reports remaining claimable percentage without going negative', () => {
+    expect(remainingClaimablePercentage(0)).toBe(100);
+    expect(remainingClaimablePercentage(60)).toBe(40);
+    expect(remainingClaimablePercentage(100)).toBe(0);
+    expect(remainingClaimablePercentage(120)).toBe(0);
+  });
+
+  it('treats a lot as fully claimed only at (or fractionally below) 100%', () => {
+    expect(isLotFullyClaimed(99.9)).toBe(false);
+    expect(isLotFullyClaimed(100)).toBe(true);
+    expect(isLotFullyClaimed(99.99999)).toBe(true); // within epsilon of 100
+    expect(isLotFullyClaimed(50)).toBe(false);
+  });
+
+  it('rounds claim line amounts to whole cents', () => {
+    expect(roundClaimAmountToCents((10000 * 33.33) / 100)).toBe(3333);
+    expect(roundClaimAmountToCents(5050.005)).toBe(5050.01);
+    expect(roundClaimAmountToCents(0.1 + 0.2)).toBe(0.3);
+  });
+
+  it('rejects an increment that would exceed 100% cumulative', () => {
+    expect(() => assertClaimIncrementWithinRemaining(0, 100, 'LOT-1')).not.toThrow();
+    expect(() => assertClaimIncrementWithinRemaining(70, 30, 'LOT-1')).not.toThrow();
+    expect(() => assertClaimIncrementWithinRemaining(70, 31, 'LOT-1')).toThrow(
+      /already been claimed/,
+    );
+
+    try {
+      assertClaimIncrementWithinRemaining(70, 40, 'LOT-7');
+      throw new Error('expected over-claim to throw');
+    } catch (error) {
+      const details = (error as { details?: Record<string, unknown> }).details;
+      expect(details?.code).toBe('OVER_CLAIM');
+      expect(details?.remaining).toBe(30);
+    }
+  });
+
+  it('allows tiny floating-point drift at the 100% boundary', () => {
+    expect(() => assertClaimIncrementWithinRemaining(33.33 * 2, 33.34, 'LOT-1')).not.toThrow();
   });
 });

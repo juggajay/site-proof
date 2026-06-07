@@ -211,6 +211,51 @@ describe('evidence readiness helpers', () => {
     );
   });
 
+  it('keeps a partially claimed conformed lot selectable and reports remaining percentage', () => {
+    const readiness = buildLotReadinessFromInputs(
+      baseInput({
+        lot: {
+          id: 'lot-5',
+          lotNumber: 'LOT-005',
+          status: 'conformed',
+          budgetAmount: 200000,
+          claimedInId: null,
+          claimedPercentage: 50,
+        },
+        conformStatus: {
+          canConform: true,
+          blockingReasons: [],
+          prerequisites: {
+            itpAssigned: true,
+            itpCompleted: true,
+            itpCompletedCount: 1,
+            itpTotalCount: 1,
+            itpIncompleteItems: [],
+            hasPassingTest: true,
+            testResults: [
+              { id: 'test-5', testType: 'Compaction', passFail: 'pass', status: 'verified' },
+            ],
+            noOpenNcrs: true,
+            openNcrs: [],
+          },
+        },
+      }),
+    );
+
+    expect(readiness.claim.state).not.toBe('already_claimed');
+    expect(readiness.claim.claimedPercentage).toBe(50);
+    expect(readiness.claim.remainingPercentage).toBe(50);
+    expect(readiness.claim.blockers.some((blocker) => blocker.blocksAction)).toBe(false);
+    expect(readiness.claim.support).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'partially_claimed',
+          blocksAction: false,
+        }),
+      ]),
+    );
+  });
+
   it('builds post-claim evidence review with readiness vocabulary', () => {
     const review = buildClaimEvidenceReviewFromInputs({
       analyzedAt: '2026-05-21T00:00:00.000Z',

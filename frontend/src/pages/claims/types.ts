@@ -25,7 +25,11 @@ export interface ConformedLot {
   activity: string;
   budgetAmount: number | null;
   selected: boolean;
-  percentComplete: string; // 0-100, kept as text so invalid input is not coerced
+  percentComplete: string; // this claim's increment, 0-100, kept as text so invalid input is not coerced
+  // Cumulative claiming: how much of the lot has already been claimed on prior
+  // claims, and how much is still available to claim this time.
+  claimedPercentage: number;
+  remainingPercentage: number;
 }
 
 export interface NewClaimFormData {

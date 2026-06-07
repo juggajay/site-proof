@@ -293,7 +293,13 @@ test.describe('production readiness guardrails', () => {
       'utf8',
     );
 
-    expect(createClaimModal).toContain("percentComplete: '100'");
+    // Cumulative claiming: the modal seeds an explicit per-lot percentage from
+    // each lot's remaining (still-claimable) percentage instead of a hardcoded
+    // 100. The guard still proves the modal sends an explicit percentage rather
+    // than leaving it blank for the backend to default.
+    expect(createClaimModal).toContain(
+      'percentComplete: String(Number(remainingPercentage.toFixed(2)))',
+    );
     expect(createClaimModal).toContain('required');
     expect(createClaimModal).toContain('Percent complete is required for every selected lot.');
     expect(claimsWorkflowValidation).toContain('Each claimed lot must include percentageComplete');
