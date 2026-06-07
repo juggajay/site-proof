@@ -5,6 +5,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import type { Docket } from '../docketEditData';
 import { formatCurrency, formatDate } from '../docketEditDisplay';
+import { LOTS_MODULE_DISABLED_DOCKET_MESSAGE } from '../subcontractorDashboardHelpers';
 
 export function DocketEditLoading() {
   return (
@@ -98,6 +99,10 @@ interface DocketEditNoticesProps {
   queryResponse: string;
   respondingToQuery: boolean;
   assignedLotCount: number;
+  // True when the assigned-lots fetch 403'd because the HC disabled the subbie's
+  // "Assigned Work" (lots) portal module. Distinguishes "module off" (HC must
+  // enable lot access) from "module on, but no lots assigned yet".
+  lotsModuleDisabled: boolean;
   onQueryResponseChange: (value: string) => void;
   onRespondToQuery: () => void;
 }
@@ -107,6 +112,7 @@ export function DocketEditNotices({
   queryResponse,
   respondingToQuery,
   assignedLotCount,
+  lotsModuleDisabled,
   onQueryResponseChange,
   onRespondToQuery,
 }: DocketEditNoticesProps) {
@@ -167,14 +173,21 @@ export function DocketEditNotices({
         </div>
       )}
 
-      {assignedLotCount === 0 && (
+      {lotsModuleDisabled ? (
         <div className="flex items-start gap-3 p-4 mb-4 bg-primary/5 border border-primary/30 rounded-lg">
           <AlertCircle className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-          <p className="text-primary">
-            No lots have been assigned to you yet. Contact your project manager to get lot
-            assignments.
-          </p>
+          <p className="text-primary">{LOTS_MODULE_DISABLED_DOCKET_MESSAGE}</p>
         </div>
+      ) : (
+        assignedLotCount === 0 && (
+          <div className="flex items-start gap-3 p-4 mb-4 bg-primary/5 border border-primary/30 rounded-lg">
+            <AlertCircle className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+            <p className="text-primary">
+              No lots have been assigned to you yet. Contact your project manager to get lot
+              assignments.
+            </p>
+          </div>
+        )
       )}
     </>
   );

@@ -65,6 +65,7 @@ describe('DocketEditPagePanels', () => {
         queryResponse=""
         respondingToQuery={false}
         assignedLotCount={0}
+        lotsModuleDisabled={false}
         onQueryResponseChange={onQueryResponseChange}
         onRespondToQuery={onRespondToQuery}
       />,
@@ -86,6 +87,7 @@ describe('DocketEditPagePanels', () => {
         queryResponse=""
         respondingToQuery={false}
         assignedLotCount={1}
+        lotsModuleDisabled={false}
         onQueryResponseChange={onQueryResponseChange}
         onRespondToQuery={onRespondToQuery}
       />,
@@ -93,6 +95,26 @@ describe('DocketEditPagePanels', () => {
 
     expect(screen.getByText(/rejection reason/i)).toBeInTheDocument();
     expect(screen.getByText('Missing docket photo')).toBeInTheDocument();
+    expect(screen.queryByText(/no lots have been assigned/i)).not.toBeInTheDocument();
+  });
+
+  it('shows the lots-module-disabled notice instead of the no-lots notice when the lots module is off', () => {
+    renderInRouter(
+      <DocketEditNotices
+        docket={baseDocket}
+        queryResponse=""
+        respondingToQuery={false}
+        assignedLotCount={0}
+        lotsModuleDisabled
+        onQueryResponseChange={vi.fn()}
+        onRespondToQuery={vi.fn()}
+      />,
+    );
+
+    // The lots-module-off explanation replaces the generic "no lots assigned"
+    // copy so the subbie knows the HC must enable lot access, not assign lots.
+    expect(screen.getByText(/has not enabled assigned work \(lot\) access/i)).toBeInTheDocument();
+    expect(screen.getByText(/plant-only dockets still work/i)).toBeInTheDocument();
     expect(screen.queryByText(/no lots have been assigned/i)).not.toBeInTheDocument();
   });
 

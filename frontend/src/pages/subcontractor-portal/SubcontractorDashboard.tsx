@@ -25,9 +25,11 @@ import {
   buildNeedsAttentionItems,
   formatCurrency,
   formatDate,
+  getDocketPrerequisiteState,
   getDocketStatusMeta,
   getGreeting,
   getToday,
+  LOTS_MODULE_DISABLED_DOCKET_MESSAGE,
 } from './subcontractorDashboardHelpers';
 import { PortalQuickLinks } from './SubcontractorDashboardSections';
 
@@ -185,13 +187,24 @@ export function SubcontractorDashboard() {
 
   // Docket prerequisites: a subbie needs at least one approved employee or plant
   // item (rates approved) to add anything, and — when the lots module is on — at
-  // least one assigned lot to allocate labour against. When these are missing the
-  // "start docket" empty state explains the next steps instead of dead-ending.
+  // least one assigned lot to allocate labour against. When the lots module is
+  // OFF, labour dockets are impossible (the backend 403s the lot list and the
+  // submit guard requires a lot), so the empty state warns instead of silently
+  // claiming the subbie is ready. When these are missing the "start docket"
+  // empty state explains the next steps instead of dead-ending.
   const approvedEmployees = company?.employees?.filter((e) => e.status === 'approved') ?? [];
   const approvedPlant = company?.plant?.filter((p) => p.status === 'approved') ?? [];
-  const hasDocketResources = approvedEmployees.length > 0 || approvedPlant.length > 0;
-  const needsLotAssignment = canViewAssignedLots && assignedLots.length === 0;
-  const docketPrerequisitesMet = hasDocketResources && !needsLotAssignment;
+  const {
+    hasDocketResources,
+    needsLotAssignment,
+    lotsModuleDisabled,
+    prerequisitesMet: docketPrerequisitesMet,
+  } = getDocketPrerequisiteState({
+    approvedEmployeeCount: approvedEmployees.length,
+    approvedPlantCount: approvedPlant.length,
+    lotsModuleEnabled: canViewAssignedLots,
+    assignedLotCount: assignedLots.length,
+  });
 
   const loading = companyLoading;
 
@@ -358,6 +371,11 @@ export function SubcontractorDashboard() {
                   {needsLotAssignment && (
                     <p className="text-sm text-muted-foreground">
                       No lots assigned yet. Contact your project manager to get lot assignments.
+                    </p>
+                  )}
+                  {lotsModuleDisabled && (
+                    <p className="text-sm text-muted-foreground">
+                      {LOTS_MODULE_DISABLED_DOCKET_MESSAGE}
                     </p>
                   )}
                 </div>

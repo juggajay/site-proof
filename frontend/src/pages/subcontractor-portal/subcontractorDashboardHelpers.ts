@@ -94,6 +94,53 @@ export interface NeedsAttentionItem {
   link: string;
 }
 
+// Shared plain-language warning for when the HC has turned off the subbie's
+// "Assigned Work" (lots) portal module. Labour docket lines must be allocated to
+// a lot, and the backend enforces the lots module on `GET /api/lots` (403) and
+// on the labour submit guard (LOT_REQUIRED), so without it labour dockets are a
+// dead-end. Plant-only dockets still work. Both the dashboard and the docket
+// editor render this exact copy so the subbie hears the same explanation
+// wherever they hit the wall.
+export const LOTS_MODULE_DISABLED_DOCKET_MESSAGE =
+  'Your head contractor has not enabled Assigned Work (lot) access, which is required to submit labour dockets. Plant-only dockets still work. Ask them to enable it.';
+
+export interface DocketPrerequisiteState {
+  // At least one approved employee or plant item (i.e. something can be added).
+  hasDocketResources: boolean;
+  // Lots module on, but no lot assigned yet — labour can't be allocated.
+  needsLotAssignment: boolean;
+  // Lots module off — labour is blocked entirely, only plant dockets work.
+  lotsModuleDisabled: boolean;
+  // True only when the subbie can actually start a normal docket. When the lots
+  // module is off this stays false so the dashboard surfaces the warning instead
+  // of silently claiming the subbie is ready.
+  prerequisitesMet: boolean;
+}
+
+// Centralizes the dashboard's "can this subbie start a docket?" decision so the
+// lots-module-off case is handled honestly. Previously a disabled lots module
+// made `needsLotAssignment` false (lots check skipped), which made the page
+// claim the subbie was ready even though labour dockets are impossible without
+// lot access.
+export function getDocketPrerequisiteState({
+  approvedEmployeeCount,
+  approvedPlantCount,
+  lotsModuleEnabled,
+  assignedLotCount,
+}: {
+  approvedEmployeeCount: number;
+  approvedPlantCount: number;
+  lotsModuleEnabled: boolean;
+  assignedLotCount: number;
+}): DocketPrerequisiteState {
+  const hasDocketResources = approvedEmployeeCount > 0 || approvedPlantCount > 0;
+  const lotsModuleDisabled = !lotsModuleEnabled;
+  const needsLotAssignment = lotsModuleEnabled && assignedLotCount === 0;
+  const prerequisitesMet = hasDocketResources && !needsLotAssignment && !lotsModuleDisabled;
+
+  return { hasDocketResources, needsLotAssignment, lotsModuleDisabled, prerequisitesMet };
+}
+
 // `myCompanyLink` is passed in because the page builds it with the current
 // project query string (`/my-company?projectId=...` when switched); the
 // rate-counter items must keep linking to exactly that URL.
