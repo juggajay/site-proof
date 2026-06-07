@@ -29,6 +29,7 @@ export function ITPPage() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false); // Feature #128
   const [editingTemplate, setEditingTemplate] = useState<ITPTemplate | null>(null); // Feature #128
+  const [editError, setEditError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [togglingTemplateId, setTogglingTemplateId] = useState<string | null>(null);
   const [cloningTemplateId, setCloningTemplateId] = useState<string | null>(null);
@@ -149,6 +150,7 @@ export function ITPPage() {
   // Feature #128 - Edit template handler
   const handleEditTemplate = (template: ITPTemplate) => {
     setEditingTemplate(template);
+    setEditError(null);
     setShowEditModal(true);
   };
 
@@ -165,6 +167,7 @@ export function ITPPage() {
     if (!token || creating) return;
 
     setCreating(true);
+    setEditError(null);
     try {
       const result = await apiFetch<{ template: ITPTemplate }>(
         `/api/itp/templates/${encodeURIComponent(templateId)}`,
@@ -179,11 +182,10 @@ export function ITPPage() {
       setEditingTemplate(null);
     } catch (err) {
       logError('Failed to update template:', err);
-      toast({
-        title: 'Failed to update template',
-        description: extractErrorMessage(err, 'Please try again.'),
-        variant: 'error',
-      });
+      // Keep the explanation inside the open modal so the admin can read why the
+      // save was blocked (e.g. an in-use template) and the next step to take,
+      // rather than an auto-dismissing toast.
+      setEditError(extractErrorMessage(err, 'Failed to update template. Please try again.'));
     } finally {
       setCreating(false);
     }
@@ -490,9 +492,11 @@ export function ITPPage() {
           onClose={() => {
             setShowEditModal(false);
             setEditingTemplate(null);
+            setEditError(null);
           }}
           onSubmit={(data) => handleUpdateTemplate(editingTemplate.id, data)}
           loading={creating}
+          errorMessage={editError}
         />
       )}
     </div>
