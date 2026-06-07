@@ -1,12 +1,13 @@
 // Focused unit tests for offline/syncWorker.ts — the per-item dispatcher and
-// the low-risk per-type executors extracted from useOfflineStatus.ts (Slice 2).
+// every per-type executor extracted from useOfflineStatus.ts (Slices 2-3:
+// itp_completion, diary, docket, lot_conflict, unknown-GC in Slice 2;
+// photo_upload and lot_edit in Slice 3).
 //
 // These complement the hook-level characterization suite (useOfflineStatus.test.tsx):
 // here we call `syncSingleItem(item)` directly with the module boundaries mocked,
 // asserting the returned SyncItemResult status AND the marker/fetch side effects
 // for each executor. The hook tests prove the loop integrates this correctly;
-// these prove the executors in isolation, including the `deferred` seam that
-// keeps photo_upload and lot_edit running inline in the hook for now.
+// these prove the executors in isolation.
 
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 
@@ -19,6 +20,13 @@ vi.mock('../offlineDb', () => ({
   markDocketSynced: vi.fn(),
   markDocketServerId: vi.fn(),
   markDocketSyncError: vi.fn(),
+  getOfflinePhoto: vi.fn(),
+  markPhotoSynced: vi.fn(),
+  markPhotoSyncError: vi.fn(),
+  getOfflineLot: vi.fn(),
+  detectLotSyncConflict: vi.fn(),
+  markLotSynced: vi.fn(),
+  markLotSyncError: vi.fn(),
   offlineDb: {
     diaries: { get: vi.fn() },
     dockets: { get: vi.fn() },
@@ -36,7 +44,12 @@ vi.mock('./syncClient', () => ({
   syncOfflineDocketDraft: vi.fn(),
 }));
 
+vi.mock('./syncPayloads', () => ({
+  buildOfflineLotEditPayload: vi.fn((lot: unknown) => ({ payload: lot })),
+}));
+
 vi.mock('../logger', () => ({
+  devLog: vi.fn(),
   devWarn: vi.fn(),
 }));
 
@@ -49,11 +62,19 @@ import {
   markDocketSynced,
   markDocketServerId,
   markDocketSyncError,
+  getOfflinePhoto,
+  markPhotoSynced,
+  markPhotoSyncError,
+  getOfflineLot,
+  detectLotSyncConflict,
+  markLotSynced,
+  markLotSyncError,
   offlineDb,
   type SyncQueueItem,
 } from '../offlineDb';
 import { authFetch } from '../api';
 import { readResponseError, syncOfflineDiarySnapshot, syncOfflineDocketDraft } from './syncClient';
+import { buildOfflineLotEditPayload } from './syncPayloads';
 import { devWarn } from '../logger';
 import { syncSingleItem } from './syncWorker';
 
@@ -65,6 +86,14 @@ const markDiarySyncErrorMock = markDiarySyncError as Mock;
 const markDocketSyncedMock = markDocketSynced as Mock;
 const markDocketServerIdMock = markDocketServerId as Mock;
 const markDocketSyncErrorMock = markDocketSyncError as Mock;
+const getOfflinePhotoMock = getOfflinePhoto as Mock;
+const markPhotoSyncedMock = markPhotoSynced as Mock;
+const markPhotoSyncErrorMock = markPhotoSyncError as Mock;
+const getOfflineLotMock = getOfflineLot as Mock;
+const detectLotSyncConflictMock = detectLotSyncConflict as Mock;
+const markLotSyncedMock = markLotSynced as Mock;
+const markLotSyncErrorMock = markLotSyncError as Mock;
+const buildOfflineLotEditPayloadMock = buildOfflineLotEditPayload as Mock;
 const diariesGetMock = offlineDb.diaries.get as unknown as Mock;
 const docketsGetMock = offlineDb.dockets.get as unknown as Mock;
 const authFetchMock = authFetch as Mock;
@@ -95,11 +124,22 @@ function errorResponse(status: number, text: string): Response {
   return new Response(text, { status });
 }
 
+// The photo_upload executor reads its in-memory base64 dataUrl via the global
+// `fetch` (NOT authFetch) and calls `.blob()` on it. jsdom's Blob lacks a
+// `.stream()` method, so wrapping a real Blob in a real Response throws; mirror
+// the characterization suite and return a minimal stub exposing only the
+// `.blob()` the worker uses.
+const globalFetchMock = vi.fn();
+
 beforeEach(() => {
   readResponseErrorMock.mockImplementation(async (response: Response) => response.text());
+  const blob = new Blob(['x'], { type: 'image/jpeg' });
+  globalFetchMock.mockResolvedValue({ blob: async () => blob } as unknown as Response);
+  vi.stubGlobal('fetch', globalFetchMock);
 });
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   vi.clearAllMocks();
 });
 
@@ -400,26 +440,290 @@ describe('syncSingleItem — lot_conflict', () => {
   });
 });
 
-describe('syncSingleItem — deferred seam (photo_upload, lot_edit stay in the hook)', () => {
-  it('returns "deferred" for photo_upload without touching it', async () => {
+describe('syncSingleItem — photo_upload (Slice 3, moved from the hook)', () => {
+  const photoRecord = {
+    dataUrl: 'data:image/jpeg;base64,abc',
+    fileName: 'site.jpg',
+    projectId: 'proj-1',
+    lotId: 'lot-1',
+    documentType: 'photo',
+    category: 'progress',
+    entityType: 'lot',
+    entityId: 'ent-1',
+    caption: 'a caption',
+    tags: ['t1', 't2'],
+    gpsLatitude: -33.8,
+    gpsLongitude: 151.2,
+    capturedAt: '2026-01-01T00:00:00.000Z',
+  };
+
+  it('reads the dataUrl blob, POSTs multipart, returns "synced" and marks the photo', async () => {
+    getOfflinePhotoMock.mockResolvedValue(photoRecord);
+    authFetchMock.mockResolvedValue(okJson({ document: { id: 'doc-9' } }));
+
     const result = await syncSingleItem(
       queueItem({ id: 41, type: 'photo_upload', data: { photoId: 'ph-1' } }),
     );
 
-    expect(result).toEqual({ status: 'deferred' });
-    expect(removeSyncQueueItemMock).not.toHaveBeenCalled();
-    expect(markSyncItemErrorMock).not.toHaveBeenCalled();
+    expect(result).toEqual({ status: 'synced' });
+    // The in-memory dataUrl is read via the global fetch, not authFetch.
+    expect(globalFetchMock).toHaveBeenCalledWith('data:image/jpeg;base64,abc');
+    // Uploaded via authFetch to the documents endpoint as multipart FormData.
+    expect(authFetchMock).toHaveBeenCalledTimes(1);
+    const [url, options] = authFetchMock.mock.calls[0];
+    expect(url).toBe('/api/documents/upload');
+    expect(options.method).toBe('POST');
+    expect(options.body).toBeInstanceOf(FormData);
+    const fd = options.body as FormData;
+    expect(fd.get('projectId')).toBe('proj-1');
+    expect(fd.get('lotId')).toBe('lot-1');
+    expect(fd.get('documentType')).toBe('photo');
+    expect(fd.get('category')).toBe('progress');
+    expect(fd.get('entityType')).toBe('lot');
+    expect(fd.get('entityId')).toBe('ent-1');
+    expect(fd.get('caption')).toBe('a caption');
+    expect(fd.get('tags')).toBe(JSON.stringify(['t1', 't2']));
+    expect(fd.get('gpsLatitude')).toBe('-33.8');
+    expect(fd.get('gpsLongitude')).toBe('151.2');
+    expect(fd.get('capturedAt')).toBe('2026-01-01T00:00:00.000Z');
+
+    expect(removeSyncQueueItemMock).toHaveBeenCalledWith(41);
+    expect(markPhotoSyncedMock).toHaveBeenCalledWith('ph-1', 'doc-9');
+  });
+
+  it('omits optional GPS fields when undefined', async () => {
+    getOfflinePhotoMock.mockResolvedValue({
+      dataUrl: 'data:image/jpeg;base64,abc',
+      fileName: 'site.jpg',
+      projectId: 'proj-1',
+      documentType: 'photo',
+      entityType: 'lot',
+      capturedAt: '2026-01-01T00:00:00.000Z',
+      // no lotId/category/entityId/caption/tags/gps*
+    });
+    authFetchMock.mockResolvedValue(okJson({ document: { id: 'doc-9' } }));
+
+    await syncSingleItem(queueItem({ id: 41, type: 'photo_upload', data: { photoId: 'ph-1' } }));
+
+    const fd = authFetchMock.mock.calls[0][1].body as FormData;
+    expect(fd.has('gpsLatitude')).toBe(false);
+    expect(fd.has('gpsLongitude')).toBe(false);
+    expect(fd.has('lotId')).toBe(false);
+    expect(fd.has('category')).toBe(false);
+  });
+
+  it('removes the item (handled) when the photo no longer exists', async () => {
+    getOfflinePhotoMock.mockResolvedValue(undefined);
+
+    const result = await syncSingleItem(
+      queueItem({ id: 41, type: 'photo_upload', data: { photoId: 'gone' } }),
+    );
+
+    expect(result).toEqual({ status: 'handled' });
+    expect(removeSyncQueueItemMock).toHaveBeenCalledWith(41);
+    expect(globalFetchMock).not.toHaveBeenCalled();
     expect(authFetchMock).not.toHaveBeenCalled();
   });
 
-  it('returns "deferred" for lot_edit without touching it', async () => {
+  it('error-marks item + photo (handled, no removal) when the upload is not ok', async () => {
+    getOfflinePhotoMock.mockResolvedValue(photoRecord);
+    authFetchMock.mockResolvedValue(errorResponse(500, 'upload boom'));
+
+    const result = await syncSingleItem(
+      queueItem({ id: 41, type: 'photo_upload', data: { photoId: 'ph-1' } }),
+    );
+
+    expect(result).toEqual({ status: 'handled' });
+    expect(markSyncItemErrorMock).toHaveBeenCalledWith(41, 'upload boom');
+    expect(markPhotoSyncErrorMock).toHaveBeenCalledWith('ph-1');
+    expect(removeSyncQueueItemMock).not.toHaveBeenCalled();
+    expect(markPhotoSyncedMock).not.toHaveBeenCalled();
+  });
+
+  it('catches a thrown error and marks item + photo via the shared onError', async () => {
+    getOfflinePhotoMock.mockResolvedValue(photoRecord);
+    authFetchMock.mockRejectedValue(new Error('network down'));
+
+    const result = await syncSingleItem(
+      queueItem({ id: 41, type: 'photo_upload', data: { photoId: 'ph-1' } }),
+    );
+
+    expect(result).toEqual({ status: 'handled' });
+    expect(markSyncItemErrorMock).toHaveBeenCalledWith(41, 'network down');
+    expect(markPhotoSyncErrorMock).toHaveBeenCalledWith('ph-1');
+  });
+});
+
+describe('syncSingleItem — lot_edit (Slice 3, moved from the hook)', () => {
+  const lotRecord = { lotNumber: 'L-100', syncStatus: 'pending' };
+
+  it('no conflict -> PATCHes via buildOfflineLotEditPayload, returns "synced", marks the lot', async () => {
+    getOfflineLotMock.mockResolvedValue(lotRecord);
+    detectLotSyncConflictMock.mockResolvedValue({ hasConflict: false });
+    authFetchMock
+      .mockResolvedValueOnce(okJson({ lot: { updatedAt: '2026-02-02T00:00:00.000Z' } })) // GET
+      .mockResolvedValueOnce(okJson({ lot: { updatedAt: '2026-03-03T00:00:00.000Z' } })); // PATCH
+
     const result = await syncSingleItem(
       queueItem({ id: 51, type: 'lot_edit', data: { lotId: 'lot-1' } }),
     );
 
-    expect(result).toEqual({ status: 'deferred' });
-    expect(removeSyncQueueItemMock).not.toHaveBeenCalled();
+    expect(result).toEqual({ status: 'synced' });
+    expect(authFetchMock).toHaveBeenNthCalledWith(1, '/api/lots/lot-1', { method: 'GET' });
+    const patchCall = authFetchMock.mock.calls[1];
+    expect(patchCall[0]).toBe('/api/lots/lot-1');
+    expect(patchCall[1].method).toBe('PATCH');
+    expect(buildOfflineLotEditPayloadMock).toHaveBeenCalledWith(lotRecord);
+    expect(removeSyncQueueItemMock).toHaveBeenCalledWith(51);
+    expect(markLotSyncedMock).toHaveBeenCalledWith('lot-1', '2026-03-03T00:00:00.000Z');
+  });
+
+  it('maps server budgetAmount into the internal budget field for conflict detection', async () => {
+    getOfflineLotMock.mockResolvedValue(lotRecord);
+    detectLotSyncConflictMock.mockResolvedValue({ hasConflict: false });
+    authFetchMock
+      .mockResolvedValueOnce(
+        okJson({
+          lot: {
+            updatedAt: '2026-02-02T00:00:00.000Z',
+            lotNumber: 'L-100',
+            budgetAmount: 12345,
+            chainageStart: 'CH1',
+          },
+        }),
+      )
+      .mockResolvedValueOnce(okJson({ lot: { updatedAt: '2026-03-03T00:00:00.000Z' } }));
+
+    await syncSingleItem(queueItem({ id: 51, type: 'lot_edit', data: { lotId: 'lot-1' } }));
+
+    expect(detectLotSyncConflictMock).toHaveBeenCalledWith(
+      'lot-1',
+      expect.objectContaining({
+        updatedAt: '2026-02-02T00:00:00.000Z',
+        lotNumber: 'L-100',
+        chainageStart: 'CH1',
+        budget: 12345,
+      }),
+    );
+  });
+
+  it('conflict detected -> fires onConflictDetected, removes item, NO PATCH, returns "handled"', async () => {
+    getOfflineLotMock.mockResolvedValue(lotRecord);
+    detectLotSyncConflictMock.mockResolvedValue({ hasConflict: true });
+    authFetchMock.mockResolvedValueOnce(okJson({ lot: { updatedAt: 'x' } })); // GET only
+    const onConflictDetected = vi.fn();
+
+    const result = await syncSingleItem(
+      queueItem({ id: 51, type: 'lot_edit', data: { lotId: 'lot-1' } }),
+      { onConflictDetected },
+    );
+
+    expect(result).toEqual({ status: 'handled' });
+    expect(onConflictDetected).toHaveBeenCalledWith(
+      'lot-1',
+      'L-100',
+      'Sync conflict detected for lot L-100. Another user edited this lot while you were offline.',
+    );
+    expect(removeSyncQueueItemMock).toHaveBeenCalledWith(51);
+    // Only the GET ran; no PATCH.
+    expect(authFetchMock).toHaveBeenCalledTimes(1);
+    expect(markLotSyncedMock).not.toHaveBeenCalled();
+  });
+
+  it("stale-skip: removes the item (handled) when the lot is already 'conflict'", async () => {
+    getOfflineLotMock.mockResolvedValue({ lotNumber: 'L-100', syncStatus: 'conflict' });
+
+    const result = await syncSingleItem(
+      queueItem({ id: 51, type: 'lot_edit', data: { lotId: 'lot-1' } }),
+    );
+
+    expect(result).toEqual({ status: 'handled' });
+    expect(removeSyncQueueItemMock).toHaveBeenCalledWith(51);
     expect(authFetchMock).not.toHaveBeenCalled();
+  });
+
+  it("stale-skip: removes the item (handled) when the lot is already 'synced'", async () => {
+    getOfflineLotMock.mockResolvedValue({ lotNumber: 'L-100', syncStatus: 'synced' });
+
+    const result = await syncSingleItem(
+      queueItem({ id: 51, type: 'lot_edit', data: { lotId: 'lot-1' } }),
+    );
+
+    expect(result).toEqual({ status: 'handled' });
+    expect(removeSyncQueueItemMock).toHaveBeenCalledWith(51);
+    expect(authFetchMock).not.toHaveBeenCalled();
+  });
+
+  it("forceOverwrite bypasses both the stale-skip and the conflict check, PATCHing 'synced' lots", async () => {
+    getOfflineLotMock.mockResolvedValue({ lotNumber: 'L-100', syncStatus: 'synced' });
+    authFetchMock
+      .mockResolvedValueOnce(okJson({ lot: { updatedAt: 'x' } })) // GET
+      .mockResolvedValueOnce(okJson({ lot: { updatedAt: '2026-03-03T00:00:00.000Z' } })); // PATCH
+
+    const result = await syncSingleItem(
+      queueItem({ id: 51, type: 'lot_edit', data: { lotId: 'lot-1', forceOverwrite: true } }),
+    );
+
+    expect(result).toEqual({ status: 'synced' });
+    expect(detectLotSyncConflictMock).not.toHaveBeenCalled();
+    expect(markLotSyncedMock).toHaveBeenCalledWith('lot-1', '2026-03-03T00:00:00.000Z');
+  });
+
+  it('removes the item (handled) when the lot no longer exists', async () => {
+    getOfflineLotMock.mockResolvedValue(undefined);
+
+    const result = await syncSingleItem(
+      queueItem({ id: 51, type: 'lot_edit', data: { lotId: 'gone' } }),
+    );
+
+    expect(result).toEqual({ status: 'handled' });
+    expect(removeSyncQueueItemMock).toHaveBeenCalledWith(51);
+    expect(authFetchMock).not.toHaveBeenCalled();
+  });
+
+  it('GET not ok -> error-marks item + lot (handled, no removal, no PATCH)', async () => {
+    getOfflineLotMock.mockResolvedValue(lotRecord);
+    authFetchMock.mockResolvedValueOnce(errorResponse(404, 'lot gone server-side'));
+
+    const result = await syncSingleItem(
+      queueItem({ id: 51, type: 'lot_edit', data: { lotId: 'lot-1' } }),
+    );
+
+    expect(result).toEqual({ status: 'handled' });
+    expect(markSyncItemErrorMock).toHaveBeenCalledWith(51, 'lot gone server-side');
+    expect(markLotSyncErrorMock).toHaveBeenCalledWith('lot-1');
+    expect(authFetchMock).toHaveBeenCalledTimes(1);
+    expect(removeSyncQueueItemMock).not.toHaveBeenCalled();
+  });
+
+  it('PATCH not ok -> error-marks item + lot (handled, no removal)', async () => {
+    getOfflineLotMock.mockResolvedValue(lotRecord);
+    detectLotSyncConflictMock.mockResolvedValue({ hasConflict: false });
+    authFetchMock
+      .mockResolvedValueOnce(okJson({ lot: { updatedAt: 'x' } })) // GET
+      .mockResolvedValueOnce(errorResponse(422, 'invalid patch')); // PATCH
+
+    const result = await syncSingleItem(
+      queueItem({ id: 51, type: 'lot_edit', data: { lotId: 'lot-1' } }),
+    );
+
+    expect(result).toEqual({ status: 'handled' });
+    expect(markSyncItemErrorMock).toHaveBeenCalledWith(51, 'invalid patch');
+    expect(markLotSyncErrorMock).toHaveBeenCalledWith('lot-1');
+    expect(markLotSyncedMock).not.toHaveBeenCalled();
+  });
+
+  it('catches a thrown error and marks item + lot via the shared onError', async () => {
+    getOfflineLotMock.mockResolvedValue(lotRecord);
+    authFetchMock.mockRejectedValueOnce(new Error('network down'));
+
+    const result = await syncSingleItem(
+      queueItem({ id: 51, type: 'lot_edit', data: { lotId: 'lot-1' } }),
+    );
+
+    expect(result).toEqual({ status: 'handled' });
+    expect(markSyncItemErrorMock).toHaveBeenCalledWith(51, 'network down');
+    expect(markLotSyncErrorMock).toHaveBeenCalledWith('lot-1');
   });
 });
 

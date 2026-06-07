@@ -1996,7 +1996,10 @@ test.describe('production readiness guardrails', () => {
     );
     const allowedRawFetchFiles = [
       '/frontend/src/lib/fetchWithTimeout.ts',
-      '/frontend/src/lib/useOfflineStatus.ts',
+      // The offline photo_upload executor reads its base64 photo dataUrl via a
+      // bare fetch() (dataUrl is in-memory, not a network request that needs a
+      // timeout). It moved here from useOfflineStatus.ts with the executor.
+      '/frontend/src/lib/offline/syncWorker.ts',
       '/backend/src/lib/fetchWithTimeout.ts',
       '/backend/src/routes/webhooks.ts',
       '/backend/src/routes/webhooks/delivery.ts',
@@ -2062,8 +2065,11 @@ test.describe('production readiness guardrails', () => {
       new URL('../src/lib/offlineDb.ts', import.meta.url),
       'utf8',
     );
-    const offlineStatusSource = await readFile(
-      new URL('../src/lib/useOfflineStatus.ts', import.meta.url),
+    // The lot_edit sync executor (including its stale-skip guards) moved from
+    // useOfflineStatus.ts into offline/syncWorker.ts; the conflict-safety
+    // literals are asserted against the worker module they now live in.
+    const syncWorkerSource = await readFile(
+      new URL('../src/lib/offline/syncWorker.ts', import.meta.url),
       'utf8',
     );
     const conflictModalSource = await readFile(
@@ -2075,9 +2081,9 @@ test.describe('production readiness guardrails', () => {
     expect(offlineDbSource).toContain("localLot.syncStatus !== 'pending'");
     expect(offlineDbSource).toContain("localLot.syncStatus !== 'error'");
     expect(offlineDbSource).toContain('await removeQueuedLotEditSyncs(lotId);');
-    expect(offlineStatusSource).toContain("lot.syncStatus === 'conflict'");
-    expect(offlineStatusSource).toContain("lot.syncStatus === 'synced'");
-    expect(offlineStatusSource).toContain('Removing stale lot edit queue item for conflicted lot');
+    expect(syncWorkerSource).toContain("lot.syncStatus === 'conflict'");
+    expect(syncWorkerSource).toContain("lot.syncStatus === 'synced'");
+    expect(syncWorkerSource).toContain('Removing stale lot edit queue item for conflicted lot');
     expect(conflictModalSource).toContain('function pickConflictForReview');
     expect(conflictModalSource).toContain('formatConflictValue');
     expect(conflictModalSource).toContain("key: 'chainageStart'");
@@ -2105,8 +2111,11 @@ test.describe('production readiness guardrails', () => {
       new URL('../src/lib/offline/photos.ts', import.meta.url),
       'utf8',
     );
-    const offlineStatusSource = await readFile(
-      new URL('../src/lib/useOfflineStatus.ts', import.meta.url),
+    // The photo_upload sync executor moved from useOfflineStatus.ts into
+    // offline/syncWorker.ts; its upload-metadata literals are asserted against
+    // the worker module they now live in.
+    const syncWorkerSource = await readFile(
+      new URL('../src/lib/offline/syncWorker.ts', import.meta.url),
       'utf8',
     );
     const captureModalSource = await readFile(
@@ -2127,10 +2136,10 @@ test.describe('production readiness guardrails', () => {
     expect(offlinePhotosSource).toContain('documentType?: string;');
     expect(offlinePhotosSource).toContain("documentType: options.documentType ?? 'photo'");
     expect(offlinePhotosSource).toContain('category?: string;');
-    expect(offlineStatusSource).toContain("formData.append('documentType', photo.documentType);");
-    expect(offlineStatusSource).toContain("formData.append('category', photo.category);");
-    expect(offlineStatusSource).toContain('photo.gpsLatitude !== undefined');
-    expect(offlineStatusSource).toContain('photo.gpsLongitude !== undefined');
+    expect(syncWorkerSource).toContain("formData.append('documentType', photo.documentType);");
+    expect(syncWorkerSource).toContain("formData.append('category', photo.category);");
+    expect(syncWorkerSource).toContain('photo.gpsLatitude !== undefined');
+    expect(syncWorkerSource).toContain('photo.gpsLongitude !== undefined');
     expect(captureModalSource).toContain(
       "documentType: captureType === 'ncr' ? 'ncr_evidence' : 'photo'",
     );
