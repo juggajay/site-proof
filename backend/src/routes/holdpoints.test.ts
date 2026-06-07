@@ -363,7 +363,7 @@ describe('Hold Points API', () => {
       expect(res.body.holdPoint.releaseSignatureUrl).toBeNull();
     });
 
-    it('suppresses hold point release notifications when the project toggle is off', async () => {
+    it('notifies the team and emails confirmations when the release toggle is on (default)', async () => {
       const hp = await prisma.holdPoint.create({
         data: {
           lotId,
@@ -371,6 +371,80 @@ describe('Hold Points API', () => {
           pointType: 'hold_point',
           status: 'notified',
         },
+      });
+
+      const itpInstance = await prisma.iTPInstance.findUniqueOrThrow({
+        where: { lotId },
+        select: { id: true },
+      });
+      const completion = await prisma.iTPCompletion.create({
+        data: {
+          itpInstanceId: itpInstance.id,
+          checklistItemId,
+          status: 'completed',
+        },
+      });
+
+      // A foreman receives the Feature #948 contractor confirmation email
+      // (direct `to:` send), so it proves both the in-app and the confirmation
+      // email paths run when the category is on. The project has no stored
+      // settings, so the toggle defaults to enabled.
+      const foreman = await registerTestUser('HP Release Foreman On', 'user', companyId);
+      await prisma.projectUser.create({
+        data: { projectId, userId: foreman.userId, role: 'foreman', status: 'active' },
+      });
+
+      try {
+        clearEmailQueue();
+        const res = await request(app)
+          .post(`/api/holdpoints/${hp.id}/release`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            releasedByName: 'Toggle On Releaser',
+            releaseDate: '2026-01-23',
+            releaseTime: '12:00',
+            releaseNotes: 'Team should be notified',
+          });
+
+        expect(res.status).toBe(200);
+        expect(res.body.holdPoint.status).toBe('released');
+
+        // In-app records are created for the project team.
+        const notifications = await prisma.notification.findMany({
+          where: { projectId, type: 'hold_point_release' },
+        });
+        expect(notifications.length).toBeGreaterThan(0);
+
+        // The foreman confirmation email (Feature #948) is sent.
+        const confirmationToForeman = getQueuedEmails().some((email) => email.to === foreman.email);
+        expect(confirmationToForeman).toBe(true);
+      } finally {
+        await prisma.notification.deleteMany({ where: { projectId, type: 'hold_point_release' } });
+        await prisma.iTPCompletion.delete({ where: { id: completion.id } }).catch(() => {});
+        await prisma.holdPoint.delete({ where: { id: hp.id } }).catch(() => {});
+        await prisma.projectUser.deleteMany({ where: { projectId, userId: foreman.userId } });
+        await cleanupTestUser(foreman.userId);
+        clearEmailQueue();
+      }
+    });
+
+    it('suppresses hold point release notifications and emails when the project toggle is off', async () => {
+      const hp = await prisma.holdPoint.create({
+        data: {
+          lotId,
+          itpChecklistItemId: checklistItemId,
+          pointType: 'hold_point',
+          status: 'notified',
+        },
+      });
+
+      // A foreman on the project would normally receive the Feature #948
+      // contractor confirmation email — a direct `to:` send that bypasses the
+      // per-user email preference system. The project toggle is the only seam
+      // that can suppress it, so this proves it is gated too.
+      const foreman = await registerTestUser('HP Release Foreman Off', 'user', companyId);
+      await prisma.projectUser.create({
+        data: { projectId, userId: foreman.userId, role: 'foreman', status: 'active' },
       });
 
       // Admin turned the "Hold Point Releases" category off for this project.
@@ -401,6 +475,10 @@ describe('Hold Points API', () => {
           where: { projectId, type: 'hold_point_release' },
         });
         expect(notifications).toHaveLength(0);
+
+        // Neither the per-user release emails nor the Feature #948 confirmation
+        // emails are sent. Suppressing one but not the other would be a new lie.
+        expect(getQueuedEmails()).toHaveLength(0);
       } finally {
         await prisma.project.update({
           where: { id: projectId },
@@ -408,6 +486,8 @@ describe('Hold Points API', () => {
         });
         await prisma.notification.deleteMany({ where: { projectId, type: 'hold_point_release' } });
         await prisma.holdPoint.delete({ where: { id: hp.id } }).catch(() => {});
+        await prisma.projectUser.deleteMany({ where: { projectId, userId: foreman.userId } });
+        await cleanupTestUser(foreman.userId);
         clearEmailQueue();
       }
     });

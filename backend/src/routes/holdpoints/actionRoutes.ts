@@ -210,56 +210,62 @@ holdPointActionRouter.post(
           // Continue with other notifications even if one fails
         }
       }
-    }
 
-    // Feature #948 - Send HP release confirmation emails to contractor and superintendent
-    try {
-      const lotUrl = buildFrontendUrl(
-        `/projects/${existingHP.lot.projectId}/lots/${existingHP.lot.id}`,
-      );
-      const releasedAtDisplay = releasedAt.toLocaleString('en-AU', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-
-      const confirmationContext = {
-        projectName: existingHP.lot.project.name,
-        lotNumber: holdPoint.lot.lotNumber,
-        holdPointDescription: holdPoint.description,
-        releasedByName,
-        releasedByOrg,
-        releaseMethod,
-        releaseNotes,
-        releasedAt: releasedAtDisplay,
-        lotUrl,
-      };
-
-      // Send to contractors (site_engineer, foreman roles)
-      const contractors = selectHoldPointReleaseContractors(projectUsers);
-      for (const contractor of contractors) {
-        await sendHPReleaseConfirmationEmail(
-          buildHoldPointReleaseConfirmationEmail(contractor, 'contractor', confirmationContext),
+      // Feature #948 - Send HP release confirmation emails to contractor and
+      // superintendent. These are part of the same "Hold Point Releases"
+      // category (they fire on the same release event, to project users), so
+      // they live under the same toggle as the in-app records and the primary
+      // release emails above. sendHPReleaseConfirmationEmail is a direct `to:`
+      // send that bypasses the per-user email preference system, so this
+      // project-level gate is the only thing that can suppress it.
+      try {
+        const lotUrl = buildFrontendUrl(
+          `/projects/${existingHP.lot.projectId}/lots/${existingHP.lot.id}`,
         );
-      }
+        const releasedAtDisplay = releasedAt.toLocaleString('en-AU', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        });
 
-      // Send to superintendents
-      const superintendents = selectHoldPointReleaseSuperintendents(projectUsers);
-      for (const superintendent of superintendents) {
-        await sendHPReleaseConfirmationEmail(
-          buildHoldPointReleaseConfirmationEmail(
-            superintendent,
-            'superintendent',
-            confirmationContext,
-          ),
-        );
+        const confirmationContext = {
+          projectName: existingHP.lot.project.name,
+          lotNumber: holdPoint.lot.lotNumber,
+          holdPointDescription: holdPoint.description,
+          releasedByName,
+          releasedByOrg,
+          releaseMethod,
+          releaseNotes,
+          releasedAt: releasedAtDisplay,
+          lotUrl,
+        };
+
+        // Send to contractors (site_engineer, foreman roles)
+        const contractors = selectHoldPointReleaseContractors(projectUsers);
+        for (const contractor of contractors) {
+          await sendHPReleaseConfirmationEmail(
+            buildHoldPointReleaseConfirmationEmail(contractor, 'contractor', confirmationContext),
+          );
+        }
+
+        // Send to superintendents
+        const superintendents = selectHoldPointReleaseSuperintendents(projectUsers);
+        for (const superintendent of superintendents) {
+          await sendHPReleaseConfirmationEmail(
+            buildHoldPointReleaseConfirmationEmail(
+              superintendent,
+              'superintendent',
+              confirmationContext,
+            ),
+          );
+        }
+      } catch (emailError) {
+        logError('[HP Release] Failed to send confirmation emails:', emailError);
+        // Don't fail the main request
       }
-    } catch (emailError) {
-      logError('[HP Release] Failed to send confirmation emails:', emailError);
-      // Don't fail the main request
     }
 
     // Audit log for HP release
