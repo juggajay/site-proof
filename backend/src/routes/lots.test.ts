@@ -6,6 +6,7 @@ import { authRouter } from './auth.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { AuditAction } from '../lib/auditLog.js';
+import { registerTestUser } from '../test/routeTestHarness.js';
 
 const app = express();
 app.use(express.json());
@@ -28,21 +29,14 @@ describe('Lots API', () => {
     companyId = company.id;
 
     // Create test user via registration
-    const testEmail = `lots-test-${Date.now()}@example.com`;
-    const regRes = await request(app).post('/api/auth/register').send({
-      email: testEmail,
-      password: 'SecureP@ssword123!',
+    const primaryUser = await registerTestUser(app, {
+      emailPrefix: 'lots-test',
       fullName: 'Lots Test User',
-      tosAccepted: true,
+      companyId,
+      roleInCompany: 'admin',
     });
-    authToken = regRes.body.token;
-    userId = regRes.body.user.id;
-
-    // Update user with company and admin role
-    await prisma.user.update({
-      where: { id: userId },
-      data: { companyId, roleInCompany: 'admin' },
-    });
+    authToken = primaryUser.token;
+    userId = primaryUser.userId;
 
     // Create test project
     const project = await prisma.project.create({
@@ -2338,20 +2332,14 @@ describe('Lot Status Workflows', () => {
     });
     companyId = company.id;
 
-    const testEmail = `workflow-test-${Date.now()}@example.com`;
-    const regRes = await request(app).post('/api/auth/register').send({
-      email: testEmail,
-      password: 'SecureP@ssword123!',
+    const primaryUser = await registerTestUser(app, {
+      emailPrefix: 'workflow-test',
       fullName: 'Workflow Test User',
-      tosAccepted: true,
+      companyId,
+      roleInCompany: 'admin',
     });
-    authToken = regRes.body.token;
-    userId = regRes.body.user.id;
-
-    await prisma.user.update({
-      where: { id: userId },
-      data: { companyId, roleInCompany: 'admin' },
-    });
+    authToken = primaryUser.token;
+    userId = primaryUser.userId;
 
     const project = await prisma.project.create({
       data: {
@@ -2443,20 +2431,14 @@ describe('Lot Bulk Operations', () => {
     });
     companyId = company.id;
 
-    const testEmail = `bulk-test-${Date.now()}@example.com`;
-    const regRes = await request(app).post('/api/auth/register').send({
-      email: testEmail,
-      password: 'SecureP@ssword123!',
+    const primaryUser = await registerTestUser(app, {
+      emailPrefix: 'bulk-test',
       fullName: 'Bulk Test User',
-      tosAccepted: true,
+      companyId,
+      roleInCompany: 'admin',
     });
-    authToken = regRes.body.token;
-    userId = regRes.body.user.id;
-
-    await prisma.user.update({
-      where: { id: userId },
-      data: { companyId, roleInCompany: 'admin' },
-    });
+    authToken = primaryUser.token;
+    userId = primaryUser.userId;
 
     const project = await prisma.project.create({
       data: {

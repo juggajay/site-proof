@@ -11,6 +11,7 @@ import { authRouter } from './auth.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import webpush from 'web-push';
+import { registerTestUser } from '../test/routeTestHarness.js';
 
 const app = express();
 app.use(express.json());
@@ -24,7 +25,6 @@ const getSubscriptionId = (endpoint: string) =>
 describe('Push Notifications API', () => {
   let authToken: string;
   let userId: string;
-  let testEmail: string;
 
   // Sample push subscription
   const mockSubscription = {
@@ -38,15 +38,12 @@ describe('Push Notifications API', () => {
 
   beforeAll(async () => {
     // Create test user
-    testEmail = `push-test-${Date.now()}@example.com`;
-    const regRes = await request(app).post('/api/auth/register').send({
-      email: testEmail,
-      password: 'SecureP@ssword123!',
+    const primaryUser = await registerTestUser(app, {
+      emailPrefix: 'push-test',
       fullName: 'Push Test User',
-      tosAccepted: true,
     });
-    authToken = regRes.body.token;
-    userId = regRes.body.user.id;
+    authToken = primaryUser.token;
+    userId = primaryUser.userId;
   });
 
   afterAll(async () => {

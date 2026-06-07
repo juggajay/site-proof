@@ -4,6 +4,7 @@ import express from 'express';
 import { authRouter } from './auth.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
+import { registerTestUser as registerSharedTestUser } from '../test/routeTestHarness.js';
 
 // Import diary router
 import diaryRouter from './diary/index.js';
@@ -15,21 +16,13 @@ app.use('/api/diary', diaryRouter);
 app.use(errorHandler);
 
 async function registerDiaryUser(fullName: string, roleInCompany: string, companyId: string) {
-  const res = await request(app)
-    .post('/api/auth/register')
-    .send({
-      email: `diary-${fullName.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}-${Math.random()}@example.com`,
-      password: 'SecureP@ssword123!',
-      fullName,
-      tosAccepted: true,
-    });
-
-  await prisma.user.update({
-    where: { id: res.body.user.id },
-    data: { companyId, roleInCompany },
+  const { token, userId } = await registerSharedTestUser(app, {
+    emailPrefix: `diary-${fullName.toLowerCase().replace(/\s+/g, '-')}`,
+    fullName,
+    roleInCompany,
+    companyId,
   });
-
-  return { token: res.body.token as string, userId: res.body.user.id as string };
+  return { token, userId };
 }
 
 describe('Daily Diary API', () => {

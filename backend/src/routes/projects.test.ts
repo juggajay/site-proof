@@ -6,6 +6,7 @@ import { authRouter } from './auth.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { AuditAction, parseAuditLogChanges } from '../lib/auditLog.js';
+import { registerTestUser } from '../test/routeTestHarness.js';
 
 const app = express();
 app.use(express.json());
@@ -27,20 +28,14 @@ describe('Projects API', () => {
     companyId = company.id;
 
     // Create test user
-    const testEmail = `projects-test-${Date.now()}@example.com`;
-    const regRes = await request(app).post('/api/auth/register').send({
-      email: testEmail,
-      password: 'SecureP@ssword123!',
+    const primaryUser = await registerTestUser(app, {
+      emailPrefix: 'projects-test',
       fullName: 'Projects Test User',
-      tosAccepted: true,
+      companyId,
+      roleInCompany: 'admin',
     });
-    authToken = regRes.body.token;
-    userId = regRes.body.user.id;
-
-    await prisma.user.update({
-      where: { id: userId },
-      data: { companyId, roleInCompany: 'admin' },
-    });
+    authToken = primaryUser.token;
+    userId = primaryUser.userId;
   });
 
   afterAll(async () => {

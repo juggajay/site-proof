@@ -7,6 +7,7 @@ import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { holdpointsRouter } from './holdpoints.js';
 import { clearEmailQueue, getQueuedEmails } from '../lib/email.js';
+import { registerTestUser as registerSharedTestUser } from '../test/routeTestHarness.js';
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
@@ -21,20 +22,12 @@ function hashHoldPointReleaseTokenForTest(token: string): string {
 }
 
 async function registerTestUser(fullName: string, roleInCompany: string, companyId: string | null) {
-  const email = `${fullName.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`;
-  const res = await request(app).post('/api/auth/register').send({
-    email,
-    password: TEST_PASSWORD,
+  return registerSharedTestUser(app, {
     fullName,
-    tosAccepted: true,
+    roleInCompany,
+    companyId,
+    password: TEST_PASSWORD,
   });
-
-  await prisma.user.update({
-    where: { id: res.body.user.id },
-    data: { companyId, roleInCompany },
-  });
-
-  return { token: res.body.token as string, userId: res.body.user.id as string, email };
 }
 
 async function cleanupTestUser(userId: string) {
@@ -58,20 +51,9 @@ describe('Hold Points API', () => {
     });
     companyId = company.id;
 
-    const testEmail = `hp-test-${Date.now()}@example.com`;
-    const regRes = await request(app).post('/api/auth/register').send({
-      email: testEmail,
-      password: TEST_PASSWORD,
-      fullName: 'HP Test User',
-      tosAccepted: true,
-    });
-    authToken = regRes.body.token;
-    userId = regRes.body.user.id;
-
-    await prisma.user.update({
-      where: { id: userId },
-      data: { companyId, roleInCompany: 'admin' },
-    });
+    const primaryUser = await registerTestUser('HP Test User', 'admin', companyId);
+    authToken = primaryUser.token;
+    userId = primaryUser.userId;
 
     const project = await prisma.project.create({
       data: {

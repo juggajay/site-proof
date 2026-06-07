@@ -5,6 +5,7 @@ import { authRouter } from './auth.js';
 import { notificationsRouter } from './notifications.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
+import { registerTestUser } from '../test/routeTestHarness.js';
 
 const app = express();
 app.use(express.json());
@@ -32,36 +33,24 @@ describe('Notifications API', () => {
     companyId = company.id;
 
     // Create first user
-    const email = `notifications-test-${Date.now()}@example.com`;
-    const res = await request(app).post('/api/auth/register').send({
-      email,
-      password: 'SecureP@ssword123!',
+    const primaryUser = await registerTestUser(app, {
+      emailPrefix: 'notifications-test',
       fullName: 'Notifications Test User',
-      tosAccepted: true,
+      companyId,
+      roleInCompany: 'admin',
     });
-    authToken = res.body.token;
-    userId = res.body.user.id;
-
-    await prisma.user.update({
-      where: { id: userId },
-      data: { companyId, roleInCompany: 'admin' },
-    });
+    authToken = primaryUser.token;
+    userId = primaryUser.userId;
 
     // Create second user for mention tests
-    const email2 = `notifications-test2-${Date.now()}@example.com`;
-    const res2 = await request(app).post('/api/auth/register').send({
-      email: email2,
-      password: 'SecureP@ssword123!',
+    const secondUser = await registerTestUser(app, {
+      emailPrefix: 'notifications-test2',
       fullName: 'Second User',
-      tosAccepted: true,
+      companyId,
+      roleInCompany: 'site_manager',
     });
-    secondUserToken = res2.body.token;
-    secondUserId = res2.body.user.id;
-
-    await prisma.user.update({
-      where: { id: secondUserId },
-      data: { companyId, roleInCompany: 'site_manager' },
-    });
+    secondUserToken = secondUser.token;
+    secondUserId = secondUser.userId;
 
     // Create test project
     const project = await prisma.project.create({

@@ -6,6 +6,7 @@ import { lotsRouter } from './lots.js';
 import { ncrsRouter } from './ncrs/index.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
+import { registerTestUser } from '../test/routeTestHarness.js';
 
 const app = express();
 app.use(express.json());
@@ -47,58 +48,40 @@ describe('Role-Based Access Control', () => {
     projectId = project.id;
 
     // Create admin user
-    const adminEmail = `rbac-admin-${Date.now()}@example.com`;
-    const adminRes = await request(app).post('/api/auth/register').send({
-      email: adminEmail,
-      password: 'SecureP@ssword123!',
+    const adminUser = await registerTestUser(app, {
+      emailPrefix: 'rbac-admin',
       fullName: 'RBAC Admin',
-      tosAccepted: true,
+      companyId,
+      roleInCompany: 'admin',
     });
-    adminToken = adminRes.body.token;
-    adminId = adminRes.body.user.id;
-
-    await prisma.user.update({
-      where: { id: adminId },
-      data: { companyId, roleInCompany: 'admin' },
-    });
+    adminToken = adminUser.token;
+    adminId = adminUser.userId;
     await prisma.projectUser.create({
       data: { projectId, userId: adminId, role: 'admin', status: 'active' },
     });
 
     // Create foremen user (can create lots)
-    const foremenEmail = `rbac-foremen-${Date.now()}@example.com`;
-    const foremenRes = await request(app).post('/api/auth/register').send({
-      email: foremenEmail,
-      password: 'SecureP@ssword123!',
+    const foremenUser = await registerTestUser(app, {
+      emailPrefix: 'rbac-foremen',
       fullName: 'RBAC Foreman',
-      tosAccepted: true,
+      companyId,
+      roleInCompany: 'foreman',
     });
-    foremenToken = foremenRes.body.token;
-    foremenId = foremenRes.body.user.id;
-
-    await prisma.user.update({
-      where: { id: foremenId },
-      data: { companyId, roleInCompany: 'foreman' },
-    });
+    foremenToken = foremenUser.token;
+    foremenId = foremenUser.userId;
     await prisma.projectUser.create({
       data: { projectId, userId: foremenId, role: 'foreman', status: 'active' },
     });
 
     // Create viewer user (limited access)
-    const viewerEmail = `rbac-viewer-${Date.now()}@example.com`;
-    const viewerRes = await request(app).post('/api/auth/register').send({
-      email: viewerEmail,
-      password: 'SecureP@ssword123!',
+    const viewerUser = await registerTestUser(app, {
+      emailPrefix: 'rbac-viewer',
       fullName: 'RBAC Viewer',
-      tosAccepted: true,
+      companyId,
+      roleInCompany: 'viewer',
     });
-    viewerToken = viewerRes.body.token;
-    viewerId = viewerRes.body.user.id;
-
-    await prisma.user.update({
-      where: { id: viewerId },
-      data: { companyId, roleInCompany: 'viewer' },
-    });
+    viewerToken = viewerUser.token;
+    viewerId = viewerUser.userId;
     await prisma.projectUser.create({
       data: { projectId, userId: viewerId, role: 'viewer', status: 'active' },
     });

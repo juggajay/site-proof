@@ -6,6 +6,7 @@ import { lotsRouter } from './lots.js';
 import { ncrsRouter } from './ncrs/index.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
+import { registerTestUser } from '../test/routeTestHarness.js';
 
 const app = express();
 app.use(express.json());
@@ -28,21 +29,14 @@ describe('Full Workflow Integration', () => {
     companyId = company.id;
 
     // Register admin user
-    const adminEmail = `integration-admin-${Date.now()}@example.com`;
-    const regRes = await request(app).post('/api/auth/register').send({
-      email: adminEmail,
-      password: 'SecureP@ssword123!',
+    const adminUser = await registerTestUser(app, {
+      emailPrefix: 'integration-admin',
       fullName: 'Integration Admin',
-      tosAccepted: true,
+      companyId,
+      roleInCompany: 'admin',
     });
-    adminToken = regRes.body.token;
-    adminId = regRes.body.user.id;
-
-    // Set up admin with company
-    await prisma.user.update({
-      where: { id: adminId },
-      data: { companyId, roleInCompany: 'admin' },
-    });
+    adminToken = adminUser.token;
+    adminId = adminUser.userId;
 
     // Create project
     const project = await prisma.project.create({
