@@ -6,6 +6,7 @@ import { authRouter } from './auth.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { parseAuditLogChanges } from '../lib/auditLog.js';
+import { registerTestUser } from '../test/routeTestHarness.js';
 
 const app = express();
 app.use(express.json());
@@ -21,15 +22,12 @@ describe('API Keys Management', () => {
 
   beforeAll(async () => {
     // Create test user
-    const testEmail = `apikeys-test-${Date.now()}@example.com`;
-    const regRes = await request(app).post('/api/auth/register').send({
-      email: testEmail,
-      password: 'SecureP@ssword123!',
+    const primaryUser = await registerTestUser(app, {
+      emailPrefix: 'apikeys-test',
       fullName: 'API Keys Test User',
-      tosAccepted: true,
     });
-    authToken = regRes.body.token;
-    userId = regRes.body.user.id;
+    authToken = primaryUser.token;
+    userId = primaryUser.userId;
   });
 
   afterAll(async () => {

@@ -5,6 +5,7 @@ import { authRouter } from './auth.js';
 import { auditLogRouter } from './auditLog.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
+import { registerTestUser as registerSharedTestUser } from '../test/routeTestHarness.js';
 
 const app = express();
 app.use(express.json());
@@ -30,36 +31,14 @@ describe('Audit Log API', () => {
     companyId = company.id;
 
     // Create first test user
-    const testEmail = `auditlog-test-${Date.now()}@example.com`;
-    const regRes = await request(app).post('/api/auth/register').send({
-      email: testEmail,
-      password: 'SecureP@ssword123!',
-      fullName: 'AuditLog Test User',
-      tosAccepted: true,
-    });
-    authToken = regRes.body.token;
-    userId = regRes.body.user.id;
-
-    await prisma.user.update({
-      where: { id: userId },
-      data: { companyId, roleInCompany: 'admin' },
-    });
+    const primaryUser = await registerAuditUser('auditlog-test', 'AuditLog Test User', 'admin');
+    authToken = primaryUser.token;
+    userId = primaryUser.userId;
 
     // Create second test user for filtering tests
-    const secondEmail = `auditlog-second-${Date.now()}@example.com`;
-    const secondRegRes = await request(app).post('/api/auth/register').send({
-      email: secondEmail,
-      password: 'SecureP@ssword123!',
-      fullName: 'Second Test User',
-      tosAccepted: true,
-    });
-    secondUserId = secondRegRes.body.user.id;
-    secondAuthToken = secondRegRes.body.token;
-
-    await prisma.user.update({
-      where: { id: secondUserId },
-      data: { companyId, roleInCompany: 'viewer' },
-    });
+    const secondUser = await registerAuditUser('auditlog-second', 'Second Test User', 'viewer');
+    secondUserId = secondUser.userId;
+    secondAuthToken = secondUser.token;
 
     // Create test project
     projectNumber = `AUDIT-${Date.now()}`;
@@ -157,23 +136,13 @@ describe('Audit Log API', () => {
   });
 
   async function registerAuditUser(prefix: string, fullName: string, roleInCompany = 'viewer') {
-    const email = `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`;
-    const res = await request(app).post('/api/auth/register').send({
-      email,
-      password: 'SecureP@ssword123!',
+    const { token, userId } = await registerSharedTestUser(app, {
+      emailPrefix: prefix,
       fullName,
-      tosAccepted: true,
+      roleInCompany,
+      companyId,
     });
-
-    await prisma.user.update({
-      where: { id: res.body.user.id },
-      data: { companyId, roleInCompany },
-    });
-
-    return {
-      token: res.body.token as string,
-      userId: res.body.user.id as string,
-    };
+    return { token, userId };
   }
 
   async function cleanupAuditUser(tempUserId: string) {

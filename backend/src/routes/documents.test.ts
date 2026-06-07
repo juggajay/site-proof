@@ -18,6 +18,7 @@ vi.mock('../lib/supabase.js', async () => {
 });
 
 import * as supabaseLib from '../lib/supabase.js';
+import { registerTestUser } from '../test/routeTestHarness.js';
 
 // Import documents router
 import documentsRouter from './documents.js';
@@ -81,20 +82,14 @@ describe('Documents API', () => {
     companyId = company.id;
 
     // Create test user
-    const testEmail = `documents-test-${Date.now()}@example.com`;
-    const regRes = await request(app).post('/api/auth/register').send({
-      email: testEmail,
-      password: 'SecureP@ssword123!',
+    const primaryUser = await registerTestUser(app, {
+      emailPrefix: 'documents-test',
       fullName: 'Documents Test User',
-      tosAccepted: true,
+      companyId,
+      roleInCompany: 'admin',
     });
-    authToken = regRes.body.token;
-    userId = regRes.body.user.id;
-
-    await prisma.user.update({
-      where: { id: userId },
-      data: { companyId, roleInCompany: 'admin' },
-    });
+    authToken = primaryUser.token;
+    userId = primaryUser.userId;
 
     // Create project
     const project = await prisma.project.create({

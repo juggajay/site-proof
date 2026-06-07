@@ -4,6 +4,7 @@ import express from 'express';
 import { authRouter } from './auth.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
+import { registerTestUser } from '../test/routeTestHarness.js';
 
 // Import dockets router
 import { docketsRouter } from './dockets.js';
@@ -35,20 +36,14 @@ describe('Dockets API', () => {
     companyId = company.id;
 
     // Create head contractor user
-    const adminEmail = `dockets-admin-${Date.now()}@example.com`;
-    const adminRes = await request(app).post('/api/auth/register').send({
-      email: adminEmail,
-      password: 'SecureP@ssword123!',
+    const adminUser = await registerTestUser(app, {
+      emailPrefix: 'dockets-admin',
       fullName: 'Dockets Admin',
-      tosAccepted: true,
+      companyId,
+      roleInCompany: 'site_manager',
     });
-    authToken = adminRes.body.token;
-    userId = adminRes.body.user.id;
-
-    await prisma.user.update({
-      where: { id: userId },
-      data: { companyId, roleInCompany: 'site_manager' },
-    });
+    authToken = adminUser.token;
+    userId = adminUser.userId;
 
     // Create project
     const project = await prisma.project.create({

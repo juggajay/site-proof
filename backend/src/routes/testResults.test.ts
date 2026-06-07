@@ -7,6 +7,7 @@ import { authRouter } from './auth.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { AuditAction } from '../lib/auditLog.js';
+import { registerTestUser as registerSharedTestUser } from '../test/routeTestHarness.js';
 
 const mockSendNotificationIfEnabled = vi.hoisted(() =>
   vi.fn(async () => ({ sent: false, queued: false })),
@@ -84,20 +85,13 @@ function findNewFilesWithContent(beforeFiles: Set<string>, content: Buffer): str
 }
 
 async function registerTestUser(fullName: string, roleInCompany: string, companyId: string | null) {
-  const email = `${fullName.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`;
-  const res = await request(app).post('/api/auth/register').send({
-    email,
-    password: TEST_PASSWORD,
+  const { token, userId } = await registerSharedTestUser(app, {
     fullName,
-    tosAccepted: true,
+    roleInCompany,
+    companyId,
+    password: TEST_PASSWORD,
   });
-
-  await prisma.user.update({
-    where: { id: res.body.user.id },
-    data: { companyId, roleInCompany },
-  });
-
-  return { token: res.body.token as string, userId: res.body.user.id as string };
+  return { token, userId };
 }
 
 async function cleanupTestUser(userId: string) {

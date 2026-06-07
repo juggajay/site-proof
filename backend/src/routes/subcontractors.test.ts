@@ -5,6 +5,7 @@ import { authRouter } from './auth.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { AuditAction, parseAuditLogChanges } from '../lib/auditLog.js';
+import { registerTestUser as registerSharedTestUser } from '../test/routeTestHarness.js';
 
 // Import subcontractors router
 import { subcontractorsRouter } from './subcontractors.js';
@@ -15,22 +16,8 @@ app.use('/api/auth', authRouter);
 app.use('/api/subcontractors', subcontractorsRouter);
 app.use(errorHandler);
 
-const TEST_PASSWORD = 'SecureP@ssword123!';
-
 async function registerTestUser(prefix: string, fullName: string) {
-  const email = `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`;
-  const res = await request(app).post('/api/auth/register').send({
-    email,
-    password: TEST_PASSWORD,
-    fullName,
-    tosAccepted: true,
-  });
-
-  return {
-    email,
-    token: res.body.token as string,
-    userId: res.body.user.id as string,
-  };
+  return registerSharedTestUser(app, { emailPrefix: prefix, fullName });
 }
 
 async function cleanupTestUser(userId: string) {
@@ -55,20 +42,14 @@ describe('Subcontractors API', () => {
     companyId = company.id;
 
     // Create head contractor user
-    const adminEmail = `sub-admin-${Date.now()}@example.com`;
-    const adminRes = await request(app).post('/api/auth/register').send({
-      email: adminEmail,
-      password: 'SecureP@ssword123!',
+    const adminUser = await registerSharedTestUser(app, {
+      emailPrefix: 'sub-admin',
       fullName: 'Subcontractor Admin',
-      tosAccepted: true,
+      companyId,
+      roleInCompany: 'project_manager',
     });
-    authToken = adminRes.body.token;
-    userId = adminRes.body.user.id;
-
-    await prisma.user.update({
-      where: { id: userId },
-      data: { companyId, roleInCompany: 'project_manager' },
-    });
+    authToken = adminUser.token;
+    userId = adminUser.userId;
 
     // Create project
     const project = await prisma.project.create({

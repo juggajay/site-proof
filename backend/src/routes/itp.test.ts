@@ -5,6 +5,7 @@ import { authRouter } from './auth.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { AuditAction, parseAuditLogChanges } from '../lib/auditLog.js';
+import { registerTestUser as registerSharedTestUser } from '../test/routeTestHarness.js';
 
 // Import ITP router - named export
 import { itpRouter } from './itp/index.js';
@@ -15,21 +16,9 @@ app.use('/api/auth', authRouter);
 app.use('/api/itp', itpRouter);
 app.use(errorHandler);
 
-const TEST_PASSWORD = 'SecureP@ssword123!';
-
 async function registerTestUser(prefix: string, fullName: string) {
-  const email = `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`;
-  const res = await request(app).post('/api/auth/register').send({
-    email,
-    password: TEST_PASSWORD,
-    fullName,
-    tosAccepted: true,
-  });
-
-  return {
-    token: res.body.token as string,
-    userId: res.body.user.id as string,
-  };
+  const { token, userId } = await registerSharedTestUser(app, { emailPrefix: prefix, fullName });
+  return { token, userId };
 }
 
 async function cleanupTestUser(userId: string) {
@@ -50,20 +39,14 @@ describe('ITP Templates API', () => {
     });
     companyId = company.id;
 
-    const testEmail = `itp-test-${Date.now()}@example.com`;
-    const regRes = await request(app).post('/api/auth/register').send({
-      email: testEmail,
-      password: 'SecureP@ssword123!',
+    const primaryUser = await registerSharedTestUser(app, {
+      emailPrefix: 'itp-test',
       fullName: 'ITP Test User',
-      tosAccepted: true,
+      companyId,
+      roleInCompany: 'admin',
     });
-    authToken = regRes.body.token;
-    userId = regRes.body.user.id;
-
-    await prisma.user.update({
-      where: { id: userId },
-      data: { companyId, roleInCompany: 'admin' },
-    });
+    authToken = primaryUser.token;
+    userId = primaryUser.userId;
 
     const project = await prisma.project.create({
       data: {
@@ -699,20 +682,14 @@ describe('ITP Instances', () => {
     });
     companyId = company.id;
 
-    const testEmail = `itp-instance-${Date.now()}@example.com`;
-    const regRes = await request(app).post('/api/auth/register').send({
-      email: testEmail,
-      password: 'SecureP@ssword123!',
+    const primaryUser = await registerSharedTestUser(app, {
+      emailPrefix: 'itp-instance',
       fullName: 'ITP Instance User',
-      tosAccepted: true,
+      companyId,
+      roleInCompany: 'admin',
     });
-    authToken = regRes.body.token;
-    userId = regRes.body.user.id;
-
-    await prisma.user.update({
-      where: { id: userId },
-      data: { companyId, roleInCompany: 'admin' },
-    });
+    authToken = primaryUser.token;
+    userId = primaryUser.userId;
 
     const project = await prisma.project.create({
       data: {

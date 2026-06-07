@@ -5,6 +5,7 @@ import { dashboardRouter } from './dashboard.js';
 import { authRouter } from './auth.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
+import { registerTestUser as registerSharedTestUser } from '../test/routeTestHarness.js';
 
 const app = express();
 app.use(express.json());
@@ -20,25 +21,15 @@ async function registerDashboardUser(
   companyId?: string,
   roleInCompany = 'viewer',
 ) {
-  const email = `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`;
-  const res = await request(app).post('/api/auth/register').send({
-    email,
-    password: TEST_PASSWORD,
+  const { token, userId } = await registerSharedTestUser(app, {
+    emailPrefix: prefix,
     fullName,
-    tosAccepted: true,
+    password: TEST_PASSWORD,
+    // The role update only runs when a company is supplied, matching the
+    // original `if (companyId)` guard.
+    ...(companyId ? { companyId, roleInCompany } : {}),
   });
-
-  if (companyId) {
-    await prisma.user.update({
-      where: { id: res.body.user.id },
-      data: { companyId, roleInCompany },
-    });
-  }
-
-  return {
-    token: res.body.token as string,
-    userId: res.body.user.id as string,
-  };
+  return { token, userId };
 }
 
 async function cleanupDashboardUser(userId: string) {
@@ -66,20 +57,14 @@ describe('Dashboard Stats API', () => {
     companyId = company.id;
 
     // Create test user
-    const testEmail = `dashboard-test-${Date.now()}@example.com`;
-    const regRes = await request(app).post('/api/auth/register').send({
-      email: testEmail,
-      password: 'SecureP@ssword123!',
-      fullName: 'Dashboard Test User',
-      tosAccepted: true,
-    });
-    authToken = regRes.body.token;
-    userId = regRes.body.user.id;
-
-    await prisma.user.update({
-      where: { id: userId },
-      data: { companyId, roleInCompany: 'admin' },
-    });
+    const primaryUser = await registerDashboardUser(
+      'dashboard-test',
+      'Dashboard Test User',
+      companyId,
+      'admin',
+    );
+    authToken = primaryUser.token;
+    userId = primaryUser.userId;
 
     // Create test project
     const project = await prisma.project.create({
@@ -688,20 +673,14 @@ describe('Portfolio Cash Flow API', () => {
     });
     companyId = company.id;
 
-    const testEmail = `cashflow-test-${Date.now()}@example.com`;
-    const regRes = await request(app).post('/api/auth/register').send({
-      email: testEmail,
-      password: 'SecureP@ssword123!',
-      fullName: 'Cashflow Test User',
-      tosAccepted: true,
-    });
-    authToken = regRes.body.token;
-    userId = regRes.body.user.id;
-
-    await prisma.user.update({
-      where: { id: userId },
-      data: { companyId, roleInCompany: 'admin' },
-    });
+    const primaryUser = await registerDashboardUser(
+      'cashflow-test',
+      'Cashflow Test User',
+      companyId,
+      'admin',
+    );
+    authToken = primaryUser.token;
+    userId = primaryUser.userId;
 
     const project = await prisma.project.create({
       data: {
@@ -865,20 +844,14 @@ describe('Portfolio NCRs API', () => {
     });
     companyId = company.id;
 
-    const testEmail = `ncr-portfolio-test-${Date.now()}@example.com`;
-    const regRes = await request(app).post('/api/auth/register').send({
-      email: testEmail,
-      password: 'SecureP@ssword123!',
-      fullName: 'NCR Portfolio Test User',
-      tosAccepted: true,
-    });
-    authToken = regRes.body.token;
-    userId = regRes.body.user.id;
-
-    await prisma.user.update({
-      where: { id: userId },
-      data: { companyId, roleInCompany: 'admin' },
-    });
+    const primaryUser = await registerDashboardUser(
+      'ncr-portfolio-test',
+      'NCR Portfolio Test User',
+      companyId,
+      'admin',
+    );
+    authToken = primaryUser.token;
+    userId = primaryUser.userId;
 
     const project = await prisma.project.create({
       data: {
@@ -1009,20 +982,14 @@ describe('Portfolio Risks API', () => {
     });
     companyId = company.id;
 
-    const testEmail = `risk-test-${Date.now()}@example.com`;
-    const regRes = await request(app).post('/api/auth/register').send({
-      email: testEmail,
-      password: 'SecureP@ssword123!',
-      fullName: 'Risk Test User',
-      tosAccepted: true,
-    });
-    authToken = regRes.body.token;
-    userId = regRes.body.user.id;
-
-    await prisma.user.update({
-      where: { id: userId },
-      data: { companyId, roleInCompany: 'admin' },
-    });
+    const primaryUser = await registerDashboardUser(
+      'risk-test',
+      'Risk Test User',
+      companyId,
+      'admin',
+    );
+    authToken = primaryUser.token;
+    userId = primaryUser.userId;
 
     // Create project with near-term completion date
     const targetDate = new Date();
@@ -1147,20 +1114,14 @@ describe('Cost Trend API', () => {
     });
     companyId = company.id;
 
-    const testEmail = `cost-trend-test-${Date.now()}@example.com`;
-    const regRes = await request(app).post('/api/auth/register').send({
-      email: testEmail,
-      password: 'SecureP@ssword123!',
-      fullName: 'Cost Trend Test User',
-      tosAccepted: true,
-    });
-    authToken = regRes.body.token;
-    userId = regRes.body.user.id;
-
-    await prisma.user.update({
-      where: { id: userId },
-      data: { companyId, roleInCompany: 'admin' },
-    });
+    const primaryUser = await registerDashboardUser(
+      'cost-trend-test',
+      'Cost Trend Test User',
+      companyId,
+      'admin',
+    );
+    authToken = primaryUser.token;
+    userId = primaryUser.userId;
 
     const project = await prisma.project.create({
       data: {
@@ -1489,20 +1450,14 @@ describe('Foreman Dashboard API', () => {
     });
     companyId = company.id;
 
-    const testEmail = `foreman-test-${Date.now()}@example.com`;
-    const regRes = await request(app).post('/api/auth/register').send({
-      email: testEmail,
-      password: 'SecureP@ssword123!',
-      fullName: 'Foreman Test User',
-      tosAccepted: true,
-    });
-    authToken = regRes.body.token;
-    userId = regRes.body.user.id;
-
-    await prisma.user.update({
-      where: { id: userId },
-      data: { companyId, roleInCompany: 'foreman' },
-    });
+    const primaryUser = await registerDashboardUser(
+      'foreman-test',
+      'Foreman Test User',
+      companyId,
+      'foreman',
+    );
+    authToken = primaryUser.token;
+    userId = primaryUser.userId;
 
     const project = await prisma.project.create({
       data: {
@@ -1659,20 +1614,9 @@ describe('Quality Manager Dashboard API', () => {
     });
     companyId = company.id;
 
-    const testEmail = `qm-test-${Date.now()}@example.com`;
-    const regRes = await request(app).post('/api/auth/register').send({
-      email: testEmail,
-      password: 'SecureP@ssword123!',
-      fullName: 'QM Test User',
-      tosAccepted: true,
-    });
-    authToken = regRes.body.token;
-    userId = regRes.body.user.id;
-
-    await prisma.user.update({
-      where: { id: userId },
-      data: { companyId, roleInCompany: 'admin' },
-    });
+    const primaryUser = await registerDashboardUser('qm-test', 'QM Test User', companyId, 'admin');
+    authToken = primaryUser.token;
+    userId = primaryUser.userId;
 
     const project = await prisma.project.create({
       data: {
@@ -1823,20 +1767,14 @@ describe('Project Manager Dashboard API', () => {
     });
     companyId = company.id;
 
-    const testEmail = `pm-test-${Date.now()}@example.com`;
-    const regRes = await request(app).post('/api/auth/register').send({
-      email: testEmail,
-      password: 'SecureP@ssword123!',
-      fullName: 'PM Test User',
-      tosAccepted: true,
-    });
-    authToken = regRes.body.token;
-    userId = regRes.body.user.id;
-
-    await prisma.user.update({
-      where: { id: userId },
-      data: { companyId, roleInCompany: 'project_manager' },
-    });
+    const primaryUser = await registerDashboardUser(
+      'pm-test',
+      'PM Test User',
+      companyId,
+      'project_manager',
+    );
+    authToken = primaryUser.token;
+    userId = primaryUser.userId;
 
     const project = await prisma.project.create({
       data: {
@@ -2008,20 +1946,14 @@ describe('Foreman Today Worklist API', () => {
     });
     companyId = company.id;
 
-    const testEmail = `foreman-today-test-${Date.now()}@example.com`;
-    const regRes = await request(app).post('/api/auth/register').send({
-      email: testEmail,
-      password: 'SecureP@ssword123!',
-      fullName: 'Foreman Today Test User',
-      tosAccepted: true,
-    });
-    authToken = regRes.body.token;
-    userId = regRes.body.user.id;
-
-    await prisma.user.update({
-      where: { id: userId },
-      data: { companyId, roleInCompany: 'foreman' },
-    });
+    const primaryUser = await registerDashboardUser(
+      'foreman-today-test',
+      'Foreman Today Test User',
+      companyId,
+      'foreman',
+    );
+    authToken = primaryUser.token;
+    userId = primaryUser.userId;
 
     const project = await prisma.project.create({
       data: {

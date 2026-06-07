@@ -23,6 +23,7 @@ import { authRouter } from './auth.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { AuditAction, parseAuditLogChanges } from '../lib/auditLog.js';
+import { registerTestUser } from '../test/routeTestHarness.js';
 
 const mockIsSupabaseConfigured = vi.mocked(supabaseLib.isSupabaseConfigured);
 const mockGetSupabaseClient = vi.mocked(supabaseLib.getSupabaseClient);
@@ -83,21 +84,14 @@ describe('Company API', () => {
     companyId = company.id;
 
     // Create test user
-    const testEmail = `company-test-${Date.now()}@example.com`;
-    const regRes = await request(app).post('/api/auth/register').send({
-      email: testEmail,
-      password: 'SecureP@ssword123!',
+    const primaryUser = await registerTestUser(app, {
+      emailPrefix: 'company-test',
       fullName: 'Company Test User',
-      tosAccepted: true,
+      companyId,
+      roleInCompany: 'owner',
     });
-    authToken = regRes.body.token;
-    userId = regRes.body.user.id;
-
-    // Update user with company and owner role
-    await prisma.user.update({
-      where: { id: userId },
-      data: { companyId, roleInCompany: 'owner' },
-    });
+    authToken = primaryUser.token;
+    userId = primaryUser.userId;
   });
 
   afterAll(async () => {

@@ -7,6 +7,7 @@ import { lotsRouter } from './lots.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { AuditAction, parseAuditLogChanges } from '../lib/auditLog.js';
+import { registerTestUser as registerSharedTestUser } from '../test/routeTestHarness.js';
 
 const app = express();
 app.use(express.json());
@@ -15,22 +16,8 @@ app.use('/api/ncrs', ncrsRouter);
 app.use('/api/lots', lotsRouter);
 app.use(errorHandler);
 
-const TEST_PASSWORD = 'SecureP@ssword123!';
-
 async function registerTestUser(prefix: string, fullName: string) {
-  const email = `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`;
-  const res = await request(app).post('/api/auth/register').send({
-    email,
-    password: TEST_PASSWORD,
-    fullName,
-    tosAccepted: true,
-  });
-
-  return {
-    token: res.body.token as string,
-    userId: res.body.user.id as string,
-    email,
-  };
+  return registerSharedTestUser(app, { emailPrefix: prefix, fullName });
 }
 
 async function cleanupTestUser(userId: string) {
@@ -76,20 +63,14 @@ describe('NCR API', () => {
     companyId = company.id;
 
     // Create test user
-    const testEmail = `ncr-test-${Date.now()}@example.com`;
-    const regRes = await request(app).post('/api/auth/register').send({
-      email: testEmail,
-      password: 'SecureP@ssword123!',
+    const primaryUser = await registerSharedTestUser(app, {
+      emailPrefix: 'ncr-test',
       fullName: 'NCR Test User',
-      tosAccepted: true,
+      companyId,
+      roleInCompany: 'quality_manager',
     });
-    authToken = regRes.body.token;
-    userId = regRes.body.user.id;
-
-    await prisma.user.update({
-      where: { id: userId },
-      data: { companyId, roleInCompany: 'quality_manager' },
-    });
+    authToken = primaryUser.token;
+    userId = primaryUser.userId;
 
     // Create test project
     const project = await prisma.project.create({
@@ -1135,20 +1116,14 @@ describe('NCR Workflow', () => {
     });
     companyId = company.id;
 
-    const testEmail = `ncr-workflow-${Date.now()}@example.com`;
-    const regRes = await request(app).post('/api/auth/register').send({
-      email: testEmail,
-      password: 'SecureP@ssword123!',
+    const primaryUser = await registerSharedTestUser(app, {
+      emailPrefix: 'ncr-workflow',
       fullName: 'NCR Workflow User',
-      tosAccepted: true,
+      companyId,
+      roleInCompany: 'quality_manager',
     });
-    authToken = regRes.body.token;
-    userId = regRes.body.user.id;
-
-    await prisma.user.update({
-      where: { id: userId },
-      data: { companyId, roleInCompany: 'quality_manager' },
-    });
+    authToken = primaryUser.token;
+    userId = primaryUser.userId;
 
     const project = await prisma.project.create({
       data: {
@@ -1778,20 +1753,14 @@ describe('NCR QM Review - Request Revision', () => {
     });
     companyId = company.id;
 
-    const testEmail = `ncr-revision-${Date.now()}@example.com`;
-    const regRes = await request(app).post('/api/auth/register').send({
-      email: testEmail,
-      password: 'SecureP@ssword123!',
+    const primaryUser = await registerSharedTestUser(app, {
+      emailPrefix: 'ncr-revision',
       fullName: 'NCR Revision User',
-      tosAccepted: true,
+      companyId,
+      roleInCompany: 'quality_manager',
     });
-    authToken = regRes.body.token;
-    userId = regRes.body.user.id;
-
-    await prisma.user.update({
-      where: { id: userId },
-      data: { companyId, roleInCompany: 'quality_manager' },
-    });
+    authToken = primaryUser.token;
+    userId = primaryUser.userId;
 
     const project = await prisma.project.create({
       data: {
@@ -1923,20 +1892,14 @@ describe('Major NCR QM Approval', () => {
     });
     companyId = company.id;
 
-    const testEmail = `major-ncr-${Date.now()}@example.com`;
-    const regRes = await request(app).post('/api/auth/register').send({
-      email: testEmail,
-      password: 'SecureP@ssword123!',
+    const primaryUser = await registerSharedTestUser(app, {
+      emailPrefix: 'major-ncr',
       fullName: 'Major NCR User',
-      tosAccepted: true,
+      companyId,
+      roleInCompany: 'quality_manager',
     });
-    authToken = regRes.body.token;
-    userId = regRes.body.user.id;
-
-    await prisma.user.update({
-      where: { id: userId },
-      data: { companyId, roleInCompany: 'quality_manager' },
-    });
+    authToken = primaryUser.token;
+    userId = primaryUser.userId;
 
     const project = await prisma.project.create({
       data: {

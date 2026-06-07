@@ -14,6 +14,7 @@ import webhooksRouter, {
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { isEncrypted } from '../lib/encryption.js';
+import { registerTestUser } from '../test/routeTestHarness.js';
 
 const app = express();
 app.use(express.json());
@@ -42,35 +43,23 @@ describe('Webhooks API', () => {
     companyId = company.id;
 
     // Create test user
-    const testEmail = `webhooks-test-${Date.now()}@example.com`;
-    const regRes = await request(app).post('/api/auth/register').send({
-      email: testEmail,
-      password: 'SecureP@ssword123!',
+    const primaryUser = await registerTestUser(app, {
+      emailPrefix: 'webhooks-test',
       fullName: 'Webhooks Test User',
-      tosAccepted: true,
+      companyId,
+      roleInCompany: 'admin',
     });
-    authToken = regRes.body.token;
-    userId = regRes.body.user.id;
+    authToken = primaryUser.token;
+    userId = primaryUser.userId;
 
-    await prisma.user.update({
-      where: { id: userId },
-      data: { companyId, roleInCompany: 'admin' },
-    });
-
-    const viewerEmail = `webhooks-viewer-${Date.now()}@example.com`;
-    const viewerRes = await request(app).post('/api/auth/register').send({
-      email: viewerEmail,
-      password: 'SecureP@ssword123!',
+    const viewerUser = await registerTestUser(app, {
+      emailPrefix: 'webhooks-viewer',
       fullName: 'Webhooks Viewer',
-      tosAccepted: true,
+      companyId,
+      roleInCompany: 'viewer',
     });
-    viewerToken = viewerRes.body.token;
-    viewerUserId = viewerRes.body.user.id;
-
-    await prisma.user.update({
-      where: { id: viewerUserId },
-      data: { companyId, roleInCompany: 'viewer' },
-    });
+    viewerToken = viewerUser.token;
+    viewerUserId = viewerUser.userId;
   });
 
   afterAll(async () => {

@@ -5,6 +5,7 @@ import { authRouter } from './auth.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { AuditAction } from '../lib/auditLog.js';
+import { registerTestUser } from '../test/routeTestHarness.js';
 
 // Import claims router
 import claimsRouter from './claims.js';
@@ -43,20 +44,14 @@ describe('Progress Claims API', () => {
     companyId = company.id;
 
     // Create test user
-    const testEmail = `claims-test-${Date.now()}@example.com`;
-    const regRes = await request(app).post('/api/auth/register').send({
-      email: testEmail,
-      password: 'SecureP@ssword123!',
+    const primaryUser = await registerTestUser(app, {
+      emailPrefix: 'claims-test',
       fullName: 'Claims Test User',
-      tosAccepted: true,
+      companyId,
+      roleInCompany: 'project_manager',
     });
-    authToken = regRes.body.token;
-    userId = regRes.body.user.id;
-
-    await prisma.user.update({
-      where: { id: userId },
-      data: { companyId, roleInCompany: 'project_manager' },
-    });
+    authToken = primaryUser.token;
+    userId = primaryUser.userId;
 
     // Create project
     const project = await prisma.project.create({
@@ -2223,20 +2218,14 @@ describe('Claim Lots Association', () => {
     });
     companyId = company.id;
 
-    const testEmail = `claim-lots-${Date.now()}@example.com`;
-    const regRes = await request(app).post('/api/auth/register').send({
-      email: testEmail,
-      password: 'SecureP@ssword123!',
+    const primaryUser = await registerTestUser(app, {
+      emailPrefix: 'claim-lots',
       fullName: 'Claim Lots User',
-      tosAccepted: true,
+      companyId,
+      roleInCompany: 'project_manager',
     });
-    authToken = regRes.body.token;
-    userId = regRes.body.user.id;
-
-    await prisma.user.update({
-      where: { id: userId },
-      data: { companyId, roleInCompany: 'project_manager' },
-    });
+    authToken = primaryUser.token;
+    userId = primaryUser.userId;
 
     const project = await prisma.project.create({
       data: {
