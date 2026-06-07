@@ -10,6 +10,7 @@
   },
   "scripts": {
     "prepare": "node scripts/install-git-hooks.mjs",
-    "precommit": "node scripts/precommit.mjs"
+    "precommit": "node scripts/precommit.mjs",
+    "fallow:audit": "fallow audit --base origin/master"
   }
 }

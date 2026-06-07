@@ -171,6 +171,30 @@ cd backend && npm run type-check
 cd frontend && npm run type-check
 ```
 
+### Code intelligence audit (fallow)
+
+Every refactor/feature PR should also run the advisory quality audit before
+opening (from the repo root):
+
+```bash
+npm run fallow:audit    # audits only files changed vs origin/master
+```
+
+- Requires the `fallow` CLI on PATH (`npm install -g fallow`). If it is not
+  installed, say so in the PR body instead of skipping silently.
+- The audit reports a pass/warn/fail verdict for dead code, complexity, and
+  duplication **introduced by the change**. Include the verdict in the PR body.
+- The audit is advisory, not a hard gate. A `warn` on extraction PRs is often
+  expected (moved complexity counts as "new" in the new file) — explain it.
+  Investigate `fail` verdicts and any new dead-code finding before opening
+  the PR; do not "fix" them by weakening `.fallowrc.json`.
+- Repo config lives in `.fallowrc.json`. The ITP template seeders are loaded
+  dynamically by `backend/scripts/seeds/itp-templates/index.mjs` (filenames in
+  a manifest array), so they are marked `dynamicallyLoaded` there — they are
+  not dead code, and static analysis cannot see that without the config.
+- Agent rules when scripting fallow: always `--format json --quiet 2>/dev/null`
+  and append `|| true` (exit 1 means "issues found", not an error).
+
 ## User Roles
 
 | Role | Access Level |
