@@ -794,7 +794,7 @@ test.describe('Registration Flow', () => {
         email: 'new-user@example.com',
         tosAccepted: true,
       });
-    await expect(page.getByRole('heading', { name: 'Check Your Email' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Account created' })).toBeVisible();
     await expect.poll(() => page.evaluate(() => localStorage.getItem('siteproof_auth'))).toBeNull();
     await expect
       .poll(() => page.evaluate(() => sessionStorage.getItem('siteproof_auth')))

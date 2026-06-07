@@ -41,6 +41,7 @@ interface User {
   createdAt?: string;
   avatarUrl?: string | null;
   hasPassword?: boolean;
+  emailVerified?: boolean;
 }
 
 type AuthResponseBody = {

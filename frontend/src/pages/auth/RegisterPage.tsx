@@ -98,10 +98,11 @@ export function RegisterPage() {
         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
           <Mail className="h-8 w-8 text-primary" />
         </div>
-        <h2 className="text-2xl font-bold">Check Your Email</h2>
+        <h2 className="text-2xl font-bold">Account created</h2>
         <p className="text-muted-foreground">
-          We've sent a verification link to <strong>{registeredEmail}</strong>. Please check your
-          email and click the link to verify your account.
+          You can sign in now. We've also sent a verification link to{' '}
+          <strong>{registeredEmail}</strong> &mdash; click it when it arrives to confirm your
+          address. If you don't see it, check your spam folder.
         </p>
         {import.meta.env.DEV && (
           <div className="rounded-lg border bg-amber-50 p-4 text-left text-sm text-amber-800">

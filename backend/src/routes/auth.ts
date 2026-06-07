@@ -263,10 +263,11 @@ authRouter.post(
         full_name: string | null;
         role_in_company: string;
         company_id: string | null;
+        email_verified: boolean;
         two_factor_enabled: number;
         two_factor_secret: string | null;
       }>
-    >`SELECT id, email, password_hash, full_name, role_in_company, company_id, two_factor_enabled, two_factor_secret FROM users WHERE LOWER(email) = ${normalizedEmail} LIMIT 1`;
+    >`SELECT id, email, password_hash, full_name, role_in_company, company_id, email_verified, two_factor_enabled, two_factor_secret FROM users WHERE LOWER(email) = ${normalizedEmail} LIMIT 1`;
 
     const user = userResult[0];
 
@@ -368,6 +369,7 @@ authRouter.post(
         role: user.role_in_company,
         companyId: user.company_id,
         companyName,
+        emailVerified: Boolean(user.email_verified),
         hasPassword: true,
         hasSubcontractorPortalAccess: await hasActiveSubcontractorPortalIdentity(user.id),
         dashboardRole: await resolveDashboardRoleForUser({

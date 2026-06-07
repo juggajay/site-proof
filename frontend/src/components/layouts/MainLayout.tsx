@@ -6,6 +6,7 @@ import { MobileNav } from './MobileNav';
 import { useAuth } from '@/lib/auth';
 import { useForemanMobileStore } from '@/stores/foremanMobileStore';
 import { CaptureModal } from '@/components/foreman/CaptureModal';
+import { EmailVerificationBanner } from '@/components/EmailVerificationBanner';
 import { useEffectiveProjectId } from '@/hooks/useEffectiveProjectId';
 
 export function MainLayout() {
@@ -35,6 +36,7 @@ export function MainLayout() {
             isTransitioning ? 'opacity-0' : 'opacity-100'
           }`}
         >
+          <EmailVerificationBanner />
           <Outlet />
         </main>
       </div>
