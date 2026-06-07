@@ -23,7 +23,9 @@ interface PreviousPersonnel {
   role?: string | null;
   startTime?: string | null;
   finishTime?: string | null;
-  hours?: number | null;
+  // The backend serializes Prisma Decimal hours as a JSON string (e.g. "8.5"),
+  // so this is a string at runtime even though it models a number.
+  hours?: number | string | null;
 }
 
 function toHoursNumber(value: number | string | null | undefined): number {
@@ -166,7 +168,13 @@ export const PersonnelTab = React.memo(function PersonnelTab({
           if (person.role) cleanPerson.role = person.role;
           if (person.startTime) cleanPerson.startTime = person.startTime;
           if (person.finishTime) cleanPerson.finishTime = person.finishTime;
-          if (person.hours !== null && person.hours !== undefined) cleanPerson.hours = person.hours;
+          // hours arrives as a Prisma-Decimal JSON string (e.g. "8.5"); the POST
+          // schema requires a number, so coerce it the same way manual add does.
+          // Omit invalid/non-positive values to match the optional hours contract.
+          if (person.hours !== null && person.hours !== undefined) {
+            const hours = parseOptionalDiaryHoursInput(String(person.hours));
+            if (typeof hours === 'number') cleanPerson.hours = hours;
+          }
 
           try {
             const newPerson = await apiFetch<Personnel>(
