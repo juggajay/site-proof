@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import request from 'supertest';
 import type { Express } from 'express';
 import { prisma } from '../lib/prisma.js';
@@ -66,7 +67,11 @@ function slugify(value: string): string {
 }
 
 function uniqueEmail(prefix: string): string {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`;
+  // randomUUID (not Math.random): the production-readiness guard
+  // "backend runtime identifiers avoid Math.random" scans every non-*.test.ts
+  // file under backend/src/, and this helper is runtime-shaped enough to
+  // deserve the stronger source anyway.
+  return `${prefix}-${Date.now()}-${randomUUID().slice(0, 8)}@example.com`;
 }
 
 /**
