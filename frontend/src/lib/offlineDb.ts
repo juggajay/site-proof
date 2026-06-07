@@ -1,4 +1,5 @@
 import { offlineDb, type OfflineLotEditTable, type SyncQueueItem } from './offline/core';
+import { getPendingSyncCount } from './offline/syncQueue';
 
 export { compressImage, fileToDataUrl } from './offlinePhotoCompression';
 
@@ -78,11 +79,15 @@ export {
 // Generic sync queue and maintenance helpers live in ./offline/syncQueue.
 // Re-exported so callers keep importing from '@/lib/offlineDb'.
 export {
+  MAX_SYNC_ATTEMPTS,
   clearAllOfflineData,
+  getFailedSyncCount,
+  getLiveSyncCount,
   getPendingSyncCount,
   getPendingSyncItems,
   markSyncItemError,
   removeSyncQueueItem,
+  resetFailedSyncItems,
 } from './offline/syncQueue';
 
 type LotEditSyncQueueItem = Extract<SyncQueueItem, { type: 'lot_edit' }>;
@@ -481,4 +486,13 @@ export async function deleteOfflineLot(lotId: string): Promise<void> {
 // Get count of lots with conflicts
 export async function getConflictedLotsCount(): Promise<number> {
   return offlineDb.lots.where('syncStatus').equals('conflict').count();
+}
+
+// Total amount of work that has not reached the server yet: everything still in
+// the sync queue (including items that have stopped retrying) plus unresolved
+// lot conflicts. Used to warn the user before a manual sign-out wipes offline
+// data, so the count must reflect everything that would be permanently lost.
+export async function getUnsyncedWorkCount(): Promise<number> {
+  const [queued, conflicts] = await Promise.all([getPendingSyncCount(), getConflictedLotsCount()]);
+  return queued + conflicts;
 }

@@ -18,6 +18,7 @@ import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
 import { Breadcrumbs } from './Breadcrumbs';
 import { GlobalSearch } from '@/components/GlobalSearch';
+import { useUnsyncedSignOut } from '@/components/UnsyncedSignOutDialog';
 import { useTheme } from '@/lib/theme';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -37,7 +38,8 @@ function decodePathSegment(segment: string): string {
 }
 
 export function Header() {
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
+  const { requestSignOut, dialog: signOutDialog } = useUnsyncedSignOut();
   const navigate = useNavigate();
   const location = useLocation();
   const { projectId } = useParams();
@@ -131,8 +133,8 @@ export function Header() {
   }, []);
 
   const handleSignOut = async () => {
-    await signOut();
-    navigate('/login', { replace: true });
+    // Manual sign-out: warn before wiping unsynced offline work, then navigate.
+    await requestSignOut(() => navigate('/login', { replace: true }));
   };
 
   const handleProjectSelect = (project: Project) => {
@@ -376,6 +378,9 @@ export function Header() {
 
       {/* Global Search Modal */}
       <GlobalSearch isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} />
+
+      {/* Confirm dialog shown when signing out would discard unsynced offline work */}
+      {signOutDialog}
     </header>
   );
 }

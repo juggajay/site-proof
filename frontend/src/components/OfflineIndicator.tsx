@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { useOfflineStatus } from '@/lib/useOfflineStatus';
+import { useOfflineStatus, type SyncCompleteResult } from '@/lib/useOfflineStatus';
 import { WifiOff, RefreshCw, CloudOff, Check, AlertTriangle } from 'lucide-react';
 import { SyncConflictModal } from './SyncConflictModal';
 import { toast } from '@/components/ui/toaster';
@@ -22,8 +22,13 @@ export function OfflineIndicator() {
     [],
   );
 
-  // Callback when sync completes successfully
-  const handleSyncComplete = useCallback((syncedCount: number) => {
+  // Callback when sync completes. Only celebrate when nothing was left behind:
+  // if some items failed to sync, a separate "failed" indicator stays on screen,
+  // so showing an "all synced" toast here would be misleading.
+  const handleSyncComplete = useCallback(({ syncedCount, failedCount }: SyncCompleteResult) => {
+    if (failedCount > 0) {
+      return;
+    }
     toast({
       title: 'Sync Complete',
       description: `Successfully synced ${syncedCount} change${syncedCount > 1 ? 's' : ''}.`,
@@ -32,15 +37,22 @@ export function OfflineIndicator() {
     });
   }, []);
 
-  const { isOnline, pendingSyncCount, isSyncing, syncPendingChanges, conflictCount } =
-    useOfflineStatus({
-      onConflictDetected: handleConflictDetected,
-      onSyncComplete: handleSyncComplete,
-      enableSyncWorker: true,
-    });
+  const {
+    isOnline,
+    pendingSyncCount,
+    failedSyncCount,
+    isSyncing,
+    syncPendingChanges,
+    retryFailedSyncs,
+    conflictCount,
+  } = useOfflineStatus({
+    onConflictDetected: handleConflictDetected,
+    onSyncComplete: handleSyncComplete,
+    enableSyncWorker: true,
+  });
 
-  // Don't show when online, synced, and no conflicts
-  if (isOnline && pendingSyncCount === 0 && conflictCount === 0) {
+  // Don't show when online, synced, and no conflicts or failures
+  if (isOnline && pendingSyncCount === 0 && conflictCount === 0 && failedSyncCount === 0) {
     return null;
   }
 
@@ -58,6 +70,24 @@ export function OfflineIndicator() {
               {conflictCount} sync conflict{conflictCount > 1 ? 's' : ''}
             </span>
             <span className="text-xs bg-amber-200 px-2 py-0.5 rounded">Resolve</span>
+          </button>
+        )}
+
+        {/* Failed sync indicator - items the server rejected too many times.
+            They are kept (never deleted); the user can retry them here. */}
+        {failedSyncCount > 0 && (
+          <button
+            onClick={retryFailedSyncs}
+            disabled={isSyncing}
+            className="flex items-center gap-2 bg-red-100 text-red-800 px-4 py-2 rounded-lg shadow-lg border border-red-300 hover:bg-red-200 transition-colors disabled:opacity-60"
+          >
+            <AlertTriangle className="h-4 w-4" />
+            <span className="text-sm font-medium">
+              {failedSyncCount} item{failedSyncCount > 1 ? 's' : ''} failed to sync
+            </span>
+            <span className="text-xs bg-red-200 px-2 py-0.5 rounded">
+              {isSyncing ? 'Retrying...' : 'Retry'}
+            </span>
           </button>
         )}
 
