@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SiteProof — Dashboard</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;450;500;600;700&display=swap');
+
+  /* ============================================================
+     SiteProof v3 — "QUIET AUTHORITY" (premium pass)
+     Restraint without flatness. Warm greige neutrals + pure-white
+     cards on a warm canvas + imperceptible material shadows.
+     ONE deep-amber signature (active nav). Colour stays reserved
+     for genuine decisions. IBM Plex Sans/Mono, optically tuned.
+     The eye lands on three things: project, lot %, what's overdue.
+     ============================================================ */
+  :root {
+    /* WARM neutral scale — the premium lever (greige, not cold zinc) */
+    --ink:        #1b1714;   /* warm near-black ink */
+    --ink-2:      #57514b;   /* warm secondary */
+    --ink-faint:  #7a726a;   /* warm faint — labels, timestamps (AA on white) */
+    --paper:      #f7f6f3;   /* warm work-area canvas */
+    --paper-2:    #f1efe9;   /* deeper warm — hovers, active nav, header bands */
+    --card:       #ffffff;   /* pure white cards POP on warm canvas */
+    --hair:       #e9e5de;   /* warm hairline border */
+    --hair-2:     #f0ede7;   /* faint inner divider */
+    --hair-strong:#d9d3ca;   /* stronger hairline / hover border */
+
+    /* rationed colour — meaning only */
+    --red:#b42318;  --red-ink:#912018;
+    --amber:#d97706; --amber-ink:#92400e;
+    --green:#15803d;
+    --accent:#b45309;        /* the single deep-amber brand signature */
+    --accent-soft:#fbeee0;
+
+    /* warm-tinted material shadows — felt, not seen */
+    --sh-card: 0 1px 2px rgba(40,34,28,.045), 0 1px 3px rgba(40,34,28,.025);
+    --sh-pop:  0 4px 12px rgba(40,34,28,.10), 0 1px 3px rgba(40,34,28,.06);
+    --sh-top:  0 1px 2px rgba(40,34,28,.035);
+    --sh-btn:  0 1px 1.5px rgba(40,34,28,.12), inset 0 1px 0 rgba(255,255,255,.08);
+
+    --radius:7px;
+    --ring:var(--ink);
+  }
+
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; }
+  body {
+    background:var(--paper); color:var(--ink);
+    font-family:'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+    font-size:14px; line-height:1.5; letter-spacing:-0.011em;
+    -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+  }
+  .mono { font-family:'IBM Plex Mono', ui-monospace, monospace; font-variant-numeric:tabular-nums; }
+  .tnum { font-variant-numeric:tabular-nums; }
+  .micro { font-size:10.5px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; color:var(--ink-faint); }
+  a { color:inherit; text-decoration:none; }
+  ::selection { background:var(--ink); color:#fff; }
+
+  .ico { width:16px; height:16px; stroke:currentColor; fill:none; stroke-width:1.75; stroke-linecap:round; stroke-linejoin:round; flex:none; }
+  .ico.sm { width:14px; height:14px; } .ico.lg { width:18px; height:18px; }
+
+  /* ---------- app shell ---------- */
+  .app { display:grid; grid-template-columns:236px 1fr; height:100vh; }
+
+  /* sidebar */
+  .sidebar { background:var(--card); border-right:1px solid var(--hair); display:flex; flex-direction:column; min-height:0; }
+  .brand { display:flex; align-items:center; gap:10px; height:58px; padding:0 18px; border-bottom:1px solid var(--hair); flex:none; }
+  .brand .mark { width:27px; height:27px; border-radius:7px; background:var(--ink); color:#fff; display:grid; place-items:center; font-weight:700; font-size:14px; box-shadow:var(--sh-btn); }
+  .brand .wm { font-weight:600; font-size:15px; letter-spacing:-.02em; }
+  .brand .wm span { color:var(--ink-faint); font-weight:450; }
+
+  .nav { padding:9px 9px 6px; overflow-y:auto; flex:1; }
+  .nav .grp { padding:7px 9px 6px; font-size:10px; font-weight:600; letter-spacing:.09em; text-transform:uppercase; color:var(--ink-faint); margin-top:9px; border-top:1px solid var(--hair-2); }
+  .nav .grp:first-of-type { margin-top:6px; }
+  .nav a { display:flex; align-items:center; gap:11px; height:33px; padding:0 9px; border-radius:6px; color:var(--ink-2); font-weight:450; position:relative; transition:background .11s ease, color .11s ease; }
+  .nav a svg { color:#a79f96; transition:color .11s ease; }
+  .nav a:hover { background:var(--paper-2); color:var(--ink); }
+  .nav a:hover svg { color:var(--ink-2); }
+  .nav a.active { background:var(--paper-2); color:var(--ink); font-weight:500; }
+  /* THE signature: one deep-amber rail + amber icon on the single active item */
+  .nav a.active svg { color:var(--accent); }
+  .nav a.active::before { content:""; position:absolute; left:-1px; top:7px; bottom:7px; width:2.5px; border-radius:0 3px 3px 0; background:var(--accent); }
+  .nav .count { margin-left:auto; font-size:11px; font-weight:500; color:var(--ink-faint); font-variant-numeric:tabular-nums; }
+  .nav .count.flag { color:var(--red-ink); font-weight:600; }
+  .nav .count.flag::before { content:""; display:inline-block; width:5px; height:5px; border-radius:50%; background:var(--red); margin-right:6px; vertical-align:1px; }
+
+  .side-foot { border-top:1px solid var(--hair); padding:9px; flex:none; }
+  .side-foot a { display:flex; align-items:center; gap:11px; height:33px; padding:0 9px; border-radius:6px; color:var(--ink-2); font-weight:450; }
+  .side-foot a svg { color:#a79f96; } .side-foot a:hover { background:var(--paper-2); color:var(--ink); }
+
+  /* ---------- topbar ---------- */
+  .main { display:flex; flex-direction:column; min-width:0; min-height:0; }
+  .topbar { height:58px; flex:none; border-bottom:1px solid var(--hair); background:var(--card); box-shadow:var(--sh-top); display:flex; align-items:center; gap:12px; padding:0 22px; position:relative; z-index:3; }
+  .switcher { display:flex; align-items:center; gap:9px; height:34px; padding:0 11px; border:1px solid var(--hair); border-radius:7px; font-weight:500; cursor:pointer; background:var(--card); box-shadow:var(--sh-card); transition:border-color .12s; }
+  .switcher:hover { border-color:var(--hair-strong); }
+  .switcher .k { font-size:10px; font-weight:600; letter-spacing:.09em; color:var(--ink-faint); }
+  .search { margin-left:2px; flex:1; max-width:300px; display:flex; align-items:center; gap:9px; height:34px; padding:0 11px; border:1px solid var(--hair); border-radius:7px; color:var(--ink-faint); background:var(--paper); transition:border-color .12s, background .12s; }
+  .search:focus-within { border-color:var(--hair-strong); background:var(--card); }
+  .search input { border:0; background:transparent; outline:none; color:var(--ink); font:inherit; width:100%; }
+  .search .kbd { font-family:'IBM Plex Mono',monospace; font-size:10px; color:var(--ink-faint); }
+  .top-r { margin-left:auto; display:flex; align-items:center; gap:4px; }
+  .ibtn { width:34px; height:34px; display:grid; place-items:center; border:1px solid transparent; border-radius:7px; background:transparent; color:var(--ink-2); cursor:pointer; position:relative; transition:background .12s, border-color .12s; }
+  .ibtn:hover { background:var(--paper-2); border-color:var(--hair); }
+  .ibtn .dot { position:absolute; top:8px; right:9px; width:6px; height:6px; border-radius:50%; background:var(--accent); }
+  .avatar { width:32px; height:32px; margin-left:7px; border-radius:50%; background:var(--ink); color:#fff; display:grid; place-items:center; font-weight:600; font-size:12px; cursor:pointer; box-shadow:var(--sh-btn); }
+
+  .content { padding:26px 28px 60px; overflow-y:auto; background:var(--paper); }
+  .wrap { max-width:1180px; margin:0 auto; }
+
+  /* page head */
+  .phead { display:flex; align-items:flex-start; justify-content:space-between; gap:18px; }
+  .phead h1 { margin:0; font-size:22px; font-weight:600; letter-spacing:-.025em; line-height:1.15; display:flex; align-items:center; gap:11px; }
+  .live { display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:500; color:var(--ink-2); padding:2px 10px 2px 8px; border:1px solid var(--hair); border-radius:999px; background:var(--card); box-shadow:var(--sh-card); }
+  .live .d { width:6px; height:6px; border-radius:50%; background:var(--green); }
+  .psub { margin:9px 0 0; color:var(--ink-2); font-size:13px; display:flex; align-items:center; gap:9px; flex-wrap:wrap; }
+  .psub .code { font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:500; color:var(--ink); background:var(--card); border:1px solid var(--hair); border-radius:5px; padding:1px 7px; box-shadow:var(--sh-card); }
+  .psub .sep { color:var(--hair-strong); }
+  .phead-actions { display:flex; gap:8px; flex:none; }
+
+  .btn { display:inline-flex; align-items:center; gap:7px; height:35px; padding:0 14px; border-radius:7px; font:inherit; font-size:13px; font-weight:500; cursor:pointer; border:1px solid var(--hair); background:var(--card); color:var(--ink); white-space:nowrap; box-shadow:var(--sh-card); transition:border-color .12s, background .12s; }
+  .btn svg { color:var(--ink-2); }
+  .btn:hover { border-color:var(--hair-strong); background:var(--paper); }
+  .btn.primary { background:var(--ink); color:#fff; border-color:var(--ink); box-shadow:var(--sh-btn); }
+  .btn.primary svg { color:#fff; } .btn.primary:hover { background:#2b2520; border-color:#2b2520; }
+
+  .rule { height:1px; background:var(--hair); margin:21px 0; }
+
+  /* ---------- attention : where colour concentrates ---------- */
+  .attn { border:1px solid var(--hair); border-radius:var(--radius); background:var(--card); overflow:hidden; box-shadow:var(--sh-card); }
+  .attn-h { display:flex; align-items:center; gap:9px; padding:14px 16px; border-bottom:1px solid var(--hair); }
+  .attn-h .t { font-weight:600; font-size:13px; letter-spacing:-.01em; }
+  .attn-h .n { font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:500; color:var(--ink-faint); }
+  .attn-h .all { margin-left:auto; font-size:12px; color:var(--ink-2); display:flex; align-items:center; gap:5px; }
+  .attn-h .all:hover { color:var(--ink); }
+  .arow { display:flex; align-items:center; gap:12px; padding:11px 16px; border-bottom:1px solid var(--hair-2); transition:background .1s; }
+  .arow:last-child { border-bottom:0; }
+  .arow:hover { background:var(--paper); }
+  .arow:hover .desc { color:var(--ink); }
+  .arow .d { width:7px; height:7px; border-radius:50%; flex:none; }
+  .arow .d.red { background:var(--red); } .arow .d.amber { background:var(--amber); }
+  .arow .code { font-family:'IBM Plex Mono',monospace; font-size:12.5px; font-weight:600; color:var(--ink); flex:none; }
+  .arow .desc { color:var(--ink-2); font-size:13px; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; line-height:1.4; transition:color .1s; }
+  .arow .age { margin-left:auto; font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:500; white-space:nowrap; flex:none; color:var(--ink-faint); }
+  .arow .age.red { color:var(--red-ink); } .arow .age.amber { color:var(--amber-ink); }
+  .arow .go { color:var(--hair-strong); flex:none; }
+  .arow:hover .go { color:var(--ink-2); }
+
+  /* ---------- KPI strip — monochrome, material ---------- */
+  .kpis { display:grid; grid-template-columns:repeat(6,1fr); border:1px solid var(--hair); border-radius:var(--radius); background:var(--card); margin-top:21px; overflow:hidden; box-shadow:var(--sh-card); }
+  .kpi { padding:15px 16px 15px; border-right:1px solid var(--hair); }
+  .kpi:last-child { border-right:0; }
+  .kpi .lab { font-size:10.5px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; color:var(--ink-faint); }
+  .kpi .v { font-family:'IBM Plex Mono',monospace; font-size:25px; font-weight:500; letter-spacing:-.025em; line-height:1; margin-top:12px; color:var(--ink); font-variant-numeric:tabular-nums; }
+  .kpi .v small { font-size:13px; font-weight:400; color:var(--ink-faint); margin-left:2px; vertical-align:.16em; letter-spacing:0; }
+  .kpi .sub { font-size:11.5px; color:var(--ink-faint); margin-top:8px; font-variant-numeric:tabular-nums; }
+  .kpi .sub.flag { color:var(--red-ink); font-weight:500; }
+  @media (max-width:1080px){ .kpis{ grid-template-columns:repeat(3,1fr);} .kpi:nth-child(3){border-right:0;} .kpi:nth-child(n+4){border-top:1px solid var(--hair);} }
+
+  /* ---------- grid ---------- */
+  .grid { display:grid; grid-template-columns:1.05fr .95fr; gap:20px; margin-top:20px; align-items:start; }
+  @media (max-width:980px){ .grid{ grid-template-columns:1fr; } }
+
+  .card { border:1px solid var(--hair); border-radius:var(--radius); background:var(--card); box-shadow:var(--sh-card); }
+  .card-h { display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px solid var(--hair); }
+  .card-h h2 { margin:0; font-size:13px; font-weight:600; letter-spacing:-.01em; }
+  .card-h .link { font-size:12px; color:var(--ink-2); display:flex; align-items:center; gap:5px; }
+  .card-h .link:hover { color:var(--ink); }
+  .card-b { padding:18px 16px; }
+  .stack { display:flex; flex-direction:column; gap:20px; }
+
+  /* lot progress — monochrome segmented bar (premium, not rainbow) */
+  .prog-top { display:flex; align-items:baseline; justify-content:space-between; }
+  .prog-top .big { font-family:'IBM Plex Mono',monospace; font-size:34px; font-weight:500; letter-spacing:-.035em; line-height:1; }
+  .prog-top .meta { font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--ink-faint); letter-spacing:.01em; }
+  .bar { height:9px; border-radius:999px; background:var(--paper-2); overflow:hidden; display:flex; gap:2px; margin:16px 0 16px; box-shadow:inset 0 1px 1px rgba(40,34,28,.05); }
+  .bar i { display:block; height:100%; border-radius:2px; }
+  .seg-done { background:var(--ink); } .seg-prog { background:#b7afa5; } .seg-hold { background:var(--amber); }
+  .legend { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:2px; }
+  .leg { display:flex; flex-direction:column; gap:5px; }
+  .leg .top { display:flex; align-items:center; gap:7px; }
+  .leg .sw { width:8px; height:8px; border-radius:2px; }
+  .leg .n { font-family:'IBM Plex Mono',monospace; font-size:17px; font-weight:500; letter-spacing:-.01em; }
+  .leg .t { font-size:11px; color:var(--ink-faint); }
+
+  /* quality — monochrome breakdown; one red tick only */
+  .qrow { display:flex; align-items:center; gap:12px; padding:9px 0; }
+  .qrow + .qrow { border-top:1px solid var(--hair-2); }
+  .qrow .ql { width:96px; font-size:13px; color:var(--ink-2); flex:none; }
+  .qrow .qtrack { flex:1; height:6px; border-radius:999px; background:var(--paper-2); overflow:hidden; box-shadow:inset 0 1px 1px rgba(40,34,28,.05); }
+  .qrow .qtrack i { display:block; height:100%; background:#86807a; border-radius:999px; }
+  .qrow .qtrack i.red { background:var(--red); }
+  .qrow .qn { font-family:'IBM Plex Mono',monospace; font-size:13px; font-weight:500; color:var(--ink); width:18px; text-align:right; flex:none; }
+  .qnote { display:flex; align-items:center; gap:7px; margin-top:14px; padding-top:14px; border-top:1px solid var(--hair); font-size:12.5px; color:var(--red-ink); font-weight:500; }
+
+  /* activity — text-led, inline icons (no boxes) */
+  .act { display:flex; gap:11px; padding:11px 16px; border-bottom:1px solid var(--hair-2); align-items:flex-start; }
+  .act:last-child { border-bottom:0; }
+  .act .ai { width:15px; height:15px; flex:none; color:#a79f96; margin-top:3px; }
+  .act .at { font-weight:450; line-height:1.45; }
+  .act .at b { font-family:'IBM Plex Mono',monospace; font-weight:600; font-size:13px; }
+  .act .am { font-size:12px; color:var(--ink-faint); margin-top:2px; }
+  .act .when { margin-left:auto; font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:var(--ink-faint); white-space:nowrap; flex:none; padding-top:2px; }
+
+  :focus-visible { outline:2px solid var(--ring); outline-offset:2px; border-radius:5px; }
+
+  /* ============ DARK THEME — same rules, warm charcoal ============ */
+  html[data-theme="dark"] {
+    --ink:#f6f1ea; --ink-2:#c2b8ab; --ink-faint:#a59c90;
+    --paper:#16130f; --paper-2:#221d18; --card:#1e1a15;
+    --hair:#322c24; --hair-2:#272019; --hair-strong:#433a30;
+    --red:#f87171; --red-ink:#fca5a5;
+    --amber:#fbbf24; --amber-ink:#fcd34d;
+    --green:#34d399;
+    --accent:#f59e0b; --accent-soft:rgba(245,158,11,.14);
+    --sh-card:0 1px 2px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.035);
+    --sh-pop:0 10px 28px rgba(0,0,0,.6);
+    --sh-top:0 1px 2px rgba(0,0,0,.35);
+    --sh-btn:0 1px 2px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.06);
+    --ring:#f4efe8;
+  }
+  html[data-theme="dark"] body { background:var(--paper); }
+  html[data-theme="dark"] .btn.primary { color:#16130f; }
+  html[data-theme="dark"] .btn.primary svg { color:#16130f; }
+  html[data-theme="dark"] .btn.primary:hover { background:#e7e1d8; border-color:#e7e1d8; }
+  html[data-theme="dark"] .brand .mark { color:#16130f; }
+  html[data-theme="dark"] .avatar { color:#16130f; }
+  html[data-theme="dark"] ::selection { background:var(--ink); color:#16130f; }
+  html[data-theme="dark"] .nav a svg { color:#6f6760; }
+  html[data-theme="dark"] .side-foot a svg { color:#6f6760; }
+  html[data-theme="dark"] .nav a.active svg { color:var(--accent); }
+  html[data-theme="dark"] .act .ai { color:#6f6760; }
+  html[data-theme="dark"] .seg-prog { background:#5b544b; }
+  html[data-theme="dark"] .leg .sw[style*="b7afa5"] { background:#5b544b !important; }
+  html[data-theme="dark"] .qrow .qtrack i { background:#6b645c; }
+  html[data-theme="dark"] .qrow .qtrack i.red { background:var(--red); }
+  html[data-theme="dark"] #themeBtn use { } /* icon swapped via JS */
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-dash" viewBox="0 0 24 24"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></symbol>
+  <symbol id="i-clip" viewBox="0 0 24 24"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+  <symbol id="i-flask" viewBox="0 0 24 24"><path d="M10 2v7.31"/><path d="M14 9.3V2"/><path d="M8.5 2h7"/><path d="M14 9.3a6.5 6.5 0 1 1-4 0"/><path d="M5.52 16h12.96"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+  <symbol id="i-cal" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M8 2v4"/><path d="M16 2v4"/></symbol>
+  <symbol id="i-filecheck" viewBox="0 0 24 24"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="m9 15 2 2 4-4"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v5h5"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/></symbol>
+  <symbol id="i-trend" viewBox="0 0 24 24"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><line x1="5" x2="19" y1="12" y2="12"/><polyline points="12 5 19 12 12 19"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></symbol>
+</svg>
+
+<div class="app">
+  <!-- ================= SIDEBAR ================= -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="mark">S</div>
+      <div class="wm">SiteProof<span>·v3</span></div>
+    </div>
+    <nav class="nav">
+      <a class="active" href="#"><svg class="ico"><use href="#i-dash"/></svg>Dashboard</a>
+      <a href="#"><svg class="ico"><use href="#i-folder"/></svg>Projects</a>
+      <a href="#"><svg class="ico"><use href="#i-pin"/></svg>Lots</a>
+
+      <div class="grp">Quality</div>
+      <a href="#"><svg class="ico"><use href="#i-clip"/></svg>ITPs</a>
+      <a href="#"><svg class="ico"><use href="#i-clock"/></svg>Hold Points<span class="count">3</span></a>
+      <a href="#"><svg class="ico"><use href="#i-flask"/></svg>Tests</a>
+      <a href="#"><svg class="ico"><use href="#i-alert"/></svg>NCRs<span class="count flag">4</span></a>
+
+      <div class="grp">Daily</div>
+      <a href="#"><svg class="ico"><use href="#i-cal"/></svg>Diary</a>
+      <a href="#"><svg class="ico"><use href="#i-filecheck"/></svg>Dockets<span class="count">6</span></a>
+
+      <div class="grp">Commercial</div>
+      <a href="#"><svg class="ico"><use href="#i-file"/></svg>Claims</a>
+      <a href="#"><svg class="ico"><use href="#i-file"/></svg>Documents</a>
+      <a href="#"><svg class="ico"><use href="#i-trend"/></svg>Reports</a>
+      <a href="#"><svg class="ico"><use href="#i-users"/></svg>Subcontractors</a>
+    </nav>
+    <div class="side-foot">
+      <a href="#"><svg class="ico"><use href="#i-settings"/></svg>Settings</a>
+    </div>
+  </aside>
+
+  <!-- ================= MAIN ================= -->
+  <div class="main">
+    <header class="topbar">
+      <div class="switcher"><span class="k">PROJECT</span> Northern Connector — Stage 3 <svg class="ico sm" style="color:var(--ink-faint)"><use href="#i-chev"/></svg></div>
+      <div class="search"><svg class="ico sm"><use href="#i-search"/></svg><input placeholder="Search lots, ITPs, NCRs…" /><span class="kbd">/</span></div>
+      <div class="top-r">
+        <button class="ibtn" id="themeBtn" title="Toggle theme"><svg class="ico"><use href="#i-moon"/></svg></button>
+        <button class="ibtn" title="Notifications"><svg class="ico"><use href="#i-bell"/></svg><span class="dot"></span></button>
+        <button class="ibtn" title="Settings"><svg class="ico"><use href="#i-settings"/></svg></button>
+        <div class="avatar">JR</div>
+      </div>
+    </header>
+
+    <main class="content">
+      <div class="wrap">
+
+        <!-- page head -->
+        <div class="phead">
+          <div>
+            <h1>Northern Connector — Stage 3 <span class="live"><span class="d"></span>Active</span></h1>
+            <p class="psub">
+              <span class="code">PRJ-2041</span>
+              <span>Transport for NSW</span>
+              <span class="sep">/</span>
+              <span class="mono" style="color:var(--ink-faint)">NSW · CH 0+000 — 8+600</span>
+            </p>
+          </div>
+          <div class="phead-actions">
+            <button class="btn"><svg class="ico sm"><use href="#i-refresh"/></svg>Refresh</button>
+            <button class="btn primary"><svg class="ico sm"><use href="#i-trend"/></svg>Reports</button>
+          </div>
+        </div>
+
+        <div class="rule"></div>
+
+        <!-- needs attention -->
+        <section class="attn">
+          <div class="attn-h">
+            <span class="t">Needs your attention</span>
+            <span class="n">3</span>
+            <a class="all" href="#">View all <svg class="ico sm"><use href="#i-arrow"/></svg></a>
+          </div>
+          <a class="arow" href="#">
+            <span class="d red"></span>
+            <span class="code">NCR-0042</span>
+            <span class="desc">Subgrade compaction below spec — awaiting close-out</span>
+            <span class="age red">5d overdue</span>
+            <svg class="ico sm go"><use href="#i-arrow"/></svg>
+          </a>
+          <a class="arow" href="#">
+            <span class="d amber"></span>
+            <span class="code">HP-12</span>
+            <span class="desc">Pre-pour reinforcement — awaiting Superintendent release</span>
+            <span class="age amber">3d waiting</span>
+            <svg class="ico sm go"><use href="#i-arrow"/></svg>
+          </a>
+          <a class="arow" href="#">
+            <span class="d amber"></span>
+            <span class="code">DKT-0318</span>
+            <span class="desc">J. Mason Plant Hire — docket pending your approval</span>
+            <span class="age amber">2d waiting</span>
+            <svg class="ico sm go"><use href="#i-arrow"/></svg>
+          </a>
+        </section>
+
+        <!-- KPI strip -->
+        <section class="kpis">
+          <div class="kpi"><div class="lab">Lots complete</div><div class="v">62<small>%</small></div><div class="sub">28 / 45 lots</div></div>
+          <div class="kpi"><div class="lab">Open NCRs</div><div class="v">4</div><div class="sub flag">2 overdue</div></div>
+          <div class="kpi"><div class="lab">Hold points</div><div class="v">3</div><div class="sub">pending release</div></div>
+          <div class="kpi"><div class="lab">ITPs complete</div><div class="v">117</div><div class="sub">9 in progress</div></div>
+          <div class="kpi"><div class="lab">Dockets</div><div class="v">6</div><div class="sub">pending approval</div></div>
+          <div class="kpi"><div class="lab">Test results</div><div class="v">84</div><div class="sub">on record</div></div>
+        </section>
+
+        <!-- main grid -->
+        <div class="grid">
+          <div class="stack">
+            <section class="card">
+              <div class="card-h"><h2>Lot progress</h2><a class="link" href="#">View lots <svg class="ico sm"><use href="#i-arrow"/></svg></a></div>
+              <div class="card-b">
+                <div class="prog-top">
+                  <span class="big">62%</span>
+                  <span class="meta">28 / 45 COMPLETE</span>
+                </div>
+                <div class="bar">
+                  <i class="seg-done" style="width:62%"></i>
+                  <i class="seg-prog" style="width:20%"></i>
+                  <i class="seg-hold" style="width:4%"></i>
+                </div>
+                <div class="legend">
+                  <div class="leg"><div class="top"><span class="sw" style="background:var(--ink)"></span><span class="n">28</span></div><span class="t">Complete</span></div>
+                  <div class="leg"><div class="top"><span class="sw" style="background:#b7afa5"></span><span class="n">9</span></div><span class="t">In progress</span></div>
+                  <div class="leg"><div class="top"><span class="sw" style="background:var(--amber)"></span><span class="n">2</span></div><span class="t">On hold</span></div>
+                  <div class="leg"><div class="top"><span class="sw" style="background:var(--hair-strong)"></span><span class="n">6</span></div><span class="t">Not started</span></div>
+                </div>
+              </div>
+            </section>
+
+            <section class="card">
+              <div class="card-h"><h2>Quality overview</h2><a class="link" href="#">View NCRs <svg class="ico sm"><use href="#i-arrow"/></svg></a></div>
+              <div class="card-b">
+                <div class="prog-top" style="margin-bottom:14px">
+                  <span class="big" style="font-size:28px">4</span>
+                  <span class="meta">OPEN OF 9 TOTAL</span>
+                </div>
+                <div class="qrow"><span class="ql">Major</span><span class="qtrack"><i class="red" style="width:25%"></i></span><span class="qn">1</span></div>
+                <div class="qrow"><span class="ql">Minor</span><span class="qtrack"><i style="width:50%"></i></span><span class="qn">2</span></div>
+                <div class="qrow"><span class="ql">Observation</span><span class="qtrack"><i style="width:25%"></i></span><span class="qn">1</span></div>
+                <div class="qnote"><svg class="ico sm"><use href="#i-alert"/></svg> 2 NCRs overdue for close-out</div>
+              </div>
+            </section>
+          </div>
+
+          <section class="card">
+            <div class="card-h"><h2>Recent activity</h2><a class="link" href="#">Full log <svg class="ico sm"><use href="#i-arrow"/></svg></a></div>
+            <div>
+              <div class="act"><svg class="ico ai"><use href="#i-check"/></svg><div><div class="at"><b>ITP-204</b> witness point signed off — Lot 31</div><div class="am">Quality Manager · Dean Whitfield</div></div><span class="when">12m</span></div>
+              <div class="act"><svg class="ico ai"><use href="#i-alert"/></svg><div><div class="at"><b>NCR-0042</b> raised — subgrade compaction</div><div class="am">Site Engineer · Priya Nair</div></div><span class="when">1h</span></div>
+              <div class="act"><svg class="ico ai"><use href="#i-filecheck"/></svg><div><div class="at"><b>DKT-0316</b> approved — 4 labour, 2 plant</div><div class="am">Foreman · Jayson Ryan</div></div><span class="when">2h</span></div>
+              <div class="act"><svg class="ico ai"><use href="#i-link"/></svg><div><div class="at"><b>HP-11</b> released — base course</div><div class="am">Superintendent · via secure link</div></div><span class="when">3h</span></div>
+              <div class="act"><svg class="ico ai"><use href="#i-flask"/></svg><div><div class="at">Test result added — MDD/OMC, Lot 33</div><div class="am">Construction Sciences · cert attached</div></div><span class="when">5h</span></div>
+              <div class="act"><svg class="ico ai"><use href="#i-cal"/></svg><div><div class="at">Daily diary started (draft)</div><div class="am">Foreman · Jayson Ryan</div></div><span class="when">7h</span></div>
+              <div class="act"><svg class="ico ai"><use href="#i-file"/></svg><div><div class="at">Drawing C-204 Rev D superseded Rev C</div><div class="am">Project Manager · Alex Tran</div></div><span class="when">1d</span></div>
+            </div>
+          </section>
+        </div>
+
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+  (function(){
+    var btn = document.getElementById('themeBtn');
+    if(!btn) return;
+    var icon = btn.querySelector('use');
+    btn.addEventListener('click', function(){
+      var dark = document.documentElement.getAttribute('data-theme') === 'dark';
+      document.documentElement.setAttribute('data-theme', dark ? 'light' : 'dark');
+      icon.setAttribute('href', dark ? '#i-moon' : '#i-sun');
+    });
+  })();
+</script>
+</body>
+</html>

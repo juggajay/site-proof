@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SiteProof — Foreman (mobile)</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;450;500;600;700&display=swap');
+
+  /* ============================================================
+     SiteProof v3 — FOREMAN MOBILE  ("Quiet Authority")
+     Field execution. 7am, gloved, sunlight, one hand.
+     Hero = end-of-shift docket sign-off (the daily-habit hook).
+     Warm greige + white cards + material depth. Big targets.
+     ONE amber signature: the capture button in the thumb zone.
+     ============================================================ */
+  :root {
+    --ink:#1b1714; --ink-2:#57514b; --ink-faint:#7a726a;
+    --paper:#f7f6f3; --paper-2:#f1efe9; --card:#ffffff;
+    --hair:#e9e5de; --hair-2:#f0ede7; --hair-strong:#d9d3ca;
+    --red:#b42318; --red-ink:#912018; --red-soft:#fdeeec;
+    --amber:#d97706; --amber-ink:#92400e; --amber-soft:#fdf3e7;
+    --green:#15803d; --green-ink:#166534; --green-soft:#eaf5ec;
+    --accent:#b45309; --accent-soft:#fbeee0;
+    --sh-card:0 1px 2px rgba(40,34,28,.05), 0 1px 3px rgba(40,34,28,.03);
+    --sh-pop:0 6px 20px rgba(40,34,28,.12), 0 2px 6px rgba(40,34,28,.06);
+    --sh-btn:0 1px 2px rgba(40,34,28,.18), inset 0 1px 0 rgba(255,255,255,.10);
+    --radius:12px;
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { margin:0; }
+  body { background:#e8e6e1; color:var(--ink);
+    font-family:'IBM Plex Sans',ui-sans-serif,system-ui,sans-serif;
+    font-size:15px; line-height:1.5; letter-spacing:-.011em; -webkit-font-smoothing:antialiased; }
+  .mono { font-family:'IBM Plex Mono',ui-monospace,monospace; font-variant-numeric:tabular-nums; }
+  .micro { font-size:10.5px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-faint); }
+  a { color:inherit; text-decoration:none; }
+  .ico { width:22px; height:22px; stroke:currentColor; fill:none; stroke-width:1.75; stroke-linecap:round; stroke-linejoin:round; flex:none; }
+  .ico.sm{ width:18px; height:18px; } .ico.xs{ width:15px; height:15px; }
+
+  /* phone */
+  .phone { width:390px; margin:0 auto; min-height:844px; background:var(--paper); position:relative;
+    display:flex; flex-direction:column; overflow:hidden; }
+
+  /* status bar */
+  .sbar { height:44px; flex:none; display:flex; align-items:center; justify-content:space-between; padding:0 22px 0 26px; font-size:14px; font-weight:600; letter-spacing:-.01em; }
+  .sbar .r { display:flex; align-items:center; gap:6px; }
+  .sbar svg { width:17px; height:12px; }
+
+  /* app bar */
+  .appbar { display:flex; align-items:center; gap:10px; padding:6px 16px 10px; }
+  .proj { display:flex; align-items:center; gap:7px; font-weight:600; font-size:15px; letter-spacing:-.02em; min-width:0; }
+  .proj .chev { color:var(--ink-faint); }
+  .sync { margin-left:auto; display:inline-flex; align-items:center; gap:6px; height:30px; padding:0 11px; border-radius:999px; background:var(--card); border:1px solid var(--hair); box-shadow:var(--sh-card); font-size:12px; font-weight:500; color:var(--ink-2); }
+  .sync .d { width:6px; height:6px; border-radius:50%; background:var(--green); }
+  .av { width:34px; height:34px; border-radius:50%; background:var(--ink); color:#fff; display:grid; place-items:center; font-weight:600; font-size:12.5px; box-shadow:var(--sh-btn); }
+
+  .scroll { flex:1; overflow-y:auto; padding:6px 16px 96px; }
+
+  /* greeting */
+  .greet { margin:8px 2px 16px; }
+  .greet h1 { margin:0; font-size:23px; font-weight:600; letter-spacing:-.03em; line-height:1.15; }
+  .greet p { margin:5px 0 0; color:var(--ink-2); font-size:13.5px; }
+  .greet p .mono { color:var(--ink-faint); font-size:12.5px; }
+
+  /* HERO — end of shift sign-off */
+  .hero { background:var(--card); border:1px solid var(--hair); border-radius:var(--radius); box-shadow:var(--sh-card); padding:18px 18px 16px; }
+  .hero .top { display:flex; align-items:center; justify-content:space-between; }
+  .hero .top .lab { display:flex; align-items:center; gap:7px; }
+  .hero .top .lab .dot { width:7px; height:7px; border-radius:50%; background:var(--amber); }
+  .hero .top .clock { font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--ink-faint); }
+  .hero .h { margin:13px 0 2px; font-size:21px; font-weight:600; letter-spacing:-.025em; line-height:1.2; }
+  .hero .h b { font-family:'IBM Plex Mono',monospace; font-weight:600; }
+  .hero .names { color:var(--ink-2); font-size:13px; margin-top:3px; }
+  .hero .crew { margin:15px 0 16px; display:flex; flex-direction:column; gap:1px; border:1px solid var(--hair); border-radius:10px; overflow:hidden; }
+  .crow { display:flex; align-items:center; gap:11px; padding:11px 12px; background:var(--card); border-bottom:1px solid var(--hair-2); }
+  .crow:last-child { border-bottom:0; }
+  .crow .nm { font-weight:500; font-size:14px; }
+  .crow .meta { font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--ink-faint); margin-top:1px; }
+  .crow .hrs { margin-left:auto; font-family:'IBM Plex Mono',monospace; font-size:14px; font-weight:600; }
+  .crow .swipe { color:var(--hair-strong); }
+  .btn-primary { display:flex; align-items:center; justify-content:center; gap:8px; width:100%; height:52px; border:0; border-radius:11px; background:var(--ink); color:#fff; font:inherit; font-size:15.5px; font-weight:600; letter-spacing:-.01em; box-shadow:var(--sh-btn); cursor:pointer; }
+  .btn-primary svg { color:#fff; }
+
+  /* section label */
+  .seclab { display:flex; align-items:center; justify-content:space-between; margin:24px 2px 11px; }
+  .seclab .t { font-size:13px; font-weight:600; letter-spacing:-.01em; }
+  .seclab .a { font-size:12.5px; color:var(--ink-2); display:flex; align-items:center; gap:4px; }
+
+  /* needs-you rows */
+  .qlist { display:flex; flex-direction:column; gap:10px; }
+  .qcard { display:flex; align-items:center; gap:13px; padding:14px 14px; background:var(--card); border:1px solid var(--hair); border-radius:var(--radius); box-shadow:var(--sh-card); }
+  .qcard .ic { width:38px; height:38px; border-radius:10px; display:grid; place-items:center; flex:none; background:var(--paper-2); color:var(--ink-2); border:1px solid var(--hair); }
+  .qcard .ic.amber { background:var(--amber-soft); color:var(--amber-ink); border-color:#f6e2c8; }
+  .qcard .tx { min-width:0; display:flex; flex-direction:column; }
+  .qcard .tx .t1 { display:block; font-weight:550; font-size:14.5px; letter-spacing:-.01em; }
+  .qcard .tx .t1 b { font-family:'IBM Plex Mono',monospace; font-weight:600; }
+  .qcard .tx .t2 { display:block; font-size:12.5px; color:var(--ink-faint); margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .qcard .age { margin-left:auto; font-family:'IBM Plex Mono',monospace; font-size:12px; font-weight:500; color:var(--amber-ink); white-space:nowrap; flex:none; }
+  .qcard .chev { color:var(--hair-strong); flex:none; }
+
+  /* quick actions */
+  .quick { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+  .qa { display:flex; flex-direction:column; align-items:center; gap:8px; padding:15px 6px 13px; background:var(--card); border:1px solid var(--hair); border-radius:var(--radius); box-shadow:var(--sh-card); }
+  .qa .ic { width:24px; height:24px; color:var(--ink); }
+  .qa .l { font-size:11.5px; font-weight:500; color:var(--ink-2); text-align:center; line-height:1.2; }
+
+  /* on-site stats */
+  .stats { display:grid; grid-template-columns:repeat(3,1fr); border:1px solid var(--hair); border-radius:var(--radius); background:var(--card); overflow:hidden; box-shadow:var(--sh-card); }
+  .stat { padding:14px 14px; border-right:1px solid var(--hair); }
+  .stat:last-child { border-right:0; }
+  .stat .l { font-size:10.5px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-faint); }
+  .stat .v { font-family:'IBM Plex Mono',monospace; font-size:23px; font-weight:500; letter-spacing:-.02em; margin-top:8px; }
+
+  /* bottom nav */
+  .nav { position:fixed; bottom:0; left:50%; transform:translateX(-50%); width:390px; height:78px; background:var(--card); border-top:1px solid var(--hair); display:flex; align-items:flex-start; padding:9px 8px 0; box-shadow:0 -1px 3px rgba(40,34,28,.04); }
+  .nav .t { flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; color:var(--ink-faint); font-size:10.5px; font-weight:500; padding-top:4px; }
+  .nav .t svg { width:23px; height:23px; }
+  .nav .t.active { color:var(--ink); }
+  .nav .t.active svg { color:var(--ink); }
+  .nav .cap { flex:1; display:flex; flex-direction:column; align-items:center; }
+  .nav .cap .btn { width:56px; height:56px; border-radius:18px; background:var(--accent); color:#fff; display:grid; place-items:center; box-shadow:0 4px 12px rgba(180,83,9,.35), inset 0 1px 0 rgba(255,255,255,.18); margin-top:-20px; border:0; cursor:pointer; }
+  .nav .cap .btn svg { width:26px; height:26px; }
+  .nav .cap .l { font-size:10.5px; font-weight:600; color:var(--accent); margin-top:5px; }
+  .tbtn { width:34px; height:34px; display:grid; place-items:center; border:1px solid var(--hair); border-radius:9px; background:var(--card); color:var(--ink-2); box-shadow:var(--sh-card); flex:none; }
+
+  /* ============ DARK THEME — same rules, warm charcoal ============ */
+  html[data-theme="dark"] {
+    --ink:#f6f1ea; --ink-2:#c2b8ab; --ink-faint:#a59c90;
+    --paper:#16130f; --paper-2:#221d18; --card:#1e1a15;
+    --hair:#322c24; --hair-2:#272019; --hair-strong:#433a30;
+    --red:#f87171; --red-ink:#fca5a5; --red-soft:rgba(180,40,40,.18);
+    --amber:#fbbf24; --amber-ink:#fcd34d; --amber-soft:rgba(180,120,20,.18);
+    --green:#34d399; --green-ink:#6ee7a8; --green-soft:rgba(20,90,50,.22);
+    --accent:#f59e0b; --accent-soft:rgba(245,158,11,.16);
+    --sh-card:0 1px 2px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.035);
+    --sh-btn:0 1px 2px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.06);
+  }
+  html[data-theme="dark"] body { background:#0e0c09; }
+  html[data-theme="dark"] .btn-primary { color:#16130f; }
+  html[data-theme="dark"] .btn-primary svg { color:#16130f; }
+  html[data-theme="dark"] .av { color:#16130f; }
+  html[data-theme="dark"] .qcard .ic.amber { border-color:rgba(245,158,11,.32); }
+  html[data-theme="dark"] .qcard .ic { color:var(--ink-2); }
+  html[data-theme="dark"] .nav .cap .btn { box-shadow:0 4px 14px rgba(245,158,11,.4), inset 0 1px 0 rgba(255,255,255,.2); }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-chevr" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><line x1="5" x2="19" y1="12" y2="12"/><polyline points="12 5 19 12 12 19"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+  <symbol id="i-cal" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M8 2v4"/><path d="M16 2v4"/></symbol>
+  <symbol id="i-flask" viewBox="0 0 24 24"><path d="M10 2v7.31"/><path d="M14 9.3V2"/><path d="M8.5 2h7"/><path d="M14 9.3a6.5 6.5 0 1 1-4 0"/><path d="M5.52 16h12.96"/></symbol>
+  <symbol id="i-filecheck" viewBox="0 0 24 24"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="m9 15 2 2 4-4"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></symbol>
+  <symbol id="i-cam" viewBox="0 0 24 24"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z"/><circle cx="12" cy="13" r="3"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></symbol>
+  <symbol id="i-signal" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="1" y="9" width="3" height="5" rx="1"/><rect x="6.5" y="6.5" width="3" height="7.5" rx="1"/><rect x="12" y="3.5" width="3" height="10.5" rx="1"/><rect x="17.5" y="1" width="3" height="13" rx="1" opacity=".35"/></symbol>
+  <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M8.5 16.03a6 6 0 0 1 7 0"/><path d="M12 19.5h.01"/></symbol>
+  <symbol id="i-batt" viewBox="0 0 24 24"><rect x="1.5" y="6" width="18" height="12" rx="3" fill="currentColor" stroke="none"/><rect x="21" y="10" width="2" height="4" rx="1" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></symbol>
+</svg>
+
+<div class="phone">
+
+  <!-- status bar -->
+  <div class="sbar">
+    <span>9:41</span>
+    <span class="r">
+      <svg class="ico"><use href="#i-signal"/></svg>
+      <svg class="ico" style="width:18px;height:14px"><use href="#i-wifi"/></svg>
+      <svg class="ico"><use href="#i-batt"/></svg>
+    </span>
+  </div>
+
+  <!-- app bar -->
+  <div class="appbar">
+    <div class="proj">Northern Connector — Stage 3 <svg class="ico xs chev"><use href="#i-chev"/></svg></div>
+    <span class="sync"><span class="d"></span> Synced</span>
+    <button class="tbtn" id="themeBtn"><svg class="ico sm"><use href="#i-moon"/></svg></button>
+    <div class="av">JR</div>
+  </div>
+
+  <div class="scroll">
+
+    <!-- greeting -->
+    <div class="greet">
+      <h1>Good arvo, Jayson</h1>
+      <p>Tuesday 8 June · <span class="mono">12 crew on site · fine 19°</span></p>
+    </div>
+
+    <!-- HERO : end of shift sign-off -->
+    <section class="hero">
+      <div class="top">
+        <span class="lab"><span class="dot"></span><span class="micro" style="color:var(--amber-ink)">End of shift</span></span>
+        <span class="clock">4:52 PM</span>
+      </div>
+      <div class="h">Sign off <b>3</b> dockets</div>
+      <div class="names">Subbie hours waiting on your approval</div>
+
+      <div class="crew">
+        <div class="crow">
+          <div><div class="nm">Mason Plant Hire</div><div class="meta">DKT-0318 · 2 plant</div></div>
+          <span class="hrs">9.0h</span>
+          <svg class="ico xs swipe"><use href="#i-chevr"/></svg>
+        </div>
+        <div class="crow">
+          <div><div class="nm">D&amp;G Civil</div><div class="meta">DKT-0319 · 4 labour</div></div>
+          <span class="hrs">34.0h</span>
+          <svg class="ico xs swipe"><use href="#i-chevr"/></svg>
+        </div>
+        <div class="crow">
+          <div><div class="nm">ABC Haulage</div><div class="meta">DKT-0320 · 3 plant</div></div>
+          <span class="hrs">22.5h</span>
+          <svg class="ico xs swipe"><use href="#i-chevr"/></svg>
+        </div>
+      </div>
+
+      <button class="btn-primary"><svg class="ico sm"><use href="#i-check"/></svg> Review &amp; sign off</button>
+    </section>
+
+    <!-- also needs you -->
+    <div class="seclab"><span class="t">Also needs you</span></div>
+    <div class="qlist">
+      <a class="qcard" href="#">
+        <span class="ic amber"><svg class="ico sm"><use href="#i-clock"/></svg></span>
+        <span class="tx"><span class="t1"><b>HP-12</b> awaiting your witness</span><span class="t2">Pre-pour reinforcement · Lot 34</span></span>
+        <span class="age">on site</span>
+        <svg class="ico sm chev"><use href="#i-chevr"/></svg>
+      </a>
+      <a class="qcard" href="#">
+        <span class="ic"><svg class="ico sm"><use href="#i-cal"/></svg></span>
+        <span class="tx"><span class="t1">Site diary not finished</span><span class="t2">Draft started 7:12 AM · weather + plant logged</span></span>
+        <svg class="ico sm chev"><use href="#i-chevr"/></svg>
+      </a>
+    </div>
+
+    <!-- quick actions -->
+    <div class="seclab"><span class="t">Quick actions</span></div>
+    <div class="quick">
+      <a class="qa" href="#"><svg class="ico ic"><use href="#i-alert"/></svg><span class="l">Raise NCR</span></a>
+      <a class="qa" href="#"><svg class="ico ic"><use href="#i-clock"/></svg><span class="l">Hold points</span></a>
+      <a class="qa" href="#"><svg class="ico ic"><use href="#i-flask"/></svg><span class="l">Log test</span></a>
+      <a class="qa" href="#"><svg class="ico ic"><use href="#i-book"/></svg><span class="l">Site diary</span></a>
+    </div>
+
+    <!-- on site today -->
+    <div class="seclab"><span class="t">On site today</span></div>
+    <div class="stats">
+      <div class="stat"><div class="l">Crew</div><div class="v">12</div></div>
+      <div class="stat"><div class="l">Plant</div><div class="v">5</div></div>
+      <div class="stat"><div class="l">Lots active</div><div class="v">3</div></div>
+    </div>
+
+  </div>
+
+  <!-- bottom nav -->
+  <nav class="nav">
+    <a class="t active" href="#"><svg class="ico"><use href="#i-home"/></svg>Today</a>
+    <a class="t" href="#"><svg class="ico"><use href="#i-filecheck"/></svg>Dockets</a>
+    <div class="cap"><button class="btn"><svg class="ico"><use href="#i-cam"/></svg></button><span class="l">Capture</span></div>
+    <a class="t" href="#"><svg class="ico"><use href="#i-pin"/></svg>Lots</a>
+    <a class="t" href="#"><svg class="ico"><use href="#i-grid"/></svg>More</a>
+  </nav>
+
+</div>
+
+<script>
+  (function(){
+    var btn = document.getElementById('themeBtn');
+    if(!btn) return;
+    var icon = btn.querySelector('use');
+    btn.addEventListener('click', function(){
+      var dark = document.documentElement.getAttribute('data-theme') === 'dark';
+      document.documentElement.setAttribute('data-theme', dark ? 'light' : 'dark');
+      icon.setAttribute('href', dark ? '#i-moon' : '#i-sun');
+    });
+  })();
+</script>
+</body>
+</html>

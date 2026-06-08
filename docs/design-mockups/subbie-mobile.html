@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SiteProof — Subcontractor (mobile)</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;450;500;600;700&display=swap');
+
+  /* ============================================================
+     SiteProof v3 — SUBCONTRACTOR MOBILE  ("Quiet Authority")
+     A subbie inside the head contractor's tenant. One HC at a time.
+     Hero = submit today's docket. Money view = docket status
+     (approved = paid). Crew/plant readiness gates dockets.
+     Same warm-greige premium system; colour earns its place on
+     docket status because it literally means cash.
+     ============================================================ */
+  :root {
+    --ink:#1b1714; --ink-2:#57514b; --ink-faint:#7a726a;
+    --paper:#f7f6f3; --paper-2:#f1efe9; --card:#ffffff;
+    --hair:#e9e5de; --hair-2:#f0ede7; --hair-strong:#d9d3ca;
+    --red:#b42318; --red-ink:#912018; --red-soft:#fdeeec;
+    --amber:#d97706; --amber-ink:#92400e; --amber-soft:#fdf3e7;
+    --green:#15803d; --green-ink:#166534; --green-soft:#eaf5ec;
+    --accent:#b45309; --accent-soft:#fbeee0;
+    --sh-card:0 1px 2px rgba(40,34,28,.05), 0 1px 3px rgba(40,34,28,.03);
+    --sh-btn:0 1px 2px rgba(40,34,28,.18), inset 0 1px 0 rgba(255,255,255,.10);
+    --radius:12px;
+  }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { margin:0; }
+  body { background:#e8e6e1; color:var(--ink);
+    font-family:'IBM Plex Sans',ui-sans-serif,system-ui,sans-serif;
+    font-size:15px; line-height:1.5; letter-spacing:-.011em; -webkit-font-smoothing:antialiased; }
+  .mono { font-family:'IBM Plex Mono',ui-monospace,monospace; font-variant-numeric:tabular-nums; }
+  .micro { font-size:10.5px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-faint); }
+  a { color:inherit; text-decoration:none; }
+  .ico { width:22px; height:22px; stroke:currentColor; fill:none; stroke-width:1.75; stroke-linecap:round; stroke-linejoin:round; flex:none; }
+  .ico.sm{ width:18px; height:18px; } .ico.xs{ width:15px; height:15px; }
+
+  .phone { width:390px; margin:0 auto; min-height:844px; background:var(--paper); position:relative;
+    display:flex; flex-direction:column; overflow:hidden; }
+
+  .sbar { height:44px; flex:none; display:flex; align-items:center; justify-content:space-between; padding:0 22px 0 26px; font-size:14px; font-weight:600; letter-spacing:-.01em; }
+  .sbar .r { display:flex; align-items:center; gap:6px; }
+  .sbar svg { width:17px; height:12px; }
+
+  /* app bar — subbie identity + HC context */
+  .appbar { display:flex; align-items:center; gap:11px; padding:6px 16px 12px; }
+  .logo { width:36px; height:36px; border-radius:9px; background:var(--ink); color:#fff; display:grid; place-items:center; font-weight:700; font-size:14px; box-shadow:var(--sh-btn); flex:none; }
+  .who { min-width:0; }
+  .who .co { font-weight:600; font-size:15px; letter-spacing:-.02em; line-height:1.15; }
+  .who .hc { font-size:12px; color:var(--ink-faint); margin-top:1px; display:flex; align-items:center; gap:5px; }
+  .who .hc b { color:var(--ink-2); font-weight:500; }
+  .bell { margin-left:auto; width:36px; height:36px; border-radius:9px; display:grid; place-items:center; color:var(--ink-2); border:1px solid var(--hair); background:var(--card); box-shadow:var(--sh-card); position:relative; }
+  .bell .dot { position:absolute; top:8px; right:9px; width:6px; height:6px; border-radius:50%; background:var(--accent); }
+
+  .scroll { flex:1; overflow-y:auto; padding:4px 16px 96px; }
+
+  /* HERO : today's docket */
+  .hero { background:var(--card); border:1px solid var(--hair); border-radius:var(--radius); box-shadow:var(--sh-card); padding:18px; }
+  .hero .top { display:flex; align-items:center; justify-content:space-between; margin-bottom:13px; }
+  .hero .top .lab { font-size:13px; font-weight:600; letter-spacing:-.01em; }
+  .hero .top .date { font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--ink-faint); }
+  .pill { display:inline-flex; align-items:center; gap:6px; height:24px; padding:0 10px; border-radius:999px; font-size:11px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; }
+  .pill .d { width:6px; height:6px; border-radius:50%; }
+  .pill.draft { background:var(--amber-soft); color:var(--amber-ink); } .pill.draft .d{ background:var(--amber); }
+  .pill.ok { background:var(--green-soft); color:var(--green-ink); } .pill.ok .d{ background:var(--green); }
+  .pill.sub { background:var(--paper-2); color:var(--ink-2); } .pill.sub .d{ background:var(--ink-faint); }
+  .pill.rej { background:var(--red-soft); color:var(--red-ink); } .pill.rej .d{ background:var(--red); }
+
+  .hero .lines { display:grid; grid-template-columns:1fr 1fr; gap:1px; background:var(--hair); border:1px solid var(--hair); border-radius:10px; overflow:hidden; margin-bottom:16px; }
+  .hline { background:var(--card); padding:12px 13px; }
+  .hline .l { font-size:10.5px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-faint); }
+  .hline .v { font-family:'IBM Plex Mono',monospace; font-size:20px; font-weight:500; letter-spacing:-.02em; margin-top:6px; }
+  .hline .v small { font-size:12px; color:var(--ink-faint); font-weight:400; margin-left:3px; }
+  .btn-primary { display:flex; align-items:center; justify-content:center; gap:8px; width:100%; height:52px; border:0; border-radius:11px; background:var(--ink); color:#fff; font:inherit; font-size:15.5px; font-weight:600; letter-spacing:-.01em; box-shadow:var(--sh-btn); cursor:pointer; }
+  .btn-primary svg { color:#fff; }
+  .hero .hint { text-align:center; margin:11px 0 0; font-size:12px; color:var(--ink-faint); }
+
+  /* section label */
+  .seclab { display:flex; align-items:center; justify-content:space-between; margin:24px 2px 11px; }
+  .seclab .t { font-size:13px; font-weight:600; letter-spacing:-.01em; }
+  .seclab .a { font-size:12.5px; color:var(--ink-2); display:flex; align-items:center; gap:4px; }
+
+  /* dockets = the money view */
+  .dlist { border:1px solid var(--hair); border-radius:var(--radius); background:var(--card); overflow:hidden; box-shadow:var(--sh-card); }
+  .drow { display:flex; align-items:center; gap:12px; padding:13px 15px; border-bottom:1px solid var(--hair-2); }
+  .drow:last-child { border-bottom:0; }
+  .drow .day { width:38px; flex:none; }
+  .drow .day .dd { font-family:'IBM Plex Mono',monospace; font-size:17px; font-weight:600; line-height:1; }
+  .drow .day .mm { font-size:10.5px; color:var(--ink-faint); text-transform:uppercase; letter-spacing:.05em; margin-top:3px; }
+  .drow .mid { min-width:0; flex:1; }
+  .drow .mid .t1 { font-weight:500; font-size:14px; }
+  .drow .mid .t2 { font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--ink-faint); margin-top:2px; }
+  .drow .amt { font-family:'IBM Plex Mono',monospace; font-size:13px; font-weight:600; margin-left:auto; flex:none; text-align:right; }
+
+  /* readiness */
+  .ready { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .rcard { background:var(--card); border:1px solid var(--hair); border-radius:var(--radius); box-shadow:var(--sh-card); padding:15px 15px 14px; }
+  .rcard .top { display:flex; align-items:center; gap:9px; }
+  .rcard .top .ic { width:30px; height:30px; border-radius:8px; background:var(--paper-2); border:1px solid var(--hair); display:grid; place-items:center; color:var(--ink-2); }
+  .rcard .top .l { font-size:12.5px; font-weight:600; }
+  .rcard .v { font-family:'IBM Plex Mono',monospace; font-size:24px; font-weight:500; letter-spacing:-.02em; margin-top:12px; }
+  .rcard .v small { font-size:13px; color:var(--ink-faint); }
+  .rcard .note { font-size:11.5px; margin-top:6px; color:var(--ink-faint); }
+  .rcard .note.flag { color:var(--amber-ink); font-weight:500; display:flex; align-items:center; gap:5px; }
+  .rcard .note.flag .d { width:5px; height:5px; border-radius:50%; background:var(--amber); }
+
+  /* bottom nav */
+  .nav { position:fixed; bottom:0; left:50%; transform:translateX(-50%); width:390px; height:78px; background:var(--card); border-top:1px solid var(--hair); display:flex; align-items:flex-start; padding:9px 8px 0; box-shadow:0 -1px 3px rgba(40,34,28,.04); }
+  .nav .t { flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; color:var(--ink-faint); font-size:10.5px; font-weight:500; padding-top:4px; }
+  .nav .t svg { width:23px; height:23px; }
+  .nav .t.active { color:var(--ink); } .nav .t.active svg { color:var(--ink); }
+  .nav .cap { flex:1; display:flex; flex-direction:column; align-items:center; }
+  .nav .cap .btn { width:56px; height:56px; border-radius:18px; background:var(--accent); color:#fff; display:grid; place-items:center; box-shadow:0 4px 12px rgba(180,83,9,.35), inset 0 1px 0 rgba(255,255,255,.18); margin-top:-20px; border:0; cursor:pointer; }
+  .nav .cap .btn svg { width:26px; height:26px; }
+  .nav .cap .l { font-size:10.5px; font-weight:600; color:var(--accent); margin-top:5px; }
+  .tbtn { width:36px; height:36px; display:grid; place-items:center; border:1px solid var(--hair); border-radius:9px; background:var(--card); color:var(--ink-2); box-shadow:var(--sh-card); flex:none; }
+
+  /* ============ DARK THEME — same rules, warm charcoal ============ */
+  html[data-theme="dark"] {
+    --ink:#f6f1ea; --ink-2:#c2b8ab; --ink-faint:#a59c90;
+    --paper:#16130f; --paper-2:#221d18; --card:#1e1a15;
+    --hair:#322c24; --hair-2:#272019; --hair-strong:#433a30;
+    --red:#f87171; --red-ink:#fca5a5; --red-soft:rgba(180,40,40,.18);
+    --amber:#fbbf24; --amber-ink:#fcd34d; --amber-soft:rgba(180,120,20,.18);
+    --green:#34d399; --green-ink:#6ee7a8; --green-soft:rgba(20,90,50,.22);
+    --accent:#f59e0b; --accent-soft:rgba(245,158,11,.16);
+    --sh-card:0 1px 2px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.035);
+    --sh-btn:0 1px 2px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.06);
+  }
+  html[data-theme="dark"] body { background:#0e0c09; }
+  html[data-theme="dark"] .btn-primary { color:#16130f; }
+  html[data-theme="dark"] .btn-primary svg { color:#16130f; }
+  html[data-theme="dark"] .logo { color:#16130f; }
+  html[data-theme="dark"] .nav .cap .btn { box-shadow:0 4px 14px rgba(245,158,11,.4), inset 0 1px 0 rgba(255,255,255,.2); }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-chevr" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><line x1="5" x2="19" y1="12" y2="12"/><polyline points="12 5 19 12 12 19"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></symbol>
+  <symbol id="i-filecheck" viewBox="0 0 24 24"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="m9 15 2 2 4-4"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="i-truck" viewBox="0 0 24 24"><path d="M10 17h4V5H2v12h2"/><path d="M14 9h4l4 4v4h-2"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+  <symbol id="i-signal" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="1" y="9" width="3" height="5" rx="1"/><rect x="6.5" y="6.5" width="3" height="7.5" rx="1"/><rect x="12" y="3.5" width="3" height="10.5" rx="1"/><rect x="17.5" y="1" width="3" height="13" rx="1" opacity=".35"/></symbol>
+  <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M8.5 16.03a6 6 0 0 1 7 0"/><path d="M12 19.5h.01"/></symbol>
+  <symbol id="i-batt" viewBox="0 0 24 24"><rect x="1.5" y="6" width="18" height="12" rx="3" fill="currentColor" stroke="none"/><rect x="21" y="10" width="2" height="4" rx="1" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></symbol>
+</svg>
+
+<div class="phone">
+
+  <!-- status bar -->
+  <div class="sbar">
+    <span>9:41</span>
+    <span class="r">
+      <svg class="ico"><use href="#i-signal"/></svg>
+      <svg class="ico" style="width:18px;height:14px"><use href="#i-wifi"/></svg>
+      <svg class="ico"><use href="#i-batt"/></svg>
+    </span>
+  </div>
+
+  <!-- app bar : subbie identity + which HC -->
+  <div class="appbar">
+    <div class="logo">M</div>
+    <div class="who">
+      <div class="co">Mason Plant Hire</div>
+      <div class="hc"><svg class="ico xs" style="width:13px;height:13px"><use href="#i-link"/></svg> Working for <b>Northern Connector</b></div>
+    </div>
+    <button class="tbtn" id="themeBtn" style="margin-left:auto"><svg class="ico sm"><use href="#i-moon"/></svg></button>
+    <a class="bell" href="#"><svg class="ico sm"><use href="#i-bell"/></svg><span class="dot"></span></a>
+  </div>
+
+  <div class="scroll">
+
+    <!-- HERO : today's docket -->
+    <section class="hero">
+      <div class="top">
+        <span class="lab">Today's docket</span>
+        <span class="pill draft"><span class="d"></span> Draft</span>
+      </div>
+      <div class="lines">
+        <div class="hline"><div class="l">Labour</div><div class="v">3 <small>crew</small></div></div>
+        <div class="hline"><div class="l">Plant</div><div class="v">2 <small>items</small></div></div>
+      </div>
+      <button class="btn-primary"><svg class="ico sm"><use href="#i-arrow"/></svg> Review &amp; submit</button>
+      <p class="hint">Tue 8 June · submit before 6:00 PM to get signed off today</p>
+    </section>
+
+    <!-- dockets : the money view -->
+    <div class="seclab"><span class="t">Your dockets</span><a class="a" href="#">View all <svg class="ico xs"><use href="#i-chevr"/></svg></a></div>
+    <div class="dlist">
+      <a class="drow" href="#">
+        <div class="day"><div class="dd">07</div><div class="mm">Jun</div></div>
+        <div class="mid"><div class="t1">Mon — earthworks, Lot 31</div><div class="t2">3 labour · 2 plant · 28.0h</div></div>
+        <span class="pill ok"><span class="d"></span> Paid-ready</span>
+      </a>
+      <a class="drow" href="#">
+        <div class="day"><div class="dd">06</div><div class="mm">Jun</div></div>
+        <div class="mid"><div class="t1">Sun — drainage, Lot 29</div><div class="t2">2 labour · 1 plant · 14.0h</div></div>
+        <span class="pill sub"><span class="d"></span> Submitted</span>
+      </a>
+      <a class="drow" href="#">
+        <div class="day"><div class="dd">04</div><div class="mm">Jun</div></div>
+        <div class="mid"><div class="t1">Fri — subgrade, Lot 31</div><div class="t2">4 labour · 3 plant · 36.5h</div></div>
+        <span class="pill rej"><span class="d"></span> Query</span>
+      </a>
+      <a class="drow" href="#">
+        <div class="day"><div class="dd">03</div><div class="mm">Jun</div></div>
+        <div class="mid"><div class="t1">Thu — earthworks, Lot 28</div><div class="t2">3 labour · 2 plant · 27.0h</div></div>
+        <span class="pill ok"><span class="d"></span> Paid-ready</span>
+      </a>
+    </div>
+
+    <!-- readiness : crew + plant gate the docket -->
+    <div class="seclab"><span class="t">Your crew &amp; plant</span><a class="a" href="#">Manage <svg class="ico xs"><use href="#i-chevr"/></svg></a></div>
+    <div class="ready">
+      <div class="rcard">
+        <div class="top"><span class="ic"><svg class="ico sm"><use href="#i-users"/></svg></span><span class="l">Crew</span></div>
+        <div class="v">6<small>/8 approved</small></div>
+        <div class="note flag"><span class="d"></span> 2 awaiting HC approval</div>
+      </div>
+      <div class="rcard">
+        <div class="top"><span class="ic"><svg class="ico sm"><use href="#i-truck"/></svg></span><span class="l">Plant</span></div>
+        <div class="v">4<small>/4 approved</small></div>
+        <div class="note">All cleared for dockets</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- bottom nav -->
+  <nav class="nav">
+    <a class="t active" href="#"><svg class="ico"><use href="#i-home"/></svg>Today</a>
+    <a class="t" href="#"><svg class="ico"><use href="#i-filecheck"/></svg>Dockets</a>
+    <div class="cap"><button class="btn"><svg class="ico"><use href="#i-plus"/></svg></button><span class="l">New docket</span></div>
+    <a class="t" href="#"><svg class="ico"><use href="#i-users"/></svg>Crew</a>
+    <a class="t" href="#"><svg class="ico"><use href="#i-grid"/></svg>More</a>
+  </nav>
+
+</div>
+
+<script>
+  (function(){
+    var btn = document.getElementById('themeBtn');
+    if(!btn) return;
+    var icon = btn.querySelector('use');
+    btn.addEventListener('click', function(){
+      var dark = document.documentElement.getAttribute('data-theme') === 'dark';
+      document.documentElement.setAttribute('data-theme', dark ? 'light' : 'dark');
+      icon.setAttribute('href', dark ? '#i-moon' : '#i-sun');
+    });
+  })();
+</script>
+</body>
+</html>
