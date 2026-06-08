@@ -143,17 +143,6 @@ export function QualityManagerDashboard() {
     );
   }
 
-  const getAuditStatusColor = (status: string) => {
-    switch (status) {
-      case 'ready':
-        return 'text-green-600 bg-green-100';
-      case 'needs_attention':
-        return 'text-yellow-600 bg-yellow-100';
-      default:
-        return 'text-red-600 bg-red-100';
-    }
-  };
-
   const getAuditStatusIcon = (status: string) => {
     switch (status) {
       case 'ready':
@@ -180,7 +169,10 @@ export function QualityManagerDashboard() {
             Try again
           </Button>
         </div>
-        <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
+        <div
+          role="alert"
+          className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-destructive"
+        >
           <p className="font-medium">Quality manager dashboard could not be loaded.</p>
           <p className="mt-1 text-sm">{errorMessage}</p>
         </div>
@@ -203,7 +195,10 @@ export function QualityManagerDashboard() {
       </div>
 
       {errorMessage && (
-        <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
+        <div
+          role="alert"
+          className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-destructive"
+        >
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <p className="font-medium">Quality manager dashboard data could not be refreshed.</p>
@@ -236,16 +231,14 @@ export function QualityManagerDashboard() {
         {/* Lot Conformance Rate */}
         <div className="bg-card rounded-lg border p-4">
           <div className="flex items-center gap-3">
-            <div
-              className={`p-2 rounded-lg ${data.lotConformance.rate >= 90 ? 'bg-green-100' : data.lotConformance.rate >= 70 ? 'bg-yellow-100' : 'bg-red-100'}`}
-            >
-              <CheckCircle2
-                className={`h-5 w-5 ${data.lotConformance.rate >= 90 ? 'text-green-600' : data.lotConformance.rate >= 70 ? 'text-yellow-600' : 'text-red-600'}`}
-              />
+            <div className="p-2 bg-muted rounded-lg">
+              <CheckCircle2 className="h-5 w-5 text-muted-foreground" />
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Lot Conformance</p>
-              <p className="text-2xl font-bold">{data.lotConformance.rate.toFixed(1)}%</p>
+              <p className="text-2xl font-bold font-mono tabular-nums">
+                {data.lotConformance.rate.toFixed(1)}%
+              </p>
             </div>
           </div>
           <div className="mt-3 text-xs text-muted-foreground">
@@ -256,12 +249,14 @@ export function QualityManagerDashboard() {
         {/* HP Release Rate */}
         <div className="bg-card rounded-lg border p-4">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <ClipboardCheck className="h-5 w-5 text-blue-600" />
+            <div className="p-2 bg-muted rounded-lg">
+              <ClipboardCheck className="h-5 w-5 text-muted-foreground" />
             </div>
             <div>
               <p className="text-sm text-muted-foreground">HP Release Rate</p>
-              <p className="text-2xl font-bold">{data.holdPointMetrics.releaseRate.toFixed(1)}%</p>
+              <p className="text-2xl font-bold font-mono tabular-nums">
+                {data.holdPointMetrics.releaseRate.toFixed(1)}%
+              </p>
             </div>
           </div>
           <div className="mt-3 text-xs text-muted-foreground">
@@ -273,16 +268,18 @@ export function QualityManagerDashboard() {
         {/* ITP Completion */}
         <div className="bg-card rounded-lg border p-4">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-purple-100 rounded-lg">
-              <FileCheck className="h-5 w-5 text-purple-600" />
+            <div className="p-2 bg-muted rounded-lg">
+              <FileCheck className="h-5 w-5 text-muted-foreground" />
             </div>
             <div>
               <p className="text-sm text-muted-foreground">ITP Completion</p>
-              <p className="text-2xl font-bold">{data.itpTrends.completionRate.toFixed(1)}%</p>
+              <p className="text-2xl font-bold font-mono tabular-nums">
+                {data.itpTrends.completionRate.toFixed(1)}%
+              </p>
             </div>
           </div>
           <div className="mt-3 text-xs text-muted-foreground flex items-center gap-1">
-            {data.itpTrends.trend === 'up' && <TrendingUp className="h-3 w-3 text-green-500" />}
+            {data.itpTrends.trend === 'up' && <TrendingUp className="h-3 w-3 text-success" />}
             {data.itpTrends.completedThisWeek} completed this week
             {data.itpTrends.trend === 'up' && ' (↑)'}
             {data.itpTrends.trend === 'down' && ' (↓)'}
@@ -292,12 +289,14 @@ export function QualityManagerDashboard() {
         {/* Audit Readiness */}
         <div className="bg-card rounded-lg border p-4">
           <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-lg ${getAuditStatusColor(data.auditReadiness.status)}`}>
+            <div className="p-2 bg-muted rounded-lg text-muted-foreground">
               {getAuditStatusIcon(data.auditReadiness.status)}
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Audit Readiness</p>
-              <p className="text-2xl font-bold">{data.auditReadiness.score}%</p>
+              <p className="text-2xl font-bold font-mono tabular-nums">
+                {data.auditReadiness.score}%
+              </p>
             </div>
           </div>
           <div className="mt-3 text-xs text-muted-foreground">
@@ -314,10 +313,10 @@ export function QualityManagerDashboard() {
         <div className="bg-card rounded-lg border">
           <div className="p-4 border-b flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-red-500" />
+              <AlertTriangle className="h-5 w-5 text-muted-foreground" />
               <h2 className="text-lg font-semibold">Open NCRs by Category</h2>
             </div>
-            <span className="bg-red-100 text-red-800 text-sm font-medium px-2.5 py-0.5 rounded-full">
+            <span className="bg-muted text-muted-foreground text-sm font-medium px-2.5 py-0.5 rounded-full">
               {data.ncrsByCategory.total} total
             </span>
           </div>
@@ -325,24 +324,30 @@ export function QualityManagerDashboard() {
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                  <div className="w-3 h-3 rounded-full bg-destructive"></div>
                   <span className="text-sm">Major</span>
                 </div>
-                <span className="font-bold text-red-600">{data.ncrsByCategory.major}</span>
+                <span className="font-bold font-mono tabular-nums text-destructive">
+                  {data.ncrsByCategory.major}
+                </span>
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                  <div className="w-3 h-3 rounded-full bg-warning"></div>
                   <span className="text-sm">Minor</span>
                 </div>
-                <span className="font-bold text-yellow-600">{data.ncrsByCategory.minor}</span>
+                <span className="font-bold font-mono tabular-nums text-warning">
+                  {data.ncrsByCategory.minor}
+                </span>
               </div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                  <div className="w-3 h-3 rounded-full bg-info"></div>
                   <span className="text-sm">Observation</span>
                 </div>
-                <span className="font-bold text-blue-600">{data.ncrsByCategory.observation}</span>
+                <span className="font-bold font-mono tabular-nums text-info">
+                  {data.ncrsByCategory.observation}
+                </span>
               </div>
             </div>
 
@@ -362,7 +367,7 @@ export function QualityManagerDashboard() {
                       <p className="text-xs text-muted-foreground truncate">{ncr.description}</p>
                     </div>
                     <span
-                      className={`text-xs px-2 py-0.5 rounded ${ncr.category === 'major' ? 'bg-red-100 text-red-700' : ncr.category === 'minor' ? 'bg-yellow-100 text-yellow-700' : 'bg-blue-100 text-blue-700'}`}
+                      className={`text-xs px-2 py-0.5 rounded border ${ncr.category === 'major' ? 'bg-destructive/10 text-destructive border-destructive/30' : ncr.category === 'minor' ? 'bg-warning/10 text-warning border-warning/30' : 'bg-info/10 text-info border-info/30'}`}
                     >
                       {ncr.category}
                     </span>
@@ -383,11 +388,11 @@ export function QualityManagerDashboard() {
         <div className="bg-card rounded-lg border">
           <div className="p-4 border-b flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Clock className="h-5 w-5 text-amber-500" />
+              <Clock className="h-5 w-5 text-muted-foreground" />
               <h2 className="text-lg font-semibold">Pending Verifications</h2>
             </div>
             {data.pendingVerifications.count > 0 && (
-              <span className="bg-amber-100 text-amber-800 text-sm font-medium px-2.5 py-0.5 rounded-full">
+              <span className="bg-warning text-warning-foreground text-sm font-medium px-2.5 py-0.5 rounded-full">
                 {data.pendingVerifications.count} pending
               </span>
             )}
@@ -417,7 +422,7 @@ export function QualityManagerDashboard() {
                 )}
               </div>
             ) : (
-              <div className="flex items-center gap-2 text-green-600 py-4">
+              <div className="flex items-center gap-2 text-success py-4">
                 <CheckCircle2 className="h-5 w-5" />
                 <span>All verifications complete</span>
               </div>
@@ -437,10 +442,10 @@ export function QualityManagerDashboard() {
                 {data.auditReadiness.issues.map((issue, idx) => (
                   <div
                     key={idx}
-                    className="flex items-start gap-2 p-3 bg-amber-50 rounded-lg border border-amber-200"
+                    className="flex items-start gap-2 p-3 bg-warning/10 rounded-lg border border-warning/30"
                   >
-                    <AlertCircle className="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" />
-                    <span className="text-sm text-amber-800">{issue}</span>
+                    <AlertCircle className="h-4 w-4 text-warning mt-0.5 flex-shrink-0" />
+                    <span className="text-sm text-warning">{issue}</span>
                   </div>
                 ))}
               </div>
@@ -459,28 +464,28 @@ export function QualityManagerDashboard() {
             to={getProjectRoute(projectId, '/ncr')}
             className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted transition-colors"
           >
-            <AlertTriangle className="h-5 w-5 text-red-600" />
+            <AlertTriangle className="h-5 w-5 text-muted-foreground" />
             <span className="font-medium">NCR Register</span>
           </Link>
           <Link
             to={getProjectRoute(projectId, '/itp')}
             className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted transition-colors"
           >
-            <FileCheck className="h-5 w-5 text-purple-600" />
+            <FileCheck className="h-5 w-5 text-muted-foreground" />
             <span className="font-medium">ITP Management</span>
           </Link>
           <Link
             to={getProjectRoute(projectId, '/hold-points')}
             className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted transition-colors"
           >
-            <ClipboardCheck className="h-5 w-5 text-blue-600" />
+            <ClipboardCheck className="h-5 w-5 text-muted-foreground" />
             <span className="font-medium">Hold Points</span>
           </Link>
           <Link
             to={getProjectRoute(projectId, '/reports')}
             className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted transition-colors"
           >
-            <BarChart3 className="h-5 w-5 text-green-600" />
+            <BarChart3 className="h-5 w-5 text-muted-foreground" />
             <span className="font-medium">Quality Reports</span>
           </Link>
         </div>
