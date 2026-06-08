@@ -23,9 +23,9 @@ export function isOverdue(hp: HoldPoint): boolean {
 
 export function getStatusBadge(status: string): string {
   const styles: Record<string, string> = {
-    pending: 'bg-muted text-foreground',
-    notified: 'bg-amber-100 text-amber-800',
-    released: 'bg-green-100 text-green-800',
+    pending: 'bg-muted text-muted-foreground',
+    notified: 'bg-warning/10 text-warning',
+    released: 'bg-muted text-muted-foreground',
   };
   return styles[status] || styles.pending;
 }

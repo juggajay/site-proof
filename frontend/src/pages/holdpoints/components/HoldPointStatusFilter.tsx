@@ -62,16 +62,18 @@ export const HoldPointSummaryCards = React.memo(function HoldPointSummaryCards({
       </div>
       <div className="rounded-lg border bg-card p-4">
         <div className="text-sm text-muted-foreground">Awaiting Release</div>
-        <div className="text-2xl font-bold mt-1 text-amber-600">
+        <div className="text-2xl font-bold mt-1 text-warning">
           {stats.notified}
           {stats.overdue > 0 && (
-            <span className="ml-2 text-sm font-normal text-red-600">({stats.overdue} overdue)</span>
+            <span className="ml-2 text-sm font-normal text-destructive">
+              ({stats.overdue} overdue)
+            </span>
           )}
         </div>
       </div>
       <div className="rounded-lg border bg-card p-4">
         <div className="text-sm text-muted-foreground">Released This Week</div>
-        <div className="text-2xl font-bold mt-1 text-green-600">{stats.releasedThisWeek}</div>
+        <div className="text-2xl font-bold mt-1 text-foreground">{stats.releasedThisWeek}</div>
       </div>
     </div>
   );

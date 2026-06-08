@@ -67,7 +67,7 @@ function StatusPill({ status }: { status: string }) {
   return (
     <span
       className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${
-        released ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'
+        released ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'
       }`}
     >
       {released ? (
@@ -403,7 +403,7 @@ export function PublicHoldPointReleasePage() {
         <aside className="rounded-lg border bg-card p-5 shadow-sm lg:sticky lg:top-6 lg:self-start">
           {releaseResult ? (
             <div>
-              <div className="flex items-center gap-2 text-emerald-700" role="status">
+              <div className="flex items-center gap-2 text-success" role="status">
                 <CheckCircle2 className="h-5 w-5" />
                 <h2 className="font-semibold">Hold Point Released</h2>
               </div>
@@ -437,7 +437,7 @@ export function PublicHoldPointReleasePage() {
 
               {!canRelease && (
                 <div
-                  className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+                  className="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning"
                   role="alert"
                 >
                   This link can no longer release the hold point.
@@ -452,7 +452,7 @@ export function PublicHoldPointReleasePage() {
                   maxLength={120}
                   required
                   disabled={!canRelease || submitting}
-                  className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                  className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
                 />
               </label>
 
@@ -463,7 +463,7 @@ export function PublicHoldPointReleasePage() {
                   onChange={(event) => setReleasedByOrg(event.target.value)}
                   maxLength={160}
                   disabled={!canRelease || submitting}
-                  className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                  className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
                 />
               </label>
 
@@ -475,7 +475,7 @@ export function PublicHoldPointReleasePage() {
                   maxLength={2000}
                   rows={4}
                   disabled={!canRelease || submitting}
-                  className="mt-1 w-full resize-none rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring"
+                  className="mt-1 w-full resize-none rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
                 />
               </label>
 

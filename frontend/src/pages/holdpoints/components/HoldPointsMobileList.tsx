@@ -112,7 +112,7 @@ interface HoldPointMobileCardProps {
 const statusVariants: Record<string, 'default' | 'warning' | 'success'> = {
   pending: 'default',
   notified: 'warning',
-  released: 'success',
+  released: 'default',
 };
 
 function HoldPointMobileCard({
@@ -134,12 +134,12 @@ function HoldPointMobileCard({
       title={hp.lotNumber}
       subtitle={hp.description}
       status={{ label: getStatusLabel(hp.status), variant: statusVariants[hp.status] ?? 'default' }}
-      className={overdue ? 'border-red-400' : undefined}
+      className={overdue ? 'border-destructive' : undefined}
       fields={[
         {
           label: 'Scheduled',
           value: overdue ? (
-            <span className="text-red-600 font-medium">
+            <span className="text-destructive font-medium">
               {formatHoldPointDate(hp.scheduledDate)} &middot; Overdue
             </span>
           ) : (
@@ -234,7 +234,7 @@ function HoldPointMobileCard({
           >
             {copiedHpId === hp.id ? (
               <>
-                <Check className="h-4 w-4 text-green-600" />
+                <Check className="h-4 w-4 text-success" />
                 Copied
               </>
             ) : (
