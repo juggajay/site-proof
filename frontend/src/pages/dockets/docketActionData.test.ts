@@ -182,7 +182,7 @@ describe('status display maps', () => {
     expect(statusLabels.rejected).toBe('Rejected');
     expect(statusLabels.queried).toBe('Queried');
     expect(statusLabels.draft).toBe('Draft');
-    expect(statusColors.pending_approval).toContain('yellow');
-    expect(statusColors.approved).toContain('green');
+    expect(statusColors.pending_approval).toContain('text-muted-foreground');
+    expect(statusColors.approved).toContain('text-muted-foreground');
   });
 });

@@ -325,7 +325,7 @@ export function DocketActionModal({
               </Button>
               <Button
                 variant="outline"
-                className="flex-1 border-amber-500 text-amber-700 hover:bg-amber-50"
+                className="flex-1 border-warning text-warning hover:bg-warning/10"
                 onClick={() => setActionType('query')}
               >
                 <MessageSquare className="mr-2 h-4 w-4" />
@@ -353,8 +353,8 @@ export function DocketActionModal({
                     type="number"
                     value={adjustedLabourHours}
                     onChange={(e) => setAdjustedLabourHours(e.target.value)}
-                    className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary ${
-                      adjustedLabourValidation.warning ? 'border-amber-500' : ''
+                    className={`w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary ${
+                      adjustedLabourValidation.warning ? 'border-warning' : ''
                     }`}
                     min="0"
                     step="0.5"
@@ -363,7 +363,7 @@ export function DocketActionModal({
                     Submitted: {docket.labourHours || 0}h
                   </p>
                   {adjustedLabourValidation.warning && (
-                    <p className="mt-1 text-sm text-amber-600 flex items-center gap-1">
+                    <p className="mt-1 text-sm text-warning flex items-center gap-1">
                       <svg
                         className="h-4 w-4"
                         fill="none"
@@ -390,8 +390,8 @@ export function DocketActionModal({
                     type="number"
                     value={adjustedPlantHours}
                     onChange={(e) => setAdjustedPlantHours(e.target.value)}
-                    className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary ${
-                      adjustedPlantValidation.warning ? 'border-amber-500' : ''
+                    className={`w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary ${
+                      adjustedPlantValidation.warning ? 'border-warning' : ''
                     }`}
                     min="0"
                     step="0.5"
@@ -400,7 +400,7 @@ export function DocketActionModal({
                     Submitted: {docket.plantHours || 0}h
                   </p>
                   {adjustedPlantValidation.warning && (
-                    <p className="mt-1 text-sm text-amber-600 flex items-center gap-1">
+                    <p className="mt-1 text-sm text-warning flex items-center gap-1">
                       <svg
                         className="h-4 w-4"
                         fill="none"
@@ -431,7 +431,7 @@ export function DocketActionModal({
                   type="text"
                   value={adjustmentReason}
                   onChange={(e) => setAdjustmentReason(e.target.value)}
-                  className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                   placeholder="Reason for adjustment (if hours changed)"
                 />
               </div>
@@ -458,7 +458,7 @@ export function DocketActionModal({
               id="docket-action-notes"
               value={actionNotes}
               onChange={(e) => setActionNotes(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               rows={3}
               placeholder={
                 actionType === 'approve'

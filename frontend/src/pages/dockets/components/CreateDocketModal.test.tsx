@@ -115,8 +115,8 @@ describe('CreateDocketModal', () => {
     expect(
       screen.getByText('Warning: Hours exceed 24 - please verify this is correct'),
     ).toBeInTheDocument();
-    expect(screen.getByLabelText('Labour Hours').className).toContain('border-amber-500');
-    expect(screen.getByLabelText('Plant Hours').className).not.toContain('border-amber-500');
+    expect(screen.getByLabelText('Labour Hours').className).toContain('border-warning');
+    expect(screen.getByLabelText('Plant Hours').className).not.toContain('border-warning');
   });
 
   it('shows the invalid-input warning for malformed plant hours', () => {
