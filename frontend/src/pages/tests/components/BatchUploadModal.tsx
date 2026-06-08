@@ -210,7 +210,7 @@ export const BatchUploadModal = React.memo(function BatchUploadModal({
         {/* Before processing - File selection */}
         {batchResults.length === 0 ? (
           <div className="p-6">
-            <div className="border-2 border-dashed rounded-lg p-8 text-center">
+            <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
               <div className="text-5xl mb-4">{'\uD83D\uDCC1'}</div>
               <h3 className="text-lg font-semibold mb-2">Upload Multiple Test Certificates</h3>
               <p className="text-muted-foreground mb-4">
@@ -249,7 +249,7 @@ export const BatchUploadModal = React.memo(function BatchUploadModal({
 
             {/* Progress indicator */}
             {batchProgress && (
-              <div className="mt-4 p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+              <div className="mt-4 p-4 bg-muted rounded-lg">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-medium">Processing certificates...</span>
                   <span className="text-sm text-muted-foreground">
@@ -258,7 +258,7 @@ export const BatchUploadModal = React.memo(function BatchUploadModal({
                 </div>
                 <div className="w-full bg-muted rounded-full h-2">
                   <div
-                    className="bg-purple-500 h-2 rounded-full transition-all"
+                    className="bg-primary h-2 rounded-full transition-all"
                     style={{ width: `${(batchProgress.current / batchProgress.total) * 100}%` }}
                   />
                 </div>
@@ -278,11 +278,10 @@ export const BatchUploadModal = React.memo(function BatchUploadModal({
               <Button
                 onClick={handleBatchUpload}
                 disabled={batchFiles.length === 0 || batchUploading}
-                className="bg-purple-600 hover:bg-purple-700"
               >
                 {batchUploading ? (
                   <span className="flex items-center gap-2">
-                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
                     Processing...
                   </span>
                 ) : (
@@ -309,25 +308,23 @@ export const BatchUploadModal = React.memo(function BatchUploadModal({
                     key={index}
                     onClick={() => result.success && setSelectedBatchResult(index)}
                     className={`p-3 border-b cursor-pointer hover:bg-muted/50 ${
-                      selectedBatchResult === index
-                        ? 'bg-purple-50 dark:bg-purple-900/20 border-l-4 border-l-purple-500'
-                        : ''
+                      selectedBatchResult === index ? 'bg-muted border-l-4 border-l-foreground' : ''
                     } ${!result.success ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium truncate">{result.filename}</span>
                       {result.success ? (
                         result.extraction?.needsReview ? (
-                          <span className="text-xs px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded">
+                          <span className="text-xs px-1.5 py-0.5 bg-warning/10 text-warning rounded">
                             Review
                           </span>
                         ) : (
-                          <span className="text-xs px-1.5 py-0.5 bg-green-100 text-green-800 rounded">
+                          <span className="text-xs px-1.5 py-0.5 bg-success/10 text-success rounded">
                             {'\u2713'} Good
                           </span>
                         )
                       ) : (
-                        <span className="text-xs px-1.5 py-0.5 bg-red-100 text-red-800 rounded">
+                        <span className="text-xs px-1.5 py-0.5 bg-destructive/10 text-destructive rounded">
                           Failed
                         </span>
                       )}
@@ -487,11 +484,7 @@ export const BatchUploadModal = React.memo(function BatchUploadModal({
                 <Button variant="outline" onClick={handleClose}>
                   Cancel
                 </Button>
-                <Button
-                  onClick={handleBatchConfirmAll}
-                  disabled={batchConfirming}
-                  className="bg-purple-600 hover:bg-purple-700"
-                >
+                <Button onClick={handleBatchConfirmAll} disabled={batchConfirming}>
                   {batchConfirming
                     ? 'Saving...'
                     : `\u2713 Confirm All (${batchResults.filter((r) => r.success).length})`}

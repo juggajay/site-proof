@@ -99,7 +99,7 @@ export const TestResultsTable = React.memo(function TestResultsTable({
                 ? 'Draft review'
                 : testStatusLabels[test.status] || test.status;
               const statusClass = aiExtractionReviewDraft
-                ? 'bg-amber-100 text-amber-800'
+                ? 'bg-warning/10 text-warning'
                 : testStatusColors[test.status] || 'bg-muted';
               return (
                 <div
@@ -117,7 +117,7 @@ export const TestResultsTable = React.memo(function TestResultsTable({
                   <table className="w-full">
                     <tbody>
                       <tr
-                        className={`hover:bg-muted/30 border-b ${overdue ? 'bg-red-50 dark:bg-red-900/20 border-l-4 border-l-red-500' : ''}`}
+                        className={`hover:bg-muted/30 border-b ${overdue ? 'bg-destructive/10 border-l-4 border-l-destructive' : ''}`}
                       >
                         <td className="px-4 py-3 text-sm font-medium">
                           <div className="flex items-center gap-2">
@@ -125,7 +125,7 @@ export const TestResultsTable = React.memo(function TestResultsTable({
                             {/* Feature #200: AI extracted indicator */}
                             {test.aiExtracted && (
                               <span
-                                className="px-1.5 py-0.5 text-[10px] bg-purple-500 text-white rounded font-bold"
+                                className="px-1.5 py-0.5 text-[10px] bg-muted text-muted-foreground rounded font-bold"
                                 title="AI Extracted from certificate"
                               >
                                 AI
@@ -133,21 +133,21 @@ export const TestResultsTable = React.memo(function TestResultsTable({
                             )}
                             {aiExtractionReviewDraft && (
                               <span
-                                className="px-1.5 py-0.5 text-[10px] bg-amber-100 text-amber-800 rounded font-bold"
+                                className="px-1.5 py-0.5 text-[10px] bg-warning/10 text-warning rounded font-bold"
                                 title="Draft extraction review. Confirm the AI review dialog before treating this as an official test result."
                               >
                                 Draft extraction review
                               </span>
                             )}
                             {overdue && (
-                              <span className="px-1.5 py-0.5 text-[10px] bg-red-500 text-white rounded font-bold">
+                              <span className="px-1.5 py-0.5 text-[10px] bg-destructive text-destructive-foreground rounded font-bold">
                                 OVERDUE
                               </span>
                             )}
                           </div>
                           {/* Feature #197: Show days since sample/created */}
                           <div
-                            className={`text-xs mt-0.5 ${overdue ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground'}`}
+                            className={`text-xs mt-0.5 ${overdue ? 'text-destructive' : 'text-muted-foreground'}`}
                           >
                             {daysSince} days since {test.sampleDate ? 'sample' : 'request'}
                           </div>
@@ -213,13 +213,13 @@ export const TestResultsTable = React.memo(function TestResultsTable({
                             {test.status === 'entered' && (
                               <button
                                 onClick={() => onRejectTest(test.id)}
-                                className="px-3 py-1 text-xs rounded bg-red-100 text-red-700 hover:bg-red-200"
+                                className="px-3 py-1 text-xs rounded bg-destructive/10 text-destructive hover:bg-destructive/20"
                               >
                                 Reject
                               </button>
                             )}
                             {test.status === 'verified' && (
-                              <span className="text-green-600 text-xs font-medium">
+                              <span className="text-muted-foreground text-xs font-medium">
                                 {'\u2713'} Complete
                               </span>
                             )}

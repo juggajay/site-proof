@@ -484,9 +484,9 @@ export const CreateTestModal = React.memo(function CreateTestModal({
                 {...register('passFail')}
                 className={
                   passFail === 'pass'
-                    ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
+                    ? 'border-success bg-success/10'
                     : passFail === 'fail'
-                      ? 'border-red-500 bg-red-50 dark:bg-red-900/20'
+                      ? 'border-destructive bg-destructive/10'
                       : ''
                 }
               >

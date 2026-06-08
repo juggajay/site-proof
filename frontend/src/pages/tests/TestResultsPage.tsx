@@ -395,7 +395,7 @@ export function TestResultsPage() {
           </button>
           <button
             onClick={() => setShowBatchUploadModal(true)}
-            className="rounded-lg border border-purple-500 px-4 py-2 text-purple-600 hover:bg-purple-50"
+            className="rounded-lg border border-border px-4 py-2 text-foreground hover:bg-muted/50"
           >
             {'\uD83D\uDCC1'} Batch Upload
           </button>

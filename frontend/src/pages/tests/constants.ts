@@ -4,17 +4,17 @@ import { getCalendarDaysSince } from '@/lib/localDate';
 export const TEST_REJECTION_REASON_MAX_LENGTH = 3000;
 
 export const statusColors: Record<string, string> = {
-  pending: 'bg-yellow-100 text-yellow-800',
-  pass: 'bg-green-100 text-green-800',
-  fail: 'bg-red-100 text-red-800',
+  pending: 'bg-muted text-muted-foreground',
+  pass: 'bg-muted text-muted-foreground',
+  fail: 'bg-destructive/10 text-destructive',
 };
 
 export const testStatusColors: Record<string, string> = {
-  requested: 'bg-gray-100 text-gray-800',
-  at_lab: 'bg-yellow-100 text-yellow-800',
-  results_received: 'bg-purple-100 text-purple-800',
-  entered: 'bg-blue-100 text-blue-800',
-  verified: 'bg-green-100 text-green-800',
+  requested: 'bg-muted text-muted-foreground',
+  at_lab: 'bg-muted text-muted-foreground',
+  results_received: 'bg-muted text-muted-foreground',
+  entered: 'bg-muted text-muted-foreground',
+  verified: 'bg-muted text-muted-foreground',
 };
 
 export const testStatusLabels: Record<string, string> = {
@@ -222,17 +222,17 @@ export const getConfidenceIndicator = (
 
   if (conf < 0.8) {
     return {
-      color: 'border-red-500 bg-red-50 dark:bg-red-900/30',
+      color: 'border-destructive bg-destructive/10',
       text: `${Math.round(conf * 100)}% - Low confidence, please verify`,
     };
   } else if (conf < 0.9) {
     return {
-      color: 'border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20',
+      color: 'border-warning bg-warning/10',
       text: `${Math.round(conf * 100)}% confidence`,
     };
   }
   return {
-    color: 'border-green-500 bg-green-50 dark:bg-green-900/20',
+    color: 'border-success bg-success/10',
     text: `${Math.round(conf * 100)}% confidence`,
   };
 };
@@ -253,9 +253,12 @@ export const getBatchConfidenceIndicator = (
   if (!confidence) return { color: '', text: '' };
 
   if (confidence < 0.8) {
-    return { color: 'border-red-500 bg-red-50', text: `${Math.round(confidence * 100)}%` };
+    return {
+      color: 'border-destructive bg-destructive/10',
+      text: `${Math.round(confidence * 100)}%`,
+    };
   } else if (confidence < 0.9) {
-    return { color: 'border-yellow-500 bg-yellow-50', text: `${Math.round(confidence * 100)}%` };
+    return { color: 'border-warning bg-warning/10', text: `${Math.round(confidence * 100)}%` };
   }
-  return { color: 'border-green-500 bg-green-50', text: `${Math.round(confidence * 100)}%` };
+  return { color: 'border-success bg-success/10', text: `${Math.round(confidence * 100)}%` };
 };
