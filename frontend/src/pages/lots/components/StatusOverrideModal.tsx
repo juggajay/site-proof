@@ -76,7 +76,7 @@ export function StatusOverrideModal({
     <Modal onClose={handleClose}>
       <ModalHeader>
         <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center w-10 h-10 rounded-full bg-purple-100 text-purple-600">
+          <div className="flex items-center justify-center w-10 h-10 rounded-full bg-muted text-muted-foreground">
             <RefreshCw className="h-5 w-5" />
           </div>
           <div>
@@ -101,7 +101,7 @@ export function StatusOverrideModal({
 
             <div>
               <Label htmlFor="override-status">
-                New Workflow Status <span className="text-red-500">*</span>
+                New Workflow Status <span className="text-destructive">*</span>
               </Label>
               <NativeSelect
                 id="override-status"
@@ -124,7 +124,7 @@ export function StatusOverrideModal({
 
             <div>
               <Label htmlFor="override-reason">
-                Reason for Override <span className="text-red-500">*</span>
+                Reason for Override <span className="text-destructive">*</span>
               </Label>
               <Textarea
                 id="override-reason"

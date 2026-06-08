@@ -204,7 +204,7 @@ export function LotsPage() {
           {canDelete && actions.selectedLots.size > 0 && (
             <Button
               variant="outline"
-              className="text-red-600 border-red-600 hover:bg-red-50"
+              className="text-destructive border-destructive hover:bg-destructive/10"
               onClick={() => actions.setBulkDeleteModalOpen(true)}
             >
               Delete Selected ({actions.selectedLots.size})
@@ -213,7 +213,7 @@ export function LotsPage() {
           {actions.selectedLots.size > 0 && (
             <Button
               variant="outline"
-              className="text-green-600 border-green-600 hover:bg-green-50"
+              className="text-foreground border-border hover:bg-muted/50"
               onClick={() => actions.setPrintLabelsModalOpen(true)}
             >
               Print Labels ({actions.selectedLots.size})
@@ -299,7 +299,7 @@ export function LotsPage() {
       {/* Error State */}
       {error && (
         <div
-          className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700"
+          className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-destructive"
           role="alert"
           aria-live="assertive"
         >
@@ -309,7 +309,7 @@ export function LotsPage() {
             type="button"
             variant="outline"
             size="sm"
-            className="mt-3 border-red-300 bg-white text-red-700 hover:bg-red-100"
+            className="mt-3 border-destructive/30 bg-card text-destructive hover:bg-destructive/10"
             onClick={() => void fetchLots()}
           >
             Try again

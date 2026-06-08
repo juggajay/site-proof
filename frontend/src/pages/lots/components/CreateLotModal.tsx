@@ -235,7 +235,7 @@ export function CreateLotModal({ isOpen, onClose, onSuccess, projectId }: Create
             )}
             {lookupError && (
               <div
-                className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"
+                className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm text-warning-foreground"
                 role="alert"
               >
                 <p>{lookupError}</p>
@@ -243,7 +243,7 @@ export function CreateLotModal({ isOpen, onClose, onSuccess, projectId }: Create
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="mt-2 border-amber-300 bg-white text-amber-800 hover:bg-amber-100"
+                  className="mt-2 border-warning/40 bg-card text-warning-foreground hover:bg-warning/10"
                   onClick={() => void fetchLookupData()}
                   disabled={loadingLookups}
                 >
@@ -261,7 +261,7 @@ export function CreateLotModal({ isOpen, onClose, onSuccess, projectId }: Create
             )}
             <div>
               <Label htmlFor="lot-number">
-                Lot Number <span className="text-red-500">*</span>
+                Lot Number <span className="text-destructive">*</span>
                 <span className="text-xs text-muted-foreground ml-2">
                   ({LOT_NUMBER_MIN_LENGTH}-{LOT_NUMBER_MAX_LENGTH} chars)
                 </span>
@@ -275,7 +275,7 @@ export function CreateLotModal({ isOpen, onClose, onSuccess, projectId }: Create
                 placeholder="e.g., LOT-001"
               />
               {errors.lotNumber && (
-                <p className="text-sm text-red-600 mt-1" role="alert" aria-live="assertive">
+                <p className="text-sm text-destructive mt-1" role="alert" aria-live="assertive">
                   {errors.lotNumber.message}
                 </p>
               )}
@@ -360,7 +360,7 @@ export function CreateLotModal({ isOpen, onClose, onSuccess, projectId }: Create
                   placeholder="e.g., 0"
                 />
                 {errors.chainageStart && (
-                  <p className="text-sm text-red-600 mt-1" role="alert" aria-live="assertive">
+                  <p className="text-sm text-destructive mt-1" role="alert" aria-live="assertive">
                     {errors.chainageStart.message}
                   </p>
                 )}
@@ -378,7 +378,7 @@ export function CreateLotModal({ isOpen, onClose, onSuccess, projectId }: Create
                   placeholder="e.g., 100"
                 />
                 {errors.chainageEnd && (
-                  <p className="text-sm text-red-600 mt-1" role="alert" aria-live="assertive">
+                  <p className="text-sm text-destructive mt-1" role="alert" aria-live="assertive">
                     {errors.chainageEnd.message}
                   </p>
                 )}

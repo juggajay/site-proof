@@ -252,22 +252,24 @@ export function ImportLotsModal({ projectId, onClose, onSuccess }: ImportLotsMod
                 <p className="text-2xl font-bold">{validationResult.lots.length}</p>
               </div>
               <div
-                className={`flex-1 p-3 rounded-lg ${validationResult.errors.length > 0 ? 'bg-red-100 dark:bg-red-900/30' : 'bg-green-100 dark:bg-green-900/30'}`}
+                className={`flex-1 p-3 rounded-lg ${validationResult.errors.length > 0 ? 'bg-destructive/10' : 'bg-success/10'}`}
               >
                 <p className="text-sm text-muted-foreground flex items-center gap-1">
-                  <AlertCircle className="h-4 w-4 text-red-600" />
+                  <AlertCircle className="h-4 w-4 text-destructive" />
                   Errors
                 </p>
-                <p className="text-2xl font-bold text-red-600">{validationResult.errors.length}</p>
+                <p className="text-2xl font-bold text-destructive">
+                  {validationResult.errors.length}
+                </p>
               </div>
               <div
-                className={`flex-1 p-3 rounded-lg ${validationResult.warnings.length > 0 ? 'bg-amber-100 dark:bg-amber-900/30' : 'bg-green-100 dark:bg-green-900/30'}`}
+                className={`flex-1 p-3 rounded-lg ${validationResult.warnings.length > 0 ? 'bg-warning/10' : 'bg-success/10'}`}
               >
                 <p className="text-sm text-muted-foreground flex items-center gap-1">
-                  <AlertTriangle className="h-4 w-4 text-amber-600" />
+                  <AlertTriangle className="h-4 w-4 text-warning" />
                   Warnings
                 </p>
-                <p className="text-2xl font-bold text-amber-600">
+                <p className="text-2xl font-bold text-warning">
                   {validationResult.warnings.length}
                 </p>
               </div>
@@ -277,15 +279,15 @@ export function ImportLotsModal({ projectId, onClose, onSuccess }: ImportLotsMod
             <div className="flex-1 overflow-auto space-y-4 min-h-0">
               {/* Errors Section */}
               {validationResult.errors.length > 0 && (
-                <div className="border border-red-200 rounded-lg overflow-hidden">
-                  <div className="bg-red-50 dark:bg-red-900/30 px-4 py-2 font-medium flex items-center gap-2 text-red-800 dark:text-red-200">
+                <div className="border border-destructive/30 rounded-lg overflow-hidden">
+                  <div className="bg-destructive/10 px-4 py-2 font-medium flex items-center gap-2 text-destructive">
                     <AlertCircle className="h-4 w-4" />
                     Errors ({validationResult.errors.length}) - Must be fixed before import
                   </div>
                   <div className="divide-y max-h-40 overflow-auto">
                     {validationResult.errors.map((error, idx) => (
                       <div key={idx} className="px-4 py-2 text-sm flex items-start gap-2">
-                        <span className="font-mono bg-red-100 dark:bg-red-900/50 px-1 rounded text-red-800 dark:text-red-200">
+                        <span className="font-mono bg-destructive/10 px-1 rounded text-destructive">
                           Row {error.row}
                         </span>
                         <span className="font-medium">{error.field}:</span>
@@ -298,15 +300,15 @@ export function ImportLotsModal({ projectId, onClose, onSuccess }: ImportLotsMod
 
               {/* Warnings Section */}
               {validationResult.warnings.length > 0 && (
-                <div className="border border-amber-200 rounded-lg overflow-hidden">
-                  <div className="bg-amber-50 dark:bg-amber-900/30 px-4 py-2 font-medium flex items-center gap-2 text-amber-800 dark:text-amber-200">
+                <div className="border border-warning/30 rounded-lg overflow-hidden">
+                  <div className="bg-warning/10 px-4 py-2 font-medium flex items-center gap-2 text-warning">
                     <AlertTriangle className="h-4 w-4" />
                     Warnings ({validationResult.warnings.length}) - Non-blocking issues
                   </div>
                   <div className="divide-y max-h-40 overflow-auto">
                     {validationResult.warnings.map((warning, idx) => (
                       <div key={idx} className="px-4 py-2 text-sm flex items-start gap-2">
-                        <span className="font-mono bg-amber-100 dark:bg-amber-900/50 px-1 rounded text-amber-800 dark:text-amber-200">
+                        <span className="font-mono bg-warning/10 px-1 rounded text-warning">
                           Row {warning.row}
                         </span>
                         <span className="font-medium">{warning.field}:</span>
@@ -319,7 +321,7 @@ export function ImportLotsModal({ projectId, onClose, onSuccess }: ImportLotsMod
 
               {/* Success message */}
               {validationResult.isValid && (
-                <div className="border border-green-200 rounded-lg p-4 bg-green-50 dark:bg-green-900/30 flex items-center gap-2 text-green-800 dark:text-green-200">
+                <div className="border border-success/30 rounded-lg p-4 bg-success/10 flex items-center gap-2 text-success">
                   <CheckCircle2 className="h-5 w-5" />
                   <span>
                     All {validationResult.lots.length} rows passed validation. Ready to import!

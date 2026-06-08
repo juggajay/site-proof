@@ -154,7 +154,7 @@ export function BulkCreateLotsWizard({ projectId, onClose, onSuccess }: BulkCrea
                     step === s
                       ? 'bg-primary text-primary-foreground'
                       : ['chainage', 'parameters', 'preview', 'confirm'].indexOf(step) > i
-                        ? 'bg-green-500 text-white'
+                        ? 'bg-muted-foreground text-background'
                         : 'bg-muted text-muted-foreground'
                   }`}
                 >

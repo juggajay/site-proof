@@ -49,9 +49,9 @@ export function HistoryTabContent({ activityLogs, loading }: HistoryTabContentPr
               <div
                 className={`absolute left-2.5 w-3 h-3 rounded-full border-2 bg-background ${
                   isCreate
-                    ? 'border-green-500'
+                    ? 'border-muted-foreground'
                     : isDelete
-                      ? 'border-red-500'
+                      ? 'border-destructive'
                       : isUpdate
                         ? 'border-primary'
                         : 'border-muted-foreground'
@@ -64,9 +64,9 @@ export function HistoryTabContent({ activityLogs, loading }: HistoryTabContentPr
                     <span
                       className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${
                         isCreate
-                          ? 'bg-green-100 text-green-700'
+                          ? 'bg-muted text-muted-foreground'
                           : isDelete
-                            ? 'bg-red-100 text-red-700'
+                            ? 'bg-destructive/10 text-destructive'
                             : isUpdate
                               ? 'bg-primary/10 text-primary'
                               : 'bg-muted text-muted-foreground'
@@ -112,13 +112,13 @@ export function HistoryTabContent({ activityLogs, loading }: HistoryTabContentPr
                             </span>{' '}
                             {from !== undefined && (
                               <>
-                                <span className="text-red-600 line-through">
+                                <span className="text-destructive line-through">
                                   {String(from || '(empty)')}
                                 </span>
                                 {' → '}
                               </>
                             )}
-                            <span className="text-green-600">{String(to || '(empty)')}</span>
+                            <span className="text-foreground">{String(to || '(empty)')}</span>
                           </div>
                         );
                       })}

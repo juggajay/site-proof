@@ -29,7 +29,7 @@ export function highlightSearchTerm(text: string, searchTerm: string): React.Rea
 
   return parts.map((part, index) =>
     regex.test(part) ? (
-      <mark key={index} className="bg-yellow-200 text-yellow-900 px-0.5 rounded">
+      <mark key={index} className="bg-brand/20 text-foreground px-0.5 rounded">
         {part}
       </mark>
     ) : (

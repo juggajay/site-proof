@@ -86,7 +86,7 @@ export function LegacyAssignSubcontractorModal({
           </div>
 
           {lot.assignedSubcontractorId && selectedSubcontractor !== lot.assignedSubcontractorId && (
-            <div className="text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded-lg p-3">
+            <div className="text-sm text-warning-foreground bg-warning/10 border border-warning/20 rounded-lg p-3">
               <strong>Note:</strong> This will change the assigned subcontractor from{' '}
               <span className="font-medium">
                 {lot.assignedSubcontractor?.companyName || 'current'}

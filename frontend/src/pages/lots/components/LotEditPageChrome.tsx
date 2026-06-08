@@ -45,7 +45,7 @@ export function LotEditHeader({
           <h1 className="text-2xl font-bold">Edit Lot</h1>
           {offlineSyncStatus !== 'synced' && <SyncStatusBadge status={offlineSyncStatus} />}
           {!isOnline && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-warning/10 text-warning">
               Offline Mode
             </span>
           )}
@@ -75,7 +75,7 @@ export function LotEditLockedWarning({
   if (!detailsLocked) return null;
 
   return (
-    <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-800">
+    <div className="rounded-lg border border-warning/30 bg-warning/10 p-4 text-warning">
       <strong>Note:</strong>{' '}
       {canEditConformedBudget
         ? 'Only the commercial budget can be edited on this conformed lot before it is claimed.'
@@ -88,7 +88,9 @@ export function LotEditSaveError({ saveError }: { saveError: string | null }) {
   if (!saveError) return null;
 
   return (
-    <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">{saveError}</div>
+    <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-destructive">
+      {saveError}
+    </div>
   );
 }
 

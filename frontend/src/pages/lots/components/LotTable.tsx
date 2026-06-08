@@ -19,13 +19,13 @@ import type { Lot } from '../lotsPageTypes';
 import { readLocalStorageItem, writeLocalStorageItem } from '@/lib/storagePreferences';
 import { formatStatusLabel } from '@/lib/statusLabels';
 
-// Feature #438: Okabe-Ito color-blind safe palette
+// Colour reserved for decision/exception states only (INV-3); benign states stay monochrome.
 const statusColors: Record<string, string> = {
-  pending: 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200',
-  in_progress: 'bg-sky-100 dark:bg-sky-900/40 text-sky-800 dark:text-sky-200',
-  completed: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-200',
-  on_hold: 'bg-orange-100 dark:bg-orange-900/40 text-orange-800 dark:text-orange-200',
-  not_started: 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200',
+  pending: 'bg-muted text-muted-foreground',
+  in_progress: 'bg-muted text-muted-foreground',
+  completed: 'bg-muted text-muted-foreground',
+  on_hold: 'bg-warning/10 text-warning',
+  not_started: 'bg-muted text-muted-foreground',
 };
 
 interface LotTableProps {
@@ -433,7 +433,7 @@ export const LotTable = React.memo(function LotTable({
                           </button>
                           {canCreate && lot.status !== 'conformed' && lot.status !== 'claimed' && (
                             <button
-                              className="text-sm text-amber-600 hover:underline px-2 py-3 min-h-[44px] touch-manipulation"
+                              className="text-sm text-primary hover:underline px-2 py-3 min-h-[44px] touch-manipulation"
                               onClick={() =>
                                 navigate(
                                   `/projects/${encodeURIComponent(projectId)}/lots/${encodeURIComponent(lot.id)}/edit`,
@@ -455,7 +455,7 @@ export const LotTable = React.memo(function LotTable({
                           )}
                           {canDelete && lot.status !== 'conformed' && lot.status !== 'claimed' && (
                             <button
-                              className="text-sm text-red-600 hover:underline px-2 py-3 min-h-[44px] touch-manipulation"
+                              className="text-sm text-destructive hover:underline px-2 py-3 min-h-[44px] touch-manipulation"
                               onClick={() => onDeleteClick(lot)}
                             >
                               Delete

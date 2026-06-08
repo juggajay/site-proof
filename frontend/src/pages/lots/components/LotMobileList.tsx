@@ -7,25 +7,27 @@ import { SwipeableCard } from '@/components/foreman/SwipeableCard';
 import { formatStatusLabel } from '@/lib/statusLabels';
 import type { Lot } from '../lotsPageTypes';
 
-// Feature #438: Okabe-Ito color-blind safe palette
+// Status pill colors for mobile cards. Benign states stay monochrome;
+// colour is reserved for the on-hold exception state (INV-3).
 const statusColors: Record<string, string> = {
-  pending: 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200',
-  in_progress: 'bg-sky-100 dark:bg-sky-900/40 text-sky-800 dark:text-sky-200',
-  completed: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-200',
-  on_hold: 'bg-orange-100 dark:bg-orange-900/40 text-orange-800 dark:text-orange-200',
-  not_started: 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200',
+  pending: 'bg-muted text-muted-foreground',
+  in_progress: 'bg-muted text-muted-foreground',
+  completed: 'bg-muted text-muted-foreground',
+  on_hold: 'bg-warning/10 text-warning',
+  not_started: 'bg-muted text-muted-foreground',
 };
 
-// Status border colors for mobile cards
+// Status border colors for mobile cards. Benign states use a neutral border;
+// colour is reserved for the hold-point / NCR exception states (INV-3).
 const statusBorderColors: Record<string, string> = {
-  not_started: 'border-l-gray-400',
-  in_progress: 'border-l-sky-500',
-  awaiting_test: 'border-l-purple-500',
-  hold_point: 'border-l-red-500',
-  ncr_raised: 'border-l-red-600',
-  completed: 'border-l-emerald-500',
-  conformed: 'border-l-green-600',
-  claimed: 'border-l-teal-500',
+  not_started: 'border-l-border',
+  in_progress: 'border-l-border',
+  awaiting_test: 'border-l-border',
+  hold_point: 'border-l-warning',
+  ncr_raised: 'border-l-destructive',
+  completed: 'border-l-border',
+  conformed: 'border-l-border',
+  claimed: 'border-l-border',
 };
 
 // Format chainage for display
@@ -139,7 +141,7 @@ export const LotMobileList = React.memo(function LotMobileList({
               <div
                 className={`rounded-lg border bg-card p-4 hover:shadow-md transition-shadow cursor-pointer ${
                   isMobile
-                    ? `border-l-4 ${statusBorderColors[lot.status] || 'border-l-gray-400'}`
+                    ? `border-l-4 ${statusBorderColors[lot.status] || 'border-l-border'}`
                     : ''
                 }`}
                 onClick={() => navigate(`/projects/${projectId}/lots/${lot.id}`)}
@@ -178,7 +180,7 @@ export const LotMobileList = React.memo(function LotMobileList({
                     <span>{lot.itpCount ?? 0} ITPs</span>
                     <span>{lot.testCount ?? 0} Tests</span>
                     {(lot.ncrCount ?? 0) > 0 && (
-                      <span className="text-amber-600 flex items-center gap-0.5">
+                      <span className="text-warning flex items-center gap-0.5">
                         <AlertTriangle className="h-3 w-3" />
                         {lot.ncrCount} NCRs
                       </span>
@@ -197,7 +199,7 @@ export const LotMobileList = React.memo(function LotMobileList({
                 onSwipeRight={() => navigate(`/projects/${projectId}/lots/${lot.id}`)}
                 rightAction={{
                   label: 'View',
-                  color: 'bg-blue-500',
+                  color: 'bg-primary',
                   icon: <Eye className="h-6 w-6" />,
                 }}
               >

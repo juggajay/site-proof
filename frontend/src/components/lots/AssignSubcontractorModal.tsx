@@ -191,11 +191,11 @@ export function AssignSubcontractorModal({
             <div className="space-y-2">
               <Label>Subcontractor Company</Label>
               {!projectId ? (
-                <p className="text-sm text-red-500">
+                <p className="text-sm text-destructive">
                   Error: Project ID is missing. Please reload the page.
                 </p>
               ) : subError || assignError ? (
-                <p className="text-sm text-red-500">
+                <p className="text-sm text-destructive">
                   Error loading data:{' '}
                   {(subError as Error)?.message ||
                     (assignError as Error)?.message ||

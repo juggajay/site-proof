@@ -48,7 +48,7 @@ export function DeleteLotModal({ isOpen, lot, onClose, onDeleted, onError }: Del
         {lot.description && (
           <p className="mt-1 text-sm text-muted-foreground">&quot;{lot.description}&quot;</p>
         )}
-        <p className="mt-3 text-sm text-red-600">
+        <p className="mt-3 text-sm text-destructive">
           This action cannot be undone. All associated data will be permanently deleted.
         </p>
       </ModalBody>

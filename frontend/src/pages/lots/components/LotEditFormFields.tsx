@@ -63,7 +63,7 @@ export function LotEditFormFields({
               onChange={onInputChange}
               disabled={detailsLocked}
               required
-              className="w-full rounded-lg border px-3 py-2 disabled:bg-muted disabled:cursor-not-allowed"
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground disabled:bg-muted disabled:cursor-not-allowed"
             />
           </div>
 
@@ -77,7 +77,7 @@ export function LotEditFormFields({
               value={formData.status}
               onChange={onInputChange}
               disabled={detailsLocked}
-              className="w-full rounded-lg border px-3 py-2 disabled:bg-muted disabled:cursor-not-allowed"
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground disabled:bg-muted disabled:cursor-not-allowed"
             >
               <option value="">Select status</option>
               {STATUS_OPTIONS.map((opt) => (
@@ -100,7 +100,7 @@ export function LotEditFormFields({
             onChange={onInputChange}
             disabled={detailsLocked}
             rows={3}
-            className="w-full rounded-lg border px-3 py-2 disabled:bg-muted disabled:cursor-not-allowed"
+            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground disabled:bg-muted disabled:cursor-not-allowed"
           />
         </div>
 
@@ -114,7 +114,7 @@ export function LotEditFormFields({
             value={formData.activityType}
             onChange={onInputChange}
             disabled={detailsLocked}
-            className="w-full rounded-lg border px-3 py-2 disabled:bg-muted disabled:cursor-not-allowed"
+            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground disabled:bg-muted disabled:cursor-not-allowed"
           >
             <option value="">Select activity type</option>
             {ACTIVITY_TYPES.map((type) => (
@@ -143,7 +143,7 @@ export function LotEditFormFields({
               onChange={onInputChange}
               disabled={detailsLocked}
               step="0.01"
-              className="w-full rounded-lg border px-3 py-2 disabled:bg-muted disabled:cursor-not-allowed"
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground disabled:bg-muted disabled:cursor-not-allowed"
             />
           </div>
 
@@ -159,7 +159,7 @@ export function LotEditFormFields({
               onChange={onInputChange}
               disabled={detailsLocked}
               step="0.01"
-              className="w-full rounded-lg border px-3 py-2 disabled:bg-muted disabled:cursor-not-allowed"
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground disabled:bg-muted disabled:cursor-not-allowed"
             />
           </div>
 
@@ -173,7 +173,7 @@ export function LotEditFormFields({
               value={formData.offset}
               onChange={onInputChange}
               disabled={detailsLocked}
-              className="w-full rounded-lg border px-3 py-2 disabled:bg-muted disabled:cursor-not-allowed"
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground disabled:bg-muted disabled:cursor-not-allowed"
             >
               <option value="">Select offset</option>
               {OFFSET_OPTIONS.map((opt) => (
@@ -197,7 +197,7 @@ export function LotEditFormFields({
                 onChange={onInputChange}
                 disabled={detailsLocked}
                 placeholder="e.g., +2.5m, -1.0m CL"
-                className="w-full rounded-lg border px-3 py-2 disabled:bg-muted disabled:cursor-not-allowed"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground disabled:bg-muted disabled:cursor-not-allowed"
               />
             </div>
           )}
@@ -213,7 +213,7 @@ export function LotEditFormFields({
               value={formData.layer}
               onChange={onInputChange}
               disabled={detailsLocked}
-              className="w-full rounded-lg border px-3 py-2 disabled:bg-muted disabled:cursor-not-allowed"
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground disabled:bg-muted disabled:cursor-not-allowed"
             />
           </div>
 
@@ -228,7 +228,7 @@ export function LotEditFormFields({
               value={formData.areaZone}
               onChange={onInputChange}
               disabled={detailsLocked}
-              className="w-full rounded-lg border px-3 py-2 disabled:bg-muted disabled:cursor-not-allowed"
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground disabled:bg-muted disabled:cursor-not-allowed"
             />
           </div>
         </div>
@@ -252,7 +252,7 @@ export function LotEditFormFields({
                 onChange={onInputChange}
                 disabled={budgetLocked}
                 step="0.01"
-                className="w-full rounded-lg border px-3 py-2 disabled:bg-muted disabled:cursor-not-allowed"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground disabled:bg-muted disabled:cursor-not-allowed"
               />
             </div>
 
@@ -266,7 +266,7 @@ export function LotEditFormFields({
                 value={formData.assignedSubcontractorId}
                 onChange={onInputChange}
                 disabled={detailsLocked}
-                className="w-full rounded-lg border px-3 py-2 disabled:bg-muted disabled:cursor-not-allowed"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground disabled:bg-muted disabled:cursor-not-allowed"
               >
                 <option value="">No subcontractor assigned</option>
                 {subcontractors.map((sub) => (

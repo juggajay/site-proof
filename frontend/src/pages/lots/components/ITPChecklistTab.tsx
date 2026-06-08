@@ -219,10 +219,10 @@ export function ITPChecklistTab({
             <div
               className={`mb-4 flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${
                 !isOnline
-                  ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                  ? 'bg-warning/10 text-warning-foreground border border-warning/20'
                   : isOfflineData
-                    ? 'bg-blue-50 text-blue-800 border border-blue-200'
-                    : 'bg-green-50 text-green-800 border border-green-200'
+                    ? 'bg-muted text-muted-foreground border border-border'
+                    : 'bg-muted text-muted-foreground border border-border'
               }`}
             >
               {!isOnline ? (
@@ -230,7 +230,7 @@ export function ITPChecklistTab({
                   <WifiOff className="h-4 w-4" />
                   <span>Offline Mode - Changes will sync when online</span>
                   {offlinePendingCount > 0 && (
-                    <span className="ml-auto bg-amber-200 px-2 py-0.5 rounded-full text-xs font-medium">
+                    <span className="ml-auto bg-warning/20 px-2 py-0.5 rounded-full text-xs font-medium">
                       {offlinePendingCount} pending
                     </span>
                   )}
@@ -355,7 +355,7 @@ export function ITPChecklistTab({
                     <span
                       className={`text-xs px-2 py-1 rounded-full font-medium ${
                         isCategoryComplete
-                          ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                          ? 'bg-foreground/10 text-foreground'
                           : 'bg-muted text-muted-foreground'
                       }`}
                     >
@@ -482,13 +482,13 @@ export function ITPChecklistTab({
                     }}
                     disabled={assigningTemplate}
                     className={`w-full text-left p-3 border rounded-lg hover:border-primary/50 transition-colors disabled:opacity-50 ${
-                      isMatch ? 'border-green-500 bg-green-50 dark:bg-green-950/20' : ''
+                      isMatch ? 'border-primary/40 bg-muted' : ''
                     }`}
                   >
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{template.name}</span>
                       {isMatch && (
-                        <span className="text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 px-2 py-0.5 rounded-full">
+                        <span className="text-xs bg-foreground/10 text-foreground px-2 py-0.5 rounded-full">
                           Suggested
                         </span>
                       )}

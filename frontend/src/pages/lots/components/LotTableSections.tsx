@@ -99,7 +99,7 @@ export function LotExpandedDetailsRow({ lot, colSpanCount }: LotExpandedDetailsR
             </h4>
             <div className="space-y-1 text-muted-foreground">
               <p className="flex items-center gap-1">
-                {(lot.ncrCount ?? 0) > 0 && <AlertTriangle className="h-3 w-3 text-amber-500" />}
+                {(lot.ncrCount ?? 0) > 0 && <AlertTriangle className="h-3 w-3 text-warning" />}
                 NCRs: {lot.ncrCount ?? 0}
               </p>
               <p>Hold Points: {lot.holdPointCount ?? 0}</p>

@@ -305,7 +305,7 @@ export function PhotosTab({
                 </div>
                 {/* Caption badge if exists */}
                 {attachment.document.caption && (
-                  <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded">
+                  <div className="absolute top-2 right-2 bg-success text-success-foreground text-xs px-1.5 py-0.5 rounded">
                     Captioned
                   </div>
                 )}
@@ -405,7 +405,7 @@ export function PhotosTab({
                       onClick={() => setSelectedEvidenceItem(item.id)}
                       className={`w-full text-left p-3 rounded-lg border transition-colors ${
                         isSelected
-                          ? 'border-green-500 bg-green-50 dark:bg-green-950/30'
+                          ? 'border-success bg-success/10'
                           : 'hover:border-primary hover:bg-muted/50'
                       }`}
                     >
@@ -423,7 +423,7 @@ export function PhotosTab({
                           </p>
                         </div>
                         {isSelected && (
-                          <CheckCircle className="h-5 w-5 text-green-500 ml-2 flex-shrink-0" />
+                          <CheckCircle className="h-5 w-5 text-success ml-2 flex-shrink-0" />
                         )}
                       </div>
                     </button>

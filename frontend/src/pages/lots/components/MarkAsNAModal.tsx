@@ -75,7 +75,7 @@ export function MarkAsNAModal({
         <form id="mark-na-form" onSubmit={handleSubmit(onFormSubmit)}>
           <div className="mb-4">
             <Label>
-              Reason for N/A <span className="text-red-500">*</span>
+              Reason for N/A <span className="text-destructive">*</span>
             </Label>
             <Textarea
               {...register('reason')}

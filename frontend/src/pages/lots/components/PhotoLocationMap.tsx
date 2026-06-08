@@ -42,7 +42,7 @@ export function PhotoLocationMap({
         href={location.googleMapsUrl}
         target="_blank"
         rel="noopener noreferrer"
-        className="text-xs text-primary/70 hover:text-primary mt-1 inline-block"
+        className="text-xs text-white/70 hover:text-white mt-1 inline-block"
         onClick={(event) => event.stopPropagation()}
       >
         {openLabel}

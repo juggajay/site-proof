@@ -143,7 +143,7 @@ describe('highlightSearchTerm', () => {
 
     expect(marks).toHaveLength(1);
     expect(marks[0]?.textContent).toBe('Lot');
-    expect(marks[0]?.className).toBe('bg-yellow-200 text-yellow-900 px-0.5 rounded');
+    expect(marks[0]?.className).toBe('bg-brand/20 text-foreground px-0.5 rounded');
     expect(container.textContent).toBe('Lot 100 base');
   });
 

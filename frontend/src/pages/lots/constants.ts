@@ -39,40 +39,40 @@ export function getLotTabsForRole(role: string | undefined | null): TabConfig[] 
 
 // Status color classes for lot status badges
 export const lotStatusColors: Record<string, string> = {
-  pending: 'bg-yellow-100 text-yellow-800',
-  in_progress: 'bg-blue-100 text-blue-800',
-  completed: 'bg-green-100 text-green-800',
-  on_hold: 'bg-red-100 text-red-800',
+  pending: 'bg-muted text-muted-foreground',
+  in_progress: 'bg-muted text-muted-foreground',
+  completed: 'bg-muted text-muted-foreground',
+  on_hold: 'bg-warning/10 text-warning',
 };
 
 // Pass/fail color classes for test results
 export const testPassFailColors: Record<string, string> = {
-  pending: 'bg-yellow-100 text-yellow-800',
-  pass: 'bg-green-100 text-green-800',
-  fail: 'bg-red-100 text-red-800',
+  pending: 'bg-muted text-muted-foreground',
+  pass: 'bg-muted text-muted-foreground',
+  fail: 'bg-destructive/10 text-destructive',
 };
 
 // Status color classes for test result workflow status
 export const testStatusColors: Record<string, string> = {
-  requested: 'bg-gray-100 text-gray-800',
-  entered: 'bg-blue-100 text-blue-800',
-  verified: 'bg-green-100 text-green-800',
+  requested: 'bg-muted text-muted-foreground',
+  entered: 'bg-muted text-muted-foreground',
+  verified: 'bg-muted text-muted-foreground',
 };
 
 // Status color classes for NCR workflow status
 export const ncrStatusColors: Record<string, string> = {
-  open: 'bg-red-100 text-red-800',
-  investigating: 'bg-yellow-100 text-yellow-800',
-  rectification: 'bg-orange-100 text-orange-800',
-  verification: 'bg-blue-100 text-blue-800',
-  closed: 'bg-green-100 text-green-800',
-  closed_concession: 'bg-green-100 text-green-700',
+  open: 'bg-destructive/10 text-destructive',
+  investigating: 'bg-warning/10 text-warning',
+  rectification: 'bg-warning/10 text-warning',
+  verification: 'bg-muted text-muted-foreground',
+  closed: 'bg-muted text-muted-foreground',
+  closed_concession: 'bg-muted text-muted-foreground',
 };
 
 // Severity color classes for NCRs
 export const severityColors: Record<string, string> = {
-  minor: 'bg-yellow-100 text-yellow-800',
-  major: 'bg-red-500 text-white',
+  minor: 'bg-warning/10 text-warning',
+  major: 'bg-destructive text-destructive-foreground',
 };
 
 // Workflow statuses only. Conformance and claim terminal states are controlled
