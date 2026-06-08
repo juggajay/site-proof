@@ -87,7 +87,7 @@ export function DiaryDocketSummary({
         <div className="flex items-center gap-4 text-sm">
           {summary && summary.totals.workers > 0 && (
             <span className="flex items-center gap-1">
-              <Users className="h-4 w-4 text-emerald-600" />
+              <Users className="h-4 w-4 text-muted-foreground" />
               <strong>{summary.totals.workers}</strong> workers
             </span>
           )}
@@ -100,7 +100,7 @@ export function DiaryDocketSummary({
         </div>
         <div className="flex items-center gap-2">
           {summary && summary.pendingCount > 0 && (
-            <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
+            <span className="text-xs bg-warning/10 text-warning px-2 py-0.5 rounded-full">
               {summary.pendingCount} pending
             </span>
           )}
@@ -113,7 +113,7 @@ export function DiaryDocketSummary({
           {summary?.approvedDockets.map((d) => (
             <div key={d.id} className="space-y-1">
               <div className="flex items-center gap-2">
-                <Check className="h-3 w-3 text-green-600" />
+                <Check className="h-3 w-3 text-muted-foreground" />
                 <span className="text-sm font-medium">{d.subcontractor}</span>
               </div>
               <p className="text-xs text-muted-foreground ml-5">
@@ -134,8 +134,8 @@ export function DiaryDocketSummary({
               onClick={() => onTapPending(d.id)}
               className="flex items-center gap-2 w-full text-left touch-manipulation"
             >
-              <Clock className="h-3 w-3 text-amber-500" />
-              <span className="text-sm text-amber-600">{d.subcontractor} — pending</span>
+              <Clock className="h-3 w-3 text-warning" />
+              <span className="text-sm text-warning">{d.subcontractor} — pending</span>
             </button>
           ))}
 

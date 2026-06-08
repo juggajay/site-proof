@@ -150,9 +150,9 @@ export function AddManualLabourPlantSheet({
     <BottomSheet isOpen={isOpen} onClose={onClose} title={title}>
       <div className="space-y-6">
         {/* Tip banner */}
-        <div className="flex items-start gap-2 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-          <Info className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
-          <p className="text-xs text-blue-700 dark:text-blue-300">
+        <div className="flex items-start gap-2 p-3 bg-muted rounded-lg border border-border">
+          <Info className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+          <p className="text-xs text-muted-foreground">
             Tip: Labour and plant auto-populate from approved dockets.
           </p>
         </div>
@@ -170,7 +170,7 @@ export function AddManualLabourPlantSheet({
                 value={personnelName}
                 onChange={(e) => setPersonnelName(e.target.value)}
                 placeholder="Worker name"
-                className="w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation"
+                className="w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation"
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -181,7 +181,7 @@ export function AddManualLabourPlantSheet({
                   value={personnelCompany}
                   onChange={(e) => setPersonnelCompany(e.target.value)}
                   placeholder="Company"
-                  className="w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation"
+                  className="w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation"
                 />
               </div>
               <div>
@@ -191,7 +191,7 @@ export function AddManualLabourPlantSheet({
                   value={personnelRole}
                   onChange={(e) => setPersonnelRole(e.target.value)}
                   placeholder="Role"
-                  className="w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation"
+                  className="w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation"
                 />
               </div>
             </div>
@@ -205,12 +205,12 @@ export function AddManualLabourPlantSheet({
                   placeholder="0"
                   step="0.5"
                   className={cn(
-                    'w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation',
-                    personnelHoursError && 'border-red-500',
+                    'w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation',
+                    personnelHoursError && 'border-destructive',
                   )}
                 />
                 {personnelHoursError && (
-                  <p className="mt-1 text-xs text-red-600" role="alert" aria-live="assertive">
+                  <p className="mt-1 text-xs text-destructive" role="alert" aria-live="assertive">
                     {personnelHoursError}
                   </p>
                 )}
@@ -220,7 +220,7 @@ export function AddManualLabourPlantSheet({
                 <select
                   value={personnelLotId}
                   onChange={(e) => setPersonnelLotId(e.target.value)}
-                  className="w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation bg-background"
+                  className="w-full mt-1 px-3 py-3 border border-border rounded-lg text-base touch-manipulation bg-background text-foreground"
                 >
                   <option value="">No lot</option>
                   {lots.map((lot) => (
@@ -235,8 +235,8 @@ export function AddManualLabourPlantSheet({
               onClick={handleSavePersonnel}
               disabled={!personnelName.trim() || Boolean(personnelHoursError) || savingPersonnel}
               className={cn(
-                'w-full py-3 rounded-lg font-semibold text-white',
-                'bg-emerald-600 active:bg-emerald-700',
+                'w-full py-3 rounded-lg font-semibold text-primary-foreground',
+                'bg-primary active:bg-primary/90',
                 'touch-manipulation min-h-[48px]',
                 'flex items-center justify-center gap-2',
                 (!personnelName.trim() || personnelHoursError || savingPersonnel) && 'opacity-50',
@@ -254,7 +254,7 @@ export function AddManualLabourPlantSheet({
         )}
 
         {/* Divider */}
-        {!editingMode && <div className="border-t" />}
+        {!editingMode && <div className="border-t border-border" />}
 
         {/* Plant section */}
         {editingMode !== 'personnel' && (
@@ -269,7 +269,7 @@ export function AddManualLabourPlantSheet({
                 value={plantDescription}
                 onChange={(e) => setPlantDescription(e.target.value)}
                 placeholder="Plant / equipment description"
-                className="w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation"
+                className="w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation"
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -280,7 +280,7 @@ export function AddManualLabourPlantSheet({
                   value={plantIdRego}
                   onChange={(e) => setPlantIdRego(e.target.value)}
                   placeholder="ID or rego"
-                  className="w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation"
+                  className="w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation"
                 />
               </div>
               <div>
@@ -290,7 +290,7 @@ export function AddManualLabourPlantSheet({
                   value={plantCompany}
                   onChange={(e) => setPlantCompany(e.target.value)}
                   placeholder="Company"
-                  className="w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation"
+                  className="w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation"
                 />
               </div>
             </div>
@@ -304,12 +304,12 @@ export function AddManualLabourPlantSheet({
                   placeholder="0"
                   step="0.5"
                   className={cn(
-                    'w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation',
-                    plantHoursError && 'border-red-500',
+                    'w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation',
+                    plantHoursError && 'border-destructive',
                   )}
                 />
                 {plantHoursError && (
-                  <p className="mt-1 text-xs text-red-600" role="alert" aria-live="assertive">
+                  <p className="mt-1 text-xs text-destructive" role="alert" aria-live="assertive">
                     {plantHoursError}
                   </p>
                 )}
@@ -319,7 +319,7 @@ export function AddManualLabourPlantSheet({
                 <select
                   value={plantLotId}
                   onChange={(e) => setPlantLotId(e.target.value)}
-                  className="w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation bg-background"
+                  className="w-full mt-1 px-3 py-3 border border-border rounded-lg text-base touch-manipulation bg-background text-foreground"
                 >
                   <option value="">No lot</option>
                   {lots.map((lot) => (
@@ -334,8 +334,8 @@ export function AddManualLabourPlantSheet({
               onClick={handleSavePlant}
               disabled={!plantDescription.trim() || Boolean(plantHoursError) || savingPlant}
               className={cn(
-                'w-full py-3 rounded-lg font-semibold text-white',
-                'bg-gray-600 dark:bg-gray-700 active:bg-gray-700 dark:active:bg-gray-600',
+                'w-full py-3 rounded-lg font-semibold text-accent-foreground',
+                'bg-accent active:bg-accent/80',
                 'touch-manipulation min-h-[48px]',
                 'flex items-center justify-center gap-2',
                 (!plantDescription.trim() || plantHoursError || savingPlant) && 'opacity-50',

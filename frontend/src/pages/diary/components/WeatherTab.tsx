@@ -217,7 +217,7 @@ export const WeatherTab = React.memo(function WeatherTab({
             </span>
           )}
           {!autoSaving && hasUnsavedChanges && (
-            <span className="text-xs text-orange-500">&bull; Unsaved changes</span>
+            <span className="text-xs text-warning">&bull; Unsaved changes</span>
           )}
         </div>
         <div className="flex items-center gap-3">
@@ -228,9 +228,7 @@ export const WeatherTab = React.memo(function WeatherTab({
             </span>
           )}
           {weatherSource && !fetchingWeather && (
-            <span
-              className={`text-sm ${weatherSourceIsWarning ? 'text-amber-600' : 'text-green-600'}`}
-            >
+            <span className={`text-sm ${weatherSourceIsWarning ? 'text-warning' : 'text-success'}`}>
               {weatherSourceIsWarning ? '!' : '\u2713'} {weatherSource}
             </span>
           )}
@@ -354,7 +352,7 @@ export const WeatherTab = React.memo(function WeatherTab({
         </div>
       </div>
       {weatherNumberError && (
-        <p className="mt-3 text-sm text-red-600" role="alert" aria-live="assertive">
+        <p className="mt-3 text-sm text-destructive" role="alert" aria-live="assertive">
           {weatherNumberError}
         </p>
       )}

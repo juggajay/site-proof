@@ -100,7 +100,7 @@ export function DiaryMobileView(props: DiaryMobileViewProps) {
           <div>
             <h1 className="text-lg font-bold">{dateLabel}</h1>
             {!isToday && <p className="text-xs text-muted-foreground">Not today</p>}
-            {isSubmitted && <p className="text-xs text-green-600 font-medium">Submitted</p>}
+            {isSubmitted && <p className="text-xs text-muted-foreground font-medium">Submitted</p>}
           </div>
           <DiaryLotSelector lots={lots} activeLotId={activeLotId} onLotChange={onLotChange} />
         </div>

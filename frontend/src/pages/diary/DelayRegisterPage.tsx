@@ -241,7 +241,7 @@ export function DelayRegisterPage() {
           <button
             onClick={handleExport}
             disabled={delays.length === 0 || exporting}
-            className="rounded-md bg-green-600 px-4 py-2 text-sm text-white hover:bg-green-700 disabled:opacity-50"
+            className="rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
           >
             {exporting ? 'Exporting...' : 'Export to Excel (CSV)'}
           </button>
@@ -249,13 +249,16 @@ export function DelayRegisterPage() {
       </div>
 
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700" role="alert">
+        <div
+          className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-destructive"
+          role="alert"
+        >
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm font-medium">{error}</p>
             <button
               type="button"
               onClick={() => void fetchDelays()}
-              className="rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50"
+              className="rounded-md border border-destructive/30 bg-card px-3 py-1.5 text-sm font-medium text-destructive hover:bg-destructive/10"
             >
               Try again
             </button>
@@ -267,20 +270,21 @@ export function DelayRegisterPage() {
       {!error && summary && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="rounded-lg border bg-card p-4">
-            <div className="text-3xl font-bold text-red-600">{summary.totalDelays}</div>
+            <div className="text-3xl font-bold text-destructive">{summary.totalDelays}</div>
             <div className="text-sm text-muted-foreground">Total Delays</div>
           </div>
           <div className="rounded-lg border bg-card p-4">
-            <div className="text-3xl font-bold text-orange-600">
-              {summary.totalHours.toFixed(1)}
-            </div>
+            <div className="text-3xl font-bold text-warning">{summary.totalHours.toFixed(1)}</div>
             <div className="text-sm text-muted-foreground">Total Hours Lost</div>
           </div>
           <div className="rounded-lg border bg-card p-4 md:col-span-2">
             <div className="text-sm font-medium mb-2">By Category</div>
             <div className="flex flex-wrap gap-2">
               {Object.entries(summary.byType).map(([type, data]) => (
-                <span key={type} className="rounded-full bg-red-100 px-3 py-1 text-sm text-red-700">
+                <span
+                  key={type}
+                  className="rounded-full bg-destructive/10 px-3 py-1 text-sm text-destructive"
+                >
                   {getDelayTypeLabel(type)}: {data.count} ({data.totalHours.toFixed(1)}h)
                 </span>
               ))}
@@ -370,7 +374,7 @@ export function DelayRegisterPage() {
                   <tr key={delay.id} className="hover:bg-muted/30">
                     <td className="px-4 py-3 text-sm font-medium">{formatDate(delay.diaryDate)}</td>
                     <td className="px-4 py-3 text-sm">
-                      <span className="rounded-full bg-red-100 px-2 py-1 text-xs text-red-700">
+                      <span className="rounded-full bg-destructive/10 px-2 py-1 text-xs text-destructive">
                         {getDelayTypeLabel(delay.delayType)}
                       </span>
                     </td>
@@ -379,7 +383,7 @@ export function DelayRegisterPage() {
                         ? `${delay.startTime} - ${delay.endTime}`
                         : delay.startTime || delay.endTime || '-'}
                     </td>
-                    <td className="px-4 py-3 text-sm font-medium text-red-600">
+                    <td className="px-4 py-3 text-sm font-medium text-destructive">
                       {delay.durationHours ? `${delay.durationHours.toFixed(1)}h` : '-'}
                     </td>
                     <td className="px-4 py-3 text-sm max-w-xs truncate" title={delay.description}>

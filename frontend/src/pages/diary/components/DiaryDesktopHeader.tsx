@@ -20,7 +20,7 @@ export function DiaryDesktopHeader({ projectId, onNewEntry }: DiaryDesktopHeader
           className="inline-flex items-center gap-2 rounded-lg border border-input bg-background px-4 py-2 text-sm hover:bg-muted"
         >
           <svg
-            className="h-5 w-5 text-red-500"
+            className="h-5 w-5 text-muted-foreground"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"

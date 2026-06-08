@@ -118,7 +118,7 @@ export const ActivitiesTab = React.memo(function ActivitiesTab({
                     <td className="py-2">
                       <button
                         onClick={() => removeActivity(a.id)}
-                        className="text-red-600 hover:text-red-700"
+                        className="text-destructive hover:text-destructive/80"
                       >
                         <svg
                           className="h-5 w-5"
@@ -173,7 +173,7 @@ export const ActivitiesTab = React.memo(function ActivitiesTab({
               onChange={(e) => setActivityForm({ ...activityForm, quantity: e.target.value })}
               placeholder="Quantity"
               className={`rounded-md border bg-background px-3 py-2 ${
-                quantityError ? 'border-red-500' : 'border-input'
+                quantityError ? 'border-destructive' : 'border-input'
               }`}
             />
             <input
@@ -192,7 +192,7 @@ export const ActivitiesTab = React.memo(function ActivitiesTab({
             </button>
           </div>
           {quantityError && (
-            <p className="mt-2 text-sm text-red-600" role="alert" aria-live="assertive">
+            <p className="mt-2 text-sm text-destructive" role="alert" aria-live="assertive">
               {quantityError}
             </p>
           )}

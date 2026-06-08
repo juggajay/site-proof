@@ -93,7 +93,7 @@ export function AddDeliverySheet({
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="What was delivered?"
-            className="w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation"
+            className="w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation"
             autoFocus
           />
         </div>
@@ -105,7 +105,7 @@ export function AddDeliverySheet({
             value={supplier}
             onChange={(e) => setSupplier(e.target.value)}
             placeholder="Supplier name"
-            className="w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation"
+            className="w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation"
           />
         </div>
 
@@ -116,7 +116,7 @@ export function AddDeliverySheet({
             value={docketNumber}
             onChange={(e) => setDocketNumber(e.target.value)}
             placeholder="e.g. DEL-001"
-            className="w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation"
+            className="w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation"
           />
         </div>
 
@@ -139,12 +139,12 @@ export function AddDeliverySheet({
                   onChange={(e) => setQuantity(e.target.value)}
                   placeholder="0"
                   className={cn(
-                    'w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation',
-                    quantityError && 'border-red-500',
+                    'w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation',
+                    quantityError && 'border-destructive',
                   )}
                 />
                 {quantityError && (
-                  <p className="mt-1 text-xs text-red-600" role="alert" aria-live="assertive">
+                  <p className="mt-1 text-xs text-destructive" role="alert" aria-live="assertive">
                     {quantityError}
                   </p>
                 )}
@@ -156,7 +156,7 @@ export function AddDeliverySheet({
                   value={unit}
                   onChange={(e) => setUnit(e.target.value)}
                   placeholder="m3, tonnes..."
-                  className="w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation"
+                  className="w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation"
                 />
               </div>
             </div>
@@ -165,7 +165,7 @@ export function AddDeliverySheet({
               <select
                 value={lotId}
                 onChange={(e) => setLotId(e.target.value)}
-                className="w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation bg-background"
+                className="w-full mt-1 px-3 py-3 border border-border rounded-lg text-base touch-manipulation bg-background text-foreground"
               >
                 <option value="">No lot</option>
                 {lots.map((lot) => (
@@ -181,7 +181,7 @@ export function AddDeliverySheet({
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 rows={2}
-                className="w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation resize-none"
+                className="w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation resize-none"
               />
             </div>
           </div>
@@ -191,8 +191,8 @@ export function AddDeliverySheet({
           onClick={handleSave}
           disabled={!description.trim() || Boolean(quantityError) || saving}
           className={cn(
-            'w-full py-4 rounded-lg font-semibold text-white',
-            'bg-green-600 active:bg-green-700',
+            'w-full py-4 rounded-lg font-semibold text-primary-foreground',
+            'bg-primary active:bg-primary/90',
             'touch-manipulation min-h-[56px]',
             'flex items-center justify-center gap-2',
             (!description.trim() || quantityError || saving) && 'opacity-50',

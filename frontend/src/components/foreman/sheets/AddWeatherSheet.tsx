@@ -79,7 +79,9 @@ export function AddWeatherSheet({ isOpen, onClose, onSave, initialData }: AddWea
                 onClick={() => setConditions(c)}
                 className={cn(
                   'px-3 py-2 rounded-full text-sm font-medium touch-manipulation min-h-[40px]',
-                  conditions === c ? 'bg-blue-600 text-white' : 'bg-muted text-muted-foreground',
+                  conditions === c
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted text-muted-foreground',
                 )}
               >
                 {c}
@@ -97,8 +99,8 @@ export function AddWeatherSheet({ isOpen, onClose, onSave, initialData }: AddWea
               onChange={(e) => setTemperatureMin(e.target.value)}
               placeholder="e.g. 12"
               className={cn(
-                'w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation',
-                weatherNumberError && 'border-red-500',
+                'w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation',
+                weatherNumberError && 'border-destructive',
               )}
             />
           </div>
@@ -110,8 +112,8 @@ export function AddWeatherSheet({ isOpen, onClose, onSave, initialData }: AddWea
               onChange={(e) => setTemperatureMax(e.target.value)}
               placeholder="e.g. 28"
               className={cn(
-                'w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation',
-                weatherNumberError && 'border-red-500',
+                'w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation',
+                weatherNumberError && 'border-destructive',
               )}
             />
           </div>
@@ -126,14 +128,14 @@ export function AddWeatherSheet({ isOpen, onClose, onSave, initialData }: AddWea
             placeholder="0"
             step="0.1"
             className={cn(
-              'w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation',
-              weatherNumberError && 'border-red-500',
+              'w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation',
+              weatherNumberError && 'border-destructive',
             )}
           />
         </div>
 
         {weatherNumberError && (
-          <p className="text-sm text-red-600" role="alert" aria-live="assertive">
+          <p className="text-sm text-destructive" role="alert" aria-live="assertive">
             {weatherNumberError}
           </p>
         )}
@@ -142,8 +144,8 @@ export function AddWeatherSheet({ isOpen, onClose, onSave, initialData }: AddWea
           onClick={handleSave}
           disabled={Boolean(weatherNumberError) || saving}
           className={cn(
-            'w-full py-4 rounded-lg font-semibold text-white',
-            'bg-green-600 active:bg-green-700',
+            'w-full py-4 rounded-lg font-semibold text-primary-foreground',
+            'bg-primary active:bg-primary/90',
             'touch-manipulation min-h-[56px]',
             'flex items-center justify-center gap-2',
             (weatherNumberError || saving) && 'opacity-50',

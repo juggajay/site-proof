@@ -43,32 +43,32 @@ const typeConfig: Record<
 > = {
   activity: {
     icon: Plus,
-    color: 'text-orange-600',
-    bgColor: 'bg-orange-100 dark:bg-orange-900/30',
+    color: 'text-muted-foreground',
+    bgColor: 'bg-muted',
     label: 'Activity',
   },
   delay: {
     icon: AlertTriangle,
-    color: 'text-red-600',
-    bgColor: 'bg-red-100 dark:bg-red-900/30',
+    color: 'text-muted-foreground',
+    bgColor: 'bg-muted',
     label: 'Delay',
   },
   delivery: {
     icon: Truck,
-    color: 'text-blue-600',
-    bgColor: 'bg-blue-100 dark:bg-blue-900/30',
+    color: 'text-muted-foreground',
+    bgColor: 'bg-muted',
     label: 'Delivery',
   },
   event: {
     icon: CalendarClock,
-    color: 'text-purple-600',
-    bgColor: 'bg-purple-100 dark:bg-purple-900/30',
+    color: 'text-muted-foreground',
+    bgColor: 'bg-muted',
     label: 'Event',
   },
   personnel: {
     icon: Users,
-    color: 'text-emerald-600',
-    bgColor: 'bg-emerald-100 dark:bg-emerald-900/30',
+    color: 'text-muted-foreground',
+    bgColor: 'bg-muted',
     label: 'Personnel',
   },
   plant: { icon: Wrench, color: 'text-muted-foreground', bgColor: 'bg-muted', label: 'Plant' },
@@ -142,7 +142,7 @@ export function DiaryTimelineEntry({
       onSwipeLeft={() => onDelete(entry)}
       leftAction={{
         label: 'Delete',
-        color: 'bg-red-500',
+        color: 'bg-destructive',
         icon: <Trash2 className="h-5 w-5" />,
       }}
       rightAction={{

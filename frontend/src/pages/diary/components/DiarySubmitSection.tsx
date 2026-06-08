@@ -258,9 +258,9 @@ export const DiarySubmitSection = React.memo(function DiarySubmitSection({
           <ModalHeader>Submit Daily Diary?</ModalHeader>
           <ModalBody>
             {submitWarnings.length > 0 && (
-              <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                <p className="font-medium text-yellow-800 mb-2">Warnings:</p>
-                <ul className="list-disc pl-5 text-sm text-yellow-700 space-y-1">
+              <div className="mb-4 p-3 bg-warning/10 border border-warning/30 rounded-lg">
+                <p className="font-medium text-warning mb-2">Warnings:</p>
+                <ul className="list-disc pl-5 text-sm text-warning space-y-1">
                   {submitWarnings.map((warning, idx) => (
                     <li key={idx}>{warning}</li>
                   ))}
@@ -287,11 +287,11 @@ export const DiarySubmitSection = React.memo(function DiarySubmitSection({
 
       {/* Submitted Info */}
       {diary.status === 'submitted' && diary.submittedBy && (
-        <div className="rounded-lg border bg-green-50 p-4 text-green-800">
+        <div className="rounded-lg border border-success/30 bg-success/10 p-4 text-success">
           <p>
             <strong>Submitted</strong> by {diary.submittedBy.fullName} on{' '}
             {diary.submittedAt && new Date(diary.submittedAt).toLocaleString('en-AU')}
-            {diary.isLate && <span className="ml-2 text-orange-600">(Late Entry)</span>}
+            {diary.isLate && <span className="ml-2 text-warning">(Late Entry)</span>}
           </p>
         </div>
       )}
