@@ -72,10 +72,10 @@ export function MobileITPItemSheet({
       <div className="space-y-4">
         {/* No permission banner */}
         {!canComplete && (
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-warning/10 border border-warning/20">
             <div>
-              <p className="text-sm font-medium text-amber-800 dark:text-amber-200">View Only</p>
-              <p className="text-xs text-amber-600 dark:text-amber-400">
+              <p className="text-sm font-medium text-warning-foreground">View Only</p>
+              <p className="text-xs text-muted-foreground">
                 Contact head contractor for completion access
               </p>
             </div>
@@ -88,10 +88,10 @@ export function MobileITPItemSheet({
             <span
               className={`px-2 py-0.5 rounded text-xs font-medium ${
                 item.pointType === 'hold_point'
-                  ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                  ? 'bg-destructive/10 text-destructive'
                   : item.pointType === 'witness'
-                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200'
-                    : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+                    ? 'bg-warning/10 text-warning'
+                    : 'bg-muted text-muted-foreground'
               }`}
             >
               {pointTypeLabel[item.pointType]}
@@ -117,8 +117,8 @@ export function MobileITPItemSheet({
               !canComplete
                 ? 'bg-muted text-muted-foreground cursor-not-allowed'
                 : isCompleted
-                  ? 'bg-green-500 text-white ring-2 ring-green-600 ring-offset-2'
-                  : 'bg-green-100 text-green-800 hover:bg-green-200 dark:bg-green-900/50 dark:text-green-200'
+                  ? 'bg-success text-success-foreground ring-2 ring-success ring-offset-2'
+                  : 'bg-success/10 text-success hover:bg-success/20'
             }`}
           >
             <span className="text-2xl block mb-1">✓</span>
@@ -137,8 +137,8 @@ export function MobileITPItemSheet({
               !canComplete
                 ? 'bg-muted text-muted-foreground cursor-not-allowed'
                 : isNA
-                  ? 'bg-gray-500 text-white ring-2 ring-gray-600 ring-offset-2'
-                  : 'bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-200'
+                  ? 'bg-muted-foreground text-background ring-2 ring-muted-foreground ring-offset-2'
+                  : 'bg-muted text-foreground hover:bg-accent'
             }`}
           >
             <span className="text-2xl block mb-1">—</span>
@@ -157,8 +157,8 @@ export function MobileITPItemSheet({
               !canComplete
                 ? 'bg-muted text-muted-foreground cursor-not-allowed'
                 : isFailed
-                  ? 'bg-red-500 text-white ring-2 ring-red-600 ring-offset-2'
-                  : 'bg-red-100 text-red-800 hover:bg-red-200 dark:bg-red-900/50 dark:text-red-200'
+                  ? 'bg-destructive text-destructive-foreground ring-2 ring-destructive ring-offset-2'
+                  : 'bg-destructive/10 text-destructive hover:bg-destructive/20'
             }`}
           >
             <span className="text-2xl block mb-1">✗</span>
@@ -174,19 +174,19 @@ export function MobileITPItemSheet({
               value={naReason}
               onChange={(e) => setNaReason(e.target.value)}
               placeholder="Why is this item not applicable?"
-              className="w-full px-3 py-2 border rounded-lg text-sm min-h-[80px] bg-background"
+              className="w-full px-3 py-2 border border-border rounded-lg text-sm min-h-[80px] bg-background text-foreground"
               autoFocus
             />
             <div className="flex gap-2">
               <button
                 onClick={() => setShowNAInput(false)}
-                className="flex-1 py-3 border rounded-lg text-sm font-medium touch-manipulation"
+                className="flex-1 py-3 border border-border rounded-lg text-sm font-medium touch-manipulation"
               >
                 Cancel
               </button>
               <button
                 onClick={() => onNA(naReason)}
-                className="flex-1 py-3 bg-gray-500 text-white rounded-lg text-sm font-medium touch-manipulation"
+                className="flex-1 py-3 bg-muted-foreground text-background rounded-lg text-sm font-medium touch-manipulation"
               >
                 Mark as N/A
               </button>
@@ -196,27 +196,25 @@ export function MobileITPItemSheet({
 
         {/* Fail reason input */}
         {showFailInput && (
-          <div className="p-3 bg-red-50 dark:bg-red-950/30 rounded-lg space-y-2">
-            <label className="text-sm font-medium text-red-800 dark:text-red-200">
-              Reason for failure:
-            </label>
+          <div className="p-3 bg-destructive/10 rounded-lg space-y-2">
+            <label className="text-sm font-medium text-destructive">Reason for failure:</label>
             <textarea
               value={failReason}
               onChange={(e) => setFailReason(e.target.value)}
               placeholder="Describe the issue..."
-              className="w-full px-3 py-2 border border-red-200 dark:border-red-800 rounded-lg text-sm min-h-[80px] bg-background"
+              className="w-full px-3 py-2 border border-destructive/20 rounded-lg text-sm min-h-[80px] bg-background text-foreground"
               autoFocus
             />
             <div className="flex gap-2">
               <button
                 onClick={() => setShowFailInput(false)}
-                className="flex-1 py-3 border rounded-lg text-sm font-medium touch-manipulation"
+                className="flex-1 py-3 border border-border rounded-lg text-sm font-medium touch-manipulation"
               >
                 Cancel
               </button>
               <button
                 onClick={() => onFail(failReason)}
-                className="flex-1 py-3 bg-red-500 text-white rounded-lg text-sm font-medium touch-manipulation"
+                className="flex-1 py-3 bg-destructive text-destructive-foreground rounded-lg text-sm font-medium touch-manipulation"
               >
                 Mark as Failed
               </button>
@@ -238,7 +236,7 @@ export function MobileITPItemSheet({
               }}
               placeholder="Add notes about this item..."
               disabled={!canComplete}
-              className="w-full px-3 py-2 border rounded-lg text-sm min-h-[80px] bg-background disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full px-3 py-2 border border-border rounded-lg text-sm min-h-[80px] bg-background text-foreground disabled:cursor-not-allowed disabled:opacity-60"
             />
           </div>
         )}

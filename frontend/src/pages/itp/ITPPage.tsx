@@ -285,7 +285,7 @@ export function ITPPage() {
           <select
             value={activityTypeFilter}
             onChange={(e) => setActivityTypeFilter(e.target.value)}
-            className="text-sm border rounded px-2 py-1"
+            className="text-sm border border-border bg-background text-foreground rounded px-2 py-1"
           >
             <option value="">All Activities</option>
             {[...new Set(templates.map((t) => t.activityType))].sort().map((type) => (
@@ -302,7 +302,7 @@ export function ITPPage() {
           <select
             value={responsiblePartyFilter}
             onChange={(e) => setResponsiblePartyFilter(e.target.value)}
-            className="text-sm border rounded px-2 py-1"
+            className="text-sm border border-border bg-background text-foreground rounded px-2 py-1"
           >
             <option value="">All Parties</option>
             <option value="contractor">Contractor</option>
@@ -389,7 +389,7 @@ export function ITPPage() {
                         </span>
                       )}
                       {template.isActive === false && (
-                        <span className="text-xs text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">
+                        <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
                           Inactive
                         </span>
                       )}
@@ -451,7 +451,7 @@ export function ITPPage() {
                         disabled={togglingTemplateId === template.id}
                         className={`text-xs px-2 py-1 rounded ${
                           template.isActive !== false
-                            ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                            ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                             : 'bg-muted text-muted-foreground hover:bg-muted/80'
                         } disabled:opacity-50`}
                       >

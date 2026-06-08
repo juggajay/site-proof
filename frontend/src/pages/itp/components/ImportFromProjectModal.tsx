@@ -98,7 +98,7 @@ export function ImportFromProjectModal({
               <select
                 value={selectedProject}
                 onChange={(e) => setUserSelectedProject(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg"
+                className="w-full px-3 py-2 border border-border bg-background text-foreground rounded-lg"
               >
                 {projects.map((project) => (
                   <option key={project.id} value={project.id}>
@@ -133,7 +133,7 @@ export function ImportFromProjectModal({
                     disabled={importing === template.id || importedTemplates.has(template.id)}
                     className={`px-3 py-1.5 rounded text-sm ${
                       importedTemplates.has(template.id)
-                        ? 'bg-green-100 text-green-700'
+                        ? 'bg-muted text-muted-foreground'
                         : 'bg-primary text-primary-foreground hover:bg-primary/90'
                     } disabled:opacity-50`}
                   >
