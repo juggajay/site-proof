@@ -8,63 +8,65 @@ interface DashboardQuickLinksProps {
 export function DashboardQuickLinks({ reportsQuickLink }: DashboardQuickLinksProps) {
   return (
     <div className="bg-card rounded-lg border">
-      <div className="p-4 border-b">
-        <h2 className="text-lg font-semibold">Quick Links</h2>
+      <div className="border-b p-4">
+        <h2 className="text-sm font-semibold">Quick Links</h2>
       </div>
-      <div className="p-4 grid gap-3 sm:grid-cols-2 md:grid-cols-4">
+      <div className="grid gap-3 p-4 sm:grid-cols-2 md:grid-cols-4">
         <Link
           to="/projects"
-          className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted transition-colors"
+          className="flex items-center gap-3 rounded-md border p-3 transition-colors hover:border-foreground/20 hover:bg-muted"
         >
-          <FolderKanban className="h-5 w-5 text-blue-600" />
-          <span className="font-medium">Projects</span>
+          <FolderKanban className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm font-medium">Projects</span>
         </Link>
         <Link
           to="/portfolio"
-          className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted transition-colors"
+          className="flex items-center gap-3 rounded-md border p-3 transition-colors hover:border-foreground/20 hover:bg-muted"
         >
-          <FileText className="h-5 w-5 text-purple-600" />
-          <span className="font-medium">Portfolio</span>
+          <FileText className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm font-medium">Portfolio</span>
         </Link>
         <Link
           to={reportsQuickLink}
-          className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted transition-colors"
+          className="flex items-center gap-3 rounded-md border p-3 transition-colors hover:border-foreground/20 hover:bg-muted"
         >
-          <FileText className="h-5 w-5 text-green-600" />
-          <span className="font-medium">Reports</span>
+          <FileText className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm font-medium">Reports</span>
         </Link>
         <Link
           to="/settings"
-          className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted transition-colors"
+          className="flex items-center gap-3 rounded-md border p-3 transition-colors hover:border-foreground/20 hover:bg-muted"
         >
-          <Settings2 className="h-5 w-5 text-muted-foreground" />
-          <span className="font-medium">Settings</span>
+          <Settings2 className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm font-medium">Settings</span>
         </Link>
       </div>
       {/* Feature #500: Quick Actions */}
       <div className="px-4 pb-4">
-        <h3 className="text-sm font-medium text-muted-foreground mb-3">Quick Actions</h3>
+        <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          Quick Actions
+        </h3>
         <div className="grid gap-3 sm:grid-cols-3">
           <Link
             to="/projects?action=photo"
-            className="flex items-center gap-3 p-3 rounded-lg bg-orange-50 border border-orange-200 hover:bg-orange-100 transition-colors"
+            className="flex items-center gap-3 rounded-md border p-3 transition-colors hover:border-foreground/20 hover:bg-muted"
           >
-            <Camera className="h-5 w-5 text-orange-600" />
-            <span className="font-medium text-orange-700">Quick Photo</span>
+            <Camera className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium text-foreground">Quick Photo</span>
           </Link>
           <Link
             to="/projects?action=create-lot"
-            className="flex items-center gap-3 p-3 rounded-lg bg-blue-50 border border-blue-200 hover:bg-blue-100 transition-colors"
+            className="flex items-center gap-3 rounded-md border p-3 transition-colors hover:border-foreground/20 hover:bg-muted"
           >
-            <Plus className="h-5 w-5 text-blue-600" />
-            <span className="font-medium text-blue-700">Create Lot</span>
+            <Plus className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium text-foreground">Create Lot</span>
           </Link>
           <Link
             to="/projects?action=add-test"
-            className="flex items-center gap-3 p-3 rounded-lg bg-green-50 border border-green-200 hover:bg-green-100 transition-colors"
+            className="flex items-center gap-3 rounded-md border p-3 transition-colors hover:border-foreground/20 hover:bg-muted"
           >
-            <FlaskConical className="h-5 w-5 text-green-600" />
-            <span className="font-medium text-green-700">Add Test</span>
+            <FlaskConical className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium text-foreground">Add Test</span>
           </Link>
         </div>
       </div>

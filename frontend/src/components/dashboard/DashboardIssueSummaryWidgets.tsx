@@ -25,23 +25,25 @@ function DashboardIssueSummaryWidget({
 }: DashboardIssueSummaryWidgetProps) {
   return (
     <div className="bg-card rounded-lg border">
-      <div className="p-4 border-b flex items-center gap-2">
+      <div className="flex items-center gap-2 border-b p-4">
         {headerIcon}
-        <h2 className="text-lg font-semibold">{title}</h2>
+        <h2 className="text-sm font-semibold">{title}</h2>
       </div>
       <div className="p-4">
         <button
           onClick={() => onNavigate(to)}
-          className="w-full flex items-center justify-between mb-4 p-2 -m-2 rounded hover:bg-muted transition-colors"
+          className="-m-2 mb-2 flex w-full items-center justify-between rounded-md p-2 transition-colors hover:bg-muted"
           type="button"
         >
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
             {countIcon}
             <span>{countLabel}</span>
           </div>
-          <span className="text-2xl font-bold">{count}</span>
+          <span className="font-mono text-2xl font-medium tabular-nums text-foreground">
+            {count}
+          </span>
         </button>
-        <Link to={to} className="text-sm text-primary hover:underline">
+        <Link to={to} className="text-sm text-muted-foreground hover:text-foreground">
           {linkLabel}
         </Link>
       </div>
@@ -65,8 +67,8 @@ export function HoldPointsSummaryWidget({
       count={openHoldPoints}
       linkLabel="View all hold points →"
       to="/projects?view=holdpoints"
-      headerIcon={<ClipboardCheck className="h-5 w-5 text-muted-foreground" />}
-      countIcon={<Clock className="h-5 w-5 text-amber-500" />}
+      headerIcon={<ClipboardCheck className="h-4 w-4 text-muted-foreground" />}
+      countIcon={<Clock className="h-4 w-4 text-warning" />}
       onNavigate={onNavigate}
     />
   );
@@ -85,8 +87,8 @@ export function NcrSummaryWidget({ openNCRs, onNavigate }: NcrSummaryWidgetProps
       count={openNCRs}
       linkLabel="View all NCRs →"
       to="/projects?view=ncrs"
-      headerIcon={<AlertTriangle className="h-5 w-5 text-muted-foreground" />}
-      countIcon={<AlertTriangle className="h-5 w-5 text-red-500" />}
+      headerIcon={<AlertTriangle className="h-4 w-4 text-muted-foreground" />}
+      countIcon={<AlertTriangle className="h-4 w-4 text-destructive" />}
       onNavigate={onNavigate}
     />
   );
