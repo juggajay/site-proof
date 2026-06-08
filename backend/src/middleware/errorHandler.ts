@@ -11,6 +11,7 @@ import {
   sanitizeLogText,
   sanitizeLogValue,
 } from '../lib/logSanitization.js';
+import { captureServerError } from '../lib/monitoring.js';
 
 export { sanitizeLogQuery } from '../lib/logSanitization.js';
 
@@ -166,14 +167,6 @@ function logError(entry: ErrorLogEntry) {
       if (err) console.error('Failed to write error log:', sanitizeLogText(err.message));
     });
   }
-
-  // Hook for external monitoring services (e.g., Sentry, DataDog)
-  sendToMonitoringService(sanitizedEntry);
-}
-
-// Placeholder for external monitoring integration
-function sendToMonitoringService(_entry: ErrorLogEntry) {
-  // External monitoring SDK integration belongs here when a provider is wired.
 }
 
 // Export the log function for use elsewhere
@@ -333,6 +326,28 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
 
   // Log the error
   logError(logEntry);
+
+  // Report server-side failures to external monitoring (no-op unless configured).
+  // 4xx responses are client/validation errors and intentionally not reported.
+  if (statusCode >= 500) {
+    const rawRequestId = req.headers['x-request-id'];
+    const requestId =
+      typeof rawRequestId === 'string'
+        ? rawRequestId
+        : Array.isArray(rawRequestId)
+          ? rawRequestId[0]
+          : undefined;
+
+    captureServerError(err, {
+      code,
+      statusCode,
+      method: req.method,
+      path: logEntry.context.path,
+      userId: req.user?.id,
+      apiKeyId: req.apiKey?.id,
+      requestId,
+    });
+  }
 
   // Send response
   res.status(statusCode).json({

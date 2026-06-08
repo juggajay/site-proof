@@ -202,6 +202,10 @@ export async function startServer(): Promise<void> {
       logInfo('Waiting for in-flight requests to complete...');
       await new Promise((resolve) => setTimeout(resolve, 5000));
 
+      // Flush any buffered monitoring events before exit (no-op if disabled)
+      const { flushMonitoring } = await import('./lib/monitoring.js');
+      await flushMonitoring(2000);
+
       // Close database connections (Prisma)
       logInfo('Closing database connections...');
       const { prisma } = await import('./lib/prisma.js');

@@ -69,4 +69,11 @@ describe('.env.example', () => {
     expect(envExample).toMatch(/^ERROR_LOG_TO_FILE=/m);
     expect(envExample).toMatch(/^ERROR_LOG_MAX_BYTES=/m);
   });
+
+  it('documents the optional Sentry error monitoring configuration', async () => {
+    const envExample = await readEnvExample();
+
+    expect(envExample).toMatch(/^SENTRY_DSN=/m);
+    expect(envExample).toMatch(/^SENTRY_TRACES_SAMPLE_RATE=/m);
+  });
 });

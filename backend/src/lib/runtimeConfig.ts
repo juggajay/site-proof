@@ -275,6 +275,28 @@ function assertProductionVapidConfig(): void {
   assertProductionPublicUrl('VAPID_SUBJECT', normalizePublicUrl('VAPID_SUBJECT', subject));
 }
 
+function assertOptionalSentryConfig(): void {
+  const dsn = process.env.SENTRY_DSN?.trim();
+  if (dsn) {
+    try {
+      const url = new URL(dsn);
+      if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+        throw new Error('protocol');
+      }
+    } catch {
+      throw new Error('FATAL: SENTRY_DSN must be a valid Sentry DSN URL in production');
+    }
+  }
+
+  const sampleRate = process.env.SENTRY_TRACES_SAMPLE_RATE?.trim();
+  if (sampleRate) {
+    const value = Number(sampleRate);
+    if (!Number.isFinite(value) || value < 0 || value > 1) {
+      throw new Error('FATAL: SENTRY_TRACES_SAMPLE_RATE must be a number between 0 and 1');
+    }
+  }
+}
+
 function assertProductionGoogleOAuthConfig(): void {
   const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
@@ -410,4 +432,5 @@ export function validateRuntimeConfig(): void {
   assertProductionStorageConfig();
 
   assertProductionGoogleOAuthConfig();
+  assertOptionalSentryConfig();
 }

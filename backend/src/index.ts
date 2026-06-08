@@ -25,8 +25,19 @@ async function logFatal(message: string, details: FatalDetails): Promise<void> {
   }
 }
 
+async function reportFatal(message: string, details: FatalDetails): Promise<void> {
+  await logFatal(message, details);
+  try {
+    const { captureFatal, flushMonitoring } = await import('./lib/monitoring.js');
+    captureFatal(message, details);
+    await flushMonitoring(2000);
+  } catch {
+    // Monitoring is best-effort and must not delay the fatal exit.
+  }
+}
+
 function exitAfterFatal(message: string, details: FatalDetails): void {
-  void logFatal(message, details).finally(() => process.exit(1));
+  void reportFatal(message, details).finally(() => process.exit(1));
 }
 
 // Register fatal handlers before loading application modules. Static ESM imports
@@ -42,6 +53,11 @@ process.on('unhandledRejection', (reason, promise) => {
 
 async function bootstrap(): Promise<void> {
   await import('dotenv/config');
+
+  // Initialise error monitoring early so startup/config failures are reported.
+  // No-op unless SENTRY_DSN is configured.
+  const { initMonitoring } = await import('./lib/monitoring.js');
+  await initMonitoring();
 
   const { validateRuntimeConfig } = await import('./lib/runtimeConfig.js');
   validateRuntimeConfig();

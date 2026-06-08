@@ -222,7 +222,16 @@ EMAIL_FROM="..."
 FRONTEND_URL=https://...                     # https in prod, not localhost
 BACKEND_URL=https://...                      # or API_URL; https in prod, not localhost
 TRUST_PROXY=1                                # required behind Railway/CDN; do not use true in prod
+SENTRY_DSN=https://...@...ingest.sentry.io/...  # optional; blank disables error monitoring
+SENTRY_TRACES_SAMPLE_RATE=0                  # optional; 0..1, 0 = errors only (no tracing)
 ```
+
+Error monitoring is wired through `backend/src/lib/monitoring.ts`. It is a clean
+no-op unless `SENTRY_DSN` is set, so dev/test/unconfigured deploys are unchanged.
+When configured, 5xx responses and fatal crashes are reported (with sanitised
+request context); 4xx/validation errors are intentionally not reported. The
+`@sentry/node` package is loaded lazily, so a missing install only disables
+monitoring rather than breaking startup.
 
 ### Frontend (.env)
 ```
