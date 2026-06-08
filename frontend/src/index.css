@@ -3,79 +3,104 @@
 @tailwind utilities;
 
 @layer base {
-  /* High-Growth Startup: Violet + Zinc */
+  /* SiteProof "Quiet Authority" — warm greige + near-black + amber signature.
+     Monochrome by default; colour = status only. See docs/DESIGN.md. */
   :root {
-    --background: 0 0% 98%;
-    --foreground: 240 10% 3.9%;
+    --background: 40 14% 96%; /* warm canvas */
+    --foreground: 24 14% 9%; /* warm near-black ink */
 
-    --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
+    --card: 0 0% 100%; /* pure white pops on canvas */
+    --card-foreground: 24 14% 9%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
+    --popover-foreground: 24 14% 9%;
 
-    --primary: 262.1 83.3% 57.8%;
-    --primary-foreground: 0 0% 100%;
+    --primary: 24 14% 9%; /* near-black actions (NOT violet) */
+    --primary-foreground: 40 33% 98%;
 
-    --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 240 5.9% 10%;
+    --secondary: 40 15% 93%; /* warm grey */
+    --secondary-foreground: 24 14% 9%;
 
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
+    --muted: 40 15% 93%;
+    --muted-foreground: 30 8% 32%; /* warm secondary text */
 
-    --accent: 240 4.8% 95.9%;
-    --accent-foreground: 240 5.9% 10%;
+    --accent: 40 15% 93%; /* NEUTRAL — shadcn hovers; not amber */
+    --accent-foreground: 24 14% 9%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
+    --destructive: 4 74% 40%; /* red-700 */
+    --destructive-foreground: 40 33% 98%;
 
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
-    --ring: 262.1 83.3% 57.8%;
+    --success: 142 72% 29%; /* emerald-700 */
+    --success-foreground: 40 33% 98%;
+
+    --warning: 32 95% 44%; /* amber */
+    --warning-foreground: 24 14% 9%;
+
+    --info: 217 79% 45%; /* blue */
+    --info-foreground: 40 33% 98%;
+
+    --brand: 26 90% 37%; /* deep-amber signature (active nav, capture) */
+    --brand-foreground: 40 33% 98%;
+
+    --border: 38 18% 89%; /* warm hairline */
+    --input: 38 18% 89%;
+    --ring: 24 14% 9%;
 
     --radius: 0.5rem;
 
-    --chart-1: 262.1 83.3% 57.8%;
-    --chart-2: 160 60% 45%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 190 80% 50%;
-    --chart-5: 340 75% 55%;
+    --chart-1: 24 14% 20%;
+    --chart-2: 217 76% 46%;
+    --chart-3: 32 95% 44%;
+    --chart-4: 142 64% 33%;
+    --chart-5: 4 74% 50%;
   }
 
   .dark {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
+    --background: 30 16% 7%; /* warm charcoal — not cold black */
+    --foreground: 40 30% 94%; /* warm off-white (INV-1) */
 
-    --card: 240 5.9% 10%;
-    --card-foreground: 0 0% 98%;
+    --card: 30 16% 10%; /* raised surface */
+    --card-foreground: 40 30% 94%;
 
-    --popover: 240 5.9% 10%;
-    --popover-foreground: 0 0% 98%;
+    --popover: 30 16% 10%;
+    --popover-foreground: 40 30% 94%;
 
-    --primary: 258.3 89.5% 66.3%;
-    --primary-foreground: 0 0% 100%;
+    --primary: 40 30% 94%; /* inverts to off-white */
+    --primary-foreground: 30 16% 7%;
 
-    --secondary: 240 3.7% 15.9%;
-    --secondary-foreground: 0 0% 98%;
+    --secondary: 33 14% 15%;
+    --secondary-foreground: 40 30% 94%;
 
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
+    --muted: 33 14% 15%;
+    --muted-foreground: 36 16% 70%; /* brightened for INV-1 */
 
-    --accent: 240 3.7% 15.9%;
-    --accent-foreground: 0 0% 98%;
+    --accent: 33 14% 17%;
+    --accent-foreground: 40 30% 94%;
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
+    --destructive: 0 88% 71%; /* brighter on dark */
+    --destructive-foreground: 30 16% 7%;
 
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 258.3 89.5% 66.3%;
+    --success: 156 64% 52%;
+    --success-foreground: 30 16% 7%;
 
-    --chart-1: 258.3 89.5% 66.3%;
-    --chart-2: 160 60% 50%;
-    --chart-3: 30 80% 60%;
-    --chart-4: 190 80% 55%;
-    --chart-5: 340 75% 60%;
+    --warning: 43 96% 56%;
+    --warning-foreground: 30 16% 7%;
+
+    --info: 213 92% 68%;
+    --info-foreground: 30 16% 7%;
+
+    --brand: 38 92% 50%; /* brighter amber on dark */
+    --brand-foreground: 30 16% 7%;
+
+    --border: 33 15% 17%;
+    --input: 33 15% 17%;
+    --ring: 40 30% 94%;
+
+    --chart-1: 40 30% 80%;
+    --chart-2: 213 85% 66%;
+    --chart-3: 41 92% 56%;
+    --chart-4: 156 60% 55%;
+    --chart-5: 0 85% 70%;
   }
 }
 
@@ -90,7 +115,11 @@
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans;
+    font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: -0.006em;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
     /* Prevent pull-to-refresh interference */
     overscroll-behavior-y: contain;
   }
