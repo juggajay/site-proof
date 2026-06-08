@@ -314,7 +314,11 @@ export function MobileNav() {
                 className={({ isActive }) =>
                   cn(
                     'flex flex-col items-center justify-center w-full h-full gap-1 text-xs transition-colors',
-                    isActive ? 'text-primary' : 'text-muted-foreground',
+                    isActive
+                      ? isSubcontractor
+                        ? 'text-brand'
+                        : 'text-primary'
+                      : 'text-muted-foreground',
                   )
                 }
               >

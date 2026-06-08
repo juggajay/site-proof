@@ -49,7 +49,7 @@ export function PortalQuickLinks({ company, myCompanyLink }: PortalQuickLinksPro
           className="border border-border rounded-lg bg-card hover:border-primary transition-colors cursor-pointer"
         >
           <div className="p-4 flex items-center gap-3">
-            <ClipboardList className="h-5 w-5 text-green-500" />
+            <ClipboardList className="h-5 w-5 text-muted-foreground" />
             <div>
               <p className="font-medium text-foreground">ITPs</p>
               <p className="text-xs text-muted-foreground">Inspection & Test Plans</p>
@@ -63,7 +63,7 @@ export function PortalQuickLinks({ company, myCompanyLink }: PortalQuickLinksPro
           className="border border-border rounded-lg bg-card hover:border-primary transition-colors cursor-pointer"
         >
           <div className="p-4 flex items-center gap-3">
-            <Hand className="h-5 w-5 text-amber-500" />
+            <Hand className="h-5 w-5 text-muted-foreground" />
             <div>
               <p className="font-medium text-foreground">Hold Points</p>
               <p className="text-xs text-muted-foreground">View hold points</p>
@@ -77,7 +77,7 @@ export function PortalQuickLinks({ company, myCompanyLink }: PortalQuickLinksPro
           className="border border-border rounded-lg bg-card hover:border-primary transition-colors cursor-pointer"
         >
           <div className="p-4 flex items-center gap-3">
-            <FlaskConical className="h-5 w-5 text-blue-500" />
+            <FlaskConical className="h-5 w-5 text-muted-foreground" />
             <div>
               <p className="font-medium text-foreground">Test Results</p>
               <p className="text-xs text-muted-foreground">View test results</p>
@@ -91,7 +91,7 @@ export function PortalQuickLinks({ company, myCompanyLink }: PortalQuickLinksPro
           className="border border-border rounded-lg bg-card hover:border-primary transition-colors cursor-pointer"
         >
           <div className="p-4 flex items-center gap-3">
-            <AlertTriangle className="h-5 w-5 text-red-500" />
+            <AlertTriangle className="h-5 w-5 text-muted-foreground" />
             <div>
               <p className="font-medium text-foreground">NCRs</p>
               <p className="text-xs text-muted-foreground">Non-conformance reports</p>
@@ -105,7 +105,7 @@ export function PortalQuickLinks({ company, myCompanyLink }: PortalQuickLinksPro
           className="border border-border rounded-lg bg-card hover:border-primary transition-colors cursor-pointer"
         >
           <div className="p-4 flex items-center gap-3">
-            <FolderOpen className="h-5 w-5 text-purple-500" />
+            <FolderOpen className="h-5 w-5 text-muted-foreground" />
             <div>
               <p className="font-medium text-foreground">Documents</p>
               <p className="text-xs text-muted-foreground">Project documents</p>
