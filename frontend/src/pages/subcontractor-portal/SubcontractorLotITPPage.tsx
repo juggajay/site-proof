@@ -10,6 +10,7 @@ import { logError } from '@/lib/logger';
 import { formatDateTime } from '@/lib/utils';
 import type { ITPCompletion, ITPInstance } from '../lots/types';
 import { getItpPhotoValidationError } from '../lots/lib/itpEvidence';
+import { useItpCompletionActions } from '../lots/hooks/useItpCompletionActions';
 
 interface Lot {
   id: string;
@@ -81,111 +82,41 @@ export function SubcontractorLotITPPage() {
     return false;
   };
 
-  const handleToggleCompletion = async (
-    checklistItemId: string,
-    isCompleted: boolean,
-    notes: string | null,
-  ) => {
-    if (!itpInstance) return;
-    if (!requireCompletionAccess()) return;
-    setUpdatingItem(checklistItemId);
+  // The four completion actions (toggle / N/A / Failed / notes) live in the
+  // shared `useItpCompletionActions` hook so the portal and the lot-detail (HC)
+  // path drive the same request + control logic. The page keeps owning the
+  // trust boundary: `requireCompletionAccess` is injected as `requireAccess`, so
+  // the hook can never act without the permission the page already enforced.
+  //
+  // Portal-specific wiring injected here (not branched-on-role inside the hook):
+  //   - `onAfterMutate: fetchData`   -> full refetch (no optimistic merge)
+  //   - `naDefaultNote: ''`          -> portal sends the trimmed reason as-is
+  //   - `updateNotes`                -> PATCH an existing completion only
+  // Toast copy keeps the portal's existing wording; the one approved change is
+  // that a Failed mark now surfaces the raised NCR number when the API returns
+  // it (parity with the HC path).
+  const { handleToggleCompletion, handleMarkNotApplicable, handleMarkFailed, handleUpdateNotes } =
+    useItpCompletionActions({
+      itpInstance,
+      requireAccess: requireCompletionAccess,
+      setUpdatingItem,
+      onAfterMutate: fetchData,
+      naDefaultNote: '',
+      updateNotes: async (checklistItemId: string, notes: string) => {
+        if (!itpInstance) return;
+        const completion = itpInstance.completions.find(
+          (c) => c.checklistItemId === checklistItemId,
+        );
 
-    try {
-      await apiFetch(`/api/itp/completions`, {
-        method: 'POST',
-        body: JSON.stringify({
-          itpInstanceId: itpInstance.id,
-          checklistItemId,
-          isCompleted,
-          notes,
-        }),
-      });
-
-      await fetchData();
-      toast({ title: 'Success', description: 'Item updated', variant: 'success' });
-    } catch (err) {
-      handleApiError(err, 'Failed to update item');
-    } finally {
-      setUpdatingItem(null);
-    }
-  };
-
-  const handleMarkNotApplicable = async (checklistItemId: string, reason: string) => {
-    if (!itpInstance) return;
-    if (!requireCompletionAccess()) return;
-    setUpdatingItem(checklistItemId);
-
-    try {
-      await apiFetch(`/api/itp/completions`, {
-        method: 'POST',
-        body: JSON.stringify({
-          itpInstanceId: itpInstance.id,
-          checklistItemId,
-          status: 'not_applicable',
-          notes: reason.trim(),
-        }),
-      });
-
-      await fetchData();
-      toast({ title: 'Success', description: 'Item marked as N/A', variant: 'success' });
-    } catch (err) {
-      handleApiError(err, 'Failed to mark as N/A');
-    } finally {
-      setUpdatingItem(null);
-    }
-  };
-
-  const handleMarkFailed = async (checklistItemId: string, reason: string) => {
-    if (!itpInstance) return;
-    if (!requireCompletionAccess()) return;
-    setUpdatingItem(checklistItemId);
-
-    try {
-      await apiFetch(`/api/itp/completions`, {
-        method: 'POST',
-        body: JSON.stringify({
-          itpInstanceId: itpInstance.id,
-          checklistItemId,
-          status: 'failed',
-          notes: `Failed: ${reason.trim() || 'Item failed inspection'}`,
-          ncrDescription: reason.trim() || 'Item failed ITP inspection',
-          ncrCategory: 'workmanship',
-          ncrSeverity: 'minor',
-        }),
-      });
-
-      await fetchData();
-      toast({ title: 'Success', description: 'Item marked as failed', variant: 'success' });
-    } catch (err) {
-      handleApiError(err, 'Failed to mark as failed');
-    } finally {
-      setUpdatingItem(null);
-    }
-  };
-
-  const handleUpdateNotes = async (checklistItemId: string, notes: string) => {
-    if (!itpInstance) return;
-    if (!requireCompletionAccess()) return;
-    setUpdatingItem(checklistItemId);
-
-    try {
-      const completion = itpInstance.completions.find((c) => c.checklistItemId === checklistItemId);
-
-      if (completion) {
-        // Update existing completion
-        await apiFetch(`/api/itp/completions/${completion.id}`, {
-          method: 'PATCH',
-          body: JSON.stringify({ notes }),
-        });
-      }
-
-      await fetchData();
-    } catch (err) {
-      handleApiError(err, 'Failed to update notes');
-    } finally {
-      setUpdatingItem(null);
-    }
-  };
+        if (completion) {
+          // Update existing completion
+          await apiFetch(`/api/itp/completions/${completion.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ notes }),
+          });
+        }
+      },
+    });
 
   const handleAddPhoto = async (checklistItemId: string, file: File) => {
     if (!itpInstance || !lot) return;
