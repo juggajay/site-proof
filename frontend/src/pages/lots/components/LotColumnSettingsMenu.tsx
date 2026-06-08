@@ -115,7 +115,9 @@ export function LotColumnSettingsMenu({
                           isColumnVisible(column.id) ? 'bg-primary border-primary' : 'border-border'
                         }`}
                       >
-                        {isColumnVisible(column.id) && <Check className="h-3 w-3 text-white" />}
+                        {isColumnVisible(column.id) && (
+                          <Check className="h-3 w-3 text-primary-foreground" />
+                        )}
                       </div>
                       <span className="truncate">{column.label}</span>
                       {column.required && (

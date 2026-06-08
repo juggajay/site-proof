@@ -54,7 +54,7 @@ export function AIClassificationModal({
     >
       <div className="bg-background rounded-lg p-6 w-full max-w-lg shadow-xl">
         <div className="flex items-center gap-3 mb-4">
-          <div className="flex items-center justify-center w-10 h-10 rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-400">
+          <div className="flex items-center justify-center w-10 h-10 rounded-full bg-muted text-muted-foreground">
             <span className="text-xl">🤖</span>
           </div>
           <div>
@@ -65,17 +65,17 @@ export function AIClassificationModal({
 
         <div className="space-y-4">
           {/* AI Suggestion */}
-          <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+          <div className="p-4 bg-muted rounded-lg border border-border">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-blue-800 dark:text-blue-300">
+              <span className="text-sm font-medium text-muted-foreground">
                 AI Suggested Classification
               </span>
-              <span className="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-800 rounded-full text-blue-700 dark:text-blue-300">
+              <span className="text-xs px-2 py-1 bg-background rounded-full text-muted-foreground">
                 {data.confidence}% confidence
               </span>
             </div>
             <p
-              className="text-lg font-semibold text-blue-900 dark:text-blue-100"
+              className="text-lg font-semibold text-foreground"
               data-testid="ai-suggested-classification"
             >
               {data.suggestedClassification}
@@ -85,7 +85,7 @@ export function AIClassificationModal({
           {/* Classification Selection */}
           <div>
             <label className="block text-sm font-medium mb-2">
-              Select Classification <span className="text-red-500">*</span>
+              Select Classification <span className="text-destructive">*</span>
             </label>
             <div
               className="grid grid-cols-2 gap-2 max-h-[300px] overflow-y-auto"

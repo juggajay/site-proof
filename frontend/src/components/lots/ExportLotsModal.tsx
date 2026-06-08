@@ -282,7 +282,7 @@ export function ExportLotsModal({
         <p className="text-sm text-muted-foreground">
           Exporting {filteredLots.length} lot{filteredLots.length !== 1 ? 's' : ''}{' '}
           {filteredLots.length !== lots.length && (
-            <span className="text-amber-600">(filtered from {lots.length})</span>
+            <span className="text-muted-foreground">(filtered from {lots.length})</span>
           )}{' '}
           with {selectedCount} of {totalCount} columns
         </p>

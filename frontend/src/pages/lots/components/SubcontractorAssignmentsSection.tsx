@@ -38,13 +38,13 @@ export function SubcontractorAssignmentsSection({
       {/* Show legacy assignment if exists but not in new assignments table */}
       {lot.assignedSubcontractor &&
         !assignments.some((a) => a.subcontractorCompany.id === lot.assignedSubcontractorId) && (
-          <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-md">
+          <div className="mb-3 p-3 bg-warning/10 border border-warning/30 rounded-md">
             <div className="flex items-center justify-between">
               <div>
-                <div className="font-medium text-amber-800">
+                <div className="font-medium text-foreground">
                   {lot.assignedSubcontractor.companyName}
                 </div>
-                <div className="text-sm text-amber-600">
+                <div className="text-sm text-warning">
                   Legacy assignment - click Add to set ITP permissions
                 </div>
               </div>
@@ -67,9 +67,9 @@ export function SubcontractorAssignmentsSection({
                   ITP:{' '}
                   {assignment.canCompleteITP ? (
                     <>
-                      <span className="text-green-600">Can complete</span>
+                      <span className="text-muted-foreground">Can complete</span>
                       {assignment.itpRequiresVerification && (
-                        <span className="text-amber-600 ml-2">Requires verification</span>
+                        <span className="text-warning ml-2">Requires verification</span>
                       )}
                     </>
                   ) : (
@@ -88,7 +88,7 @@ export function SubcontractorAssignmentsSection({
                   <button
                     onClick={() => onRemoveAssignment(assignment.id)}
                     disabled={removeAssignmentPending}
-                    className="px-3 py-1.5 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 border border-red-200 rounded-md transition-colors disabled:opacity-50"
+                    className="px-3 py-1.5 text-sm font-medium text-destructive hover:bg-destructive/10 border border-destructive/30 rounded-md transition-colors disabled:opacity-50"
                   >
                     Remove
                   </button>

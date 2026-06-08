@@ -46,7 +46,7 @@ export function LotContextMenu({
   return (
     <div
       ref={contextMenuRef}
-      className="fixed z-50 min-w-[160px] rounded-lg border bg-white shadow-lg py-1"
+      className="fixed z-50 min-w-[160px] rounded-lg border bg-popover text-popover-foreground shadow-lg py-1"
       style={{
         top: Math.min(contextMenu.y, window.innerHeight - 200),
         left: Math.min(contextMenu.x, window.innerWidth - 180),
@@ -148,7 +148,7 @@ export function LotContextMenu({
           <>
             <div className="border-t my-1" />
             <button
-              className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+              className="w-full px-4 py-2 text-left text-sm text-destructive hover:bg-destructive/10 flex items-center gap-2"
               onClick={() => {
                 onDeleteClick(contextMenu.lot);
                 onClose();

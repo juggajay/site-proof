@@ -57,7 +57,7 @@ export function ConformanceReportModal({
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-background rounded-lg p-6 w-full max-w-lg shadow-xl">
         <div className="flex items-center gap-3 mb-4">
-          <div className="flex items-center justify-center w-10 h-10 rounded-full bg-green-100 text-green-600">
+          <div className="flex items-center justify-center w-10 h-10 rounded-full bg-muted text-muted-foreground">
             <FileText className="h-5 w-5" />
           </div>
           <div>
@@ -76,9 +76,7 @@ export function ConformanceReportModal({
                 <label
                   key={option.value}
                   className={`flex items-start gap-3 p-3 border rounded-lg cursor-pointer hover:bg-muted/50 transition-colors ${
-                    selectedFormat === option.value
-                      ? 'border-green-500 bg-green-50 dark:bg-green-950/20'
-                      : ''
+                    selectedFormat === option.value ? 'border-primary bg-muted' : ''
                   }`}
                 >
                   <input
@@ -105,7 +103,7 @@ export function ConformanceReportModal({
           </button>
           <button
             onClick={onGenerate}
-            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90"
           >
             Generate PDF
           </button>

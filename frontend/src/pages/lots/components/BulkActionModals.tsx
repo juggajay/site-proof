@@ -50,7 +50,7 @@ export function BulkDeleteModal({
           Are you sure you want to delete{' '}
           <span className="font-semibold text-foreground">{selectedCount} lot(s)</span>?
         </p>
-        <p className="mt-3 text-sm text-red-600">
+        <p className="mt-3 text-sm text-destructive">
           This action cannot be undone. All associated data will be permanently deleted.
         </p>
       </ModalBody>

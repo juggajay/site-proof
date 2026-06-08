@@ -52,33 +52,35 @@ export function QualityManagementSection({
     <>
       {/* Quality Management Actions - Pre-conformance */}
       {canShowConformSection && (
-        <div className="mt-6 rounded-lg border border-green-200 bg-green-50 p-4">
-          <h2 className="text-lg font-semibold text-green-800 mb-2">Quality Management</h2>
-          <p className="text-sm text-green-700 mb-4">
+        <div className="mt-6 rounded-lg border border-border bg-card p-4">
+          <h2 className="text-lg font-semibold text-foreground mb-2">Quality Management</h2>
+          <p className="text-sm text-muted-foreground mb-4">
             As a quality manager, you can conform this lot once all requirements are met.
           </p>
 
           {/* Conformance Prerequisites Checklist */}
           {loadingConformStatus ? (
             <div className="flex items-center gap-2 mb-4">
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-green-600 border-t-transparent" />
-              <span className="text-sm text-green-700">Loading prerequisites...</span>
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-muted-foreground border-t-transparent" />
+              <span className="text-sm text-muted-foreground">Loading prerequisites...</span>
             </div>
           ) : conformStatus ? (
             <div className="mb-4 space-y-2">
-              <h3 className="text-sm font-medium text-green-800 mb-2">Prerequisites:</h3>
+              <h3 className="text-sm font-medium text-foreground mb-2">Prerequisites:</h3>
               <div className="space-y-1">
                 <div className="flex items-center gap-2 text-sm">
                   <span
                     className={
-                      conformStatus.prerequisites.itpAssigned ? 'text-green-700' : 'text-red-600'
+                      conformStatus.prerequisites.itpAssigned ? 'text-success' : 'text-destructive'
                     }
                   >
                     {conformStatus.prerequisites.itpAssigned ? '\u2713' : '\u2717'}
                   </span>
                   <span
                     className={
-                      conformStatus.prerequisites.itpAssigned ? 'text-green-700' : 'text-red-700'
+                      conformStatus.prerequisites.itpAssigned
+                        ? 'text-muted-foreground'
+                        : 'text-destructive'
                     }
                   >
                     ITP Assigned
@@ -87,14 +89,16 @@ export function QualityManagementSection({
                 <div className="flex items-center gap-2 text-sm">
                   <span
                     className={
-                      conformStatus.prerequisites.itpCompleted ? 'text-green-700' : 'text-red-600'
+                      conformStatus.prerequisites.itpCompleted ? 'text-success' : 'text-destructive'
                     }
                   >
                     {conformStatus.prerequisites.itpCompleted ? '\u2713' : '\u2717'}
                   </span>
                   <span
                     className={
-                      conformStatus.prerequisites.itpCompleted ? 'text-green-700' : 'text-red-700'
+                      conformStatus.prerequisites.itpCompleted
+                        ? 'text-muted-foreground'
+                        : 'text-destructive'
                     }
                   >
                     ITP Completed ({conformStatus.prerequisites.itpCompletedCount}/
@@ -104,14 +108,18 @@ export function QualityManagementSection({
                 <div className="flex items-center gap-2 text-sm">
                   <span
                     className={
-                      conformStatus.prerequisites.hasPassingTest ? 'text-green-700' : 'text-red-600'
+                      conformStatus.prerequisites.hasPassingTest
+                        ? 'text-success'
+                        : 'text-destructive'
                     }
                   >
                     {conformStatus.prerequisites.hasPassingTest ? '\u2713' : '\u2717'}
                   </span>
                   <span
                     className={
-                      conformStatus.prerequisites.hasPassingTest ? 'text-green-700' : 'text-red-700'
+                      conformStatus.prerequisites.hasPassingTest
+                        ? 'text-muted-foreground'
+                        : 'text-destructive'
                     }
                   >
                     Passing Verified Test Result
@@ -120,20 +128,22 @@ export function QualityManagementSection({
                 <div className="flex items-center gap-2 text-sm">
                   <span
                     className={
-                      conformStatus.prerequisites.noOpenNcrs ? 'text-green-700' : 'text-red-600'
+                      conformStatus.prerequisites.noOpenNcrs ? 'text-success' : 'text-destructive'
                     }
                   >
                     {conformStatus.prerequisites.noOpenNcrs ? '\u2713' : '\u2717'}
                   </span>
                   <span
                     className={
-                      conformStatus.prerequisites.noOpenNcrs ? 'text-green-700' : 'text-red-700'
+                      conformStatus.prerequisites.noOpenNcrs
+                        ? 'text-muted-foreground'
+                        : 'text-destructive'
                     }
                   >
                     No Open NCRs
                     {!conformStatus.prerequisites.noOpenNcrs &&
                       conformStatus.prerequisites.openNcrs.length > 0 && (
-                        <span className="text-red-600 ml-1">
+                        <span className="text-destructive ml-1">
                           ({conformStatus.prerequisites.openNcrs.map((n) => n.ncrNumber).join(', ')}
                           )
                         </span>
@@ -142,9 +152,9 @@ export function QualityManagementSection({
                 </div>
               </div>
               {!conformStatus.canConform && conformStatus.blockingReasons.length > 0 && (
-                <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg">
-                  <p className="text-sm font-medium text-red-800 mb-1">Cannot conform lot:</p>
-                  <ul className="list-disc list-inside text-sm text-red-700">
+                <div className="mt-3 p-3 bg-destructive/10 border border-destructive/30 rounded-lg">
+                  <p className="text-sm font-medium text-destructive mb-1">Cannot conform lot:</p>
+                  <ul className="list-disc list-inside text-sm text-destructive">
                     {conformStatus.blockingReasons.map((reason, i) => (
                       <li key={i}>{reason}</li>
                     ))}
@@ -152,7 +162,7 @@ export function QualityManagementSection({
                 </div>
               )}
               {canForceConformBlockedLot && (
-                <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                <div className="mt-3 rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm text-warning">
                   <div className="flex items-start gap-2">
                     <AlertTriangle className="mt-0.5 h-4 w-4 flex-none" />
                     <div>
@@ -172,10 +182,10 @@ export function QualityManagementSection({
             <button
               onClick={onConformLot}
               disabled={conforming || (conformStatus !== null && !conformStatus.canConform)}
-              className={`rounded-lg px-4 py-2 text-sm text-white disabled:opacity-50 ${
+              className={`rounded-lg px-4 py-2 text-sm disabled:opacity-50 ${
                 conformStatus?.canConform
-                  ? 'bg-green-600 hover:bg-green-700'
-                  : 'bg-muted-foreground cursor-not-allowed'
+                  ? 'bg-success text-success-foreground hover:bg-success/90'
+                  : 'bg-muted text-muted-foreground cursor-not-allowed'
               }`}
             >
               {conforming ? 'Conforming...' : 'Conform Lot'}
@@ -184,7 +194,7 @@ export function QualityManagementSection({
               <button
                 onClick={onForceConformLot}
                 disabled={conforming}
-                className="rounded-lg border border-amber-600 px-4 py-2 text-sm font-medium text-amber-800 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-lg border border-warning px-4 py-2 text-sm font-medium text-warning hover:bg-warning/10 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {conforming ? 'Conforming...' : 'Force Conform Lot'}
               </button>
@@ -192,7 +202,7 @@ export function QualityManagementSection({
             {canVerifyTestResults && (
               <button
                 onClick={() => onTabChange('tests')}
-                className="rounded-lg border border-green-700 px-4 py-2 text-sm text-green-700 hover:bg-green-100"
+                className="rounded-lg border border-border px-4 py-2 text-sm text-foreground hover:bg-muted"
               >
                 Verify Test Results
               </button>
@@ -204,7 +214,7 @@ export function QualityManagementSection({
       {/* Conformed Status Display (also show for claimed lots as they were previously conformed) */}
       {isConformedOrClaimed && (
         <div
-          className={`mt-6 rounded-lg border p-4 ${lot.status === 'claimed' ? 'border-blue-400 bg-blue-100' : 'border-green-400 bg-green-100'}`}
+          className={`mt-6 rounded-lg border p-4 ${lot.status === 'claimed' ? 'border-border bg-muted' : 'border-success/30 bg-success/10'}`}
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -213,12 +223,12 @@ export function QualityManagementSection({
               </span>
               <div>
                 <h2
-                  className={`text-lg font-semibold ${lot.status === 'claimed' ? 'text-blue-800' : 'text-green-800'}`}
+                  className={`text-lg font-semibold ${lot.status === 'claimed' ? 'text-foreground' : 'text-success'}`}
                 >
                   {lot.status === 'claimed' ? 'Lot Claimed' : 'Lot Conformed'}
                 </h2>
                 <p
-                  className={`text-sm ${lot.status === 'claimed' ? 'text-blue-700' : 'text-green-700'}`}
+                  className={`text-sm ${lot.status === 'claimed' ? 'text-muted-foreground' : 'text-success'}`}
                 >
                   {lot.status === 'claimed'
                     ? 'This lot has been included in a progress claim.'
@@ -227,10 +237,10 @@ export function QualityManagementSection({
                 {/* Conformance Details */}
                 {(lot.conformedAt || lot.conformedBy) && (
                   <div
-                    className={`mt-2 pt-2 border-t ${lot.status === 'claimed' ? 'border-blue-300' : 'border-green-300'}`}
+                    className={`mt-2 pt-2 border-t ${lot.status === 'claimed' ? 'border-border' : 'border-success/30'}`}
                   >
                     <div
-                      className={`flex flex-wrap gap-4 text-sm ${lot.status === 'claimed' ? 'text-blue-700' : 'text-green-700'}`}
+                      className={`flex flex-wrap gap-4 text-sm ${lot.status === 'claimed' ? 'text-muted-foreground' : 'text-success'}`}
                     >
                       {lot.conformedBy && (
                         <div className="flex items-center gap-1">
@@ -261,7 +271,7 @@ export function QualityManagementSection({
             <button
               onClick={onShowReportDialog}
               disabled={generatingReport}
-              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <FileText className="h-4 w-4" />
               {generatingReport ? 'Generating...' : 'Generate Conformance Report'}

@@ -71,8 +71,8 @@ export function LotHeader({
           >
             {linkCopied ? (
               <>
-                <Check className="h-4 w-4 text-green-600" />
-                <span className="text-green-600">Copied!</span>
+                <Check className="h-4 w-4 text-success" />
+                <span className="text-success">Copied!</span>
               </>
             ) : (
               <>
@@ -92,7 +92,7 @@ export function LotHeader({
           {canManageLot && isEditable && (
             <button
               onClick={onEdit}
-              className="rounded-lg border border-amber-500 px-4 py-2 text-sm text-amber-600 hover:bg-amber-50"
+              className="rounded-lg border border-border px-4 py-2 text-sm text-foreground hover:bg-muted/50 transition-colors"
             >
               Edit Lot
             </button>
@@ -120,7 +120,7 @@ export function LotHeader({
           {canConformLots && lot.status !== 'claimed' && (
             <button
               onClick={onOverrideStatus}
-              className="flex items-center gap-1.5 rounded-lg border border-purple-500 px-3 py-2 text-sm text-purple-600 hover:bg-purple-50"
+              className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm text-foreground hover:bg-muted/50 transition-colors"
               title="Manually override lot workflow status"
             >
               <RefreshCw className="h-4 w-4" />

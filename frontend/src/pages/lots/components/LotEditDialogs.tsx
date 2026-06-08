@@ -51,9 +51,9 @@ export function LotEditDialogs({
         <Modal alert onClose={onCloseConcurrentWarning} className="max-w-md">
           <AlertModalHeader>
             <span className="flex items-center gap-3">
-              <span className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center">
+              <span className="w-10 h-10 rounded-full bg-warning/10 flex items-center justify-center">
                 <svg
-                  className="w-6 h-6 text-amber-600"
+                  className="w-6 h-6 text-warning"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"

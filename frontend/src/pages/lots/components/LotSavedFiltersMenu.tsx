@@ -103,7 +103,7 @@ export function LotSavedFiltersMenu({
                           event.stopPropagation();
                           onDeleteSavedFilter(filter.id);
                         }}
-                        className="h-6 w-6 text-muted-foreground hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="h-6 w-6 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
                         title="Delete filter"
                       >
                         <Trash2 className="h-3.5 w-3.5" />

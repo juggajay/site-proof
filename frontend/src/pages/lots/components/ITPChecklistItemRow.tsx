@@ -40,7 +40,7 @@ export function ITPChecklistItemRow({
 
   return (
     <div
-      className={`p-4 ${isNotApplicable ? 'bg-muted/50' : ''} ${isFailed ? 'bg-red-50 dark:bg-red-900/30' : ''}`}
+      className={`p-4 ${isNotApplicable ? 'bg-muted/50' : ''} ${isFailed ? 'bg-destructive/10' : ''}`}
     >
       <div className="flex items-start gap-3">
         <button
@@ -59,11 +59,11 @@ export function ITPChecklistItemRow({
           }
           className={`mt-0.5 flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
             isFailed
-              ? 'bg-red-500 border-red-500 text-white cursor-not-allowed'
+              ? 'bg-destructive border-destructive text-destructive-foreground cursor-not-allowed'
               : isNotApplicable
-                ? 'bg-gray-400 dark:bg-gray-600 border-gray-400 dark:border-gray-600 text-white cursor-not-allowed'
+                ? 'bg-muted-foreground border-muted-foreground text-background cursor-not-allowed'
                 : isCompleted
-                  ? 'bg-green-500 border-green-500 text-white'
+                  ? 'bg-primary border-primary text-primary-foreground'
                   : 'border-border hover:border-primary'
           } ${updatingCompletion === item.id ? 'opacity-50' : ''}`}
         >
@@ -89,10 +89,10 @@ export function ITPChecklistItemRow({
             <span
               className={`inline-flex items-center justify-center w-6 h-6 text-xs font-bold rounded ${
                 item.pointType === 'hold_point'
-                  ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                  ? 'bg-destructive/10 text-destructive'
                   : item.pointType === 'witness'
-                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200'
-                    : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+                    ? 'bg-warning/10 text-warning'
+                    : 'bg-muted text-muted-foreground'
               }`}
               title={
                 item.pointType === 'hold_point'
@@ -116,7 +116,7 @@ export function ITPChecklistItemRow({
               </span>
             )}
             {item.isHoldPoint && (
-              <span className="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded">
+              <span className="text-xs bg-destructive/10 text-destructive px-2 py-0.5 rounded">
                 Hold Point
               </span>
             )}
@@ -124,12 +124,12 @@ export function ITPChecklistItemRow({
             <span
               className={`text-xs px-2 py-0.5 rounded ${
                 item.responsibleParty === 'superintendent'
-                  ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
+                  ? 'bg-muted text-muted-foreground'
                   : item.responsibleParty === 'subcontractor'
-                    ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
+                    ? 'bg-muted text-muted-foreground'
                     : item.responsibleParty === 'contractor'
-                      ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                      : 'bg-muted'
+                      ? 'bg-muted text-muted-foreground'
+                      : 'bg-muted text-muted-foreground'
               }`}
             >
               {item.responsibleParty === 'superintendent'
@@ -143,7 +143,7 @@ export function ITPChecklistItemRow({
             {/* Evidence required icons */}
             {item.evidenceRequired === 'photo' && (
               <span
-                className="inline-flex items-center text-green-600 dark:text-green-400"
+                className="inline-flex items-center text-muted-foreground"
                 title="Photo required"
               >
                 <svg
@@ -162,7 +162,7 @@ export function ITPChecklistItemRow({
             )}
             {(item.evidenceRequired === 'test' || item.testType) && (
               <span
-                className="inline-flex items-center gap-1 text-purple-600 dark:text-purple-400"
+                className="inline-flex items-center gap-1 text-muted-foreground"
                 title={item.testType ? `Test required: ${item.testType}` : 'Test required'}
               >
                 <svg
@@ -181,7 +181,10 @@ export function ITPChecklistItemRow({
               </span>
             )}
             {item.evidenceRequired === 'document' && (
-              <span className="inline-flex items-center text-primary" title="Document required">
+              <span
+                className="inline-flex items-center text-muted-foreground"
+                title="Document required"
+              >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   className="h-4 w-4"
@@ -240,7 +243,7 @@ export function ITPChecklistItemRow({
                 });
               }}
               onBlur={(e) => onUpdateNotes(item.id, e.target.value)}
-              className="w-full px-2 py-1 text-sm border rounded bg-transparent"
+              className="w-full px-2 py-1 text-sm border border-border rounded bg-background text-foreground"
             />
           </div>
           {completion?.completedBy && (
@@ -255,17 +258,15 @@ export function ITPChecklistItemRow({
           {item.pointType === 'witness' &&
             completion?.witnessPresent !== undefined &&
             completion?.witnessPresent !== null && (
-              <div className="mt-2 p-2 bg-amber-50 dark:bg-amber-900/20 rounded border border-amber-200 dark:border-amber-800">
-                <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
-                  Witness Details:
-                </p>
+              <div className="mt-2 p-2 bg-muted rounded border border-border">
+                <p className="text-xs font-medium text-foreground">Witness Details:</p>
                 {completion.witnessPresent ? (
-                  <p className="text-xs text-amber-600 dark:text-amber-500">
+                  <p className="text-xs text-muted-foreground">
                     Witness present: {completion.witnessName || 'Name not recorded'}
                     {completion.witnessCompany && ` (${completion.witnessCompany})`}
                   </p>
                 ) : (
-                  <p className="text-xs text-amber-600 dark:text-amber-500">
+                  <p className="text-xs text-muted-foreground">
                     Witness not present (notification given)
                   </p>
                 )}
@@ -333,7 +334,7 @@ export function ITPChecklistItemRow({
                 </button>
                 <button
                   onClick={() => onMarkAsFailed(item.id, item.description)}
-                  className="inline-flex items-center gap-1 text-xs text-red-500 hover:text-red-700 dark:hover:text-red-400"
+                  className="inline-flex items-center gap-1 text-xs text-destructive hover:text-destructive/80"
                   title="Mark this item as Failed and raise an NCR"
                 >
                   <span>X</span>
@@ -351,13 +352,13 @@ export function ITPChecklistItemRow({
 
             {/* Show Failed status with NCR link */}
             {isFailed && (
-              <p className="text-xs text-red-600 mt-1">
+              <p className="text-xs text-destructive mt-1">
                 <span className="font-medium">Failed</span>
                 {notes && `: ${notes}`}
                 {completion?.linkedNcr && (
                   <a
                     href={`/projects/${encodeURIComponent(projectId)}/ncr`}
-                    className="ml-2 underline hover:text-red-800"
+                    className="ml-2 underline hover:text-destructive/80"
                   >
                     View NCR {completion.linkedNcr.ncrNumber}
                   </a>

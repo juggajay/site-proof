@@ -93,7 +93,7 @@ export function WitnessPointModal({
     <Modal onClose={handleClose}>
       <ModalHeader>
         <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center w-10 h-10 rounded-full bg-amber-100 text-amber-600 dark:bg-amber-900 dark:text-amber-400">
+          <div className="flex items-center justify-center w-10 h-10 rounded-full bg-muted text-muted-foreground">
             <span className="text-xl font-bold">W</span>
           </div>
           <div>
@@ -103,7 +103,7 @@ export function WitnessPointModal({
         </div>
       </ModalHeader>
       <ModalBody>
-        <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
+        <div className="mb-4 p-3 bg-muted rounded-lg border border-border">
           <p className="text-sm font-medium">{itemDescription}</p>
         </div>
 
@@ -111,7 +111,7 @@ export function WitnessPointModal({
           <div className="space-y-4">
             <div>
               <Label>
-                Was the client witness present? <span className="text-red-500">*</span>
+                Was the client witness present? <span className="text-destructive">*</span>
               </Label>
               <div className="flex gap-3 mt-2">
                 <button
@@ -119,7 +119,7 @@ export function WitnessPointModal({
                   onClick={() => setValue('witnessPresent', true, { shouldValidate: true })}
                   className={`flex-1 px-4 py-3 border rounded-lg text-sm font-medium transition-colors ${
                     witnessPresent === true
-                      ? 'bg-green-100 border-green-500 text-green-700 dark:bg-green-900/30 dark:border-green-600 dark:text-green-400'
+                      ? 'bg-success/10 border-success text-success'
                       : 'hover:bg-muted'
                   }`}
                 >
@@ -130,7 +130,7 @@ export function WitnessPointModal({
                   onClick={() => setValue('witnessPresent', false, { shouldValidate: true })}
                   className={`flex-1 px-4 py-3 border rounded-lg text-sm font-medium transition-colors ${
                     witnessPresent === false
-                      ? 'bg-orange-100 border-orange-500 text-orange-700 dark:bg-orange-900/30 dark:border-orange-600 dark:text-orange-400'
+                      ? 'bg-warning/10 border-warning text-warning'
                       : 'hover:bg-muted'
                   }`}
                 >
@@ -148,7 +148,7 @@ export function WitnessPointModal({
               <>
                 <div>
                   <Label>
-                    Witness Name <span className="text-red-500">*</span>
+                    Witness Name <span className="text-destructive">*</span>
                   </Label>
                   <Input
                     type="text"
@@ -177,8 +177,8 @@ export function WitnessPointModal({
             )}
 
             {witnessPresent === false && (
-              <div className="p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
-                <p className="text-sm text-orange-700 dark:text-orange-400">
+              <div className="p-3 bg-warning/10 rounded-lg border border-warning/30">
+                <p className="text-sm text-warning">
                   <strong>Note:</strong> The item will be marked as complete with a record that
                   notification was given but the witness was not present.
                 </p>

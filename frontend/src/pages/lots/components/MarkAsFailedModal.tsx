@@ -65,7 +65,7 @@ export function MarkAsFailedModal({
     <Modal onClose={handleClose}>
       <ModalHeader>
         <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center w-10 h-10 rounded-full bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-400">
+          <div className="flex items-center justify-center w-10 h-10 rounded-full bg-destructive/10 text-destructive">
             <span className="text-xl font-bold">&#10007;</span>
           </div>
           <div>
@@ -83,7 +83,7 @@ export function MarkAsFailedModal({
           <div className="space-y-4">
             <div>
               <Label>
-                NCR Description <span className="text-red-500">*</span>
+                NCR Description <span className="text-destructive">*</span>
               </Label>
               <Textarea
                 {...register('description')}

@@ -46,14 +46,14 @@ function conformanceFieldLabel(bucket: ReadinessBucket): string {
 
 function bucketTone(bucket: ReadinessBucket): string {
   if (bucket.blockers.some((item) => item.blocksAction)) {
-    return 'border-red-200 bg-red-50 text-red-950';
+    return 'border-destructive/30 bg-destructive/10 text-foreground';
   }
 
   if (bucket.blockers.length > 0 || bucket.warnings.length > 0) {
-    return 'border-amber-200 bg-amber-50 text-amber-950';
+    return 'border-warning/30 bg-warning/10 text-foreground';
   }
 
-  return 'border-green-200 bg-green-50 text-green-950';
+  return 'border-success/30 bg-success/10 text-foreground';
 }
 
 function tabFromHref(href?: string): LotTab | null {
@@ -77,14 +77,14 @@ function actionTab(item: EvidenceReadinessItem): LotTab | null {
 
 function itemIcon(item: EvidenceReadinessItem) {
   if (item.severity === 'support') {
-    return <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0 text-green-600" />;
+    return <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0 text-success" />;
   }
 
   if (item.blocksAction) {
-    return <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-red-600" />;
+    return <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-destructive" />;
   }
 
-  return <CircleDot className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600" />;
+  return <CircleDot className="mt-0.5 h-4 w-4 flex-shrink-0 text-warning" />;
 }
 
 function ItemList({
@@ -174,14 +174,14 @@ export function LotReadinessPanel({
   if (error) {
     return (
       <section
-        className="rounded-lg border border-amber-200 bg-amber-50 p-4"
+        className="rounded-lg border border-warning/30 bg-warning/10 p-4"
         aria-label="Evidence Readiness"
       >
-        <h2 className="text-lg font-semibold text-amber-950">Evidence Readiness unavailable</h2>
-        <p className="mt-1 text-sm text-amber-900">{error}</p>
+        <h2 className="text-lg font-semibold text-foreground">Evidence Readiness unavailable</h2>
+        <p className="mt-1 text-sm text-muted-foreground">{error}</p>
         <button
           type="button"
-          className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-amber-950 underline-offset-4 hover:underline"
+          className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-foreground underline-offset-4 hover:underline"
           onClick={onRetry}
         >
           <RefreshCw className="h-4 w-4" />
