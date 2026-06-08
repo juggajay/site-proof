@@ -31,6 +31,75 @@ import { getGPSLocation, getItpPhotoValidationError } from '../lib/itpEvidence';
 import type { ITPAttachment, ITPCompletion, ITPInstance } from '../types';
 import type { ClassificationModalData } from '../components/AIClassificationModal';
 
+/**
+ * Pure upload-then-attach for an ITP evidence photo: POST the file to
+ * `/api/documents/upload`, then attach the created document to the completion.
+ *
+ * Standalone (no hook/component state) so BOTH the HC lot-detail path (via
+ * `useLotPhotoUpload`) and the subcontractor portal page call the exact same
+ * upload + attach request shape from one tested place. It captures the device
+ * GPS fix (`getGPSLocation()`) and sends `gpsLatitude`/`gpsLongitude`, and it
+ * `encodeURIComponent`s the completionId in the attachment URL.
+ *
+ * This function deliberately does NOT do AI classification (Feature #247) or any
+ * offline/IndexedDB write-through — those concerns live only in the hook's
+ * handlers, so the portal (which calls this directly) never touches them.
+ *
+ * The caller owns the trust boundary and any validation/permission gate; this
+ * function never reads `user.role` and only performs the upload it is asked to.
+ */
+export async function uploadItpEvidencePhoto({
+  projectId,
+  lotId,
+  completionId,
+  file,
+}: {
+  projectId: string | undefined;
+  lotId: string | undefined;
+  completionId: string;
+  file: File;
+}): Promise<ITPAttachment> {
+  if (!projectId || !lotId) {
+    throw new Error('Project and lot are required to upload ITP evidence.');
+  }
+
+  const gpsLocation = await getGPSLocation();
+  const caption = `ITP Evidence Photo - ${formatDateTime(new Date())}`;
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('projectId', projectId);
+  formData.append('lotId', lotId);
+  formData.append('documentType', 'photo');
+  formData.append('category', 'itp_evidence');
+  formData.append('caption', caption);
+
+  const uploadResponse = await authFetch('/api/documents/upload', {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!uploadResponse.ok) {
+    const body = await uploadResponse.text();
+    throw new ApiError(uploadResponse.status, body);
+  }
+
+  const document = (await uploadResponse.json()) as { id: string };
+  const data = await apiFetch<{ attachment: ITPAttachment }>(
+    `/api/itp/completions/${encodeURIComponent(completionId)}/attachments`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        documentId: document.id,
+        caption,
+        gpsLatitude: gpsLocation?.latitude ?? null,
+        gpsLongitude: gpsLocation?.longitude ?? null,
+      }),
+    },
+  );
+
+  return data.attachment;
+}
+
 interface UseLotPhotoUploadParams {
   projectId: string | undefined;
   lotId: string | undefined;
@@ -60,50 +129,11 @@ export function useLotPhotoUpload({
   const [savingClassification, setSavingClassification] = useState(false);
   const [_classifying, setClassifying] = useState(false);
 
-  const uploadItpEvidencePhoto = async (
-    completionId: string,
-    file: File,
-  ): Promise<ITPAttachment> => {
-    if (!projectId || !lotId) {
-      throw new Error('Project and lot are required to upload ITP evidence.');
-    }
-
-    const gpsLocation = await getGPSLocation();
-    const caption = `ITP Evidence Photo - ${formatDateTime(new Date())}`;
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('projectId', projectId);
-    formData.append('lotId', lotId);
-    formData.append('documentType', 'photo');
-    formData.append('category', 'itp_evidence');
-    formData.append('caption', caption);
-
-    const uploadResponse = await authFetch('/api/documents/upload', {
-      method: 'POST',
-      body: formData,
-    });
-
-    if (!uploadResponse.ok) {
-      const body = await uploadResponse.text();
-      throw new ApiError(uploadResponse.status, body);
-    }
-
-    const document = (await uploadResponse.json()) as { id: string };
-    const data = await apiFetch<{ attachment: ITPAttachment }>(
-      `/api/itp/completions/${encodeURIComponent(completionId)}/attachments`,
-      {
-        method: 'POST',
-        body: JSON.stringify({
-          documentId: document.id,
-          caption,
-          gpsLatitude: gpsLocation?.latitude ?? null,
-          gpsLongitude: gpsLocation?.longitude ?? null,
-        }),
-      },
-    );
-
-    return data.attachment;
-  };
+  // The upload-then-attach request shape now lives in the standalone
+  // `uploadItpEvidencePhoto` (module scope, also used by the subcontractor portal
+  // page). The hook handlers below call it with this page's projectId/lotId.
+  const uploadEvidencePhoto = (completionId: string, file: File): Promise<ITPAttachment> =>
+    uploadItpEvidencePhoto({ projectId, lotId, completionId, file });
 
   const handleMobileAddPhoto = async (checklistItemId: string, file: File) => {
     if (!itpInstance || updatingCompletionRef.current === checklistItemId) return;
@@ -157,7 +187,7 @@ export function useLotPhotoUpload({
         return;
       }
 
-      const attachment = await uploadItpEvidencePhoto(completion.id, file);
+      const attachment = await uploadEvidencePhoto(completion.id, file);
 
       // Update local state with new attachment
       setItpInstance((prev) => {
@@ -210,7 +240,7 @@ export function useLotPhotoUpload({
     setUploadingPhoto(checklistItemId);
 
     try {
-      const attachment = await uploadItpEvidencePhoto(completionId, file);
+      const attachment = await uploadEvidencePhoto(completionId, file);
 
       // Update the ITP instance with the new attachment
       setItpInstance((prev) => {
