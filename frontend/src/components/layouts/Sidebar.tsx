@@ -154,6 +154,30 @@ const MODULE_NAV_MAPPING: Record<string, string[]> = {
   dailyDiary: ['Daily Diary'],
 };
 
+// "Quiet Authority" nav item styling (docs/DESIGN.md). Monochrome by default;
+// the single active item carries THE brand signature: a deep-amber (--brand)
+// left rail + amber icon on a subtle warm bg. Everything else stays neutral.
+// Shared across every nav group so there is exactly one active treatment.
+function navLinkClass(isActive: boolean, isCollapsed: boolean): string {
+  return cn(
+    'group relative flex items-center rounded-lg py-2 text-sm transition-colors duration-200',
+    isCollapsed ? 'justify-center px-2' : 'gap-3 px-3',
+    // Amber left rail — the one signature. Hidden when idle, ~2.5px when active.
+    'before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-[2.5px] before:rounded-r-full before:bg-brand before:transition-opacity before:duration-200',
+    isActive
+      ? 'bg-accent font-medium text-foreground before:opacity-100'
+      : 'text-muted-foreground before:opacity-0 hover:bg-muted hover:text-foreground',
+  );
+}
+
+// Idle icons are muted; the active item's icon is amber to match its rail.
+function navIconClass(isActive: boolean): string {
+  return cn(
+    'h-5 w-5 flex-shrink-0 transition-colors duration-200',
+    isActive ? 'text-brand' : 'text-muted-foreground group-hover:text-foreground',
+  );
+}
+
 export function Sidebar() {
   const { projectId } = useParams();
   const { user } = useAuth();
@@ -300,10 +324,11 @@ export function Sidebar() {
         )}
       >
         {isCollapsed ? (
-          <span className="text-xl font-bold text-primary">SP</span>
+          <span className="text-lg font-semibold tracking-tight text-foreground">SP</span>
         ) : (
-          <span className="text-xl font-bold text-primary whitespace-nowrap overflow-hidden">
+          <span className="text-lg font-semibold tracking-tight text-foreground whitespace-nowrap overflow-hidden">
             SiteProof
+            <span className="font-mono text-sm font-normal text-muted-foreground">·v3</span>
           </span>
         )}
       </div>
@@ -315,18 +340,16 @@ export function Sidebar() {
             key={item.name}
             to={item.href}
             title={isCollapsed ? item.name : undefined}
-            className={({ isActive }) =>
-              cn(
-                'flex items-center rounded-lg py-2 text-sm transition-all duration-200',
-                isCollapsed ? 'justify-center px-2' : 'gap-3 px-3',
-                isActive
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-              )
-            }
+            className={({ isActive }) => navLinkClass(isActive, isCollapsed)}
           >
-            <item.icon className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
-            {!isCollapsed && <span className="transition-opacity duration-200">{item.name}</span>}
+            {({ isActive }) => (
+              <>
+                <item.icon className={navIconClass(isActive)} aria-hidden="true" />
+                {!isCollapsed && (
+                  <span className="transition-opacity duration-200">{item.name}</span>
+                )}
+              </>
+            )}
           </NavLink>
         ))}
 
@@ -345,19 +368,15 @@ export function Sidebar() {
                 key={item.name}
                 to={item.href}
                 title={isCollapsed ? item.name : undefined}
-                className={({ isActive }) =>
-                  cn(
-                    'flex items-center rounded-lg py-2 text-sm transition-all duration-200',
-                    isCollapsed ? 'justify-center px-2' : 'gap-3 px-3',
-                    isActive
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-                  )
-                }
+                className={({ isActive }) => navLinkClass(isActive, isCollapsed)}
               >
-                <item.icon className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
-                {!isCollapsed && (
-                  <span className="transition-opacity duration-200">{item.name}</span>
+                {({ isActive }) => (
+                  <>
+                    <item.icon className={navIconClass(isActive)} aria-hidden="true" />
+                    {!isCollapsed && (
+                      <span className="transition-opacity duration-200">{item.name}</span>
+                    )}
+                  </>
                 )}
               </NavLink>
             ))}
@@ -379,19 +398,15 @@ export function Sidebar() {
                 key={item.name}
                 to={`/projects/${projectId}/${item.href}`}
                 title={isCollapsed ? item.name : undefined}
-                className={({ isActive }) =>
-                  cn(
-                    'flex items-center rounded-lg py-2 text-sm transition-all duration-200',
-                    isCollapsed ? 'justify-center px-2' : 'gap-3 px-3',
-                    isActive
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-                  )
-                }
+                className={({ isActive }) => navLinkClass(isActive, isCollapsed)}
               >
-                <item.icon className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
-                {!isCollapsed && (
-                  <span className="transition-opacity duration-200">{item.name}</span>
+                {({ isActive }) => (
+                  <>
+                    <item.icon className={navIconClass(isActive)} aria-hidden="true" />
+                    {!isCollapsed && (
+                      <span className="transition-opacity duration-200">{item.name}</span>
+                    )}
+                  </>
                 )}
               </NavLink>
             ))}
@@ -409,18 +424,16 @@ export function Sidebar() {
             key={item.name}
             to={item.href}
             title={isCollapsed ? item.name : undefined}
-            className={({ isActive }) =>
-              cn(
-                'flex items-center rounded-lg py-2 text-sm transition-all duration-200',
-                isCollapsed ? 'justify-center px-2' : 'gap-3 px-3',
-                isActive
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-              )
-            }
+            className={({ isActive }) => navLinkClass(isActive, isCollapsed)}
           >
-            <item.icon className="h-5 w-5 flex-shrink-0" aria-hidden="true" />
-            {!isCollapsed && <span className="transition-opacity duration-200">{item.name}</span>}
+            {({ isActive }) => (
+              <>
+                <item.icon className={navIconClass(isActive)} aria-hidden="true" />
+                {!isCollapsed && (
+                  <span className="transition-opacity duration-200">{item.name}</span>
+                )}
+              </>
+            )}
           </NavLink>
         ))}
 
