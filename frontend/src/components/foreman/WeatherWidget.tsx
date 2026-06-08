@@ -16,14 +16,14 @@ interface WeatherWidgetProps {
 }
 
 function getWeatherIcon(conditions: string | null) {
-  if (!conditions) return <Sun className="h-10 w-10 text-yellow-500" />;
+  if (!conditions) return <Sun className="h-10 w-10 text-muted-foreground" />;
 
   const lower = conditions.toLowerCase();
   if (lower.includes('rain') || lower.includes('shower')) {
-    return <CloudRain className="h-10 w-10 text-blue-500" />;
+    return <CloudRain className="h-10 w-10 text-muted-foreground" />;
   }
   if (lower.includes('snow')) {
-    return <CloudSnow className="h-10 w-10 text-blue-200" />;
+    return <CloudSnow className="h-10 w-10 text-muted-foreground" />;
   }
   if (lower.includes('wind')) {
     return <Wind className="h-10 w-10 text-muted-foreground" />;
@@ -31,21 +31,7 @@ function getWeatherIcon(conditions: string | null) {
   if (lower.includes('cloud') || lower.includes('overcast')) {
     return <Cloud className="h-10 w-10 text-muted-foreground" />;
   }
-  return <Sun className="h-10 w-10 text-yellow-500" />;
-}
-
-function getGradient(conditions: string | null) {
-  if (!conditions)
-    return 'from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20';
-
-  const lower = conditions.toLowerCase();
-  if (lower.includes('rain') || lower.includes('shower')) {
-    return 'from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20';
-  }
-  if (lower.includes('cloud') || lower.includes('overcast')) {
-    return 'from-gray-50 to-gray-100 dark:from-gray-900/20 dark:to-gray-800/20';
-  }
-  return 'from-yellow-50 to-orange-50 dark:from-yellow-900/20 dark:to-orange-900/20';
+  return <Sun className="h-10 w-10 text-muted-foreground" />;
 }
 
 export function WeatherWidget({ weather, loading, className }: WeatherWidgetProps) {
@@ -64,13 +50,7 @@ export function WeatherWidget({ weather, loading, className }: WeatherWidgetProp
   }
 
   return (
-    <div
-      className={cn(
-        'rounded-lg border p-4 bg-gradient-to-r',
-        getGradient(weather.conditions),
-        className,
-      )}
-    >
+    <div className={cn('rounded-lg border bg-card p-4', className)}>
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-4">
           {getWeatherIcon(weather.conditions)}
@@ -85,16 +65,18 @@ export function WeatherWidget({ weather, loading, className }: WeatherWidgetProp
         <div className="flex items-center gap-4 flex-wrap">
           {weather.temperatureMin !== null && weather.temperatureMax !== null && (
             <div className="flex items-center gap-2">
-              <Thermometer className="h-5 w-5 text-red-500" />
-              <span className="text-lg font-medium">
+              <Thermometer className="h-5 w-5 text-muted-foreground" />
+              <span className="text-lg font-medium font-mono tabular-nums">
                 {weather.temperatureMin}° - {weather.temperatureMax}°C
               </span>
             </div>
           )}
           {weather.rainfallMm !== null && weather.rainfallMm > 0 && (
             <div className="flex items-center gap-2">
-              <Droplets className="h-5 w-5 text-blue-500" />
-              <span className="text-lg font-medium">{weather.rainfallMm}mm</span>
+              <Droplets className="h-5 w-5 text-muted-foreground" />
+              <span className="text-lg font-medium font-mono tabular-nums">
+                {weather.rainfallMm}mm
+              </span>
             </div>
           )}
         </div>

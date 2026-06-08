@@ -65,15 +65,15 @@ interface ForemanDashboardData {
 }
 
 const getWeatherIcon = (conditions: string | null) => {
-  if (!conditions) return <Sun className="h-8 w-8 text-yellow-500" />;
+  if (!conditions) return <Sun className="h-8 w-8 text-muted-foreground" />;
   const lower = conditions.toLowerCase();
   if (lower.includes('rain') || lower.includes('shower')) {
-    return <CloudRain className="h-8 w-8 text-blue-500" />;
+    return <CloudRain className="h-8 w-8 text-muted-foreground" />;
   }
   if (lower.includes('cloud') || lower.includes('overcast')) {
-    return <Cloud className="h-8 w-8 text-gray-500" />;
+    return <Cloud className="h-8 w-8 text-muted-foreground" />;
   }
-  return <Sun className="h-8 w-8 text-yellow-500" />;
+  return <Sun className="h-8 w-8 text-muted-foreground" />;
 };
 
 const defaultForemanData: ForemanDashboardData = {
@@ -159,7 +159,10 @@ export function ForemanDashboard() {
             Try again
           </Button>
         </div>
-        <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
+        <div
+          role="alert"
+          className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-destructive"
+        >
           <p className="font-medium">Foreman dashboard could not be loaded.</p>
           <p className="mt-1 text-sm">{errorMessage}</p>
         </div>
@@ -224,7 +227,10 @@ export function ForemanDashboard() {
       </div>
 
       {errorMessage && (
-        <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
+        <div
+          role="alert"
+          className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-destructive"
+        >
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <p className="font-medium">Foreman dashboard data could not be refreshed.</p>
@@ -253,7 +259,7 @@ export function ForemanDashboard() {
       )}
 
       {/* Weather Card */}
-      <div className="bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-lg border p-6">
+      <div className="bg-card rounded-lg border p-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             {getWeatherIcon(data.weather.conditions)}
@@ -267,16 +273,18 @@ export function ForemanDashboard() {
           <div className="flex items-center gap-6">
             {data.weather.temperatureMin !== null && data.weather.temperatureMax !== null && (
               <div className="flex items-center gap-2">
-                <Thermometer className="h-5 w-5 text-red-500" />
-                <span className="text-lg font-medium">
+                <Thermometer className="h-5 w-5 text-muted-foreground" />
+                <span className="text-lg font-medium font-mono tabular-nums">
                   {data.weather.temperatureMin}° - {data.weather.temperatureMax}°C
                 </span>
               </div>
             )}
             {data.weather.rainfallMm !== null && data.weather.rainfallMm > 0 && (
               <div className="flex items-center gap-2">
-                <CloudRain className="h-5 w-5 text-blue-500" />
-                <span className="text-lg font-medium">{data.weather.rainfallMm}mm</span>
+                <CloudRain className="h-5 w-5 text-muted-foreground" />
+                <span className="text-lg font-medium font-mono tabular-nums">
+                  {data.weather.rainfallMm}mm
+                </span>
               </div>
             )}
           </div>
@@ -289,7 +297,7 @@ export function ForemanDashboard() {
         <div className="bg-card rounded-lg border">
           <div className="p-4 border-b flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <FileText className="h-5 w-5 text-primary" />
+              <FileText className="h-5 w-5 text-muted-foreground" />
               <h2 className="text-lg font-semibold">Today's Diary</h2>
             </div>
             <DiaryStatusBadge status={data.todayDiary.status} exists={data.todayDiary.exists} />
@@ -328,11 +336,11 @@ export function ForemanDashboard() {
         <div className="bg-card rounded-lg border">
           <div className="p-4 border-b flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <ClipboardCheck className="h-5 w-5 text-amber-500" />
+              <ClipboardCheck className="h-5 w-5 text-muted-foreground" />
               <h2 className="text-lg font-semibold">Pending Dockets</h2>
             </div>
             {data.pendingDockets.count > 0 && (
-              <span className="bg-amber-100 text-amber-800 text-sm font-medium px-2.5 py-0.5 rounded-full">
+              <span className="bg-warning text-warning-foreground text-sm font-medium px-2.5 py-0.5 rounded-full">
                 {data.pendingDockets.count} pending
               </span>
             )}
@@ -343,11 +351,15 @@ export function ForemanDashboard() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="bg-muted/50 rounded-lg p-3">
                     <p className="text-sm text-muted-foreground">Labour Hours</p>
-                    <p className="text-xl font-bold">{data.pendingDockets.totalLabourHours}h</p>
+                    <p className="text-xl font-semibold font-mono tabular-nums">
+                      {data.pendingDockets.totalLabourHours}h
+                    </p>
                   </div>
                   <div className="bg-muted/50 rounded-lg p-3">
                     <p className="text-sm text-muted-foreground">Plant Hours</p>
-                    <p className="text-xl font-bold">{data.pendingDockets.totalPlantHours}h</p>
+                    <p className="text-xl font-semibold font-mono tabular-nums">
+                      {data.pendingDockets.totalPlantHours}h
+                    </p>
                   </div>
                 </div>
                 <Link
@@ -358,7 +370,7 @@ export function ForemanDashboard() {
                 </Link>
               </div>
             ) : (
-              <div className="flex items-center gap-2 text-green-600">
+              <div className="flex items-center gap-2 text-success">
                 <CheckCircle2 className="h-5 w-5" />
                 <span>All dockets reviewed</span>
               </div>
@@ -370,11 +382,11 @@ export function ForemanDashboard() {
         <div className="bg-card rounded-lg border md:col-span-2">
           <div className="p-4 border-b flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Clock className="h-5 w-5 text-blue-500" />
+              <Clock className="h-5 w-5 text-muted-foreground" />
               <h2 className="text-lg font-semibold">Inspections Due Today</h2>
             </div>
             {data.inspectionsDueToday.count > 0 && (
-              <span className="bg-blue-100 text-blue-800 text-sm font-medium px-2.5 py-0.5 rounded-full">
+              <span className="bg-warning text-warning-foreground text-sm font-medium px-2.5 py-0.5 rounded-full">
                 {data.inspectionsDueToday.count} due
               </span>
             )}
@@ -406,7 +418,7 @@ export function ForemanDashboard() {
                 )}
               </div>
             ) : (
-              <div className="flex items-center gap-2 text-green-600">
+              <div className="flex items-center gap-2 text-success">
                 <CheckCircle2 className="h-5 w-5" />
                 <span>No inspections scheduled for today</span>
               </div>
@@ -425,28 +437,28 @@ export function ForemanDashboard() {
             to={getProjectPath(`diary?date=${formatDateForUrl(new Date())}`)}
             className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted transition-colors"
           >
-            <FileText className="h-5 w-5 text-blue-600" />
+            <FileText className="h-5 w-5 text-muted-foreground" />
             <span className="font-medium">Daily Diary</span>
           </Link>
           <Link
             to={getProjectPath('dockets')}
             className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted transition-colors"
           >
-            <ClipboardCheck className="h-5 w-5 text-amber-600" />
+            <ClipboardCheck className="h-5 w-5 text-muted-foreground" />
             <span className="font-medium">Docket Approvals</span>
           </Link>
           <Link
             to={getProjectPath('lots')}
             className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted transition-colors"
           >
-            <Users className="h-5 w-5 text-green-600" />
+            <Users className="h-5 w-5 text-muted-foreground" />
             <span className="font-medium">View Lots</span>
           </Link>
           <Link
             to={getProjectPath('itp')}
             className="flex items-center gap-3 p-3 rounded-lg border hover:bg-muted transition-colors"
           >
-            <AlertTriangle className="h-5 w-5 text-red-600" />
+            <AlertTriangle className="h-5 w-5 text-muted-foreground" />
             <span className="font-medium">ITPs</span>
           </Link>
         </div>
@@ -460,21 +472,21 @@ export function ForemanDashboard() {
 function DiaryStatusBadge({ status, exists }: { status: string | null; exists: boolean }) {
   if (!exists) {
     return (
-      <span className="bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 text-sm font-medium px-2.5 py-0.5 rounded-full">
+      <span className="bg-muted text-muted-foreground text-sm font-medium px-2.5 py-0.5 rounded-full">
         Not Started
       </span>
     );
   }
   if (status === 'submitted') {
     return (
-      <span className="bg-green-100 text-green-800 text-sm font-medium px-2.5 py-0.5 rounded-full flex items-center gap-1">
+      <span className="bg-success text-success-foreground text-sm font-medium px-2.5 py-0.5 rounded-full flex items-center gap-1">
         <CheckCircle2 className="h-3 w-3" />
         Submitted
       </span>
     );
   }
   return (
-    <span className="bg-yellow-100 text-yellow-800 text-sm font-medium px-2.5 py-0.5 rounded-full">
+    <span className="bg-warning text-warning-foreground text-sm font-medium px-2.5 py-0.5 rounded-full">
       Draft
     </span>
   );

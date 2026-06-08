@@ -279,7 +279,7 @@ export function CaptureModal({
               className="max-w-full max-h-full object-contain"
             />
             {latitude && (
-              <div className="absolute top-4 left-4 flex items-center gap-1.5 px-2.5 py-1.5 bg-green-600/90 text-white text-xs rounded-full">
+              <div className="absolute top-4 left-4 flex items-center gap-1.5 px-2.5 py-1.5 bg-success text-success-foreground text-xs rounded-full">
                 <MapPin className="h-3 w-3" />
                 GPS captured
               </div>
@@ -303,7 +303,7 @@ export function CaptureModal({
                 label="Defect"
                 selected={captureType === 'ncr'}
                 onClick={() => setCaptureType('ncr')}
-                accentColor="text-red-600"
+                accentColor="text-destructive"
               />
               <TypeButton
                 icon={FileText}

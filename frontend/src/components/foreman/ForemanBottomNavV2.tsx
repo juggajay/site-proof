@@ -117,21 +117,21 @@ export function ForemanBottomNavV2({
           className={cn(
             'flex items-center justify-center gap-2 py-1.5 text-xs font-medium',
             isOnline
-              ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200'
-              : 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200',
+              ? 'bg-warning text-warning-foreground'
+              : 'bg-destructive text-destructive-foreground',
           )}
         >
           {isOnline ? (
             <>
               <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-warning-foreground opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-warning-foreground" />
               </span>
               {pendingSyncCount} pending sync
             </>
           ) : (
             <>
-              <span className="h-2 w-2 rounded-full bg-red-500" />
+              <span className="h-2 w-2 rounded-full bg-destructive-foreground" />
               Offline - changes saved locally
             </>
           )}
@@ -169,11 +169,11 @@ export function ForemanBottomNavV2({
               aria-label={item.label}
             >
               {isCapture ? (
-                // Capture button - centered circle
+                // Capture button - centered circle (the single amber brand signature)
                 <div
                   className={cn(
                     'flex items-center justify-center w-12 h-12 rounded-full',
-                    'bg-primary text-primary-foreground shadow-lg',
+                    'bg-brand text-brand-foreground shadow-lg',
                     'active:scale-95 transition-transform',
                   )}
                 >
@@ -189,7 +189,7 @@ export function ForemanBottomNavV2({
                         className={cn(
                           'flex items-center justify-center',
                           'min-w-[16px] h-4 px-1 text-[10px] font-bold rounded-full',
-                          'bg-red-500 text-white',
+                          'bg-destructive text-destructive-foreground',
                         )}
                       >
                         {todayBadgeCount > 9 ? '9+' : todayBadgeCount}
