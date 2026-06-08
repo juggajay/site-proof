@@ -35,7 +35,7 @@ export function QuickCaptureButton({
       id: 'photo',
       label: 'Photo',
       icon: Camera,
-      color: 'bg-primary',
+      color: 'bg-primary text-primary-foreground',
       onClick: () => {
         setIsExpanded(false);
         onCapturePhoto();
@@ -45,7 +45,7 @@ export function QuickCaptureButton({
       id: 'delay',
       label: 'Delay',
       icon: CloudRain,
-      color: 'bg-amber-500',
+      color: 'bg-primary text-primary-foreground',
       onClick: () => {
         setIsExpanded(false);
         onAddDelay();
@@ -55,7 +55,7 @@ export function QuickCaptureButton({
       id: 'ncr',
       label: 'NCR',
       icon: AlertTriangle,
-      color: 'bg-red-500',
+      color: 'bg-destructive text-destructive-foreground',
       onClick: () => {
         setIsExpanded(false);
         onRaiseNCR();
@@ -65,7 +65,7 @@ export function QuickCaptureButton({
       id: 'note',
       label: 'Note',
       icon: StickyNote,
-      color: 'bg-green-500',
+      color: 'bg-primary text-primary-foreground',
       onClick: () => {
         setIsExpanded(false);
         onAddNote();
@@ -75,7 +75,7 @@ export function QuickCaptureButton({
       id: 'holdpoint',
       label: 'Hold Point',
       icon: Clock,
-      color: 'bg-purple-500',
+      color: 'bg-primary text-primary-foreground',
       onClick: () => {
         setIsExpanded(false);
         onRequestHoldPointRelease();
@@ -111,7 +111,6 @@ export function QuickCaptureButton({
                   'transform transition-all duration-200',
                   'min-h-[48px] touch-manipulation',
                   action.color,
-                  'text-white',
                 )}
                 style={{
                   animation: `slideInFab 0.2s ease-out ${index * 0.05}s both`,
@@ -131,15 +130,11 @@ export function QuickCaptureButton({
           className={cn(
             'w-14 h-14 rounded-full shadow-lg flex items-center justify-center',
             'transform transition-all duration-200 active:scale-95',
-            'touch-manipulation',
+            'touch-manipulation text-primary-foreground',
             isExpanded ? 'bg-muted-foreground rotate-45' : 'bg-primary',
           )}
         >
-          {isExpanded ? (
-            <X className="w-6 h-6 text-white" />
-          ) : (
-            <Camera className="w-6 h-6 text-white" />
-          )}
+          {isExpanded ? <X className="w-6 h-6" /> : <Camera className="w-6 h-6" />}
         </button>
       </div>
 

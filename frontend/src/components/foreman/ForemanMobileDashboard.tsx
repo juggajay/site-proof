@@ -177,7 +177,10 @@ export function ForemanMobileDashboard() {
         </div>
 
         <div className="p-4 space-y-4 md:p-6 md:space-y-6">
-          <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
+          <div
+            role="alert"
+            className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-destructive"
+          >
             <p className="font-medium">Foreman dashboard could not be loaded.</p>
             <p className="mt-1 text-sm">{errorMessage}</p>
           </div>
@@ -262,7 +265,10 @@ export function ForemanMobileDashboard() {
       {/* Main content */}
       <div className="p-4 space-y-4 md:p-6 md:space-y-6">
         {errorMessage && (
-          <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
+          <div
+            role="alert"
+            className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-destructive"
+          >
             <p className="font-medium">Foreman dashboard data could not be refreshed.</p>
             <p className="mt-1 text-sm">{errorMessage}</p>
           </div>
@@ -343,7 +349,7 @@ export function ForemanMobileDashboard() {
                 />
               </div>
             ) : (
-              <div className="flex items-center gap-2 text-green-600">
+              <div className="flex items-center gap-2 text-success">
                 <CheckCircle2 className="h-5 w-5" />
                 <span className="text-sm">All dockets reviewed</span>
               </div>
@@ -398,7 +404,7 @@ export function ForemanMobileDashboard() {
               )}
             </div>
           ) : (
-            <div className="flex items-center gap-2 text-green-600">
+            <div className="flex items-center gap-2 text-success">
               <CheckCircle2 className="h-5 w-5" />
               <span className="text-sm">No inspections scheduled for today</span>
             </div>

@@ -15,10 +15,10 @@ interface DashboardCardProps {
 }
 
 const badgeColors = {
-  default: 'bg-primary/10 text-primary',
-  warning: 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200',
-  success: 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200',
-  error: 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200',
+  default: 'bg-muted text-muted-foreground',
+  warning: 'bg-warning text-warning-foreground',
+  success: 'bg-success text-success-foreground',
+  error: 'bg-destructive text-destructive-foreground',
 };
 
 export function DashboardCard({
@@ -46,7 +46,7 @@ export function DashboardCard({
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b">
         <div className="flex items-center gap-2">
-          {icon && <span className="text-primary">{icon}</span>}
+          {icon && <span className="text-muted-foreground">{icon}</span>}
           <h3 className="font-semibold">{title}</h3>
         </div>
         <div className="flex items-center gap-2">
@@ -81,12 +81,12 @@ interface DashboardStatProps {
 
 export function DashboardStat({ label, value, icon, className }: DashboardStatProps) {
   return (
-    <div className={cn('bg-muted/50 rounded-lg p-3', className)}>
+    <div className={cn('bg-muted rounded-lg p-3', className)}>
       <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1">
         {icon}
         <span>{label}</span>
       </div>
-      <p className="text-xl font-bold">{value}</p>
+      <p className="text-xl font-semibold font-mono tabular-nums">{value}</p>
     </div>
   );
 }
