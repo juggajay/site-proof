@@ -45,11 +45,11 @@ interface DocketApprovalsMobileViewProps {
 }
 
 const statusColors: Record<string, string> = {
-  draft: 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200',
-  pending_approval: 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200',
-  approved: 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-800 dark:text-emerald-200',
-  rejected: 'bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-200',
-  queried: 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200',
+  draft: 'bg-muted text-muted-foreground',
+  pending_approval: 'bg-warning/10 text-warning',
+  approved: 'bg-muted text-muted-foreground',
+  rejected: 'bg-destructive/10 text-destructive',
+  queried: 'bg-warning/10 text-warning',
 };
 
 const statusLabels: Record<string, string> = {
@@ -120,8 +120,7 @@ function DocketCard({
         <span
           className={cn(
             'text-xs font-medium px-2.5 py-1 rounded-full whitespace-nowrap',
-            statusColors[docket.status] ||
-              'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200',
+            statusColors[docket.status] || 'bg-muted text-muted-foreground',
           )}
         >
           {statusLabels[docket.status] || docket.status}
@@ -180,7 +179,7 @@ export function DocketApprovalsMobileView({
       <div className="flex items-center justify-between px-4 pt-4 pb-2">
         <h1 className="text-xl font-bold">Approve</h1>
         {pendingCount > 0 && (
-          <span className="inline-flex items-center justify-center h-6 min-w-[1.5rem] px-2 rounded-full bg-amber-500 text-white text-xs font-bold">
+          <span className="inline-flex items-center justify-center h-6 min-w-[1.5rem] px-2 rounded-full bg-warning text-warning-foreground text-xs font-bold">
             {pendingCount}
           </span>
         )}
@@ -319,12 +318,12 @@ export function DocketApprovalsMobileView({
                   onSwipeLeft={() => onReject(docket)}
                   rightAction={{
                     label: 'Approve',
-                    color: 'bg-green-500',
+                    color: 'bg-success',
                     icon: <Check className="h-6 w-6" />,
                   }}
                   leftAction={{
                     label: 'Reject',
-                    color: 'bg-red-500',
+                    color: 'bg-destructive',
                     icon: <X className="h-6 w-6" />,
                   }}
                   disabled={!canApprove}
@@ -337,7 +336,7 @@ export function DocketApprovalsMobileView({
                         <>
                           <button
                             type="button"
-                            className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-md bg-green-600 px-3 py-2 text-sm font-medium text-white"
+                            className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-md bg-success px-3 py-2 text-sm font-medium text-success-foreground"
                             onClick={() => onApprove(docket)}
                           >
                             <Check className="h-4 w-4" />
@@ -345,7 +344,7 @@ export function DocketApprovalsMobileView({
                           </button>
                           <button
                             type="button"
-                            className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-md border border-amber-300 px-3 py-2 text-sm font-medium text-amber-700"
+                            className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-md border border-warning px-3 py-2 text-sm font-medium text-warning"
                             onClick={() => onQuery(docket)}
                           >
                             <MessageSquare className="h-4 w-4" />
@@ -353,7 +352,7 @@ export function DocketApprovalsMobileView({
                           </button>
                           <button
                             type="button"
-                            className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-md border border-red-300 px-3 py-2 text-sm font-medium text-red-700"
+                            className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-md border border-destructive px-3 py-2 text-sm font-medium text-destructive"
                             onClick={() => onReject(docket)}
                           >
                             <X className="h-4 w-4" />

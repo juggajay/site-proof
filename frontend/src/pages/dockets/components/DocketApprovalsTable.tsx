@@ -172,7 +172,7 @@ export function DocketApprovalsTable({
                         <Button
                           variant="outline"
                           size="sm"
-                          className="border-amber-500 text-amber-700 hover:bg-amber-50"
+                          className="border-warning text-warning hover:bg-warning/10"
                           onClick={() => onQuery(docket)}
                         >
                           <MessageSquare className="mr-1 h-4 w-4" />
@@ -181,7 +181,7 @@ export function DocketApprovalsTable({
                         <Button
                           variant="outline"
                           size="sm"
-                          className="text-red-600 border-red-600 hover:bg-red-50"
+                          className="border-destructive text-destructive hover:bg-destructive/10"
                           onClick={() => onReject(docket)}
                         >
                           Reject

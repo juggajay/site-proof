@@ -17,10 +17,10 @@ export type DocketActionEndpoint = 'approve' | 'reject' | 'query';
 
 export const statusColors: Record<string, string> = {
   draft: 'bg-muted text-foreground',
-  pending_approval: 'bg-yellow-100 text-yellow-800',
-  approved: 'bg-green-100 text-green-800',
-  rejected: 'bg-red-100 text-red-800',
-  queried: 'bg-amber-100 text-amber-800',
+  pending_approval: 'bg-muted text-muted-foreground',
+  approved: 'bg-muted text-muted-foreground',
+  rejected: 'bg-destructive/10 text-destructive',
+  queried: 'bg-warning/10 text-warning',
 };
 
 export const statusLabels: Record<string, string> = {

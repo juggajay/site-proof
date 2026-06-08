@@ -65,7 +65,7 @@ export function CreateDocketModal({
               type="date"
               value={date}
               onChange={(e) => onDateChange(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
             />
           </div>
           <div>
@@ -77,15 +77,15 @@ export function CreateDocketModal({
               type="number"
               value={labourHours}
               onChange={(e) => onLabourHoursChange(e.target.value)}
-              className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary ${
-                labourHoursValidation.warning ? 'border-amber-500' : ''
+              className={`w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary ${
+                labourHoursValidation.warning ? 'border-warning' : ''
               }`}
               placeholder="0"
               min="0"
               step="0.5"
             />
             {labourHoursValidation.warning && (
-              <p className="mt-1 text-sm text-amber-600 flex items-center gap-1">
+              <p className="mt-1 text-sm text-warning flex items-center gap-1">
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path
                     strokeLinecap="round"
@@ -107,15 +107,15 @@ export function CreateDocketModal({
               type="number"
               value={plantHours}
               onChange={(e) => onPlantHoursChange(e.target.value)}
-              className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary ${
-                plantHoursValidation.warning ? 'border-amber-500' : ''
+              className={`w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary ${
+                plantHoursValidation.warning ? 'border-warning' : ''
               }`}
               placeholder="0"
               min="0"
               step="0.5"
             />
             {plantHoursValidation.warning && (
-              <p className="mt-1 text-sm text-amber-600 flex items-center gap-1">
+              <p className="mt-1 text-sm text-warning flex items-center gap-1">
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path
                     strokeLinecap="round"
@@ -143,7 +143,7 @@ export function CreateDocketModal({
               id="new-docket-notes"
               value={notes}
               onChange={(e) => onNotesChange(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               rows={3}
               placeholder="Enter any notes about this docket..."
             />
