@@ -8,55 +8,8 @@ import { toast } from '@/components/ui/toaster';
 import { extractErrorMessage, handleApiError } from '@/lib/errorHandling';
 import { logError } from '@/lib/logger';
 import { formatDateTime } from '@/lib/utils';
-
-interface ITPChecklistItem {
-  id: string;
-  description: string;
-  category: string;
-  responsibleParty: 'contractor' | 'subcontractor' | 'superintendent' | 'general';
-  isHoldPoint: boolean;
-  pointType: 'standard' | 'witness' | 'hold_point';
-  evidenceRequired: 'none' | 'photo' | 'test' | 'document';
-  order: number;
-  testType?: string | null;
-  acceptanceCriteria?: string | null;
-}
-
-interface ITPAttachment {
-  id: string;
-  documentId: string;
-  document: {
-    id: string;
-    filename: string;
-    fileUrl: string;
-    caption: string | null;
-  };
-}
-
-interface ITPCompletion {
-  id: string;
-  checklistItemId: string;
-  isCompleted: boolean;
-  isNotApplicable?: boolean;
-  isFailed?: boolean;
-  isVerified?: boolean;
-  notes: string | null;
-  completedAt: string | null;
-  completedBy: { id: string; fullName: string; email: string } | null;
-  attachments: ITPAttachment[];
-}
-
-interface ITPInstance {
-  id: string;
-  status: string;
-  template: {
-    id: string;
-    name: string;
-    activityType: string;
-    checklistItems: ITPChecklistItem[];
-  };
-  completions: ITPCompletion[];
-}
+import type { ITPCompletion, ITPInstance } from '../lots/types';
+import { getItpPhotoValidationError } from '../lots/lib/itpEvidence';
 
 interface Lot {
   id: string;
@@ -69,21 +22,6 @@ interface Lot {
     itpRequiresVerification: boolean;
   }[];
 }
-
-const MAX_ITP_PHOTO_SIZE = 10 * 1024 * 1024;
-const ALLOWED_ITP_PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-
-const getItpPhotoValidationError = (file: File): string | null => {
-  if (file.size > MAX_ITP_PHOTO_SIZE) {
-    return `The file "${file.name}" exceeds the 10MB limit. Please select a smaller file.`;
-  }
-
-  if (!ALLOWED_ITP_PHOTO_TYPES.includes(file.type)) {
-    return `The file "${file.name}" is not a supported image format. Please use JPEG, PNG, GIF, or WebP.`;
-  }
-
-  return null;
-};
 
 export function SubcontractorLotITPPage() {
   const { lotId } = useParams<{ lotId: string }>();

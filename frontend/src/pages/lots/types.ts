@@ -127,9 +127,15 @@ export interface ITPCompletion {
 
 export interface ITPInstance {
   id: string;
+  // Optional: surfaced by the subcontractor portal's instance fetch; unused by
+  // HC pages, so kept optional to remain additive and HC-safe.
+  status?: string;
   template: {
     id: string;
     name: string;
+    // Optional: present in the portal's instance shape; HC pages don't read it
+    // here, so optional keeps existing HC usage unaffected.
+    activityType?: string;
     checklistItems: ITPChecklistItem[];
   };
   completions: ITPCompletion[];
