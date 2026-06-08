@@ -3,14 +3,14 @@ import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, AlertCircle } from 'lucide-react';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { MobileITPChecklist } from '@/components/foreman/MobileITPChecklist';
-import { ApiError, apiFetch, authFetch } from '@/lib/api';
+import { apiFetch } from '@/lib/api';
 import { toast } from '@/components/ui/toaster';
 import { extractErrorMessage, handleApiError } from '@/lib/errorHandling';
 import { logError } from '@/lib/logger';
-import { formatDateTime } from '@/lib/utils';
 import type { ITPCompletion, ITPInstance } from '../lots/types';
 import { getItpPhotoValidationError } from '../lots/lib/itpEvidence';
 import { useItpCompletionActions } from '../lots/hooks/useItpCompletionActions';
+import { uploadItpEvidencePhoto } from '../lots/hooks/useLotPhotoUpload';
 
 interface Lot {
   id: string;
@@ -150,33 +150,16 @@ export function SubcontractorLotITPPage() {
         completion = data.completion;
       }
 
-      const caption = `ITP Evidence Photo - ${formatDateTime(new Date())}`;
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('projectId', lot.projectId);
-      formData.append('lotId', lot.id);
-      formData.append('documentType', 'photo');
-      formData.append('category', 'itp_evidence');
-      formData.append('caption', caption);
-
-      const uploadResponse = await authFetch('/api/documents/upload', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!uploadResponse.ok) {
-        const body = await uploadResponse.text();
-        throw new ApiError(uploadResponse.status, body);
-      }
-
-      const document = (await uploadResponse.json()) as { id: string };
-
-      await apiFetch(`/api/itp/completions/${completion.id}/attachments`, {
-        method: 'POST',
-        body: JSON.stringify({
-          documentId: document.id,
-          caption,
-        }),
+      // Reuse the shared upload-then-attach so the subbie and HC paths send the
+      // same request shape. This intentionally adds GPS geotag + an
+      // encodeURIComponent'd attachment URL to the subbie path (parity with HC);
+      // it does NOT do AI classification or any offline write-through (those live
+      // only in useLotPhotoUpload's handlers, never in this shared function).
+      await uploadItpEvidencePhoto({
+        projectId: lot.projectId,
+        lotId: lot.id,
+        completionId: completion.id,
+        file,
       });
 
       await fetchData();
