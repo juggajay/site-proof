@@ -1,10 +1,16 @@
-import { CheckCircle2, FolderKanban, ListChecks, Users } from 'lucide-react';
-
 interface DashboardKpiTilesProps {
   totalProjects: number;
   activeProjects: number;
   totalLots: number;
   onNavigate: (to: string) => void;
+}
+
+interface KpiTile {
+  label: string;
+  value: string;
+  sub: string;
+  to: string;
+  title?: string;
 }
 
 export function DashboardKpiTiles({
@@ -13,73 +19,64 @@ export function DashboardKpiTiles({
   totalLots,
   onNavigate,
 }: DashboardKpiTilesProps) {
+  const tiles: KpiTile[] = [
+    {
+      label: 'Total Projects',
+      value: String(totalProjects),
+      sub: 'across your company',
+      to: '/projects',
+    },
+    {
+      label: 'Active Projects',
+      value: String(activeProjects),
+      sub: 'currently on site',
+      to: '/projects?status=active',
+    },
+    {
+      label: 'Total Lots',
+      value: String(totalLots),
+      sub: 'in all projects',
+      to: '/projects',
+      title: 'View all lots in projects',
+    },
+    {
+      label: 'Team Members',
+      value: '—',
+      sub: 'company settings',
+      to: '/company-settings',
+      title: 'Manage company settings',
+    },
+  ];
+
+  // Hairline dividers between cells. At 2-col: vertical divider on odd cells,
+  // horizontal divider on the second row. At lg 4-col (single row): vertical
+  // divider on every cell except the first, no horizontal dividers.
+  const cellBorder = [
+    '',
+    'border-l lg:border-l',
+    'border-t lg:border-t-0 lg:border-l',
+    'border-l border-t lg:border-t-0',
+  ];
+
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-      <button
-        onClick={() => onNavigate('/projects')}
-        className="bg-card rounded-lg border p-4 hover:bg-muted/50 transition-colors cursor-pointer text-left"
-        type="button"
-      >
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-blue-100 rounded-lg">
-            <FolderKanban className="h-5 w-5 text-blue-600" />
-          </div>
-          <div>
-            <p className="text-sm text-muted-foreground">Total Projects</p>
-            <p className="text-2xl font-bold">{totalProjects}</p>
-          </div>
-        </div>
-      </button>
-
-      <button
-        onClick={() => onNavigate('/projects?status=active')}
-        className="bg-card rounded-lg border p-4 hover:bg-muted/50 transition-colors cursor-pointer text-left"
-        type="button"
-      >
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-green-100 rounded-lg">
-            <CheckCircle2 className="h-5 w-5 text-green-600" />
-          </div>
-          <div>
-            <p className="text-sm text-muted-foreground">Active Projects</p>
-            <p className="text-2xl font-bold">{activeProjects}</p>
-          </div>
-        </div>
-      </button>
-
-      <button
-        onClick={() => onNavigate('/projects')}
-        className="bg-card rounded-lg border p-4 hover:bg-muted/50 transition-colors cursor-pointer text-left"
-        title="View all lots in projects"
-        type="button"
-      >
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-purple-100 rounded-lg">
-            <ListChecks className="h-5 w-5 text-purple-600" />
-          </div>
-          <div>
-            <p className="text-sm text-muted-foreground">Total Lots</p>
-            <p className="text-2xl font-bold">{totalLots}</p>
-          </div>
-        </div>
-      </button>
-
-      <button
-        onClick={() => onNavigate('/company-settings')}
-        className="bg-card rounded-lg border p-4 hover:bg-muted/50 transition-colors cursor-pointer text-left"
-        title="Manage company settings"
-        type="button"
-      >
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-amber-100 rounded-lg">
-            <Users className="h-5 w-5 text-amber-600" />
-          </div>
-          <div>
-            <p className="text-sm text-muted-foreground">Team Members</p>
-            <p className="text-2xl font-bold">—</p>
-          </div>
-        </div>
-      </button>
+    <div className="grid grid-cols-2 overflow-hidden rounded-lg border bg-card lg:grid-cols-4">
+      {tiles.map((tile, index) => (
+        <button
+          key={tile.label}
+          onClick={() => onNavigate(tile.to)}
+          title={tile.title}
+          type="button"
+          className={`p-4 text-left transition-colors hover:bg-muted/50 ${cellBorder[index]}`}
+        >
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            {tile.label}
+          </p>
+          <p className="mt-3 font-mono text-3xl font-medium tabular-nums tracking-tight text-foreground">
+            {tile.value}
+          </p>
+          <p className="mt-2 text-xs text-muted-foreground">{tile.sub}</p>
+        </button>
+      ))}
     </div>
   );
 }

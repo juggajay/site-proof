@@ -38,7 +38,15 @@ import { ProjectManagerDashboard } from '@/components/dashboard/ProjectManagerDa
 import { SubcontractorDashboard } from '@/pages/subcontractor-portal/SubcontractorDashboard';
 import { hasSubcontractorPortalIdentity } from '@/lib/subcontractorIdentity';
 import { Button } from '@/components/ui/button';
-import { Settings2, Download, Calendar, RefreshCw, MailCheck } from 'lucide-react';
+import {
+  Settings2,
+  Download,
+  Calendar,
+  RefreshCw,
+  MailCheck,
+  AlertCircle,
+  AlertTriangle,
+} from 'lucide-react';
 
 interface DashboardStats {
   totalProjects: number;
@@ -268,8 +276,8 @@ function DefaultDashboard({ user }: { user: DashboardUser }) {
     <div className="space-y-6 dashboard-content">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
-          <h1 className="text-3xl font-bold">Dashboard</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
             Welcome back{user?.name ? `, ${user.name}` : user?.fullName ? `, ${user.fullName}` : ''}
             ! Here's an overview of your projects.
           </p>
@@ -327,19 +335,22 @@ function DefaultDashboard({ user }: { user: DashboardUser }) {
       {statsErrorMessage && (
         <div
           role="alert"
-          className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-700"
+          className="rounded-lg border border-l-2 border-l-destructive bg-card px-4 py-3 text-foreground"
         >
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <p className="font-medium">Dashboard data could not be loaded.</p>
-              <p className="text-sm mt-1">{statsErrorMessage}</p>
+            <div className="flex items-start gap-3">
+              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" />
+              <div>
+                <p className="font-medium">Dashboard data could not be loaded.</p>
+                <p className="mt-1 text-sm text-muted-foreground">{statsErrorMessage}</p>
+              </div>
             </div>
             <Button
               type="button"
               variant="outline"
               onClick={handleRefresh}
               disabled={isRefreshing}
-              className="border-red-200 hover:bg-red-100 sm:shrink-0"
+              className="sm:shrink-0"
             >
               <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
               Try again
@@ -351,10 +362,15 @@ function DefaultDashboard({ user }: { user: DashboardUser }) {
       {pdfError && (
         <div
           role="alert"
-          className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-800"
+          className="rounded-lg border border-l-2 border-l-warning bg-card px-4 py-3 text-foreground"
         >
-          <p className="font-medium">Dashboard PDF could not be generated.</p>
-          <p className="text-sm mt-1">{pdfError}</p>
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
+            <div>
+              <p className="font-medium">Dashboard PDF could not be generated.</p>
+              <p className="mt-1 text-sm text-muted-foreground">{pdfError}</p>
+            </div>
+          </div>
         </div>
       )}
 
@@ -365,10 +381,17 @@ function DefaultDashboard({ user }: { user: DashboardUser }) {
       ) : (
         <>
           {/* Date Range Indicator */}
-          <div className="text-sm text-muted-foreground flex items-center gap-2">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Calendar className="h-4 w-4" />
             <span>
-              Showing data from {currentDateRange.startDate} to {currentDateRange.endDate}
+              Showing data from{' '}
+              <span className="font-mono tabular-nums text-foreground">
+                {currentDateRange.startDate}
+              </span>{' '}
+              to{' '}
+              <span className="font-mono tabular-nums text-foreground">
+                {currentDateRange.endDate}
+              </span>
             </span>
           </div>
 
@@ -458,21 +481,21 @@ function PendingInvitationBanner({ user }: { user: DashboardUser }) {
     <section
       role="region"
       aria-label="Pending subcontractor invitation"
-      className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900"
+      className="rounded-lg border border-l-2 border-l-warning bg-card px-4 py-3 text-foreground"
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-start gap-3">
-          <MailCheck className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+          <MailCheck className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
           <div>
             <p className="font-medium">Pending subcontractor invitation</p>
-            <p className="text-sm">
+            <p className="text-sm text-muted-foreground">
               Accept your invite to {invitation.companyName} on {invitation.projectName}.
             </p>
           </div>
         </div>
         <Link
           to="/invitations"
-          className="inline-flex items-center justify-center rounded-md bg-amber-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-amber-700 sm:shrink-0"
+          className="inline-flex items-center justify-center rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 sm:shrink-0"
         >
           Accept Invitation
         </Link>
