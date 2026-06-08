@@ -144,12 +144,12 @@ export function RecordReleaseModal({
 
         {/* Feature #698 - Superintendent approval requirement notice */}
         {approvalRequirement === 'superintendent' && (
-          <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
-            <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
+          <div className="mb-4 p-3 bg-warning/10 border border-warning/30 rounded-lg">
+            <div className="flex items-center gap-2 text-warning">
               <AlertTriangle className="h-4 w-4" />
               <span className="text-sm font-medium">Superintendent Approval Required</span>
             </div>
-            <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+            <p className="text-xs text-warning mt-1">
               This project requires superintendent-level authorization to release hold points.
             </p>
           </div>
@@ -205,7 +205,7 @@ export function RecordReleaseModal({
 
           <div>
             <Label>
-              Releaser Name <span className="text-red-500">*</span>
+              Releaser Name <span className="text-destructive">*</span>
             </Label>
             <Input
               type="text"
@@ -271,7 +271,7 @@ export function RecordReleaseModal({
           {releaseMethod === 'digital' ? (
             <div className="space-y-2">
               <Label>
-                Digital Signature <span className="text-red-500">*</span>
+                Digital Signature <span className="text-destructive">*</span>
               </Label>
               <SignaturePad
                 onChange={setSignatureDataUrl}
@@ -286,19 +286,19 @@ export function RecordReleaseModal({
           ) : releaseMethod === 'email' ? (
             <div className="space-y-2">
               <Label>Email Evidence</Label>
-              <div className="p-4 border border-dashed rounded-lg bg-primary/5">
+              <div className="p-4 border border-dashed border-border rounded-lg bg-muted">
                 <input
                   type="file"
                   accept=".pdf,.eml,.msg,.png,.jpg,.jpeg"
                   onChange={handleFileChange('email')}
-                  className="w-full text-sm"
+                  className="w-full text-sm text-foreground"
                   id="evidence-upload"
                 />
                 <p className="text-xs text-muted-foreground mt-2">
                   Upload email or screenshot as evidence (PDF, EML, MSG, PNG, JPG)
                 </p>
                 {emailEvidenceFile && (
-                  <div className="mt-2 p-2 bg-green-50 rounded text-sm text-green-700 flex items-center gap-2">
+                  <div className="mt-2 p-2 bg-success/10 rounded text-sm text-success flex items-center gap-2">
                     <Check className="h-4 w-4" />
                     <span>Selected: {emailEvidenceFile.name}</span>
                   </div>
@@ -308,19 +308,19 @@ export function RecordReleaseModal({
           ) : (
             <div className="space-y-2">
               <Label>Paper Form Evidence</Label>
-              <div className="p-4 border border-dashed rounded-lg bg-amber-50/50">
+              <div className="p-4 border border-dashed border-border rounded-lg bg-muted">
                 <input
                   type="file"
                   accept=".pdf,.png,.jpg,.jpeg"
                   onChange={handleFileChange('paper')}
-                  className="w-full text-sm"
+                  className="w-full text-sm text-foreground"
                   id="paper-evidence-upload"
                 />
                 <p className="text-xs text-muted-foreground mt-2">
                   Upload photo or scan of signed release form (PDF, PNG, JPG)
                 </p>
                 {paperEvidenceFile && (
-                  <div className="mt-2 p-2 bg-green-50 rounded text-sm text-green-700 flex items-center gap-2">
+                  <div className="mt-2 p-2 bg-success/10 rounded text-sm text-success flex items-center gap-2">
                     <Check className="h-4 w-4" />
                     <span>Selected: {paperEvidenceFile.name}</span>
                   </div>

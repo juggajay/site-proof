@@ -183,15 +183,17 @@ export function RequestReleaseModal({
                         key={prereq.id}
                         className={`flex items-center gap-2 p-2 rounded text-sm ${
                           prereq.isCompleted
-                            ? 'bg-green-50 text-green-800'
-                            : 'bg-red-50 text-red-800'
+                            ? 'bg-success/10 text-success'
+                            : 'bg-destructive/10 text-destructive'
                         }`}
                       >
                         <span className="text-lg">{prereq.isCompleted ? '\u2713' : '\u2717'}</span>
                         <span className="flex-1">
                           {prereq.sequenceNumber}. {prereq.description}
                           {prereq.isHoldPoint && (
-                            <span className="ml-2 text-xs px-1 bg-amber-200 rounded">HP</span>
+                            <span className="ml-2 text-xs px-1 bg-brand/15 text-brand rounded">
+                              HP
+                            </span>
                           )}
                         </span>
                       </div>
@@ -202,15 +204,20 @@ export function RequestReleaseModal({
 
               {/* Error / Block Message */}
               {error && !hasNoticePeriodWarning && (
-                <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg" role="alert">
+                <div
+                  className="mb-4 p-4 bg-destructive/10 border border-destructive/30 rounded-lg"
+                  role="alert"
+                >
                   <div className="flex items-start gap-2">
-                    <span className="text-red-500 text-xl">&#x26a0;&#xfe0f;</span>
+                    <span className="text-destructive text-xl">&#x26a0;&#xfe0f;</span>
                     <div>
-                      <div className="font-medium text-red-800">{error.message}</div>
+                      <div className="font-medium text-destructive">{error.message}</div>
                       {error.incompleteItems && error.incompleteItems.length > 0 && (
                         <div className="mt-2">
-                          <div className="text-sm text-red-700 mb-1">Missing prerequisites:</div>
-                          <ul className="text-sm text-red-600 list-disc list-inside">
+                          <div className="text-sm text-destructive mb-1">
+                            Missing prerequisites:
+                          </div>
+                          <ul className="text-sm text-destructive list-disc list-inside">
                             {error.incompleteItems.map((item) => (
                               <li key={item.id}>
                                 {item.sequenceNumber}. {item.description}
@@ -227,15 +234,15 @@ export function RequestReleaseModal({
               {/* Notice Period Warning - Allow Override (Feature #180) */}
               {hasNoticePeriodWarning && (
                 <div
-                  className="mb-4 p-4 bg-amber-50 border border-amber-300 rounded-lg"
+                  className="mb-4 p-4 bg-warning/10 border border-warning/30 rounded-lg"
                   role="alert"
                 >
                   <div className="flex items-start gap-2">
-                    <span className="text-amber-500 text-xl">&#x26a0;&#xfe0f;</span>
+                    <span className="text-warning text-xl">&#x26a0;&#xfe0f;</span>
                     <div className="flex-1">
-                      <div className="font-medium text-amber-800">{error!.message}</div>
+                      <div className="font-medium text-warning">{error!.message}</div>
                       {error!.details && (
-                        <div className="mt-2 text-sm text-amber-700">
+                        <div className="mt-2 text-sm text-warning">
                           <p>
                             Scheduled date provides only {error!.details.workingDaysNotice} working
                             day{error!.details.workingDaysNotice !== 1 ? 's' : ''} notice.
@@ -248,10 +255,10 @@ export function RequestReleaseModal({
                       )}
                       <div className="mt-4 space-y-3">
                         <div>
-                          <Label className="text-amber-800">Override Reason (required)</Label>
+                          <Label className="text-warning">Override Reason (required)</Label>
                           <Textarea
                             {...register('overrideReason')}
-                            className="border-amber-300"
+                            className="border-warning/40"
                             placeholder="Explain why this short notice is necessary..."
                             rows={2}
                           />
@@ -261,7 +268,7 @@ export function RequestReleaseModal({
                             type="button"
                             onClick={handleOverrideSubmit}
                             disabled={requesting || !watch('overrideReason')?.trim()}
-                            className="bg-amber-600 hover:bg-amber-700"
+                            className="bg-warning text-warning-foreground hover:bg-warning/90"
                           >
                             {requesting ? 'Requesting...' : 'Override & Submit'}
                           </Button>
@@ -269,7 +276,7 @@ export function RequestReleaseModal({
                             type="button"
                             variant="outline"
                             onClick={onClose}
-                            className="border-amber-300 hover:bg-amber-100"
+                            className="border-warning/40 hover:bg-warning/10"
                           >
                             Cancel
                           </Button>
@@ -283,12 +290,12 @@ export function RequestReleaseModal({
               {/* Can Request - Show Form */}
               {details?.canRequestRelease && !error && (
                 <form onSubmit={rhfHandleSubmit(onFormSubmit)} className="space-y-4">
-                  <div className="p-3 bg-green-50 border border-green-200 rounded-lg mb-4">
-                    <div className="flex items-center gap-2 text-green-800">
+                  <div className="p-3 bg-success/10 border border-success/20 rounded-lg mb-4">
+                    <div className="flex items-center gap-2 text-success">
                       <span className="text-lg">&#x2713;</span>
                       <span className="font-medium">All prerequisites completed</span>
                     </div>
-                    <p className="text-sm text-green-700 mt-1">
+                    <p className="text-sm text-success mt-1">
                       You can now request release for this hold point.
                     </p>
                   </div>
@@ -377,12 +384,15 @@ export function RequestReleaseModal({
               {/* Cannot Request - Show Block */}
               {details && !details.canRequestRelease && !error && (
                 <div className="space-y-4">
-                  <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg" role="alert">
+                  <div
+                    className="p-4 bg-warning/10 border border-warning/30 rounded-lg"
+                    role="alert"
+                  >
                     <div className="flex items-start gap-2">
-                      <span className="text-amber-500 text-xl">&#x26a0;&#xfe0f;</span>
+                      <span className="text-warning text-xl">&#x26a0;&#xfe0f;</span>
                       <div>
-                        <div className="font-medium text-amber-800">Cannot request release yet</div>
-                        <p className="text-sm text-amber-700 mt-1">
+                        <div className="font-medium text-warning">Cannot request release yet</div>
+                        <p className="text-sm text-warning mt-1">
                           Complete all preceding checklist items before requesting hold point
                           release.
                         </p>
@@ -396,7 +406,7 @@ export function RequestReleaseModal({
                       <ul className="text-sm text-muted-foreground space-y-1">
                         {details.incompletePrerequisites.map((item) => (
                           <li key={item.id} className="flex items-center gap-2">
-                            <span className="text-red-500">&#x2717;</span>
+                            <span className="text-destructive">&#x2717;</span>
                             {item.sequenceNumber}. {item.description}
                           </li>
                         ))}

@@ -19,11 +19,13 @@ export function EvidencePreviewModal({
   return (
     <Modal onClose={onClose} className="max-w-4xl">
       {/* Preview Header */}
-      <div className="flex items-center justify-between p-4 border-b bg-primary/5">
+      <div className="flex items-center justify-between p-4 border-b border-border bg-muted">
         <div className="flex items-center gap-2">
-          <Eye className="h-5 w-5 text-primary" />
+          <Eye className="h-5 w-5 text-muted-foreground" />
           <h3 className="text-lg font-semibold text-foreground">Evidence Package Preview</h3>
-          <span className="px-2 py-0.5 bg-primary/10 text-primary text-xs rounded">PREVIEW</span>
+          <span className="px-2 py-0.5 bg-accent text-accent-foreground text-xs rounded">
+            PREVIEW
+          </span>
         </div>
       </div>
 
@@ -78,18 +80,18 @@ export function EvidencePreviewModal({
                 {previewData.checklist.map((item) => (
                   <tr
                     key={item.sequenceNumber}
-                    className={item.isCompleted ? 'bg-green-50/50' : 'bg-red-50/50'}
+                    className={item.isCompleted ? '' : 'bg-destructive/10'}
                   >
                     <td className="px-3 py-2">{item.sequenceNumber}</td>
                     <td className="px-3 py-2">{item.description}</td>
                     <td className="px-3 py-2">
                       {item.pointType === 'hold' && (
-                        <span className="px-1.5 py-0.5 bg-red-100 text-red-700 text-xs rounded">
+                        <span className="px-1.5 py-0.5 bg-muted text-foreground text-xs rounded">
                           HP
                         </span>
                       )}
                       {item.pointType === 'witness' && (
-                        <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 text-xs rounded">
+                        <span className="px-1.5 py-0.5 bg-muted text-foreground text-xs rounded">
                           WP
                         </span>
                       )}
@@ -101,9 +103,9 @@ export function EvidencePreviewModal({
                     </td>
                     <td className="px-3 py-2">
                       {item.isCompleted ? (
-                        <span className="text-green-600">&#x2713; Completed</span>
+                        <span className="text-muted-foreground">&#x2713; Completed</span>
                       ) : (
-                        <span className="text-red-600">&#x2717; Incomplete</span>
+                        <span className="text-destructive">&#x2717; Incomplete</span>
                       )}
                     </td>
                     <td className="px-3 py-2 text-muted-foreground">{item.completedBy || '-'}</td>
@@ -141,9 +143,9 @@ export function EvidencePreviewModal({
                       </td>
                       <td className="px-3 py-2">
                         {test.passFail === 'pass' ? (
-                          <span className="text-green-600">&#x2713; Pass</span>
+                          <span className="text-success">&#x2713; Pass</span>
                         ) : (
-                          <span className="text-red-600">&#x2717; Fail</span>
+                          <span className="text-destructive">&#x2717; Fail</span>
                         )}
                       </td>
                     </tr>
@@ -155,29 +157,29 @@ export function EvidencePreviewModal({
         )}
 
         {/* Summary */}
-        <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg">
+        <div className="p-4 bg-muted border border-border rounded-lg">
           <h4 className="font-medium text-foreground mb-2">Evidence Summary</h4>
           <div className="grid grid-cols-4 gap-4 text-sm">
             <div>
-              <div className="text-primary">Checklist Items</div>
+              <div className="text-muted-foreground">Checklist Items</div>
               <div className="font-semibold text-foreground">
                 {previewData.summary.completedItems}/{previewData.summary.totalChecklistItems}
               </div>
             </div>
             <div>
-              <div className="text-primary">Verified Items</div>
+              <div className="text-muted-foreground">Verified Items</div>
               <div className="font-semibold text-foreground">
                 {previewData.summary.verifiedItems}
               </div>
             </div>
             <div>
-              <div className="text-primary">Test Results</div>
+              <div className="text-muted-foreground">Test Results</div>
               <div className="font-semibold text-foreground">
                 {previewData.summary.passingTests}/{previewData.summary.totalTestResults}
               </div>
             </div>
             <div>
-              <div className="text-primary">Photos/Attachments</div>
+              <div className="text-muted-foreground">Photos/Attachments</div>
               <div className="font-semibold text-foreground">
                 {previewData.summary.totalPhotos + previewData.summary.totalAttachments}
               </div>
@@ -191,11 +193,7 @@ export function EvidencePreviewModal({
         <p className="text-sm text-muted-foreground mr-auto">
           This is a preview of the evidence package that will be generated.
         </p>
-        <Button
-          variant="outline"
-          onClick={onDownload}
-          className="border-primary/30 bg-primary/5 text-primary hover:bg-primary/10"
-        >
+        <Button variant="outline" onClick={onDownload}>
           <Download className="h-4 w-4" />
           Download PDF
         </Button>

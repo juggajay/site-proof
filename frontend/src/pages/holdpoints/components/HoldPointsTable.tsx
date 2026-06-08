@@ -167,11 +167,13 @@ function HoldPointRow({
   const overdue = isOverdue(hp);
 
   return (
-    <tr className={`hover:bg-muted/25 ${overdue ? 'bg-red-50 border-l-4 border-l-red-500' : ''}`}>
+    <tr
+      className={`hover:bg-muted/25 ${overdue ? 'bg-destructive/10 border-l-4 border-l-destructive' : ''}`}
+    >
       <td className="px-4 py-3 font-medium">
         {hp.lotNumber}
         {overdue && (
-          <span className="ml-2 px-1.5 py-0.5 text-xs bg-red-100 text-red-700 rounded font-normal">
+          <span className="ml-2 px-1.5 py-0.5 text-xs bg-destructive/10 text-destructive rounded font-normal">
             OVERDUE
           </span>
         )}
@@ -185,7 +187,7 @@ function HoldPointRow({
         </span>
       </td>
       <td
-        className={`px-4 py-3 text-sm ${overdue ? 'text-red-600 font-medium' : 'text-muted-foreground'}`}
+        className={`px-4 py-3 text-sm ${overdue ? 'text-destructive font-medium' : 'text-muted-foreground'}`}
       >
         {formatHoldPointDate(hp.scheduledDate)}
       </td>
@@ -210,7 +212,7 @@ function HoldPointRow({
             aria-label={`Copy link to hold point ${hp.lotNumber}`}
           >
             {copiedHpId === hp.id ? (
-              <Check className="h-3.5 w-3.5 text-green-600" />
+              <Check className="h-3.5 w-3.5 text-success" />
             ) : (
               <Link2 className="h-3.5 w-3.5" />
             )}
@@ -225,12 +227,12 @@ function HoldPointRow({
           )}
           {hp.status === 'notified' && (
             <>
-              <span className="text-sm text-amber-600">Awaiting...</span>
+              <span className="text-sm text-warning">Awaiting...</span>
               {!hp.id.startsWith('virtual-') && (
                 <>
                   <button
                     onClick={() => onRecordRelease(hp)}
-                    className="flex items-center gap-1 px-2 py-1 text-xs bg-green-50 text-green-700 border border-green-200 rounded hover:bg-green-100"
+                    className="flex items-center gap-1 px-2 py-1 text-xs bg-success/10 text-success border border-success/20 rounded hover:bg-success/15"
                     title="Record hold point release"
                   >
                     <ClipboardCheck className="h-3 w-3" />
@@ -239,7 +241,7 @@ function HoldPointRow({
                   <button
                     onClick={() => onChase(hp)}
                     disabled={chasingHpId === hp.id}
-                    className="flex items-center gap-1 px-2 py-1 text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded hover:bg-amber-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex items-center gap-1 px-2 py-1 text-xs bg-warning/10 text-warning border border-warning/20 rounded hover:bg-warning/15 disabled:opacity-50 disabled:cursor-not-allowed"
                     title="Send follow-up notification"
                   >
                     {chasingHpId === hp.id ? (
@@ -260,7 +262,7 @@ function HoldPointRow({
           )}
           {hp.status === 'released' && (
             <>
-              <span className="text-sm text-green-600">&#x2713; Released</span>
+              <span className="text-sm text-muted-foreground">&#x2713; Released</span>
               {!hp.id.startsWith('virtual-') && (
                 <button
                   onClick={() => onGenerateEvidence(hp)}
