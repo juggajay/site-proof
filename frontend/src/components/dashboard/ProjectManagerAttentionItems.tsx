@@ -11,14 +11,14 @@ interface ProjectManagerAttentionItemsProps {
 
 function getUrgencyClass(urgency: PMAttentionItem['urgency']) {
   if (urgency === 'critical') {
-    return 'bg-red-100 text-red-700';
+    return 'border border-destructive/30 bg-destructive/10 text-destructive';
   }
 
   if (urgency === 'warning') {
-    return 'bg-yellow-100 text-yellow-700';
+    return 'border border-warning/30 bg-warning/10 text-warning';
   }
 
-  return 'bg-blue-100 text-blue-700';
+  return 'border border-info/30 bg-info/10 text-info';
 }
 
 export function ProjectManagerAttentionItems({
@@ -30,20 +30,20 @@ export function ProjectManagerAttentionItems({
   }
 
   return (
-    <div className="bg-red-50 border border-red-200 rounded-lg">
-      <div className="p-4 border-b border-red-200 flex items-center gap-2">
-        <AlertCircle className="h-5 w-5 text-red-500" />
-        <h2 className="text-lg font-semibold text-red-700">Items Requiring Attention</h2>
-        <span className="ml-auto bg-red-100 text-red-700 text-sm font-medium px-2.5 py-0.5 rounded-full">
+    <div className="bg-card border rounded-lg">
+      <div className="p-4 border-b flex items-center gap-2">
+        <AlertCircle className="h-5 w-5 text-destructive" />
+        <h2 className="text-lg font-semibold text-foreground">Items Requiring Attention</h2>
+        <span className="ml-auto rounded-full border border-destructive/30 bg-destructive/10 text-destructive text-sm font-medium px-2.5 py-0.5">
           {items.length}
         </span>
       </div>
-      <div className="divide-y divide-red-100">
+      <div className="divide-y">
         {items.slice(0, 5).map((item) => (
           <button
             key={item.id}
             onClick={() => onOpenItem(item.link)}
-            className="w-full flex items-center justify-between p-3 hover:bg-red-100/50 transition-colors text-left"
+            className="w-full flex items-center justify-between p-3 hover:bg-muted transition-colors text-left"
           >
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">

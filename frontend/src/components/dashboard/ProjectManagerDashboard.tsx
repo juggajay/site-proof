@@ -79,7 +79,10 @@ export function ProjectManagerDashboard() {
             Try again
           </Button>
         </div>
-        <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
+        <div
+          role="alert"
+          className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-destructive"
+        >
           <p className="font-medium">Project manager dashboard could not be loaded.</p>
           <p className="mt-1 text-sm">{errorMessage}</p>
         </div>
@@ -102,7 +105,10 @@ export function ProjectManagerDashboard() {
       </div>
 
       {errorMessage && (
-        <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
+        <div
+          role="alert"
+          className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-destructive"
+        >
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <p className="font-medium">Project manager dashboard data could not be refreshed.</p>
@@ -135,12 +141,12 @@ export function ProjectManagerDashboard() {
         {/* Lot Progress */}
         <div className="bg-card rounded-lg border p-4">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <Layers className="h-5 w-5 text-blue-600" />
+            <div className="p-2 bg-muted rounded-lg">
+              <Layers className="h-5 w-5 text-muted-foreground" />
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Lot Progress</p>
-              <p className="text-2xl font-bold">
+              <p className="text-2xl font-bold font-mono tabular-nums">
                 {data.lotProgress.progressPercentage.toFixed(0)}%
               </p>
             </div>
@@ -148,7 +154,7 @@ export function ProjectManagerDashboard() {
           <div className="mt-3">
             <div className="w-full bg-muted rounded-full h-2">
               <div
-                className="bg-blue-600 h-2 rounded-full"
+                className="bg-primary h-2 rounded-full"
                 style={{ width: `${data.lotProgress.progressPercentage}%` }}
               />
             </div>
@@ -164,38 +170,36 @@ export function ProjectManagerDashboard() {
           className="bg-card rounded-lg border p-4 text-left hover:bg-muted/50 transition-colors"
         >
           <div className="flex items-center gap-3">
-            <div
-              className={`p-2 rounded-lg ${data.openNCRs.total > 0 ? 'bg-red-100' : 'bg-green-100'}`}
-            >
-              <AlertTriangle
-                className={`h-5 w-5 ${data.openNCRs.total > 0 ? 'text-red-600' : 'text-green-600'}`}
-              />
+            <div className="p-2 bg-muted rounded-lg">
+              <AlertTriangle className="h-5 w-5 text-muted-foreground" />
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Open NCRs</p>
-              <p className="text-2xl font-bold">{data.openNCRs.total}</p>
+              <p className="text-2xl font-bold font-mono tabular-nums">{data.openNCRs.total}</p>
             </div>
           </div>
           <div className="mt-3 text-xs text-muted-foreground">
             {data.openNCRs.major > 0 && (
-              <span className="text-red-600">{data.openNCRs.major} major • </span>
+              <span className="text-destructive">{data.openNCRs.major} major • </span>
             )}
             {data.openNCRs.overdue > 0 && (
-              <span className="text-orange-600">{data.openNCRs.overdue} overdue</span>
+              <span className="text-warning">{data.openNCRs.overdue} overdue</span>
             )}
-            {data.openNCRs.total === 0 && <span className="text-green-600">All clear</span>}
+            {data.openNCRs.total === 0 && <span className="text-success">All clear</span>}
           </div>
         </button>
 
         {/* Claim Status */}
         <div className="bg-card rounded-lg border p-4">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-green-100 rounded-lg">
-              <DollarSign className="h-5 w-5 text-green-600" />
+            <div className="p-2 bg-muted rounded-lg">
+              <DollarSign className="h-5 w-5 text-muted-foreground" />
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Outstanding</p>
-              <p className="text-2xl font-bold">{formatCurrency(data.claimStatus.outstanding)}</p>
+              <p className="text-2xl font-bold font-mono tabular-nums">
+                {formatCurrency(data.claimStatus.outstanding)}
+              </p>
             </div>
           </div>
           <div className="mt-3 text-xs text-muted-foreground">
@@ -206,33 +210,17 @@ export function ProjectManagerDashboard() {
         {/* Cost Variance */}
         <div className="bg-card rounded-lg border p-4">
           <div className="flex items-center gap-3">
-            <div
-              className={`p-2 rounded-lg ${
-                data.costTracking.trend === 'under'
-                  ? 'bg-green-100'
-                  : data.costTracking.trend === 'over'
-                    ? 'bg-red-100'
-                    : 'bg-blue-100'
-              }`}
-            >
-              <TrendingUp
-                className={`h-5 w-5 ${
-                  data.costTracking.trend === 'under'
-                    ? 'text-green-600'
-                    : data.costTracking.trend === 'over'
-                      ? 'text-red-600'
-                      : 'text-blue-600'
-                }`}
-              />
+            <div className="p-2 bg-muted rounded-lg">
+              <TrendingUp className="h-5 w-5 text-muted-foreground" />
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Cost Variance</p>
               <p
-                className={`text-2xl font-bold ${
+                className={`text-2xl font-bold font-mono tabular-nums ${
                   data.costTracking.variance < 0
-                    ? 'text-green-600'
+                    ? 'text-success'
                     : data.costTracking.variance > 0
-                      ? 'text-red-600'
+                      ? 'text-destructive'
                       : ''
                 }`}
               >
@@ -256,37 +244,43 @@ export function ProjectManagerDashboard() {
         {/* Lot Progress Breakdown */}
         <div className="bg-card rounded-lg border">
           <div className="p-4 border-b flex items-center gap-2">
-            <Layers className="h-5 w-5 text-blue-500" />
+            <Layers className="h-5 w-5 text-muted-foreground" />
             <h2 className="text-lg font-semibold">Lot Status Breakdown</h2>
           </div>
           <div className="p-4 space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-gray-400"></div>
+                <div className="w-3 h-3 rounded-full bg-muted-foreground/30"></div>
                 <span className="text-sm">Not Started</span>
               </div>
-              <span className="font-medium">{data.lotProgress.notStarted}</span>
+              <span className="font-medium font-mono tabular-nums">
+                {data.lotProgress.notStarted}
+              </span>
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                <div className="w-3 h-3 rounded-full bg-muted-foreground/60"></div>
                 <span className="text-sm">In Progress</span>
               </div>
-              <span className="font-medium">{data.lotProgress.inProgress}</span>
+              <span className="font-medium font-mono tabular-nums">
+                {data.lotProgress.inProgress}
+              </span>
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+                <div className="w-3 h-3 rounded-full bg-warning"></div>
                 <span className="text-sm">On Hold</span>
               </div>
-              <span className="font-medium">{data.lotProgress.onHold}</span>
+              <span className="font-medium font-mono tabular-nums">{data.lotProgress.onHold}</span>
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                <div className="w-3 h-3 rounded-full bg-foreground/70"></div>
                 <span className="text-sm">Completed</span>
               </div>
-              <span className="font-medium">{data.lotProgress.completed}</span>
+              <span className="font-medium font-mono tabular-nums">
+                {data.lotProgress.completed}
+              </span>
             </div>
           </div>
         </div>
@@ -295,7 +289,7 @@ export function ProjectManagerDashboard() {
         <div className="bg-card rounded-lg border">
           <div className="p-4 border-b flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <ClipboardCheck className="h-5 w-5 text-amber-500" />
+              <ClipboardCheck className="h-5 w-5 text-muted-foreground" />
               <h2 className="text-lg font-semibold">Hold Point Pipeline</h2>
             </div>
             <span className="text-sm text-muted-foreground">
@@ -304,20 +298,28 @@ export function ProjectManagerDashboard() {
           </div>
           <div className="p-4">
             <div className="grid grid-cols-4 gap-2 text-center mb-4">
-              <div className="bg-gray-50 dark:bg-gray-800/50 rounded p-2">
-                <p className="text-lg font-bold">{data.holdPointPipeline.pending}</p>
+              <div className="bg-muted rounded p-2">
+                <p className="text-lg font-bold font-mono tabular-nums">
+                  {data.holdPointPipeline.pending}
+                </p>
                 <p className="text-xs text-muted-foreground">Pending</p>
               </div>
-              <div className="bg-blue-50 dark:bg-blue-950/30 rounded p-2">
-                <p className="text-lg font-bold">{data.holdPointPipeline.scheduled}</p>
+              <div className="bg-muted rounded p-2">
+                <p className="text-lg font-bold font-mono tabular-nums">
+                  {data.holdPointPipeline.scheduled}
+                </p>
                 <p className="text-xs text-muted-foreground">Scheduled</p>
               </div>
-              <div className="bg-yellow-50 dark:bg-yellow-950/30 rounded p-2">
-                <p className="text-lg font-bold">{data.holdPointPipeline.requested}</p>
+              <div className="bg-muted rounded p-2">
+                <p className="text-lg font-bold font-mono tabular-nums">
+                  {data.holdPointPipeline.requested}
+                </p>
                 <p className="text-xs text-muted-foreground">Requested</p>
               </div>
-              <div className="bg-green-50 dark:bg-green-950/30 rounded p-2">
-                <p className="text-lg font-bold">{data.holdPointPipeline.released}</p>
+              <div className="bg-muted rounded p-2">
+                <p className="text-lg font-bold font-mono tabular-nums">
+                  {data.holdPointPipeline.released}
+                </p>
                 <p className="text-xs text-muted-foreground">Released</p>
               </div>
             </div>
@@ -338,14 +340,14 @@ export function ProjectManagerDashboard() {
                       <p className="text-xs text-muted-foreground">Lot {hp.lotNumber}</p>
                     </div>
                     <span
-                      className={`text-xs px-2 py-0.5 rounded ${
+                      className={`text-xs px-2 py-0.5 rounded border ${
                         hp.status === 'pending'
-                          ? 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200'
+                          ? 'bg-muted text-muted-foreground border-transparent'
                           : hp.status === 'scheduled'
-                            ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-200'
+                            ? 'bg-info/10 text-info border-info/30'
                             : hp.status === 'requested'
-                              ? 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-200'
-                              : 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-200'
+                              ? 'bg-warning/10 text-warning border-warning/30'
+                              : 'bg-success/10 text-success border-success/30'
                       }`}
                     >
                       {hp.status}
@@ -366,7 +368,7 @@ export function ProjectManagerDashboard() {
         {/* Cost Tracking */}
         <div className="bg-card rounded-lg border">
           <div className="p-4 border-b flex items-center gap-2">
-            <DollarSign className="h-5 w-5 text-green-500" />
+            <DollarSign className="h-5 w-5 text-muted-foreground" />
             <h2 className="text-lg font-semibold">Cost Tracking</h2>
           </div>
           <div className="p-4">
@@ -394,7 +396,7 @@ export function ProjectManagerDashboard() {
                 </div>
                 <div className="w-full bg-muted rounded-full h-2">
                   <div
-                    className={`h-2 rounded-full ${data.costTracking.trend === 'over' ? 'bg-red-500' : 'bg-green-500'}`}
+                    className={`h-2 rounded-full ${data.costTracking.trend === 'over' ? 'bg-destructive' : 'bg-success'}`}
                     style={{
                       width: `${Math.min(100, data.costTracking.budgetTotal > 0 ? (data.costTracking.actualSpend / data.costTracking.budgetTotal) * 100 : 0)}%`,
                     }}
@@ -421,11 +423,11 @@ export function ProjectManagerDashboard() {
         <div className="bg-card rounded-lg border">
           <div className="p-4 border-b flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <FileText className="h-5 w-5 text-purple-500" />
+              <FileText className="h-5 w-5 text-muted-foreground" />
               <h2 className="text-lg font-semibold">Claims Status</h2>
             </div>
             {data.claimStatus.pendingClaims > 0 && (
-              <span className="bg-purple-100 text-purple-800 text-sm font-medium px-2.5 py-0.5 rounded-full">
+              <span className="bg-warning text-warning-foreground text-sm font-medium px-2.5 py-0.5 rounded-full">
                 {data.claimStatus.pendingClaims} pending
               </span>
             )}
@@ -463,12 +465,12 @@ export function ProjectManagerDashboard() {
                     <div className="flex items-center gap-2">
                       <span className="text-sm">{formatCurrency(claim.amount)}</span>
                       <span
-                        className={`text-xs px-2 py-0.5 rounded ${
+                        className={`text-xs px-2 py-0.5 rounded border ${
                           claim.status === 'paid'
-                            ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-200'
+                            ? 'bg-success/10 text-success border-success/30'
                             : claim.status === 'certified'
-                              ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-200'
-                              : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200'
+                              ? 'bg-info/10 text-info border-info/30'
+                              : 'bg-muted text-muted-foreground border-transparent'
                         }`}
                       >
                         {claim.status}

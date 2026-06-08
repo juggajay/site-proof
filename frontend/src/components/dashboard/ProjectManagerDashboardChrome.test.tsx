@@ -21,7 +21,7 @@ describe('ProjectManagerDashboardChrome', () => {
 
     expect(screen.getByText('Northern Bypass')).toBeInTheDocument();
     expect(screen.getByText(/\(NB-001\)/)).toBeInTheDocument();
-    expect(screen.getByText('active')).toHaveClass('bg-green-100');
+    expect(screen.getByText('active')).toHaveClass('bg-success/10');
   });
 
   it('links quick actions to the current project modules', () => {
