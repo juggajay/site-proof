@@ -196,7 +196,7 @@ export const UploadCertificateModal = React.memo(function UploadCertificateModal
         {/* Before extraction - File upload */}
         {!extractionResult ? (
           <div className="p-6">
-            <div className="border-2 border-dashed rounded-lg p-8 text-center">
+            <div className="border-2 border-dashed border-border rounded-lg p-8 text-center">
               <div className="text-5xl mb-4">{'\uD83D\uDCC4'}</div>
               <h3 className="text-lg font-semibold mb-2">Upload Test Certificate PDF</h3>
               <p className="text-muted-foreground mb-4">
@@ -231,7 +231,7 @@ export const UploadCertificateModal = React.memo(function UploadCertificateModal
               <Button onClick={handleUploadCertificate} disabled={!uploadedFile || uploading}>
                 {uploading ? (
                   <span className="flex items-center gap-2">
-                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent" />
                     Processing with AI...
                   </span>
                 ) : (
@@ -270,19 +270,19 @@ export const UploadCertificateModal = React.memo(function UploadCertificateModal
               <div className="p-3 bg-muted/50 border-b">
                 <h3 className="font-medium">Extracted Data</h3>
                 {extractionResult.needsReview && (
-                  <p className="text-xs text-amber-600 mt-1">
+                  <p className="text-xs text-warning mt-1">
                     {'\u26A0\uFE0F'} {extractionResult.reviewMessage}
                   </p>
                 )}
               </div>
               <div className="flex-1 overflow-auto p-4 space-y-4">
                 {/* Confidence Summary */}
-                <div className="p-3 rounded-lg bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800">
-                  <div className="flex items-center gap-2 text-sm font-medium text-purple-800 dark:text-purple-200">
+                <div className="p-3 rounded-lg bg-muted border border-border">
+                  <div className="flex items-center gap-2 text-sm font-medium text-foreground">
                     <span>{'\uD83E\uDD16'}</span>
                     <span>AI Extraction Complete</span>
                   </div>
-                  <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">
+                  <p className="text-xs text-muted-foreground mt-1">
                     {extractionResult.lowConfidenceFields.length === 0
                       ? 'All fields extracted with high confidence'
                       : `${extractionResult.lowConfidenceFields.length} field(s) need verification (highlighted in red)`}

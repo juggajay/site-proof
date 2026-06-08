@@ -106,10 +106,10 @@ const statusVariants: Record<
   'default' | 'warning' | 'success' | 'error' | 'info' | 'pending'
 > = {
   requested: 'default',
-  at_lab: 'warning',
-  results_received: 'pending',
-  entered: 'info',
-  verified: 'success',
+  at_lab: 'default',
+  results_received: 'default',
+  entered: 'default',
+  verified: 'default',
 };
 
 function TestResultMobileCard({
@@ -136,7 +136,7 @@ function TestResultMobileCard({
       title={test.testType}
       subtitle={test.testRequestNumber ? `Request ${test.testRequestNumber}` : undefined}
       status={{ label: statusLabel, variant: statusVariant }}
-      className={overdue ? 'border-red-400' : undefined}
+      className={overdue ? 'border-destructive' : undefined}
       fields={[
         {
           label: 'Result',
@@ -145,7 +145,7 @@ function TestResultMobileCard({
               {resultDisplay}
               {test.aiExtracted && (
                 <span
-                  className="px-1.5 py-0.5 text-[10px] bg-purple-500 text-white rounded font-bold"
+                  className="px-1.5 py-0.5 text-[10px] bg-muted text-muted-foreground rounded font-bold"
                   title="AI Extracted from certificate"
                 >
                   AI
@@ -188,7 +188,7 @@ function TestResultMobileCard({
         {
           label: test.sampleDate ? 'Since sample' : 'Since request',
           value: overdue ? (
-            <span className="text-red-600 font-medium">{daysSince} days &middot; Overdue</span>
+            <span className="text-destructive font-medium">{daysSince} days &middot; Overdue</span>
           ) : (
             `${daysSince} days`
           ),
@@ -225,7 +225,7 @@ function TestResultMobileCard({
           )}
 
           {test.status === 'verified' && (
-            <p className="flex items-center justify-center gap-1 text-sm font-medium text-green-600">
+            <p className="flex items-center justify-center gap-1 text-sm font-medium text-muted-foreground">
               <Check className="h-4 w-4" />
               Complete
             </p>

@@ -98,7 +98,7 @@ export const RejectTestModal = React.memo(function RejectTestModal({
   return (
     <Modal onClose={handleClose} className="max-w-md">
       <ModalHeader>
-        <span className="text-red-600">Reject Test Verification</span>
+        <span className="text-destructive">Reject Test Verification</span>
       </ModalHeader>
       <ModalDescription>
         Provide rejection feedback and return this test result for correction.

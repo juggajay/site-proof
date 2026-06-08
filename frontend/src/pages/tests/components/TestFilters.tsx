@@ -62,7 +62,7 @@ export const TestFilters = React.memo(function TestFilters({
             value={searchQuery}
             onChange={(e) => onSearchQueryChange(e.target.value)}
             placeholder="Search by report #, lot #, lab name..."
-            className="w-full rounded-lg border px-3 py-2 pl-9 text-sm"
+            className="w-full rounded-lg border border-border bg-background px-3 py-2 pl-9 text-sm text-foreground"
           />
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
             {'\uD83D\uDD0D'}
@@ -80,7 +80,7 @@ export const TestFilters = React.memo(function TestFilters({
         {/* Filters Toggle */}
         <button
           onClick={toggleFilters}
-          className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg border hover:bg-muted"
+          className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg border border-border bg-card text-foreground hover:bg-muted"
         >
           {'\u2699\uFE0F'} Filters{' '}
           {hasActiveFilters && (
@@ -92,7 +92,7 @@ export const TestFilters = React.memo(function TestFilters({
       </div>
 
       {showFilters && (
-        <div className="mt-3 p-4 rounded-lg border bg-muted/30 space-y-3">
+        <div className="mt-3 p-4 rounded-lg border border-border bg-muted/30 space-y-3">
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
             {/* Test Type Filter */}
             <div>
@@ -100,7 +100,7 @@ export const TestFilters = React.memo(function TestFilters({
               <select
                 value={filterTestType}
                 onChange={(e) => onFilterTestTypeChange(e.target.value)}
-                className="w-full rounded border px-2 py-1.5 text-sm"
+                className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground"
               >
                 <option value="">All Types</option>
                 {uniqueTestTypes.map((type) => (
@@ -117,7 +117,7 @@ export const TestFilters = React.memo(function TestFilters({
               <select
                 value={filterStatus}
                 onChange={(e) => onFilterStatusChange(e.target.value)}
-                className="w-full rounded border px-2 py-1.5 text-sm"
+                className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground"
               >
                 <option value="">All Statuses</option>
                 <option value="requested">Requested</option>
@@ -134,7 +134,7 @@ export const TestFilters = React.memo(function TestFilters({
               <select
                 value={filterPassFail}
                 onChange={(e) => onFilterPassFailChange(e.target.value)}
-                className="w-full rounded border px-2 py-1.5 text-sm"
+                className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground"
               >
                 <option value="">All</option>
                 <option value="pass">Pass</option>
@@ -149,7 +149,7 @@ export const TestFilters = React.memo(function TestFilters({
               <select
                 value={filterLot}
                 onChange={(e) => onFilterLotChange(e.target.value)}
-                className="w-full rounded border px-2 py-1.5 text-sm"
+                className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground"
               >
                 <option value="">All Lots</option>
                 {lots.map((lot) => (
@@ -167,7 +167,7 @@ export const TestFilters = React.memo(function TestFilters({
                 type="date"
                 value={filterDateFrom}
                 onChange={(e) => onFilterDateFromChange(e.target.value)}
-                className="w-full rounded border px-2 py-1.5 text-sm"
+                className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground"
               />
             </div>
 
@@ -178,17 +178,20 @@ export const TestFilters = React.memo(function TestFilters({
                 type="date"
                 value={filterDateTo}
                 onChange={(e) => onFilterDateToChange(e.target.value)}
-                className="w-full rounded border px-2 py-1.5 text-sm"
+                className="w-full rounded border border-border bg-background px-2 py-1.5 text-sm text-foreground"
               />
             </div>
           </div>
 
           {hasActiveFilters && (
-            <div className="flex justify-between items-center pt-2 border-t">
+            <div className="flex justify-between items-center pt-2 border-t border-border">
               <span className="text-sm text-muted-foreground">
                 Showing {filteredCount} of {totalCount} results
               </span>
-              <button onClick={onClearFilters} className="text-sm text-red-600 hover:text-red-700">
+              <button
+                onClick={onClearFilters}
+                className="text-sm text-muted-foreground hover:text-foreground"
+              >
                 Clear all filters
               </button>
             </div>
