@@ -278,10 +278,11 @@ export function Header() {
             {unreadCount > 0 && (
               <>
                 {/* Animated ping effect */}
-                <span className="absolute -right-0.5 -top-0.5 h-5 w-5 rounded-full bg-red-400 animate-ping opacity-75" />
-                {/* Badge with count */}
+                <span className="absolute -right-0.5 -top-0.5 h-5 w-5 rounded-full bg-destructive/60 animate-ping opacity-75" />
+                {/* Badge with count — destructive token: an unread count is a
+                    real signal the user needs to act on (INV-3). */}
                 <span
-                  className="absolute -right-0.5 -top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-xs font-medium text-white"
+                  className="absolute -right-0.5 -top-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-xs font-medium text-destructive-foreground"
                   data-testid="notification-badge"
                 >
                   {unreadCount > 9 ? '9+' : unreadCount}
@@ -364,7 +365,7 @@ export function Header() {
                     setIsUserMenuOpen(false);
                     handleSignOut();
                   }}
-                  className="flex w-full items-center gap-2 rounded px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                  className="flex w-full items-center gap-2 rounded px-3 py-2 text-sm text-destructive hover:bg-destructive/10"
                   role="menuitem"
                 >
                   <LogOut className="h-4 w-4" aria-hidden="true" />
