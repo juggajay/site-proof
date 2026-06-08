@@ -19,11 +19,13 @@ interface Lot {
 }
 
 function getStatusBadge(status: string) {
+  // Lot status pills: in_progress/completed are informational, on_hold is the
+  // exception that needs a human's eye. Benign not_started stays neutral.
   const variants: Record<string, string> = {
-    not_started: 'bg-muted text-foreground',
-    in_progress: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100',
-    completed: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100',
-    on_hold: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100',
+    not_started: 'bg-muted text-muted-foreground',
+    in_progress: 'bg-info/10 text-info',
+    completed: 'bg-success/10 text-success',
+    on_hold: 'bg-warning/10 text-warning',
   };
   const labels: Record<string, string> = {
     not_started: 'Not Started',
@@ -34,7 +36,7 @@ function getStatusBadge(status: string) {
   return (
     <span
       className={cn(
-        'px-2 py-1 text-xs font-medium rounded-full',
+        'inline-flex items-center px-2.5 py-0.5 text-xs font-medium uppercase tracking-wide rounded-full',
         variants[status] || variants.not_started,
       )}
     >
@@ -123,7 +125,7 @@ export function AssignedWorkPage() {
   if (error) {
     return (
       <div className="container max-w-2xl mx-auto p-4">
-        <div className="flex items-start gap-3 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-800 dark:text-red-200">
+        <div className="flex items-start gap-3 p-4 bg-destructive/10 border border-destructive/30 rounded-lg text-destructive">
           <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
           <p>{extractErrorMessage(error, 'Failed to load assigned work')}</p>
         </div>
@@ -179,24 +181,28 @@ export function AssignedWorkPage() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 gap-3">
-        <div className="border border-border rounded-lg bg-card">
+        <div className="border border-border rounded-lg bg-card shadow-sm">
           <div className="p-4 flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <MapPin className="h-5 w-5 text-primary" />
+            <div className="p-2 rounded-lg border border-border bg-muted">
+              <MapPin className="h-5 w-5 text-muted-foreground" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-foreground">{lots.length}</p>
+              <p className="font-mono text-2xl font-medium tabular-nums text-foreground">
+                {lots.length}
+              </p>
               <p className="text-sm text-muted-foreground">Assigned Lots</p>
             </div>
           </div>
         </div>
-        <div className="border border-border rounded-lg bg-card">
+        <div className="border border-border rounded-lg bg-card shadow-sm">
           <div className="p-4 flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900">
-              <Clock className="h-5 w-5 text-amber-600 dark:text-amber-300" />
+            <div className="p-2 rounded-lg border border-border bg-muted">
+              <Clock className="h-5 w-5 text-muted-foreground" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-foreground">{inProgress.length}</p>
+              <p className="font-mono text-2xl font-medium tabular-nums text-foreground">
+                {inProgress.length}
+              </p>
               <p className="text-sm text-muted-foreground">In Progress</p>
             </div>
           </div>
@@ -278,11 +284,11 @@ export function AssignedWorkPage() {
 
 function LotCard({ lot }: { lot: Lot }) {
   return (
-    <div className="border border-border rounded-lg bg-card">
+    <div className="border border-border rounded-lg bg-card shadow-sm">
       <div className="p-4">
         <div className="flex items-start justify-between">
           <div className="flex items-start gap-3">
-            <div className="p-2 rounded-lg bg-muted">
+            <div className="p-2 rounded-lg border border-border bg-muted">
               <MapPin className="h-4 w-4 text-muted-foreground" />
             </div>
             <div>

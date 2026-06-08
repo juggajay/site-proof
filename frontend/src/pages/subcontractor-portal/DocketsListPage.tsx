@@ -53,30 +53,32 @@ function getDocketStatusIcon(status: string) {
     case 'draft':
       return <Clock className="h-5 w-5 text-muted-foreground" />;
     case 'pending_approval':
-      return <Clock className="h-5 w-5 text-amber-500" />;
+      return <Clock className="h-5 w-5 text-warning" />;
     case 'approved':
-      return <CheckCircle className="h-5 w-5 text-green-500" />;
+      return <CheckCircle className="h-5 w-5 text-success" />;
     case 'rejected':
-      return <XCircle className="h-5 w-5 text-red-500" />;
+      return <XCircle className="h-5 w-5 text-destructive" />;
     case 'queried':
-      return <MessageSquare className="h-5 w-5 text-amber-500" />;
+      return <MessageSquare className="h-5 w-5 text-warning" />;
     default:
       return <Clock className="h-5 w-5 text-muted-foreground" />;
   }
 }
 
+// Docket status pills earn colour: status is cash (approved = paid). Benign
+// states (draft) stay neutral; colour carries decision/exception meaning.
 function getDocketStatusBadge(status: string) {
   const variants: Record<string, string> = {
-    draft: 'bg-muted text-foreground',
-    pending_approval: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100',
-    approved: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100',
-    rejected: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100',
-    queried: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100',
+    draft: 'bg-muted text-muted-foreground',
+    pending_approval: 'bg-warning/10 text-warning',
+    approved: 'bg-success/10 text-success',
+    rejected: 'bg-destructive/10 text-destructive',
+    queried: 'bg-warning/10 text-warning',
   };
   return (
     <span
       className={cn(
-        'px-2 py-1 text-xs font-medium rounded-full',
+        'inline-flex items-center px-2.5 py-0.5 text-xs font-medium uppercase tracking-wide rounded-full',
         variants[status] || variants.draft,
       )}
     >
@@ -297,7 +299,7 @@ export function DocketsListPage() {
                               <p className="font-medium text-foreground">
                                 {formatDate(docket.date)}
                               </p>
-                              <p className="text-sm text-muted-foreground dark:text-muted-foreground">
+                              <p className="font-mono text-sm tabular-nums text-muted-foreground">
                                 {formatCurrency(
                                   docket.totalLabourSubmitted + docket.totalPlantSubmitted,
                                 )}

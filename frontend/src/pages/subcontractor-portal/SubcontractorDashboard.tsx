@@ -102,22 +102,41 @@ function getDocketStatusIcon(status: string) {
     case 'draft':
       return <Clock className="h-5 w-5 text-muted-foreground" />;
     case 'pending_approval':
-      return <Clock className="h-5 w-5 text-amber-500" />;
+      return <Clock className="h-5 w-5 text-warning" />;
     case 'approved':
-      return <CheckCircle className="h-5 w-5 text-green-500" />;
+      return <CheckCircle className="h-5 w-5 text-success" />;
     case 'rejected':
-      return <XCircle className="h-5 w-5 text-red-500" />;
+      return <XCircle className="h-5 w-5 text-destructive" />;
     case 'queried':
-      return <MessageSquare className="h-5 w-5 text-amber-500" />;
+      return <MessageSquare className="h-5 w-5 text-warning" />;
     default:
       return <Clock className="h-5 w-5 text-muted-foreground" />;
   }
 }
 
+// Status pills earn colour because docket status literally means cash for the
+// subbie (approved = paid). Map each status to the semantic token pair; benign
+// states (draft/submitted) stay neutral.
+const DOCKET_STATUS_PILL_CLASSES: Record<string, string> = {
+  draft: 'bg-muted text-muted-foreground',
+  pending_approval: 'bg-warning/10 text-warning',
+  approved: 'bg-success/10 text-success',
+  rejected: 'bg-destructive/10 text-destructive',
+  queried: 'bg-warning/10 text-warning',
+};
+
 function getDocketStatusBadge(status: string) {
-  const { label, className } = getDocketStatusMeta(status);
+  const { label } = getDocketStatusMeta(status);
+  const className = DOCKET_STATUS_PILL_CLASSES[status] ?? DOCKET_STATUS_PILL_CLASSES.draft;
   return (
-    <span className={cn('px-2 py-1 text-xs font-medium rounded-full', className)}>{label}</span>
+    <span
+      className={cn(
+        'inline-flex items-center px-2.5 py-0.5 text-xs font-medium uppercase tracking-wide rounded-full',
+        className,
+      )}
+    >
+      {label}
+    </span>
   );
 }
 
@@ -304,38 +323,44 @@ export function SubcontractorDashboard() {
         </div>
       )}
 
-      {/* Today's Docket Card */}
-      <div className="border-2 border-border rounded-lg bg-card">
+      {/* Today's Docket Card — the hero: submit today's docket */}
+      <div className="border border-border rounded-lg bg-card shadow-sm">
         <div className="p-4 pb-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Calendar className="h-5 w-5 text-primary" />
+              <Calendar className="h-5 w-5 text-muted-foreground" />
               <h2 className="text-lg font-semibold text-foreground">Today's Docket</h2>
             </div>
             {todaysDocket && getDocketStatusBadge(todaysDocket.status)}
           </div>
-          <p className="text-sm text-muted-foreground mt-1">{formatDate(getToday())}</p>
+          <p className="font-mono text-xs text-muted-foreground mt-1">{formatDate(getToday())}</p>
         </div>
         <div className="p-4 pt-2">
           {todaysDocket ? (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-muted-foreground">Labour</p>
-                  <p className="text-lg font-semibold text-foreground">
+              <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-border bg-border">
+                <div className="bg-card p-3">
+                  <p className="text-[10.5px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Labour
+                  </p>
+                  <p className="mt-1.5 font-mono text-xl font-medium tabular-nums text-foreground">
                     {formatCurrency(todaysDocket.totalLabourSubmitted)}
                   </p>
                 </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Plant</p>
-                  <p className="text-lg font-semibold text-foreground">
+                <div className="bg-card p-3">
+                  <p className="text-[10.5px] font-semibold uppercase tracking-wide text-muted-foreground">
+                    Plant
+                  </p>
+                  <p className="mt-1.5 font-mono text-xl font-medium tabular-nums text-foreground">
                     {formatCurrency(todaysDocket.totalPlantSubmitted)}
                   </p>
                 </div>
               </div>
               <div className="pt-2 border-t border-border">
-                <p className="text-sm text-muted-foreground mb-1">Total</p>
-                <p className="text-xl font-bold text-foreground">
+                <p className="text-[10.5px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">
+                  Total
+                </p>
+                <p className="font-mono text-xl font-semibold tabular-nums text-foreground">
                   {formatCurrency(
                     todaysDocket.totalLabourSubmitted + todaysDocket.totalPlantSubmitted,
                   )}
@@ -343,7 +368,7 @@ export function SubcontractorDashboard() {
               </div>
               <Link
                 to={`/subcontractor-portal/docket/${todaysDocket.id}`}
-                className="flex items-center justify-center gap-2 w-full py-2.5 px-4 bg-primary hover:bg-primary/90 text-white font-medium rounded-lg transition-colors"
+                className="flex items-center justify-center gap-2 w-full py-2.5 px-4 bg-primary hover:bg-primary/90 text-primary-foreground font-medium rounded-lg transition-colors"
               >
                 {todaysDocket.status === 'draft' ? 'Continue Docket' : 'View Docket'}
                 <ChevronRight className="h-4 w-4" />
@@ -354,9 +379,9 @@ export function SubcontractorDashboard() {
               {docketPrerequisitesMet ? (
                 <p className="text-muted-foreground mb-4">No docket started for today</p>
               ) : (
-                <div className="mb-4 text-left rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20 p-3 space-y-2">
+                <div className="mb-4 text-left rounded-lg border border-warning/30 bg-warning/10 p-3 space-y-2">
                   <p className="flex items-center gap-1.5 text-sm font-medium text-foreground">
-                    <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                    <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
                     Finish setup before filling out a docket
                   </p>
                   {!hasDocketResources && (
@@ -382,7 +407,7 @@ export function SubcontractorDashboard() {
               )}
               <Link
                 to={newDocketLink}
-                className="inline-flex items-center gap-2 py-2.5 px-4 bg-primary hover:bg-primary/90 text-white font-medium rounded-lg transition-colors"
+                className="inline-flex items-center gap-2 py-2.5 px-4 bg-primary hover:bg-primary/90 text-primary-foreground font-medium rounded-lg transition-colors"
               >
                 <Plus className="h-4 w-4" />
                 Start Today's Docket
@@ -394,10 +419,10 @@ export function SubcontractorDashboard() {
 
       {/* Needs Attention */}
       {needsAttention.length > 0 && (
-        <div className="border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20 rounded-lg">
+        <div className="border border-warning/30 bg-warning/10 rounded-lg">
           <div className="p-4 pb-2">
             <div className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-amber-600" />
+              <AlertTriangle className="h-5 w-5 text-warning" />
               <h2 className="text-lg font-semibold text-foreground">
                 Needs Attention ({needsAttention.length})
               </h2>
@@ -498,7 +523,7 @@ export function SubcontractorDashboard() {
                     {getDocketStatusIcon(docket.status)}
                     <div>
                       <p className="font-medium text-foreground">{formatDate(docket.date)}</p>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="font-mono text-sm tabular-nums text-muted-foreground">
                         {formatCurrency(docket.totalLabourSubmitted + docket.totalPlantSubmitted)}
                       </p>
                     </div>
