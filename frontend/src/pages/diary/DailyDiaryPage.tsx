@@ -172,7 +172,10 @@ export function DailyDiaryPage() {
       <DiaryDesktopHeader projectId={projectId!} onNewEntry={handleNewEntry} />
 
       {data.error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700" role="alert">
+        <div
+          className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-destructive"
+          role="alert"
+        >
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm font-medium">{data.error}</p>
             <Button

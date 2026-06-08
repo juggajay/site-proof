@@ -255,7 +255,7 @@ export function DiaryFinishFlow({ isOpen, onClose, onSubmit, date }: DiaryFinish
             </div>
           ) : error ? (
             <div className="p-8 text-center">
-              <AlertTriangle className="h-12 w-12 text-amber-500 mx-auto mb-4" />
+              <AlertTriangle className="h-12 w-12 text-destructive mx-auto mb-4" />
               <p className="text-muted-foreground">{error}</p>
               <button
                 onClick={() => {
@@ -282,7 +282,7 @@ export function DiaryFinishFlow({ isOpen, onClose, onSubmit, date }: DiaryFinish
                     {diary.weather.rainfall > 0 && ` • ${diary.weather.rainfall}mm rain`}
                   </p>
                 ) : (
-                  <p className="text-sm text-amber-600">Weather not recorded</p>
+                  <p className="text-sm text-warning">Weather not recorded</p>
                 )}
               </SectionCard>
 
@@ -299,7 +299,7 @@ export function DiaryFinishFlow({ isOpen, onClose, onSubmit, date }: DiaryFinish
                     {diary.personnel.reduce((sum, p) => sum + p.hours, 0)} total hours
                   </p>
                 ) : (
-                  <p className="text-sm text-amber-600">No personnel recorded</p>
+                  <p className="text-sm text-warning">No personnel recorded</p>
                 )}
               </SectionCard>
 
@@ -339,7 +339,7 @@ export function DiaryFinishFlow({ isOpen, onClose, onSubmit, date }: DiaryFinish
                     )}
                   </ul>
                 ) : (
-                  <p className="text-sm text-amber-600">No activities recorded</p>
+                  <p className="text-sm text-warning">No activities recorded</p>
                 )}
               </SectionCard>
 
@@ -351,7 +351,7 @@ export function DiaryFinishFlow({ isOpen, onClose, onSubmit, date }: DiaryFinish
                   status="complete"
                   onEdit={() => handleEditSection('delays')}
                 >
-                  <p className="text-sm text-amber-600">
+                  <p className="text-sm text-muted-foreground">
                     {diary.delays.length} delay{diary.delays.length !== 1 ? 's' : ''} •{' '}
                     {diary.delays.reduce((sum, d) => sum + d.hours, 0)} hours lost
                   </p>
@@ -367,7 +367,7 @@ export function DiaryFinishFlow({ isOpen, onClose, onSubmit, date }: DiaryFinish
                   navigate(`/projects/${projectId}/diary`);
                   onClose();
                 }}
-                className="px-6 py-3 bg-primary text-white rounded-lg font-medium touch-manipulation min-h-[48px]"
+                className="px-6 py-3 bg-primary text-primary-foreground rounded-lg font-medium touch-manipulation min-h-[48px]"
               >
                 Start Diary
               </button>
@@ -381,7 +381,7 @@ export function DiaryFinishFlow({ isOpen, onClose, onSubmit, date }: DiaryFinish
             {submitWarnings.length > 0 && (
               <div
                 role="alert"
-                className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-900 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-100"
+                className="rounded-lg border border-warning/40 bg-warning/10 p-3 text-warning"
               >
                 <div className="flex items-start gap-2">
                   <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
@@ -400,8 +400,8 @@ export function DiaryFinishFlow({ isOpen, onClose, onSubmit, date }: DiaryFinish
               onClick={handleSubmit}
               disabled={submitting || diary.isComplete}
               className={cn(
-                'w-full py-4 rounded-lg font-semibold text-white',
-                'bg-green-600 active:bg-green-700',
+                'w-full py-4 rounded-lg font-semibold text-success-foreground',
+                'bg-success active:bg-success/90',
                 'touch-manipulation min-h-[56px]',
                 'flex items-center justify-center gap-2',
                 submitting && 'opacity-50',
@@ -455,11 +455,11 @@ function SectionCard({ icon: Icon, title, status, onEdit, children }: SectionCar
   const statusConfig = {
     auto: { color: 'text-primary', bg: 'bg-primary/5 dark:bg-primary/10', label: 'Auto-filled' },
     complete: {
-      color: 'text-green-600',
-      bg: 'bg-green-50 dark:bg-green-900/20',
+      color: 'text-muted-foreground',
+      bg: 'bg-muted',
       label: 'Complete',
     },
-    missing: { color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-900/20', label: 'Missing' },
+    missing: { color: 'text-warning', bg: 'bg-warning/10', label: 'Missing' },
     optional: {
       color: 'text-muted-foreground',
       bg: 'bg-muted/50 dark:bg-muted',
@@ -470,12 +470,7 @@ function SectionCard({ icon: Icon, title, status, onEdit, children }: SectionCar
   const config = statusConfig[status];
 
   return (
-    <div
-      className={cn(
-        'rounded-lg border p-4',
-        status === 'missing' && 'border-amber-300 dark:border-amber-700',
-      )}
-    >
+    <div className={cn('rounded-lg border p-4', status === 'missing' && 'border-warning/40')}>
       <div className="flex items-start justify-between mb-2">
         <div className="flex items-center gap-2">
           <Icon className={cn('h-5 w-5', config.color)} />

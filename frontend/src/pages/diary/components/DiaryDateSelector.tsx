@@ -154,15 +154,15 @@ export const DiaryDateSelector = React.memo(function DiaryDateSelector({
           <span
             className={`rounded-full px-3 py-1 text-sm font-medium ${
               diary.status === 'submitted'
-                ? 'bg-green-100 text-green-700'
-                : 'bg-yellow-100 text-yellow-700'
+                ? 'bg-success/10 text-success'
+                : 'bg-muted text-muted-foreground'
             }`}
           >
             {diary.status === 'submitted' ? 'Submitted' : 'Draft'}
           </span>
         )}
         {diary?.isLate && (
-          <span className="rounded-full bg-orange-100 px-3 py-1 text-sm font-medium text-orange-700">
+          <span className="rounded-full bg-warning/10 px-3 py-1 text-sm font-medium text-warning">
             Late Entry
           </span>
         )}
@@ -198,15 +198,15 @@ export const DiaryDateSelector = React.memo(function DiaryDateSelector({
           {/* Calendar Legend */}
           <div className="mb-4 flex items-center gap-4 text-sm">
             <span className="flex items-center gap-1">
-              <span className="h-4 w-4 rounded bg-green-500"></span>
+              <span className="h-4 w-4 rounded bg-success"></span>
               Submitted
             </span>
             <span className="flex items-center gap-1">
-              <span className="h-4 w-4 rounded bg-yellow-500"></span>
+              <span className="h-4 w-4 rounded bg-muted-foreground"></span>
               Draft
             </span>
             <span className="flex items-center gap-1">
-              <span className="h-4 w-4 rounded bg-red-500"></span>
+              <span className="h-4 w-4 rounded bg-destructive"></span>
               Missing
             </span>
           </div>
@@ -232,11 +232,11 @@ export const DiaryDateSelector = React.memo(function DiaryDateSelector({
                     disabled={day.status === 'future'}
                     className={`flex h-full w-full items-center justify-center rounded-md text-sm font-medium transition-colors ${
                       day.status === 'submitted'
-                        ? 'bg-green-500 text-white hover:bg-green-600'
+                        ? 'bg-success text-success-foreground hover:bg-success/90'
                         : day.status === 'draft'
-                          ? 'bg-yellow-500 text-white hover:bg-yellow-600'
+                          ? 'bg-muted-foreground text-background hover:bg-muted-foreground/90'
                           : day.status === 'missing'
-                            ? 'bg-red-500 text-white hover:bg-red-600'
+                            ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90'
                             : 'bg-muted text-muted-foreground cursor-not-allowed'
                     } ${
                       formatDateKey(day.date) === selectedDate
@@ -318,8 +318,8 @@ export const DiaryDateSelector = React.memo(function DiaryDateSelector({
                       <span
                         className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                           d.status === 'submitted'
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-yellow-100 text-yellow-700'
+                            ? 'bg-success/10 text-success'
+                            : 'bg-muted text-muted-foreground'
                         }`}
                       >
                         {d.status}
@@ -358,8 +358,8 @@ export const DiaryDateSelector = React.memo(function DiaryDateSelector({
                     <span
                       className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                         d.status === 'submitted'
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-yellow-100 text-yellow-700'
+                          ? 'bg-success/10 text-success'
+                          : 'bg-muted text-muted-foreground'
                       }`}
                     >
                       {d.status}

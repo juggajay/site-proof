@@ -259,7 +259,7 @@ export const PersonnelTab = React.memo(function PersonnelTab({
                     {diary.status !== 'submitted' && (
                       <button
                         onClick={() => removePersonnel(p.id)}
-                        className="p-2 text-red-600 hover:text-red-700 touch-manipulation"
+                        className="p-2 text-destructive hover:text-destructive/80 touch-manipulation"
                       >
                         <svg
                           className="h-5 w-5"
@@ -314,7 +314,7 @@ export const PersonnelTab = React.memo(function PersonnelTab({
                         <td className="py-2">
                           <button
                             onClick={() => removePersonnel(p.id)}
-                            className="text-red-600 hover:text-red-700"
+                            className="text-destructive hover:text-destructive/80"
                           >
                             <svg
                               className="h-5 w-5"

@@ -70,7 +70,7 @@ export function AddEventSheet({
                 className={cn(
                   'px-3 py-2 rounded-full text-sm font-medium touch-manipulation min-h-[40px]',
                   eventType === type
-                    ? 'bg-purple-600 text-white'
+                    ? 'bg-primary text-primary-foreground'
                     : 'bg-muted text-muted-foreground',
                 )}
               >
@@ -87,7 +87,7 @@ export function AddEventSheet({
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="What happened?"
-            className="w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation"
+            className="w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation"
           />
         </div>
 
@@ -98,7 +98,7 @@ export function AddEventSheet({
             onChange={(e) => setNotes(e.target.value)}
             rows={2}
             placeholder="Additional details..."
-            className="w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation resize-none"
+            className="w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation resize-none"
           />
         </div>
 
@@ -107,7 +107,7 @@ export function AddEventSheet({
           <select
             value={lotId}
             onChange={(e) => setLotId(e.target.value)}
-            className="w-full mt-1 px-3 py-3 border rounded-lg text-base touch-manipulation bg-background"
+            className="w-full mt-1 px-3 py-3 border border-border rounded-lg text-base touch-manipulation bg-background text-foreground"
           >
             <option value="">No lot</option>
             {lots.map((lot) => (
@@ -122,8 +122,8 @@ export function AddEventSheet({
           onClick={handleSave}
           disabled={!eventType || !description.trim() || saving}
           className={cn(
-            'w-full py-4 rounded-lg font-semibold text-white',
-            'bg-green-600 active:bg-green-700',
+            'w-full py-4 rounded-lg font-semibold text-primary-foreground',
+            'bg-primary active:bg-primary/90',
             'touch-manipulation min-h-[56px]',
             'flex items-center justify-center gap-2',
             (!eventType || !description.trim() || saving) && 'opacity-50',
