@@ -43,8 +43,8 @@ export function MobileITPProgressHeader({
 
 export function MobileITPReadOnlyNotice() {
   return (
-    <div className="mx-4 mt-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-md p-3">
-      <p className="text-sm text-amber-800 dark:text-amber-200">
+    <div className="mx-4 mt-4 bg-warning/10 border border-warning/20 rounded-md p-3">
+      <p className="text-sm text-warning-foreground">
         You can view this ITP but do not have permission to complete items. Contact the head
         contractor to request completion access.
       </p>
@@ -85,9 +85,7 @@ export function MobileITPCategoryHeader({
       <div className="flex items-center gap-2">
         <span
           className={`text-xs px-2 py-1 rounded-full font-medium ${
-            isComplete
-              ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-              : 'bg-muted text-muted-foreground'
+            isComplete ? 'bg-foreground/10 text-foreground' : 'bg-muted text-muted-foreground'
           }`}
         >
           {completedCount}/{totalCount}
@@ -122,11 +120,10 @@ export function MobileITPItem({
 }: MobileITPItemProps) {
   const statusColors = {
     pending: 'bg-muted border-muted-foreground/30 text-muted-foreground',
-    completed: 'bg-green-500 border-green-500 text-white',
-    na: 'bg-gray-400 dark:bg-gray-600 border-gray-400 dark:border-gray-600 text-white',
-    failed: 'bg-red-500 border-red-500 text-white',
-    disabled:
-      'bg-gray-300 dark:bg-gray-700 border-gray-400 dark:border-gray-600 text-gray-500 dark:text-gray-400',
+    completed: 'bg-primary border-primary text-primary-foreground',
+    na: 'bg-muted-foreground border-muted-foreground text-background',
+    failed: 'bg-destructive border-destructive text-destructive-foreground',
+    disabled: 'bg-muted border-border text-muted-foreground',
   };
 
   const statusIcons = {
@@ -139,13 +136,13 @@ export function MobileITPItem({
   const pointTypeBadge = {
     standard: {
       label: 'S',
-      color: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+      color: 'bg-muted text-muted-foreground',
     },
     witness: {
       label: 'W',
-      color: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
+      color: 'bg-warning/10 text-warning',
     },
-    hold_point: { label: 'H', color: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' },
+    hold_point: { label: 'H', color: 'bg-destructive/10 text-destructive' },
   };
 
   const badge = pointTypeBadge[item.pointType];
@@ -187,19 +184,19 @@ export function MobileITPItem({
         </div>
         <div className="flex items-center gap-3 text-xs text-muted-foreground ml-7">
           {item.evidenceRequired === 'photo' && !hasPhotos && (
-            <span className="flex items-center gap-1 text-amber-600">
+            <span className="flex items-center gap-1 text-warning">
               <Camera className="w-3 h-3" />
               <span>Photo req</span>
             </span>
           )}
           {hasPhotos && (
-            <span className="flex items-center gap-1 text-primary">
+            <span className="flex items-center gap-1 text-muted-foreground">
               <Image className="w-3 h-3" />
               <span>{photoCount}</span>
             </span>
           )}
           {hasNotes && (
-            <span className="flex items-center gap-1 text-amber-600">
+            <span className="flex items-center gap-1 text-muted-foreground">
               <MessageSquare className="w-3 h-3" />
             </span>
           )}

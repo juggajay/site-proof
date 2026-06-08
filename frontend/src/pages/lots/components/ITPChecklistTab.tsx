@@ -287,7 +287,7 @@ export function ITPChecklistTab({
               id="itp-status-filter"
               value={itpStatusFilter}
               onChange={(e) => setItpStatusFilter(e.target.value as typeof itpStatusFilter)}
-              className="text-sm border rounded-md px-2 py-1 bg-background"
+              className="text-sm border border-border rounded-md px-2 py-1 bg-background text-foreground"
             >
               <option value="all">All Items</option>
               <option value="pending">Pending</option>

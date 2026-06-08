@@ -52,32 +52,36 @@ interface TodayWorklistData {
   };
 }
 
+// Colour means status, never decoration (INV-3). Only the two states that
+// demand a foreman decision carry colour: blocking work is an exception
+// (destructive) and due-today must be actioned (warning). "Coming Up" is a
+// benign, scheduled state, so it stays monochrome.
 const urgencyConfig = {
   blocking: {
     label: 'Blocking Work',
     description: 'Cannot proceed until resolved',
-    color: 'bg-red-500',
-    textColor: 'text-red-700 dark:text-red-400',
-    bgColor: 'bg-red-50 dark:bg-red-900/20',
-    borderColor: 'border-red-200 dark:border-red-800',
+    color: 'bg-destructive',
+    textColor: 'text-destructive',
+    bgColor: 'bg-destructive/10',
+    borderColor: 'border-destructive/30',
     icon: AlertCircle,
   },
   due_today: {
     label: 'Due Today',
     description: 'Must complete today',
-    color: 'bg-amber-500',
-    textColor: 'text-amber-700 dark:text-amber-400',
-    bgColor: 'bg-amber-50 dark:bg-amber-900/20',
-    borderColor: 'border-amber-200 dark:border-amber-800',
+    color: 'bg-warning',
+    textColor: 'text-warning',
+    bgColor: 'bg-warning/10',
+    borderColor: 'border-warning/30',
     icon: Clock,
   },
   upcoming: {
     label: 'Coming Up',
     description: 'Next 24-48 hours',
-    color: 'bg-blue-500',
-    textColor: 'text-blue-700 dark:text-blue-400',
-    bgColor: 'bg-blue-50 dark:bg-blue-900/20',
-    borderColor: 'border-blue-200 dark:border-blue-800',
+    color: 'bg-muted-foreground',
+    textColor: 'text-muted-foreground',
+    bgColor: 'bg-card',
+    borderColor: 'border-border',
     icon: Calendar,
   },
 };
@@ -185,7 +189,7 @@ export function TodayWorklist() {
               <span
                 className={cn(
                   'flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap',
-                  'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+                  'bg-destructive/10 text-destructive',
                 )}
               >
                 <AlertCircle className="h-3 w-3" />
@@ -196,7 +200,7 @@ export function TodayWorklist() {
               <span
                 className={cn(
                   'flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap',
-                  'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+                  'bg-warning/10 text-warning',
                 )}
               >
                 <Clock className="h-3 w-3" />
@@ -207,7 +211,7 @@ export function TodayWorklist() {
               <span
                 className={cn(
                   'flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap',
-                  'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+                  'bg-muted text-muted-foreground',
                 )}
               >
                 <Calendar className="h-3 w-3" />
@@ -221,20 +225,18 @@ export function TodayWorklist() {
       {/* Error State */}
       {error && (
         <div className="p-4">
-          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+          <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-4">
             <div className="flex items-start gap-3">
-              <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <AlertCircle className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
               <div>
-                <p className="font-medium text-red-800 dark:text-red-300">{error}</p>
+                <p className="font-medium text-destructive">{error}</p>
                 {!isOnline && (
-                  <p className="text-sm text-red-600 dark:text-red-400 mt-1">
-                    You appear to be offline
-                  </p>
+                  <p className="text-sm text-destructive mt-1">You appear to be offline</p>
                 )}
                 <Button
                   variant="link"
                   onClick={handleRefresh}
-                  className="mt-2 text-sm text-red-700 dark:text-red-400 p-0 h-auto"
+                  className="mt-2 text-sm text-destructive p-0 h-auto"
                 >
                   Try again
                 </Button>
@@ -247,8 +249,8 @@ export function TodayWorklist() {
       {/* All Clear State */}
       {allClear && (
         <div className="flex flex-col items-center justify-center py-16 px-4">
-          <div className="w-20 h-20 rounded-full bg-green-100 dark:bg-green-900/20 flex items-center justify-center mb-4">
-            <CheckCircle2 className="h-10 w-10 text-green-600" />
+          <div className="w-20 h-20 rounded-full bg-success/10 flex items-center justify-center mb-4">
+            <CheckCircle2 className="h-10 w-10 text-success" />
           </div>
           <h2 className="text-xl font-semibold mb-2">You're all caught up</h2>
           <p className="text-sm text-muted-foreground text-center max-w-xs">
@@ -382,14 +384,15 @@ function WorklistItemCard({ item, urgency, onClick }: WorklistItemCardProps) {
         config.borderColor,
       )}
     >
-      {/* Icon */}
+      {/* Icon — the type glyph is neutral; urgency colour lives on the card
+          border/dot, not on a rainbow icon chip (INV-3). */}
       <div
         className={cn(
           'w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0',
-          'bg-card shadow-sm',
+          'bg-muted',
         )}
       >
-        <TypeIcon className={cn('h-5 w-5', config.textColor)} />
+        <TypeIcon className="h-5 w-5 text-muted-foreground" />
       </div>
 
       {/* Content */}

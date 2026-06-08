@@ -122,7 +122,7 @@ export function EditTemplateModal({
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg"
+                className="w-full px-3 py-2 border border-border bg-background text-foreground rounded-lg"
                 placeholder="e.g., Earthworks ITP"
                 required
               />
@@ -132,7 +132,7 @@ export function EditTemplateModal({
               <select
                 value={activityType}
                 onChange={(e) => setActivityType(e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg"
+                className="w-full px-3 py-2 border border-border bg-background text-foreground rounded-lg"
                 required
               >
                 <option value="">Select activity type</option>
@@ -149,7 +149,7 @@ export function EditTemplateModal({
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg"
+              className="w-full px-3 py-2 border border-border bg-background text-foreground rounded-lg"
               rows={2}
               placeholder="Optional description of this ITP template"
             />

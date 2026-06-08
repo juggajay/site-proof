@@ -66,7 +66,7 @@ export function TemplateChecklistEditor({
                 type="text"
                 value={item.description}
                 onChange={(e) => onItemChange(index, 'description', e.target.value)}
-                className="w-full px-3 py-2 border rounded-lg text-sm"
+                className="w-full px-3 py-2 border border-border bg-background text-foreground rounded-lg text-sm"
                 placeholder="Checklist item description"
               />
               <div className="flex items-center gap-4">
@@ -77,7 +77,7 @@ export function TemplateChecklistEditor({
                     onItemChange(index, 'responsibleParty', responsibleParty);
                     onItemChange(index, 'category', e.target.value);
                   }}
-                  className="px-2 py-1 border rounded text-sm"
+                  className="px-2 py-1 border border-border bg-background text-foreground rounded text-sm"
                 >
                   <option value="contractor">Contractor</option>
                   <option value="subcontractor">Subcontractor</option>
@@ -90,7 +90,7 @@ export function TemplateChecklistEditor({
                     onItemChange(index, 'pointType', newPointType);
                     onItemChange(index, 'isHoldPoint', newPointType === 'hold_point');
                   }}
-                  className="px-2 py-1 text-sm border rounded"
+                  className="px-2 py-1 text-sm border border-border bg-background text-foreground rounded"
                 >
                   <option value="standard">S - Standard</option>
                   <option value="witness">W - Witness</option>
@@ -105,7 +105,7 @@ export function TemplateChecklistEditor({
                       e.target.value as ChecklistItem['evidenceRequired'],
                     )
                   }
-                  className="px-2 py-1 text-sm border rounded"
+                  className="px-2 py-1 text-sm border border-border bg-background text-foreground rounded"
                 >
                   <option value="none">No Evidence</option>
                   <option value="photo">📷 Photo</option>
@@ -117,7 +117,7 @@ export function TemplateChecklistEditor({
                     type="text"
                     value={item.testType || ''}
                     onChange={(e) => onItemChange(index, 'testType', e.target.value)}
-                    className="px-2 py-1 text-sm border rounded w-28"
+                    className="px-2 py-1 text-sm border border-border bg-background text-foreground rounded w-28"
                     placeholder="Test type"
                   />
                 )}
@@ -127,7 +127,7 @@ export function TemplateChecklistEditor({
               <button
                 type="button"
                 onClick={() => onRemoveItem(index)}
-                className="text-red-500 hover:text-red-700 p-1"
+                className="text-destructive hover:text-destructive/80 p-1"
               >
                 ×
               </button>

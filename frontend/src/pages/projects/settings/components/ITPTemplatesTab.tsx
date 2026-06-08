@@ -116,8 +116,8 @@ export function ITPTemplatesTab({ projectId }: ITPTemplatesTabProps) {
                 <span
                   className={`px-2 py-1 text-xs rounded-full ${
                     template.isActive !== false
-                      ? 'bg-green-100 text-green-700'
-                      : 'bg-amber-100 text-amber-700'
+                      ? 'bg-muted text-foreground'
+                      : 'bg-muted text-muted-foreground'
                   }`}
                 >
                   {template.isActive !== false ? 'Active' : 'Inactive'}
