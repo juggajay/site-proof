@@ -73,30 +73,61 @@ function nullableOptionalTrimmedNcrString(fieldName: string, maxLength: number) 
   );
 }
 
-export const createNcrSchema = z.object({
-  projectId: requiredTrimmedNcrString('Project ID', NCR_ID_MAX_LENGTH, 'Project ID is required'),
-  description: requiredTrimmedNcrString(
-    'Description',
-    NCR_DESCRIPTION_MAX_LENGTH,
-    'Description is required',
-  ),
-  specificationReference: optionalTrimmedNcrString(
-    'Specification reference',
-    NCR_SPECIFICATION_REFERENCE_MAX_LENGTH,
-  ),
-  category: requiredTrimmedNcrString('Category', NCR_CATEGORY_MAX_LENGTH, 'Category is required'),
-  severity: z.enum(['minor', 'major']).optional(),
-  responsibleUserId: optionalTrimmedNcrString('Responsible user ID', NCR_ID_MAX_LENGTH),
-  dueDate: optionalTrimmedNcrString('dueDate', NCR_DATE_INPUT_MAX_LENGTH),
-  lotIds: z
-    .array(requiredTrimmedNcrString('Lot ID', NCR_ID_MAX_LENGTH, 'Lot ID is required'))
-    .optional(),
-});
+export const MUTUALLY_EXCLUSIVE_RESPONSIBLE_PARTY_MESSAGE =
+  'An NCR can be assigned to a user or a subcontractor, not both';
 
-export const updateNcrSchema = z.object({
-  responsibleUserId: nullableOptionalTrimmedNcrString('Responsible user ID', NCR_ID_MAX_LENGTH),
-  comments: optionalTrimmedNcrString('Comments', NCR_COMMENT_MAX_LENGTH),
-});
+export const createNcrSchema = z
+  .object({
+    projectId: requiredTrimmedNcrString('Project ID', NCR_ID_MAX_LENGTH, 'Project ID is required'),
+    description: requiredTrimmedNcrString(
+      'Description',
+      NCR_DESCRIPTION_MAX_LENGTH,
+      'Description is required',
+    ),
+    specificationReference: optionalTrimmedNcrString(
+      'Specification reference',
+      NCR_SPECIFICATION_REFERENCE_MAX_LENGTH,
+    ),
+    category: requiredTrimmedNcrString('Category', NCR_CATEGORY_MAX_LENGTH, 'Category is required'),
+    severity: z.enum(['minor', 'major']).optional(),
+    responsibleUserId: optionalTrimmedNcrString('Responsible user ID', NCR_ID_MAX_LENGTH),
+    responsibleSubcontractorId: optionalTrimmedNcrString(
+      'Responsible subcontractor ID',
+      NCR_ID_MAX_LENGTH,
+    ),
+    dueDate: optionalTrimmedNcrString('dueDate', NCR_DATE_INPUT_MAX_LENGTH),
+    lotIds: z
+      .array(requiredTrimmedNcrString('Lot ID', NCR_ID_MAX_LENGTH, 'Lot ID is required'))
+      .optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.responsibleUserId && data.responsibleSubcontractorId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: MUTUALLY_EXCLUSIVE_RESPONSIBLE_PARTY_MESSAGE,
+        path: ['responsibleSubcontractorId'],
+      });
+    }
+  });
+
+export const updateNcrSchema = z
+  .object({
+    responsibleUserId: nullableOptionalTrimmedNcrString('Responsible user ID', NCR_ID_MAX_LENGTH),
+    responsibleSubcontractorId: nullableOptionalTrimmedNcrString(
+      'Responsible subcontractor ID',
+      NCR_ID_MAX_LENGTH,
+    ),
+    comments: optionalTrimmedNcrString('Comments', NCR_COMMENT_MAX_LENGTH),
+  })
+  .superRefine((data, ctx) => {
+    if (data.responsibleUserId && data.responsibleSubcontractorId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: MUTUALLY_EXCLUSIVE_RESPONSIBLE_PARTY_MESSAGE,
+        path: ['responsibleSubcontractorId'],
+      });
+    }
+  });
 
 function normalizeUniqueTargetField(value: string) {
   return value.replace(/_/g, '').toLowerCase();

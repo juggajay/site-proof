@@ -123,7 +123,10 @@ function NCRMobileListInner({
                     {
                       label: 'Responsible',
                       value:
-                        ncr.responsibleUser?.fullName || ncr.responsibleUser?.email || 'Unassigned',
+                        ncr.responsibleUser?.fullName ||
+                        ncr.responsibleUser?.email ||
+                        ncr.responsibleSubcontractor?.companyName ||
+                        'Unassigned',
                       priority: 'primary',
                     },
                     {

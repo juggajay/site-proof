@@ -30,7 +30,16 @@ interface UseNCRActionsReturn {
     specificationReference?: string;
     lotIds?: string[];
     dueDate?: string;
+    responsibleUserId?: string;
+    responsibleSubcontractorId?: string;
   }) => Promise<void>;
+  handleAssignNcr: (
+    ncrId: string,
+    assignment: {
+      responsibleUserId?: string | null;
+      responsibleSubcontractorId?: string | null;
+    },
+  ) => Promise<void>;
   handleRespond: (
     ncrId: string,
     responseData: {
@@ -110,6 +119,8 @@ export function useNCRActions({
       specificationReference?: string;
       lotIds?: string[];
       dueDate?: string;
+      responsibleUserId?: string;
+      responsibleSubcontractorId?: string;
     }) => {
       if (!projectId || actionLoadingRef.current) return;
       actionLoadingRef.current = true;
@@ -136,6 +147,35 @@ export function useNCRActions({
       }
     },
     [projectId, fetchNcrs, setError, closeModal],
+  );
+
+  const handleAssignNcr = useCallback(
+    async (
+      ncrId: string,
+      assignment: {
+        responsibleUserId?: string | null;
+        responsibleSubcontractorId?: string | null;
+      },
+    ) => {
+      if (actionLoadingRef.current) return;
+      actionLoadingRef.current = true;
+      setActionLoading(true);
+      try {
+        await apiFetch(`/api/ncrs/${encodeURIComponent(ncrId)}`, {
+          method: 'PATCH',
+          body: JSON.stringify(assignment),
+        });
+        closeModal();
+        showSuccess('NCR assignment updated');
+        await fetchNcrs();
+      } catch (err) {
+        setError(extractErrorMessage(err, 'Failed to update NCR assignment'));
+      } finally {
+        actionLoadingRef.current = false;
+        setActionLoading(false);
+      }
+    },
+    [fetchNcrs, setError, closeModal],
   );
 
   const handleRespond = useCallback(
@@ -294,7 +334,9 @@ export function useNCRActions({
         formatStatusLabel(ncr.status),
         ncr.responsibleUser
           ? ncr.responsibleUser.fullName || ncr.responsibleUser.email
-          : 'Unassigned',
+          : ncr.responsibleSubcontractor
+            ? ncr.responsibleSubcontractor.companyName
+            : 'Unassigned',
         ncr.dueDate ? new Date(ncr.dueDate).toLocaleDateString('en-AU') : '-',
         new Date(ncr.createdAt).toLocaleDateString('en-AU'),
       ]);
@@ -308,6 +350,7 @@ export function useNCRActions({
     successMessage,
     copiedNcrId,
     handleCreateNcr,
+    handleAssignNcr,
     handleRespond,
     handleRequestQmApproval,
     handleCloseNcr,

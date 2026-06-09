@@ -14,7 +14,10 @@ export interface NCR {
   qmApprovedAt: string | null;
   qmApprovedBy?: { fullName: string; email: string } | null;
   raisedBy: { fullName: string; email: string };
-  responsibleUser?: { fullName: string; email: string } | null;
+  responsibleUser?: { id?: string; fullName: string; email: string } | null;
+  responsibleSubcontractor?: { id: string; companyName: string } | null;
+  responsibleUserId?: string | null;
+  responsibleSubcontractorId?: string | null;
   dueDate?: string;
   createdAt: string;
   project: { id?: string; name: string; projectNumber: string };

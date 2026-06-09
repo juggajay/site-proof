@@ -2546,6 +2546,415 @@ describe('NCR Access Hardening', () => {
     expect(res.body.error.message).toContain('Responsible user');
   });
 
+  describe('Feature N1 - subcontractor responsible party', () => {
+    async function createActiveSubcontractor(prefix: string) {
+      return prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `${prefix} ${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          primaryContactName: 'N1 Sub Contact',
+          primaryContactEmail: `${prefix}-${Date.now()}@example.com`,
+          status: 'approved',
+          portalAccess: { ncrs: true },
+        },
+      });
+    }
+
+    it('creates an NCR assigned to a subcontractor and the subcontractor can read it', async () => {
+      const subcontractor = await createActiveSubcontractor('N1 Create Sub');
+      const subUser = await registerTestUser('n1-create-sub-user', 'N1 Create Sub User');
+      await prisma.user.update({
+        where: { id: subUser.userId },
+        data: { companyId, roleInCompany: 'subcontractor' },
+      });
+      await prisma.subcontractorUser.create({
+        data: {
+          userId: subUser.userId,
+          subcontractorCompanyId: subcontractor.id,
+          role: 'user',
+        },
+      });
+
+      let createdNcrId: string | undefined;
+      try {
+        const createRes = await request(app)
+          .post('/api/ncrs')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            projectId,
+            description: 'NCR assigned to a subcontractor on create',
+            category: 'Workmanship',
+            severity: 'minor',
+            responsibleSubcontractorId: subcontractor.id,
+          });
+
+        expect(createRes.status).toBe(201);
+        createdNcrId = createRes.body.ncr.id;
+        expect(createRes.body.ncr.responsibleSubcontractorId).toBe(subcontractor.id);
+        expect(createRes.body.ncr.responsibleSubcontractor?.companyName).toBe(
+          subcontractor.companyName,
+        );
+
+        // Acceptance #1: the assigned subcontractor sees it in their portal list.
+        const listRes = await request(app)
+          .get(`/api/ncrs?projectId=${projectId}`)
+          .set('Authorization', `Bearer ${subUser.token}`);
+
+        expect(listRes.status).toBe(200);
+        const listedIds = listRes.body.ncrs.map((entry: { id: string }) => entry.id);
+        expect(listedIds).toContain(createdNcrId);
+
+        // Single-NCR read access is also granted.
+        const detailRes = await request(app)
+          .get(`/api/ncrs/${createdNcrId}`)
+          .set('Authorization', `Bearer ${subUser.token}`);
+        expect(detailRes.status).toBe(200);
+
+        // The company's portal users are notified of the assignment.
+        const notification = await prisma.notification.findFirst({
+          where: { userId: subUser.userId, projectId, type: 'ncr_assigned' },
+        });
+        expect(notification).not.toBeNull();
+      } finally {
+        await prisma.notification.deleteMany({ where: { userId: subUser.userId } });
+        if (createdNcrId) {
+          await prisma.nCR.delete({ where: { id: createdNcrId } }).catch(() => {});
+        }
+        await prisma.subcontractorUser.deleteMany({
+          where: { subcontractorCompanyId: subcontractor.id },
+        });
+        await prisma.subcontractorCompany
+          .delete({ where: { id: subcontractor.id } })
+          .catch(() => {});
+        await cleanupTestUser(subUser.userId);
+      }
+    });
+
+    it('does not notify a subcontractor whose NCRs portal module is disabled when assigned an NCR', async () => {
+      // Mirror the happy-path fixture, but with the NCRs portal module OFF.
+      // portalAccess.ncrs defaults to false via DEFAULT_SUBCONTRACTOR_PORTAL_ACCESS,
+      // so omitting it entirely leaves the module disabled.
+      const subcontractor = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `N1 No-Portal Sub ${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          primaryContactName: 'N1 Sub Contact',
+          primaryContactEmail: `n1-no-portal-sub-${Date.now()}@example.com`,
+          status: 'approved',
+          portalAccess: { ncrs: false },
+        },
+      });
+      const subUser = await registerTestUser('n1-no-portal-sub-user', 'N1 No-Portal Sub User');
+      await prisma.user.update({
+        where: { id: subUser.userId },
+        data: { companyId, roleInCompany: 'subcontractor' },
+      });
+      await prisma.subcontractorUser.create({
+        data: {
+          userId: subUser.userId,
+          subcontractorCompanyId: subcontractor.id,
+          role: 'user',
+        },
+      });
+
+      let createdNcrId: string | undefined;
+      try {
+        const createRes = await request(app)
+          .post('/api/ncrs')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            projectId,
+            description: 'NCR assigned to a subcontractor with the NCRs portal module off',
+            category: 'Workmanship',
+            severity: 'minor',
+            responsibleSubcontractorId: subcontractor.id,
+          });
+
+        expect(createRes.status).toBe(201);
+        createdNcrId = createRes.body.ncr.id;
+        expect(createRes.body.ncr.responsibleSubcontractorId).toBe(subcontractor.id);
+
+        // notifySubcontractorAssignment short-circuits on the disabled NCRs
+        // portal module, so the company's portal users get NO assignment
+        // notification (contrast the happy-path test which seeds ncrs: true).
+        const notificationCount = await prisma.notification.count({
+          where: {
+            userId: subUser.userId,
+            projectId,
+            type: { in: ['ncr_assigned', 'ncr_redirect'] },
+          },
+        });
+        expect(notificationCount).toBe(0);
+      } finally {
+        await prisma.notification.deleteMany({ where: { userId: subUser.userId } });
+        if (createdNcrId) {
+          await prisma.nCR.delete({ where: { id: createdNcrId } }).catch(() => {});
+        }
+        await prisma.subcontractorUser.deleteMany({
+          where: { subcontractorCompanyId: subcontractor.id },
+        });
+        await prisma.subcontractorCompany
+          .delete({ where: { id: subcontractor.id } })
+          .catch(() => {});
+        await cleanupTestUser(subUser.userId);
+      }
+    });
+
+    it('rejects creating an NCR assigned to both a user and a subcontractor', async () => {
+      const subcontractor = await createActiveSubcontractor('N1 Exclusive Sub');
+      try {
+        const res = await request(app)
+          .post('/api/ncrs')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            projectId,
+            description: 'NCR with both responsible parties',
+            category: 'Workmanship',
+            severity: 'minor',
+            responsibleUserId: userId,
+            responsibleSubcontractorId: subcontractor.id,
+          });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.message).toBe('Validation failed');
+        expect(JSON.stringify(res.body.error.details)).toContain('user or a subcontractor');
+        expect(
+          await prisma.nCR.count({
+            where: { projectId, responsibleSubcontractorId: subcontractor.id },
+          }),
+        ).toBe(0);
+      } finally {
+        await prisma.subcontractorCompany
+          .delete({ where: { id: subcontractor.id } })
+          .catch(() => {});
+      }
+    });
+
+    it('rejects creating an NCR assigned to a subcontractor from another project', async () => {
+      const foreignSubcontractor = await prisma.subcontractorCompany.create({
+        data: {
+          projectId: otherProjectId,
+          companyName: `N1 Foreign Sub ${Date.now()}`,
+          primaryContactName: 'Foreign Contact',
+          primaryContactEmail: `n1-foreign-sub-${Date.now()}@example.com`,
+          status: 'approved',
+          portalAccess: { ncrs: true },
+        },
+      });
+      try {
+        const res = await request(app)
+          .post('/api/ncrs')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            projectId,
+            description: 'NCR with cross-project subcontractor',
+            category: 'Workmanship',
+            severity: 'minor',
+            responsibleSubcontractorId: foreignSubcontractor.id,
+          });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.message).toContain('Responsible subcontractor');
+        expect(
+          await prisma.nCR.count({
+            where: { projectId, responsibleSubcontractorId: foreignSubcontractor.id },
+          }),
+        ).toBe(0);
+      } finally {
+        await prisma.subcontractorCompany
+          .delete({ where: { id: foreignSubcontractor.id } })
+          .catch(() => {});
+      }
+    });
+
+    it('rejects creating an NCR assigned to a removed subcontractor', async () => {
+      const removedSubcontractor = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `N1 Removed Sub ${Date.now()}`,
+          primaryContactName: 'Removed Contact',
+          primaryContactEmail: `n1-removed-sub-${Date.now()}@example.com`,
+          status: 'removed',
+          portalAccess: { ncrs: true },
+        },
+      });
+      try {
+        const res = await request(app)
+          .post('/api/ncrs')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            projectId,
+            description: 'NCR with removed subcontractor',
+            category: 'Workmanship',
+            severity: 'minor',
+            responsibleSubcontractorId: removedSubcontractor.id,
+          });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.message).toContain('Responsible subcontractor');
+      } finally {
+        await prisma.subcontractorCompany
+          .delete({ where: { id: removedSubcontractor.id } })
+          .catch(() => {});
+      }
+    });
+
+    it('reassigns an NCR from a user to a subcontractor and back, then clears it', async () => {
+      const subcontractor = await createActiveSubcontractor('N1 Reassign Sub');
+      const ncr = await prisma.nCR.create({
+        data: {
+          projectId,
+          ncrNumber: `NCR-N1-REASSIGN-${Date.now()}`,
+          description: 'NCR for reassignment lifecycle',
+          category: 'Workmanship',
+          severity: 'minor',
+          status: 'open',
+          raisedById: userId,
+          responsibleUserId: userId,
+        },
+      });
+
+      try {
+        // user -> subcontractor: clears the user, sets the subcontractor.
+        const toSubRes = await request(app)
+          .patch(`/api/ncrs/${ncr.id}`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ responsibleSubcontractorId: subcontractor.id });
+        expect(toSubRes.status).toBe(200);
+
+        const afterToSub = await prisma.nCR.findUniqueOrThrow({
+          where: { id: ncr.id },
+          select: { responsibleUserId: true, responsibleSubcontractorId: true },
+        });
+        expect(afterToSub.responsibleSubcontractorId).toBe(subcontractor.id);
+        expect(afterToSub.responsibleUserId).toBeNull();
+
+        // subcontractor -> user: clears the subcontractor, sets the user.
+        const toUserRes = await request(app)
+          .patch(`/api/ncrs/${ncr.id}`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ responsibleUserId: userId });
+        expect(toUserRes.status).toBe(200);
+
+        const afterToUser = await prisma.nCR.findUniqueOrThrow({
+          where: { id: ncr.id },
+          select: { responsibleUserId: true, responsibleSubcontractorId: true },
+        });
+        expect(afterToUser.responsibleUserId).toBe(userId);
+        expect(afterToUser.responsibleSubcontractorId).toBeNull();
+
+        // clear to unassigned via explicit null.
+        const clearRes = await request(app)
+          .patch(`/api/ncrs/${ncr.id}`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ responsibleUserId: null });
+        expect(clearRes.status).toBe(200);
+
+        const afterClear = await prisma.nCR.findUniqueOrThrow({
+          where: { id: ncr.id },
+          select: { responsibleUserId: true, responsibleSubcontractorId: true },
+        });
+        expect(afterClear.responsibleUserId).toBeNull();
+        expect(afterClear.responsibleSubcontractorId).toBeNull();
+      } finally {
+        await prisma.notification.deleteMany({ where: { projectId } });
+        await prisma.nCR.delete({ where: { id: ncr.id } }).catch(() => {});
+        await prisma.subcontractorCompany
+          .delete({ where: { id: subcontractor.id } })
+          .catch(() => {});
+      }
+    });
+
+    it('rejects reassigning an NCR to both a user and a subcontractor at once', async () => {
+      const subcontractor = await createActiveSubcontractor('N1 Patch Exclusive Sub');
+      const ncr = await prisma.nCR.create({
+        data: {
+          projectId,
+          ncrNumber: `NCR-N1-PATCH-EXC-${Date.now()}`,
+          description: 'NCR for patch exclusivity',
+          category: 'Workmanship',
+          severity: 'minor',
+          status: 'open',
+          raisedById: userId,
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .patch(`/api/ncrs/${ncr.id}`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ responsibleUserId: userId, responsibleSubcontractorId: subcontractor.id });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.message).toBe('Validation failed');
+        expect(JSON.stringify(res.body.error.details)).toContain('user or a subcontractor');
+
+        const unchanged = await prisma.nCR.findUniqueOrThrow({
+          where: { id: ncr.id },
+          select: { responsibleUserId: true, responsibleSubcontractorId: true },
+        });
+        expect(unchanged.responsibleUserId).toBeNull();
+        expect(unchanged.responsibleSubcontractorId).toBeNull();
+      } finally {
+        await prisma.nCR.delete({ where: { id: ncr.id } }).catch(() => {});
+        await prisma.subcontractorCompany
+          .delete({ where: { id: subcontractor.id } })
+          .catch(() => {});
+      }
+    });
+
+    it('counts subcontractor-assigned NCRs in analytics repeat-offender data', async () => {
+      const subcontractor = await createActiveSubcontractor('N1 Analytics Sub');
+      // Repeat-offender analytics surfaces a subcontractor only at 2+ NCRs.
+      const [ncrOne, ncrTwo] = await Promise.all([
+        prisma.nCR.create({
+          data: {
+            projectId,
+            ncrNumber: `NCR-N1-ANALYTICS-A-${Date.now()}`,
+            description: 'First NCR counted in subcontractor analytics',
+            category: 'Workmanship',
+            severity: 'minor',
+            status: 'open',
+            raisedById: userId,
+            responsibleSubcontractorId: subcontractor.id,
+          },
+        }),
+        prisma.nCR.create({
+          data: {
+            projectId,
+            ncrNumber: `NCR-N1-ANALYTICS-B-${Date.now()}`,
+            description: 'Second NCR counted in subcontractor analytics',
+            category: 'Materials',
+            severity: 'minor',
+            status: 'open',
+            raisedById: userId,
+            responsibleSubcontractorId: subcontractor.id,
+          },
+        }),
+      ]);
+
+      try {
+        const res = await request(app)
+          .get(`/api/ncrs/analytics/${projectId}`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(200);
+        const repeatOffenders = res.body.repeatOffenders.data as Array<{
+          subcontractorId: string;
+          ncrCount: number;
+        }>;
+        const offender = repeatOffenders.find((o) => o.subcontractorId === subcontractor.id);
+        expect(offender).toBeDefined();
+        expect(offender?.ncrCount).toBe(2);
+      } finally {
+        await prisma.nCR.deleteMany({ where: { id: { in: [ncrOne.id, ncrTwo.id] } } });
+        await prisma.subcontractorCompany
+          .delete({ where: { id: subcontractor.id } })
+          .catch(() => {});
+      }
+    });
+  });
+
   it('should validate analytics date filters before querying NCRs', async () => {
     const invalidDateRes = await request(app)
       .get(`/api/ncrs/analytics/${projectId}`)

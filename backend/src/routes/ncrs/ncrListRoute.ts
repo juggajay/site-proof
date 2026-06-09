@@ -238,7 +238,8 @@ ncrListRouter.get(
         include: {
           project: { select: { name: true, projectNumber: true } },
           raisedBy: { select: { fullName: true, email: true } },
-          responsibleUser: { select: { fullName: true, email: true } },
+          responsibleUser: { select: { id: true, fullName: true, email: true } },
+          responsibleSubcontractor: { select: { id: true, companyName: true } },
           ncrLots: {
             include: {
               lot: { select: { lotNumber: true, description: true } },
