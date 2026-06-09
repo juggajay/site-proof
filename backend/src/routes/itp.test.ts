@@ -1211,12 +1211,17 @@ describe('ITP Instances', () => {
         .get(`/api/itp/instances/lot/${lotId}`)
         .set('Authorization', `Bearer ${subcontractor.token}`);
       expect(allowedRes.status).toBe(200);
-      expect(allowedRes.body.instance.template.checklistItems).toHaveLength(1);
-      expect(allowedRes.body.instance.template.checklistItems[0].responsibleParty).toBe(
-        'subcontractor',
+      // The subcontractor view now includes the contractor field-work items the
+      // subcontractor performs, not only items tagged 'subcontractor'. Only the
+      // superintendent's hold/witness points remain withheld.
+      const allowedParties = allowedRes.body.instance.template.checklistItems.map(
+        (item: { responsibleParty: string }) => item.responsibleParty,
       );
+      expect(allowedParties).toHaveLength(2);
+      expect(allowedParties).toEqual(expect.arrayContaining(['contractor', 'subcontractor']));
+      expect(allowedParties).not.toContain('superintendent');
       expect(allowedRes.body.instance.templateSnapshot).toBeUndefined();
-      expect(JSON.stringify(allowedRes.body.instance)).not.toContain('Contractor Test Item');
+      expect(JSON.stringify(allowedRes.body.instance)).toContain('Contractor Test Item');
     } finally {
       await prisma.lotSubcontractorAssignment.deleteMany({
         where: { subcontractorCompanyId: subcontractorCompany.id },
