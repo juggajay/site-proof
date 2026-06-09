@@ -49,8 +49,8 @@ export function EmailPreferencesSection() {
           role={message.type === 'success' ? 'status' : 'alert'}
           className={`flex items-center gap-2 text-sm px-4 py-2 rounded-md ${
             message.type === 'success'
-              ? 'bg-green-50 text-green-600 dark:bg-green-950 dark:text-green-400'
-              : 'bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-400'
+              ? 'bg-success/10 text-success'
+              : 'bg-destructive/10 text-destructive'
           }`}
         >
           {message.type === 'success' ? (
@@ -68,10 +68,7 @@ export function EmailPreferencesSection() {
           Loading preferences...
         </div>
       ) : loadFailed ? (
-        <div
-          role="alert"
-          className="rounded-lg bg-red-50 p-4 text-sm text-red-700 dark:bg-red-950 dark:text-red-300"
-        >
+        <div role="alert" className="rounded-lg bg-destructive/10 p-4 text-sm text-destructive">
           <p>
             Email notification preferences could not be loaded. Existing preferences were not
             changed.
@@ -109,7 +106,7 @@ export function EmailPreferencesSection() {
               }`}
             >
               <span
-                className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform ${
+                className={`absolute top-1 w-4 h-4 rounded-full bg-background transition-transform ${
                   preferences.enabled ? 'translate-x-7' : 'translate-x-1'
                 }`}
               />
@@ -165,7 +162,7 @@ export function EmailPreferencesSection() {
                       }`}
                     >
                       <span
-                        className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+                        className={`absolute top-0.5 w-4 h-4 rounded-full bg-background transition-transform ${
                           preferences[pref.key] ? 'translate-x-5' : 'translate-x-0.5'
                         }`}
                       />

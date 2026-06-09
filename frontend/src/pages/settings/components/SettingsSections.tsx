@@ -267,17 +267,14 @@ export function PrivacyDataSection({
           </Button>
 
           {exportSuccess && (
-            <div
-              role="status"
-              className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400"
-            >
+            <div role="status" className="flex items-center gap-2 text-sm text-success">
               <Check className="h-4 w-4" />
               Data exported successfully! Check your downloads folder.
             </div>
           )}
 
           {exportError && (
-            <div role="alert" className="text-sm text-red-600 dark:text-red-400">
+            <div role="alert" className="text-sm text-destructive">
               {exportError}
             </div>
           )}
@@ -291,7 +288,7 @@ export function PrivacyDataSection({
       </div>
 
       <div className="border-t pt-4 mt-6">
-        <h3 className="text-lg font-medium mb-2 flex items-center gap-2 text-red-600 dark:text-red-400">
+        <h3 className="text-lg font-medium mb-2 flex items-center gap-2 text-destructive">
           <Trash2 className="h-5 w-5" />
           Delete Account
         </h3>
@@ -334,14 +331,14 @@ export function CompanyMembershipSection({
             <p className="text-sm text-muted-foreground">Current Company</p>
             <p className="text-lg font-semibold">{companyName || 'Unknown Company'}</p>
           </div>
-          <div className="p-2 rounded-full bg-primary/10">
-            <Building2 className="h-6 w-6 text-primary" />
+          <div className="p-2 rounded-full bg-muted">
+            <Building2 className="h-6 w-6 text-muted-foreground" />
           </div>
         </div>
       </div>
 
       <div className="border-t pt-4">
-        <h3 className="text-lg font-medium mb-2 flex items-center gap-2 text-amber-600">
+        <h3 className="text-lg font-medium mb-2 flex items-center gap-2 text-warning">
           <LogOut className="h-5 w-5" />
           Leave Company
         </h3>
@@ -353,7 +350,7 @@ export function CompanyMembershipSection({
         <Button
           variant="outline"
           onClick={onLeaveCompanyClick}
-          className="border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-900/20"
+          className="border-warning/40 text-warning hover:bg-warning/10"
         >
           <LogOut className="h-4 w-4" />
           Leave Company

@@ -369,7 +369,10 @@ export function ProfilePage() {
           </ModalDescription>
           <ModalBody>
             {passwordError && (
-              <div role="alert" className="mb-4 p-3 rounded-lg bg-red-50 text-red-700 text-sm">
+              <div
+                role="alert"
+                className="mb-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm"
+              >
                 {passwordError}
               </div>
             )}

@@ -62,8 +62,8 @@ export function AccountDangerModals({
         <Modal alert onClose={onDeleteModalClose}>
           <AlertModalHeader>
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-red-100 dark:bg-red-900/30">
-                <AlertTriangle className="h-6 w-6 text-red-600" />
+              <div className="p-2 rounded-full bg-destructive/10">
+                <AlertTriangle className="h-6 w-6 text-destructive" />
               </div>
               Delete Account
             </div>
@@ -74,12 +74,12 @@ export function AccountDangerModals({
           </AlertModalDescription>
           <ModalBody>
             <div className="space-y-4">
-              <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                <p className="text-sm text-red-800 dark:text-red-200">
+              <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+                <p className="text-sm text-destructive">
                   <strong>Warning:</strong> This will permanently delete your account and all
                   associated data including:
                 </p>
-                <ul className="text-sm text-red-700 dark:text-red-300 mt-2 list-disc list-inside space-y-1">
+                <ul className="text-sm text-destructive/90 mt-2 list-disc list-inside space-y-1">
                   <li>Your profile and settings</li>
                   <li>All project memberships</li>
                   <li>ITP completions you've made</li>
@@ -109,7 +109,7 @@ export function AccountDangerModals({
                   <p
                     id="delete-account-email-error"
                     role="alert"
-                    className="text-sm text-red-600 dark:text-red-400 mt-1"
+                    className="text-sm text-destructive mt-1"
                   >
                     Email must match your account email exactly.
                   </p>
@@ -139,7 +139,7 @@ export function AccountDangerModals({
               {deleteError && (
                 <div
                   role="alert"
-                  className="text-sm text-red-600 dark:text-red-400 p-2 bg-red-50 dark:bg-red-900/20 rounded"
+                  className="text-sm text-destructive p-2 bg-destructive/10 rounded"
                 >
                   {deleteError}
                 </div>
@@ -173,8 +173,8 @@ export function AccountDangerModals({
         <Modal alert onClose={onLeaveCompanyModalClose}>
           <AlertModalHeader>
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-amber-100 dark:bg-amber-900/30">
-                <AlertTriangle className="h-6 w-6 text-amber-600" />
+              <div className="p-2 rounded-full bg-warning/10">
+                <AlertTriangle className="h-6 w-6 text-warning" />
               </div>
               Leave Company
             </div>
@@ -184,11 +184,11 @@ export function AccountDangerModals({
           </AlertModalDescription>
           <ModalBody>
             <div className="space-y-4">
-              <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
-                <p className="text-sm text-amber-800 dark:text-amber-200">
+              <div className="p-4 bg-warning/10 border border-warning/20 rounded-lg">
+                <p className="text-sm text-warning">
                   <strong>Warning:</strong> Leaving <strong>{companyName}</strong> will:
                 </p>
-                <ul className="text-sm text-amber-700 dark:text-amber-300 mt-2 list-disc list-inside space-y-1">
+                <ul className="text-sm text-warning/90 mt-2 list-disc list-inside space-y-1">
                   <li>Remove your access to all company projects</li>
                   <li>Remove you from all project teams</li>
                   <li>Revoke access to company documents</li>
@@ -203,7 +203,7 @@ export function AccountDangerModals({
               {leaveCompanyError && (
                 <div
                   role="alert"
-                  className="text-sm text-red-600 dark:text-red-400 p-2 bg-red-50 dark:bg-red-900/20 rounded"
+                  className="text-sm text-destructive p-2 bg-destructive/10 rounded"
                 >
                   {leaveCompanyError}
                 </div>
@@ -221,7 +221,7 @@ export function AccountDangerModals({
             <Button
               onClick={onLeaveCompany}
               disabled={isLeavingCompany}
-              className="bg-amber-600 text-white hover:bg-amber-700"
+              className="bg-warning text-warning-foreground hover:bg-warning/90"
             >
               {isLeavingCompany ? (
                 <>

@@ -40,8 +40,8 @@ export function OwnershipTransferModal({
     <Modal onClose={onClose} className="max-w-md">
       <ModalHeader>
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-full bg-amber-100 dark:bg-amber-900/30">
-            <Crown className="h-6 w-6 text-amber-600" />
+          <div className="p-2 rounded-full bg-muted">
+            <Crown className="h-6 w-6 text-muted-foreground" />
           </div>
           Transfer Ownership
         </div>
@@ -51,7 +51,7 @@ export function OwnershipTransferModal({
         {transferError && (
           <div
             role="alert"
-            className="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300"
+            className="mb-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive"
           >
             <p>{transferError}</p>
             {!loadingMembers && members.length === 0 && (
@@ -103,8 +103,8 @@ export function OwnershipTransferModal({
             </div>
 
             {selectedNewOwner && (
-              <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
-                <p className="text-sm text-amber-800 dark:text-amber-200">
+              <div className="p-4 bg-warning/10 border border-warning/30 rounded-lg">
+                <p className="text-sm text-foreground">
                   You are about to transfer ownership to{' '}
                   <strong>
                     {members.find((m) => m.id === selectedNewOwner)?.fullName ||
@@ -122,12 +122,7 @@ export function OwnershipTransferModal({
           Cancel
         </Button>
         {members.length > 0 && (
-          <Button
-            type="button"
-            onClick={onTransfer}
-            disabled={transferring || !selectedNewOwner}
-            className="bg-amber-600 text-white hover:bg-amber-700"
-          >
+          <Button type="button" onClick={onTransfer} disabled={transferring || !selectedNewOwner}>
             {transferring ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />

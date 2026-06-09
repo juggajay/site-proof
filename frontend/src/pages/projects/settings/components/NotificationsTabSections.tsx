@@ -15,7 +15,7 @@ export function SettingsFeedbackMessages({ error, status }: SettingsFeedbackMess
         </div>
       )}
       {status && (
-        <div role="status" className="rounded-lg bg-green-100 p-3 text-sm text-green-700">
+        <div role="status" className="rounded-lg bg-success/10 p-3 text-sm text-success">
           {status}
         </div>
       )}
@@ -62,7 +62,7 @@ export function HoldPointRecipientsSection({
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="text-red-500 hover:text-red-700 text-xs h-auto p-1"
+                className="text-destructive hover:text-destructive/80 text-xs h-auto p-1"
                 onClick={() => onRemoveRecipient(index)}
                 disabled={savingSetting === `removeRecipient-${index}`}
               >

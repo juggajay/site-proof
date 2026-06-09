@@ -187,7 +187,7 @@ export function GeneralSettingsTab({
         </div>
       )}
       {saveSuccess && (
-        <div role="status" className="rounded-lg bg-green-100 p-3 text-sm text-green-700 mb-4">
+        <div role="status" className="rounded-lg bg-success/10 p-3 text-sm text-success mb-4">
           Settings saved successfully!
         </div>
       )}

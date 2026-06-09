@@ -45,10 +45,10 @@ export function CompanyUsageSection({ company }: CompanyUsageSectionProps) {
                 <div
                   className={`h-full rounded-full ${
                     company.projectCount >= company.projectLimit
-                      ? 'bg-red-500'
+                      ? 'bg-destructive'
                       : company.projectCount >= company.projectLimit * 0.8
-                        ? 'bg-amber-500'
-                        : 'bg-green-500'
+                        ? 'bg-warning'
+                        : 'bg-success'
                   }`}
                   style={{
                     width: `${Math.min((company.projectCount / company.projectLimit) * 100, 100)}%`,
@@ -61,7 +61,7 @@ export function CompanyUsageSection({ company }: CompanyUsageSectionProps) {
         {hasFiniteLimit(company?.projectLimit) &&
           company?.projectCount !== undefined &&
           company.projectCount >= company.projectLimit && (
-            <p className="text-sm text-red-600 mt-2">
+            <p className="text-sm text-destructive mt-2">
               You've reached your project limit. Upgrade your plan to create more projects.
             </p>
           )}
@@ -81,10 +81,10 @@ export function CompanyUsageSection({ company }: CompanyUsageSectionProps) {
                 <div
                   className={`h-full rounded-full ${
                     company.userCount >= company.userLimit
-                      ? 'bg-red-500'
+                      ? 'bg-destructive'
                       : company.userCount >= company.userLimit * 0.8
-                        ? 'bg-amber-500'
-                        : 'bg-green-500'
+                        ? 'bg-warning'
+                        : 'bg-success'
                   }`}
                   style={{
                     width: `${Math.min((company.userCount / company.userLimit) * 100, 100)}%`,
@@ -97,7 +97,7 @@ export function CompanyUsageSection({ company }: CompanyUsageSectionProps) {
         {hasFiniteLimit(company?.userLimit) &&
           company?.userCount !== undefined &&
           company.userCount >= company.userLimit && (
-            <p className="text-sm text-red-600 mt-2">
+            <p className="text-sm text-destructive mt-2">
               You've reached your user limit. Upgrade your plan to add more team members.
             </p>
           )}

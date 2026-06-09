@@ -148,7 +148,7 @@ export function CompanyTeamMembersSection({ currentUserId }: CompanyTeamMembersS
       </div>
 
       {membersError && (
-        <div role="alert" className="rounded-md bg-red-50 p-3 text-sm text-red-800">
+        <div role="alert" className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
           {membersError}
         </div>
       )}
@@ -202,8 +202,8 @@ export function CompanyTeamMembersSection({ currentUserId }: CompanyTeamMembersS
                     <span
                       className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${
                         status === 'active'
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-amber-100 text-amber-700'
+                          ? 'bg-success/10 text-success'
+                          : 'bg-warning/10 text-warning'
                       }`}
                     >
                       {status === 'active' ? 'Active' : 'Pending'}
@@ -251,7 +251,7 @@ export function CompanyTeamMembersSection({ currentUserId }: CompanyTeamMembersS
                 <Label htmlFor="company-member-role">Company Role</Label>
                 <select
                   id="company-member-role"
-                  className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
                   value={inviteForm.roleInCompany}
                   onChange={(event) =>
                     setInviteForm((current) => ({
@@ -273,12 +273,15 @@ export function CompanyTeamMembersSection({ currentUserId }: CompanyTeamMembersS
                 password.
               </p>
               {inviteError && (
-                <div role="alert" className="rounded-md bg-red-50 p-3 text-sm text-red-800">
+                <div
+                  role="alert"
+                  className="rounded-md bg-destructive/10 p-3 text-sm text-destructive"
+                >
                   {inviteError}
                 </div>
               )}
               {inviteSuccess && (
-                <div role="status" className="rounded-md bg-green-50 p-3 text-sm text-green-800">
+                <div role="status" className="rounded-md bg-success/10 p-3 text-sm text-success">
                   {inviteSuccess}
                 </div>
               )}

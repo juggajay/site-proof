@@ -182,10 +182,10 @@ export function DangerZone({ projectId, project, onProjectUpdate }: DangerZonePr
   return (
     <>
       {/* Complete Project */}
-      <div className="rounded-lg border border-green-500/50 p-4 mt-8">
+      <div className="rounded-lg border border-success/50 p-4 mt-8">
         <div className="flex items-center gap-2 mb-2">
-          <CheckCircle2 className="h-5 w-5 text-green-600" />
-          <h2 className="text-lg font-semibold text-green-600">
+          <CheckCircle2 className="h-5 w-5 text-success" />
+          <h2 className="text-lg font-semibold text-success">
             {project?.status === 'completed' ? 'Reactivate Project' : 'Mark as Completed'}
           </h2>
         </div>
@@ -195,7 +195,7 @@ export function DangerZone({ projectId, project, onProjectUpdate }: DangerZonePr
             : 'Mark this project as completed when all work is finished. Completed projects remain accessible.'}
         </p>
         {project?.status === 'completed' && (
-          <div className="mb-4 px-3 py-2 rounded-lg bg-green-100 text-green-800 text-sm">
+          <div className="mb-4 px-3 py-2 rounded-lg bg-success/10 text-success text-sm">
             This project has been marked as completed
           </div>
         )}
@@ -205,7 +205,7 @@ export function DangerZone({ projectId, project, onProjectUpdate }: DangerZonePr
           className={
             project?.status === 'completed'
               ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-              : 'bg-green-600 text-white hover:bg-green-700'
+              : 'bg-success text-success-foreground hover:bg-success/90'
           }
         >
           {project?.status === 'completed' ? 'Reactivate Project' : 'Mark as Completed'}
@@ -213,10 +213,10 @@ export function DangerZone({ projectId, project, onProjectUpdate }: DangerZonePr
       </div>
 
       {/* Archive Project */}
-      <div className="rounded-lg border border-amber-500/50 p-4 mt-4">
+      <div className="rounded-lg border border-warning/50 p-4 mt-4">
         <div className="flex items-center gap-2 mb-2">
-          <Archive className="h-5 w-5 text-amber-600" />
-          <h2 className="text-lg font-semibold text-amber-600">
+          <Archive className="h-5 w-5 text-warning" />
+          <h2 className="text-lg font-semibold text-warning">
             {project?.status === 'archived' ? 'Restore Project' : 'Archive Project'}
           </h2>
         </div>
@@ -226,7 +226,7 @@ export function DangerZone({ projectId, project, onProjectUpdate }: DangerZonePr
             : 'Archive this project to make it read-only. You can restore it later.'}
         </p>
         {project?.status === 'archived' && (
-          <div className="mb-4 px-3 py-2 rounded-lg bg-amber-100 text-amber-800 text-sm">
+          <div className="mb-4 px-3 py-2 rounded-lg bg-warning/10 text-warning text-sm">
             This project is currently archived (read-only)
           </div>
         )}
@@ -235,8 +235,8 @@ export function DangerZone({ projectId, project, onProjectUpdate }: DangerZonePr
           onClick={handleArchiveClick}
           className={
             project?.status === 'archived'
-              ? 'bg-green-600 text-white hover:bg-green-700'
-              : 'bg-amber-600 text-white hover:bg-amber-700'
+              ? 'bg-success text-success-foreground hover:bg-success/90'
+              : 'bg-warning text-warning-foreground hover:bg-warning/90'
           }
         >
           {project?.status === 'archived' ? 'Restore Project' : 'Archive Project'}
@@ -360,8 +360,8 @@ export function DangerZone({ projectId, project, onProjectUpdate }: DangerZonePr
               disabled={archiving}
               className={
                 project?.status === 'archived'
-                  ? 'bg-green-600 text-white hover:bg-green-700'
-                  : 'bg-amber-600 text-white hover:bg-amber-700'
+                  ? 'bg-success text-success-foreground hover:bg-success/90'
+                  : 'bg-warning text-warning-foreground hover:bg-warning/90'
               }
             >
               {archiving
@@ -423,7 +423,7 @@ export function DangerZone({ projectId, project, onProjectUpdate }: DangerZonePr
               className={
                 project?.status === 'completed'
                   ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-                  : 'bg-green-600 text-white hover:bg-green-700'
+                  : 'bg-success text-success-foreground hover:bg-success/90'
               }
             >
               {completing

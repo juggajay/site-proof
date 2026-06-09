@@ -43,9 +43,9 @@ const ROLES = [
 ];
 
 const statusColors: Record<string, string> = {
-  active: 'bg-green-100 text-green-700',
-  pending: 'bg-amber-100 text-amber-700',
-  inactive: 'bg-muted text-foreground',
+  active: 'bg-success/10 text-success',
+  pending: 'bg-warning/10 text-warning',
+  inactive: 'bg-muted text-muted-foreground',
 };
 
 function normalizeInviteEmail(email: string) {
@@ -254,7 +254,7 @@ export function ProjectUsersPage() {
 
       {loadError && (
         <div
-          className="mb-6 flex items-center justify-between gap-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700"
+          className="mb-6 flex items-center justify-between gap-3 rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
           role="alert"
         >
           <span>{loadError}</span>
@@ -344,7 +344,7 @@ export function ProjectUsersPage() {
                               size="icon"
                               onClick={handleUpdateRole}
                               disabled={saving}
-                              className="text-green-600 hover:bg-green-50"
+                              className="text-primary hover:bg-primary/5"
                               aria-label={`Save role for ${user.fullName || user.email}`}
                               title="Save"
                             >
@@ -378,7 +378,7 @@ export function ProjectUsersPage() {
                               size="icon"
                               onClick={() => setUserPendingRemove(user)}
                               disabled={removingUserId === user.id}
-                              className="text-red-600 hover:bg-red-50"
+                              className="text-destructive hover:bg-destructive/10"
                               aria-label={`Remove ${user.fullName || user.email} from project`}
                               title="Remove from project"
                             >
