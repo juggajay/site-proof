@@ -216,7 +216,7 @@ export const InviteSubcontractorModal = React.memo(function InviteSubcontractorM
               <div className="space-y-2">
                 {directoryError && (
                   <div
-                    className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700"
+                    className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
                     role="alert"
                   >
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -224,7 +224,7 @@ export const InviteSubcontractorModal = React.memo(function InviteSubcontractorM
                       <button
                         type="button"
                         onClick={() => void fetchGlobalDirectory()}
-                        className="rounded-md border border-red-200 bg-white px-3 py-1 font-medium text-red-700 hover:bg-red-100"
+                        className="rounded-md border border-destructive/30 bg-background px-3 py-1 font-medium text-destructive hover:bg-destructive/10"
                       >
                         Try again
                       </button>
@@ -240,7 +240,7 @@ export const InviteSubcontractorModal = React.memo(function InviteSubcontractorM
                     type="text"
                     value={directorySearch}
                     onChange={(e) => setDirectorySearch(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                    className="w-full pl-9 pr-3 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                     placeholder="Search existing subcontractors..."
                   />
                 </div>
@@ -315,7 +315,7 @@ export const InviteSubcontractorModal = React.memo(function InviteSubcontractorM
               type="text"
               value={inviteData.companyName}
               onChange={(e) => setInviteData((prev) => ({ ...prev, companyName: e.target.value }))}
-              className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary ${
+              className={`w-full px-3 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary ${
                 selectedGlobalId ? 'bg-muted/50 cursor-not-allowed' : ''
               }`}
               placeholder="ABC Construction Pty Ltd"
@@ -332,15 +332,15 @@ export const InviteSubcontractorModal = React.memo(function InviteSubcontractorM
               value={inviteData.abn}
               onChange={(e) => handleABNChange(e.target.value)}
               onBlur={handleABNBlur}
-              className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary ${
-                abnError ? 'border-red-500 focus:ring-red-500' : ''
+              className={`w-full px-3 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary ${
+                abnError ? 'border-destructive focus:ring-destructive' : ''
               } ${selectedGlobalId ? 'bg-muted/50 cursor-not-allowed' : ''}`}
               placeholder="51 824 753 556"
               data-testid="abn-input"
               readOnly={!!selectedGlobalId}
             />
             {abnError && (
-              <p className="text-sm text-red-500 mt-1" data-testid="abn-error">
+              <p className="text-sm text-destructive mt-1" data-testid="abn-error">
                 {abnError}
               </p>
             )}
@@ -357,7 +357,7 @@ export const InviteSubcontractorModal = React.memo(function InviteSubcontractorM
               type="text"
               value={inviteData.contactName}
               onChange={(e) => setInviteData((prev) => ({ ...prev, contactName: e.target.value }))}
-              className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary ${
+              className={`w-full px-3 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary ${
                 selectedGlobalId ? 'bg-muted/50 cursor-not-allowed' : ''
               }`}
               placeholder="John Smith"
@@ -373,7 +373,7 @@ export const InviteSubcontractorModal = React.memo(function InviteSubcontractorM
               type="email"
               value={inviteData.email}
               onChange={(e) => setInviteData((prev) => ({ ...prev, email: e.target.value }))}
-              className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary ${
+              className={`w-full px-3 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary ${
                 selectedGlobalId ? 'bg-muted/50 cursor-not-allowed' : ''
               }`}
               placeholder="john@company.com.au"
@@ -389,7 +389,7 @@ export const InviteSubcontractorModal = React.memo(function InviteSubcontractorM
               type="tel"
               value={inviteData.phone}
               onChange={(e) => setInviteData((prev) => ({ ...prev, phone: e.target.value }))}
-              className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary ${
+              className={`w-full px-3 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary ${
                 selectedGlobalId ? 'bg-muted/50 cursor-not-allowed' : ''
               }`}
               placeholder="0412 345 678"

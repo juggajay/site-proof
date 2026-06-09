@@ -84,14 +84,14 @@ export function PendingApprovalsAlert({
   if (pendingEmployees === 0 && pendingPlant === 0) return null;
 
   return (
-    <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
-      <h3 className="font-semibold text-amber-800">Pending Approvals</h3>
-      <p className="text-sm text-amber-700 mt-1">
+    <div className="rounded-lg border border-warning/30 bg-warning/10 p-4">
+      <h3 className="font-semibold text-warning">Pending Approvals</h3>
+      <p className="text-sm text-warning mt-1">
         {pendingEmployees > 0 && `${pendingEmployees} employee rate(s) pending approval`}
         {pendingEmployees > 0 && pendingPlant > 0 && ' • '}
         {pendingPlant > 0 && `${pendingPlant} plant rate(s) pending approval`}
       </p>
-      <p className="text-xs text-amber-600 mt-2">
+      <p className="text-xs text-warning/80 mt-2">
         Pending items need to be approved by the head contractor before they can be used in dockets.
       </p>
     </div>
@@ -115,7 +115,7 @@ export function EmployeeRosterSection({
     <div className="rounded-lg border bg-card">
       <div className="flex items-center justify-between p-4 border-b">
         <div className="flex items-center gap-2">
-          <Users className="h-5 w-5 text-primary" />
+          <Users className="h-5 w-5 text-muted-foreground" />
           <h3 className="font-semibold">Employee Roster</h3>
           <span className="text-sm text-muted-foreground">({employees.length})</span>
         </div>
@@ -173,7 +173,7 @@ export function EmployeeRosterSection({
                           type="button"
                           onClick={() => onDeleteEmployee(employee.id)}
                           disabled={saving}
-                          className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+                          className="p-1 text-destructive hover:text-destructive/80 hover:bg-destructive/10 rounded"
                           title="Delete"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -208,7 +208,7 @@ export function PlantRegisterSection({
     <div className="rounded-lg border bg-card">
       <div className="flex items-center justify-between p-4 border-b">
         <div className="flex items-center gap-2">
-          <Truck className="h-5 w-5 text-primary" />
+          <Truck className="h-5 w-5 text-muted-foreground" />
           <h3 className="font-semibold">Plant Register</h3>
           <span className="text-sm text-muted-foreground">({plant.length})</span>
         </div>
@@ -270,7 +270,7 @@ export function PlantRegisterSection({
                           type="button"
                           onClick={() => onDeletePlant(item.id)}
                           disabled={saving}
-                          className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+                          className="p-1 text-destructive hover:text-destructive/80 hover:bg-destructive/10 rounded"
                           title="Delete"
                         >
                           <Trash2 className="h-4 w-4" />

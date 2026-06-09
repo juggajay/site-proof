@@ -198,13 +198,13 @@ export function MyCompanyPage() {
   if (!companyData && loadError) {
     return (
       <div className="p-6">
-        <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4">
-          <h3 className="font-semibold text-red-800">Unable to Load Company</h3>
-          <p className="text-sm text-red-700 mt-1">{loadError}</p>
+        <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 p-4">
+          <h3 className="font-semibold text-destructive">Unable to Load Company</h3>
+          <p className="text-sm text-destructive mt-1">{loadError}</p>
           <button
             type="button"
             onClick={() => void companyQuery.refetch()}
-            className="mt-3 rounded-lg bg-red-700 px-3 py-1.5 text-sm text-white hover:bg-red-800"
+            className="mt-3 rounded-lg bg-destructive px-3 py-1.5 text-sm text-destructive-foreground hover:bg-destructive/90"
           >
             Retry
           </button>
@@ -216,9 +216,9 @@ export function MyCompanyPage() {
   if (!companyData) {
     return (
       <div className="p-6">
-        <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4">
-          <h3 className="font-semibold text-red-800">No Company Found</h3>
-          <p className="text-sm text-red-700 mt-1">
+        <div role="alert" className="rounded-lg border bg-muted p-4">
+          <h3 className="font-semibold text-foreground">No Company Found</h3>
+          <p className="text-sm text-muted-foreground mt-1">
             You are not associated with a subcontractor company. Please contact your administrator.
           </p>
         </div>
@@ -250,7 +250,7 @@ export function MyCompanyPage() {
       {actionError && (
         <div
           role="alert"
-          className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+          className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive"
         >
           {actionError}
         </div>

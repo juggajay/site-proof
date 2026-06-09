@@ -22,8 +22,8 @@ export function AcceptInviteErrorState({ error }: AcceptInviteErrorStateProps) {
     <div className="min-h-screen bg-muted/50 flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-card rounded-lg shadow-md p-6">
         <div className="text-center">
-          <div className="mx-auto w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mb-4">
-            <AlertCircle className="h-6 w-6 text-red-600" />
+          <div className="mx-auto w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center mb-4">
+            <AlertCircle className="h-6 w-6 text-destructive" />
           </div>
           <h2 className="text-xl font-semibold mb-2">Invitation Not Found</h2>
           <p className="text-muted-foreground mb-4">
@@ -56,22 +56,22 @@ export function AcceptInviteAlreadyAcceptedState({
     <div className="min-h-screen bg-muted/50 flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-card rounded-lg shadow-md p-6">
         <div className="text-center">
-          <div className="mx-auto w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mb-4">
-            <Check className="h-6 w-6 text-green-600" />
+          <div className="mx-auto w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-4">
+            <Check className="h-6 w-6 text-muted-foreground" />
           </div>
           <h2 className="text-xl font-semibold mb-2">Invitation Already Accepted</h2>
           <p className="text-muted-foreground mb-4">This invitation has already been accepted.</p>
           {isLoggedIn ? (
             <Link
               to="/subcontractor-portal"
-              className="inline-block px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90"
+              className="inline-block px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
             >
               Go to Portal
             </Link>
           ) : (
             <Link
               to="/login"
-              className="inline-block px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90"
+              className="inline-block px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
             >
               Log In
             </Link>
@@ -129,9 +129,9 @@ interface AcceptInviteFormErrorProps {
 
 export function AcceptInviteFormError({ message }: AcceptInviteFormErrorProps) {
   return (
-    <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md flex items-start gap-2">
-      <AlertCircle className="h-4 w-4 text-red-600 mt-0.5 shrink-0" />
-      <p className="text-sm text-red-600">{message}</p>
+    <div className="mb-4 p-3 bg-destructive/10 border border-destructive/30 rounded-md flex items-start gap-2">
+      <AlertCircle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+      <p className="text-sm text-destructive">{message}</p>
     </div>
   );
 }
@@ -153,7 +153,7 @@ export function PasswordRequirementsList({
   checks,
   minPasswordLength,
 }: PasswordRequirementsListProps) {
-  const itemClassName = (isMet: boolean) => (isMet ? 'text-green-600' : 'text-muted-foreground');
+  const itemClassName = (isMet: boolean) => (isMet ? 'text-success' : 'text-muted-foreground');
 
   return (
     <div className="text-xs space-y-1 mt-2">

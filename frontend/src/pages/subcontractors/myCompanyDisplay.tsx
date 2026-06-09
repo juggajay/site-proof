@@ -8,14 +8,14 @@ export function StatusBadge({ status }: StatusBadgeProps) {
   switch (status) {
     case 'pending':
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-warning/10 text-warning">
           <Clock className="h-3 w-3" /> Pending Approval
         </span>
       );
     case 'approved':
     case 'active':
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
+        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-muted text-foreground">
           <CheckCircle className="h-3 w-3" /> Approved
         </span>
       );
