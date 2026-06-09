@@ -1,7 +1,8 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { getAuthToken } from '@/lib/auth';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, authFetch } from '@/lib/api';
+import { getResponseErrorMessage } from './utils';
 import type { TestResult, Lot, FailedTestForNcr, NcrFormData, CreateTestFormData } from './types';
 import { TestFilters } from './components/TestFilters';
 import { TestResultsTable } from './components/TestResultsTable';
@@ -233,6 +234,50 @@ export function TestResultsPage() {
     [refreshTestResults],
   );
 
+  // Feature B2: attach (or replace) a certificate on an EXISTING test result so a
+  // manually-created test can satisfy the verification gate. Mirrors the
+  // UploadCertificateModal upload pattern (FormData + authFetch for multipart),
+  // then refreshes the list so the now-attachable Verify action unblocks.
+  const handleAttachCertificate = useCallback(
+    async (testId: string, file: File) => {
+      try {
+        const formData = new FormData();
+        formData.append('certificate', file);
+
+        const response = await authFetch(
+          `/api/test-results/${encodeURIComponent(testId)}/certificate`,
+          {
+            method: 'POST',
+            body: formData,
+          },
+        );
+
+        if (!response.ok) {
+          toast({
+            title: 'Failed to attach certificate',
+            description: await getResponseErrorMessage(response, 'Please try again.'),
+            variant: 'error',
+          });
+          return;
+        }
+
+        await refreshTestResults();
+        toast({
+          title: 'Certificate attached',
+          description: 'You can now verify this test result.',
+          variant: 'success',
+        });
+      } catch (err) {
+        toast({
+          title: 'Failed to attach certificate',
+          description: extractErrorMessage(err, 'Please try again.'),
+          variant: 'error',
+        });
+      }
+    },
+    [refreshTestResults],
+  );
+
   // Create test handler
   const handleCreateTestResult = useCallback(
     async (formData: CreateTestFormData) => {
@@ -446,6 +491,7 @@ export function TestResultsPage() {
           updatingStatusId={updatingStatusId}
           onUpdateStatus={handleUpdateStatus}
           onRejectTest={openRejectModal}
+          onAttachCertificate={handleAttachCertificate}
           onClearFilters={clearFilters}
           onOpenCreateModal={() => setShowCreateModal(true)}
         />
@@ -457,6 +503,7 @@ export function TestResultsPage() {
           updatingStatusId={updatingStatusId}
           onUpdateStatus={handleUpdateStatus}
           onRejectTest={openRejectModal}
+          onAttachCertificate={handleAttachCertificate}
           onClearFilters={clearFilters}
           onOpenCreateModal={() => setShowCreateModal(true)}
         />

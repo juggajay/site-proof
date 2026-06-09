@@ -13,6 +13,7 @@ import {
   isAiExtractionReviewDraft,
 } from '../constants';
 import { generateTestResultCertificate } from '../testResultCertificate';
+import { AttachCertificateButton } from './AttachCertificateButton';
 
 interface TestResultsTableProps {
   projectId: string;
@@ -21,6 +22,7 @@ interface TestResultsTableProps {
   updatingStatusId: string | null;
   onUpdateStatus: (testId: string, newStatus: string) => void;
   onRejectTest: (testId: string) => void;
+  onAttachCertificate: (testId: string, file: File) => Promise<void>;
   onClearFilters: () => void;
   onOpenCreateModal: () => void;
 }
@@ -32,6 +34,7 @@ export const TestResultsTable = React.memo(function TestResultsTable({
   updatingStatusId,
   onUpdateStatus,
   onRejectTest,
+  onAttachCertificate,
   onClearFilters,
   onOpenCreateModal,
 }: TestResultsTableProps) {
@@ -208,6 +211,15 @@ export const TestResultsTable = React.memo(function TestResultsTable({
                                   ? 'Updating...'
                                   : nextStatusButtonLabels[test.status]}
                               </button>
+                            )}
+                            {/* Feature B2: attach/replace a certificate so a
+                                manual test can reach 'verified'. */}
+                            {test.status !== 'verified' && (
+                              <AttachCertificateButton
+                                testId={test.id}
+                                hasCertificate={!!test.certificateDocId}
+                                onAttachCertificate={onAttachCertificate}
+                              />
                             )}
                             {/* Feature #204: Reject button for tests in "entered" status */}
                             {test.status === 'entered' && (

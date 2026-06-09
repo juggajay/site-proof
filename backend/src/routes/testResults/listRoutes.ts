@@ -225,6 +225,7 @@ listRoutes.get(
             },
           },
           aiExtracted: true, // Feature #200
+          certificateDocId: true, // Feature B2: lets the UI show attach vs replace + predict the verify gate
           createdAt: true,
           updatedAt: true,
         },

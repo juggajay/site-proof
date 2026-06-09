@@ -16,6 +16,7 @@ import {
   processBatchCertificateUpload,
   processCertificateUpload,
 } from './testResults/certificateIntake.js';
+import { processCertificateAttachment } from './testResults/certificateAttachment.js';
 import { confirmExtraction, processBatchConfirm } from './testResults/extractionConfirmation.js';
 import { workflowRoutes } from './testResults/workflowRoutes.js';
 import { crudRoutes } from './testResults/crudRoutes.js';
@@ -202,6 +203,46 @@ testResultsRouter.post(
     });
 
     res.status(201).json(result);
+  }),
+);
+
+// POST /api/test-results/:id/certificate - Attach (or replace) a certificate on
+// an EXISTING test result (Feature B2). Unlike /upload-certificate this performs
+// NO AI extraction and does not create a new test — it links a Document to the
+// supplied test so a manually-created test can satisfy the verification gate.
+// Registered before /:id/extraction so the literal /certificate suffix wins over
+// the /:id parameter route.
+testResultsRouter.post(
+  '/:id/certificate',
+  certificateUpload.single('certificate'),
+  asyncHandler(async (req, res) => {
+    const id = parseTestResultRouteParam(req.params.id, 'id');
+    const user = req.user!;
+
+    const result = await processCertificateAttachment({
+      testResultId: id,
+      file: req.file,
+      userId: user.id,
+      loadTestResult: (testId) =>
+        prisma.testResult.findUnique({
+          where: { id: testId },
+          select: {
+            projectId: true,
+            certificateDocId: true,
+            certificateDoc: { select: { id: true, fileUrl: true } },
+          },
+        }),
+      authorize: async (projectId) => {
+        await requireTestProjectRole(
+          projectId,
+          user,
+          TEST_CREATORS,
+          'You do not have permission to attach test certificates',
+        );
+      },
+    });
+
+    res.status(200).json(result);
   }),
 );
 

@@ -13,6 +13,7 @@ import {
   isAiExtractionReviewDraft,
 } from '../constants';
 import { generateTestResultCertificate } from '../testResultCertificate';
+import { AttachCertificateButton } from './AttachCertificateButton';
 
 interface TestResultsMobileListProps {
   projectId: string;
@@ -21,6 +22,7 @@ interface TestResultsMobileListProps {
   updatingStatusId: string | null;
   onUpdateStatus: (testId: string, newStatus: string) => void;
   onRejectTest: (testId: string) => void;
+  onAttachCertificate: (testId: string, file: File) => Promise<void>;
   onClearFilters: () => void;
   onOpenCreateModal: () => void;
 }
@@ -37,6 +39,7 @@ export function TestResultsMobileList({
   updatingStatusId,
   onUpdateStatus,
   onRejectTest,
+  onAttachCertificate,
   onClearFilters,
   onOpenCreateModal,
 }: TestResultsMobileListProps) {
@@ -85,6 +88,7 @@ export function TestResultsMobileList({
           updatingStatusId={updatingStatusId}
           onUpdateStatus={onUpdateStatus}
           onRejectTest={onRejectTest}
+          onAttachCertificate={onAttachCertificate}
         />
       ))}
     </div>
@@ -97,6 +101,7 @@ interface TestResultMobileCardProps {
   updatingStatusId: string | null;
   onUpdateStatus: (testId: string, newStatus: string) => void;
   onRejectTest: (testId: string) => void;
+  onAttachCertificate: (testId: string, file: File) => Promise<void>;
 }
 
 // Maps the test workflow status to a MobileDataCard badge variant. Mirrors the
@@ -118,6 +123,7 @@ function TestResultMobileCard({
   updatingStatusId,
   onUpdateStatus,
   onRejectTest,
+  onAttachCertificate,
 }: TestResultMobileCardProps) {
   const navigate = useNavigate();
   const overdue = isTestOverdue(test);
@@ -211,6 +217,17 @@ function TestResultMobileCard({
             >
               {updatingStatusId === test.id ? 'Updating...' : nextStatusButtonLabels[test.status]}
             </Button>
+          )}
+
+          {/* Feature B2: attach/replace a certificate so a manual test can
+              reach 'verified'. */}
+          {test.status !== 'verified' && (
+            <AttachCertificateButton
+              testId={test.id}
+              hasCertificate={!!test.certificateDocId}
+              onAttachCertificate={onAttachCertificate}
+              variant="mobile"
+            />
           )}
 
           {test.status === 'entered' && (
