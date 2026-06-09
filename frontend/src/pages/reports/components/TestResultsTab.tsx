@@ -68,7 +68,7 @@ export const TestResultsTab = React.memo(function TestResultsTab({
                 type="date"
                 value={testStartDate}
                 onChange={(e) => setTestStartDate(e.target.value)}
-                className="px-3 py-2 border border-border rounded-md text-sm"
+                className="px-3 py-2 border border-border rounded-md bg-background text-foreground text-sm"
               />
               <span className="text-muted-foreground">to</span>
               <label htmlFor="test-report-end-date" className="sr-only">
@@ -79,7 +79,7 @@ export const TestResultsTab = React.memo(function TestResultsTab({
                 type="date"
                 value={testEndDate}
                 onChange={(e) => setTestEndDate(e.target.value)}
-                className="px-3 py-2 border border-border rounded-md text-sm"
+                className="px-3 py-2 border border-border rounded-md bg-background text-foreground text-sm"
               />
             </div>
             {/* Date Range Presets */}
@@ -124,7 +124,7 @@ export const TestResultsTab = React.memo(function TestResultsTab({
                     onClick={() => handleToggleTestType(testType)}
                     className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                       selectedTestTypes.includes(testType)
-                        ? 'bg-primary text-white'
+                        ? 'bg-primary text-primary-foreground'
                         : 'bg-muted text-foreground hover:bg-muted'
                     }`}
                   >
@@ -145,7 +145,7 @@ export const TestResultsTab = React.memo(function TestResultsTab({
             type="button"
             onClick={handleGenerateReport}
             disabled={loading}
-            className="px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90 disabled:opacity-50"
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50"
           >
             {loading ? 'Generating...' : 'Generate Report'}
           </button>
@@ -180,17 +180,17 @@ export const TestResultsTab = React.memo(function TestResultsTab({
               <div className="text-3xl font-bold text-foreground">{report.totalTests}</div>
               <div className="text-sm text-muted-foreground">Total Tests</div>
             </div>
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-              <div className="text-3xl font-bold text-green-600">{report.summary.pass}</div>
-              <div className="text-sm text-green-500">Passed</div>
+            <div className="bg-card border rounded-lg p-4">
+              <div className="text-3xl font-bold text-foreground">{report.summary.pass}</div>
+              <div className="text-sm text-muted-foreground">Passed</div>
             </div>
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-              <div className="text-3xl font-bold text-red-600">{report.summary.fail}</div>
-              <div className="text-sm text-red-500">Failed</div>
+            <div className="bg-card border rounded-lg p-4">
+              <div className="text-3xl font-bold text-foreground">{report.summary.fail}</div>
+              <div className="text-sm text-muted-foreground">Failed</div>
             </div>
-            <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
-              <div className="text-3xl font-bold text-primary">{report.summary.passRate}%</div>
-              <div className="text-sm text-primary/70">Pass Rate</div>
+            <div className="bg-card border rounded-lg p-4">
+              <div className="text-3xl font-bold text-foreground">{report.summary.passRate}%</div>
+              <div className="text-sm text-muted-foreground">Pass Rate</div>
             </div>
           </div>
 
@@ -257,9 +257,9 @@ export const TestResultsTab = React.memo(function TestResultsTab({
                         <span
                           className={`px-2 py-1 rounded-full text-xs ${
                             test.passFail === 'pass'
-                              ? 'bg-green-100 text-green-700'
+                              ? 'bg-success/10 text-success'
                               : test.passFail === 'fail'
-                                ? 'bg-red-100 text-red-700'
+                                ? 'bg-destructive/10 text-destructive'
                                 : 'bg-muted text-foreground'
                           }`}
                         >

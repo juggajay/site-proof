@@ -35,23 +35,23 @@ export const ClaimsReportTab = React.memo(function ClaimsReportTab({
           </div>
           <div className="text-sm text-muted-foreground">Total Claimed</div>
         </div>
-        <div className="rounded-lg border border-green-200 bg-green-50 p-4">
-          <div className="text-2xl font-bold text-green-700">
+        <div className="rounded-lg border bg-card p-4">
+          <div className="text-2xl font-bold text-foreground">
             {formatCurrency(report.financialSummary.totalCertified)}
           </div>
-          <div className="text-sm text-green-600">Certified</div>
+          <div className="text-sm text-muted-foreground">Certified</div>
         </div>
-        <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
-          <div className="text-2xl font-bold text-blue-700">
+        <div className="rounded-lg border bg-card p-4">
+          <div className="text-2xl font-bold text-foreground">
             {formatCurrency(report.financialSummary.totalPaid)}
           </div>
-          <div className="text-sm text-blue-600">Paid</div>
+          <div className="text-sm text-muted-foreground">Paid</div>
         </div>
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
-          <div className="text-2xl font-bold text-amber-700">
+        <div className="rounded-lg border bg-card p-4">
+          <div className="text-2xl font-bold text-foreground">
             {formatCurrency(report.financialSummary.outstanding)}
           </div>
-          <div className="text-sm text-amber-600">Outstanding</div>
+          <div className="text-sm text-muted-foreground">Outstanding</div>
         </div>
       </div>
 

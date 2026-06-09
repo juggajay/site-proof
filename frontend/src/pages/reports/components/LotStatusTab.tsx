@@ -18,7 +18,7 @@ export const LotStatusTab = React.memo(function LotStatusTab({ report }: LotStat
     <div className="space-y-6 animate-in fade-in duration-200">
       {/* Summary Cards with Percentage */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
-        <div className="bg-muted rounded-lg p-4 text-center">
+        <div className="bg-card border rounded-lg p-4 text-center">
           <div className="text-2xl font-bold text-foreground">{report.summary.notStarted}</div>
           <div className="text-sm text-muted-foreground">Not Started</div>
           <div className="text-xs text-muted-foreground mt-1">
@@ -28,60 +28,60 @@ export const LotStatusTab = React.memo(function LotStatusTab({ report }: LotStat
             %
           </div>
         </div>
-        <div className="bg-primary/10 rounded-lg p-4 text-center">
-          <div className="text-2xl font-bold text-primary">{report.summary.inProgress}</div>
-          <div className="text-sm text-primary">In Progress</div>
-          <div className="text-xs text-primary/70 mt-1">
+        <div className="bg-card border rounded-lg p-4 text-center">
+          <div className="text-2xl font-bold text-foreground">{report.summary.inProgress}</div>
+          <div className="text-sm text-muted-foreground">In Progress</div>
+          <div className="text-xs text-muted-foreground mt-1">
             {report.totalLots > 0
               ? ((report.summary.inProgress / report.totalLots) * 100).toFixed(1)
               : 0}
             %
           </div>
         </div>
-        <div className="bg-amber-100 rounded-lg p-4 text-center">
-          <div className="text-2xl font-bold text-amber-700">{report.summary.awaitingTest}</div>
-          <div className="text-sm text-amber-600">Awaiting Test</div>
-          <div className="text-xs text-amber-500 mt-1">
+        <div className="bg-card border rounded-lg p-4 text-center">
+          <div className="text-2xl font-bold text-foreground">{report.summary.awaitingTest}</div>
+          <div className="text-sm text-muted-foreground">Awaiting Test</div>
+          <div className="text-xs text-muted-foreground mt-1">
             {report.totalLots > 0
               ? ((report.summary.awaitingTest / report.totalLots) * 100).toFixed(1)
               : 0}
             %
           </div>
         </div>
-        <div className="bg-amber-200 rounded-lg p-4 text-center">
-          <div className="text-2xl font-bold text-amber-800">{report.summary.holdPoint}</div>
-          <div className="text-sm text-amber-700">Hold Point</div>
-          <div className="text-xs text-amber-600 mt-1">
+        <div className="bg-card border rounded-lg p-4 text-center">
+          <div className="text-2xl font-bold text-foreground">{report.summary.holdPoint}</div>
+          <div className="text-sm text-muted-foreground">Hold Point</div>
+          <div className="text-xs text-muted-foreground mt-1">
             {report.totalLots > 0
               ? ((report.summary.holdPoint / report.totalLots) * 100).toFixed(1)
               : 0}
             %
           </div>
         </div>
-        <div className="bg-red-100 rounded-lg p-4 text-center">
-          <div className="text-2xl font-bold text-red-700">{report.summary.ncrRaised}</div>
-          <div className="text-sm text-red-600">NCR Raised</div>
-          <div className="text-xs text-red-400 mt-1">
+        <div className="bg-card border rounded-lg p-4 text-center">
+          <div className="text-2xl font-bold text-foreground">{report.summary.ncrRaised}</div>
+          <div className="text-sm text-muted-foreground">NCR Raised</div>
+          <div className="text-xs text-muted-foreground mt-1">
             {report.totalLots > 0
               ? ((report.summary.ncrRaised / report.totalLots) * 100).toFixed(1)
               : 0}
             %
           </div>
         </div>
-        <div className="bg-green-100 rounded-lg p-4 text-center">
-          <div className="text-2xl font-bold text-green-700">{report.summary.conformed}</div>
-          <div className="text-sm text-green-600">Conformed</div>
-          <div className="text-xs text-green-500 mt-1">
+        <div className="bg-card border rounded-lg p-4 text-center">
+          <div className="text-2xl font-bold text-foreground">{report.summary.conformed}</div>
+          <div className="text-sm text-muted-foreground">Conformed</div>
+          <div className="text-xs text-muted-foreground mt-1">
             {report.totalLots > 0
               ? ((report.summary.conformed / report.totalLots) * 100).toFixed(1)
               : 0}
             %
           </div>
         </div>
-        <div className="bg-green-200 rounded-lg p-4 text-center">
-          <div className="text-2xl font-bold text-green-800">{report.summary.claimed}</div>
-          <div className="text-sm text-green-700">Claimed</div>
-          <div className="text-xs text-green-600 mt-1">
+        <div className="bg-card border rounded-lg p-4 text-center">
+          <div className="text-2xl font-bold text-foreground">{report.summary.claimed}</div>
+          <div className="text-sm text-muted-foreground">Claimed</div>
+          <div className="text-xs text-muted-foreground mt-1">
             {report.totalLots > 0
               ? ((report.summary.claimed / report.totalLots) * 100).toFixed(1)
               : 0}
@@ -95,17 +95,17 @@ export const LotStatusTab = React.memo(function LotStatusTab({ report }: LotStat
         <div className="bg-card border rounded-lg p-6">
           <h3 className="text-lg font-semibold mb-4">Period Comparison</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-              <div className="text-3xl font-bold text-green-600">
+            <div className="bg-card border rounded-lg p-4">
+              <div className="text-3xl font-bold text-foreground">
                 {report.periodComparison.conformedThisPeriod}
               </div>
-              <div className="text-sm text-green-600">Conformed This Period</div>
-              <div className="text-xs text-green-500 mt-1">
+              <div className="text-sm text-muted-foreground">Conformed This Period</div>
+              <div className="text-xs text-muted-foreground mt-1">
                 {report.periodComparison.currentPeriodLabel}
               </div>
             </div>
-            <div className="bg-muted/50 border border-border rounded-lg p-4">
-              <div className="text-3xl font-bold text-muted-foreground">
+            <div className="bg-card border rounded-lg p-4">
+              <div className="text-3xl font-bold text-foreground">
                 {report.periodComparison.conformedLastPeriod}
               </div>
               <div className="text-sm text-muted-foreground">Conformed Last Period</div>
@@ -116,19 +116,19 @@ export const LotStatusTab = React.memo(function LotStatusTab({ report }: LotStat
             <div
               className={`border rounded-lg p-4 ${
                 report.periodComparison.periodChange > 0
-                  ? 'bg-green-50 border-green-200'
+                  ? 'bg-success/10 border-success/20'
                   : report.periodComparison.periodChange < 0
-                    ? 'bg-red-50 border-red-200'
-                    : 'bg-muted/50 border-border'
+                    ? 'bg-destructive/10 border-destructive/20'
+                    : 'bg-card border-border'
               }`}
             >
               <div
                 className={`text-3xl font-bold ${
                   report.periodComparison.periodChange > 0
-                    ? 'text-green-600'
+                    ? 'text-success'
                     : report.periodComparison.periodChange < 0
-                      ? 'text-red-600'
-                      : 'text-muted-foreground'
+                      ? 'text-destructive'
+                      : 'text-foreground'
                 }`}
               >
                 {report.periodComparison.periodChange > 0 ? '+' : ''}
@@ -137,9 +137,9 @@ export const LotStatusTab = React.memo(function LotStatusTab({ report }: LotStat
               <div
                 className={`text-sm ${
                   report.periodComparison.periodChange > 0
-                    ? 'text-green-600'
+                    ? 'text-success'
                     : report.periodComparison.periodChange < 0
-                      ? 'text-red-600'
+                      ? 'text-destructive'
                       : 'text-muted-foreground'
                 }`}
               >
@@ -148,9 +148,9 @@ export const LotStatusTab = React.memo(function LotStatusTab({ report }: LotStat
               <div
                 className={`text-xs mt-1 ${
                   report.periodComparison.periodChange > 0
-                    ? 'text-green-500'
+                    ? 'text-success'
                     : report.periodComparison.periodChange < 0
-                      ? 'text-red-500'
+                      ? 'text-destructive'
                       : 'text-muted-foreground'
                 }`}
               >

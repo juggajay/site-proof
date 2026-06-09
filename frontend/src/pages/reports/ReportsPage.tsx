@@ -285,7 +285,7 @@ export function ReportsPage() {
             className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm font-medium sm:px-4 ${
               hasAdvancedAnalytics
                 ? 'border-primary text-primary hover:bg-primary/5'
-                : 'border-amber-300 text-amber-700 hover:bg-amber-50'
+                : 'border-brand text-brand hover:bg-brand/10'
             }`}
           >
             {hasAdvancedAnalytics ? <Mail className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
@@ -321,12 +321,12 @@ export function ReportsPage() {
                 activeTab === tab.id
                   ? 'border-primary text-primary'
                   : 'border-transparent text-muted-foreground hover:text-foreground hover:border-border'
-              } ${tab.premium && !hasAdvancedAnalytics ? 'text-amber-600 hover:text-amber-700' : ''}`}
+              } ${tab.premium && !hasAdvancedAnalytics ? 'text-brand hover:text-brand' : ''}`}
             >
               {tab.label}
               {tab.premium && !hasAdvancedAnalytics && <Lock className="h-3.5 w-3.5" />}
               {tab.premium && hasAdvancedAnalytics && (
-                <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+                <Sparkles className="h-3.5 w-3.5 text-brand" />
               )}
             </button>
           ))}
@@ -335,7 +335,7 @@ export function ReportsPage() {
 
       {error && (
         <div
-          className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md"
+          className="bg-destructive/10 border border-destructive/20 text-destructive px-4 py-3 rounded-md"
           role="alert"
         >
           {error}

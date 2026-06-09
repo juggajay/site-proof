@@ -240,13 +240,13 @@ export interface ClaimsReport {
 }
 
 export const STATUS_COLORS: Record<string, string> = {
-  not_started: 'bg-muted text-foreground',
-  in_progress: 'bg-primary/10 text-primary',
-  awaiting_test: 'bg-amber-100 text-amber-700',
-  hold_point: 'bg-amber-200 text-amber-800',
-  ncr_raised: 'bg-red-100 text-red-700',
-  conformed: 'bg-green-100 text-green-700',
-  claimed: 'bg-green-200 text-green-800',
+  not_started: 'bg-muted text-muted-foreground',
+  in_progress: 'bg-muted text-muted-foreground',
+  awaiting_test: 'bg-muted text-muted-foreground',
+  hold_point: 'bg-warning/10 text-warning',
+  ncr_raised: 'bg-destructive/10 text-destructive',
+  conformed: 'bg-success/10 text-success',
+  claimed: 'bg-muted text-muted-foreground',
 };
 
 export const STATUS_LABELS: Record<string, string> = {
