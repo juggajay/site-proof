@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AppError } from '../../lib/AppError.js';
-import { buildConfirmationUpdateData, processBatchConfirm } from './extractionConfirmation.js';
+import {
+  assertConfirmedResultRecorded,
+  buildConfirmationUpdateData,
+  processBatchConfirm,
+} from './extractionConfirmation.js';
 
 function expectBadRequest(fn: () => unknown) {
   let captured: unknown;
@@ -66,6 +70,58 @@ describe('buildConfirmationUpdateData', () => {
 
   it('propagates a 400 for an invalid passFail correction', () => {
     expectBadRequest(() => buildConfirmationUpdateData({ passFail: 'maybe' }, 'user-1'));
+  });
+});
+
+describe('assertConfirmedResultRecorded (Ticket T2)', () => {
+  function expectResultRequired(fn: () => unknown) {
+    let captured: unknown;
+    try {
+      fn();
+    } catch (error) {
+      captured = error;
+    }
+    expect(captured).toBeInstanceOf(AppError);
+    expect((captured as AppError).statusCode).toBe(400);
+    expect((captured as AppError).code).toBe('RESULT_REQUIRED');
+  }
+
+  it('passes when the correction supplies a real result + pass/fail', () => {
+    expect(() =>
+      assertConfirmedResultRecorded(
+        { resultValue: 98.5, passFail: 'pass' },
+        { resultValue: null, passFail: 'pending' },
+      ),
+    ).not.toThrow();
+  });
+
+  it('passes when the stored row already holds a real result (correction omits it)', () => {
+    // e.g. AI extraction wrote resultValue/passFail on upload; confirm with no
+    // overriding correction should still be allowed.
+    expect(() =>
+      assertConfirmedResultRecorded({ status: 'entered' }, { resultValue: 97.1, passFail: 'fail' }),
+    ).not.toThrow();
+  });
+
+  it('throws RESULT_REQUIRED when neither correction nor stored row has a result', () => {
+    expectResultRequired(() =>
+      assertConfirmedResultRecorded(
+        { status: 'entered' },
+        { resultValue: null, passFail: 'pending' },
+      ),
+    );
+  });
+
+  it('throws when a correction clears the value or sets a non pass/fail outcome', () => {
+    expectResultRequired(() =>
+      assertConfirmedResultRecorded({ resultValue: null }, { resultValue: 98.5, passFail: 'pass' }),
+    );
+    expectResultRequired(() =>
+      assertConfirmedResultRecorded(
+        { passFail: 'pending' },
+        { resultValue: 98.5, passFail: 'pass' },
+      ),
+    );
   });
 });
 

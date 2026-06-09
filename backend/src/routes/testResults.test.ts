@@ -190,6 +190,11 @@ describe('Test Results API', () => {
         lotId,
         testType: `Rejectable Test ${Date.now()}`,
         status: 'entered',
+        // Ticket T2: an 'entered' test now carries a real result value + a
+        // definitive pass/fail outcome (the RESULT_REQUIRED gate). Seed both so
+        // these rows reflect valid post-T2 state and stay verifiable.
+        resultValue: 98.5,
+        passFail: 'pass',
         enteredById: userId,
         enteredAt: new Date(),
       },
@@ -1949,17 +1954,20 @@ describe('Test Results API', () => {
 
     it.each([
       {
+        // Ticket T2: the intermediate lab states are optional, so the workflow
+        // presenter now surfaces every reachable next status from 'requested'.
+        // The result-required gate is enforced by the route layer, not here.
         status: 'requested',
         label: 'Requested',
         completed: ['requested'],
-        next: ['at_lab'],
+        next: ['at_lab', 'results_received', 'entered'],
         isComplete: false,
       },
       {
         status: 'at_lab',
         label: 'At Lab',
         completed: ['requested', 'at_lab'],
-        next: ['results_received'],
+        next: ['results_received', 'entered'],
         isComplete: false,
       },
       {
@@ -2157,6 +2165,50 @@ describe('Test Results API', () => {
       } finally {
         await prisma.auditLog.deleteMany({ where: { entityId: testResult.id } });
         await prisma.testResult.deleteMany({ where: { id: testResult.id } });
+      }
+    });
+
+    it('requires a recorded result before direct verification even with a certificate (Ticket T2)', async () => {
+      const certificate = await createTestCertificate('blank-result-verify-cert');
+      // An 'entered' row with a certificate but NO result value / pending
+      // pass-fail — exactly the empty rows the old no-data flow produced.
+      const testResult = await prisma.testResult.create({
+        data: {
+          projectId,
+          lotId,
+          testType: `Blank Result Verify Test ${Date.now()}`,
+          status: 'entered',
+          certificateDocId: certificate.id,
+          enteredById: userId,
+          enteredAt: new Date(),
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .post(`/api/test-results/${testResult.id}/verify`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe('RESULT_REQUIRED');
+        expect(res.body.error.message).toContain('pass/fail');
+
+        const unchanged = await prisma.testResult.findUniqueOrThrow({
+          where: { id: testResult.id },
+          select: { status: true, verifiedAt: true, verifiedById: true },
+        });
+        expect(unchanged.status).toBe('entered');
+        expect(unchanged.verifiedAt).toBeNull();
+        expect(unchanged.verifiedById).toBeNull();
+
+        const auditCount = await prisma.auditLog.count({
+          where: { entityId: testResult.id, action: AuditAction.TEST_RESULT_VERIFIED },
+        });
+        expect(auditCount).toBe(0);
+      } finally {
+        await prisma.auditLog.deleteMany({ where: { entityId: testResult.id } });
+        await prisma.testResult.deleteMany({ where: { id: testResult.id } });
+        await prisma.document.deleteMany({ where: { id: certificate.id } });
       }
     });
 
@@ -2733,6 +2785,76 @@ describe('Test Results API', () => {
 
       expect(res.status).toBe(400);
     });
+
+    it('blocks moving a blank test to entered without a recorded result (Ticket T2)', async () => {
+      const testResult = await prisma.testResult.create({
+        data: {
+          projectId,
+          lotId,
+          testType: `Blank Enter Test ${Date.now()}`,
+          status: 'results_received',
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .post(`/api/test-results/${testResult.id}/status`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ status: 'entered' });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe('RESULT_REQUIRED');
+        expect(res.body.error.message).toContain('pass/fail');
+
+        // The blank test is NOT advanced — this was the core bug.
+        const unchanged = await prisma.testResult.findUniqueOrThrow({
+          where: { id: testResult.id },
+          select: { status: true, enteredById: true, enteredAt: true },
+        });
+        expect(unchanged.status).toBe('results_received');
+        expect(unchanged.enteredById).toBeNull();
+        expect(unchanged.enteredAt).toBeNull();
+      } finally {
+        await prisma.testResult.deleteMany({ where: { id: testResult.id } });
+      }
+    });
+
+    it('enters a test with a recorded result via the optional-state short path (Ticket T2)', async () => {
+      // A manually-created test that already has a real result + pass/fail can
+      // jump straight from 'requested' to 'entered' (intermediate lab states are
+      // optional), keeping "have a cert" -> verified within 2 clicks.
+      const testResult = await prisma.testResult.create({
+        data: {
+          projectId,
+          lotId,
+          testType: `Short Path Enter Test ${Date.now()}`,
+          status: 'requested',
+          resultValue: 97.2,
+          passFail: 'pass',
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .post(`/api/test-results/${testResult.id}/status`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ status: 'entered' });
+
+        expect(res.status).toBe(200);
+        expect(res.body.testResult.status).toBe('entered');
+
+        const updated = await prisma.testResult.findUniqueOrThrow({
+          where: { id: testResult.id },
+          select: { status: true, enteredById: true, enteredAt: true },
+        });
+        expect(updated.status).toBe('entered');
+        expect(updated.enteredById).toBe(userId);
+        expect(updated.enteredAt).not.toBeNull();
+      } finally {
+        await prisma.auditLog.deleteMany({ where: { entityId: testResult.id } });
+        await prisma.testResult.deleteMany({ where: { id: testResult.id } });
+      }
+    });
   });
 
   describe('DELETE /api/test-results/:id', () => {
@@ -2936,6 +3058,12 @@ describe('Test Results API', () => {
         testType: `Pending Extraction ${Date.now()}-${Math.random().toString(36).slice(2)}`,
         status: 'pending_extraction',
         aiExtracted: true,
+        // Ticket T2: a real AI-extracted certificate lands with a result value
+        // and a pass/fail outcome already populated. Seed both so confirming
+        // (which moves the row to 'entered') satisfies the RESULT_REQUIRED gate
+        // even when the confirmation supplies no overriding corrections.
+        resultValue: 98.0,
+        passFail: 'pass',
       },
     });
   }
@@ -2999,6 +3127,9 @@ describe('Test Results API', () => {
     });
 
     it('confirms with no corrections payload and still moves status to entered', async () => {
+      // Ticket T2: the seeded row already carries an AI-extracted result + pass/
+      // fail, so confirming with no overriding corrections still satisfies the
+      // RESULT_REQUIRED gate and reaches 'entered'.
       const testResult = await createPendingExtractionTestResult();
 
       try {
@@ -3017,6 +3148,39 @@ describe('Test Results API', () => {
         });
         expect(persisted.status).toBe('entered');
         expect(persisted.enteredById).toBe(userId);
+      } finally {
+        await prisma.testResult.deleteMany({ where: { id: testResult.id } });
+      }
+    });
+
+    it('blocks confirming an extraction with no recorded result (Ticket T2)', async () => {
+      // A pending-extraction row with NO result value / pending pass-fail and no
+      // overriding correction must not reach 'entered'.
+      const testResult = await prisma.testResult.create({
+        data: {
+          projectId,
+          lotId,
+          testType: `Blank Extraction ${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          status: 'pending_extraction',
+          aiExtracted: true,
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .patch(`/api/test-results/${testResult.id}/confirm-extraction`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ corrections: { laboratoryName: 'ABC Labs' } });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe('RESULT_REQUIRED');
+
+        const persisted = await prisma.testResult.findUniqueOrThrow({
+          where: { id: testResult.id },
+          select: { status: true, enteredById: true },
+        });
+        expect(persisted.status).toBe('pending_extraction');
+        expect(persisted.enteredById).toBeNull();
       } finally {
         await prisma.testResult.deleteMany({ where: { id: testResult.id } });
       }
@@ -3208,6 +3372,44 @@ describe('Test Results API', () => {
         // Unlike confirm-extraction (which returns 400), batch-confirm catches
         // the AppError thrown by applyTestResultCorrections and records a
         // generic per-item failure instead of failing the request.
+        expect(res.status).toBe(200);
+        expect(res.body.summary).toEqual({ total: 1, success: 0, failed: 1 });
+        expect(res.body.results[0]).toEqual({
+          success: false,
+          testResultId: target.id,
+          error: 'Failed to confirm',
+        });
+
+        const persisted = await prisma.testResult.findUniqueOrThrow({
+          where: { id: target.id },
+          select: { status: true, enteredById: true },
+        });
+        expect(persisted.status).toBe('pending_extraction');
+        expect(persisted.enteredById).toBeNull();
+      } finally {
+        await prisma.testResult.deleteMany({ where: { id: target.id } });
+      }
+    });
+
+    it('records a blank-result item as a per-item failure (Ticket T2)', async () => {
+      // A pending-extraction row with no result + no overriding correction is
+      // swallowed as a per-item failure rather than reaching 'entered'.
+      const target = await prisma.testResult.create({
+        data: {
+          projectId,
+          lotId,
+          testType: `Blank Batch ${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          status: 'pending_extraction',
+          aiExtracted: true,
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .post('/api/test-results/batch-confirm')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ confirmations: [{ testResultId: target.id, corrections: {} }] });
+
         expect(res.status).toBe(200);
         expect(res.body.summary).toEqual({ total: 1, success: 0, failed: 1 });
         expect(res.body.results[0]).toEqual({

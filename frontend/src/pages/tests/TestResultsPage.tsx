@@ -9,6 +9,7 @@ import { TestResultsTable } from './components/TestResultsTable';
 import { TestResultsMobileList } from './components/TestResultsMobileList';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { CreateTestModal } from './components/CreateTestModal';
+import { EnterResultsModal, type EnterResultsValues } from './components/EnterResultsModal';
 import { UploadCertificateModal } from './components/UploadCertificateModal';
 import { BatchUploadModal } from './components/BatchUploadModal';
 import { RejectTestModal } from './components/RejectTestModal';
@@ -41,6 +42,7 @@ export function TestResultsPage() {
 
   // Modal visibility state
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [enterResultsTest, setEnterResultsTest] = useState<TestResult | null>(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showBatchUploadModal, setShowBatchUploadModal] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
@@ -50,6 +52,7 @@ export function TestResultsPage() {
   // Status update tracking
   const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
   const updatingStatusRef = useRef<string | null>(null);
+  const enteringResultsRef = useRef<string | null>(null);
   const rejectingTestRef = useRef<string | null>(null);
   const creatingTestRef = useRef(false);
   const creatingNcrRef = useRef(false);
@@ -186,6 +189,49 @@ export function TestResultsPage() {
       } finally {
         updatingStatusRef.current = null;
         setUpdatingStatusId(null);
+      }
+    },
+    [refreshTestResults],
+  );
+
+  // Ticket T2: open the Enter Results form for a test (replaces the old no-data
+  // "Enter Results" status click).
+  const openEnterResultsModal = useCallback((test: TestResult) => {
+    setEnterResultsTest(test);
+  }, []);
+
+  // Ticket T2: record the actual result value + pass/fail on the test (PATCH),
+  // then advance it to 'entered' (status POST). Two requests, one user action:
+  // this is the single mandatory click that gets a test with a cert to 'entered',
+  // leaving only Verify before it is complete (<=2 clicks from "have a cert").
+  const handleEnterResults = useCallback(
+    async (testId: string, values: EnterResultsValues) => {
+      if (enteringResultsRef.current === testId) return;
+
+      enteringResultsRef.current = testId;
+      try {
+        await apiFetch(`/api/test-results/${encodeURIComponent(testId)}`, {
+          method: 'PATCH',
+          body: JSON.stringify({
+            resultValue: values.resultValue.trim(),
+            resultUnit: values.resultUnit.trim(),
+            specificationMin: values.specificationMin.trim(),
+            specificationMax: values.specificationMax.trim(),
+            passFail: values.passFail,
+          }),
+        });
+
+        await apiFetch(`/api/test-results/${encodeURIComponent(testId)}/status`, {
+          method: 'POST',
+          body: JSON.stringify({ status: 'entered' }),
+        });
+
+        await refreshTestResults();
+        setEnterResultsTest(null);
+      } finally {
+        // On failure the error propagates to the modal (which stays open); the
+        // finally always clears the in-flight guard.
+        enteringResultsRef.current = null;
       }
     },
     [refreshTestResults],
@@ -490,6 +536,7 @@ export function TestResultsPage() {
           hasActiveFilters={testResults.length > 0 && hasActiveFilters}
           updatingStatusId={updatingStatusId}
           onUpdateStatus={handleUpdateStatus}
+          onOpenEnterResults={openEnterResultsModal}
           onRejectTest={openRejectModal}
           onAttachCertificate={handleAttachCertificate}
           onClearFilters={clearFilters}
@@ -502,6 +549,7 @@ export function TestResultsPage() {
           hasActiveFilters={testResults.length > 0 && hasActiveFilters}
           updatingStatusId={updatingStatusId}
           onUpdateStatus={handleUpdateStatus}
+          onOpenEnterResults={openEnterResultsModal}
           onRejectTest={openRejectModal}
           onAttachCertificate={handleAttachCertificate}
           onClearFilters={clearFilters}
@@ -516,6 +564,13 @@ export function TestResultsPage() {
         onSuccess={handleCreateTestResult}
         lots={lots}
         projectState={projectState}
+      />
+
+      <EnterResultsModal
+        isOpen={enterResultsTest !== null}
+        test={enterResultsTest}
+        onClose={() => setEnterResultsTest(null)}
+        onSubmit={handleEnterResults}
       />
 
       <UploadCertificateModal
