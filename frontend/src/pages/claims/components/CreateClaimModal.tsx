@@ -201,7 +201,7 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
         <div className="space-y-6">
           {(loadError || createError) && (
             <div
-              className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700"
+              className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
               role="alert"
             >
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -288,7 +288,7 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
                             <p
                               key={`${lot.id}-${item.code}`}
                               className={`flex items-start gap-1.5 text-xs ${
-                                item.blocksAction ? 'text-red-700' : 'text-amber-700'
+                                item.blocksAction ? 'text-destructive' : 'text-warning'
                               }`}
                             >
                               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
@@ -303,7 +303,7 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
                       {supportItems.length > 0 &&
                         actionBlockers.length === 0 &&
                         evidenceIssues.length === 0 && (
-                          <p className="mt-2 ml-7 flex items-start gap-1.5 text-xs text-green-700">
+                          <p className="mt-2 ml-7 flex items-start gap-1.5 text-xs text-success">
                             <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
                             <span>{supportItems[0].title}</span>
                           </p>
@@ -323,7 +323,7 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
                             onChange={(e) => updateLotPercentage(lot.id, e.target.value)}
                             className={`w-20 h-8 text-sm text-center ${
                               getClaimIncrementError(lot.percentComplete, lot.remainingPercentage)
-                                ? 'border-red-500'
+                                ? 'border-destructive'
                                 : ''
                             }`}
                           />
@@ -333,7 +333,7 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
                           </span>
                           {getClaimIncrementError(lot.percentComplete, lot.remainingPercentage) && (
                             <span
-                              className="text-sm text-red-600"
+                              className="text-sm text-destructive"
                               role="alert"
                               aria-live="assertive"
                             >

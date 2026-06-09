@@ -15,27 +15,27 @@ interface CompletenessCheckModalProps {
 function severityStyles(item: EvidenceReadinessItem) {
   if (item.severity === 'blocker') {
     return {
-      wrapper: 'bg-red-50 border-red-100',
-      icon: <XCircle className="h-4 w-4 text-red-600 flex-shrink-0 mt-0.5" />,
-      title: 'text-red-800',
-      detail: 'text-red-700',
+      wrapper: 'bg-destructive/10 border-destructive/20',
+      icon: <XCircle className="h-4 w-4 text-destructive flex-shrink-0 mt-0.5" />,
+      title: 'text-destructive',
+      detail: 'text-destructive/90',
     };
   }
 
   if (item.severity === 'warning') {
     return {
-      wrapper: 'bg-amber-50 border-amber-100',
-      icon: <AlertTriangle className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />,
-      title: 'text-amber-800',
-      detail: 'text-amber-700',
+      wrapper: 'bg-warning/10 border-warning/20',
+      icon: <AlertTriangle className="h-4 w-4 text-warning flex-shrink-0 mt-0.5" />,
+      title: 'text-warning',
+      detail: 'text-warning/90',
     };
   }
 
   return {
-    wrapper: 'bg-green-50 border-green-100',
-    icon: <CheckCircle2 className="h-4 w-4 text-green-600 flex-shrink-0 mt-0.5" />,
-    title: 'text-green-800',
-    detail: 'text-green-700',
+    wrapper: 'bg-success/10 border-success/20',
+    icon: <CheckCircle2 className="h-4 w-4 text-success flex-shrink-0 mt-0.5" />,
+    title: 'text-success',
+    detail: 'text-success/90',
   };
 }
 
@@ -56,7 +56,7 @@ function EvidenceItem({ item }: { item: EvidenceReadinessItem }) {
 function stateBadge(lot: CompletenessLot) {
   if (lot.claim.state === 'blocked') {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+      <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive">
         <XCircle className="h-3 w-3" /> Blocked
       </span>
     );
@@ -64,14 +64,14 @@ function stateBadge(lot: CompletenessLot) {
 
   if (lot.claim.state === 'warning') {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+      <span className="inline-flex items-center gap-1 rounded-full bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning">
         <AlertTriangle className="h-3 w-3" /> Needs review
       </span>
     );
   }
 
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+    <span className="inline-flex items-center gap-1 rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success">
       <CheckCircle2 className="h-3 w-3" /> Ready
     </span>
   );
@@ -84,10 +84,10 @@ function LotEvidenceCard({ lot }: { lot: CompletenessLot }) {
     <div
       className={`rounded-lg border p-4 ${
         lot.claim.state === 'blocked'
-          ? 'border-red-200 bg-red-50/60'
+          ? 'border-destructive/20 bg-destructive/5'
           : lot.claim.state === 'warning'
-            ? 'border-amber-200 bg-amber-50/60'
-            : 'border-green-200 bg-green-50/60'
+            ? 'border-warning/20 bg-warning/5'
+            : 'border-success/20 bg-success/5'
       }`}
     >
       <div className="flex items-start justify-between gap-3">
@@ -110,7 +110,7 @@ function LotEvidenceCard({ lot }: { lot: CompletenessLot }) {
           ))}
         </div>
       ) : (
-        <div className="mt-3 flex items-center gap-2 text-sm text-green-700">
+        <div className="mt-3 flex items-center gap-2 text-sm text-success">
           <CheckCircle2 className="h-4 w-4" />
           Claim evidence is ready for review.
         </div>
@@ -145,15 +145,17 @@ export const CompletenessCheckModal = React.memo(function CompletenessCheckModal
           <div className="space-y-6">
             <div className="grid gap-4 md:grid-cols-4">
               <div className="rounded-lg border bg-card p-4 text-center">
-                <div className="text-3xl font-bold text-green-600">{data.summary.readyCount}</div>
+                <div className="text-3xl font-bold text-success">{data.summary.readyCount}</div>
                 <p className="text-sm text-muted-foreground">Ready</p>
               </div>
               <div className="rounded-lg border bg-card p-4 text-center">
-                <div className="text-3xl font-bold text-amber-600">{data.summary.reviewCount}</div>
+                <div className="text-3xl font-bold text-warning">{data.summary.reviewCount}</div>
                 <p className="text-sm text-muted-foreground">Needs review</p>
               </div>
               <div className="rounded-lg border bg-card p-4 text-center">
-                <div className="text-3xl font-bold text-red-600">{data.summary.blockedCount}</div>
+                <div className="text-3xl font-bold text-destructive">
+                  {data.summary.blockedCount}
+                </div>
                 <p className="text-sm text-muted-foreground">Blocked</p>
               </div>
               <div className="rounded-lg border bg-card p-4 text-center">
@@ -172,7 +174,7 @@ export const CompletenessCheckModal = React.memo(function CompletenessCheckModal
                     Claim value excluding lines with evidence blockers.
                   </p>
                 </div>
-                <div className="text-xl font-bold text-green-700">
+                <div className="text-xl font-bold text-foreground">
                   {formatCurrency(data.summary.recommendedAmount)}
                 </div>
               </div>
@@ -196,7 +198,7 @@ export const CompletenessCheckModal = React.memo(function CompletenessCheckModal
             )}
 
             {data.summary.blockedCount > 0 && (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+              <div className="rounded-lg border border-warning/20 bg-warning/10 p-4 text-sm text-warning">
                 Evidence blockers do not change this claim&apos;s status. Resolve them before
                 sharing the claim pack when the client needs a cleaner evidence trail.
               </div>

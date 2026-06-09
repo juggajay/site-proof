@@ -26,11 +26,11 @@ export const ClaimsSummary = React.memo(function ClaimsSummary({
       </div>
       <div className="rounded-lg border bg-card p-4">
         <p className="text-sm text-muted-foreground">Total Paid</p>
-        <p className="text-2xl font-bold text-green-600">{formatCurrency(totalPaid)}</p>
+        <p className="text-2xl font-bold">{formatCurrency(totalPaid)}</p>
       </div>
       <div className="rounded-lg border bg-card p-4">
         <p className="text-sm text-muted-foreground">Outstanding</p>
-        <p className="text-2xl font-bold text-amber-600">{formatCurrency(outstanding)}</p>
+        <p className="text-2xl font-bold text-warning">{formatCurrency(outstanding)}</p>
       </div>
     </div>
   );

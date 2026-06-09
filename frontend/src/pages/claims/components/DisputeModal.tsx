@@ -53,16 +53,16 @@ export const DisputeModal = React.memo(function DisputeModal({
   return (
     <Modal onClose={onClose} alert className="max-w-md">
       <AlertModalHeader>
-        <span className="text-red-600">Mark Claim as Disputed</span>
+        <span className="text-destructive">Mark Claim as Disputed</span>
       </AlertModalHeader>
       <AlertModalDescription>
         Record dispute notes before moving this progress claim into disputed status.
       </AlertModalDescription>
       <ModalBody>
         <div className="space-y-4">
-          <div className="flex items-start gap-3 p-4 bg-red-50 rounded-lg border border-red-200">
-            <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
-            <div className="text-sm text-red-800">
+          <div className="flex items-start gap-3 p-4 bg-destructive/10 rounded-lg border border-destructive/20">
+            <AlertCircle className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
+            <div className="text-sm text-destructive">
               <p className="font-medium">This action will mark the claim as disputed.</p>
               <p className="mt-1">
                 The claim will remain in disputed status until resolved. Please provide details
@@ -73,7 +73,7 @@ export const DisputeModal = React.memo(function DisputeModal({
 
           <div>
             <Label>
-              Dispute Notes <span className="text-red-500">*</span>
+              Dispute Notes <span className="text-destructive">*</span>
             </Label>
             <Textarea
               value={disputeNotes}
@@ -89,7 +89,7 @@ export const DisputeModal = React.memo(function DisputeModal({
               {trimmedDisputeNotes.length.toLocaleString()}/
               {CLAIM_DISPUTE_NOTES_MAX_LENGTH.toLocaleString()}
             </p>
-            {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+            {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
           </div>
         </div>
       </ModalBody>

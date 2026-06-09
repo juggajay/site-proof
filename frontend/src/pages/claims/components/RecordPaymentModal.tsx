@@ -101,7 +101,7 @@ export const RecordPaymentModal = React.memo(function RecordPaymentModal({
         <div className="space-y-4">
           <div className="rounded-lg border bg-muted/40 p-4">
             <div className="flex items-start gap-3">
-              <div className="rounded-lg bg-green-100 p-2 text-green-700">
+              <div className="rounded-lg bg-muted p-2 text-muted-foreground">
                 <DollarSign className="h-5 w-5" />
               </div>
               <div className="space-y-1 text-sm">
@@ -119,7 +119,7 @@ export const RecordPaymentModal = React.memo(function RecordPaymentModal({
 
           <div>
             <Label>
-              Payment Amount <span className="text-red-500">*</span>
+              Payment Amount <span className="text-destructive">*</span>
             </Label>
             <Input
               inputMode="decimal"
@@ -170,7 +170,7 @@ export const RecordPaymentModal = React.memo(function RecordPaymentModal({
             />
           </div>
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
       </ModalBody>
       <ModalFooter>

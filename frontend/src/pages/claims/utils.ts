@@ -75,13 +75,13 @@ export function getCertificationDueStatus(claim: Claim): CertificationDueStatus 
   if (daysUntilDue < 0) {
     return {
       text: `Certification overdue by ${Math.abs(daysUntilDue)} days`,
-      className: 'text-red-600 font-semibold',
+      className: 'text-destructive font-semibold',
       isOverdue: true,
     };
   } else if (daysUntilDue <= 3) {
     return {
       text: `Certification due in ${daysUntilDue} days`,
-      className: 'text-amber-600',
+      className: 'text-warning',
       isOverdue: false,
     };
   } else {
@@ -107,9 +107,9 @@ export function getPaymentDueStatus(claim: Claim): PaymentDueStatus | null {
   const daysUntilDue = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
   if (daysUntilDue < 0) {
-    return { text: `Overdue by ${Math.abs(daysUntilDue)} days`, className: 'text-red-600' };
+    return { text: `Overdue by ${Math.abs(daysUntilDue)} days`, className: 'text-destructive' };
   } else if (daysUntilDue <= 3) {
-    return { text: `Due in ${daysUntilDue} days`, className: 'text-amber-600' };
+    return { text: `Due in ${daysUntilDue} days`, className: 'text-warning' };
   } else {
     return { text: `Due ${due.toLocaleDateString('en-AU')}`, className: 'text-muted-foreground' };
   }
