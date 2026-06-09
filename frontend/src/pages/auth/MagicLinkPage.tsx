@@ -78,9 +78,9 @@ export function MagicLinkPage() {
   if (status === 'success') {
     return (
       <div className="space-y-4 text-center" role="status">
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-success/10">
           <svg
-            className="h-6 w-6 text-green-600"
+            className="h-6 w-6 text-success"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -96,8 +96,13 @@ export function MagicLinkPage() {
 
   return (
     <div className="space-y-4 text-center" role="alert">
-      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
-        <svg className="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10">
+        <svg
+          className="h-6 w-6 text-destructive"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
           <path
             strokeLinecap="round"
             strokeLinejoin="round"

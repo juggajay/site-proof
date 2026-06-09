@@ -46,7 +46,7 @@ export function ForgotPasswordPage() {
       <div className="space-y-4 text-center">
         <h2 className="text-2xl font-bold">Check Your Email</h2>
         <p className="text-muted-foreground">We've sent a password reset link to {sentEmail}</p>
-        <Link to="/login" className="text-primary hover:underline">
+        <Link to="/login" className="text-foreground hover:underline">
           Back to sign in
         </Link>
       </div>
@@ -89,7 +89,7 @@ export function ForgotPasswordPage() {
         {isSubmitting ? 'Sending...' : 'Send Reset Link'}
       </Button>
 
-      <Link to="/login" className="block text-center text-sm text-primary hover:underline">
+      <Link to="/login" className="block text-center text-sm text-foreground hover:underline">
         Back to sign in
       </Link>
     </form>

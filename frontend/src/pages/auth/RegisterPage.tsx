@@ -105,7 +105,7 @@ export function RegisterPage() {
           address. If you don't see it, check your spam folder.
         </p>
         {import.meta.env.DEV && (
-          <div className="rounded-lg border bg-amber-50 p-4 text-left text-sm text-amber-800">
+          <div className="rounded-lg border border-border bg-muted p-4 text-left text-sm text-muted-foreground">
             <strong>Development Mode:</strong> Check the terminal/console running the backend server
             for the verification link.
           </div>
@@ -151,7 +151,7 @@ export function RegisterPage() {
             id="firstName"
             type="text"
             {...register('firstName')}
-            className={`mt-1 w-full rounded-lg border bg-background px-3 py-2 ${
+            className={`mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-foreground placeholder:text-muted-foreground ${
               errors.firstName ? 'border-destructive' : ''
             }`}
           />
@@ -169,7 +169,7 @@ export function RegisterPage() {
             id="lastName"
             type="text"
             {...register('lastName')}
-            className={`mt-1 w-full rounded-lg border bg-background px-3 py-2 ${
+            className={`mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-foreground placeholder:text-muted-foreground ${
               errors.lastName ? 'border-destructive' : ''
             }`}
           />
@@ -190,7 +190,7 @@ export function RegisterPage() {
           type="email"
           autoComplete="email"
           {...register('email')}
-          className={`mt-1 w-full rounded-lg border bg-background px-3 py-2 ${
+          className={`mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-foreground placeholder:text-muted-foreground ${
             errors.email ? 'border-destructive' : ''
           }`}
         />
@@ -210,14 +210,14 @@ export function RegisterPage() {
           type="password"
           autoComplete="new-password"
           {...register('password')}
-          className={`mt-1 w-full rounded-lg border bg-background px-3 py-2 ${
+          className={`mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-foreground placeholder:text-muted-foreground ${
             errors.password ? 'border-destructive' : ''
           }`}
         />
         {password && (
           <div className="mt-2 space-y-1 text-xs">
             <div
-              className={`flex items-center gap-1 ${passwordValidation.minLength ? 'text-green-600' : 'text-muted-foreground'}`}
+              className={`flex items-center gap-1 ${passwordValidation.minLength ? 'text-success' : 'text-muted-foreground'}`}
             >
               {passwordValidation.minLength ? (
                 <Check className="h-3 w-3" />
@@ -227,7 +227,7 @@ export function RegisterPage() {
               At least {MIN_PASSWORD_LENGTH} characters
             </div>
             <div
-              className={`flex items-center gap-1 ${passwordValidation.hasUppercase ? 'text-green-600' : 'text-muted-foreground'}`}
+              className={`flex items-center gap-1 ${passwordValidation.hasUppercase ? 'text-success' : 'text-muted-foreground'}`}
             >
               {passwordValidation.hasUppercase ? (
                 <Check className="h-3 w-3" />
@@ -237,7 +237,7 @@ export function RegisterPage() {
               One uppercase letter
             </div>
             <div
-              className={`flex items-center gap-1 ${passwordValidation.hasLowercase ? 'text-green-600' : 'text-muted-foreground'}`}
+              className={`flex items-center gap-1 ${passwordValidation.hasLowercase ? 'text-success' : 'text-muted-foreground'}`}
             >
               {passwordValidation.hasLowercase ? (
                 <Check className="h-3 w-3" />
@@ -247,7 +247,7 @@ export function RegisterPage() {
               One lowercase letter
             </div>
             <div
-              className={`flex items-center gap-1 ${passwordValidation.hasNumber ? 'text-green-600' : 'text-muted-foreground'}`}
+              className={`flex items-center gap-1 ${passwordValidation.hasNumber ? 'text-success' : 'text-muted-foreground'}`}
             >
               {passwordValidation.hasNumber ? (
                 <Check className="h-3 w-3" />
@@ -257,7 +257,7 @@ export function RegisterPage() {
               One number
             </div>
             <div
-              className={`flex items-center gap-1 ${passwordValidation.hasSpecial ? 'text-green-600' : 'text-muted-foreground'}`}
+              className={`flex items-center gap-1 ${passwordValidation.hasSpecial ? 'text-success' : 'text-muted-foreground'}`}
             >
               {passwordValidation.hasSpecial ? (
                 <Check className="h-3 w-3" />
@@ -284,7 +284,7 @@ export function RegisterPage() {
           type="password"
           autoComplete="new-password"
           {...register('confirmPassword')}
-          className={`mt-1 w-full rounded-lg border bg-background px-3 py-2 ${
+          className={`mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-foreground placeholder:text-muted-foreground ${
             errors.confirmPassword ? 'border-destructive' : ''
           }`}
         />
@@ -301,7 +301,7 @@ export function RegisterPage() {
             id="tosAccepted"
             type="checkbox"
             {...register('tosAccepted')}
-            className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
+            className="mt-1 h-4 w-4 rounded border-border accent-primary text-primary focus:ring-primary"
           />
           <label htmlFor="tosAccepted" className="text-sm">
             <span className="flex items-center gap-1">
@@ -312,7 +312,7 @@ export function RegisterPage() {
               href="/terms-of-service"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-primary hover:underline"
+              className="text-foreground hover:underline"
             >
               Terms of Service
             </a>{' '}
@@ -321,7 +321,7 @@ export function RegisterPage() {
               href="/privacy-policy"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-primary hover:underline"
+              className="text-foreground hover:underline"
             >
               Privacy Policy
             </a>
@@ -344,7 +344,7 @@ export function RegisterPage() {
 
       <p className="text-center text-sm">
         Already have an account?{' '}
-        <Link to="/login" className="text-primary hover:underline">
+        <Link to="/login" className="text-foreground hover:underline">
           Sign in
         </Link>
       </p>
