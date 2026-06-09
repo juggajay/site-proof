@@ -108,21 +108,28 @@ export function QualityManagementSection({
                 <div className="flex items-center gap-2 text-sm">
                   <span
                     className={
+                      !conformStatus.prerequisites.testRequired ||
                       conformStatus.prerequisites.hasPassingTest
                         ? 'text-success'
                         : 'text-destructive'
                     }
                   >
-                    {conformStatus.prerequisites.hasPassingTest ? '\u2713' : '\u2717'}
+                    {!conformStatus.prerequisites.testRequired ||
+                    conformStatus.prerequisites.hasPassingTest
+                      ? '\u2713'
+                      : '\u2717'}
                   </span>
                   <span
                     className={
+                      !conformStatus.prerequisites.testRequired ||
                       conformStatus.prerequisites.hasPassingTest
                         ? 'text-muted-foreground'
                         : 'text-destructive'
                     }
                   >
-                    Passing Verified Test Result
+                    {conformStatus.prerequisites.testRequired
+                      ? 'Passing Verified Test Result'
+                      : 'No test required by this ITP'}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-sm">

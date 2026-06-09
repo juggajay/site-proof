@@ -66,6 +66,10 @@ interface ConformancePrerequisiteSnapshot {
   itpCompletedCount: number;
   itpTotalCount: number;
   itpIncompleteItems: { id: string; description: string; pointType: string }[];
+  // True only when the lot's ITP actually has a test point. The readiness layer
+  // must gate the "no passing verified test" blocker on this so a no-test-point
+  // lot is not shown a contradictory test blocker that the conform gate allows.
+  testRequired: boolean;
   hasPassingTest: boolean;
   testResults: { id: string; testType: string; passFail: string; status: string }[];
   noOpenNcrs: boolean;

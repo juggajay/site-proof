@@ -18,13 +18,14 @@ function baseInput(overrides: Partial<LotReadinessInput> = {}): LotReadinessInpu
     canViewCommercial: true,
     conformStatus: {
       canConform: false,
-      blockingReasons: ['No ITP assigned to this lot', 'No passing verified test result'],
+      blockingReasons: ['No ITP assigned to this lot'],
       prerequisites: {
         itpAssigned: false,
         itpCompleted: false,
         itpCompletedCount: 0,
         itpTotalCount: 0,
         itpIncompleteItems: [],
+        testRequired: false,
         hasPassingTest: false,
         testResults: [],
         noOpenNcrs: true,
@@ -50,7 +51,10 @@ describe('evidence readiness helpers', () => {
       baseInput({
         conformStatus: {
           canConform: false,
-          blockingReasons: ['ITP incomplete', 'No passing verified test result'],
+          blockingReasons: [
+            'ITP checklist incomplete (1/3 items completed)',
+            'ITP requires a test, but no passing verified test result was recorded',
+          ],
           prerequisites: {
             itpAssigned: true,
             itpCompleted: false,
@@ -60,6 +64,8 @@ describe('evidence readiness helpers', () => {
               { id: 'item-2', description: 'Hold point release', pointType: 'hold_point' },
               { id: 'item-3', description: 'Survey check', pointType: 'standard' },
             ],
+            // This lot's ITP has a test point, so the test blocker still shows.
+            testRequired: true,
             hasPassingTest: false,
             testResults: [
               { id: 'test-1', testType: 'Compaction', passFail: 'pending', status: 'submitted' },
@@ -82,6 +88,43 @@ describe('evidence readiness helpers', () => {
     expect(readiness.summary.actionBlockerCount).toBe(3);
   });
 
+  it('does not raise the test blocker for a no-test-point lot and reports prerequisites met', () => {
+    // A lot whose ITP has no test point: the conform gate allows conformance
+    // (testRequired false), so the readiness layer must NOT surface a
+    // contradictory "No passing verified test result" blocker, and the
+    // "Conformance prerequisites met" support line must appear.
+    const readiness = buildLotReadinessFromInputs(
+      baseInput({
+        conformStatus: {
+          canConform: true,
+          blockingReasons: [],
+          prerequisites: {
+            itpAssigned: true,
+            itpCompleted: true,
+            itpCompletedCount: 2,
+            itpTotalCount: 2,
+            itpIncompleteItems: [],
+            testRequired: false,
+            hasPassingTest: false,
+            testResults: [],
+            noOpenNcrs: true,
+            openNcrs: [],
+          },
+        },
+      }),
+    );
+
+    const codes = readiness.conformance.blockers.map((readinessItem) => readinessItem.code);
+    expect(codes).not.toContain('no_passing_verified_test');
+    // The conformance bucket has no blockers at all and is ready...
+    expect(readiness.conformance.blockers).toEqual([]);
+    expect(readiness.conformance.state).toBe('ready');
+    // ...and the support line that was previously suppressed now appears.
+    expect(readiness.conformance.support.map((readinessItem) => readinessItem.code)).toContain(
+      'conformance_prerequisites_met',
+    );
+  });
+
   it('treats unreleased hold points as claim evidence blockers without disabling claim selection', () => {
     const readiness = buildLotReadinessFromInputs(
       baseInput({
@@ -101,6 +144,7 @@ describe('evidence readiness helpers', () => {
             itpCompletedCount: 3,
             itpTotalCount: 3,
             itpIncompleteItems: [],
+            testRequired: true,
             hasPassingTest: true,
             testResults: [
               { id: 'test-2', testType: 'Compaction', passFail: 'pass', status: 'verified' },
@@ -153,6 +197,7 @@ describe('evidence readiness helpers', () => {
             itpCompletedCount: 1,
             itpTotalCount: 1,
             itpIncompleteItems: [],
+            testRequired: true,
             hasPassingTest: true,
             testResults: [
               { id: 'test-3', testType: 'Compaction', passFail: 'pass', status: 'verified' },
@@ -231,6 +276,7 @@ describe('evidence readiness helpers', () => {
             itpCompletedCount: 1,
             itpTotalCount: 1,
             itpIncompleteItems: [],
+            testRequired: true,
             hasPassingTest: true,
             testResults: [
               { id: 'test-5', testType: 'Compaction', passFail: 'pass', status: 'verified' },
