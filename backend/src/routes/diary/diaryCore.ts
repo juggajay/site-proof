@@ -141,12 +141,10 @@ router.get(
         where,
         include: {
           submittedBy: { select: { id: true, fullName: true, email: true } },
-          personnel: { include: { lot: { select: { id: true, lotNumber: true } } } },
-          plant: { include: { lot: { select: { id: true, lotNumber: true } } } },
-          activities: { include: { lot: { select: { id: true, lotNumber: true } } } },
-          delays: { include: { lot: { select: { id: true, lotNumber: true } } } },
-          deliveries: { include: { lot: { select: { id: true, lotNumber: true } } } },
-          events: { include: { lot: { select: { id: true, lotNumber: true } } } },
+          // The list UI only shows a personnel count; id-only keeps
+          // `.length` consumers working without hydrating child rows.
+          // Full children come from GET /entry/:diaryId.
+          personnel: { select: { id: true } },
         },
         orderBy: { date: 'desc' },
         skip,

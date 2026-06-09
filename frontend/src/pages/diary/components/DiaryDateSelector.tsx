@@ -102,10 +102,10 @@ export const DiaryDateSelector = React.memo(function DiaryDateSelector({
       setSearching(true);
       try {
         const queryParams = new URLSearchParams({ search: query.trim() });
-        const data = await apiFetch<DailyDiary[]>(
+        const data = await apiFetch<DailyDiary[] | { data: DailyDiary[] }>(
           `/api/diary/${encodeURIComponent(projectId)}?${queryParams.toString()}`,
         );
-        setFilteredDiaries(data);
+        setFilteredDiaries(Array.isArray(data) ? data : data.data || []);
       } catch (err) {
         logError('Error searching diaries:', err);
         setFilteredDiaries([]);
