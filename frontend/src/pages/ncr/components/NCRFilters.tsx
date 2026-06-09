@@ -9,6 +9,15 @@ import {
 import { formatStatusLabel } from '@/lib/statusLabels';
 import type { NCR } from '../types';
 
+function responsibleLabel(ncr: NCR): string {
+  return (
+    ncr.responsibleUser?.fullName ||
+    ncr.responsibleUser?.email ||
+    ncr.responsibleSubcontractor?.companyName ||
+    'Unassigned'
+  );
+}
+
 interface NCRFiltersProps {
   ncrs: NCR[];
   isMobile: boolean;
@@ -29,13 +38,7 @@ function NCRFiltersInner({ ncrs, isMobile, onFilteredNcrsChange }: NCRFiltersPro
   const uniqueStatuses = useMemo(() => [...new Set(ncrs.map((ncr) => ncr.status))], [ncrs]);
   const uniqueCategories = useMemo(() => [...new Set(ncrs.map((ncr) => ncr.category))], [ncrs]);
   const uniqueResponsible = useMemo(
-    () => [
-      ...new Set(
-        ncrs.map(
-          (ncr) => ncr.responsibleUser?.fullName || ncr.responsibleUser?.email || 'Unassigned',
-        ),
-      ),
-    ],
+    () => [...new Set(ncrs.map((ncr) => responsibleLabel(ncr)))],
     [ncrs],
   );
 
@@ -50,7 +53,8 @@ function NCRFiltersInner({ ncrs, isMobile, onFilteredNcrsChange }: NCRFiltersPro
           ncr.description.toLowerCase().includes(query) ||
           ncr.category.toLowerCase().includes(query) ||
           ncr.responsibleUser?.fullName?.toLowerCase().includes(query) ||
-          ncr.responsibleUser?.email?.toLowerCase().includes(query);
+          ncr.responsibleUser?.email?.toLowerCase().includes(query) ||
+          ncr.responsibleSubcontractor?.companyName?.toLowerCase().includes(query);
         if (!matchesSearch) return false;
       }
 
@@ -58,9 +62,7 @@ function NCRFiltersInner({ ncrs, isMobile, onFilteredNcrsChange }: NCRFiltersPro
       if (categoryFilter && ncr.category !== categoryFilter) return false;
 
       if (responsibleFilter) {
-        const responsibleName =
-          ncr.responsibleUser?.fullName || ncr.responsibleUser?.email || 'Unassigned';
-        if (responsibleName !== responsibleFilter) return false;
+        if (responsibleLabel(ncr) !== responsibleFilter) return false;
       }
 
       if (dateFromFilter) {

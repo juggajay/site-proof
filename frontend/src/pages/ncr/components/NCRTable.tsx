@@ -14,6 +14,7 @@ interface NCRTableProps {
   actionLoading: boolean;
   copiedNcrId: string | null;
   onCopyLink: (ncrId: string, ncrNumber: string) => void;
+  onAssign: (ncr: NCR) => void;
   onRespond: (ncr: NCR) => void;
   onReviewResponse: (ncr: NCR) => void;
   onQmApprove: (ncrId: string) => void;
@@ -30,6 +31,7 @@ function NCRTableInner({
   actionLoading,
   copiedNcrId,
   onCopyLink,
+  onAssign,
   onRespond,
   onReviewResponse,
   onQmApprove,
@@ -82,6 +84,15 @@ function NCRTableInner({
       });
     }
   };
+
+  // Assign/reassign is restricted to NCR management roles, mirroring the
+  // backend PATCH /api/ncrs/:id gate.
+  const canAssign =
+    userRole?.isQualityManager === true ||
+    (userRole?.role !== undefined &&
+      ['project_manager', 'admin', 'owner', 'site_manager', 'quality_manager'].includes(
+        userRole.role,
+      ));
 
   // Row virtualizer
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -173,6 +184,8 @@ function NCRTableInner({
                 <td className="px-4 py-3 text-sm">
                   {ncr.responsibleUser ? (
                     ncr.responsibleUser.fullName || ncr.responsibleUser.email
+                  ) : ncr.responsibleSubcontractor ? (
+                    ncr.responsibleSubcontractor.companyName
                   ) : (
                     <span className="text-muted-foreground">Unassigned</span>
                   )}
@@ -215,6 +228,19 @@ function NCRTableInner({
                     >
                       <Printer className="h-3.5 w-3.5" />
                     </button>
+                    {/* Assign / Reassign Button (management roles) */}
+                    {canAssign && (
+                      <button
+                        onClick={() => onAssign(ncr)}
+                        disabled={actionLoading}
+                        className="px-3 py-1 text-xs border rounded hover:bg-muted/50 disabled:opacity-50"
+                        title="Assign or reassign this NCR"
+                      >
+                        {ncr.responsibleUser || ncr.responsibleSubcontractor
+                          ? 'Reassign'
+                          : 'Assign'}
+                      </button>
+                    )}
                     {/* Respond Button for open NCRs */}
                     {ncr.status === 'open' && (
                       <button

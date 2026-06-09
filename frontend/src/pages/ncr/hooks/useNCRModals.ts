@@ -3,6 +3,7 @@ import type { NCR } from '../types';
 
 type ModalType =
   | 'create'
+  | 'assign'
   | 'close'
   | 'concession'
   | 'respond'

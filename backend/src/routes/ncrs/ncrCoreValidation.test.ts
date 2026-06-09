@@ -27,21 +27,51 @@ describe('ncrCoreValidation', () => {
       specificationReference: undefined,
       category: 'major',
       responsibleUserId: 'user-1',
+      responsibleSubcontractorId: undefined,
       dueDate: '2026-06-15',
       lotIds: ['lot-1', 'lot-2'],
     });
   });
 
+  it('rejects assigning an NCR to both a user and a subcontractor on create', () => {
+    const result = createNcrSchema.safeParse({
+      projectId: 'project-1',
+      description: 'Nonconforming compaction result',
+      category: 'major',
+      responsibleUserId: 'user-1',
+      responsibleSubcontractorId: 'subcontractor-1',
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0]?.message).toContain('user or a subcontractor');
+    }
+  });
+
   it('normalizes blank nullable update fields to null', () => {
     const result = updateNcrSchema.parse({
       responsibleUserId: '   ',
+      responsibleSubcontractorId: '   ',
       comments: '  Reviewed by QM  ',
     });
 
     expect(result).toEqual({
       responsibleUserId: null,
+      responsibleSubcontractorId: null,
       comments: 'Reviewed by QM',
     });
+  });
+
+  it('rejects assigning an NCR to both a user and a subcontractor on update', () => {
+    const result = updateNcrSchema.safeParse({
+      responsibleUserId: 'user-1',
+      responsibleSubcontractorId: 'subcontractor-1',
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0]?.message).toContain('user or a subcontractor');
+    }
   });
 
   it('builds the next NCR number from valid existing sequence values only', () => {

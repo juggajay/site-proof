@@ -18,6 +18,8 @@ import { NativeSelect } from '@/components/ui/native-select';
 import { Label } from '@/components/ui/label';
 import { logError } from '@/lib/logger';
 import { Check } from 'lucide-react';
+import { useResponsiblePartyOptions } from '../hooks/useResponsiblePartyOptions';
+import { ResponsiblePartyPicker, type ResponsibleParty } from './ResponsiblePartyPicker';
 
 const createNCRSchema = z.object({
   description: z.string().trim().min(1, 'Description is required'),
@@ -47,6 +49,8 @@ interface CreateNCRModalProps {
     specificationReference?: string;
     lotIds?: string[];
     dueDate?: string;
+    responsibleUserId?: string;
+    responsibleSubcontractorId?: string;
   }) => void;
   loading: boolean;
   projectId?: string;
@@ -66,7 +70,19 @@ function CreateNCRModalInner({
   const [lotsLoading, setLotsLoading] = useState(true);
   const [lotsError, setLotsError] = useState<string | null>(null);
   const [lotLookupRetryKey, setLotLookupRetryKey] = useState(0);
+  const [responsibleParty, setResponsibleParty] = useState<ResponsibleParty>({
+    type: 'unassigned',
+  });
   const token = getAuthToken();
+
+  const {
+    users: responsibleUsers,
+    subcontractors: responsibleSubcontractors,
+    subcontractorsUnavailable: responsibleSubcontractorsUnavailable,
+    loading: responsibleLoading,
+    error: responsibleError,
+    retry: retryResponsibleOptions,
+  } = useResponsiblePartyOptions(projectId, isOpen);
 
   const {
     register,
@@ -88,6 +104,7 @@ function CreateNCRModalInner({
       reset(DEFAULT_CREATE_NCR_VALUES);
       setSelectedLotIds([]);
       setLotsError(null);
+      setResponsibleParty({ type: 'unassigned' });
       return;
     }
 
@@ -143,12 +160,16 @@ function CreateNCRModalInner({
       specificationReference: data.specificationReference?.trim() || undefined,
       lotIds: selectedLotIds.length > 0 ? selectedLotIds : undefined,
       dueDate: data.dueDate?.trim() || undefined,
+      responsibleUserId: responsibleParty.type === 'user' ? responsibleParty.userId : undefined,
+      responsibleSubcontractorId:
+        responsibleParty.type === 'subcontractor' ? responsibleParty.subcontractorId : undefined,
     });
   };
 
   const handleClose = () => {
     reset(DEFAULT_CREATE_NCR_VALUES);
     setSelectedLotIds([]);
+    setResponsibleParty({ type: 'unassigned' });
     onClose();
   };
 
@@ -286,6 +307,17 @@ function CreateNCRModalInner({
               </p>
             )}
           </div>
+          <ResponsiblePartyPicker
+            id="ncr-responsible-party"
+            value={responsibleParty}
+            onChange={setResponsibleParty}
+            users={responsibleUsers}
+            subcontractors={responsibleSubcontractors}
+            subcontractorsUnavailable={responsibleSubcontractorsUnavailable}
+            loading={responsibleLoading}
+            error={responsibleError}
+            onRetry={retryResponsibleOptions}
+          />
           <div>
             <Label htmlFor="ncr-spec-reference">Specification Reference</Label>
             <Input

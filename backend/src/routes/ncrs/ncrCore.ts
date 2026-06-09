@@ -15,6 +15,10 @@ import {
 } from './ncrAccess.js';
 import { logError } from '../../lib/serverLogger.js';
 import { isProjectNotificationEnabled } from '../../lib/projectNotificationPreferences.js';
+import {
+  activeSubcontractorCompanyWhere,
+  hasPortalModuleEnabled,
+} from '../../lib/projectAccess.js';
 import { buildNcrResponse, buildNcrUpdatedResponse } from './ncrCoreResponses.js';
 import { createNcrSchema, parseOptionalNcrDueDate, updateNcrSchema } from './ncrCoreValidation.js';
 import { createNcrWithAllocatedNumber } from './ncrNumberAllocation.js';
@@ -65,6 +69,75 @@ async function requireActiveResponsibleUser(
   }
 }
 
+async function requireActiveResponsibleSubcontractor(
+  projectId: string,
+  responsibleSubcontractorId?: string | null,
+): Promise<void> {
+  if (!responsibleSubcontractorId) {
+    return;
+  }
+
+  const subcontractor = await prisma.subcontractorCompany.findFirst({
+    where: activeSubcontractorCompanyWhere({ id: responsibleSubcontractorId, projectId }),
+    select: { id: true },
+  });
+
+  if (!subcontractor) {
+    throw AppError.badRequest(
+      'Responsible subcontractor must be an active subcontractor on this project',
+    );
+  }
+}
+
+// Notify every member of a subcontractor company that an NCR has been assigned
+// to their company. Mirrors the user-assignment notification, but fans out via
+// createMany across all of the company's portal users. Respects the
+// project-level "NCR Assignments" toggle (caller checks it before invoking).
+async function notifySubcontractorAssignment(options: {
+  projectId: string;
+  subcontractorCompanyId: string;
+  type: 'ncr_assigned' | 'ncr_redirect';
+  title: string;
+  message: string;
+}): Promise<void> {
+  const { projectId, subcontractorCompanyId, type, title, message } = options;
+
+  // Gate the fan-out on the company's NCRs portal module, using the SAME
+  // portalAccess.ncrs check the read side (canReadNcr ->
+  // hasSubcontractorPortalModuleAccess) resolves to — default-false included.
+  // A company with the NCRs module disabled cannot open the NCR, so notifying
+  // them would only produce a notification that 403s on click. Checking here
+  // (inside the helper) covers BOTH call sites — the create fan-out and the
+  // PATCH redirect fan-out — so the gate cannot drift from the read side.
+  const company = await prisma.subcontractorCompany.findUnique({
+    where: { id: subcontractorCompanyId },
+    select: { portalAccess: true },
+  });
+  if (!company || !hasPortalModuleEnabled(company.portalAccess, 'ncrs')) {
+    return;
+  }
+
+  const subcontractorUsers = await prisma.subcontractorUser.findMany({
+    where: { subcontractorCompanyId },
+    select: { userId: true },
+  });
+
+  if (subcontractorUsers.length === 0) {
+    return;
+  }
+
+  await prisma.notification.createMany({
+    data: subcontractorUsers.map((subUser) => ({
+      userId: subUser.userId,
+      projectId,
+      type,
+      title,
+      message,
+      linkUrl: `/projects/${projectId}/ncr`,
+    })),
+  });
+}
+
 ncrCoreRouter.use(ncrListRouter);
 
 // GET /api/ncrs/:id - Get single NCR
@@ -81,6 +154,7 @@ ncrCoreRouter.get(
         project: { select: { name: true, projectNumber: true } },
         raisedBy: { select: { fullName: true, email: true } },
         responsibleUser: { select: { fullName: true, email: true } },
+        responsibleSubcontractor: { select: { id: true, companyName: true } },
         verifiedBy: { select: { fullName: true, email: true } },
         closedBy: { select: { fullName: true, email: true } },
         qmApprovedBy: { select: { fullName: true, email: true } },
@@ -127,6 +201,7 @@ ncrCoreRouter.post(
       category,
       severity,
       responsibleUserId,
+      responsibleSubcontractorId,
       dueDate,
       lotIds,
     } = validation.data;
@@ -140,6 +215,7 @@ ncrCoreRouter.post(
 
     const ncrLotIds = await requireNcrLotsInProject(projectId, lotIds || []);
     await requireActiveResponsibleUser(projectId, responsibleUserId);
+    await requireActiveResponsibleSubcontractor(projectId, responsibleSubcontractorId);
     const parsedDueDate = parseOptionalNcrDueDate(dueDate);
 
     // Major NCRs require QM approval to close and client notification
@@ -158,6 +234,7 @@ ncrCoreRouter.post(
           clientNotificationRequired: isMajor, // Feature #213: Major NCRs require client notification
           raisedById: user.userId,
           responsibleUserId,
+          responsibleSubcontractorId,
           dueDate: parsedDueDate,
           ncrLots: ncrLotIds.length
             ? {
@@ -170,6 +247,7 @@ ncrCoreRouter.post(
         include: {
           project: { select: { name: true } },
           raisedBy: { select: { fullName: true, email: true } },
+          responsibleSubcontractor: { select: { id: true, companyName: true } },
           ncrLots: {
             include: {
               lot: { select: { lotNumber: true } },
@@ -235,6 +313,30 @@ ncrCoreRouter.post(
       }
     }
 
+    // Feature N1: Notify the assigned subcontractor's portal users when an NCR
+    // is raised against their company. Respects the same project-level "NCR
+    // Assignments" toggle as the user-assignment notification above.
+    if (responsibleSubcontractorId) {
+      const project = await prisma.project.findUnique({
+        where: { id: projectId },
+        select: { settings: true },
+      });
+
+      if (isProjectNotificationEnabled(project?.settings, 'ncrAssignments')) {
+        try {
+          await notifySubcontractorAssignment({
+            projectId,
+            subcontractorCompanyId: responsibleSubcontractorId,
+            type: 'ncr_assigned',
+            title: 'NCR Assigned to Your Company',
+            message: `${ncr.ncrNumber} has been assigned to your company: ${description.substring(0, 100)}${description.length > 100 ? '...' : ''}`,
+          });
+        } catch (notifError) {
+          logError('Failed to create subcontractor assignment notifications:', notifError);
+        }
+      }
+    }
+
     // Notify head contractor users when a subcontractor raises an NCR
     // Check if the user is a subcontractor
     const raisedByUserInfo = await prisma.user.findUnique({
@@ -291,13 +393,14 @@ ncrCoreRouter.patch(
 
     // Note: user authenticated via requireAuth middleware
     const id = parseNcrRouteParam(req.params.id, 'id');
-    const { responsibleUserId, comments } = validation.data;
+    const { responsibleUserId, responsibleSubcontractorId, comments } = validation.data;
 
     const ncr = await prisma.nCR.findUnique({
       where: { id },
       include: {
         project: true,
         responsibleUser: { select: { id: true, fullName: true, email: true } },
+        responsibleSubcontractor: { select: { id: true, companyName: true } },
       },
     });
 
@@ -315,20 +418,45 @@ ncrCoreRouter.patch(
 
     // Build update data
     const updateData: Prisma.NCRUncheckedUpdateInput = {};
+    const notificationsEnabled = isProjectNotificationEnabled(
+      ncr.project.settings,
+      'ncrAssignments',
+    );
 
-    // If responsibleUserId is being changed (redirect)
+    // Responsible-party assignment is mutually exclusive: assigning to a user
+    // clears any subcontractor (and vice-versa); passing null/empty clears the
+    // field to unassigned. Schema-level superRefine already rejects requests
+    // that try to set BOTH a user and a subcontractor at once.
+    const assigningUser = responsibleUserId !== undefined && responsibleUserId !== null;
+    const assigningSubcontractor =
+      responsibleSubcontractorId !== undefined && responsibleSubcontractorId !== null;
+
+    // Mutual-exclusion swap-clear (see below): each change-branch clears the
+    // OPPOSITE target whenever it assigns its own. The clear is gated on the
+    // change-branch being entered, which is sufficient because a request that
+    // changes the responsible party necessarily enters the matching branch, and
+    // that branch's clear nulls the other field. Both-set can therefore never
+    // persist. The schema-level superRefine (createNcrSchema/updateNcrSchema in
+    // ncrCoreValidation.ts) is the authoritative guard — it rejects any single
+    // request that sends BOTH a non-null user id and a non-null subcontractor
+    // id — so at most one of `assigningUser` / `assigningSubcontractor` is ever
+    // true here, and the swap-clears below are belt-and-braces, not the
+    // primary defence.
+
+    // If responsibleUserId is being changed (redirect to a user)
     if (responsibleUserId !== undefined && responsibleUserId !== ncr.responsibleUserId) {
       await requireActiveResponsibleUser(ncr.projectId, responsibleUserId);
 
       updateData.responsibleUserId = responsibleUserId || null;
+      // Swap target type: assigning to a user clears any subcontractor.
+      if (assigningUser) {
+        updateData.responsibleSubcontractorId = null;
+      }
 
       // If redirecting to a new user, create a notification. Respect the
       // project-level "NCR Assignments" notification toggle (a redirect is an
       // assignment): when off, suppress it. Absent/missing settings default on.
-      if (
-        responsibleUserId &&
-        isProjectNotificationEnabled(ncr.project.settings, 'ncrAssignments')
-      ) {
+      if (responsibleUserId && notificationsEnabled) {
         try {
           await prisma.notification.create({
             data: {
@@ -342,6 +470,35 @@ ncrCoreRouter.patch(
           });
         } catch (notifError) {
           logError('Failed to create redirect notification:', notifError);
+        }
+      }
+    }
+
+    // If responsibleSubcontractorId is being changed (redirect to a subcontractor)
+    if (
+      responsibleSubcontractorId !== undefined &&
+      responsibleSubcontractorId !== ncr.responsibleSubcontractorId
+    ) {
+      await requireActiveResponsibleSubcontractor(ncr.projectId, responsibleSubcontractorId);
+
+      updateData.responsibleSubcontractorId = responsibleSubcontractorId || null;
+      // Swap target type: assigning to a subcontractor clears any user.
+      if (assigningSubcontractor) {
+        updateData.responsibleUserId = null;
+      }
+
+      // Notify the subcontractor's portal users on (re)assignment. Same toggle.
+      if (responsibleSubcontractorId && notificationsEnabled) {
+        try {
+          await notifySubcontractorAssignment({
+            projectId: ncr.projectId,
+            subcontractorCompanyId: responsibleSubcontractorId,
+            type: 'ncr_redirect',
+            title: 'NCR Redirected to Your Company',
+            message: `NCR #${ncr.ncrNumber} "${ncr.description.substring(0, 50)}..." has been redirected to your company for response`,
+          });
+        } catch (notifError) {
+          logError('Failed to create subcontractor redirect notifications:', notifError);
         }
       }
     }
@@ -360,6 +517,7 @@ ncrCoreRouter.patch(
       data: updateData,
       include: {
         responsibleUser: { select: { id: true, fullName: true, email: true } },
+        responsibleSubcontractor: { select: { id: true, companyName: true } },
         raisedBy: { select: { id: true, fullName: true, email: true } },
         ncrLots: {
           include: {

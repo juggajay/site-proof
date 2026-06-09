@@ -20,6 +20,7 @@ import { NCRFilters } from './components/NCRFilters';
 import { NCRTable } from './components/NCRTable';
 import { NCRMobileList } from './components/NCRMobileList';
 import { CreateNCRModal } from './components/CreateNCRModal';
+import { AssignNCRModal } from './components/AssignNCRModal';
 import { RespondNCRModal } from './components/RespondNCRModal';
 import { RectifyNCRModal } from './components/RectifyNCRModal';
 import { QMReviewModal } from './components/QMReviewModal';
@@ -65,6 +66,7 @@ export function NCRPage() {
     successMessage,
     copiedNcrId,
     handleCreateNcr,
+    handleAssignNcr,
     handleRespond,
     handleRequestQmApproval,
     handleCloseNcr,
@@ -216,6 +218,7 @@ export function NCRPage() {
           actionLoading={actionLoading}
           copiedNcrId={copiedNcrId}
           onCopyLink={handleCopyNcrLink}
+          onAssign={(ncr) => openModal('assign', ncr)}
           onRespond={(ncr) => openModal('respond', ncr)}
           onReviewResponse={(ncr) => openModal('qmReview', ncr)}
           onQmApprove={handleRequestQmApproval}
@@ -234,6 +237,15 @@ export function NCRPage() {
         onSubmit={handleCreateNcr}
         loading={actionLoading}
         projectId={projectId}
+      />
+
+      <AssignNCRModal
+        isOpen={activeModal === 'assign'}
+        ncr={selectedNcr}
+        projectId={projectId}
+        onClose={closeModal}
+        onSubmit={handleAssignNcr}
+        loading={actionLoading}
       />
 
       <CloseNCRModal
