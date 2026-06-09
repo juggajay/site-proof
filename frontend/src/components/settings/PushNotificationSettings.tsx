@@ -177,13 +177,11 @@ export function PushNotificationSettings() {
 
       {/* Browser Support Check */}
       {!status.supported && (
-        <div className="flex items-start gap-3 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg mb-4">
-          <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5" />
+        <div className="flex items-start gap-3 p-4 bg-warning/10 border border-warning/30 rounded-lg mb-4">
+          <AlertTriangle className="h-5 w-5 text-warning mt-0.5" />
           <div>
-            <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-              Push Notifications Not Supported
-            </p>
-            <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
+            <p className="text-sm font-medium text-warning">Push Notifications Not Supported</p>
+            <p className="text-sm text-warning mt-1">
               Your browser does not support push notifications. Try using Chrome, Firefox, Edge, or
               Safari (iOS 16.4+).
             </p>
@@ -193,13 +191,11 @@ export function PushNotificationSettings() {
 
       {/* Permission Denied */}
       {status.supported && status.permission === 'denied' && (
-        <div className="flex items-start gap-3 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg mb-4">
-          <X className="h-5 w-5 text-red-600 mt-0.5" />
+        <div className="flex items-start gap-3 p-4 bg-destructive/10 border border-destructive/30 rounded-lg mb-4">
+          <X className="h-5 w-5 text-destructive mt-0.5" />
           <div>
-            <p className="text-sm font-medium text-red-800 dark:text-red-200">
-              Notifications Blocked
-            </p>
-            <p className="text-sm text-red-700 dark:text-red-300 mt-1">
+            <p className="text-sm font-medium text-destructive">Notifications Blocked</p>
+            <p className="text-sm text-destructive mt-1">
               You have blocked notifications for this site. To enable push notifications, click the
               lock icon in your browser's address bar and allow notifications.
             </p>
@@ -211,15 +207,15 @@ export function PushNotificationSettings() {
       {loadError && (
         <div
           role="alert"
-          className="flex items-start gap-3 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg mb-4"
+          className="flex items-start gap-3 p-4 bg-destructive/10 border border-destructive/30 rounded-lg mb-4"
         >
-          <X className="h-5 w-5 text-red-600 mt-0.5" />
+          <X className="h-5 w-5 text-destructive mt-0.5" />
           <div>
-            <p className="text-sm text-red-700 dark:text-red-300">{loadError}</p>
+            <p className="text-sm text-destructive">{loadError}</p>
             <button
               type="button"
               onClick={() => void loadStatus()}
-              className="mt-3 px-3 py-1.5 rounded-lg text-sm border border-red-200 text-red-700 hover:bg-red-100 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-900/40"
+              className="mt-3 px-3 py-1.5 rounded-lg text-sm border border-destructive/40 text-destructive hover:bg-destructive/10"
             >
               Try again
             </button>
@@ -230,14 +226,12 @@ export function PushNotificationSettings() {
       {status.supported && !status.configured && !loadError && (
         <div
           role="alert"
-          className="flex items-start gap-3 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg mb-4"
+          className="flex items-start gap-3 p-4 bg-warning/10 border border-warning/30 rounded-lg mb-4"
         >
-          <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5" />
+          <AlertTriangle className="h-5 w-5 text-warning mt-0.5" />
           <div>
-            <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-              Push Notifications Not Configured
-            </p>
-            <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
+            <p className="text-sm font-medium text-warning">Push Notifications Not Configured</p>
+            <p className="text-sm text-warning mt-1">
               {status.message ||
                 'Push notifications require server VAPID keys before this device can subscribe.'}
             </p>
@@ -248,10 +242,10 @@ export function PushNotificationSettings() {
       {error && (
         <div
           role="alert"
-          className="flex items-start gap-3 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg mb-4"
+          className="flex items-start gap-3 p-4 bg-destructive/10 border border-destructive/30 rounded-lg mb-4"
         >
-          <X className="h-5 w-5 text-red-600 mt-0.5" />
-          <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+          <X className="h-5 w-5 text-destructive mt-0.5" />
+          <p className="text-sm text-destructive">{error}</p>
         </div>
       )}
 
@@ -261,22 +255,16 @@ export function PushNotificationSettings() {
           role={testResult.success ? 'status' : 'alert'}
           className={`flex items-start gap-3 p-4 rounded-lg mb-4 ${
             testResult.success
-              ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
-              : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
+              ? 'bg-success/10 border border-success/30'
+              : 'bg-destructive/10 border border-destructive/30'
           }`}
         >
           {testResult.success ? (
-            <Check className="h-5 w-5 text-green-600 mt-0.5" />
+            <Check className="h-5 w-5 text-success mt-0.5" />
           ) : (
-            <X className="h-5 w-5 text-red-600 mt-0.5" />
+            <X className="h-5 w-5 text-destructive mt-0.5" />
           )}
-          <p
-            className={`text-sm ${
-              testResult.success
-                ? 'text-green-700 dark:text-green-300'
-                : 'text-red-700 dark:text-red-300'
-            }`}
-          >
+          <p className={`text-sm ${testResult.success ? 'text-success' : 'text-destructive'}`}>
             {testResult.message}
           </p>
         </div>
@@ -289,7 +277,7 @@ export function PushNotificationSettings() {
           <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
             <div className="flex items-center gap-3">
               {status.subscribed ? (
-                <Bell className="h-5 w-5 text-green-600" />
+                <Bell className="h-5 w-5 text-success" />
               ) : (
                 <BellOff className="h-5 w-5 text-muted-foreground" />
               )}

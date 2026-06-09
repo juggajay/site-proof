@@ -30,7 +30,7 @@ export function CommentAttachmentDraftList({
             type="button"
             onClick={() => onRemove(index)}
             aria-label={`Remove ${att.file.name}`}
-            className="p-0.5 rounded-full hover:bg-red-100 text-muted-foreground hover:text-red-600"
+            className="p-0.5 rounded-full hover:bg-destructive/10 text-muted-foreground hover:text-destructive"
           >
             <X className="h-3.5 w-3.5" />
           </button>

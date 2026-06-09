@@ -47,7 +47,7 @@ export function EmailVerificationBanner() {
 
   return (
     <div
-      className="mb-4 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200"
+      className="mb-4 flex items-start gap-3 rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-warning-foreground"
       role="status"
       data-testid="email-verification-banner"
     >
@@ -66,7 +66,7 @@ export function EmailVerificationBanner() {
             type="button"
             onClick={handleResend}
             disabled={resendState === 'sending'}
-            className="rounded-md border border-amber-300 bg-white px-3 py-1.5 text-xs font-medium text-amber-900 transition-colors hover:bg-amber-100 disabled:opacity-50 dark:border-amber-800 dark:bg-amber-900/40 dark:text-amber-100 dark:hover:bg-amber-900/60"
+            className="rounded-md border border-warning/30 bg-card px-3 py-1.5 text-xs font-medium text-warning-foreground transition-colors hover:bg-warning/10 disabled:opacity-50"
           >
             {resendState === 'sending'
               ? 'Sending…'
@@ -78,7 +78,7 @@ export function EmailVerificationBanner() {
         <button
           type="button"
           onClick={handleDismiss}
-          className="rounded p-1 hover:bg-amber-100 dark:hover:bg-amber-900/40"
+          className="rounded p-1 hover:bg-warning/10"
           aria-label="Dismiss verification reminder"
         >
           <X className="h-4 w-4" />

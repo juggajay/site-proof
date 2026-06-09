@@ -63,13 +63,13 @@ export function OfflineIndicator() {
         {conflictCount > 0 && (
           <button
             onClick={() => setShowConflictModal(true)}
-            className="flex items-center gap-2 bg-amber-100 text-amber-800 px-4 py-2 rounded-lg shadow-lg border border-amber-300 hover:bg-amber-200 transition-colors animate-pulse"
+            className="flex items-center gap-2 bg-warning/10 text-warning px-4 py-2 rounded-lg shadow-lg border border-warning/30 hover:bg-warning/20 transition-colors animate-pulse"
           >
             <AlertTriangle className="h-4 w-4" />
             <span className="text-sm font-medium">
               {conflictCount} sync conflict{conflictCount > 1 ? 's' : ''}
             </span>
-            <span className="text-xs bg-amber-200 px-2 py-0.5 rounded">Resolve</span>
+            <span className="text-xs bg-warning/20 px-2 py-0.5 rounded">Resolve</span>
           </button>
         )}
 
@@ -79,13 +79,13 @@ export function OfflineIndicator() {
           <button
             onClick={retryFailedSyncs}
             disabled={isSyncing}
-            className="flex items-center gap-2 bg-red-100 text-red-800 px-4 py-2 rounded-lg shadow-lg border border-red-300 hover:bg-red-200 transition-colors disabled:opacity-60"
+            className="flex items-center gap-2 bg-destructive/10 text-destructive px-4 py-2 rounded-lg shadow-lg border border-destructive/30 hover:bg-destructive/20 transition-colors disabled:opacity-60"
           >
             <AlertTriangle className="h-4 w-4" />
             <span className="text-sm font-medium">
               {failedSyncCount} item{failedSyncCount > 1 ? 's' : ''} failed to sync
             </span>
-            <span className="text-xs bg-red-200 px-2 py-0.5 rounded">
+            <span className="text-xs bg-destructive/20 px-2 py-0.5 rounded">
               {isSyncing ? 'Retrying...' : 'Retry'}
             </span>
           </button>
@@ -93,11 +93,11 @@ export function OfflineIndicator() {
 
         {/* Offline / Pending sync indicator */}
         {!isOnline ? (
-          <div className="flex items-center gap-2 bg-amber-100 text-amber-800 px-4 py-2 rounded-lg shadow-lg border border-amber-200">
+          <div className="flex items-center gap-2 bg-warning/10 text-warning px-4 py-2 rounded-lg shadow-lg border border-warning/20">
             <WifiOff className="h-4 w-4" />
             <span className="text-sm font-medium">Offline Mode</span>
             {pendingSyncCount > 0 && (
-              <span className="bg-amber-200 px-2 py-0.5 rounded-full text-xs">
+              <span className="bg-warning/20 px-2 py-0.5 rounded-full text-xs">
                 {pendingSyncCount} pending
               </span>
             )}
@@ -150,7 +150,7 @@ export function OfflineBadge() {
   return (
     <span
       className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-        !isOnline ? 'bg-amber-100 text-amber-800' : 'bg-primary/10 text-primary'
+        !isOnline ? 'bg-warning/10 text-warning' : 'bg-primary/10 text-primary'
       }`}
     >
       {!isOnline ? (
@@ -175,7 +175,7 @@ export function SyncStatusBadge({
 }) {
   if (status === 'synced') {
     return (
-      <span className="inline-flex items-center gap-1 text-xs text-green-600">
+      <span className="inline-flex items-center gap-1 text-xs text-success">
         <Check className="h-3 w-3" />
         Synced
       </span>
@@ -184,7 +184,7 @@ export function SyncStatusBadge({
 
   if (status === 'pending') {
     return (
-      <span className="inline-flex items-center gap-1 text-xs text-amber-600">
+      <span className="inline-flex items-center gap-1 text-xs text-warning">
         <CloudOff className="h-3 w-3" />
         Pending sync
       </span>
@@ -193,7 +193,7 @@ export function SyncStatusBadge({
 
   if (status === 'conflict') {
     return (
-      <span className="inline-flex items-center gap-1 text-xs text-amber-700 bg-amber-100 px-2 py-0.5 rounded">
+      <span className="inline-flex items-center gap-1 text-xs text-warning bg-warning/10 px-2 py-0.5 rounded">
         <AlertTriangle className="h-3 w-3" />
         Sync conflict
       </span>
@@ -201,7 +201,7 @@ export function SyncStatusBadge({
   }
 
   return (
-    <span className="inline-flex items-center gap-1 text-xs text-red-600">
+    <span className="inline-flex items-center gap-1 text-xs text-destructive">
       <CloudOff className="h-3 w-3" />
       Sync error
     </span>

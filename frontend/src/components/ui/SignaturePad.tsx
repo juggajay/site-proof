@@ -169,7 +169,7 @@ export function SignaturePad({
       {label && (
         <label className="block text-sm font-medium text-foreground">
           {label}
-          {required && <span className="text-red-500 ml-1">*</span>}
+          {required && <span className="text-destructive ml-1">*</span>}
         </label>
       )}
 
@@ -182,7 +182,7 @@ export function SignaturePad({
             isFocused
               ? 'ring-2 ring-primary ring-offset-2 shadow-lg'
               : hasSignature
-                ? 'ring-2 ring-green-500 ring-offset-1'
+                ? 'ring-2 ring-success ring-offset-1'
                 : 'border-2 border-dashed border-muted-foreground/30 hover:border-muted-foreground/50'
           }
         `}
@@ -217,7 +217,7 @@ export function SignaturePad({
 
         {/* Success indicator overlay */}
         {hasSignature && !isDrawing && (
-          <div className="absolute top-2 right-2 bg-green-500 text-white rounded-full p-1 shadow-sm">
+          <div className="absolute top-2 right-2 bg-success text-success-foreground rounded-full p-1 shadow-sm">
             <Check className="h-3 w-3" />
           </div>
         )}
@@ -227,7 +227,7 @@ export function SignaturePad({
       <div className="flex items-center justify-between">
         <span className="text-xs text-muted-foreground">
           {hasSignature ? (
-            <span className="flex items-center gap-1.5 text-green-600 font-medium">
+            <span className="flex items-center gap-1.5 text-success font-medium">
               <Check className="h-3.5 w-3.5" />
               Signature captured
             </span>
@@ -246,7 +246,7 @@ export function SignaturePad({
             transition-all duration-200
             ${
               hasSignature
-                ? 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-200'
+                ? 'bg-destructive/10 text-destructive hover:bg-destructive/20 border border-destructive/30'
                 : 'bg-muted text-muted-foreground cursor-not-allowed opacity-50'
             }
           `}

@@ -159,7 +159,7 @@ export function PDFViewer({ url, filename, onClose: _onClose, className = '' }: 
   return (
     <div className={`flex flex-col bg-background ${className}`} data-testid="pdf-viewer">
       {/* Toolbar */}
-      <div className="flex items-center justify-between bg-card px-4 py-2 text-white">
+      <div className="flex items-center justify-between bg-card px-4 py-2 text-foreground">
         <div className="flex items-center gap-2">
           {/* Page Navigation */}
           <button
@@ -179,7 +179,7 @@ export function PDFViewer({ url, filename, onClose: _onClose, className = '' }: 
               onChange={handlePageInputChange}
               min={1}
               max={numPages || 1}
-              className="w-12 rounded bg-muted px-2 py-1 text-center text-white"
+              className="w-12 rounded bg-muted px-2 py-1 text-center text-foreground"
               aria-label="Current page"
             />
             <span className="text-muted-foreground">/ {numPages || '-'}</span>
@@ -278,9 +278,9 @@ export function PDFViewer({ url, filename, onClose: _onClose, className = '' }: 
 
         {error && (
           <div className="flex flex-col items-center gap-4 text-center p-6 mt-10">
-            <div className="rounded-full bg-red-100 p-4">
+            <div className="rounded-full bg-destructive/10 p-4">
               <svg
-                className="h-8 w-8 text-red-600"
+                className="h-8 w-8 text-destructive"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -294,7 +294,7 @@ export function PDFViewer({ url, filename, onClose: _onClose, className = '' }: 
               </svg>
             </div>
             <div>
-              <p className="text-red-600 font-medium">{error}</p>
+              <p className="text-destructive font-medium">{error}</p>
               <p className="text-muted-foreground text-sm mt-1">
                 Double-tap to retry or download the file
               </p>
@@ -302,7 +302,7 @@ export function PDFViewer({ url, filename, onClose: _onClose, className = '' }: 
             <a
               href={url}
               download={downloadFilename}
-              className="rounded-lg bg-primary px-6 py-3 text-sm font-medium text-white hover:bg-primary/90 flex items-center gap-2"
+              className="rounded-lg bg-primary px-6 py-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 flex items-center gap-2"
             >
               <Download className="h-4 w-4" />
               Download PDF
@@ -405,7 +405,9 @@ export function PDFViewerInline({ url, className = '' }: { url: string; classNam
   return (
     <div className={`bg-muted rounded ${className}`}>
       {error ? (
-        <div className="flex items-center justify-center p-4 text-red-600">Failed to load PDF</div>
+        <div className="flex items-center justify-center p-4 text-destructive">
+          Failed to load PDF
+        </div>
       ) : (
         <Document
           file={url}

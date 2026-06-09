@@ -77,7 +77,7 @@ export function useUnsyncedSignOut(): UnsyncedSignOutGuard {
   const dialog = isOpen ? (
     <Modal alert onClose={() => setIsOpen(false)} className="max-w-md w-full">
       <AlertModalHeader>
-        <span className="flex items-center gap-2 text-red-600">
+        <span className="flex items-center gap-2 text-destructive">
           <AlertTriangle className="h-5 w-5" />
           Unsynced work will be deleted
         </span>
@@ -100,7 +100,7 @@ export function useUnsyncedSignOut(): UnsyncedSignOutGuard {
         <button
           onClick={() => performSignOut(onSignedOutRef)}
           disabled={isSigningOut}
-          className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors disabled:opacity-60"
+          className="px-4 py-2 rounded-lg bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors disabled:opacity-60"
           data-testid="unsynced-signout-confirm"
         >
           Sign out anyway

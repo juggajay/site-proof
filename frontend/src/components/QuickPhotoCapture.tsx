@@ -229,11 +229,15 @@ export function QuickPhotoCapture({
       {!isCapturing && (
         <button
           onClick={openCamera}
-          className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
         >
           <Camera className="h-5 w-5" />
           <span>Quick Photo</span>
-          {!isOnline && <span className="bg-amber-500 text-xs px-1.5 py-0.5 rounded">Offline</span>}
+          {!isOnline && (
+            <span className="bg-warning text-warning-foreground text-xs px-1.5 py-0.5 rounded">
+              Offline
+            </span>
+          )}
         </button>
       )}
 
@@ -263,7 +267,7 @@ export function QuickPhotoCapture({
               {/* Sync status indicator */}
               <div className="mt-2 text-sm text-muted-foreground">
                 {!isOnline ? (
-                  <span className="flex items-center gap-1 text-amber-600">
+                  <span className="flex items-center gap-1 text-warning">
                     <MapPin className="h-4 w-4" />
                     Will sync when online
                   </span>
@@ -281,8 +285,8 @@ export function QuickPhotoCapture({
 
               {/* Dimension warning */}
               {dimensionWarning && (
-                <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded-lg">
-                  <p className="text-sm text-amber-700 flex items-center gap-2">
+                <div className="mt-2 p-2 bg-warning/10 border border-warning/30 rounded-lg">
+                  <p className="text-sm text-warning-foreground flex items-center gap-2">
                     <AlertTriangle className="h-4 w-4 flex-shrink-0" />
                     <span>{dimensionWarning}</span>
                   </p>
@@ -323,7 +327,7 @@ export function QuickPhotoCapture({
 
               {/* GPS indicator */}
               {gpsPosition && (
-                <div className="flex items-center gap-2 text-sm text-green-600">
+                <div className="flex items-center gap-2 text-sm text-success">
                   <MapPin className="h-4 w-4" />
                   <span>
                     Location: {gpsPosition.lat.toFixed(6)}, {gpsPosition.lng.toFixed(6)}
@@ -349,11 +353,11 @@ export function QuickPhotoCapture({
               <button
                 onClick={savePhoto}
                 disabled={isSaving}
-                className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {isSaving ? (
                   <>
-                    <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <div className="h-4 w-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
                     Saving...
                   </>
                 ) : (

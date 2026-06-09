@@ -338,7 +338,7 @@ export function ImportLotsModal({ projectId, onClose, onSuccess }: ImportLotsMod
                     type="checkbox"
                     checked={strictMode}
                     onChange={(e) => setStrictMode(e.target.checked)}
-                    className="w-4 h-4 rounded border-border"
+                    className="w-4 h-4 rounded border-border accent-primary"
                   />
                   <span className="font-medium">Strict Mode (All or Nothing)</span>
                 </label>

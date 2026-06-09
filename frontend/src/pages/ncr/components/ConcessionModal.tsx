@@ -191,7 +191,7 @@ function ConcessionModalInner({ isOpen, ncr, onClose, onSubmit, loading }: Conce
                   <input
                     type="checkbox"
                     {...register('clientApprovalConfirmed')}
-                    className="mt-1 rounded border-border"
+                    className="mt-1 rounded border-border accent-primary"
                   />
                   <span className="text-sm text-foreground">
                     I confirm that the client has been notified of this concession and has provided

@@ -272,7 +272,7 @@ export function ITPPage() {
             type="checkbox"
             checked={includeGlobalTemplates}
             onChange={(e) => setIncludeGlobalTemplates(e.target.checked)}
-            className="rounded border-border"
+            className="rounded border-border accent-primary"
           />
           <span className="text-sm">
             Include {projectSpecificationSet || 'MRTS'} library templates

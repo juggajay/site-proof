@@ -301,7 +301,7 @@ export function ITPChecklistTab({
               type="checkbox"
               checked={showIncompleteOnly}
               onChange={(e) => setShowIncompleteOnly(e.target.checked)}
-              className="rounded border-border"
+              className="rounded border-border accent-primary"
             />
             <span>Show incomplete only</span>
           </label>

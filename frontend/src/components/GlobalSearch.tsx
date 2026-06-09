@@ -340,9 +340,9 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
       case 'lot':
         return <FileText className="h-4 w-4 text-primary" />;
       case 'ncr':
-        return <AlertTriangle className="h-4 w-4 text-amber-500" />;
+        return <AlertTriangle className="h-4 w-4 text-warning" />;
       case 'test':
-        return <TestTube className="h-4 w-4 text-green-500" />;
+        return <TestTube className="h-4 w-4 text-success" />;
     }
   };
 
@@ -419,7 +419,7 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
             </div>
           ) : hasSearchError && results.length === 0 && !loading ? (
             <div className="p-6 text-center text-sm text-muted-foreground" role="alert">
-              <AlertCircle className="mx-auto mb-3 h-5 w-5 text-amber-500" />
+              <AlertCircle className="mx-auto mb-3 h-5 w-5 text-warning" />
               <p className="font-medium text-foreground">Some search results could not be loaded</p>
               <p className="mt-1">Try again before assuming there are no matches.</p>
               <Button
@@ -442,7 +442,7 @@ export function GlobalSearch({ isOpen, onClose }: GlobalSearchProps) {
             <>
               {hasSearchError && (
                 <div
-                  className="mx-3 mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900"
+                  className="mx-3 mt-3 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning"
                   role="alert"
                 >
                   Some search results could not be loaded.

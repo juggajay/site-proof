@@ -243,7 +243,7 @@ export function AssignSubcontractorModal({
                 type="checkbox"
                 id="canCompleteITP"
                 {...register('canCompleteITP')}
-                className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-ring"
+                className="mt-1 h-4 w-4 rounded border-border text-primary accent-primary focus:ring-ring"
               />
               <div>
                 <Label htmlFor="canCompleteITP" className="cursor-pointer">
@@ -261,7 +261,7 @@ export function AssignSubcontractorModal({
                 id="itpRequiresVerification"
                 {...register('itpRequiresVerification')}
                 disabled={!canCompleteITP}
-                className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
+                className="mt-1 h-4 w-4 rounded border-border text-primary accent-primary focus:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
               />
               <div className={!canCompleteITP ? 'opacity-50' : ''}>
                 <Label

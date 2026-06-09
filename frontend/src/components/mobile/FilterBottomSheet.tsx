@@ -122,7 +122,7 @@ export function FilterTriggerButton({
         'hover:bg-muted/60 active:scale-[0.98] active:bg-muted',
         'transition-all duration-100',
         // Focus state for accessibility
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
         className,
       )}
       aria-label={`${label}${activeCount > 0 ? `, ${activeCount} active` : ''}`}
@@ -137,7 +137,7 @@ export function FilterTriggerButton({
             'absolute -top-2 -right-2',
             'flex items-center justify-center',
             'min-w-[24px] h-6 px-1.5 rounded-full',
-            'bg-amber-500 text-foreground',
+            'bg-primary text-primary-foreground',
             'text-xs font-bold',
             'border-2 border-background',
           )}
@@ -338,7 +338,7 @@ export function FilterBottomSheet({
 
         {/* Header */}
         <div className="flex items-center justify-between px-4 pb-3 border-b-2 border-border">
-          <h2 id="filter-sheet-title" className="text-xl font-bold text-foreground dark:text-white">
+          <h2 id="filter-sheet-title" className="text-xl font-bold text-foreground">
             {title}
           </h2>
           <div className="flex items-center gap-2">
@@ -347,11 +347,11 @@ export function FilterBottomSheet({
                 onClick={onClear}
                 className={cn(
                   'min-h-[44px] px-3 py-2 rounded-lg',
-                  'text-sm font-semibold text-amber-600 dark:text-amber-400',
-                  'hover:bg-amber-100 dark:hover:bg-amber-900/30',
+                  'text-sm font-semibold text-primary',
+                  'hover:bg-muted',
                   'active:scale-[0.98]',
                   'touch-manipulation transition-all duration-100',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
                 )}
               >
                 Clear All
@@ -367,7 +367,7 @@ export function FilterBottomSheet({
                 'hover:bg-muted',
                 'active:scale-[0.98]',
                 'touch-manipulation transition-all duration-100',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
               )}
               aria-label="Close filters"
             >
@@ -439,12 +439,12 @@ export function FilterBottomSheet({
             onClick={() => onApply(values)}
             className={cn(
               'w-full min-h-[56px] px-6 py-4 rounded-xl',
-              'bg-amber-500 hover:bg-amber-600 active:bg-amber-700',
-              'text-foreground font-bold text-lg uppercase tracking-wide',
-              'shadow-lg shadow-amber-500/30',
+              'bg-primary hover:bg-primary/90 active:bg-primary/80',
+              'text-primary-foreground font-bold text-lg uppercase tracking-wide',
+              'shadow-lg shadow-primary/30',
               'active:scale-[0.98]',
               'touch-manipulation transition-all duration-100',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
             )}
           >
             Apply Filters

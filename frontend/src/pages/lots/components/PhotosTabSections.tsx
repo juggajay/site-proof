@@ -54,7 +54,7 @@ export function PhotosSelectionToolbar({
             type="checkbox"
             checked={allSelected}
             onChange={onToggleSelectAll}
-            className="h-4 w-4 rounded border-border"
+            className="h-4 w-4 rounded border-border accent-primary"
           />
           Select All
         </label>

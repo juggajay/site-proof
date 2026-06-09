@@ -172,7 +172,7 @@ export function CostsPage() {
                 type="checkbox"
                 checked={showOverBudgetOnly}
                 onChange={(e) => setShowOverBudgetOnly(e.target.checked)}
-                className="h-4 w-4 rounded border-border"
+                className="h-4 w-4 rounded border-border accent-primary"
               />
               Over-budget lots only
             </label>

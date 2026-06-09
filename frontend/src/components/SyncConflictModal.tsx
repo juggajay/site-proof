@@ -184,11 +184,11 @@ export function SyncConflictModal({ isOpen, onClose, onResolved }: SyncConflictM
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-card rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-border bg-amber-50 dark:bg-amber-950/30">
+        <div className="px-6 py-4 border-b border-border bg-warning/10">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-full bg-warning/20 flex items-center justify-center">
               <svg
-                className="w-6 h-6 text-amber-600 dark:text-amber-400"
+                className="w-6 h-6 text-warning"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -256,11 +256,9 @@ export function SyncConflictModal({ isOpen, onClose, onResolved }: SyncConflictM
                 {showMergeView ? (
                   /* Merge View */
                   <div className="space-y-4">
-                    <div className="bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-lg p-4 mb-4">
-                      <h4 className="font-medium text-purple-800 dark:text-purple-200 mb-2">
-                        Manual Merge
-                      </h4>
-                      <p className="text-sm text-purple-700 dark:text-purple-300">
+                    <div className="bg-info/10 border border-info/30 rounded-lg p-4 mb-4">
+                      <h4 className="font-medium text-info-foreground mb-2">Manual Merge</h4>
+                      <p className="text-sm text-info-foreground/80">
                         Choose the value you want for each field, or enter a custom value.
                       </p>
                     </div>
@@ -273,14 +271,12 @@ export function SyncConflictModal({ isOpen, onClose, onResolved }: SyncConflictM
                       return (
                         <div
                           key={key}
-                          className={`border rounded-lg p-4 ${isDifferent ? 'border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/20' : 'border-border'}`}
+                          className={`border rounded-lg p-4 ${isDifferent ? 'border-warning/40 bg-warning/10' : 'border-border'}`}
                         >
                           <label className="block text-sm font-medium text-foreground mb-2">
                             {label}
                             {isDifferent && (
-                              <span className="ml-2 text-amber-600 dark:text-amber-400 text-xs">
-                                (differs)
-                              </span>
+                              <span className="ml-2 text-warning text-xs">(differs)</span>
                             )}
                           </label>
                           <div className="grid grid-cols-3 gap-2 mb-2 text-sm">
@@ -299,7 +295,7 @@ export function SyncConflictModal({ isOpen, onClose, onResolved }: SyncConflictM
                               <button
                                 type="button"
                                 onClick={() => handleMergedFieldChange(key, serverVal)}
-                                className="w-full text-left px-2 py-1 rounded border hover:bg-green-50 dark:hover:bg-green-950/30 hover:border-green-300 dark:hover:border-green-700 truncate"
+                                className="w-full text-left px-2 py-1 rounded border hover:bg-success/10 hover:border-success/40 truncate"
                               >
                                 {formatConflictValue(serverVal)}
                               </button>
@@ -310,7 +306,7 @@ export function SyncConflictModal({ isOpen, onClose, onResolved }: SyncConflictM
                                 type="text"
                                 value={getMergeInputValue(mergedData[key])}
                                 onChange={(e) => handleMergedFieldChange(key, e.target.value)}
-                                className="w-full px-2 py-1 rounded border border-purple-300 dark:border-purple-700 bg-background text-foreground text-sm"
+                                className="w-full px-2 py-1 rounded border border-info/40 bg-background text-foreground text-sm"
                               />
                             </div>
                           </div>
@@ -330,7 +326,7 @@ export function SyncConflictModal({ isOpen, onClose, onResolved }: SyncConflictM
                           <th className="px-4 py-2 text-left text-xs font-medium text-primary uppercase">
                             Your Changes
                           </th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-green-600 dark:text-green-400 uppercase">
+                          <th className="px-4 py-2 text-left text-xs font-medium text-success uppercase">
                             Server Version
                           </th>
                         </tr>
@@ -342,14 +338,11 @@ export function SyncConflictModal({ isOpen, onClose, onResolved }: SyncConflictM
                           const isDifferent = localVal !== serverVal;
 
                           return (
-                            <tr
-                              key={key}
-                              className={isDifferent ? 'bg-amber-50 dark:bg-amber-950/20' : ''}
-                            >
+                            <tr key={key} className={isDifferent ? 'bg-warning/10' : ''}>
                               <td className="px-4 py-2 font-medium text-foreground">
                                 {label}
                                 {isDifferent && (
-                                  <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200">
+                                  <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-warning/20 text-warning-foreground">
                                     Changed
                                   </span>
                                 )}
@@ -357,7 +350,7 @@ export function SyncConflictModal({ isOpen, onClose, onResolved }: SyncConflictM
                               <td className="px-4 py-2 text-primary">
                                 {formatConflictValue(localVal)}
                               </td>
-                              <td className="px-4 py-2 text-green-800 dark:text-green-300">
+                              <td className="px-4 py-2 text-success">
                                 {formatConflictValue(serverVal)}
                               </td>
                             </tr>
@@ -408,7 +401,7 @@ export function SyncConflictModal({ isOpen, onClose, onResolved }: SyncConflictM
                       Back to Compare
                     </Button>
                     <Button
-                      className="bg-purple-600 hover:bg-purple-700 dark:bg-purple-500 dark:hover:bg-purple-600 text-white"
+                      className="bg-info hover:bg-info/90 text-info-foreground"
                       onClick={handleResolveWithMerge}
                       disabled={resolving}
                     >
@@ -432,7 +425,7 @@ export function SyncConflictModal({ isOpen, onClose, onResolved }: SyncConflictM
                     </Button>
                     <Button
                       variant="outline"
-                      className="text-purple-700 dark:text-purple-200 bg-purple-100 dark:bg-purple-900/30 hover:bg-purple-200 dark:hover:bg-purple-900/50 border-purple-200 dark:border-purple-800"
+                      className="text-info-foreground bg-info/10 hover:bg-info/20 border-info/30"
                       onClick={() => setShowMergeView(true)}
                     >
                       Merge Manually

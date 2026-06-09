@@ -321,7 +321,7 @@ export function LinearMapView({
                     >
                       {/* Lot label (shown on hover or if wide enough) */}
                       <div className="absolute inset-0 flex items-center justify-center overflow-hidden px-1">
-                        <span className="text-[10px] text-white font-medium truncate drop-shadow-sm">
+                        <span className="text-[10px] text-primary-foreground font-medium truncate drop-shadow-sm">
                           {lot.lotNumber}
                         </span>
                       </div>
@@ -329,12 +329,12 @@ export function LinearMapView({
                       {/* Tooltip on hover (only when popup not shown) */}
                       {!popup && (
                         <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block z-30">
-                          <div className="bg-gray-900 text-white text-xs rounded px-2 py-1 whitespace-nowrap shadow-lg">
+                          <div className="bg-foreground text-background text-xs rounded px-2 py-1 whitespace-nowrap shadow-lg">
                             <div className="font-medium">{lot.lotNumber}</div>
-                            <div className="text-gray-300">
+                            <div className="text-background/80">
                               {lot.description || 'No description'}
                             </div>
-                            <div className="text-gray-400">
+                            <div className="text-background/70">
                               Ch. {start.toLocaleString()} - {end.toLocaleString()}
                             </div>
                           </div>

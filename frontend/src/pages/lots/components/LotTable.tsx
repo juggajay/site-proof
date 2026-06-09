@@ -239,7 +239,7 @@ export const LotTable = React.memo(function LotTable({
                   type="checkbox"
                   checked={allDeletableSelected}
                   onChange={onSelectAll}
-                  className="h-4 w-4 rounded border-border"
+                  className="h-4 w-4 rounded border-border accent-primary"
                   aria-label="Select all deletable lots"
                   title="Select all"
                 />
@@ -348,7 +348,7 @@ export const LotTable = React.memo(function LotTable({
                                 type="checkbox"
                                 checked={selectedLots.has(lot.id)}
                                 onChange={() => onSelectLot(lot.id)}
-                                className="h-4 w-4 rounded border-border"
+                                className="h-4 w-4 rounded border-border accent-primary"
                                 aria-label={`Select lot ${lot.lotNumber}`}
                               />
                             )}

@@ -83,7 +83,7 @@ export function LotStatusFilterMenu({ statusFilters, onUpdateFilters }: LotStatu
                     type="checkbox"
                     checked={statusFilters.includes(option.value)}
                     onChange={() => handleStatusToggle(option.value)}
-                    className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                    className="h-4 w-4 rounded border-border accent-primary focus:ring-primary"
                   />
                   <span className="text-sm">{option.label}</span>
                 </label>

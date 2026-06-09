@@ -44,10 +44,10 @@ export function DiaryWeatherBar({
     return (
       <button
         onClick={onTapEdit}
-        className="w-full flex items-center gap-2 px-4 py-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg touch-manipulation min-h-[44px]"
+        className="w-full flex items-center gap-2 px-4 py-3 bg-warning/10 rounded-lg touch-manipulation min-h-[44px]"
       >
-        <Cloud className="h-4 w-4 text-amber-500" />
-        <span className="text-sm text-amber-600 dark:text-amber-400">Tap to add weather</span>
+        <Cloud className="h-4 w-4 text-warning" />
+        <span className="text-sm text-warning">Tap to add weather</span>
       </button>
     );
   }

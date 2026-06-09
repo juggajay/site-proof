@@ -121,7 +121,7 @@ export function SubcontractorVerificationSection({
             checked={requireSubcontractorVerification}
             onChange={onToggle}
             disabled={savingSetting !== null}
-            className="h-5 w-5 cursor-pointer"
+            className="h-5 w-5 cursor-pointer accent-primary"
           />
         </label>
       </div>
