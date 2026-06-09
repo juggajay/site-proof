@@ -497,9 +497,10 @@ export function ClaimsPage() {
           onDisputed={handleDisputeClaim}
         />
       )}
-      {certificationClaim && (
+      {certificationClaim && projectId && (
         <RecordCertificationModal
           claim={certificationClaim}
+          projectId={projectId}
           onClose={() => setShowCertificationModal(null)}
           onCertify={handleCertifyClaim}
         />

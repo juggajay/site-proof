@@ -15,6 +15,8 @@ import {
 import type { Claim } from '../types';
 import { formatCurrency, getCertificationDueStatus, getPaymentDueStatus } from '../utils';
 import { downloadCsv } from '@/lib/csv';
+import { openDocumentAccessUrl } from '@/lib/documentAccess';
+import { logError } from '@/lib/logger';
 
 interface ClaimsTableProps {
   claims: Claim[];
@@ -75,6 +77,44 @@ function getStatusBadge(status: string) {
         </span>
       );
   }
+}
+
+/**
+ * Read-back of the external certificate recorded against a claim: who recorded
+ * it, an optional notes snippet, and a link to the attached certificate. Shown
+ * as a muted secondary line under the certified status badge.
+ */
+function CertificationReadBack({ claim }: { claim: Claim }) {
+  const certification = claim.certification;
+  if (!certification) return null;
+
+  const { certifiedByName, variationNotes, certificationDocumentId } = certification;
+  if (!certifiedByName && !variationNotes && !certificationDocumentId) return null;
+
+  const notesSnippet =
+    variationNotes && variationNotes.length > 80
+      ? `${variationNotes.slice(0, 80)}…`
+      : variationNotes;
+
+  return (
+    <div className="mt-1 space-y-0.5 text-xs text-muted-foreground">
+      {certifiedByName && <div>Certified by {certifiedByName}</div>}
+      {notesSnippet && <div title={variationNotes ?? undefined}>{notesSnippet}</div>}
+      {certificationDocumentId && (
+        <button
+          type="button"
+          onClick={() => {
+            void openDocumentAccessUrl(certificationDocumentId).catch((error) => {
+              logError('Failed to open certification document', error);
+            });
+          }}
+          className="text-primary underline hover:no-underline"
+        >
+          View certificate
+        </button>
+      )}
+    </div>
+  );
 }
 
 function downloadClaimCsv(claim: Claim) {
@@ -177,7 +217,10 @@ export const ClaimsTable = React.memo(function ClaimsTable({
                   {new Date(claim.periodStart).toLocaleDateString('en-AU')} -{' '}
                   {new Date(claim.periodEnd).toLocaleDateString('en-AU')}
                 </td>
-                <td className="p-4">{getStatusBadge(claim.status)}</td>
+                <td className="p-4">
+                  {getStatusBadge(claim.status)}
+                  <CertificationReadBack claim={claim} />
+                </td>
                 <td className="p-4">
                   {certStatus ? (
                     <span className={`text-sm ${certStatus.className}`}>{certStatus.text}</span>
@@ -226,8 +269,8 @@ export const ClaimsTable = React.memo(function ClaimsTable({
                       <button
                         onClick={() => onCertifyClaim(claim.id)}
                         className="p-2 hover:bg-muted rounded-lg text-foreground"
-                        aria-label="Certify Claim"
-                        title="Certify Claim"
+                        aria-label="Record Certification"
+                        title="Record Certification"
                       >
                         <CheckCircle className="h-4 w-4" />
                       </button>

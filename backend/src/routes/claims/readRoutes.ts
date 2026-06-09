@@ -8,6 +8,7 @@ import { buildLotReadinessFromInputs } from '../../lib/evidenceReadiness.js';
 import { checkConformancePrerequisites } from '../../lib/conformancePrerequisites.js';
 import { getCumulativeClaimedPercentByLot } from './cumulativeClaims.js';
 import {
+  buildClaimCertificationView,
   buildClaimDetailResponse,
   buildClaimReadinessResponse,
   buildClaimableLotsResponse,
@@ -15,6 +16,7 @@ import {
   mapClaimListItem,
   mapClaimReadinessItem,
   mapClaimableLot,
+  parseClaimCertificationMetadata,
 } from './presentation.js';
 
 const CLAIM_LOT_QUERYABLE_STATUSES = [
@@ -279,8 +281,30 @@ export function createClaimReadRouter({
         }),
       ]);
 
+      // The certifier id lives inside the certification JSON stored in each
+      // claim's disputeNotes column. Resolve those ids to display names in one
+      // batched query so the read-back can surface who recorded the external
+      // certificate (mirrors the PM-name lookup in the certify workflow).
+      const certifierIds = [
+        ...new Set(
+          claims
+            .map((claim) => parseClaimCertificationMetadata(claim.disputeNotes)?.certifiedById)
+            .filter((id): id is string => Boolean(id)),
+        ),
+      ];
+      const certifierNameById = new Map<string, string | null>();
+      if (certifierIds.length > 0) {
+        const certifiers = await prisma.user.findMany({
+          where: { id: { in: certifierIds } },
+          select: { id: true, fullName: true, email: true },
+        });
+        for (const certifier of certifiers) {
+          certifierNameById.set(certifier.id, certifier.fullName || certifier.email || null);
+        }
+      }
+
       const transformedClaims = claims.map((claim) =>
-        mapClaimListItem(claim, project?.state ?? null),
+        mapClaimListItem(claim, project?.state ?? null, certifierNameById),
       );
 
       res.json(buildClaimsListResponse(transformedClaims));
@@ -313,7 +337,23 @@ export function createClaimReadRouter({
         throw AppError.notFound('Claim');
       }
 
-      res.json(buildClaimDetailResponse(claim));
+      // Surface the parsed external-certificate metadata (who recorded it, the
+      // notes, and the attached certificate document) without altering the raw
+      // disputeNotes field other consumers and the PUT path still rely on.
+      const certifierId = parseClaimCertificationMetadata(claim.disputeNotes)?.certifiedById;
+      const certifierNameById = new Map<string, string | null>();
+      if (certifierId) {
+        const certifier = await prisma.user.findUnique({
+          where: { id: certifierId },
+          select: { id: true, fullName: true, email: true },
+        });
+        if (certifier) {
+          certifierNameById.set(certifier.id, certifier.fullName || certifier.email || null);
+        }
+      }
+      const certification = buildClaimCertificationView(claim.disputeNotes, certifierNameById);
+
+      res.json(buildClaimDetailResponse({ ...claim, certification }));
     }),
   );
 

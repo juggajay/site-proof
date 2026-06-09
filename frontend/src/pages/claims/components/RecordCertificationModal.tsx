@@ -17,21 +17,25 @@ import { Textarea } from '@/components/ui/textarea';
 import { parseOptionalNonNegativeDecimalInput } from '@/lib/numericInput';
 import { formatDateKey } from '@/lib/localDate';
 import { formatStatusLabel } from '@/lib/statusLabels';
+import { uploadDocuments } from '@/pages/documents/documentsUploadData';
 
 interface RecordCertificationModalProps {
   claim: Claim;
+  projectId: string;
   onClose: () => void;
   onCertify: (claimId: string, certification: ClaimCertificationFormData) => Promise<void>;
 }
 
 export const RecordCertificationModal = React.memo(function RecordCertificationModal({
   claim,
+  projectId,
   onClose,
   onCertify,
 }: RecordCertificationModalProps) {
   const [certifiedAmount, setCertifiedAmount] = useState(String(claim.totalClaimedAmount));
   const [certificationDate, setCertificationDate] = useState(() => formatDateKey());
   const [variationNotes, setVariationNotes] = useState('');
+  const [certificateFile, setCertificateFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [certifying, setCertifying] = useState(false);
   const certifyingRef = useRef(false);
@@ -65,10 +69,42 @@ export const RecordCertificationModal = React.memo(function RecordCertificationM
     setCertifying(true);
     setError(null);
     try {
+      // If a certificate file was attached, upload it first via the existing
+      // documents-upload endpoint, then thread the resulting document id into
+      // the certify call. The /certify endpoint validates that the id
+      // references a document in this project.
+      let certificationDocumentId: string | undefined;
+      if (certificateFile) {
+        const { uploadedDocs, failedUploads } = await uploadDocuments({
+          files: [certificateFile],
+          projectId,
+          form: {
+            documentType: 'certificate',
+            category: 'certification',
+            caption: '',
+            lotId: '',
+          },
+          onProgress: () => {},
+        });
+
+        if (failedUploads.length > 0 || uploadedDocs.length === 0) {
+          setError(failedUploads[0] || 'Could not upload the certificate. Please try again.');
+          return;
+        }
+
+        const uploadedId = (uploadedDocs[0] as { id?: string }).id;
+        if (!uploadedId) {
+          setError('Could not upload the certificate. Please try again.');
+          return;
+        }
+        certificationDocumentId = uploadedId;
+      }
+
       await onCertify(claim.id, {
         certifiedAmount: parsedCertifiedAmount,
         certificationDate: certificationDate || undefined,
         variationNotes: variationNotes.trim() || undefined,
+        certificationDocumentId,
       });
     } finally {
       certifyingRef.current = false;
@@ -78,9 +114,11 @@ export const RecordCertificationModal = React.memo(function RecordCertificationM
 
   return (
     <Modal onClose={onClose} className="max-w-md">
-      <ModalHeader>Certify Claim</ModalHeader>
+      <ModalHeader>Record certification received</ModalHeader>
       <ModalDescription>
-        Record the certified amount before this progress claim is eligible for payment.
+        Record the certificate or payment schedule received from the principal (or their
+        superintendent), including the certified amount and a copy of the certificate. This does not
+        certify the claim yourself; it captures the external party&apos;s certification.
       </ModalDescription>
       <ModalBody>
         <div className="space-y-4">
@@ -115,6 +153,9 @@ export const RecordCertificationModal = React.memo(function RecordCertificationM
               }}
               aria-invalid={hasAmountError}
             />
+            <p className="mt-1 text-xs text-muted-foreground">
+              The amount certified on the principal&apos;s certificate or payment schedule.
+            </p>
           </div>
 
           <div>
@@ -128,7 +169,7 @@ export const RecordCertificationModal = React.memo(function RecordCertificationM
           </div>
 
           <div>
-            <Label>Variation Notes</Label>
+            <Label>Notes / variations from the certificate</Label>
             <Textarea
               value={variationNotes}
               aria-label="Variation Notes"
@@ -145,6 +186,39 @@ export const RecordCertificationModal = React.memo(function RecordCertificationM
             </p>
           </div>
 
+          <div>
+            <Label>Certificate / payment schedule (PDF or image)</Label>
+            <input
+              type="file"
+              accept=".pdf,image/*"
+              id="certification-document-upload"
+              className="hidden"
+              onChange={(event) => {
+                setCertificateFile(event.target.files?.[0] || null);
+                if (error) setError(null);
+              }}
+            />
+            <div className="mt-1 flex items-center gap-3">
+              <label
+                htmlFor="certification-document-upload"
+                className="inline-block cursor-pointer rounded-lg bg-muted px-3 py-2 text-sm text-foreground hover:bg-muted/80"
+              >
+                {certificateFile ? 'Change file' : 'Attach certificate'}
+              </label>
+              {certificateFile && (
+                <span
+                  className="truncate text-sm text-muted-foreground"
+                  title={certificateFile.name}
+                >
+                  {certificateFile.name}
+                </span>
+              )}
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Optional. Attach the certificate received from the principal for the audit trail.
+            </p>
+          </div>
+
           {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
       </ModalBody>
@@ -156,7 +230,7 @@ export const RecordCertificationModal = React.memo(function RecordCertificationM
           onClick={handleCertify}
           disabled={certifying || hasAmountError || variationNotesTooLong}
         >
-          {certifying ? 'Certifying...' : 'Certify Claim'}
+          {certifying ? 'Recording...' : 'Record Certification'}
         </Button>
       </ModalFooter>
     </Modal>
