@@ -20,6 +20,7 @@ export interface Project {
   workingHoursStart?: string | null;
   workingHoursEnd?: string | null;
   workingDays?: string[] | null;
+  specificationSet?: string | null;
   settings?: string | Record<string, unknown> | null;
 }
 
@@ -53,6 +54,7 @@ export interface GeneralFormData {
   chainageEnd: string;
   workingHoursStart: string;
   workingHoursEnd: string;
+  specificationSet: string;
 }
 
 export interface ITPTemplate {
@@ -106,6 +108,19 @@ export const ROLE_OPTIONS: RoleOption[] = [
   { value: 'viewer', label: 'Viewer' },
 ];
 
+// Specification standards a project can use. These values must match the
+// `stateSpec` tags on the seeded global ITP library so a project can see its
+// templates (see CreateProjectModal, which offers the same set).
+export const SPECIFICATION_SET_OPTIONS: RoleOption[] = [
+  { value: 'Austroads', label: 'Austroads (National)' },
+  { value: 'TfNSW', label: 'TfNSW (NSW)' },
+  { value: 'MRTS', label: 'MRTS (QLD)' },
+  { value: 'VicRoads', label: 'VicRoads (VIC)' },
+  { value: 'DIT', label: 'DIT (SA)' },
+  { value: 'MRWA', label: 'Main Roads WA' },
+  { value: 'custom', label: 'Custom' },
+];
+
 export const DEFAULT_FORM_DATA: GeneralFormData = {
   name: '',
   code: '',
@@ -117,6 +132,7 @@ export const DEFAULT_FORM_DATA: GeneralFormData = {
   chainageEnd: '10000',
   workingHoursStart: '06:00',
   workingHoursEnd: '18:00',
+  specificationSet: 'TfNSW',
 };
 
 export const DEFAULT_ENABLED_MODULES: EnabledModules = {
