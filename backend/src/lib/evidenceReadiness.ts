@@ -77,7 +77,10 @@ function buildConformanceItems(input: LotReadinessInput): EvidenceReadinessItem[
     );
   }
 
-  if (!prerequisites.hasPassingTest) {
+  // Only surface the test blocker when the ITP actually has a test point. A
+  // lot whose ITP has no test points must not be shown a blocker the conform
+  // gate (which now uses testRequired) would never raise.
+  if (prerequisites.testRequired && !prerequisites.hasPassingTest) {
     items.push(
       item({
         code: 'no_passing_verified_test',

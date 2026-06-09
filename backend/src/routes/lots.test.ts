@@ -1475,18 +1475,25 @@ describe('Lots API', () => {
           conformance: { state: 'blocked' },
           claim: { state: 'not_conformed' },
         });
+        // A lot with no ITP assigned has no test requirement (testRequired=false),
+        // so it must NOT be shown a "no passing verified test" blocker — only the
+        // ITP-assignment blocker (T1: derive the test requirement from the ITP).
         expect(res.body.readiness.conformance.blockers).toEqual(
           expect.arrayContaining([
             expect.objectContaining({ code: 'no_itp_assigned', blocksAction: true }),
-            expect.objectContaining({ code: 'no_passing_verified_test', blocksAction: true }),
           ]),
+        );
+        expect(res.body.readiness.conformance.blockers).not.toEqual(
+          expect.arrayContaining([expect.objectContaining({ code: 'no_passing_verified_test' })]),
         );
         expect(res.body.readiness.claim.blockers).toEqual(
           expect.arrayContaining([
             expect.objectContaining({ code: 'not_conformed', blocksAction: true }),
           ]),
         );
-        expect(res.body.readiness.summary.actionBlockerCount).toBeGreaterThanOrEqual(3);
+        // no_itp_assigned (conformance) + not_conformed (claim) = 2 action blockers
+        // (no_passing_verified_test no longer applies without an ITP).
+        expect(res.body.readiness.summary.actionBlockerCount).toBeGreaterThanOrEqual(2);
 
         const afterAuditCount = await prisma.auditLog.count({
           where: { entityType: 'lot', entityId: readinessLot.id },

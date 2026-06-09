@@ -187,6 +187,7 @@ export interface ConformStatus {
     itpCompleted: boolean;
     itpCompletedCount: number;
     itpTotalCount: number;
+    testRequired: boolean;
     hasPassingTest: boolean;
     noOpenNcrs: boolean;
     openNcrs: { id: string; ncrNumber: string; status: string }[];

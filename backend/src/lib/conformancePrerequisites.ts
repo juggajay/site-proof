@@ -1,13 +1,14 @@
 import { prisma } from './prisma.js';
 
-// A checklist item counts as finished for conformance when its completion is
-// either 'completed' or 'not_applicable'. N/A is a first-class status that the
-// app requires a reason for (itp/completions.ts) and renders as done; treating
-// it as unfinished would make a lot with any N/A item impossible to conform.
-// 'failed' and missing completions remain unfinished (they still block). This
-// mirrors the isFinished semantics in routes/itp/helpers/lotProgression.ts.
+// A checklist item counts as finished for conformance only when its completion
+// status is 'completed'. This preserves the pre-existing conformance semantics
+// (the conform gate has always counted only 'completed' items); any other
+// status — including 'not_applicable', 'failed', 'pending', or a missing
+// completion — remains unfinished and still blocks. The N/A-as-finished
+// question is a separate behaviour decision and is intentionally out of scope
+// for the test-requirement change.
 export function isItpCompletionFinished(status: string | null | undefined): boolean {
-  return status === 'completed' || status === 'not_applicable';
+  return status === 'completed';
 }
 
 interface ChecklistCompletenessItem {
@@ -29,9 +30,10 @@ export interface ChecklistCompleteness {
 }
 
 // Pure (DB-free) computation of ITP checklist completeness for conformance.
-// An item is "finished" when its completion status is 'completed' or
-// 'not_applicable'. Extracted so the conformance gate can be unit-tested with
-// mocked completions and so the N/A semantics stay in one place.
+// An item is "finished" when its completion status is 'completed' (see
+// isItpCompletionFinished). Extracted so the conformance gate can be
+// unit-tested with mocked completions and so the finished-status rule stays in
+// one place.
 export function buildItpChecklistCompleteness(
   checklistItems: ChecklistCompletenessItem[],
   completions: ChecklistCompletenessCompletion[],
@@ -58,12 +60,24 @@ export function buildItpChecklistCompleteness(
   };
 }
 
+// Pure (DB-free) predicate: does the lot's ITP actually require a test?
+// Real civil QA ties testing to specific ITP points/frequencies, not to every
+// lot. An item demands a test when its evidence requirement is 'test' OR it has
+// a non-empty testType. Mirrors the testItems filter in
+// routes/itp/helpers/lotProgression.ts so the two definitions can't drift.
+export function itpRequiresTest(
+  checklistItems: { evidenceRequired?: string | null; testType?: string | null }[],
+): boolean {
+  return checklistItems.some((item) => item.evidenceRequired === 'test' || Boolean(item.testType));
+}
+
 interface ConformancePrerequisites {
   itpAssigned: boolean;
   itpCompleted: boolean;
   itpCompletedCount: number;
   itpTotalCount: number;
   itpIncompleteItems: { id: string; description: string; pointType: string }[];
+  testRequired: boolean;
   hasPassingTest: boolean;
   testResults: { id: string; testType: string; passFail: string; status: string }[];
   noOpenNcrs: boolean;
@@ -118,15 +132,16 @@ export async function checkConformancePrerequisites(
     itpCompletedCount: 0,
     itpTotalCount: 0,
     itpIncompleteItems: [],
+    testRequired: false,
     hasPassingTest: false,
     testResults: [],
     noOpenNcrs: true,
     openNcrs: [],
   };
 
-  // Check ITP completion. N/A items count as finished (see
-  // buildItpChecklistCompleteness / isItpCompletionFinished above) so a lot
-  // with an N/A item can still be conformed; 'failed' and missing items block.
+  // Check ITP completion. Only 'completed' items count as finished (see
+  // buildItpChecklistCompleteness / isItpCompletionFinished above); 'failed',
+  // 'not_applicable', and missing items remain incomplete and still block.
   if (lot.itpInstance) {
     prerequisites.itpAssigned = true;
     const checklistItems = lot.itpInstance.template.checklistItems;
@@ -137,6 +152,10 @@ export async function checkConformancePrerequisites(
     prerequisites.itpCompletedCount = completeness.completedCount;
     prerequisites.itpCompleted = completeness.completed;
     prerequisites.itpIncompleteItems = completeness.incompleteItems;
+
+    // A passing verified test is only required when the ITP actually has a test
+    // point. Lots whose ITP has no test points must not be forced to invent one.
+    prerequisites.testRequired = itpRequiresTest(checklistItems);
   }
 
   // Check test results - need at least one passing and verified test
@@ -170,7 +189,7 @@ export async function checkConformancePrerequisites(
   const canConform =
     prerequisites.itpAssigned &&
     prerequisites.itpCompleted &&
-    prerequisites.hasPassingTest &&
+    (!prerequisites.testRequired || prerequisites.hasPassingTest) &&
     prerequisites.noOpenNcrs;
 
   const blockingReasons: string[] = [];
@@ -182,8 +201,8 @@ export async function checkConformancePrerequisites(
       `ITP checklist incomplete (${prerequisites.itpCompletedCount}/${prerequisites.itpTotalCount} items completed)`,
     );
   }
-  if (!prerequisites.hasPassingTest) {
-    blockingReasons.push('No passing verified test result');
+  if (prerequisites.testRequired && !prerequisites.hasPassingTest) {
+    blockingReasons.push('ITP requires a test, but no passing verified test result was recorded');
   }
   if (!prerequisites.noOpenNcrs) {
     blockingReasons.push(`${prerequisites.openNcrs.length} open NCR(s) must be closed`);
