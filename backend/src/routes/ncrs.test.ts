@@ -2716,7 +2716,8 @@ describe('NCR Access Hardening', () => {
           });
 
         expect(res.status).toBe(400);
-        expect(res.body.error.message).toContain('user or a subcontractor');
+        expect(res.body.error.message).toBe('Validation failed');
+        expect(JSON.stringify(res.body.error.details)).toContain('user or a subcontractor');
         expect(
           await prisma.nCR.count({
             where: { projectId, responsibleSubcontractorId: subcontractor.id },
@@ -2885,7 +2886,8 @@ describe('NCR Access Hardening', () => {
           .send({ responsibleUserId: userId, responsibleSubcontractorId: subcontractor.id });
 
         expect(res.status).toBe(400);
-        expect(res.body.error.message).toContain('user or a subcontractor');
+        expect(res.body.error.message).toBe('Validation failed');
+        expect(JSON.stringify(res.body.error.details)).toContain('user or a subcontractor');
 
         const unchanged = await prisma.nCR.findUniqueOrThrow({
           where: { id: ncr.id },
@@ -2937,7 +2939,7 @@ describe('NCR Access Hardening', () => {
           .set('Authorization', `Bearer ${authToken}`);
 
         expect(res.status).toBe(200);
-        const repeatOffenders = res.body.charts.repeatOffenders.data as Array<{
+        const repeatOffenders = res.body.repeatOffenders.data as Array<{
           subcontractorId: string;
           ncrCount: number;
         }>;
