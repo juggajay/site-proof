@@ -13,7 +13,7 @@ export function NotFoundPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted/30 px-4 py-10">
       <main className="w-full max-w-2xl rounded-lg border bg-background p-6 shadow-sm sm:p-8">
-        <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 text-primary">
+        <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-lg bg-muted text-muted-foreground">
           <SearchX className="h-6 w-6" aria-hidden="true" />
         </div>
 

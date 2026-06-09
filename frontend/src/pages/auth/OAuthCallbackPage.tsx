@@ -75,9 +75,9 @@ export function OAuthCallbackPage() {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-center space-y-4" role="alert">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10">
             <svg
-              className="h-6 w-6 text-red-600"
+              className="h-6 w-6 text-destructive"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -90,7 +90,7 @@ export function OAuthCallbackPage() {
               />
             </svg>
           </div>
-          <p className="text-red-600">{error}</p>
+          <p className="text-destructive">{error}</p>
           <p className="text-sm text-muted-foreground">Redirecting to login...</p>
         </div>
       </div>

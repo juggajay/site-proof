@@ -202,9 +202,9 @@ export function LoginPage() {
   if (magicLinkSent) {
     return (
       <div className="space-y-4 text-center">
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-success/10">
           <svg
-            className="h-6 w-6 text-green-600"
+            className="h-6 w-6 text-success"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -378,7 +378,7 @@ export function LoginPage() {
 
       {sessionExpired && (
         <div
-          className="rounded-lg bg-yellow-100 p-3 text-sm text-yellow-800"
+          className="rounded-lg bg-warning/10 p-3 text-sm text-warning"
           role="alert"
           aria-live="polite"
         >
@@ -443,7 +443,7 @@ export function LoginPage() {
           id="rememberMe"
           type="checkbox"
           {...loginForm.register('rememberMe')}
-          className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+          className="h-4 w-4 rounded border-border accent-primary text-primary focus:ring-primary"
         />
         <Label htmlFor="rememberMe" className="text-sm text-muted-foreground font-normal">
           Remember me
@@ -476,7 +476,7 @@ export function LoginPage() {
       {/* Feature #414, #1004: Google OAuth Sign In */}
       <a
         href={apiUrl('/api/auth/google')}
-        className="w-full flex items-center justify-center gap-2 rounded-lg border border-border bg-card py-2 text-foreground hover:bg-muted/50 transition-colors"
+        className="w-full flex items-center justify-center gap-2 rounded-lg border border-border bg-card py-2 text-foreground hover:bg-muted transition-colors"
       >
         <svg className="h-5 w-5" viewBox="0 0 24 24">
           <path
@@ -500,10 +500,10 @@ export function LoginPage() {
       </a>
 
       <div className="flex justify-between text-sm">
-        <Link to="/forgot-password" className="text-primary hover:underline">
+        <Link to="/forgot-password" className="text-foreground hover:underline">
           Forgot password?
         </Link>
-        <Link to="/register" className="text-primary hover:underline">
+        <Link to="/register" className="text-foreground hover:underline">
           Create account
         </Link>
       </div>

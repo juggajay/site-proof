@@ -146,7 +146,7 @@ export function VerifyEmailPage() {
           </div>
 
           {resendStatus === 'success' && (
-            <div className="rounded-lg bg-green-50 p-3 text-sm text-green-700" role="status">
+            <div className="rounded-lg bg-success/10 p-3 text-sm text-success" role="status">
               {resendMessage}
             </div>
           )}
@@ -174,7 +174,7 @@ export function VerifyEmailPage() {
         </form>
 
         <p className="text-center text-sm">
-          <Link to="/login" className="text-primary hover:underline">
+          <Link to="/login" className="text-foreground hover:underline">
             Back to Login
           </Link>
         </p>
@@ -200,8 +200,8 @@ export function VerifyEmailPage() {
   if (status === 'success') {
     return (
       <div className="w-full max-w-md space-y-6 text-center" role="status">
-        <CheckCircle className="mx-auto h-16 w-16 text-green-500" />
-        <h2 className="text-2xl font-bold text-green-700">Email Verified!</h2>
+        <CheckCircle className="mx-auto h-16 w-16 text-success" />
+        <h2 className="text-2xl font-bold text-success">Email Verified!</h2>
         <p className="text-muted-foreground">{message}</p>
         <Link
           to="/login"
@@ -242,7 +242,7 @@ export function VerifyEmailPage() {
           )}
 
           {resendStatus === 'success' && (
-            <div className="rounded-lg bg-green-50 p-3 text-sm text-green-700" role="status">
+            <div className="rounded-lg bg-success/10 p-3 text-sm text-success" role="status">
               {resendMessage}
             </div>
           )}
@@ -271,7 +271,7 @@ export function VerifyEmailPage() {
       </div>
 
       <p className="text-center text-sm">
-        <Link to="/login" className="text-primary hover:underline">
+        <Link to="/login" className="text-foreground hover:underline">
           Back to Login
         </Link>
       </p>

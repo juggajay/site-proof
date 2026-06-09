@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Check, Lock, X } from 'lucide-react';
+import { Check, CheckCircle, Lock, X } from 'lucide-react';
 import { resetPasswordSchema, MIN_PASSWORD_LENGTH } from '@/lib/validation';
 import { apiFetch } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -104,7 +104,7 @@ export function ResetPasswordPage() {
   if (validating) {
     return (
       <div className="space-y-4 text-center" role="status" aria-label="Validating reset link">
-        <div className="h-12 w-12 mx-auto animate-spin rounded-full border-4 border-primary border-t-transparent" />
+        <div className="h-12 w-12 mx-auto animate-spin rounded-full border-4 border-muted-foreground border-t-transparent" />
         <p className="text-muted-foreground">Validating reset link...</p>
       </div>
     );
@@ -126,7 +126,7 @@ export function ResetPasswordPage() {
           >
             Request New Reset Link
           </Link>
-          <Link to="/login" className="block text-center text-sm text-primary hover:underline">
+          <Link to="/login" className="block text-center text-sm text-foreground hover:underline">
             Back to sign in
           </Link>
         </div>
@@ -138,12 +138,12 @@ export function ResetPasswordPage() {
   if (success) {
     return (
       <div className="space-y-4 text-center">
-        <div className="text-6xl">✅</div>
-        <h2 className="text-2xl font-bold text-green-600">Password Reset Successfully!</h2>
+        <CheckCircle className="mx-auto h-16 w-16 text-success" />
+        <h2 className="text-2xl font-bold text-success">Password Reset Successfully!</h2>
         <p className="text-muted-foreground">
           Your password has been updated. Redirecting to login...
         </p>
-        <Link to="/login" className="block text-center text-sm text-primary hover:underline">
+        <Link to="/login" className="block text-center text-sm text-foreground hover:underline">
           Click here if not redirected
         </Link>
       </div>
@@ -181,7 +181,7 @@ export function ResetPasswordPage() {
         {password && (
           <div className="mt-2 space-y-1 text-xs">
             <div
-              className={`flex items-center gap-1 ${passwordValidation.minLength ? 'text-green-600' : 'text-muted-foreground'}`}
+              className={`flex items-center gap-1 ${passwordValidation.minLength ? 'text-success' : 'text-muted-foreground'}`}
             >
               {passwordValidation.minLength ? (
                 <Check className="h-3 w-3" />
@@ -191,7 +191,7 @@ export function ResetPasswordPage() {
               At least {MIN_PASSWORD_LENGTH} characters
             </div>
             <div
-              className={`flex items-center gap-1 ${passwordValidation.hasUppercase ? 'text-green-600' : 'text-muted-foreground'}`}
+              className={`flex items-center gap-1 ${passwordValidation.hasUppercase ? 'text-success' : 'text-muted-foreground'}`}
             >
               {passwordValidation.hasUppercase ? (
                 <Check className="h-3 w-3" />
@@ -201,7 +201,7 @@ export function ResetPasswordPage() {
               One uppercase letter
             </div>
             <div
-              className={`flex items-center gap-1 ${passwordValidation.hasLowercase ? 'text-green-600' : 'text-muted-foreground'}`}
+              className={`flex items-center gap-1 ${passwordValidation.hasLowercase ? 'text-success' : 'text-muted-foreground'}`}
             >
               {passwordValidation.hasLowercase ? (
                 <Check className="h-3 w-3" />
@@ -211,7 +211,7 @@ export function ResetPasswordPage() {
               One lowercase letter
             </div>
             <div
-              className={`flex items-center gap-1 ${passwordValidation.hasNumber ? 'text-green-600' : 'text-muted-foreground'}`}
+              className={`flex items-center gap-1 ${passwordValidation.hasNumber ? 'text-success' : 'text-muted-foreground'}`}
             >
               {passwordValidation.hasNumber ? (
                 <Check className="h-3 w-3" />
@@ -221,7 +221,7 @@ export function ResetPasswordPage() {
               One number
             </div>
             <div
-              className={`flex items-center gap-1 ${passwordValidation.hasSpecial ? 'text-green-600' : 'text-muted-foreground'}`}
+              className={`flex items-center gap-1 ${passwordValidation.hasSpecial ? 'text-success' : 'text-muted-foreground'}`}
             >
               {passwordValidation.hasSpecial ? (
                 <Check className="h-3 w-3" />
@@ -260,7 +260,7 @@ export function ResetPasswordPage() {
         {loading ? 'Resetting Password...' : 'Reset Password'}
       </Button>
 
-      <Link to="/login" className="block text-center text-sm text-primary hover:underline">
+      <Link to="/login" className="block text-center text-sm text-foreground hover:underline">
         Back to sign in
       </Link>
     </form>
