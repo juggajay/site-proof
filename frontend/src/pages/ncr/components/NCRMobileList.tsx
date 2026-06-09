@@ -72,12 +72,12 @@ function NCRMobileListInner({
             ncr.status !== 'closed_concession';
           const statusVariant =
             ncr.status === 'closed' || ncr.status === 'closed_concession'
-              ? 'success'
+              ? 'default'
               : ncr.status === 'open'
                 ? 'error'
                 : ncr.status === 'verification'
-                  ? 'info'
-                  : 'warning';
+                  ? 'default'
+                  : 'default';
 
           return (
             <div
@@ -134,7 +134,7 @@ function NCRMobileListInner({
                     { label: 'Age', value: `${ageInDays}d`, priority: 'secondary' },
                   ]}
                   onClick={() => onSelectNcr(ncr)}
-                  className={isOverdue ? 'border-red-300' : undefined}
+                  className={isOverdue ? 'border-destructive/40' : undefined}
                 />
               </SwipeableCard>
             </div>

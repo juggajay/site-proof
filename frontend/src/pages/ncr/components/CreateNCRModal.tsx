@@ -272,7 +272,7 @@ function CreateNCRModalInner({
               </label>
               <label className="flex items-center gap-2">
                 <input type="radio" value="major" {...register('severity')} />
-                <span className="text-red-600 font-medium">Major</span>
+                <span className="text-destructive font-medium">Major</span>
               </label>
             </div>
             {errors.severity && (
@@ -281,7 +281,7 @@ function CreateNCRModalInner({
               </p>
             )}
             {severity === 'major' && (
-              <p className="text-amber-600 text-sm mt-1">
+              <p className="text-warning text-sm mt-1">
                 Major NCRs require Quality Manager approval before closure.
               </p>
             )}

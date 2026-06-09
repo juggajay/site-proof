@@ -131,7 +131,7 @@ export function NCRPage() {
       {error && (
         <div
           role="alert"
-          className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg"
+          className="bg-destructive/10 border border-destructive/20 text-destructive px-4 py-3 rounded-lg"
         >
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <span>{error}</span>
@@ -142,7 +142,7 @@ export function NCRPage() {
               <button
                 type="button"
                 onClick={() => setError(null)}
-                className="text-red-700 hover:text-red-900"
+                className="text-destructive hover:text-destructive/80"
                 aria-label="Dismiss NCR error"
               >
                 &times;
@@ -155,7 +155,7 @@ export function NCRPage() {
       {successMessage && (
         <div
           role="status"
-          className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg"
+          className="bg-success/10 border border-success/20 text-success px-4 py-3 rounded-lg"
         >
           {successMessage}
         </div>
@@ -166,7 +166,7 @@ export function NCRPage() {
         <div className="bg-primary/5 border border-primary/20 text-primary px-4 py-3 rounded-lg text-sm">
           Your role: <span className="font-medium">{userRole.role}</span>
           {userRole.isQualityManager && (
-            <span className="ml-2 text-green-600">(Can approve major NCR closures)</span>
+            <span className="ml-2 text-muted-foreground">(Can approve major NCR closures)</span>
           )}
         </div>
       )}
@@ -297,11 +297,11 @@ export function NCRPage() {
               id: 'raise-ncr',
               label: 'Raise NCR',
               icon: <AlertTriangle className="w-5 h-5" />,
-              color: 'bg-red-500',
+              color: 'bg-destructive',
               onClick: () => openModal('create'),
             },
           ]}
-          mainColor="bg-red-500"
+          mainColor="bg-destructive"
         />
       )}
     </div>

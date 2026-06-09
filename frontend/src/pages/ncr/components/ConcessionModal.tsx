@@ -100,8 +100,8 @@ function ConcessionModalInner({ isOpen, ncr, onClose, onSubmit, loading }: Conce
             <span
               className={`px-2 py-0.5 rounded text-xs ${
                 ncr.severity === 'major'
-                  ? 'bg-red-100 text-red-800'
-                  : 'bg-yellow-100 text-yellow-800'
+                  ? 'bg-destructive/10 text-destructive'
+                  : 'bg-warning/10 text-warning'
               }`}
             >
               {ncr.severity.toUpperCase()}
@@ -111,7 +111,7 @@ function ConcessionModalInner({ isOpen, ncr, onClose, onSubmit, loading }: Conce
 
         {/* Warning for Major NCRs */}
         {isMajor && (
-          <div className="mb-4 bg-amber-50 border border-amber-200 text-amber-800 px-3 py-2 rounded-lg text-sm flex items-start gap-2">
+          <div className="mb-4 bg-warning/10 border border-warning/30 text-warning px-3 py-2 rounded-lg text-sm flex items-start gap-2">
             <svg className="w-5 h-5 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
               <path
                 fillRule="evenodd"
@@ -169,19 +169,19 @@ function ConcessionModalInner({ isOpen, ncr, onClose, onSubmit, loading }: Conce
 
           {/* Client Approval Section for Major NCRs */}
           {requiresClientApproval && (
-            <div className="border border-amber-200 bg-amber-50 rounded-lg p-4">
-              <Label className="text-amber-900">Client Approval *</Label>
+            <div className="border border-warning/30 bg-warning/10 rounded-lg p-4">
+              <Label className="text-warning">Client Approval *</Label>
 
               <div className="space-y-3 mt-2">
                 {/* Approval Reference/Document ID */}
                 <div>
-                  <label className="block text-xs text-amber-800 mb-1">
+                  <label className="block text-xs text-warning mb-1">
                     Approval Document Reference
                   </label>
                   <Input
                     type="text"
                     {...register('clientApprovalReference')}
-                    className="border-amber-300 bg-white"
+                    className="bg-card border-border text-foreground"
                     placeholder="e.g., Email ref, Letter ID, Document number..."
                   />
                 </div>
@@ -191,9 +191,9 @@ function ConcessionModalInner({ isOpen, ncr, onClose, onSubmit, loading }: Conce
                   <input
                     type="checkbox"
                     {...register('clientApprovalConfirmed')}
-                    className="mt-1 rounded border-amber-400"
+                    className="mt-1 rounded border-border"
                   />
-                  <span className="text-sm text-amber-900">
+                  <span className="text-sm text-foreground">
                     I confirm that the client has been notified of this concession and has provided
                     documented approval to proceed.
                   </span>
@@ -216,7 +216,7 @@ function ConcessionModalInner({ isOpen, ncr, onClose, onSubmit, loading }: Conce
           {/* Status Info */}
           <div className="bg-muted/50 border border-border px-3 py-2 rounded-lg text-sm">
             <span className="text-muted-foreground">NCR will be closed with status: </span>
-            <span className="font-medium text-green-700">CLOSED_CONCESSION</span>
+            <span className="font-medium text-foreground">CLOSED_CONCESSION</span>
           </div>
         </form>
       </ModalBody>

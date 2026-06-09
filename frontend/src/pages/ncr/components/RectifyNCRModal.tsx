@@ -141,9 +141,9 @@ function RectifyNCRModalInner({
     <Modal onClose={handleClose} className="max-w-lg">
       <ModalHeader>Submit Rectification Evidence</ModalHeader>
       <ModalBody>
-        <div className="mb-4 p-3 bg-primary/5 border border-primary/20 rounded-lg">
-          <p className="text-sm font-medium text-primary">{ncr.ncrNumber}</p>
-          <p className="text-sm text-primary mt-1">{ncr.description}</p>
+        <div className="mb-4 p-3 bg-muted/50 border border-border rounded-lg">
+          <p className="text-sm font-medium text-foreground">{ncr.ncrNumber}</p>
+          <p className="text-sm text-muted-foreground mt-1">{ncr.description}</p>
         </div>
 
         {/* Evidence Upload Section */}
@@ -164,7 +164,7 @@ function RectifyNCRModalInner({
                 }
               }}
               disabled={uploadingEvidence}
-              className="w-full border rounded-lg px-3 py-2 text-sm mt-1"
+              className="w-full bg-background border border-border text-foreground rounded-lg px-3 py-2 text-sm mt-1"
             />
           </div>
 
@@ -184,18 +184,20 @@ function RectifyNCRModalInner({
                 }
               }}
               disabled={uploadingEvidence}
-              className="w-full border rounded-lg px-3 py-2 text-sm mt-1"
+              className="w-full bg-background border border-border text-foreground rounded-lg px-3 py-2 text-sm mt-1"
             />
           </div>
 
-          {uploadingEvidence && <p className="text-sm text-amber-600">Uploading evidence...</p>}
+          {uploadingEvidence && (
+            <p className="text-sm text-muted-foreground">Uploading evidence...</p>
+          )}
 
           {/* Uploaded files list */}
           {evidenceFiles.length > 0 && (
             <div className="mt-2 space-y-1">
               <p className="text-xs font-medium text-muted-foreground">Uploaded Evidence:</p>
               {evidenceFiles.map((file, index) => (
-                <p key={index} className="text-xs text-green-600">
+                <p key={index} className="text-xs text-muted-foreground">
                   &#10003; {file.name}
                 </p>
               ))}
@@ -220,8 +222,8 @@ function RectifyNCRModalInner({
             )}
           </div>
 
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-            <p className="text-sm text-amber-800">
+          <div className="bg-warning/10 border border-warning/30 rounded-lg p-3">
+            <p className="text-sm text-warning">
               <strong>Note:</strong> Please upload at least one piece of evidence (photo or re-test
               certificate) before submitting for verification.
             </p>
