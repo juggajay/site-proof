@@ -179,7 +179,7 @@ function NCRTableInner({
                 </td>
                 <td className="px-4 py-3 text-sm">
                   {ncr.dueDate ? (
-                    <span className={isOverdue ? 'text-red-600 font-medium' : ''}>
+                    <span className={isOverdue ? 'text-destructive font-medium' : ''}>
                       {new Date(ncr.dueDate).toLocaleDateString('en-AU')}
                     </span>
                   ) : (
@@ -187,7 +187,7 @@ function NCRTableInner({
                   )}
                 </td>
                 <td className="px-4 py-3 text-sm">
-                  <span className={ageInDays > 14 ? 'text-amber-600 font-medium' : ''}>
+                  <span className={ageInDays > 14 ? 'text-warning font-medium' : ''}>
                     {ageInDays}d
                   </span>
                 </td>
@@ -201,7 +201,7 @@ function NCRTableInner({
                       aria-label={`Copy link to NCR ${ncr.ncrNumber}`}
                     >
                       {copiedNcrId === ncr.id ? (
-                        <Check className="h-3.5 w-3.5 text-green-600" />
+                        <Check className="h-3.5 w-3.5 text-success" />
                       ) : (
                         <Link2 className="h-3.5 w-3.5" />
                       )}
@@ -220,7 +220,7 @@ function NCRTableInner({
                       <button
                         onClick={() => onRespond(ncr)}
                         disabled={actionLoading}
-                        className="px-3 py-1 text-xs bg-amber-600 text-white rounded hover:bg-amber-700 disabled:opacity-50"
+                        className="px-3 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50"
                       >
                         Respond
                       </button>
@@ -234,7 +234,7 @@ function NCRTableInner({
                         <button
                           onClick={() => onReviewResponse(ncr)}
                           disabled={actionLoading}
-                          className="px-3 py-1 text-xs bg-cyan-600 text-white rounded hover:bg-cyan-700 disabled:opacity-50"
+                          className="px-3 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50"
                           title="Review the submitted response"
                         >
                           Review Response
@@ -249,7 +249,7 @@ function NCRTableInner({
                         <button
                           onClick={() => onQmApprove(ncr.id)}
                           disabled={actionLoading}
-                          className="px-3 py-1 text-xs bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
+                          className="px-3 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50"
                         >
                           QM Approve
                         </button>
@@ -266,7 +266,7 @@ function NCRTableInner({
                         <button
                           onClick={() => onNotifyClient(ncr)}
                           disabled={actionLoading}
-                          className="px-3 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50"
+                          className="px-3 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50"
                           title="Notify client about this major NCR"
                         >
                           Notify Client
@@ -276,7 +276,7 @@ function NCRTableInner({
                     {/* Client Notified Badge */}
                     {ncr.clientNotifiedAt && (
                       <span
-                        className="px-2 py-0.5 text-xs bg-indigo-100 text-indigo-800 rounded"
+                        className="px-2 py-0.5 text-xs bg-muted text-muted-foreground rounded"
                         title={`Client notified on ${new Date(ncr.clientNotifiedAt).toLocaleDateString('en-AU')}`}
                       >
                         ✓ Client Notified
@@ -288,7 +288,7 @@ function NCRTableInner({
                       <button
                         onClick={() => onRectify(ncr)}
                         disabled={actionLoading}
-                        className="px-3 py-1 text-xs bg-primary text-white rounded hover:bg-primary/90 disabled:opacity-50"
+                        className="px-3 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50"
                       >
                         Submit Rectification
                       </button>
@@ -302,7 +302,7 @@ function NCRTableInner({
                         <button
                           onClick={() => onRejectRectification(ncr)}
                           disabled={actionLoading}
-                          className="px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
+                          className="px-3 py-1 text-xs bg-destructive text-destructive-foreground rounded hover:bg-destructive/90 disabled:opacity-50"
                           title="Reject rectification and return to responsible party"
                         >
                           Reject
@@ -317,7 +317,7 @@ function NCRTableInner({
                         className={`px-3 py-1 text-xs rounded disabled:opacity-50 ${
                           ncr.severity === 'major' && !ncr.qmApprovedAt
                             ? 'bg-muted-foreground text-muted cursor-not-allowed'
-                            : 'bg-green-600 text-white hover:bg-green-700'
+                            : 'bg-success text-success-foreground hover:bg-success/90'
                         }`}
                         title={
                           ncr.severity === 'major' && !ncr.qmApprovedAt
@@ -337,7 +337,7 @@ function NCRTableInner({
                         className={`px-3 py-1 text-xs rounded disabled:opacity-50 ${
                           ncr.severity === 'major' && !ncr.qmApprovedAt
                             ? 'bg-muted-foreground text-muted cursor-not-allowed'
-                            : 'bg-amber-600 text-white hover:bg-amber-700'
+                            : 'bg-warning text-warning-foreground hover:bg-warning/90'
                         }`}
                         title={
                           ncr.severity === 'major' && !ncr.qmApprovedAt

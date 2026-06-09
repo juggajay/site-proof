@@ -81,7 +81,7 @@ function RejectRectificationModalInner({
   return (
     <Modal onClose={handleClose}>
       <ModalHeader>
-        <span className="text-red-600">Reject Rectification</span>
+        <span className="text-destructive">Reject Rectification</span>
       </ModalHeader>
       <ModalBody>
         <div className="mb-4 p-3 bg-muted/50 border border-border rounded-lg">

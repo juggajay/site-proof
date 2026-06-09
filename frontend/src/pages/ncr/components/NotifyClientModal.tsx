@@ -83,13 +83,13 @@ function NotifyClientModalInner({ isOpen, ncr, onClose, onSuccess }: NotifyClien
     <Modal onClose={handleClose} className="max-w-lg">
       <ModalHeader>Notify Client - Major NCR</ModalHeader>
       <ModalBody>
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-          <p className="text-sm font-medium text-red-800">Major NCR: {ncr.ncrNumber}</p>
-          <p className="text-sm text-red-700 mt-1">
+        <div className="mb-4 p-3 bg-destructive/10 border border-destructive/30 rounded-lg">
+          <p className="text-sm font-medium text-destructive">Major NCR: {ncr.ncrNumber}</p>
+          <p className="text-sm text-destructive mt-1">
             {ncr.description.substring(0, 100)}
             {ncr.description.length > 100 ? '...' : ''}
           </p>
-          <p className="text-xs text-red-600 mt-2">
+          <p className="text-xs text-destructive/80 mt-2">
             Affected Lots: {ncr.ncrLots.map((nl) => nl.lot.lotNumber).join(', ') || 'None'}
           </p>
         </div>

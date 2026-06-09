@@ -5,12 +5,12 @@
 
 // Status color classes for NCR status badges
 export const ncrStatusColors: Record<string, string> = {
-  open: 'bg-red-100 text-red-800',
-  investigating: 'bg-yellow-100 text-yellow-800',
-  rectification: 'bg-orange-100 text-orange-800',
-  verification: 'bg-blue-100 text-blue-800',
-  closed: 'bg-green-100 text-green-800',
-  closed_concession: 'bg-green-100 text-green-700',
+  open: 'bg-destructive/10 text-destructive',
+  investigating: 'bg-muted text-muted-foreground',
+  rectification: 'bg-muted text-muted-foreground',
+  verification: 'bg-muted text-muted-foreground',
+  closed: 'bg-muted text-muted-foreground',
+  closed_concession: 'bg-muted text-muted-foreground',
 };
 
 // Default fallback status color
