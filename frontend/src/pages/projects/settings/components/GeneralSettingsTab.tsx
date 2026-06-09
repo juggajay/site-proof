@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { Project, GeneralFormData } from '../types';
-import { DEFAULT_FORM_DATA } from '../types';
+import { DEFAULT_FORM_DATA, SPECIFICATION_SET_OPTIONS } from '../types';
 import {
   parseOptionalNonNegativeDecimalInput,
   parsePositiveIntegerInput,
@@ -54,11 +54,12 @@ export function GeneralSettingsTab({
         chainageEnd: String(project.chainageEnd ?? 10000),
         workingHoursStart: project.workingHoursStart || '06:00',
         workingHoursEnd: project.workingHoursEnd || '18:00',
+        specificationSet: project.specificationSet || DEFAULT_FORM_DATA.specificationSet,
       });
     }
   }, [project]);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
@@ -156,6 +157,9 @@ export function GeneralSettingsTab({
             chainageEnd,
             workingHoursStart: nextFormData.workingHoursStart,
             workingHoursEnd: nextFormData.workingHoursEnd,
+            ...(nextFormData.specificationSet
+              ? { specificationSet: nextFormData.specificationSet }
+              : {}),
           }),
         },
       );
@@ -174,6 +178,20 @@ export function GeneralSettingsTab({
       setSaving(false);
     }
   };
+
+  // If the project carries a legacy/unknown standard (e.g. 'rms'), keep it
+  // selectable so it shows as the current value rather than being silently
+  // swapped for the first option — the user can then switch to a valid one.
+  const specificationOptions = SPECIFICATION_SET_OPTIONS.some(
+    (option) => option.value === formData.specificationSet,
+  )
+    ? SPECIFICATION_SET_OPTIONS
+    : formData.specificationSet
+      ? [
+          { value: formData.specificationSet, label: `${formData.specificationSet} (current)` },
+          ...SPECIFICATION_SET_OPTIONS,
+        ]
+      : SPECIFICATION_SET_OPTIONS;
 
   return (
     <>
@@ -224,6 +242,28 @@ export function GeneralSettingsTab({
               placeholder="PRJ-001"
             />
           </div>
+        </div>
+        <div className="mt-4">
+          <Label htmlFor="project-settings-specification-set" className="mb-1">
+            Specification Standard
+          </Label>
+          <select
+            id="project-settings-specification-set"
+            name="specificationSet"
+            value={formData.specificationSet}
+            onChange={handleInputChange}
+            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground disabled:bg-muted disabled:cursor-not-allowed"
+          >
+            {specificationOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Determines which global ITP library templates this project can use. Must match the
+            standard your templates are filed under (e.g. TfNSW).
+          </p>
         </div>
         {(project?.startDate || project?.targetCompletion) && (
           <div className="mt-4 pt-4 border-t grid gap-4 sm:grid-cols-2">

@@ -201,6 +201,19 @@ export function createProjectWriteRouter({
         req.body.code === undefined
           ? undefined
           : parseRequiredTrimmedString(req.body.code, 'Project code', projectNumberMaxLength);
+      // The specification standard determines which global ITP library templates
+      // a project can use. It was previously only settable at creation, which
+      // stranded projects created with a legacy value (e.g. 'rms') — they could
+      // never see the library and there was no way to correct it. Allow updating
+      // it here (non-empty; the field is required on the model).
+      const specificationSet =
+        req.body.specificationSet === undefined
+          ? undefined
+          : parseRequiredTrimmedString(
+              req.body.specificationSet,
+              'Specification set',
+              projectSpecificationSetMaxLength,
+            );
       const lotPrefix =
         req.body.lotPrefix === undefined
           ? undefined
@@ -310,6 +323,7 @@ export function createProjectWriteRouter({
       const updateData: Record<string, unknown> = {};
       if (name !== undefined) updateData.name = name;
       if (code !== undefined) updateData.projectNumber = code;
+      if (specificationSet !== undefined) updateData.specificationSet = specificationSet;
       if (lotPrefix !== undefined) updateData.lotPrefix = lotPrefix;
       if (lotStartingNumber !== undefined) updateData.lotStartingNumber = lotStartingNumber;
       if (ncrPrefix !== undefined) updateData.ncrPrefix = ncrPrefix;
@@ -346,6 +360,7 @@ export function createProjectWriteRouter({
           lotStartingNumber: true,
           ncrPrefix: true,
           ncrStartingNumber: true,
+          specificationSet: true,
           workingHoursStart: true,
           workingHoursEnd: true,
           workingDays: true,

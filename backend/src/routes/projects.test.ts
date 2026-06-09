@@ -1231,6 +1231,33 @@ describe('Projects API', () => {
       expect(res.body.project.name).toBe('Updated Project Name');
     });
 
+    it('should update the specification standard and return it', async () => {
+      const res = await request(app)
+        .patch(`/api/projects/${projectId}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ specificationSet: 'MRTS' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.project.specificationSet).toBe('MRTS');
+
+      // Restore so later tests that assume the original standard are unaffected.
+      const restore = await request(app)
+        .patch(`/api/projects/${projectId}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ specificationSet: 'TfNSW' });
+      expect(restore.status).toBe(200);
+      expect(restore.body.project.specificationSet).toBe('TfNSW');
+    });
+
+    it('should reject an empty specification standard', async () => {
+      const res = await request(app)
+        .patch(`/api/projects/${projectId}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ specificationSet: '' });
+
+      expect(res.status).toBe(400);
+    });
+
     it('should reject empty project name', async () => {
       const res = await request(app)
         .patch(`/api/projects/${projectId}`)
