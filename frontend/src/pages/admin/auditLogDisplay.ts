@@ -158,8 +158,11 @@ export const formatChanges = (changes: unknown) => {
 };
 
 export const getActionColor = (action: string) => {
-  if (action.includes('create') || action.includes('add')) return 'text-green-600 bg-green-50';
-  if (action.includes('delete') || action.includes('remove')) return 'text-red-600 bg-red-50';
-  if (action.includes('update') || action.includes('edit')) return 'text-primary bg-primary/5';
+  if (action.includes('create') || action.includes('add'))
+    return 'text-muted-foreground bg-muted/50';
+  if (action.includes('delete') || action.includes('remove'))
+    return 'text-destructive bg-destructive/10';
+  if (action.includes('update') || action.includes('edit'))
+    return 'text-muted-foreground bg-muted/50';
   return 'text-muted-foreground bg-muted/50';
 };

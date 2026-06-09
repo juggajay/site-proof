@@ -64,7 +64,10 @@ export function PortfolioDataErrorAlert({
   if (dataErrors.length === 0) return null;
 
   return (
-    <div role="alert" className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+    <div
+      role="alert"
+      className="bg-destructive/10 border border-destructive/30 text-destructive px-4 py-3 rounded-lg"
+    >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="font-medium">Some portfolio data could not be loaded.</p>
@@ -79,7 +82,7 @@ export function PortfolioDataErrorAlert({
         <button
           type="button"
           onClick={onRetry}
-          className="rounded-md border border-red-200 px-3 py-1.5 text-sm font-medium hover:bg-red-100 sm:shrink-0"
+          className="rounded-md border border-destructive/30 px-3 py-1.5 text-sm font-medium hover:bg-destructive/20 sm:shrink-0"
         >
           Try again
         </button>
@@ -114,8 +117,8 @@ export function PortfolioMetricsSection({
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <div className="bg-card rounded-lg border p-4">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-primary/10 rounded-lg">
-              <FolderKanban className="h-5 w-5 text-primary" />
+            <div className="p-2 bg-muted rounded-lg">
+              <FolderKanban className="h-5 w-5 text-muted-foreground" />
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Total Projects</p>
@@ -126,8 +129,8 @@ export function PortfolioMetricsSection({
 
         <div className="bg-card rounded-lg border p-4">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-green-100 rounded-lg">
-              <CheckCircle2 className="h-5 w-5 text-green-600" />
+            <div className="p-2 bg-muted rounded-lg">
+              <CheckCircle2 className="h-5 w-5 text-muted-foreground" />
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Active Projects</p>
@@ -138,8 +141,8 @@ export function PortfolioMetricsSection({
 
         <div className="bg-card rounded-lg border p-4">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-purple-100 rounded-lg">
-              <TrendingUp className="h-5 w-5 text-purple-600" />
+            <div className="p-2 bg-muted rounded-lg">
+              <TrendingUp className="h-5 w-5 text-muted-foreground" />
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Completed</p>
@@ -150,8 +153,8 @@ export function PortfolioMetricsSection({
 
         <div className="bg-card rounded-lg border p-4">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-amber-100 rounded-lg">
-              <DollarSign className="h-5 w-5 text-amber-600" />
+            <div className="p-2 bg-muted rounded-lg">
+              <DollarSign className="h-5 w-5 text-muted-foreground" />
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Total Contract Value</p>
@@ -167,21 +170,21 @@ export function PortfolioMetricsSection({
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                <div className="w-3 h-3 rounded-full bg-foreground"></div>
                 <span className="text-sm">Active</span>
               </div>
               <span className="font-medium">{stats.activeProjects}</span>
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-purple-500"></div>
+                <div className="w-3 h-3 rounded-full bg-muted-foreground"></div>
                 <span className="text-sm">Completed</span>
               </div>
               <span className="font-medium">{stats.completedProjects}</span>
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-muted-foreground"></div>
+                <div className="w-3 h-3 rounded-full bg-border"></div>
                 <span className="text-sm">Archived</span>
               </div>
               <span className="font-medium">{stats.archivedProjects}</span>
@@ -194,14 +197,14 @@ export function PortfolioMetricsSection({
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <CheckCircle2 className="h-4 w-4 text-green-500" />
+                <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
                 <span className="text-sm">On Track</span>
               </div>
               <span className="font-medium">{stats.projectsOnTrack}</span>
             </div>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-amber-500" />
+                <AlertTriangle className="h-4 w-4 text-warning" />
                 <span className="text-sm">At Risk (due within 30 days)</span>
               </div>
               <span className="font-medium">{stats.projectsAtRisk}</span>
@@ -243,27 +246,27 @@ export function PortfolioCashFlowSection({
     <div className="bg-card rounded-lg border p-4">
       <h2 className="text-lg font-semibold mb-4">Cash Flow Summary</h2>
       <div className="grid gap-4 md:grid-cols-4">
-        <div className="text-center p-3 bg-primary/5 rounded-lg">
+        <div className="text-center p-3 bg-muted/50 rounded-lg">
           <p className="text-sm text-muted-foreground">Total Claimed</p>
-          <p className="text-xl font-bold text-primary">
+          <p className="text-xl font-bold text-foreground">
             {formatCurrencyValue(cashFlow.totalClaimed)}
           </p>
         </div>
-        <div className="text-center p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
+        <div className="text-center p-3 bg-muted/50 rounded-lg">
           <p className="text-sm text-muted-foreground">Total Certified</p>
-          <p className="text-xl font-bold text-amber-600 dark:text-amber-400">
+          <p className="text-xl font-bold text-foreground">
             {formatCurrencyValue(cashFlow.totalCertified)}
           </p>
         </div>
-        <div className="text-center p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+        <div className="text-center p-3 bg-muted/50 rounded-lg">
           <p className="text-sm text-muted-foreground">Total Paid</p>
-          <p className="text-xl font-bold text-green-600 dark:text-green-400">
+          <p className="text-xl font-bold text-foreground">
             {formatCurrencyValue(cashFlow.totalPaid)}
           </p>
         </div>
-        <div className="text-center p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+        <div className="text-center p-3 bg-muted/50 rounded-lg">
           <p className="text-sm text-muted-foreground">Outstanding</p>
-          <p className="text-xl font-bold text-purple-600 dark:text-purple-400">
+          <p className="text-xl font-bold text-foreground">
             {formatCurrencyValue(cashFlow.outstanding)}
           </p>
         </div>
@@ -282,48 +285,44 @@ export function PortfolioRiskSections({
   return (
     <>
       {criticalNCRs.length > 0 && (
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-          <div className="p-4 border-b border-red-200 dark:border-red-800 flex items-center gap-2">
-            <AlertCircle className="h-5 w-5 text-red-500" />
-            <h2 className="text-lg font-semibold text-red-700 dark:text-red-400">
+        <div className="bg-destructive/10 border border-destructive/30 rounded-lg">
+          <div className="p-4 border-b border-destructive/30 flex items-center gap-2">
+            <AlertCircle className="h-5 w-5 text-destructive" />
+            <h2 className="text-lg font-semibold text-destructive">
               Critical NCRs Across Projects
             </h2>
-            <span className="ml-auto bg-red-100 dark:bg-red-800 text-red-700 dark:text-red-300 text-sm font-medium px-2.5 py-0.5 rounded-full">
+            <span className="ml-auto bg-destructive/15 text-destructive text-sm font-medium px-2.5 py-0.5 rounded-full">
               {criticalNCRs.length}
             </span>
           </div>
-          <div className="divide-y divide-red-200 dark:divide-red-800">
+          <div className="divide-y divide-destructive/30">
             {criticalNCRs.map((ncr) => (
               <Link
                 key={ncr.id}
                 to={getSafeInternalLink(ncr.link, getProjectPath(ncr.project.id, '/ncr'))}
                 aria-label={`Open ${ncr.ncrNumber} for ${ncr.project.name}`}
-                className="block p-4 hover:bg-red-100/50 dark:hover:bg-red-900/30 transition-colors cursor-pointer"
+                className="block p-4 hover:bg-destructive/15 transition-colors cursor-pointer"
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="font-medium text-red-700 dark:text-red-400">
-                        {ncr.ncrNumber}
-                      </span>
-                      <span className="text-xs px-2 py-0.5 bg-red-100 dark:bg-red-800 text-red-700 dark:text-red-300 rounded">
+                      <span className="font-medium text-destructive">{ncr.ncrNumber}</span>
+                      <span className="text-xs px-2 py-0.5 bg-destructive/15 text-destructive rounded">
                         {ncr.status}
                       </span>
                       {ncr.isOverdue && (
-                        <span className="text-xs px-2 py-0.5 bg-red-600 text-white rounded">
+                        <span className="text-xs px-2 py-0.5 bg-destructive text-destructive-foreground rounded">
                           OVERDUE
                         </span>
                       )}
                     </div>
-                    <p className="text-sm text-red-600/80 dark:text-red-300/80 mt-1">
-                      {ncr.description}
-                    </p>
-                    <p className="text-xs text-red-500/70 dark:text-red-400/70 mt-1">
+                    <p className="text-sm text-foreground/80 mt-1">{ncr.description}</p>
+                    <p className="text-xs text-muted-foreground mt-1">
                       {ncr.project.name} ({ncr.project.projectNumber})
                       {formatDateLabel(ncr.dueDate) && ` • Due: ${formatDateLabel(ncr.dueDate)}`}
                     </p>
                   </div>
-                  <ExternalLink className="h-4 w-4 text-red-400" />
+                  <ExternalLink className="h-4 w-4 text-destructive/70" />
                 </div>
               </Link>
             ))}
@@ -332,35 +331,31 @@ export function PortfolioRiskSections({
       )}
 
       {projectsAtRisk.length > 0 && (
-        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
-          <div className="p-4 border-b border-amber-200 dark:border-amber-800 flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-amber-500" />
-            <h2 className="text-lg font-semibold text-amber-700 dark:text-amber-400">
-              Projects at Risk
-            </h2>
-            <span className="ml-auto bg-amber-100 dark:bg-amber-800 text-amber-700 dark:text-amber-300 text-sm font-medium px-2.5 py-0.5 rounded-full">
+        <div className="bg-warning/10 border border-warning/30 rounded-lg">
+          <div className="p-4 border-b border-warning/30 flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-warning" />
+            <h2 className="text-lg font-semibold text-warning">Projects at Risk</h2>
+            <span className="ml-auto bg-warning/15 text-warning text-sm font-medium px-2.5 py-0.5 rounded-full">
               {projectsAtRisk.length}
             </span>
           </div>
-          <div className="divide-y divide-amber-200 dark:divide-amber-800">
+          <div className="divide-y divide-warning/30">
             {projectsAtRisk.map((project) => (
               <Link
                 key={project.id}
                 to={getSafeInternalLink(project.link, getProjectPath(project.id))}
                 aria-label={`Open risk summary for ${project.name}`}
-                className="block p-4 hover:bg-amber-100/50 dark:hover:bg-amber-900/30 transition-colors cursor-pointer"
+                className="block p-4 hover:bg-warning/15 transition-colors cursor-pointer"
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="font-medium text-amber-700 dark:text-amber-400">
-                        {project.name}
-                      </span>
-                      <span className="text-xs text-amber-600/70 dark:text-amber-400/70">
+                      <span className="font-medium text-foreground">{project.name}</span>
+                      <span className="text-xs text-muted-foreground">
                         ({project.projectNumber})
                       </span>
                       {project.riskLevel === 'critical' && (
-                        <span className="text-xs px-2 py-0.5 bg-red-600 text-white rounded">
+                        <span className="text-xs px-2 py-0.5 bg-destructive text-destructive-foreground rounded">
                           CRITICAL
                         </span>
                       )}
@@ -371,20 +366,20 @@ export function PortfolioRiskSections({
                           <span
                             className={`text-xs px-2 py-0.5 rounded ${
                               indicator.severity === 'critical'
-                                ? 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300'
-                                : 'bg-amber-100 dark:bg-amber-800 text-amber-700 dark:text-amber-300'
+                                ? 'bg-destructive/15 text-destructive'
+                                : 'bg-warning/15 text-warning'
                             }`}
                           >
                             {indicator.message}
                           </span>
-                          <span className="text-xs text-amber-500/70 dark:text-amber-400/70 italic">
+                          <span className="text-xs text-muted-foreground italic">
                             {indicator.explanation}
                           </span>
                         </div>
                       ))}
                     </div>
                   </div>
-                  <ExternalLink className="h-4 w-4 text-amber-400 mt-1" />
+                  <ExternalLink className="h-4 w-4 text-warning/70 mt-1" />
                 </div>
               </Link>
             ))}
@@ -426,10 +421,10 @@ export function PortfolioProjectsList({
                   className={cn(
                     'w-2 h-10 rounded-full',
                     project.status === 'active'
-                      ? 'bg-green-500'
+                      ? 'bg-foreground'
                       : project.status === 'completed'
-                        ? 'bg-purple-500'
-                        : 'bg-muted-foreground',
+                        ? 'bg-muted-foreground'
+                        : 'bg-border',
                   )}
                 ></div>
                 <div>
@@ -453,10 +448,8 @@ export function PortfolioProjectsList({
                 <span
                   className={`px-2 py-1 rounded-full text-xs ${
                     project.status === 'active'
-                      ? 'bg-green-100 text-green-800'
-                      : project.status === 'completed'
-                        ? 'bg-purple-100 text-purple-800'
-                        : 'bg-muted text-foreground'
+                      ? 'bg-foreground text-background'
+                      : 'bg-muted text-muted-foreground'
                   }`}
                 >
                   {project.status}

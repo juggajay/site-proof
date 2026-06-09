@@ -179,7 +179,7 @@ export function SupportPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold flex items-center gap-3">
-          <HelpCircle className="h-8 w-8 text-primary" />
+          <HelpCircle className="h-8 w-8 text-muted-foreground" />
           Help & Support
         </h1>
         <p className="text-muted-foreground">
@@ -194,8 +194,8 @@ export function SupportPage() {
           className="rounded-lg border bg-card p-4 hover:bg-muted transition-colors"
         >
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-full bg-primary/10">
-              <FileText className="h-5 w-5 text-primary" />
+            <div className="p-2 rounded-full bg-muted">
+              <FileText className="h-5 w-5 text-muted-foreground" />
             </div>
             <div>
               <h3 className="font-medium">Privacy Policy</h3>
@@ -209,8 +209,8 @@ export function SupportPage() {
           className="rounded-lg border bg-card p-4 hover:bg-muted transition-colors"
         >
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-full bg-primary/10">
-              <Book className="h-5 w-5 text-primary" />
+            <div className="p-2 rounded-full bg-muted">
+              <Book className="h-5 w-5 text-muted-foreground" />
             </div>
             <div>
               <h3 className="font-medium">Terms of Service</h3>
@@ -221,8 +221,8 @@ export function SupportPage() {
 
         <Link to="/docs" className="rounded-lg border bg-card p-4 hover:bg-muted transition-colors">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-full bg-primary/10">
-              <Book className="h-5 w-5 text-primary" />
+            <div className="p-2 rounded-full bg-muted">
+              <Book className="h-5 w-5 text-muted-foreground" />
             </div>
             <div>
               <h3 className="font-medium">Documentation</h3>
@@ -247,14 +247,14 @@ export function SupportPage() {
 
           <div className="space-y-4">
             <div className="flex items-start gap-4">
-              <div className="p-2 rounded-full bg-primary/10">
-                <Mail className="h-5 w-5 text-primary" />
+              <div className="p-2 rounded-full bg-muted">
+                <Mail className="h-5 w-5 text-muted-foreground" />
               </div>
               <div>
                 <h3 className="font-medium">Email Support</h3>
                 <a
                   href={supportMailtoHref(contactInfo.email)}
-                  className="text-primary hover:underline"
+                  className="text-foreground hover:underline"
                 >
                   {contactInfo.email}
                 </a>
@@ -266,12 +266,12 @@ export function SupportPage() {
 
             {contactInfo.phone && (
               <div className="flex items-start gap-4">
-                <div className="p-2 rounded-full bg-green-100 dark:bg-green-900/30">
-                  <Phone className="h-5 w-5 text-green-600 dark:text-green-400" />
+                <div className="p-2 rounded-full bg-muted">
+                  <Phone className="h-5 w-5 text-muted-foreground" />
                 </div>
                 <div>
                   <h3 className="font-medium">Phone Support</h3>
-                  <a href={telHref(contactInfo.phone)} className="text-primary hover:underline">
+                  <a href={telHref(contactInfo.phone)} className="text-foreground hover:underline">
                     {contactInfo.phoneLabel || contactInfo.phone}
                   </a>
                   <p className="text-sm text-muted-foreground mt-1">{contactInfo.hours}</p>
@@ -280,8 +280,8 @@ export function SupportPage() {
             )}
 
             <div className="flex items-start gap-4">
-              <div className="p-2 rounded-full bg-purple-100 dark:bg-purple-900/30">
-                <Clock className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+              <div className="p-2 rounded-full bg-muted">
+                <Clock className="h-5 w-5 text-muted-foreground" />
               </div>
               <div>
                 <h3 className="font-medium">Response Times</h3>
@@ -302,7 +302,7 @@ export function SupportPage() {
                 emergency hotline:{' '}
                 <a
                   href={telHref(contactInfo.emergencyPhone)}
-                  className="text-primary hover:underline"
+                  className="text-foreground hover:underline"
                 >
                   {contactInfo.emergencyPhone}
                 </a>
@@ -333,18 +333,16 @@ export function SupportPage() {
           {submitSuccess && (
             <div
               role="status"
-              className="flex items-center gap-2 p-4 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800"
+              className="flex items-center gap-2 p-4 rounded-lg bg-success/10 border border-success/20"
             >
-              <Check className="h-5 w-5 text-green-600" />
+              <Check className="h-5 w-5 text-success" />
               <div>
-                <p className="font-medium text-green-800 dark:text-green-200">
-                  Request submitted successfully!
-                </p>
-                <p className="text-sm text-green-700 dark:text-green-300">
+                <p className="font-medium text-success">Request submitted successfully!</p>
+                <p className="text-sm text-success">
                   We'll respond as soon as we can, usually within 1-2 business days.
                 </p>
                 {submittedTicketId && (
-                  <p className="text-sm text-green-700 dark:text-green-300">
+                  <p className="text-sm text-success">
                     Reference: <span className="font-medium">{submittedTicketId}</span>
                   </p>
                 )}
@@ -355,9 +353,9 @@ export function SupportPage() {
           {submitError && (
             <div
               role="alert"
-              className="p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800"
+              className="p-4 rounded-lg bg-destructive/10 border border-destructive/20"
             >
-              <p className="text-sm text-red-800 dark:text-red-200">{submitError}</p>
+              <p className="text-sm text-destructive">{submitError}</p>
             </div>
           )}
 
