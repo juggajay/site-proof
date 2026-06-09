@@ -55,9 +55,9 @@ export interface DrawingRevisionForm {
 // ---------------------------------------------------------------------------
 
 export const DRAWING_STATUSES = [
-  { id: 'preliminary', label: 'Preliminary', color: 'bg-yellow-100 text-yellow-800' },
-  { id: 'for_construction', label: 'For Construction', color: 'bg-primary/10 text-primary' },
-  { id: 'as_built', label: 'As-Built', color: 'bg-green-100 text-green-800' },
+  { id: 'preliminary', label: 'Preliminary', color: 'bg-warning/10 text-warning' },
+  { id: 'for_construction', label: 'For Construction', color: 'bg-info/10 text-info' },
+  { id: 'as_built', label: 'As-Built', color: 'bg-success/10 text-success' },
 ];
 
 export const DRAWING_FILE_ACCEPT = '.pdf,.dwg,.dxf,.jpg,.jpeg,.png,.tiff,.tif';

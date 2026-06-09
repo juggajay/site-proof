@@ -105,7 +105,7 @@ export function DocumentGrid<TDoc extends DocumentGridDoc>({
                 ) : null}
                 {isImage(doc.mimeType) ? (
                   <svg
-                    className="h-6 w-6 text-primary hidden"
+                    className="h-6 w-6 text-muted-foreground hidden"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -120,7 +120,7 @@ export function DocumentGrid<TDoc extends DocumentGridDoc>({
                   </svg>
                 ) : isPdf(doc.mimeType) ? (
                   <svg
-                    className="h-6 w-6 text-red-500"
+                    className="h-6 w-6 text-muted-foreground"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -138,7 +138,7 @@ export function DocumentGrid<TDoc extends DocumentGridDoc>({
                   </svg>
                 ) : isExcel(doc.mimeType) ? (
                   <svg
-                    className="h-6 w-6 text-green-600"
+                    className="h-6 w-6 text-muted-foreground"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -153,7 +153,7 @@ export function DocumentGrid<TDoc extends DocumentGridDoc>({
                   </svg>
                 ) : isWord(doc.mimeType) ? (
                   <svg
-                    className="h-6 w-6 text-blue-600"
+                    className="h-6 w-6 text-muted-foreground"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -195,7 +195,7 @@ export function DocumentGrid<TDoc extends DocumentGridDoc>({
                     {getTypeLabel(doc.documentType)}
                   </span>
                   {doc.category && (
-                    <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">
+                    <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
                       {doc.category}
                     </span>
                   )}
@@ -204,7 +204,9 @@ export function DocumentGrid<TDoc extends DocumentGridDoc>({
                   <span>{formatFileSize(doc.fileSize)}</span>
                   <span>{formatDate(doc.uploadedAt)}</span>
                   {doc.uploadedBy && <span>by {doc.uploadedBy.fullName}</span>}
-                  {doc.lot && <span className="text-primary">Lot {doc.lot.lotNumber}</span>}
+                  {doc.lot && (
+                    <span className="font-medium text-foreground">Lot {doc.lot.lotNumber}</span>
+                  )}
                 </div>
                 {doc.caption && (
                   <p className="text-sm text-muted-foreground mt-1 truncate">{doc.caption}</p>
@@ -219,8 +221,8 @@ export function DocumentGrid<TDoc extends DocumentGridDoc>({
                   onClick={() => onToggleFavourite(doc)}
                   className={
                     doc.isFavourite
-                      ? 'text-yellow-500 hover:bg-yellow-100'
-                      : 'text-muted-foreground hover:bg-yellow-100'
+                      ? 'text-foreground hover:bg-muted'
+                      : 'text-muted-foreground hover:bg-muted'
                   }
                   title={doc.isFavourite ? 'Remove from Favourites' : 'Add to Favourites'}
                   aria-label={
@@ -248,7 +250,7 @@ export function DocumentGrid<TDoc extends DocumentGridDoc>({
                     variant="ghost"
                     size="icon"
                     onClick={() => onOpenViewer(doc)}
-                    className="text-primary hover:bg-primary/10"
+                    className="text-muted-foreground hover:bg-muted"
                     title="View"
                     aria-label={`View ${doc.filename}`}
                   >
@@ -288,7 +290,7 @@ export function DocumentGrid<TDoc extends DocumentGridDoc>({
                   variant="ghost"
                   size="icon"
                   onClick={() => onMarkPendingDelete(doc)}
-                  className="text-red-600 hover:bg-red-100"
+                  className="text-destructive hover:bg-destructive/10"
                   title="Delete"
                   aria-label={`Delete ${doc.filename}`}
                 >

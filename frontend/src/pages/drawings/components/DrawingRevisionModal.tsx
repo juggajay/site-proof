@@ -137,7 +137,7 @@ export function DrawingRevisionModal({
             </NativeSelect>
           </div>
 
-          <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
+          <div className="rounded-lg bg-warning/10 border border-warning/20 p-3 text-sm text-warning">
             <strong>Note:</strong> The previous revision ({drawing.revision || 'original'}) will be
             marked as superseded.
           </div>

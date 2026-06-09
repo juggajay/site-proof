@@ -147,11 +147,11 @@ export function DocumentFiltersPanel({
         <Button
           variant={showFavouritesOnly ? 'outline' : 'secondary'}
           onClick={() => onShowFavouritesOnlyChange(!showFavouritesOnly)}
-          className={showFavouritesOnly ? 'bg-yellow-100 text-yellow-700 border-yellow-300' : ''}
+          className={showFavouritesOnly ? 'bg-muted text-foreground border-border' : ''}
           title={showFavouritesOnly ? 'Show All' : 'Show Favourites Only'}
         >
           <svg
-            className={`h-4 w-4 ${showFavouritesOnly ? 'fill-yellow-500' : ''}`}
+            className={`h-4 w-4 ${showFavouritesOnly ? 'fill-foreground' : ''}`}
             fill={showFavouritesOnly ? 'currentColor' : 'none'}
             viewBox="0 0 24 24"
             stroke="currentColor"
