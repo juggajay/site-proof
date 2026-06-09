@@ -154,10 +154,10 @@ docketReviewRouter.post(
         });
 
         if (fullDocket) {
-          // Write personnel records from labour entries
-          for (const entry of fullDocket.labourEntries) {
-            await tx.diaryPersonnel.create({
-              data: {
+          // Write personnel records from labour entries (single batched insert)
+          if (fullDocket.labourEntries.length > 0) {
+            await tx.diaryPersonnel.createMany({
+              data: fullDocket.labourEntries.map((entry) => ({
                 diaryId: diary.id,
                 name: entry.employee.name,
                 role: entry.employee.role || undefined,
@@ -168,14 +168,14 @@ docketReviewRouter.post(
                 source: 'docket',
                 docketId: docket.id,
                 lotId: entry.lotAllocations[0]?.lotId || undefined,
-              },
+              })),
             });
           }
 
-          // Write plant records from plant entries
-          for (const entry of fullDocket.plantEntries) {
-            await tx.diaryPlant.create({
-              data: {
+          // Write plant records from plant entries (single batched insert)
+          if (fullDocket.plantEntries.length > 0) {
+            await tx.diaryPlant.createMany({
+              data: fullDocket.plantEntries.map((entry) => ({
                 diaryId: diary.id,
                 description: entry.plant.description || entry.plant.type,
                 idRego: entry.plant.idRego || undefined,
@@ -184,7 +184,7 @@ docketReviewRouter.post(
                 source: 'docket',
                 docketId: docket.id,
                 lotId: entry.lotAllocations[0]?.lotId || undefined,
-              },
+              })),
             });
           }
         }
