@@ -248,26 +248,26 @@ docketsRouter.get(
     // docket/diary discrepancies (pure comparison; see dockets/diaryComparison).
     const { foremanDiary, discrepancies } = buildDocketDiaryComparison(docket, diary);
 
-    // Fetch project info separately since it's not a relation on DailyDocket
-    const project = await prisma.project.findUnique({
-      where: { id: docket.projectId },
-      select: { id: true, name: true },
-    });
-
-    // Fetch submittedBy and approvedBy user info separately
-    const submittedBy = docket.submittedById
-      ? await prisma.user.findUnique({
-          where: { id: docket.submittedById },
-          select: { id: true, fullName: true, email: true },
-        })
-      : null;
-
-    const approvedBy = docket.approvedById
-      ? await prisma.user.findUnique({
-          where: { id: docket.approvedById },
-          select: { id: true, fullName: true, email: true },
-        })
-      : null;
+    // Fetch project/user info separately since they're not relations on
+    // DailyDocket; the three lookups are independent, so run them together.
+    const [project, submittedBy, approvedBy] = await Promise.all([
+      prisma.project.findUnique({
+        where: { id: docket.projectId },
+        select: { id: true, name: true },
+      }),
+      docket.submittedById
+        ? prisma.user.findUnique({
+            where: { id: docket.submittedById },
+            select: { id: true, fullName: true, email: true },
+          })
+        : null,
+      docket.approvedById
+        ? prisma.user.findUnique({
+            where: { id: docket.approvedById },
+            select: { id: true, fullName: true, email: true },
+          })
+        : null,
+    ]);
 
     res.json(
       buildDocketDetailResponse({

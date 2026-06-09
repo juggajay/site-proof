@@ -1276,6 +1276,101 @@ describe('Dockets API', () => {
       }
     });
 
+    it('should auto-populate the diary with labour and plant when approving a docket', async () => {
+      const date = new Date(Date.now() + 1_123_200_000);
+      const docket = await prisma.dailyDocket.create({
+        data: {
+          projectId,
+          subcontractorCompanyId,
+          date,
+          status: 'pending_approval',
+          submittedAt: new Date(),
+        },
+      });
+      const labour = await prisma.docketLabour.create({
+        data: {
+          docketId: docket.id,
+          employeeId,
+          startTime: '06:30',
+          finishTime: '14:30',
+          submittedHours: 8,
+          hourlyRate: 45.5,
+          submittedCost: 364,
+          lotAllocations: {
+            create: {
+              lotId: assignedLotId,
+              hours: 8,
+            },
+          },
+        },
+      });
+      const plantEntry = await prisma.docketPlant.create({
+        data: {
+          docketId: docket.id,
+          plantId,
+          hoursOperated: 3,
+          hourlyRate: 150,
+          submittedCost: 450,
+          lotAllocations: {
+            create: {
+              lotId: assignedLotId,
+              hours: 3,
+            },
+          },
+        },
+      });
+      let diaryId: string | undefined;
+
+      try {
+        const res = await request(app)
+          .post(`/api/dockets/${docket.id}/approve`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            foremanNotes: 'Approve and populate diary',
+          });
+
+        expect(res.status).toBe(200);
+        expect(res.body.docket.status).toBe('approved');
+
+        const diary = await prisma.dailyDiary.findUnique({
+          where: { projectId_date: { projectId, date } },
+        });
+        expect(diary).not.toBeNull();
+        diaryId = diary!.id;
+
+        const personnel = await prisma.diaryPersonnel.findMany({ where: { diaryId } });
+        expect(personnel).toHaveLength(1);
+        expect(personnel[0]).toMatchObject({
+          source: 'docket',
+          docketId: docket.id,
+          lotId: assignedLotId,
+        });
+        expect(Number(personnel[0].hours)).toBe(8);
+
+        const plantRows = await prisma.diaryPlant.findMany({ where: { diaryId } });
+        expect(plantRows).toHaveLength(1);
+        expect(plantRows[0]).toMatchObject({
+          source: 'docket',
+          docketId: docket.id,
+          lotId: assignedLotId,
+        });
+        expect(Number(plantRows[0].hoursOperated)).toBe(3);
+      } finally {
+        if (diaryId) {
+          await prisma.diaryPersonnel.deleteMany({ where: { diaryId } });
+          await prisma.diaryPlant.deleteMany({ where: { diaryId } });
+        }
+        await prisma.docketLabourLot.deleteMany({ where: { docketLabourId: labour.id } });
+        await prisma.docketPlantLot.deleteMany({ where: { docketPlantId: plantEntry.id } });
+        await prisma.docketLabour.deleteMany({ where: { docketId: docket.id } });
+        await prisma.docketPlant.deleteMany({ where: { docketId: docket.id } });
+        await prisma.dailyDocket.delete({ where: { id: docket.id } }).catch(() => {});
+        if (diaryId) {
+          await prisma.dailyDiary.delete({ where: { id: diaryId } }).catch(() => {});
+        }
+      }
+    });
+
     it('should not auto-populate a submitted diary when approving a docket', async () => {
       const date = new Date(Date.now() + 1_036_800_000);
       const docket = await prisma.dailyDocket.create({
