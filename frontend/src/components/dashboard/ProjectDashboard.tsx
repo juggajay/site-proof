@@ -93,7 +93,7 @@ export function ProjectDashboard() {
       <div className="p-6">
         <div
           role="alert"
-          className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg dark:bg-red-900/20 dark:border-red-800 dark:text-red-300"
+          className="bg-destructive/10 border border-destructive/20 text-destructive px-4 py-3 rounded-lg"
         >
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <span>{error || 'Failed to load project dashboard'}</span>
@@ -111,12 +111,14 @@ export function ProjectDashboard() {
   const { project, stats, attentionItems, recentActivity } = data;
   const projectRouteBase = `/projects/${encodedProjectId}`;
 
+  // Quiet Authority: benign project lifecycle states are MONOCHROME. Only the
+  // soft-exception `on_hold` carries a status colour (warning).
   const statusColors: Record<string, string> = {
-    active: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
-    completed: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
-    on_hold: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
-    pending: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300',
-    draft: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300',
+    active: 'bg-muted text-foreground',
+    completed: 'bg-muted text-muted-foreground',
+    on_hold: 'bg-warning/10 text-warning',
+    pending: 'bg-muted text-muted-foreground',
+    draft: 'bg-muted text-muted-foreground',
   };
 
   const getDiaryLabel = () => {
@@ -133,9 +135,11 @@ export function ProjectDashboard() {
   const getDiaryColor = () => {
     switch (stats.diary.todayStatus) {
       case 'submitted':
-        return 'text-green-600 dark:text-green-400';
+        // Benign "done" state — monochrome per INV-3.
+        return 'text-foreground';
       case 'draft':
-        return 'text-amber-600 dark:text-amber-400';
+        // Soft exception: started but not submitted today.
+        return 'text-warning';
       default:
         return 'text-muted-foreground';
     }
@@ -187,25 +191,18 @@ export function ProjectDashboard() {
           className={cn(
             'rounded-lg border p-4',
             criticalCount > 0
-              ? 'bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-900'
-              : 'bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-900',
+              ? 'bg-destructive/10 border-destructive/20'
+              : 'bg-warning/10 border-warning/20',
           )}
         >
           <div className="flex items-center gap-2 mb-3">
             <AlertCircle
-              className={cn(
-                'h-5 w-5',
-                criticalCount > 0
-                  ? 'text-red-600 dark:text-red-400'
-                  : 'text-amber-600 dark:text-amber-400',
-              )}
+              className={cn('h-5 w-5', criticalCount > 0 ? 'text-destructive' : 'text-warning')}
             />
             <h2
               className={cn(
                 'text-sm font-semibold',
-                criticalCount > 0
-                  ? 'text-red-800 dark:text-red-300'
-                  : 'text-amber-800 dark:text-amber-300',
+                criticalCount > 0 ? 'text-destructive' : 'text-warning',
               )}
             >
               {attentionItems.length} item{attentionItems.length !== 1 ? 's' : ''} need
@@ -224,22 +221,20 @@ export function ProjectDashboard() {
                 className={cn(
                   'flex items-center justify-between p-2.5 rounded-md transition-colors text-sm',
                   item.urgency === 'critical'
-                    ? 'bg-red-100/60 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40'
-                    : 'bg-amber-100/60 hover:bg-amber-100 dark:bg-amber-900/20 dark:hover:bg-amber-900/40',
+                    ? 'bg-destructive/10 hover:bg-destructive/20'
+                    : 'bg-warning/10 hover:bg-warning/20',
                 )}
               >
                 <div className="flex items-center gap-2.5 min-w-0">
                   {item.urgency === 'critical' ? (
-                    <XCircle className="h-4 w-4 text-red-600 dark:text-red-400 flex-shrink-0" />
+                    <XCircle className="h-4 w-4 text-destructive flex-shrink-0" />
                   ) : (
-                    <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+                    <AlertTriangle className="h-4 w-4 text-warning flex-shrink-0" />
                   )}
                   <span
                     className={cn(
                       'font-medium truncate',
-                      item.urgency === 'critical'
-                        ? 'text-red-800 dark:text-red-300'
-                        : 'text-amber-800 dark:text-amber-300',
+                      item.urgency === 'critical' ? 'text-destructive' : 'text-warning',
                     )}
                   >
                     {item.title}
@@ -248,9 +243,7 @@ export function ProjectDashboard() {
                 <span
                   className={cn(
                     'text-xs flex-shrink-0 ml-3',
-                    item.urgency === 'critical'
-                      ? 'text-red-600 dark:text-red-400'
-                      : 'text-amber-600 dark:text-amber-400',
+                    item.urgency === 'critical' ? 'text-destructive' : 'text-warning',
                   )}
                 >
                   {item.daysOverdue}d overdue
@@ -261,9 +254,7 @@ export function ProjectDashboard() {
               <p
                 className={cn(
                   'text-xs pl-2',
-                  criticalCount > 0
-                    ? 'text-red-600 dark:text-red-400'
-                    : 'text-amber-600 dark:text-amber-400',
+                  criticalCount > 0 ? 'text-destructive' : 'text-warning',
                 )}
               >
                 + {attentionItems.length - 4} more
@@ -280,40 +271,40 @@ export function ProjectDashboard() {
           value={`${stats.lots.progressPct}%`}
           sub={`${stats.lots.completed} of ${stats.lots.total} lots`}
           icon={<MapPin className="h-3.5 w-3.5" />}
-          color="text-blue-600 dark:text-blue-400"
+          color="text-muted-foreground"
         />
         <StatPill
           label="open NCRs"
           value={stats.ncrs.open}
           sub={stats.ncrs.overdue > 0 ? `${stats.ncrs.overdue} late` : 'open'}
           icon={<AlertTriangle className="h-3.5 w-3.5" />}
-          color="text-red-600 dark:text-red-400"
+          color="text-muted-foreground"
           alert={stats.ncrs.overdue > 0}
         />
         <StatPill
           label="pending hold points"
           value={stats.holdPoints.pending}
           icon={<Clock className="h-3.5 w-3.5" />}
-          color="text-orange-600 dark:text-orange-400"
+          color="text-muted-foreground"
         />
         <StatPill
           label="ITPs complete"
           value={stats.itps.completed}
           sub={`${stats.itps.pending} in progress`}
           icon={<ClipboardCheck className="h-3.5 w-3.5" />}
-          color="text-green-600 dark:text-green-400"
+          color="text-muted-foreground"
         />
         <StatPill
           label="dockets pending"
           value={stats.dockets.pendingApproval}
           icon={<FileCheck className="h-3.5 w-3.5" />}
-          color="text-amber-600 dark:text-amber-400"
+          color="text-muted-foreground"
         />
         <StatPill
           label="test results"
           value={stats.tests.total}
           icon={<FlaskConical className="h-3.5 w-3.5" />}
-          color="text-teal-600 dark:text-teal-400"
+          color="text-muted-foreground"
         />
         <StatPill
           label="documents"
@@ -368,19 +359,19 @@ export function ProjectDashboard() {
                   <div className="h-2.5 bg-muted rounded-full overflow-hidden flex">
                     {stats.lots.completed > 0 && (
                       <div
-                        className="bg-green-500 dark:bg-green-400 transition-all"
+                        className="bg-primary transition-all"
                         style={{ width: `${(stats.lots.completed / stats.lots.total) * 100}%` }}
                       />
                     )}
                     {stats.lots.inProgress > 0 && (
                       <div
-                        className="bg-blue-500 dark:bg-blue-400 transition-all"
+                        className="bg-muted-foreground transition-all"
                         style={{ width: `${(stats.lots.inProgress / stats.lots.total) * 100}%` }}
                       />
                     )}
                     {stats.lots.onHold > 0 && (
                       <div
-                        className="bg-amber-500 dark:bg-amber-400 transition-all"
+                        className="bg-warning transition-all"
                         style={{ width: `${(stats.lots.onHold / stats.lots.total) * 100}%` }}
                       />
                     )}
@@ -392,15 +383,15 @@ export function ProjectDashboard() {
                   <StatusCount
                     label="Not Started"
                     count={stats.lots.notStarted}
-                    color="bg-gray-400"
+                    color="bg-muted-foreground/40"
                   />
                   <StatusCount
                     label="In Progress"
                     count={stats.lots.inProgress}
-                    color="bg-blue-500"
+                    color="bg-muted-foreground"
                   />
-                  <StatusCount label="On Hold" count={stats.lots.onHold} color="bg-amber-500" />
-                  <StatusCount label="Complete" count={stats.lots.completed} color="bg-green-500" />
+                  <StatusCount label="On Hold" count={stats.lots.onHold} color="bg-warning" />
+                  <StatusCount label="Complete" count={stats.lots.completed} color="bg-primary" />
                 </div>
               </>
             )}
@@ -423,7 +414,7 @@ export function ProjectDashboard() {
 
             {stats.ncrs.total === 0 ? (
               <div className="text-center py-6 text-muted-foreground text-sm">
-                <CheckCircle2 className="h-8 w-8 mx-auto mb-2 text-green-500" />
+                <CheckCircle2 className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
                 No non-conformances recorded
               </div>
             ) : (
@@ -444,7 +435,7 @@ export function ProjectDashboard() {
                         label="Major"
                         count={stats.ncrs.major}
                         total={stats.ncrs.open}
-                        color="bg-red-500"
+                        color="bg-destructive"
                       />
                     )}
                     {stats.ncrs.minor > 0 && (
@@ -452,7 +443,7 @@ export function ProjectDashboard() {
                         label="Minor"
                         count={stats.ncrs.minor}
                         total={stats.ncrs.open}
-                        color="bg-amber-500"
+                        color="bg-warning"
                       />
                     )}
                     {stats.ncrs.observation > 0 && (
@@ -460,7 +451,7 @@ export function ProjectDashboard() {
                         label="Observation"
                         count={stats.ncrs.observation}
                         total={stats.ncrs.open}
-                        color="bg-blue-400"
+                        color="bg-muted-foreground"
                       />
                     )}
                   </div>
@@ -468,7 +459,7 @@ export function ProjectDashboard() {
 
                 {/* Overdue warning */}
                 {stats.ncrs.overdue > 0 && (
-                  <div className="flex items-center gap-2 text-xs text-red-600 dark:text-red-400 pt-1">
+                  <div className="flex items-center gap-2 text-xs text-destructive pt-1">
                     <XCircle className="h-3.5 w-3.5" />
                     {stats.ncrs.overdue} overdue NCR{stats.ncrs.overdue !== 1 ? 's' : ''}
                   </div>

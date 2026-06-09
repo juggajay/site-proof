@@ -48,42 +48,45 @@ const SPEC_SET_OPTIONS = [
   { value: 'custom', label: 'Custom' },
 ];
 
-// Status configuration with colors and descriptions
+// Status configuration with colors and descriptions.
+// Quiet Authority: benign lifecycle states are MONOCHROME; colour is reserved
+// for decisions/exceptions. `on_hold` is a soft exception (warning); only
+// `cancelled` is a hard exception (destructive).
 const STATUS_CONFIG: Record<string, { color: string; bgColor: string; description: string }> = {
   active: {
-    color: 'text-green-800 dark:text-green-300',
-    bgColor: 'bg-green-100 dark:bg-green-900/30',
+    color: 'text-foreground',
+    bgColor: 'bg-muted',
     description: 'Project is currently in progress with ongoing work',
   },
   completed: {
-    color: 'text-primary',
-    bgColor: 'bg-primary/10',
+    color: 'text-muted-foreground',
+    bgColor: 'bg-muted',
     description: 'Project has been completed successfully',
   },
   on_hold: {
-    color: 'text-amber-800 dark:text-amber-300',
-    bgColor: 'bg-amber-100 dark:bg-amber-900/30',
+    color: 'text-warning',
+    bgColor: 'bg-warning/10',
     description: 'Project is temporarily paused',
   },
   pending: {
-    color: 'text-purple-800 dark:text-purple-300',
-    bgColor: 'bg-purple-100 dark:bg-purple-900/30',
+    color: 'text-muted-foreground',
+    bgColor: 'bg-muted',
     description: 'Project is awaiting approval or resources to start',
   },
   cancelled: {
-    color: 'text-red-800 dark:text-red-300',
-    bgColor: 'bg-red-100 dark:bg-red-900/30',
+    color: 'text-destructive',
+    bgColor: 'bg-destructive/10',
     description: 'Project has been cancelled',
   },
   draft: {
-    color: 'text-foreground',
+    color: 'text-muted-foreground',
     bgColor: 'bg-muted',
     description: 'Project is in draft status, not yet active',
   },
 };
 
 const DEFAULT_STATUS_CONFIG = {
-  color: 'text-foreground',
+  color: 'text-muted-foreground',
   bgColor: 'bg-muted',
   description: 'Project status',
 };
@@ -288,7 +291,7 @@ export function ProjectsPage() {
             {createError && (
               <div
                 role="alert"
-                className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm"
+                className="mb-4 p-3 bg-destructive/10 border border-destructive/20 text-destructive rounded-lg text-sm"
               >
                 {createError}
               </div>
@@ -296,7 +299,7 @@ export function ProjectsPage() {
             {(scheduleError || contractValueError) && (
               <div
                 role="alert"
-                className="mb-4 p-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-lg text-sm"
+                className="mb-4 p-3 bg-warning/10 border border-warning/20 text-warning rounded-lg text-sm"
               >
                 {scheduleError || contractValueError}
               </div>
@@ -443,7 +446,7 @@ export function ProjectsPage() {
       {error && (
         <div
           role="alert"
-          className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg"
+          className="bg-destructive/10 border border-destructive/20 text-destructive px-4 py-3 rounded-lg"
         >
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <span>{error}</span>
@@ -521,17 +524,11 @@ export function ProjectsPage() {
                       <span className="inline-flex items-center gap-1">
                         <span
                           className={`inline-block w-2 h-2 rounded-full ${
-                            statusKey === 'active'
-                              ? 'bg-green-500'
-                              : statusKey === 'completed'
-                                ? 'bg-primary'
-                                : statusKey === 'on_hold'
-                                  ? 'bg-amber-500'
-                                  : statusKey === 'pending'
-                                    ? 'bg-purple-500'
-                                    : statusKey === 'cancelled'
-                                      ? 'bg-red-500'
-                                      : 'bg-muted-foreground'
+                            statusKey === 'on_hold'
+                              ? 'bg-warning'
+                              : statusKey === 'cancelled'
+                                ? 'bg-destructive'
+                                : 'bg-muted-foreground'
                           }`}
                         />
                         {statusLabel}

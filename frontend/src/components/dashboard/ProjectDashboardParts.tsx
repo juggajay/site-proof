@@ -30,13 +30,11 @@ export function StatPill({
     <div
       className={cn(
         'bg-card px-3 py-2.5 text-center',
-        alert && 'ring-1 ring-inset ring-red-200 dark:ring-red-800',
+        alert && 'ring-1 ring-inset ring-destructive/30',
       )}
     >
       <div className={cn('flex items-center justify-center mb-1', color)}>{icon}</div>
-      <p
-        className={cn('text-lg font-bold leading-tight', alert && 'text-red-600 dark:text-red-400')}
-      >
+      <p className={cn('text-lg font-bold leading-tight', alert && 'text-destructive')}>
         <span>{value}</span>
         {labelText && <span className="ml-1 text-sm font-semibold"> {labelText}</span>}
       </p>
@@ -89,20 +87,22 @@ export function NCRCategoryBar({
 }
 
 export function ActivityIcon({ type }: { type: string }) {
-  const base = 'h-4 w-4 mt-0.5 flex-shrink-0';
+  // Quiet Authority: activity-type icons are category markers, not status
+  // decisions — render them monochrome (mono icon, neutral tint).
+  const base = 'h-4 w-4 mt-0.5 flex-shrink-0 text-muted-foreground';
   switch (type) {
     case 'ncr':
-      return <AlertTriangle className={cn(base, 'text-red-500')} />;
+      return <AlertTriangle className={base} />;
     case 'lot':
-      return <MapPin className={cn(base, 'text-blue-500')} />;
+      return <MapPin className={base} />;
     case 'holdpoint':
-      return <Clock className={cn(base, 'text-orange-500')} />;
+      return <Clock className={base} />;
     case 'docket':
-      return <FileCheck className={cn(base, 'text-amber-500')} />;
+      return <FileCheck className={base} />;
     case 'diary':
-      return <Calendar className={cn(base, 'text-purple-500')} />;
+      return <Calendar className={base} />;
     default:
-      return <Activity className={cn(base, 'text-muted-foreground')} />;
+      return <Activity className={base} />;
   }
 }
 
