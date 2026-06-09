@@ -154,7 +154,7 @@ export async function generateClaimEvidencePackagePDF(
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
 
-    data.lots.forEach((lot, idx) => {
+    (data.lots ?? []).forEach((lot, idx) => {
       checkPageBreak(8);
 
       // Alternate row colors
@@ -193,7 +193,11 @@ export async function generateClaimEvidencePackagePDF(
     doc.rect(margin, yPos - 1, contentWidth, 8, 'F');
     doc.setFont('helvetica', 'bold');
     doc.text('TOTAL', margin + 2, yPos + 5);
-    doc.text(`${data.lots.length} lots`, margin + colWidths[0] + colWidths[1] + 2, yPos + 5);
+    doc.text(
+      `${(data.lots ?? []).length} lots`,
+      margin + colWidths[0] + colWidths[1] + 2,
+      yPos + 5,
+    );
     doc.text(
       formatCurrency(data.summary.totalClaimedAmount),
       margin +
@@ -211,7 +215,7 @@ export async function generateClaimEvidencePackagePDF(
 
   // ========== INDIVIDUAL LOT DETAILS ==========
   if (options.includeLotDetails) {
-    data.lots.forEach((lot, lotIdx) => {
+    (data.lots ?? []).forEach((lot, lotIdx) => {
       // Each lot starts on a new page (or at least has enough space)
       if (lotIdx > 0 || yPos > pageHeight - 100) {
         doc.addPage();
@@ -266,8 +270,8 @@ export async function generateClaimEvidencePackagePDF(
         doc.setFontSize(9);
         doc.text(`Template: ${lot.itp.templateName}`, margin, yPos);
         yPos += 4;
-        const completedItems = lot.itp.completions.filter((c) => c.isCompleted).length;
-        const totalItems = lot.itp.checklistItems.length;
+        const completedItems = (lot.itp.completions ?? []).filter((c) => c.isCompleted).length;
+        const totalItems = (lot.itp.checklistItems ?? []).length;
         doc.text(
           `Completion: ${completedItems}/${totalItems} items (${lot.summary.itpCompletionPercentage}%)`,
           margin,
@@ -277,8 +281,10 @@ export async function generateClaimEvidencePackagePDF(
 
         // Hold points (conditional)
         if (options.includeHoldPoints) {
-          const releasedHP = lot.itp.holdPoints.filter((hp) => hp.status === 'released').length;
-          const totalHP = lot.itp.holdPoints.length;
+          const releasedHP = (lot.itp.holdPoints ?? []).filter(
+            (hp) => hp.status === 'released',
+          ).length;
+          const totalHP = (lot.itp.holdPoints ?? []).length;
           if (totalHP > 0) {
             doc.text(`Hold Points: ${releasedHP}/${totalHP} released`, margin, yPos);
             yPos += 4;
@@ -288,7 +294,7 @@ export async function generateClaimEvidencePackagePDF(
       }
 
       // Test Results Summary (conditional)
-      if (options.includeTestResults && lot.testResults.length > 0) {
+      if (options.includeTestResults && (lot.testResults ?? []).length > 0) {
         checkPageBreak(20);
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(10);
@@ -304,7 +310,7 @@ export async function generateClaimEvidencePackagePDF(
         yPos += 6;
 
         // List first few test results
-        lot.testResults.slice(0, 5).forEach((test) => {
+        (lot.testResults ?? []).slice(0, 5).forEach((test) => {
           checkPageBreak(6);
           const passFail = test.passFail === 'pass' ? '✓' : test.passFail === 'fail' ? '✗' : '-';
           const result =
@@ -312,9 +318,9 @@ export async function generateClaimEvidencePackagePDF(
           doc.text(`  ${passFail} ${test.testType}: ${result}`, margin, yPos);
           yPos += 4;
         });
-        if (lot.testResults.length > 5) {
+        if ((lot.testResults ?? []).length > 5) {
           doc.setFont('helvetica', 'italic');
-          doc.text(`  ... and ${lot.testResults.length - 5} more tests`, margin, yPos);
+          doc.text(`  ... and ${(lot.testResults ?? []).length - 5} more tests`, margin, yPos);
           doc.setFont('helvetica', 'normal');
           yPos += 4;
         }
@@ -322,7 +328,7 @@ export async function generateClaimEvidencePackagePDF(
       }
 
       // NCR Summary (conditional)
-      if (options.includeNCRs && lot.ncrs.length > 0) {
+      if (options.includeNCRs && (lot.ncrs ?? []).length > 0) {
         checkPageBreak(20);
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(10);
@@ -338,14 +344,14 @@ export async function generateClaimEvidencePackagePDF(
         yPos += 6;
 
         // List NCRs
-        lot.ncrs.slice(0, 3).forEach((ncr) => {
+        (lot.ncrs ?? []).slice(0, 3).forEach((ncr) => {
           checkPageBreak(6);
           doc.text(`  ${ncr.ncrNumber} (${ncr.severity}): ${ncr.status}`, margin, yPos);
           yPos += 4;
         });
-        if (lot.ncrs.length > 3) {
+        if ((lot.ncrs ?? []).length > 3) {
           doc.setFont('helvetica', 'italic');
-          doc.text(`  ... and ${lot.ncrs.length - 3} more NCRs`, margin, yPos);
+          doc.text(`  ... and ${(lot.ncrs ?? []).length - 3} more NCRs`, margin, yPos);
           doc.setFont('helvetica', 'normal');
           yPos += 4;
         }

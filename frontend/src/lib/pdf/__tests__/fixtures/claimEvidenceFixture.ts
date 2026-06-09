@@ -122,3 +122,97 @@ export const submittedClaimEvidencePackageFixture: ClaimEvidencePackageData = {
   generatedAt: '2026-05-28T03:15:00.000Z',
   generationTimeMs: 1234,
 };
+
+/**
+ * Empty-lot fixture for the B1 regression test (Evidence Package PDF crash).
+ *
+ * Represents the real-world malformed payload that crashed the builder: a lot
+ * whose `itp` is undefined and whose collection fields (testResults, ncrs,
+ * completions, holdPoints, documents) are undefined rather than empty arrays.
+ * The `lots` array as a whole is also undefined-safety-tested below.
+ *
+ * The runtime API can return these fields absent even though the TS type marks
+ * them required, so the lot objects are built loosely and cast to the data type.
+ */
+const emptyLot = {
+  id: 'lot-empty',
+  lotNumber: 'EMPTY-01',
+  description: null,
+  activityType: null,
+  chainageStart: null,
+  chainageEnd: null,
+  layer: null,
+  areaZone: null,
+  status: 'pending',
+  conformedAt: null,
+  conformedBy: null,
+  claimAmount: 0,
+  percentComplete: 0,
+  // itp intentionally undefined (absent) — pre-fix this crashed on
+  // lot.itp.completions.filter(...) only when itp existed, but the undefined
+  // collections below crash regardless of itp.
+  itp: undefined,
+  // testResults / ncrs / documents intentionally undefined (absent)
+  testResults: undefined,
+  ncrs: undefined,
+  documents: undefined,
+  summary: {
+    testResultCount: 0,
+    passedTestCount: 0,
+    ncrCount: 0,
+    openNcrCount: 0,
+    photoCount: 0,
+    itpCompletionPercentage: 0,
+  },
+};
+
+/**
+ * Second empty lot whose `itp` IS present but whose nested arrays
+ * (completions, checklistItems, holdPoints) are undefined — exercises the
+ * exact crash sites from the ticket: claimEvidencePackagePdf.ts:269/280.
+ */
+const itpPresentButArraysUndefinedLot = {
+  ...emptyLot,
+  id: 'lot-empty-2',
+  lotNumber: 'EMPTY-02',
+  itp: {
+    templateName: 'Bare ITP',
+    checklistItems: undefined,
+    completions: undefined,
+    holdPoints: undefined,
+  },
+};
+
+export const emptyClaimEvidencePackageFixture: ClaimEvidencePackageData = {
+  ...submittedClaimEvidencePackageFixture,
+  lots: [emptyLot, itpPresentButArraysUndefinedLot] as unknown as ClaimEvidencePackageData['lots'],
+  summary: {
+    totalLots: 2,
+    totalClaimedAmount: 0,
+    totalTestResults: 0,
+    totalPassedTests: 0,
+    totalNCRs: 0,
+    totalOpenNCRs: 0,
+    totalPhotos: 0,
+    conformedLots: 0,
+  },
+};
+
+/**
+ * Fixture whose top-level `lots` array is itself undefined — exercises the
+ * `data.lots.forEach(...)` / `data.lots.length` guards.
+ */
+export const noLotsClaimEvidencePackageFixture: ClaimEvidencePackageData = {
+  ...submittedClaimEvidencePackageFixture,
+  lots: undefined as unknown as ClaimEvidencePackageData['lots'],
+  summary: {
+    totalLots: 0,
+    totalClaimedAmount: 0,
+    totalTestResults: 0,
+    totalPassedTests: 0,
+    totalNCRs: 0,
+    totalOpenNCRs: 0,
+    totalPhotos: 0,
+    conformedLots: 0,
+  },
+};
