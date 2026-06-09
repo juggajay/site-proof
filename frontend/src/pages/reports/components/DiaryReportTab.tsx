@@ -59,7 +59,7 @@ export const DiaryReportTab = React.memo(function DiaryReportTab({
                 type="date"
                 value={diaryStartDate}
                 onChange={(e) => setDiaryStartDate(e.target.value)}
-                className="px-3 py-2 border border-border rounded-md"
+                className="px-3 py-2 border border-border rounded-md bg-background text-foreground"
               />
               <span className="text-muted-foreground">to</span>
               <label htmlFor="diary-report-end-date" className="sr-only">
@@ -70,7 +70,7 @@ export const DiaryReportTab = React.memo(function DiaryReportTab({
                 type="date"
                 value={diaryEndDate}
                 onChange={(e) => setDiaryEndDate(e.target.value)}
-                className="px-3 py-2 border border-border rounded-md"
+                className="px-3 py-2 border border-border rounded-md bg-background text-foreground"
               />
             </div>
             {/* Date Range Presets */}
@@ -116,7 +116,7 @@ export const DiaryReportTab = React.memo(function DiaryReportTab({
                   onClick={() => toggleDiarySection(section.id)}
                   className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                     diarySections.includes(section.id)
-                      ? 'bg-primary text-white'
+                      ? 'bg-primary text-primary-foreground'
                       : 'bg-muted text-foreground hover:bg-muted'
                   }`}
                 >
@@ -131,7 +131,7 @@ export const DiaryReportTab = React.memo(function DiaryReportTab({
           type="button"
           onClick={handleGenerateReport}
           disabled={loading || diarySections.length === 0}
-          className="mt-4 px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90 disabled:opacity-50"
+          className="mt-4 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50"
         >
           {loading ? 'Generating...' : 'Generate Report'}
         </button>
@@ -145,19 +145,19 @@ export const DiaryReportTab = React.memo(function DiaryReportTab({
               <div className="text-3xl font-bold text-foreground">{report.totalDiaries}</div>
               <div className="text-sm text-muted-foreground">Total Diaries</div>
             </div>
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-              <div className="text-3xl font-bold text-green-600">{report.submittedCount}</div>
-              <div className="text-sm text-green-500">Submitted</div>
+            <div className="bg-card border rounded-lg p-4">
+              <div className="text-3xl font-bold text-foreground">{report.submittedCount}</div>
+              <div className="text-sm text-muted-foreground">Submitted</div>
             </div>
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-              <div className="text-3xl font-bold text-amber-600">{report.draftCount}</div>
-              <div className="text-sm text-amber-500">Drafts</div>
+            <div className="bg-card border rounded-lg p-4">
+              <div className="text-3xl font-bold text-foreground">{report.draftCount}</div>
+              <div className="text-sm text-muted-foreground">Drafts</div>
             </div>
-            <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
-              <div className="text-3xl font-bold text-primary">
+            <div className="bg-card border rounded-lg p-4">
+              <div className="text-3xl font-bold text-foreground">
                 {report.selectedSections.length}
               </div>
-              <div className="text-sm text-primary/70">Sections Included</div>
+              <div className="text-sm text-muted-foreground">Sections Included</div>
             </div>
           </div>
 
@@ -167,7 +167,7 @@ export const DiaryReportTab = React.memo(function DiaryReportTab({
               <h3 className="text-lg font-medium mb-4">Weather Summary</h3>
               <div className="flex flex-wrap gap-2">
                 {Object.entries(report.summary.weather).map(([condition, count]) => (
-                  <span key={condition} className="px-3 py-1 bg-primary/10 rounded-full text-sm">
+                  <span key={condition} className="px-3 py-1 bg-muted rounded-full text-sm">
                     {condition}: <strong>{count}</strong>
                   </span>
                 ))}
@@ -248,7 +248,7 @@ export const DiaryReportTab = React.memo(function DiaryReportTab({
                   <h4 className="text-sm font-medium text-foreground mb-2">By Lot</h4>
                   <div className="flex flex-wrap gap-2">
                     {Object.entries(report.summary.activities.byLot).map(([lot, count]) => (
-                      <span key={lot} className="px-3 py-1 bg-green-100 rounded-full text-sm">
+                      <span key={lot} className="px-3 py-1 bg-muted rounded-full text-sm">
                         {lot}: <strong>{count}</strong>
                       </span>
                     ))}
@@ -263,17 +263,17 @@ export const DiaryReportTab = React.memo(function DiaryReportTab({
             <div className="bg-card border rounded-lg p-6">
               <h3 className="text-lg font-medium mb-4">Delays Summary</h3>
               <div className="grid grid-cols-2 gap-4 mb-4">
-                <div className="bg-red-50 rounded-lg p-3">
-                  <div className="text-2xl font-bold text-red-600">
+                <div className="bg-muted rounded-lg p-3">
+                  <div className="text-2xl font-bold text-foreground">
                     {report.summary.delays.totalDelays}
                   </div>
-                  <div className="text-sm text-red-500">Total Delays</div>
+                  <div className="text-sm text-muted-foreground">Total Delays</div>
                 </div>
-                <div className="bg-red-50 rounded-lg p-3">
-                  <div className="text-2xl font-bold text-red-600">
+                <div className="bg-muted rounded-lg p-3">
+                  <div className="text-2xl font-bold text-foreground">
                     {report.summary.delays.totalHours.toFixed(1)}
                   </div>
-                  <div className="text-sm text-red-500">Total Delay Hours</div>
+                  <div className="text-sm text-muted-foreground">Total Delay Hours</div>
                 </div>
               </div>
               {Object.keys(report.summary.delays.byType).length > 0 && (
@@ -281,7 +281,7 @@ export const DiaryReportTab = React.memo(function DiaryReportTab({
                   <h4 className="text-sm font-medium text-foreground mb-2">By Delay Type</h4>
                   <div className="space-y-2">
                     {Object.entries(report.summary.delays.byType).map(([type, data]) => (
-                      <div key={type} className="flex justify-between bg-red-50 px-3 py-2 rounded">
+                      <div key={type} className="flex justify-between bg-muted px-3 py-2 rounded">
                         <span className="capitalize">{type.replace(/_/g, ' ')}</span>
                         <span className="font-medium">
                           {data.count} delays, {data.hours.toFixed(1)} hrs
@@ -343,7 +343,7 @@ export const DiaryReportTab = React.memo(function DiaryReportTab({
                       <td className="px-4 py-3 text-sm font-medium text-foreground">
                         {new Date(diary.date).toLocaleDateString('en-AU')}
                         {diary.isLate && (
-                          <span className="ml-2 px-1.5 py-0.5 bg-orange-100 text-orange-700 text-xs rounded">
+                          <span className="ml-2 px-1.5 py-0.5 bg-warning/10 text-warning text-xs rounded">
                             Late
                           </span>
                         )}
@@ -352,8 +352,8 @@ export const DiaryReportTab = React.memo(function DiaryReportTab({
                         <span
                           className={`px-2 py-1 rounded-full text-xs ${
                             diary.status === 'submitted'
-                              ? 'bg-green-100 text-green-700'
-                              : 'bg-amber-100 text-amber-700'
+                              ? 'bg-success/10 text-success'
+                              : 'bg-muted text-foreground'
                           }`}
                         >
                           {diary.status}

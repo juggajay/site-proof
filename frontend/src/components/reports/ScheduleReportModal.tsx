@@ -216,7 +216,7 @@ export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalP
         <ModalBody>
           {displayError && (
             <div
-              className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-md flex items-center justify-between gap-3"
+              className="mb-4 p-3 bg-destructive/10 border border-destructive/20 text-destructive rounded-md flex items-center justify-between gap-3"
               role="alert"
             >
               <div className="flex items-center gap-2">
@@ -286,7 +286,7 @@ export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalP
                           <span
                             className={`px-2 py-0.5 text-xs rounded-full ${
                               schedule.isActive
-                                ? 'bg-green-100 text-green-700'
+                                ? 'bg-foreground/10 text-foreground'
                                 : 'bg-muted text-muted-foreground'
                             }`}
                           >
@@ -310,11 +310,6 @@ export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalP
                           variant="outline"
                           size="sm"
                           onClick={() => handleToggleActive(schedule)}
-                          className={
-                            schedule.isActive
-                              ? 'bg-amber-100 text-amber-700 hover:bg-amber-200 border-amber-200'
-                              : 'bg-green-100 text-green-700 hover:bg-green-200 border-green-200'
-                          }
                         >
                           {schedule.isActive ? 'Pause' : 'Activate'}
                         </Button>

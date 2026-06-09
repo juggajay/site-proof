@@ -21,38 +21,38 @@ export const NCRReportTab = React.memo(function NCRReportTab({ report }: NCRRepo
           <div className="text-3xl font-bold text-foreground">{report.totalNCRs}</div>
           <div className="text-sm text-muted-foreground">Total NCRs</div>
         </div>
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <div className="text-3xl font-bold text-red-600">
+        <div className="bg-card border rounded-lg p-4">
+          <div className="text-3xl font-bold text-foreground">
             {report.summary.open +
               report.summary.investigating +
               report.summary.rectification +
               report.summary.verification}
           </div>
-          <div className="text-sm text-red-500">Open NCRs</div>
+          <div className="text-sm text-muted-foreground">Open NCRs</div>
         </div>
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-          <div className="text-3xl font-bold text-green-600">{report.closedThisMonth}</div>
-          <div className="text-sm text-green-500">Closed This Month</div>
+        <div className="bg-card border rounded-lg p-4">
+          <div className="text-3xl font-bold text-foreground">{report.closedThisMonth}</div>
+          <div className="text-sm text-muted-foreground">Closed This Month</div>
         </div>
-        <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
-          <div className="text-3xl font-bold text-primary">
+        <div className="bg-card border rounded-lg p-4">
+          <div className="text-3xl font-bold text-foreground">
             {report.averageClosureTime > 0 ? `${report.averageClosureTime}d` : 'N/A'}
           </div>
-          <div className="text-sm text-primary/70">Avg Closure Time</div>
+          <div className="text-sm text-muted-foreground">Avg Closure Time</div>
         </div>
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-          <div className="text-3xl font-bold text-amber-600">{report.overdueCount}</div>
-          <div className="text-sm text-amber-500">Overdue</div>
+        <div className="bg-card border rounded-lg p-4">
+          <div className="text-3xl font-bold text-foreground">{report.overdueCount}</div>
+          <div className="text-sm text-muted-foreground">Overdue</div>
         </div>
-        <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-          <div className="text-3xl font-bold text-purple-600">
+        <div className="bg-card border rounded-lg p-4">
+          <div className="text-3xl font-bold text-foreground">
             {report.summary.closed + report.summary.closedConcession}
           </div>
-          <div className="text-sm text-purple-500">Total Closed</div>
+          <div className="text-sm text-muted-foreground">Total Closed</div>
         </div>
-        <div className="bg-teal-50 border border-teal-200 rounded-lg p-4">
-          <div className="text-3xl font-bold text-teal-600">{report.closureRate}%</div>
-          <div className="text-sm text-teal-500">Closure Rate</div>
+        <div className="bg-card border rounded-lg p-4">
+          <div className="text-3xl font-bold text-foreground">{report.closureRate}%</div>
+          <div className="text-sm text-muted-foreground">Closure Rate</div>
         </div>
       </div>
 
@@ -75,19 +75,7 @@ export const NCRReportTab = React.memo(function NCRReportTab({ report }: NCRRepo
                   </div>
                   <div className="w-full bg-muted rounded-full h-2">
                     <div
-                      className={`h-2 rounded-full ${
-                        category === 'workmanship'
-                          ? 'bg-amber-500'
-                          : category === 'materials'
-                            ? 'bg-blue-500'
-                            : category === 'documentation'
-                              ? 'bg-green-500'
-                              : category === 'process'
-                                ? 'bg-purple-500'
-                                : category === 'design'
-                                  ? 'bg-red-500'
-                                  : 'bg-gray-500'
-                      }`}
+                      className="h-2 rounded-full bg-primary"
                       style={{ width: `${percentage}%` }}
                     />
                   </div>
@@ -117,19 +105,7 @@ export const NCRReportTab = React.memo(function NCRReportTab({ report }: NCRRepo
                   </div>
                   <div className="w-full bg-muted rounded-full h-2">
                     <div
-                      className={`h-2 rounded-full ${
-                        rootCause === 'human_error'
-                          ? 'bg-red-500'
-                          : rootCause === 'equipment_failure'
-                            ? 'bg-amber-500'
-                            : rootCause === 'material_defect'
-                              ? 'bg-blue-500'
-                              : rootCause === 'procedural'
-                                ? 'bg-purple-500'
-                                : rootCause === 'environmental'
-                                  ? 'bg-green-500'
-                                  : 'bg-gray-500'
-                      }`}
+                      className="h-2 rounded-full bg-primary"
                       style={{ width: `${percentage}%` }}
                     />
                   </div>
@@ -159,7 +135,7 @@ export const NCRReportTab = React.memo(function NCRReportTab({ report }: NCRRepo
                   </div>
                   <div className="w-full bg-muted rounded-full h-2">
                     <div
-                      className="h-2 rounded-full bg-indigo-500"
+                      className="h-2 rounded-full bg-primary"
                       style={{ width: `${percentage}%` }}
                     />
                   </div>
@@ -177,10 +153,10 @@ export const NCRReportTab = React.memo(function NCRReportTab({ report }: NCRRepo
       <div className="bg-card border rounded-lg p-6">
         <h3 className="text-lg font-medium mb-3">By Severity</h3>
         <div className="flex gap-4">
-          <span className="px-4 py-2 bg-amber-100 rounded-lg">
+          <span className="px-4 py-2 bg-warning/10 text-warning rounded-lg">
             Minor: <strong>{report.summary.minor}</strong>
           </span>
-          <span className="px-4 py-2 bg-red-100 rounded-lg">
+          <span className="px-4 py-2 bg-destructive/10 text-destructive rounded-lg">
             Major: <strong>{report.summary.major}</strong>
           </span>
         </div>
@@ -222,8 +198,8 @@ export const NCRReportTab = React.memo(function NCRReportTab({ report }: NCRRepo
                     <span
                       className={`px-2 py-1 rounded-full text-xs ${
                         ncr.category === 'major'
-                          ? 'bg-red-100 text-red-700'
-                          : 'bg-amber-100 text-amber-700'
+                          ? 'bg-destructive/10 text-destructive'
+                          : 'bg-warning/10 text-warning'
                       }`}
                     >
                       {ncr.category}
