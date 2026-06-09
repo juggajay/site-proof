@@ -57,8 +57,8 @@ export const SubmitClaimModal = React.memo(function SubmitClaimModal({
               disabled={submitting}
               className="w-full flex items-center gap-4 p-4 border rounded-lg hover:bg-muted/50 transition-colors text-left"
             >
-              <div className="p-2 bg-green-100 rounded-lg">
-                <Download className="h-5 w-5 text-green-600" />
+              <div className="p-2 bg-muted rounded-lg">
+                <Download className="h-5 w-5 text-foreground" />
               </div>
               <div>
                 <div className="font-medium">{option.label}</div>

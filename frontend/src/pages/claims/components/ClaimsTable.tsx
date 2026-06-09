@@ -46,25 +46,25 @@ function getStatusBadge(status: string) {
       );
     case 'certified':
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-muted text-foreground">
           <CheckCircle className="h-3 w-3" /> Certified
         </span>
       );
     case 'paid':
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
+        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-muted text-foreground">
           <DollarSign className="h-3 w-3" /> Paid
         </span>
       );
     case 'partially_paid':
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
+        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-muted text-foreground">
           <DollarSign className="h-3 w-3" /> Partially Paid
         </span>
       );
     case 'disputed':
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">
+        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-destructive/10 text-destructive">
           <AlertCircle className="h-3 w-3" /> Disputed
         </span>
       );
@@ -170,7 +170,7 @@ export const ClaimsTable = React.memo(function ClaimsTable({
             return (
               <tr
                 key={claim.id}
-                className={`border-t hover:bg-muted/30 ${isOverdue ? 'bg-red-50' : ''}`}
+                className={`border-t hover:bg-muted/30 ${isOverdue ? 'bg-destructive/10' : ''}`}
               >
                 <td className="p-4 font-medium">Claim {claim.claimNumber}</td>
                 <td className="p-4">
@@ -199,9 +199,7 @@ export const ClaimsTable = React.memo(function ClaimsTable({
                   {formatCurrency(claim.totalClaimedAmount)}
                 </td>
                 <td className="p-4 text-right">{formatCurrency(claim.certifiedAmount)}</td>
-                <td className="p-4 text-right text-green-600">
-                  {formatCurrency(claim.paidAmount)}
-                </td>
+                <td className="p-4 text-right">{formatCurrency(claim.paidAmount)}</td>
                 <td className="p-4 text-right">
                   <div className="flex items-center justify-end gap-1">
                     {claim.status === 'draft' && (
@@ -217,7 +215,7 @@ export const ClaimsTable = React.memo(function ClaimsTable({
                     {(claim.status === 'submitted' || claim.status === 'certified') && (
                       <button
                         onClick={() => onDisputeClaim(claim.id)}
-                        className="p-2 hover:bg-red-100 rounded-lg text-red-600"
+                        className="p-2 hover:bg-destructive/10 rounded-lg text-destructive"
                         aria-label="Mark as Disputed"
                         title="Mark as Disputed"
                       >
@@ -227,7 +225,7 @@ export const ClaimsTable = React.memo(function ClaimsTable({
                     {canCertifyClaim && (
                       <button
                         onClick={() => onCertifyClaim(claim.id)}
-                        className="p-2 hover:bg-amber-100 rounded-lg text-amber-700"
+                        className="p-2 hover:bg-muted rounded-lg text-foreground"
                         aria-label="Certify Claim"
                         title="Certify Claim"
                       >
@@ -237,7 +235,7 @@ export const ClaimsTable = React.memo(function ClaimsTable({
                     {canRecordPayment && (
                       <button
                         onClick={() => onRecordPayment(claim.id)}
-                        className="p-2 hover:bg-green-100 rounded-lg text-green-700"
+                        className="p-2 hover:bg-muted rounded-lg text-foreground"
                         aria-label="Record Payment"
                         title="Record Payment"
                       >
@@ -260,7 +258,7 @@ export const ClaimsTable = React.memo(function ClaimsTable({
                     <button
                       onClick={() => onEvidencePackage(claim.id)}
                       disabled={generatingEvidence === claim.id}
-                      className="p-2 hover:bg-green-100 rounded-lg text-green-600 disabled:opacity-50"
+                      className="p-2 hover:bg-muted rounded-lg text-foreground disabled:opacity-50"
                       aria-label="Generate Evidence Package"
                       title="Generate Evidence Package"
                     >
