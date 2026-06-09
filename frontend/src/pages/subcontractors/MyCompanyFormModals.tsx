@@ -61,7 +61,7 @@ export function AddEmployeeModal({
               type="text"
               value={employeeForm.name}
               onChange={(e) => setEmployeeForm((prev) => ({ ...prev, name: e.target.value }))}
-              className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full px-3 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               placeholder="John Smith"
             />
           </div>
@@ -74,7 +74,7 @@ export function AddEmployeeModal({
               type="tel"
               value={employeeForm.phone}
               onChange={(e) => setEmployeeForm((prev) => ({ ...prev, phone: e.target.value }))}
-              className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full px-3 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               placeholder="0412 345 678"
             />
           </div>
@@ -86,7 +86,7 @@ export function AddEmployeeModal({
               id="my-company-employee-role"
               value={employeeForm.role}
               onChange={(e) => setEmployeeForm((prev) => ({ ...prev, role: e.target.value }))}
-              className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full px-3 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
             >
               <option value="">Select role...</option>
               <option value="Supervisor">Supervisor</option>
@@ -114,7 +114,7 @@ export function AddEmployeeModal({
                 onChange={(e) =>
                   setEmployeeForm((prev) => ({ ...prev, hourlyRate: e.target.value }))
                 }
-                className="w-full pl-7 pr-12 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full pl-7 pr-12 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                 placeholder="85"
                 min="0"
                 step="0.01"
@@ -198,7 +198,7 @@ export function AddPlantModal({
               id="my-company-plant-type"
               value={plantForm.type}
               onChange={(e) => setPlantForm((prev) => ({ ...prev, type: e.target.value }))}
-              className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full px-3 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
             >
               <option value="">Select type...</option>
               <option value="Excavator">Excavator</option>
@@ -225,7 +225,7 @@ export function AddPlantModal({
               type="text"
               value={plantForm.description}
               onChange={(e) => setPlantForm((prev) => ({ ...prev, description: e.target.value }))}
-              className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full px-3 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               placeholder="20T Excavator"
             />
           </div>
@@ -238,7 +238,7 @@ export function AddPlantModal({
               type="text"
               value={plantForm.idRego}
               onChange={(e) => setPlantForm((prev) => ({ ...prev, idRego: e.target.value }))}
-              className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full px-3 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               placeholder="EXC-001"
             />
           </div>
@@ -254,7 +254,7 @@ export function AddPlantModal({
                   type="number"
                   value={plantForm.dryRate}
                   onChange={(e) => setPlantForm((prev) => ({ ...prev, dryRate: e.target.value }))}
-                  className="w-full pl-7 pr-12 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full pl-7 pr-12 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                   placeholder="150"
                   min="0"
                   step="0.01"
@@ -273,7 +273,7 @@ export function AddPlantModal({
                   type="number"
                   value={plantForm.wetRate}
                   onChange={(e) => setPlantForm((prev) => ({ ...prev, wetRate: e.target.value }))}
-                  className="w-full pl-7 pr-12 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="w-full pl-7 pr-12 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                   placeholder="200"
                   min="0"
                   step="0.01"

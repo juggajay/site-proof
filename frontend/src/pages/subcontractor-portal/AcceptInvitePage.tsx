@@ -397,7 +397,7 @@ export function AcceptInvitePage() {
                   />
                   {invitation.primaryContactEmail && (
                     <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-                      <Check className="h-3 w-3 text-green-500" />
+                      <Check className="h-3 w-3 text-muted-foreground" />
                       Email pre-filled from invitation
                     </p>
                   )}
@@ -458,7 +458,7 @@ export function AcceptInvitePage() {
                     className={`py-3 ${errors.confirmPassword ? 'border-destructive' : ''}`}
                   />
                   {confirmPassword && password !== confirmPassword && !errors.confirmPassword && (
-                    <p className="text-xs text-red-600 mt-1">Passwords do not match</p>
+                    <p className="text-xs text-destructive mt-1">Passwords do not match</p>
                   )}
                   {errors.confirmPassword && (
                     <p className="mt-1 text-sm text-destructive" role="alert">

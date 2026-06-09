@@ -108,7 +108,7 @@ export const AddEmployeeModal = React.memo(function AddEmployeeModal({
               type="text"
               value={employeeData.name}
               onChange={(e) => setEmployeeData((prev) => ({ ...prev, name: e.target.value }))}
-              className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full px-3 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               placeholder="John Smith"
             />
           </div>
@@ -121,7 +121,7 @@ export const AddEmployeeModal = React.memo(function AddEmployeeModal({
               type="text"
               value={employeeData.role}
               onChange={(e) => setEmployeeData((prev) => ({ ...prev, role: e.target.value }))}
-              className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full px-3 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               placeholder="Operator, Labourer, Supervisor..."
             />
           </div>
@@ -137,7 +137,7 @@ export const AddEmployeeModal = React.memo(function AddEmployeeModal({
               type="number"
               value={employeeData.hourlyRate}
               onChange={(e) => setEmployeeData((prev) => ({ ...prev, hourlyRate: e.target.value }))}
-              className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full px-3 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               placeholder="85"
               min="0"
               step="0.01"

@@ -113,7 +113,7 @@ export const AddPlantModal = React.memo(function AddPlantModal({
               type="text"
               value={plantData.type}
               onChange={(e) => setPlantData((prev) => ({ ...prev, type: e.target.value }))}
-              className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full px-3 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               placeholder="Excavator, Roller, Truck..."
             />
           </div>
@@ -129,7 +129,7 @@ export const AddPlantModal = React.memo(function AddPlantModal({
               type="text"
               value={plantData.description}
               onChange={(e) => setPlantData((prev) => ({ ...prev, description: e.target.value }))}
-              className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full px-3 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               placeholder="20T Excavator, Padfoot Roller..."
             />
           </div>
@@ -142,7 +142,7 @@ export const AddPlantModal = React.memo(function AddPlantModal({
               type="text"
               value={plantData.idRego}
               onChange={(e) => setPlantData((prev) => ({ ...prev, idRego: e.target.value }))}
-              className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+              className="w-full px-3 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               placeholder="EXC-001"
             />
           </div>
@@ -159,7 +159,7 @@ export const AddPlantModal = React.memo(function AddPlantModal({
                 type="number"
                 value={plantData.dryRate}
                 onChange={(e) => setPlantData((prev) => ({ ...prev, dryRate: e.target.value }))}
-                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full px-3 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                 placeholder="150"
                 min="0"
                 step="0.01"
@@ -177,7 +177,7 @@ export const AddPlantModal = React.memo(function AddPlantModal({
                 type="number"
                 value={plantData.wetRate}
                 onChange={(e) => setPlantData((prev) => ({ ...prev, wetRate: e.target.value }))}
-                className="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
+                className="w-full px-3 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
                 placeholder="200"
                 min="0"
                 step="0.01"

@@ -29,10 +29,10 @@ export function SubcontractorsPageHeader({
             aria-checked={showRemoved}
             aria-label="Show removed subcontractors"
             onClick={() => onShowRemovedChange(!showRemoved)}
-            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${showRemoved ? 'bg-red-500' : 'bg-muted-foreground/30'}`}
+            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${showRemoved ? 'bg-destructive' : 'bg-muted-foreground/30'}`}
           >
             <span
-              className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${showRemoved ? 'translate-x-[18px]' : 'translate-x-[3px]'}`}
+              className={`inline-block h-3.5 w-3.5 transform rounded-full bg-background transition-transform ${showRemoved ? 'translate-x-[18px]' : 'translate-x-[3px]'}`}
             />
           </button>
           <span className="text-muted-foreground">
@@ -65,14 +65,14 @@ export function SubcontractorsLoadErrorAlert({
 
   return (
     <div
-      className="flex items-center justify-between gap-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700"
+      className="flex items-center justify-between gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
       role="alert"
     >
       <span>{loadError}</span>
       <button
         type="button"
         onClick={onRetry}
-        className="rounded-md border border-red-200 bg-white px-3 py-1 font-medium text-red-700 hover:bg-red-100"
+        className="rounded-md border border-destructive/30 bg-card px-3 py-1 font-medium text-destructive hover:bg-destructive/10"
       >
         Try again
       </button>
@@ -92,15 +92,15 @@ export function PendingApprovalsAlert({
   if (!summary) return null;
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-3 rounded-lg border border-warning/30 bg-warning/10 p-4 sm:flex-row sm:items-center sm:justify-between">
       <div>
-        <h3 className="font-semibold text-amber-800">Pending Approvals</h3>
-        <p className="text-sm text-amber-700 mt-1">{summary}</p>
+        <h3 className="font-semibold text-warning">Pending Approvals</h3>
+        <p className="text-sm text-warning mt-1">{summary}</p>
       </div>
       <button
         type="button"
         onClick={onReviewPendingApprovals}
-        className="self-start rounded-md border border-amber-300 bg-white px-3 py-2 text-sm font-medium text-amber-800 hover:bg-amber-100 sm:self-auto"
+        className="self-start rounded-md border border-warning/30 bg-card px-3 py-2 text-sm font-medium text-warning hover:bg-warning/10 sm:self-auto"
       >
         Review pending approvals
       </button>

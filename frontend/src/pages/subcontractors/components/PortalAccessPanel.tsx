@@ -126,8 +126,8 @@ export const PortalAccessPanel = React.memo(function PortalAccessPanel({
           {/* Company Info Summary */}
           <div className="rounded-lg border bg-muted/30 p-4">
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                <Building2 className="h-5 w-5 text-primary" />
+              <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center">
+                <Building2 className="h-5 w-5 text-muted-foreground" />
               </div>
               <div>
                 <p className="font-medium">{subcontractor.companyName}</p>
@@ -147,14 +147,14 @@ export const PortalAccessPanel = React.memo(function PortalAccessPanel({
           </div>
 
           {/* Access Explanation */}
-          <div className="rounded-lg border border-primary/20 bg-primary/5 p-3">
-            <p className="text-sm text-primary">
+          <div className="rounded-lg border bg-muted/50 p-3">
+            <p className="text-sm text-foreground">
               <strong>Portal Access Settings</strong>
               <br />
               Control what project information this subcontractor can view in their portal. They
               will always have access to their dockets and company management.
             </p>
-            <p className="mt-2 text-xs text-primary/80" role="status" aria-live="polite">
+            <p className="mt-2 text-xs text-muted-foreground" role="status" aria-live="polite">
               {saveStatus === 'saving'
                 ? 'Saving portal access changes...'
                 : saveStatus === 'saved'
@@ -165,7 +165,7 @@ export const PortalAccessPanel = React.memo(function PortalAccessPanel({
 
           {saveError && (
             <div
-              className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700"
+              className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
               role="alert"
             >
               <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
@@ -187,23 +187,15 @@ export const PortalAccessPanel = React.memo(function PortalAccessPanel({
                 <div
                   key={module.key}
                   className={`rounded-lg border p-3 transition-colors ${
-                    isEnabled
-                      ? 'border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-900/20'
-                      : 'border-border'
+                    isEnabled ? 'border-foreground/20 bg-muted/50' : 'border-border'
                   }`}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div
-                        className={`p-2 rounded-lg ${
-                          isEnabled ? 'bg-green-100 dark:bg-green-800' : 'bg-muted'
-                        }`}
-                      >
+                      <div className="p-2 rounded-lg bg-muted">
                         <Icon
                           className={`h-4 w-4 ${
-                            isEnabled
-                              ? 'text-green-600 dark:text-green-400'
-                              : 'text-muted-foreground'
+                            isEnabled ? 'text-foreground' : 'text-muted-foreground'
                           }`}
                         />
                       </div>
@@ -220,11 +212,11 @@ export const PortalAccessPanel = React.memo(function PortalAccessPanel({
                       onClick={() => toggleAccessModule(module.key as keyof PortalAccess)}
                       disabled={savingAccess}
                       className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                        isEnabled ? 'bg-green-500' : 'bg-muted-foreground/30'
+                        isEnabled ? 'bg-primary' : 'bg-muted-foreground/30'
                       } ${savingAccess ? 'opacity-50' : ''}`}
                     >
                       <span
-                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        className={`inline-block h-4 w-4 transform rounded-full bg-background transition-transform ${
                           isEnabled ? 'translate-x-6' : 'translate-x-1'
                         }`}
                       />

@@ -110,8 +110,8 @@ export const SubcontractorList = React.memo(function SubcontractorList({
                   }}
                 >
                   <div className="flex items-center gap-4">
-                    <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
-                      <Building2 className="h-6 w-6 text-primary" />
+                    <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center">
+                      <Building2 className="h-6 w-6 text-muted-foreground" />
                     </div>
                     <div>
                       <h3 className="font-semibold">{sub.companyName}</h3>
@@ -162,7 +162,7 @@ export const SubcontractorList = React.memo(function SubcontractorList({
                               e.stopPropagation();
                               onApproveSubcontractor(sub.id);
                             }}
-                            className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700"
+                            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
                           >
                             <CheckCircle className="h-4 w-4" />
                             Approve Company
@@ -173,7 +173,7 @@ export const SubcontractorList = React.memo(function SubcontractorList({
                               e.stopPropagation();
                               onRemoveSubcontractor(sub.id);
                             }}
-                            className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700"
+                            className="flex items-center gap-2 rounded-lg bg-destructive px-4 py-2 text-destructive-foreground hover:bg-destructive/90"
                           >
                             <X className="h-4 w-4" />
                             Remove from Project
@@ -188,7 +188,7 @@ export const SubcontractorList = React.memo(function SubcontractorList({
                               e.stopPropagation();
                               onSuspendSubcontractor(sub.id);
                             }}
-                            className="flex items-center gap-2 rounded-lg bg-amber-500 px-4 py-2 text-white hover:bg-amber-600"
+                            className="flex items-center gap-2 rounded-lg bg-destructive px-4 py-2 text-destructive-foreground hover:bg-destructive/90"
                           >
                             <Clock className="h-4 w-4" />
                             Suspend
@@ -199,7 +199,7 @@ export const SubcontractorList = React.memo(function SubcontractorList({
                               e.stopPropagation();
                               onRemoveSubcontractor(sub.id);
                             }}
-                            className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700"
+                            className="flex items-center gap-2 rounded-lg bg-destructive px-4 py-2 text-destructive-foreground hover:bg-destructive/90"
                           >
                             <X className="h-4 w-4" />
                             Remove from Project
@@ -214,7 +214,7 @@ export const SubcontractorList = React.memo(function SubcontractorList({
                               e.stopPropagation();
                               onReinstateSubcontractor(sub.id);
                             }}
-                            className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700"
+                            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
                           >
                             <CheckCircle className="h-4 w-4" />
                             Reinstate
@@ -225,7 +225,7 @@ export const SubcontractorList = React.memo(function SubcontractorList({
                               e.stopPropagation();
                               onRemoveSubcontractor(sub.id);
                             }}
-                            className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-white hover:bg-red-700"
+                            className="flex items-center gap-2 rounded-lg bg-destructive px-4 py-2 text-destructive-foreground hover:bg-destructive/90"
                           >
                             <X className="h-4 w-4" />
                             Remove from Project
@@ -240,7 +240,7 @@ export const SubcontractorList = React.memo(function SubcontractorList({
                               e.stopPropagation();
                               onReinstateSubcontractor(sub.id);
                             }}
-                            className="flex items-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-white hover:bg-green-700"
+                            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
                           >
                             <CheckCircle className="h-4 w-4" />
                             Reinstate
@@ -251,7 +251,7 @@ export const SubcontractorList = React.memo(function SubcontractorList({
                               e.stopPropagation();
                               onDeleteSubcontractor(sub);
                             }}
-                            className="flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-white hover:bg-red-900"
+                            className="flex items-center gap-2 rounded-lg bg-destructive px-4 py-2 text-destructive-foreground hover:bg-destructive/90"
                           >
                             <Trash2 className="h-4 w-4" />
                             Delete Permanently
@@ -307,7 +307,7 @@ export const SubcontractorList = React.memo(function SubcontractorList({
                                         e.stopPropagation();
                                         onApproveEmployee(sub.id, emp.id);
                                       }}
-                                      className="text-sm text-green-600 hover:text-green-700 font-medium"
+                                      className="text-sm text-primary hover:text-primary/80 font-medium"
                                     >
                                       Approve
                                     </button>
@@ -319,7 +319,7 @@ export const SubcontractorList = React.memo(function SubcontractorList({
                                         e.stopPropagation();
                                         onDeactivateEmployee(sub.id, emp.id);
                                       }}
-                                      className="text-sm text-orange-600 hover:text-orange-700 font-medium"
+                                      className="text-sm text-destructive hover:text-destructive/80 font-medium"
                                     >
                                       Deactivate
                                     </button>
@@ -395,7 +395,7 @@ export const SubcontractorList = React.memo(function SubcontractorList({
                                         e.stopPropagation();
                                         onApprovePlant(sub.id, p.id);
                                       }}
-                                      className="text-sm text-green-600 hover:text-green-700 font-medium"
+                                      className="text-sm text-primary hover:text-primary/80 font-medium"
                                     >
                                       Approve
                                     </button>
@@ -407,7 +407,7 @@ export const SubcontractorList = React.memo(function SubcontractorList({
                                         e.stopPropagation();
                                         onDeactivatePlant(sub.id, p.id);
                                       }}
-                                      className="text-sm text-orange-600 hover:text-orange-700 font-medium"
+                                      className="text-sm text-destructive hover:text-destructive/80 font-medium"
                                     >
                                       Deactivate
                                     </button>
