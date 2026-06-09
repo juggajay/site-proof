@@ -135,7 +135,7 @@ export function CostsPage() {
 
       {loadError && (
         <div
-          className="flex items-start justify-between gap-3 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700"
+          className="flex items-start justify-between gap-3 rounded-md border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive"
           role="alert"
         >
           <div className="flex gap-2">
@@ -395,7 +395,7 @@ export function CostsPage() {
                         <td className="p-4 text-right">{formatCurrency(lot.budgetAmount)}</td>
                         <td className="p-4 text-right">{formatCurrency(lot.actualCost)}</td>
                         <td
-                          className={`p-4 text-right font-semibold ${lot.variance >= 0 ? 'text-green-600' : 'text-red-600'}`}
+                          className={`p-4 text-right font-semibold ${lot.variance >= 0 ? 'text-success' : 'text-destructive'}`}
                         >
                           {lot.variance >= 0 ? '+' : ''}
                           {formatCurrency(lot.variance)}
@@ -445,7 +445,7 @@ export function CostsPage() {
                   </div>
                   <div className="h-3 bg-muted rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-green-500 rounded-full"
+                      className="h-full bg-primary/60 rounded-full"
                       style={{
                         width: `${Math.min(100, ((summary?.totalPlantCost || 0) / (summary?.totalCost || 1)) * 100)}%`,
                       }}
@@ -459,7 +459,7 @@ export function CostsPage() {
                 <div className="flex items-end gap-4 h-32">
                   <div className="flex-1 flex flex-col items-center">
                     <div
-                      className="w-full max-w-24 bg-primary/20 rounded-t"
+                      className="w-full max-w-24 bg-muted-foreground/30 rounded-t"
                       style={{
                         height: `${Math.min(100, ((summary?.budgetTotal || 0) / (summary?.budgetTotal || 1)) * 100)}%`,
                       }}
@@ -471,7 +471,7 @@ export function CostsPage() {
                   </div>
                   <div className="flex-1 flex flex-col items-center">
                     <div
-                      className="w-full max-w-24 bg-green-500 rounded-t"
+                      className="w-full max-w-24 bg-muted-foreground rounded-t"
                       style={{
                         height: `${Math.min(100, ((summary?.totalCost || 0) / (summary?.budgetTotal || 1)) * 100)}%`,
                       }}

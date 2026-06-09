@@ -59,7 +59,7 @@ export function CostSummaryCards({ summary, isMobile }: CostSummaryCardsProps) {
         </div>
         <div className="text-3xl font-bold">{formatCurrency(summary.budgetTotal)}</div>
         <p
-          className={`text-sm mt-1 font-medium ${summary.budgetVariance >= 0 ? 'text-green-600' : 'text-red-600'}`}
+          className={`text-sm mt-1 font-medium ${summary.budgetVariance >= 0 ? 'text-success' : 'text-destructive'}`}
         >
           {summary.budgetVariance >= 0 ? 'Under budget by ' : 'Over budget by '}
           {formatCurrency(Math.abs(summary.budgetVariance))}
@@ -67,11 +67,11 @@ export function CostSummaryCards({ summary, isMobile }: CostSummaryCardsProps) {
         {isMobile && (
           <div className="mt-3 pt-3 border-t grid grid-cols-2 gap-4">
             <div>
-              <span className="text-2xl font-bold text-green-600">{summary.approvedDockets}</span>
+              <span className="text-2xl font-bold text-success">{summary.approvedDockets}</span>
               <p className="text-xs text-muted-foreground">Approved</p>
             </div>
             <div>
-              <span className="text-2xl font-bold text-amber-600">{summary.pendingDockets}</span>
+              <span className="text-2xl font-bold text-warning">{summary.pendingDockets}</span>
               <p className="text-xs text-muted-foreground">Pending</p>
             </div>
           </div>
@@ -119,11 +119,11 @@ export function DocketStatusSummary({ summary }: { summary: CostSummary }) {
       <h3 className="font-semibold mb-4">Docket Status</h3>
       <div className="flex gap-8">
         <div>
-          <span className="text-2xl font-bold text-green-600">{summary.approvedDockets}</span>
+          <span className="text-2xl font-bold text-success">{summary.approvedDockets}</span>
           <p className="text-sm text-muted-foreground">Approved Dockets</p>
         </div>
         <div>
-          <span className="text-2xl font-bold text-amber-600">{summary.pendingDockets}</span>
+          <span className="text-2xl font-bold text-warning">{summary.pendingDockets}</span>
           <p className="text-sm text-muted-foreground">Pending Approval</p>
         </div>
       </div>

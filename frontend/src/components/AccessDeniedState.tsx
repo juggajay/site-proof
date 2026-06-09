@@ -16,7 +16,7 @@ export function AccessDeniedState({
   return (
     <div className="flex min-h-[320px] items-center justify-center p-6">
       <div className="max-w-md rounded-xl border bg-card p-6 text-center shadow-sm">
-        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
           <ShieldAlert className="h-6 w-6" aria-hidden="true" />
         </div>
         <h1 className="text-2xl font-semibold text-foreground">Access Denied</h1>
