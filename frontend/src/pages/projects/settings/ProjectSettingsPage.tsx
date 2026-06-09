@@ -300,7 +300,7 @@ export function ProjectSettingsPage() {
       {loadError && (
         <div
           role="alert"
-          className="mb-6 flex items-center justify-between gap-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700"
+          className="mb-6 flex items-center justify-between gap-3 rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
         >
           <span>{loadError}</span>
           <Button type="button" variant="outline" size="sm" onClick={() => void fetchProject()}>

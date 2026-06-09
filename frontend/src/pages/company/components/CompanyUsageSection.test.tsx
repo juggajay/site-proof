@@ -69,14 +69,14 @@ describe('CompanyUsageSection', () => {
     expect(screen.queryByText(/reached your project limit/)).not.toBeInTheDocument();
   });
 
-  it('colors the project bar green below 80%, amber at 80%, and red at the limit', () => {
+  it('colors the project bar success below 80%, warning at 80%, and destructive at the limit', () => {
     const noUserBar = { ...baseCompany, userLimit: null };
 
     const green = render(
       <CompanyUsageSection company={{ ...noUserBar, projectCount: 2, projectLimit: 10 }} />,
     );
     let bar = getOnlyProgressBar(green.container);
-    expect(bar).toHaveClass('bg-green-500');
+    expect(bar).toHaveClass('bg-success');
     expect(bar).toHaveStyle({ width: '20%' });
     green.unmount();
 
@@ -84,14 +84,14 @@ describe('CompanyUsageSection', () => {
       <CompanyUsageSection company={{ ...noUserBar, projectCount: 8, projectLimit: 10 }} />,
     );
     bar = getOnlyProgressBar(amber.container);
-    expect(bar).toHaveClass('bg-amber-500');
+    expect(bar).toHaveClass('bg-warning');
     amber.unmount();
 
     const red = render(
       <CompanyUsageSection company={{ ...noUserBar, projectCount: 10, projectLimit: 10 }} />,
     );
     bar = getOnlyProgressBar(red.container);
-    expect(bar).toHaveClass('bg-red-500');
+    expect(bar).toHaveClass('bg-destructive');
     expect(
       screen.getByText(
         "You've reached your project limit. Upgrade your plan to create more projects.",

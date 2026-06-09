@@ -154,7 +154,7 @@ export function CompanyInformationCard({
                 variant="ghost"
                 size="sm"
                 onClick={() => onFormDataChange((prev) => ({ ...prev, logoUrl: '' }))}
-                className="text-red-600 hover:text-red-700"
+                className="text-destructive hover:text-destructive"
                 disabled={saving || logoUploading}
               >
                 Remove
@@ -170,7 +170,7 @@ export function CompanyInformationCard({
       {saveError && (
         <div
           role="alert"
-          className="rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-800"
+          className="rounded-md bg-destructive/10 border border-destructive/20 p-3 text-sm text-destructive"
         >
           {saveError}
         </div>
@@ -179,7 +179,7 @@ export function CompanyInformationCard({
       {statusMessage && (
         <div
           role="status"
-          className="rounded-md bg-green-50 border border-green-200 p-3 text-sm text-green-800"
+          className="rounded-md bg-success/10 border border-success/20 p-3 text-sm text-success"
         >
           {statusMessage}
         </div>
@@ -303,18 +303,18 @@ export function TransferOwnershipCard({
   onOpenTransferModal: () => void;
 }) {
   return (
-    <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 p-6 space-y-4">
+    <div className="rounded-lg border border-warning/30 bg-warning/10 p-6 space-y-4">
       <div>
-        <h2 className="text-xl font-semibold flex items-center gap-2 text-amber-800 dark:text-amber-200">
-          <Crown className="h-5 w-5" />
+        <h2 className="text-xl font-semibold flex items-center gap-2 text-foreground">
+          <Crown className="h-5 w-5 text-warning" />
           Transfer Ownership
         </h2>
-        <p className="text-sm text-amber-700 dark:text-amber-300">
+        <p className="text-sm text-muted-foreground">
           Transfer company ownership to another team member.
         </p>
       </div>
 
-      <div className="text-sm text-amber-800 dark:text-amber-200 space-y-2">
+      <div className="text-sm text-foreground space-y-2">
         <p>
           <strong>Warning:</strong> Transferring ownership will:
         </p>
@@ -325,12 +325,7 @@ export function TransferOwnershipCard({
         </ul>
       </div>
 
-      <Button
-        type="button"
-        variant="outline"
-        onClick={onOpenTransferModal}
-        className="border-amber-400 bg-amber-100 text-amber-800 hover:bg-amber-200 dark:bg-amber-900/40 dark:text-amber-200 dark:hover:bg-amber-900/60"
-      >
+      <Button type="button" variant="outline" onClick={onOpenTransferModal}>
         <UserCog className="h-4 w-4" />
         Transfer Ownership
       </Button>

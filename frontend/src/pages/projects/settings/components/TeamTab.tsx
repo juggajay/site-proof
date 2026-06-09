@@ -191,16 +191,8 @@ export function TeamTab({ projectId }: TeamTabProps) {
                     className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
                   >
                     <div className="flex items-center gap-3">
-                      <div
-                        className={`h-10 w-10 rounded-full flex items-center justify-center ${
-                          member.role === 'admin' ? 'bg-primary/20' : 'bg-green-100'
-                        }`}
-                      >
-                        <Users
-                          className={`h-5 w-5 ${
-                            member.role === 'admin' ? 'text-primary' : 'text-green-600'
-                          }`}
-                        />
+                      <div className="h-10 w-10 rounded-full flex items-center justify-center bg-muted">
+                        <Users className="h-5 w-5 text-muted-foreground" />
                       </div>
                       <div>
                         <p className="font-medium">{member.fullName || 'Team Member'}</p>
@@ -209,7 +201,7 @@ export function TeamTab({ projectId }: TeamTabProps) {
                     </div>
                     <div className="flex items-center gap-2">
                       {member.status === 'pending' && (
-                        <span className="px-2 py-1 text-xs rounded-full bg-amber-100 text-amber-700">
+                        <span className="px-2 py-1 text-xs rounded-full bg-warning/10 text-warning">
                           Pending
                         </span>
                       )}
@@ -217,7 +209,7 @@ export function TeamTab({ projectId }: TeamTabProps) {
                         className={`px-2 py-1 text-xs rounded-full ${
                           member.role === 'admin'
                             ? 'bg-primary/10 text-primary'
-                            : 'bg-green-100 text-green-700'
+                            : 'bg-muted text-muted-foreground'
                         }`}
                       >
                         {ROLE_OPTIONS.find((r) => r.value === member.role)?.label || member.role}
@@ -256,10 +248,7 @@ export function TeamTab({ projectId }: TeamTabProps) {
             )}
 
             {inviteSuccess && (
-              <div
-                role="status"
-                className="rounded-lg bg-green-100 p-3 text-sm text-green-700 mb-4"
-              >
+              <div role="status" className="rounded-lg bg-success/10 p-3 text-sm text-success mb-4">
                 {inviteSuccess}
               </div>
             )}

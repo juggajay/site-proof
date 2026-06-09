@@ -109,8 +109,8 @@ export function MfaSecuritySection({
             role={mfaMessage.type === 'success' ? 'status' : 'alert'}
             className={`flex items-center gap-2 text-sm px-4 py-2 rounded-md ${
               mfaMessage.type === 'success'
-                ? 'bg-green-50 text-green-600 dark:bg-green-950 dark:text-green-400'
-                : 'bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-400'
+                ? 'bg-success/10 text-success'
+                : 'bg-destructive/10 text-destructive'
             }`}
           >
             {mfaMessage.type === 'success' ? (
@@ -138,10 +138,7 @@ export function MfaSecuritySection({
               Loading security settings...
             </div>
           ) : mfaLoadError ? (
-            <div
-              role="alert"
-              className="rounded-lg bg-red-50 p-4 text-sm text-red-700 dark:bg-red-950 dark:text-red-300"
-            >
+            <div role="alert" className="rounded-lg bg-destructive/10 p-4 text-sm text-destructive">
               <p>{mfaLoadError}</p>
               <Button
                 type="button"
@@ -155,18 +152,14 @@ export function MfaSecuritySection({
             </div>
           ) : mfaEnabled ? (
             <div className="space-y-4">
-              <div className="flex items-center justify-between p-4 bg-green-50 dark:bg-green-950 rounded-lg">
+              <div className="flex items-center justify-between p-4 bg-success/10 rounded-lg">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-full bg-green-100 dark:bg-green-900">
-                    <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
+                  <div className="p-2 rounded-full bg-success/15">
+                    <CheckCircle2 className="h-5 w-5 text-success" />
                   </div>
                   <div>
-                    <p className="font-medium text-green-700 dark:text-green-300">
-                      Two-Factor Authentication Enabled
-                    </p>
-                    <p className="text-sm text-green-600 dark:text-green-400">
-                      Your account is protected with 2FA
-                    </p>
+                    <p className="font-medium text-success">Two-Factor Authentication Enabled</p>
+                    <p className="text-sm text-success">Your account is protected with 2FA</p>
                   </div>
                 </div>
               </div>
@@ -174,7 +167,7 @@ export function MfaSecuritySection({
               <Button
                 variant="outline"
                 onClick={onDisableMfaOpen}
-                className="border-red-300 text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/20"
+                className="border-destructive/40 text-destructive hover:bg-destructive/10"
                 disabled={isMfaLoading}
               >
                 <Lock className="h-4 w-4" />
@@ -198,8 +191,8 @@ export function MfaSecuritySection({
         <Modal onClose={onMfaSetupClose}>
           <ModalHeader>
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-primary/10">
-                <Smartphone className="h-6 w-6 text-primary" />
+              <div className="p-2 rounded-full bg-muted">
+                <Smartphone className="h-6 w-6 text-muted-foreground" />
               </div>
               Set Up Two-Factor Authentication
             </div>
@@ -251,7 +244,7 @@ export function MfaSecuritySection({
                     aria-label="Copy setup secret"
                   >
                     {copiedSecret ? (
-                      <Check className="h-4 w-4 text-green-500" />
+                      <Check className="h-4 w-4 text-success" />
                     ) : (
                       <Copy className="h-4 w-4" />
                     )}
@@ -281,7 +274,7 @@ export function MfaSecuritySection({
               {mfaMessage?.type === 'error' && (
                 <div
                   role="alert"
-                  className="text-sm text-red-600 dark:text-red-400 p-2 bg-red-50 dark:bg-red-900/20 rounded"
+                  className="text-sm text-destructive p-2 bg-destructive/10 rounded"
                 >
                   {mfaMessage.text}
                 </div>
@@ -310,8 +303,8 @@ export function MfaSecuritySection({
         <Modal alert onClose={onBackupCodesClose}>
           <AlertModalHeader>
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-green-100 dark:bg-green-900">
-                <CheckCircle2 className="h-6 w-6 text-green-600" />
+              <div className="p-2 rounded-full bg-success/15">
+                <CheckCircle2 className="h-6 w-6 text-success" />
               </div>
               2FA Enabled Successfully!
             </div>
@@ -321,11 +314,11 @@ export function MfaSecuritySection({
           </AlertModalDescription>
           <ModalBody>
             <div className="space-y-4">
-              <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
-                <p className="text-sm text-amber-800 dark:text-amber-200 font-medium mb-2">
+              <div className="p-4 bg-warning/10 border border-warning/30 rounded-lg">
+                <p className="text-sm text-warning font-medium mb-2">
                   Important: Save your backup codes!
                 </p>
-                <p className="text-sm text-amber-700 dark:text-amber-300">
+                <p className="text-sm text-warning">
                   If you lose access to your authenticator app, you can use these codes to regain
                   access to your account. Each code can only be used once.
                 </p>
@@ -357,8 +350,8 @@ export function MfaSecuritySection({
         <Modal alert onClose={onDisableMfaClose}>
           <AlertModalHeader>
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-red-100 dark:bg-red-900/30">
-                <AlertTriangle className="h-6 w-6 text-red-600" />
+              <div className="p-2 rounded-full bg-destructive/15">
+                <AlertTriangle className="h-6 w-6 text-destructive" />
               </div>
               Disable Two-Factor Authentication
             </div>
@@ -368,8 +361,8 @@ export function MfaSecuritySection({
           </AlertModalDescription>
           <ModalBody>
             <div className="space-y-4">
-              <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                <p className="text-sm text-red-800 dark:text-red-200">
+              <div className="p-4 bg-destructive/10 border border-destructive/30 rounded-lg">
+                <p className="text-sm text-destructive">
                   <strong>Warning:</strong> Disabling 2FA will make your account less secure. Are
                   you sure you want to continue?
                 </p>
@@ -392,7 +385,7 @@ export function MfaSecuritySection({
               {mfaMessage?.type === 'error' && (
                 <div
                   role="alert"
-                  className="text-sm text-red-600 dark:text-red-400 p-2 bg-red-50 dark:bg-red-900/20 rounded"
+                  className="text-sm text-destructive p-2 bg-destructive/10 rounded"
                 >
                   {mfaMessage.text}
                 </div>

@@ -320,9 +320,9 @@ export function CompanySettingsPage() {
     return (
       <div className="space-y-6">
         <h1 className="text-3xl font-bold">Company Settings</h1>
-        <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4">
+        <div role="alert" className="rounded-lg border border-destructive/20 bg-destructive/10 p-4">
           <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2 text-red-800">
+            <div className="flex items-center gap-2 text-destructive">
               <AlertTriangle className="h-5 w-5" />
               <span>{error}</span>
             </div>

@@ -75,7 +75,7 @@ export function ProfileOverview({
             <div className="flex-1 space-y-1">
               <h2 className="text-xl font-semibold">{getDisplayName(user)}</h2>
               <p className="text-muted-foreground">{user?.email}</p>
-              <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-primary/10 px-3 py-1 text-sm text-primary">
+              <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-sm text-foreground">
                 <Shield className="h-3 w-3" />
                 {displayRole}
               </div>

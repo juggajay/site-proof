@@ -246,7 +246,7 @@ export function ProjectAreasPage() {
 
       {loadError && (
         <div
-          className="mb-6 flex items-center justify-between gap-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700"
+          className="mb-6 flex items-center justify-between gap-3 rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
           role="alert"
         >
           <span>{loadError}</span>
@@ -319,7 +319,7 @@ export function ProjectAreasPage() {
                         size="icon"
                         onClick={() => setAreaPendingDelete(area)}
                         disabled={deletingId === area.id}
-                        className="text-red-600 hover:bg-red-50"
+                        className="text-destructive hover:bg-destructive/10"
                         aria-label={`Delete ${area.name}`}
                         title="Delete"
                       >
