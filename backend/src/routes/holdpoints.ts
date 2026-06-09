@@ -335,16 +335,42 @@ holdpointsRouter.post(
       });
 
       if (itpInstance) {
-        await tx.iTPCompletion.updateMany({
+        // I1-core RECONCILE: releasing the hold point satisfies the ITP item.
+        // Set status='completed' + completedAt (releasedAt) alongside the
+        // verification fields, and CREATE the completion row if the hold point
+        // was never ticked. This is a public release (no authenticated user), so
+        // completedById / verifiedById stay null — attribution lives on the
+        // HoldPoint (releasedByName/Org/Method) and is surfaced via the GET
+        // serializer. ITPCompletion has no unique key on
+        // [itpInstanceId, checklistItemId] (only @@index), so this is a
+        // find-then-update-or-create inside the existing transaction.
+        const completionData = {
+          status: 'completed',
+          completedAt: releasedAt,
+          verificationStatus: 'verified',
+          verifiedAt: releasedAt,
+        };
+        const existingCompletion = await tx.iTPCompletion.findFirst({
           where: {
             itpInstanceId: itpInstance.id,
             checklistItemId: updatedHoldPoint.itpChecklistItemId,
           },
-          data: {
-            verificationStatus: 'verified',
-            verifiedAt: releasedAt,
-          },
+          select: { id: true },
         });
+        if (existingCompletion) {
+          await tx.iTPCompletion.update({
+            where: { id: existingCompletion.id },
+            data: completionData,
+          });
+        } else {
+          await tx.iTPCompletion.create({
+            data: {
+              itpInstanceId: itpInstance.id,
+              checklistItemId: updatedHoldPoint.itpChecklistItemId,
+              ...completionData,
+            },
+          });
+        }
       }
 
       return updatedHoldPoint;

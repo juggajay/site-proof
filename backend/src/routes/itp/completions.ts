@@ -189,11 +189,48 @@ completionsRouter.post(
         id: checklistItemId,
         templateId: itpInstanceForAccess.templateId,
       },
-      select: { id: true },
+      select: { id: true, pointType: true, responsibleParty: true },
     });
 
     if (!checklistItem) {
       throw AppError.badRequest('Checklist item does not belong to this ITP instance');
+    }
+
+    // I1-core GUARD: a hold-point (or superintendent sign-off) item must be
+    // satisfied through the hold-point release flow, which records who released
+    // it, when, and how. Block the bare "tick it complete" path for these items
+    // UNLESS the corresponding HoldPoint has already been released (in which case
+    // the attribution is on the HoldPoint and the completion just mirrors it).
+    //
+    // Witness items are intentionally NOT blocked (witness points are not hard
+    // blockers), and N/A / Failed flows stay open so a contractor can still mark
+    // a hold point N/A or raise an NCR. The guard fires only when FINISHING the
+    // item as 'completed'.
+    const isHoldPointSignoffItem =
+      checklistItem.pointType === 'hold_point' ||
+      (checklistItem.responsibleParty === 'superintendent' &&
+        checklistItem.pointType !== 'witness');
+
+    if (newStatus === 'completed' && isHoldPointSignoffItem) {
+      let holdPointReleased = false;
+      if (itpInstanceForAccess.lotId) {
+        const releasedHoldPoint = await prisma.holdPoint.findFirst({
+          where: {
+            itpChecklistItemId: checklistItemId,
+            lotId: itpInstanceForAccess.lotId,
+            status: 'released',
+          },
+          select: { id: true },
+        });
+        holdPointReleased = !!releasedHoldPoint;
+      }
+
+      if (!holdPointReleased) {
+        throw AppError.badRequest(
+          'This is a hold point. It must be released through the hold-point release flow ' +
+            '(which records who released it, when, and how) before the ITP item can be completed.',
+        );
+      }
     }
 
     // Feature #271: Check if user is a subcontractor

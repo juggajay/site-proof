@@ -302,6 +302,63 @@ describe('Hold Points API', () => {
       expect(completion.verificationStatus).toBe('verified');
       expect(completion.verifiedById).toBe(userId);
       expect(completion.verifiedAt).toBeInstanceOf(Date);
+      // I1-core: releasing the hold point also completes the ITP item.
+      expect(completion.status).toBe('completed');
+      expect(completion.completedAt).toBeInstanceOf(Date);
+      expect(completion.completedById).toBe(userId);
+    });
+
+    it('creates a completed + verified completion when releasing a never-ticked hold point', async () => {
+      // Fresh checklist item + hold point with NO pre-existing ITPCompletion.
+      const itpInstance = await prisma.iTPInstance.findUniqueOrThrow({
+        where: { lotId },
+        select: { id: true, templateId: true },
+      });
+      const freshItem = await prisma.iTPChecklistItem.create({
+        data: {
+          templateId: itpInstance.templateId,
+          sequenceNumber: 9001,
+          description: 'Never-ticked hold point',
+          pointType: 'hold_point',
+          responsibleParty: 'superintendent',
+        },
+      });
+      const hp = await prisma.holdPoint.create({
+        data: {
+          lotId,
+          itpChecklistItemId: freshItem.id,
+          pointType: 'hold_point',
+          status: 'pending',
+        },
+      });
+
+      const before = await prisma.iTPCompletion.findFirst({
+        where: { itpInstanceId: itpInstance.id, checklistItemId: freshItem.id },
+      });
+      expect(before).toBeNull();
+
+      const res = await request(app)
+        .post(`/api/holdpoints/${hp.id}/release`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          releasedByName: 'Superintendent Releaser',
+          releaseDate: '2026-01-22',
+          releaseTime: '11:00',
+          releaseNotes: 'Released without prior tick',
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.holdPoint.status).toBe('released');
+
+      const created = await prisma.iTPCompletion.findFirstOrThrow({
+        where: { itpInstanceId: itpInstance.id, checklistItemId: freshItem.id },
+      });
+      expect(created.status).toBe('completed');
+      expect(created.completedAt).toBeInstanceOf(Date);
+      expect(created.completedById).toBe(userId);
+      expect(created.verificationStatus).toBe('verified');
+      expect(created.verifiedById).toBe(userId);
+      expect(created.verifiedAt).toBeInstanceOf(Date);
     });
 
     it('should accept email confirmation release with no signature data', async () => {
@@ -1445,6 +1502,13 @@ describe('Hold Point Token Release', () => {
     });
     expect(completion.verificationStatus).toBe('verified');
     expect(completion.verifiedAt).toBeInstanceOf(Date);
+    // I1-core: the tokenised release also completes the ITP item. There is no
+    // authenticated user on the public path, so completedById / verifiedById
+    // stay null — attribution lives on the HoldPoint.
+    expect(completion.status).toBe('completed');
+    expect(completion.completedAt).toBeInstanceOf(Date);
+    expect(completion.completedById).toBeNull();
+    expect(completion.verifiedById).toBeNull();
   });
 
   it('should reject reuse of a public release token', async () => {

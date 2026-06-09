@@ -2549,6 +2549,8 @@ describe('ITP Completion Decision Logic (characterization)', () => {
   let instanceId: string;
   let contractorItemId: string;
   let subcontractorItemId: string;
+  let holdPointItemId: string;
+  let witnessItemId: string;
 
   beforeAll(async () => {
     const company = await prisma.company.create({
@@ -2601,6 +2603,18 @@ describe('ITP Completion Decision Logic (characterization)', () => {
               responsibleParty: 'subcontractor',
               sequenceNumber: 2,
             },
+            {
+              description: 'Hold point decision item',
+              pointType: 'hold_point',
+              responsibleParty: 'superintendent',
+              sequenceNumber: 3,
+            },
+            {
+              description: 'Witness decision item',
+              pointType: 'witness',
+              responsibleParty: 'superintendent',
+              sequenceNumber: 4,
+            },
           ],
         },
       },
@@ -2609,6 +2623,8 @@ describe('ITP Completion Decision Logic (characterization)', () => {
     templateId = template.id;
     contractorItemId = template.checklistItems[0].id;
     subcontractorItemId = template.checklistItems[1].id;
+    holdPointItemId = template.checklistItems[2].id;
+    witnessItemId = template.checklistItems[3].id;
 
     const lot = await prisma.lot.create({
       data: {
@@ -2630,6 +2646,7 @@ describe('ITP Completion Decision Logic (characterization)', () => {
   afterAll(async () => {
     await prisma.nCRLot.deleteMany({ where: { lot: { projectId } } });
     await prisma.nCR.deleteMany({ where: { projectId } });
+    await prisma.holdPoint.deleteMany({ where: { lotId } });
     await prisma.iTPCompletion.deleteMany({ where: { itpInstance: { lotId } } });
     await prisma.iTPInstance.deleteMany({ where: { lotId } });
     await prisma.lot.deleteMany({ where: { projectId } });
@@ -2647,6 +2664,113 @@ describe('ITP Completion Decision Logic (characterization)', () => {
     });
     await prisma.lot.update({ where: { id: lotId }, data: { status: 'not_started' } });
   }
+
+  // I1-core: a hold-point (superintendent sign-off) item must go through the
+  // hold-point release flow before it can be completed via the bare path.
+  it('rejects completing a hold-point item via the bare path and persists nothing', async () => {
+    await prisma.holdPoint.deleteMany({ where: { lotId, itpChecklistItemId: holdPointItemId } });
+    await prisma.iTPCompletion.deleteMany({
+      where: { itpInstanceId: instanceId, checklistItemId: holdPointItemId },
+    });
+
+    const res = await request(app)
+      .post('/api/itp/completions')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        itpInstanceId: instanceId,
+        checklistItemId: holdPointItemId,
+        status: 'completed',
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toContain('hold-point release flow');
+
+    const completion = await prisma.iTPCompletion.findFirst({
+      where: { itpInstanceId: instanceId, checklistItemId: holdPointItemId },
+    });
+    expect(completion).toBeNull();
+  });
+
+  it('allows completing a hold-point item once its hold point has been released', async () => {
+    await prisma.iTPCompletion.deleteMany({
+      where: { itpInstanceId: instanceId, checklistItemId: holdPointItemId },
+    });
+    await prisma.holdPoint.deleteMany({ where: { lotId, itpChecklistItemId: holdPointItemId } });
+    await prisma.holdPoint.create({
+      data: {
+        lotId,
+        itpChecklistItemId: holdPointItemId,
+        pointType: 'hold_point',
+        status: 'released',
+        releasedByName: 'Released Superintendent',
+        releasedAt: new Date(),
+      },
+    });
+
+    const res = await request(app)
+      .post('/api/itp/completions')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        itpInstanceId: instanceId,
+        checklistItemId: holdPointItemId,
+        status: 'completed',
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.completion.status).toBe('completed');
+
+    await prisma.holdPoint.deleteMany({ where: { lotId, itpChecklistItemId: holdPointItemId } });
+    await prisma.iTPCompletion.deleteMany({
+      where: { itpInstanceId: instanceId, checklistItemId: holdPointItemId },
+    });
+  });
+
+  it('does not block N/A on a hold-point item (only completion is gated)', async () => {
+    await prisma.iTPCompletion.deleteMany({
+      where: { itpInstanceId: instanceId, checklistItemId: holdPointItemId },
+    });
+    await prisma.holdPoint.deleteMany({ where: { lotId, itpChecklistItemId: holdPointItemId } });
+
+    const res = await request(app)
+      .post('/api/itp/completions')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        itpInstanceId: instanceId,
+        checklistItemId: holdPointItemId,
+        status: 'not_applicable',
+        notes: 'Not applicable for this lot',
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.completion.status).toBe('not_applicable');
+
+    await prisma.iTPCompletion.deleteMany({
+      where: { itpInstanceId: instanceId, checklistItemId: holdPointItemId },
+    });
+  });
+
+  it('still completes a standard/witness item via the bare path (regression)', async () => {
+    await prisma.iTPCompletion.deleteMany({
+      where: { itpInstanceId: instanceId, checklistItemId: witnessItemId },
+    });
+
+    const res = await request(app)
+      .post('/api/itp/completions')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        itpInstanceId: instanceId,
+        checklistItemId: witnessItemId,
+        status: 'completed',
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.completion.status).toBe('completed');
+    expect(res.body.completion.completedById).toBe(userId);
+
+    await prisma.iTPCompletion.deleteMany({
+      where: { itpInstanceId: instanceId, checklistItemId: witnessItemId },
+    });
+  });
 
   it('requires a reason when marking an item N/A and persists nothing', async () => {
     await resetContractorCompletion();

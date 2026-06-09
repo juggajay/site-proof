@@ -379,6 +379,23 @@ instancesRouter.get(
       failedChecklistItemIds,
     );
 
+    // I1-core: surface hold-point release attribution on each ITP item. One
+    // scoped, batched query for the released hold points on this lot, keyed by
+    // itpChecklistItemId (mirrors the linked-NCR batch lookup style above).
+    const releasedHoldPoints = await prisma.holdPoint.findMany({
+      where: { lotId, status: 'released' },
+      select: {
+        itpChecklistItemId: true,
+        releasedByName: true,
+        releasedByOrg: true,
+        releaseMethod: true,
+        releasedAt: true,
+      },
+    });
+    const holdPointReleaseByItem = new Map(
+      releasedHoldPoints.map((hp) => [hp.itpChecklistItemId, hp]),
+    );
+
     // Transform to frontend-friendly format
     const transformedInstance = {
       ...instance,
@@ -392,6 +409,17 @@ instancesRouter.get(
         isVerified: c.verificationStatus === 'verified',
         isPendingVerification: c.verificationStatus === 'pending_verification',
         linkedNcr: c.status === 'failed' ? (linkedNcrsByItem.get(c.checklistItemId) ?? null) : null,
+        holdPointRelease: holdPointReleaseByItem.has(c.checklistItemId)
+          ? (() => {
+              const hp = holdPointReleaseByItem.get(c.checklistItemId)!;
+              return {
+                releasedByName: hp.releasedByName,
+                releasedByOrg: hp.releasedByOrg,
+                releaseMethod: hp.releaseMethod,
+                releasedAt: hp.releasedAt,
+              };
+            })()
+          : null,
         attachments:
           (c as unknown as CompletionWithAttachments).attachments?.map((a) => ({
             id: a.id,
