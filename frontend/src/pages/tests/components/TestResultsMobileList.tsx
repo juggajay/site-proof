@@ -8,6 +8,7 @@ import {
   testStatusLabels,
   nextStatusMap,
   nextStatusButtonLabels,
+  isEnterResultsStep,
   isTestOverdue,
   getDaysSince,
   isAiExtractionReviewDraft,
@@ -21,6 +22,7 @@ interface TestResultsMobileListProps {
   hasActiveFilters: boolean;
   updatingStatusId: string | null;
   onUpdateStatus: (testId: string, newStatus: string) => void;
+  onOpenEnterResults: (test: TestResult) => void;
   onRejectTest: (testId: string) => void;
   onAttachCertificate: (testId: string, file: File) => Promise<void>;
   onClearFilters: () => void;
@@ -38,6 +40,7 @@ export function TestResultsMobileList({
   hasActiveFilters,
   updatingStatusId,
   onUpdateStatus,
+  onOpenEnterResults,
   onRejectTest,
   onAttachCertificate,
   onClearFilters,
@@ -87,6 +90,7 @@ export function TestResultsMobileList({
           projectId={projectId}
           updatingStatusId={updatingStatusId}
           onUpdateStatus={onUpdateStatus}
+          onOpenEnterResults={onOpenEnterResults}
           onRejectTest={onRejectTest}
           onAttachCertificate={onAttachCertificate}
         />
@@ -100,6 +104,7 @@ interface TestResultMobileCardProps {
   projectId: string;
   updatingStatusId: string | null;
   onUpdateStatus: (testId: string, newStatus: string) => void;
+  onOpenEnterResults: (test: TestResult) => void;
   onRejectTest: (testId: string) => void;
   onAttachCertificate: (testId: string, file: File) => Promise<void>;
 }
@@ -122,6 +127,7 @@ function TestResultMobileCard({
   projectId,
   updatingStatusId,
   onUpdateStatus,
+  onOpenEnterResults,
   onRejectTest,
   onAttachCertificate,
 }: TestResultMobileCardProps) {
@@ -208,16 +214,22 @@ function TestResultMobileCard({
       ]}
       actions={
         <div className="flex w-full flex-col gap-2">
-          {nextStatus && (
-            <Button
-              size="lg"
-              className="w-full"
-              disabled={updatingStatusId === test.id}
-              onClick={() => onUpdateStatus(test.id, nextStatus)}
-            >
-              {updatingStatusId === test.id ? 'Updating...' : nextStatusButtonLabels[test.status]}
-            </Button>
-          )}
+          {nextStatus &&
+            (isEnterResultsStep(test.status) ? (
+              // Ticket T2: record the result before entering.
+              <Button size="lg" className="w-full" onClick={() => onOpenEnterResults(test)}>
+                {nextStatusButtonLabels[test.status]}
+              </Button>
+            ) : (
+              <Button
+                size="lg"
+                className="w-full"
+                disabled={updatingStatusId === test.id}
+                onClick={() => onUpdateStatus(test.id, nextStatus)}
+              >
+                {updatingStatusId === test.id ? 'Updating...' : nextStatusButtonLabels[test.status]}
+              </Button>
+            ))}
 
           {/* Feature B2: attach/replace a certificate so a manual test can
               reach 'verified'. */}

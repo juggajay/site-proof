@@ -61,7 +61,14 @@ describe('buildTestResultWorkflowResponse', () => {
             completedBy: null,
           },
         ],
-        nextTransitions: [{ status: 'at_lab', label: 'At Lab', canPerform: true }],
+        // Ticket T2: the intermediate lab states are optional, so 'requested'
+        // can advance to any of at_lab / results_received / entered (the
+        // result-required gate lives in the route layer, not this presenter).
+        nextTransitions: [
+          { status: 'at_lab', label: 'At Lab', canPerform: true },
+          { status: 'results_received', label: 'Results Received', canPerform: true },
+          { status: 'entered', label: 'Entered', canPerform: true },
+        ],
         canAdvance: true,
         isComplete: false,
       },

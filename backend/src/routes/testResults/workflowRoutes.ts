@@ -13,7 +13,13 @@ import {
   requireTestProjectRole,
   requireTestResultReadAccess,
 } from './accessControl.js';
-import { STATUS_LABELS, VALID_STATUS_TRANSITIONS } from './statusWorkflow.js';
+import {
+  hasRecordedResult,
+  RESULT_REQUIRED_CODE,
+  RESULT_REQUIRED_MESSAGE,
+  STATUS_LABELS,
+  VALID_STATUS_TRANSITIONS,
+} from './statusWorkflow.js';
 import {
   buildTestResultAlreadyVerifiedResponse,
   buildTestResultRejectedResponse,
@@ -35,6 +41,16 @@ import {
 } from './validation.js';
 
 export const workflowRoutes = Router();
+
+// Ticket T2: a test cannot become 'entered' or 'verified' until it carries a
+// real result value AND a definitive pass/fail outcome. Throws the same
+// AppError style as the B2 CERTIFICATE_REQUIRED gate so the global error handler
+// returns a 400 with a clear, code-tagged message.
+function assertResultRecorded(testResult: { resultValue: unknown; passFail: unknown }) {
+  if (!hasRecordedResult(testResult)) {
+    throw new AppError(400, RESULT_REQUIRED_MESSAGE, RESULT_REQUIRED_CODE);
+  }
+}
 
 // POST /api/test-results/:id/reject - Reject a test result verification (Feature #204)
 workflowRoutes.post(
@@ -180,6 +196,10 @@ workflowRoutes.post(
       );
     }
 
+    // Ticket T2: never verify a blank/pending result. The full row is loaded
+    // above (no `select`), so resultValue/passFail are available here.
+    assertResultRecorded(testResult);
+
     const updatedTestResult = await prisma.testResult.update({
       where: { id },
       data: {
@@ -275,6 +295,13 @@ workflowRoutes.post(
         'A test certificate must be uploaded before the test result can be verified.',
         'CERTIFICATE_REQUIRED',
       );
+    }
+
+    // Ticket T2: 'entered' must mean "has a real result", and 'verified' inherits
+    // that requirement. Block the old no-data "Enter Results" click here. The
+    // full row is loaded above, so resultValue/passFail are available.
+    if (status === 'entered' || status === 'verified') {
+      assertResultRecorded(testResult);
     }
 
     // Build update data based on the new status

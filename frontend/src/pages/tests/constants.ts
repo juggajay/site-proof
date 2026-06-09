@@ -25,19 +25,44 @@ export const testStatusLabels: Record<string, string> = {
   verified: 'Verified',
 };
 
-// Feature #196: Valid status transitions
+// Feature #196 / Ticket T2: Valid status transitions.
+//
+// The intermediate lab-handling states (At Lab / Results Received) are now
+// OPTIONAL. The only mandatory clicks from "have a cert + recorded result" to
+// "verified" are: Enter Results (-> 'entered') then Verify (-> 'verified').
+//
+// `nextStatusMap` still drives the single per-row "advance" button. For any
+// pre-'entered' state the next step is recording the result, so they all map to
+// 'entered' (the Enter Results action). 'entered' advances to 'verified'.
 export const nextStatusMap: Record<string, string> = {
-  requested: 'at_lab',
-  at_lab: 'results_received',
+  requested: 'entered',
+  at_lab: 'entered',
   results_received: 'entered',
   entered: 'verified',
 };
 
 export const nextStatusButtonLabels: Record<string, string> = {
-  requested: 'Mark as At Lab',
-  at_lab: 'Mark Results Received',
+  requested: 'Enter Results',
+  at_lab: 'Enter Results',
   results_received: 'Enter Results',
   entered: 'Verify',
+};
+
+// Ticket T2: statuses whose "advance" action records the result (opens the Enter
+// Results modal) rather than firing a no-data status POST. Reaching 'entered'
+// always requires a real result value + pass/fail, so every pre-'entered' state
+// routes through the result-entry form.
+export const ENTER_RESULTS_STATUSES = new Set(['requested', 'at_lab', 'results_received']);
+
+export const isEnterResultsStep = (status: string): boolean => ENTER_RESULTS_STATUSES.has(status);
+
+// Ticket T2: client-side mirror of the backend RESULT_REQUIRED gate so the Enter
+// Results form blocks submit (and the toast matches) before the request is sent.
+export const hasRecordedResult = (test: {
+  resultValue: number | null;
+  passFail: string;
+}): boolean => {
+  return test.resultValue != null && (test.passFail === 'pass' || test.passFail === 'fail');
 };
 
 // Feature #197: Check if test is overdue (14+ days since creation and not verified)

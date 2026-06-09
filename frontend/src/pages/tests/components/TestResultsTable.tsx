@@ -8,6 +8,7 @@ import {
   testStatusLabels,
   nextStatusMap,
   nextStatusButtonLabels,
+  isEnterResultsStep,
   isTestOverdue,
   getDaysSince,
   isAiExtractionReviewDraft,
@@ -21,6 +22,10 @@ interface TestResultsTableProps {
   hasActiveFilters: boolean;
   updatingStatusId: string | null;
   onUpdateStatus: (testId: string, newStatus: string) => void;
+  // Ticket T2: open the Enter Results form (records result + pass/fail, then
+  // advances to 'entered'). Used for any pre-'entered' state instead of a
+  // no-data status POST.
+  onOpenEnterResults: (test: TestResult) => void;
   onRejectTest: (testId: string) => void;
   onAttachCertificate: (testId: string, file: File) => Promise<void>;
   onClearFilters: () => void;
@@ -33,6 +38,7 @@ export const TestResultsTable = React.memo(function TestResultsTable({
   hasActiveFilters,
   updatingStatusId,
   onUpdateStatus,
+  onOpenEnterResults,
   onRejectTest,
   onAttachCertificate,
   onClearFilters,
@@ -201,17 +207,28 @@ export const TestResultsTable = React.memo(function TestResultsTable({
                             >
                               {'\uD83D\uDDA8\uFE0F'}
                             </button>
-                            {nextStatusMap[test.status] && (
-                              <button
-                                onClick={() => onUpdateStatus(test.id, nextStatusMap[test.status])}
-                                disabled={updatingStatusId === test.id}
-                                className="px-3 py-1 text-xs rounded bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-                              >
-                                {updatingStatusId === test.id
-                                  ? 'Updating...'
-                                  : nextStatusButtonLabels[test.status]}
-                              </button>
-                            )}
+                            {nextStatusMap[test.status] &&
+                              (isEnterResultsStep(test.status) ? (
+                                // Ticket T2: record the result before entering.
+                                <button
+                                  onClick={() => onOpenEnterResults(test)}
+                                  className="px-3 py-1 text-xs rounded bg-primary text-primary-foreground hover:bg-primary/90"
+                                >
+                                  {nextStatusButtonLabels[test.status]}
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() =>
+                                    onUpdateStatus(test.id, nextStatusMap[test.status])
+                                  }
+                                  disabled={updatingStatusId === test.id}
+                                  className="px-3 py-1 text-xs rounded bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+                                >
+                                  {updatingStatusId === test.id
+                                    ? 'Updating...'
+                                    : nextStatusButtonLabels[test.status]}
+                                </button>
+                              ))}
                             {/* Feature B2: attach/replace a certificate so a
                                 manual test can reach 'verified'. */}
                             {test.status !== 'verified' && (
