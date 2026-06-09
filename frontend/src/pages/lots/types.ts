@@ -123,6 +123,14 @@ export interface ITPCompletion {
   witnessPresent?: boolean | null;
   witnessName?: string | null;
   witnessCompany?: string | null;
+  // I1-core: hold-point release attribution (who/org/method/when). Present only
+  // when the corresponding hold point has been released; null otherwise.
+  holdPointRelease?: {
+    releasedByName: string | null;
+    releasedByOrg: string | null;
+    releaseMethod: string | null;
+    releasedAt: string | null;
+  } | null;
 }
 
 export interface ITPInstance {

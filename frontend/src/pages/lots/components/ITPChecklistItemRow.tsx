@@ -1,6 +1,17 @@
 import { SecureDocumentImage } from '@/components/documents/SecureDocumentImage';
 import type { ITPInstance, ITPAttachment, ITPCompletion } from '../types';
 
+// I1-core: human-readable hold-point release method for the attribution line.
+const RELEASE_METHOD_LABELS: Record<string, string> = {
+  secure_link: 'secure link',
+  email: 'email',
+  in_person: 'in person',
+  phone: 'phone',
+};
+function formatReleaseMethod(method: string): string {
+  return RELEASE_METHOD_LABELS[method] ?? method.replace(/_/g, ' ');
+}
+
 // Props for the ITP checklist item row
 export interface ITPChecklistItemRowProps {
   item: ITPInstance['template']['checklistItems'][0];
@@ -37,6 +48,12 @@ export function ITPChecklistItemRow({
   const isNotApplicable = completion?.isNotApplicable || false;
   const isFailed = completion?.isFailed || false;
   const notes = completion?.notes || '';
+  // I1-core: a hold-point item cannot be ticked complete via the bare checkbox —
+  // it must go through the hold-point release flow (which records attribution).
+  // Once released, the completion mirrors that and the row reads as released.
+  const isHoldPoint = item.pointType === 'hold_point';
+  const isReleased = !!completion?.holdPointRelease?.releasedByName;
+  const isHoldPointLocked = isHoldPoint && !isReleased;
 
   return (
     <div
@@ -45,26 +62,36 @@ export function ITPChecklistItemRow({
       <div className="flex items-start gap-3">
         <button
           onClick={() =>
-            !isNotApplicable && !isFailed && onToggleCompletion(item.id, isCompleted, notes)
+            !isNotApplicable &&
+            !isFailed &&
+            !isHoldPointLocked &&
+            onToggleCompletion(item.id, isCompleted, notes)
           }
-          disabled={updatingCompletion === item.id || isNotApplicable || isFailed}
+          disabled={
+            updatingCompletion === item.id || isNotApplicable || isFailed || isHoldPointLocked
+          }
+          title={isHoldPointLocked ? 'Release this hold point to complete it' : undefined}
           aria-label={
             isFailed
               ? 'Failed'
               : isNotApplicable
                 ? 'Not Applicable'
-                : isCompleted
-                  ? `Mark "${item.description}" as incomplete`
-                  : `Mark "${item.description}" as complete`
+                : isHoldPointLocked
+                  ? `Release the hold point "${item.description}" to complete it`
+                  : isCompleted
+                    ? `Mark "${item.description}" as incomplete`
+                    : `Mark "${item.description}" as complete`
           }
           className={`mt-0.5 flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
             isFailed
               ? 'bg-destructive border-destructive text-destructive-foreground cursor-not-allowed'
               : isNotApplicable
                 ? 'bg-muted-foreground border-muted-foreground text-background cursor-not-allowed'
-                : isCompleted
-                  ? 'bg-primary border-primary text-primary-foreground'
-                  : 'border-border hover:border-primary'
+                : isHoldPointLocked
+                  ? 'border-border bg-muted/50 cursor-not-allowed'
+                  : isCompleted
+                    ? 'bg-primary border-primary text-primary-foreground'
+                    : 'border-border hover:border-primary'
           } ${updatingCompletion === item.id ? 'opacity-50' : ''}`}
         >
           {isFailed ? (
@@ -246,13 +273,23 @@ export function ITPChecklistItemRow({
               className="w-full px-2 py-1 text-sm border border-border rounded bg-background text-foreground"
             />
           </div>
-          {completion?.completedBy && (
+          {item.pointType === 'hold_point' && completion?.holdPointRelease?.releasedByName ? (
+            <p className="text-xs text-muted-foreground mt-1">
+              Released by {completion.holdPointRelease.releasedByName}
+              {completion.holdPointRelease.releasedByOrg &&
+                `, ${completion.holdPointRelease.releasedByOrg}`}
+              {completion.holdPointRelease.releasedAt &&
+                ` on ${new Date(completion.holdPointRelease.releasedAt).toLocaleDateString('en-AU')}`}
+              {completion.holdPointRelease.releaseMethod &&
+                ` via ${formatReleaseMethod(completion.holdPointRelease.releaseMethod)}`}
+            </p>
+          ) : completion?.completedBy ? (
             <p className="text-xs text-muted-foreground mt-1">
               Completed by {completion.completedBy.fullName || completion.completedBy.email}
               {completion.completedAt &&
                 ` on ${new Date(completion.completedAt).toLocaleDateString('en-AU')}`}
             </p>
-          )}
+          ) : null}
 
           {/* Witness Point Details (if this is a witness point and has witness data) */}
           {item.pointType === 'witness' &&
