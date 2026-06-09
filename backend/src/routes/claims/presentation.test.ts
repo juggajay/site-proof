@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  buildClaimCertificationView,
   buildClaimCertifiedResponse,
   buildClaimCreatedResponse,
   buildClaimDeletedResponse,
@@ -16,6 +17,7 @@ import {
   mapClaimPaymentItem,
   mapClaimReadinessItem,
   mapClaimableLot,
+  parseClaimCertificationMetadata,
 } from './presentation.js';
 
 describe('mapClaimableLot', () => {
@@ -75,12 +77,49 @@ describe('mapClaimListItem', () => {
       status: 'certified',
       totalClaimedAmount: 48000.25,
       certifiedAmount: 47000.1,
+      certifiedAt: null,
       paidAmount: 1000,
       submittedAt: '2026-06-01',
+      // A plain-string disputeNotes is not certification metadata, so the
+      // raw field is preserved and `certification` stays null.
       disputeNotes: 'Variation pending',
       disputedAt: '2026-06-02',
       lotCount: 3,
       projectState: 'WA',
+      certification: null,
+    });
+  });
+
+  it('emits the certifiedAt timestamp and parsed certification metadata when present', () => {
+    const result = mapClaimListItem(
+      {
+        id: 'claim-cert',
+        claimNumber: 11,
+        claimPeriodStart: new Date('2026-05-01T10:00:00.000Z'),
+        claimPeriodEnd: new Date('2026-05-31T10:00:00.000Z'),
+        status: 'certified',
+        totalClaimedAmount: '48000.25',
+        certifiedAmount: '47000.10',
+        certifiedAt: new Date('2026-06-03T04:05:06.000Z'),
+        paidAmount: null,
+        submittedAt: new Date('2026-06-01T12:00:00.000Z'),
+        disputeNotes: JSON.stringify({
+          variationNotes: 'Variation approved',
+          certificationDocumentId: 'doc-9',
+          certifiedBy: 'user-7',
+        }),
+        disputedAt: null,
+        _count: { claimedLots: 2 },
+      },
+      'NSW',
+      new Map([['user-7', 'Jane Principal']]),
+    );
+
+    expect(result.certifiedAt).toBe('2026-06-03T04:05:06.000Z');
+    expect(result.certification).toEqual({
+      certifiedByName: 'Jane Principal',
+      variationNotes: 'Variation approved',
+      certificationDocumentId: 'doc-9',
     });
   });
 
@@ -323,6 +362,108 @@ describe('claim certification presentation', () => {
         },
       },
     );
+  });
+});
+
+describe('parseClaimCertificationMetadata', () => {
+  it('parses the certification JSON stored in disputeNotes', () => {
+    expect(
+      parseClaimCertificationMetadata(
+        JSON.stringify({
+          variationNotes: 'Approved with variation',
+          certificationDocumentId: 'doc-1',
+          certifiedBy: 'user-1',
+        }),
+      ),
+    ).toEqual({
+      certifiedById: 'user-1',
+      variationNotes: 'Approved with variation',
+      certificationDocumentId: 'doc-1',
+    });
+  });
+
+  it('still parses certification keys after the payment workflow merges paymentHistory', () => {
+    expect(
+      parseClaimCertificationMetadata(
+        JSON.stringify({
+          variationNotes: 'Approved',
+          certificationDocumentId: 'doc-2',
+          certifiedBy: 'user-2',
+          paymentHistory: [{ amount: 100, date: '2026-07-01' }],
+          lastPaymentNotes: 'Part payment',
+        }),
+      ),
+    ).toEqual({
+      certifiedById: 'user-2',
+      variationNotes: 'Approved',
+      certificationDocumentId: 'doc-2',
+    });
+  });
+
+  it('returns null for plain-string disputeNotes (the disputed-claim path)', () => {
+    expect(parseClaimCertificationMetadata('Documentation incomplete')).toBeNull();
+  });
+
+  it('returns null for empty, null, and malformed values', () => {
+    expect(parseClaimCertificationMetadata(null)).toBeNull();
+    expect(parseClaimCertificationMetadata('')).toBeNull();
+    expect(parseClaimCertificationMetadata('{not valid json')).toBeNull();
+  });
+
+  it('returns null for JSON without any certification keys', () => {
+    expect(
+      parseClaimCertificationMetadata(
+        JSON.stringify({ paymentHistory: [{ amount: 100, date: '2026-07-01' }] }),
+      ),
+    ).toBeNull();
+  });
+
+  it('nulls non-string certification fields without discarding the others', () => {
+    expect(
+      parseClaimCertificationMetadata(
+        JSON.stringify({ variationNotes: 'Notes', certificationDocumentId: 42, certifiedBy: null }),
+      ),
+    ).toEqual({
+      certifiedById: null,
+      variationNotes: 'Notes',
+      certificationDocumentId: null,
+    });
+  });
+});
+
+describe('buildClaimCertificationView', () => {
+  it('resolves the certifier name from the lookup map', () => {
+    expect(
+      buildClaimCertificationView(
+        JSON.stringify({
+          variationNotes: 'Approved',
+          certificationDocumentId: 'doc-3',
+          certifiedBy: 'user-3',
+        }),
+        new Map([['user-3', 'Jordan Principal']]),
+      ),
+    ).toEqual({
+      certifiedByName: 'Jordan Principal',
+      variationNotes: 'Approved',
+      certificationDocumentId: 'doc-3',
+    });
+  });
+
+  it('leaves the certifier name null when it is not in the lookup map', () => {
+    expect(
+      buildClaimCertificationView(
+        JSON.stringify({ certifiedBy: 'user-missing', variationNotes: 'Approved' }),
+      ),
+    ).toEqual({
+      certifiedByName: null,
+      variationNotes: 'Approved',
+      certificationDocumentId: null,
+    });
+  });
+
+  it('returns null when there is no certification metadata', () => {
+    expect(buildClaimCertificationView('Documentation incomplete')).toBeNull();
+    expect(buildClaimCertificationView(null)).toBeNull();
   });
 });
 

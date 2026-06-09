@@ -634,18 +634,22 @@ test.describe('Claims seeded commercial contract', () => {
     const claimRow = page.getByRole('row').filter({ hasText: 'Claim 7' });
     await expect(claimRow).toBeVisible();
     await expect(claimRow.getByText('Submitted')).toBeVisible();
-    await expect(claimRow.getByRole('button', { name: 'Certify Claim' })).toBeVisible();
+    await expect(claimRow.getByRole('button', { name: 'Record Certification' })).toBeVisible();
 
-    await claimRow.getByRole('button', { name: 'Certify Claim' }).click();
+    await claimRow.getByRole('button', { name: 'Record Certification' }).click();
 
-    const certificationModal = page.getByRole('dialog').filter({ hasText: 'Certify Claim' });
-    await expect(certificationModal.getByRole('heading', { name: 'Certify Claim' })).toBeVisible();
+    const certificationModal = page
+      .getByRole('dialog')
+      .filter({ hasText: 'Record certification received' });
+    await expect(
+      certificationModal.getByRole('heading', { name: 'Record certification received' }),
+    ).toBeVisible();
     await expect(certificationModal.getByText('Claimed $120,000')).toBeVisible();
 
     await certificationModal.getByLabel('Certified Amount').fill('88000');
     await certificationModal.getByLabel('Certification Date').fill('2026-05-11');
     await certificationModal.getByLabel('Variation Notes').fill('Certified less retention.');
-    await certificationModal.getByRole('button', { name: 'Certify Claim' }).click();
+    await certificationModal.getByRole('button', { name: 'Record Certification' }).click();
 
     await expect
       .poll(() => api.getCertificationRequests())

@@ -18,6 +18,7 @@ type ClaimListItem = {
   status: string;
   totalClaimedAmount: unknown;
   certifiedAmount: unknown;
+  certifiedAt?: Date | null;
   paidAmount: unknown;
   submittedAt: Date | null;
   disputeNotes: string | null;
@@ -80,6 +81,89 @@ function formatClaimDateKey(date: Date): string {
   return date.toISOString().split('T')[0];
 }
 
+/**
+ * The id, variation notes, and certifier of an external certificate parsed out
+ * of the JSON that the certify workflow stores in the `disputeNotes` column.
+ */
+export interface ParsedClaimCertification {
+  certifiedById: string | null;
+  variationNotes: string | null;
+  certificationDocumentId: string | null;
+}
+
+/**
+ * Parse the certification metadata the certify workflow stores as JSON in the
+ * `disputeNotes` column ({ variationNotes, certificationDocumentId,
+ * certifiedBy }). The payment workflow merges `paymentHistory` into the same
+ * JSON while retaining these keys, so a certified→partially_paid/paid claim
+ * still parses. Returns null for plain-string disputeNotes (legacy or the
+ * disputed-claim path) and for JSON without any certification keys, so the raw
+ * `disputeNotes` field is never reinterpreted as certification data.
+ */
+export function parseClaimCertificationMetadata(
+  disputeNotes: string | null | undefined,
+): ParsedClaimCertification | null {
+  if (!disputeNotes) {
+    return null;
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(disputeNotes);
+  } catch {
+    // Plain-string disputeNotes (e.g. a dispute reason) is not certification
+    // metadata.
+    return null;
+  }
+
+  if (typeof parsed !== 'object' || parsed === null) {
+    return null;
+  }
+
+  const record = parsed as Record<string, unknown>;
+  const hasCertificationKeys =
+    'certifiedBy' in record || 'variationNotes' in record || 'certificationDocumentId' in record;
+  if (!hasCertificationKeys) {
+    return null;
+  }
+
+  return {
+    certifiedById: typeof record.certifiedBy === 'string' ? record.certifiedBy : null,
+    variationNotes: typeof record.variationNotes === 'string' ? record.variationNotes : null,
+    certificationDocumentId:
+      typeof record.certificationDocumentId === 'string' ? record.certificationDocumentId : null,
+  };
+}
+
+/**
+ * Shape the parsed certification metadata into the read-back object the
+ * frontend renders, resolving the certifier id to a display name via the
+ * provided lookup map. Returns null when there is no certification metadata.
+ */
+export function buildClaimCertificationView(
+  disputeNotes: string | null | undefined,
+  certifierNameById?: Map<string, string | null>,
+): {
+  certifiedByName: string | null;
+  variationNotes: string | null;
+  certificationDocumentId: string | null;
+} | null {
+  const parsed = parseClaimCertificationMetadata(disputeNotes);
+  if (!parsed) {
+    return null;
+  }
+
+  const certifiedByName = parsed.certifiedById
+    ? (certifierNameById?.get(parsed.certifiedById) ?? null)
+    : null;
+
+  return {
+    certifiedByName,
+    variationNotes: parsed.variationNotes,
+    certificationDocumentId: parsed.certificationDocumentId,
+  };
+}
+
 export function mapClaimableLot(lot: ClaimableLot) {
   return {
     id: lot.id,
@@ -89,7 +173,11 @@ export function mapClaimableLot(lot: ClaimableLot) {
   };
 }
 
-export function mapClaimListItem(claim: ClaimListItem, projectState?: string | null) {
+export function mapClaimListItem(
+  claim: ClaimListItem,
+  projectState?: string | null,
+  certifierNameById?: Map<string, string | null>,
+) {
   return {
     id: claim.id,
     claimNumber: claim.claimNumber,
@@ -98,6 +186,7 @@ export function mapClaimListItem(claim: ClaimListItem, projectState?: string | n
     status: claim.status,
     totalClaimedAmount: claim.totalClaimedAmount ? Number(claim.totalClaimedAmount) : 0,
     certifiedAmount: claim.certifiedAmount ? Number(claim.certifiedAmount) : null,
+    certifiedAt: claim.certifiedAt ? claim.certifiedAt.toISOString() : null,
     paidAmount: claim.paidAmount ? Number(claim.paidAmount) : null,
     submittedAt: claim.submittedAt ? formatClaimDateKey(claim.submittedAt) : null,
     disputeNotes: claim.disputeNotes || null,
@@ -107,6 +196,9 @@ export function mapClaimListItem(claim: ClaimListItem, projectState?: string | n
     // timeframes the frontend renders. Null when unknown so the client can
     // fall back to NSW (its historical default).
     projectState: projectState ?? null,
+    // Read-back of the external certificate metadata parsed out of the JSON the
+    // certify workflow stores in `disputeNotes`. Null when there is none.
+    certification: buildClaimCertificationView(claim.disputeNotes, certifierNameById),
   };
 }
 

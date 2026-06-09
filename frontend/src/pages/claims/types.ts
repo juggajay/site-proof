@@ -3,6 +3,17 @@
  * Extracted from ClaimsPage.tsx for reusability.
  */
 
+// Parsed certification metadata surfaced by the read-side parser. The
+// who-certified / variation-notes / certificate-document reference live only
+// inside the JSON stored in the `disputeNotes` column on the backend, so the
+// server parses them out and returns this sub-object for display. Null when
+// the claim has no certification metadata (e.g. drafts, plain-string disputes).
+export interface ClaimCertification {
+  certifiedByName: string | null;
+  variationNotes: string | null;
+  certificationDocumentId: string | null;
+}
+
 export interface Claim {
   id: string;
   claimNumber: number;
@@ -13,6 +24,7 @@ export interface Claim {
   certifiedAmount: number | null;
   paidAmount: number | null;
   submittedAt: string | null;
+  certifiedAt?: string | null;
   disputeNotes: string | null;
   disputedAt: string | null;
   lotCount: number;
@@ -21,6 +33,9 @@ export interface Claim {
   // per-jurisdiction SOPA certification/payment-due timeframes. Optional so
   // older payloads (and tests) without it fall back to NSW.
   projectState?: string | null;
+  // Read-back of who recorded the external certificate, their notes, and the
+  // attached certificate document. Optional so older payloads omit it.
+  certification?: ClaimCertification | null;
 }
 
 export interface ConformedLot {
@@ -71,4 +86,8 @@ export interface ClaimCertificationFormData {
   certifiedAmount: number;
   certificationDate?: string;
   variationNotes?: string;
+  // Id of an existing Document (created by the documents-upload endpoint) that
+  // holds the external certificate / payment-schedule PDF. The /certify
+  // endpoint validates it references a document in this project.
+  certificationDocumentId?: string;
 }

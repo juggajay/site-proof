@@ -1609,6 +1609,69 @@ describe('Progress Claims API', () => {
         restoreOptionalEnv('SUPABASE_URL', ORIGINAL_SUPABASE_URL);
       }
     });
+
+    it('surfaces parsed certification metadata on the read-back routes after certifying', async () => {
+      const claim = await createSubmittedCertificationClaim(1000);
+      const fileUrl = `/uploads/documents/readback-${claim.claimNumber}.pdf`;
+
+      const certifyRes = await request(app)
+        .post(`/api/projects/${projectId}/claims/${claim.id}/certify`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          certifiedAmount: 900,
+          variationNotes: 'Approved with a minor variation',
+          certificationDocumentUrl: fileUrl,
+          certificationDocumentFilename: 'readback-cert.pdf',
+        });
+
+      expect(certifyRes.status).toBe(200);
+      const certificationDocumentId = certifyRes.body.claim.certificationDocumentId as string;
+      expect(certificationDocumentId).toBeDefined();
+
+      // Detail GET surfaces the parsed certification sub-object (who/notes/cert)
+      // while keeping the raw disputeNotes JSON intact.
+      const detailRes = await request(app)
+        .get(`/api/projects/${projectId}/claims/${claim.id}`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(detailRes.status).toBe(200);
+      expect(detailRes.body.claim.certification).toMatchObject({
+        variationNotes: 'Approved with a minor variation',
+        certificationDocumentId,
+      });
+      expect(detailRes.body.claim.certification.certifiedByName).toBeTruthy();
+
+      // List GET surfaces the same certification read-back for the certified claim.
+      const listRes = await request(app)
+        .get(`/api/projects/${projectId}/claims`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(listRes.status).toBe(200);
+      const listed = (listRes.body.claims as Array<{ id: string; certification?: unknown }>).find(
+        (c) => c.id === claim.id,
+      );
+      expect(listed?.certification).toMatchObject({
+        variationNotes: 'Approved with a minor variation',
+        certificationDocumentId,
+      });
+    });
+
+    it('keeps a disputed claim disputeNotes as a plain string with no certification on read-back', async () => {
+      const claim = await createSubmittedCertificationClaim(1000);
+      await request(app)
+        .put(`/api/projects/${projectId}/claims/${claim.id}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ status: 'disputed', disputeNotes: 'Documentation incomplete' })
+        .expect(200);
+
+      const detailRes = await request(app)
+        .get(`/api/projects/${projectId}/claims/${claim.id}`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(detailRes.status).toBe(200);
+      expect(detailRes.body.claim.disputeNotes).toBe('Documentation incomplete');
+      expect(detailRes.body.claim.certification).toBeNull();
+    });
   });
 
   describe('POST /api/projects/:projectId/claims/:claimId/payment', () => {
