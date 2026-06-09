@@ -73,8 +73,8 @@ class ErrorBoundaryFrame extends Component<Props, State> {
         <div className="min-h-screen flex items-center justify-center bg-muted/50 p-4">
           <div className="max-w-md w-full bg-card rounded-lg shadow-lg p-8 text-center">
             {/* Error Icon */}
-            <div className="mx-auto w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mb-6">
-              <AlertTriangle className="h-8 w-8 text-red-600 dark:text-red-400" />
+            <div className="mx-auto w-16 h-16 bg-destructive/10 rounded-full flex items-center justify-center mb-6">
+              <AlertTriangle className="h-8 w-8 text-destructive" />
             </div>
 
             {/* Error Title */}
@@ -106,7 +106,7 @@ class ErrorBoundaryFrame extends Component<Props, State> {
             {/* Error Details (Development only) */}
             {import.meta.env.DEV && this.state.error && (
               <div className="mb-6 p-4 bg-muted rounded-lg text-left">
-                <p className="text-xs font-mono text-red-600 dark:text-red-400 break-all">
+                <p className="text-xs font-mono text-destructive break-all">
                   {this.state.error.toString()}
                 </p>
                 {this.state.errorInfo && (
@@ -126,7 +126,7 @@ class ErrorBoundaryFrame extends Component<Props, State> {
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <button
                 onClick={this.handleRetry}
-                className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
               >
                 <RefreshCw className="h-4 w-4" />
                 Try Again

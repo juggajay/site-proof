@@ -106,7 +106,7 @@ export function ModulesTab({ projectId, initialEnabledModules }: ModulesTabProps
                 checked={enabledModules[module.key]}
                 onChange={() => void handleModuleChange(module.key)}
                 disabled={savingModule !== null}
-                className="h-5 w-5 cursor-pointer"
+                className="h-5 w-5 cursor-pointer accent-primary"
               />
             </label>
           ))}

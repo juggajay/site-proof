@@ -6,7 +6,7 @@ export function PortalAccessDenied({ moduleName }: { moduleName: string }) {
     <div className="container max-w-2xl mx-auto p-4">
       <div
         role="alert"
-        className="flex items-start gap-3 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg text-amber-800 dark:text-amber-200"
+        className="flex items-start gap-3 p-4 bg-warning/10 border border-warning/30 rounded-lg text-warning"
       >
         <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
         <p>{moduleName} portal access is not enabled for your company.</p>

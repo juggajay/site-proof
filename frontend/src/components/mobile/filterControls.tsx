@@ -32,7 +32,7 @@ export function SelectFilterComponent({ filter, value, onChange }: SelectFilterC
             'rounded-lg text-base font-medium',
             'appearance-none cursor-pointer',
             'touch-manipulation',
-            'focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20',
+            'focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20',
             'transition-colors duration-100',
           )}
         >
@@ -96,10 +96,10 @@ export function MultiselectFilterComponent({
                 'active:scale-[0.97]',
                 // Selected state
                 isSelected
-                  ? 'bg-amber-500 border-amber-600 text-foreground'
+                  ? 'bg-primary border-primary text-primary-foreground'
                   : 'bg-card border-border text-foreground',
                 // Focus state
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-2',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
               )}
               aria-pressed={isSelected}
             >
@@ -108,7 +108,9 @@ export function MultiselectFilterComponent({
                 <span
                   className={cn(
                     'text-xs px-1.5 py-0.5 rounded-full',
-                    isSelected ? 'bg-amber-600 text-amber-100' : 'bg-muted text-muted-foreground',
+                    isSelected
+                      ? 'bg-primary-foreground/20 text-primary-foreground'
+                      : 'bg-muted text-muted-foreground',
                   )}
                 >
                   {option.count}
@@ -167,15 +169,15 @@ export function RangeFilterComponent({ filter, value, onChange }: RangeFilterCom
               '[&::-webkit-slider-runnable-track]:bg-muted',
               // Thumb styles - large for glove use
               '[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-8 [&::-webkit-slider-thumb]:w-8',
-              '[&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-amber-500',
-              '[&::-webkit-slider-thumb]:border-4 [&::-webkit-slider-thumb]:border-amber-600',
+              '[&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary',
+              '[&::-webkit-slider-thumb]:border-4 [&::-webkit-slider-thumb]:border-primary',
               '[&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:-mt-2.5',
               // Firefox styles
               '[&::-moz-range-track]:h-3 [&::-moz-range-track]:rounded-full',
               '[&::-moz-range-track]:bg-muted',
               '[&::-moz-range-thumb]:h-8 [&::-moz-range-thumb]:w-8 [&::-moz-range-thumb]:rounded-full',
-              '[&::-moz-range-thumb]:bg-amber-500 [&::-moz-range-thumb]:border-4',
-              '[&::-moz-range-thumb]:border-amber-600',
+              '[&::-moz-range-thumb]:bg-primary [&::-moz-range-thumb]:border-4',
+              '[&::-moz-range-thumb]:border-primary',
             )}
           />
         </div>
@@ -201,15 +203,15 @@ export function RangeFilterComponent({ filter, value, onChange }: RangeFilterCom
               '[&::-webkit-slider-runnable-track]:bg-muted',
               // Thumb styles - large for glove use
               '[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-8 [&::-webkit-slider-thumb]:w-8',
-              '[&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-amber-500',
-              '[&::-webkit-slider-thumb]:border-4 [&::-webkit-slider-thumb]:border-amber-600',
+              '[&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary',
+              '[&::-webkit-slider-thumb]:border-4 [&::-webkit-slider-thumb]:border-primary',
               '[&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:-mt-2.5',
               // Firefox styles
               '[&::-moz-range-track]:h-3 [&::-moz-range-track]:rounded-full',
               '[&::-moz-range-track]:bg-muted',
               '[&::-moz-range-thumb]:h-8 [&::-moz-range-thumb]:w-8 [&::-moz-range-thumb]:rounded-full',
-              '[&::-moz-range-thumb]:bg-amber-500 [&::-moz-range-thumb]:border-4',
-              '[&::-moz-range-thumb]:border-amber-600',
+              '[&::-moz-range-thumb]:bg-primary [&::-moz-range-thumb]:border-4',
+              '[&::-moz-range-thumb]:border-primary',
             )}
           />
         </div>
@@ -248,7 +250,7 @@ export function DateFilterComponent({ filter, value, onChange }: DateFilterCompo
               'border-2 border-border',
               'rounded-lg text-base font-medium',
               'touch-manipulation',
-              'focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20',
+              'focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20',
               'transition-colors duration-100',
             )}
           />
@@ -270,7 +272,7 @@ export function DateFilterComponent({ filter, value, onChange }: DateFilterCompo
               'border-2 border-border',
               'rounded-lg text-base font-medium',
               'touch-manipulation',
-              'focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20',
+              'focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20',
               'transition-colors duration-100',
             )}
           />

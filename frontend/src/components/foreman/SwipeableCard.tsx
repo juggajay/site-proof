@@ -27,8 +27,16 @@ export function SwipeableCard({
   children,
   onSwipeLeft,
   onSwipeRight,
-  leftAction = { label: 'Reject', color: 'bg-red-500', icon: <X className="h-6 w-6" /> },
-  rightAction = { label: 'Approve', color: 'bg-green-500', icon: <Check className="h-6 w-6" /> },
+  leftAction = {
+    label: 'Reject',
+    color: 'bg-destructive text-destructive-foreground',
+    icon: <X className="h-6 w-6" />,
+  },
+  rightAction = {
+    label: 'Approve',
+    color: 'bg-success text-success-foreground',
+    icon: <Check className="h-6 w-6" />,
+  },
   threshold = 100,
   className,
   disabled = false,
@@ -105,8 +113,9 @@ export function SwipeableCard({
         <div
           className={cn(
             'flex items-center justify-start px-6 flex-1',
+            'text-primary-foreground',
             rightAction.color,
-            'text-white transition-opacity duration-150',
+            'transition-opacity duration-150',
             showRightAction ? 'opacity-100' : 'opacity-0',
           )}
         >
@@ -120,8 +129,9 @@ export function SwipeableCard({
         <div
           className={cn(
             'flex items-center justify-end px-6 flex-1',
+            'text-primary-foreground',
             leftAction.color,
-            'text-white transition-opacity duration-150',
+            'transition-opacity duration-150',
             showLeftAction ? 'opacity-100' : 'opacity-0',
           )}
         >

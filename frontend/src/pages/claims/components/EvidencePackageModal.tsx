@@ -85,7 +85,7 @@ export const EvidencePackageModal = React.memo(function EvidencePackageModal({
                   type="checkbox"
                   checked={options[key]}
                   onChange={(e) => setOptions((prev) => ({ ...prev, [key]: e.target.checked }))}
-                  className="h-4 w-4 rounded border-border"
+                  className="h-4 w-4 rounded border-border accent-primary"
                 />
                 <div>
                   <div className="font-medium">{label}</div>

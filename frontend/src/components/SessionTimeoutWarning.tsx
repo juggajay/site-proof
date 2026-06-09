@@ -133,7 +133,7 @@ export function SessionTimeoutWarning({ enabled = true }: SessionTimeoutWarningP
   return (
     <Modal onClose={handleExtendSession} className="max-w-md w-full">
       <ModalHeader>
-        <span className="flex items-center gap-2 text-amber-600">
+        <span className="flex items-center gap-2 text-warning">
           <AlertTriangle className="h-5 w-5" />
           Session Timeout Warning
         </span>
@@ -145,12 +145,12 @@ export function SessionTimeoutWarning({ enabled = true }: SessionTimeoutWarningP
         </p>
 
         <div className="flex flex-col items-center gap-4">
-          <div className="flex items-center justify-center w-20 h-20 rounded-full bg-amber-100">
-            <Clock className="h-10 w-10 text-amber-600" />
+          <div className="flex items-center justify-center w-20 h-20 rounded-full bg-warning/10">
+            <Clock className="h-10 w-10 text-warning" />
           </div>
           <div className="text-center">
             <p className="text-lg font-medium text-foreground">You will be logged out in</p>
-            <p className="text-4xl font-bold text-amber-600 mt-2" data-testid="session-countdown">
+            <p className="text-4xl font-bold text-warning mt-2" data-testid="session-countdown">
               {countdown} seconds
             </p>
           </div>
@@ -171,7 +171,7 @@ export function SessionTimeoutWarning({ enabled = true }: SessionTimeoutWarningP
         </button>
         <button
           onClick={handleExtendSession}
-          className="px-4 py-2 rounded-lg bg-amber-600 text-white hover:bg-amber-700 transition-colors"
+          className="px-4 py-2 rounded-lg bg-warning text-warning-foreground hover:bg-warning/90 transition-colors"
           data-testid="stay-logged-in-button"
         >
           Stay Logged In

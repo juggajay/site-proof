@@ -56,7 +56,7 @@ export function DocketComparisonCard({
           <div className="text-right">
             <p className="text-sm font-medium">{new Date(date).toLocaleDateString('en-AU')}</p>
             {hasDiscrepancy && (
-              <div className="flex items-center gap-1 text-amber-600 text-xs mt-1">
+              <div className="flex items-center gap-1 text-warning text-xs mt-1">
                 <AlertTriangle className="h-3 w-3" />
                 Discrepancy
               </div>
@@ -77,12 +77,12 @@ export function DocketComparisonCard({
         <div
           className={cn(
             'grid grid-cols-3 gap-2 text-center py-2 rounded',
-            labourDiscrepancy && 'bg-amber-50 dark:bg-amber-900/20',
+            labourDiscrepancy && 'bg-warning/10',
           )}
         >
           <div className="text-left font-medium">Labour</div>
           <div>{labour.submitted}h</div>
-          <div className={cn(labourDiscrepancy && 'text-amber-600 font-medium')}>
+          <div className={cn(labourDiscrepancy && 'text-warning font-medium')}>
             {diaryLabourHours !== undefined ? `${diaryLabourHours}h` : '-'}
           </div>
         </div>
@@ -91,12 +91,12 @@ export function DocketComparisonCard({
         <div
           className={cn(
             'grid grid-cols-3 gap-2 text-center py-2 rounded',
-            plantDiscrepancy && 'bg-amber-50 dark:bg-amber-900/20',
+            plantDiscrepancy && 'bg-warning/10',
           )}
         >
           <div className="text-left font-medium">Plant</div>
           <div>{plant.submitted}h</div>
-          <div className={cn(plantDiscrepancy && 'text-amber-600 font-medium')}>
+          <div className={cn(plantDiscrepancy && 'text-warning font-medium')}>
             {diaryPlantHours !== undefined ? `${diaryPlantHours}h` : '-'}
           </div>
         </div>
@@ -110,8 +110,8 @@ export function DocketComparisonCard({
               onClick={onApprove}
               className={cn(
                 'flex-1 flex items-center justify-center gap-2 py-3 rounded-lg',
-                'bg-green-600 text-white font-medium',
-                'active:bg-green-700 transition-colors',
+                'bg-success text-success-foreground font-medium',
+                'active:bg-success/90 transition-colors',
                 'touch-manipulation min-h-[48px]',
               )}
             >
@@ -122,8 +122,8 @@ export function DocketComparisonCard({
               onClick={onQuery}
               className={cn(
                 'flex-1 flex items-center justify-center gap-2 py-3 rounded-lg',
-                'bg-amber-500 text-white font-medium',
-                'active:bg-amber-600 transition-colors',
+                'bg-warning text-warning-foreground font-medium',
+                'active:bg-warning/90 transition-colors',
                 'touch-manipulation min-h-[48px]',
               )}
             >
@@ -134,8 +134,8 @@ export function DocketComparisonCard({
               onClick={onReject}
               className={cn(
                 'flex-1 flex items-center justify-center gap-2 py-3 rounded-lg',
-                'bg-red-600 text-white font-medium',
-                'active:bg-red-700 transition-colors',
+                'bg-destructive text-destructive-foreground font-medium',
+                'active:bg-destructive/90 transition-colors',
                 'touch-manipulation min-h-[48px]',
               )}
             >

@@ -89,14 +89,11 @@ export function CookieConsentBanner() {
     >
       <div className="mx-auto flex max-w-4xl items-start gap-3 sm:items-center sm:gap-4">
         <div className="flex min-w-0 flex-1 items-start gap-2 sm:gap-3">
-          <Cookie className="mt-0.5 h-5 w-5 flex-shrink-0 text-orange-500 sm:h-6 sm:w-6" />
+          <Cookie className="mt-0.5 h-5 w-5 flex-shrink-0 text-muted-foreground sm:h-6 sm:w-6" />
           <div>
             <p className="text-xs leading-snug text-foreground sm:hidden">
               We use cookies to improve SiteProof. See our{' '}
-              <Link
-                to="/privacy-policy"
-                className="font-medium text-orange-600 hover:underline dark:text-orange-400"
-              >
+              <Link to="/privacy-policy" className="font-medium text-primary hover:underline">
                 Privacy Policy
               </Link>
               .
@@ -104,10 +101,7 @@ export function CookieConsentBanner() {
             <p className="hidden text-sm text-foreground sm:block">
               We use cookies to enhance your experience and analyze site usage. By continuing to use
               SiteProof, you agree to our{' '}
-              <Link
-                to="/privacy-policy"
-                className="text-orange-600 dark:text-orange-400 hover:underline font-medium"
-              >
+              <Link to="/privacy-policy" className="text-primary hover:underline font-medium">
                 Privacy Policy
               </Link>
               .
@@ -125,7 +119,7 @@ export function CookieConsentBanner() {
           </button>
           <button
             onClick={handleAccept}
-            className="rounded-md bg-orange-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-orange-700 sm:px-4 sm:py-2 sm:text-sm"
+            className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 sm:px-4 sm:py-2 sm:text-sm"
             data-testid="cookie-accept-button"
           >
             Accept

@@ -362,7 +362,7 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
       </div>
 
       {error && (
-        <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
+        <div className="p-3 bg-destructive/10 border border-destructive/30 text-destructive rounded-lg text-sm">
           {error}
           <button
             type="button"
@@ -370,14 +370,14 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
               setError(null);
               void refetchCommentsQuery();
             }}
-            className="ml-2 text-red-800 hover:underline"
+            className="ml-2 text-destructive font-medium hover:underline"
           >
             Retry
           </button>
           <button
             type="button"
             onClick={() => setError(null)}
-            className="ml-2 text-red-800 hover:underline"
+            className="ml-2 text-destructive font-medium hover:underline"
           >
             Dismiss
           </button>

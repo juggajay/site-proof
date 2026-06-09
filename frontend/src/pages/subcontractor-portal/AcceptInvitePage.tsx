@@ -468,7 +468,12 @@ export function AcceptInvitePage() {
                 </div>
 
                 <div className="flex items-start gap-2 pt-2">
-                  <input id="tos" type="checkbox" {...register('tosAccepted')} className="mt-1" />
+                  <input
+                    id="tos"
+                    type="checkbox"
+                    {...register('tosAccepted')}
+                    className="mt-1 accent-primary"
+                  />
                   <Label
                     htmlFor="tos"
                     className="text-sm text-muted-foreground dark:text-muted-foreground font-normal"

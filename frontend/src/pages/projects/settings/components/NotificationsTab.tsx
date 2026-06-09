@@ -304,7 +304,7 @@ export function NotificationsTab({
                   checked={notificationPreferences[preference.key]}
                   onChange={() => handleNotificationPreferenceChange(preference.key)}
                   disabled={savingSetting !== null}
-                  className="h-5 w-5 rounded border-border"
+                  className="h-5 w-5 rounded border-border accent-primary"
                 />
               </label>
             ))}
@@ -337,7 +337,7 @@ export function NotificationsTab({
                   setSettingsStatus('');
                 }}
                 disabled={savingSetting !== null}
-                className="h-5 w-5 rounded border-border"
+                className="h-5 w-5 rounded border-border accent-primary"
               />
             </label>
             <div className="p-3 rounded-lg bg-muted/30">

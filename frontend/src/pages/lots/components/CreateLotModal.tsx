@@ -319,7 +319,7 @@ export function CreateLotModal({ isOpen, onClose, onSuccess, projectId }: Create
                     onChange={(e) =>
                       setSelectedTemplateId(e.target.checked ? suggestedTemplate.id : '')
                     }
-                    className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                    className="h-4 w-4 rounded border-border accent-primary focus:ring-primary"
                   />
                   <label htmlFor="use-suggested-itp" className="text-sm text-primary">
                     Assign this ITP template to the lot
@@ -411,7 +411,7 @@ export function CreateLotModal({ isOpen, onClose, onSuccess, projectId }: Create
                         type="checkbox"
                         id="can-complete-itp"
                         {...register('canCompleteITP')}
-                        className="h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                        className="h-4 w-4 rounded border-border accent-primary focus:ring-primary"
                       />
                       <label htmlFor="can-complete-itp" className="text-sm text-foreground">
                         Allow ITP completion
@@ -423,7 +423,7 @@ export function CreateLotModal({ isOpen, onClose, onSuccess, projectId }: Create
                         id="itp-requires-verification"
                         {...register('itpRequiresVerification')}
                         disabled={!canCompleteITP}
-                        className="h-4 w-4 rounded border-border text-primary focus:ring-primary disabled:opacity-50"
+                        className="h-4 w-4 rounded border-border accent-primary focus:ring-primary disabled:opacity-50"
                       />
                       <label
                         htmlFor="itp-requires-verification"

@@ -113,13 +113,13 @@ export function ChangelogNotification({ forceShow = false, onClose }: ChangelogN
   const getIcon = (type: 'feature' | 'improvement' | 'security' | 'docs') => {
     switch (type) {
       case 'feature':
-        return <Gift className="h-4 w-4 text-green-500" />;
+        return <Gift className="h-4 w-4 text-success" />;
       case 'improvement':
         return <Zap className="h-4 w-4 text-primary" />;
       case 'security':
-        return <Shield className="h-4 w-4 text-amber-500" />;
+        return <Shield className="h-4 w-4 text-warning" />;
       case 'docs':
-        return <FileText className="h-4 w-4 text-purple-500" />;
+        return <FileText className="h-4 w-4 text-muted-foreground" />;
     }
   };
 

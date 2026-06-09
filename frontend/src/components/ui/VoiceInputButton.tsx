@@ -96,7 +96,7 @@ export function VoiceInputButton({
             transition-all duration-200
             ${
               isListening
-                ? 'bg-red-500 text-white hover:bg-red-600 animate-pulse'
+                ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90 animate-pulse'
                 : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
             }
             ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
@@ -117,12 +117,14 @@ export function VoiceInputButton({
           )}
         </button>
 
-        {isListening && <span className="text-xs text-red-500 animate-pulse">● Recording...</span>}
+        {isListening && (
+          <span className="text-xs text-destructive animate-pulse">● Recording...</span>
+        )}
       </div>
 
       {/* Error display */}
       {error && (
-        <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded-md text-sm text-red-600">
+        <div className="mt-2 p-2 bg-destructive/10 border border-destructive/30 rounded-md text-sm text-destructive">
           <div className="flex items-start gap-2">
             <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
             <span>{error}</span>

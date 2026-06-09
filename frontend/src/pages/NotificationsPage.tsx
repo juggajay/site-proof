@@ -63,10 +63,10 @@ function formatRelativeTime(timestamp: string): string {
 function getNotificationIcon(type: string) {
   const normalizedType = type.toLowerCase();
   if (normalizedType === 'warning' || normalizedType.includes('alert')) {
-    return <AlertCircle className="h-5 w-5 text-amber-500" />;
+    return <AlertCircle className="h-5 w-5 text-warning" />;
   }
   if (normalizedType === 'success') {
-    return <CheckCircle className="h-5 w-5 text-green-500" />;
+    return <CheckCircle className="h-5 w-5 text-success" />;
   }
   if (normalizedType === 'mention') {
     return <User className="h-5 w-5 text-primary" />;
@@ -173,7 +173,7 @@ export function NotificationsPage() {
             Loading notifications...
           </div>
         ) : error ? (
-          <div className="p-8 text-center text-sm text-red-600">
+          <div className="p-8 text-center text-sm text-destructive">
             Notifications could not be loaded.
           </div>
         ) : filteredNotifications.length === 0 ? (

@@ -304,7 +304,7 @@ export function CommentThreadItem(props: CommentThreadItemProps) {
               <button
                 type="button"
                 onClick={() => onRequestDelete(comment.id)}
-                className="p-1 text-muted-foreground hover:text-red-600 rounded"
+                className="p-1 text-muted-foreground hover:text-destructive rounded"
                 title="Delete comment"
                 aria-label="Delete comment"
               >

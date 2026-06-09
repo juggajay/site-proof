@@ -266,7 +266,7 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
                           checked={lot.selected}
                           onChange={() => toggleLotSelection(lot.id)}
                           disabled={lot.actionBlocked}
-                          className="h-4 w-4 rounded border-border"
+                          className="h-4 w-4 rounded border-border accent-primary"
                         />
                         <div className="flex-1">
                           <span className="font-medium">{lot.lotNumber}</span>
