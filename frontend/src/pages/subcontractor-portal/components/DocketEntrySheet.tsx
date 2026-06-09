@@ -154,7 +154,7 @@ export function DocketEntrySheet({
                   <div className="flex items-center gap-2 p-3 bg-muted rounded-lg mt-1">
                     <MapPin className="h-4 w-4 text-muted-foreground" />
                     <span className="text-foreground">{assignedLots[0].lotNumber}</span>
-                    <Check className="h-4 w-4 text-green-500 ml-auto" />
+                    <Check className="h-4 w-4 text-success ml-auto" />
                   </div>
                 ) : (
                   <NativeSelect
@@ -189,7 +189,9 @@ export function DocketEntrySheet({
                   onChange={(e) => onHoursOperatedChange(e.target.value)}
                   className="mt-1 h-12 text-lg"
                 />
-                {plantHoursError && <p className="mt-1 text-sm text-red-600">{plantHoursError}</p>}
+                {plantHoursError && (
+                  <p className="mt-1 text-sm text-destructive">{plantHoursError}</p>
+                )}
               </div>
 
               {/* Wet/Dry toggle */}
@@ -259,7 +261,7 @@ export function DocketEntrySheet({
                 (sheetType === 'labour' && !selectedLotId) ||
                 (sheetType === 'plant' && Boolean(plantHoursError))
                 ? ''
-                : 'bg-primary hover:bg-primary/90 text-white',
+                : 'bg-primary hover:bg-primary/90 text-primary-foreground',
             )}
           >
             {saving ? (

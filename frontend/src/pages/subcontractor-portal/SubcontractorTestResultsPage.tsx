@@ -66,14 +66,14 @@ function getResultBadge(result: string) {
   switch (result) {
     case 'pass':
       return (
-        <span className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100">
+        <span className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-success/10 text-success">
           <CheckCircle2 className="h-3 w-3" />
           Pass
         </span>
       );
     case 'fail':
       return (
-        <span className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100">
+        <span className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-destructive/10 text-destructive">
           <XCircle className="h-3 w-3" />
           Fail
         </span>
@@ -143,7 +143,7 @@ export function SubcontractorTestResultsPage() {
   if (error) {
     return (
       <div className="container max-w-2xl mx-auto p-4">
-        <div className="flex items-start gap-3 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-800 dark:text-red-200">
+        <div className="flex items-start gap-3 p-4 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive">
           <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
           <p>{extractErrorMessage(error, 'Failed to load test results')}</p>
         </div>
@@ -177,11 +177,11 @@ export function SubcontractorTestResultsPage() {
       {/* Stats */}
       <div className="grid grid-cols-3 gap-3">
         <div className="border border-border rounded-lg bg-card p-3">
-          <p className="text-2xl font-bold text-green-600 dark:text-green-400">{passed.length}</p>
+          <p className="text-2xl font-bold text-foreground">{passed.length}</p>
           <p className="text-xs text-muted-foreground">Passed</p>
         </div>
         <div className="border border-border rounded-lg bg-card p-3">
-          <p className="text-2xl font-bold text-red-600 dark:text-red-400">{failed.length}</p>
+          <p className="text-2xl font-bold text-foreground">{failed.length}</p>
           <p className="text-xs text-muted-foreground">Failed</p>
         </div>
         <div className="border border-border rounded-lg bg-card p-3">
@@ -205,7 +205,7 @@ export function SubcontractorTestResultsPage() {
           {/* Failed - show first as priority */}
           {failed.length > 0 && (
             <div>
-              <h2 className="text-sm font-medium text-red-500 dark:text-red-400 mb-2">
+              <h2 className="text-sm font-medium text-destructive mb-2">
                 Failed ({failed.length})
               </h2>
               <div className="space-y-2">
@@ -255,8 +255,8 @@ function TestResultCard({ testResult }: { testResult: TestResult }) {
       <div className="p-4">
         <div className="flex items-start justify-between">
           <div className="flex items-start gap-3">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <FlaskConical className="h-4 w-4 text-primary" />
+            <div className="p-2 rounded-lg bg-muted">
+              <FlaskConical className="h-4 w-4 text-muted-foreground" />
             </div>
             <div>
               <p className="font-medium text-foreground">{testResult.lotNumber}</p>

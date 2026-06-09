@@ -22,7 +22,7 @@ interface DocketEditErrorProps {
 export function DocketEditError({ message }: DocketEditErrorProps) {
   return (
     <div className="container max-w-2xl mx-auto p-4">
-      <div className="flex items-start gap-3 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-800 dark:text-red-200">
+      <div className="flex items-start gap-3 p-4 bg-destructive/10 border border-destructive/30 rounded-lg text-destructive">
         <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
         <p>{message}</p>
       </div>
@@ -66,14 +66,10 @@ export function DocketEditHeader({
         <span
           className={cn(
             'ml-auto px-2.5 py-1 text-xs font-medium rounded-full',
-            docket.status === 'approved' &&
-              'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100',
-            docket.status === 'pending_approval' &&
-              'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100',
-            docket.status === 'queried' &&
-              'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100',
-            docket.status === 'rejected' &&
-              'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100',
+            docket.status === 'approved' && 'bg-success/10 text-success',
+            docket.status === 'pending_approval' && 'bg-warning/10 text-warning',
+            docket.status === 'queried' && 'bg-warning/10 text-warning',
+            docket.status === 'rejected' && 'bg-destructive/10 text-destructive',
             docket.status === 'draft' && 'bg-muted text-foreground',
           )}
         >
@@ -119,10 +115,10 @@ export function DocketEditNotices({
   return (
     <>
       {docket?.status === 'queried' && (
-        <div className="mb-4 border border-amber-200 dark:border-amber-800 rounded-lg bg-amber-50 dark:bg-amber-900/20 overflow-hidden">
+        <div className="mb-4 border border-warning/30 rounded-lg bg-warning/10 overflow-hidden">
           <div className="flex items-start gap-3 p-4">
-            <AlertCircle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
-            <div className="text-amber-800 dark:text-amber-200">
+            <AlertCircle className="h-5 w-5 text-warning shrink-0 mt-0.5" />
+            <div className="text-warning">
               <strong>Query from foreman:</strong>{' '}
               {docket.foremanNotes || 'Please review this docket'}
             </div>
@@ -133,7 +129,7 @@ export function DocketEditNotices({
               onChange={(e) => onQueryResponseChange(e.target.value)}
               placeholder="Type your response to the query..."
               rows={3}
-              className="border-amber-300 dark:border-amber-700 focus-visible:ring-amber-500"
+              className="border-warning/40 focus-visible:ring-warning"
             />
             <Button
               onClick={onRespondToQuery}
@@ -141,7 +137,7 @@ export function DocketEditNotices({
               className={cn(
                 'w-full',
                 queryResponse.trim() && !respondingToQuery
-                  ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                  ? 'bg-primary hover:bg-primary/90 text-primary-foreground'
                   : '',
               )}
             >
@@ -162,11 +158,11 @@ export function DocketEditNotices({
       )}
 
       {docket?.status === 'rejected' && (
-        <div className="flex items-start gap-3 p-4 mb-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-          <AlertCircle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
-          <div className="text-red-800 dark:text-red-200">
+        <div className="flex items-start gap-3 p-4 mb-4 bg-destructive/10 border border-destructive/30 rounded-lg">
+          <AlertCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+          <div className="text-destructive">
             <strong>Rejection reason:</strong> {docket.foremanNotes || 'No reason provided'}
-            <p className="text-sm mt-2 text-red-700 dark:text-red-300">
+            <p className="text-sm mt-2 text-destructive/90">
               You can edit the entries below and resubmit using the button at the bottom.
             </p>
           </div>
@@ -223,7 +219,9 @@ export function DocketEditActionBar({
             disabled={!canSubmit || submitting}
             className={cn(
               'px-6 py-3 h-auto',
-              canSubmit && !submitting ? 'bg-primary hover:bg-primary/90 text-white' : '',
+              canSubmit && !submitting
+                ? 'bg-primary hover:bg-primary/90 text-primary-foreground'
+                : '',
             )}
           >
             {submitting ? (
@@ -240,9 +238,7 @@ export function DocketEditActionBar({
           </Button>
         )}
         {canEdit && docketStatus === 'queried' && (
-          <p className="text-sm text-amber-700 dark:text-amber-300 text-right">
-            Respond to the query above to resubmit.
-          </p>
+          <p className="text-sm text-warning text-right">Respond to the query above to resubmit.</p>
         )}
         {!canEdit && docketStatus === 'pending_approval' && (
           <span className="px-4 py-2 text-base bg-muted text-muted-foreground rounded-lg">
@@ -250,7 +246,7 @@ export function DocketEditActionBar({
           </span>
         )}
         {!canEdit && docketStatus === 'approved' && (
-          <span className="px-4 py-2 text-base bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100 rounded-lg">
+          <span className="px-4 py-2 text-base bg-success/10 text-success rounded-lg">
             Approved
           </span>
         )}
