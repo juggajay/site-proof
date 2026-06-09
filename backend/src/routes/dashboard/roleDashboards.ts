@@ -71,36 +71,82 @@ dashboardRoleDashboardsRouter.get(
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
-    // 1. Today's Diary Status
-    const todayDiary = await prisma.dailyDiary.findFirst({
-      where: {
-        projectId,
-        date: {
-          gte: today,
-          lt: tomorrow,
+    // 1. Today's diary, 2. pending dockets and 3. inspections due today are
+    // independent reads - run them together instead of sequentially.
+    const [todayDiary, pendingDockets, holdPointsDueToday, itpsDueToday] = await Promise.all([
+      // 1. Today's Diary Status
+      prisma.dailyDiary.findFirst({
+        where: {
+          projectId,
+          date: {
+            gte: today,
+            lt: tomorrow,
+          },
         },
-      },
-      select: {
-        id: true,
-        status: true,
-        weatherConditions: true,
-        temperatureMin: true,
-        temperatureMax: true,
-        rainfallMm: true,
-      },
-    });
-
-    // 2. Pending Dockets
-    const pendingDockets = await prisma.dailyDocket.findMany({
-      where: {
-        projectId,
-        status: 'pending_approval',
-      },
-      select: {
-        totalLabourSubmitted: true,
-        totalPlantSubmitted: true,
-      },
-    });
+        select: {
+          id: true,
+          status: true,
+          weatherConditions: true,
+          temperatureMin: true,
+          temperatureMax: true,
+          rainfallMm: true,
+        },
+      }),
+      // 2. Pending Dockets
+      prisma.dailyDocket.findMany({
+        where: {
+          projectId,
+          status: 'pending_approval',
+        },
+        select: {
+          totalLabourSubmitted: true,
+          totalPlantSubmitted: true,
+        },
+      }),
+      // 3. Inspections Due Today (Hold Points + ITPs that are scheduled for today)
+      prisma.holdPoint.findMany({
+        where: {
+          lot: { projectId },
+          status: { in: ['scheduled', 'requested'] },
+          scheduledDate: {
+            gte: today,
+            lt: tomorrow,
+          },
+        },
+        include: {
+          lot: { select: { lotNumber: true, id: true, projectId: true } },
+        },
+        take: 10,
+      }),
+      // Also check ITP completions due today
+      prisma.iTPChecklistItem.findMany({
+        where: {
+          template: {
+            itpInstances: {
+              some: {
+                lot: { projectId },
+              },
+            },
+          },
+        },
+        include: {
+          template: {
+            include: {
+              itpInstances: {
+                where: {
+                  lot: { projectId },
+                },
+                include: {
+                  lot: { select: { lotNumber: true, id: true, projectId: true } },
+                },
+                take: 1,
+              },
+            },
+          },
+        },
+        take: 10,
+      }),
+    ]);
 
     const docketStats = {
       count: pendingDockets.length,
@@ -113,51 +159,6 @@ dashboardRoleDashboardsRouter.get(
         0,
       ),
     };
-
-    // 3. Inspections Due Today (Hold Points + ITPs that are scheduled for today)
-    const holdPointsDueToday = await prisma.holdPoint.findMany({
-      where: {
-        lot: { projectId },
-        status: { in: ['scheduled', 'requested'] },
-        scheduledDate: {
-          gte: today,
-          lt: tomorrow,
-        },
-      },
-      include: {
-        lot: { select: { lotNumber: true, id: true, projectId: true } },
-      },
-      take: 10,
-    });
-
-    // Also check ITP completions due today
-    const itpsDueToday = await prisma.iTPChecklistItem.findMany({
-      where: {
-        template: {
-          itpInstances: {
-            some: {
-              lot: { projectId },
-            },
-          },
-        },
-      },
-      include: {
-        template: {
-          include: {
-            itpInstances: {
-              where: {
-                lot: { projectId },
-              },
-              include: {
-                lot: { select: { lotNumber: true, id: true, projectId: true } },
-              },
-              take: 1,
-            },
-          },
-        },
-      },
-      take: 10,
-    });
 
     const inspectionItems = [
       ...holdPointsDueToday.map((hp) => ({
