@@ -240,7 +240,7 @@ export function AuditLogFilterOptionsAlert({ onRetry }: { onRetry: () => void })
   return (
     <div
       role="alert"
-      className="flex items-center justify-between gap-3 p-4 bg-amber-50 border border-amber-200 text-amber-800 rounded-lg"
+      className="flex items-center justify-between gap-3 p-4 bg-warning/10 border border-warning/30 text-warning rounded-lg"
     >
       <span>
         Some audit log filter options could not be loaded. Existing filters and search still work.
@@ -262,7 +262,7 @@ export function AuditLogDismissibleErrorAlert({
   return (
     <div
       role="alert"
-      className="flex items-center justify-between gap-3 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg"
+      className="flex items-center justify-between gap-3 p-4 bg-destructive/10 border border-destructive/30 text-destructive rounded-lg"
     >
       <span>{error}</span>
       <Button type="button" variant="outline" size="sm" onClick={onDismiss}>
@@ -284,7 +284,7 @@ export function AuditLogLoadErrorAlert({
   return (
     <div
       role="alert"
-      className="flex items-center justify-between gap-3 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg"
+      className="flex items-center justify-between gap-3 p-4 bg-destructive/10 border border-destructive/30 text-destructive rounded-lg"
     >
       <span>{error}</span>
       {canRetry && (

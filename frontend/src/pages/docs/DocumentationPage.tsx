@@ -15,7 +15,7 @@ export function DocumentationPage() {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="max-w-3xl">
           <div className="mb-3 inline-flex items-center gap-2 rounded-full border bg-card px-3 py-1 text-sm text-muted-foreground">
-            <BookOpen className="h-4 w-4 text-primary" />
+            <BookOpen className="h-4 w-4 text-muted-foreground" />
             SiteProof documentation
           </div>
           <h1 className="text-3xl font-bold tracking-tight">User guide and workflow reference</h1>
@@ -48,7 +48,7 @@ export function DocumentationPage() {
           <ol className="grid gap-3 md:grid-cols-5">
             {workflowSteps.map((step, index) => (
               <li key={step.title} className="rounded-lg border bg-background p-4">
-                <div className="mb-3 flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
+                <div className="mb-3 flex h-8 w-8 items-center justify-center rounded-full bg-foreground text-sm font-semibold text-background">
                   {index + 1}
                 </div>
                 <h2 className="font-semibold">{step.title}</h2>
@@ -88,8 +88,8 @@ export function DocumentationPage() {
             <Card key={section.id} id={section.id} className="scroll-mt-6">
               <CardHeader>
                 <div className="flex items-start gap-3">
-                  <div className="rounded-lg bg-primary/10 p-2">
-                    <section.icon className="h-5 w-5 text-primary" />
+                  <div className="rounded-lg bg-muted p-2">
+                    <section.icon className="h-5 w-5 text-muted-foreground" />
                   </div>
                   <div>
                     <h2 className="font-semibold leading-none tracking-tight">{section.title}</h2>
@@ -102,7 +102,7 @@ export function DocumentationPage() {
                   {section.steps.map((step) => (
                     <div key={step.title} className="rounded-lg border bg-background p-4">
                       <div className="mb-2 flex items-center gap-2 text-sm font-medium">
-                        <CircleDot className="h-4 w-4 text-primary" />
+                        <CircleDot className="h-4 w-4 text-muted-foreground" />
                         {step.title}
                       </div>
                       <p className="text-sm text-muted-foreground">{step.description}</p>
@@ -115,7 +115,7 @@ export function DocumentationPage() {
                   <ul className="mt-3 grid gap-2 md:grid-cols-3">
                     {section.tips.map((tip) => (
                       <li key={tip} className="flex gap-2 text-sm text-muted-foreground">
-                        <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0 text-green-600" />
+                        <CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0 text-muted-foreground" />
                         <span>{tip}</span>
                       </li>
                     ))}
@@ -164,7 +164,7 @@ export function DocumentationPage() {
                   to={href}
                   className="flex items-center gap-3 rounded-lg border bg-background p-3 text-sm font-medium hover:bg-muted"
                 >
-                  <item.icon className="h-4 w-4 text-primary" />
+                  <item.icon className="h-4 w-4 text-muted-foreground" />
                   {label}
                 </Link>
               );
