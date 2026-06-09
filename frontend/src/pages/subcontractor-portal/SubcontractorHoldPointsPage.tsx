@@ -61,21 +61,21 @@ function getStatusBadge(status: string) {
   switch (status) {
     case 'released':
       return (
-        <span className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100">
+        <span className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-muted text-foreground">
           <CheckCircle2 className="h-3 w-3" />
           Released
         </span>
       );
     case 'rejected':
       return (
-        <span className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100">
+        <span className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-muted text-foreground">
           <AlertTriangle className="h-3 w-3" />
           Rejected
         </span>
       );
     default:
       return (
-        <span className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100">
+        <span className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-muted text-foreground">
           <Clock className="h-3 w-3" />
           Pending
         </span>
@@ -138,7 +138,7 @@ export function SubcontractorHoldPointsPage() {
   if (error) {
     return (
       <div className="container max-w-2xl mx-auto p-4">
-        <div className="flex items-start gap-3 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-800 dark:text-red-200">
+        <div className="flex items-start gap-3 p-4 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive">
           <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
           <p>{extractErrorMessage(error, 'Failed to load hold points')}</p>
         </div>
@@ -172,15 +172,15 @@ export function SubcontractorHoldPointsPage() {
       {/* Stats */}
       <div className="grid grid-cols-3 gap-3">
         <div className="border border-border rounded-lg bg-card p-3">
-          <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">{pending.length}</p>
+          <p className="text-2xl font-bold text-foreground">{pending.length}</p>
           <p className="text-xs text-muted-foreground">Pending</p>
         </div>
         <div className="border border-border rounded-lg bg-card p-3">
-          <p className="text-2xl font-bold text-green-600 dark:text-green-400">{released.length}</p>
+          <p className="text-2xl font-bold text-foreground">{released.length}</p>
           <p className="text-xs text-muted-foreground">Released</p>
         </div>
         <div className="border border-border rounded-lg bg-card p-3">
-          <p className="text-2xl font-bold text-red-600 dark:text-red-400">{rejected.length}</p>
+          <p className="text-2xl font-bold text-foreground">{rejected.length}</p>
           <p className="text-xs text-muted-foreground">Rejected</p>
         </div>
       </div>
@@ -250,8 +250,8 @@ function HoldPointCard({ holdPoint }: { holdPoint: HoldPoint }) {
       <div className="p-4">
         <div className="flex items-start justify-between">
           <div className="flex items-start gap-3">
-            <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900">
-              <Hand className="h-4 w-4 text-amber-600 dark:text-amber-300" />
+            <div className="p-2 rounded-lg bg-muted">
+              <Hand className="h-4 w-4 text-muted-foreground" />
             </div>
             <div>
               <p className="font-medium text-foreground">{holdPoint.lotNumber}</p>

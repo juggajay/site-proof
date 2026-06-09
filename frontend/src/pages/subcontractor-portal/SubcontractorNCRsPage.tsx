@@ -40,7 +40,7 @@ function getStatusBadge(status: string) {
     case 'closed':
     case 'closed_concession':
       return (
-        <span className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100">
+        <span className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-muted text-foreground">
           <CheckCircle2 className="h-3 w-3" />
           {formatStatusLabel(status)}
         </span>
@@ -49,7 +49,7 @@ function getStatusBadge(status: string) {
     case 'rectification':
     case 'verification':
       return (
-        <span className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-primary/10 text-primary">
+        <span className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-muted text-foreground">
           <Clock className="h-3 w-3" />
           {formatStatusLabel(status)}
         </span>
@@ -63,7 +63,7 @@ function getStatusBadge(status: string) {
       );
     default:
       return (
-        <span className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100">
+        <span className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-destructive/10 text-destructive">
           <AlertTriangle className="h-3 w-3" />
           {formatStatusLabel(status, { fallback: 'Open' })}
         </span>
@@ -83,13 +83,13 @@ function getSeverityBadge(severity: string) {
   switch (severity) {
     case 'critical':
       return (
-        <span className="px-2 py-0.5 text-xs font-medium rounded bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100">
+        <span className="px-2 py-0.5 text-xs font-medium rounded bg-destructive/10 text-destructive">
           Critical
         </span>
       );
     case 'major':
       return (
-        <span className="px-2 py-0.5 text-xs font-medium rounded bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100">
+        <span className="px-2 py-0.5 text-xs font-medium rounded bg-warning/10 text-warning">
           Major
         </span>
       );
@@ -157,7 +157,7 @@ export function SubcontractorNCRsPage() {
   if (error) {
     return (
       <div className="container max-w-2xl mx-auto p-4">
-        <div className="flex items-start gap-3 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-800 dark:text-red-200">
+        <div className="flex items-start gap-3 p-4 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive">
           <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
           <p>{extractErrorMessage(error, 'Failed to load NCRs')}</p>
         </div>
@@ -191,15 +191,15 @@ export function SubcontractorNCRsPage() {
       {/* Stats */}
       <div className="grid grid-cols-3 gap-3">
         <div className="border border-border rounded-lg bg-card p-3">
-          <p className="text-2xl font-bold text-red-600 dark:text-red-400">{open.length}</p>
+          <p className="text-2xl font-bold text-destructive">{open.length}</p>
           <p className="text-xs text-muted-foreground">Open</p>
         </div>
         <div className="border border-border rounded-lg bg-card p-3">
-          <p className="text-2xl font-bold text-primary">{inProgress.length}</p>
+          <p className="text-2xl font-bold text-foreground">{inProgress.length}</p>
           <p className="text-xs text-muted-foreground">In Progress</p>
         </div>
         <div className="border border-border rounded-lg bg-card p-3">
-          <p className="text-2xl font-bold text-green-600 dark:text-green-400">{closed.length}</p>
+          <p className="text-2xl font-bold text-foreground">{closed.length}</p>
           <p className="text-xs text-muted-foreground">Closed</p>
         </div>
       </div>
@@ -219,9 +219,7 @@ export function SubcontractorNCRsPage() {
           {/* Open - show first as priority */}
           {open.length > 0 && (
             <div>
-              <h2 className="text-sm font-medium text-red-500 dark:text-red-400 mb-2">
-                Open ({open.length})
-              </h2>
+              <h2 className="text-sm font-medium text-destructive mb-2">Open ({open.length})</h2>
               <div className="space-y-2">
                 {open.map((ncr) => (
                   <NCRCard key={ncr.id} ncr={ncr} />
@@ -274,8 +272,8 @@ function NCRCard({ ncr }: { ncr: NCR }) {
       <div className="p-4">
         <div className="flex items-start justify-between">
           <div className="flex items-start gap-3">
-            <div className="p-2 rounded-lg bg-red-100 dark:bg-red-900">
-              <AlertTriangle className="h-4 w-4 text-red-600 dark:text-red-300" />
+            <div className="p-2 rounded-lg bg-muted">
+              <AlertTriangle className="h-4 w-4 text-muted-foreground" />
             </div>
             <div>
               <div className="flex items-center gap-2">

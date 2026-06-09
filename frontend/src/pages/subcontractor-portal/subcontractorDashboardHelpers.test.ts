@@ -76,19 +76,19 @@ describe('subcontractor dashboard – getDocketStatusMeta', () => {
     });
     expect(getDocketStatusMeta('pending_approval')).toEqual({
       label: 'Pending',
-      className: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100',
+      className: 'bg-warning/10 text-warning',
     });
     expect(getDocketStatusMeta('approved')).toEqual({
       label: 'Approved',
-      className: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100',
+      className: 'bg-success/10 text-success',
     });
     expect(getDocketStatusMeta('rejected')).toEqual({
       label: 'Rejected',
-      className: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100',
+      className: 'bg-destructive/10 text-destructive',
     });
     expect(getDocketStatusMeta('queried')).toEqual({
       label: 'Queried',
-      className: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100',
+      className: 'bg-warning/10 text-warning',
     });
   });
 

@@ -54,7 +54,7 @@ interface SubcontractorCompany {
 function getITPStatusBadge(status: string, percentage?: number) {
   if (status === 'completed') {
     return (
-      <span className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100">
+      <span className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-muted text-foreground">
         <CheckCircle2 className="h-3 w-3" />
         Complete
       </span>
@@ -62,7 +62,7 @@ function getITPStatusBadge(status: string, percentage?: number) {
   }
   if (status === 'in_progress' || (percentage && percentage > 0)) {
     return (
-      <span className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-primary/10 text-primary">
+      <span className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-muted text-foreground">
         <Clock className="h-3 w-3" />
         {percentage ? `${percentage}%` : 'In Progress'}
       </span>
@@ -138,7 +138,7 @@ export function SubcontractorITPsPage() {
   if (error) {
     return (
       <div className="container max-w-2xl mx-auto p-4">
-        <div className="flex items-start gap-3 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-800 dark:text-red-200">
+        <div className="flex items-start gap-3 p-4 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive">
           <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
           <p>{extractErrorMessage(error, 'Failed to load ITPs')}</p>
         </div>
@@ -176,13 +176,11 @@ export function SubcontractorITPsPage() {
           <p className="text-xs text-muted-foreground">Total ITPs</p>
         </div>
         <div className="border border-border rounded-lg bg-card p-3">
-          <p className="text-2xl font-bold text-primary">{inProgress.length}</p>
+          <p className="text-2xl font-bold text-foreground">{inProgress.length}</p>
           <p className="text-xs text-muted-foreground">In Progress</p>
         </div>
         <div className="border border-border rounded-lg bg-card p-3">
-          <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-            {completed.length}
-          </p>
+          <p className="text-2xl font-bold text-foreground">{completed.length}</p>
           <p className="text-xs text-muted-foreground">Completed</p>
         </div>
       </div>
@@ -258,18 +256,14 @@ function ITPLotCard({ lot }: { lot: Lot }) {
       <div className="p-4">
         <div className="flex items-center justify-between">
           <div className="flex items-start gap-3">
-            <div
-              className={`p-2 rounded-lg ${canComplete ? 'bg-green-100 dark:bg-green-900' : 'bg-muted'}`}
-            >
-              <ClipboardList
-                className={`h-4 w-4 ${canComplete ? 'text-green-600 dark:text-green-300' : 'text-muted-foreground'}`}
-              />
+            <div className="p-2 rounded-lg bg-muted">
+              <ClipboardList className="h-4 w-4 text-muted-foreground" />
             </div>
             <div>
               <p className="font-medium text-foreground">{lot.lotNumber}</p>
               {itp && <p className="text-sm text-muted-foreground">{itp.template.name}</p>}
               {!canComplete && (
-                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                <p className="text-xs text-muted-foreground mt-1">
                   View only - contact PM for completion access
                 </p>
               )}

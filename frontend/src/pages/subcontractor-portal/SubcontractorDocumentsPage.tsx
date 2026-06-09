@@ -42,12 +42,12 @@ function getCategoryIcon(category: string) {
   switch (category.toLowerCase()) {
     case 'drawing':
     case 'drawings':
-      return <FileText className="h-4 w-4 text-primary" />;
+      return <FileText className="h-4 w-4 text-muted-foreground" />;
     case 'specification':
     case 'specifications':
-      return <FileText className="h-4 w-4 text-purple-600 dark:text-purple-300" />;
+      return <FileText className="h-4 w-4 text-muted-foreground" />;
     case 'safety':
-      return <FileText className="h-4 w-4 text-red-600 dark:text-red-300" />;
+      return <FileText className="h-4 w-4 text-muted-foreground" />;
     default:
       return <FileText className="h-4 w-4 text-muted-foreground" />;
   }
@@ -117,7 +117,7 @@ export function SubcontractorDocumentsPage() {
   if (error) {
     return (
       <div className="container max-w-2xl mx-auto p-4">
-        <div className="flex items-start gap-3 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-800 dark:text-red-200">
+        <div className="flex items-start gap-3 p-4 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive">
           <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
           <p>{extractErrorMessage(error, 'Failed to load documents')}</p>
         </div>
@@ -155,9 +155,7 @@ export function SubcontractorDocumentsPage() {
           <p className="text-xs text-muted-foreground">Total Documents</p>
         </div>
         <div className="border border-border rounded-lg bg-card p-3">
-          <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-            {categories.length}
-          </p>
+          <p className="text-2xl font-bold text-foreground">{categories.length}</p>
           <p className="text-xs text-muted-foreground">Categories</p>
         </div>
       </div>
@@ -211,9 +209,7 @@ function DocumentCard({ document }: { document: Document }) {
       <div className="p-4">
         <div className="flex items-start justify-between">
           <div className="flex items-start gap-3">
-            <div className="p-2 rounded-lg bg-purple-100 dark:bg-purple-900">
-              {getCategoryIcon(document.category)}
-            </div>
+            <div className="p-2 rounded-lg bg-muted">{getCategoryIcon(document.category)}</div>
             <div className="min-w-0 flex-1">
               <p className="font-medium text-foreground truncate">{document.filename}</p>
               {document.description && (
