@@ -101,7 +101,7 @@ export function DrawingRegisterTable({
                 <td className="px-4 py-3">
                   <span className="font-medium">{drawing.drawingNumber}</span>
                   {drawing.supersededBy && (
-                    <span className="ml-2 text-xs text-orange-600">(Superseded)</span>
+                    <span className="ml-2 text-xs text-warning">(Superseded)</span>
                   )}
                 </td>
                 <td className="px-4 py-3 text-sm">{drawing.title || '-'}</td>
@@ -168,7 +168,7 @@ export function DrawingRegisterTable({
                         variant="ghost"
                         size="icon"
                         onClick={() => openRevisionModal(drawing)}
-                        className="text-primary hover:bg-primary/10 h-8 w-8"
+                        className="h-8 w-8 hover:bg-muted"
                         aria-label={`Upload new revision for ${drawing.drawingNumber}`}
                         title="Upload New Revision"
                       >
@@ -192,7 +192,7 @@ export function DrawingRegisterTable({
                         variant="ghost"
                         size="icon"
                         onClick={() => setDrawingPendingDelete(drawing)}
-                        className="text-red-600 hover:bg-red-100 h-8 w-8"
+                        className="text-destructive hover:bg-destructive/10 h-8 w-8"
                         aria-label={`Delete ${drawing.drawingNumber}`}
                         title="Delete"
                       >

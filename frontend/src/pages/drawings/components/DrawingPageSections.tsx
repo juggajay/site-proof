@@ -80,15 +80,15 @@ export function DrawingStatsCards({ stats }: { stats: DrawingStats }) {
         <div className="text-sm text-muted-foreground">Total Drawings</div>
       </div>
       <div className="rounded-lg border bg-card p-4">
-        <div className="text-2xl font-bold text-yellow-600">{stats.preliminary}</div>
+        <div className="text-2xl font-bold">{stats.preliminary}</div>
         <div className="text-sm text-muted-foreground">Preliminary</div>
       </div>
       <div className="rounded-lg border bg-card p-4">
-        <div className="text-2xl font-bold text-primary">{stats.forConstruction}</div>
+        <div className="text-2xl font-bold">{stats.forConstruction}</div>
         <div className="text-sm text-muted-foreground">For Construction</div>
       </div>
       <div className="rounded-lg border bg-card p-4">
-        <div className="text-2xl font-bold text-green-600">{stats.asBuilt}</div>
+        <div className="text-2xl font-bold">{stats.asBuilt}</div>
         <div className="text-sm text-muted-foreground">As-Built</div>
       </div>
     </div>
@@ -215,7 +215,7 @@ export function DrawingLoadErrorAlert({ error, onRetry }: DrawingLoadErrorAlertP
   return (
     <div
       role="alert"
-      className="flex items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-red-700"
+      className="flex items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-destructive"
     >
       <span>{error}</span>
       <Button type="button" variant="outline" size="sm" onClick={onRetry}>

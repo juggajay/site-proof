@@ -74,8 +74,8 @@ export function DocumentUploadModal({
             <div
               className={`relative border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
                 selectedFiles.length > 0
-                  ? 'border-green-400 bg-green-50'
-                  : 'border-border hover:border-primary hover:bg-primary/5'
+                  ? 'border-primary bg-muted'
+                  : 'border-input bg-background hover:border-primary hover:bg-muted'
               }`}
               onDragOver={(e) => {
                 e.preventDefault();
@@ -96,7 +96,7 @@ export function DocumentUploadModal({
                 <div className="space-y-2">
                   <div className="flex items-center justify-center gap-2">
                     <svg
-                      className="h-8 w-8 text-green-500"
+                      className="h-8 w-8 text-foreground"
                       fill="none"
                       viewBox="0 0 24 24"
                       stroke="currentColor"
@@ -108,7 +108,7 @@ export function DocumentUploadModal({
                         d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
                       />
                     </svg>
-                    <span className="font-medium text-green-700">
+                    <span className="font-medium text-foreground">
                       {selectedFiles.length} file{selectedFiles.length > 1 ? 's' : ''} selected
                     </span>
                   </div>
@@ -116,16 +116,16 @@ export function DocumentUploadModal({
                     {selectedFiles.map((file, idx) => (
                       <div
                         key={idx}
-                        className="flex items-center justify-between text-sm py-1 px-2 hover:bg-green-100 rounded"
+                        className="flex items-center justify-between text-sm py-1 px-2 hover:bg-muted rounded"
                       >
-                        <span className="truncate text-green-700">{file.name}</span>
-                        <span className="text-green-600 ml-2 flex-shrink-0">
+                        <span className="truncate text-foreground">{file.name}</span>
+                        <span className="text-muted-foreground ml-2 flex-shrink-0">
                           {formatFileSize(file.size)}
                         </span>
                       </div>
                     ))}
                   </div>
-                  <p className="text-xs text-green-600">
+                  <p className="text-xs text-muted-foreground">
                     Total: {formatFileSize(selectedFiles.reduce((sum, f) => sum + f.size, 0))}
                   </p>
                 </div>
@@ -145,7 +145,7 @@ export function DocumentUploadModal({
                     />
                   </svg>
                   <p className="mt-2 text-sm text-muted-foreground">
-                    <span className="font-medium text-primary">Click to browse</span> or drag and
+                    <span className="font-medium text-foreground">Click to browse</span> or drag and
                     drop
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
@@ -162,8 +162,8 @@ export function DocumentUploadModal({
               </p>
             )}
             {dimensionWarning && (
-              <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded-lg">
-                <p className="text-sm text-amber-700 flex items-center gap-2">
+              <div className="mt-2 p-2 bg-warning/10 border border-warning/30 rounded-lg">
+                <p className="text-sm text-warning flex items-center gap-2">
                   <AlertTriangle className="h-4 w-4 flex-shrink-0" />
                   <span>{dimensionWarning}</span>
                 </p>
