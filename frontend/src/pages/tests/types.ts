@@ -22,6 +22,10 @@ export interface TestResult {
   lotId: string | null;
   lot: Lot | null;
   aiExtracted?: boolean;
+  // Feature B2: set when a certificate Document is linked to this test. The
+  // verification gate requires it, and the UI uses it to label the per-row
+  // action "Attach" vs "Replace certificate".
+  certificateDocId?: string | null;
   createdAt: string;
   updatedAt: string;
 }

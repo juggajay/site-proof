@@ -2313,6 +2313,248 @@ describe('Test Results API', () => {
     });
   });
 
+  // Feature B2: attach (or replace) a certificate on an EXISTING test result so
+  // a manually-created test can satisfy the verification gate without the AI
+  // upload path (which would create a brand-new test instead).
+  describe('POST /api/test-results/:id/certificate', () => {
+    const PDF_BYTES = Buffer.from('%PDF-1.4\nattach cert\n%%EOF');
+
+    it('attaches a certificate to a manual test, then the test can be verified', async () => {
+      const testResult = await createEnteredTestResult();
+
+      try {
+        // Pre-condition: no certificate, so verification is blocked.
+        expect(testResult.certificateDocId).toBeNull();
+        const blocked = await request(app)
+          .post(`/api/test-results/${testResult.id}/verify`)
+          .set('Authorization', `Bearer ${authToken}`);
+        expect(blocked.status).toBe(400);
+        expect(blocked.body.error.code).toBe('CERTIFICATE_REQUIRED');
+
+        // Attach a PDF certificate to the existing test.
+        const attachRes = await request(app)
+          .post(`/api/test-results/${testResult.id}/certificate`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .attach('certificate', PDF_BYTES, {
+            filename: 'attach-existing.pdf',
+            contentType: 'application/pdf',
+          });
+
+        expect(attachRes.status).toBe(200);
+        expect(attachRes.body.message).toBe('Certificate attached successfully');
+        expect(attachRes.body.testResult.id).toBe(testResult.id);
+        expect(attachRes.body.testResult.certificateDoc).toBeTruthy();
+        expect(attachRes.body.testResult.certificateDoc.filename).toBe('attach-existing.pdf');
+        trackCertificateFile(attachRes.body.testResult.certificateDoc?.fileUrl);
+
+        const certificateDocId = attachRes.body.testResult.certificateDoc.id;
+
+        // DB row now links the new certificate; manual test stays manual.
+        const linked = await prisma.testResult.findUniqueOrThrow({
+          where: { id: testResult.id },
+          select: { certificateDocId: true, aiExtracted: true, status: true },
+        });
+        expect(linked.certificateDocId).toBe(certificateDocId);
+        expect(linked.aiExtracted).toBe(false);
+        expect(linked.status).toBe('entered');
+
+        // Acceptance: the gate is now satisfied and verification succeeds.
+        const verifyRes = await request(app)
+          .post(`/api/test-results/${testResult.id}/verify`)
+          .set('Authorization', `Bearer ${authToken}`);
+        expect(verifyRes.status).toBe(200);
+        expect(verifyRes.body.testResult.status).toBe('verified');
+      } finally {
+        await prisma.auditLog.deleteMany({ where: { entityId: testResult.id } });
+        await prisma.testResult.deleteMany({ where: { id: testResult.id } });
+        await prisma.document.deleteMany({ where: { projectId, filename: 'attach-existing.pdf' } });
+      }
+    });
+
+    it('replaces the existing certificate and deletes the old Document row', async () => {
+      const firstDoc = await prisma.document.create({
+        data: {
+          projectId,
+          documentType: 'test_certificate',
+          category: 'test_results',
+          filename: 'first-cert.pdf',
+          fileUrl: '/uploads/certificates/first-cert.pdf',
+          fileSize: 100,
+          mimeType: 'application/pdf',
+          uploadedById: userId,
+        },
+      });
+      const testResult = await prisma.testResult.create({
+        data: {
+          projectId,
+          lotId,
+          testType: `Replace Cert Test ${Date.now()}`,
+          status: 'entered',
+          certificateDocId: firstDoc.id,
+          enteredById: userId,
+          enteredAt: new Date(),
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .post(`/api/test-results/${testResult.id}/certificate`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .attach('certificate', PDF_BYTES, {
+            filename: 'replacement-cert.pdf',
+            contentType: 'application/pdf',
+          });
+
+        expect(res.status).toBe(200);
+        trackCertificateFile(res.body.testResult.certificateDoc?.fileUrl);
+        const newDocId = res.body.testResult.certificateDoc.id;
+        expect(newDocId).not.toBe(firstDoc.id);
+
+        // The test points at the new doc; the old Document row is gone.
+        const linked = await prisma.testResult.findUniqueOrThrow({
+          where: { id: testResult.id },
+          select: { certificateDocId: true },
+        });
+        expect(linked.certificateDocId).toBe(newDocId);
+        expect(await prisma.document.findUnique({ where: { id: firstDoc.id } })).toBeNull();
+      } finally {
+        await prisma.testResult.deleteMany({ where: { id: testResult.id } });
+        await prisma.document.deleteMany({
+          where: { projectId, filename: { in: ['first-cert.pdf', 'replacement-cert.pdf'] } },
+        });
+      }
+    });
+
+    it('rejects a file whose content does not match the declared type without linking it', async () => {
+      const testResult = await createEnteredTestResult();
+      const beforeFiles = new Set(fs.readdirSync(certificatesDir));
+      const invalidBytes = Buffer.from('not a pdf');
+
+      try {
+        const res = await request(app)
+          .post(`/api/test-results/${testResult.id}/certificate`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .attach('certificate', invalidBytes, {
+            filename: 'spoofed-attach.pdf',
+            contentType: 'application/pdf',
+          });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe('INVALID_FILE_TYPE');
+
+        const unchanged = await prisma.testResult.findUniqueOrThrow({
+          where: { id: testResult.id },
+          select: { certificateDocId: true },
+        });
+        expect(unchanged.certificateDocId).toBeNull();
+        expect(
+          await prisma.document.findFirst({ where: { projectId, filename: 'spoofed-attach.pdf' } }),
+        ).toBeNull();
+        expect(findNewFilesWithContent(beforeFiles, invalidBytes)).toHaveLength(0);
+      } finally {
+        await prisma.testResult.deleteMany({ where: { id: testResult.id } });
+      }
+    });
+
+    it('rejects the attach with 400 when no file is uploaded', async () => {
+      const testResult = await createEnteredTestResult();
+
+      try {
+        const res = await request(app)
+          .post(`/api/test-results/${testResult.id}/certificate`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.message).toContain('No file uploaded');
+      } finally {
+        await prisma.testResult.deleteMany({ where: { id: testResult.id } });
+      }
+    });
+
+    it('returns 404 for an unknown test result and cleans up the upload', async () => {
+      const beforeFiles = new Set(fs.readdirSync(certificatesDir));
+      const bytes = Buffer.from(`%PDF-1.4\nunknown ${Date.now()}\n%%EOF`);
+
+      const res = await request(app)
+        .post('/api/test-results/nonexistent-test-id/certificate')
+        .set('Authorization', `Bearer ${authToken}`)
+        .attach('certificate', bytes, {
+          filename: 'unknown-test.pdf',
+          contentType: 'application/pdf',
+        });
+
+      expect(res.status).toBe(404);
+      expect(findNewFilesWithContent(beforeFiles, bytes)).toHaveLength(0);
+    });
+
+    it('forbids a non-creator role from attaching a certificate', async () => {
+      const subbie = await registerTestUser(
+        'Attach Cert Subcontractor',
+        'subcontractor',
+        companyId,
+      );
+      const testResult = await createEnteredTestResult();
+
+      try {
+        await prisma.projectUser.create({
+          data: { projectId, userId: subbie.userId, role: 'subcontractor', status: 'active' },
+        });
+
+        const res = await request(app)
+          .post(`/api/test-results/${testResult.id}/certificate`)
+          .set('Authorization', `Bearer ${subbie.token}`)
+          .attach('certificate', PDF_BYTES, {
+            filename: 'forbidden-attach.pdf',
+            contentType: 'application/pdf',
+          });
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.message).toContain('permission to attach test certificates');
+
+        const unchanged = await prisma.testResult.findUniqueOrThrow({
+          where: { id: testResult.id },
+          select: { certificateDocId: true },
+        });
+        expect(unchanged.certificateDocId).toBeNull();
+      } finally {
+        await prisma.testResult.deleteMany({ where: { id: testResult.id } });
+        await cleanupTestUser(subbie.userId);
+      }
+    });
+
+    it('forbids attaching to a test result in a project the user cannot access', async () => {
+      // Outsider belongs to a different company and has no membership on this
+      // project, so the project/role scoping must reject the attach.
+      const outsiderCompany = await prisma.company.create({
+        data: { name: `Attach Cert Outsider Co ${Date.now()}` },
+      });
+      const outsider = await registerTestUser('Attach Cert Outsider', 'admin', outsiderCompany.id);
+      const testResult = await createEnteredTestResult();
+
+      try {
+        const res = await request(app)
+          .post(`/api/test-results/${testResult.id}/certificate`)
+          .set('Authorization', `Bearer ${outsider.token}`)
+          .attach('certificate', PDF_BYTES, {
+            filename: 'cross-project-attach.pdf',
+            contentType: 'application/pdf',
+          });
+
+        expect(res.status).toBe(403);
+
+        const unchanged = await prisma.testResult.findUniqueOrThrow({
+          where: { id: testResult.id },
+          select: { certificateDocId: true },
+        });
+        expect(unchanged.certificateDocId).toBeNull();
+      } finally {
+        await prisma.testResult.deleteMany({ where: { id: testResult.id } });
+        await cleanupTestUser(outsider.userId);
+        await prisma.company.delete({ where: { id: outsiderCompany.id } }).catch(() => {});
+      }
+    });
+  });
+
   describe('POST /api/test-results/:id/status', () => {
     it('should reject invalid workflow status payloads', async () => {
       const unknownStatusRes = await request(app)
