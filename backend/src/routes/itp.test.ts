@@ -1022,9 +1022,14 @@ describe('ITP Instances', () => {
       .set('Authorization', `Bearer ${authToken}`);
 
     expect(subcontractorViewRes.status).toBe(200);
-    expect(subcontractorViewRes.body.instance.template.checklistItems).toHaveLength(1);
-    expect(subcontractorViewRes.body.instance.template.checklistItems[0].responsibleParty).toBe(
-      'subcontractor',
+    // The subcontractor view now includes contractor items (the field work the
+    // subcontractor performs), not only items tagged 'subcontractor'.
+    const subcontractorViewParties = subcontractorViewRes.body.instance.template.checklistItems.map(
+      (item: { responsibleParty: string }) => item.responsibleParty,
+    );
+    expect(subcontractorViewParties).toHaveLength(2);
+    expect(subcontractorViewParties).toEqual(
+      expect.arrayContaining(['contractor', 'subcontractor']),
     );
 
     const duplicateSubcontractorViewRes = await request(app)
@@ -1045,6 +1050,82 @@ describe('ITP Instances', () => {
     expect(invalidSubcontractorViewRes.body.error.message).toContain(
       'subcontractorView must be true or false',
     );
+  });
+
+  it('hides superintendent items but shows contractor + subcontractor items in the subcontractor view', async () => {
+    // Dedicated template covering all three responsible parties so the
+    // subcontractor-view filter is exercised end to end.
+    const partyTemplate = await prisma.iTPTemplate.create({
+      data: {
+        projectId,
+        name: `Party Filter ITP ${Date.now()}`,
+        activityType: 'Earthworks',
+        checklistItems: {
+          create: [
+            {
+              description: 'Contractor item',
+              pointType: 'verification',
+              responsibleParty: 'contractor',
+              sequenceNumber: 1,
+            },
+            {
+              description: 'Subcontractor item',
+              pointType: 'verification',
+              responsibleParty: 'subcontractor',
+              sequenceNumber: 2,
+            },
+            {
+              description: 'Superintendent hold point',
+              pointType: 'hold_point',
+              responsibleParty: 'superintendent',
+              sequenceNumber: 3,
+            },
+          ],
+        },
+      },
+    });
+    const partyLot = await prisma.lot.create({
+      data: {
+        projectId,
+        lotNumber: `PARTY-LOT-${Date.now()}`,
+        status: 'not_started',
+        lotType: 'chainage',
+        activityType: 'Earthworks',
+      },
+    });
+
+    try {
+      const createInstanceRes = await request(app)
+        .post('/api/itp/instances')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ lotId: partyLot.id, templateId: partyTemplate.id });
+      expect(createInstanceRes.status).toBe(201);
+
+      // Full (head-contractor) view sees every item.
+      const fullView = await request(app)
+        .get(`/api/itp/instances/lot/${partyLot.id}`)
+        .set('Authorization', `Bearer ${authToken}`);
+      expect(fullView.status).toBe(200);
+      expect(fullView.body.instance.template.checklistItems).toHaveLength(3);
+
+      // Subcontractor view sees contractor + subcontractor, but not superintendent.
+      const subView = await request(app)
+        .get(`/api/itp/instances/lot/${partyLot.id}?subcontractorView=true`)
+        .set('Authorization', `Bearer ${authToken}`);
+      expect(subView.status).toBe(200);
+      const parties = subView.body.instance.template.checklistItems.map(
+        (item: { responsibleParty: string }) => item.responsibleParty,
+      );
+      expect(parties).toHaveLength(2);
+      expect(parties).toEqual(expect.arrayContaining(['contractor', 'subcontractor']));
+      expect(parties).not.toContain('superintendent');
+    } finally {
+      await prisma.iTPCompletion.deleteMany({ where: { itpInstance: { lotId: partyLot.id } } });
+      await prisma.iTPInstance.deleteMany({ where: { lotId: partyLot.id } });
+      await prisma.lot.delete({ where: { id: partyLot.id } }).catch(() => {});
+      await prisma.iTPChecklistItem.deleteMany({ where: { templateId: partyTemplate.id } });
+      await prisma.iTPTemplate.delete({ where: { id: partyTemplate.id } }).catch(() => {});
+    }
   });
 
   it('should reject oversized lot route ids before ITP instance lookups', async () => {

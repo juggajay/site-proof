@@ -336,12 +336,26 @@ instancesRouter.get(
       };
     }
 
-    // Feature #271: Filter to subcontractor-assigned items only if subcontractorView is true
+    // Feature #271: Filter the checklist for the subcontractor portal view.
+    //
+    // A subcontractor performing the field work on a lot is responsible for the
+    // contractor inspection items as well as any items explicitly tagged
+    // 'subcontractor' (and non-party-specific 'general' items). Only the
+    // superintendent's hold/witness points are withheld — those are released
+    // through the superintendent flow, not the subcontractor portal.
+    //
+    // This previously filtered to responsibleParty === 'subcontractor' only,
+    // which hid the *entire* checklist for the seeded library templates (whose
+    // items are tagged 'contractor'/'superintendent'), leaving subcontractors
+    // with nothing to complete even when granted canCompleteITP on the lot.
+    // We use an allow-list (not "!== superintendent") so any future/unknown
+    // responsible-party value defaults to hidden in the subcontractor view.
     const useSubcontractorView = subcontractorView || isItpSubcontractorUser(user);
+    const SUBCONTRACTOR_VISIBLE_PARTIES = new Set(['contractor', 'subcontractor', 'general']);
 
     if (useSubcontractorView) {
-      templateData.checklistItems = templateData.checklistItems.filter(
-        (item) => item.responsibleParty === 'subcontractor',
+      templateData.checklistItems = templateData.checklistItems.filter((item) =>
+        SUBCONTRACTOR_VISIBLE_PARTIES.has(item.responsibleParty ?? ''),
       );
     }
 
