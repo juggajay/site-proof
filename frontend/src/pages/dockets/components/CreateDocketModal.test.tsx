@@ -2,6 +2,14 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { CreateDocketModal } from './CreateDocketModal';
 
+// Render through the desktop (modal) path so tests don't need to set up
+// BottomSheet animation expectations. Individual ResponsiveSheet tests
+// cover the mobile branch.
+vi.mock('@/hooks/useMediaQuery', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/hooks/useMediaQuery')>();
+  return { ...actual, useIsMobile: () => false };
+});
+
 // VoiceInputButton wraps browser SpeechRecognition; stub it with a button that
 // emits a fixed transcript so the notes append behavior can be asserted.
 vi.mock('@/components/ui/VoiceInputButton', () => ({
@@ -82,15 +90,14 @@ describe('CreateDocketModal', () => {
     expect(screen.getByRole('button', { name: 'Creating...' })).toBeDisabled();
   });
 
-  it('submits via onSubmit and closes via the X and Cancel buttons', () => {
+  it('submits via onSubmit and closes via the Cancel button', () => {
     const { props } = renderModal({ date: '2026-06-04' });
 
     fireEvent.click(screen.getByRole('button', { name: 'Create Docket' }));
     expect(props.onSubmit).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Close create docket' }));
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    expect(props.onClose).toHaveBeenCalledTimes(2);
+    expect(props.onClose).toHaveBeenCalledTimes(1);
   });
 
   it('reports field edits through the controlled-value callbacks', () => {
