@@ -6,7 +6,7 @@ import type { TimelineEntry } from './DiaryTimelineEntry';
 import { DiaryDocketSummary } from './DiaryDocketSummary';
 import type { DocketSummaryData, ManualEntries } from './DiaryDocketSummary';
 import { usePullToRefresh, PullToRefreshIndicator } from '@/hooks/usePullToRefresh';
-import { MobileDataCardSkeleton } from '@/components/ui/MobileDataCard';
+import { DiaryTimelineEntrySkeleton } from '@/components/ui/Skeleton';
 import { Button } from '@/components/ui/button';
 import type { DailyDiary } from '@/pages/diary/types';
 import { formatDateKey } from '@/lib/localDate';
@@ -139,13 +139,15 @@ export function DiaryMobileView(props: DiaryMobileViewProps) {
             onAddManual={onAddManual || (() => {})}
           />
 
-          {/* Timeline entries */}
+          {/* Timeline entries — initial-load skeleton (isLoading with no cached data).
+              Three cards mirror a typical morning diary; layout-matched to DiaryTimelineEntry
+              so content landing causes no layout shift. */}
           {loading && (
-            <>
-              <MobileDataCardSkeleton />
-              <MobileDataCardSkeleton />
-              <MobileDataCardSkeleton />
-            </>
+            <div data-testid="diary-timeline-skeleton">
+              <DiaryTimelineEntrySkeleton />
+              <DiaryTimelineEntrySkeleton />
+              <DiaryTimelineEntrySkeleton />
+            </div>
           )}
 
           {!loading && timeline.length === 0 && (

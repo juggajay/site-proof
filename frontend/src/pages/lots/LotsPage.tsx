@@ -270,8 +270,10 @@ export function LotsPage() {
         onSetColumnOrder={setColumnOrder}
       />
 
-      {/* Loading Skeleton */}
-      {loading && (
+      {/* Loading Skeleton — desktop table only.
+          Mobile/card view renders LotMobileList with isLoading=true (see below)
+          so it shows its own layout-matched card skeleton instead of this table skeleton. */}
+      {loading && !isMobile && viewMode !== 'card' && (
         <div className="rounded-lg border overflow-hidden" role="status" aria-label="Loading lots">
           <div className="bg-muted/50 border-b px-4 py-3">
             <div className="flex gap-4">
@@ -350,26 +352,26 @@ export function LotsPage() {
         />
       )}
 
-      {/* Card / Mobile View */}
-      {!loading &&
-        !error &&
-        (viewMode === 'card' || (viewMode === 'list' && isMobile)) &&
-        projectId && (
-          <LotMobileList
-            displayedLots={displayedLots}
-            filteredLots={filteredLots}
-            allLots={lots}
-            isMobile={isMobile}
-            isSubcontractor={isSubcontractor}
-            canCreate={canCreate}
-            projectId={projectId}
-            onContextMenu={actions.handleContextMenu}
-            onRefresh={fetchLots}
-            loadMoreRef={loadMoreRef}
-            loadingMore={loadingMore}
-            hasMore={hasMore}
-          />
-        )}
+      {/* Card / Mobile View — rendered during loading too so LotMobileList shows
+          its own layout-matched skeleton (isLoading=true, displayedLots empty).
+          Error state suppresses the list entirely (existing behaviour). */}
+      {!error && (viewMode === 'card' || (viewMode === 'list' && isMobile)) && projectId && (
+        <LotMobileList
+          displayedLots={displayedLots}
+          filteredLots={filteredLots}
+          allLots={lots}
+          isMobile={isMobile}
+          isSubcontractor={isSubcontractor}
+          canCreate={canCreate}
+          projectId={projectId}
+          onContextMenu={actions.handleContextMenu}
+          onRefresh={fetchLots}
+          isLoading={loading}
+          loadMoreRef={loadMoreRef}
+          loadingMore={loadingMore}
+          hasMore={hasMore}
+        />
+      )}
 
       {/* Feature #151 - Linear Map View */}
       {!loading && !error && viewMode === 'linear' && (
