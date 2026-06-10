@@ -50,6 +50,24 @@ export {
   submitDiaryOffline,
 } from './offline/diaries';
 
+// The mobile diary quick-add offline path (queue an activity/delay/plant/
+// weather/delivery/event entry when its save fails on a network failure, plus
+// the delivery/event sync-status markers) lives in ./offline/diaryQuickAdd.
+// Re-exported for the same reason: callers keep importing from '@/lib/offlineDb'.
+export {
+  markDeliverySynced,
+  markDeliverySyncError,
+  markEventSynced,
+  markEventSyncError,
+  queueDiaryActivityOffline,
+  queueDiaryDelayOffline,
+  queueDiaryDeliveryOffline,
+  queueDiaryEventOffline,
+  queueDiaryPlantOffline,
+  queueDiaryWeatherOffline,
+  type OfflineDiaryRef,
+} from './offline/diaryQuickAdd';
+
 // The offline ITP checklist/completion helpers live in ./offline/itp.
 // Re-exported so callers keep importing from '@/lib/offlineDb'.
 export {

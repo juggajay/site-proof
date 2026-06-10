@@ -125,7 +125,13 @@ export interface OfflineDailyDiary {
   status: 'draft' | 'submitted';
   weather: {
     conditions?: string;
+    // Legacy single reading kept for records already on devices; new offline
+    // weather writes store the min/max pair the diary API actually accepts.
+    // These are plain nested fields (not Dexie indexes), so adding them needs
+    // no schema version bump.
     temperature?: number;
+    temperatureMin?: number;
+    temperatureMax?: number;
     rainfall?: number;
     notes?: string;
   };

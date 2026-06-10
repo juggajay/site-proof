@@ -17,6 +17,10 @@ vi.mock('../offlineDb', () => ({
   markCompletionSynced: vi.fn(),
   markDiarySynced: vi.fn(),
   markDiarySyncError: vi.fn(),
+  markDeliverySynced: vi.fn(),
+  markDeliverySyncError: vi.fn(),
+  markEventSynced: vi.fn(),
+  markEventSyncError: vi.fn(),
   markDocketSynced: vi.fn(),
   markDocketServerId: vi.fn(),
   markDocketSyncError: vi.fn(),
@@ -30,6 +34,8 @@ vi.mock('../offlineDb', () => ({
   offlineDb: {
     diaries: { get: vi.fn() },
     dockets: { get: vi.fn() },
+    diaryDeliveries: { get: vi.fn() },
+    diaryEvents: { get: vi.fn() },
   },
 }));
 
@@ -59,6 +65,10 @@ import {
   markCompletionSynced,
   markDiarySynced,
   markDiarySyncError,
+  markDeliverySynced,
+  markDeliverySyncError,
+  markEventSynced,
+  markEventSyncError,
   markDocketSynced,
   markDocketServerId,
   markDocketSyncError,
@@ -83,6 +93,10 @@ const markSyncItemErrorMock = markSyncItemError as Mock;
 const markCompletionSyncedMock = markCompletionSynced as Mock;
 const markDiarySyncedMock = markDiarySynced as Mock;
 const markDiarySyncErrorMock = markDiarySyncError as Mock;
+const markDeliverySyncedMock = markDeliverySynced as Mock;
+const markDeliverySyncErrorMock = markDeliverySyncError as Mock;
+const markEventSyncedMock = markEventSynced as Mock;
+const markEventSyncErrorMock = markEventSyncError as Mock;
 const markDocketSyncedMock = markDocketSynced as Mock;
 const markDocketServerIdMock = markDocketServerId as Mock;
 const markDocketSyncErrorMock = markDocketSyncError as Mock;
@@ -96,6 +110,8 @@ const markLotSyncErrorMock = markLotSyncError as Mock;
 const buildOfflineLotEditPayloadMock = buildOfflineLotEditPayload as Mock;
 const diariesGetMock = offlineDb.diaries.get as unknown as Mock;
 const docketsGetMock = offlineDb.dockets.get as unknown as Mock;
+const diaryDeliveriesGetMock = offlineDb.diaryDeliveries.get as unknown as Mock;
+const diaryEventsGetMock = offlineDb.diaryEvents.get as unknown as Mock;
 const authFetchMock = authFetch as Mock;
 const readResponseErrorMock = readResponseError as Mock;
 const syncOfflineDiarySnapshotMock = syncOfflineDiarySnapshot as Mock;
@@ -344,6 +360,175 @@ describe('syncSingleItem — diary', () => {
     expect(result).toEqual({ status: 'handled' });
     expect(markSyncItemErrorMock).toHaveBeenCalledWith(21, 'activity post failed');
     expect(markDiarySyncErrorMock).toHaveBeenCalledWith('d-5');
+  });
+});
+
+describe('syncSingleItem — delivery_save / event_save (diary quick-add offline path)', () => {
+  const deliveryRecord = {
+    id: 'del-1',
+    diaryId: 'server-d-1',
+    description: '20t road base',
+    supplier: 'Quarry Co',
+    docketNumber: 'QC-441',
+    quantity: 20,
+    unit: 't',
+    lotId: 'lot-1',
+    notes: 'tipped at CH200',
+    syncStatus: 'pending',
+    localUpdatedAt: '2026-01-01T00:00:00.000Z',
+  };
+
+  const eventRecord = {
+    id: 'evt-1',
+    diaryId: 'server-d-1',
+    eventType: 'inspection',
+    description: 'Council walkover',
+    notes: 'no issues raised',
+    lotId: 'lot-2',
+    syncStatus: 'pending',
+    localUpdatedAt: '2026-01-01T00:00:00.000Z',
+  };
+
+  it('delivery_save POSTs to the stored server diary id, returns "synced", removes + marks', async () => {
+    diaryDeliveriesGetMock.mockResolvedValue(deliveryRecord);
+    diariesGetMock.mockResolvedValue(undefined); // diaryId is already a server id
+    authFetchMock.mockResolvedValue(okJson({ ok: true }));
+
+    const result = await syncSingleItem(
+      queueItem({ id: 81, type: 'delivery_save', data: { deliveryId: 'del-1' } }),
+    );
+
+    expect(result).toEqual({ status: 'synced' });
+    expect(syncOfflineDiarySnapshotMock).not.toHaveBeenCalled();
+    expect(authFetchMock).toHaveBeenCalledWith('/api/diary/server-d-1/deliveries', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        description: '20t road base',
+        supplier: 'Quarry Co',
+        docketNumber: 'QC-441',
+        quantity: 20,
+        unit: 't',
+        lotId: 'lot-1',
+        notes: 'tipped at CH200',
+      }),
+    });
+    expect(removeSyncQueueItemMock).toHaveBeenCalledWith(81);
+    expect(markDeliverySyncedMock).toHaveBeenCalledWith('del-1');
+  });
+
+  it('delivery_save anchored to a LOCAL diary snapshot resolves the server id via the snapshot sync', async () => {
+    diaryDeliveriesGetMock.mockResolvedValue({
+      ...deliveryRecord,
+      diaryId: 'diary-project-1-2026-06-09',
+    });
+    const localDiary = { id: 'diary-project-1-2026-06-09' };
+    diariesGetMock.mockResolvedValue(localDiary);
+    syncOfflineDiarySnapshotMock.mockResolvedValue('server-d-9');
+    authFetchMock.mockResolvedValue(okJson({ ok: true }));
+
+    const result = await syncSingleItem(
+      queueItem({ id: 81, type: 'delivery_save', data: { deliveryId: 'del-1' } }),
+    );
+
+    expect(result).toEqual({ status: 'synced' });
+    expect(syncOfflineDiarySnapshotMock).toHaveBeenCalledWith(localDiary);
+    expect(authFetchMock.mock.calls[0][0]).toBe('/api/diary/server-d-9/deliveries');
+    expect(markDeliverySyncedMock).toHaveBeenCalledWith('del-1');
+  });
+
+  it('delivery_save removes the item (handled) when the delivery no longer exists', async () => {
+    diaryDeliveriesGetMock.mockResolvedValue(undefined);
+
+    const result = await syncSingleItem(
+      queueItem({ id: 81, type: 'delivery_save', data: { deliveryId: 'gone' } }),
+    );
+
+    expect(result).toEqual({ status: 'handled' });
+    expect(removeSyncQueueItemMock).toHaveBeenCalledWith(81);
+    expect(authFetchMock).not.toHaveBeenCalled();
+  });
+
+  it('delivery_save POST not ok -> error-marks item + delivery (handled, no removal)', async () => {
+    diaryDeliveriesGetMock.mockResolvedValue(deliveryRecord);
+    diariesGetMock.mockResolvedValue(undefined);
+    authFetchMock.mockResolvedValue(errorResponse(422, 'invalid delivery'));
+
+    const result = await syncSingleItem(
+      queueItem({ id: 81, type: 'delivery_save', data: { deliveryId: 'del-1' } }),
+    );
+
+    expect(result).toEqual({ status: 'handled' });
+    expect(markSyncItemErrorMock).toHaveBeenCalledWith(81, 'invalid delivery');
+    expect(markDeliverySyncErrorMock).toHaveBeenCalledWith('del-1');
+    expect(removeSyncQueueItemMock).not.toHaveBeenCalled();
+    expect(markDeliverySyncedMock).not.toHaveBeenCalled();
+  });
+
+  it('delivery_save catches a thrown error and marks item + delivery via the shared onError', async () => {
+    diaryDeliveriesGetMock.mockResolvedValue(deliveryRecord);
+    diariesGetMock.mockResolvedValue(undefined);
+    authFetchMock.mockRejectedValue(new Error('network down'));
+
+    const result = await syncSingleItem(
+      queueItem({ id: 81, type: 'delivery_save', data: { deliveryId: 'del-1' } }),
+    );
+
+    expect(result).toEqual({ status: 'handled' });
+    expect(markSyncItemErrorMock).toHaveBeenCalledWith(81, 'network down');
+    expect(markDeliverySyncErrorMock).toHaveBeenCalledWith('del-1');
+  });
+
+  it('event_save POSTs to /events, returns "synced", removes + marks', async () => {
+    diaryEventsGetMock.mockResolvedValue(eventRecord);
+    diariesGetMock.mockResolvedValue(undefined);
+    authFetchMock.mockResolvedValue(okJson({ ok: true }));
+
+    const result = await syncSingleItem(
+      queueItem({ id: 82, type: 'event_save', data: { eventId: 'evt-1' } }),
+    );
+
+    expect(result).toEqual({ status: 'synced' });
+    expect(authFetchMock).toHaveBeenCalledWith('/api/diary/server-d-1/events', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        eventType: 'inspection',
+        description: 'Council walkover',
+        notes: 'no issues raised',
+        lotId: 'lot-2',
+      }),
+    });
+    expect(removeSyncQueueItemMock).toHaveBeenCalledWith(82);
+    expect(markEventSyncedMock).toHaveBeenCalledWith('evt-1');
+  });
+
+  it('event_save removes the item (handled) when the event no longer exists', async () => {
+    diaryEventsGetMock.mockResolvedValue(undefined);
+
+    const result = await syncSingleItem(
+      queueItem({ id: 82, type: 'event_save', data: { eventId: 'gone' } }),
+    );
+
+    expect(result).toEqual({ status: 'handled' });
+    expect(removeSyncQueueItemMock).toHaveBeenCalledWith(82);
+    expect(authFetchMock).not.toHaveBeenCalled();
+  });
+
+  it('event_save POST not ok -> error-marks item + event (handled, no removal)', async () => {
+    diaryEventsGetMock.mockResolvedValue(eventRecord);
+    diariesGetMock.mockResolvedValue(undefined);
+    authFetchMock.mockResolvedValue(errorResponse(400, 'invalid event'));
+
+    const result = await syncSingleItem(
+      queueItem({ id: 82, type: 'event_save', data: { eventId: 'evt-1' } }),
+    );
+
+    expect(result).toEqual({ status: 'handled' });
+    expect(markSyncItemErrorMock).toHaveBeenCalledWith(82, 'invalid event');
+    expect(markEventSyncErrorMock).toHaveBeenCalledWith('evt-1');
+    expect(removeSyncQueueItemMock).not.toHaveBeenCalled();
+    expect(markEventSyncedMock).not.toHaveBeenCalled();
   });
 });
 
@@ -739,16 +924,25 @@ describe('syncSingleItem — unknown-type GC (invariant 8)', () => {
     expect(removeSyncQueueItemMock).toHaveBeenCalledWith(71);
   });
 
-  it('GCs the branch-less delivery_save / event_save union members (pinned latent gap)', async () => {
+  it('no longer GCs delivery_save / event_save — they have real executors now', async () => {
+    // These union members used to be branch-less and fell through to the
+    // unknown-type sweep (queued entries silently discarded). They are now
+    // dispatched to their executors; the GC sweep must never see them.
+    diaryDeliveriesGetMock.mockResolvedValue(undefined);
     await syncSingleItem(
       queueItem({ id: 72, type: 'delivery_save', data: { deliveryId: 'del-1' } }),
     );
-    expect(removeSyncQueueItemMock).toHaveBeenCalledWith(72);
-    expect(devWarnMock).toHaveBeenCalledWith('[Sync] Removing unknown item type:', 'delivery_save');
+    expect(devWarnMock).not.toHaveBeenCalledWith(
+      '[Sync] Removing unknown item type:',
+      'delivery_save',
+    );
 
+    diaryEventsGetMock.mockResolvedValue(undefined);
     await syncSingleItem(queueItem({ id: 73, type: 'event_save', data: { eventId: 'evt-1' } }));
-    expect(removeSyncQueueItemMock).toHaveBeenCalledWith(73);
-    expect(devWarnMock).toHaveBeenCalledWith('[Sync] Removing unknown item type:', 'event_save');
+    expect(devWarnMock).not.toHaveBeenCalledWith(
+      '[Sync] Removing unknown item type:',
+      'event_save',
+    );
   });
 
   it('does not GC a known type (returns handled without removing) — itp with no id falls through', async () => {

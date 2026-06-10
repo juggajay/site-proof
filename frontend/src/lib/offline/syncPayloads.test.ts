@@ -141,6 +141,22 @@ describe('buildOfflineDiaryPayload', () => {
     });
   });
 
+  it('prefers the stored min/max temperature pair and falls back to the legacy single reading', () => {
+    const withPair = buildOfflineDiaryPayload(
+      makeDiary({ weather: { temperatureMin: 8, temperatureMax: 31 } }),
+    );
+    expect(withPair.temperatureMin).toBe(8);
+    expect(withPair.temperatureMax).toBe(31);
+
+    // Records written before the quick-add wiring only carry `temperature`;
+    // it keeps mapping to both bounds exactly as before.
+    const legacy = buildOfflineDiaryPayload(
+      makeDiary({ weather: { temperature: 24, temperatureMax: 31 } }),
+    );
+    expect(legacy.temperatureMin).toBe(24);
+    expect(legacy.temperatureMax).toBe(31);
+  });
+
   it('drops blank weather fields and empty notes instead of sending empty strings', () => {
     const payload = buildOfflineDiaryPayload(makeDiary({ weather: { conditions: '   ' } }));
 
