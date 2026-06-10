@@ -45,7 +45,7 @@ describe('ResponsiveSheet', () => {
     expect(screen.queryByTestId('bottom-sheet')).not.toBeInTheDocument();
   });
 
-  it('renders a BottomSheet on mobile', () => {
+  it('renders a BottomSheet on mobile with an accessible dialog role', () => {
     useIsMobileMock.mockReturnValue(true);
 
     render(
@@ -54,7 +54,9 @@ describe('ResponsiveSheet', () => {
       </ResponsiveSheet>,
     );
 
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    // The wrapper must expose role="dialog" so that getByRole('dialog', { name })
+    // works in Playwright E2E tests (and for assistive technology).
+    expect(screen.getByRole('dialog', { name: 'Mobile Title' })).toBeInTheDocument();
     expect(screen.getByTestId('bottom-sheet')).toBeInTheDocument();
     expect(screen.getByTestId('bottom-sheet-title')).toHaveTextContent('Mobile Title');
     expect(screen.getByText('Sheet content')).toBeInTheDocument();
