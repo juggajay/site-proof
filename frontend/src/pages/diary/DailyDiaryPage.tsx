@@ -13,6 +13,7 @@ import { DiarySubmitSection } from './components/DiarySubmitSection';
 import { DiaryDesktopHeader } from './components/DiaryDesktopHeader';
 import { DiaryTabNav } from './components/DiaryTabNav';
 import { DiaryEmptyState } from './components/DiaryEmptyState';
+import { DiaryNoDayCard } from './components/DiaryNoDayCard';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
@@ -242,6 +243,16 @@ export function DailyDiaryPage() {
                 weatherSource={data.weatherSource}
                 onFetchWeather={data.fetchWeatherForDate}
               />
+            )}
+            {/*
+              The four entry tabs need diary.id, so they stay gated on
+              data.diary. Before the day's diary exists (saving Weather creates
+              it), show one shared guided card instead of a blank panel. Loading
+              and error states never reach here — the branch above already
+              renders the spinner or nothing alongside the error banner.
+            */}
+            {activeTab !== 'weather' && !data.diary && (
+              <DiaryNoDayCard onGoToWeather={() => setActiveTab('weather')} />
             )}
             {activeTab === 'personnel' && data.diary && (
               <PersonnelTab
