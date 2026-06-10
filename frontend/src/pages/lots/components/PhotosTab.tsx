@@ -3,7 +3,7 @@ import { CheckCircle } from 'lucide-react';
 import { toast } from '@/components/ui/toaster';
 import { authFetch } from '@/lib/api';
 import { SecureDocumentImage } from '@/components/documents/SecureDocumentImage';
-import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal';
+import { ResponsiveSheet } from '@/components/ui/ResponsiveSheet';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import type { ITPAttachment, ITPChecklistItem, ITPCompletion, ITPInstance, LotTab } from '../types';
@@ -327,32 +327,20 @@ export function PhotosTab({
           })}
         </div>
 
-        {/* Batch Caption Modal */}
-        {showBatchCaptionModal && (
-          <Modal
-            onClose={() => {
-              setShowBatchCaptionModal(false);
-              setBatchCaption('');
-            }}
-            className="max-w-md"
-          >
-            <ModalHeader>Bulk Caption Photos</ModalHeader>
-            <ModalBody>
-              <p className="text-sm text-muted-foreground mb-4">
-                Apply caption to {selectedPhotos.size} selected photo
-                {selectedPhotos.size !== 1 ? 's' : ''}
-              </p>
-              <Textarea
-                value={batchCaption}
-                onChange={(e) => setBatchCaption(e.target.value)}
-                placeholder="Enter caption for all selected photos..."
-                className="h-24 resize-none"
-                autoFocus
-              />
-            </ModalBody>
-            <ModalFooter>
+        {/* Batch Caption Sheet */}
+        <ResponsiveSheet
+          open={showBatchCaptionModal}
+          onClose={() => {
+            setShowBatchCaptionModal(false);
+            setBatchCaption('');
+          }}
+          title="Bulk Caption Photos"
+          className="max-w-md"
+          footer={
+            <>
               <Button
                 variant="outline"
+                className="min-h-[44px]"
                 onClick={() => {
                   setShowBatchCaptionModal(false);
                   setBatchCaption('');
@@ -362,6 +350,7 @@ export function PhotosTab({
                 Cancel
               </Button>
               <Button
+                className="min-h-[44px]"
                 onClick={applyBatchCaptionToPhotos}
                 disabled={!batchCaption.trim() || applyingBatchCaption}
               >
@@ -374,66 +363,36 @@ export function PhotosTab({
                   'Apply Caption'
                 )}
               </Button>
-            </ModalFooter>
-          </Modal>
-        )}
+            </>
+          }
+        >
+          <p className="text-sm text-muted-foreground">
+            Apply caption to {selectedPhotos.size} selected photo
+            {selectedPhotos.size !== 1 ? 's' : ''}
+          </p>
+          <Textarea
+            value={batchCaption}
+            onChange={(e) => setBatchCaption(e.target.value)}
+            placeholder="Enter caption for all selected photos..."
+            className="h-24 resize-none"
+            autoFocus
+          />
+        </ResponsiveSheet>
 
-        {/* Add to Evidence Modal */}
-        {showAddToEvidenceModal && itpInstance?.template?.checklistItems && (
-          <Modal
-            onClose={() => {
-              setShowAddToEvidenceModal(false);
-              setSelectedEvidenceItem(null);
-            }}
-            className="max-w-lg"
-          >
-            <ModalHeader>Add Photos to Evidence</ModalHeader>
-            <ModalBody className="max-h-[60vh] overflow-y-auto">
-              <p className="text-sm text-muted-foreground mb-4">
-                Select an ITP checklist item to attach {selectedPhotos.size} photo
-                {selectedPhotos.size !== 1 ? 's' : ''} as evidence
-              </p>
-              <div className="space-y-2">
-                {itpInstance.template.checklistItems.map((item: ITPChecklistItem) => {
-                  const completion = itpInstance.completions?.find(
-                    (c) => c.checklistItemId === item.id,
-                  );
-                  const isSelected = selectedEvidenceItem === item.id;
-                  return (
-                    <button
-                      key={item.id}
-                      onClick={() => setSelectedEvidenceItem(item.id)}
-                      className={`w-full text-left p-3 rounded-lg border transition-colors ${
-                        isSelected
-                          ? 'border-success bg-success/10'
-                          : 'hover:border-primary hover:bg-muted/50'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm truncate">
-                            {item.order}. {item.description}
-                          </p>
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            {item.evidenceRequired !== 'none'
-                              ? `Requires: ${item.evidenceRequired}`
-                              : 'No evidence required'}
-                            {(completion?.attachments?.length ?? 0) > 0 &&
-                              ` • ${completion?.attachments?.length ?? 0} attached`}
-                          </p>
-                        </div>
-                        {isSelected && (
-                          <CheckCircle className="h-5 w-5 text-success ml-2 flex-shrink-0" />
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </ModalBody>
-            <ModalFooter>
+        {/* Add to Evidence Sheet */}
+        <ResponsiveSheet
+          open={showAddToEvidenceModal && Boolean(itpInstance?.template?.checklistItems)}
+          onClose={() => {
+            setShowAddToEvidenceModal(false);
+            setSelectedEvidenceItem(null);
+          }}
+          title="Add Photos to Evidence"
+          className="max-w-lg"
+          footer={
+            <>
               <Button
                 variant="outline"
+                className="min-h-[44px]"
                 onClick={() => {
                   setShowAddToEvidenceModal(false);
                   setSelectedEvidenceItem(null);
@@ -444,6 +403,7 @@ export function PhotosTab({
               </Button>
               <Button
                 variant="success"
+                className="min-h-[44px]"
                 onClick={addPhotosToEvidence}
                 disabled={!selectedEvidenceItem || addingToEvidence}
               >
@@ -456,9 +416,51 @@ export function PhotosTab({
                   'Add to Evidence'
                 )}
               </Button>
-            </ModalFooter>
-          </Modal>
-        )}
+            </>
+          }
+        >
+          <p className="text-sm text-muted-foreground">
+            Select an ITP checklist item to attach {selectedPhotos.size} photo
+            {selectedPhotos.size !== 1 ? 's' : ''} as evidence
+          </p>
+          <div className="space-y-2">
+            {itpInstance?.template?.checklistItems?.map((item: ITPChecklistItem) => {
+              const completion = itpInstance.completions?.find(
+                (c) => c.checklistItemId === item.id,
+              );
+              const isSelected = selectedEvidenceItem === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setSelectedEvidenceItem(item.id)}
+                  className={`w-full text-left p-3 min-h-[48px] rounded-lg border transition-colors ${
+                    isSelected
+                      ? 'border-success bg-success/10'
+                      : 'hover:border-primary hover:bg-muted/50'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate">
+                        {item.order}. {item.description}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {item.evidenceRequired !== 'none'
+                          ? `Requires: ${item.evidenceRequired}`
+                          : 'No evidence required'}
+                        {(completion?.attachments?.length ?? 0) > 0 &&
+                          ` • ${completion?.attachments?.length ?? 0} attached`}
+                      </p>
+                    </div>
+                    {isSelected && (
+                      <CheckCircle className="h-5 w-5 text-success ml-2 flex-shrink-0" />
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </ResponsiveSheet>
       </div>
 
       {/* Photo Viewer Modal with Prev/Next Navigation and Zoom */}
