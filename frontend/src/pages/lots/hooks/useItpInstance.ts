@@ -14,14 +14,17 @@
  * toggle settles, and `refreshLotAfterFailure` / `refreshNcrsAfterFailure`
  * re-fetch the page-owned lot/NCR state after a failure is recorded.
  *
- * Behavior is intentionally unchanged: same API paths, payloads, optimistic
- * merge, offline decision tree, toast wording, and polling semantics. The photo
- * / evidence upload + AI-classification handlers live in useLotPhotoUpload
- * (the PR-D slice) and reuse the `setUpdatingCompletion` /
- * `updatingCompletionRef` guard this hook exposes.
+ * Field-write resilience: a failed completion POST falls back to the offline
+ * path (local write + sync queue + "Saved Offline" toast) on ANY retriable
+ * network failure — browser offline, timeout, fetch-level failure, or 5xx —
+ * via isRetriableNetworkFailure, not only when navigator.onLine is false.
+ * Definitive 4xx rejections still surface as errors. The photo / evidence
+ * upload + AI-classification handlers live in useLotPhotoUpload (the PR-D
+ * slice) and reuse the `setUpdatingCompletion` / `updatingCompletionRef` guard
+ * this hook exposes.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { apiFetch, ApiError } from '@/lib/api';
+import { apiFetch, ApiError, isRetriableNetworkFailure } from '@/lib/api';
 import { logError } from '@/lib/logger';
 import { extractErrorMessage, handleApiError } from '@/lib/errorHandling';
 import { toast } from '@/components/ui/toaster';
@@ -29,6 +32,7 @@ import {
   cacheITPChecklist,
   getCachedITPChecklist,
   getPendingSyncCount,
+  recordSyncedChecklistItem,
   updateChecklistItemOffline,
 } from '@/lib/offlineDb';
 import type { ITPCompletion, ITPInstance, ITPTemplate, LotTab } from '../types';
@@ -283,10 +287,11 @@ export function useItpInstance({
       // Update the completions in state
       setItpInstance((prev) => mergeCompletionIntoInstance(prev, data.completion));
 
-      // Update offline cache with the new completion status
+      // Write through to the offline cache without queueing a sync entry —
+      // the server already confirmed this write.
       if (lotId) {
         const newStatus = !currentlyCompleted ? 'completed' : 'pending';
-        await updateChecklistItemOffline(
+        await recordSyncedChecklistItem(
           lotId,
           checklistItemId,
           newStatus,
@@ -297,8 +302,11 @@ export function useItpInstance({
     } catch (err) {
       logError('Failed to update completion:', err);
 
-      // If offline, save to IndexedDB and update local state
-      if (!navigator.onLine && lotId) {
+      // On any retriable network failure — browser offline, request timeout,
+      // fetch-level failure, or a 5xx — save to IndexedDB, queue for sync, and
+      // update local state so the tick is never lost on patchy connections.
+      // Definitive rejections (4xx) fall through to the error toast instead.
+      if (lotId && isRetriableNetworkFailure(err)) {
         const newStatus = !currentlyCompleted ? 'completed' : 'pending';
         await updateChecklistItemOffline(
           lotId,
@@ -333,7 +341,7 @@ export function useItpInstance({
 
         toast({
           title: 'Saved Offline',
-          description: "Your change will sync when you're back online.",
+          description: 'Your change is saved on this device and will sync automatically.',
           variant: 'default',
         });
       } else {

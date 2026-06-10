@@ -2,7 +2,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useCommercialAccess } from '@/hooks/useCommercialAccess';
 import { getAuthToken, getCurrentUser } from '@/lib/auth';
-import { apiFetch, ApiError } from '@/lib/api';
+import { apiFetch, ApiError, isRetriableNetworkFailure } from '@/lib/api';
 import { extractErrorMessage, extractErrorDetails, hasStatus } from '@/lib/errorHandling';
 import { useOfflineStatus } from '@/lib/useOfflineStatus';
 import { cacheLotForOfflineEdit, saveLotEditOffline, getOfflineLot } from '@/lib/offlineDb';
@@ -351,8 +351,9 @@ export function LotEditPage() {
         setSaving(false);
         return;
       }
-      // If network error and we're actually offline, save offline
-      if (!navigator.onLine && lotId && projectId && user) {
+      // On a retriable network failure (browser offline, timeout, fetch-level
+      // failure, or 5xx) save offline; definitive 4xx rejections surface below.
+      if (isRetriableNetworkFailure(err) && lotId && projectId && user) {
         try {
           await saveLotEditOffline(
             buildOfflineLotEditInput({

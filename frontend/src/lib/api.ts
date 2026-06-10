@@ -7,7 +7,7 @@
 import { getAuthToken as getAuthTokenFromAuth } from './auth';
 import { notifySessionExpired } from './authStorage';
 import { API_URL, apiUrl } from './config';
-import { fetchWithTimeout } from './fetchWithTimeout';
+import { fetchWithTimeout, RequestTimeoutError } from './fetchWithTimeout';
 
 export { API_URL, apiUrl };
 
@@ -86,6 +86,27 @@ export class ApiError extends Error {
       this.data = null;
     }
   }
+}
+
+/**
+ * True when a failed request never produced a definitive server answer, so the
+ * write is safe to retry later (e.g. queue it for offline sync): the browser
+ * reports offline, the request timed out, fetch failed at the network layer
+ * (fetch rejects with a TypeError on DNS/connection failures), or the server
+ * answered 5xx. A 4xx response is a definitive rejection — it must surface to
+ * the user as a real error, never be queued and replayed.
+ */
+export function isRetriableNetworkFailure(error: unknown): boolean {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    return true;
+  }
+  if (error instanceof RequestTimeoutError) {
+    return true;
+  }
+  if (error instanceof ApiError) {
+    return error.status >= 500;
+  }
+  return error instanceof TypeError;
 }
 
 /**
