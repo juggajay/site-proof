@@ -60,6 +60,29 @@ const LOCAL_TEMPLATE: ITPTemplate = {
   ],
 };
 
+const LIBRARY_TEMPLATE: ITPTemplate = {
+  id: 'g1',
+  name: 'TfNSW Earthworks ITP',
+  description: 'Seeded library template',
+  activityType: 'Earthworks',
+  createdAt: '2026-01-10T00:00:00.000Z',
+  isGlobalTemplate: true,
+  stateSpec: 'TfNSW',
+  isActive: true,
+  checklistItems: [
+    {
+      id: 'ci-g1',
+      description: 'Confirm survey conformance',
+      category: 'Survey',
+      responsibleParty: 'contractor',
+      isHoldPoint: false,
+      pointType: 'standard',
+      evidenceRequired: 'none',
+      order: 1,
+    },
+  ],
+};
+
 function mockTemplates(templates: ITPTemplate[], projectSpecificationSet: string | null = 'TfNSW') {
   useItpTemplatesQueryMock.mockReturnValue({
     data: { templates, projectSpecificationSet },
@@ -155,14 +178,155 @@ describe('ITPPage role-aware template management', () => {
     expect(screen.getByText('Include state spec library templates')).toBeInTheDocument();
     expect(screen.queryByText('Include MRTS library templates')).not.toBeInTheDocument();
   });
+});
 
-  it('keeps the create-first CTA on the empty state for a manager (admin)', () => {
-    authState.actualRole = 'admin';
-    mockTemplates([]);
+describe('ITPPage empty state leads with the spec library', () => {
+  it('leads with the library when the project owns no templates but the library has some', () => {
+    authState.actualRole = 'project_manager';
+    mockTemplates([LIBRARY_TEMPLATE]);
 
     renderWithProviders(<ITPPage />);
 
-    expect(screen.getByRole('button', { name: 'Create Your First Template' })).toBeInTheDocument();
+    // Library-led lead-in panel, with build-from-scratch demoted to secondary.
+    expect(
+      screen.getByRole('heading', { name: 'Start from the TfNSW library' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Build a template from scratch' }),
+    ).toBeInTheDocument();
+
+    // The pre-filtered library list is right below, ready to copy.
+    expect(screen.getByText('TfNSW Earthworks ITP')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy' })).toBeInTheDocument();
+
+    // The old build-from-scratch-first empty state is gone.
+    expect(
+      screen.queryByRole('button', { name: 'Create Your First Template' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('drops the library lead-in once the project has templates of its own', () => {
+    authState.actualRole = 'project_manager';
+    mockTemplates([LOCAL_TEMPLATE, LIBRARY_TEMPLATE]);
+
+    renderWithProviders(<ITPPage />);
+
+    expect(screen.getByText('Earthworks ITP')).toBeInTheDocument();
+    expect(screen.getByText('TfNSW Earthworks ITP')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: 'Start from the TfNSW library' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Build a template from scratch' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('never leads a foreman into template setup, even when only library templates exist', () => {
+    authState.actualRole = 'foreman';
+    mockTemplates([LIBRARY_TEMPLATE]);
+
+    renderWithProviders(<ITPPage />);
+
+    expect(screen.getByText('TfNSW Earthworks ITP')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: 'Start from the TfNSW library' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Build a template from scratch' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows honest guidance when the library has nothing for the project spec set', () => {
+    authState.actualRole = 'admin';
+    mockTemplates([], 'MRTS');
+
+    renderWithProviders(<ITPPage />);
+
+    expect(
+      screen.getByRole('heading', { name: 'No MRTS library templates yet' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/The template library has nothing for MRTS yet/i)).toBeInTheDocument();
+    // Header + guidance both offer the import path.
+    expect(screen.getAllByRole('button', { name: 'Import from Project' })).toHaveLength(2);
+    expect(
+      screen.queryByRole('button', { name: 'Create Your First Template' }),
+    ).not.toBeInTheDocument();
+
+    // Build from scratch still works as the fallback.
+    fireEvent.click(screen.getByRole('button', { name: 'Build a template from scratch' }));
+    expect(screen.getByRole('heading', { name: 'Create ITP Template' })).toBeInTheDocument();
+  });
+
+  it('points an admin at project settings when no spec set is chosen', () => {
+    authState.actualRole = 'admin';
+    mockTemplates([], null);
+
+    renderWithProviders(<ITPPage />);
+
+    expect(
+      screen.getByRole('heading', { name: 'Start from the state spec ITP library' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Choose a specification standard' })).toHaveAttribute(
+      'href',
+      '/projects/p1/settings',
+    );
+    expect(
+      screen.getByRole('button', { name: 'Build a template from scratch' }),
+    ).toBeInTheDocument();
+  });
+
+  it('omits the settings link for template managers who cannot open project settings', () => {
+    // site_manager can manage ITP templates but the settings route is
+    // admin-gated, so the guidance must not link there.
+    authState.actualRole = 'site_manager';
+    mockTemplates([], null);
+
+    renderWithProviders(<ITPPage />);
+
+    expect(
+      screen.getByRole('heading', { name: 'Start from the state spec ITP library' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('link', { name: 'Choose a specification standard' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText(/ask a project admin/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Build a template from scratch' }),
+    ).toBeInTheDocument();
+  });
+
+  it('reveals the spec-set library list when the include-library filter is off', () => {
+    authState.actualRole = 'project_manager';
+    // The bootstrap query already carries library availability: with the
+    // filter on it returns the library list, with it off nothing.
+    useItpTemplatesQueryMock.mockImplementation(
+      (_projectId: string | undefined, includeGlobal: boolean) => ({
+        data: {
+          templates: includeGlobal ? [LIBRARY_TEMPLATE] : [],
+          projectSpecificationSet: 'TfNSW',
+        },
+        isFetching: false,
+        error: null,
+        refetch: vi.fn(),
+      }),
+    );
+
+    renderWithProviders(<ITPPage />);
+
+    // Filter defaults to on: the library list is already visible.
+    expect(screen.getByText('TfNSW Earthworks ITP')).toBeInTheDocument();
+
+    // Turn the filter off: no dead "create from scratch" wall — the empty
+    // state's primary CTA brings the library back.
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Include TfNSW library templates' }));
+    expect(screen.queryByText('TfNSW Earthworks ITP')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'No project templates yet' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Browse TfNSW library templates' }));
+    expect(screen.getByText('TfNSW Earthworks ITP')).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Start from the TfNSW library' }),
+    ).toBeInTheDocument();
   });
 });
 
