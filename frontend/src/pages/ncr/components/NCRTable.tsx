@@ -1,9 +1,10 @@
-import { memo, useEffect, useRef } from 'react';
+import { memo, useEffect, useRef, type ReactNode } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Link2, Check, Printer } from 'lucide-react';
 import { toast } from '@/components/ui/toaster';
 import type { NCRDetailData } from '@/lib/pdfGenerator';
 import { getStatusBadgeColor } from '../constants';
+import type { NcrSortDirection, NcrSortField } from '../ncrRegisterSort';
 import type { NCR, UserRole } from '../types';
 import { logError } from '@/lib/logger';
 import { formatStatusLabel } from '@/lib/statusLabels';
@@ -15,6 +16,10 @@ interface NCRTableProps {
   copiedNcrId: string | null;
   /** Deep-linked NCR (?ncr=<id>) to scroll to and highlight. */
   highlightedNcrId: string | null;
+  /** Active `?sort=` column ('' when the register keeps the server order). */
+  sortField: string;
+  sortDirection: NcrSortDirection;
+  onSort: (field: NcrSortField) => void;
   onCopyLink: (ncrId: string, ncrNumber: string) => void;
   onAssign: (ncr: NCR) => void;
   onRespond: (ncr: NCR) => void;
@@ -33,6 +38,9 @@ function NCRTableInner({
   actionLoading,
   copiedNcrId,
   highlightedNcrId,
+  sortField,
+  sortDirection,
+  onSort,
   onCopyLink,
   onAssign,
   onRespond,
@@ -114,6 +122,33 @@ function NCRTableInner({
     if (index >= 0) rowVirtualizer.scrollToIndex(index, { align: 'center' });
   }, [highlightedNcrId, ncrs, rowVirtualizer]);
 
+  // Sortable column header (same affordance as the lot register).
+  const renderSortableHeader = (field: NcrSortField, children: ReactNode) => (
+    <th
+      className="px-4 py-3 text-left text-sm font-medium cursor-pointer hover:bg-muted/70 select-none group"
+      aria-sort={
+        sortField === field ? (sortDirection === 'asc' ? 'ascending' : 'descending') : undefined
+      }
+      onClick={() => onSort(field)}
+      data-testid={`ncr-column-header-${field}`}
+    >
+      <div className="flex items-center gap-1">
+        {children}
+        <span className="text-muted-foreground">
+          {sortField === field ? (
+            sortDirection === 'asc' ? (
+              '↑'
+            ) : (
+              '↓'
+            )
+          ) : (
+            <span className="opacity-0 group-hover:opacity-50">{'↕'}</span>
+          )}
+        </span>
+      </div>
+    </th>
+  );
+
   return (
     <div
       ref={scrollContainerRef}
@@ -127,10 +162,11 @@ function NCRTableInner({
             <th className="px-4 py-3 text-left text-sm font-medium">Lots</th>
             <th className="px-4 py-3 text-left text-sm font-medium">Description</th>
             <th className="px-4 py-3 text-left text-sm font-medium">Category</th>
-            <th className="px-4 py-3 text-left text-sm font-medium">Status</th>
+            {renderSortableHeader('severity', 'Severity')}
+            {renderSortableHeader('status', 'Status')}
             <th className="px-4 py-3 text-left text-sm font-medium">Responsible</th>
-            <th className="px-4 py-3 text-left text-sm font-medium">Due</th>
-            <th className="px-4 py-3 text-left text-sm font-medium">Age</th>
+            {renderSortableHeader('due', 'Due')}
+            {renderSortableHeader('raised', 'Age')}
             <th className="px-4 py-3 text-left text-sm font-medium">Actions</th>
           </tr>
         </thead>
@@ -138,7 +174,7 @@ function NCRTableInner({
           {ncrs.length > 0 && rowVirtualizer.getVirtualItems().length > 0 && (
             <tr>
               <td
-                colSpan={9}
+                colSpan={10}
                 style={{
                   height: `${rowVirtualizer.getVirtualItems()[0]?.start ?? 0}px`,
                   padding: 0,
@@ -184,6 +220,13 @@ function NCRTableInner({
                 </td>
                 <td className="px-4 py-3 text-sm">
                   <span className="capitalize">{ncr.category.replace(/_/g, ' ')}</span>
+                </td>
+                <td className="px-4 py-3 text-sm">
+                  <span
+                    className={`capitalize ${ncr.severity === 'major' ? 'text-destructive font-medium' : ''}`}
+                  >
+                    {ncr.severity}
+                  </span>
                 </td>
                 <td className="px-4 py-3">
                   <span
@@ -393,7 +436,7 @@ function NCRTableInner({
           {ncrs.length > 0 && rowVirtualizer.getVirtualItems().length > 0 && (
             <tr>
               <td
-                colSpan={9}
+                colSpan={10}
                 style={{
                   height: `${rowVirtualizer.getTotalSize() - (rowVirtualizer.getVirtualItems()[rowVirtualizer.getVirtualItems().length - 1]?.end ?? 0)}px`,
                   padding: 0,

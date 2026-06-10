@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useEffect, memo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Search } from 'lucide-react';
 import {
   FilterBottomSheet,
@@ -25,14 +26,32 @@ interface NCRFiltersProps {
 }
 
 function NCRFiltersInner({ ncrs, isMobile, onFilteredNcrsChange }: NCRFiltersProps) {
-  // Filter state
-  const [statusFilter, setStatusFilter] = useState<string>('');
-  const [categoryFilter, setCategoryFilter] = useState<string>('');
-  const [responsibleFilter, setResponsibleFilter] = useState<string>('');
-  const [dateFromFilter, setDateFromFilter] = useState<string>('');
-  const [dateToFilter, setDateToFilter] = useState<string>('');
-  const [mobileSearchQuery, setMobileSearchQuery] = useState('');
+  // URL-persisted filter state (same idiom as LotsPage), so back-navigation
+  // and shared URLs keep the filtered view. `ncr` (deep link) and `create`
+  // (raise-NCR modal) are reserved params on this page — never written here.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const statusFilter = searchParams.get('status') || '';
+  const categoryFilter = searchParams.get('category') || '';
+  const responsibleFilter = searchParams.get('responsible') || '';
+  const dateFromFilter = searchParams.get('from') || '';
+  const dateToFilter = searchParams.get('to') || '';
+  const mobileSearchQuery = searchParams.get('search') || '';
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
+
+  const updateFilters = useCallback(
+    (newParams: Record<string, string>) => {
+      const params = new URLSearchParams(searchParams);
+      Object.entries(newParams).forEach(([key, value]) => {
+        if (value) {
+          params.set(key, value);
+        } else {
+          params.delete(key);
+        }
+      });
+      setSearchParams(params);
+    },
+    [searchParams, setSearchParams],
+  );
 
   // Get unique values for filter dropdowns
   const uniqueStatuses = useMemo(() => [...new Set(ncrs.map((ncr) => ncr.status))], [ncrs]);
@@ -169,43 +188,32 @@ function NCRFiltersInner({ ncrs, isMobile, onFilteredNcrsChange }: NCRFiltersPro
   const hasActiveFilters =
     statusFilter || categoryFilter || responsibleFilter || dateFromFilter || dateToFilter;
 
+  const applyMobileFilterValues = useCallback(
+    (values: FilterValues) => {
+      const dateRange = values.dateRange as { start: string | null; end: string | null };
+      updateFilters({
+        status: (values.status as string) || '',
+        category: (values.category as string) || '',
+        responsible: (values.responsible as string) || '',
+        from: dateRange?.start || '',
+        to: dateRange?.end || '',
+      });
+    },
+    [updateFilters],
+  );
+
   // Handle mobile filter apply
-  const handleMobileFilterApply = useCallback((values: FilterValues) => {
-    setStatusFilter((values.status as string) || '');
-    setCategoryFilter((values.category as string) || '');
-    setResponsibleFilter((values.responsible as string) || '');
-    const dateRange = values.dateRange as { start: string | null; end: string | null };
-    setDateFromFilter(dateRange?.start || '');
-    setDateToFilter(dateRange?.end || '');
-    setFilterSheetOpen(false);
-  }, []);
-
-  // Handle mobile filter clear
-  const handleMobileFilterClear = useCallback(() => {
-    setStatusFilter('');
-    setCategoryFilter('');
-    setResponsibleFilter('');
-    setDateFromFilter('');
-    setDateToFilter('');
-  }, []);
-
-  // Handle mobile filter onChange
-  const handleMobileFilterChange = useCallback((values: FilterValues) => {
-    setStatusFilter((values.status as string) || '');
-    setCategoryFilter((values.category as string) || '');
-    setResponsibleFilter((values.responsible as string) || '');
-    const dateRange = values.dateRange as { start: string | null; end: string | null };
-    setDateFromFilter(dateRange?.start || '');
-    setDateToFilter(dateRange?.end || '');
-  }, []);
+  const handleMobileFilterApply = useCallback(
+    (values: FilterValues) => {
+      applyMobileFilterValues(values);
+      setFilterSheetOpen(false);
+    },
+    [applyMobileFilterValues],
+  );
 
   const clearAllFilters = useCallback(() => {
-    setStatusFilter('');
-    setCategoryFilter('');
-    setResponsibleFilter('');
-    setDateFromFilter('');
-    setDateToFilter('');
-  }, []);
+    updateFilters({ status: '', category: '', responsible: '', from: '', to: '' });
+  }, [updateFilters]);
 
   return (
     <>
@@ -221,7 +229,7 @@ function NCRFiltersInner({ ncrs, isMobile, onFilteredNcrsChange }: NCRFiltersPro
                 type="text"
                 placeholder="Search NCRs..."
                 value={mobileSearchQuery}
-                onChange={(e) => setMobileSearchQuery(e.target.value)}
+                onChange={(e) => updateFilters({ search: e.target.value })}
                 className="w-full pl-10 pr-4 py-3 border-2 border-border rounded-lg bg-background text-foreground text-base focus:outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
               />
             </div>
@@ -253,7 +261,7 @@ function NCRFiltersInner({ ncrs, isMobile, onFilteredNcrsChange }: NCRFiltersPro
               <select
                 id="status-filter"
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
+                onChange={(e) => updateFilters({ status: e.target.value })}
                 className="px-3 py-2 border rounded-lg bg-background text-sm"
               >
                 <option value="">All Statuses</option>
@@ -276,7 +284,7 @@ function NCRFiltersInner({ ncrs, isMobile, onFilteredNcrsChange }: NCRFiltersPro
               <select
                 id="category-filter"
                 value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
+                onChange={(e) => updateFilters({ category: e.target.value })}
                 className="px-3 py-2 border rounded-lg bg-background text-sm"
               >
                 <option value="">All Categories</option>
@@ -299,7 +307,7 @@ function NCRFiltersInner({ ncrs, isMobile, onFilteredNcrsChange }: NCRFiltersPro
               <select
                 id="responsible-filter"
                 value={responsibleFilter}
-                onChange={(e) => setResponsibleFilter(e.target.value)}
+                onChange={(e) => updateFilters({ responsible: e.target.value })}
                 className="px-3 py-2 border rounded-lg bg-background text-sm"
               >
                 <option value="">All Responsible</option>
@@ -323,7 +331,7 @@ function NCRFiltersInner({ ncrs, isMobile, onFilteredNcrsChange }: NCRFiltersPro
                 id="date-from-filter"
                 type="date"
                 value={dateFromFilter}
-                onChange={(e) => setDateFromFilter(e.target.value)}
+                onChange={(e) => updateFilters({ from: e.target.value })}
                 className="px-3 py-2 border rounded-lg bg-background text-sm"
               />
             </div>
@@ -340,7 +348,7 @@ function NCRFiltersInner({ ncrs, isMobile, onFilteredNcrsChange }: NCRFiltersPro
                 id="date-to-filter"
                 type="date"
                 value={dateToFilter}
-                onChange={(e) => setDateToFilter(e.target.value)}
+                onChange={(e) => updateFilters({ to: e.target.value })}
                 className="px-3 py-2 border rounded-lg bg-background text-sm"
               />
             </div>
@@ -372,9 +380,9 @@ function NCRFiltersInner({ ncrs, isMobile, onFilteredNcrsChange }: NCRFiltersPro
         title="Filter NCRs"
         filters={mobileFilters}
         values={mobileFilterValues}
-        onChange={handleMobileFilterChange}
+        onChange={applyMobileFilterValues}
         onApply={handleMobileFilterApply}
-        onClear={handleMobileFilterClear}
+        onClear={clearAllFilters}
       />
     </>
   );
