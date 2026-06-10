@@ -301,7 +301,7 @@ export function MobileNav() {
       {/* Bottom Navigation Bar */}
       <nav
         ref={navRef}
-        className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t z-30 safe-area-inset-bottom"
+        className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t z-30 safe-area-inset-bottom ui-chrome"
       >
         <div className="flex justify-around items-center h-16">
           {/* Use subcontractor nav items if subcontractor */}

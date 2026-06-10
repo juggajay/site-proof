@@ -101,4 +101,15 @@ export function installStaleAssetRecovery(): void {
       recoverFromStaleAssetLoad(event.reason);
     }
   });
+
+  // vite:preloadError fires when Vite's dynamic-import prefetch fails (e.g. a
+  // hashed JS chunk 404s after a deploy). The handler reloads once; the
+  // shouldAttemptRecovery() guard (session-scoped via storagePreferences)
+  // prevents a reload loop if the chunk is permanently missing.
+  //
+  // VitePreloadErrorEvent extends Event (not CustomEvent) and carries the
+  // error directly as `.payload` — see vite/client.d.ts.
+  window.addEventListener('vite:preloadError', (event) => {
+    recoverFromStaleAssetLoad((event as VitePreloadErrorEvent).payload);
+  });
 }

@@ -1,20 +1,30 @@
 /**
  * NCRs tab content for LotDetailPage.
  * Displays non-conformance reports linked to a lot.
+ * On mobile (isMobile=true) renders tap-friendly cards; desktop rendering is
+ * unchanged.
  */
 
 import { useNavigate } from 'react-router-dom';
 import type { NCR } from '@/pages/lots/types';
 import { ncrStatusColors, severityColors } from '@/pages/lots/constants';
 import { formatStatusLabel } from '@/lib/statusLabels';
+import { MobileDataCard } from '@/components/ui/MobileDataCard';
 
 interface NCRsTabContentProps {
   projectId: string;
   ncrs: NCR[];
   loading: boolean;
+  /** When true, renders mobile card layout instead of the desktop table. */
+  isMobile?: boolean;
 }
 
-export function NCRsTabContent({ projectId, ncrs, loading }: NCRsTabContentProps) {
+export function NCRsTabContent({
+  projectId,
+  ncrs,
+  loading,
+  isMobile = false,
+}: NCRsTabContentProps) {
   const navigate = useNavigate();
 
   if (loading) {
@@ -39,6 +49,57 @@ export function NCRsTabContent({ projectId, ncrs, loading }: NCRsTabContentProps
         >
           Go to NCR Register
         </button>
+      </div>
+    );
+  }
+
+  // Mobile card list — one card per NCR
+  if (isMobile) {
+    return (
+      <div className="space-y-3" data-testid="ncrs-mobile-cards">
+        {ncrs.map((ncr) => {
+          // Map NCR status to a MobileDataCard status variant
+          const statusVariant =
+            ncr.status === 'open'
+              ? ('error' as const)
+              : ncr.status === 'investigating' || ncr.status === 'rectification'
+                ? ('warning' as const)
+                : ('default' as const);
+
+          return (
+            <MobileDataCard
+              key={ncr.id}
+              title={ncr.ncrNumber}
+              subtitle={ncr.description}
+              status={{ label: formatStatusLabel(ncr.status), variant: statusVariant }}
+              fields={[
+                {
+                  label: 'Severity',
+                  value: (
+                    <span
+                      className={`px-2 py-0.5 rounded text-xs font-medium ${severityColors[ncr.severity] || 'bg-muted text-muted-foreground'}`}
+                    >
+                      {ncr.severity.toUpperCase()}
+                    </span>
+                  ),
+                  priority: 'primary',
+                },
+                {
+                  label: 'Category',
+                  value: <span className="capitalize">{ncr.category}</span>,
+                  priority: 'primary',
+                },
+                {
+                  label: 'Raised By',
+                  value: ncr.raisedBy?.fullName || ncr.raisedBy?.email || '—',
+                  priority: 'secondary',
+                },
+              ]}
+              onClick={() => navigate(`/projects/${encodeURIComponent(projectId)}/ncr`)}
+              data-testid={`ncr-card-${ncr.id}`}
+            />
+          );
+        })}
       </div>
     );
   }

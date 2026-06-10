@@ -67,6 +67,19 @@ export async function markSyncItemError(id: number, error: string): Promise<void
   }
 }
 
+// Age in milliseconds of the oldest item still pending in the sync queue.
+// Returns null when the queue is empty (no age to report).
+// Uses the ISO `createdAt` string already present on every SyncQueueBase row.
+export async function getOldestPendingItemAge(): Promise<number | null> {
+  const items = await offlineDb.syncQueue.toArray();
+  if (items.length === 0) {
+    return null;
+  }
+
+  const oldestMs = Math.min(...items.map((item) => new Date(item.createdAt).getTime()));
+  return Date.now() - oldestMs;
+}
+
 export async function clearAllOfflineData(): Promise<void> {
   await offlineDb.itpChecklists.clear();
   await offlineDb.itpCompletions.clear();

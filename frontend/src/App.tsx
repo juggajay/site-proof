@@ -1,10 +1,12 @@
-import { Suspense, lazy } from 'react';
+import { Suspense, lazy, useEffect } from 'react';
+import { requestPersistentStorage } from '@/lib/offline/storagePersistence';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from '@/components/ui/toaster';
 import { AuthProvider } from '@/lib/auth';
 import { RoleProtectedRoute } from '@/components/auth/RoleProtectedRoute';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { DeferredOfflineIndicator } from '@/components/DeferredOfflineIndicator';
+import { UpdatePrompt } from '@/components/UpdatePrompt';
 import { CookieConsentBanner } from '@/components/CookieConsentBanner';
 import { PageSkeleton } from '@/components/ui/Skeleton';
 import {
@@ -96,6 +98,13 @@ const RoleSwitcher = ENABLE_DEV_TOOLS
   : null;
 
 function App() {
+  // Request persistent storage once on app start so iOS/Safari cannot evict
+  // the IndexedDB offline queue under storage pressure. No-throw: returns
+  // false silently when the Storage API is unsupported.
+  useEffect(() => {
+    requestPersistentStorage();
+  }, []);
+
   return (
     <ErrorBoundary>
       <AuthProvider>
@@ -488,6 +497,7 @@ function App() {
         </Suspense>
         <Toaster />
         <DeferredOfflineIndicator />
+        <UpdatePrompt />
         <CookieConsentBanner />
         {ENABLE_DEV_TOOLS && RoleSwitcher && <RoleSwitcher />}
       </AuthProvider>

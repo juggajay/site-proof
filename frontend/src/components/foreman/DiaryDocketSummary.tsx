@@ -70,7 +70,7 @@ export function DiaryDocketSummary({
         </div>
         <button
           onClick={onAddManual}
-          className="text-sm text-primary font-medium touch-manipulation min-h-[32px]"
+          className="text-sm text-primary font-medium touch-manipulation min-h-[44px]"
         >
           Add manually
         </button>

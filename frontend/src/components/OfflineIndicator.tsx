@@ -1,5 +1,9 @@
 import { useState, useCallback } from 'react';
-import { useOfflineStatus, type SyncCompleteResult } from '@/lib/useOfflineStatus';
+import {
+  useOfflineStatus,
+  STUCK_SYNC_THRESHOLD_MS,
+  type SyncCompleteResult,
+} from '@/lib/useOfflineStatus';
 import { WifiOff, RefreshCw, CloudOff, Check, AlertTriangle } from 'lucide-react';
 import { SyncConflictModal } from './SyncConflictModal';
 import { toast } from '@/components/ui/toaster';
@@ -45,11 +49,18 @@ export function OfflineIndicator() {
     syncPendingChanges,
     retryFailedSyncs,
     conflictCount,
+    oldestPendingItemAge,
   } = useOfflineStatus({
     onConflictDetected: handleConflictDetected,
     onSyncComplete: handleSyncComplete,
     enableSyncWorker: true,
   });
+
+  const isStuck =
+    isOnline &&
+    pendingSyncCount > 0 &&
+    oldestPendingItemAge !== null &&
+    oldestPendingItemAge >= STUCK_SYNC_THRESHOLD_MS;
 
   // Don't show when online, synced, and no conflicts or failures
   if (isOnline && pendingSyncCount === 0 && conflictCount === 0 && failedSyncCount === 0) {
@@ -105,6 +116,13 @@ export function OfflineIndicator() {
               </span>
             )}
           </div>
+        ) : isStuck ? (
+          <div className="flex items-center gap-2 bg-warning/10 text-warning px-4 py-2 rounded-lg shadow-lg border border-warning/30">
+            <AlertTriangle className="h-4 w-4" />
+            <span className="text-sm font-medium">
+              Some items haven&apos;t synced yet — keep the app open while on signal
+            </span>
+          </div>
         ) : pendingSyncCount > 0 ? (
           <button
             onClick={syncPendingChanges}
@@ -118,9 +136,10 @@ export function OfflineIndicator() {
               </>
             ) : (
               <>
-                <CloudOff className="h-4 w-4" />
-                <span className="text-sm font-medium">{pendingSyncCount} pending changes</span>
-                <span className="text-xs text-primary">Click to sync</span>
+                <RefreshCw className="h-4 w-4" />
+                <span className="text-sm font-medium">
+                  {pendingSyncCount} item{pendingSyncCount > 1 ? 's' : ''} waiting to upload
+                </span>
               </>
             )}
           </button>

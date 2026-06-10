@@ -117,7 +117,7 @@ export function ForemanBottomNavV2({
     // tap-to-sync / retry / conflict resolution.
     <nav
       ref={navRef}
-      className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t z-30 pb-safe"
+      className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t z-30 pb-safe ui-chrome"
     >
       {/* No active project: keep the bar honest instead of silently inert */}
       {hasNoProject && (

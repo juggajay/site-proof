@@ -89,4 +89,48 @@ describe('DrawingRegisterTable', () => {
     expect(handleStatusChange).toHaveBeenCalledTimes(1);
     expect(handleStatusChange).toHaveBeenCalledWith('drawing-1', 'as_built');
   });
+
+  // Desktop unchanged: isMobile defaults to false, table DOM is present.
+  it('renders the overflow table on desktop (isMobile omitted)', () => {
+    renderTable();
+
+    expect(screen.getByRole('table')).toBeInTheDocument();
+    expect(screen.queryByTestId('drawing-mobile-list')).not.toBeInTheDocument();
+  });
+
+  it('renders the mobile card list when isMobile is true', () => {
+    renderTable({ isMobile: true });
+
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    expect(screen.getByTestId('drawing-mobile-list')).toBeInTheDocument();
+    // Key fields visible in card
+    expect(screen.getByText('DWG-001')).toBeInTheDocument();
+    expect(screen.getByText('Site Plan')).toBeInTheDocument();
+  });
+
+  it('mobile: shows loading state', () => {
+    renderTable({ loading: true, isMobile: true });
+
+    expect(screen.getByText('Loading drawings...')).toBeInTheDocument();
+  });
+
+  it('mobile: returns null when error is set', () => {
+    const { container } = render(
+      <DrawingRegisterTable
+        loading={false}
+        error="Failed"
+        drawings={[baseDrawing]}
+        hasActiveFilters={false}
+        canManageDrawings={true}
+        statusChangePending={false}
+        handleStatusChange={vi.fn()}
+        handleOpenDrawing={vi.fn().mockResolvedValue(undefined)}
+        openRevisionModal={vi.fn()}
+        setDrawingPendingDelete={vi.fn()}
+        isMobile={true}
+      />,
+    );
+
+    expect(container.firstChild).toBeNull();
+  });
 });

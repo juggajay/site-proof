@@ -36,6 +36,21 @@ function renderView(overrides: Overrides = {}) {
   return { onReviewSubmit };
 }
 
+describe('DiaryMobileView skeleton loading state', () => {
+  it('renders the timeline skeleton wrapper while loading=true', () => {
+    renderView({ loading: true });
+    expect(screen.getByTestId('diary-timeline-skeleton')).toBeInTheDocument();
+    expect(screen.getAllByTestId('diary-timeline-entry-skeleton').length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('removes the skeleton and shows empty-state once loading=false', () => {
+    renderView({ loading: false });
+    expect(screen.queryByTestId('diary-timeline-skeleton')).not.toBeInTheDocument();
+    // Empty-state message shown instead (no entries, diary is a draft)
+    expect(screen.getByText('No entries yet')).toBeInTheDocument();
+  });
+});
+
 describe('DiaryMobileView review & submit action', () => {
   it("shows a persistent Review & submit button for today's draft and triggers the finish flow", () => {
     const { onReviewSubmit } = renderView();

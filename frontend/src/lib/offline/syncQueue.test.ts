@@ -29,6 +29,7 @@ import {
   clearAllOfflineData,
   getFailedSyncCount,
   getLiveSyncCount,
+  getOldestPendingItemAge,
   getPendingSyncCount,
   getPendingSyncItems,
   markSyncItemError,
@@ -143,6 +144,37 @@ describe('sync queue mutations', () => {
     await markSyncItemError(2, 'Upload failed');
 
     expect(offlineDb.syncQueue.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('getOldestPendingItemAge', () => {
+  const item = (id: number, createdAt: string): SyncQueueItem =>
+    ({ id, type: 'photo_upload', attempts: 0, createdAt }) as SyncQueueItem;
+
+  it('returns null when the queue is empty', async () => {
+    vi.mocked(offlineDb.syncQueue.toArray).mockResolvedValue([]);
+    await expect(getOldestPendingItemAge()).resolves.toBeNull();
+  });
+
+  it('returns the age of the single item when there is only one', async () => {
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    vi.mocked(offlineDb.syncQueue.toArray).mockResolvedValue([item(1, fiveMinutesAgo)]);
+    const age = await getOldestPendingItemAge();
+    expect(age).toBeGreaterThanOrEqual(5 * 60 * 1000 - 100);
+    expect(age).toBeLessThanOrEqual(5 * 60 * 1000 + 1000);
+  });
+
+  it('returns the age of the oldest item when there are multiple', async () => {
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+    vi.mocked(offlineDb.syncQueue.toArray).mockResolvedValue([
+      item(1, twoMinutesAgo),
+      item(2, tenMinutesAgo),
+    ]);
+    const age = await getOldestPendingItemAge();
+    // Should be ~10 min, not ~2 min
+    expect(age).toBeGreaterThanOrEqual(10 * 60 * 1000 - 100);
+    expect(age).toBeLessThanOrEqual(10 * 60 * 1000 + 1000);
   });
 });
 

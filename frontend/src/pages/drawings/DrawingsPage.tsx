@@ -4,6 +4,7 @@ import { useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '../../lib/auth';
 import { apiFetch, authFetch } from '@/lib/api';
+import { useIsMobile } from '@/hooks/useMediaQuery';
 import { getDocumentAccessUrl, openDocumentAccessUrl } from '@/lib/documentAccess';
 import { queryKeys } from '@/lib/queryKeys';
 import { createMutationErrorHandler, extractErrorMessage } from '@/lib/errorHandling';
@@ -85,6 +86,7 @@ export function DrawingsPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const isMobile = useIsMobile();
   const userRole = user?.role || user?.roleInCompany || '';
   const canManageDrawings = DRAWING_WRITE_ROLES.includes(userRole);
   const encodedProjectId = projectId ? encodeURIComponent(projectId) : '';
@@ -438,6 +440,7 @@ export function DrawingsPage() {
           handleOpenDrawing={handleOpenDrawing}
           openRevisionModal={openRevisionModal}
           setDrawingPendingDelete={setDrawingPendingDelete}
+          isMobile={isMobile}
         />
         {!loading && !error && drawings.length > 0 && pagination && pagination.totalPages > 1 && (
           <DrawingPagination

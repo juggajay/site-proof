@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { AlertCircle, Check, CheckSquare, MessageSquare, X } from 'lucide-react';
 import { SwipeableCard } from './SwipeableCard';
-import { MobileDataCardSkeleton } from '@/components/ui/MobileDataCard';
+import { DocketCardSkeleton } from '@/components/ui/Skeleton';
 import { usePullToRefresh, PullToRefreshIndicator } from '@/hooks/usePullToRefresh';
 
 interface Docket {
@@ -242,13 +242,16 @@ export function DocketApprovalsMobileView({
             transition: pullDistance === 0 ? 'transform 0.2s ease-out' : 'none',
           }}
         >
-          {/* G. Loading state */}
+          {/* G. Initial-load skeleton: layout-matched to DocketCard (header + 3-col grid).
+              Shows only while loading with no cached data; pull-to-refresh keeps
+              showing the data list (handled by the parent gate: `loading` from
+              the caller is only true on initial load with no data). */}
           {loading && (
-            <>
-              <MobileDataCardSkeleton />
-              <MobileDataCardSkeleton />
-              <MobileDataCardSkeleton />
-            </>
+            <div data-testid="docket-approvals-skeleton">
+              <DocketCardSkeleton />
+              <DocketCardSkeleton />
+              <DocketCardSkeleton />
+            </div>
           )}
 
           {loadError && !loading && (

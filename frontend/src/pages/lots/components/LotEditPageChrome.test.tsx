@@ -9,6 +9,13 @@ import {
   LotEditSaveError,
 } from './LotEditPageChrome';
 
+// Mobile/desktop toggle — default to desktop (isMobile = false)
+let mockIsMobile = false;
+vi.mock('@/hooks/useMediaQuery', () => ({
+  useIsMobile: () => mockIsMobile,
+  useMediaQuery: () => false,
+}));
+
 describe('LotEditLoadingState', () => {
   it('renders the loading spinner shell', () => {
     const { container } = render(<LotEditLoadingState />);
@@ -80,7 +87,9 @@ describe('LotEditSaveError', () => {
   });
 });
 
-describe('LotEditFormActions', () => {
+// ── Desktop form actions ────────────────────────────────────────────────────
+
+describe('LotEditFormActions (desktop)', () => {
   it('renders cancel and enabled save controls', () => {
     const onCancel = vi.fn();
     render(<LotEditFormActions canSubmit saving={false} onCancel={onCancel} />);
@@ -94,5 +103,57 @@ describe('LotEditFormActions', () => {
     render(<LotEditFormActions canSubmit={false} saving onCancel={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: 'Saving...' })).toBeDisabled();
+  });
+
+  it('does not render the sticky bar data-testid on desktop', () => {
+    render(<LotEditFormActions canSubmit saving={false} onCancel={vi.fn()} />);
+
+    expect(screen.queryByTestId('lot-edit-sticky-bar')).not.toBeInTheDocument();
+  });
+});
+
+// ── Mobile sticky save bar ──────────────────────────────────────────────────
+
+describe('LotEditFormActions mobile sticky save bar', () => {
+  it('renders the fixed sticky bar with correct testid on mobile', () => {
+    mockIsMobile = true;
+    render(<LotEditFormActions canSubmit saving={false} onCancel={vi.fn()} />);
+
+    expect(screen.getByTestId('lot-edit-sticky-bar')).toBeInTheDocument();
+    mockIsMobile = false;
+  });
+
+  it('calls onCancel when Cancel is pressed in the sticky bar', () => {
+    mockIsMobile = true;
+    const onCancel = vi.fn();
+    render(<LotEditFormActions canSubmit saving={false} onCancel={onCancel} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    mockIsMobile = false;
+  });
+
+  it('Save Changes is enabled when canSubmit=true and not saving', () => {
+    mockIsMobile = true;
+    render(<LotEditFormActions canSubmit saving={false} onCancel={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: 'Save Changes' })).toBeEnabled();
+    mockIsMobile = false;
+  });
+
+  it('submit button is disabled while saving', () => {
+    mockIsMobile = true;
+    render(<LotEditFormActions canSubmit saving onCancel={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: 'Saving...' })).toBeDisabled();
+    mockIsMobile = false;
+  });
+
+  it('submit button is disabled when canSubmit=false', () => {
+    mockIsMobile = true;
+    render(<LotEditFormActions canSubmit={false} saving={false} onCancel={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: 'Save Changes' })).toBeDisabled();
+    mockIsMobile = false;
   });
 });

@@ -120,8 +120,6 @@
     letter-spacing: -0.006em;
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
-    /* Prevent pull-to-refresh interference */
-    overscroll-behavior-y: contain;
   }
 
   /* Prevent horizontal scroll on mobile */
@@ -130,6 +128,12 @@
     overflow-x: hidden;
     width: 100%;
     position: relative;
+    /* Kill browser's native pull-to-refresh and scroll chaining.
+       The app's JS-driven usePullToRefresh hook remains the only PTR surface
+       (it arms on touchstart at scrollTop===0 and uses preventDefault on
+       touchmove on the container element — overscroll-behavior on html/body
+       does NOT disable that hook). */
+    overscroll-behavior-y: none;
   }
 
   /* Safe area for bottom nav on notched devices */
@@ -246,6 +250,14 @@
   /* Skeleton pulse animation */
   .skeleton-pulse {
     @apply animate-pulse bg-muted rounded;
+  }
+
+  /* UI chrome — nav bars, tab strips.
+     Apply to bottom-nav containers so labels never get text-selected on
+     long-press. Do NOT use globally — page content must stay selectable. */
+  .ui-chrome {
+    user-select: none;
+    -webkit-user-select: none;
   }
 }
 
@@ -429,5 +441,17 @@
   /* Links - show URL in print */
   a[href]:after {
     content: none;
+  }
+}
+
+/* Accessibility: honour prefers-reduced-motion system preference */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

@@ -102,6 +102,7 @@ export {
   clearAllOfflineData,
   getFailedSyncCount,
   getLiveSyncCount,
+  getOldestPendingItemAge,
   getPendingSyncCount,
   getPendingSyncItems,
   markSyncItemError,
