@@ -172,6 +172,7 @@ export function LotDetailTabPanel({
             projectId={projectId!}
             testResults={testResults}
             loading={loadingTests}
+            isMobile={isMobile}
           />
         </div>
       )}
@@ -188,7 +189,12 @@ export function LotDetailTabPanel({
               View All NCRs
             </button>
           </div>
-          <NCRsTabContent projectId={projectId!} ncrs={ncrs} loading={loadingNcrs} />
+          <NCRsTabContent
+            projectId={projectId!}
+            ncrs={ncrs}
+            loading={loadingNcrs}
+            isMobile={isMobile}
+          />
         </div>
       )}
 
