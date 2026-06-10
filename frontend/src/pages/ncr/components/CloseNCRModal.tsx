@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import type { NCR } from '../types';
-import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal';
+import { ResponsiveSheet } from '@/components/ui/ResponsiveSheet';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -53,55 +53,67 @@ function CloseNCRModalInner({ isOpen, ncr, onClose, onSubmit, loading }: CloseNC
 
   if (!isOpen || !ncr) return null;
 
-  return (
-    <Modal onClose={handleClose} className="max-w-lg">
-      <ModalHeader>Close NCR {ncr.ncrNumber}</ModalHeader>
-      <ModalBody>
-        {ncr.severity === 'major' && ncr.qmApprovedAt && (
-          <div className="mb-4 bg-success/10 border border-success/30 text-success px-3 py-2 rounded-lg text-sm">
-            QM Approval granted by {ncr.qmApprovedBy?.fullName || 'Quality Manager'}
-          </div>
-        )}
+  const footer = (
+    <>
+      <Button type="button" variant="outline" className="min-h-[44px]" onClick={handleClose}>
+        Cancel
+      </Button>
+      <Button
+        type="submit"
+        form="close-ncr-form"
+        variant="success"
+        className="min-h-[44px]"
+        disabled={loading}
+      >
+        {loading ? 'Closing...' : 'Close NCR'}
+      </Button>
+    </>
+  );
 
-        <form id="close-ncr-form" onSubmit={handleSubmit(onFormSubmit)} className="space-y-4">
-          <div>
-            <Label>Verification Notes</Label>
-            <Textarea
-              {...register('verificationNotes')}
-              className={errors.verificationNotes ? 'border-destructive mt-1' : 'mt-1'}
-              rows={3}
-              placeholder="Notes about the verification and closure..."
-            />
-            {errors.verificationNotes && (
-              <p className="text-sm text-destructive mt-1" role="alert">
-                {errors.verificationNotes.message}
-              </p>
-            )}
-          </div>
-          {/* Feature #474: Lessons Learned Recording */}
-          <div>
-            <Label>Lessons Learned</Label>
-            <Textarea
-              {...register('lessonsLearned')}
-              className={errors.lessonsLearned ? 'border-destructive mt-1' : 'mt-1'}
-              rows={3}
-              placeholder="What lessons can be learned from this NCR? How can similar issues be prevented in the future?"
-            />
-            <p className="text-xs text-muted-foreground mt-1">
-              Document insights for continuous improvement and future reference.
+  return (
+    <ResponsiveSheet
+      isOpen={isOpen}
+      onClose={handleClose}
+      title={`Close NCR ${ncr.ncrNumber}`}
+      footer={footer}
+      className="max-w-lg"
+    >
+      {ncr.severity === 'major' && ncr.qmApprovedAt && (
+        <div className="mb-4 bg-success/10 border border-success/30 text-success px-3 py-2 rounded-lg text-sm">
+          QM Approval granted by {ncr.qmApprovedBy?.fullName || 'Quality Manager'}
+        </div>
+      )}
+
+      <form id="close-ncr-form" onSubmit={handleSubmit(onFormSubmit)} className="space-y-4">
+        <div>
+          <Label>Verification Notes</Label>
+          <Textarea
+            {...register('verificationNotes')}
+            className={errors.verificationNotes ? 'border-destructive mt-1' : 'mt-1'}
+            rows={3}
+            placeholder="Notes about the verification and closure..."
+          />
+          {errors.verificationNotes && (
+            <p className="text-sm text-destructive mt-1" role="alert">
+              {errors.verificationNotes.message}
             </p>
-          </div>
-        </form>
-      </ModalBody>
-      <ModalFooter>
-        <Button type="button" variant="outline" onClick={handleClose}>
-          Cancel
-        </Button>
-        <Button type="submit" form="close-ncr-form" variant="success" disabled={loading}>
-          {loading ? 'Closing...' : 'Close NCR'}
-        </Button>
-      </ModalFooter>
-    </Modal>
+          )}
+        </div>
+        {/* Feature #474: Lessons Learned Recording */}
+        <div>
+          <Label>Lessons Learned</Label>
+          <Textarea
+            {...register('lessonsLearned')}
+            className={errors.lessonsLearned ? 'border-destructive mt-1' : 'mt-1'}
+            rows={3}
+            placeholder="What lessons can be learned from this NCR? How can similar issues be prevented in the future?"
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            Document insights for continuous improvement and future reference.
+          </p>
+        </div>
+      </form>
+    </ResponsiveSheet>
   );
 }
 
