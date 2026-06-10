@@ -33,10 +33,15 @@ import {
   type DashboardAttentionItems,
 } from '@/components/dashboard/ItemsRequiringAttentionWidget';
 import { DashboardQuickLinks } from '@/components/dashboard/DashboardQuickLinks';
+import {
+  DashboardMemberSetupNotice,
+  DashboardSetupChecklist,
+} from '@/components/dashboard/DashboardSetupChecklist';
 import { QualityManagerDashboard } from '@/components/dashboard/QualityManagerDashboard';
 import { ProjectManagerDashboard } from '@/components/dashboard/ProjectManagerDashboard';
 import { SubcontractorDashboard } from '@/pages/subcontractor-portal/SubcontractorDashboard';
-import { hasSubcontractorPortalIdentity } from '@/lib/subcontractorIdentity';
+import { getCompanyRole, hasSubcontractorPortalIdentity } from '@/lib/subcontractorIdentity';
+import { ROLE_GROUPS, hasRoleInGroup } from '@/lib/roles';
 import { Button } from '@/components/ui/button';
 import {
   Settings2,
@@ -216,6 +221,14 @@ function DefaultDashboard({ user }: { user: DashboardUser }) {
   const stats = statsData ?? defaultStats;
   const loading = statsLoading;
   const hasStatsData = Boolean(statsData);
+
+  // First-run detection: only ever decided from loaded stats (never while the
+  // query is still in flight) so an established company never sees the setup
+  // state flash before its real numbers arrive. The projects list feeds the
+  // checklist's "done" ticks because it refreshes independently of stats.
+  const knownProjectCount = projectsData?.projects.length ?? 0;
+  const showFirstRunSetup = hasStatsData && stats.totalProjects === 0;
+  const canCreateProjects = hasRoleInGroup(getCompanyRole(user), ROLE_GROUPS.ADMIN);
   const statsErrorMessage = statsError
     ? extractErrorMessage(statsError, 'Failed to load dashboard data')
     : null;
@@ -268,6 +281,37 @@ function DefaultDashboard({ user }: { user: DashboardUser }) {
         aria-label="Loading dashboard"
       >
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  // A company with zero projects has nothing to chart, so the KPI grid and
+  // export chrome would be an all-zero wall. Show a path to first value
+  // instead: a setup checklist for roles that can create projects, and a
+  // plain "you'll be added" notice for everyone else.
+  if (showFirstRunSetup) {
+    return (
+      <div className="space-y-6 dashboard-content">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Welcome{user?.name ? `, ${user.name}` : user?.fullName ? `, ${user.fullName}` : ''}!{' '}
+            {canCreateProjects
+              ? "Let's get your first project set up."
+              : 'Your dashboard fills in once you are working on a project.'}
+          </p>
+        </div>
+
+        <PendingInvitationBanner user={user} />
+
+        {canCreateProjects ? (
+          <DashboardSetupChecklist
+            projectCreated={knownProjectCount > 0}
+            lotsAdded={stats.totalLots > 0}
+          />
+        ) : (
+          <DashboardMemberSetupNotice />
+        )}
       </div>
     );
   }
