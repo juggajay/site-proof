@@ -1,4 +1,5 @@
-import { Suspense, lazy } from 'react';
+import { Suspense, lazy, useEffect } from 'react';
+import { requestPersistentStorage } from '@/lib/offline/storagePersistence';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from '@/components/ui/toaster';
 import { AuthProvider } from '@/lib/auth';
@@ -96,6 +97,13 @@ const RoleSwitcher = ENABLE_DEV_TOOLS
   : null;
 
 function App() {
+  // Request persistent storage once on app start so iOS/Safari cannot evict
+  // the IndexedDB offline queue under storage pressure. No-throw: returns
+  // false silently when the Storage API is unsupported.
+  useEffect(() => {
+    requestPersistentStorage();
+  }, []);
+
   return (
     <ErrorBoundary>
       <AuthProvider>
