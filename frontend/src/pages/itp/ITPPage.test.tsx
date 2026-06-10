@@ -60,9 +60,9 @@ const LOCAL_TEMPLATE: ITPTemplate = {
   ],
 };
 
-function mockTemplates(templates: ITPTemplate[]) {
+function mockTemplates(templates: ITPTemplate[], projectSpecificationSet: string | null = 'TfNSW') {
   useItpTemplatesQueryMock.mockReturnValue({
-    data: { templates, projectSpecificationSet: 'TfNSW' },
+    data: { templates, projectSpecificationSet },
     isFetching: false,
     error: null,
     refetch: vi.fn(),
@@ -135,6 +135,25 @@ describe('ITPPage role-aware template management', () => {
       'href',
       '/projects/p1/lots',
     );
+  });
+
+  it('labels the library filter with the project spec set when one is configured', () => {
+    authState.actualRole = 'project_manager';
+    mockTemplates([LOCAL_TEMPLATE]);
+
+    renderWithProviders(<ITPPage />);
+
+    expect(screen.getByText('Include TfNSW library templates')).toBeInTheDocument();
+  });
+
+  it('falls back to neutral library wording when the project has no spec set', () => {
+    authState.actualRole = 'project_manager';
+    mockTemplates([LOCAL_TEMPLATE], null);
+
+    renderWithProviders(<ITPPage />);
+
+    expect(screen.getByText('Include state spec library templates')).toBeInTheDocument();
+    expect(screen.queryByText('Include MRTS library templates')).not.toBeInTheDocument();
   });
 
   it('keeps the create-first CTA on the empty state for a manager (admin)', () => {

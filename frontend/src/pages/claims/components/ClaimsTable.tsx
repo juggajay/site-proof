@@ -164,8 +164,9 @@ export const ClaimsTable = React.memo(function ClaimsTable({
       <div className="rounded-lg border bg-card p-8 text-center">
         <FileText className="mx-auto h-12 w-12 text-muted-foreground" />
         <h3 className="mt-4 font-semibold">No claims yet</h3>
-        <p className="text-muted-foreground mt-1">
-          Create your first progress claim to get started
+        <p className="text-muted-foreground mt-1 mx-auto max-w-md">
+          Claims are built from conformed lots — lots whose quality checks are complete and signed
+          off. Once a lot is conformed, create a claim to bill that work.
         </p>
         <button
           onClick={onCreateClaim}

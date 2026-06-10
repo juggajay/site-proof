@@ -1,4 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { apiFetch } from '@/lib/api';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import type { ConformedLot, NewClaimFormData } from '../types';
@@ -11,6 +12,7 @@ import {
   calculateLotClaimAmount,
   formatCurrency,
   getClaimIncrementError,
+  getClaimPeriodError,
   parseClaimPercentageInput,
 } from '../utils';
 import {
@@ -122,6 +124,12 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
   const createClaim = async () => {
     if (creatingRef.current) return;
 
+    const periodError = getClaimPeriodError(newClaim.periodStart, newClaim.periodEnd);
+    if (periodError) {
+      setCreateError(periodError);
+      return;
+    }
+
     const selectedLots = conformedLots.filter((l) => l.selected);
     if (selectedLots.length === 0) {
       setCreateError('Please select at least one lot to include in the claim.');
@@ -190,6 +198,7 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
   const hasPercentageErrors = selectedLots.some((lot) =>
     Boolean(getClaimIncrementError(lot.percentComplete, lot.remainingPercentage)),
   );
+  const periodError = getClaimPeriodError(newClaim.periodStart, newClaim.periodEnd);
 
   return (
     <Modal onClose={onClose} className="max-w-2xl">
@@ -216,23 +225,38 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
           )}
 
           {/* Period Selection */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label>Period Start</Label>
-              <Input
-                type="date"
-                value={newClaim.periodStart}
-                onChange={(e) => setNewClaim((prev) => ({ ...prev, periodStart: e.target.value }))}
-              />
+          <div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="claim-period-start">Period Start</Label>
+                <Input
+                  id="claim-period-start"
+                  type="date"
+                  value={newClaim.periodStart}
+                  aria-invalid={Boolean(periodError)}
+                  onChange={(e) =>
+                    setNewClaim((prev) => ({ ...prev, periodStart: e.target.value }))
+                  }
+                  className={periodError ? 'border-destructive' : ''}
+                />
+              </div>
+              <div>
+                <Label htmlFor="claim-period-end">Period End</Label>
+                <Input
+                  id="claim-period-end"
+                  type="date"
+                  value={newClaim.periodEnd}
+                  aria-invalid={Boolean(periodError)}
+                  onChange={(e) => setNewClaim((prev) => ({ ...prev, periodEnd: e.target.value }))}
+                  className={periodError ? 'border-destructive' : ''}
+                />
+              </div>
             </div>
-            <div>
-              <Label>Period End</Label>
-              <Input
-                type="date"
-                value={newClaim.periodEnd}
-                onChange={(e) => setNewClaim((prev) => ({ ...prev, periodEnd: e.target.value }))}
-              />
-            </div>
+            {periodError && (
+              <p className="mt-1.5 text-sm text-destructive" role="alert">
+                {periodError}
+              </p>
+            )}
           </div>
 
           {/* Lot Selection */}
@@ -244,8 +268,18 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
                   Loading claimable lots...
                 </div>
               ) : loadError ? null : conformedLots.length === 0 ? (
-                <div className="p-4 text-center text-muted-foreground">
-                  No conformed lots available for claiming
+                <div className="p-6 text-center">
+                  <p className="font-medium">No conformed lots to claim yet</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Claims are built from conformed lots — lots whose quality checks are complete
+                    and signed off. Conform a lot first, then come back here to claim it.
+                  </p>
+                  <Link
+                    to={`/projects/${projectId}/lots`}
+                    className="touch-target mt-3 inline-flex items-center justify-center rounded-lg border px-4 py-2 text-sm hover:bg-muted"
+                  >
+                    Go to Lots
+                  </Link>
                 </div>
               ) : (
                 conformedLots.map((lot) => {
@@ -368,7 +402,9 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
         </Button>
         <Button
           onClick={createClaim}
-          disabled={creating || selectedLots.length === 0 || hasPercentageErrors}
+          disabled={
+            creating || selectedLots.length === 0 || hasPercentageErrors || Boolean(periodError)
+          }
         >
           {creating ? 'Creating...' : 'Create Claim'}
         </Button>

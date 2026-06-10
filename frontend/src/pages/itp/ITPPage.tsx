@@ -274,8 +274,11 @@ export function ITPPage() {
             onChange={(e) => setIncludeGlobalTemplates(e.target.checked)}
             className="rounded border-border accent-primary"
           />
+          {/* Spec set is legitimately nullable; fall back to neutral wording
+              (matching the 'Library' template badge below) instead of a
+              state-specific standard the project may not use. */}
           <span className="text-sm">
-            Include {projectSpecificationSet || 'MRTS'} library templates
+            Include {projectSpecificationSet || 'state spec'} library templates
           </span>
         </label>
 

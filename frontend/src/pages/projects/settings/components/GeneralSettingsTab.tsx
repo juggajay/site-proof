@@ -6,7 +6,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { Project, GeneralFormData } from '../types';
-import { DEFAULT_FORM_DATA, SPECIFICATION_SET_OPTIONS } from '../types';
+import {
+  DEFAULT_FORM_DATA,
+  SPECIFICATION_SET_HELPER_TEXT,
+  SPECIFICATION_SET_OPTIONS,
+} from '../types';
 import {
   parseOptionalNonNegativeDecimalInput,
   parsePositiveIntegerInput,
@@ -260,10 +264,7 @@ export function GeneralSettingsTab({
               </option>
             ))}
           </select>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Determines which global ITP library templates this project can use. Must match the
-            standard your templates are filed under (e.g. TfNSW).
-          </p>
+          <p className="mt-1 text-xs text-muted-foreground">{SPECIFICATION_SET_HELPER_TEXT}</p>
         </div>
         {(project?.startDate || project?.targetCompletion) && (
           <div className="mt-4 pt-4 border-t grid gap-4 sm:grid-cols-2">
