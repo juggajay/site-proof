@@ -38,22 +38,30 @@ export function addBusinessDays(startDate: Date, days: number): Date {
 
 /**
  * Calculate certification due date based on SOPA response timeframes.
- * `state` is the project's jurisdiction (e.g. 'WA'); when it is missing or
- * unrecognised we fall back to NSW timeframes (the historical default).
+ * `state` is the project's jurisdiction (e.g. 'WA'). A missing/undefined state
+ * defaults to NSW, but an *unrecognised* jurisdiction (e.g. 'NT', which has no
+ * East-Coast payment-schedule mechanics) returns null rather than fabricating a
+ * confident-but-wrong NSW date — callers should render "not available".
  */
-export function calculateCertificationDueDate(submittedAt: string, state: string = 'NSW'): string {
-  const timeframe = SOPA_TIMEFRAMES[state] || SOPA_TIMEFRAMES.NSW;
+export function calculateCertificationDueDate(
+  submittedAt: string,
+  state: string = 'NSW',
+): string | null {
+  const timeframe = SOPA_TIMEFRAMES[state];
+  if (!timeframe) return null;
   const submissionDate = new Date(submittedAt);
   return addBusinessDays(submissionDate, timeframe.responseTime).toISOString();
 }
 
 /**
  * Calculate payment due date based on SOPA timeframes.
- * `state` is the project's jurisdiction (e.g. 'WA'); when it is missing or
- * unrecognised we fall back to NSW timeframes (the historical default).
+ * `state` is the project's jurisdiction (e.g. 'WA'). A missing/undefined state
+ * defaults to NSW; an *unrecognised* jurisdiction returns null (see
+ * calculateCertificationDueDate).
  */
-export function calculatePaymentDueDate(submittedAt: string, state: string = 'NSW'): string {
-  const timeframe = SOPA_TIMEFRAMES[state] || SOPA_TIMEFRAMES.NSW;
+export function calculatePaymentDueDate(submittedAt: string, state: string = 'NSW'): string | null {
+  const timeframe = SOPA_TIMEFRAMES[state];
+  if (!timeframe) return null;
   const submissionDate = new Date(submittedAt);
   return addBusinessDays(submissionDate, timeframe.paymentTime).toISOString();
 }
@@ -65,9 +73,11 @@ export function getCertificationDueStatus(claim: Claim): CertificationDueStatus 
     return null;
   }
 
-  // Use the project's jurisdiction so e.g. WA claims get WA timeframes;
-  // calculateCertificationDueDate falls back to NSW when state is absent.
+  // Use the project's jurisdiction so e.g. WA claims get WA timeframes.
+  // null = jurisdiction without computable SOPA timeframes (e.g. NT) — show no
+  // due-date chip rather than a wrong one.
   const dueDate = calculateCertificationDueDate(claim.submittedAt, claim.projectState ?? undefined);
+  if (!dueDate) return null;
   const now = new Date();
   const due = new Date(dueDate);
   const daysUntilDue = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
@@ -99,9 +109,10 @@ export function getPaymentDueStatus(claim: Claim): PaymentDueStatus | null {
     return null;
   }
 
-  // Use the project's jurisdiction so e.g. WA claims get WA timeframes;
-  // calculatePaymentDueDate falls back to NSW when state is absent.
+  // Use the project's jurisdiction so e.g. WA claims get WA timeframes.
+  // null = jurisdiction without computable SOPA timeframes (e.g. NT).
   const dueDate = calculatePaymentDueDate(claim.submittedAt, claim.projectState ?? undefined);
+  if (!dueDate) return null;
   const now = new Date();
   const due = new Date(dueDate);
   const daysUntilDue = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));

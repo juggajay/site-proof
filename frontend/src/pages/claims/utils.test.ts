@@ -109,18 +109,38 @@ describe('SOPA due dates by project state', () => {
   });
 
   it('WA payment due is later than NSW (the original NSW-for-all bug)', () => {
-    const nsw = new Date(calculatePaymentDueDate(submittedAt, 'NSW')).getTime();
-    const wa = new Date(calculatePaymentDueDate(submittedAt, 'WA')).getTime();
-    expect(wa).toBeGreaterThan(nsw);
+    const nswDue = calculatePaymentDueDate(submittedAt, 'NSW');
+    const waDue = calculatePaymentDueDate(submittedAt, 'WA');
+    expect(nswDue).not.toBeNull();
+    expect(waDue).not.toBeNull();
+    expect(new Date(waDue ?? '').getTime()).toBeGreaterThan(new Date(nswDue ?? '').getTime());
   });
 
-  it('falls back to NSW timeframes when state is missing or unknown', () => {
+  it('uses QLD timeframes (15 schedule / 10 payment business days) for QLD projects', () => {
+    // QLD BIF s76 (schedule 15 BD) / s73 (payment 10 BD default) — the previous
+    // 10/15 had these reversed.
+    expect(calculateCertificationDueDate(submittedAt, 'QLD')).toBe(
+      addBusinessDays(new Date(submittedAt), 15).toISOString(),
+    );
+    expect(calculatePaymentDueDate(submittedAt, 'QLD')).toBe(
+      addBusinessDays(new Date(submittedAt), 10).toISOString(),
+    );
+  });
+
+  it('defaults to NSW timeframes when the state is missing/undefined', () => {
     const nswCert = calculateCertificationDueDate(submittedAt, 'NSW');
     const nswPayment = calculatePaymentDueDate(submittedAt, 'NSW');
     expect(calculateCertificationDueDate(submittedAt)).toBe(nswCert);
     expect(calculatePaymentDueDate(submittedAt)).toBe(nswPayment);
-    expect(calculateCertificationDueDate(submittedAt, 'ZZ')).toBe(nswCert);
-    expect(calculatePaymentDueDate(submittedAt, 'ZZ')).toBe(nswPayment);
+  });
+
+  it('returns null for an unrecognised jurisdiction (e.g. NT, ZZ) instead of faking NSW dates', () => {
+    // NT uses the West-Coast model (no payment-schedule mechanics) and is not in
+    // SOPA_TIMEFRAMES; unknown codes must not silently inherit NSW numbers.
+    expect(calculateCertificationDueDate(submittedAt, 'NT')).toBeNull();
+    expect(calculatePaymentDueDate(submittedAt, 'NT')).toBeNull();
+    expect(calculateCertificationDueDate(submittedAt, 'ZZ')).toBeNull();
+    expect(calculatePaymentDueDate(submittedAt, 'ZZ')).toBeNull();
   });
 
   it('pins one business-day boundary: +10 business days from a Monday is the Monday 14 calendar days later', () => {

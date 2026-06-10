@@ -131,26 +131,28 @@ export function ClaimsPage() {
       'Submitted At',
       'Payment Due Date',
     ];
-    const rows = claims.map((c) => [
-      `Claim ${c.claimNumber}`,
-      new Date(c.periodStart).toLocaleDateString('en-AU'),
-      new Date(c.periodEnd).toLocaleDateString('en-AU'),
-      c.status,
-      c.lotCount,
-      c.totalClaimedAmount,
-      c.certifiedAmount ?? '-',
-      c.paidAmount ?? '-',
-      c.submittedAt ? new Date(c.submittedAt).toLocaleDateString('en-AU') : '-',
-      c.paymentDueDate
-        ? new Date(c.paymentDueDate).toLocaleDateString('en-AU')
-        : c.submittedAt
-          ? new Date(
-              // Project jurisdiction drives SOPA timeframes; falls back to NSW
-              // inside calculatePaymentDueDate when state is absent.
-              calculatePaymentDueDate(c.submittedAt, c.projectState ?? undefined),
-            ).toLocaleDateString('en-AU')
-          : '-',
-    ]);
+    const rows = claims.map((c) => {
+      // Project jurisdiction drives SOPA timeframes; calculatePaymentDueDate
+      // returns null for jurisdictions without computable timeframes (e.g. NT),
+      // in which case we render '-' rather than an "Invalid Date".
+      const paymentDue =
+        c.paymentDueDate ??
+        (c.submittedAt
+          ? calculatePaymentDueDate(c.submittedAt, c.projectState ?? undefined)
+          : null);
+      return [
+        `Claim ${c.claimNumber}`,
+        new Date(c.periodStart).toLocaleDateString('en-AU'),
+        new Date(c.periodEnd).toLocaleDateString('en-AU'),
+        c.status,
+        c.lotCount,
+        c.totalClaimedAmount,
+        c.certifiedAmount ?? '-',
+        c.paidAmount ?? '-',
+        c.submittedAt ? new Date(c.submittedAt).toLocaleDateString('en-AU') : '-',
+        paymentDue ? new Date(paymentDue).toLocaleDateString('en-AU') : '-',
+      ];
+    });
     downloadCsv(`progress-claims-${projectId}-${formatDateKey()}.csv`, [headers, ...rows]);
   }, [claims, projectId]);
 
