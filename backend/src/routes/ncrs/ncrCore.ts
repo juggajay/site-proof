@@ -17,6 +17,7 @@ import { logError } from '../../lib/serverLogger.js';
 import { isProjectNotificationEnabled } from '../../lib/projectNotificationPreferences.js';
 import {
   activeSubcontractorCompanyWhere,
+  ensureSubcontractorNcrPortalAccess,
   hasPortalModuleEnabled,
 } from '../../lib/projectAccess.js';
 import { buildNcrResponse, buildNcrUpdatedResponse } from './ncrCoreResponses.js';
@@ -86,6 +87,44 @@ async function requireActiveResponsibleSubcontractor(
     throw AppError.badRequest(
       'Responsible subcontractor must be an active subcontractor on this project',
     );
+  }
+}
+
+// Auto-enable the assigned subcontractor's NCR portal visibility on assignment.
+// The `ncrs` portal module is opt-in / off by default (an NCR is a
+// non-conformance against the subcontractor's own work), but assigning an NCR
+// to a company IS the head contractor's intent to share it — so without this
+// the assigned subcontractor silently can't see the NCR, AND the assignment
+// notification below is suppressed (notifySubcontractorAssignment gates on the
+// same portalAccess.ncrs flag). Run this BEFORE notifying so both surface.
+// Best-effort: a failure here must not block the NCR write. The grant is
+// audit-logged so the permission change is traceable.
+async function enableSubcontractorNcrPortalAccessOnAssignment(
+  subcontractorCompanyId: string,
+  projectId: string,
+  userId: string,
+  ncrNumber: string,
+  req: Request,
+): Promise<void> {
+  try {
+    const enabled = await ensureSubcontractorNcrPortalAccess(subcontractorCompanyId);
+    if (enabled) {
+      await createAuditLog({
+        projectId,
+        userId,
+        entityType: 'subcontractor',
+        entityId: subcontractorCompanyId,
+        action: AuditAction.SUBCONTRACTOR_PORTAL_ACCESS_CHANGED,
+        changes: {
+          portalAccess: { ncrs: true },
+          autoEnabledBy: 'ncr_assignment',
+          ncrNumber,
+        },
+        req,
+      });
+    }
+  } catch (err) {
+    logError('Failed to auto-enable subcontractor NCR portal access:', err);
   }
 }
 
@@ -317,6 +356,16 @@ ncrCoreRouter.post(
     // is raised against their company. Respects the same project-level "NCR
     // Assignments" toggle as the user-assignment notification above.
     if (responsibleSubcontractorId) {
+      // Grant the subcontractor NCR portal visibility on assignment (before the
+      // notification, which is gated on the same module flag).
+      await enableSubcontractorNcrPortalAccessOnAssignment(
+        responsibleSubcontractorId,
+        projectId,
+        user.userId,
+        ncr.ncrNumber,
+        req,
+      );
+
       const project = await prisma.project.findUnique({
         where: { id: projectId },
         select: { settings: true },
@@ -485,6 +534,18 @@ ncrCoreRouter.patch(
       // Swap target type: assigning to a subcontractor clears any user.
       if (assigningSubcontractor) {
         updateData.responsibleUserId = null;
+      }
+
+      if (responsibleSubcontractorId) {
+        // Grant the subcontractor NCR portal visibility on (re)assignment
+        // (before the notification, which is gated on the same module flag).
+        await enableSubcontractorNcrPortalAccessOnAssignment(
+          responsibleSubcontractorId,
+          ncr.projectId,
+          user.userId,
+          ncr.ncrNumber,
+          req,
+        );
       }
 
       // Notify the subcontractor's portal users on (re)assignment. Same toggle.
