@@ -13,16 +13,20 @@
  * `updatingCompletionRef` double-submit guard from it, and merges uploaded
  * attachments into the instance exactly as the inline handlers did.
  *
- * Behavior is intentionally unchanged: same API paths and payloads
- * (documents/upload, ITP completion attachments, classify, save-classification),
- * same GPS capture and caption format, same validation messages and toast
- * wording, same optimistic attachment merge with the duplicate-id guard, same
- * input reset semantics, and the same error paths through handleApiError /
- * devWarn.
+ * Field-write resilience (parity with useItpInstance's completion writes):
+ * evidence photos are never dropped on a flaky connection. The upload is
+ * attempted online first; on ANY retriable network failure — browser offline,
+ * request timeout, fetch-level failure, or a 5xx — the photo is written
+ * through the offline pipeline (compressed -> IndexedDB -> sync queue with
+ * entityType 'itp' + the completion id) and the sync worker delivers it
+ * later; the documents upload endpoint attaches it to the completion
+ * server-side. Definitive 4xx rejections still surface as errors.
  */
 import { useState } from 'react';
 import type { ChangeEvent, Dispatch, MutableRefObject, SetStateAction } from 'react';
-import { apiFetch, ApiError, authFetch } from '@/lib/api';
+import { apiFetch, ApiError, authFetch, isRetriableNetworkFailure } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
+import { capturePhotoOffline } from '@/lib/offlineDb';
 import { handleApiError } from '@/lib/errorHandling';
 import { devWarn } from '@/lib/logger';
 import { formatDateTime } from '@/lib/utils';
@@ -30,6 +34,8 @@ import { toast } from '@/components/ui/toaster';
 import { getGPSLocation, getItpPhotoValidationError } from '../lib/itpEvidence';
 import type { ITPAttachment, ITPCompletion, ITPInstance } from '../types';
 import type { ClassificationModalData } from '../components/AIClassificationModal';
+
+const buildItpEvidenceCaption = () => `ITP Evidence Photo - ${formatDateTime(new Date())}`;
 
 /**
  * Pure upload-then-attach for an ITP evidence photo: POST the file to
@@ -41,9 +47,11 @@ import type { ClassificationModalData } from '../components/AIClassificationModa
  * GPS fix (`getGPSLocation()`) and sends `gpsLatitude`/`gpsLongitude`, and it
  * `encodeURIComponent`s the completionId in the attachment URL.
  *
- * This function deliberately does NOT do AI classification (Feature #247) or any
- * offline/IndexedDB write-through — those concerns live only in the hook's
- * handlers, so the portal (which calls this directly) never touches them.
+ * This function deliberately does NOT do AI classification (Feature #247) or
+ * any offline/IndexedDB write-through — classification lives only in the
+ * hook's handlers, and the offline fallback lives in
+ * `uploadItpEvidencePhotoWithOfflineFallback` below so this stays the pure
+ * online request shape.
  *
  * The caller owns the trust boundary and any validation/permission gate; this
  * function never reads `user.role` and only performs the upload it is asked to.
@@ -64,7 +72,7 @@ export async function uploadItpEvidencePhoto({
   }
 
   const gpsLocation = await getGPSLocation();
-  const caption = `ITP Evidence Photo - ${formatDateTime(new Date())}`;
+  const caption = buildItpEvidenceCaption();
   const formData = new FormData();
   formData.append('file', file);
   formData.append('projectId', projectId);
@@ -100,6 +108,69 @@ export async function uploadItpEvidencePhoto({
   return data.attachment;
 }
 
+/** Outcome of an evidence upload: attached now (online) or queued on-device. */
+export type ItpEvidenceUploadResult =
+  | { status: 'attached'; attachment: ITPAttachment }
+  | { status: 'queued'; photoId: string };
+
+/**
+ * Resilient evidence upload shared by the HC lot-detail hook and the
+ * subcontractor portal page: try the online upload-then-attach first; on a
+ * retriable network failure — browser offline, request timeout, fetch-level
+ * failure, or a 5xx (per isRetriableNetworkFailure) — write the photo through
+ * the offline pipeline instead: compressed into IndexedDB and queued with
+ * entityType 'itp' + the completion id. The sync worker re-uploads it with
+ * those fields and the documents upload endpoint attaches it to the same
+ * completion, so the queued path converges on the data shape of the direct
+ * path. Definitive rejections (4xx) are re-thrown for the caller's error UI.
+ *
+ * The GPS fix is re-read on the fallback; getGPSLocation caches positions for
+ * up to 60s, so this does not re-prompt and usually reuses the same fix.
+ */
+export async function uploadItpEvidencePhotoWithOfflineFallback({
+  projectId,
+  lotId,
+  completionId,
+  file,
+  capturedBy,
+}: {
+  projectId: string | undefined;
+  lotId: string | undefined;
+  completionId: string;
+  file: File;
+  capturedBy: string;
+}): Promise<ItpEvidenceUploadResult> {
+  try {
+    const attachment = await uploadItpEvidencePhoto({ projectId, lotId, completionId, file });
+    return { status: 'attached', attachment };
+  } catch (err) {
+    if (!projectId || !lotId || !isRetriableNetworkFailure(err)) throw err;
+
+    const gpsLocation = await getGPSLocation();
+    const photo = await capturePhotoOffline(projectId, file, {
+      lotId,
+      entityType: 'itp',
+      entityId: completionId,
+      documentType: 'photo',
+      category: 'itp_evidence',
+      caption: buildItpEvidenceCaption(),
+      capturedBy,
+      gpsLatitude: gpsLocation?.latitude,
+      gpsLongitude: gpsLocation?.longitude,
+    });
+    return { status: 'queued', photoId: photo.id };
+  }
+}
+
+/** Honest queued-save feedback: saved on this device, attaches after sync. */
+const notifyEvidenceSavedOffline = () => {
+  toast({
+    title: 'Saved Offline',
+    description:
+      'Photo is saved on this device and will attach to this checklist item when it syncs.',
+  });
+};
+
 interface UseLotPhotoUploadParams {
   projectId: string | undefined;
   lotId: string | undefined;
@@ -120,7 +191,7 @@ export function useLotPhotoUpload({
   setUpdatingCompletion,
   updatingCompletionRef,
 }: UseLotPhotoUploadParams) {
-  const [_uploadingPhoto, setUploadingPhoto] = useState<string | null>(null);
+  const { user } = useAuth();
 
   // AI Photo Classification modal state (Feature #247)
   const [classificationModal, setClassificationModal] = useState<ClassificationModalData | null>(
@@ -129,11 +200,21 @@ export function useLotPhotoUpload({
   const [savingClassification, setSavingClassification] = useState(false);
   const [_classifying, setClassifying] = useState(false);
 
-  // The upload-then-attach request shape now lives in the standalone
-  // `uploadItpEvidencePhoto` (module scope, also used by the subcontractor portal
-  // page). The hook handlers below call it with this page's projectId/lotId.
-  const uploadEvidencePhoto = (completionId: string, file: File): Promise<ITPAttachment> =>
-    uploadItpEvidencePhoto({ projectId, lotId, completionId, file });
+  // The resilient upload (online upload-then-attach with the offline-queue
+  // fallback) lives in the standalone `uploadItpEvidencePhotoWithOfflineFallback`
+  // (module scope, also used by the subcontractor portal page). The hook
+  // handlers below call it with this page's projectId/lotId.
+  const uploadEvidencePhoto = (
+    completionId: string,
+    file: File,
+  ): Promise<ItpEvidenceUploadResult> =>
+    uploadItpEvidencePhotoWithOfflineFallback({
+      projectId,
+      lotId,
+      completionId,
+      file,
+      capturedBy: user?.id ?? 'unknown',
+    });
 
   const handleMobileAddPhoto = async (checklistItemId: string, file: File) => {
     if (!itpInstance || updatingCompletionRef.current === checklistItemId) return;
@@ -187,7 +268,14 @@ export function useLotPhotoUpload({
         return;
       }
 
-      const attachment = await uploadEvidencePhoto(completion.id, file);
+      const result = await uploadEvidencePhoto(completion.id, file);
+
+      if (result.status === 'queued') {
+        notifyEvidenceSavedOffline();
+        return;
+      }
+
+      const attachment = result.attachment;
 
       // Update local state with new attachment
       setItpInstance((prev) => {
@@ -224,7 +312,7 @@ export function useLotPhotoUpload({
     event: ChangeEvent<HTMLInputElement>,
   ) => {
     const file = event.target.files?.[0];
-    if (!file || !itpInstance) return;
+    if (!file || !itpInstance || updatingCompletionRef.current === checklistItemId) return;
 
     const validationError = getItpPhotoValidationError(file);
     if (validationError) {
@@ -237,10 +325,20 @@ export function useLotPhotoUpload({
       return;
     }
 
-    setUploadingPhoto(checklistItemId);
+    // Shared in-flight guard (same as useItpInstance's mutations): disables the
+    // row while the upload runs and blocks double submits.
+    updatingCompletionRef.current = checklistItemId;
+    setUpdatingCompletion(checklistItemId);
 
     try {
-      const attachment = await uploadEvidencePhoto(completionId, file);
+      const result = await uploadEvidencePhoto(completionId, file);
+
+      if (result.status === 'queued') {
+        notifyEvidenceSavedOffline();
+        return;
+      }
+
+      const attachment = result.attachment;
 
       // Update the ITP instance with the new attachment
       setItpInstance((prev) => {
@@ -291,7 +389,8 @@ export function useLotPhotoUpload({
     } catch (err) {
       handleApiError(err, 'Failed to upload photo');
     } finally {
-      setUploadingPhoto(null);
+      updatingCompletionRef.current = null;
+      setUpdatingCompletion(null);
       event.target.value = '';
     }
   };

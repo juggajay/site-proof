@@ -4,13 +4,14 @@ import { ArrowLeft, AlertCircle } from 'lucide-react';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { MobileITPChecklist } from '@/components/foreman/MobileITPChecklist';
 import { apiFetch } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 import { toast } from '@/components/ui/toaster';
 import { extractErrorMessage, handleApiError } from '@/lib/errorHandling';
 import { logError } from '@/lib/logger';
 import type { ITPCompletion, ITPInstance } from '../lots/types';
 import { getItpPhotoValidationError } from '../lots/lib/itpEvidence';
 import { useItpCompletionActions } from '../lots/hooks/useItpCompletionActions';
-import { uploadItpEvidencePhoto } from '../lots/hooks/useLotPhotoUpload';
+import { uploadItpEvidencePhotoWithOfflineFallback } from '../lots/hooks/useLotPhotoUpload';
 
 interface Lot {
   id: string;
@@ -26,6 +27,7 @@ interface Lot {
 
 export function SubcontractorLotITPPage() {
   const { lotId } = useParams<{ lotId: string }>();
+  const { user } = useAuth();
   const [lot, setLot] = useState<Lot | null>(null);
   const [itpInstance, setItpInstance] = useState<ITPInstance | null>(null);
   const [loading, setLoading] = useState(true);
@@ -150,17 +152,30 @@ export function SubcontractorLotITPPage() {
         completion = data.completion;
       }
 
-      // Reuse the shared upload-then-attach so the subbie and HC paths send the
-      // same request shape. This intentionally adds GPS geotag + an
-      // encodeURIComponent'd attachment URL to the subbie path (parity with HC);
-      // it does NOT do AI classification or any offline write-through (those live
-      // only in useLotPhotoUpload's handlers, never in this shared function).
-      await uploadItpEvidencePhoto({
+      // Reuse the shared resilient upload so the subbie and HC paths send the
+      // same request shape: online upload-then-attach first, and on a retriable
+      // network failure the photo is queued through the offline pipeline
+      // (entityType 'itp' + completion id) and attached server-side after sync.
+      // AI classification stays HC-only (it lives in useLotPhotoUpload's
+      // handlers, never in the shared function).
+      const result = await uploadItpEvidencePhotoWithOfflineFallback({
         projectId: lot.projectId,
         lotId: lot.id,
         completionId: completion.id,
         file,
+        capturedBy: user?.id ?? 'unknown',
       });
+
+      if (result.status === 'queued') {
+        // Honest feedback, and no refetch: the network just failed, so a
+        // refetch would only surface another error over the successful save.
+        toast({
+          title: 'Saved Offline',
+          description:
+            'Photo is saved on this device and will attach to this checklist item when it syncs.',
+        });
+        return;
+      }
 
       await fetchData();
       toast({ title: 'Success', description: 'Photo uploaded', variant: 'success' });

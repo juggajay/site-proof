@@ -1150,6 +1150,244 @@ describe('Documents API', () => {
     });
   });
 
+  describe('POST /api/documents/upload — ITP evidence linkage (offline photo pipeline)', () => {
+    // The offline photo sync worker posts entityType/entityId with each queued
+    // photo. These tests pin the round-trip the worker relies on: an
+    // entityType 'itp' upload attaches the created document to its completion
+    // exactly like the direct attach endpoint, unknown completions stay
+    // orphan-safe, and foreign ids are rejected before anything is stored.
+    const validPngBytes = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
+    let templateId: string;
+    let itpInstanceId: string;
+    let checklistItemId: string;
+    let completionId: string;
+    let foreignCompanyId: string;
+    let foreignProjectId: string;
+    let foreignLotId: string;
+    let foreignCompletionId: string;
+
+    beforeAll(async () => {
+      const suffix = Date.now();
+      const template = await prisma.iTPTemplate.create({
+        data: {
+          projectId,
+          name: `Evidence Pipeline Template ${suffix}`,
+          activityType: 'Earthworks',
+          checklistItems: {
+            create: [{ sequenceNumber: 1, description: 'Compaction evidence' }],
+          },
+        },
+        include: { checklistItems: true },
+      });
+      templateId = template.id;
+      checklistItemId = template.checklistItems[0].id;
+
+      const instance = await prisma.iTPInstance.create({
+        data: { lotId, templateId, status: 'in_progress' },
+      });
+      itpInstanceId = instance.id;
+
+      const completion = await prisma.iTPCompletion.create({
+        data: { itpInstanceId, checklistItemId, status: 'pending' },
+      });
+      completionId = completion.id;
+
+      // A completion in another company's project: resolvable by id, but the
+      // upload must reject it (cross-project/cross-company evidence).
+      const foreignCompany = await prisma.company.create({
+        data: { name: `Foreign Evidence Company ${suffix}` },
+      });
+      foreignCompanyId = foreignCompany.id;
+      const foreignProject = await prisma.project.create({
+        data: {
+          name: `Foreign Evidence Project ${suffix}`,
+          projectNumber: `FEP-${suffix}`,
+          companyId: foreignCompanyId,
+          status: 'active',
+          state: 'NSW',
+          specificationSet: 'TfNSW',
+        },
+      });
+      foreignProjectId = foreignProject.id;
+      const foreignLot = await prisma.lot.create({
+        data: {
+          projectId: foreignProjectId,
+          lotNumber: `FEP-LOT-${suffix}`,
+          status: 'not_started',
+          lotType: 'chainage',
+          activityType: 'Earthworks',
+        },
+      });
+      foreignLotId = foreignLot.id;
+      const foreignTemplate = await prisma.iTPTemplate.create({
+        data: {
+          projectId: foreignProjectId,
+          name: `Foreign Evidence Template ${suffix}`,
+          activityType: 'Earthworks',
+          checklistItems: {
+            create: [{ sequenceNumber: 1, description: 'Foreign item' }],
+          },
+        },
+        include: { checklistItems: true },
+      });
+      const foreignInstance = await prisma.iTPInstance.create({
+        data: {
+          lotId: foreignLotId,
+          templateId: foreignTemplate.id,
+          status: 'in_progress',
+        },
+      });
+      const foreignCompletion = await prisma.iTPCompletion.create({
+        data: {
+          itpInstanceId: foreignInstance.id,
+          checklistItemId: foreignTemplate.checklistItems[0].id,
+          status: 'pending',
+        },
+      });
+      foreignCompletionId = foreignCompletion.id;
+    });
+
+    afterAll(async () => {
+      await prisma.iTPCompletionAttachment.deleteMany({
+        where: { completionId: { in: [completionId, foreignCompletionId] } },
+      });
+      await prisma.iTPCompletion.deleteMany({
+        where: { id: { in: [completionId, foreignCompletionId] } },
+      });
+      await prisma.iTPInstance.deleteMany({
+        where: { OR: [{ id: itpInstanceId }, { lotId: foreignLotId }] },
+      });
+      await prisma.iTPTemplate.deleteMany({
+        where: { OR: [{ id: templateId }, { projectId: foreignProjectId }] },
+      });
+      await prisma.lot.deleteMany({ where: { id: foreignLotId } });
+      await prisma.project.deleteMany({ where: { id: foreignProjectId } });
+      await prisma.company.deleteMany({ where: { id: foreignCompanyId } });
+    });
+
+    async function uploadEvidence(fields: Record<string, string>, filename: string) {
+      let req = request(app)
+        .post('/api/documents/upload')
+        .set('Authorization', `Bearer ${authToken}`);
+      for (const [name, value] of Object.entries(fields)) {
+        req = req.field(name, value);
+      }
+      return req.attach('file', validPngBytes, { filename, contentType: 'image/png' });
+    }
+
+    async function cleanupUploadedDocument(body: { id?: string; fileUrl?: string }) {
+      if (body.id) {
+        await prisma.iTPCompletionAttachment.deleteMany({ where: { documentId: body.id } });
+        await prisma.document.deleteMany({ where: { id: body.id } });
+      }
+      if (body.fileUrl) {
+        const storedPath = path.join(uploadDir, path.basename(body.fileUrl));
+        if (fs.existsSync(storedPath)) fs.unlinkSync(storedPath);
+      }
+    }
+
+    it('attaches the uploaded photo to the ITP completion when entityType is itp', async () => {
+      const res = await uploadEvidence(
+        {
+          projectId,
+          lotId,
+          documentType: 'photo',
+          category: 'itp_evidence',
+          entityType: 'itp',
+          entityId: completionId,
+          caption: 'ITP Evidence Photo - synced from device',
+        },
+        `itp-evidence-${Date.now()}.png`,
+      );
+
+      try {
+        expect(res.status).toBe(201);
+        const attachment = await prisma.iTPCompletionAttachment.findFirst({
+          where: { completionId, documentId: res.body.id },
+        });
+        expect(attachment).not.toBeNull();
+      } finally {
+        await cleanupUploadedDocument(res.body);
+      }
+    });
+
+    it('is orphan-safe for an unknown completion id (document created, no attachment, no 4xx)', async () => {
+      const res = await uploadEvidence(
+        {
+          projectId,
+          lotId,
+          documentType: 'photo',
+          category: 'itp_evidence',
+          entityType: 'itp',
+          entityId: '00000000-0000-4000-8000-000000000000',
+        },
+        `itp-evidence-orphan-${Date.now()}.png`,
+      );
+
+      try {
+        expect(res.status).toBe(201);
+        const attachments = await prisma.iTPCompletionAttachment.count({
+          where: { documentId: res.body.id },
+        });
+        expect(attachments).toBe(0);
+      } finally {
+        await cleanupUploadedDocument(res.body);
+      }
+    });
+
+    it('rejects a foreign company completion id and stores nothing', async () => {
+      const filename = `itp-evidence-foreign-${Date.now()}.png`;
+      const res = await uploadEvidence(
+        {
+          projectId,
+          lotId,
+          documentType: 'photo',
+          category: 'itp_evidence',
+          entityType: 'itp',
+          entityId: foreignCompletionId,
+        },
+        filename,
+      );
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toBe(
+        'Document must belong to the same project as the ITP completion',
+      );
+
+      const createdDocument = await prisma.document.findFirst({ where: { projectId, filename } });
+      expect(createdDocument).toBeNull();
+      const attachments = await prisma.iTPCompletionAttachment.count({
+        where: { completionId: foreignCompletionId },
+      });
+      expect(attachments).toBe(0);
+      const leakedFiles = fs.readdirSync(uploadDir).filter((file) => file.includes(filename));
+      expect(leakedFiles).toHaveLength(0);
+    });
+
+    it('ignores non-itp entity types (additive: existing offline photo uploads unchanged)', async () => {
+      const res = await uploadEvidence(
+        {
+          projectId,
+          lotId,
+          documentType: 'photo',
+          entityType: 'general',
+          entityId: completionId,
+        },
+        `general-photo-${Date.now()}.png`,
+      );
+
+      try {
+        expect(res.status).toBe(201);
+        const attachments = await prisma.iTPCompletionAttachment.count({
+          where: { documentId: res.body.id },
+        });
+        expect(attachments).toBe(0);
+      } finally {
+        await cleanupUploadedDocument(res.body);
+      }
+    });
+  });
+
   describe('GET /api/documents/file/:documentId', () => {
     it('does not render extension-only local documents as client supplied HTML', async () => {
       const storedFilename = `unsafe-email-${Date.now()}.eml`;
