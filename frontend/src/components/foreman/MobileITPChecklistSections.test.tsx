@@ -63,6 +63,36 @@ describe('MobileITPChecklistSections', () => {
     expect(onToggle).toHaveBeenCalledTimes(1);
   });
 
+  it('shows the photo-required count on a collapsed header, but not when expanded', () => {
+    const { rerender } = render(
+      <MobileITPCategoryHeader
+        category="Earthworks"
+        isExpanded={false}
+        isComplete={false}
+        completedCount={1}
+        totalCount={4}
+        photoRequiredCount={2}
+        onToggle={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByLabelText('2 items need photos')).toBeVisible();
+
+    rerender(
+      <MobileITPCategoryHeader
+        category="Earthworks"
+        isExpanded={true}
+        isComplete={false}
+        completedCount={1}
+        totalCount={4}
+        photoRequiredCount={2}
+        onToggle={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByLabelText('2 items need photos')).not.toBeInTheDocument();
+  });
+
   it('delegates item row taps and quick-complete clicks', () => {
     const onTap = vi.fn();
     const onQuickComplete = vi.fn();

@@ -29,6 +29,7 @@ export function QuickPhotoCapture({
   const { user } = useAuth();
   const { isOnline } = useOfflineStatus();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
   const previewUrlRef = useRef<string | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -84,9 +85,10 @@ export function QuickPhotoCapture({
     );
   }, []);
 
-  // Handle file selection (camera or file picker)
+  // Handle file selection (camera or gallery picker — reset whichever fired)
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
+    const input = event.target;
+    const file = input.files?.[0];
     if (!file) return;
 
     // Validate file type
@@ -95,9 +97,7 @@ export function QuickPhotoCapture({
         title: 'Select an image file',
         variant: 'warning',
       });
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+      input.value = '';
       return;
     }
 
@@ -108,9 +108,7 @@ export function QuickPhotoCapture({
         description: 'Image must be smaller than 10MB.',
         variant: 'warning',
       });
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+      input.value = '';
       return;
     }
 
@@ -147,9 +145,7 @@ export function QuickPhotoCapture({
         variant: 'error',
       });
       URL.revokeObjectURL(objectUrl);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+      input.value = '';
     };
     img.src = objectUrl;
   };
@@ -158,6 +154,13 @@ export function QuickPhotoCapture({
   const openCamera = () => {
     if (fileInputRef.current) {
       fileInputRef.current.click();
+    }
+  };
+
+  // Open the gallery/file picker (no forced camera)
+  const openGallery = () => {
+    if (galleryInputRef.current) {
+      galleryInputRef.current.click();
     }
   };
 
@@ -173,6 +176,9 @@ export function QuickPhotoCapture({
     setImageDimensions(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
+    }
+    if (galleryInputRef.current) {
+      galleryInputRef.current.value = '';
     }
   };
 
@@ -215,7 +221,8 @@ export function QuickPhotoCapture({
 
   return (
     <div className={className}>
-      {/* Hidden file input */}
+      {/* Hidden file inputs: camera-first, plus a gallery picker without the
+          capture attribute so photos taken earlier can be attached. */}
       <input
         ref={fileInputRef}
         type="file"
@@ -224,21 +231,37 @@ export function QuickPhotoCapture({
         className="hidden"
         onChange={handleFileSelect}
       />
+      <input
+        ref={galleryInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleFileSelect}
+      />
 
-      {/* Capture button */}
+      {/* Capture buttons */}
       {!isCapturing && (
-        <button
-          onClick={openCamera}
-          className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
-        >
-          <Camera className="h-5 w-5" />
-          <span>Quick Photo</span>
-          {!isOnline && (
-            <span className="bg-warning text-warning-foreground text-xs px-1.5 py-0.5 rounded">
-              Offline
-            </span>
-          )}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={openCamera}
+            className="flex items-center gap-2 px-4 py-2 min-h-[44px] bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+          >
+            <Camera className="h-5 w-5" />
+            <span>Quick Photo</span>
+            {!isOnline && (
+              <span className="bg-warning text-warning-foreground text-xs px-1.5 py-0.5 rounded">
+                Offline
+              </span>
+            )}
+          </button>
+          <button
+            onClick={openGallery}
+            className="flex items-center gap-2 px-4 py-2 min-h-[44px] border border-border text-foreground rounded-lg hover:bg-muted transition-colors"
+          >
+            <Image className="h-5 w-5" />
+            <span>From gallery</span>
+          </button>
+        </div>
       )}
 
       {/* Preview and edit modal */}
@@ -251,7 +274,11 @@ export function QuickPhotoCapture({
                 <Image className="h-5 w-5" />
                 Photo Preview
               </h3>
-              <button onClick={cancelCapture} className="p-1 hover:bg-muted rounded">
+              <button
+                onClick={cancelCapture}
+                aria-label="Close photo preview"
+                className="touch-target flex items-center justify-center p-1 hover:bg-muted rounded"
+              >
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -387,6 +414,7 @@ export function QuickPhotoCaptureButton({
   const { user } = useAuth();
   const { isOnline: _isOnline } = useOfflineStatus();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -411,10 +439,8 @@ export function QuickPhotoCaptureButton({
       });
     }
 
-    // Reset input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+    // Reset whichever input fired (camera or gallery)
+    event.target.value = '';
   };
 
   if (variant === 'icon') {
@@ -428,12 +454,26 @@ export function QuickPhotoCaptureButton({
           className="hidden"
           onChange={handleFileSelect}
         />
+        <input
+          ref={galleryInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleFileSelect}
+        />
         <button
           onClick={() => fileInputRef.current?.click()}
           className="p-2 hover:bg-muted rounded-lg transition-colors"
           title="Take quick photo"
         >
           <Camera className="h-5 w-5 text-muted-foreground" />
+        </button>
+        <button
+          onClick={() => galleryInputRef.current?.click()}
+          className="p-2 hover:bg-muted rounded-lg transition-colors"
+          title="Add photo from gallery"
+        >
+          <Image className="h-5 w-5 text-muted-foreground" />
         </button>
       </>
     );
@@ -450,12 +490,26 @@ export function QuickPhotoCaptureButton({
           className="hidden"
           onChange={handleFileSelect}
         />
+        <input
+          ref={galleryInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleFileSelect}
+        />
         <button
           onClick={() => fileInputRef.current?.click()}
           className="flex items-center gap-1 px-2 py-1 text-sm bg-muted hover:bg-muted/80 rounded transition-colors"
         >
           <Camera className="h-4 w-4" />
           Photo
+        </button>
+        <button
+          onClick={() => galleryInputRef.current?.click()}
+          className="flex items-center gap-1 px-2 py-1 text-sm bg-muted hover:bg-muted/80 rounded transition-colors"
+        >
+          <Image className="h-4 w-4" />
+          Gallery
         </button>
       </>
     );

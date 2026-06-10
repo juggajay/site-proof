@@ -20,8 +20,11 @@ export function useItpMobileActions({
   setUpdatingCompletion,
   refreshNcrsAfterFailure,
 }: UseItpMobileActionsParams) {
-  const mobileMarkNA = async (checklistItemId: string, reason: string) => {
-    if (!itpInstance || updatingCompletionRef.current === checklistItemId) return;
+  // Returns true on success so the mobile sheet can close; false when the write
+  // failed (or was skipped by the in-flight guard) so the sheet stays open and
+  // the typed reason is preserved.
+  const mobileMarkNA = async (checklistItemId: string, reason: string): Promise<boolean> => {
+    if (!itpInstance || updatingCompletionRef.current === checklistItemId) return false;
 
     try {
       updatingCompletionRef.current = checklistItemId;
@@ -41,16 +44,19 @@ export function useItpMobileActions({
         title: 'Item marked as N/A',
         description: 'The checklist item has been marked as not applicable.',
       });
+      return true;
     } catch (err) {
       handleApiError(err, 'Failed to mark as N/A');
+      return false;
     } finally {
       updatingCompletionRef.current = null;
       setUpdatingCompletion(null);
     }
   };
 
-  const mobileMarkFailed = async (checklistItemId: string, reason: string) => {
-    if (!itpInstance || updatingCompletionRef.current === checklistItemId) return;
+  // Returns true on success / false on failure, same contract as mobileMarkNA.
+  const mobileMarkFailed = async (checklistItemId: string, reason: string): Promise<boolean> => {
+    if (!itpInstance || updatingCompletionRef.current === checklistItemId) return false;
 
     try {
       updatingCompletionRef.current = checklistItemId;
@@ -82,8 +88,10 @@ export function useItpMobileActions({
           ? `NCR ${data.ncr.ncrNumber} has been raised for this item.`
           : 'The item has been marked as failed.',
       });
+      return true;
     } catch (err) {
       handleApiError(err, 'Failed to mark item');
+      return false;
     } finally {
       updatingCompletionRef.current = null;
       setUpdatingCompletion(null);

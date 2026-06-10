@@ -664,7 +664,7 @@ describe('useItpInstance — completion mutations', () => {
     );
   });
 
-  it('mobileMarkNA posts not_applicable with the default note and toasts', async () => {
+  it('mobileMarkNA posts not_applicable with the default note, toasts, and resolves true', async () => {
     let body: Record<string, unknown> | undefined;
     const na = completionResponse({
       id: 'completion-1',
@@ -678,12 +678,30 @@ describe('useItpInstance — completion mutations', () => {
       },
     });
 
+    let returned: boolean | undefined;
     await act(async () => {
-      await result.current.mobileMarkNA('item-1', '');
+      returned = await result.current.mobileMarkNA('item-1', '');
     });
 
+    expect(returned).toBe(true);
     expect(body).toMatchObject({ status: 'not_applicable', notes: 'Marked as N/A' });
     expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Item marked as N/A' }));
+  });
+
+  it('mobileMarkNA resolves false when the write fails, so the sheet can stay open', async () => {
+    const { result } = await mountMutationHook({
+      postCompletion: () => {
+        throw new Error('network down');
+      },
+    });
+
+    let returned: boolean | undefined;
+    await act(async () => {
+      returned = await result.current.mobileMarkNA('item-1', 'not on this lot');
+    });
+
+    expect(returned).toBe(false);
+    expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Error' }));
   });
 
   it('mobileMarkFailed posts failed, refreshes only NCRs, and toasts without the NCR-created title', async () => {
@@ -705,10 +723,12 @@ describe('useItpInstance — completion mutations', () => {
       { refreshLotAfterFailure, refreshNcrsAfterFailure },
     );
 
+    let returned: boolean | undefined;
     await act(async () => {
-      await result.current.mobileMarkFailed('item-1', 'bad joint');
+      returned = await result.current.mobileMarkFailed('item-1', 'bad joint');
     });
 
+    expect(returned).toBe(true);
     expect(body).toMatchObject({
       status: 'failed',
       notes: 'Failed: bad joint',
@@ -719,6 +739,22 @@ describe('useItpInstance — completion mutations', () => {
     expect(refreshNcrsAfterFailure).toHaveBeenCalledTimes(1);
     expect(refreshLotAfterFailure).not.toHaveBeenCalled();
     expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Item marked as Failed' }));
+  });
+
+  it('mobileMarkFailed resolves false when the write fails, so the typed reason is not lost', async () => {
+    const { result } = await mountMutationHook({
+      postCompletion: () => {
+        throw new Error('network down');
+      },
+    });
+
+    let returned: boolean | undefined;
+    await act(async () => {
+      returned = await result.current.mobileMarkFailed('item-1', 'cracked culvert base');
+    });
+
+    expect(returned).toBe(false);
+    expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Error' }));
   });
 
   it('completeWitnessPoint force-completes the toggle and toasts the recorded witness details', async () => {

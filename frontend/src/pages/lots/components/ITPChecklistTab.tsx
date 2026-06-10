@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { RefreshCw, WifiOff, CloudOff, Printer } from 'lucide-react';
 import { MobileITPChecklist } from '@/components/foreman/MobileITPChecklist';
+import { findFirstIncompleteItpCategory } from '@/components/foreman/mobileItpChecklistHelpers';
 import type { ITPInstance, ITPTemplate, ITPAttachment, Lot } from '../types';
 import { ITPChecklistItemRow } from './ITPChecklistItemRow';
 import { PhotoLightbox } from './ITPPhotoLightbox';
@@ -49,8 +50,10 @@ export interface ITPChecklistTabProps {
     witnessData?: { witnessPresent: boolean; witnessName?: string; witnessCompany?: string },
   ) => Promise<void>;
   onUpdateNotes: (checklistItemId: string, notes: string) => Promise<void>;
-  onMarkAsNA: (checklistItemId: string, reason: string) => Promise<void>;
-  onMarkAsFailed: (checklistItemId: string, reason: string) => Promise<void>;
+  /** Must resolve true on success / false on failure so the mobile sheet can stay open. */
+  onMarkAsNA: (checklistItemId: string, reason: string) => Promise<boolean>;
+  /** Must resolve true on success / false on failure so the mobile sheet can stay open. */
+  onMarkAsFailed: (checklistItemId: string, reason: string) => Promise<boolean>;
   onAddPhoto: (checklistItemId: string, file: File) => Promise<void>;
   onAddPhotoDesktop: (
     completionId: string,
@@ -106,6 +109,21 @@ export function ITPChecklistTab({
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState<ITPAttachment | null>(null);
   const [photoZoom, setPhotoZoom] = useState(1);
+  const hasAppliedDefaultItpExpansion = useRef(false);
+
+  // Default-expand the first category that still has work once the instance
+  // loads (same behavior as the mobile checklist), instead of all-collapsed.
+  useEffect(() => {
+    if (!itpInstance || hasAppliedDefaultItpExpansion.current) return;
+    hasAppliedDefaultItpExpansion.current = true;
+    const firstIncomplete = findFirstIncompleteItpCategory(
+      itpInstance.template.checklistItems,
+      itpInstance.completions,
+    );
+    if (firstIncomplete) {
+      setExpandedItpCategories(new Set([firstIncomplete]));
+    }
+  }, [itpInstance]);
 
   useEffect(() => {
     if (!autoOpenAssignTemplate || itpInstance || loadingItp) return;

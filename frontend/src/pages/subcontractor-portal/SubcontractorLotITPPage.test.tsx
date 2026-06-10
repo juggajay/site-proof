@@ -38,8 +38,8 @@ vi.mock('@/pages/lots/lib/itpEvidence', async (importOriginal) => {
 interface CapturedChecklistProps {
   canCompleteItems?: boolean;
   onToggleCompletion: (id: string, isCompleted: boolean, notes: string | null) => Promise<void>;
-  onMarkNotApplicable: (id: string, reason: string) => Promise<void>;
-  onMarkFailed: (id: string, reason: string) => Promise<void>;
+  onMarkNotApplicable: (id: string, reason: string) => Promise<boolean>;
+  onMarkFailed: (id: string, reason: string) => Promise<boolean>;
   onUpdateNotes: (id: string, notes: string) => Promise<void>;
   onAddPhoto: (id: string, file: File) => Promise<void>;
 }

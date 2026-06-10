@@ -2,7 +2,7 @@ import { cleanup, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '@/test/renderWithProviders';
 import { ITPChecklistTab, type ITPChecklistTabProps } from './ITPChecklistTab';
-import type { Lot, ITPTemplate } from '../types';
+import type { Lot, ITPTemplate, ITPInstance, ITPChecklistItem, ITPCompletion } from '../types';
 
 afterEach(() => {
   cleanup();
@@ -32,6 +32,66 @@ const template: ITPTemplate = {
   name: 'Earthworks ITP',
   activityType: 'earthworks',
   checklistItems: [],
+};
+
+function makeChecklistItem(
+  overrides: Partial<ITPChecklistItem> & Pick<ITPChecklistItem, 'id'>,
+): ITPChecklistItem {
+  return {
+    description: 'Checklist item',
+    category: 'General',
+    responsibleParty: 'contractor',
+    isHoldPoint: false,
+    pointType: 'standard',
+    evidenceRequired: 'none',
+    order: 1,
+    testType: null,
+    acceptanceCriteria: null,
+    ...overrides,
+  };
+}
+
+function makeCompletion(
+  overrides: Partial<ITPCompletion> & Pick<ITPCompletion, 'checklistItemId'>,
+): ITPCompletion {
+  return {
+    id: `completion-${overrides.checklistItemId}`,
+    isCompleted: false,
+    isNotApplicable: false,
+    isFailed: false,
+    notes: null,
+    completedAt: null,
+    completedBy: null,
+    isVerified: false,
+    verifiedAt: null,
+    verifiedBy: null,
+    attachments: [],
+    ...overrides,
+  };
+}
+
+// Two categories: Earthworks complete, Pavement still has open work.
+const itpInstance: ITPInstance = {
+  id: 'instance-1',
+  template: {
+    id: 'template-1',
+    name: 'Earthworks ITP',
+    checklistItems: [
+      makeChecklistItem({
+        id: 'item-1',
+        description: 'Strip topsoil',
+        category: 'Earthworks',
+        order: 1,
+      }),
+      makeChecklistItem({
+        id: 'item-2',
+        description: 'Compact subgrade',
+        category: 'Pavement',
+        order: 2,
+      }),
+    ],
+  },
+  completions: [makeCompletion({ checklistItemId: 'item-1', isCompleted: true })],
 };
 
 function renderChecklist(overrides: Partial<ITPChecklistTabProps> = {}) {
@@ -66,6 +126,18 @@ function renderChecklist(overrides: Partial<ITPChecklistTabProps> = {}) {
 
   return renderWithProviders(<ITPChecklistTab {...props} />);
 }
+
+describe('ITPChecklistTab desktop default expansion', () => {
+  it('default-expands the first category that still has incomplete items', async () => {
+    renderChecklist({ itpInstance });
+
+    // Pavement (incomplete) is expanded; Earthworks (complete) stays collapsed.
+    expect(await screen.findByText(/Compact subgrade/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Strip topsoil/i)).not.toBeInTheDocument();
+    expect(screen.getByText('Pavement')).toBeInTheDocument();
+    expect(screen.getByText('Earthworks')).toBeInTheDocument();
+  });
+});
 
 describe('ITPChecklistTab no-assignment state', () => {
   it('shows assignment controls when the user can manage ITP templates', () => {

@@ -2,7 +2,15 @@
 // Research-backed: Camera opens immediately. Categorize AFTER capture, not before.
 // Goal: Take photo, optionally link to Lot/ITP/NCR, done in <10 seconds
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { X, Camera, MapPin, AlertTriangle, FileText, Loader2 } from 'lucide-react';
+import {
+  X,
+  Camera,
+  MapPin,
+  AlertTriangle,
+  FileText,
+  Image as ImageIcon,
+  Loader2,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useGeoLocation } from '@/hooks/useGeoLocation';
 import { capturePhotoOffline } from '@/lib/offlineDb';
@@ -58,6 +66,7 @@ export function CaptureModal({
   const [saving, setSaving] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
 
   const loadLots = useCallback(async () => {
     if (!projectId) return;
@@ -240,6 +249,15 @@ export function CaptureModal({
         onChange={handleFileSelect}
         className="hidden"
       />
+      {/* Gallery alternative: no capture attribute, so photos taken earlier can
+          be attached without forcing the camera. */}
+      <input
+        ref={galleryInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleFileSelect}
+        className="hidden"
+      />
 
       {phase === 'capture' && !capturedImage && (
         <div className="flex-1 flex flex-col items-center justify-center bg-gray-900">
@@ -248,6 +266,14 @@ export function CaptureModal({
           <p className="text-gray-500 text-sm">If camera doesn't open, tap below</p>
           <Button onClick={() => fileInputRef.current?.click()} className="mt-4 min-h-[48px]">
             Open Camera
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => galleryInputRef.current?.click()}
+            className="mt-3 min-h-[48px]"
+          >
+            <ImageIcon className="h-4 w-4" />
+            From gallery
           </Button>
           <Button variant="ghost" onClick={onClose} className="mt-4 text-gray-400 min-h-[48px]">
             Cancel
