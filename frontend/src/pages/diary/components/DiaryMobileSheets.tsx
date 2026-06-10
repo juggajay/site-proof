@@ -4,6 +4,7 @@ import { AddDeliverySheet } from '@/components/foreman/sheets/AddDeliverySheet';
 import { AddEventSheet } from '@/components/foreman/sheets/AddEventSheet';
 import { AddManualLabourPlantSheet } from '@/components/foreman/sheets/AddManualLabourPlantSheet';
 import { AddWeatherSheet } from '@/components/foreman/sheets/AddWeatherSheet';
+import { sheetDraftKey, type SheetDraftType } from '@/components/foreman/sheets/useSheetDraft';
 import type { QuickAddType } from '@/components/foreman/DiaryQuickAddBar';
 import type { TimelineEntry } from '@/components/foreman/DiaryTimelineEntry';
 import { parseOptionalNonNegativeDecimalInput } from '@/lib/numericInput';
@@ -28,6 +29,8 @@ interface ManualPlantData {
 interface DiaryMobileSheetsProps {
   activeSheet: QuickAddType | 'weather' | null;
   onCloseSheet: () => void;
+  projectId: string | undefined;
+  selectedDate: string;
   editingEntry: TimelineEntry | null;
   setEditingEntry: (entry: TimelineEntry | null) => void;
   activeLotId: string | null;
@@ -84,6 +87,8 @@ const toOptionalNumber = (value: number | string | undefined) => {
 export function DiaryMobileSheets({
   activeSheet,
   onCloseSheet,
+  projectId,
+  selectedDate,
   editingEntry,
   setEditingEntry,
   activeLotId,
@@ -98,6 +103,12 @@ export function DiaryMobileSheets({
   onSavePlant,
   onSaveWeather,
 }: DiaryMobileSheetsProps) {
+  // Auto-draft scope: project + diary date + sheet type. Editing an existing
+  // timeline entry never drafts — only fresh entries can be interrupted and
+  // restored.
+  const draftKeyFor = (sheetType: SheetDraftType) =>
+    projectId && !editingEntry ? sheetDraftKey(projectId, selectedDate, sheetType) : undefined;
+
   return (
     <>
       {activeSheet === 'activity' && (
@@ -110,6 +121,7 @@ export function DiaryMobileSheets({
           }}
           defaultLotId={activeLotId}
           lots={lots}
+          draftKey={draftKeyFor('activity')}
           initialData={
             editingEntry?.type === 'activity'
               ? {
@@ -133,6 +145,7 @@ export function DiaryMobileSheets({
           }}
           defaultLotId={activeLotId}
           lots={lots}
+          draftKey={draftKeyFor('delay')}
           initialData={
             editingEntry?.type === 'delay'
               ? {
@@ -156,6 +169,7 @@ export function DiaryMobileSheets({
           }}
           defaultLotId={activeLotId}
           lots={lots}
+          draftKey={draftKeyFor('delivery')}
           initialData={
             editingEntry?.type === 'delivery'
               ? {
@@ -181,6 +195,7 @@ export function DiaryMobileSheets({
           }}
           defaultLotId={activeLotId}
           lots={lots}
+          draftKey={draftKeyFor('event')}
           initialData={
             editingEntry?.type === 'event'
               ? {
@@ -201,6 +216,7 @@ export function DiaryMobileSheets({
           onSavePlant={onSavePlant}
           defaultLotId={activeLotId}
           lots={lots}
+          draftKey={draftKeyFor('manual')}
           initialPersonnelData={
             editingEntry?.type === 'personnel'
               ? {
@@ -230,6 +246,7 @@ export function DiaryMobileSheets({
           isOpen
           onClose={onCloseSheet}
           onSave={onSaveWeather}
+          draftKey={draftKeyFor('weather')}
           initialData={
             diary
               ? {

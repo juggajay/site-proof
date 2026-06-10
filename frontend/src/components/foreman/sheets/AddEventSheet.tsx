@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BottomSheet } from './BottomSheet';
+import { SheetDraftRestoredHint } from './SheetDraftRestoredHint';
 import { SheetErrorBanner } from './SheetErrorBanner';
+import { readSheetDraft, useSheetDraft } from './useSheetDraft';
 import { useSheetSave } from './useSheetSave';
 
 const EVENT_TYPES = ['Visitor', 'Safety', 'Instruction', 'Variation', 'Other'];
@@ -19,6 +21,8 @@ interface AddEventSheetProps {
   defaultLotId: string | null;
   lots: Array<{ id: string; lotNumber: string }>;
   initialData?: { eventType?: string; description?: string; notes?: string; lotId?: string };
+  /** Enables auto-draft of typed state; omitted when editing an existing entry. */
+  draftKey?: string;
 }
 
 export function AddEventSheet({
@@ -28,12 +32,35 @@ export function AddEventSheet({
   defaultLotId,
   lots,
   initialData,
+  draftKey,
 }: AddEventSheetProps) {
-  const [eventType, setEventType] = useState(initialData?.eventType || '');
-  const [description, setDescription] = useState(initialData?.description || '');
-  const [notes, setNotes] = useState(initialData?.notes || '');
-  const [lotId, setLotId] = useState(initialData?.lotId || defaultLotId || '');
+  // An interrupted entry restored from the auto-draft; edits never draft.
+  const [restoredDraft] = useState(() => (initialData ? null : readSheetDraft(draftKey)));
+  const [eventType, setEventType] = useState(
+    restoredDraft?.eventType ?? (initialData?.eventType || ''),
+  );
+  const [description, setDescription] = useState(
+    restoredDraft?.description ?? (initialData?.description || ''),
+  );
+  const [notes, setNotes] = useState(restoredDraft?.notes ?? (initialData?.notes || ''));
+  const [lotId, setLotId] = useState(
+    restoredDraft ? restoredDraft.lotId || '' : initialData?.lotId || defaultLotId || '',
+  );
   const { saving, saveError, runSave } = useSheetSave();
+  const draft = useSheetDraft({
+    draftKey: initialData ? undefined : draftKey,
+    restored: restoredDraft,
+    fields: { eventType, description, notes, lotId },
+    baseline: { eventType: '', description: '', notes: '', lotId: defaultLotId || '' },
+  });
+
+  const handleDiscardDraft = () => {
+    setEventType('');
+    setDescription('');
+    setNotes('');
+    setLotId(defaultLotId || '');
+    draft.discardDraft();
+  };
 
   const handleSave = () => {
     if (!eventType || !description.trim()) return;
@@ -46,6 +73,8 @@ export function AddEventSheet({
           lotId: lotId || undefined,
         }),
       () => {
+        // The entry is recorded (online or queued offline) — drop the draft.
+        draft.clearDraft();
         setEventType('');
         setDescription('');
         setNotes('');
@@ -57,6 +86,12 @@ export function AddEventSheet({
   return (
     <BottomSheet isOpen={isOpen} onClose={onClose} title="Add Event">
       <div className="space-y-4">
+        {draft.draftHintVisible && (
+          <SheetDraftRestoredHint
+            onDiscard={handleDiscardDraft}
+            onDismiss={draft.dismissDraftHint}
+          />
+        )}
         <div>
           <label className="text-sm font-medium text-muted-foreground">Event Type *</label>
           <div className="flex flex-wrap gap-2 mt-2">
