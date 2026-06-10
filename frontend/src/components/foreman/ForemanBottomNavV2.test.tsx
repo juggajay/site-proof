@@ -5,17 +5,14 @@ import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 // Capture navigate; keep the rest of react-router-dom real so MemoryRouter and
-// useLocation work. The effective-project-id resolution and the online status /
-// badge fetch are mocked so the nav's own wiring is what's under test.
+// useLocation work. The effective-project-id resolution and the badge fetch
+// are mocked so the nav's own wiring is what's under test.
 const navigateSpy = vi.fn();
 vi.mock('react-router-dom', async (importOriginal) => {
   const actual = await importOriginal<typeof import('react-router-dom')>();
   return { ...actual, useNavigate: () => navigateSpy };
 });
 vi.mock('@/hooks/useEffectiveProjectId', () => ({ useEffectiveProjectId: vi.fn() }));
-vi.mock('@/hooks/useOnlineStatus', () => ({
-  useOnlineStatus: () => ({ isOnline: true, pendingSyncCount: 0 }),
-}));
 vi.mock('@/lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api')>();
   return { ...actual, apiFetch: vi.fn().mockResolvedValue({ blocking: [], dueToday: [] }) };
@@ -102,6 +99,20 @@ describe('ForemanBottomNavV2', () => {
 
     fireEvent.click(todayTab);
     expect(navigateSpy).not.toHaveBeenCalled();
+  });
+
+  it('publishes its height for the sync pill and renders no sync strip of its own', () => {
+    const offsetHeight = vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(72);
+
+    renderNav();
+
+    // The global OfflineIndicator pill anchors above the nav via this
+    // variable; the nav itself no longer duplicates offline/pending state.
+    expect(document.documentElement.style.getPropertyValue('--bottom-nav-height')).toBe('72px');
+    expect(screen.queryByText(/pending sync/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/offline/i)).not.toBeInTheDocument();
+
+    offsetHeight.mockRestore();
   });
 
   it('keeps the tabs active while a project is still resolving', () => {

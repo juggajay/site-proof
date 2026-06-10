@@ -5,7 +5,7 @@
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Camera, ListChecks, AlertTriangle, BookOpen, MapPin } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useOnlineStatus } from '@/hooks/useOnlineStatus';
+import { usePublishBottomNavHeight } from '@/hooks/useBottomNavHeight';
 import { apiFetch } from '@/lib/api';
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
@@ -67,7 +67,7 @@ export function ForemanBottomNavV2({
   const { projectId: effectiveProjectId, hasNoProject } = useEffectiveProjectId();
   const location = useLocation();
   const navigate = useNavigate();
-  const { isOnline, pendingSyncCount } = useOnlineStatus();
+  const navRef = usePublishBottomNavHeight<HTMLElement>();
 
   // Self-manage badge count when no external count provided
   const { data: badgeData } = useQuery({
@@ -110,34 +110,15 @@ export function ForemanBottomNavV2({
   };
 
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t z-30 pb-safe">
-      {/* Offline/Sync indicator */}
-      {(!isOnline || pendingSyncCount > 0) && (
-        <div
-          className={cn(
-            'flex items-center justify-center gap-2 py-1.5 text-xs font-medium',
-            isOnline
-              ? 'bg-warning text-warning-foreground'
-              : 'bg-destructive text-destructive-foreground',
-          )}
-        >
-          {isOnline ? (
-            <>
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-warning-foreground opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-warning-foreground" />
-              </span>
-              {pendingSyncCount} pending sync
-            </>
-          ) : (
-            <>
-              <span className="h-2 w-2 rounded-full bg-destructive-foreground" />
-              Offline - changes saved locally
-            </>
-          )}
-        </div>
-      )}
-
+    // Offline/pending sync state is NOT duplicated here: the global
+    // OfflineIndicator pill (anchored just above this nav via
+    // usePublishBottomNavHeight + .above-bottom-nav) is the single
+    // interactive sync surface — it shows the counts and offers
+    // tap-to-sync / retry / conflict resolution.
+    <nav
+      ref={navRef}
+      className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t z-30 pb-safe"
+    >
       {/* No active project: keep the bar honest instead of silently inert */}
       {hasNoProject && (
         <div className="px-3 py-1.5 text-center text-xs font-medium bg-muted text-muted-foreground">

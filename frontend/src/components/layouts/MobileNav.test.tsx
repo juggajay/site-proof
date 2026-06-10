@@ -103,6 +103,17 @@ describe('MobileNav menu trigger', () => {
     expect(screen.queryByRole('button', { name: /open menu/i })).not.toBeInTheDocument();
   });
 
+  it('publishes the bottom bar height so the offline sync pill clears it', () => {
+    const offsetHeight = vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(64);
+    setUser({ role: 'admin', companyId: 'c1' });
+
+    renderNav();
+
+    expect(document.documentElement.style.getPropertyValue('--bottom-nav-height')).toBe('64px');
+
+    offsetHeight.mockRestore();
+  });
+
   it('keeps the Menu trigger reachable even with no project selected', () => {
     setUser({ role: 'admin', companyId: 'c1' });
 
