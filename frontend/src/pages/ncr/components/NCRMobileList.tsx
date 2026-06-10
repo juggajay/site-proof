@@ -1,7 +1,8 @@
-import { memo, useRef, type RefObject } from 'react';
+import { memo, useEffect, useRef, type RefObject } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ChevronRight, Link2 } from 'lucide-react';
 import { MobileDataCard } from '@/components/ui/MobileDataCard';
+import { cn } from '@/lib/utils';
 import { formatStatusLabel } from '@/lib/statusLabels';
 import { PullToRefreshIndicator } from '@/hooks/usePullToRefresh';
 import { SwipeableCard } from '@/components/foreman/SwipeableCard';
@@ -13,6 +14,8 @@ interface NCRMobileListProps {
   pullDistance: number;
   isRefreshing: boolean;
   progress: number;
+  /** Deep-linked NCR (?ncr=<id>) to scroll to and highlight. */
+  highlightedNcrId: string | null;
   onSelectNcr: (ncr: NCR) => void;
   onCopyLink: (ncrId: string, ncrNumber: string) => void;
 }
@@ -23,6 +26,7 @@ function NCRMobileListInner({
   pullDistance,
   isRefreshing,
   progress,
+  highlightedNcrId,
   onSelectNcr,
   onCopyLink,
 }: NCRMobileListProps) {
@@ -36,6 +40,13 @@ function NCRMobileListInner({
     estimateSize: () => 140, // estimated card height in px
     overscan: 5,
   });
+
+  // Scroll the deep-linked NCR into view while its highlight pulse is active.
+  useEffect(() => {
+    if (!highlightedNcrId) return;
+    const index = ncrs.findIndex((ncr) => ncr.id === highlightedNcrId);
+    if (index >= 0) rowVirtualizer.scrollToIndex(index, { align: 'center' });
+  }, [highlightedNcrId, ncrs, rowVirtualizer]);
 
   return (
     <div
@@ -84,6 +95,7 @@ function NCRMobileListInner({
               key={virtualRow.key}
               data-index={virtualRow.index}
               ref={rowVirtualizer.measureElement}
+              data-deep-linked={ncr.id === highlightedNcrId ? 'true' : undefined}
               style={{
                 position: 'absolute',
                 top: 0,
@@ -137,7 +149,10 @@ function NCRMobileListInner({
                     { label: 'Age', value: `${ageInDays}d`, priority: 'secondary' },
                   ]}
                   onClick={() => onSelectNcr(ncr)}
-                  className={isOverdue ? 'border-destructive/40' : undefined}
+                  className={cn(
+                    isOverdue && 'border-destructive/40',
+                    ncr.id === highlightedNcrId && 'ring-2 ring-primary/50',
+                  )}
                 />
               </SwipeableCard>
             </div>

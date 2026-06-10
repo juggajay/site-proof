@@ -61,6 +61,15 @@ import { RequestReleaseModal } from './components/RequestReleaseModal';
 import { RecordReleaseModal } from './components/RecordReleaseModal';
 import { downloadCsv } from '@/lib/csv';
 import { useIsMobile } from '@/hooks/useMediaQuery';
+import { useRegisterDeepLink } from '@/hooks/useRegisterDeepLink';
+
+// Read side of the "Copy link" action (?hp=<id>): stable references so the
+// deep-link effect doesn't re-run on every render.
+const getHoldPointId = (hp: HoldPoint) => hp.id;
+const HOLD_POINT_LINK_NOT_FOUND = {
+  title: "Couldn't find that hold point",
+  description: 'The link may belong to another project, or the hold point may have been removed.',
+};
 
 async function fetchAllProjectHoldPoints(projectId: string): Promise<HoldPoint[]> {
   const allHoldPoints: HoldPoint[] = [];
@@ -161,6 +170,16 @@ export function HoldPointsPage() {
       setLoadingDetails(false);
     }
   }, []);
+
+  // Deep link from a copied register link (?hp=<id>): scroll to + highlight
+  // the linked hold point once the register has loaded, or toast if it isn't here.
+  const { highlightedId: deepLinkedHpId } = useRegisterDeepLink({
+    param: 'hp',
+    loading: loading || Boolean(loadError),
+    records: holdPoints,
+    getRecordId: getHoldPointId,
+    notFound: HOLD_POINT_LINK_NOT_FOUND,
+  });
 
   // --- Derived data ---
 
@@ -491,6 +510,7 @@ export function HoldPointsPage() {
             filteredHoldPoints={filteredHoldPoints}
             loading={loading}
             statusFilter={statusFilter}
+            highlightedHpId={deepLinkedHpId}
             copiedHpId={copiedHpId}
             generatingPdf={generatingPdf}
             chasingHpId={chasingHpId}
@@ -507,6 +527,7 @@ export function HoldPointsPage() {
             filteredHoldPoints={filteredHoldPoints}
             loading={loading}
             statusFilter={statusFilter}
+            highlightedHpId={deepLinkedHpId}
             copiedHpId={copiedHpId}
             generatingPdf={generatingPdf}
             chasingHpId={chasingHpId}

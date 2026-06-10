@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Link2, Check, Download, RefreshCw, ClipboardCheck } from 'lucide-react';
 import type { HoldPoint, StatusFilter } from '../types';
@@ -14,6 +14,8 @@ interface HoldPointsTableProps {
   filteredHoldPoints: HoldPoint[];
   loading: boolean;
   statusFilter: StatusFilter;
+  /** Deep-linked hold point (?hp=<id>) to scroll to and highlight. */
+  highlightedHpId: string | null;
   copiedHpId: string | null;
   generatingPdf: string | null;
   chasingHpId: string | null;
@@ -30,6 +32,7 @@ export const HoldPointsTable = React.memo(function HoldPointsTable({
   filteredHoldPoints,
   loading,
   statusFilter,
+  highlightedHpId,
   copiedHpId,
   generatingPdf,
   chasingHpId,
@@ -48,6 +51,13 @@ export const HoldPointsTable = React.memo(function HoldPointsTable({
     estimateSize: () => 56,
     overscan: 5,
   });
+
+  // Scroll the deep-linked hold point into view while its highlight pulse is active.
+  useEffect(() => {
+    if (!highlightedHpId) return;
+    const index = filteredHoldPoints.findIndex((hp) => hp.id === highlightedHpId);
+    if (index >= 0) virtualizer.scrollToIndex(index, { align: 'center' });
+  }, [highlightedHpId, filteredHoldPoints, virtualizer]);
 
   if (loading) {
     return (
@@ -121,6 +131,7 @@ export const HoldPointsTable = React.memo(function HoldPointsTable({
                   <tbody>
                     <HoldPointRow
                       hp={hp}
+                      isDeepLinked={hp.id === highlightedHpId}
                       copiedHpId={copiedHpId}
                       generatingPdf={generatingPdf}
                       chasingHpId={chasingHpId}
@@ -143,6 +154,8 @@ export const HoldPointsTable = React.memo(function HoldPointsTable({
 
 interface HoldPointRowProps {
   hp: HoldPoint;
+  /** True while this row is the deep-linked record's highlight pulse target. */
+  isDeepLinked: boolean;
   copiedHpId: string | null;
   generatingPdf: string | null;
   chasingHpId: string | null;
@@ -155,6 +168,7 @@ interface HoldPointRowProps {
 
 function HoldPointRow({
   hp,
+  isDeepLinked,
   copiedHpId,
   generatingPdf,
   chasingHpId,
@@ -168,7 +182,8 @@ function HoldPointRow({
 
   return (
     <tr
-      className={`hover:bg-muted/25 ${overdue ? 'bg-destructive/10 border-l-4 border-l-destructive' : ''}`}
+      className={`hover:bg-muted/25 ${overdue ? 'bg-destructive/10 border-l-4 border-l-destructive' : ''} ${isDeepLinked ? 'bg-primary/10' : ''}`}
+      data-deep-linked={isDeepLinked ? 'true' : undefined}
     >
       <td className="px-4 py-3 font-medium">
         {hp.lotNumber}

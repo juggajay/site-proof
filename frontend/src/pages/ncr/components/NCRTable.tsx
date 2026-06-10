@@ -1,4 +1,4 @@
-import { memo, useRef } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Link2, Check, Printer } from 'lucide-react';
 import { toast } from '@/components/ui/toaster';
@@ -13,6 +13,8 @@ interface NCRTableProps {
   userRole: UserRole | null;
   actionLoading: boolean;
   copiedNcrId: string | null;
+  /** Deep-linked NCR (?ncr=<id>) to scroll to and highlight. */
+  highlightedNcrId: string | null;
   onCopyLink: (ncrId: string, ncrNumber: string) => void;
   onAssign: (ncr: NCR) => void;
   onRespond: (ncr: NCR) => void;
@@ -30,6 +32,7 @@ function NCRTableInner({
   userRole,
   actionLoading,
   copiedNcrId,
+  highlightedNcrId,
   onCopyLink,
   onAssign,
   onRespond,
@@ -104,6 +107,13 @@ function NCRTableInner({
     overscan: 5,
   });
 
+  // Scroll the deep-linked NCR into view while its highlight pulse is active.
+  useEffect(() => {
+    if (!highlightedNcrId) return;
+    const index = ncrs.findIndex((ncr) => ncr.id === highlightedNcrId);
+    if (index >= 0) rowVirtualizer.scrollToIndex(index, { align: 'center' });
+  }, [highlightedNcrId, ncrs, rowVirtualizer]);
+
   return (
     <div
       ref={scrollContainerRef}
@@ -154,7 +164,8 @@ function NCRTableInner({
                 key={ncr.id}
                 data-index={virtualRow.index}
                 ref={rowVirtualizer.measureElement}
-                className="hover:bg-muted/50"
+                className={`hover:bg-muted/50 ${ncr.id === highlightedNcrId ? 'bg-primary/10' : ''}`}
+                data-deep-linked={ncr.id === highlightedNcrId ? 'true' : undefined}
               >
                 <td className="px-4 py-3 font-mono text-sm">{ncr.ncrNumber}</td>
                 <td className="px-4 py-3 text-sm">
