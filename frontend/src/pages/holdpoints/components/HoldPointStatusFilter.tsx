@@ -3,7 +3,9 @@ import type { StatusFilter, HoldPointStats } from '../types';
 
 interface HoldPointStatusFilterProps {
   statusFilter: StatusFilter;
+  searchQuery: string;
   onStatusFilterChange: (filter: StatusFilter) => void;
+  onSearchChange: (query: string) => void;
   onExportCSV: () => void;
   // Mobile hides the CSV export to keep the primary actions uncluttered; desktop
   // keeps it (default true), so this is a no-op for existing callers.
@@ -12,22 +14,34 @@ interface HoldPointStatusFilterProps {
 
 export const HoldPointStatusFilter = React.memo(function HoldPointStatusFilter({
   statusFilter,
+  searchQuery,
   onStatusFilterChange,
+  onSearchChange,
   onExportCSV,
   showExport = true,
 }: HoldPointStatusFilterProps) {
   return (
     <>
       {/* Header filter/export row */}
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => onSearchChange(e.target.value)}
+          placeholder="Search lot or description..."
+          aria-label="Search hold points by lot or description"
+          className="w-56 rounded-lg border border-border px-3 py-2 text-sm bg-card"
+        />
         <select
           value={statusFilter}
           onChange={(e) => onStatusFilterChange(e.target.value as StatusFilter)}
+          aria-label="Filter hold points by status"
           className="rounded-lg border border-border px-3 py-2 text-sm bg-card"
         >
           <option value="all">All Statuses</option>
           <option value="pending">Pending</option>
           <option value="notified">Awaiting Release</option>
+          <option value="notice-expired">Awaiting Release — Notice Expired</option>
           <option value="released">Released</option>
         </select>
         {showExport && (

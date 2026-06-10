@@ -53,7 +53,17 @@ export interface RequestError {
   };
 }
 
-export type StatusFilter = 'all' | 'pending' | 'notified' | 'released';
+/**
+ * Register filter views. The first four mirror backend hold-point statuses;
+ * 'notice-expired' is a derived view — awaiting release ('notified') with the
+ * minimum notice window already elapsed (see isNoticeExpired).
+ */
+export type StatusFilter = 'all' | 'pending' | 'notified' | 'released' | 'notice-expired';
+
+/** Sortable register columns. 'lot' is the server order (lot number, then sequence). */
+export type HoldPointSortField = 'lot' | 'status' | 'notified' | 'scheduled' | 'released';
+
+export type HoldPointSortDirection = 'asc' | 'desc';
 
 export interface HoldPointStats {
   total: number;
