@@ -753,27 +753,54 @@ test.describe('Registration Flow', () => {
     await expect(page.getByRole('alert').filter({ hasText: 'Email already in use' })).toBeVisible();
   });
 
-  test('unverified registration does not persist an authenticated session', async ({ page }) => {
+  test('registration signs the new user in and lands on company onboarding', async ({ page }) => {
     let registerRequest: unknown;
 
-    await page.route('**/api/auth/register', async (route) => {
-      registerRequest = route.request().postDataJSON();
-      await route.fulfill({
-        status: 201,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          user: {
-            id: 'new-unverified-user',
-            email: 'new-user@example.com',
-            fullName: 'New User',
-            role: 'member',
-            emailVerified: false,
+    await page.route('**/api/**', async (route) => {
+      const url = new URL(route.request().url());
+      const json = (body: unknown, status = 200) =>
+        route.fulfill({
+          status,
+          contentType: 'application/json',
+          body: JSON.stringify(body),
+        });
+
+      if (url.pathname === '/api/auth/register') {
+        registerRequest = route.request().postDataJSON();
+        await json(
+          {
+            user: {
+              id: 'new-unverified-user',
+              email: 'new-user@example.com',
+              fullName: 'New User',
+              role: 'member',
+              emailVerified: false,
+            },
+            token: 'unverified-registration-token',
+            verificationRequired: true,
+            message: 'Account created. Please check your email to verify your account.',
           },
-          token: 'unverified-registration-token',
-          verificationRequired: true,
-          message: 'Account created. Please check your email to verify your account.',
-        }),
-      });
+          201,
+        );
+        return;
+      }
+
+      if (url.pathname === '/api/notifications') {
+        await json({ notifications: [], unreadCount: 0 });
+        return;
+      }
+
+      if (url.pathname === '/api/projects') {
+        await json({ projects: [] });
+        return;
+      }
+
+      if (url.pathname === '/api/subcontractors/my-pending-invitation') {
+        await json({ invitation: null });
+        return;
+      }
+
+      await json({ message: `Unhandled E2E API route: ${url.pathname}` }, 404);
     });
 
     await page.goto('/register');
@@ -794,10 +821,19 @@ test.describe('Registration Flow', () => {
         email: 'new-user@example.com',
         tosAccepted: true,
       });
-    await expect(page.getByRole('heading', { name: 'Account created' })).toBeVisible();
-    await expect.poll(() => page.evaluate(() => localStorage.getItem('siteproof_auth'))).toBeNull();
+
+    // No password retyping: the new user is signed in immediately and the
+    // company-onboarding gate forwards the company-less account to setup.
+    await page.waitForURL('**/onboarding');
+    await expect(page.getByRole('heading', { name: 'Set up your company' })).toBeVisible();
+
+    // The session from the register response is persisted like a login.
     await expect
-      .poll(() => page.evaluate(() => sessionStorage.getItem('siteproof_auth')))
-      .toBeNull();
+      .poll(() => page.evaluate(() => localStorage.getItem('siteproof_auth')))
+      .toContain('unverified-registration-token');
+
+    // Email verification stays non-blocking but visible: the in-app banner
+    // keeps nudging until the address is confirmed.
+    await expect(page.getByTestId('email-verification-banner')).toBeVisible();
   });
 });
