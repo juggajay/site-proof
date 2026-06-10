@@ -210,6 +210,11 @@ describe('HoldPointsPage register data layer', () => {
     await waitFor(() => {
       expect(container.querySelector('[data-deep-linked="true"]')).not.toBeNull();
     });
-    expect(screen.getByTestId('location-search')).not.toHaveTextContent('hp=hp-3');
+    // The param is cleared via setSearchParams, which React Router v7 wraps in
+    // React.startTransition — that commit can land a frame after the highlight
+    // commit above, so the URL assertion must also wait.
+    await waitFor(() => {
+      expect(screen.getByTestId('location-search')).not.toHaveTextContent('hp=hp-3');
+    });
   });
 });
