@@ -7,6 +7,11 @@ import { requireAuth } from '../../middleware/authMiddleware.js';
 import { checkProjectAccess } from '../../lib/projectAccess.js';
 import { isSupabaseConfigured } from '../../lib/supabase.js';
 import { assertUploadedFileMatchesDeclaredType } from '../../lib/imageValidation.js';
+import {
+  attachDocumentToItpCompletion,
+  resolveItpEvidenceAttachmentTarget,
+  type ItpEvidenceAttachmentTarget,
+} from './itpEvidenceAttachment.js';
 
 type AuthUser = NonNullable<Express.Request['user']>;
 
@@ -117,6 +122,12 @@ function createUploadDocumentBodySchema({
     tags: optionalFormStringSchema('tags', maxTagsLength),
     gpsLatitude: optionalGpsCoordinateSchema('gpsLatitude', -90, 90),
     gpsLongitude: optionalGpsCoordinateSchema('gpsLongitude', -180, 180),
+    // Entity linkage sent by the offline photo sync worker. Only
+    // entityType 'itp' (ITP completion evidence) is acted on today; other
+    // values are accepted and ignored so queued photos from older clients
+    // never fail validation.
+    entityType: optionalFormStringSchema('entityType', maxDocumentTypeLength),
+    entityId: optionalFormStringSchema('entityId', maxDocumentIdLength),
   });
 }
 
@@ -170,8 +181,18 @@ export function createDocumentUploadRouter({
         throw AppError.fromZodError(bodyParse.error);
       }
 
-      const { projectId, lotId, documentType, category, caption, tags, gpsLatitude, gpsLongitude } =
-        bodyParse.data;
+      const {
+        projectId,
+        lotId,
+        documentType,
+        category,
+        caption,
+        tags,
+        gpsLatitude,
+        gpsLongitude,
+        entityType,
+        entityId,
+      } = bodyParse.data;
 
       const hasAccess = await checkProjectAccess(userId, projectId);
       if (!hasAccess) {
@@ -186,6 +207,23 @@ export function createDocumentUploadRouter({
       }
       try {
         assertUploadedFileMatchesDeclaredType(uploadedFile);
+      } catch (error) {
+        cleanupUploadedFile(uploadedFile);
+        throw error;
+      }
+
+      // ITP evidence linkage (offline photo pipeline): resolve + authorize the
+      // target completion BEFORE the file is stored so a rejected upload never
+      // leaves a stored file or document row behind. Unknown completions
+      // resolve to null (orphan-safe — the upload proceeds unattached).
+      let itpEvidenceTarget: ItpEvidenceAttachmentTarget | null = null;
+      try {
+        itpEvidenceTarget = await resolveItpEvidenceAttachmentTarget(req.user!, {
+          entityType,
+          entityId,
+          projectId,
+          lotId,
+        });
       } catch (error) {
         cleanupUploadedFile(uploadedFile);
         throw error;
@@ -243,6 +281,16 @@ export function createDocumentUploadRouter({
         });
 
         documentCreated = true;
+
+        // Attach ITP evidence to its completion — the same association row the
+        // direct attach endpoint creates, so a queued-and-synced photo ends up
+        // identical to a directly uploaded one. Runs after the document exists;
+        // a failure here surfaces as a 500 so the offline queue retries (the
+        // retry re-resolves the target and stays orphan-safe).
+        if (itpEvidenceTarget) {
+          await attachDocumentToItpCompletion(itpEvidenceTarget, document.id);
+        }
+
         res.status(201).json(document);
       } catch (error) {
         if (!documentCreated) {

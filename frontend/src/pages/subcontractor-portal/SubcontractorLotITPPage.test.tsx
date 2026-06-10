@@ -23,6 +23,11 @@ vi.mock('@/lib/api', async (importOriginal) => {
 });
 vi.mock('@/components/ui/toaster', () => ({ toast: vi.fn() }));
 vi.mock('@/lib/logger', () => ({ devLog: vi.fn(), devWarn: vi.fn(), logError: vi.fn() }));
+// The page reads the auth user only for capturedBy on the offline fallback.
+vi.mock('@/lib/auth', () => ({ useAuth: vi.fn(() => ({ user: { id: 'subbie-1' } })) }));
+// The offline pipeline boundary: the shared upload falls back to this on a
+// retriable network failure. Mocked so no Dexie/IndexedDB is touched here.
+vi.mock('@/lib/offlineDb', () => ({ capturePhotoOffline: vi.fn() }));
 
 // The portal photo upload reuses the shared upload-then-attach, which captures a
 // GPS fix. Mock only getGPSLocation so we can assert the geotag is sent.
@@ -56,6 +61,7 @@ vi.mock('@/components/foreman/MobileITPChecklist', () => ({
 }));
 
 import { apiFetch, authFetch } from '@/lib/api';
+import { capturePhotoOffline } from '@/lib/offlineDb';
 import { toast } from '@/components/ui/toaster';
 import { SubcontractorLotITPPage } from './SubcontractorLotITPPage';
 
@@ -268,7 +274,7 @@ describe('SubcontractorLotITPPage — photo upload (shared upload-then-attach)',
     expect(body.documentId).toBe('document-1');
   });
 
-  it('does NOT classify the photo and performs no offline/IndexedDB write on the subbie path', async () => {
+  it('does NOT classify the photo and skips the offline queue when the upload succeeds', async () => {
     getGPSLocationMock.mockResolvedValue(null);
     mockApiForUpload();
     renderPage();
@@ -281,9 +287,46 @@ describe('SubcontractorLotITPPage — photo upload (shared upload-then-attach)',
       .mocked(apiFetch)
       .mock.calls.some(([url]) => typeof url === 'string' && url.includes('/classify'));
     expect(classifyHit).toBe(false);
-    // The page must not pull in the offline DB module for a photo upload (it is
-    // online-only). If it ever did, this import would have to be mocked here.
+    // The offline pipeline is a fallback only: a successful online upload must
+    // never write the photo into the on-device queue.
+    expect(capturePhotoOffline).not.toHaveBeenCalled();
     expect(getGPSLocationMock).toHaveBeenCalled();
+  });
+
+  it('queues the photo offline with the completion linkage when the upload fails retriably', async () => {
+    getGPSLocationMock.mockResolvedValue(null);
+    vi.mocked(capturePhotoOffline).mockResolvedValue({ id: 'photo-1' } as Awaited<
+      ReturnType<typeof capturePhotoOffline>
+    >);
+    // Page loads fine; the evidence upload itself dies at the fetch level.
+    vi.mocked(apiFetch).mockImplementation(async (url: string, options?: RequestInit) => {
+      const method = options?.method ?? 'GET';
+      if (url.includes('/api/lots/') && method === 'GET') return lotResponse(true);
+      if (url.includes('/api/itp/instances/lot/') && method === 'GET') return { instance };
+      throw new Error(`Unexpected apiFetch ${method} ${url}`);
+    });
+    vi.mocked(authFetch).mockRejectedValue(new TypeError('Failed to fetch'));
+    renderPage();
+    await waitFor(() => expect(capturedProps).not.toBeNull());
+
+    await capturedProps!.onAddPhoto('item-1', imageFile);
+
+    // The photo went into the offline pipeline with the ITP completion linkage
+    // the sync worker + documents upload endpoint use to attach it after sync.
+    expect(capturePhotoOffline).toHaveBeenCalledWith(
+      'project-1',
+      imageFile,
+      expect.objectContaining({
+        lotId: 'lot-1',
+        entityType: 'itp',
+        entityId: 'completion-1',
+        category: 'itp_evidence',
+        capturedBy: 'subbie-1',
+      }),
+    );
+    // Honest feedback: saved on device, not "uploaded".
+    expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Saved Offline' }));
+    expect(attachmentCall()).toBeUndefined();
   });
 
   it('blocks photo upload when canCompleteITP is false (no upload, "View only" toast)', async () => {

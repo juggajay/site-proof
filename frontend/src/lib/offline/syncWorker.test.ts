@@ -676,6 +676,33 @@ describe('syncSingleItem — photo_upload (Slice 3, moved from the hook)', () =>
     expect(markPhotoSyncedMock).toHaveBeenCalledWith('ph-1', 'doc-9');
   });
 
+  it("sends entityType 'itp' + the completion entityId so the backend attaches the evidence", async () => {
+    // ITP evidence queued by uploadItpEvidencePhotoWithOfflineFallback: the
+    // upload FormData must carry the completion linkage the documents upload
+    // endpoint now resolves into an ITPCompletionAttachment.
+    getOfflinePhotoMock.mockResolvedValue({
+      ...photoRecord,
+      entityType: 'itp',
+      entityId: 'completion-1',
+      category: 'itp_evidence',
+    });
+    authFetchMock.mockResolvedValue(okJson({ document: { id: 'doc-10' } }));
+
+    const result = await syncSingleItem(
+      queueItem({ id: 42, type: 'photo_upload', data: { photoId: 'ph-2' } }),
+    );
+
+    expect(result).toEqual({ status: 'synced' });
+    const [url, options] = authFetchMock.mock.calls[0];
+    expect(url).toBe('/api/documents/upload');
+    const fd = options.body as FormData;
+    expect(fd.get('entityType')).toBe('itp');
+    expect(fd.get('entityId')).toBe('completion-1');
+    expect(fd.get('category')).toBe('itp_evidence');
+    expect(removeSyncQueueItemMock).toHaveBeenCalledWith(42);
+    expect(markPhotoSyncedMock).toHaveBeenCalledWith('ph-2', 'doc-10');
+  });
+
   it('omits optional GPS fields when undefined', async () => {
     getOfflinePhotoMock.mockResolvedValue({
       dataUrl: 'data:image/jpeg;base64,abc',
