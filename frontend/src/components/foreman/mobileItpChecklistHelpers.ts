@@ -71,3 +71,40 @@ export function countCompletedItpItems(completions: ItpCompletionStatusFlags[]):
 export function calculateItpProgressPercent(completedCount: number, totalCount: number): number {
   return totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 }
+
+/**
+ * First category (in display/grouping order) that still has an item needing
+ * action — pending or failed (failed items need rework, so their category
+ * counts as incomplete). Used to default-expand that category on mount.
+ * Returns null when every item is passed or N/A.
+ */
+export function findFirstIncompleteItpCategory<T extends { id: string; category: string }>(
+  items: T[],
+  completions: ({ checklistItemId: string } & ItpCompletionStatusFlags)[],
+): string | null {
+  const grouped = groupItpItemsByCategory(items);
+  for (const [category, categoryItems] of Object.entries(grouped)) {
+    const hasIncomplete = categoryItems.some((item) => {
+      const completion = findItpCompletion(completions, item.id);
+      return !completion || !countsTowardItpProgress(completion);
+    });
+    if (hasIncomplete) return category;
+  }
+  return null;
+}
+
+/**
+ * Items that require photo evidence and have no photo attached yet — the same
+ * predicate as the per-row "Photo req" badge, surfaced on collapsed category
+ * headers so missing evidence is visible without expanding.
+ */
+export function countItpPhotoRequiredItems(
+  items: { id: string; evidenceRequired: string }[],
+  completions: { checklistItemId: string; attachments?: unknown[] }[],
+): number {
+  return items.filter((item) => {
+    if (item.evidenceRequired !== 'photo') return false;
+    const completion = findItpCompletion(completions, item.id);
+    return (completion?.attachments?.length || 0) === 0;
+  }).length;
+}

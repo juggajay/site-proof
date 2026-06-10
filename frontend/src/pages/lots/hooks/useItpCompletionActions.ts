@@ -126,9 +126,14 @@ export function useItpCompletionActions({
     }
   };
 
-  const handleMarkNotApplicable = async (checklistItemId: string, reason: string) => {
-    if (!itpInstance) return;
-    if (!requireAccess()) return;
+  // Returns true on success so the mobile sheet can close; false when the write
+  // failed or was gated, so the sheet stays open with the typed reason intact.
+  const handleMarkNotApplicable = async (
+    checklistItemId: string,
+    reason: string,
+  ): Promise<boolean> => {
+    if (!itpInstance) return false;
+    if (!requireAccess()) return false;
     setUpdatingItem(checklistItemId);
 
     try {
@@ -144,16 +149,19 @@ export function useItpCompletionActions({
 
       await onAfterMutate();
       toast({ title: copy.naTitle, description: copy.naDescription, variant: 'success' });
+      return true;
     } catch (err) {
       handleApiError(err, 'Failed to mark as N/A');
+      return false;
     } finally {
       setUpdatingItem(null);
     }
   };
 
-  const handleMarkFailed = async (checklistItemId: string, reason: string) => {
-    if (!itpInstance) return;
-    if (!requireAccess()) return;
+  // Returns true on success / false on failure, same contract as mark-N/A.
+  const handleMarkFailed = async (checklistItemId: string, reason: string): Promise<boolean> => {
+    if (!itpInstance) return false;
+    if (!requireAccess()) return false;
     setUpdatingItem(checklistItemId);
 
     try {
@@ -182,8 +190,10 @@ export function useItpCompletionActions({
           : copy.failedDescriptionFallback,
         variant: 'success',
       });
+      return true;
     } catch (err) {
       handleApiError(err, 'Failed to mark as failed');
+      return false;
     } finally {
       setUpdatingItem(null);
     }

@@ -12,6 +12,8 @@ import {
 import {
   calculateItpProgressPercent,
   countCompletedItpItems,
+  countItpPhotoRequiredItems,
+  findFirstIncompleteItpCategory,
   findItpCompletion,
   getItpCategoryStats,
   getItpItemStatus,
@@ -65,8 +67,10 @@ interface MobileITPChecklistProps {
     isCompleted: boolean,
     notes: string | null,
   ) => Promise<void>;
-  onMarkNotApplicable: (checklistItemId: string, reason: string) => Promise<void>;
-  onMarkFailed: (checklistItemId: string, reason: string) => Promise<void>;
+  /** Must resolve true on success / false on failure so the sheet can stay open. */
+  onMarkNotApplicable: (checklistItemId: string, reason: string) => Promise<boolean>;
+  /** Must resolve true on success / false on failure so the sheet can stay open. */
+  onMarkFailed: (checklistItemId: string, reason: string) => Promise<boolean>;
   onUpdateNotes: (checklistItemId: string, notes: string) => Promise<void>;
   onAddPhoto: (checklistItemId: string, file: File) => Promise<void>;
   updatingItem?: string | null;
@@ -88,7 +92,12 @@ export function MobileITPChecklist({
   canCompleteItems = true,
 }: MobileITPChecklistProps) {
   const [selectedItem, setSelectedItem] = useState<ITPChecklistItem | null>(null);
-  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  // Default-expand the first category that still has work, so the foreman lands
+  // on actionable items instead of a wall of collapsed headers.
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(() => {
+    const firstIncomplete = findFirstIncompleteItpCategory(checklistItems, completions);
+    return firstIncomplete ? new Set([firstIncomplete]) : new Set<string>();
+  });
   const { trigger } = useHaptics();
 
   const getCompletion = (itemId: string) => findItpCompletion(completions, itemId);
@@ -152,6 +161,7 @@ export function MobileITPChecklist({
                 isComplete={isComplete}
                 completedCount={stats.completed}
                 totalCount={stats.total}
+                photoRequiredCount={countItpPhotoRequiredItems(items, completions)}
                 onToggle={() => toggleCategory(category)}
               />
 
@@ -214,25 +224,29 @@ export function MobileITPChecklist({
           onToggleCompletion(selectedItem.id, true, notes);
           setSelectedItem(null);
         }}
-        onNA={(reason) => {
-          if (!selectedItem) return;
+        onNA={async (reason) => {
+          if (!selectedItem) return false;
           if (!canCompleteItems) {
             trigger('error');
-            return;
+            return false;
           }
           trigger('medium');
-          onMarkNotApplicable(selectedItem.id, reason);
-          setSelectedItem(null);
+          // Close only on success so a failed save keeps the typed reason.
+          const saved = await onMarkNotApplicable(selectedItem.id, reason);
+          if (saved) setSelectedItem(null);
+          return saved;
         }}
-        onFail={(reason) => {
-          if (!selectedItem) return;
+        onFail={async (reason) => {
+          if (!selectedItem) return false;
           if (!canCompleteItems) {
             trigger('error');
-            return;
+            return false;
           }
           trigger('error');
-          onMarkFailed(selectedItem.id, reason);
-          setSelectedItem(null);
+          // Close only on success so a failed save keeps the typed defect reason.
+          const saved = await onMarkFailed(selectedItem.id, reason);
+          if (saved) setSelectedItem(null);
+          return saved;
         }}
         onUpdateNotes={(notes) => {
           if (!selectedItem) return;

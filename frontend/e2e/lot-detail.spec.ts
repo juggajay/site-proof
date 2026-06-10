@@ -728,7 +728,15 @@ test.describe('Lot detail ITP workflow', () => {
     await page.goto(`/projects/${E2E_PROJECT_ID}/lots/${E2E_LOT_ID}`);
     await expect(page.getByText('E2E Earthworks ITP')).toBeVisible();
 
-    await page.getByRole('button', { name: /Preparation/ }).click();
+    // The first category with incomplete work (Preparation) is expanded by
+    // default, so its items are actionable without opening the category.
+    await expect(
+      page.getByRole('button', { name: 'Mark "Inspect subgrade before fill" as complete' }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Mark "Document compaction proof" as complete' }),
+    ).toHaveCount(0);
+
     await page
       .getByRole('button', { name: 'Mark "Inspect subgrade before fill" as complete' })
       .dblclick();

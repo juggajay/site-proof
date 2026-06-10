@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Camera } from 'lucide-react';
+import { Camera, Image as ImageIcon } from 'lucide-react';
 import { SecureDocumentImage } from '@/components/documents/SecureDocumentImage';
 import { BottomSheet } from './sheets/BottomSheet';
 import type { ITPChecklistItem, ITPCompletion } from './MobileITPChecklist';
@@ -11,8 +11,10 @@ interface MobileITPItemSheetProps {
   canComplete: boolean;
   onClose: () => void;
   onPass: (notes: string | null) => void;
-  onNA: (reason: string) => void;
-  onFail: (reason: string) => void;
+  /** Resolves true when saved; false keeps the sheet open with the reason intact. */
+  onNA: (reason: string) => Promise<boolean>;
+  /** Resolves true when saved; false keeps the sheet open with the reason intact. */
+  onFail: (reason: string) => Promise<boolean>;
   onUpdateNotes: (notes: string) => void;
   onAddPhoto: (file: File) => void;
 }
@@ -34,7 +36,12 @@ export function MobileITPItemSheet({
   const [failReason, setFailReason] = useState('');
   const [showNAInput, setShowNAInput] = useState(false);
   const [showFailInput, setShowFailInput] = useState(false);
+  // In-flight + failure state for the N/A / Fail saves. On failure the sheet
+  // stays open with the typed reason intact and an inline error.
+  const [savingStatus, setSavingStatus] = useState(false);
+  const [statusError, setStatusError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
 
   // Reset state when item changes
   useEffect(() => {
@@ -44,10 +51,37 @@ export function MobileITPItemSheet({
       setFailReason('');
       setShowNAInput(false);
       setShowFailInput(false);
+      setSavingStatus(false);
+      setStatusError(null);
     }
   }, [item, completion]);
 
   if (!isOpen || !item) return null;
+
+  // Await the save; only a successful save closes the sheet (the parent owns
+  // that). On failure keep everything as typed and show an inline error.
+  const submitStatus = async (action: (reason: string) => Promise<boolean>, reason: string) => {
+    setSavingStatus(true);
+    setStatusError(null);
+    let saved = false;
+    try {
+      saved = await action(reason);
+    } catch {
+      saved = false;
+    }
+    setSavingStatus(false);
+    if (!saved) {
+      setStatusError('Could not save this item. Your reason is kept - please try again.');
+    }
+  };
+
+  const handlePhotoSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      onAddPhoto(file);
+      e.target.value = ''; // Reset for next upload
+    }
+  };
 
   const isCompleted = completion?.isCompleted;
   const isNA = completion?.isNotApplicable;
@@ -130,6 +164,7 @@ export function MobileITPItemSheet({
               if (!showNAInput) {
                 setShowNAInput(true);
                 setShowFailInput(false);
+                setStatusError(null);
               }
             }}
             disabled={!canComplete}
@@ -150,6 +185,7 @@ export function MobileITPItemSheet({
               if (!showFailInput) {
                 setShowFailInput(true);
                 setShowNAInput(false);
+                setStatusError(null);
               }
             }}
             disabled={!canComplete}
@@ -177,18 +213,28 @@ export function MobileITPItemSheet({
               className="w-full px-3 py-2 border border-border rounded-lg text-sm min-h-[80px] bg-background text-foreground"
               autoFocus
             />
+            {statusError && (
+              <p role="alert" className="text-sm text-destructive">
+                {statusError}
+              </p>
+            )}
             <div className="flex gap-2">
               <button
-                onClick={() => setShowNAInput(false)}
-                className="flex-1 py-3 border border-border rounded-lg text-sm font-medium touch-manipulation"
+                onClick={() => {
+                  setShowNAInput(false);
+                  setStatusError(null);
+                }}
+                disabled={savingStatus}
+                className="flex-1 py-3 border border-border rounded-lg text-sm font-medium touch-manipulation disabled:opacity-60"
               >
                 Cancel
               </button>
               <button
-                onClick={() => onNA(naReason)}
-                className="flex-1 py-3 bg-muted-foreground text-background rounded-lg text-sm font-medium touch-manipulation"
+                onClick={() => submitStatus(onNA, naReason)}
+                disabled={savingStatus}
+                className="flex-1 py-3 bg-muted-foreground text-background rounded-lg text-sm font-medium touch-manipulation disabled:opacity-60"
               >
-                Mark as N/A
+                {savingStatus ? 'Saving...' : 'Mark as N/A'}
               </button>
             </div>
           </div>
@@ -205,18 +251,28 @@ export function MobileITPItemSheet({
               className="w-full px-3 py-2 border border-destructive/20 rounded-lg text-sm min-h-[80px] bg-background text-foreground"
               autoFocus
             />
+            {statusError && (
+              <p role="alert" className="text-sm text-destructive">
+                {statusError}
+              </p>
+            )}
             <div className="flex gap-2">
               <button
-                onClick={() => setShowFailInput(false)}
-                className="flex-1 py-3 border border-border rounded-lg text-sm font-medium touch-manipulation"
+                onClick={() => {
+                  setShowFailInput(false);
+                  setStatusError(null);
+                }}
+                disabled={savingStatus}
+                className="flex-1 py-3 border border-border rounded-lg text-sm font-medium touch-manipulation disabled:opacity-60"
               >
                 Cancel
               </button>
               <button
-                onClick={() => onFail(failReason)}
-                className="flex-1 py-3 bg-destructive text-destructive-foreground rounded-lg text-sm font-medium touch-manipulation"
+                onClick={() => submitStatus(onFail, failReason)}
+                disabled={savingStatus}
+                className="flex-1 py-3 bg-destructive text-destructive-foreground rounded-lg text-sm font-medium touch-manipulation disabled:opacity-60"
               >
-                Mark as Failed
+                {savingStatus ? 'Saving...' : 'Mark as Failed'}
               </button>
             </div>
           </div>
@@ -247,13 +303,22 @@ export function MobileITPItemSheet({
             <div className="flex items-center justify-between mb-2">
               <label className="text-sm font-medium">Photos</label>
               {canComplete && (
-                <>
+                <div className="flex items-center gap-2">
                   <button
                     onClick={() => fileInputRef.current?.click()}
-                    className="text-sm text-primary font-medium flex items-center gap-1 py-2 px-3 bg-primary/10 rounded-lg touch-manipulation"
+                    className="min-h-[44px] text-sm text-primary font-medium flex items-center gap-1 py-2 px-3 bg-primary/10 rounded-lg touch-manipulation"
                   >
                     <Camera className="w-4 h-4" />
                     <span>Add Photo</span>
+                  </button>
+                  {/* Gallery alternative: same handler, no capture attribute, so
+                      photos taken earlier can be attached. */}
+                  <button
+                    onClick={() => galleryInputRef.current?.click()}
+                    className="min-h-[44px] text-sm text-primary font-medium flex items-center gap-1 py-2 px-3 bg-primary/10 rounded-lg touch-manipulation"
+                  >
+                    <ImageIcon className="w-4 h-4" />
+                    <span>Gallery</span>
                   </button>
                   <input
                     ref={fileInputRef}
@@ -261,15 +326,16 @@ export function MobileITPItemSheet({
                     accept="image/*"
                     capture="environment"
                     className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        onAddPhoto(file);
-                        e.target.value = ''; // Reset for next upload
-                      }
-                    }}
+                    onChange={handlePhotoSelected}
                   />
-                </>
+                  <input
+                    ref={galleryInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handlePhotoSelected}
+                  />
+                </div>
               )}
             </div>
             {photos.length > 0 ? (

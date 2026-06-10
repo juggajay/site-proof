@@ -384,6 +384,60 @@ describe('useItpCompletionActions — HC param set (same hook, HC wire)', () => 
   });
 });
 
+describe('useItpCompletionActions — success flag for the mobile sheet', () => {
+  it('mark N/A resolves true on success and false when the write fails', async () => {
+    const { params } = portalParams();
+    const { result } = renderHook(() => useItpCompletionActions(params));
+
+    let returned: boolean | undefined;
+    await act(async () => {
+      returned = await result.current.handleMarkNotApplicable('item-1', 'out of scope');
+    });
+    expect(returned).toBe(true);
+
+    vi.mocked(apiFetch).mockRejectedValueOnce(new Error('network down'));
+    await act(async () => {
+      returned = await result.current.handleMarkNotApplicable('item-1', 'out of scope');
+    });
+    expect(returned).toBe(false);
+  });
+
+  it('mark Failed resolves true on success and false when the write fails', async () => {
+    const { params } = portalParams();
+    const { result } = renderHook(() => useItpCompletionActions(params));
+
+    let returned: boolean | undefined;
+    await act(async () => {
+      returned = await result.current.handleMarkFailed('item-1', 'cracked slab');
+    });
+    expect(returned).toBe(true);
+
+    vi.mocked(apiFetch).mockRejectedValueOnce(new Error('network down'));
+    await act(async () => {
+      returned = await result.current.handleMarkFailed('item-1', 'cracked slab');
+    });
+    expect(returned).toBe(false);
+  });
+
+  it('gated and instance-less calls resolve false without sending anything', async () => {
+    const gated = portalParams({ requireAccess: () => false });
+    const gatedHook = renderHook(() => useItpCompletionActions(gated.params));
+    const noInstance = portalParams({ itpInstance: null });
+    const noInstanceHook = renderHook(() => useItpCompletionActions(noInstance.params));
+
+    const returns: (boolean | undefined)[] = [];
+    await act(async () => {
+      returns.push(await gatedHook.result.current.handleMarkNotApplicable('item-1', 'x'));
+      returns.push(await gatedHook.result.current.handleMarkFailed('item-1', 'x'));
+      returns.push(await noInstanceHook.result.current.handleMarkNotApplicable('item-1', 'x'));
+      returns.push(await noInstanceHook.result.current.handleMarkFailed('item-1', 'x'));
+    });
+
+    expect(returns).toEqual([false, false, false, false]);
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+});
+
 describe('useItpCompletionActions — trust boundary (injected gate)', () => {
   it('fires NO request and NO refresh for any action when requireAccess() is false', async () => {
     const onAfterMutate = vi.fn(async () => {});

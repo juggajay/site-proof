@@ -58,6 +58,8 @@ interface MobileITPCategoryHeaderProps {
   isComplete: boolean;
   completedCount: number;
   totalCount: number;
+  /** Items in this category still missing required photos; badged while collapsed. */
+  photoRequiredCount?: number;
   onToggle: () => void;
 }
 
@@ -67,6 +69,7 @@ export function MobileITPCategoryHeader({
   isComplete,
   completedCount,
   totalCount,
+  photoRequiredCount = 0,
   onToggle,
 }: MobileITPCategoryHeaderProps) {
   return (
@@ -83,6 +86,15 @@ export function MobileITPCategoryHeader({
         <span className="font-semibold text-sm">{category}</span>
       </div>
       <div className="flex items-center gap-2">
+        {!isExpanded && photoRequiredCount > 0 && (
+          <span
+            className="flex items-center gap-1 text-xs font-medium text-warning"
+            aria-label={`${photoRequiredCount} ${photoRequiredCount === 1 ? 'item needs' : 'items need'} photos`}
+          >
+            <Camera className="w-3.5 h-3.5" />
+            {photoRequiredCount}
+          </span>
+        )}
         <span
           className={`text-xs px-2 py-1 rounded-full font-medium ${
             isComplete ? 'bg-foreground/10 text-foreground' : 'bg-muted text-muted-foreground'
