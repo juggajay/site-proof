@@ -11,6 +11,7 @@ import { createProjectAreaRouter } from './projects/areaRoutes.js';
 import { createProjectReadRouter } from './projects/readRoutes.js';
 import { createProjectTeamRouter } from './projects/teamRoutes.js';
 import { createProjectWriteRouter } from './projects/writeRoutes.js';
+import { createSampleProjectRouter } from './projects/sampleProjectRoute.js';
 
 export const projectsRouter = Router();
 
@@ -375,6 +376,16 @@ projectsRouter.use(
     isCompanyAdmin,
     isSubcontractorUser,
     parseProjectRouteParam,
+  }),
+);
+
+// POST /api/projects/sample — one-click example project for first-run
+// exploration. Registered before the write router only for grouping; the
+// static '/sample' path has no conflicts with the write routes.
+projectsRouter.use(
+  createSampleProjectRouter({
+    canCreateProjectForCompany,
+    hasSubcontractorProjectIdentity,
   }),
 );
 

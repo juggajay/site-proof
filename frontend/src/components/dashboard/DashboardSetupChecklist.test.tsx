@@ -1,16 +1,33 @@
-import { describe, expect, it } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { render } from '@testing-library/react';
+import {
+  fireEvent,
+  renderWithProviders,
+  screen,
+  waitFor,
+  within,
+} from '@/test/renderWithProviders';
+import { apiFetch } from '@/lib/api';
 import { DashboardMemberSetupNotice, DashboardSetupChecklist } from './DashboardSetupChecklist';
 
+const navigateSpy = vi.fn();
+
+vi.mock('react-router-dom', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('react-router-dom')>();
+  return { ...actual, useNavigate: () => navigateSpy };
+});
+
+vi.mock('@/lib/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/api')>();
+  return { ...actual, apiFetch: vi.fn() };
+});
+
 function renderChecklist(props: { projectCreated?: boolean; lotsAdded?: boolean } = {}) {
-  return render(
-    <MemoryRouter>
-      <DashboardSetupChecklist
-        projectCreated={props.projectCreated ?? false}
-        lotsAdded={props.lotsAdded ?? false}
-      />
-    </MemoryRouter>,
+  return renderWithProviders(
+    <DashboardSetupChecklist
+      projectCreated={props.projectCreated ?? false}
+      lotsAdded={props.lotsAdded ?? false}
+    />,
   );
 }
 
@@ -19,6 +36,10 @@ function getStep(title: string): HTMLAnchorElement {
   expect(link).not.toBeNull();
   return link as HTMLAnchorElement;
 }
+
+afterEach(() => {
+  vi.clearAllMocks();
+});
 
 describe('DashboardSetupChecklist', () => {
   it('renders the four setup steps with their navigation targets', () => {
@@ -50,6 +71,62 @@ describe('DashboardSetupChecklist', () => {
     // Steps without cheap counts on the dashboard stay as static links.
     expect(within(getStep('Assign an ITP template')).queryByText('(done)')).not.toBeInTheDocument();
     expect(within(getStep('Invite your team')).queryByText('(done)')).not.toBeInTheDocument();
+  });
+});
+
+describe('DashboardSetupChecklist example project action', () => {
+  it('seeds the example project and navigates into it', async () => {
+    vi.mocked(apiFetch).mockResolvedValue({
+      project: { id: 'sample-1', name: 'Example Project — Riverside Estate Stage 1' },
+      alreadyExisted: false,
+    });
+
+    renderChecklist();
+
+    fireEvent.click(screen.getByRole('button', { name: /explore an example project/i }));
+
+    await waitFor(() => {
+      expect(apiFetch).toHaveBeenCalledWith('/api/projects/sample', { method: 'POST' });
+    });
+    await waitFor(() => {
+      expect(navigateSpy).toHaveBeenCalledWith('/projects/sample-1');
+    });
+  });
+
+  it('disables the action while the example project is being seeded', async () => {
+    let resolveRequest: (value: unknown) => void = () => {};
+    vi.mocked(apiFetch).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveRequest = resolve;
+        }),
+    );
+
+    renderChecklist();
+
+    fireEvent.click(screen.getByRole('button', { name: /explore an example project/i }));
+
+    const pendingButton = await screen.findByRole('button', {
+      name: /setting up example project/i,
+    });
+    expect(pendingButton).toBeDisabled();
+
+    resolveRequest({ project: { id: 'sample-1' }, alreadyExisted: true });
+    await waitFor(() => {
+      expect(navigateSpy).toHaveBeenCalledWith('/projects/sample-1');
+    });
+  });
+
+  it('surfaces an error and stays usable when seeding fails', async () => {
+    vi.mocked(apiFetch).mockRejectedValue(new Error('Sample seeding failed'));
+
+    renderChecklist();
+
+    fireEvent.click(screen.getByRole('button', { name: /explore an example project/i }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Sample seeding failed');
+    expect(navigateSpy).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: /explore an example project/i })).not.toBeDisabled();
   });
 });
 

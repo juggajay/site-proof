@@ -16,6 +16,7 @@ import {
 } from '@/lib/numericInput';
 import { getCompanyRole, hasSubcontractorPortalIdentity } from '@/lib/subcontractorIdentity';
 import { ROLE_GROUPS, hasRoleInGroup } from '@/lib/roles';
+import { useCreateSampleProject } from '@/hooks/useCreateSampleProject';
 import { SPECIFICATION_SET_HELPER_TEXT } from './settings/types';
 
 interface Project {
@@ -131,6 +132,10 @@ export function ProjectsPage() {
 
   const projects = projectsData?.projects || [];
   const error = queryError ? extractErrorMessage(queryError, 'Failed to load projects') : null;
+
+  // "Explore an example project" — seeds (or returns) the company's
+  // clearly-labelled sample project and navigates into it.
+  const createSampleProject = useCreateSampleProject();
 
   // Modal state
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -480,9 +485,31 @@ export function ProjectsPage() {
         <div className="text-center py-12 bg-card rounded-lg border">
           <h3 className="text-lg font-medium">No projects found</h3>
           <p className="mt-1 text-muted-foreground">Create a new project to get started.</p>
-          <Button className="mt-4" onClick={openCreateModal}>
-            Create Project
-          </Button>
+          {createSampleProject.isError && (
+            <p role="alert" className="mt-3 text-sm text-destructive">
+              {extractErrorMessage(
+                createSampleProject.error,
+                'Failed to create the example project',
+              )}
+            </p>
+          )}
+          <div className="mt-4 flex flex-col items-center justify-center gap-2 sm:flex-row">
+            <Button onClick={openCreateModal}>Create Project</Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => createSampleProject.mutate()}
+              disabled={createSampleProject.isPending}
+            >
+              {createSampleProject.isPending
+                ? 'Setting up example project…'
+                : 'Explore an example project'}
+            </Button>
+          </div>
+          <p className="mx-auto mt-3 max-w-md text-xs text-muted-foreground">
+            The example project comes pre-filled with lots, an ITP, hold points, an NCR, and test
+            results so you can look around with real content. Delete it whenever you like.
+          </p>
         </div>
       ) : !error && projects.length === 0 ? (
         // Company member (e.g. an invited foreman) who can't create projects and
