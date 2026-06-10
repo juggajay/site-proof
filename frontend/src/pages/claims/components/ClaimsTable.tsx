@@ -181,152 +181,154 @@ export const ClaimsTable = React.memo(function ClaimsTable({
 
   return (
     <div className="rounded-lg border">
-      <table className="w-full">
-        <thead className="bg-muted/50">
-          <tr>
-            <th className="text-left p-4 font-medium">Claim #</th>
-            <th className="text-left p-4 font-medium">Period</th>
-            <th className="text-left p-4 font-medium">Status</th>
-            <th className="text-left p-4 font-medium">Certification Due</th>
-            <th className="text-left p-4 font-medium">Payment Due (SOPA)</th>
-            <th className="text-right p-4 font-medium">Lots</th>
-            <th className="text-right p-4 font-medium">Claimed</th>
-            <th className="text-right p-4 font-medium">Certified</th>
-            <th className="text-right p-4 font-medium">Paid</th>
-            <th className="text-right p-4 font-medium">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {claims.map((claim) => {
-            const certStatus = getCertificationDueStatus(claim);
-            const isOverdue = certStatus?.isOverdue || false;
-            const outstandingAmount = Math.max(
-              0,
-              (claim.certifiedAmount ?? 0) - (claim.paidAmount ?? 0),
-            );
-            const canRecordPayment =
-              (claim.status === 'certified' || claim.status === 'partially_paid') &&
-              outstandingAmount > 0;
-            const canCertifyClaim = claim.status === 'submitted' || claim.status === 'disputed';
-            return (
-              <tr
-                key={claim.id}
-                className={`border-t hover:bg-muted/30 ${isOverdue ? 'bg-destructive/10' : ''}`}
-              >
-                <td className="p-4 font-medium">Claim {claim.claimNumber}</td>
-                <td className="p-4">
-                  {new Date(claim.periodStart).toLocaleDateString('en-AU')} -{' '}
-                  {new Date(claim.periodEnd).toLocaleDateString('en-AU')}
-                </td>
-                <td className="p-4">
-                  {getStatusBadge(claim.status)}
-                  <CertificationReadBack claim={claim} />
-                </td>
-                <td className="p-4">
-                  {certStatus ? (
-                    <span className={`text-sm ${certStatus.className}`}>{certStatus.text}</span>
-                  ) : (
-                    <span className="text-muted-foreground">-</span>
-                  )}
-                </td>
-                <td className="p-4">
-                  {(() => {
-                    const dueStatus = getPaymentDueStatus(claim);
-                    if (!dueStatus) return <span className="text-muted-foreground">-</span>;
-                    return (
-                      <span className={`text-sm ${dueStatus.className}`}>{dueStatus.text}</span>
-                    );
-                  })()}
-                </td>
-                <td className="p-4 text-right">{claim.lotCount}</td>
-                <td className="p-4 text-right font-semibold">
-                  {formatCurrency(claim.totalClaimedAmount)}
-                </td>
-                <td className="p-4 text-right">{formatCurrency(claim.certifiedAmount)}</td>
-                <td className="p-4 text-right">{formatCurrency(claim.paidAmount)}</td>
-                <td className="p-4 text-right">
-                  <div className="flex items-center justify-end gap-1">
-                    {claim.status === 'draft' && (
-                      <button
-                        onClick={() => onSubmitClaim(claim.id)}
-                        className="p-2 hover:bg-primary/10 rounded-lg text-primary"
-                        aria-label="Submit Claim"
-                        title="Submit Claim"
-                      >
-                        <Send className="h-4 w-4" />
-                      </button>
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead className="bg-muted/50">
+            <tr>
+              <th className="text-left p-4 font-medium">Claim #</th>
+              <th className="text-left p-4 font-medium">Period</th>
+              <th className="text-left p-4 font-medium">Status</th>
+              <th className="text-left p-4 font-medium">Certification Due</th>
+              <th className="text-left p-4 font-medium">Payment Due (SOPA)</th>
+              <th className="text-right p-4 font-medium">Lots</th>
+              <th className="text-right p-4 font-medium">Claimed</th>
+              <th className="text-right p-4 font-medium">Certified</th>
+              <th className="text-right p-4 font-medium">Paid</th>
+              <th className="text-right p-4 font-medium">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {claims.map((claim) => {
+              const certStatus = getCertificationDueStatus(claim);
+              const isOverdue = certStatus?.isOverdue || false;
+              const outstandingAmount = Math.max(
+                0,
+                (claim.certifiedAmount ?? 0) - (claim.paidAmount ?? 0),
+              );
+              const canRecordPayment =
+                (claim.status === 'certified' || claim.status === 'partially_paid') &&
+                outstandingAmount > 0;
+              const canCertifyClaim = claim.status === 'submitted' || claim.status === 'disputed';
+              return (
+                <tr
+                  key={claim.id}
+                  className={`border-t hover:bg-muted/30 ${isOverdue ? 'bg-destructive/10' : ''}`}
+                >
+                  <td className="p-4 font-medium">Claim {claim.claimNumber}</td>
+                  <td className="p-4">
+                    {new Date(claim.periodStart).toLocaleDateString('en-AU')} -{' '}
+                    {new Date(claim.periodEnd).toLocaleDateString('en-AU')}
+                  </td>
+                  <td className="p-4">
+                    {getStatusBadge(claim.status)}
+                    <CertificationReadBack claim={claim} />
+                  </td>
+                  <td className="p-4">
+                    {certStatus ? (
+                      <span className={`text-sm ${certStatus.className}`}>{certStatus.text}</span>
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
                     )}
-                    {(claim.status === 'submitted' || claim.status === 'certified') && (
-                      <button
-                        onClick={() => onDisputeClaim(claim.id)}
-                        className="p-2 hover:bg-destructive/10 rounded-lg text-destructive"
-                        aria-label="Mark as Disputed"
-                        title="Mark as Disputed"
-                      >
-                        <AlertCircle className="h-4 w-4" />
-                      </button>
-                    )}
-                    {canCertifyClaim && (
-                      <button
-                        onClick={() => onCertifyClaim(claim.id)}
-                        className="p-2 hover:bg-muted rounded-lg text-foreground"
-                        aria-label="Record Certification"
-                        title="Record Certification"
-                      >
-                        <CheckCircle className="h-4 w-4" />
-                      </button>
-                    )}
-                    {canRecordPayment && (
-                      <button
-                        onClick={() => onRecordPayment(claim.id)}
-                        className="p-2 hover:bg-muted rounded-lg text-foreground"
-                        aria-label="Record Payment"
-                        title="Record Payment"
-                      >
-                        <DollarSign className="h-4 w-4" />
-                      </button>
-                    )}
-                    <button
-                      onClick={() => onCompletenessCheck(claim.id)}
-                      disabled={loadingCompleteness && showCompletenessModal === claim.id}
-                      className="p-2 hover:bg-primary/10 rounded-lg text-primary disabled:opacity-50"
-                      aria-label="Claim Evidence Review"
-                      title="Claim Evidence Review"
-                    >
-                      {loadingCompleteness && showCompletenessModal === claim.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <ClipboardCheck className="h-4 w-4" />
+                  </td>
+                  <td className="p-4">
+                    {(() => {
+                      const dueStatus = getPaymentDueStatus(claim);
+                      if (!dueStatus) return <span className="text-muted-foreground">-</span>;
+                      return (
+                        <span className={`text-sm ${dueStatus.className}`}>{dueStatus.text}</span>
+                      );
+                    })()}
+                  </td>
+                  <td className="p-4 text-right">{claim.lotCount}</td>
+                  <td className="p-4 text-right font-semibold">
+                    {formatCurrency(claim.totalClaimedAmount)}
+                  </td>
+                  <td className="p-4 text-right">{formatCurrency(claim.certifiedAmount)}</td>
+                  <td className="p-4 text-right">{formatCurrency(claim.paidAmount)}</td>
+                  <td className="p-4 text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      {claim.status === 'draft' && (
+                        <button
+                          onClick={() => onSubmitClaim(claim.id)}
+                          className="p-2 hover:bg-primary/10 rounded-lg text-primary"
+                          aria-label="Submit Claim"
+                          title="Submit Claim"
+                        >
+                          <Send className="h-4 w-4" />
+                        </button>
                       )}
-                    </button>
-                    <button
-                      onClick={() => onEvidencePackage(claim.id)}
-                      disabled={generatingEvidence === claim.id}
-                      className="p-2 hover:bg-muted rounded-lg text-foreground disabled:opacity-50"
-                      aria-label="Generate Evidence Package"
-                      title="Generate Evidence Package"
-                    >
-                      {generatingEvidence === claim.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Package className="h-4 w-4" />
+                      {(claim.status === 'submitted' || claim.status === 'certified') && (
+                        <button
+                          onClick={() => onDisputeClaim(claim.id)}
+                          className="p-2 hover:bg-destructive/10 rounded-lg text-destructive"
+                          aria-label="Mark as Disputed"
+                          title="Mark as Disputed"
+                        >
+                          <AlertCircle className="h-4 w-4" />
+                        </button>
                       )}
-                    </button>
-                    <button
-                      onClick={() => downloadClaimCsv(claim)}
-                      className="p-2 hover:bg-muted rounded-lg"
-                      aria-label="Download CSV"
-                      title="Download CSV"
-                    >
-                      <Download className="h-4 w-4" />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                      {canCertifyClaim && (
+                        <button
+                          onClick={() => onCertifyClaim(claim.id)}
+                          className="p-2 hover:bg-muted rounded-lg text-foreground"
+                          aria-label="Record Certification"
+                          title="Record Certification"
+                        >
+                          <CheckCircle className="h-4 w-4" />
+                        </button>
+                      )}
+                      {canRecordPayment && (
+                        <button
+                          onClick={() => onRecordPayment(claim.id)}
+                          className="p-2 hover:bg-muted rounded-lg text-foreground"
+                          aria-label="Record Payment"
+                          title="Record Payment"
+                        >
+                          <DollarSign className="h-4 w-4" />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => onCompletenessCheck(claim.id)}
+                        disabled={loadingCompleteness && showCompletenessModal === claim.id}
+                        className="p-2 hover:bg-primary/10 rounded-lg text-primary disabled:opacity-50"
+                        aria-label="Claim Evidence Review"
+                        title="Claim Evidence Review"
+                      >
+                        {loadingCompleteness && showCompletenessModal === claim.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <ClipboardCheck className="h-4 w-4" />
+                        )}
+                      </button>
+                      <button
+                        onClick={() => onEvidencePackage(claim.id)}
+                        disabled={generatingEvidence === claim.id}
+                        className="p-2 hover:bg-muted rounded-lg text-foreground disabled:opacity-50"
+                        aria-label="Generate Evidence Package"
+                        title="Generate Evidence Package"
+                      >
+                        {generatingEvidence === claim.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Package className="h-4 w-4" />
+                        )}
+                      </button>
+                      <button
+                        onClick={() => downloadClaimCsv(claim)}
+                        className="p-2 hover:bg-muted rounded-lg"
+                        aria-label="Download CSV"
+                        title="Download CSV"
+                      >
+                        <Download className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 });
