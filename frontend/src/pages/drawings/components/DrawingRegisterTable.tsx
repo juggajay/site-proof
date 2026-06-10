@@ -3,9 +3,13 @@
 // prop names intentionally match the page's variable names so the markup stays
 // byte-identical with the pre-extraction page. The one rename: the page-owned
 // statusChangeMutation.isPending arrives as the statusChangePending prop.
+//
+// PR-M: when isMobile is true, renders DrawingMobileList (card view) instead of
+// the overflow table — desktop output is byte-for-byte unchanged.
 import { Button } from '@/components/ui/button';
 import { NativeSelect } from '@/components/ui/native-select';
 import { DRAWING_STATUSES, formatFileSize, type Drawing } from '../drawingsUploadData';
+import { DrawingMobileList } from './DrawingMobileList';
 
 interface DrawingRegisterTableProps {
   loading: boolean;
@@ -19,6 +23,8 @@ interface DrawingRegisterTableProps {
   handleOpenDrawing: (drawing: Drawing) => Promise<void>;
   openRevisionModal: (drawing: Drawing) => void;
   setDrawingPendingDelete: (drawing: Drawing | null) => void;
+  /** When true, renders a mobile card list instead of the overflow table. */
+  isMobile?: boolean;
 }
 
 export function DrawingRegisterTable({
@@ -32,6 +38,7 @@ export function DrawingRegisterTable({
   handleOpenDrawing,
   openRevisionModal,
   setDrawingPendingDelete,
+  isMobile = false,
 }: DrawingRegisterTableProps) {
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return '-';
@@ -52,31 +59,59 @@ export function DrawingRegisterTable({
     );
   };
 
-  return loading ? (
-    <div className="p-8 text-center text-muted-foreground">Loading drawings...</div>
-  ) : error ? null : drawings.length === 0 ? (
-    <div className="p-12 text-center">
-      <svg
-        className="mx-auto h-12 w-12 text-muted-foreground"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-        />
-      </svg>
-      <h3 className="mt-4 text-lg font-medium">No drawings found</h3>
-      <p className="mt-2 text-muted-foreground">
-        {hasActiveFilters
-          ? 'No drawings match the current filters.'
-          : 'Upload your first drawing to get started.'}
-      </p>
-    </div>
-  ) : (
+  // Loading and error states are the same for both views.
+  if (loading) {
+    return <div className="p-8 text-center text-muted-foreground">Loading drawings...</div>;
+  }
+
+  if (error) {
+    return null;
+  }
+
+  // Mobile card list — renders when the page detects a narrow viewport.
+  if (isMobile) {
+    return (
+      <DrawingMobileList
+        drawings={drawings}
+        hasActiveFilters={hasActiveFilters}
+        canManageDrawings={canManageDrawings}
+        statusChangePending={statusChangePending}
+        handleStatusChange={handleStatusChange}
+        handleOpenDrawing={handleOpenDrawing}
+        openRevisionModal={openRevisionModal}
+        setDrawingPendingDelete={setDrawingPendingDelete}
+      />
+    );
+  }
+
+  // Desktop: overflow table — byte-for-byte identical to the pre-PR output.
+  if (drawings.length === 0) {
+    return (
+      <div className="p-12 text-center">
+        <svg
+          className="mx-auto h-12 w-12 text-muted-foreground"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+          />
+        </svg>
+        <h3 className="mt-4 text-lg font-medium">No drawings found</h3>
+        <p className="mt-2 text-muted-foreground">
+          {hasActiveFilters
+            ? 'No drawings match the current filters.'
+            : 'Upload your first drawing to get started.'}
+        </p>
+      </div>
+    );
+  }
+
+  return (
     <div className="overflow-x-auto">
       <table className="w-full">
         <thead className="border-b bg-muted/50">
