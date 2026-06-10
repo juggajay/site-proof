@@ -4,13 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import type { TestResult } from '../types';
 import { calculatePassFail, hasRecordedResult } from '../constants';
-import {
-  Modal,
-  ModalHeader,
-  ModalDescription,
-  ModalBody,
-  ModalFooter,
-} from '@/components/ui/Modal';
+import { ResponsiveSheet } from '@/components/ui/ResponsiveSheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { NativeSelect } from '@/components/ui/native-select';
@@ -56,6 +50,10 @@ const toInputString = (value: number | null | undefined): string =>
 // result value + pass/fail outcome (mirroring the backend RESULT_REQUIRED gate),
 // and only then advances the test to 'entered'. Reuses CreateTestModal's
 // result-entry fields and its auto-calculated pass/fail behaviour.
+//
+// PR-L: converted from Modal to ResponsiveSheet so field staff get a native
+// bottom-sheet on mobile (the most-used field action, audit finding #9).
+// All form logic/validation/mutations are preserved.
 export const EnterResultsModal = React.memo(function EnterResultsModal({
   isOpen,
   test,
@@ -136,108 +134,122 @@ export const EnterResultsModal = React.memo(function EnterResultsModal({
     onClose();
   }, [onClose]);
 
-  if (!isOpen || !test) return null;
+  const footer = (
+    <>
+      <Button variant="outline" type="button" onClick={handleClose} className="min-h-[44px]">
+        Cancel
+      </Button>
+      <Button
+        type="submit"
+        form="enter-results-form"
+        disabled={saving || !resultRecorded}
+        className="min-h-[44px]"
+      >
+        {saving ? 'Saving...' : 'Save & Enter Results'}
+      </Button>
+    </>
+  );
 
   return (
-    <Modal onClose={handleClose} className="max-w-lg">
-      <ModalHeader>Enter Results</ModalHeader>
-      <ModalDescription>
-        Record the result value and pass/fail outcome for {test.testType}. A result and a definitive
-        pass/fail are required before this test can be entered and verified.
-      </ModalDescription>
-      <ModalBody>
-        {formError && (
-          <div
-            className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
-            role="alert"
-          >
-            {formError}
-          </div>
-        )}
-        <form id="enter-results-form" onSubmit={handleSubmit(onFormSubmit)}>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="enter-result-value">Result Value *</Label>
-                <Input
-                  id="enter-result-value"
-                  type="number"
-                  step="any"
-                  {...register('resultValue')}
-                  placeholder="e.g., 98.5"
-                />
-              </div>
-              <div>
-                <Label htmlFor="enter-result-unit">Unit</Label>
-                <Input
-                  id="enter-result-unit"
-                  type="text"
-                  {...register('resultUnit')}
-                  placeholder="e.g., %"
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="enter-spec-min">Spec Min</Label>
-                <Input
-                  id="enter-spec-min"
-                  type="number"
-                  step="any"
-                  {...register('specificationMin')}
-                  placeholder="e.g., 95"
-                />
-              </div>
-              <div>
-                <Label htmlFor="enter-spec-max">Spec Max</Label>
-                <Input
-                  id="enter-spec-max"
-                  type="number"
-                  step="any"
-                  {...register('specificationMax')}
-                  placeholder="e.g., 100"
-                />
-              </div>
+    <ResponsiveSheet
+      open={isOpen && test !== null}
+      onClose={handleClose}
+      title="Enter Results"
+      footer={footer}
+      className="max-w-lg"
+    >
+      <p className="text-sm text-muted-foreground mb-4">
+        Record the result value and pass/fail outcome
+        {test ? ` for ${test.testType}` : ''}. A result and a definitive pass/fail are required
+        before this test can be entered and verified.
+      </p>
+      {formError && (
+        <div
+          className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
+          role="alert"
+        >
+          {formError}
+        </div>
+      )}
+      <form id="enter-results-form" onSubmit={handleSubmit(onFormSubmit)}>
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="enter-result-value">Result Value *</Label>
+              <Input
+                id="enter-result-value"
+                type="number"
+                step="any"
+                className="min-h-[44px]"
+                {...register('resultValue')}
+                placeholder="e.g., 98.5"
+              />
             </div>
             <div>
-              <Label htmlFor="enter-pass-fail">
-                Pass/Fail Status *
-                {resultValue && (specificationMin || specificationMax) && (
-                  <span className="ml-2 text-xs text-muted-foreground">(auto-calculated)</span>
-                )}
-              </Label>
-              <NativeSelect
-                id="enter-pass-fail"
-                {...register('passFail')}
-                className={
-                  passFail === 'pass'
-                    ? 'border-success bg-success/10'
-                    : passFail === 'fail'
-                      ? 'border-destructive bg-destructive/10'
-                      : ''
-                }
-              >
-                <option value="pending">Pending</option>
-                <option value="pass">Pass</option>
-                <option value="fail">Fail</option>
-              </NativeSelect>
-              {!resultRecorded && (
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Enter a result value and choose Pass or Fail to continue.
-                </p>
-              )}
+              <Label htmlFor="enter-result-unit">Unit</Label>
+              <Input
+                id="enter-result-unit"
+                type="text"
+                className="min-h-[44px]"
+                {...register('resultUnit')}
+                placeholder="e.g., %"
+              />
             </div>
           </div>
-        </form>
-      </ModalBody>
-      <ModalFooter>
-        <Button variant="outline" type="button" onClick={handleClose}>
-          Cancel
-        </Button>
-        <Button type="submit" form="enter-results-form" disabled={saving || !resultRecorded}>
-          {saving ? 'Saving...' : 'Save & Enter Results'}
-        </Button>
-      </ModalFooter>
-    </Modal>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="enter-spec-min">Spec Min</Label>
+              <Input
+                id="enter-spec-min"
+                type="number"
+                step="any"
+                className="min-h-[44px]"
+                {...register('specificationMin')}
+                placeholder="e.g., 95"
+              />
+            </div>
+            <div>
+              <Label htmlFor="enter-spec-max">Spec Max</Label>
+              <Input
+                id="enter-spec-max"
+                type="number"
+                step="any"
+                className="min-h-[44px]"
+                {...register('specificationMax')}
+                placeholder="e.g., 100"
+              />
+            </div>
+          </div>
+          <div>
+            <Label htmlFor="enter-pass-fail">
+              Pass/Fail Status *
+              {resultValue && (specificationMin || specificationMax) && (
+                <span className="ml-2 text-xs text-muted-foreground">(auto-calculated)</span>
+              )}
+            </Label>
+            <NativeSelect
+              id="enter-pass-fail"
+              {...register('passFail')}
+              className={
+                passFail === 'pass'
+                  ? 'border-success bg-success/10 min-h-[44px]'
+                  : passFail === 'fail'
+                    ? 'border-destructive bg-destructive/10 min-h-[44px]'
+                    : 'min-h-[44px]'
+              }
+            >
+              <option value="pending">Pending</option>
+              <option value="pass">Pass</option>
+              <option value="fail">Fail</option>
+            </NativeSelect>
+            {!resultRecorded && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Enter a result value and choose Pass or Fail to continue.
+              </p>
+            )}
+          </div>
+        </div>
+      </form>
+    </ResponsiveSheet>
   );
 });
