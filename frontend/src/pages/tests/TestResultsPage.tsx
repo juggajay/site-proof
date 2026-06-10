@@ -1,5 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
+import { MoreVertical, FileDown, Upload, FolderOpen } from 'lucide-react';
 import { getAuthToken } from '@/lib/auth';
 import { apiFetch, authFetch } from '@/lib/api';
 import { getResponseErrorMessage } from './utils';
@@ -14,6 +15,7 @@ import { UploadCertificateModal } from './components/UploadCertificateModal';
 import { BatchUploadModal } from './components/BatchUploadModal';
 import { RejectTestModal } from './components/RejectTestModal';
 import { NcrPromptModal, NcrCreateModal } from './components/NcrModals';
+import { BottomSheet } from '@/components/foreman/sheets/BottomSheet';
 import { downloadCsv } from '@/lib/csv';
 import { formatDateKey } from '@/lib/localDate';
 import { toast } from '@/components/ui/toaster';
@@ -40,6 +42,9 @@ export function TestResultsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [projectState, setProjectState] = useState<string>('NSW');
+
+  // Mobile overflow sheet state (PR-L: header "More" button)
+  const [moreSheetOpen, setMoreSheetOpen] = useState(false);
 
   // Modal visibility state
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -473,35 +478,110 @@ export function TestResultsPage() {
           <h1 className="text-3xl font-bold">Test Results</h1>
           <ContextHelp title={HELP_CONTENT.tests.title} content={HELP_CONTENT.tests.content} />
         </div>
-        <div className="flex flex-wrap gap-2">
-          {testResults.length > 0 && (
+        {isMobile ? (
+          /* PR-L: Mobile \u2014 one primary action + More overflow BottomSheet */
+          <div className="flex items-center gap-2">
             <button
-              onClick={handleExportCSV}
+              onClick={() => setShowCreateModal(true)}
+              className="flex-1 rounded-lg bg-primary px-4 py-2.5 text-primary-foreground hover:bg-primary/90 min-h-[44px]"
+            >
+              Add Test Result
+            </button>
+            <button
+              type="button"
+              onClick={() => setMoreSheetOpen(true)}
+              className="rounded-lg border border-border p-2.5 hover:bg-muted/50 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+              aria-label="More actions"
+              data-testid="tests-header-more-button"
+            >
+              <MoreVertical className="h-5 w-5" />
+            </button>
+          </div>
+        ) : (
+          /* Desktop \u2014 all buttons visible */
+          <div className="flex flex-wrap gap-2">
+            {testResults.length > 0 && (
+              <button
+                onClick={handleExportCSV}
+                className="rounded-lg border border-border px-4 py-2 text-foreground hover:bg-muted/50"
+              >
+                Export CSV
+              </button>
+            )}
+            <button
+              onClick={() => setShowUploadModal(true)}
+              className="rounded-lg border border-primary px-4 py-2 text-primary hover:bg-primary/10"
+            >
+              {'\uD83D\uDCC4'} Upload Certificate
+            </button>
+            <button
+              onClick={() => setShowBatchUploadModal(true)}
               className="rounded-lg border border-border px-4 py-2 text-foreground hover:bg-muted/50"
             >
-              Export CSV
+              {'\uD83D\uDCC1'} Batch Upload
             </button>
-          )}
-          <button
-            onClick={() => setShowUploadModal(true)}
-            className="rounded-lg border border-primary px-4 py-2 text-primary hover:bg-primary/10"
-          >
-            {'\uD83D\uDCC4'} Upload Certificate
-          </button>
-          <button
-            onClick={() => setShowBatchUploadModal(true)}
-            className="rounded-lg border border-border px-4 py-2 text-foreground hover:bg-muted/50"
-          >
-            {'\uD83D\uDCC1'} Batch Upload
-          </button>
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
-          >
-            Add Test Result
-          </button>
-        </div>
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
+            >
+              Add Test Result
+            </button>
+          </div>
+        )}
       </div>
+
+      {/* PR-L: Mobile overflow sheet \u2014 secondary header actions */}
+      {isMobile && (
+        <BottomSheet
+          isOpen={moreSheetOpen}
+          onClose={() => setMoreSheetOpen(false)}
+          title="More actions"
+        >
+          <div className="space-y-1">
+            {testResults.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  handleExportCSV();
+                  setMoreSheetOpen(false);
+                }}
+                className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm hover:bg-muted/50 active:bg-muted/70 transition-colors rounded-lg min-h-[48px]"
+              >
+                <span className="flex-shrink-0 text-muted-foreground">
+                  <FileDown className="h-5 w-5" />
+                </span>
+                <span>Export CSV</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setShowUploadModal(true);
+                setMoreSheetOpen(false);
+              }}
+              className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm hover:bg-muted/50 active:bg-muted/70 transition-colors rounded-lg min-h-[48px]"
+            >
+              <span className="flex-shrink-0 text-muted-foreground">
+                <Upload className="h-5 w-5" />
+              </span>
+              <span>Upload Certificate</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setShowBatchUploadModal(true);
+                setMoreSheetOpen(false);
+              }}
+              className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm hover:bg-muted/50 active:bg-muted/70 transition-colors rounded-lg min-h-[48px]"
+            >
+              <span className="flex-shrink-0 text-muted-foreground">
+                <FolderOpen className="h-5 w-5" />
+              </span>
+              <span>Batch Upload</span>
+            </button>
+          </div>
+        </BottomSheet>
+      )}
       <p className="text-muted-foreground">
         Manage test results and certificates for this project.
       </p>
