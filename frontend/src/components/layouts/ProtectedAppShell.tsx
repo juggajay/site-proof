@@ -8,11 +8,11 @@ import {
 import { OnboardingTour } from '@/components/OnboardingTour';
 import { SessionTimeoutWarning } from '@/components/SessionTimeoutWarning';
 import { useAuth } from '@/lib/auth';
+import { ROLES } from '@/lib/roles';
 import { getCompanyRole, hasSubcontractorPortalIdentity } from '@/lib/subcontractorIdentity';
 import { MainLayout } from './MainLayout';
 
 const SUBCONTRACTOR_ROLES = ['subcontractor', 'subcontractor_admin'];
-const AUTO_SHOW_GENERAL_ONBOARDING = false;
 
 function CompanyOnboardingGate({ children }: { children: ReactNode }) {
   const { user } = useAuth();
@@ -37,18 +37,27 @@ function KeyboardShortcutsProvider({ children }: { children: ReactNode }) {
   const location = useLocation();
   const userRole = getCompanyRole(user);
   const isCompanySetupRoute = location.pathname === '/onboarding';
+  // Tour audience: company users outside the subcontractor portal. Gates both
+  // the first-run auto-show and the "Take the tour" replay from the header.
   const showGeneralOnboarding =
-    AUTO_SHOW_GENERAL_ONBOARDING &&
     Boolean(user?.companyId) &&
     !SUBCONTRACTOR_ROLES.includes(userRole) &&
     !hasSubcontractorPortalIdentity(user) &&
     !isCompanySetupRoute;
+  // First-run auto-show. OnboardingTour persists a per-user seen marker the
+  // moment it opens, which is the root-cause fix for the recurring launch
+  // modals that PR #203 originally stopped by hardcoding the tour off.
+  // Foremen are excluded from the auto-show: their day-to-day surface is the
+  // mobile-first foreman dashboard, while the tour walks desktop chrome
+  // (sidebar navigation, Cmd+K, keyboard shortcuts). They can still start it
+  // from the header user menu.
+  const autoShowGeneralOnboarding = showGeneralOnboarding && userRole !== ROLES.FOREMAN;
 
   return (
     <>
       {children}
       <KeyboardShortcutsHelp isOpen={isOpen} onClose={closeHelp} />
-      <OnboardingTour enabled={showGeneralOnboarding} />
+      <OnboardingTour enabled={showGeneralOnboarding} autoShow={autoShowGeneralOnboarding} />
       <SessionTimeoutWarning />
     </>
   );

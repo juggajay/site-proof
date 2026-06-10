@@ -1,17 +1,21 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { X, ChevronRight, ChevronLeft, CheckCircle2 } from 'lucide-react';
+import { useAuth } from '@/lib/auth';
+import { hasCommercialAccess } from '@/lib/roles';
 import {
   readLocalStorageItem,
   removeLocalStorageItem,
   writeLocalStorageItem,
 } from '@/lib/storagePreferences';
+import { getCompanyRole } from '@/lib/subcontractorIdentity';
 
 interface TourStep {
   title: string;
   content: string;
   target?: string; // CSS selector for element to highlight (optional)
   route?: string; // Route to navigate to for this step
+  commercial?: boolean; // Uses commercial vocabulary (claims/costs) — hidden from non-commercial roles
 }
 
 const TOUR_STEPS: TourStep[] = [
@@ -51,6 +55,7 @@ const TOUR_STEPS: TourStep[] = [
     title: 'Progress Claims & Costs',
     content:
       'Track progress claims for conformed work and manage project costs with budget tracking and variance analysis.',
+    commercial: true,
   },
   {
     title: 'Quick Search',
@@ -60,29 +65,69 @@ const TOUR_STEPS: TourStep[] = [
   {
     title: "You're all set!",
     content:
-      "That's the basics! Explore the sidebar navigation to access all features. Click the help icon (?) on any page for context-specific guidance.",
+      "That's the basics! Explore the sidebar navigation to access all features. You can replay this tour anytime — open the user menu in the top-right corner and choose Take the tour.",
   },
 ];
 
-const ONBOARDING_STORAGE_KEY = 'siteproof_onboarding_completed';
+// The pre-revival tour persisted one device-wide marker under this key. The
+// marker is now scoped per user so each account gets its own first-run, but
+// the legacy key is still honoured as "completed" so devices that already
+// finished (or suppressed) the original tour are never re-interrupted.
+const LEGACY_ONBOARDING_STORAGE_KEY = 'siteproof_onboarding_completed';
+
+export function onboardingStorageKey(userId: string | null | undefined): string {
+  return userId ? `${LEGACY_ONBOARDING_STORAGE_KEY}:${userId}` : LEGACY_ONBOARDING_STORAGE_KEY;
+}
+
+function hasCompletedOnboarding(userId: string | null | undefined): boolean {
+  return (
+    readLocalStorageItem(onboardingStorageKey(userId)) === 'true' ||
+    readLocalStorageItem(LEGACY_ONBOARDING_STORAGE_KEY) === 'true'
+  );
+}
+
+// Replay trigger: dispatched by the header user menu ("Take the tour") and
+// handled by the single OnboardingTour instance mounted in ProtectedAppShell.
+export const ONBOARDING_TOUR_EVENT = 'siteproof:start-onboarding-tour';
+
+export function startOnboardingTour(): void {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event(ONBOARDING_TOUR_EVENT));
+  }
+}
 
 interface OnboardingTourProps {
+  /** Audience gate: whether this user may see the tour at all (auto-show and replay). */
   enabled?: boolean;
+  /** First-run gate: auto-open once per user per device. Only honoured when `enabled`. */
+  autoShow?: boolean;
   forceShow?: boolean; // For testing - force show the tour
   onComplete?: () => void;
 }
 
 export function OnboardingTour({
   enabled = true,
+  autoShow = true,
   forceShow = false,
   onComplete,
 }: OnboardingTourProps) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = useAuth();
+  const userId = user?.id;
   const [isVisible, setIsVisible] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
 
-  // Check if user has completed onboarding
+  // Foremen (and other roles without commercial access) never see commercial
+  // vocabulary, so the claims/costs step is filtered out of their tour.
+  const steps = TOUR_STEPS.filter(
+    (step) => !step.commercial || hasCommercialAccess(getCompanyRole(user)),
+  );
+
+  // Auto-show at most once per user per device: the seen marker is persisted
+  // the moment the tour opens (not only on dismissal), so reloads, remounts,
+  // and auth refreshes can never re-trigger it. That recurrence is the bug
+  // that originally got the tour disabled outright (PR #203).
   useEffect(() => {
     if (!enabled && !forceShow) {
       setIsVisible(false);
@@ -94,22 +139,43 @@ export function OnboardingTour({
       return;
     }
 
-    const completed = readLocalStorageItem(ONBOARDING_STORAGE_KEY);
-    if (!completed) {
-      // Small delay to let the page render first
-      const timer = setTimeout(() => setIsVisible(true), 500);
-      return () => clearTimeout(timer);
+    if (!autoShow || hasCompletedOnboarding(userId)) {
+      return;
     }
-  }, [enabled, forceShow]);
+
+    // Small delay to let the page render first
+    const timer = setTimeout(() => {
+      writeLocalStorageItem(onboardingStorageKey(userId), 'true');
+      setIsVisible(true);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [enabled, autoShow, forceShow, userId]);
+
+  // Replay: reopen from the first step when the header entry point fires.
+  // Opening also re-persists the seen marker so an abandoned replay never
+  // turns back into an auto-show on the next load.
+  useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+
+    const handleReplay = () => {
+      writeLocalStorageItem(onboardingStorageKey(userId), 'true');
+      setCurrentStep(0);
+      setIsVisible(true);
+    };
+    window.addEventListener(ONBOARDING_TOUR_EVENT, handleReplay);
+    return () => window.removeEventListener(ONBOARDING_TOUR_EVENT, handleReplay);
+  }, [enabled, userId]);
 
   const handleNext = () => {
-    if (currentStep < TOUR_STEPS.length - 1) {
+    if (currentStep < steps.length - 1) {
       const nextStep = currentStep + 1;
       setCurrentStep(nextStep);
 
       // Navigate to the route if specified
-      if (TOUR_STEPS[nextStep].route && location.pathname !== TOUR_STEPS[nextStep].route) {
-        navigate(TOUR_STEPS[nextStep].route);
+      if (steps[nextStep].route && location.pathname !== steps[nextStep].route) {
+        navigate(steps[nextStep].route);
       }
     } else {
       completeTour();
@@ -122,8 +188,8 @@ export function OnboardingTour({
       setCurrentStep(prevStep);
 
       // Navigate to the route if specified
-      if (TOUR_STEPS[prevStep].route && location.pathname !== TOUR_STEPS[prevStep].route) {
-        navigate(TOUR_STEPS[prevStep].route);
+      if (steps[prevStep].route && location.pathname !== steps[prevStep].route) {
+        navigate(steps[prevStep].route);
       }
     }
   };
@@ -133,17 +199,18 @@ export function OnboardingTour({
   };
 
   const completeTour = () => {
-    writeLocalStorageItem(ONBOARDING_STORAGE_KEY, 'true');
+    writeLocalStorageItem(onboardingStorageKey(userId), 'true');
     setIsVisible(false);
     onComplete?.();
   };
 
   if (!isVisible) return null;
 
-  const step = TOUR_STEPS[currentStep];
+  const step = steps[currentStep];
+  if (!step) return null;
   const isFirstStep = currentStep === 0;
-  const isLastStep = currentStep === TOUR_STEPS.length - 1;
-  const progress = ((currentStep + 1) / TOUR_STEPS.length) * 100;
+  const isLastStep = currentStep === steps.length - 1;
+  const progress = ((currentStep + 1) / steps.length) * 100;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60">
@@ -159,7 +226,7 @@ export function OnboardingTour({
         {/* Header */}
         <div className="flex items-center justify-between px-6 pt-4">
           <span className="text-xs text-muted-foreground">
-            Step {currentStep + 1} of {TOUR_STEPS.length}
+            Step {currentStep + 1} of {steps.length}
           </span>
           <button
             onClick={handleSkip}
@@ -217,7 +284,7 @@ export function OnboardingTour({
 
         {/* Step indicators */}
         <div className="flex justify-center gap-1 pb-4">
-          {TOUR_STEPS.map((_, index) => (
+          {steps.map((_, index) => (
             <div
               key={index}
               className={`h-1.5 w-1.5 rounded-full transition-colors ${
@@ -235,19 +302,25 @@ export function OnboardingTour({
   );
 }
 
-// Hook to check onboarding status and reset for testing
+// Hook for the replay entry point (header user menu): exposes whether the
+// signed-in user has completed the tour, plus reset/mark helpers.
 export function useOnboarding() {
-  const [completed, setCompleted] = useState(() => {
-    return readLocalStorageItem(ONBOARDING_STORAGE_KEY) === 'true';
-  });
+  const { user } = useAuth();
+  const userId = user?.id;
+  const [completed, setCompleted] = useState(() => hasCompletedOnboarding(userId));
+
+  useEffect(() => {
+    setCompleted(hasCompletedOnboarding(userId));
+  }, [userId]);
 
   const resetOnboarding = () => {
-    removeLocalStorageItem(ONBOARDING_STORAGE_KEY);
+    removeLocalStorageItem(onboardingStorageKey(userId));
+    removeLocalStorageItem(LEGACY_ONBOARDING_STORAGE_KEY);
     setCompleted(false);
   };
 
   const markCompleted = () => {
-    writeLocalStorageItem(ONBOARDING_STORAGE_KEY, 'true');
+    writeLocalStorageItem(onboardingStorageKey(userId), 'true');
     setCompleted(true);
   };
 

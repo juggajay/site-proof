@@ -57,6 +57,8 @@ export default tseslint.config(
             'withErrorBoundary',
             'useKeyboardShortcutsHelp',
             'useOnboarding',
+            'onboardingStorageKey',
+            'startOnboardingTour',
             'isAdminRole',
             'canViewCommercialData',
             'useFilterSheet',
