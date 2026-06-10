@@ -149,10 +149,21 @@ export const HoldPointsTable = React.memo(function HoldPointsTable({
     );
   }
 
+  const virtualItems = virtualizer.getVirtualItems();
+
   return (
-    <div className="rounded-lg border overflow-hidden">
+    // Single <table> inside the scroll container with top/bottom spacer rows
+    // (the lots/NCR register virtualization idiom) so header and body columns
+    // share one column model and screen readers see one coherent table — the
+    // previous header-table + per-row tables broke both alignment and semantics.
+    <div
+      ref={parentRef}
+      className="rounded-lg border overflow-auto"
+      style={{ maxHeight: 'calc(100vh - 300px)' }}
+      data-testid="holdpoints-scroll-container"
+    >
       <table className="w-full">
-        <thead className="bg-muted/50">
+        <thead className="bg-muted/50 sticky top-0 z-10">
           <tr>
             <SortableHeader
               field="lot"
@@ -198,45 +209,52 @@ export const HoldPointsTable = React.memo(function HoldPointsTable({
             <th className="px-4 py-3 text-left text-sm font-medium">Actions</th>
           </tr>
         </thead>
-      </table>
-      <div ref={parentRef} style={{ maxHeight: 'calc(100vh - 300px)', overflow: 'auto' }}>
-        <div style={{ height: `${virtualizer.getTotalSize()}px`, position: 'relative' }}>
-          {virtualizer.getVirtualItems().map((virtualRow) => {
+        <tbody>
+          {/* Top spacer: pushes the first rendered row to its virtual position. */}
+          {virtualItems.length > 0 && (
+            <tr>
+              <td
+                colSpan={7}
+                style={{ height: `${virtualItems[0]?.start ?? 0}px`, padding: 0, border: 'none' }}
+              />
+            </tr>
+          )}
+          {virtualItems.map((virtualRow) => {
             const hp = filteredHoldPoints[virtualRow.index];
+            if (!hp) return null;
             return (
-              <div
+              <HoldPointRow
                 key={virtualRow.key}
-                ref={virtualizer.measureElement}
-                data-index={virtualRow.index}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  transform: `translateY(${virtualRow.start}px)`,
-                }}
-              >
-                <table className="w-full">
-                  <tbody>
-                    <HoldPointRow
-                      hp={hp}
-                      isDeepLinked={hp.id === highlightedHpId}
-                      copiedHpId={copiedHpId}
-                      generatingPdf={generatingPdf}
-                      chasingHpId={chasingHpId}
-                      onCopyLink={onCopyLink}
-                      onRequestRelease={onRequestRelease}
-                      onRecordRelease={onRecordRelease}
-                      onChase={onChase}
-                      onGenerateEvidence={onGenerateEvidence}
-                    />
-                  </tbody>
-                </table>
-              </div>
+                innerRef={virtualizer.measureElement}
+                dataIndex={virtualRow.index}
+                hp={hp}
+                isDeepLinked={hp.id === highlightedHpId}
+                copiedHpId={copiedHpId}
+                generatingPdf={generatingPdf}
+                chasingHpId={chasingHpId}
+                onCopyLink={onCopyLink}
+                onRequestRelease={onRequestRelease}
+                onRecordRelease={onRecordRelease}
+                onChase={onChase}
+                onGenerateEvidence={onGenerateEvidence}
+              />
             );
           })}
-        </div>
-      </div>
+          {/* Bottom spacer: keeps total scroll height correct below the window. */}
+          {virtualItems.length > 0 && (
+            <tr>
+              <td
+                colSpan={7}
+                style={{
+                  height: `${virtualizer.getTotalSize() - (virtualItems[virtualItems.length - 1]?.end ?? 0)}px`,
+                  padding: 0,
+                  border: 'none',
+                }}
+              />
+            </tr>
+          )}
+        </tbody>
+      </table>
     </div>
   );
 });
@@ -245,6 +263,9 @@ interface HoldPointRowProps {
   hp: HoldPoint;
   /** True while this row is the deep-linked record's highlight pulse target. */
   isDeepLinked: boolean;
+  /** Virtualizer measure ref + index, applied to the <tr> for dynamic sizing. */
+  innerRef?: (el: HTMLTableRowElement | null) => void;
+  dataIndex?: number;
   copiedHpId: string | null;
   generatingPdf: string | null;
   chasingHpId: string | null;
@@ -258,6 +279,8 @@ interface HoldPointRowProps {
 function HoldPointRow({
   hp,
   isDeepLinked,
+  innerRef,
+  dataIndex,
   copiedHpId,
   generatingPdf,
   chasingHpId,
@@ -272,7 +295,9 @@ function HoldPointRow({
 
   return (
     <tr
-      className={`hover:bg-muted/25 ${overdue ? 'bg-destructive/10 border-l-4 border-l-destructive' : ''} ${isDeepLinked ? 'bg-primary/10' : ''}`}
+      ref={innerRef}
+      data-index={dataIndex}
+      className={`border-b hover:bg-muted/25 ${overdue ? 'bg-destructive/10 border-l-4 border-l-destructive' : ''} ${isDeepLinked ? 'bg-primary/10' : ''}`}
       data-deep-linked={isDeepLinked ? 'true' : undefined}
     >
       <td className="px-4 py-3 font-medium">
