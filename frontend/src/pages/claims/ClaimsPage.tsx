@@ -1,6 +1,8 @@
 import { useParams } from 'react-router-dom';
-import { useRef, useState, useEffect, useMemo, useCallback } from 'react';
+import { useRef, useState, useMemo, useCallback } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api';
+import { queryKeys } from '@/lib/queryKeys';
 import { downloadCsv } from '@/lib/csv';
 import { formatDateKey } from '@/lib/localDate';
 import { toast } from '@/components/ui/toaster';
@@ -41,10 +43,7 @@ import {
 
 export function ClaimsPage() {
   const { projectId } = useParams();
-  const [claims, setClaims] = useState<Claim[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [accessDenied, setAccessDenied] = useState(false);
+  const queryClient = useQueryClient();
 
   // Modal visibility state
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -66,35 +65,51 @@ export function ClaimsPage() {
   const completenessRef = useRef<string | null>(null);
   const evidenceRef = useRef<string | null>(null);
 
-  const fetchClaims = useCallback(async () => {
-    if (!projectId) {
-      setLoading(false);
-      setLoadError('Project not found');
-      setAccessDenied(false);
-      return;
-    }
-
-    setLoading(true);
-    setLoadError(null);
-    setAccessDenied(false);
-    try {
+  const {
+    data: claims = [],
+    isLoading,
+    error: claimsError,
+    refetch,
+  } = useQuery({
+    queryKey: queryKeys.claims(projectId ?? ''),
+    queryFn: async () => {
       const data = await apiFetch<{ claims?: Claim[] }>(
-        `/api/projects/${encodeURIComponent(projectId)}/claims`,
+        `/api/projects/${encodeURIComponent(projectId ?? '')}/claims`,
       );
-      setClaims(data.claims || []);
-    } catch (error) {
-      logError('Error fetching claims:', error);
-      setClaims([]);
-      setAccessDenied(isForbidden(error));
-      setLoadError(extractErrorMessage(error, 'Could not load progress claims. Please try again.'));
-    } finally {
-      setLoading(false);
-    }
-  }, [projectId]);
+      return data.claims ?? [];
+    },
+    enabled: !!projectId,
+    // Claims is the owner's cash view: cached revisits render instantly from
+    // the query cache, and a focus after the data has gone stale refreshes the
+    // numbers in the background instead of blanking the page with a spinner.
+    staleTime: 30_000,
+    refetchOnWindowFocus: true,
+  });
 
-  useEffect(() => {
-    fetchClaims();
-  }, [fetchClaims]);
+  const loading = Boolean(projectId) && isLoading;
+  const loadError = !projectId
+    ? 'Project not found'
+    : claimsError
+      ? extractErrorMessage(claimsError, 'Could not load progress claims. Please try again.')
+      : null;
+  const accessDenied = isForbidden(claimsError);
+
+  // Every claim mutation ends with an invalidation so the register always
+  // reconciles with server truth, even after the optimistic cache write.
+  const invalidateClaims = useCallback(() => {
+    if (!projectId) return;
+    void queryClient.invalidateQueries({ queryKey: queryKeys.claims(projectId) });
+  }, [projectId, queryClient]);
+
+  const updateClaimInCache = useCallback(
+    (claimId: string, updater: (claim: Claim) => Claim) => {
+      if (!projectId) return;
+      queryClient.setQueryData<Claim[]>(queryKeys.claims(projectId), (prev) =>
+        prev ? prev.map((claim) => (claim.id === claimId ? updater(claim) : claim)) : prev,
+      );
+    },
+    [projectId, queryClient],
+  );
 
   const totals = useMemo(() => buildClaimSummaryTotals(claims), [claims]);
 
@@ -166,8 +181,8 @@ export function ClaimsPage() {
   }, [monthlyBreakdownData]);
 
   const handleClaimCreated = useCallback(() => {
-    fetchClaims();
-  }, [fetchClaims]);
+    invalidateClaims();
+  }, [invalidateClaims]);
 
   const handleSubmitClaim = useCallback(
     async (claimId: string, _method: SubmitMethod) => {
@@ -184,11 +199,8 @@ export function ClaimsPage() {
           },
         );
         const submittedAt = new Date().toISOString();
-        setClaims((prev) =>
-          prev.map((c) =>
-            c.id === claimId ? { ...c, status: 'submitted' as const, submittedAt } : c,
-          ),
-        );
+        updateClaimInCache(claimId, (c) => ({ ...c, status: 'submitted' as const, submittedAt }));
+        invalidateClaims();
 
         downloadCsv(`claim-${claim.claimNumber}.csv`, [
           ['Claim Number', claim.claimNumber],
@@ -217,7 +229,7 @@ export function ClaimsPage() {
         submittingClaimsRef.current.delete(claimId);
       }
     },
-    [claims, projectId],
+    [claims, projectId, updateClaimInCache, invalidateClaims],
   );
 
   const handleDisputeClaim = useCallback(
@@ -240,18 +252,13 @@ export function ClaimsPage() {
           `/api/projects/${encodeURIComponent(projectId)}/claims/${encodeURIComponent(claimId)}`,
           { method: 'PUT', body: JSON.stringify({ status: 'disputed', disputeNotes }) },
         );
-        setClaims((prev) =>
-          prev.map((c) =>
-            c.id === claimId
-              ? {
-                  ...c,
-                  status: 'disputed' as const,
-                  disputeNotes,
-                  disputedAt: formatDateKey(),
-                }
-              : c,
-          ),
-        );
+        updateClaimInCache(claimId, (c) => ({
+          ...c,
+          status: 'disputed' as const,
+          disputeNotes,
+          disputedAt: formatDateKey(),
+        }));
+        invalidateClaims();
         toast({
           title: 'Claim disputed',
           description: 'The claim has been marked as disputed.',
@@ -272,7 +279,7 @@ export function ClaimsPage() {
         disputingClaimsRef.current.delete(claimId);
       }
     },
-    [projectId],
+    [projectId, updateClaimInCache, invalidateClaims],
   );
 
   const handleCertifyClaim = useCallback(
@@ -289,17 +296,12 @@ export function ClaimsPage() {
           },
         );
 
-        setClaims((prev) =>
-          prev.map((c) =>
-            c.id === claimId
-              ? {
-                  ...c,
-                  ...data.claim,
-                  status: 'certified',
-                }
-              : c,
-          ),
-        );
+        updateClaimInCache(claimId, (c) => ({
+          ...c,
+          ...data.claim,
+          status: 'certified',
+        }));
+        invalidateClaims();
         toast({
           title: 'Claim certified',
           description: data.message || 'The claim has been certified.',
@@ -317,7 +319,7 @@ export function ClaimsPage() {
         certifyingClaimsRef.current.delete(claimId);
       }
     },
-    [projectId],
+    [projectId, updateClaimInCache, invalidateClaims],
   );
 
   const handleRecordPayment = useCallback(
@@ -334,7 +336,8 @@ export function ClaimsPage() {
           },
         );
 
-        setClaims((prev) => prev.map((c) => (c.id === claimId ? { ...c, ...data.claim } : c)));
+        updateClaimInCache(claimId, (c) => ({ ...c, ...data.claim }));
+        invalidateClaims();
         toast({
           title: 'Payment recorded',
           description: data.message || 'The payment has been recorded against this claim.',
@@ -352,7 +355,7 @@ export function ClaimsPage() {
         recordingPaymentsRef.current.delete(claimId);
       }
     },
-    [projectId],
+    [projectId, updateClaimInCache, invalidateClaims],
   );
 
   const handleCompletenessCheck = useCallback(
@@ -454,7 +457,7 @@ export function ClaimsPage() {
         onCreateClaim={() => setShowCreateModal(true)}
       />
 
-      <ClaimsLoadErrorAlert loadError={loadError} onRetry={() => void fetchClaims()} />
+      <ClaimsLoadErrorAlert loadError={loadError} onRetry={() => void refetch()} />
 
       <ClaimsMainContent
         loadError={loadError}
