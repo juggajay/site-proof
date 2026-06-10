@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
+import { usePublishBottomNavHeight } from '@/hooks/useBottomNavHeight';
 import { ForemanBottomNavV2 } from '@/components/foreman/ForemanBottomNavV2';
 import { useForemanMobileStore } from '@/stores/foremanMobileStore';
 import { getCompanyRole, hasSubcontractorPortalIdentity } from '@/lib/subcontractorIdentity';
@@ -132,6 +133,10 @@ export function MobileNav() {
   const [isOpen, setIsOpen] = useState(false);
   const { projectId } = useParams();
   const { user } = useAuth();
+  // Publishes the bottom bar's height so the offline sync pill can float
+  // above it (see useBottomNavHeight). Unused on the foreman branch, where
+  // ForemanBottomNavV2 publishes its own height.
+  const navRef = usePublishBottomNavHeight<HTMLElement>();
 
   const userRole = getCompanyRole(user);
   const hasPortalIdentity = hasSubcontractorPortalIdentity(user);
@@ -294,7 +299,10 @@ export function MobileNav() {
       )}
 
       {/* Bottom Navigation Bar */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t z-30 safe-area-inset-bottom">
+      <nav
+        ref={navRef}
+        className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t z-30 safe-area-inset-bottom"
+      >
         <div className="flex justify-around items-center h-16">
           {/* Use subcontractor nav items if subcontractor */}
           {(isSubcontractor ? subcontractorBottomNavItems : bottomNavItems).map((item) => {

@@ -72,6 +72,20 @@ describe('OfflineIndicator failed state', () => {
   });
 });
 
+describe('OfflineIndicator positioning', () => {
+  it('anchors above the mobile bottom nav instead of a fixed bottom offset', () => {
+    // A plain bottom-4 pill sits on top of the bottom nav's rightmost tab
+    // (Lots) and intercepts its taps. The pill must use the clearance utility
+    // driven by the nav-published --bottom-nav-height variable instead.
+    hookState.failedSyncCount = 1;
+    const { container } = render(<OfflineIndicator />);
+
+    const pill = container.firstElementChild;
+    expect(pill).toHaveClass('fixed', 'right-4', 'above-bottom-nav');
+    expect(pill).not.toHaveClass('bottom-4');
+  });
+});
+
 describe('OfflineIndicator sync-complete toast', () => {
   it('suppresses the success toast when failures remain', () => {
     render(<OfflineIndicator />);

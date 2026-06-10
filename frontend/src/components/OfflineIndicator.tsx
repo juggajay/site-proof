@@ -58,7 +58,10 @@ export function OfflineIndicator() {
 
   return (
     <>
-      <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 items-end">
+      {/* above-bottom-nav keeps the pill clear of the mobile bottom nav
+          (height published by usePublishBottomNavHeight) and of the device
+          safe-area inset, so it never covers a nav tab. */}
+      <div className="fixed right-4 z-50 above-bottom-nav flex flex-col gap-2 items-end">
         {/* Conflict indicator */}
         {conflictCount > 0 && (
           <button

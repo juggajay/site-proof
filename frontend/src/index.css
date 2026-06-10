@@ -234,6 +234,15 @@
     @apply min-h-[44px] min-w-[44px] touch-manipulation;
   }
 
+  /* Anchor floating UI (offline sync pill) above the mobile bottom nav.
+     --bottom-nav-height is published by usePublishBottomNavHeight from the
+     mounted bottom nav (0 when unmounted or md:hidden); the measured height
+     already includes the nav's pb-safe padding, so the max() falls back to
+     the bare safe-area inset on nav-less screens. */
+  .above-bottom-nav {
+    bottom: calc(1rem + max(var(--bottom-nav-height, 0px), env(safe-area-inset-bottom, 0px)));
+  }
+
   /* Skeleton pulse animation */
   .skeleton-pulse {
     @apply animate-pulse bg-muted rounded;
