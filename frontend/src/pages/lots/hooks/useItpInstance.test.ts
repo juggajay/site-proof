@@ -13,16 +13,19 @@ vi.mock('@/lib/offlineDb', () => ({
   cacheITPChecklist: vi.fn(),
   getCachedITPChecklist: vi.fn(),
   getPendingSyncCount: vi.fn(),
+  recordSyncedChecklistItem: vi.fn(),
   updateChecklistItemOffline: vi.fn(),
 }));
 vi.mock('@/components/ui/toaster', () => ({ toast: vi.fn() }));
 vi.mock('@/lib/logger', () => ({ devLog: vi.fn(), devWarn: vi.fn(), logError: vi.fn() }));
 
 import { apiFetch, ApiError } from '@/lib/api';
+import { RequestTimeoutError } from '@/lib/fetchWithTimeout';
 import {
   cacheITPChecklist,
   getCachedITPChecklist,
   getPendingSyncCount,
+  recordSyncedChecklistItem,
   updateChecklistItemOffline,
 } from '@/lib/offlineDb';
 import { toast } from '@/components/ui/toaster';
@@ -396,7 +399,7 @@ describe('useItpInstance — assignTemplate', () => {
 });
 
 describe('useItpInstance — completion mutations', () => {
-  it('toggleCompletion posts, merges optimistically, and writes through to the offline cache', async () => {
+  it('toggleCompletion posts, merges optimistically, and writes through to the offline cache without queueing a sync entry', async () => {
     let body: Record<string, unknown> | undefined;
     const merged = completionResponse({ id: 'completion-1', checklistItemId: 'item-1' });
     const { result } = await mountMutationHook({
@@ -418,13 +421,15 @@ describe('useItpInstance — completion mutations', () => {
       notes: null,
     });
     expect(result.current.itpInstance?.completions[0]).toEqual(merged);
-    expect(updateChecklistItemOffline).toHaveBeenCalledWith(
+    expect(recordSyncedChecklistItem).toHaveBeenCalledWith(
       'lot-1',
       'item-1',
       'completed',
       undefined,
       'Current User',
     );
+    // A server-confirmed write must add exactly zero sync-queue entries.
+    expect(updateChecklistItemOffline).not.toHaveBeenCalled();
     expect(result.current.updatingCompletion).toBeNull();
   });
 
@@ -461,6 +466,82 @@ describe('useItpInstance — completion mutations', () => {
     } finally {
       Object.defineProperty(navigator, 'onLine', { value: originalOnLine, configurable: true });
     }
+  });
+
+  it('toggleCompletion queues offline + updates local state when the POST times out while the browser reports online', async () => {
+    // Mount reads 0 pending; the offline write re-reads and sees 1.
+    vi.mocked(getPendingSyncCount).mockResolvedValueOnce(0).mockResolvedValue(1);
+    const { result } = await mountMutationHook({
+      postCompletion: () => {
+        throw new RequestTimeoutError(30000);
+      },
+    });
+
+    await act(async () => {
+      await result.current.toggleCompletion('item-1', false, null);
+    });
+
+    expect(updateChecklistItemOffline).toHaveBeenCalledWith(
+      'lot-1',
+      'item-1',
+      'completed',
+      undefined,
+      'Current User (Offline)',
+    );
+    const offline = result.current.itpInstance?.completions.find(
+      (c) => c.checklistItemId === 'item-1',
+    );
+    expect(offline?.isCompleted).toBe(true);
+    expect(result.current.offlinePendingCount).toBe(1);
+    expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Saved Offline' }));
+    expect(toast).not.toHaveBeenCalledWith(expect.objectContaining({ title: 'Error' }));
+  });
+
+  it('toggleCompletion queues offline when the server answers 5xx', async () => {
+    const { result } = await mountMutationHook({
+      postCompletion: () => {
+        throw new ApiError(503, 'upstream unavailable');
+      },
+    });
+
+    await act(async () => {
+      await result.current.toggleCompletion('item-1', false, null);
+    });
+
+    expect(updateChecklistItemOffline).toHaveBeenCalledWith(
+      'lot-1',
+      'item-1',
+      'completed',
+      undefined,
+      'Current User (Offline)',
+    );
+    expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Saved Offline' }));
+  });
+
+  it('toggleCompletion surfaces a 4xx as a real error and queues nothing', async () => {
+    const { result } = await mountMutationHook({
+      postCompletion: () => {
+        throw new ApiError(400, 'completion rejected');
+      },
+    });
+
+    await act(async () => {
+      await result.current.toggleCompletion('item-1', false, null);
+    });
+
+    expect(updateChecklistItemOffline).not.toHaveBeenCalled();
+    expect(toast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Error',
+        description: 'Failed to update checklist item. Please try again.',
+      }),
+    );
+    expect(toast).not.toHaveBeenCalledWith(expect.objectContaining({ title: 'Saved Offline' }));
+    // The 4xx must not flip the item on locally either.
+    const completion = result.current.itpInstance?.completions.find(
+      (c) => c.checklistItemId === 'item-1',
+    );
+    expect(completion?.isCompleted).toBe(false);
   });
 
   it('toggleCompletion on a witness point requests the witness modal and does not POST', async () => {

@@ -56,6 +56,7 @@ export {
   cacheITPChecklist,
   getCachedITPChecklist,
   markCompletionSynced,
+  recordSyncedChecklistItem,
   updateChecklistItemOffline,
 } from './offline/itp';
 

@@ -16,6 +16,8 @@ vi.mock('./core', () => ({
     },
     syncQueue: {
       add: vi.fn(),
+      update: vi.fn(),
+      where: vi.fn(),
     },
   },
 }));
@@ -25,9 +27,11 @@ import {
   getCachedITPChecklist,
   markCompletionSynced,
   offlineDb,
+  recordSyncedChecklistItem,
   updateChecklistItemOffline,
   type OfflineChecklistItem,
   type OfflineITPChecklist,
+  type SyncQueueItem,
 } from '@/lib/offlineDb';
 
 const checklistItems: OfflineChecklistItem[] = [
@@ -58,8 +62,23 @@ function mockChecklistLookup(checklist?: OfflineITPChecklist) {
   return { equals, first };
 }
 
+// Simulates the syncQueue where('type').equals(type).filter(fn).first() chain
+// against an in-memory queue, so the dedupe predicate is genuinely exercised.
+function mockSyncQueueLookup(queued: SyncQueueItem[]) {
+  const equals = vi.fn((type: string) => ({
+    filter: (predicate: (item: SyncQueueItem) => boolean) => ({
+      first: async () => queued.filter((item) => item.type === type).find(predicate),
+    }),
+  }));
+  vi.mocked(offlineDb.syncQueue.where).mockReturnValue({
+    equals,
+  } as unknown as ReturnType<typeof offlineDb.syncQueue.where>);
+  return { equals };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
+  mockSyncQueueLookup([]);
 });
 
 describe('cacheITPChecklist', () => {
@@ -163,6 +182,111 @@ describe('updateChecklistItemOffline', () => {
       }),
     );
     expect(offlineDb.itpChecklists.update).not.toHaveBeenCalled();
+  });
+
+  it('replaces a still-queued entry for the same item instead of appending (last-write-wins)', async () => {
+    mockChecklistLookup(undefined);
+    mockSyncQueueLookup([
+      {
+        id: 7,
+        type: 'itp_completion',
+        action: 'update',
+        data: {
+          id: 'lot-1-item-1',
+          lotId: 'lot-1',
+          checklistItemId: 'item-1',
+          status: 'completed',
+          syncStatus: 'pending',
+          localUpdatedAt: '2026-06-09T00:00:00.000Z',
+        },
+        createdAt: '2026-06-09T00:00:00.000Z',
+        attempts: 3,
+        lastError: 'Request timed out after 30000ms',
+      },
+    ]);
+
+    await updateChecklistItemOffline('lot-1', 'item-1', 'pending', 'unticked again');
+
+    expect(offlineDb.syncQueue.add).not.toHaveBeenCalled();
+    expect(offlineDb.syncQueue.update).toHaveBeenCalledWith(7, {
+      data: expect.objectContaining({
+        id: 'lot-1-item-1',
+        status: 'pending',
+        notes: 'unticked again',
+      }),
+      createdAt: expect.any(String),
+      attempts: 0,
+      lastError: undefined,
+    });
+  });
+
+  it('still appends when the only queued entries are for other items', async () => {
+    mockChecklistLookup(undefined);
+    mockSyncQueueLookup([
+      {
+        id: 8,
+        type: 'itp_completion',
+        action: 'update',
+        data: {
+          id: 'lot-1-item-2',
+          lotId: 'lot-1',
+          checklistItemId: 'item-2',
+          status: 'completed',
+          syncStatus: 'pending',
+          localUpdatedAt: '2026-06-09T00:00:00.000Z',
+        },
+        createdAt: '2026-06-09T00:00:00.000Z',
+        attempts: 0,
+      },
+    ]);
+
+    await updateChecklistItemOffline('lot-1', 'item-1', 'completed');
+
+    expect(offlineDb.syncQueue.update).not.toHaveBeenCalled();
+    expect(offlineDb.syncQueue.add).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'itp_completion',
+        data: expect.objectContaining({ id: 'lot-1-item-1' }),
+      }),
+    );
+  });
+});
+
+describe('recordSyncedChecklistItem', () => {
+  it('stores a synced completion and patches the cache without touching the sync queue', async () => {
+    mockChecklistLookup({
+      id: 'lot-1-template-1',
+      lotId: 'lot-1',
+      templateId: 'template-1',
+      templateName: 'Earthworks ITP',
+      items: checklistItems,
+      cachedAt: '2026-06-06T00:00:00.000Z',
+    });
+
+    await recordSyncedChecklistItem('lot-1', 'item-1', 'completed', 'Passed', 'Current User');
+
+    expect(offlineDb.itpCompletions.put).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'lot-1-item-1',
+        status: 'completed',
+        syncStatus: 'synced',
+      }),
+    );
+    expect(offlineDb.syncQueue.add).not.toHaveBeenCalled();
+    expect(offlineDb.syncQueue.update).not.toHaveBeenCalled();
+    expect(offlineDb.syncQueue.where).not.toHaveBeenCalled();
+    expect(offlineDb.itpChecklists.update).toHaveBeenCalledWith('lot-1-template-1', {
+      items: [
+        expect.objectContaining({
+          id: 'item-1',
+          status: 'completed',
+          notes: 'Passed',
+          completedBy: 'Current User',
+        }),
+        checklistItems[1],
+      ],
+      cachedAt: expect.any(String),
+    });
   });
 });
 
