@@ -12,6 +12,11 @@ vi.mock('@/lib/auth', () => ({ useAuth: vi.fn() }));
 
 import { OnboardingTour, onboardingStorageKey, startOnboardingTour } from './OnboardingTour';
 import { useAuth } from '@/lib/auth';
+import {
+  readLocalStorageItem,
+  removeLocalStorageItem,
+  writeLocalStorageItem,
+} from '@/lib/storagePreferences';
 
 const useAuthMock = vi.mocked(useAuth);
 
@@ -30,6 +35,19 @@ const FOREMAN_USER = {
 };
 
 const TOUR_HEADING = 'Welcome to SiteProof!';
+
+// Matches LEGACY_ONBOARDING_STORAGE_KEY in OnboardingTour.tsx — the device-wide
+// marker written by the pre-revival tour, which the revived tour must honour.
+const LEGACY_SEEN_KEY = 'siteproof_onboarding_completed';
+
+// Reset only the markers these tests touch, via the safe storage helpers, so we
+// keep direct localStorage access out of source files (readiness guardrail).
+function clearOnboardingMarkers() {
+  removeLocalStorageItem(onboardingStorageKey(PM_USER.id));
+  removeLocalStorageItem(onboardingStorageKey(FOREMAN_USER.id));
+  removeLocalStorageItem(onboardingStorageKey('someone-else'));
+  removeLocalStorageItem(LEGACY_SEEN_KEY);
+}
 
 function mockUser(user: Record<string, unknown>) {
   useAuthMock.mockReturnValue({ user } as unknown as ReturnType<typeof useAuth>);
@@ -51,7 +69,7 @@ function advancePastAutoShowDelay() {
 
 beforeEach(() => {
   vi.useFakeTimers();
-  localStorage.clear();
+  clearOnboardingMarkers();
   mockUser(PM_USER);
 });
 
@@ -59,6 +77,7 @@ afterEach(() => {
   vi.runOnlyPendingTimers();
   vi.useRealTimers();
   vi.clearAllMocks();
+  clearOnboardingMarkers();
 });
 
 describe('OnboardingTour first-run auto-show', () => {
@@ -72,7 +91,7 @@ describe('OnboardingTour first-run auto-show', () => {
 
     expect(screen.getByText(TOUR_HEADING)).toBeInTheDocument();
     // Marker is written at open time, so nothing can re-trigger the auto-show.
-    expect(localStorage.getItem(onboardingStorageKey(PM_USER.id))).toBe('true');
+    expect(readLocalStorageItem(onboardingStorageKey(PM_USER.id))).toBe('true');
   });
 
   it('stays dismissed across a remount (no recurring launch modal)', () => {
@@ -90,7 +109,7 @@ describe('OnboardingTour first-run auto-show', () => {
   });
 
   it('honours the legacy device-wide marker from the pre-revival tour', () => {
-    localStorage.setItem('siteproof_onboarding_completed', 'true');
+    writeLocalStorageItem(LEGACY_SEEN_KEY, 'true');
 
     renderTour();
     advancePastAutoShowDelay();
@@ -99,7 +118,7 @@ describe('OnboardingTour first-run auto-show', () => {
   });
 
   it('keys the marker per user: a different account on the same device still gets its tour', () => {
-    localStorage.setItem(onboardingStorageKey('someone-else'), 'true');
+    writeLocalStorageItem(onboardingStorageKey('someone-else'), 'true');
 
     renderTour();
     advancePastAutoShowDelay();
@@ -110,7 +129,7 @@ describe('OnboardingTour first-run auto-show', () => {
 
 describe('OnboardingTour replay entry point', () => {
   it('reopens from the first step for a user who already completed the tour', () => {
-    localStorage.setItem(onboardingStorageKey(PM_USER.id), 'true');
+    writeLocalStorageItem(onboardingStorageKey(PM_USER.id), 'true');
 
     renderTour();
     advancePastAutoShowDelay();
