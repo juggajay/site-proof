@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { getAuthToken, useAuth } from '@/lib/auth';
 import { apiFetch } from '@/lib/api';
-import { canManageItpTemplates } from '@/lib/roles';
+import { canManageItpTemplates, hasRoleInGroup, ROLE_GROUPS } from '@/lib/roles';
 import { logError } from '@/lib/logger';
 import { toast } from '@/components/ui/toaster';
 import { extractErrorMessage } from '@/lib/errorHandling';
@@ -42,6 +42,15 @@ export function ITPPage() {
   const templatesQuery = useItpTemplatesQuery(projectId, includeGlobalTemplates);
   const templates = templatesQuery.data?.templates ?? [];
   const projectSpecificationSet = templatesQuery.data?.projectSpecificationSet ?? null;
+  // Library (state spec) templates ride along in the same list when the
+  // include-library filter is on; the project's own templates are the ones the
+  // project actually owns. The split drives the empty/lead states below.
+  const projectTemplates = templates.filter((t) => !t.isGlobalTemplate);
+  const hasLibraryTemplates = templates.some((t) => t.isGlobalTemplate);
+  // Project settings (where the specification set is chosen) is admin-gated in
+  // App.tsx. Site/quality managers can manage templates but would be bounced by
+  // that route, so library guidance must not link them to settings.
+  const canOpenProjectSettings = hasRoleInGroup(actualRole, ROLE_GROUPS.ADMIN);
   // Spinner only while a fetch is genuinely in flight with nothing to show yet —
   // covers first load and the "Try again" refetch, and stays false when the
   // query is disabled (no projectId/token), matching the previous behavior.
@@ -334,20 +343,95 @@ export function ITPPage() {
         </div>
       ) : templates.length === 0 ? (
         canManage ? (
-          <div className="rounded-lg border p-8 text-center">
-            <div className="text-4xl mb-4">📋</div>
-            <h3 className="text-lg font-semibold mb-2">No ITP Templates</h3>
-            <p className="text-muted-foreground mb-4">
-              Create ITP templates to define quality checkpoints for different activity types.
-            </p>
-            <button
-              type="button"
-              onClick={() => setShowCreateModal(true)}
-              className="rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
-            >
-              Create Your First Template
-            </button>
-          </div>
+          // The state-spec template library is the fastest start, so the empty
+          // state leads with it and demotes build-from-scratch to secondary.
+          // Library templates are keyed off the project's specification set, so
+          // each branch is honest about why the library list is empty here.
+          !projectSpecificationSet ? (
+            <div className="rounded-lg border p-8 text-center">
+              <div className="text-4xl mb-4">📚</div>
+              <h3 className="text-lg font-semibold mb-2">Start from the state spec ITP library</h3>
+              <p className="text-muted-foreground mb-4 max-w-xl mx-auto">
+                SiteProof includes ready-made ITP templates for each state road specification.
+                {canOpenProjectSettings
+                  ? " Choose this project's specification standard to unlock the matching library templates, or build a template from scratch."
+                  : " Ask a project admin to choose this project's specification standard in project settings to unlock the matching library templates, or build a template from scratch."}
+              </p>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                {canOpenProjectSettings && projectId && (
+                  <Link
+                    to={`/projects/${projectId}/settings`}
+                    className="rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
+                  >
+                    Choose a specification standard
+                  </Link>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(true)}
+                  className={
+                    canOpenProjectSettings
+                      ? 'rounded-lg border px-4 py-2 hover:bg-muted'
+                      : 'rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90'
+                  }
+                >
+                  Build a template from scratch
+                </button>
+              </div>
+            </div>
+          ) : !includeGlobalTemplates ? (
+            <div className="rounded-lg border p-8 text-center">
+              <div className="text-4xl mb-4">📚</div>
+              <h3 className="text-lg font-semibold mb-2">No project templates yet</h3>
+              <p className="text-muted-foreground mb-4 max-w-xl mx-auto">
+                Start from the {projectSpecificationSet} library — copy a ready-made template into
+                this project instead of building checklists row by row.
+              </p>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIncludeGlobalTemplates(true)}
+                  className="rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
+                >
+                  Browse {projectSpecificationSet} library templates
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(true)}
+                  className="rounded-lg border px-4 py-2 hover:bg-muted"
+                >
+                  Build a template from scratch
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-lg border p-8 text-center">
+              <div className="text-4xl mb-4">📋</div>
+              <h3 className="text-lg font-semibold mb-2">
+                No {projectSpecificationSet} library templates yet
+              </h3>
+              <p className="text-muted-foreground mb-4 max-w-xl mx-auto">
+                The template library has nothing for {projectSpecificationSet} yet. Build a template
+                from scratch, or import one from another project.
+              </p>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(true)}
+                  className="rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
+                >
+                  Build a template from scratch
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowImportModal(true)}
+                  className="rounded-lg border px-4 py-2 hover:bg-muted"
+                >
+                  Import from Project
+                </button>
+              </div>
+            </div>
+          )
         ) : (
           <div className="rounded-lg border p-8 text-center">
             <div className="text-4xl mb-4">📋</div>
@@ -367,109 +451,136 @@ export function ITPPage() {
           </div>
         )
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {templates
-            .filter((t) => !activityTypeFilter || t.activityType === activityTypeFilter)
-            .filter(
-              (t) =>
-                !responsiblePartyFilter ||
-                t.checklistItems.some((i) => i.responsibleParty === responsiblePartyFilter),
-            ) // Feature #711
-            .map((template) => (
-              <div
-                key={template.id}
-                className={`rounded-lg border p-4 transition-colors ${
-                  template.isActive === false ? 'opacity-60 bg-muted/30' : 'hover:border-primary/50'
-                }`}
+        <>
+          {/* Library-led lead-in: the project owns no templates yet, but the
+              spec-set library below is ready to copy from. Managers only —
+              field roles must not be led into template setup work. */}
+          {canManage && projectTemplates.length === 0 && hasLibraryTemplates && (
+            <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="font-semibold">
+                  Start from the {projectSpecificationSet || 'state spec'} library
+                </h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  This project has no ITP templates of its own yet. Copy a library template below to
+                  add an editable version to this project.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCreateModal(true)}
+                className="rounded-lg border px-4 py-2 text-sm hover:bg-muted shrink-0"
               >
-                <div className="flex items-start justify-between mb-2">
-                  <div>
-                    <h3 className="font-semibold">{template.name}</h3>
-                    <div className="flex items-center gap-2 mt-1">
-                      {template.isGlobalTemplate && (
-                        <span className="text-xs text-primary bg-primary/5 px-1.5 py-0.5 rounded">
-                          {template.stateSpec || 'Library'} Template
-                        </span>
-                      )}
-                      {template.isActive === false && (
-                        <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                          Inactive
-                        </span>
-                      )}
+                Build a template from scratch
+              </button>
+            </div>
+          )}
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {templates
+              .filter((t) => !activityTypeFilter || t.activityType === activityTypeFilter)
+              .filter(
+                (t) =>
+                  !responsiblePartyFilter ||
+                  t.checklistItems.some((i) => i.responsibleParty === responsiblePartyFilter),
+              ) // Feature #711
+              .map((template) => (
+                <div
+                  key={template.id}
+                  className={`rounded-lg border p-4 transition-colors ${
+                    template.isActive === false
+                      ? 'opacity-60 bg-muted/30'
+                      : 'hover:border-primary/50'
+                  }`}
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <div>
+                      <h3 className="font-semibold">{template.name}</h3>
+                      <div className="flex items-center gap-2 mt-1">
+                        {template.isGlobalTemplate && (
+                          <span className="text-xs text-primary bg-primary/5 px-1.5 py-0.5 rounded">
+                            {template.stateSpec || 'Library'} Template
+                          </span>
+                        )}
+                        {template.isActive === false && (
+                          <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                            Inactive
+                          </span>
+                        )}
+                      </div>
                     </div>
+                    <span className="text-xs bg-muted px-2 py-1 rounded">
+                      {formatActivityTypeLabel(template.activityType)}
+                    </span>
                   </div>
-                  <span className="text-xs bg-muted px-2 py-1 rounded">
-                    {formatActivityTypeLabel(template.activityType)}
-                  </span>
-                </div>
-                {template.description && (
-                  <p className="text-sm text-muted-foreground mb-3">{template.description}</p>
-                )}
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-muted-foreground">
-                    {responsiblePartyFilter
-                      ? `${template.checklistItems.filter((i) => i.responsibleParty === responsiblePartyFilter).length} ${responsiblePartyFilter} items`
-                      : `${template.checklistItems.length} checklist items`}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {
-                      template.checklistItems.filter(
-                        (i) =>
-                          i.isHoldPoint &&
-                          (!responsiblePartyFilter ||
-                            i.responsibleParty === responsiblePartyFilter),
-                      ).length
-                    }{' '}
-                    hold points
-                  </span>
-                </div>
-                {canManage && (
-                  <div className="mt-3 pt-3 border-t flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleCloneTemplate(template)}
-                        disabled={cloningTemplateId === template.id}
-                        className="text-xs px-2 py-1 rounded border hover:bg-muted disabled:opacity-50"
-                        title="Clone template"
-                      >
-                        {cloningTemplateId === template.id ? 'Copying...' : 'Copy'}
-                      </button>
-                      {/* Feature #128 - Edit button */}
+                  {template.description && (
+                    <p className="text-sm text-muted-foreground mb-3">{template.description}</p>
+                  )}
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">
+                      {responsiblePartyFilter
+                        ? `${template.checklistItems.filter((i) => i.responsibleParty === responsiblePartyFilter).length} ${responsiblePartyFilter} items`
+                        : `${template.checklistItems.length} checklist items`}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {
+                        template.checklistItems.filter(
+                          (i) =>
+                            i.isHoldPoint &&
+                            (!responsiblePartyFilter ||
+                              i.responsibleParty === responsiblePartyFilter),
+                        ).length
+                      }{' '}
+                      hold points
+                    </span>
+                  </div>
+                  {canManage && (
+                    <div className="mt-3 pt-3 border-t flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleCloneTemplate(template)}
+                          disabled={cloningTemplateId === template.id}
+                          className="text-xs px-2 py-1 rounded border hover:bg-muted disabled:opacity-50"
+                          title="Clone template"
+                        >
+                          {cloningTemplateId === template.id ? 'Copying...' : 'Copy'}
+                        </button>
+                        {/* Feature #128 - Edit button */}
+                        {!template.isGlobalTemplate && (
+                          <button
+                            type="button"
+                            onClick={() => handleEditTemplate(template)}
+                            className="text-xs px-2 py-1 rounded border hover:bg-muted"
+                            title="Edit template"
+                          >
+                            Edit
+                          </button>
+                        )}
+                      </div>
                       {!template.isGlobalTemplate && (
                         <button
                           type="button"
-                          onClick={() => handleEditTemplate(template)}
-                          className="text-xs px-2 py-1 rounded border hover:bg-muted"
-                          title="Edit template"
+                          onClick={() => handleToggleActive(template)}
+                          disabled={togglingTemplateId === template.id}
+                          className={`text-xs px-2 py-1 rounded ${
+                            template.isActive !== false
+                              ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+                              : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                          } disabled:opacity-50`}
                         >
-                          Edit
+                          {togglingTemplateId === template.id
+                            ? 'Updating...'
+                            : template.isActive !== false
+                              ? 'Active'
+                              : 'Inactive'}
                         </button>
                       )}
                     </div>
-                    {!template.isGlobalTemplate && (
-                      <button
-                        type="button"
-                        onClick={() => handleToggleActive(template)}
-                        disabled={togglingTemplateId === template.id}
-                        className={`text-xs px-2 py-1 rounded ${
-                          template.isActive !== false
-                            ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-                            : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                        } disabled:opacity-50`}
-                      >
-                        {togglingTemplateId === template.id
-                          ? 'Updating...'
-                          : template.isActive !== false
-                            ? 'Active'
-                            : 'Inactive'}
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
-        </div>
+                  )}
+                </div>
+              ))}
+          </div>
+        </>
       )}
 
       {showCreateModal && (
