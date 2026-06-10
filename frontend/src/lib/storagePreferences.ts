@@ -91,3 +91,42 @@ export function parseJsonPreference<T>(
     return fallback;
   }
 }
+
+// ─── Install nudge preferences ────────────────────────────────────────────────
+// Namespace: `siteproof_install_nudge.*`
+// These helpers track per-device app-open count and dismissal date so the
+// install nudge can apply engagement gating (show after 2nd session) and
+// re-show no sooner than 14 days after a dismiss.
+
+const INSTALL_NUDGE_OPEN_COUNT_KEY = 'siteproof_install_nudge.open_count';
+const INSTALL_NUDGE_DISMISSED_AT_KEY = 'siteproof_install_nudge.dismissed_at';
+
+/** Returns the number of times the app has been opened on this device. */
+export function readInstallNudgeOpenCount(): number {
+  const raw = readLocalStorageItem(INSTALL_NUDGE_OPEN_COUNT_KEY);
+  if (!raw) return 0;
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+}
+
+/** Increments the open-count by 1 and persists it. */
+export function incrementInstallNudgeOpenCount(): void {
+  const next = readInstallNudgeOpenCount() + 1;
+  writeLocalStorageItem(INSTALL_NUDGE_OPEN_COUNT_KEY, String(next));
+}
+
+/**
+ * Returns the ISO timestamp (ms) when the user last dismissed the nudge,
+ * or null if they have never dismissed it.
+ */
+export function readInstallNudgeDismissedAt(): number | null {
+  const raw = readLocalStorageItem(INSTALL_NUDGE_DISMISSED_AT_KEY);
+  if (!raw) return null;
+  const n = parseInt(raw, 10);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/** Records the current time as the dismissal timestamp. */
+export function writeInstallNudgeDismissedAt(): void {
+  writeLocalStorageItem(INSTALL_NUDGE_DISMISSED_AT_KEY, String(Date.now()));
+}

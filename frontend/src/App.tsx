@@ -7,6 +7,7 @@ import { RoleProtectedRoute } from '@/components/auth/RoleProtectedRoute';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { DeferredOfflineIndicator } from '@/components/DeferredOfflineIndicator';
 import { UpdatePrompt } from '@/components/UpdatePrompt';
+import { InstallNudge } from '@/components/InstallNudge';
 import { CookieConsentBanner } from '@/components/CookieConsentBanner';
 import { PageSkeleton } from '@/components/ui/Skeleton';
 import {
@@ -498,6 +499,7 @@ function App() {
         <Toaster />
         <DeferredOfflineIndicator />
         <UpdatePrompt />
+        <InstallNudge />
         <CookieConsentBanner />
         {ENABLE_DEV_TOOLS && RoleSwitcher && <RoleSwitcher />}
       </AuthProvider>
