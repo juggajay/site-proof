@@ -26,6 +26,10 @@ import {
   markCompletionSynced,
   markDiarySynced,
   markDiarySyncError,
+  markDeliverySynced,
+  markDeliverySyncError,
+  markEventSynced,
+  markEventSyncError,
   markDocketSynced,
   markDocketServerId,
   markDocketSyncError,
@@ -58,14 +62,17 @@ const SYNCED: SyncItemResult = { status: 'synced' };
 const HANDLED: SyncItemResult = { status: 'handled' };
 
 // Known queue types the worker recognizes. Unrecognized types are garbage
-// collected (see the dispatcher default) so the queue can't wedge. NOTE:
-// `delivery_save`/`event_save` are declared in the SyncQueueItem union but have
-// no branch, so they fall through to GC today — preserved as-is per the plan.
+// collected (see the dispatcher default) so the queue can't wedge.
+// `delivery_save`/`event_save` were a declared-but-branch-less latent gap
+// (queued items were GC'd); they now have real executors below, wired up for
+// the diary quick-add offline path.
 const KNOWN_TYPES = [
   'itp_completion',
   'photo_upload',
   'diary_save',
   'diary_submit',
+  'delivery_save',
+  'event_save',
   'docket_create',
   'docket_submit',
   'lot_edit',
@@ -95,6 +102,8 @@ async function runSyncStep(
 
 type ItpCompletionItem = Extract<SyncQueueItem, { type: 'itp_completion' }>;
 type DiaryItem = Extract<SyncQueueItem, { type: 'diary_save' | 'diary_submit' }>;
+type DeliveryItem = Extract<SyncQueueItem, { type: 'delivery_save' }>;
+type EventItem = Extract<SyncQueueItem, { type: 'event_save' }>;
 type DocketItem = Extract<SyncQueueItem, { type: 'docket_create' | 'docket_submit' }>;
 type PhotoUploadItem = Extract<SyncQueueItem, { type: 'photo_upload' }>;
 type LotEditItem = Extract<SyncQueueItem, { type: 'lot_edit' }>;
@@ -200,6 +209,118 @@ async function syncDiary(item: DiaryItem, itemId: number): Promise<SyncItemResul
     async () => {
       if (item.data?.diaryId) {
         await markDiarySyncError(item.data.diaryId);
+      }
+    },
+  );
+}
+
+// A queued delivery/event is anchored either to a server diary id directly or
+// to a local offline diary snapshot (`diary-<project>-<date>`, when the day
+// was started fully offline). For a local anchor, push the snapshot first —
+// POST /api/diary upserts by project+date, so this is safe to repeat — and use
+// the server id it returns.
+async function resolveServerDiaryId(anchorDiaryId: string): Promise<string> {
+  const localDiary = await offlineDb.diaries.get(anchorDiaryId);
+  if (!localDiary) {
+    return anchorDiaryId;
+  }
+  return syncOfflineDiarySnapshot(localDiary);
+}
+
+// Mirrors syncDiary: load the queued entry, resolve the diary it belongs to,
+// POST it, then remove the queue item and mark the entry synced.
+async function syncDelivery(item: DeliveryItem, itemId: number): Promise<SyncItemResult> {
+  return runSyncStep(
+    item,
+    async () => {
+      const { deliveryId } = item.data;
+      const delivery = await offlineDb.diaryDeliveries.get(deliveryId);
+
+      if (!delivery) {
+        // Delivery was deleted, remove from queue
+        await removeSyncQueueItem(itemId);
+        return HANDLED;
+      }
+
+      const serverDiaryId = await resolveServerDiaryId(delivery.diaryId);
+
+      const response = await authFetch(apiUrl(`/api/diary/${serverDiaryId}/deliveries`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          description: delivery.description,
+          supplier: delivery.supplier,
+          docketNumber: delivery.docketNumber,
+          quantity: delivery.quantity,
+          unit: delivery.unit,
+          lotId: delivery.lotId,
+          notes: delivery.notes,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await readResponseError(response);
+        await markSyncItemError(itemId, errorText);
+        await markDeliverySyncError(deliveryId);
+        return HANDLED;
+      }
+
+      await removeSyncQueueItem(itemId);
+      await markDeliverySynced(deliveryId);
+      return SYNCED;
+    },
+    async () => {
+      if (item.data?.deliveryId) {
+        await markDeliverySyncError(item.data.deliveryId);
+      }
+    },
+  );
+}
+
+async function syncEvent(item: EventItem, itemId: number): Promise<SyncItemResult> {
+  return runSyncStep(
+    item,
+    async () => {
+      const { eventId } = item.data;
+      const event = await offlineDb.diaryEvents.get(eventId);
+
+      if (!event) {
+        // Event was deleted, remove from queue
+        await removeSyncQueueItem(itemId);
+        return HANDLED;
+      }
+
+      const serverDiaryId = await resolveServerDiaryId(event.diaryId);
+
+      const response = await authFetch(apiUrl(`/api/diary/${serverDiaryId}/events`), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          eventType: event.eventType,
+          description: event.description,
+          notes: event.notes,
+          lotId: event.lotId,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await readResponseError(response);
+        await markSyncItemError(itemId, errorText);
+        await markEventSyncError(eventId);
+        return HANDLED;
+      }
+
+      await removeSyncQueueItem(itemId);
+      await markEventSynced(eventId);
+      return SYNCED;
+    },
+    async () => {
+      if (item.data?.eventId) {
+        await markEventSyncError(item.data.eventId);
       }
     },
   );
@@ -454,6 +575,15 @@ export async function syncSingleItem(
   // Feature #312: Sync offline diaries
   if ((item.type === 'diary_save' || item.type === 'diary_submit') && item.id) {
     return syncDiary(item, item.id);
+  }
+
+  // Diary quick-add offline path: queued deliveries and events
+  if (item.type === 'delivery_save' && item.id) {
+    return syncDelivery(item, item.id);
+  }
+
+  if (item.type === 'event_save' && item.id) {
+    return syncEvent(item, item.id);
   }
 
   // Feature #313: Sync offline dockets

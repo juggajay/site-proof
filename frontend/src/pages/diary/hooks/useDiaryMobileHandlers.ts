@@ -1,6 +1,15 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, isRetriableNetworkFailure } from '@/lib/api';
+import { toast } from '@/components/ui/toaster';
+import {
+  queueDiaryActivityOffline,
+  queueDiaryDelayOffline,
+  queueDiaryDeliveryOffline,
+  queueDiaryEventOffline,
+  queueDiaryPlantOffline,
+  queueDiaryWeatherOffline,
+} from '@/lib/offlineDb';
 import type { QuickAddType } from '@/components/foreman/DiaryQuickAddBar';
 import type { TimelineEntry } from '@/components/foreman/DiaryTimelineEntry';
 import type { ManualEntries } from '@/components/foreman/DiaryDocketSummary';
@@ -37,6 +46,7 @@ interface UseDiaryMobileHandlersParams {
   fetchDiaryForDate: (date: string) => Promise<void>;
   fetchDocketSummary: () => Promise<void>;
   setDiary: (diary: DailyDiary | null) => void;
+  setError: (error: string | null) => void;
   setWeatherForm: React.Dispatch<React.SetStateAction<WeatherFormState>>;
 }
 
@@ -50,6 +60,7 @@ export function useDiaryMobileHandlers({
   fetchDiaryForDate,
   fetchDocketSummary,
   setDiary,
+  setError,
   setWeatherForm,
 }: UseDiaryMobileHandlersParams) {
   const navigate = useNavigate();
@@ -85,6 +96,65 @@ export function useDiaryMobileHandlers({
     return currentDiary;
   };
 
+  // Honest wording for the offline-queued path: the entry is safe on this
+  // device, but the timeline is server-fetched so it will only show up after
+  // the sync worker replays it and the page refetches — never promise
+  // immediate visibility.
+  const notifySavedOffline = () => {
+    toast({
+      title: 'Saved Offline',
+      description:
+        'Your entry is saved on this device and will appear in the diary after it syncs.',
+    });
+  };
+
+  /**
+   * Quick-add create with an offline fallback (mirrors the ITP field-write
+   * path): attempt the network save first; on a retriable network failure —
+   * browser offline, request timeout, fetch-level failure, or a 5xx — queue
+   * the typed entry through the offline store + sync queue and report SUCCESS
+   * to the sheet (closing it) with the honest "Saved Offline" toast.
+   * Definitive rejections (4xx) still throw, keeping the #776 contract: the
+   * sheet stays open with its failure banner and the typed values intact.
+   *
+   * When `requireDiary` itself fails, ensureDiaryExists has already swallowed
+   * the network error (reporting it via the page-level error state), so the
+   * classifier can only recognise the genuinely-offline case
+   * (navigator.onLine === false); an online diary-create failure keeps
+   * today's error-banner behavior. The queued path clears the page error —
+   * a "Failed to create diary" banner would contradict the queued save.
+   */
+  const createWithOfflineFallback = async (
+    attempt: (currentDiary: DailyDiary) => Promise<void>,
+    queueOffline: (projectId: string, currentDiary: DailyDiary | null) => Promise<unknown>,
+  ): Promise<void> => {
+    let currentDiary: DailyDiary;
+    try {
+      currentDiary = await requireDiary();
+    } catch (err) {
+      if (!projectId || !isRetriableNetworkFailure(err)) throw err;
+      await queueOffline(projectId, null);
+      setError(null);
+      notifySavedOffline();
+      return;
+    }
+
+    try {
+      await attempt(currentDiary);
+    } catch (err) {
+      if (!projectId || !isRetriableNetworkFailure(err)) throw err;
+      await queueOffline(projectId, currentDiary);
+      notifySavedOffline();
+      return;
+    }
+
+    // Refetch only on the online path — on the queued path these would fail
+    // against the same dead network, clearing the timeline and re-raising the
+    // page error the foreman just recovered from.
+    await fetchTimeline(currentDiary.id);
+    await fetchDiaryForDate(selectedDate);
+  };
+
   const handleDeleteEntry = async (entry: { id: string; type: string }) => {
     if (!diary) return;
     const typeToEndpoint: Record<string, string> = {
@@ -113,6 +183,9 @@ export function useDiaryMobileHandlers({
     await Promise.all([fetchDiaryForDate(selectedDate), fetchDocketSummary()]);
   };
 
+  // Edits of existing server entries stay online-only: the offline store has
+  // no representation for "update entry <server id>", so a failed edit keeps
+  // the sheet open with its failure banner instead of queueing.
   const updateTimelineEntryFromSheet = async (
     entry: TimelineEntry,
     endpoint: string,
@@ -147,13 +220,15 @@ export function useDiaryMobileHandlers({
       return;
     }
 
-    const currentDiary = await requireDiary();
-    await apiFetch(`/api/diary/${encodeURIComponent(currentDiary.id)}/activities`, {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
-    await fetchTimeline(currentDiary.id);
-    await fetchDiaryForDate(selectedDate);
+    await createWithOfflineFallback(
+      async (currentDiary) => {
+        await apiFetch(`/api/diary/${encodeURIComponent(currentDiary.id)}/activities`, {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+      },
+      (currentProjectId) => queueDiaryActivityOffline(currentProjectId, selectedDate, payload),
+    );
   };
 
   const addDelayFromSheet = async (data: {
@@ -169,13 +244,15 @@ export function useDiaryMobileHandlers({
       return;
     }
 
-    const currentDiary = await requireDiary();
-    await apiFetch(`/api/diary/${encodeURIComponent(currentDiary.id)}/delays`, {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
-    await fetchTimeline(currentDiary.id);
-    await fetchDiaryForDate(selectedDate);
+    await createWithOfflineFallback(
+      async (currentDiary) => {
+        await apiFetch(`/api/diary/${encodeURIComponent(currentDiary.id)}/delays`, {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+      },
+      (currentProjectId) => queueDiaryDelayOffline(currentProjectId, selectedDate, payload),
+    );
   };
 
   const addDeliveryFromSheet = async (data: {
@@ -193,13 +270,21 @@ export function useDiaryMobileHandlers({
       return;
     }
 
-    const currentDiary = await requireDiary();
-    await apiFetch(`/api/diary/${encodeURIComponent(currentDiary.id)}/deliveries`, {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
-    await fetchTimeline(currentDiary.id);
-    await fetchDiaryForDate(selectedDate);
+    await createWithOfflineFallback(
+      async (currentDiary) => {
+        await apiFetch(`/api/diary/${encodeURIComponent(currentDiary.id)}/deliveries`, {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+      },
+      (currentProjectId, currentDiary) =>
+        queueDiaryDeliveryOffline(
+          currentDiary
+            ? { diaryId: currentDiary.id }
+            : { projectId: currentProjectId, date: selectedDate },
+          payload,
+        ),
+    );
   };
 
   const addEventFromSheet = async (data: {
@@ -214,13 +299,21 @@ export function useDiaryMobileHandlers({
       return;
     }
 
-    const currentDiary = await requireDiary();
-    await apiFetch(`/api/diary/${encodeURIComponent(currentDiary.id)}/events`, {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
-    await fetchTimeline(currentDiary.id);
-    await fetchDiaryForDate(selectedDate);
+    await createWithOfflineFallback(
+      async (currentDiary) => {
+        await apiFetch(`/api/diary/${encodeURIComponent(currentDiary.id)}/events`, {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+      },
+      (currentProjectId, currentDiary) =>
+        queueDiaryEventOffline(
+          currentDiary
+            ? { diaryId: currentDiary.id }
+            : { projectId: currentProjectId, date: selectedDate },
+          payload,
+        ),
+    );
   };
 
   const handleEditEntry = (entry: TimelineEntry) => {
@@ -233,6 +326,10 @@ export function useDiaryMobileHandlers({
     navigate(`/projects/${encodeURIComponent(projectId)}/dockets?status=pending_approval`);
   };
 
+  // Personnel stays online-only: the offline diary snapshot has no personnel
+  // representation (only workforce counts) and the sync worker never replays
+  // personnel rows, so a failed save keeps the sheet open with its failure
+  // banner rather than queueing an entry that could never sync.
   const handleSavePersonnel = async (data: ManualPersonnelData) => {
     const payload = {
       ...data,
@@ -262,13 +359,16 @@ export function useDiaryMobileHandlers({
       await updateTimelineEntryFromSheet(editingEntry, 'plant', payload);
       return;
     }
-    const currentDiary = await requireDiary();
-    await apiFetch(`/api/diary/${encodeURIComponent(currentDiary.id)}/plant`, {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
-    await fetchTimeline(currentDiary.id);
-    await fetchDiaryForDate(selectedDate);
+
+    await createWithOfflineFallback(
+      async (currentDiary) => {
+        await apiFetch(`/api/diary/${encodeURIComponent(currentDiary.id)}/plant`, {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+      },
+      (currentProjectId) => queueDiaryPlantOffline(currentProjectId, selectedDate, payload),
+    );
   };
 
   const handleSaveWeather = async (data: {
@@ -279,24 +379,73 @@ export function useDiaryMobileHandlers({
   }) => {
     if (getDiaryWeatherNumberError(data)) return;
 
-    // No try/catch: failures must reach the weather sheet so it stays open
-    // and shows its failure banner instead of reporting a successful save.
-    await requireDiary();
     const temperatureMin = parseOptionalDiaryTemperatureInput(data.temperatureMin);
     const temperatureMax = parseOptionalDiaryTemperatureInput(data.temperatureMax);
     const rainfallMm = parseOptionalDiaryRainfallInput(data.rainfallMm);
 
-    const updated = await apiFetch<DailyDiary>('/api/diary', {
-      method: 'POST',
-      body: JSON.stringify({
-        projectId,
-        date: selectedDate,
-        weatherConditions: data.conditions || undefined,
+    const queueWeatherOffline = async (
+      currentProjectId: string,
+      currentDiary: DailyDiary | null,
+    ) => {
+      await queueDiaryWeatherOffline(currentProjectId, selectedDate, {
+        conditions: data.conditions || undefined,
         temperatureMin: temperatureMin ?? undefined,
         temperatureMax: temperatureMax ?? undefined,
         rainfallMm: rainfallMm ?? undefined,
-      }),
-    });
+      });
+      // Local visibility for queued weather is cheap and honest: the weather
+      // bar reads the diary when one exists, the form state otherwise.
+      if (currentDiary) {
+        setDiary({
+          ...currentDiary,
+          weatherConditions: data.conditions || currentDiary.weatherConditions,
+          temperatureMin: temperatureMin ?? currentDiary.temperatureMin,
+          temperatureMax: temperatureMax ?? currentDiary.temperatureMax,
+          rainfallMm: rainfallMm ?? currentDiary.rainfallMm,
+        });
+      }
+      setWeatherForm((prev) => ({
+        ...prev,
+        weatherConditions: data.conditions || prev.weatherConditions,
+        temperatureMin: data.temperatureMin || prev.temperatureMin,
+        temperatureMax: data.temperatureMax || prev.temperatureMax,
+        rainfallMm: data.rainfallMm || prev.rainfallMm,
+      }));
+      notifySavedOffline();
+    };
+
+    // Non-retriable failures must reach the weather sheet so it stays open
+    // and shows its failure banner instead of reporting a successful save;
+    // retriable network failures queue the typed weather offline instead.
+    let currentDiary: DailyDiary;
+    try {
+      currentDiary = await requireDiary();
+    } catch (err) {
+      if (!projectId || !isRetriableNetworkFailure(err)) throw err;
+      await queueWeatherOffline(projectId, null);
+      setError(null);
+      return;
+    }
+
+    let updated: DailyDiary;
+    try {
+      updated = await apiFetch<DailyDiary>('/api/diary', {
+        method: 'POST',
+        body: JSON.stringify({
+          projectId,
+          date: selectedDate,
+          weatherConditions: data.conditions || undefined,
+          temperatureMin: temperatureMin ?? undefined,
+          temperatureMax: temperatureMax ?? undefined,
+          rainfallMm: rainfallMm ?? undefined,
+        }),
+      });
+    } catch (err) {
+      if (!projectId || !isRetriableNetworkFailure(err)) throw err;
+      await queueWeatherOffline(projectId, currentDiary);
+      return;
+    }
+
     setDiary(updated);
     setWeatherForm(() => ({
       weatherConditions: updated.weatherConditions || '',

@@ -52,6 +52,7 @@ export function DailyDiaryPage() {
     fetchDiaryForDate: data.fetchDiaryForDate,
     fetchDocketSummary: data.fetchDocketSummary,
     setDiary: data.setDiary,
+    setError: data.setError,
     setWeatherForm: data.setWeatherForm,
   });
 

@@ -42,6 +42,10 @@ vi.mock('./offlineDb', () => ({
   markPhotoSyncError: vi.fn(),
   markDiarySynced: vi.fn(),
   markDiarySyncError: vi.fn(),
+  markDeliverySynced: vi.fn(),
+  markDeliverySyncError: vi.fn(),
+  markEventSynced: vi.fn(),
+  markEventSyncError: vi.fn(),
   markDocketSynced: vi.fn(),
   markDocketServerId: vi.fn(),
   markDocketSyncError: vi.fn(),
@@ -56,6 +60,8 @@ vi.mock('./offlineDb', () => ({
   offlineDb: {
     diaries: { get: vi.fn() },
     dockets: { get: vi.fn() },
+    diaryDeliveries: { get: vi.fn() },
+    diaryEvents: { get: vi.fn() },
   },
 }));
 
@@ -100,6 +106,8 @@ import {
   markPhotoSyncError,
   markDiarySynced,
   markDiarySyncError,
+  markDeliverySynced,
+  markEventSynced,
   markDocketSynced,
   markDocketServerId,
   markDocketSyncError,
@@ -134,6 +142,8 @@ const markPhotoSyncedMock = markPhotoSynced as Mock;
 const markPhotoSyncErrorMock = markPhotoSyncError as Mock;
 const markDiarySyncedMock = markDiarySynced as Mock;
 const markDiarySyncErrorMock = markDiarySyncError as Mock;
+const markDeliverySyncedMock = markDeliverySynced as Mock;
+const markEventSyncedMock = markEventSynced as Mock;
 const markDocketSyncedMock = markDocketSynced as Mock;
 const markDocketServerIdMock = markDocketServerId as Mock;
 const markDocketSyncErrorMock = markDocketSyncError as Mock;
@@ -146,6 +156,8 @@ const getLiveSyncCountMock = getLiveSyncCount as Mock;
 const getFailedSyncCountMock = getFailedSyncCount as Mock;
 const diariesGetMock = offlineDb.diaries.get as unknown as Mock;
 const docketsGetMock = offlineDb.dockets.get as unknown as Mock;
+const diaryDeliveriesGetMock = offlineDb.diaryDeliveries.get as unknown as Mock;
+const diaryEventsGetMock = offlineDb.diaryEvents.get as unknown as Mock;
 const authFetchMock = authFetch as Mock;
 const readResponseErrorMock = readResponseError as Mock;
 const syncOfflineDiarySnapshotMock = syncOfflineDiarySnapshot as Mock;
@@ -157,9 +169,8 @@ const devWarnMock = devWarn as Mock;
 
 // Build a queue item with sensible defaults. The parameter is intentionally
 // loose (not the SyncQueueItem union) so tests can supply arbitrary type/data
-// shapes — including unknown types and the branch-less delivery_save/event_save
-// members — the way the real heterogeneous queue does. The cast happens once,
-// here, at the boundary.
+// shapes — including unknown types — the way the real heterogeneous queue
+// does. The cast happens once, here, at the boundary.
 type QueueItemInput = {
   type: string;
   id?: number;
@@ -939,31 +950,62 @@ describe('unknown-type garbage collection (invariant 8)', () => {
     expect(removeSyncQueueItemMock).toHaveBeenCalledWith(71);
   });
 
-  // DELIBERATELY PINNED ODDITY: delivery_save and event_save are declared in the
-  // SyncQueueItem union (offline/core.ts) but the worker has NO branch for them,
-  // so today they fall straight through to the unknown-type sweep and are GC'd.
-  // This is a latent data-loss gap (queued delivery/event edits are silently
-  // discarded), pinned as-is here per the plan — NOT fixed in this slice.
-  it('GCs delivery_save items that have no worker branch (latent gap, pinned as-is)', async () => {
+  // FORMER PINNED ODDITY, now fixed: delivery_save and event_save were declared
+  // in the SyncQueueItem union (offline/core.ts) with no worker branch, so they
+  // fell through to the unknown-type sweep and were GC'd (silent data loss).
+  // The diary quick-add offline wiring gave them real executors; these tests
+  // pin the new behavior — queued items SYNC, the GC sweep never sees them.
+  it('syncs delivery_save items through their executor instead of GCing them', async () => {
     getPendingSyncItemsMock.mockResolvedValue([
       queueItem({ id: 72, type: 'delivery_save', attempts: 0, data: { deliveryId: 'del-1' } }),
     ]);
+    diaryDeliveriesGetMock.mockResolvedValue({
+      id: 'del-1',
+      diaryId: 'server-d-1',
+      description: '20t road base',
+    });
+    diariesGetMock.mockResolvedValue(undefined); // diaryId is already a server id
+    authFetchMock.mockResolvedValue(okJson({ ok: true }));
 
     await runSync();
 
+    expect(authFetchMock).toHaveBeenCalledWith(
+      '/api/diary/server-d-1/deliveries',
+      expect.objectContaining({ method: 'POST' }),
+    );
     expect(removeSyncQueueItemMock).toHaveBeenCalledWith(72);
-    expect(devWarnMock).toHaveBeenCalledWith('[Sync] Removing unknown item type:', 'delivery_save');
+    expect(markDeliverySyncedMock).toHaveBeenCalledWith('del-1');
+    expect(devWarnMock).not.toHaveBeenCalledWith(
+      '[Sync] Removing unknown item type:',
+      'delivery_save',
+    );
   });
 
-  it('GCs event_save items that have no worker branch (latent gap, pinned as-is)', async () => {
+  it('syncs event_save items through their executor instead of GCing them', async () => {
     getPendingSyncItemsMock.mockResolvedValue([
       queueItem({ id: 73, type: 'event_save', attempts: 0, data: { eventId: 'evt-1' } }),
     ]);
+    diaryEventsGetMock.mockResolvedValue({
+      id: 'evt-1',
+      diaryId: 'server-d-1',
+      eventType: 'inspection',
+      description: 'Council walkover',
+    });
+    diariesGetMock.mockResolvedValue(undefined);
+    authFetchMock.mockResolvedValue(okJson({ ok: true }));
 
     await runSync();
 
+    expect(authFetchMock).toHaveBeenCalledWith(
+      '/api/diary/server-d-1/events',
+      expect.objectContaining({ method: 'POST' }),
+    );
     expect(removeSyncQueueItemMock).toHaveBeenCalledWith(73);
-    expect(devWarnMock).toHaveBeenCalledWith('[Sync] Removing unknown item type:', 'event_save');
+    expect(markEventSyncedMock).toHaveBeenCalledWith('evt-1');
+    expect(devWarnMock).not.toHaveBeenCalledWith(
+      '[Sync] Removing unknown item type:',
+      'event_save',
+    );
   });
 
   it('does NOT GC a known type after it succeeds (the type is on the allow-list)', async () => {

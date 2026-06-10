@@ -51,14 +51,17 @@ function buildOfflineDiaryNotes(diary: OfflineDailyDiary): string | undefined {
 }
 
 export function buildOfflineDiaryPayload(diary: OfflineDailyDiary) {
+  // New offline weather writes store the real min/max pair; older records on
+  // devices only carry the legacy single `temperature`, which keeps mapping to
+  // both bounds exactly as before.
   const temperature = toFiniteNumber(diary.weather.temperature);
 
   return {
     projectId: diary.projectId,
     date: diary.date,
     weatherConditions: compactText(diary.weather.conditions),
-    temperatureMin: temperature,
-    temperatureMax: temperature,
+    temperatureMin: toFiniteNumber(diary.weather.temperatureMin) ?? temperature,
+    temperatureMax: toFiniteNumber(diary.weather.temperatureMax) ?? temperature,
     rainfallMm: toFiniteNumber(diary.weather.rainfall),
     weatherNotes: compactText(diary.weather.notes),
     generalNotes: buildOfflineDiaryNotes(diary),
