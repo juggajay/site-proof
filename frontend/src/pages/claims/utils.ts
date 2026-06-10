@@ -5,6 +5,7 @@
 
 import type { Claim, CertificationDueStatus, PaymentDueStatus, ConformedLot } from './types';
 import { SOPA_TIMEFRAMES } from './constants';
+import { isSopaNonWorkingDay } from './sopaBusinessDays';
 import { downloadCsv } from '@/lib/csv';
 import { formatDateKey } from '@/lib/localDate';
 import { parseOptionalNonNegativeDecimalInput } from '@/lib/numericInput';
@@ -19,16 +20,19 @@ export function formatCurrency(amount: number | null): string {
   }).format(amount);
 }
 
-/** Calculate business days from a date (skipping weekends) */
-export function addBusinessDays(startDate: Date, days: number): Date {
+/**
+ * Add N business days to a date.
+ * Without `state`, "business day" means weekends-only (the original behaviour).
+ * With `state`, it also skips that jurisdiction's public holidays and statutory
+ * Christmas window per the SOPA "business day" definition (see sopaBusinessDays).
+ */
+export function addBusinessDays(startDate: Date, days: number, state?: string): Date {
   const currentDate = new Date(startDate);
   let businessDays = days;
 
   while (businessDays > 0) {
     currentDate.setDate(currentDate.getDate() + 1);
-    const dayOfWeek = currentDate.getDay();
-    // Skip weekends (0 = Sunday, 6 = Saturday)
-    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+    if (!isSopaNonWorkingDay(currentDate, state)) {
       businessDays--;
     }
   }
@@ -50,7 +54,7 @@ export function calculateCertificationDueDate(
   const timeframe = SOPA_TIMEFRAMES[state];
   if (!timeframe) return null;
   const submissionDate = new Date(submittedAt);
-  return addBusinessDays(submissionDate, timeframe.responseTime).toISOString();
+  return addBusinessDays(submissionDate, timeframe.responseTime, state).toISOString();
 }
 
 /**
@@ -63,7 +67,7 @@ export function calculatePaymentDueDate(submittedAt: string, state: string = 'NS
   const timeframe = SOPA_TIMEFRAMES[state];
   if (!timeframe) return null;
   const submissionDate = new Date(submittedAt);
-  return addBusinessDays(submissionDate, timeframe.paymentTime).toISOString();
+  return addBusinessDays(submissionDate, timeframe.paymentTime, state).toISOString();
 }
 
 /** Get certification due status - only for submitted claims awaiting certification */
