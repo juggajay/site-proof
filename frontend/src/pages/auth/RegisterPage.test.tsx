@@ -7,6 +7,12 @@ vi.mock('@/lib/auth', () => ({
   useAuth: () => ({ signUp: signUpMock }),
 }));
 
+const navigateMock = vi.fn();
+vi.mock('react-router-dom', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('react-router-dom')>();
+  return { ...actual, useNavigate: () => navigateMock };
+});
+
 import { RegisterPage } from './RegisterPage';
 
 const strongPassword = 'SecureP@ssword123!';
@@ -29,9 +35,32 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe('RegisterPage success screen', () => {
+describe('RegisterPage auto sign-in', () => {
+  it('signs the new user straight in and lands on the app instead of the login form', async () => {
+    // signUp resolves with the signed-in user when register returned a session.
+    signUpMock.mockResolvedValue({
+      id: 'new-user',
+      email: 'new-user@example.com',
+      emailVerified: false,
+    });
+
+    renderWithProviders(<RegisterPage />);
+    await fillAndSubmitRegistration();
+
+    // The freshly registered user never has to retype their password: they go
+    // to /dashboard, where the company-onboarding gate forwards new accounts.
+    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/dashboard', { replace: true }));
+
+    // No dead-stop success screen in the signed-in path.
+    expect(screen.queryByRole('heading', { name: 'Account created' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /go to login/i })).not.toBeInTheDocument();
+  });
+});
+
+describe('RegisterPage success screen (no-session fallback)', () => {
   it('tells the new user they can sign in now instead of implying they are blocked', async () => {
-    signUpMock.mockResolvedValue(undefined);
+    // signUp resolves null when the account was created without a session.
+    signUpMock.mockResolvedValue(null);
 
     renderWithProviders(<RegisterPage />);
     await fillAndSubmitRegistration();
@@ -47,9 +76,10 @@ describe('RegisterPage success screen', () => {
     expect(screen.queryByRole('heading', { name: 'Check Your Email' })).not.toBeInTheDocument();
     expect(screen.queryByText(/click the link to verify your account/i)).not.toBeInTheDocument();
 
-    // Both actions remain available.
+    // Both actions remain available, and nothing navigated away.
     expect(screen.getByRole('link', { name: /go to login/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /resend verification email/i })).toBeInTheDocument();
+    expect(navigateMock).not.toHaveBeenCalled();
   });
 
   it('does not show the success screen until registration succeeds', async () => {
@@ -61,5 +91,6 @@ describe('RegisterPage success screen', () => {
     await waitFor(() => expect(signUpMock).toHaveBeenCalled());
     expect(screen.queryByRole('heading', { name: 'Account created' })).not.toBeInTheDocument();
     expect(await screen.findByText('Email already in use')).toBeInTheDocument();
+    expect(navigateMock).not.toHaveBeenCalled();
   });
 });

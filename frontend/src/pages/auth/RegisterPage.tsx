@@ -1,6 +1,6 @@
 // Feature #443: React Hook Form with Zod validation
 import { useState, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -33,6 +33,7 @@ export function RegisterPage() {
   const [registrationSuccess, setRegistrationSuccess] = useState(false);
   const [registeredEmail, setRegisteredEmail] = useState('');
   const { signUp } = useAuth();
+  const navigate = useNavigate();
 
   // React Hook Form with Zod resolver
   const {
@@ -73,12 +74,20 @@ export function RegisterPage() {
     setLoading(true);
 
     try {
-      await signUp(data.email, data.password, {
+      const user = await signUp(data.email, data.password, {
         firstName: data.firstName,
         lastName: data.lastName,
         tosAccepted: data.tosAccepted,
       });
-      // Show verification message instead of navigating to login
+      if (user) {
+        // Registration signed the new user straight in — land on the
+        // protected shell; the company-onboarding gate forwards brand-new
+        // accounts to company setup. The email-verification nudge lives in
+        // the app banner, so no dead-stop screen is needed here.
+        navigate('/dashboard', { replace: true });
+        return;
+      }
+      // No session came back: fall back to the manual sign-in screen.
       setRegisteredEmail(data.email);
       setRegistrationSuccess(true);
     } catch (err) {

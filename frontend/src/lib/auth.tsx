@@ -96,7 +96,10 @@ interface AuthContextType {
     rememberMe?: boolean,
     mfaCode?: string,
   ) => Promise<User>;
-  signUp: (email: string, password: string, metadata?: object) => Promise<void>;
+  // Resolves with the signed-in user when registration also established a
+  // session, or null when the account was created without one (the caller
+  // should then fall back to the manual sign-in screen).
+  signUp: (email: string, password: string, metadata?: object) => Promise<User | null>;
   signOut: (options?: SignOutOptions) => Promise<void>;
   handleSessionExpired: () => void;
   refreshUser: () => Promise<void>;
@@ -354,7 +357,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return data.user;
   };
 
-  const signUp = async (email: string, password: string, metadata?: object) => {
+  const signUp = async (
+    email: string,
+    password: string,
+    metadata?: object,
+  ): Promise<User | null> => {
     const response = await fetchWithTimeout(apiUrl('/api/auth/register'), {
       method: 'POST',
       headers: {
@@ -370,19 +377,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const data = await readAuthResponseBody(response);
 
-    if (data.verificationRequired) {
-      clearAuthFromAllStorages();
-      queryClient.clear();
-      setActualUser(null);
-      setSessionExpired(false);
-      return;
-    }
-
     if (!isStoredUser(data.user) || typeof data.token !== 'string' || !data.token.trim()) {
+      // The account may still have been created (a response without a session
+      // token, e.g. an older API shape). Fall back to the manual sign-in
+      // screen rather than reporting the registration itself as failed.
+      if (data.verificationRequired) {
+        clearAuthFromAllStorages();
+        queryClient.clear();
+        setActualUser(null);
+        setSessionExpired(false);
+        return null;
+      }
       throw new Error('Registration failed');
     }
 
-    // Store auth data for registration flows that create a verified account.
+    // Register issues a session token immediately — email verification is
+    // non-blocking server-side — so sign the brand-new user straight in
+    // instead of bouncing them to the login form to retype their password.
     await prepareOfflineDataForUser(data.user.id);
     queryClient.clear();
     clearAuthFromAllStorages();
@@ -393,6 +404,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     setActualUser(data.user);
     setSessionExpired(false);
+    return data.user;
   };
 
   const signOut = async (options?: SignOutOptions) => {
