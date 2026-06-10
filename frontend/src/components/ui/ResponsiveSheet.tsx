@@ -54,27 +54,22 @@ export function ResponsiveSheet({
   const isMobile = useIsMobile();
 
   if (isMobile) {
-    // Wrap BottomSheet in a semantically correct dialog container so that
-    // Playwright / assistive-tech can find role="dialog" with the accessible
-    // name.  BottomSheet does not spread extra props onto its outer element,
-    // so we must set the ARIA attributes on a wrapper here.
-    // Only render the wrapper (and BottomSheet) when open so that a closed
-    // sheet does not leave a stale role="dialog" node in the DOM.
+    // BottomSheet itself carries role="dialog" aria-modal aria-label={title},
+    // so it must be the ONLY dialog node — an extra wrapper with role="dialog"
+    // makes role-based queries resolve to two elements (Playwright strict mode).
     if (!resolvedOpen) return null;
     return (
-      <div role="dialog" aria-modal="true" aria-label={title}>
-        <BottomSheet isOpen={resolvedOpen} onClose={onClose} title={title}>
-          {/* Body scrolls; footer is sticky at the bottom of the fixed sheet */}
-          <div className="flex flex-col gap-4">
-            {children}
-            {footer && (
-              <div className={cn('sticky bottom-0 bg-background pt-3 pb-2 border-t -mx-4 px-4')}>
-                {footer}
-              </div>
-            )}
-          </div>
-        </BottomSheet>
-      </div>
+      <BottomSheet isOpen={resolvedOpen} onClose={onClose} title={title}>
+        {/* Body scrolls; footer is sticky at the bottom of the fixed sheet */}
+        <div className="flex flex-col gap-4">
+          {children}
+          {footer && (
+            <div className={cn('sticky bottom-0 bg-background pt-3 pb-2 border-t -mx-4 px-4')}>
+              {footer}
+            </div>
+          )}
+        </div>
+      </BottomSheet>
     );
   }
 

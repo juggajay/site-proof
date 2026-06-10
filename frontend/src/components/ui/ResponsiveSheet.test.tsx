@@ -15,7 +15,11 @@ vi.mock('@/components/foreman/sheets/BottomSheet', () => ({
     children: React.ReactNode;
   }) =>
     isOpen ? (
-      <div data-testid="bottom-sheet">
+      // Mirror the real BottomSheet's ARIA contract: BottomSheet itself is the
+      // dialog node (role="dialog" aria-modal aria-label={title}). ResponsiveSheet
+      // must NOT add a second dialog wrapper — two nodes matching
+      // getByRole('dialog', { name }) is a Playwright strict-mode violation.
+      <div data-testid="bottom-sheet" role="dialog" aria-modal="true" aria-label={title}>
         <div data-testid="bottom-sheet-title">{title}</div>
         {children}
       </div>
@@ -54,8 +58,8 @@ describe('ResponsiveSheet', () => {
       </ResponsiveSheet>,
     );
 
-    // The wrapper must expose role="dialog" so that getByRole('dialog', { name })
-    // works in Playwright E2E tests (and for assistive technology).
+    // Exactly ONE dialog node, provided by BottomSheet itself — getByRole throws
+    // if a duplicate wrapper reintroduces a second role="dialog".
     expect(screen.getByRole('dialog', { name: 'Mobile Title' })).toBeInTheDocument();
     expect(screen.getByTestId('bottom-sheet')).toBeInTheDocument();
     expect(screen.getByTestId('bottom-sheet-title')).toHaveTextContent('Mobile Title');
