@@ -181,7 +181,7 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       VitePWA({
-        registerType: 'autoUpdate',
+        registerType: 'prompt',
         includeAssets: [
           'siteproof-icon.svg',
           'apple-touch-icon.png',

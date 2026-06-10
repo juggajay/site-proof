@@ -6,6 +6,7 @@ import { AuthProvider } from '@/lib/auth';
 import { RoleProtectedRoute } from '@/components/auth/RoleProtectedRoute';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { DeferredOfflineIndicator } from '@/components/DeferredOfflineIndicator';
+import { UpdatePrompt } from '@/components/UpdatePrompt';
 import { CookieConsentBanner } from '@/components/CookieConsentBanner';
 import { PageSkeleton } from '@/components/ui/Skeleton';
 import {
@@ -496,6 +497,7 @@ function App() {
         </Suspense>
         <Toaster />
         <DeferredOfflineIndicator />
+        <UpdatePrompt />
         <CookieConsentBanner />
         {ENABLE_DEV_TOOLS && RoleSwitcher && <RoleSwitcher />}
       </AuthProvider>
