@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Route, Routes } from 'react-router-dom';
-import { renderWithProviders, screen } from '@/test/renderWithProviders';
+import { fireEvent, renderWithProviders, screen, waitFor } from '@/test/renderWithProviders';
 
 // Mutable auth user, hoisted so the vi.mock factory below (which runs before the
 // imports) can close over it. ProjectsPage only reads `user` from useAuth.
@@ -140,7 +140,36 @@ describe('ProjectsPage company-onboarding gating', () => {
     expect(await screen.findByText('No projects found')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'New Project' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Create Project' })).toBeInTheDocument();
+    // Plus the secondary self-serve path: a one-click example project.
+    expect(screen.getByRole('button', { name: 'Explore an example project' })).toBeInTheDocument();
     expect(screen.queryByText('No projects yet')).not.toBeInTheDocument();
+  });
+
+  it('seeds the example project from the empty state and navigates into it', async () => {
+    authState.user = {
+      id: 'u6',
+      email: 'pm@example.com',
+      role: 'project_manager',
+      roleInCompany: 'project_manager',
+      companyId: 'c1',
+    };
+    apiFetchMock.mockImplementation((path: string) => {
+      if (path === '/api/projects/sample') {
+        return Promise.resolve({ project: { id: 'sample-1' }, alreadyExisted: false });
+      }
+      return Promise.resolve({ projects: [] });
+    });
+
+    renderWithProviders(<ProjectsPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Explore an example project' }));
+
+    await waitFor(() => {
+      expect(apiFetchMock).toHaveBeenCalledWith('/api/projects/sample', { method: 'POST' });
+    });
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith('/projects/sample-1');
+    });
   });
 
   it('redirects subcontractor portal users away instead of offering the company-setup CTA', async () => {

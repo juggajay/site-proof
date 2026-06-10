@@ -1,5 +1,8 @@
 import { Link } from 'react-router-dom';
-import { Check, ChevronRight, FolderKanban } from 'lucide-react';
+import { Check, ChevronRight, FolderKanban, Sparkles } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { extractErrorMessage } from '@/lib/errorHandling';
+import { useCreateSampleProject } from '@/hooks/useCreateSampleProject';
 
 interface SetupStep {
   key: string;
@@ -26,6 +29,8 @@ export function DashboardSetupChecklist({
   projectCreated,
   lotsAdded,
 }: DashboardSetupChecklistProps) {
+  const createSampleProject = useCreateSampleProject();
+
   const steps: SetupStep[] = [
     {
       key: 'project',
@@ -97,6 +102,29 @@ export function DashboardSetupChecklist({
           </li>
         ))}
       </ol>
+      <div className="border-t p-4">
+        {createSampleProject.isError && (
+          <p role="alert" className="mb-3 text-sm text-destructive">
+            {extractErrorMessage(createSampleProject.error, 'Failed to create the example project')}
+          </p>
+        )}
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => createSampleProject.mutate()}
+          disabled={createSampleProject.isPending}
+          className="w-full sm:w-auto"
+        >
+          <Sparkles className="h-4 w-4" />
+          {createSampleProject.isPending
+            ? 'Setting up example project…'
+            : '…or explore an example project'}
+        </Button>
+        <p className="mt-2 text-xs text-muted-foreground">
+          We&rsquo;ll add a clearly-labelled example project with lots, an ITP, hold points, an NCR,
+          and test results so you can look around with real content. Delete it whenever you like.
+        </p>
+      </div>
     </section>
   );
 }
