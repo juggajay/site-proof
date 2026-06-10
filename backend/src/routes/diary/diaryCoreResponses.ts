@@ -9,6 +9,14 @@ type PreviousPersonnel = {
   hours: unknown | null;
 };
 
+type PreviousPlant = {
+  description: string;
+  idRego: string | null;
+  company: string | null;
+  hoursOperated: unknown | null;
+  notes: string | null;
+};
+
 export function buildDiaryListResponse(
   diaries: unknown[],
   total: number,
@@ -30,5 +38,17 @@ export function buildPreviousPersonnelResponse(personnel: PreviousPersonnel[], p
     personnel,
     previousDate: previousDate.toISOString().split('T')[0],
     message: `Copied ${personnel.length} personnel from previous diary`,
+  };
+}
+
+export function buildPreviousPlantEmptyResponse() {
+  return { plant: [], message: 'No plant from previous day' };
+}
+
+export function buildPreviousPlantResponse(plant: PreviousPlant[], previousDate: Date) {
+  return {
+    plant,
+    previousDate: previousDate.toISOString().split('T')[0],
+    message: `Copied ${plant.length} plant from previous diary`,
   };
 }

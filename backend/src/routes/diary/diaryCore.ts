@@ -20,6 +20,8 @@ import {
   buildDiaryListResponse,
   buildPreviousPersonnelEmptyResponse,
   buildPreviousPersonnelResponse,
+  buildPreviousPlantEmptyResponse,
+  buildPreviousPlantResponse,
 } from './diaryCoreResponses.js';
 
 const router = Router();
@@ -391,6 +393,68 @@ router.get(
     }));
 
     res.json(buildPreviousPersonnelResponse(personnelToCopy, previousDiary.date));
+  }),
+);
+
+// GET /api/diary/:projectId/:date/previous-plant - Get plant from previous day's diary
+router.get(
+  '/:projectId/:date/previous-plant',
+  asyncHandler(async (req: Request, res: Response) => {
+    const projectId = parseDiaryRouteParam(req.params.projectId, 'projectId');
+    const { startOfDay, endOfDay } = getUtcDayRange(req.params.date);
+    const userId = req.user!.id;
+
+    if (!userId) {
+      throw AppError.unauthorized('Unauthorized');
+    }
+
+    await requireDiaryReadAccess(req.user!, projectId);
+
+    const currentDiary = await prisma.dailyDiary.findFirst({
+      where: {
+        projectId,
+        date: {
+          gte: startOfDay,
+          lte: endOfDay,
+        },
+      },
+    });
+
+    // Find the most recent diary BEFORE the current one that has plant entries
+    const referenceDate = currentDiary?.date || endOfDay;
+
+    const previousDiary = await prisma.dailyDiary.findFirst({
+      where: {
+        projectId,
+        date: {
+          lt: referenceDate,
+        },
+        plant: {
+          some: {}, // Only find diaries that have at least one plant entry
+        },
+      },
+      include: {
+        plant: true,
+      },
+      orderBy: {
+        date: 'desc',
+      },
+    });
+
+    if (!previousDiary || previousDiary.plant.length === 0) {
+      return res.json(buildPreviousPlantEmptyResponse());
+    }
+
+    // Return plant without IDs (so they can be added as new entries)
+    const plantToCopy = previousDiary.plant.map((p) => ({
+      description: p.description,
+      idRego: p.idRego,
+      company: p.company,
+      hoursOperated: p.hoursOperated,
+      notes: p.notes,
+    }));
+
+    res.json(buildPreviousPlantResponse(plantToCopy, previousDiary.date));
   }),
 );
 

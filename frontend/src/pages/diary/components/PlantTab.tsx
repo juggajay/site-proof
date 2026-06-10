@@ -3,10 +3,13 @@ import { apiFetch } from '@/lib/api';
 import { logError } from '@/lib/logger';
 import { validateHours } from '../constants';
 import { parseOptionalDiaryHoursInput } from '../diaryNumericInput';
+import { useCopyFromYesterday } from '../hooks/useCopyFromYesterday';
 import type { DailyDiary, Plant, PlantFormState } from '../types';
 
 interface PlantTabProps {
   diary: DailyDiary;
+  projectId: string;
+  selectedDate: string;
   saving: boolean;
   setSaving: (saving: boolean) => void;
   onDiaryUpdate: (diary: DailyDiary) => void;
@@ -14,6 +17,8 @@ interface PlantTabProps {
 
 export const PlantTab = React.memo(function PlantTab({
   diary,
+  projectId,
+  selectedDate,
   saving,
   setSaving,
   onDiaryUpdate,
@@ -24,6 +29,13 @@ export const PlantTab = React.memo(function PlantTab({
     company: '',
     hoursOperated: '',
     notes: '',
+  });
+
+  const { copyPlantFromYesterday, copyingPlant } = useCopyFromYesterday({
+    projectId,
+    selectedDate,
+    diary,
+    onDiaryUpdate,
   });
 
   const plantHoursValidation = validateHours(plantForm.hoursOperated);
@@ -70,7 +82,26 @@ export const PlantTab = React.memo(function PlantTab({
 
   return (
     <div className="rounded-lg border bg-card p-6">
-      <h3 className="mb-4 text-lg font-semibold">Plant & Equipment</h3>
+      <div className="mb-4 flex items-center justify-between">
+        <h3 className="text-lg font-semibold">Plant &amp; Equipment</h3>
+        {diary.status !== 'submitted' && (
+          <button
+            onClick={() => void copyPlantFromYesterday()}
+            disabled={saving || copyingPlant}
+            className="inline-flex items-center gap-2 rounded-lg border border-input bg-background px-3 py-1.5 text-sm hover:bg-muted disabled:opacity-50"
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+              />
+            </svg>
+            Copy from Previous Day
+          </button>
+        )}
+      </div>
 
       {/* Plant List */}
       {diary.plant.length > 0 && (
