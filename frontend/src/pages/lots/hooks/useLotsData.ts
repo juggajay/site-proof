@@ -1,8 +1,11 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
+import type { Dispatch, SetStateAction } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getAuthToken } from '@/lib/auth';
 import { apiFetch } from '@/lib/api';
-import { devLog, logError } from '@/lib/logger';
+import { queryKeys } from '@/lib/queryKeys';
+import { logError } from '@/lib/logger';
 import { extractErrorMessage, isForbidden } from '@/lib/errorHandling';
 import type { Lot } from '../lotsPageTypes';
 
@@ -10,6 +13,26 @@ const INITIAL_DISPLAY_COUNT = 20;
 const LOAD_MORE_COUNT = 15;
 const LOTS_API_PAGE_LIMIT = 100;
 const LOTS_API_MAX_PAGES = 100;
+
+// How long a downloaded register stays fresh: revisits and tab switches inside
+// this window render straight from cache with zero network requests.
+const LOTS_REGISTER_STALE_TIME_MS = 30_000;
+
+// Stable empty array so memoized consumers don't recompute on every render.
+const EMPTY_LOTS: Lot[] = [];
+
+/**
+ * Cache key for the full lot register (all pages, `Lot[]` shape).
+ *
+ * Built on `queryKeys.lots(projectId)` so the existing mutation invalidations
+ * keep hitting it via react-query prefix matching: AssignSubcontractorModal
+ * invalidates `['lots']` and useLotConformanceActions invalidates
+ * `queryKeys.lots(projectId)`. The trailing `'register'` segment keeps this
+ * entry distinct from DocumentsPage, which caches a single-page response
+ * object under the exact `queryKeys.lots(projectId)` key.
+ */
+export const lotsRegisterQueryKey = (projectId: string) =>
+  [...queryKeys.lots(projectId), 'register'] as const;
 
 interface UseLotsDataParams {
   projectId: string | undefined;
@@ -69,12 +92,11 @@ export function useLotsData({
   areaZoneFilter,
 }: UseLotsDataParams) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
-  // Core data state
-  const [lots, setLots] = useState<Lot[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [accessDenied, setAccessDenied] = useState(false);
+  // Manual error channel layered over the query's own error state so callers
+  // (e.g. DeleteLotModal's onError) can surface failures in the same banner.
+  const [manualError, setManualError] = useState<string | null>(null);
   const [projectName, setProjectName] = useState<string>('');
   const [subcontractors, setSubcontractors] = useState<{ id: string; companyName: string }[]>([]);
   const [projectAreas, setProjectAreas] = useState<
@@ -92,6 +114,109 @@ export function useLotsData({
   const [loadingMore, setLoadingMore] = useState(false);
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const statusFilterKey = useMemo(() => statusFilters.join(','), [statusFilters]);
+
+  // =====================
+  // Data fetching
+  // =====================
+  const hasAuthToken = Boolean(getAuthToken());
+  useEffect(() => {
+    if (projectId && !hasAuthToken) navigate('/login');
+  }, [projectId, hasAuthToken, navigate]);
+
+  const lotsQuery = useQuery({
+    queryKey: lotsRegisterQueryKey(projectId ?? 'none'),
+    queryFn: () => fetchAllLotPages(projectId!),
+    enabled: Boolean(projectId) && hasAuthToken,
+    // Replaces the hand-rolled fetch + 30s full-register poll + per-tab-switch
+    // re-download (Feature #732): data is served from cache while fresh, then
+    // refreshed in the background on the next window focus or when a mutation
+    // invalidates the lots key — instead of re-downloading every 30 seconds.
+    staleTime: LOTS_REGISTER_STALE_TIME_MS,
+    refetchOnWindowFocus: true,
+    // The bespoke fetch surfaced failures immediately with a "Try again"
+    // button (pinned in e2e/lots.spec.ts); the app-level default of retry: 1
+    // would swallow the first failure, so keep retries off for this query.
+    retry: false,
+    onError: (err: unknown) => logError('Fetch lots error:', err),
+  });
+
+  // Mirror the previous behavior: a failed load clears the register and shows
+  // the error banner instead of stale rows.
+  const lots = lotsQuery.error ? EMPTY_LOTS : (lotsQuery.data ?? EMPTY_LOTS);
+  // Only a cold cache shows the skeleton; warm revisits render instantly while
+  // any background refetch runs silently. Keep the skeleton up during the
+  // missing-token redirect to /login.
+  const loading = lotsQuery.isInitialLoading || Boolean(projectId && !hasAuthToken);
+  const accessDenied = isForbidden(lotsQuery.error);
+  const error =
+    manualError ??
+    (lotsQuery.error ? extractErrorMessage(lotsQuery.error, 'Failed to load lots.') : null);
+
+  // Local mutation helpers (delete/clone/create/bulk in useLotsActions) write
+  // straight into the cached register, exactly like the old setState did.
+  const setLots = useCallback<Dispatch<SetStateAction<Lot[]>>>(
+    (action) => {
+      if (!projectId) return;
+      queryClient.setQueryData<Lot[]>(lotsRegisterQueryKey(projectId), (prev) =>
+        typeof action === 'function' ? action(prev ?? EMPTY_LOTS) : action,
+      );
+    },
+    [projectId, queryClient],
+  );
+
+  const { refetch } = lotsQuery;
+  const fetchLots = useCallback(async () => {
+    setManualError(null);
+    await refetch();
+  }, [refetch]);
+
+  const fetchSubcontractors = useCallback(async () => {
+    if (!projectId) return;
+    try {
+      const data = await apiFetch<{ subcontractors: typeof subcontractors }>(
+        `/api/subcontractors/for-project/${encodeURIComponent(projectId)}`,
+      );
+      setSubcontractors(data.subcontractors || []);
+    } catch (err) {
+      logError('Fetch subcontractors error:', err);
+    }
+  }, [projectId]);
+
+  useEffect(() => {
+    if (projectId && !isSubcontractor) fetchSubcontractors();
+  }, [projectId, isSubcontractor, fetchSubcontractors]);
+
+  // Fetch project name
+  useEffect(() => {
+    const fetchProjectName = async () => {
+      if (!projectId) return;
+      try {
+        const data = await apiFetch<{ project?: { name?: string }; name?: string }>(
+          `/api/projects/${encodeURIComponent(projectId)}`,
+        );
+        setProjectName(data.project?.name || data.name || '');
+      } catch (err) {
+        logError('Error fetching project name:', err);
+      }
+    };
+    fetchProjectName();
+  }, [projectId]);
+
+  // Feature #708 - Fetch project areas
+  useEffect(() => {
+    const fetchProjectAreas = async () => {
+      if (!projectId) return;
+      try {
+        const data = await apiFetch<{ areas: typeof projectAreas }>(
+          `/api/projects/${encodeURIComponent(projectId)}/areas`,
+        );
+        setProjectAreas(data.areas || []);
+      } catch (err) {
+        logError('Error fetching project areas:', err);
+      }
+    };
+    fetchProjectAreas();
+  }, [projectId]);
 
   // =====================
   // Derived data
@@ -193,132 +318,6 @@ export function useLotsData({
   const hasMore = displayedCount < filteredLots.length;
 
   // =====================
-  // Data fetching
-  // =====================
-  const fetchLots = useCallback(async () => {
-    if (!projectId) {
-      setLots([]);
-      setError(null);
-      setAccessDenied(false);
-      setLoading(false);
-      return;
-    }
-    const token = getAuthToken();
-    if (!token) {
-      navigate('/login');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setError(null);
-      setAccessDenied(false);
-      const allLots = await fetchAllLotPages(projectId);
-      setLots(allLots);
-    } catch (err) {
-      setLots([]);
-      setAccessDenied(isForbidden(err));
-      setError(extractErrorMessage(err, 'Failed to load lots.'));
-      logError('Fetch lots error:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [projectId, navigate]);
-
-  const fetchSubcontractors = useCallback(async () => {
-    if (!projectId) return;
-    try {
-      const data = await apiFetch<{ subcontractors: typeof subcontractors }>(
-        `/api/subcontractors/for-project/${encodeURIComponent(projectId)}`,
-      );
-      setSubcontractors(data.subcontractors || []);
-    } catch (err) {
-      logError('Fetch subcontractors error:', err);
-    }
-  }, [projectId]);
-
-  useEffect(() => {
-    fetchLots();
-  }, [fetchLots]);
-
-  useEffect(() => {
-    if (projectId && !isSubcontractor) fetchSubcontractors();
-  }, [projectId, isSubcontractor, fetchSubcontractors]);
-
-  // Fetch project name
-  useEffect(() => {
-    const fetchProjectName = async () => {
-      if (!projectId) return;
-      try {
-        const data = await apiFetch<{ project?: { name?: string }; name?: string }>(
-          `/api/projects/${encodeURIComponent(projectId)}`,
-        );
-        setProjectName(data.project?.name || data.name || '');
-      } catch (err) {
-        logError('Error fetching project name:', err);
-      }
-    };
-    fetchProjectName();
-  }, [projectId]);
-
-  // Feature #708 - Fetch project areas
-  useEffect(() => {
-    const fetchProjectAreas = async () => {
-      if (!projectId) return;
-      try {
-        const data = await apiFetch<{ areas: typeof projectAreas }>(
-          `/api/projects/${encodeURIComponent(projectId)}/areas`,
-        );
-        setProjectAreas(data.areas || []);
-      } catch (err) {
-        logError('Error fetching project areas:', err);
-      }
-    };
-    fetchProjectAreas();
-  }, [projectId]);
-
-  // Feature #732: Real-time lot update polling
-  useEffect(() => {
-    let pollInterval: NodeJS.Timeout | null = null;
-    const startPolling = () => {
-      pollInterval = setInterval(() => {
-        if (document.visibilityState === 'visible' && projectId) {
-          const silentFetchLots = async () => {
-            try {
-              const newLots = await fetchAllLotPages(projectId);
-              setLots((prevLots) => {
-                const hasChanges =
-                  newLots.length !== prevLots.length ||
-                  newLots.some(
-                    (newLot: Lot, index: number) =>
-                      !prevLots[index] ||
-                      newLot.id !== prevLots[index].id ||
-                      newLot.status !== prevLots[index].status,
-                  );
-                return hasChanges ? newLots : prevLots;
-              });
-            } catch (err) {
-              devLog('Background lot fetch failed:', err);
-            }
-          };
-          silentFetchLots();
-        }
-      }, 30000);
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && projectId) fetchLots();
-    };
-
-    startPolling();
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => {
-      if (pollInterval) clearInterval(pollInterval);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [projectId, fetchLots]);
-
-  // =====================
   // Infinite scroll
   // =====================
   const loadMore = useCallback(() => {
@@ -361,7 +360,7 @@ export function useLotsData({
     loading,
     error,
     accessDenied,
-    setError,
+    setError: setManualError,
     projectName,
     subcontractors,
     projectAreas,
