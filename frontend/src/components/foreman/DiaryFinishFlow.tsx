@@ -482,7 +482,7 @@ function SectionCard({ icon: Icon, title, status, onEdit, children }: SectionCar
           </span>
           <button
             onClick={onEdit}
-            className="p-1.5 text-muted-foreground hover:text-foreground touch-manipulation min-h-[32px] min-w-[32px]"
+            className="touch-target flex items-center justify-center p-1.5 text-muted-foreground hover:text-foreground"
             aria-label={`Edit ${title}`}
           >
             <Edit2 className="h-4 w-4" />

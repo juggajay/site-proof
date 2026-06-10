@@ -71,6 +71,20 @@ export function useDiaryMobileHandlers({
       })),
   };
 
+  /**
+   * Resolves the diary for the selected date, creating it when needed.
+   * Throws (instead of silently returning) when creation fails so the calling
+   * sheet keeps the foreman's typed entry open and shows its failure banner —
+   * a silent return here used to let the sheet report success and close.
+   */
+  const requireDiary = async (): Promise<DailyDiary> => {
+    const currentDiary = diary ?? (await ensureDiaryExists());
+    if (!currentDiary) {
+      throw new Error('Diary could not be created');
+    }
+    return currentDiary;
+  };
+
   const handleDeleteEntry = async (entry: { id: string; type: string }) => {
     if (!diary) return;
     const typeToEndpoint: Record<string, string> = {
@@ -133,11 +147,7 @@ export function useDiaryMobileHandlers({
       return;
     }
 
-    let currentDiary = diary;
-    if (!currentDiary) {
-      currentDiary = await ensureDiaryExists();
-      if (!currentDiary) return;
-    }
+    const currentDiary = await requireDiary();
     await apiFetch(`/api/diary/${encodeURIComponent(currentDiary.id)}/activities`, {
       method: 'POST',
       body: JSON.stringify(payload),
@@ -159,11 +169,7 @@ export function useDiaryMobileHandlers({
       return;
     }
 
-    let currentDiary = diary;
-    if (!currentDiary) {
-      currentDiary = await ensureDiaryExists();
-      if (!currentDiary) return;
-    }
+    const currentDiary = await requireDiary();
     await apiFetch(`/api/diary/${encodeURIComponent(currentDiary.id)}/delays`, {
       method: 'POST',
       body: JSON.stringify(payload),
@@ -187,11 +193,7 @@ export function useDiaryMobileHandlers({
       return;
     }
 
-    let currentDiary = diary;
-    if (!currentDiary) {
-      currentDiary = await ensureDiaryExists();
-      if (!currentDiary) return;
-    }
+    const currentDiary = await requireDiary();
     await apiFetch(`/api/diary/${encodeURIComponent(currentDiary.id)}/deliveries`, {
       method: 'POST',
       body: JSON.stringify(payload),
@@ -212,11 +214,7 @@ export function useDiaryMobileHandlers({
       return;
     }
 
-    let currentDiary = diary;
-    if (!currentDiary) {
-      currentDiary = await ensureDiaryExists();
-      if (!currentDiary) return;
-    }
+    const currentDiary = await requireDiary();
     await apiFetch(`/api/diary/${encodeURIComponent(currentDiary.id)}/events`, {
       method: 'POST',
       body: JSON.stringify(payload),
@@ -245,11 +243,7 @@ export function useDiaryMobileHandlers({
       await updateTimelineEntryFromSheet(editingEntry, 'personnel', payload);
       return;
     }
-    let currentDiary = diary;
-    if (!currentDiary) {
-      currentDiary = await ensureDiaryExists();
-      if (!currentDiary) return;
-    }
+    const currentDiary = await requireDiary();
     await apiFetch(`/api/diary/${encodeURIComponent(currentDiary.id)}/personnel`, {
       method: 'POST',
       body: JSON.stringify(payload),
@@ -268,11 +262,7 @@ export function useDiaryMobileHandlers({
       await updateTimelineEntryFromSheet(editingEntry, 'plant', payload);
       return;
     }
-    let currentDiary = diary;
-    if (!currentDiary) {
-      currentDiary = await ensureDiaryExists();
-      if (!currentDiary) return;
-    }
+    const currentDiary = await requireDiary();
     await apiFetch(`/api/diary/${encodeURIComponent(currentDiary.id)}/plant`, {
       method: 'POST',
       body: JSON.stringify(payload),
@@ -289,36 +279,33 @@ export function useDiaryMobileHandlers({
   }) => {
     if (getDiaryWeatherNumberError(data)) return;
 
-    const currentDiary = await ensureDiaryExists();
-    if (!currentDiary) return;
-    try {
-      const temperatureMin = parseOptionalDiaryTemperatureInput(data.temperatureMin);
-      const temperatureMax = parseOptionalDiaryTemperatureInput(data.temperatureMax);
-      const rainfallMm = parseOptionalDiaryRainfallInput(data.rainfallMm);
+    // No try/catch: failures must reach the weather sheet so it stays open
+    // and shows its failure banner instead of reporting a successful save.
+    await requireDiary();
+    const temperatureMin = parseOptionalDiaryTemperatureInput(data.temperatureMin);
+    const temperatureMax = parseOptionalDiaryTemperatureInput(data.temperatureMax);
+    const rainfallMm = parseOptionalDiaryRainfallInput(data.rainfallMm);
 
-      const updated = await apiFetch<DailyDiary>('/api/diary', {
-        method: 'POST',
-        body: JSON.stringify({
-          projectId,
-          date: selectedDate,
-          weatherConditions: data.conditions || undefined,
-          temperatureMin: temperatureMin ?? undefined,
-          temperatureMax: temperatureMax ?? undefined,
-          rainfallMm: rainfallMm ?? undefined,
-        }),
-      });
-      setDiary(updated);
-      setWeatherForm(() => ({
-        weatherConditions: updated.weatherConditions || '',
-        temperatureMin: updated.temperatureMin?.toString() || '',
-        temperatureMax: updated.temperatureMax?.toString() || '',
-        rainfallMm: updated.rainfallMm?.toString() || '',
-        weatherNotes: updated.weatherNotes || '',
-        generalNotes: updated.generalNotes || '',
-      }));
-    } catch {
-      // ignore weather save errors
-    }
+    const updated = await apiFetch<DailyDiary>('/api/diary', {
+      method: 'POST',
+      body: JSON.stringify({
+        projectId,
+        date: selectedDate,
+        weatherConditions: data.conditions || undefined,
+        temperatureMin: temperatureMin ?? undefined,
+        temperatureMax: temperatureMax ?? undefined,
+        rainfallMm: rainfallMm ?? undefined,
+      }),
+    });
+    setDiary(updated);
+    setWeatherForm(() => ({
+      weatherConditions: updated.weatherConditions || '',
+      temperatureMin: updated.temperatureMin?.toString() || '',
+      temperatureMax: updated.temperatureMax?.toString() || '',
+      rainfallMm: updated.rainfallMm?.toString() || '',
+      weatherNotes: updated.weatherNotes || '',
+      generalNotes: updated.generalNotes || '',
+    }));
   };
 
   return {

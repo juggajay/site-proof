@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BottomSheet } from './BottomSheet';
-import { useHaptics } from '@/hooks/useHaptics';
+import { SheetErrorBanner } from './SheetErrorBanner';
+import { useSheetSave } from './useSheetSave';
 import { getDiaryWeatherNumberError } from '@/pages/diary/diaryNumericInput';
 
 const CONDITIONS = [
@@ -36,8 +37,7 @@ export function AddWeatherSheet({ isOpen, onClose, onSave, initialData }: AddWea
   const [temperatureMin, setTemperatureMin] = useState(initialData?.temperatureMin || '');
   const [temperatureMax, setTemperatureMax] = useState(initialData?.temperatureMax || '');
   const [rainfallMm, setRainfallMm] = useState(initialData?.rainfallMm || '');
-  const [saving, setSaving] = useState(false);
-  const { trigger } = useHaptics();
+  const { saving, saveError, runSave } = useSheetSave();
   const weatherNumberError = getDiaryWeatherNumberError({
     temperatureMin,
     temperatureMax,
@@ -53,18 +53,9 @@ export function AddWeatherSheet({ isOpen, onClose, onSave, initialData }: AddWea
     }
   }, [initialData]);
 
-  const handleSave = async () => {
-    if (weatherNumberError || saving) return;
-    setSaving(true);
-    try {
-      await onSave({ conditions, temperatureMin, temperatureMax, rainfallMm });
-      trigger('success');
-      onClose();
-    } catch {
-      trigger('error');
-    } finally {
-      setSaving(false);
-    }
+  const handleSave = () => {
+    if (weatherNumberError) return;
+    void runSave(() => onSave({ conditions, temperatureMin, temperatureMax, rainfallMm }), onClose);
   };
 
   return (
@@ -78,7 +69,7 @@ export function AddWeatherSheet({ isOpen, onClose, onSave, initialData }: AddWea
                 key={c}
                 onClick={() => setConditions(c)}
                 className={cn(
-                  'px-3 py-2 rounded-full text-sm font-medium touch-manipulation min-h-[40px]',
+                  'px-3 py-2 rounded-full text-sm font-medium touch-manipulation min-h-[44px]',
                   conditions === c
                     ? 'bg-primary text-primary-foreground'
                     : 'bg-muted text-muted-foreground',
@@ -139,6 +130,8 @@ export function AddWeatherSheet({ isOpen, onClose, onSave, initialData }: AddWea
             {weatherNumberError}
           </p>
         )}
+
+        {saveError && <SheetErrorBanner onRetry={handleSave} retrying={saving} />}
 
         <button
           onClick={handleSave}

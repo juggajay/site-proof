@@ -60,7 +60,7 @@ export function DiaryQuickAddBar({
                 onClick={() => onChipTap(chip.type)}
                 className={cn(
                   'flex shrink-0 items-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium whitespace-nowrap',
-                  'touch-manipulation min-h-[40px]',
+                  'touch-manipulation min-h-[44px]',
                   chip.color,
                 )}
               >
@@ -71,7 +71,7 @@ export function DiaryQuickAddBar({
           })}
           <button
             onClick={() => onChipTap('manual')}
-            className="flex min-h-[40px] shrink-0 touch-manipulation items-center gap-1.5 rounded-full bg-muted px-3 py-2 text-sm font-medium whitespace-nowrap text-muted-foreground"
+            className="flex min-h-[44px] shrink-0 touch-manipulation items-center gap-1.5 rounded-full bg-muted px-3 py-2 text-sm font-medium whitespace-nowrap text-muted-foreground"
           >
             <Clock className="h-4 w-4" />+ More
           </button>

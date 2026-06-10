@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BottomSheet } from './BottomSheet';
-import { useHaptics } from '@/hooks/useHaptics';
+import { SheetErrorBanner } from './SheetErrorBanner';
+import { useSheetSave } from './useSheetSave';
 import {
   getOptionalDiaryQuantityError,
   parseOptionalDiaryQuantityInput,
@@ -49,38 +50,34 @@ export function AddDeliverySheet({
   const [lotId, setLotId] = useState(initialData?.lotId || defaultLotId || '');
   const [notes, setNotes] = useState(initialData?.notes || '');
   const [showMore, setShowMore] = useState(!!initialData);
-  const [saving, setSaving] = useState(false);
-  const { trigger } = useHaptics();
+  const { saving, saveError, runSave } = useSheetSave();
   const quantityError = getOptionalDiaryQuantityError(quantity);
 
-  const handleSave = async () => {
-    if (!description.trim() || quantityError || saving) return;
+  const handleSave = () => {
+    if (!description.trim() || quantityError) return;
     const parsedQuantity = parseOptionalDiaryQuantityInput(quantity);
-    setSaving(true);
-    try {
-      await onSave({
-        description: description.trim(),
-        supplier: supplier || undefined,
-        docketNumber: docketNumber || undefined,
-        quantity: parsedQuantity ?? undefined,
-        unit: unit || undefined,
-        lotId: lotId || undefined,
-        notes: notes || undefined,
-      });
-      trigger('success');
-      setDescription('');
-      setSupplier('');
-      setDocketNumber('');
-      setQuantity('');
-      setUnit('');
-      setNotes('');
-      setShowMore(false);
-      onClose();
-    } catch {
-      trigger('error');
-    } finally {
-      setSaving(false);
-    }
+    void runSave(
+      () =>
+        onSave({
+          description: description.trim(),
+          supplier: supplier || undefined,
+          docketNumber: docketNumber || undefined,
+          quantity: parsedQuantity ?? undefined,
+          unit: unit || undefined,
+          lotId: lotId || undefined,
+          notes: notes || undefined,
+        }),
+      () => {
+        setDescription('');
+        setSupplier('');
+        setDocketNumber('');
+        setQuantity('');
+        setUnit('');
+        setNotes('');
+        setShowMore(false);
+        onClose();
+      },
+    );
   };
 
   return (
@@ -186,6 +183,8 @@ export function AddDeliverySheet({
             </div>
           </div>
         )}
+
+        {saveError && <SheetErrorBanner onRetry={handleSave} retrying={saving} />}
 
         <button
           onClick={handleSave}

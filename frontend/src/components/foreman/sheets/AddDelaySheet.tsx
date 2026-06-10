@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BottomSheet } from './BottomSheet';
-import { useHaptics } from '@/hooks/useHaptics';
+import { SheetErrorBanner } from './SheetErrorBanner';
+import { useSheetSave } from './useSheetSave';
 import {
   getOptionalDiaryHoursError,
   parseOptionalDiaryHoursInput,
@@ -45,34 +46,30 @@ export function AddDelaySheet({
   const [impact, setImpact] = useState(initialData?.impact || '');
   const [lotId, setLotId] = useState(initialData?.lotId || defaultLotId || '');
   const [showMore, setShowMore] = useState(!!initialData);
-  const [saving, setSaving] = useState(false);
-  const { trigger } = useHaptics();
+  const { saving, saveError, runSave } = useSheetSave();
   const durationHoursError = getOptionalDiaryHoursError(durationHours, 'Duration');
 
-  const handleSave = async () => {
-    if (!delayType || !description.trim() || durationHoursError || saving) return;
+  const handleSave = () => {
+    if (!delayType || !description.trim() || durationHoursError) return;
     const parsedDurationHours = parseOptionalDiaryHoursInput(durationHours);
-    setSaving(true);
-    try {
-      await onSave({
-        delayType,
-        description: description.trim(),
-        durationHours: parsedDurationHours ?? undefined,
-        impact: impact || undefined,
-        lotId: lotId || undefined,
-      });
-      trigger('success');
-      setDelayType('');
-      setDescription('');
-      setDurationHours('');
-      setImpact('');
-      setShowMore(false);
-      onClose();
-    } catch {
-      trigger('error');
-    } finally {
-      setSaving(false);
-    }
+    void runSave(
+      () =>
+        onSave({
+          delayType,
+          description: description.trim(),
+          durationHours: parsedDurationHours ?? undefined,
+          impact: impact || undefined,
+          lotId: lotId || undefined,
+        }),
+      () => {
+        setDelayType('');
+        setDescription('');
+        setDurationHours('');
+        setImpact('');
+        setShowMore(false);
+        onClose();
+      },
+    );
   };
 
   return (
@@ -86,7 +83,7 @@ export function AddDelaySheet({
                 key={type}
                 onClick={() => setDelayType(type)}
                 className={cn(
-                  'px-3 py-2 rounded-full text-sm font-medium touch-manipulation min-h-[40px]',
+                  'px-3 py-2 rounded-full text-sm font-medium touch-manipulation min-h-[44px]',
                   delayType === type
                     ? 'bg-primary text-primary-foreground'
                     : 'bg-muted text-muted-foreground',
@@ -165,6 +162,8 @@ export function AddDelaySheet({
             </div>
           </div>
         )}
+
+        {saveError && <SheetErrorBanner onRetry={handleSave} retrying={saving} />}
 
         <button
           onClick={handleSave}

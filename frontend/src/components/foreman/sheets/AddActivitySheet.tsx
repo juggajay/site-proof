@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BottomSheet } from './BottomSheet';
-import { useHaptics } from '@/hooks/useHaptics';
+import { SheetErrorBanner } from './SheetErrorBanner';
+import { useSheetSave } from './useSheetSave';
 import {
   getOptionalDiaryQuantityError,
   parseOptionalDiaryQuantityInput,
@@ -45,35 +46,31 @@ export function AddActivitySheet({
   const [unit, setUnit] = useState(initialData?.unit || '');
   const [notes, setNotes] = useState(initialData?.notes || '');
   const [showMore, setShowMore] = useState(!!initialData);
-  const [saving, setSaving] = useState(false);
-  const { trigger } = useHaptics();
+  const { saving, saveError, runSave } = useSheetSave();
   const quantityError = getOptionalDiaryQuantityError(quantity);
 
-  const handleSave = async () => {
-    if (!description.trim() || quantityError || saving) return;
+  const handleSave = () => {
+    if (!description.trim() || quantityError) return;
     const parsedQuantity = parseOptionalDiaryQuantityInput(quantity);
-    setSaving(true);
-    try {
-      await onSave({
-        description: description.trim(),
-        lotId: lotId || undefined,
-        quantity: parsedQuantity ?? undefined,
-        unit: unit || undefined,
-        notes: notes || undefined,
-      });
-      trigger('success');
-      // Reset form
-      setDescription('');
-      setQuantity('');
-      setUnit('');
-      setNotes('');
-      setShowMore(false);
-      onClose();
-    } catch {
-      trigger('error');
-    } finally {
-      setSaving(false);
-    }
+    void runSave(
+      () =>
+        onSave({
+          description: description.trim(),
+          lotId: lotId || undefined,
+          quantity: parsedQuantity ?? undefined,
+          unit: unit || undefined,
+          notes: notes || undefined,
+        }),
+      () => {
+        // Reset form
+        setDescription('');
+        setQuantity('');
+        setUnit('');
+        setNotes('');
+        setShowMore(false);
+        onClose();
+      },
+    );
   };
 
   return (
@@ -97,7 +94,7 @@ export function AddActivitySheet({
               <button
                 key={i}
                 onClick={() => setDescription(s)}
-                className="px-3 py-1.5 bg-muted rounded-full text-sm touch-manipulation"
+                className="px-3 py-1.5 bg-muted rounded-full text-sm touch-manipulation min-h-[44px]"
               >
                 {s}
               </button>
@@ -171,6 +168,8 @@ export function AddActivitySheet({
             </div>
           </div>
         )}
+
+        {saveError && <SheetErrorBanner onRetry={handleSave} retrying={saving} />}
 
         <button
           onClick={handleSave}
