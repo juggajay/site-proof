@@ -750,7 +750,9 @@ test.describe('production readiness guardrails', () => {
       /<ProtectedRoute>\s*<KeyboardShortcutsProvider>\s*<CompanyOnboardingGate>\s*<MainLayout\s*\/>\s*<\/CompanyOnboardingGate>\s*<\/KeyboardShortcutsProvider>\s*<\/ProtectedRoute>/,
     );
     expect(appSource).not.toMatch(/<KeyboardShortcutsProvider>\s*<Suspense/);
-    expect(protectedShellSource).toContain('<OnboardingTour enabled={showGeneralOnboarding} />');
+    expect(protectedShellSource).toContain(
+      '<OnboardingTour enabled={showGeneralOnboarding} autoShow={autoShowGeneralOnboarding} />',
+    );
     expect(protectedShellSource).not.toContain('ChangelogNotification');
     expect(protectedShellSource).toContain('<SessionTimeoutWarning />');
     expect(errorBoundarySource).toContain('useNavigate');
@@ -776,9 +778,17 @@ test.describe('production readiness guardrails', () => {
     expect(protectedShellSource).toContain('Boolean(user?.companyId)');
     expect(protectedShellSource).toContain('!SUBCONTRACTOR_ROLES.includes(userRole)');
     expect(protectedShellSource).toContain('!isCompanySetupRoute');
-    expect(protectedShellSource).toContain('<OnboardingTour enabled={showGeneralOnboarding} />');
+    // First-run auto-show excludes foremen (desktop-oriented steps); replay
+    // from the header stays available to them.
+    expect(protectedShellSource).toContain('const autoShowGeneralOnboarding =');
+    expect(protectedShellSource).toContain('userRole !== ROLES.FOREMAN');
+    expect(protectedShellSource).toContain(
+      '<OnboardingTour enabled={showGeneralOnboarding} autoShow={autoShowGeneralOnboarding} />',
+    );
     expect(onboardingSource).toContain('enabled = true');
     expect(onboardingSource).toContain('if (!enabled && !forceShow)');
+    // The claims/costs step never reaches roles without commercial access.
+    expect(onboardingSource).toContain('!step.commercial || hasCommercialAccess');
   });
 
   test('root app overlay persistence uses safe storage helpers', async () => {
@@ -792,9 +802,11 @@ test.describe('production readiness guardrails', () => {
     );
     const joinedSource = `${onboardingSource}\n${changelogSource}`;
 
-    expect(onboardingSource).toContain('readLocalStorageItem(ONBOARDING_STORAGE_KEY)');
-    expect(onboardingSource).toContain("writeLocalStorageItem(ONBOARDING_STORAGE_KEY, 'true')");
-    expect(onboardingSource).toContain('removeLocalStorageItem(ONBOARDING_STORAGE_KEY)');
+    expect(onboardingSource).toContain('readLocalStorageItem(onboardingStorageKey(userId))');
+    expect(onboardingSource).toContain(
+      "writeLocalStorageItem(onboardingStorageKey(userId), 'true')",
+    );
+    expect(onboardingSource).toContain('removeLocalStorageItem(onboardingStorageKey(userId))');
     expect(changelogSource).toContain('readLocalStorageItem(CHANGELOG_STORAGE_KEY)');
     expect(changelogSource).toContain('writeLocalStorageItem(CHANGELOG_STORAGE_KEY, APP_VERSION)');
     expect(changelogSource).toContain('removeLocalStorageItem(CHANGELOG_STORAGE_KEY)');

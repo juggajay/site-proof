@@ -223,20 +223,32 @@ test.describe('Authentication', () => {
     await expect(page.getByText('Keyboard Shortcuts')).toHaveCount(0);
   });
 
-  test('does not auto-open launch overlays on authenticated dashboards', async ({ page }) => {
+  test('shows only one first-run overlay, persists the dismissal, and supports replay', async ({
+    page,
+  }) => {
     await mockFreshAuthenticatedDashboard(page);
 
     await page.goto('/dashboard');
     await page.waitForTimeout(1200);
 
+    // The changelog modal stays retired; the tour is the single launch overlay.
     await expect(page.getByText("What's New in SiteProof")).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Welcome to SiteProof!' })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Skip tour' }).last().click();
     await expect(page.getByRole('heading', { name: 'Welcome to SiteProof!' })).toHaveCount(0);
 
+    // The per-user seen marker survives a reload: no recurring launch modal.
     await page.reload();
     await page.waitForTimeout(1200);
 
     await expect(page.getByText("What's New in SiteProof")).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'Welcome to SiteProof!' })).toHaveCount(0);
+
+    // Deliberate replay stays available from the header user menu.
+    await page.getByRole('button', { name: 'User menu' }).click();
+    await page.getByRole('menuitem', { name: 'Take the tour' }).click();
+    await expect(page.getByRole('heading', { name: 'Welcome to SiteProof!' })).toBeVisible();
   });
 
   test('applies dev role override to protected route access checks', async ({ page }) => {

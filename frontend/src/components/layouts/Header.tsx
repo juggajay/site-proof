@@ -11,13 +11,17 @@ import {
   Sun,
   Moon,
   BookOpen,
+  Compass,
 } from 'lucide-react';
 import { Link, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
+import { isSubcontractorRole } from '@/lib/roles';
+import { getCompanyRole, hasSubcontractorPortalIdentity } from '@/lib/subcontractorIdentity';
 import { Breadcrumbs } from './Breadcrumbs';
 import { GlobalSearch } from '@/components/GlobalSearch';
+import { startOnboardingTour, useOnboarding } from '@/components/OnboardingTour';
 import { useUnsyncedSignOut } from '@/components/UnsyncedSignOutDialog';
 import { useTheme } from '@/lib/theme';
 import { Button } from '@/components/ui/button';
@@ -39,7 +43,14 @@ function decodePathSegment(segment: string): string {
 
 export function Header() {
   const { user } = useAuth();
+  const { resetOnboarding } = useOnboarding();
   const { requestSignOut, dialog: signOutDialog } = useUnsyncedSignOut();
+  // Mirrors the ProtectedAppShell tour audience gate: subcontractor portal
+  // users get no tour entry point (the tour walks the company-side app).
+  const canTakeTour =
+    Boolean(user?.companyId) &&
+    !isSubcontractorRole(getCompanyRole(user)) &&
+    !hasSubcontractorPortalIdentity(user);
   const navigate = useNavigate();
   const location = useLocation();
   const { projectId } = useParams();
@@ -347,6 +358,20 @@ export function Header() {
                   <BookOpen className="h-4 w-4" aria-hidden="true" />
                   Documentation
                 </button>
+                {canTakeTour && (
+                  <button
+                    onClick={() => {
+                      setIsUserMenuOpen(false);
+                      resetOnboarding();
+                      startOnboardingTour();
+                    }}
+                    className="flex w-full items-center gap-2 rounded px-3 py-2 text-sm hover:bg-muted"
+                    role="menuitem"
+                  >
+                    <Compass className="h-4 w-4" aria-hidden="true" />
+                    Take the tour
+                  </button>
+                )}
                 <button
                   onClick={() => {
                     setIsUserMenuOpen(false);
