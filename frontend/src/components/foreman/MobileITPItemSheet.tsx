@@ -212,6 +212,9 @@ export function MobileITPItemSheet({
               placeholder="Why is this item not applicable?"
               className="w-full px-3 py-2 border border-border rounded-lg text-sm min-h-[80px] bg-background text-foreground"
               autoFocus
+              autoCapitalize="sentences"
+              autoComplete="off"
+              spellCheck={true}
             />
             {statusError && (
               <p role="alert" className="text-sm text-destructive">
@@ -250,6 +253,9 @@ export function MobileITPItemSheet({
               placeholder="Describe the issue..."
               className="w-full px-3 py-2 border border-destructive/20 rounded-lg text-sm min-h-[80px] bg-background text-foreground"
               autoFocus
+              autoCapitalize="sentences"
+              autoComplete="off"
+              spellCheck={true}
             />
             {statusError && (
               <p role="alert" className="text-sm text-destructive">
@@ -293,6 +299,9 @@ export function MobileITPItemSheet({
               placeholder="Add notes about this item..."
               disabled={!canComplete}
               className="w-full px-3 py-2 border border-border rounded-lg text-sm min-h-[80px] bg-background text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+              autoCapitalize="sentences"
+              autoComplete="off"
+              spellCheck={true}
             />
           </div>
         )}

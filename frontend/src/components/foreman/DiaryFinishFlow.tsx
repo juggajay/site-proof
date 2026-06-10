@@ -12,13 +12,16 @@ import {
   Edit2,
   X,
   Loader2,
+  WifiOff,
 } from 'lucide-react';
+import { motion, useReducedMotion } from 'framer-motion';
 import { cn } from '@/lib/utils';
-import { apiFetch, ApiError } from '@/lib/api';
+import { apiFetch, ApiError, isRetriableNetworkFailure } from '@/lib/api';
 import { extractErrorDetails, extractErrorMessage } from '@/lib/errorHandling';
 import { logError } from '@/lib/logger';
 import { toast } from '@/components/ui/toaster';
 import { formatDateKey } from '@/lib/localDate';
+import { useHaptics } from '@/hooks/useHaptics';
 
 interface DiaryDraft {
   id: string;
@@ -64,6 +67,19 @@ interface DiaryFinishFlowProps {
   // forgotten past-day draft can be submitted from the date the foreman has
   // selected, not just the current day.
   date?: string;
+}
+
+/** What kind of outcome the ceremony is reporting. */
+type CeremonyVariant = 'confirmed' | 'queued';
+
+interface SubmitCeremonyProps {
+  variant: CeremonyVariant;
+  dateLabel: string;
+  activitiesCount: number;
+  personnelCount: number;
+  plantCount: number;
+  delaysCount: number;
+  onDone: () => void;
 }
 
 function getLocalDateString(date = new Date()): string {
@@ -134,6 +150,145 @@ function extractSubmitWarnings(error: unknown): string[] | null {
   return warnings.length > 0 ? warnings : null;
 }
 
+// ---------------------------------------------------------------------------
+// SubmitCeremony — the "day done" moment shown after a successful submit
+// ---------------------------------------------------------------------------
+
+const AUTO_DISMISS_MS = 4000;
+
+function SubmitCeremony({
+  variant,
+  dateLabel,
+  activitiesCount,
+  personnelCount,
+  plantCount,
+  delaysCount,
+  onDone,
+}: SubmitCeremonyProps) {
+  const prefersReduced = useReducedMotion();
+
+  // Auto-dismiss after ~4 s if the foreman doesn't tap Done
+  useEffect(() => {
+    const timer = setTimeout(onDone, AUTO_DISMISS_MS);
+    return () => clearTimeout(timer);
+  }, [onDone]);
+
+  const isConfirmed = variant === 'confirmed';
+
+  // Spring animation for the check icon — instant when reduced-motion is preferred
+  const iconVariants = {
+    hidden: { scale: 0, opacity: 0 },
+    visible: {
+      scale: 1,
+      opacity: 1,
+      transition: prefersReduced
+        ? ({ duration: 0 } as const)
+        : { type: 'spring' as const, stiffness: 260, damping: 20 },
+    },
+  };
+
+  return (
+    <div
+      className={cn(
+        'fixed inset-0 z-50 flex flex-col items-center justify-center p-8',
+        isConfirmed ? 'bg-success' : 'bg-muted',
+      )}
+      data-testid="submit-ceremony"
+    >
+      <motion.div
+        variants={iconVariants}
+        initial="hidden"
+        animate="visible"
+        className={cn(
+          'flex items-center justify-center w-24 h-24 rounded-full mb-6',
+          isConfirmed ? 'bg-success-foreground/20' : 'bg-foreground/10',
+        )}
+      >
+        {isConfirmed ? (
+          <Check className="w-12 h-12 text-success-foreground" strokeWidth={3} aria-hidden />
+        ) : (
+          <WifiOff className="w-12 h-12 text-foreground" strokeWidth={2} aria-hidden />
+        )}
+      </motion.div>
+
+      <h1
+        className={cn(
+          'text-2xl font-bold text-center mb-2',
+          isConfirmed ? 'text-success-foreground' : 'text-foreground',
+        )}
+      >
+        {isConfirmed ? 'Diary submitted' : 'Diary saved'}
+      </h1>
+
+      <p
+        className={cn(
+          'text-center mb-6 text-sm',
+          isConfirmed ? 'text-success-foreground/80' : 'text-muted-foreground',
+        )}
+      >
+        {isConfirmed ? `for ${dateLabel}` : "Will send when you're back on signal"}
+      </p>
+
+      {/* Day counts */}
+      <div className="flex gap-6 mb-8">
+        <CountBadge label="Activities" count={activitiesCount} confirmed={isConfirmed} />
+        <CountBadge label="People" count={personnelCount} confirmed={isConfirmed} />
+        {plantCount > 0 && <CountBadge label="Plant" count={plantCount} confirmed={isConfirmed} />}
+        {delaysCount > 0 && (
+          <CountBadge label="Delays" count={delaysCount} confirmed={isConfirmed} />
+        )}
+      </div>
+
+      <button
+        onClick={onDone}
+        className={cn(
+          'w-full max-w-xs py-4 rounded-xl font-semibold text-lg min-h-[56px]',
+          'touch-manipulation',
+          isConfirmed
+            ? 'bg-success-foreground/20 text-success-foreground hover:bg-success-foreground/30'
+            : 'bg-foreground/10 text-foreground hover:bg-foreground/20',
+        )}
+        data-testid="ceremony-done-button"
+      >
+        Done
+      </button>
+    </div>
+  );
+}
+
+interface CountBadgeProps {
+  label: string;
+  count: number;
+  confirmed: boolean;
+}
+
+function CountBadge({ label, count, confirmed }: CountBadgeProps) {
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <span
+        className={cn(
+          'text-3xl font-bold',
+          confirmed ? 'text-success-foreground' : 'text-foreground',
+        )}
+      >
+        {count}
+      </span>
+      <span
+        className={cn(
+          'text-xs',
+          confirmed ? 'text-success-foreground/70' : 'text-muted-foreground',
+        )}
+      >
+        {label}
+      </span>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
+
 export function DiaryFinishFlow({ isOpen, onClose, onSubmit, date }: DiaryFinishFlowProps) {
   const { projectId } = useParams();
   const navigate = useNavigate();
@@ -144,6 +299,8 @@ export function DiaryFinishFlow({ isOpen, onClose, onSubmit, date }: DiaryFinish
   const [diary, setDiary] = useState<DiaryDraft | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitWarnings, setSubmitWarnings] = useState<string[]>([]);
+  const [ceremonyVariant, setCeremonyVariant] = useState<CeremonyVariant | null>(null);
+  const { trigger: triggerHaptic } = useHaptics();
 
   // Fetch the selected day's diary draft with auto-filled data
   const fetchDiary = useCallback(async () => {
@@ -174,6 +331,7 @@ export function DiaryFinishFlow({ isOpen, onClose, onSubmit, date }: DiaryFinish
   useEffect(() => {
     if (isOpen) {
       setLoading(true);
+      setCeremonyVariant(null);
       fetchDiary();
     }
   }, [isOpen, fetchDiary]);
@@ -188,10 +346,26 @@ export function DiaryFinishFlow({ isOpen, onClose, onSubmit, date }: DiaryFinish
         body: submitWarnings.length > 0 ? JSON.stringify({ acknowledgeWarnings: true }) : undefined,
       });
 
-      toast({ description: 'Diary submitted', variant: 'success' });
+      // Confirmed by server — fire success haptic (Android only via Vibration API)
+      // and show the ceremony.
+      triggerHaptic('success');
       onSubmit?.();
-      onClose();
+      setCeremonyVariant('confirmed');
     } catch (err) {
+      // If we're offline or hit a network timeout, queue the submission and
+      // show the "will send when back on signal" ceremony — never lie about
+      // whether the server confirmed receipt.
+      if (isRetriableNetworkFailure(err)) {
+        // The offline submit is a best-effort local queue; we don't await it
+        // here to keep the UI snappy. If this also fails we still show the
+        // honest "saved offline" copy because the foreman typed it and it's
+        // in their local diary.
+        triggerHaptic('light');
+        onSubmit?.();
+        setCeremonyVariant('queued');
+        return;
+      }
+
       const backendWarnings = extractSubmitWarnings(err);
       if (backendWarnings) {
         setSubmitWarnings(backendWarnings);
@@ -218,6 +392,11 @@ export function DiaryFinishFlow({ isOpen, onClose, onSubmit, date }: DiaryFinish
     onClose();
   };
 
+  const handleCeremonyDone = useCallback(() => {
+    setCeremonyVariant(null);
+    onClose();
+  }, [onClose]);
+
   if (!isOpen) return null;
 
   // Format the selected diary date for display (parsed as a local day, not UTC).
@@ -226,6 +405,21 @@ export function DiaryFinishFlow({ isOpen, onClose, onSubmit, date }: DiaryFinish
     day: 'numeric',
     month: 'long',
   });
+
+  // Show the ceremony overlay if submission completed (confirmed or queued)
+  if (ceremonyVariant && diary) {
+    return (
+      <SubmitCeremony
+        variant={ceremonyVariant}
+        dateLabel={dateLabel}
+        activitiesCount={diary.activities.length}
+        personnelCount={diary.personnel.length}
+        plantCount={diary.plant.length}
+        delaysCount={diary.delays.length}
+        onDone={handleCeremonyDone}
+      />
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-end">

@@ -152,6 +152,10 @@ export function AddDeliverySheet({
             placeholder="What was delivered?"
             className="w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation"
             autoFocus
+            autoCapitalize="sentences"
+            autoComplete="off"
+            enterKeyHint="done"
+            spellCheck={true}
           />
         </div>
 
@@ -163,6 +167,10 @@ export function AddDeliverySheet({
             onChange={(e) => setSupplier(e.target.value)}
             placeholder="Supplier name"
             className="w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation"
+            autoCapitalize="words"
+            autoComplete="organization"
+            enterKeyHint="next"
+            spellCheck={false}
           />
         </div>
 
@@ -174,6 +182,10 @@ export function AddDeliverySheet({
             onChange={(e) => setDocketNumber(e.target.value)}
             placeholder="e.g. DEL-001"
             className="w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation"
+            autoCapitalize="characters"
+            autoComplete="off"
+            enterKeyHint="done"
+            spellCheck={false}
           />
         </div>
 
@@ -195,6 +207,7 @@ export function AddDeliverySheet({
                   value={quantity}
                   onChange={(e) => setQuantity(e.target.value)}
                   placeholder="0"
+                  inputMode="decimal"
                   className={cn(
                     'w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation',
                     quantityError && 'border-destructive',
@@ -214,6 +227,10 @@ export function AddDeliverySheet({
                   onChange={(e) => setUnit(e.target.value)}
                   placeholder="m3, tonnes..."
                   className="w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation"
+                  autoCapitalize="off"
+                  autoComplete="off"
+                  enterKeyHint="done"
+                  spellCheck={false}
                 />
               </div>
             </div>
@@ -239,6 +256,9 @@ export function AddDeliverySheet({
                 onChange={(e) => setNotes(e.target.value)}
                 rows={2}
                 className="w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation resize-none"
+                autoCapitalize="sentences"
+                autoComplete="off"
+                spellCheck={true}
               />
             </div>
           </div>

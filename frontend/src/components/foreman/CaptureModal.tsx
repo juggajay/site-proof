@@ -347,6 +347,10 @@ export function CaptureModal({
                   placeholder={
                     captureType === 'ncr' ? 'Brief defect description' : 'Note description'
                   }
+                  autoCapitalize="sentences"
+                  autoComplete="off"
+                  enterKeyHint="done"
+                  spellCheck={true}
                 />
                 <VoiceInputButton onTranscript={handleVoiceInput} />
               </div>

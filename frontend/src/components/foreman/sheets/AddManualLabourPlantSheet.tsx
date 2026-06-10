@@ -252,6 +252,10 @@ export function AddManualLabourPlantSheet({
                 onChange={(e) => setPersonnelName(e.target.value)}
                 placeholder="Worker name"
                 className="w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation"
+                autoCapitalize="words"
+                autoComplete="off"
+                enterKeyHint="next"
+                spellCheck={false}
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -263,6 +267,10 @@ export function AddManualLabourPlantSheet({
                   onChange={(e) => setPersonnelCompany(e.target.value)}
                   placeholder="Company"
                   className="w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation"
+                  autoCapitalize="words"
+                  autoComplete="organization"
+                  enterKeyHint="next"
+                  spellCheck={false}
                 />
               </div>
               <div>
@@ -273,6 +281,10 @@ export function AddManualLabourPlantSheet({
                   onChange={(e) => setPersonnelRole(e.target.value)}
                   placeholder="Role"
                   className="w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation"
+                  autoCapitalize="words"
+                  autoComplete="off"
+                  enterKeyHint="next"
+                  spellCheck={false}
                 />
               </div>
             </div>
@@ -285,6 +297,7 @@ export function AddManualLabourPlantSheet({
                   onChange={(e) => setPersonnelHours(e.target.value)}
                   placeholder="0"
                   step="0.5"
+                  inputMode="decimal"
                   className={cn(
                     'w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation',
                     personnelHoursError && 'border-destructive',
@@ -354,6 +367,10 @@ export function AddManualLabourPlantSheet({
                 onChange={(e) => setPlantDescription(e.target.value)}
                 placeholder="Plant / equipment description"
                 className="w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation"
+                autoCapitalize="sentences"
+                autoComplete="off"
+                enterKeyHint="next"
+                spellCheck={true}
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -365,6 +382,10 @@ export function AddManualLabourPlantSheet({
                   onChange={(e) => setPlantIdRego(e.target.value)}
                   placeholder="ID or rego"
                   className="w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation"
+                  autoCapitalize="characters"
+                  autoComplete="off"
+                  enterKeyHint="next"
+                  spellCheck={false}
                 />
               </div>
               <div>
@@ -375,6 +396,10 @@ export function AddManualLabourPlantSheet({
                   onChange={(e) => setPlantCompany(e.target.value)}
                   placeholder="Company"
                   className="w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation"
+                  autoCapitalize="words"
+                  autoComplete="organization"
+                  enterKeyHint="next"
+                  spellCheck={false}
                 />
               </div>
             </div>
@@ -387,6 +412,7 @@ export function AddManualLabourPlantSheet({
                   onChange={(e) => setPlantHours(e.target.value)}
                   placeholder="0"
                   step="0.5"
+                  inputMode="decimal"
                   className={cn(
                     'w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation',
                     plantHoursError && 'border-destructive',
