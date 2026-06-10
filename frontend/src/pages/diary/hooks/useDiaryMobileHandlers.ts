@@ -19,6 +19,7 @@ import {
   parseOptionalDiaryTemperatureInput,
 } from '../diaryNumericInput';
 import type { DailyDiary, WeatherFormState } from '../types';
+import { useCopyFromYesterday } from './useCopyFromYesterday';
 
 interface ManualPersonnelData {
   name: string;
@@ -48,6 +49,8 @@ interface UseDiaryMobileHandlersParams {
   setDiary: (diary: DailyDiary | null) => void;
   setError: (error: string | null) => void;
   setWeatherForm: React.Dispatch<React.SetStateAction<WeatherFormState>>;
+  /** Called after a copy-from-yesterday creates new entries. */
+  onDiaryUpdate?: (diary: DailyDiary) => void;
 }
 
 export function useDiaryMobileHandlers({
@@ -62,11 +65,24 @@ export function useDiaryMobileHandlers({
   setDiary,
   setError,
   setWeatherForm,
+  onDiaryUpdate,
 }: UseDiaryMobileHandlersParams) {
   const navigate = useNavigate();
   const [activeLotId, setActiveLotId] = useState<string | null>(null);
   const [activeSheet, setActiveSheet] = useState<QuickAddType | 'weather' | null>(null);
   const [editingEntry, setEditingEntry] = useState<TimelineEntry | null>(null);
+
+  // Copy-from-yesterday for personnel and plant. Uses setDiary as the update
+  // callback so the mobile timeline reflects new entries without a full refetch.
+  const copyFromYesterday = useCopyFromYesterday({
+    projectId,
+    selectedDate,
+    diary,
+    onDiaryUpdate: (updated) => {
+      setDiary(updated);
+      onDiaryUpdate?.(updated);
+    },
+  });
 
   // Derive manual entries from timeline
   const manualEntries: ManualEntries = {
@@ -476,5 +492,11 @@ export function useDiaryMobileHandlers({
     handleSavePersonnel,
     handleSavePlant,
     handleSaveWeather,
+    // Copy-from-yesterday
+    copyPersonnelFromYesterday: copyFromYesterday.copyPersonnelFromYesterday,
+    copyingPersonnel: copyFromYesterday.copyingPersonnel,
+    copyPlantFromYesterday: copyFromYesterday.copyPlantFromYesterday,
+    copyingPlant: copyFromYesterday.copyingPlant,
+    canCopyFromYesterday: copyFromYesterday.canCopy,
   };
 }

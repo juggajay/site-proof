@@ -8,6 +8,7 @@ import type { DocketSummaryData, ManualEntries } from './DiaryDocketSummary';
 import { usePullToRefresh, PullToRefreshIndicator } from '@/hooks/usePullToRefresh';
 import { DiaryTimelineEntrySkeleton } from '@/components/ui/Skeleton';
 import { Button } from '@/components/ui/button';
+import { Loader2 } from 'lucide-react';
 import type { DailyDiary } from '@/pages/diary/types';
 import { formatDateKey } from '@/lib/localDate';
 
@@ -47,6 +48,12 @@ interface DiaryMobileViewProps {
   // the selected date's diary is still a draft so submit is one tap, not buried
   // in the timeline (including a forgotten past-day draft).
   onReviewSubmit?: () => void;
+  // Copy from yesterday — personnel
+  onCopyPersonnelFromYesterday?: () => Promise<void>;
+  copyingPersonnel?: boolean;
+  // Copy from yesterday — plant
+  onCopyPlantFromYesterday?: () => Promise<void>;
+  copyingPlant?: boolean;
 }
 
 export function DiaryMobileView(props: DiaryMobileViewProps) {
@@ -72,6 +79,10 @@ export function DiaryMobileView(props: DiaryMobileViewProps) {
     onEditEntry,
     onDeleteEntry,
     onReviewSubmit,
+    onCopyPersonnelFromYesterday,
+    copyingPersonnel = false,
+    onCopyPlantFromYesterday,
+    copyingPlant = false,
   } = props;
 
   const { containerRef, pullDistance, isRefreshing, progress } = usePullToRefresh({
@@ -85,6 +96,18 @@ export function DiaryMobileView(props: DiaryMobileViewProps) {
   // finalises the selected date's diary, so a forgotten past-day draft can be
   // submitted from a phone instead of being stuck until the foreman finds a desktop.
   const canReviewSubmit = Boolean(onReviewSubmit) && diary?.status === 'draft';
+
+  // Show copy-from-yesterday affordance when the diary exists (weather recorded)
+  // and there are no personnel or plant entries yet on this day.
+  const hasPersonnelEntries = timeline.some((e) => e.type === 'personnel');
+  const hasPlantEntries = timeline.some((e) => e.type === 'plant');
+  const showCopyAffordance =
+    !isSubmitted &&
+    diary !== null &&
+    !loading &&
+    !hasPersonnelEntries &&
+    !hasPlantEntries &&
+    (Boolean(onCopyPersonnelFromYesterday) || Boolean(onCopyPlantFromYesterday));
 
   const dateLabel = new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-AU', {
     weekday: 'short',
@@ -138,6 +161,42 @@ export function DiaryMobileView(props: DiaryMobileViewProps) {
             onTapPending={onTapPending || (() => {})}
             onAddManual={onAddManual || (() => {})}
           />
+
+          {/* Copy from yesterday — shown when diary started but no crew/plant yet */}
+          {showCopyAffordance && (
+            <div
+              data-testid="copy-from-yesterday-affordance"
+              className="rounded-lg border border-dashed bg-muted/30 px-4 py-3 flex items-center justify-between gap-3"
+            >
+              <p className="text-sm text-muted-foreground">
+                Carry yesterday&#39;s crew &amp; plant forward?
+              </p>
+              <div className="flex gap-2 shrink-0">
+                {onCopyPersonnelFromYesterday && (
+                  <button
+                    onClick={() => void onCopyPersonnelFromYesterday()}
+                    disabled={copyingPersonnel || copyingPlant}
+                    data-testid="copy-personnel-btn"
+                    className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground touch-manipulation min-h-[36px] disabled:opacity-50"
+                  >
+                    {copyingPersonnel ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                    Crew
+                  </button>
+                )}
+                {onCopyPlantFromYesterday && (
+                  <button
+                    onClick={() => void onCopyPlantFromYesterday()}
+                    disabled={copyingPersonnel || copyingPlant}
+                    data-testid="copy-plant-btn"
+                    className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-xs font-semibold text-accent-foreground touch-manipulation min-h-[36px] disabled:opacity-50"
+                  >
+                    {copyingPlant ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                    Plant
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Timeline entries — initial-load skeleton (isLoading with no cached data).
               Three cards mirror a typical morning diary; layout-matched to DiaryTimelineEntry

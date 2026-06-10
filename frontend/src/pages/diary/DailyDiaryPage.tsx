@@ -55,6 +55,7 @@ export function DailyDiaryPage() {
     setDiary: data.setDiary,
     setError: data.setError,
     setWeatherForm: data.setWeatherForm,
+    onDiaryUpdate: data.setDiary,
   });
 
   // Derive weather display data for mobile view
@@ -126,6 +127,14 @@ export function DailyDiaryPage() {
             onEditEntry={mobile.handleEditEntry}
             onDeleteEntry={(entry) => setEntryPendingDelete(entry)}
             onReviewSubmit={() => setShowFinishFlow(true)}
+            onCopyPersonnelFromYesterday={
+              mobile.canCopyFromYesterday ? mobile.copyPersonnelFromYesterday : undefined
+            }
+            copyingPersonnel={mobile.copyingPersonnel}
+            onCopyPlantFromYesterday={
+              mobile.canCopyFromYesterday ? mobile.copyPlantFromYesterday : undefined
+            }
+            copyingPlant={mobile.copyingPlant}
           />
         )}
         <DiaryFinishFlow
@@ -267,6 +276,8 @@ export function DailyDiaryPage() {
             {activeTab === 'plant' && data.diary && (
               <PlantTab
                 diary={data.diary}
+                projectId={projectId!}
+                selectedDate={data.selectedDate}
                 saving={data.saving}
                 setSaving={data.setSaving}
                 onDiaryUpdate={data.setDiary}
