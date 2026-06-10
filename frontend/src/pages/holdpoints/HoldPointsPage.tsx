@@ -1,7 +1,9 @@
-import { useRef, useState, useEffect, useMemo, useCallback } from 'react';
-import { useParams } from 'react-router-dom';
+import { useRef, useState, useMemo, useCallback } from 'react';
+import { useParams, useSearchParams } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiFetch, authFetch } from '@/lib/api';
 import { getAuthToken } from '@/lib/auth';
+import { queryKeys } from '@/lib/queryKeys';
 import { toast } from '@/components/ui/toaster';
 import {
   extractErrorMessage,
@@ -18,19 +20,11 @@ import { logError } from '@/lib/logger';
 import type {
   HoldPoint,
   HoldPointDetails,
+  HoldPointSortField,
   PrerequisiteItem,
   RequestError,
   StatusFilter,
 } from './types';
-
-interface HoldPointsResponse {
-  holdPoints?: HoldPoint[];
-  pagination?: {
-    page: number;
-    totalPages: number;
-    hasNextPage: boolean;
-  };
-}
 
 interface EvidencePackageResponse {
   evidencePackage: HPEvidencePackageData;
@@ -48,15 +42,22 @@ interface UploadedEvidenceDocument {
   fileUrl: string;
 }
 
-const HOLD_POINTS_PAGE_LIMIT = 100;
-
 // Extracted components
 import { HoldPointSummaryCards } from './components/HoldPointStatusFilter';
 import { HoldPointsLoadErrorAlert, HoldPointsPageHeader } from './HoldPointsPageSections';
 import { HoldPointsTable } from './components/HoldPointsTable';
 import { HoldPointsMobileList } from './components/HoldPointsMobileList';
 import { formatHoldPointDate, getStatusLabel } from './components/holdPointTableUtils';
-import { buildHoldPointChartData, buildHoldPointStats } from './holdPointsPageData';
+import {
+  buildHoldPointChartData,
+  buildHoldPointStats,
+  filterHoldPoints,
+  parseSortDirectionParam,
+  parseSortFieldParam,
+  parseStatusFilterParam,
+  sortHoldPoints,
+} from './holdPointsPageData';
+import { fetchAllProjectHoldPoints } from './holdPointsApi';
 import { RequestReleaseModal } from './components/RequestReleaseModal';
 import { RecordReleaseModal } from './components/RecordReleaseModal';
 import { downloadCsv } from '@/lib/csv';
@@ -71,30 +72,14 @@ const HOLD_POINT_LINK_NOT_FOUND = {
   description: 'The link may belong to another project, or the hold point may have been removed.',
 };
 
-async function fetchAllProjectHoldPoints(projectId: string): Promise<HoldPoint[]> {
-  const allHoldPoints: HoldPoint[] = [];
-  let page = 1;
-
-  while (true) {
-    const data = await apiFetch<HoldPointsResponse>(
-      `/api/holdpoints/project/${encodeURIComponent(projectId)}?page=${page}&limit=${HOLD_POINTS_PAGE_LIMIT}`,
-    );
-
-    allHoldPoints.push(...(data.holdPoints || []));
-
-    if (!data.pagination?.hasNextPage || page >= data.pagination.totalPages) {
-      return allHoldPoints;
-    }
-
-    page += 1;
-  }
-}
+// Stable empty register so a disabled/loading query never churns hook deps.
+const NO_HOLD_POINTS: HoldPoint[] = [];
 
 export function HoldPointsPage() {
   const { projectId } = useParams();
   const isMobile = useIsMobile();
-  const [holdPoints, setHoldPoints] = useState<HoldPoint[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [selectedHoldPoint, setSelectedHoldPoint] = useState<HoldPoint | null>(null);
   const [holdPointDetails, setHoldPointDetails] = useState<HoldPointDetails | null>(null);
@@ -106,53 +91,54 @@ export function HoldPointsPage() {
   const [chasingHpId, setChasingHpId] = useState<string | null>(null);
   const [showRecordReleaseModal, setShowRecordReleaseModal] = useState(false);
   const [recordingRelease, setRecordingRelease] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [recordReleaseError, setRecordReleaseError] = useState<string | null>(null);
   const generatingPdfRef = useRef<string | null>(null);
   const chasingHpRef = useRef<string | null>(null);
   const requestingRef = useRef(false);
   const recordingReleaseRef = useRef(false);
 
+  // URL-persisted filter/sort state (LotsPage idiom) so register views survive
+  // refresh and can be shared as links.
+  const statusFilter = parseStatusFilterParam(searchParams.get('status'));
+  const searchQuery = searchParams.get('search') || '';
+  const sortField = parseSortFieldParam(searchParams.get('sort'));
+  const sortDirection = parseSortDirectionParam(searchParams.get('dir'));
+
   // --- Data fetching ---
 
-  const fetchHoldPoints = useCallback(async () => {
-    if (!projectId) {
-      setHoldPoints([]);
-      setLoadError(null);
-      setLoading(false);
-      return;
-    }
+  const {
+    data: holdPointsData,
+    isLoading: loading,
+    error: holdPointsError,
+    refetch: refetchHoldPoints,
+  } = useQuery({
+    queryKey: queryKeys.holdPoints(projectId ?? ''),
+    queryFn: () => fetchAllProjectHoldPoints(projectId!),
+    enabled: Boolean(projectId),
+    // Hold points are hard production gates: revisits render the cached
+    // register instantly, and returning to the tab refreshes anything stale.
+    staleTime: 30_000,
+    refetchOnWindowFocus: true,
+    // Single attempt, like the bespoke fetch this replaced: failures surface
+    // the register-level alert with its manual "Try again" immediately.
+    retry: false,
+  });
+  const holdPoints = holdPointsData ?? NO_HOLD_POINTS;
+  const loadError = holdPointsError
+    ? extractErrorMessage(holdPointsError, 'Failed to load hold points.')
+    : null;
 
-    setLoading(true);
-    setLoadError(null);
-    try {
-      setHoldPoints(await fetchAllProjectHoldPoints(projectId));
-    } catch (err) {
-      logError('Failed to fetch hold points:', err);
-      setHoldPoints([]);
-      setLoadError(extractErrorMessage(err, 'Failed to load hold points.'));
-    } finally {
-      setLoading(false);
-    }
-  }, [projectId]);
-
-  useEffect(() => {
-    void fetchHoldPoints();
-  }, [fetchHoldPoints]);
-
+  // Mutation handlers await this so modals close only once the register
+  // reflects the change. A failed refetch surfaces via the query error state
+  // (the register-level alert) instead of rejecting here.
   const refreshHoldPoints = useCallback(async () => {
     if (!projectId) return;
-    try {
-      setHoldPoints(await fetchAllProjectHoldPoints(projectId));
-      setLoadError(null);
-    } catch (err) {
-      logError('Failed to refresh hold points:', err);
-      setLoadError(
-        extractErrorMessage(err, 'Hold point updated, but the register could not be refreshed.'),
-      );
-    }
-  }, [projectId]);
+    await queryClient.invalidateQueries({ queryKey: queryKeys.holdPoints(projectId) });
+  }, [projectId, queryClient]);
+
+  const handleRetryLoad = useCallback(() => {
+    void refetchHoldPoints();
+  }, [refetchHoldPoints]);
 
   const fetchHoldPointDetails = useCallback(async (hp: HoldPoint) => {
     setLoadingDetails(true);
@@ -185,8 +171,12 @@ export function HoldPointsPage() {
 
   const filteredHoldPoints = useMemo(
     () =>
-      statusFilter === 'all' ? holdPoints : holdPoints.filter((hp) => hp.status === statusFilter),
-    [holdPoints, statusFilter],
+      sortHoldPoints(
+        filterHoldPoints(holdPoints, statusFilter, searchQuery),
+        sortField,
+        sortDirection,
+      ),
+    [holdPoints, statusFilter, searchQuery, sortField, sortDirection],
   );
 
   const stats = useMemo(() => buildHoldPointStats(holdPoints), [holdPoints]);
@@ -194,6 +184,42 @@ export function HoldPointsPage() {
   const chartData = useMemo(() => buildHoldPointChartData(holdPoints), [holdPoints]);
 
   // --- Handlers ---
+
+  const updateFilters = useCallback(
+    (newParams: Record<string, string>) => {
+      const params = new URLSearchParams(searchParams);
+      Object.entries(newParams).forEach(([key, value]) => {
+        if (value) {
+          params.set(key, value);
+        } else {
+          params.delete(key);
+        }
+      });
+      setSearchParams(params);
+    },
+    [searchParams, setSearchParams],
+  );
+
+  const handleStatusFilterChange = useCallback(
+    (filter: StatusFilter) => updateFilters({ status: filter === 'all' ? '' : filter }),
+    [updateFilters],
+  );
+
+  const handleSearchChange = useCallback(
+    (query: string) => updateFilters({ search: query }),
+    [updateFilters],
+  );
+
+  const handleSort = useCallback(
+    (field: HoldPointSortField) => {
+      if (field === sortField) {
+        updateFilters({ sort: field, dir: sortDirection === 'asc' ? 'desc' : 'asc' });
+      } else {
+        updateFilters({ sort: field, dir: 'asc' });
+      }
+    },
+    [sortField, sortDirection, updateFilters],
+  );
 
   const handleGenerateEvidencePackage = useCallback(async (hp: HoldPoint) => {
     if (hp.id.startsWith('virtual-') || generatingPdfRef.current === hp.id) return;
@@ -477,7 +503,10 @@ export function HoldPointsPage() {
     setRecordReleaseError(null);
   }, []);
 
-  const handleClearFilter = useCallback(() => setStatusFilter('all'), []);
+  const handleClearFilter = useCallback(
+    () => updateFilters({ status: '', search: '' }),
+    [updateFilters],
+  );
 
   // --- Render ---
 
@@ -487,11 +516,13 @@ export function HoldPointsPage() {
         holdPointCount={holdPoints.length}
         isMobile={isMobile}
         statusFilter={statusFilter}
-        onStatusFilterChange={setStatusFilter}
+        searchQuery={searchQuery}
+        onStatusFilterChange={handleStatusFilterChange}
+        onSearchChange={handleSearchChange}
         onExportCSV={handleExportCSV}
       />
 
-      <HoldPointsLoadErrorAlert loadError={loadError} onRetry={fetchHoldPoints} />
+      <HoldPointsLoadErrorAlert loadError={loadError} onRetry={handleRetryLoad} />
 
       {!loading && !loadError && holdPoints.length > 0 && <HoldPointSummaryCards stats={stats} />}
 
@@ -510,6 +541,7 @@ export function HoldPointsPage() {
             filteredHoldPoints={filteredHoldPoints}
             loading={loading}
             statusFilter={statusFilter}
+            searchQuery={searchQuery}
             highlightedHpId={deepLinkedHpId}
             copiedHpId={copiedHpId}
             generatingPdf={generatingPdf}
@@ -527,10 +559,14 @@ export function HoldPointsPage() {
             filteredHoldPoints={filteredHoldPoints}
             loading={loading}
             statusFilter={statusFilter}
+            searchQuery={searchQuery}
+            sortField={sortField}
+            sortDirection={sortDirection}
             highlightedHpId={deepLinkedHpId}
             copiedHpId={copiedHpId}
             generatingPdf={generatingPdf}
             chasingHpId={chasingHpId}
+            onSort={handleSort}
             onCopyLink={handleCopyHpLink}
             onRequestRelease={handleRequestRelease}
             onRecordRelease={handleRecordRelease}

@@ -44,6 +44,7 @@ function renderList(highlightedHpId: string | null) {
       filteredHoldPoints={holdPoints}
       loading={false}
       statusFilter="all"
+      searchQuery=""
       highlightedHpId={highlightedHpId}
       copiedHpId={null}
       generatingPdf={null}

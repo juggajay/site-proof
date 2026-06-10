@@ -1,11 +1,13 @@
 import React, { useEffect, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Link2, Check, Download, RefreshCw, ClipboardCheck } from 'lucide-react';
-import type { HoldPoint, StatusFilter } from '../types';
+import type { HoldPoint, HoldPointSortDirection, HoldPointSortField, StatusFilter } from '../types';
 import {
+  buildFilterEmptyStateMessage,
   formatHoldPointDate,
   getStatusBadge,
   getStatusLabel,
+  isNoticeExpired,
   isOverdue,
 } from './holdPointTableUtils';
 
@@ -14,11 +16,15 @@ interface HoldPointsTableProps {
   filteredHoldPoints: HoldPoint[];
   loading: boolean;
   statusFilter: StatusFilter;
+  searchQuery: string;
+  sortField: HoldPointSortField;
+  sortDirection: HoldPointSortDirection;
   /** Deep-linked hold point (?hp=<id>) to scroll to and highlight. */
   highlightedHpId: string | null;
   copiedHpId: string | null;
   generatingPdf: string | null;
   chasingHpId: string | null;
+  onSort: (field: HoldPointSortField) => void;
   onCopyLink: (hpId: string, lotNumber: string, description: string) => void;
   onRequestRelease: (hp: HoldPoint) => void;
   onRecordRelease: (hp: HoldPoint) => void;
@@ -27,15 +33,63 @@ interface HoldPointsTableProps {
   onClearFilter: () => void;
 }
 
+interface SortableHeaderProps {
+  field: HoldPointSortField;
+  sortField: HoldPointSortField;
+  sortDirection: HoldPointSortDirection;
+  onSort: (field: HoldPointSortField) => void;
+  children: React.ReactNode;
+}
+
+// Clickable column header with the lot register's sort affordance (LotTable
+// idiom): arrow on the active column, hover-revealed `↕` on the rest.
+function SortableHeader({
+  field,
+  sortField,
+  sortDirection,
+  onSort,
+  children,
+}: SortableHeaderProps) {
+  return (
+    <th
+      className="group px-4 py-3 text-left text-sm font-medium cursor-pointer select-none hover:bg-muted/70"
+      aria-sort={
+        sortField === field ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'
+      }
+      onClick={() => onSort(field)}
+      data-testid={`hp-column-header-${field}`}
+    >
+      <div className="flex items-center gap-1">
+        {children}
+        <span className="text-muted-foreground">
+          {sortField === field ? (
+            sortDirection === 'asc' ? (
+              '↑'
+            ) : (
+              '↓'
+            )
+          ) : (
+            <span className="opacity-0 group-hover:opacity-50">{'↕'}</span>
+          )}
+        </span>
+      </div>
+    </th>
+  );
+}
+
 export const HoldPointsTable = React.memo(function HoldPointsTable({
   holdPoints,
   filteredHoldPoints,
   loading,
   statusFilter,
+  searchQuery,
+  sortField,
+  sortDirection,
   highlightedHpId,
   copiedHpId,
   generatingPdf,
   chasingHpId,
+  onSort,
   onCopyLink,
   onRequestRelease,
   onRecordRelease,
@@ -86,8 +140,7 @@ export const HoldPointsTable = React.memo(function HoldPointsTable({
         <div className="text-4xl mb-4">&#x1f50d;</div>
         <h3 className="text-lg font-semibold mb-2">No Hold Points Match Filter</h3>
         <p className="text-muted-foreground mb-4">
-          No hold points with status &quot;{getStatusLabel(statusFilter)}&quot; found. Try selecting
-          a different status filter.
+          {buildFilterEmptyStateMessage(statusFilter, searchQuery)}
         </p>
         <button onClick={onClearFilter} className="text-primary hover:underline">
           Show all hold points
@@ -101,11 +154,47 @@ export const HoldPointsTable = React.memo(function HoldPointsTable({
       <table className="w-full">
         <thead className="bg-muted/50">
           <tr>
-            <th className="px-4 py-3 text-left text-sm font-medium">Lot</th>
+            <SortableHeader
+              field="lot"
+              sortField={sortField}
+              sortDirection={sortDirection}
+              onSort={onSort}
+            >
+              Lot
+            </SortableHeader>
             <th className="px-4 py-3 text-left text-sm font-medium">Description</th>
-            <th className="px-4 py-3 text-left text-sm font-medium">Status</th>
-            <th className="px-4 py-3 text-left text-sm font-medium">Scheduled</th>
-            <th className="px-4 py-3 text-left text-sm font-medium">Released</th>
+            <SortableHeader
+              field="status"
+              sortField={sortField}
+              sortDirection={sortDirection}
+              onSort={onSort}
+            >
+              Status
+            </SortableHeader>
+            <SortableHeader
+              field="notified"
+              sortField={sortField}
+              sortDirection={sortDirection}
+              onSort={onSort}
+            >
+              Notified
+            </SortableHeader>
+            <SortableHeader
+              field="scheduled"
+              sortField={sortField}
+              sortDirection={sortDirection}
+              onSort={onSort}
+            >
+              Scheduled
+            </SortableHeader>
+            <SortableHeader
+              field="released"
+              sortField={sortField}
+              sortDirection={sortDirection}
+              onSort={onSort}
+            >
+              Released
+            </SortableHeader>
             <th className="px-4 py-3 text-left text-sm font-medium">Actions</th>
           </tr>
         </thead>
@@ -179,6 +268,7 @@ function HoldPointRow({
   onGenerateEvidence,
 }: HoldPointRowProps) {
   const overdue = isOverdue(hp);
+  const noticeExpired = isNoticeExpired(hp);
 
   return (
     <tr
@@ -200,6 +290,20 @@ function HoldPointRow({
         <span className={`px-2 py-1 text-xs rounded-full ${getStatusBadge(hp.status)}`}>
           {getStatusLabel(hp.status)}
         </span>
+      </td>
+      <td className="px-4 py-3 text-sm text-muted-foreground">
+        {hp.notificationSentAt ? (
+          <>
+            {formatHoldPointDate(hp.notificationSentAt)}
+            {noticeExpired && (
+              <span className="ml-2 px-1.5 py-0.5 text-xs bg-warning/10 text-warning rounded font-normal">
+                NOTICE EXPIRED
+              </span>
+            )}
+          </>
+        ) : (
+          '-'
+        )}
       </td>
       <td
         className={`px-4 py-3 text-sm ${overdue ? 'text-destructive font-medium' : 'text-muted-foreground'}`}

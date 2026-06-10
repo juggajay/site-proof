@@ -3,13 +3,20 @@ import { Link2, Check, Download, RefreshCw, ClipboardCheck } from 'lucide-react'
 import { MobileDataCard } from '@/components/ui/MobileDataCard';
 import { Button } from '@/components/ui/button';
 import type { HoldPoint, StatusFilter } from '../types';
-import { formatHoldPointDate, getStatusLabel, isOverdue } from './holdPointTableUtils';
+import {
+  buildFilterEmptyStateMessage,
+  formatHoldPointDate,
+  getStatusLabel,
+  isNoticeExpired,
+  isOverdue,
+} from './holdPointTableUtils';
 
 interface HoldPointsMobileListProps {
   holdPoints: HoldPoint[];
   filteredHoldPoints: HoldPoint[];
   loading: boolean;
   statusFilter: StatusFilter;
+  searchQuery: string;
   /** Deep-linked hold point (?hp=<id>) to scroll to and highlight. */
   highlightedHpId: string | null;
   copiedHpId: string | null;
@@ -33,6 +40,7 @@ export function HoldPointsMobileList({
   filteredHoldPoints,
   loading,
   statusFilter,
+  searchQuery,
   highlightedHpId,
   copiedHpId,
   generatingPdf,
@@ -80,8 +88,7 @@ export function HoldPointsMobileList({
         <div className="text-4xl mb-4">&#x1f50d;</div>
         <h3 className="text-lg font-semibold mb-2">No Hold Points Match Filter</h3>
         <p className="text-muted-foreground mb-4">
-          No hold points with status &quot;{getStatusLabel(statusFilter)}&quot; found. Try selecting
-          a different status filter.
+          {buildFilterEmptyStateMessage(statusFilter, searchQuery)}
         </p>
         <button type="button" onClick={onClearFilter} className="text-primary hover:underline">
           Show all hold points
@@ -149,6 +156,7 @@ function HoldPointMobileCard({
   onGenerateEvidence,
 }: HoldPointMobileCardProps) {
   const overdue = isOverdue(hp);
+  const noticeExpired = isNoticeExpired(hp);
   const isVirtual = hp.id.startsWith('virtual-');
 
   return (
@@ -158,6 +166,21 @@ function HoldPointMobileCard({
       status={{ label: getStatusLabel(hp.status), variant: statusVariants[hp.status] ?? 'default' }}
       className={overdue ? 'border-destructive' : undefined}
       fields={[
+        ...(hp.notificationSentAt
+          ? [
+              {
+                label: 'Notified',
+                value: noticeExpired ? (
+                  <span className="text-warning font-medium">
+                    {formatHoldPointDate(hp.notificationSentAt)} &middot; Notice expired
+                  </span>
+                ) : (
+                  formatHoldPointDate(hp.notificationSentAt)
+                ),
+                priority: 'secondary' as const,
+              },
+            ]
+          : []),
         {
           label: 'Scheduled',
           value: overdue ? (

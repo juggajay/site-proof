@@ -6,7 +6,9 @@ interface HoldPointsPageHeaderProps {
   holdPointCount: number;
   isMobile: boolean;
   statusFilter: StatusFilter;
+  searchQuery: string;
   onStatusFilterChange: (filter: StatusFilter) => void;
+  onSearchChange: (query: string) => void;
   onExportCSV: () => void;
 }
 
@@ -14,11 +16,13 @@ export function HoldPointsPageHeader({
   holdPointCount,
   isMobile,
   statusFilter,
+  searchQuery,
   onStatusFilterChange,
+  onSearchChange,
   onExportCSV,
 }: HoldPointsPageHeaderProps) {
   return (
-    <div className="flex items-center justify-between">
+    <div className="flex flex-wrap items-center justify-between gap-3">
       <div>
         <h1 className="text-3xl font-bold">Hold Points</h1>
         <p className="text-muted-foreground mt-1">
@@ -28,7 +32,9 @@ export function HoldPointsPageHeader({
       {holdPointCount > 0 && (
         <HoldPointStatusFilter
           statusFilter={statusFilter}
+          searchQuery={searchQuery}
           onStatusFilterChange={onStatusFilterChange}
+          onSearchChange={onSearchChange}
           onExportCSV={onExportCSV}
           showExport={!isMobile}
         />

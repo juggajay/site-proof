@@ -1,9 +1,132 @@
-import type { HoldPoint, HoldPointStats } from './types';
-import { isOverdue } from './components/holdPointTableUtils';
+import type {
+  HoldPoint,
+  HoldPointSortDirection,
+  HoldPointSortField,
+  HoldPointStats,
+  StatusFilter,
+} from './types';
+import { isNoticeExpired, isOverdue } from './components/holdPointTableUtils';
 
 export interface HoldPointChartData {
   releasesOverTime: { date: string; releases: number }[];
   avgTimeToRelease: number;
+}
+
+// --- URL filter/sort param parsing (filters are URL-persisted, LotsPage idiom) ---
+
+const STATUS_FILTER_VALUES: readonly StatusFilter[] = [
+  'all',
+  'pending',
+  'notified',
+  'released',
+  'notice-expired',
+];
+
+const SORT_FIELD_VALUES: readonly HoldPointSortField[] = [
+  'lot',
+  'status',
+  'notified',
+  'scheduled',
+  'released',
+];
+
+export function parseStatusFilterParam(value: string | null): StatusFilter {
+  return STATUS_FILTER_VALUES.includes(value as StatusFilter) ? (value as StatusFilter) : 'all';
+}
+
+export function parseSortFieldParam(value: string | null): HoldPointSortField {
+  return SORT_FIELD_VALUES.includes(value as HoldPointSortField)
+    ? (value as HoldPointSortField)
+    : 'lot';
+}
+
+export function parseSortDirectionParam(value: string | null): HoldPointSortDirection {
+  return value === 'desc' ? 'desc' : 'asc';
+}
+
+// --- Register filtering & sorting (client-side over the full cached register) ---
+
+export function filterHoldPoints(
+  holdPoints: HoldPoint[],
+  statusFilter: StatusFilter,
+  searchQuery: string,
+  referenceDate: Date | string = new Date(),
+): HoldPoint[] {
+  const query = searchQuery.trim().toLowerCase();
+
+  return holdPoints.filter((hp) => {
+    if (statusFilter === 'notice-expired') {
+      if (!isNoticeExpired(hp, referenceDate)) return false;
+    } else if (statusFilter !== 'all' && hp.status !== statusFilter) {
+      return false;
+    }
+
+    if (query) {
+      const matchesLotNumber = hp.lotNumber.toLowerCase().includes(query);
+      const matchesDescription = (hp.description || '').toLowerCase().includes(query);
+      if (!matchesLotNumber && !matchesDescription) return false;
+    }
+
+    return true;
+  });
+}
+
+// Lot-register order (the server's order for this list): lot number, then
+// ITP sequence. Used as the default sort and as the tie-breaker for the rest.
+function compareLotOrder(a: HoldPoint, b: HoldPoint): number {
+  if (a.lotNumber !== b.lotNumber) return a.lotNumber.localeCompare(b.lotNumber);
+  return a.sequenceNumber - b.sequenceNumber;
+}
+
+function getSortTimestamp(value: string | null): number | null {
+  if (!value) return null;
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? time : null;
+}
+
+/**
+ * Sort a (filtered) register slice. Returns a new array — never mutates.
+ *
+ * Date columns ('notified', 'scheduled', 'released') sort missing values last
+ * regardless of direction, so "Notified asc" is the chase ordering: the hold
+ * point that has been awaiting release the longest is on top and never hidden
+ * behind never-notified rows.
+ */
+export function sortHoldPoints(
+  holdPoints: HoldPoint[],
+  sortField: HoldPointSortField,
+  sortDirection: HoldPointSortDirection,
+): HoldPoint[] {
+  const direction = sortDirection === 'desc' ? -1 : 1;
+
+  const compareByField = (a: HoldPoint, b: HoldPoint): number => {
+    switch (sortField) {
+      case 'lot':
+        return direction * compareLotOrder(a, b);
+      case 'status':
+        return direction * a.status.localeCompare(b.status);
+      case 'notified':
+      case 'scheduled':
+      case 'released': {
+        const fieldKey = {
+          notified: 'notificationSentAt',
+          scheduled: 'scheduledDate',
+          released: 'releasedAt',
+        } as const;
+        const aTime = getSortTimestamp(a[fieldKey[sortField]]);
+        const bTime = getSortTimestamp(b[fieldKey[sortField]]);
+        if (aTime === null && bTime === null) return 0;
+        if (aTime === null) return 1;
+        if (bTime === null) return -1;
+        return direction * (aTime - bTime);
+      }
+    }
+  };
+
+  return [...holdPoints].sort((a, b) => {
+    const byField = compareByField(a, b);
+    return byField !== 0 ? byField : compareLotOrder(a, b);
+  });
 }
 
 export function buildHoldPointStats(
