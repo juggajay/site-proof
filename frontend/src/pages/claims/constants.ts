@@ -15,9 +15,12 @@ export const CLAIM_PAYMENT_NOTES_MAX_LENGTH = 3000;
 // paymentTime  = due date for the progress payment when the contract is silent.
 // Values sourced from docs/research/11-sopa-verification-2026-06.md (§2.1/§5).
 // NOTE: these statutory values are pending construction-lawyer sign-off before
-// release (see that doc's caveat). NT is intentionally omitted — it uses the
-// "West Coast" model with no payment-schedule/endorsement mechanics, so the UI
-// shows "not available" for NT rather than fabricating East-Coast dates.
+// release (see that doc's caveat). NT, TAS and ACT are intentionally omitted:
+// NT uses the "West Coast" model (no payment-schedule/endorsement mechanics),
+// and TAS/ACT were only Low–Med confidence in the research (§F5). Rather than
+// fabricate East-Coast dates, the UI shows "not available" for those
+// jurisdictions until their Acts are verified; Tier 2/3 civil buyers are
+// overwhelmingly NSW/VIC/QLD/WA/SA.
 // Still to do in later PRs: NSW/WA sub-contract payment tiers (need claim
 // direction), and the VIC post-15-Apr-2026 reform keyed by claim service date.
 export const SOPA_TIMEFRAMES: Record<
@@ -62,17 +65,8 @@ export const SOPA_TIMEFRAMES: Record<
     paymentTime: 15,
     label: 'SA (Building and Construction Industry Security of Payment Act 2009)',
   },
-  TAS: {
-    responseTime: 10,
-    paymentTime: 15,
-    label: 'TAS (Building and Construction Industry Security of Payment Act 2009)',
-  },
-  // NT intentionally omitted — see the note above SOPA_TIMEFRAMES.
-  ACT: {
-    responseTime: 10,
-    paymentTime: 15,
-    label: 'ACT (Building and Construction Industry (Security of Payment) Act 2009)',
-  },
+  // NT, TAS and ACT intentionally omitted — see the note above SOPA_TIMEFRAMES.
+  // Adding TAS/ACT later requires verifying their Acts (research §F5).
 };
 
 // Default package options for evidence package generation

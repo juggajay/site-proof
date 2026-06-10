@@ -134,13 +134,13 @@ describe('SOPA due dates by project state', () => {
     expect(calculatePaymentDueDate(submittedAt)).toBe(nswPayment);
   });
 
-  it('returns null for an unrecognised jurisdiction (e.g. NT, ZZ) instead of faking NSW dates', () => {
-    // NT uses the West-Coast model (no payment-schedule mechanics) and is not in
-    // SOPA_TIMEFRAMES; unknown codes must not silently inherit NSW numbers.
-    expect(calculateCertificationDueDate(submittedAt, 'NT')).toBeNull();
-    expect(calculatePaymentDueDate(submittedAt, 'NT')).toBeNull();
-    expect(calculateCertificationDueDate(submittedAt, 'ZZ')).toBeNull();
-    expect(calculatePaymentDueDate(submittedAt, 'ZZ')).toBeNull();
+  it('returns null for omitted/unrecognised jurisdictions (NT, TAS, ACT, ZZ) instead of faking NSW dates', () => {
+    // NT uses the West-Coast model; TAS/ACT were only Low–Med confidence (§F5) so
+    // they are omitted from SOPA_TIMEFRAMES. None may silently inherit NSW numbers.
+    for (const state of ['NT', 'TAS', 'ACT', 'ZZ']) {
+      expect(calculateCertificationDueDate(submittedAt, state)).toBeNull();
+      expect(calculatePaymentDueDate(submittedAt, state)).toBeNull();
+    }
   });
 
   it('pins one business-day boundary: +10 business days from a Monday is the Monday 14 calendar days later', () => {
