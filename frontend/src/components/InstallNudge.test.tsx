@@ -16,7 +16,7 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 // ── hoisted mocks ────────────────────────────────────────────────────────────
 
 const { pwaInstallState, canPromptInstall, promptInstall } = vi.hoisted(() => ({
-  pwaInstallState: { current: 'unsupported' as import('./InstallNudge').UsePwaInstallStateExport },
+  pwaInstallState: { current: 'unsupported' as import('@/hooks/usePwaInstall').PwaInstallState },
   canPromptInstall: { current: false },
   promptInstall: vi.fn().mockResolvedValue('accepted'),
 }));
