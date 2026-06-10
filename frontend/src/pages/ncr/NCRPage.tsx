@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth, getAuthToken } from '../../lib/auth';
 import { AlertTriangle, Plus } from 'lucide-react';
@@ -10,6 +10,12 @@ import { Button } from '@/components/ui/button';
 
 // Types
 import type { NCR } from './types';
+import {
+  nextSortParams,
+  sortNcrs,
+  type NcrSortDirection,
+  type NcrSortField,
+} from './ncrRegisterSort';
 
 // Hooks
 import { useNCRData } from './hooks/useNCRData';
@@ -41,12 +47,12 @@ const NCR_LINK_NOT_FOUND = {
 export function NCRPage() {
   const { projectId } = useParams();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   useAuth();
   const token = getAuthToken();
   const isMobile = useIsMobile();
 
-  // Data fetching + polling
+  // Register data via TanStack Query (cached across visits, refetched on focus)
   const { ncrs, loading, error, setError, userRole, fetchNcrs } = useNCRData({ projectId, token });
 
   // Modal state
@@ -79,6 +85,22 @@ export function NCRPage() {
   // Filter state
   const [filteredNcrs, setFilteredNcrs] = useState<NCR[] | null>(null);
 
+  // URL-persisted sort state (`?sort=` / `?dir=`), applied after filtering.
+  // No sort param keeps the server order, exactly as before.
+  const sortField = searchParams.get('sort') || '';
+  const sortDirection = (searchParams.get('dir') || 'asc') as NcrSortDirection;
+
+  const handleSort = useCallback(
+    (field: NcrSortField) => {
+      const { sort, dir } = nextSortParams(sortField, sortDirection, field);
+      const nextSearchParams = new URLSearchParams(searchParams);
+      nextSearchParams.set('sort', sort);
+      nextSearchParams.set('dir', dir);
+      setSearchParams(nextSearchParams);
+    },
+    [searchParams, setSearchParams, sortField, sortDirection],
+  );
+
   // Actions (API handlers)
   const {
     actionLoading,
@@ -106,7 +128,10 @@ export function NCRPage() {
     setFilteredNcrs(filtered);
   }, []);
 
-  const displayedNcrs = filteredNcrs ?? ncrs;
+  const displayedNcrs = useMemo(
+    () => sortNcrs(filteredNcrs ?? ncrs, sortField, sortDirection),
+    [filteredNcrs, ncrs, sortField, sortDirection],
+  );
 
   // --- Render ---
 
@@ -238,6 +263,9 @@ export function NCRPage() {
           actionLoading={actionLoading}
           copiedNcrId={copiedNcrId}
           highlightedNcrId={deepLinkedNcrId}
+          sortField={sortField}
+          sortDirection={sortDirection}
+          onSort={handleSort}
           onCopyLink={handleCopyNcrLink}
           onAssign={(ncr) => openModal('assign', ncr)}
           onRespond={(ncr) => openModal('respond', ncr)}

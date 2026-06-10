@@ -1,8 +1,18 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api';
 import { extractErrorMessage } from '@/lib/errorHandling';
-import { devLog, logError } from '@/lib/logger';
+import { logError } from '@/lib/logger';
+import { queryKeys } from '@/lib/queryKeys';
 import type { NCR, UserRole } from '../types';
+
+/**
+ * Register data is considered fresh for 30s (the cadence of the old manual
+ * poll). Returning to the tab refetches stale data via refetchOnWindowFocus,
+ * and every NCR mutation invalidates the key explicitly, so the register stays
+ * current without a background interval.
+ */
+const NCR_REGISTER_STALE_TIME_MS = 30_000;
 
 interface UseNCRDataOptions {
   projectId: string | undefined;
@@ -19,97 +29,45 @@ interface UseNCRDataReturn {
 }
 
 export function useNCRData({ projectId, token }: UseNCRDataOptions): UseNCRDataReturn {
-  const [ncrs, setNcrs] = useState<NCR[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  // Single error banner slot shared with useNCRActions: register load failures
+  // land here via onError, and mutation handlers write through setError.
   const [error, setError] = useState<string | null>(null);
-  const [userRole, setUserRole] = useState<UserRole | null>(null);
 
-  const fetchNcrs = useCallback(async () => {
-    try {
-      setLoading(true);
+  const ncrsQuery = useQuery({
+    queryKey: queryKeys.ncrs(projectId),
+    queryFn: async () => {
       const path = projectId ? `/api/ncrs?projectId=${encodeURIComponent(projectId)}` : `/api/ncrs`;
       const data = await apiFetch<{ ncrs: NCR[] }>(path);
-      setNcrs(data.ncrs);
-      setError(null);
-    } catch (err) {
-      setError(extractErrorMessage(err, 'Failed to load NCRs'));
-    } finally {
-      setLoading(false);
-    }
-  }, [projectId]);
+      return data.ncrs ?? [];
+    },
+    enabled: Boolean(token),
+    staleTime: NCR_REGISTER_STALE_TIME_MS,
+    refetchOnWindowFocus: true,
+    onSuccess: () => setError(null),
+    onError: (err) => setError(extractErrorMessage(err, 'Failed to load NCRs')),
+  });
 
-  const checkUserRole = useCallback(async () => {
-    if (!projectId) return;
-    try {
-      const data = await apiFetch<UserRole>(
-        `/api/ncrs/check-role/${encodeURIComponent(projectId)}`,
-      );
-      setUserRole(data);
-    } catch (err) {
-      logError('Failed to check user role:', err);
-    }
-  }, [projectId]);
+  const roleQuery = useQuery({
+    queryKey: projectId ? queryKeys.ncrRole(projectId) : ['ncr-role', 'none'],
+    queryFn: () => apiFetch<UserRole>(`/api/ncrs/check-role/${encodeURIComponent(projectId!)}`),
+    enabled: Boolean(token && projectId),
+    onError: (err) => logError('Failed to check user role:', err),
+  });
 
-  // Initial fetch
-  useEffect(() => {
-    if (token) {
-      fetchNcrs();
-      checkUserRole();
-    }
-  }, [token, projectId, fetchNcrs, checkUserRole]);
+  // Refresh entry point used by the mutations (create/assign/respond/close/…)
+  // and pull-to-refresh: invalidating the register key refetches every mounted
+  // register sharing it, and resolves once the refetch settles.
+  const fetchNcrs = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: queryKeys.ncrs(projectId) });
+  }, [queryClient, projectId]);
 
-  // Real-time NCR status update polling (every 30 seconds)
-  useEffect(() => {
-    if (!token) return;
-
-    let pollInterval: NodeJS.Timeout | null = null;
-
-    const silentFetchNcrs = async () => {
-      const path = projectId ? `/api/ncrs?projectId=${encodeURIComponent(projectId)}` : `/api/ncrs`;
-
-      try {
-        const data = await apiFetch<{ ncrs: NCR[] }>(path);
-        setNcrs((prevNcrs: NCR[]) => {
-          const newNcrs = data.ncrs || [];
-          const hasChanges =
-            newNcrs.length !== prevNcrs.length ||
-            newNcrs.some(
-              (newNcr: NCR, index: number) =>
-                !prevNcrs[index] ||
-                newNcr.id !== prevNcrs[index].id ||
-                newNcr.status !== prevNcrs[index].status ||
-                newNcr.closedAt !== prevNcrs[index].closedAt ||
-                newNcr.qmApprovedAt !== prevNcrs[index].qmApprovedAt,
-            );
-          return hasChanges ? newNcrs : prevNcrs;
-        });
-      } catch (err) {
-        devLog('Background NCR fetch failed:', err);
-      }
-    };
-
-    const startPolling = () => {
-      pollInterval = setInterval(() => {
-        if (document.visibilityState === 'visible') {
-          silentFetchNcrs();
-        }
-      }, 30000);
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        silentFetchNcrs();
-      }
-    };
-
-    startPolling();
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    return () => {
-      if (pollInterval) clearInterval(pollInterval);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [token, projectId]);
-
-  return { ncrs, loading, error, setError, userRole, fetchNcrs };
+  return {
+    ncrs: ncrsQuery.data ?? [],
+    loading: ncrsQuery.isLoading,
+    error,
+    setError,
+    userRole: roleQuery.data ?? null,
+    fetchNcrs,
+  };
 }
