@@ -406,7 +406,7 @@ export function LotEditPage() {
   );
 
   return (
-    <div className="space-y-6 p-6 max-w-3xl mx-auto">
+    <div className="space-y-6 p-6 max-w-3xl mx-auto pb-32 md:pb-6">
       <LotEditHeader
         lotNumber={lot.lotNumber}
         offlineSyncStatus={offlineSyncStatus}
