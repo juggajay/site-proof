@@ -1,4 +1,5 @@
 import { SyncStatusBadge } from '@/components/OfflineIndicator';
+import { useIsMobile } from '@/hooks/useMediaQuery';
 
 export type LotEditOfflineSyncStatus = 'synced' | 'pending' | 'conflict' | 'error';
 
@@ -103,6 +104,40 @@ export function LotEditFormActions({
   saving: boolean;
   onCancel: () => void;
 }) {
+  const isMobile = useIsMobile();
+
+  if (isMobile) {
+    // On mobile: sticky bottom bar that clears the bottom nav (bottom-16 matches
+    // the 64px nav bar used across this app — mirrors the DocketEditActionBar idiom).
+    // The form body in LotEditPage gets pb-32 to prevent the bar from obscuring the
+    // last field.
+    return (
+      <div
+        className="fixed bottom-16 left-0 right-0 z-40 border-t bg-background px-4 py-3"
+        style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+        data-testid="lot-edit-sticky-bar"
+      >
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="flex-1 rounded-lg border px-4 py-2.5 text-sm hover:bg-muted min-h-[44px]"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={!canSubmit || saving}
+            className="flex-1 rounded-lg bg-primary px-4 py-2.5 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
+          >
+            {saving ? 'Saving...' : 'Save Changes'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Desktop: unchanged inline layout
   return (
     <div className="flex justify-end gap-4">
       <button

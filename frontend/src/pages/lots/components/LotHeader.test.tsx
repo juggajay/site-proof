@@ -1,10 +1,33 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { LotHeader, type LotHeaderProps } from './LotHeader';
 import type { Lot } from '../types';
 
+// Mock framer-motion to keep tests synchronous (BottomSheet uses AnimatePresence)
+vi.mock('framer-motion', () => ({
+  AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  motion: {
+    div: ({ children, ...rest }: React.HTMLAttributes<HTMLDivElement>) => (
+      <div {...rest}>{children}</div>
+    ),
+  },
+  useMotionValue: () => ({ get: () => 0 }),
+  useTransform: () => ({ get: () => 1 }),
+  useDragControls: () => ({ start: vi.fn() }),
+  useReducedMotion: () => false,
+  animate: vi.fn(),
+}));
+
+// Mobile/desktop toggle — default to desktop (isMobile = false)
+let mockIsMobile = false;
+vi.mock('@/hooks/useMediaQuery', () => ({
+  useIsMobile: () => mockIsMobile,
+  useMediaQuery: () => false,
+}));
+
 afterEach(() => {
   cleanup();
+  mockIsMobile = false;
 });
 
 const baseLot: Lot = {
@@ -50,11 +73,10 @@ function renderHeader(overrides: Partial<LotHeaderProps> = {}) {
   return render(<LotHeader {...props} />);
 }
 
-describe('LotHeader lot-configuration permissions', () => {
+// ── Desktop permission tests (unchanged behaviour) ──────────────────────────
+
+describe('LotHeader lot-configuration permissions (desktop)', () => {
   it('hides Edit Lot and Assign Subcontractor for a foreman (canManageLot=false)', () => {
-    // A foreman is a non-viewer, so the old broad canEdit/viewer permission was
-    // true for them — yet they cannot reach the lot-edit route or assign
-    // subcontractors. The configuration actions must follow canManageLot.
     renderHeader({ canManageLot: false });
 
     expect(screen.queryByRole('button', { name: 'Edit Lot' })).not.toBeInTheDocument();
@@ -74,8 +96,8 @@ describe('LotHeader lot-configuration permissions', () => {
   });
 });
 
-describe('LotHeader mobile layout', () => {
-  it('stacks the title and actions and wraps the action cluster so it does not overflow at 390px', () => {
+describe('LotHeader desktop layout snapshot', () => {
+  it('renders the action cluster with flex-wrap and desktop layout classes', () => {
     renderHeader({ canManageLot: true });
 
     const actionCluster = screen.getByRole('button', { name: 'Copy Link' }).parentElement;
@@ -86,5 +108,133 @@ describe('LotHeader mobile layout', () => {
     // Title block and actions stack vertically on mobile, side-by-side on >= sm.
     expect(headerRow).toHaveClass('flex-col');
     expect(headerRow).toHaveClass('sm:flex-row');
+  });
+});
+
+// ── Mobile layout tests ─────────────────────────────────────────────────────
+
+describe('LotHeader mobile overflow menu', () => {
+  it('renders More button and hides individual action buttons on mobile', () => {
+    mockIsMobile = true;
+    renderHeader({ canManageLot: true, canConformLots: true });
+
+    // More button must be visible and have correct aria-label
+    expect(screen.getByRole('button', { name: 'More actions' })).toBeInTheDocument();
+
+    // Primary Edit Lot button visible since canManageLot=true
+    expect(screen.getByRole('button', { name: 'Edit Lot' })).toBeInTheDocument();
+
+    // Copy Link / Print / Assign Sub / Override should NOT be inline on mobile
+    expect(screen.queryByRole('button', { name: 'Copy Link' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Print' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Assign Subcontractor/i })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /Override Workflow Status/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('status badge renders alongside the lot title on mobile', () => {
+    mockIsMobile = true;
+    renderHeader();
+
+    // Status badge is rendered; its position is validated by the title row wrapper
+    expect(screen.getByText('In Progress')).toBeInTheDocument();
+    const heading = screen.getByRole('heading', { name: 'LOT-001' });
+    // Badge and heading share a flex wrapper (same parent)
+    expect(heading.parentElement).toContainElement(screen.getByText('In Progress'));
+  });
+
+  it('opens BottomSheet when More button is clicked and lists all allowed actions', () => {
+    mockIsMobile = true;
+    renderHeader({ canManageLot: true, canConformLots: true });
+
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+
+    // Sheet renders its action rows
+    expect(screen.getByText('Copy Link')).toBeInTheDocument();
+    expect(screen.getByText('Print')).toBeInTheDocument();
+    expect(screen.getByText('Assign Subcontractor')).toBeInTheDocument();
+    expect(screen.getByText('Override Workflow Status')).toBeInTheDocument();
+  });
+
+  it('fires onCopyLink handler when Copy Link is tapped in the sheet', () => {
+    mockIsMobile = true;
+    const onCopyLink = vi.fn();
+    renderHeader({ canManageLot: false, onCopyLink });
+
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+    fireEvent.click(screen.getByText('Copy Link'));
+    expect(onCopyLink).toHaveBeenCalledTimes(1);
+  });
+
+  it('fires onPrint handler when Print is tapped in the sheet', () => {
+    mockIsMobile = true;
+    const onPrint = vi.fn();
+    renderHeader({ onPrint });
+
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+    fireEvent.click(screen.getByText('Print'));
+    expect(onPrint).toHaveBeenCalledTimes(1);
+  });
+
+  it('fires onAssignSubcontractorLegacy handler from the sheet', () => {
+    mockIsMobile = true;
+    const onAssignSubcontractorLegacy = vi.fn();
+    renderHeader({ canManageLot: true, onAssignSubcontractorLegacy });
+
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+    fireEvent.click(screen.getByText('Assign Subcontractor'));
+    expect(onAssignSubcontractorLegacy).toHaveBeenCalledTimes(1);
+  });
+
+  it('fires onOverrideStatus handler from the sheet', () => {
+    mockIsMobile = true;
+    const onOverrideStatus = vi.fn();
+    renderHeader({ canConformLots: true, onOverrideStatus });
+
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+    fireEvent.click(screen.getByText('Override Workflow Status'));
+    expect(onOverrideStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it('hides Assign Subcontractor and Override Status from sheet when permissions are absent', () => {
+    mockIsMobile = true;
+    renderHeader({ canManageLot: false, canConformLots: false });
+
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+
+    // Copy Link + Print present
+    expect(screen.getByText('Copy Link')).toBeInTheDocument();
+    expect(screen.getByText('Print')).toBeInTheDocument();
+    // Management actions absent
+    expect(screen.queryByText('Assign Subcontractor')).not.toBeInTheDocument();
+    expect(screen.queryByText('Override Workflow Status')).not.toBeInTheDocument();
+  });
+
+  it('hides Assign Subcontractor for claimed lots on mobile', () => {
+    mockIsMobile = true;
+    renderHeader({ canManageLot: true, lot: { ...baseLot, status: 'claimed' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+
+    expect(screen.queryByText('Assign Subcontractor')).not.toBeInTheDocument();
+  });
+
+  it('fires onEdit when primary Edit Lot button is clicked directly on mobile', () => {
+    mockIsMobile = true;
+    const onEdit = vi.fn();
+    renderHeader({ canManageLot: true, onEdit });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Lot' }));
+    expect(onEdit).toHaveBeenCalledTimes(1);
+  });
+
+  it('hides Edit Lot primary button when canManageLot=false on mobile', () => {
+    mockIsMobile = true;
+    renderHeader({ canManageLot: false });
+
+    expect(screen.queryByRole('button', { name: 'Edit Lot' })).not.toBeInTheDocument();
+    // More button is still present
+    expect(screen.getByRole('button', { name: 'More actions' })).toBeInTheDocument();
   });
 });
