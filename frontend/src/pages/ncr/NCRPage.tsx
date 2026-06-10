@@ -5,6 +5,7 @@ import { AlertTriangle, Plus } from 'lucide-react';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { ContextFAB } from '@/components/mobile/ContextFAB';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
+import { useRegisterDeepLink } from '@/hooks/useRegisterDeepLink';
 import { Button } from '@/components/ui/button';
 
 // Types
@@ -29,6 +30,14 @@ import { RejectRectificationModal } from './components/RejectRectificationModal'
 import { CloseNCRModal } from './components/CloseNCRModal';
 import { ConcessionModal } from './components/ConcessionModal';
 
+// Read side of the "Copy link" action (?ncr=<id>): stable references so the
+// deep-link effect doesn't re-run on every render.
+const getNcrId = (ncr: NCR) => ncr.id;
+const NCR_LINK_NOT_FOUND = {
+  title: "Couldn't find that NCR",
+  description: 'The link may belong to another project, or the NCR may have been deleted.',
+};
+
 export function NCRPage() {
   const { projectId } = useParams();
   const navigate = useNavigate();
@@ -42,6 +51,16 @@ export function NCRPage() {
 
   // Modal state
   const { activeModal, selectedNcr, openModal, closeModal, selectNcr } = useNCRModals();
+
+  // Deep link from a copied register link (?ncr=<id>): scroll to + highlight
+  // the linked NCR once the register has loaded, or toast if it isn't here.
+  const { highlightedId: deepLinkedNcrId } = useRegisterDeepLink({
+    param: 'ncr',
+    loading: loading || Boolean(error),
+    records: ncrs,
+    getRecordId: getNcrId,
+    notFound: NCR_LINK_NOT_FOUND,
+  });
 
   useEffect(() => {
     if (!projectId || searchParams.get('create') !== '1') return;
@@ -208,6 +227,7 @@ export function NCRPage() {
           pullDistance={pullDistance}
           isRefreshing={isRefreshing}
           progress={progress}
+          highlightedNcrId={deepLinkedNcrId}
           onSelectNcr={selectNcr}
           onCopyLink={handleCopyNcrLink}
         />
@@ -217,6 +237,7 @@ export function NCRPage() {
           userRole={userRole}
           actionLoading={actionLoading}
           copiedNcrId={copiedNcrId}
+          highlightedNcrId={deepLinkedNcrId}
           onCopyLink={handleCopyNcrLink}
           onAssign={(ncr) => openModal('assign', ncr)}
           onRespond={(ncr) => openModal('respond', ncr)}

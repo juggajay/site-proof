@@ -971,6 +971,10 @@ test.describe('production readiness guardrails', () => {
       new URL('../src/pages/holdpoints/HoldPointsPage.tsx', import.meta.url),
       'utf8',
     );
+    const ncrPage = await readFile(
+      new URL('../src/pages/ncr/NCRPage.tsx', import.meta.url),
+      'utf8',
+    );
     const ncrActions = await readFile(
       new URL('../src/pages/ncr/hooks/useNCRActions.ts', import.meta.url),
       'utf8',
@@ -995,6 +999,13 @@ test.describe('production readiness guardrails', () => {
       "/projects/${encodeURIComponent(projectId || '')}/ncr?ncr=${encodeURIComponent(ncrId)}",
     );
     expect(ncrActions).not.toContain('/projects/${projectId}/ncrs?ncr=${ncrId}');
+    // The copied links must also be consumed: each register reads its own
+    // deep-link param and surfaces the linked record (fix for links that
+    // previously landed on the unfiltered register).
+    expect(holdPointsPage).toContain('useRegisterDeepLink');
+    expect(holdPointsPage).toContain("param: 'hp'");
+    expect(ncrPage).toContain('useRegisterDeepLink');
+    expect(ncrPage).toContain("param: 'ncr'");
     expect(testResultsNotifications).toContain('/projects/${projectId}/tests');
     expect(testResultsRoute).not.toContain('/projects/${testResult.projectId}/test-results');
     expect(testResultsNotifications).not.toContain('/projects/${projectId}/test-results');

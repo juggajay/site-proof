@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { Link2, Check, Download, RefreshCw, ClipboardCheck } from 'lucide-react';
 import { MobileDataCard } from '@/components/ui/MobileDataCard';
 import { Button } from '@/components/ui/button';
@@ -9,6 +10,8 @@ interface HoldPointsMobileListProps {
   filteredHoldPoints: HoldPoint[];
   loading: boolean;
   statusFilter: StatusFilter;
+  /** Deep-linked hold point (?hp=<id>) to scroll to and highlight. */
+  highlightedHpId: string | null;
   copiedHpId: string | null;
   generatingPdf: string | null;
   chasingHpId: string | null;
@@ -30,6 +33,7 @@ export function HoldPointsMobileList({
   filteredHoldPoints,
   loading,
   statusFilter,
+  highlightedHpId,
   copiedHpId,
   generatingPdf,
   chasingHpId,
@@ -40,6 +44,15 @@ export function HoldPointsMobileList({
   onGenerateEvidence,
   onClearFilter,
 }: HoldPointsMobileListProps) {
+  const highlightedCardRef = useRef<HTMLDivElement | null>(null);
+
+  // Scroll the deep-linked hold point's card into view while its highlight
+  // pulse is active.
+  useEffect(() => {
+    if (!highlightedHpId) return;
+    highlightedCardRef.current?.scrollIntoView({ block: 'center' });
+  }, [highlightedHpId]);
+
   if (loading) {
     return (
       <div className="flex justify-center p-8" role="status" aria-label="Loading hold points">
@@ -79,20 +92,29 @@ export function HoldPointsMobileList({
 
   return (
     <div className="space-y-3">
-      {filteredHoldPoints.map((hp) => (
-        <HoldPointMobileCard
-          key={hp.id}
-          hp={hp}
-          copiedHpId={copiedHpId}
-          generatingPdf={generatingPdf}
-          chasingHpId={chasingHpId}
-          onCopyLink={onCopyLink}
-          onRequestRelease={onRequestRelease}
-          onRecordRelease={onRecordRelease}
-          onChase={onChase}
-          onGenerateEvidence={onGenerateEvidence}
-        />
-      ))}
+      {filteredHoldPoints.map((hp) => {
+        const isDeepLinked = hp.id === highlightedHpId;
+        return (
+          <div
+            key={hp.id}
+            ref={isDeepLinked ? highlightedCardRef : undefined}
+            className={isDeepLinked ? 'rounded-xl ring-2 ring-primary/50' : undefined}
+            data-deep-linked={isDeepLinked ? 'true' : undefined}
+          >
+            <HoldPointMobileCard
+              hp={hp}
+              copiedHpId={copiedHpId}
+              generatingPdf={generatingPdf}
+              chasingHpId={chasingHpId}
+              onCopyLink={onCopyLink}
+              onRequestRelease={onRequestRelease}
+              onRecordRelease={onRecordRelease}
+              onChase={onChase}
+              onGenerateEvidence={onGenerateEvidence}
+            />
+          </div>
+        );
+      })}
     </div>
   );
 }
