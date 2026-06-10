@@ -6,7 +6,7 @@ import { apiFetch } from '@/lib/api';
 import { toast } from '@/components/ui/toaster';
 import type { HPEvidencePackageData } from '@/lib/pdfGenerator';
 import type { HoldPoint, HoldPointDetails, RequestError } from '../types';
-import { Modal, ModalHeader, ModalDescription, ModalBody } from '@/components/ui/Modal';
+import { ResponsiveSheet } from '@/components/ui/ResponsiveSheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -90,8 +90,8 @@ export function RequestReleaseModal({
       });
       return;
     }
-    const { scheduledDate, scheduledTime, notificationSentTo } = getValues();
-    onSubmit(scheduledDate, scheduledTime, notificationSentTo, true, overrideReason);
+    const { scheduledDate, scheduledTime, notificationSentTo: sentTo } = getValues();
+    onSubmit(scheduledDate, scheduledTime, sentTo, true, overrideReason);
   };
 
   const handlePreviewPackage = async () => {
@@ -148,283 +148,285 @@ export function RequestReleaseModal({
 
   const canSubmit = details?.canRequestRelease && !requesting;
 
-  return (
-    <>
-      <Modal onClose={onClose} className="max-w-lg">
-        <ModalHeader>Request Hold Point Release</ModalHeader>
-        <ModalDescription>
-          Schedule release notification and review prerequisites for this hold point.
-        </ModalDescription>
-        <ModalBody>
-          <div className="mb-4 p-3 bg-muted rounded-lg">
-            <div className="text-sm text-muted-foreground">Lot</div>
-            <div className="font-medium">{holdPoint.lotNumber}</div>
-            <div className="text-sm text-muted-foreground mt-2">Hold Point</div>
-            <div className="font-medium">{holdPoint.description}</div>
-          </div>
-
-          {loading ? (
-            <div
-              className="flex justify-center p-8"
-              role="status"
-              aria-label="Loading hold point details"
-            >
-              <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-            </div>
+  // Footer for the "can request" happy-path form — rendered in the sticky footer
+  // of the sheet so Submit is always in reach without scrolling.
+  const formFooter =
+    details?.canRequestRelease && !error ? (
+      <>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={handlePreviewPackage}
+          disabled={loadingPreview}
+          className="border-primary/30 bg-primary/5 text-primary hover:bg-primary/10"
+        >
+          {loadingPreview ? (
+            <>
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+              <span>Loading...</span>
+            </>
           ) : (
             <>
-              {/* Prerequisites Section */}
-              {details && details.prerequisites.length > 0 && (
-                <div className="mb-4">
-                  <h3 className="text-sm font-medium mb-2">Prerequisites</h3>
-                  <div className="space-y-2">
-                    {details.prerequisites.map((prereq) => (
-                      <div
-                        key={prereq.id}
-                        className={`flex items-center gap-2 p-2 rounded text-sm ${
-                          prereq.isCompleted
-                            ? 'bg-success/10 text-success'
-                            : 'bg-destructive/10 text-destructive'
-                        }`}
-                      >
-                        <span className="text-lg">{prereq.isCompleted ? '\u2713' : '\u2717'}</span>
-                        <span className="flex-1">
-                          {prereq.sequenceNumber}. {prereq.description}
-                          {prereq.isHoldPoint && (
-                            <span className="ml-2 text-xs px-1 bg-brand/15 text-brand rounded">
-                              HP
-                            </span>
-                          )}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Error / Block Message */}
-              {error && !hasNoticePeriodWarning && (
-                <div
-                  className="mb-4 p-4 bg-destructive/10 border border-destructive/30 rounded-lg"
-                  role="alert"
-                >
-                  <div className="flex items-start gap-2">
-                    <span className="text-destructive text-xl">&#x26a0;&#xfe0f;</span>
-                    <div>
-                      <div className="font-medium text-destructive">{error.message}</div>
-                      {error.incompleteItems && error.incompleteItems.length > 0 && (
-                        <div className="mt-2">
-                          <div className="text-sm text-destructive mb-1">
-                            Missing prerequisites:
-                          </div>
-                          <ul className="text-sm text-destructive list-disc list-inside">
-                            {error.incompleteItems.map((item) => (
-                              <li key={item.id}>
-                                {item.sequenceNumber}. {item.description}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Notice Period Warning - Allow Override (Feature #180) */}
-              {hasNoticePeriodWarning && (
-                <div
-                  className="mb-4 p-4 bg-warning/10 border border-warning/30 rounded-lg"
-                  role="alert"
-                >
-                  <div className="flex items-start gap-2">
-                    <span className="text-warning text-xl">&#x26a0;&#xfe0f;</span>
-                    <div className="flex-1">
-                      <div className="font-medium text-warning">{error!.message}</div>
-                      {error!.details && (
-                        <div className="mt-2 text-sm text-warning">
-                          <p>
-                            Scheduled date provides only {error!.details.workingDaysNotice} working
-                            day{error!.details.workingDaysNotice !== 1 ? 's' : ''} notice.
-                          </p>
-                          <p>
-                            Minimum required: {error!.details.minimumNoticeDays} working day
-                            {error!.details.minimumNoticeDays !== 1 ? 's' : ''}.
-                          </p>
-                        </div>
-                      )}
-                      <div className="mt-4 space-y-3">
-                        <div>
-                          <Label className="text-warning">Override Reason (required)</Label>
-                          <Textarea
-                            {...register('overrideReason')}
-                            className="border-warning/40"
-                            placeholder="Explain why this short notice is necessary..."
-                            rows={2}
-                          />
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            type="button"
-                            onClick={handleOverrideSubmit}
-                            disabled={requesting || !watch('overrideReason')?.trim()}
-                            className="bg-warning text-warning-foreground hover:bg-warning/90"
-                          >
-                            {requesting ? 'Requesting...' : 'Override & Submit'}
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={onClose}
-                            className="border-warning/40 hover:bg-warning/10"
-                          >
-                            Cancel
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Can Request - Show Form */}
-              {details?.canRequestRelease && !error && (
-                <form onSubmit={rhfHandleSubmit(onFormSubmit)} className="space-y-4">
-                  <div className="p-3 bg-success/10 border border-success/20 rounded-lg mb-4">
-                    <div className="flex items-center gap-2 text-success">
-                      <span className="text-lg">&#x2713;</span>
-                      <span className="font-medium">All prerequisites completed</span>
-                    </div>
-                    <p className="text-sm text-success mt-1">
-                      You can now request release for this hold point.
-                    </p>
-                  </div>
-
-                  <div>
-                    <Label>Scheduled Date</Label>
-                    <Input
-                      type="date"
-                      {...register('scheduledDate')}
-                      min={formatDateKey()}
-                      className={errors.scheduledDate ? 'border-destructive' : ''}
-                    />
-                    {errors.scheduledDate && (
-                      <p className="mt-1 text-sm text-destructive" role="alert">
-                        {errors.scheduledDate.message}
-                      </p>
-                    )}
-                  </div>
-
-                  <div>
-                    <Label>Scheduled Time</Label>
-                    <Input
-                      type="time"
-                      {...register('scheduledTime')}
-                      className={errors.scheduledTime ? 'border-destructive' : ''}
-                    />
-                    {errors.scheduledTime && (
-                      <p className="mt-1 text-sm text-destructive" role="alert">
-                        {errors.scheduledTime.message}
-                      </p>
-                    )}
-                  </div>
-
-                  <div>
-                    <Label>Notify (Emails)</Label>
-                    <Input
-                      type="text"
-                      {...register('notificationSentTo')}
-                      className={errors.notificationSentTo ? 'border-destructive' : ''}
-                      placeholder="inspector@example.com, superintendent@example.com"
-                    />
-                    {errors.notificationSentTo && (
-                      <p className="mt-1 text-sm text-destructive" role="alert">
-                        {errors.notificationSentTo.message}
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="flex justify-between items-center pt-4 border-t">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={handlePreviewPackage}
-                      disabled={loadingPreview}
-                      className="border-primary/30 bg-primary/5 text-primary hover:bg-primary/10"
-                    >
-                      {loadingPreview ? (
-                        <>
-                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-                          <span>Loading...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Eye className="h-4 w-4" />
-                          <span>Preview Package</span>
-                        </>
-                      )}
-                    </Button>
-                    <div className="flex gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={onClose}
-                        disabled={requesting}
-                      >
-                        Cancel
-                      </Button>
-                      <Button type="submit" disabled={!canSubmit}>
-                        {requesting ? 'Requesting...' : 'Request Release'}
-                      </Button>
-                    </div>
-                  </div>
-                </form>
-              )}
-
-              {/* Cannot Request - Show Block */}
-              {details && !details.canRequestRelease && !error && (
-                <div className="space-y-4">
-                  <div
-                    className="p-4 bg-warning/10 border border-warning/30 rounded-lg"
-                    role="alert"
-                  >
-                    <div className="flex items-start gap-2">
-                      <span className="text-warning text-xl">&#x26a0;&#xfe0f;</span>
-                      <div>
-                        <div className="font-medium text-warning">Cannot request release yet</div>
-                        <p className="text-sm text-warning mt-1">
-                          Complete all preceding checklist items before requesting hold point
-                          release.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {details.incompletePrerequisites.length > 0 && (
-                    <div>
-                      <div className="text-sm font-medium mb-2">Items to complete:</div>
-                      <ul className="text-sm text-muted-foreground space-y-1">
-                        {details.incompletePrerequisites.map((item) => (
-                          <li key={item.id} className="flex items-center gap-2">
-                            <span className="text-destructive">&#x2717;</span>
-                            {item.sequenceNumber}. {item.description}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  <div className="flex justify-end pt-4 border-t">
-                    <Button variant="outline" onClick={onClose}>
-                      Close
-                    </Button>
-                  </div>
-                </div>
-              )}
+              <Eye className="h-4 w-4" />
+              <span>Preview Package</span>
             </>
           )}
-        </ModalBody>
-      </Modal>
+        </Button>
+        <div className="flex gap-2">
+          <Button type="button" variant="outline" onClick={onClose} disabled={requesting}>
+            Cancel
+          </Button>
+          <Button type="submit" form="request-release-form" disabled={!canSubmit}>
+            {requesting ? 'Requesting...' : 'Request Release'}
+          </Button>
+        </div>
+      </>
+    ) : (
+      <Button variant="outline" onClick={onClose}>
+        Close
+      </Button>
+    );
+
+  return (
+    <>
+      <ResponsiveSheet
+        open={true}
+        onClose={onClose}
+        title="Request Hold Point Release"
+        footer={formFooter}
+        className="max-w-lg"
+      >
+        {/* Hold-point summary */}
+        <div className="mb-4 p-3 bg-muted rounded-lg">
+          <div className="text-sm text-muted-foreground">Lot</div>
+          <div className="font-medium">{holdPoint.lotNumber}</div>
+          <div className="text-sm text-muted-foreground mt-2">Hold Point</div>
+          <div className="font-medium">{holdPoint.description}</div>
+        </div>
+
+        {/* Description (visible to screen readers) */}
+        <p className="sr-only">
+          Schedule release notification and review prerequisites for this hold point.
+        </p>
+
+        {loading ? (
+          <div
+            className="flex justify-center p-8"
+            role="status"
+            aria-label="Loading hold point details"
+          >
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+          </div>
+        ) : (
+          <>
+            {/* Prerequisites Section */}
+            {details && details.prerequisites.length > 0 && (
+              <div className="mb-4">
+                <h3 className="text-sm font-medium mb-2">Prerequisites</h3>
+                <div className="space-y-2">
+                  {details.prerequisites.map((prereq) => (
+                    <div
+                      key={prereq.id}
+                      className={`flex items-center gap-2 p-2 rounded text-sm ${
+                        prereq.isCompleted
+                          ? 'bg-success/10 text-success'
+                          : 'bg-destructive/10 text-destructive'
+                      }`}
+                    >
+                      <span className="text-lg">{prereq.isCompleted ? '✓' : '✗'}</span>
+                      <span className="flex-1">
+                        {prereq.sequenceNumber}. {prereq.description}
+                        {prereq.isHoldPoint && (
+                          <span className="ml-2 text-xs px-1 bg-brand/15 text-brand rounded">
+                            HP
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Error / Block Message */}
+            {error && !hasNoticePeriodWarning && (
+              <div
+                className="mb-4 p-4 bg-destructive/10 border border-destructive/30 rounded-lg"
+                role="alert"
+              >
+                <div className="flex items-start gap-2">
+                  <span className="text-destructive text-xl">&#x26a0;&#xfe0f;</span>
+                  <div>
+                    <div className="font-medium text-destructive">{error.message}</div>
+                    {error.incompleteItems && error.incompleteItems.length > 0 && (
+                      <div className="mt-2">
+                        <div className="text-sm text-destructive mb-1">Missing prerequisites:</div>
+                        <ul className="text-sm text-destructive list-disc list-inside">
+                          {error.incompleteItems.map((item) => (
+                            <li key={item.id}>
+                              {item.sequenceNumber}. {item.description}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Notice Period Warning - Allow Override (Feature #180) */}
+            {hasNoticePeriodWarning && (
+              <div
+                className="mb-4 p-4 bg-warning/10 border border-warning/30 rounded-lg"
+                role="alert"
+              >
+                <div className="flex items-start gap-2">
+                  <span className="text-warning text-xl">&#x26a0;&#xfe0f;</span>
+                  <div className="flex-1">
+                    <div className="font-medium text-warning">{error!.message}</div>
+                    {error!.details && (
+                      <div className="mt-2 text-sm text-warning">
+                        <p>
+                          Scheduled date provides only {error!.details.workingDaysNotice} working
+                          day{error!.details.workingDaysNotice !== 1 ? 's' : ''} notice.
+                        </p>
+                        <p>
+                          Minimum required: {error!.details.minimumNoticeDays} working day
+                          {error!.details.minimumNoticeDays !== 1 ? 's' : ''}.
+                        </p>
+                      </div>
+                    )}
+                    <div className="mt-4 space-y-3">
+                      <div>
+                        <Label className="text-warning">Override Reason (required)</Label>
+                        <Textarea
+                          {...register('overrideReason')}
+                          className="border-warning/40"
+                          placeholder="Explain why this short notice is necessary..."
+                          rows={2}
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          onClick={handleOverrideSubmit}
+                          disabled={requesting || !watch('overrideReason')?.trim()}
+                          className="bg-warning text-warning-foreground hover:bg-warning/90 min-h-[44px]"
+                        >
+                          {requesting ? 'Requesting...' : 'Override & Submit'}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={onClose}
+                          className="border-warning/40 hover:bg-warning/10 min-h-[44px]"
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Can Request - Show Form */}
+            {details?.canRequestRelease && !error && (
+              <form
+                id="request-release-form"
+                onSubmit={rhfHandleSubmit(onFormSubmit)}
+                className="space-y-4"
+              >
+                <div className="p-3 bg-success/10 border border-success/20 rounded-lg mb-4">
+                  <div className="flex items-center gap-2 text-success">
+                    <span className="text-lg">&#x2713;</span>
+                    <span className="font-medium">All prerequisites completed</span>
+                  </div>
+                  <p className="text-sm text-success mt-1">
+                    You can now request release for this hold point.
+                  </p>
+                </div>
+
+                <div>
+                  <Label>Scheduled Date</Label>
+                  <Input
+                    type="date"
+                    {...register('scheduledDate')}
+                    min={formatDateKey()}
+                    className={errors.scheduledDate ? 'border-destructive' : ''}
+                  />
+                  {errors.scheduledDate && (
+                    <p className="mt-1 text-sm text-destructive" role="alert">
+                      {errors.scheduledDate.message}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <Label>Scheduled Time</Label>
+                  <Input
+                    type="time"
+                    {...register('scheduledTime')}
+                    className={errors.scheduledTime ? 'border-destructive' : ''}
+                  />
+                  {errors.scheduledTime && (
+                    <p className="mt-1 text-sm text-destructive" role="alert">
+                      {errors.scheduledTime.message}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <Label>Notify (Emails)</Label>
+                  <Input
+                    type="text"
+                    {...register('notificationSentTo')}
+                    className={errors.notificationSentTo ? 'border-destructive' : ''}
+                    placeholder="inspector@example.com, superintendent@example.com"
+                  />
+                  {errors.notificationSentTo && (
+                    <p className="mt-1 text-sm text-destructive" role="alert">
+                      {errors.notificationSentTo.message}
+                    </p>
+                  )}
+                </div>
+              </form>
+            )}
+
+            {/* Cannot Request - Show Block */}
+            {details && !details.canRequestRelease && !error && (
+              <div className="space-y-4">
+                <div className="p-4 bg-warning/10 border border-warning/30 rounded-lg" role="alert">
+                  <div className="flex items-start gap-2">
+                    <span className="text-warning text-xl">&#x26a0;&#xfe0f;</span>
+                    <div>
+                      <div className="font-medium text-warning">Cannot request release yet</div>
+                      <p className="text-sm text-warning mt-1">
+                        Complete all preceding checklist items before requesting hold point release.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {details.incompletePrerequisites.length > 0 && (
+                  <div>
+                    <div className="text-sm font-medium mb-2">Items to complete:</div>
+                    <ul className="text-sm text-muted-foreground space-y-1">
+                      {details.incompletePrerequisites.map((item) => (
+                        <li key={item.id} className="flex items-center gap-2">
+                          <span className="text-destructive">&#x2717;</span>
+                          {item.sequenceNumber}. {item.description}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
+      </ResponsiveSheet>
 
       {/* Evidence Package Preview Modal */}
       {showPreview && previewData && (
