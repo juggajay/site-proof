@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import { Loader2, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BottomSheet } from './BottomSheet';
+import { SheetDraftRestoredHint } from './SheetDraftRestoredHint';
 import { SheetErrorBanner } from './SheetErrorBanner';
+import { readSheetDraft, useSheetDraft } from './useSheetDraft';
 import { useSheetSave } from './useSheetSave';
 import {
   getOptionalDiaryHoursError,
@@ -42,6 +44,8 @@ interface AddManualLabourPlantSheetProps {
     hoursOperated?: number;
     lotId?: string;
   };
+  /** Enables auto-draft of typed state; omitted when editing an existing entry. */
+  draftKey?: string;
 }
 
 export function AddManualLabourPlantSheet({
@@ -53,13 +57,20 @@ export function AddManualLabourPlantSheet({
   lots,
   initialPersonnelData,
   initialPlantData,
+  draftKey,
 }: AddManualLabourPlantSheetProps) {
+  const editingMode = initialPersonnelData ? 'personnel' : initialPlantData ? 'plant' : null;
+  // An interrupted entry restored from the auto-draft; edits never draft.
+  const [restoredDraft] = useState(() => (editingMode ? null : readSheetDraft(draftKey)));
+
   // Personnel fields
-  const [personnelName, setPersonnelName] = useState('');
-  const [personnelCompany, setPersonnelCompany] = useState('');
-  const [personnelRole, setPersonnelRole] = useState('');
-  const [personnelHours, setPersonnelHours] = useState('');
-  const [personnelLotId, setPersonnelLotId] = useState(defaultLotId || '');
+  const [personnelName, setPersonnelName] = useState(restoredDraft?.personnelName || '');
+  const [personnelCompany, setPersonnelCompany] = useState(restoredDraft?.personnelCompany || '');
+  const [personnelRole, setPersonnelRole] = useState(restoredDraft?.personnelRole || '');
+  const [personnelHours, setPersonnelHours] = useState(restoredDraft?.personnelHours || '');
+  const [personnelLotId, setPersonnelLotId] = useState(
+    restoredDraft ? restoredDraft.personnelLotId || '' : defaultLotId || '',
+  );
   const {
     saving: savingPersonnel,
     saveError: personnelSaveError,
@@ -67,15 +78,44 @@ export function AddManualLabourPlantSheet({
   } = useSheetSave();
 
   // Plant fields
-  const [plantDescription, setPlantDescription] = useState('');
-  const [plantIdRego, setPlantIdRego] = useState('');
-  const [plantCompany, setPlantCompany] = useState('');
-  const [plantHours, setPlantHours] = useState('');
-  const [plantLotId, setPlantLotId] = useState(defaultLotId || '');
+  const [plantDescription, setPlantDescription] = useState(restoredDraft?.plantDescription || '');
+  const [plantIdRego, setPlantIdRego] = useState(restoredDraft?.plantIdRego || '');
+  const [plantCompany, setPlantCompany] = useState(restoredDraft?.plantCompany || '');
+  const [plantHours, setPlantHours] = useState(restoredDraft?.plantHours || '');
+  const [plantLotId, setPlantLotId] = useState(
+    restoredDraft ? restoredDraft.plantLotId || '' : defaultLotId || '',
+  );
   const { saving: savingPlant, saveError: plantSaveError, runSave: runPlantSave } = useSheetSave();
   const personnelHoursError = getOptionalDiaryHoursError(personnelHours);
   const plantHoursError = getOptionalDiaryHoursError(plantHours, 'Hours operated');
-  const editingMode = initialPersonnelData ? 'personnel' : initialPlantData ? 'plant' : null;
+  const draft = useSheetDraft({
+    draftKey: editingMode ? undefined : draftKey,
+    restored: restoredDraft,
+    fields: {
+      personnelName,
+      personnelCompany,
+      personnelRole,
+      personnelHours,
+      personnelLotId,
+      plantDescription,
+      plantIdRego,
+      plantCompany,
+      plantHours,
+      plantLotId,
+    },
+    baseline: {
+      personnelName: '',
+      personnelCompany: '',
+      personnelRole: '',
+      personnelHours: '',
+      personnelLotId: defaultLotId || '',
+      plantDescription: '',
+      plantIdRego: '',
+      plantCompany: '',
+      plantHours: '',
+      plantLotId: defaultLotId || '',
+    },
+  });
   const title =
     editingMode === 'personnel'
       ? 'Edit Personnel'
@@ -83,8 +123,26 @@ export function AddManualLabourPlantSheet({
         ? 'Edit Plant'
         : 'Add Labour / Plant';
 
+  // Seeds the fields on open. Unlike the other sheets this one resets its
+  // state through an effect, so the restored draft must be applied here or
+  // the reset would clobber it on mount.
   useEffect(() => {
     if (!isOpen) return;
+
+    if (!editingMode && restoredDraft) {
+      setPersonnelName(restoredDraft.personnelName || '');
+      setPersonnelCompany(restoredDraft.personnelCompany || '');
+      setPersonnelRole(restoredDraft.personnelRole || '');
+      setPersonnelHours(restoredDraft.personnelHours || '');
+      setPersonnelLotId(restoredDraft.personnelLotId || '');
+
+      setPlantDescription(restoredDraft.plantDescription || '');
+      setPlantIdRego(restoredDraft.plantIdRego || '');
+      setPlantCompany(restoredDraft.plantCompany || '');
+      setPlantHours(restoredDraft.plantHours || '');
+      setPlantLotId(restoredDraft.plantLotId || '');
+      return;
+    }
 
     setPersonnelName(initialPersonnelData?.name || '');
     setPersonnelCompany(initialPersonnelData?.company || '');
@@ -97,7 +155,21 @@ export function AddManualLabourPlantSheet({
     setPlantCompany(initialPlantData?.company || '');
     setPlantHours(initialPlantData?.hoursOperated?.toString() || '');
     setPlantLotId(initialPlantData?.lotId || defaultLotId || '');
-  }, [defaultLotId, initialPersonnelData, initialPlantData, isOpen]);
+  }, [defaultLotId, editingMode, initialPersonnelData, initialPlantData, isOpen, restoredDraft]);
+
+  const handleDiscardDraft = () => {
+    setPersonnelName('');
+    setPersonnelCompany('');
+    setPersonnelRole('');
+    setPersonnelHours('');
+    setPersonnelLotId(defaultLotId || '');
+    setPlantDescription('');
+    setPlantIdRego('');
+    setPlantCompany('');
+    setPlantHours('');
+    setPlantLotId(defaultLotId || '');
+    draft.discardDraft();
+  };
 
   const handleSavePersonnel = () => {
     if (!personnelName.trim() || personnelHoursError) return;
@@ -112,6 +184,10 @@ export function AddManualLabourPlantSheet({
           lotId: personnelLotId || undefined,
         }),
       () => {
+        // Recorded (online or queued offline) — drop the draft. The sheet can
+        // stay open with plant fields typed; the auto-draft re-persists them
+        // on the next field change below.
+        draft.clearDraft();
         setPersonnelName('');
         setPersonnelCompany('');
         setPersonnelRole('');
@@ -134,6 +210,8 @@ export function AddManualLabourPlantSheet({
           lotId: plantLotId || undefined,
         }),
       () => {
+        // Recorded (online or queued offline) — drop the draft (see personnel).
+        draft.clearDraft();
         setPlantDescription('');
         setPlantIdRego('');
         setPlantCompany('');
@@ -146,6 +224,12 @@ export function AddManualLabourPlantSheet({
   return (
     <BottomSheet isOpen={isOpen} onClose={onClose} title={title}>
       <div className="space-y-6">
+        {draft.draftHintVisible && (
+          <SheetDraftRestoredHint
+            onDiscard={handleDiscardDraft}
+            onDismiss={draft.dismissDraftHint}
+          />
+        )}
         {/* Tip banner */}
         <div className="flex items-start gap-2 p-3 bg-muted rounded-lg border border-border">
           <Info className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />

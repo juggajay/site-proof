@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BottomSheet } from './BottomSheet';
+import { SheetDraftRestoredHint } from './SheetDraftRestoredHint';
 import { SheetErrorBanner } from './SheetErrorBanner';
+import { readSheetDraft, useSheetDraft } from './useSheetDraft';
 import { useSheetSave } from './useSheetSave';
 import { getDiaryWeatherNumberError } from '@/pages/diary/diaryNumericInput';
 
@@ -30,21 +32,62 @@ interface AddWeatherSheetProps {
   onClose: () => void;
   onSave: (data: WeatherData) => Promise<void>;
   initialData: WeatherData | null;
+  /** Enables auto-draft of foreman-modified state (auto-populated values never draft). */
+  draftKey?: string;
 }
 
-export function AddWeatherSheet({ isOpen, onClose, onSave, initialData }: AddWeatherSheetProps) {
-  const [conditions, setConditions] = useState(initialData?.conditions || '');
-  const [temperatureMin, setTemperatureMin] = useState(initialData?.temperatureMin || '');
-  const [temperatureMax, setTemperatureMax] = useState(initialData?.temperatureMax || '');
-  const [rainfallMm, setRainfallMm] = useState(initialData?.rainfallMm || '');
+export function AddWeatherSheet({
+  isOpen,
+  onClose,
+  onSave,
+  initialData,
+  draftKey,
+}: AddWeatherSheetProps) {
+  // A foreman-modified entry restored from the auto-draft.
+  const [restoredDraft] = useState(() => readSheetDraft(draftKey));
+  const [conditions, setConditions] = useState(
+    restoredDraft?.conditions ?? (initialData?.conditions || ''),
+  );
+  const [temperatureMin, setTemperatureMin] = useState(
+    restoredDraft?.temperatureMin ?? (initialData?.temperatureMin || ''),
+  );
+  const [temperatureMax, setTemperatureMax] = useState(
+    restoredDraft?.temperatureMax ?? (initialData?.temperatureMax || ''),
+  );
+  const [rainfallMm, setRainfallMm] = useState(
+    restoredDraft?.rainfallMm ?? (initialData?.rainfallMm || ''),
+  );
   const { saving, saveError, runSave } = useSheetSave();
+  // The baseline is the auto-populated weather (diary values or the fetched
+  // forecast), so opening the sheet and dismissing it never creates a phantom
+  // draft — only foreman-modified values persist.
+  const draft = useSheetDraft({
+    draftKey,
+    restored: restoredDraft,
+    fields: { conditions, temperatureMin, temperatureMax, rainfallMm },
+    baseline: {
+      conditions: initialData?.conditions || '',
+      temperatureMin: initialData?.temperatureMin || '',
+      temperatureMax: initialData?.temperatureMax || '',
+      rainfallMm: initialData?.rainfallMm || '',
+    },
+  });
   const weatherNumberError = getDiaryWeatherNumberError({
     temperatureMin,
     temperatureMax,
     rainfallMm,
   });
 
+  // Late-arriving auto-populated weather (e.g. the forecast fetch finishing
+  // while the sheet is open) fills the fields — but never over a restored
+  // draft or values the foreman has touched: typed work always wins.
+  const fieldsTouchedRef = useRef(restoredDraft !== null);
+  const markTouched = () => {
+    fieldsTouchedRef.current = true;
+  };
+
   useEffect(() => {
+    if (fieldsTouchedRef.current) return;
     if (initialData) {
       setConditions(initialData.conditions || '');
       setTemperatureMin(initialData.temperatureMin || '');
@@ -53,21 +96,46 @@ export function AddWeatherSheet({ isOpen, onClose, onSave, initialData }: AddWea
     }
   }, [initialData]);
 
+  const handleDiscardDraft = () => {
+    setConditions(initialData?.conditions || '');
+    setTemperatureMin(initialData?.temperatureMin || '');
+    setTemperatureMax(initialData?.temperatureMax || '');
+    setRainfallMm(initialData?.rainfallMm || '');
+    fieldsTouchedRef.current = false;
+    draft.discardDraft();
+  };
+
   const handleSave = () => {
     if (weatherNumberError) return;
-    void runSave(() => onSave({ conditions, temperatureMin, temperatureMax, rainfallMm }), onClose);
+    void runSave(
+      () => onSave({ conditions, temperatureMin, temperatureMax, rainfallMm }),
+      () => {
+        // Recorded (online or queued offline) — drop the draft.
+        draft.clearDraft();
+        onClose();
+      },
+    );
   };
 
   return (
     <BottomSheet isOpen={isOpen} onClose={onClose} title="Weather">
       <div className="space-y-4">
+        {draft.draftHintVisible && (
+          <SheetDraftRestoredHint
+            onDiscard={handleDiscardDraft}
+            onDismiss={draft.dismissDraftHint}
+          />
+        )}
         <div>
           <label className="text-sm font-medium text-muted-foreground">Conditions</label>
           <div className="flex flex-wrap gap-2 mt-2">
             {CONDITIONS.map((c) => (
               <button
                 key={c}
-                onClick={() => setConditions(c)}
+                onClick={() => {
+                  markTouched();
+                  setConditions(c);
+                }}
                 className={cn(
                   'px-3 py-2 rounded-full text-sm font-medium touch-manipulation min-h-[44px]',
                   conditions === c
@@ -87,7 +155,10 @@ export function AddWeatherSheet({ isOpen, onClose, onSave, initialData }: AddWea
             <input
               type="number"
               value={temperatureMin}
-              onChange={(e) => setTemperatureMin(e.target.value)}
+              onChange={(e) => {
+                markTouched();
+                setTemperatureMin(e.target.value);
+              }}
               placeholder="e.g. 12"
               className={cn(
                 'w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation',
@@ -100,7 +171,10 @@ export function AddWeatherSheet({ isOpen, onClose, onSave, initialData }: AddWea
             <input
               type="number"
               value={temperatureMax}
-              onChange={(e) => setTemperatureMax(e.target.value)}
+              onChange={(e) => {
+                markTouched();
+                setTemperatureMax(e.target.value);
+              }}
               placeholder="e.g. 28"
               className={cn(
                 'w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation',
@@ -115,7 +189,10 @@ export function AddWeatherSheet({ isOpen, onClose, onSave, initialData }: AddWea
           <input
             type="number"
             value={rainfallMm}
-            onChange={(e) => setRainfallMm(e.target.value)}
+            onChange={(e) => {
+              markTouched();
+              setRainfallMm(e.target.value);
+            }}
             placeholder="0"
             step="0.1"
             className={cn(

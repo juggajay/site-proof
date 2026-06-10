@@ -140,6 +140,8 @@ export function DailyDiaryPage() {
         />
         <DiaryMobileSheets
           activeSheet={mobile.activeSheet}
+          projectId={projectId}
+          selectedDate={data.selectedDate}
           onCloseSheet={() => {
             mobile.setActiveSheet(null);
             mobile.setEditingEntry(null);

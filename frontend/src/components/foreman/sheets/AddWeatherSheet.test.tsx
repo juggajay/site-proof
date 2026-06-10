@@ -8,9 +8,11 @@
  * failure banner, and the banner's Retry can complete the save.
  */
 
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, renderWithProviders, screen, waitFor } from '@/test/renderWithProviders';
+import { readSessionStorageItem, removeSessionStorageItem } from '@/lib/storagePreferences';
 import { AddWeatherSheet } from './AddWeatherSheet';
+import { sheetDraftKey } from './useSheetDraft';
 
 const BANNER_TEXT = /couldn.t save — your entry is kept\. try again\./i;
 
@@ -64,5 +66,110 @@ describe('AddWeatherSheet save failure', () => {
 
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
     expect(screen.queryByText(BANNER_TEXT)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * Auto-draft for the weather sheet. Weather is special: the fields arrive
+ * auto-populated (diary values or the fetched forecast), so the baseline for
+ * "did the foreman actually type something?" is the initialData — opening and
+ * dismissing an untouched sheet must never create a phantom draft.
+ */
+describe('AddWeatherSheet auto-draft', () => {
+  const KEY = sheetDraftKey('proj-1', '2026-06-10', 'weather');
+  const AUTO_POPULATED = {
+    conditions: 'Fine',
+    temperatureMin: '12',
+    temperatureMax: '28',
+    rainfallMm: '0',
+  };
+
+  function renderDraftSheet(initialData: typeof AUTO_POPULATED | null = AUTO_POPULATED) {
+    const onClose = vi.fn();
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    const view = renderWithProviders(
+      <AddWeatherSheet
+        isOpen
+        onClose={onClose}
+        onSave={onSave}
+        initialData={initialData}
+        draftKey={KEY}
+      />,
+    );
+    return { onClose, onSave, view };
+  }
+
+  beforeEach(() => {
+    removeSessionStorageItem(KEY);
+  });
+
+  afterEach(() => {
+    removeSessionStorageItem(KEY);
+  });
+
+  it('never stores a phantom draft for untouched auto-populated weather', () => {
+    const { view } = renderDraftSheet();
+    expect(screen.queryByText(/draft restored/i)).not.toBeInTheDocument();
+
+    view.unmount();
+    expect(readSessionStorageItem(KEY)).toBeNull();
+  });
+
+  it('persists foreman-modified weather on dismissal and restores it on reopen', () => {
+    const { view } = renderDraftSheet();
+    fireEvent.change(screen.getByPlaceholderText('e.g. 28'), { target: { value: '31' } });
+    view.unmount();
+
+    expect(readSessionStorageItem(KEY)).not.toBeNull();
+
+    renderDraftSheet();
+    expect(screen.getByPlaceholderText('e.g. 28')).toHaveValue(31);
+    // Untouched fields restore their auto-populated values.
+    expect(screen.getByPlaceholderText('e.g. 12')).toHaveValue(12);
+    expect(screen.getByText(/draft restored/i)).toBeInTheDocument();
+  });
+
+  it('late-arriving auto-populated weather does not clobber a restored draft', () => {
+    const first = renderDraftSheet();
+    fireEvent.change(screen.getByPlaceholderText('e.g. 28'), { target: { value: '31' } });
+    first.view.unmount();
+
+    // Reopen before the forecast fetch resolves, then let it arrive.
+    const second = renderDraftSheet(null);
+    expect(screen.getByPlaceholderText('e.g. 28')).toHaveValue(31);
+
+    second.view.rerender(
+      <AddWeatherSheet
+        isOpen
+        onClose={vi.fn()}
+        onSave={vi.fn()}
+        initialData={AUTO_POPULATED}
+        draftKey={KEY}
+      />,
+    );
+    expect(screen.getByPlaceholderText('e.g. 28')).toHaveValue(31);
+  });
+
+  it('clears the draft once the save resolves', async () => {
+    const { onClose } = renderDraftSheet();
+    fireEvent.change(screen.getByPlaceholderText('e.g. 28'), { target: { value: '31' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save Weather' }));
+
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(readSessionStorageItem(KEY)).toBeNull();
+  });
+
+  it('discard resets the fields to the auto-populated values', () => {
+    const first = renderDraftSheet();
+    fireEvent.change(screen.getByPlaceholderText('e.g. 28'), { target: { value: '31' } });
+    first.view.unmount();
+
+    renderDraftSheet();
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
+
+    expect(screen.getByPlaceholderText('e.g. 28')).toHaveValue(28);
+    expect(screen.queryByText(/draft restored/i)).not.toBeInTheDocument();
+    expect(readSessionStorageItem(KEY)).toBeNull();
   });
 });

@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BottomSheet } from './BottomSheet';
+import { SheetDraftRestoredHint } from './SheetDraftRestoredHint';
 import { SheetErrorBanner } from './SheetErrorBanner';
+import { readSheetDraft, useSheetDraft } from './useSheetDraft';
 import { useSheetSave } from './useSheetSave';
 import {
   getOptionalDiaryHoursError,
@@ -30,6 +32,8 @@ interface AddDelaySheetProps {
     impact?: string;
     lotId?: string;
   };
+  /** Enables auto-draft of typed state; omitted when editing an existing entry. */
+  draftKey?: string;
 }
 
 export function AddDelaySheet({
@@ -39,15 +43,56 @@ export function AddDelaySheet({
   defaultLotId,
   lots,
   initialData,
+  draftKey,
 }: AddDelaySheetProps) {
-  const [delayType, setDelayType] = useState(initialData?.delayType || '');
-  const [description, setDescription] = useState(initialData?.description || '');
-  const [durationHours, setDurationHours] = useState(initialData?.durationHours?.toString() || '');
-  const [impact, setImpact] = useState(initialData?.impact || '');
-  const [lotId, setLotId] = useState(initialData?.lotId || defaultLotId || '');
-  const [showMore, setShowMore] = useState(!!initialData);
+  // An interrupted entry restored from the auto-draft; edits never draft.
+  const [restoredDraft] = useState(() => (initialData ? null : readSheetDraft(draftKey)));
+  const [delayType, setDelayType] = useState(
+    restoredDraft?.delayType ?? (initialData?.delayType || ''),
+  );
+  const [description, setDescription] = useState(
+    restoredDraft?.description ?? (initialData?.description || ''),
+  );
+  const [durationHours, setDurationHours] = useState(
+    restoredDraft?.durationHours ?? (initialData?.durationHours?.toString() || ''),
+  );
+  const [impact, setImpact] = useState(restoredDraft?.impact ?? (initialData?.impact || ''));
+  const [lotId, setLotId] = useState(
+    restoredDraft ? restoredDraft.lotId || '' : initialData?.lotId || defaultLotId || '',
+  );
+  const [showMore, setShowMore] = useState(
+    !!initialData ||
+      Boolean(
+        restoredDraft &&
+        (restoredDraft.durationHours ||
+          restoredDraft.impact ||
+          (restoredDraft.lotId || '') !== (defaultLotId || '')),
+      ),
+  );
   const { saving, saveError, runSave } = useSheetSave();
+  const draft = useSheetDraft({
+    draftKey: initialData ? undefined : draftKey,
+    restored: restoredDraft,
+    fields: { delayType, description, durationHours, impact, lotId },
+    baseline: {
+      delayType: '',
+      description: '',
+      durationHours: '',
+      impact: '',
+      lotId: defaultLotId || '',
+    },
+  });
   const durationHoursError = getOptionalDiaryHoursError(durationHours, 'Duration');
+
+  const handleDiscardDraft = () => {
+    setDelayType('');
+    setDescription('');
+    setDurationHours('');
+    setImpact('');
+    setLotId(defaultLotId || '');
+    setShowMore(false);
+    draft.discardDraft();
+  };
 
   const handleSave = () => {
     if (!delayType || !description.trim() || durationHoursError) return;
@@ -62,6 +107,8 @@ export function AddDelaySheet({
           lotId: lotId || undefined,
         }),
       () => {
+        // The entry is recorded (online or queued offline) — drop the draft.
+        draft.clearDraft();
         setDelayType('');
         setDescription('');
         setDurationHours('');
@@ -75,6 +122,12 @@ export function AddDelaySheet({
   return (
     <BottomSheet isOpen={isOpen} onClose={onClose} title="Add Delay">
       <div className="space-y-4">
+        {draft.draftHintVisible && (
+          <SheetDraftRestoredHint
+            onDiscard={handleDiscardDraft}
+            onDismiss={draft.dismissDraftHint}
+          />
+        )}
         <div>
           <label className="text-sm font-medium text-muted-foreground">Delay Type *</label>
           <div className="flex flex-wrap gap-2 mt-2">

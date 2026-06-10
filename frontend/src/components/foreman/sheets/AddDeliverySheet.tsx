@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BottomSheet } from './BottomSheet';
+import { SheetDraftRestoredHint } from './SheetDraftRestoredHint';
 import { SheetErrorBanner } from './SheetErrorBanner';
+import { readSheetDraft, useSheetDraft } from './useSheetDraft';
 import { useSheetSave } from './useSheetSave';
 import {
   getOptionalDiaryQuantityError,
@@ -32,6 +34,8 @@ interface AddDeliverySheetProps {
     lotId?: string;
     notes?: string;
   };
+  /** Enables auto-draft of typed state; omitted when editing an existing entry. */
+  draftKey?: string;
 }
 
 export function AddDeliverySheet({
@@ -41,17 +45,65 @@ export function AddDeliverySheet({
   defaultLotId,
   lots,
   initialData,
+  draftKey,
 }: AddDeliverySheetProps) {
-  const [description, setDescription] = useState(initialData?.description || '');
-  const [supplier, setSupplier] = useState(initialData?.supplier || '');
-  const [docketNumber, setDocketNumber] = useState(initialData?.docketNumber || '');
-  const [quantity, setQuantity] = useState(initialData?.quantity?.toString() || '');
-  const [unit, setUnit] = useState(initialData?.unit || '');
-  const [lotId, setLotId] = useState(initialData?.lotId || defaultLotId || '');
-  const [notes, setNotes] = useState(initialData?.notes || '');
-  const [showMore, setShowMore] = useState(!!initialData);
+  // An interrupted entry restored from the auto-draft; edits never draft.
+  const [restoredDraft] = useState(() => (initialData ? null : readSheetDraft(draftKey)));
+  const [description, setDescription] = useState(
+    restoredDraft?.description ?? (initialData?.description || ''),
+  );
+  const [supplier, setSupplier] = useState(
+    restoredDraft?.supplier ?? (initialData?.supplier || ''),
+  );
+  const [docketNumber, setDocketNumber] = useState(
+    restoredDraft?.docketNumber ?? (initialData?.docketNumber || ''),
+  );
+  const [quantity, setQuantity] = useState(
+    restoredDraft?.quantity ?? (initialData?.quantity?.toString() || ''),
+  );
+  const [unit, setUnit] = useState(restoredDraft?.unit ?? (initialData?.unit || ''));
+  const [lotId, setLotId] = useState(
+    restoredDraft ? restoredDraft.lotId || '' : initialData?.lotId || defaultLotId || '',
+  );
+  const [notes, setNotes] = useState(restoredDraft?.notes ?? (initialData?.notes || ''));
+  const [showMore, setShowMore] = useState(
+    !!initialData ||
+      Boolean(
+        restoredDraft &&
+        (restoredDraft.quantity ||
+          restoredDraft.unit ||
+          restoredDraft.notes ||
+          (restoredDraft.lotId || '') !== (defaultLotId || '')),
+      ),
+  );
   const { saving, saveError, runSave } = useSheetSave();
+  const draft = useSheetDraft({
+    draftKey: initialData ? undefined : draftKey,
+    restored: restoredDraft,
+    fields: { description, supplier, docketNumber, quantity, unit, lotId, notes },
+    baseline: {
+      description: '',
+      supplier: '',
+      docketNumber: '',
+      quantity: '',
+      unit: '',
+      lotId: defaultLotId || '',
+      notes: '',
+    },
+  });
   const quantityError = getOptionalDiaryQuantityError(quantity);
+
+  const handleDiscardDraft = () => {
+    setDescription('');
+    setSupplier('');
+    setDocketNumber('');
+    setQuantity('');
+    setUnit('');
+    setLotId(defaultLotId || '');
+    setNotes('');
+    setShowMore(false);
+    draft.discardDraft();
+  };
 
   const handleSave = () => {
     if (!description.trim() || quantityError) return;
@@ -68,6 +120,8 @@ export function AddDeliverySheet({
           notes: notes || undefined,
         }),
       () => {
+        // The entry is recorded (online or queued offline) — drop the draft.
+        draft.clearDraft();
         setDescription('');
         setSupplier('');
         setDocketNumber('');
@@ -83,6 +137,12 @@ export function AddDeliverySheet({
   return (
     <BottomSheet isOpen={isOpen} onClose={onClose} title="Add Delivery">
       <div className="space-y-4">
+        {draft.draftHintVisible && (
+          <SheetDraftRestoredHint
+            onDiscard={handleDiscardDraft}
+            onDismiss={draft.dismissDraftHint}
+          />
+        )}
         <div>
           <label className="text-sm font-medium text-muted-foreground">Description *</label>
           <input
