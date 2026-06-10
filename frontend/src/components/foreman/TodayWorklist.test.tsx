@@ -37,6 +37,33 @@ function renderTodayWorklist() {
   );
 }
 
+describe('TodayWorklist skeleton loading state', () => {
+  beforeEach(() => {
+    // Never resolves → query stays in isPending/isLoading state
+    vi.mocked(apiFetch).mockReturnValue(new Promise(() => {}));
+    useForemanMobileStore.setState({ isCameraOpen: false });
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('shows the skeleton while the worklist query is loading', () => {
+    renderTodayWorklist();
+    expect(screen.getByTestId('worklist-loading-skeleton')).toBeInTheDocument();
+    // Individual worklist item skeletons rendered
+    expect(screen.getAllByTestId('worklist-item-skeleton').length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('replaces the skeleton with content once loading completes', async () => {
+    vi.mocked(apiFetch).mockResolvedValue(emptyWorklist);
+    renderTodayWorklist();
+    // After data arrives the skeleton is gone and the all-clear state appears
+    expect(await screen.findByText("You're all caught up")).toBeInTheDocument();
+    expect(screen.queryByTestId('worklist-loading-skeleton')).not.toBeInTheDocument();
+  });
+});
+
 describe('TodayWorklist all-clear actions', () => {
   beforeEach(() => {
     vi.mocked(apiFetch).mockResolvedValue(emptyWorklist);

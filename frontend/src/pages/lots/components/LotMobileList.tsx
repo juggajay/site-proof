@@ -4,6 +4,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { AlertTriangle, MapPin, Eye } from 'lucide-react';
 import { usePullToRefresh, PullToRefreshIndicator } from '@/hooks/usePullToRefresh';
 import { SwipeableCard } from '@/components/foreman/SwipeableCard';
+import { LotMobileCardSkeleton } from '@/components/ui/Skeleton';
 import { formatStatusLabel } from '@/lib/statusLabels';
 import type { Lot } from '../lotsPageTypes';
 
@@ -50,6 +51,10 @@ interface LotMobileListProps {
   projectId: string;
   onContextMenu: (e: React.MouseEvent, lot: Lot) => void;
   onRefresh: () => Promise<void>;
+  // Initial-load state — true only while the first fetch is in-flight with no
+  // cached data. Background refetches must NOT set this true (use TanStack Query
+  // `isLoading` / `isPending` with no `data`, not `isFetching`).
+  isLoading?: boolean;
   // Infinite scroll
   loadMoreRef: React.RefObject<HTMLDivElement | null>;
   loadingMore: boolean;
@@ -66,6 +71,7 @@ export const LotMobileList = React.memo(function LotMobileList({
   projectId,
   onContextMenu,
   onRefresh,
+  isLoading = false,
   loadMoreRef,
   loadingMore,
   hasMore,
@@ -93,6 +99,25 @@ export const LotMobileList = React.memo(function LotMobileList({
     estimateSize: () => 180, // estimated card height in px
     overscan: 5,
   });
+
+  // Initial-load skeleton — shown while the first fetch is in-flight with no
+  // cached data. 4 cards mirror a typical lot list. Layout-matched to the real
+  // lot card so content landing causes no layout shift.
+  if (isLoading && displayedLots.length === 0) {
+    return (
+      <div
+        className="space-y-3 p-2"
+        data-testid="lot-mobile-skeleton"
+        aria-label="Loading lots"
+        role="status"
+      >
+        <LotMobileCardSkeleton />
+        <LotMobileCardSkeleton />
+        <LotMobileCardSkeleton />
+        <LotMobileCardSkeleton />
+      </div>
+    );
+  }
 
   return (
     <div

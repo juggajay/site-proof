@@ -167,4 +167,128 @@ export function PageSkeleton() {
   );
 }
 
+/**
+ * Skeleton matched to DiaryTimelineEntry layout:
+ * icon (w-10 h-10 rounded-full) + text column (label+time row, description line).
+ * Same outer padding/border as the real entry so content landing causes no layout shift.
+ */
+export function DiaryTimelineEntrySkeleton() {
+  return (
+    <div
+      className="flex gap-3 p-3 rounded-lg border bg-card animate-pulse"
+      data-testid="diary-timeline-entry-skeleton"
+    >
+      {/* icon circle */}
+      <div className="flex-shrink-0 w-10 h-10 rounded-full bg-muted" />
+      <div className="flex-1 min-w-0 space-y-2">
+        {/* label + time badges row */}
+        <div className="flex items-center gap-2">
+          <div className="h-3 w-14 bg-muted rounded" />
+          <div className="h-3 w-10 bg-muted rounded" />
+        </div>
+        {/* description line */}
+        <div className="h-4 w-3/4 bg-muted rounded" />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Skeleton matched to the DocketCard layout:
+ * header row (subcontractor name + status badge) + 3-column grid (Date / Labour / Plant).
+ * Same outer padding/border as the real card so content landing causes no layout shift.
+ */
+export function DocketCardSkeleton() {
+  return (
+    <div
+      className="bg-card border rounded-xl p-4 space-y-3 animate-pulse"
+      data-testid="docket-card-skeleton"
+    >
+      {/* Header: name + status badge */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 space-y-1.5">
+          <div className="h-5 w-36 bg-muted rounded" />
+          <div className="h-4 w-24 bg-muted rounded" />
+        </div>
+        <div className="h-6 w-16 bg-muted rounded-full" />
+      </div>
+      {/* 3-column grid matching Date / Labour / Plant */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="space-y-1">
+          <div className="h-3 w-8 bg-muted rounded" />
+          <div className="h-4 w-20 bg-muted rounded" />
+        </div>
+        <div className="space-y-1">
+          <div className="h-3 w-12 bg-muted rounded" />
+          <div className="h-4 w-10 bg-muted rounded" />
+        </div>
+        <div className="space-y-1">
+          <div className="h-3 w-8 bg-muted rounded" />
+          <div className="h-4 w-10 bg-muted rounded" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Skeleton matched to the WorklistItemCard layout:
+ * icon circle (w-10 h-10) + text column (title + subtitle + lot) + chevron.
+ * min-h-[72px] mirrors the real card's touch target size.
+ */
+export function WorklistItemSkeleton() {
+  return (
+    <div
+      className="w-full flex items-center gap-3 p-4 rounded-lg border min-h-[72px] bg-card animate-pulse"
+      data-testid="worklist-item-skeleton"
+    >
+      {/* icon circle */}
+      <div className="w-10 h-10 rounded-full bg-muted flex-shrink-0" />
+      {/* text column */}
+      <div className="flex-1 min-w-0 space-y-2">
+        <div className="h-4 w-2/3 bg-muted rounded" />
+        <div className="h-3 w-1/2 bg-muted rounded" />
+      </div>
+      {/* chevron placeholder */}
+      <div className="h-5 w-5 bg-muted rounded flex-shrink-0" />
+    </div>
+  );
+}
+
+/**
+ * Skeleton matched to the LotMobileList card layout:
+ * lot number header + description + tags row + footer row (ITPs/Tests + date).
+ * border-l-4 mirrors the status accent on real mobile cards.
+ */
+export function LotMobileCardSkeleton() {
+  return (
+    <div
+      className="rounded-lg border bg-card p-4 border-l-4 border-l-border animate-pulse"
+      data-testid="lot-mobile-card-skeleton"
+    >
+      {/* header: lot number + status badge */}
+      <div className="flex items-start justify-between mb-2">
+        <div className="h-6 w-24 bg-muted rounded" />
+        <div className="h-5 w-20 bg-muted rounded" />
+      </div>
+      {/* description */}
+      <div className="h-4 w-full bg-muted rounded mb-1" />
+      <div className="h-4 w-3/4 bg-muted rounded mb-3" />
+      {/* tags row */}
+      <div className="flex flex-wrap gap-2 mb-3">
+        <div className="h-5 w-20 bg-muted rounded" />
+        <div className="h-5 w-24 bg-muted rounded" />
+      </div>
+      {/* footer */}
+      <div className="flex items-center justify-between pt-3 border-t">
+        <div className="flex gap-3">
+          <div className="h-3 w-12 bg-muted rounded" />
+          <div className="h-3 w-12 bg-muted rounded" />
+        </div>
+        <div className="h-3 w-20 bg-muted rounded" />
+      </div>
+    </div>
+  );
+}
+
 export default Skeleton;

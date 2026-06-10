@@ -15,6 +15,7 @@ import {
   Calendar,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { WorklistItemSkeleton } from '@/components/ui/Skeleton';
 import { apiFetch } from '@/lib/api';
 import { useOnlineStatus } from '@/hooks/useOnlineStatus';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -150,11 +151,29 @@ export function TodayWorklist() {
     month: 'short',
   });
 
+  // Initial-load skeleton: layout-matched to WorklistItemCard (icon + text + chevron,
+  // min-h-[72px]). Shows only on first load with no cached data; background refetches
+  // keep showing the data (TanStack Query isLoading = true only when data is undefined).
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 gap-3">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-        <p className="text-sm text-muted-foreground">Loading your worklist...</p>
+      <div className="pb-24" data-testid="worklist-loading-skeleton">
+        {/* Sticky header placeholder — same height as the real header */}
+        <div className="sticky top-0 z-10 bg-background border-b px-4 py-3">
+          <div className="flex items-center justify-between animate-pulse">
+            <div className="space-y-2">
+              <div className="h-7 w-16 bg-muted rounded" />
+              <div className="h-4 w-28 bg-muted rounded" />
+            </div>
+            <div className="h-11 w-11 bg-muted rounded-md" />
+          </div>
+        </div>
+        {/* 4 worklist item skeletons — matches a typical foreman morning view */}
+        <div className="p-4 space-y-2">
+          <WorklistItemSkeleton />
+          <WorklistItemSkeleton />
+          <WorklistItemSkeleton />
+          <WorklistItemSkeleton />
+        </div>
       </div>
     );
   }
