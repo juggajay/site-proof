@@ -5,14 +5,9 @@ import { z } from 'zod';
 import { Check, AlertTriangle } from 'lucide-react';
 import { toast } from '@/components/ui/toaster';
 import { SignaturePad } from '@/components/ui/SignaturePad';
+import { useIsMobile } from '@/hooks/useMediaQuery';
 import type { HoldPoint } from '../types';
-import {
-  Modal,
-  ModalHeader,
-  ModalDescription,
-  ModalBody,
-  ModalFooter,
-} from '@/components/ui/Modal';
+import { ResponsiveSheet } from '@/components/ui/ResponsiveSheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -56,6 +51,7 @@ export function RecordReleaseModal({
   onClose,
   onSubmit,
 }: RecordReleaseModalProps) {
+  const isMobile = useIsMobile();
   const [emailEvidenceFile, setEmailEvidenceFile] = useState<File | null>(null);
   const [paperEvidenceFile, setPaperEvidenceFile] = useState<File | null>(null);
   // Feature #884: Signature capture state
@@ -128,221 +124,234 @@ export function RecordReleaseModal({
     );
   };
 
+  const footer = (
+    <>
+      <Button variant="outline" onClick={onClose} disabled={recording}>
+        Cancel
+      </Button>
+      <Button
+        variant="success"
+        type="submit"
+        form="record-release-form"
+        disabled={recording || !releasedByName?.trim()}
+      >
+        {recording ? 'Recording...' : 'Record Release'}
+      </Button>
+    </>
+  );
+
   return (
-    <Modal onClose={onClose} className="max-w-lg">
-      <ModalHeader>Record Hold Point Release</ModalHeader>
-      <ModalDescription>
-        Capture release method, releaser details, and supporting evidence for this hold point.
-      </ModalDescription>
-      <ModalBody>
-        <div className="mb-4 p-3 bg-muted rounded-lg">
-          <div className="text-sm text-muted-foreground">Lot</div>
-          <div className="font-medium">{holdPoint.lotNumber}</div>
-          <div className="text-sm text-muted-foreground mt-2">Hold Point</div>
-          <div className="font-medium">{holdPoint.description}</div>
+    <ResponsiveSheet
+      open={true}
+      onClose={onClose}
+      title="Record Hold Point Release"
+      footer={footer}
+      className="max-w-lg"
+    >
+      {/* Hold-point info summary */}
+      <div className="mb-4 p-3 bg-muted rounded-lg">
+        <div className="text-sm text-muted-foreground">Lot</div>
+        <div className="font-medium">{holdPoint.lotNumber}</div>
+        <div className="text-sm text-muted-foreground mt-2">Hold Point</div>
+        <div className="font-medium">{holdPoint.description}</div>
+      </div>
+
+      {/* Feature #698 - Superintendent approval requirement notice */}
+      {approvalRequirement === 'superintendent' && (
+        <div className="mb-4 p-3 bg-warning/10 border border-warning/30 rounded-lg">
+          <div className="flex items-center gap-2 text-warning">
+            <AlertTriangle className="h-4 w-4" />
+            <span className="text-sm font-medium">Superintendent Approval Required</span>
+          </div>
+          <p className="text-xs text-warning mt-1">
+            This project requires superintendent-level authorization to release hold points.
+          </p>
+        </div>
+      )}
+
+      {error && (
+        <div
+          className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm font-medium text-destructive"
+          role="alert"
+        >
+          {error}
+        </div>
+      )}
+
+      <form id="record-release-form" onSubmit={rhfHandleSubmit(onFormSubmit)} className="space-y-4">
+        {/* Release Method Selection (Feature #185) */}
+        <div>
+          <Label>Release Method</Label>
+          <div className="flex gap-4 mt-1">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                value="digital"
+                {...register('releaseMethod')}
+                className="w-4 h-4 text-primary"
+              />
+              <span className="text-sm">Digital (On-site)</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                value="email"
+                {...register('releaseMethod')}
+                className="w-4 h-4 text-primary"
+              />
+              <span className="text-sm">Email Confirmation</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="radio"
+                value="paper"
+                {...register('releaseMethod')}
+                className="w-4 h-4 text-primary"
+              />
+              <span className="text-sm">Paper Form</span>
+            </label>
+          </div>
         </div>
 
-        {/* Feature #698 - Superintendent approval requirement notice */}
-        {approvalRequirement === 'superintendent' && (
-          <div className="mb-4 p-3 bg-warning/10 border border-warning/30 rounded-lg">
-            <div className="flex items-center gap-2 text-warning">
-              <AlertTriangle className="h-4 w-4" />
-              <span className="text-sm font-medium">Superintendent Approval Required</span>
-            </div>
-            <p className="text-xs text-warning mt-1">
-              This project requires superintendent-level authorization to release hold points.
+        <div>
+          <Label>
+            Releaser Name <span className="text-destructive">*</span>
+          </Label>
+          <Input
+            type="text"
+            {...register('releasedByName')}
+            className={errors.releasedByName ? 'border-destructive' : ''}
+            placeholder="Enter name of person releasing"
+          />
+          {errors.releasedByName && (
+            <p className="mt-1 text-sm text-destructive" role="alert">
+              {errors.releasedByName.message}
             </p>
-          </div>
-        )}
+          )}
+        </div>
 
-        {error && (
-          <div
-            className="mb-4 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm font-medium text-destructive"
-            role="alert"
-          >
-            {error}
-          </div>
-        )}
+        <div>
+          <Label>Organization</Label>
+          <Input
+            type="text"
+            {...register('releasedByOrg')}
+            placeholder="Enter organization (e.g., Superintendent's Rep)"
+          />
+        </div>
 
-        <form
-          id="record-release-form"
-          onSubmit={rhfHandleSubmit(onFormSubmit)}
-          className="space-y-4"
-        >
-          {/* Release Method Selection (Feature #185) */}
+        {/* Date / time: full-width rows on mobile, side-by-side on desktop */}
+        <div className={isMobile ? 'space-y-4' : 'grid grid-cols-2 gap-4'}>
           <div>
-            <Label>Release Method</Label>
-            <div className="flex gap-4 mt-1">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  value="digital"
-                  {...register('releaseMethod')}
-                  className="w-4 h-4 text-primary"
-                />
-                <span className="text-sm">Digital (On-site)</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  value="email"
-                  {...register('releaseMethod')}
-                  className="w-4 h-4 text-primary"
-                />
-                <span className="text-sm">Email Confirmation</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  value="paper"
-                  {...register('releaseMethod')}
-                  className="w-4 h-4 text-primary"
-                />
-                <span className="text-sm">Paper Form</span>
-              </label>
-            </div>
-          </div>
-
-          <div>
-            <Label>
-              Releaser Name <span className="text-destructive">*</span>
-            </Label>
+            <Label>Release Date</Label>
             <Input
-              type="text"
-              {...register('releasedByName')}
-              className={errors.releasedByName ? 'border-destructive' : ''}
-              placeholder="Enter name of person releasing"
+              type="date"
+              {...register('releaseDate')}
+              className={errors.releaseDate ? 'border-destructive' : ''}
             />
-            {errors.releasedByName && (
+            {errors.releaseDate && (
               <p className="mt-1 text-sm text-destructive" role="alert">
-                {errors.releasedByName.message}
+                {errors.releaseDate.message}
               </p>
             )}
           </div>
-
           <div>
-            <Label>Organization</Label>
+            <Label>Release Time</Label>
             <Input
-              type="text"
-              {...register('releasedByOrg')}
-              placeholder="Enter organization (e.g., Superintendent's Rep)"
+              type="time"
+              {...register('releaseTime')}
+              className={errors.releaseTime ? 'border-destructive' : ''}
             />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label>Release Date</Label>
-              <Input
-                type="date"
-                {...register('releaseDate')}
-                className={errors.releaseDate ? 'border-destructive' : ''}
-              />
-              {errors.releaseDate && (
-                <p className="mt-1 text-sm text-destructive" role="alert">
-                  {errors.releaseDate.message}
-                </p>
-              )}
-            </div>
-            <div>
-              <Label>Release Time</Label>
-              <Input
-                type="time"
-                {...register('releaseTime')}
-                className={errors.releaseTime ? 'border-destructive' : ''}
-              />
-              {errors.releaseTime && (
-                <p className="mt-1 text-sm text-destructive" role="alert">
-                  {errors.releaseTime.message}
-                </p>
-              )}
-            </div>
-          </div>
-
-          <div>
-            <Label>Notes</Label>
-            <Textarea
-              {...register('releaseNotes')}
-              rows={3}
-              placeholder="Any additional notes about the release..."
-            />
-          </div>
-
-          {/* Signature or Evidence based on method */}
-          {releaseMethod === 'digital' ? (
-            <div className="space-y-2">
-              <Label>
-                Digital Signature <span className="text-destructive">*</span>
-              </Label>
-              <SignaturePad
-                onChange={setSignatureDataUrl}
-                width={380}
-                height={150}
-                className="mx-auto"
-              />
-              <p className="text-xs text-muted-foreground">
-                Draw your signature above to authorize this release
+            {errors.releaseTime && (
+              <p className="mt-1 text-sm text-destructive" role="alert">
+                {errors.releaseTime.message}
               </p>
+            )}
+          </div>
+        </div>
+
+        <div>
+          <Label>Notes</Label>
+          <Textarea
+            {...register('releaseNotes')}
+            rows={3}
+            placeholder="Any additional notes about the release..."
+          />
+        </div>
+
+        {/* Signature or Evidence based on method */}
+        {releaseMethod === 'digital' ? (
+          <div className="space-y-2">
+            <Label>
+              Digital Signature <span className="text-destructive">*</span>
+            </Label>
+            {/*
+             * fullWidth=true: canvas stretches to sheet width so a finger can
+             * draw a full-width stroke.  mobileHeight=160 ensures ≥160 px of
+             * vertical signing room.
+             *
+             * The SignaturePad container stops pointer propagation when
+             * fullWidth=true (see SignaturePad.tsx), so a downward signing
+             * stroke never reaches the BottomSheet's panel onPointerDown handler
+             * and does not trigger drag-to-dismiss.
+             */}
+            <SignaturePad
+              onChange={setSignatureDataUrl}
+              fullWidth={isMobile}
+              width={380}
+              height={150}
+              mobileHeight={160}
+              className={isMobile ? 'w-full' : 'mx-auto'}
+            />
+            <p className="text-xs text-muted-foreground">
+              Draw your signature above to authorize this release
+            </p>
+          </div>
+        ) : releaseMethod === 'email' ? (
+          <div className="space-y-2">
+            <Label>Email Evidence</Label>
+            <div className="p-4 border border-dashed border-border rounded-lg bg-muted">
+              <input
+                type="file"
+                accept=".pdf,.eml,.msg,.png,.jpg,.jpeg"
+                onChange={handleFileChange('email')}
+                className="w-full text-sm text-foreground min-h-[44px]"
+                id="evidence-upload"
+              />
+              <p className="text-xs text-muted-foreground mt-2">
+                Upload email or screenshot as evidence (PDF, EML, MSG, PNG, JPG)
+              </p>
+              {emailEvidenceFile && (
+                <div className="mt-2 p-2 bg-success/10 rounded text-sm text-success flex items-center gap-2">
+                  <Check className="h-4 w-4" />
+                  <span>Selected: {emailEvidenceFile.name}</span>
+                </div>
+              )}
             </div>
-          ) : releaseMethod === 'email' ? (
-            <div className="space-y-2">
-              <Label>Email Evidence</Label>
-              <div className="p-4 border border-dashed border-border rounded-lg bg-muted">
-                <input
-                  type="file"
-                  accept=".pdf,.eml,.msg,.png,.jpg,.jpeg"
-                  onChange={handleFileChange('email')}
-                  className="w-full text-sm text-foreground"
-                  id="evidence-upload"
-                />
-                <p className="text-xs text-muted-foreground mt-2">
-                  Upload email or screenshot as evidence (PDF, EML, MSG, PNG, JPG)
-                </p>
-                {emailEvidenceFile && (
-                  <div className="mt-2 p-2 bg-success/10 rounded text-sm text-success flex items-center gap-2">
-                    <Check className="h-4 w-4" />
-                    <span>Selected: {emailEvidenceFile.name}</span>
-                  </div>
-                )}
-              </div>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <Label>Paper Form Evidence</Label>
+            <div className="p-4 border border-dashed border-border rounded-lg bg-muted">
+              <input
+                type="file"
+                accept=".pdf,.png,.jpg,.jpeg"
+                onChange={handleFileChange('paper')}
+                className="w-full text-sm text-foreground min-h-[44px]"
+                id="paper-evidence-upload"
+              />
+              <p className="text-xs text-muted-foreground mt-2">
+                Upload photo or scan of signed release form (PDF, PNG, JPG)
+              </p>
+              {paperEvidenceFile && (
+                <div className="mt-2 p-2 bg-success/10 rounded text-sm text-success flex items-center gap-2">
+                  <Check className="h-4 w-4" />
+                  <span>Selected: {paperEvidenceFile.name}</span>
+                </div>
+              )}
             </div>
-          ) : (
-            <div className="space-y-2">
-              <Label>Paper Form Evidence</Label>
-              <div className="p-4 border border-dashed border-border rounded-lg bg-muted">
-                <input
-                  type="file"
-                  accept=".pdf,.png,.jpg,.jpeg"
-                  onChange={handleFileChange('paper')}
-                  className="w-full text-sm text-foreground"
-                  id="paper-evidence-upload"
-                />
-                <p className="text-xs text-muted-foreground mt-2">
-                  Upload photo or scan of signed release form (PDF, PNG, JPG)
-                </p>
-                {paperEvidenceFile && (
-                  <div className="mt-2 p-2 bg-success/10 rounded text-sm text-success flex items-center gap-2">
-                    <Check className="h-4 w-4" />
-                    <span>Selected: {paperEvidenceFile.name}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </form>
-      </ModalBody>
-      <ModalFooter>
-        <Button variant="outline" onClick={onClose} disabled={recording}>
-          Cancel
-        </Button>
-        <Button
-          variant="success"
-          type="submit"
-          form="record-release-form"
-          disabled={recording || !releasedByName?.trim()}
-        >
-          {recording ? 'Recording...' : 'Record Release'}
-        </Button>
-      </ModalFooter>
-    </Modal>
+          </div>
+        )}
+      </form>
+    </ResponsiveSheet>
   );
 }
