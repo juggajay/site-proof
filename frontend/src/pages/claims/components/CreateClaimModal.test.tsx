@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { renderWithProviders, screen, fireEvent } from '@/test/renderWithProviders';
+import { renderWithProviders, screen, fireEvent, waitFor } from '@/test/renderWithProviders';
 import type { ProjectClaimReadiness } from '@/types/evidenceReadiness';
 
 const apiFetchMock = vi.hoisted(() => vi.fn());
@@ -96,5 +96,36 @@ describe('CreateClaimModal claim period validation', () => {
       'Period start and period end are required.',
     );
     expect(screen.getByRole('button', { name: 'Create Claim' })).toBeDisabled();
+  });
+});
+
+describe('CreateClaimModal create flow', () => {
+  it('notifies the parent after a successful create so it can invalidate the claims cache', async () => {
+    const onClaimCreated = vi.fn();
+    const onClose = vi.fn();
+    apiFetchMock.mockImplementation((_path: string, options?: RequestInit) => {
+      if (options?.method === 'POST') {
+        return Promise.resolve({ claim: { id: 'claim-1' } });
+      }
+      return Promise.resolve(READY_LOT_READINESS);
+    });
+
+    renderWithProviders(
+      <CreateClaimModal projectId="p1" onClose={onClose} onClaimCreated={onClaimCreated} />,
+    );
+
+    expect(await screen.findByText('LOT-001')).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('Select LOT-001'));
+    fireEvent.click(screen.getByRole('button', { name: 'Create Claim' }));
+
+    // The parent (ClaimsPage) invalidates queryKeys.claims(projectId) inside
+    // onClaimCreated — this pins that a successful POST actually reaches it.
+    await waitFor(() => expect(onClaimCreated).toHaveBeenCalledTimes(1));
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    const postCall = apiFetchMock.mock.calls.find(
+      (call) => (call[1] as RequestInit | undefined)?.method === 'POST',
+    );
+    expect(postCall?.[0]).toBe('/api/projects/p1/claims');
   });
 });
