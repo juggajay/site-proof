@@ -18,6 +18,7 @@ import { downloadCsv } from '@/lib/csv';
 import { formatDateKey } from '@/lib/localDate';
 import { toast } from '@/components/ui/toaster';
 import { extractErrorMessage } from '@/lib/errorHandling';
+import { ContextHelp, HELP_CONTENT } from '@/components/ContextHelp';
 import { TEST_REJECTION_REASON_MAX_LENGTH } from './constants';
 import {
   buildTestResultsCsvRows,
@@ -468,7 +469,10 @@ export function TestResultsPage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-3xl font-bold">Test Results</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-3xl font-bold">Test Results</h1>
+          <ContextHelp title={HELP_CONTENT.tests.title} content={HELP_CONTENT.tests.content} />
+        </div>
         <div className="flex flex-wrap gap-2">
           {testResults.length > 0 && (
             <button

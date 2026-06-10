@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AccessDeniedState } from '@/components/AccessDeniedState';
+import { ContextHelp, HELP_CONTENT } from '@/components/ContextHelp';
 import { downloadCsv } from '@/lib/csv';
 import { extractErrorMessage, isForbidden } from '@/lib/errorHandling';
 import { formatDateKey } from '@/lib/localDate';
@@ -109,7 +110,10 @@ export function CostsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Project Costs</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-3xl font-bold">Project Costs</h1>
+            <ContextHelp title={HELP_CONTENT.costs.title} content={HELP_CONTENT.costs.content} />
+          </div>
           <p className="text-muted-foreground mt-1">
             Track labour, plant, and budget across all subcontractors
           </p>

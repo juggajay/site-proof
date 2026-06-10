@@ -20,6 +20,9 @@ describe('SubcontractorsPageHeader', () => {
     );
 
     expect(screen.getByRole('heading', { name: 'Subcontractors' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Help for Subcontractor Management' }),
+    ).toBeInTheDocument();
     expect(screen.getByText('Show removed')).toBeInTheDocument();
 
     rerender(

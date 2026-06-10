@@ -1,4 +1,5 @@
 import { Building2, DollarSign, Plus, Users } from 'lucide-react';
+import { ContextHelp, HELP_CONTENT } from '@/components/ContextHelp';
 
 interface SubcontractorsPageHeaderProps {
   showRemoved: boolean;
@@ -16,7 +17,13 @@ export function SubcontractorsPageHeader({
   return (
     <div className="flex items-center justify-between">
       <div>
-        <h1 className="text-3xl font-bold">Subcontractors</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-3xl font-bold">Subcontractors</h1>
+          <ContextHelp
+            title={HELP_CONTENT.subcontractors.title}
+            content={HELP_CONTENT.subcontractors.content}
+          />
+        </div>
         <p className="text-muted-foreground mt-1">
           Manage subcontractor companies, employees, and rates
         </p>

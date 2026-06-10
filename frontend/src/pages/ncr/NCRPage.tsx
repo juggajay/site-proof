@@ -7,6 +7,7 @@ import { ContextFAB } from '@/components/mobile/ContextFAB';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { useRegisterDeepLink } from '@/hooks/useRegisterDeepLink';
 import { Button } from '@/components/ui/button';
+import { ContextHelp, HELP_CONTENT } from '@/components/ContextHelp';
 
 // Types
 import type { NCR } from './types';
@@ -153,7 +154,10 @@ export function NCRPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Non-Conformance Reports</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-3xl font-bold">Non-Conformance Reports</h1>
+            <ContextHelp title={HELP_CONTENT.ncr.title} content={HELP_CONTENT.ncr.content} />
+          </div>
           <p className="text-muted-foreground mt-1">
             {projectId ? 'Manage NCR lifecycle for this project' : 'All NCRs across your projects'}
           </p>

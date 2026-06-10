@@ -5,6 +5,7 @@ import { apiFetch } from '@/lib/api';
 import { toast } from '@/components/ui/toaster';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { Button } from '@/components/ui/button';
+import { ContextHelp, HELP_CONTENT } from '@/components/ContextHelp';
 import type { DocketDetailPDFData } from '@/lib/pdfGenerator';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { DocketApprovalsMobileView } from '@/components/foreman/DocketApprovalsMobileView';
@@ -317,7 +318,13 @@ export function DocketApprovalsPage() {
           {/* Header */}
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold">Docket Approvals</h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-bold">Docket Approvals</h1>
+                <ContextHelp
+                  title={HELP_CONTENT.dockets.title}
+                  content={HELP_CONTENT.dockets.content}
+                />
+              </div>
               <p className="text-sm text-muted-foreground">
                 Review and approve subcontractor dockets for project {projectLabel}
               </p>

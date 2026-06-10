@@ -110,6 +110,9 @@ describe('ITPPage role-aware template management', () => {
     renderWithProviders(<ITPPage />);
 
     expect(screen.getByText('Earthworks ITP')).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Help for Inspection & Test Plans (ITPs)' }),
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Create ITP Template' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Import from Project' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Copy' })).toBeInTheDocument();

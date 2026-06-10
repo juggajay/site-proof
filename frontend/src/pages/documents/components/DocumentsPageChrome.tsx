@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { ContextHelp, HELP_CONTENT } from '@/components/ContextHelp';
 
 interface DeleteDocument {
   id: string;
@@ -36,7 +37,13 @@ export function DocumentsPageHeader({ onUpload }: { onUpload: () => void }) {
   return (
     <div className="flex items-center justify-between">
       <div>
-        <h1 className="text-2xl font-bold">Documents & Photos</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-2xl font-bold">Documents & Photos</h1>
+          <ContextHelp
+            title={HELP_CONTENT.documents.title}
+            content={HELP_CONTENT.documents.content}
+          />
+        </div>
         <p className="text-muted-foreground">Upload and manage project documents and photos</p>
       </div>
       <Button onClick={onUpload}>
