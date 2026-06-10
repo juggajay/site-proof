@@ -43,6 +43,7 @@ import { SubcontractorDashboard } from '@/pages/subcontractor-portal/Subcontract
 import { getCompanyRole, hasSubcontractorPortalIdentity } from '@/lib/subcontractorIdentity';
 import { ROLE_GROUPS, hasRoleInGroup } from '@/lib/roles';
 import { Button } from '@/components/ui/button';
+import { ContextHelp, HELP_CONTENT } from '@/components/ContextHelp';
 import {
   Settings2,
   Download,
@@ -320,7 +321,13 @@ function DefaultDashboard({ user }: { user: DashboardUser }) {
     <div className="space-y-6 dashboard-content">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+            <ContextHelp
+              title={HELP_CONTENT.dashboard.title}
+              content={HELP_CONTENT.dashboard.content}
+            />
+          </div>
           <p className="mt-1 text-sm text-muted-foreground">
             Welcome back{user?.name ? `, ${user.name}` : user?.fullName ? `, ${user.fullName}` : ''}
             ! Here's an overview of your projects.

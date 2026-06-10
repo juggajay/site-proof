@@ -156,6 +156,7 @@ describe('DashboardPage first-run zero state', () => {
     renderWithProviders(<DashboardPage />);
 
     expect(await screen.findByText('Total Projects')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Help for Dashboard' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Export PDF/ })).toBeInTheDocument();
     expect(screen.queryByText('Create your first project')).not.toBeInTheDocument();
     expect(screen.queryByText(/once your team adds you/)).not.toBeInTheDocument();

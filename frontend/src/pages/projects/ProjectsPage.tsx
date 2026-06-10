@@ -6,6 +6,7 @@ import { apiFetch } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { Button } from '@/components/ui/button';
+import { ContextHelp, HELP_CONTENT } from '@/components/ContextHelp';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { NativeSelect } from '@/components/ui/native-select';
@@ -277,7 +278,13 @@ export function ProjectsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Projects</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-3xl font-bold">Projects</h1>
+          <ContextHelp
+            title={HELP_CONTENT.projects.title}
+            content={HELP_CONTENT.projects.content}
+          />
+        </div>
         {needsCompanySetup ? (
           <Button onClick={goToCompanySetup}>Set up your company</Button>
         ) : canCreateProjects ? (

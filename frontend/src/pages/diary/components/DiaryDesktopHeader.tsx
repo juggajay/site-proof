@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { ContextHelp, HELP_CONTENT } from '@/components/ContextHelp';
 
 interface DiaryDesktopHeaderProps {
   projectId: string;
@@ -9,7 +10,10 @@ export function DiaryDesktopHeader({ projectId, onNewEntry }: DiaryDesktopHeader
   return (
     <div className="flex items-center justify-between">
       <div>
-        <h1 className="text-3xl font-bold">Daily Diary</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-3xl font-bold">Daily Diary</h1>
+          <ContextHelp title={HELP_CONTENT.diary.title} content={HELP_CONTENT.diary.content} />
+        </div>
         <p className="text-muted-foreground">
           Record daily site activities, personnel, plant, and weather.
         </p>

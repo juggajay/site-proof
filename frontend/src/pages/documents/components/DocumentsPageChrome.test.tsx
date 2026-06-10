@@ -17,6 +17,14 @@ describe('DocumentsPageHeader', () => {
 
     expect(onUpload).toHaveBeenCalledTimes(1);
   });
+
+  it('renders the context help affordance', () => {
+    render(<DocumentsPageHeader onUpload={vi.fn()} />);
+
+    expect(
+      screen.getByRole('button', { name: 'Help for Document Management' }),
+    ).toBeInTheDocument();
+  });
 });
 
 describe('DocumentDragOverlay', () => {

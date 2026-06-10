@@ -1,5 +1,6 @@
 import { Plus } from 'lucide-react';
 import { AccessDeniedState } from '@/components/AccessDeniedState';
+import { ContextHelp, HELP_CONTENT } from '@/components/ContextHelp';
 import { LazyCumulativeChart, LazyMonthlyChart } from '@/components/charts/LazyCharts';
 import type { Claim } from './types';
 import type {
@@ -25,7 +26,10 @@ export function ClaimsPageHeader({
   return (
     <div className="flex items-center justify-between">
       <div>
-        <h1 className="text-3xl font-bold">Progress Claims</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-3xl font-bold">Progress Claims</h1>
+          <ContextHelp title={HELP_CONTENT.claims.title} content={HELP_CONTENT.claims.content} />
+        </div>
         <p className="text-muted-foreground mt-1">
           SOPA-compliant progress claims and payment tracking
         </p>

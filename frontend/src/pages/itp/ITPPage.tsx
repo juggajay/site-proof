@@ -7,6 +7,7 @@ import { canManageItpTemplates, hasRoleInGroup, ROLE_GROUPS } from '@/lib/roles'
 import { logError } from '@/lib/logger';
 import { toast } from '@/components/ui/toaster';
 import { extractErrorMessage } from '@/lib/errorHandling';
+import { ContextHelp, HELP_CONTENT } from '@/components/ContextHelp';
 import {
   applyItpTemplatesUpdate,
   useItpTemplatesQuery,
@@ -231,7 +232,10 @@ export function ITPPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Inspection & Test Plans</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-3xl font-bold">Inspection & Test Plans</h1>
+            <ContextHelp title={HELP_CONTENT.itp.title} content={HELP_CONTENT.itp.content} />
+          </div>
           <p className="text-muted-foreground mt-1">
             {canManage
               ? 'Manage ITP templates for quality checkpoints'

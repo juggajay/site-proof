@@ -22,6 +22,7 @@ describe('HoldPointsPageHeader', () => {
     const { rerender, props } = renderHeader({ holdPointCount: 0 });
 
     expect(screen.getByRole('heading', { name: 'Hold Points' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Help for Hold Points' })).toBeInTheDocument();
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
 
     rerender(<HoldPointsPageHeader {...props} holdPointCount={1} />);

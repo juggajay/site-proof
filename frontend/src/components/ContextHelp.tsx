@@ -68,15 +68,15 @@ Key Features:
 • Export hold point reports
 
 Hold Point Statuses:
-• Pending - Awaiting inspection
-• Ready - Inspection can proceed
+• Pending - Inspection notification not yet sent
+• Notified - Inspection requested, awaiting release
 • Released - Signed off and approved
-• Failed - Did not pass inspection
+• Notice Expired - Awaiting release with the notice window elapsed
 
 Tips:
 • Critical hold points stop work until released
 • Witness points are optional inspections
-• Track hold point metrics in Reports`,
+• Export the register to CSV for reporting`,
   },
   tests: {
     title: 'Test Results',
@@ -111,9 +111,9 @@ Key Features:
 
 NCR Statuses:
 • Open - Issue identified
-• Under Review - Being assessed
-• Corrective Action - Fix in progress
-• Closed - Issue resolved
+• Investigating - Root cause being assessed
+• Verification - Corrective action being checked
+• Closed - Issue resolved (with or without concession)
 
 Tips:
 • Link NCRs to lots for traceability
@@ -131,10 +131,11 @@ Key Features:
 • Note significant events
 
 Sections:
-• Weather - Temperature, conditions, delays
+• Weather - Temperature and site conditions
 • Activities - Work performed today
-• Resources - Plant, labour, materials
-• Notes - General observations
+• Personnel - Labour on site
+• Plant - Equipment usage
+• Delays - Time lost and causes
 
 Tips:
 • Complete diary entries daily
@@ -209,9 +210,9 @@ Tips:
 
 Key Features:
 • Upload and organize documents
-• Create folder structures
+• Categorize documents and photos
 • Search documents
-• Control access permissions
+• Filter by category or lot
 
 Document Types:
 • Drawings and plans
@@ -250,10 +251,11 @@ Tips:
 
 Available Reports:
 • Lot Status Report - Progress tracking
-• Test Results Report - Pass/fail analysis
 • NCR Report - Quality issues summary
-• Cost Report - Budget vs actual
-• Hold Points Report - Inspection status
+• Test Results Report - Pass/fail analysis
+• Daily Diary Report - Site activity summaries
+• Claims Report - Progress claim history
+• Advanced Analytics - Deeper trend analysis (plan-dependent)
 
 Tips:
 • Export reports to PDF or CSV
@@ -288,12 +290,12 @@ Key Features:
 • View all projects
 • Create new projects
 • Access project settings
-• Track project progress
+• See project status at a glance
 
 Tips:
-• Use project switcher in header
-• Pin frequently used projects
-• Archive completed projects`,
+• Open a project to access its lots and registers
+• Each project has its own settings, team, and areas
+• Project status is shown on each project card`,
   },
 };
 
@@ -306,7 +308,9 @@ export function ContextHelp({ title, content, className = '' }: ContextHelpProps
         variant="ghost"
         size="icon"
         onClick={() => setIsOpen(true)}
-        className={className}
+        // 44px minimum touch target on mobile; collapses to the standard
+        // 36px icon button from the `sm` breakpoint up.
+        className={`min-h-11 min-w-11 sm:min-h-0 sm:min-w-0 ${className}`}
         aria-label={`Help for ${title}`}
         title="Get help"
       >

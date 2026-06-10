@@ -3,6 +3,7 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import { apiFetch, apiUrl } from '@/lib/api';
 import { Lock, Sparkles, Mail, RefreshCw } from 'lucide-react';
 import { ScheduleReportModal } from '../../components/reports/ScheduleReportModal';
+import { ContextHelp, HELP_CONTENT } from '@/components/ContextHelp';
 import type { LotStatusReport, NCRReport, TestReport, DiaryReport, ClaimsReport } from './types';
 import { ADVANCED_ANALYTICS_TIERS } from './types';
 import { logError } from '@/lib/logger';
@@ -274,9 +275,12 @@ export function ReportsPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="whitespace-nowrap text-2xl font-bold leading-tight sm:text-3xl">
-          Reports & Analytics
-        </h1>
+        <div className="flex items-center gap-2">
+          <h1 className="whitespace-nowrap text-2xl font-bold leading-tight sm:text-3xl">
+            Reports & Analytics
+          </h1>
+          <ContextHelp title={HELP_CONTENT.reports.title} content={HELP_CONTENT.reports.content} />
+        </div>
         <div className="grid grid-cols-2 gap-2 sm:flex sm:gap-3">
           <button
             type="button"

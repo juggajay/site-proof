@@ -31,6 +31,7 @@ describe('ClaimsPageHeader', () => {
     render(<ClaimsPageHeader claimCount={0} onExportCSV={vi.fn()} onCreateClaim={vi.fn()} />);
 
     expect(screen.getByRole('heading', { name: 'Progress Claims' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Help for Progress Claims' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Export CSV' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'New Claim' })).toBeInTheDocument();
   });

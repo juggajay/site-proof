@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button';
+import { ContextHelp, HELP_CONTENT } from '@/components/ContextHelp';
 import type { StatusFilter } from './types';
 import { HoldPointStatusFilter } from './components/HoldPointStatusFilter';
 
@@ -24,7 +25,13 @@ export function HoldPointsPageHeader({
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div>
-        <h1 className="text-3xl font-bold">Hold Points</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-3xl font-bold">Hold Points</h1>
+          <ContextHelp
+            title={HELP_CONTENT['hold-points'].title}
+            content={HELP_CONTENT['hold-points'].content}
+          />
+        </div>
         <p className="text-muted-foreground mt-1">
           Track and release hold points requiring third-party inspection
         </p>

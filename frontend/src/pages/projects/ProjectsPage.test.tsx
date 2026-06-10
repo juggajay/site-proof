@@ -63,6 +63,7 @@ describe('ProjectsPage company-onboarding gating', () => {
     renderWithProviders(<ProjectsPage />);
 
     expect(await screen.findByRole('button', { name: 'New Project' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Help for Projects' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Set up your company' })).not.toBeInTheDocument();
   });
 
