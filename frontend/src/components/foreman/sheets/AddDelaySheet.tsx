@@ -156,6 +156,10 @@ export function AddDelaySheet({
             onChange={(e) => setDescription(e.target.value)}
             placeholder="What caused the delay?"
             className="w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation"
+            autoCapitalize="sentences"
+            autoComplete="off"
+            enterKeyHint="done"
+            spellCheck={true}
           />
         </div>
 
@@ -177,6 +181,7 @@ export function AddDelaySheet({
                 onChange={(e) => setDurationHours(e.target.value)}
                 placeholder="0"
                 step="0.5"
+                inputMode="decimal"
                 className={cn(
                   'w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation',
                   durationHoursError && 'border-destructive',
@@ -196,6 +201,10 @@ export function AddDelaySheet({
                 onChange={(e) => setImpact(e.target.value)}
                 placeholder="Impact on schedule..."
                 className="w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation"
+                autoCapitalize="sentences"
+                autoComplete="off"
+                enterKeyHint="done"
+                spellCheck={true}
               />
             </div>
             <div>

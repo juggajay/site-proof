@@ -131,6 +131,10 @@ export function AddActivitySheet({
             placeholder="What work was done?"
             className="w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation"
             autoFocus
+            autoCapitalize="sentences"
+            autoComplete="off"
+            enterKeyHint="done"
+            spellCheck={true}
           />
         </div>
 
@@ -181,6 +185,7 @@ export function AddActivitySheet({
                   value={quantity}
                   onChange={(e) => setQuantity(e.target.value)}
                   placeholder="0"
+                  inputMode="decimal"
                   className={cn(
                     'w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation',
                     quantityError && 'border-destructive',
@@ -200,6 +205,10 @@ export function AddActivitySheet({
                   onChange={(e) => setUnit(e.target.value)}
                   placeholder="m3, tonnes..."
                   className="w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation"
+                  autoCapitalize="off"
+                  autoComplete="off"
+                  enterKeyHint="done"
+                  spellCheck={false}
                 />
               </div>
             </div>
@@ -210,6 +219,9 @@ export function AddActivitySheet({
                 onChange={(e) => setNotes(e.target.value)}
                 rows={2}
                 className="w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation resize-none"
+                autoCapitalize="sentences"
+                autoComplete="off"
+                spellCheck={true}
               />
             </div>
           </div>

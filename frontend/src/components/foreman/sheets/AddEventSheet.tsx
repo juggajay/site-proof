@@ -120,6 +120,10 @@ export function AddEventSheet({
             onChange={(e) => setDescription(e.target.value)}
             placeholder="What happened?"
             className="w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation"
+            autoCapitalize="sentences"
+            autoComplete="off"
+            enterKeyHint="done"
+            spellCheck={true}
           />
         </div>
 
@@ -131,6 +135,9 @@ export function AddEventSheet({
             rows={2}
             placeholder="Additional details..."
             className="w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation resize-none"
+            autoCapitalize="sentences"
+            autoComplete="off"
+            spellCheck={true}
           />
         </div>
 

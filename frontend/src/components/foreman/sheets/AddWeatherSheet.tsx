@@ -160,6 +160,7 @@ export function AddWeatherSheet({
                 setTemperatureMin(e.target.value);
               }}
               placeholder="e.g. 12"
+              inputMode="decimal"
               className={cn(
                 'w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation',
                 weatherNumberError && 'border-destructive',
@@ -176,6 +177,7 @@ export function AddWeatherSheet({
                 setTemperatureMax(e.target.value);
               }}
               placeholder="e.g. 28"
+              inputMode="decimal"
               className={cn(
                 'w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation',
                 weatherNumberError && 'border-destructive',
@@ -195,6 +197,7 @@ export function AddWeatherSheet({
             }}
             placeholder="0"
             step="0.1"
+            inputMode="decimal"
             className={cn(
               'w-full mt-1 px-3 py-3 border border-border bg-background text-foreground rounded-lg text-base touch-manipulation',
               weatherNumberError && 'border-destructive',
