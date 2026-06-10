@@ -1,19 +1,29 @@
 /**
  * Tests tab content for LotDetailPage.
  * Displays test results linked to a lot.
+ * On mobile (isMobile=true) renders tap-friendly cards; desktop rendering is
+ * unchanged.
  */
 
 import { useNavigate } from 'react-router-dom';
 import type { TestResult } from '@/pages/lots/types';
 import { testPassFailColors, testStatusColors } from '@/pages/lots/constants';
+import { MobileDataCard } from '@/components/ui/MobileDataCard';
 
 interface TestsTabContentProps {
   projectId: string;
   testResults: TestResult[];
   loading: boolean;
+  /** When true, renders mobile card layout instead of the desktop table. */
+  isMobile?: boolean;
 }
 
-export function TestsTabContent({ projectId, testResults, loading }: TestsTabContentProps) {
+export function TestsTabContent({
+  projectId,
+  testResults,
+  loading,
+  isMobile = false,
+}: TestsTabContentProps) {
   const navigate = useNavigate();
 
   if (loading) {
@@ -39,6 +49,59 @@ export function TestsTabContent({ projectId, testResults, loading }: TestsTabCon
         >
           Go to Test Results
         </button>
+      </div>
+    );
+  }
+
+  // Mobile card list — one card per test result
+  if (isMobile) {
+    return (
+      <div className="space-y-3" data-testid="tests-mobile-cards">
+        {testResults.map((test) => {
+          const resultDisplay =
+            test.resultValue != null
+              ? `${test.resultValue}${test.resultUnit ? ` ${test.resultUnit}` : ''}`
+              : '—';
+
+          // Map pass/fail to a MobileDataCard status variant
+          const passFailVariant =
+            test.passFail === 'fail'
+              ? ('error' as const)
+              : test.passFail === 'pass'
+                ? ('success' as const)
+                : ('default' as const);
+
+          return (
+            <MobileDataCard
+              key={test.id}
+              title={test.testType}
+              subtitle={test.testRequestNumber ? `Request ${test.testRequestNumber}` : undefined}
+              status={{ label: test.passFail, variant: passFailVariant }}
+              fields={[
+                { label: 'Result', value: resultDisplay, priority: 'primary' },
+                {
+                  label: 'Status',
+                  value: (
+                    <span
+                      className={`px-2 py-0.5 rounded text-xs font-medium ${testStatusColors[test.status] || 'bg-muted text-muted-foreground'}`}
+                    >
+                      {test.status}
+                    </span>
+                  ),
+                  priority: 'primary',
+                },
+                { label: 'Laboratory', value: test.laboratoryName || '—', priority: 'secondary' },
+                {
+                  label: 'Date',
+                  value: new Date(test.createdAt).toLocaleDateString('en-AU'),
+                  priority: 'secondary',
+                },
+              ]}
+              onClick={() => navigate(`/projects/${encodeURIComponent(projectId)}/tests`)}
+              data-testid={`test-card-${test.id}`}
+            />
+          );
+        })}
       </div>
     );
   }
