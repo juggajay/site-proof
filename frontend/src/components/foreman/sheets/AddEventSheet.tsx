@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BottomSheet } from './BottomSheet';
-import { useHaptics } from '@/hooks/useHaptics';
+import { SheetErrorBanner } from './SheetErrorBanner';
+import { useSheetSave } from './useSheetSave';
 
 const EVENT_TYPES = ['Visitor', 'Safety', 'Instruction', 'Variation', 'Other'];
 
@@ -32,29 +33,25 @@ export function AddEventSheet({
   const [description, setDescription] = useState(initialData?.description || '');
   const [notes, setNotes] = useState(initialData?.notes || '');
   const [lotId, setLotId] = useState(initialData?.lotId || defaultLotId || '');
-  const [saving, setSaving] = useState(false);
-  const { trigger } = useHaptics();
+  const { saving, saveError, runSave } = useSheetSave();
 
-  const handleSave = async () => {
-    if (!eventType || !description.trim() || saving) return;
-    setSaving(true);
-    try {
-      await onSave({
-        eventType: eventType.toLowerCase(),
-        description: description.trim(),
-        notes: notes || undefined,
-        lotId: lotId || undefined,
-      });
-      trigger('success');
-      setEventType('');
-      setDescription('');
-      setNotes('');
-      onClose();
-    } catch {
-      trigger('error');
-    } finally {
-      setSaving(false);
-    }
+  const handleSave = () => {
+    if (!eventType || !description.trim()) return;
+    void runSave(
+      () =>
+        onSave({
+          eventType: eventType.toLowerCase(),
+          description: description.trim(),
+          notes: notes || undefined,
+          lotId: lotId || undefined,
+        }),
+      () => {
+        setEventType('');
+        setDescription('');
+        setNotes('');
+        onClose();
+      },
+    );
   };
 
   return (
@@ -68,7 +65,7 @@ export function AddEventSheet({
                 key={type}
                 onClick={() => setEventType(type)}
                 className={cn(
-                  'px-3 py-2 rounded-full text-sm font-medium touch-manipulation min-h-[40px]',
+                  'px-3 py-2 rounded-full text-sm font-medium touch-manipulation min-h-[44px]',
                   eventType === type
                     ? 'bg-primary text-primary-foreground'
                     : 'bg-muted text-muted-foreground',
@@ -117,6 +114,8 @@ export function AddEventSheet({
             ))}
           </select>
         </div>
+
+        {saveError && <SheetErrorBanner onRetry={handleSave} retrying={saving} />}
 
         <button
           onClick={handleSave}

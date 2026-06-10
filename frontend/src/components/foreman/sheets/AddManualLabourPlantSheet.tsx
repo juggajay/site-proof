@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { Loader2, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BottomSheet } from './BottomSheet';
-import { useHaptics } from '@/hooks/useHaptics';
+import { SheetErrorBanner } from './SheetErrorBanner';
+import { useSheetSave } from './useSheetSave';
 import {
   getOptionalDiaryHoursError,
   parseOptionalDiaryHoursInput,
@@ -59,7 +60,11 @@ export function AddManualLabourPlantSheet({
   const [personnelRole, setPersonnelRole] = useState('');
   const [personnelHours, setPersonnelHours] = useState('');
   const [personnelLotId, setPersonnelLotId] = useState(defaultLotId || '');
-  const [savingPersonnel, setSavingPersonnel] = useState(false);
+  const {
+    saving: savingPersonnel,
+    saveError: personnelSaveError,
+    runSave: runPersonnelSave,
+  } = useSheetSave();
 
   // Plant fields
   const [plantDescription, setPlantDescription] = useState('');
@@ -67,9 +72,7 @@ export function AddManualLabourPlantSheet({
   const [plantCompany, setPlantCompany] = useState('');
   const [plantHours, setPlantHours] = useState('');
   const [plantLotId, setPlantLotId] = useState(defaultLotId || '');
-  const [savingPlant, setSavingPlant] = useState(false);
-
-  const { trigger } = useHaptics();
+  const { saving: savingPlant, saveError: plantSaveError, runSave: runPlantSave } = useSheetSave();
   const personnelHoursError = getOptionalDiaryHoursError(personnelHours);
   const plantHoursError = getOptionalDiaryHoursError(plantHours, 'Hours operated');
   const editingMode = initialPersonnelData ? 'personnel' : initialPlantData ? 'plant' : null;
@@ -96,54 +99,48 @@ export function AddManualLabourPlantSheet({
     setPlantLotId(initialPlantData?.lotId || defaultLotId || '');
   }, [defaultLotId, initialPersonnelData, initialPlantData, isOpen]);
 
-  const handleSavePersonnel = async () => {
-    if (!personnelName.trim() || personnelHoursError || savingPersonnel) return;
+  const handleSavePersonnel = () => {
+    if (!personnelName.trim() || personnelHoursError) return;
     const parsedPersonnelHours = parseOptionalDiaryHoursInput(personnelHours);
-    setSavingPersonnel(true);
-    try {
-      await onSavePersonnel({
-        name: personnelName.trim(),
-        company: personnelCompany || undefined,
-        role: personnelRole || undefined,
-        hours: parsedPersonnelHours ?? undefined,
-        lotId: personnelLotId || undefined,
-      });
-      trigger('success');
-      setPersonnelName('');
-      setPersonnelCompany('');
-      setPersonnelRole('');
-      setPersonnelHours('');
-      if (editingMode) onClose();
-    } catch {
-      trigger('error');
-    } finally {
-      setSavingPersonnel(false);
-    }
+    void runPersonnelSave(
+      () =>
+        onSavePersonnel({
+          name: personnelName.trim(),
+          company: personnelCompany || undefined,
+          role: personnelRole || undefined,
+          hours: parsedPersonnelHours ?? undefined,
+          lotId: personnelLotId || undefined,
+        }),
+      () => {
+        setPersonnelName('');
+        setPersonnelCompany('');
+        setPersonnelRole('');
+        setPersonnelHours('');
+        if (editingMode) onClose();
+      },
+    );
   };
 
-  const handleSavePlant = async () => {
-    if (!plantDescription.trim() || plantHoursError || savingPlant) return;
+  const handleSavePlant = () => {
+    if (!plantDescription.trim() || plantHoursError) return;
     const parsedPlantHours = parseOptionalDiaryHoursInput(plantHours);
-    setSavingPlant(true);
-    try {
-      await onSavePlant({
-        description: plantDescription.trim(),
-        idRego: plantIdRego || undefined,
-        company: plantCompany || undefined,
-        hoursOperated: parsedPlantHours ?? undefined,
-        lotId: plantLotId || undefined,
-      });
-      trigger('success');
-      setPlantDescription('');
-      setPlantIdRego('');
-      setPlantCompany('');
-      setPlantHours('');
-      if (editingMode) onClose();
-    } catch {
-      trigger('error');
-    } finally {
-      setSavingPlant(false);
-    }
+    void runPlantSave(
+      () =>
+        onSavePlant({
+          description: plantDescription.trim(),
+          idRego: plantIdRego || undefined,
+          company: plantCompany || undefined,
+          hoursOperated: parsedPlantHours ?? undefined,
+          lotId: plantLotId || undefined,
+        }),
+      () => {
+        setPlantDescription('');
+        setPlantIdRego('');
+        setPlantCompany('');
+        setPlantHours('');
+        if (editingMode) onClose();
+      },
+    );
   };
 
   return (
@@ -231,6 +228,9 @@ export function AddManualLabourPlantSheet({
                 </select>
               </div>
             </div>
+            {personnelSaveError && (
+              <SheetErrorBanner onRetry={handleSavePersonnel} retrying={savingPersonnel} />
+            )}
             <button
               onClick={handleSavePersonnel}
               disabled={!personnelName.trim() || Boolean(personnelHoursError) || savingPersonnel}
@@ -330,6 +330,9 @@ export function AddManualLabourPlantSheet({
                 </select>
               </div>
             </div>
+            {plantSaveError && (
+              <SheetErrorBanner onRetry={handleSavePlant} retrying={savingPlant} />
+            )}
             <button
               onClick={handleSavePlant}
               disabled={!plantDescription.trim() || Boolean(plantHoursError) || savingPlant}

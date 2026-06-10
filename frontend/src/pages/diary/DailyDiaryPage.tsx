@@ -81,29 +81,51 @@ export function DailyDiaryPage() {
   if (isMobile) {
     return (
       <>
-        <DiaryMobileView
-          selectedDate={data.selectedDate}
-          lots={data.lots}
-          activeLotId={mobile.activeLotId}
-          onLotChange={mobile.setActiveLotId}
-          weather={mobileWeather}
-          weatherSource={data.weatherSource}
-          fetchingWeather={data.fetchingWeather}
-          onEditWeather={() => mobile.setActiveSheet('weather')}
-          diary={data.diary}
-          loading={data.loading}
-          docketSummary={data.docketSummary}
-          docketSummaryLoading={data.docketSummaryLoading}
-          manualEntries={mobile.manualEntries}
-          onTapPending={mobile.handleTapPending}
-          onAddManual={() => mobile.setActiveSheet('manual')}
-          timeline={data.timeline}
-          onQuickAdd={(type) => mobile.setActiveSheet(type === 'plant' ? 'manual' : type)}
-          onRefresh={mobile.handleRefresh}
-          onEditEntry={mobile.handleEditEntry}
-          onDeleteEntry={(entry) => setEntryPendingDelete(entry)}
-          onReviewSubmit={() => setShowFinishFlow(true)}
-        />
+        {data.error ? (
+          // Honest failure state: a failed diary fetch must not fall through to
+          // the "Start your day" empty state — the foreman could write into (or
+          // duplicate) a day they cannot see. Mirrors the desktop error banner.
+          <div className="p-4">
+            <div
+              className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-destructive"
+              role="alert"
+            >
+              <p className="text-sm font-medium">{data.error}</p>
+              <Button
+                type="button"
+                variant="outline"
+                className="mt-3 w-full touch-target"
+                onClick={() => void data.fetchDiaryForDate(data.selectedDate)}
+              >
+                Try again
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <DiaryMobileView
+            selectedDate={data.selectedDate}
+            lots={data.lots}
+            activeLotId={mobile.activeLotId}
+            onLotChange={mobile.setActiveLotId}
+            weather={mobileWeather}
+            weatherSource={data.weatherSource}
+            fetchingWeather={data.fetchingWeather}
+            onEditWeather={() => mobile.setActiveSheet('weather')}
+            diary={data.diary}
+            loading={data.loading}
+            docketSummary={data.docketSummary}
+            docketSummaryLoading={data.docketSummaryLoading}
+            manualEntries={mobile.manualEntries}
+            onTapPending={mobile.handleTapPending}
+            onAddManual={() => mobile.setActiveSheet('manual')}
+            timeline={data.timeline}
+            onQuickAdd={(type) => mobile.setActiveSheet(type === 'plant' ? 'manual' : type)}
+            onRefresh={mobile.handleRefresh}
+            onEditEntry={mobile.handleEditEntry}
+            onDeleteEntry={(entry) => setEntryPendingDelete(entry)}
+            onReviewSubmit={() => setShowFinishFlow(true)}
+          />
+        )}
         <DiaryFinishFlow
           isOpen={showFinishFlow}
           date={data.selectedDate}
