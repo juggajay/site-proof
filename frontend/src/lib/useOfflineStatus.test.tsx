@@ -56,6 +56,7 @@ vi.mock('./offlineDb', () => ({
   getConflictedLotsCount: vi.fn(),
   getLiveSyncCount: vi.fn(),
   getFailedSyncCount: vi.fn(),
+  getOldestPendingItemAge: vi.fn(),
   resetFailedSyncItems: vi.fn(),
   offlineDb: {
     diaries: { get: vi.fn() },
@@ -118,6 +119,7 @@ import {
   getConflictedLotsCount,
   getLiveSyncCount,
   getFailedSyncCount,
+  getOldestPendingItemAge,
   offlineDb,
   type SyncQueueItem,
 } from './offlineDb';
@@ -154,6 +156,7 @@ const markLotSyncErrorMock = markLotSyncError as Mock;
 const getConflictedLotsCountMock = getConflictedLotsCount as Mock;
 const getLiveSyncCountMock = getLiveSyncCount as Mock;
 const getFailedSyncCountMock = getFailedSyncCount as Mock;
+const getOldestPendingItemAgeMock = getOldestPendingItemAge as Mock;
 const diariesGetMock = offlineDb.diaries.get as unknown as Mock;
 const docketsGetMock = offlineDb.dockets.get as unknown as Mock;
 const diaryDeliveriesGetMock = offlineDb.diaryDeliveries.get as unknown as Mock;
@@ -238,6 +241,7 @@ beforeEach(() => {
   getLiveSyncCountMock.mockResolvedValue(0);
   getFailedSyncCountMock.mockResolvedValue(0);
   getConflictedLotsCountMock.mockResolvedValue(0);
+  getOldestPendingItemAgeMock.mockResolvedValue(null);
 });
 
 afterEach(() => {

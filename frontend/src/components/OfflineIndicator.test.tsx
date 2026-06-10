@@ -5,6 +5,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { SyncCompleteResult } from '@/lib/useOfflineStatus';
+import { STUCK_SYNC_THRESHOLD_MS } from '@/lib/useOfflineStatus';
 
 const { hookState, retryFailedSyncs, toast } = vi.hoisted(() => ({
   hookState: {
@@ -13,27 +14,33 @@ const { hookState, retryFailedSyncs, toast } = vi.hoisted(() => ({
     failedSyncCount: 0,
     isSyncing: false,
     conflictCount: 0,
+    oldestPendingItemAge: null as number | null,
     onSyncComplete: undefined as ((result: SyncCompleteResult) => void) | undefined,
   },
   retryFailedSyncs: vi.fn().mockResolvedValue(undefined),
   toast: vi.fn(),
 }));
 
-vi.mock('@/lib/useOfflineStatus', () => ({
-  useOfflineStatus: (callbacks: { onSyncComplete?: (r: SyncCompleteResult) => void }) => {
-    // Capture the indicator's completion handler so the test can fire it.
-    hookState.onSyncComplete = callbacks.onSyncComplete;
-    return {
-      isOnline: hookState.isOnline,
-      pendingSyncCount: hookState.pendingSyncCount,
-      failedSyncCount: hookState.failedSyncCount,
-      isSyncing: hookState.isSyncing,
-      syncPendingChanges: vi.fn(),
-      retryFailedSyncs,
-      conflictCount: hookState.conflictCount,
-    };
-  },
-}));
+vi.mock('@/lib/useOfflineStatus', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/lib/useOfflineStatus')>();
+  return {
+    ...original,
+    useOfflineStatus: (callbacks: { onSyncComplete?: (r: SyncCompleteResult) => void }) => {
+      // Capture the indicator's completion handler so the test can fire it.
+      hookState.onSyncComplete = callbacks.onSyncComplete;
+      return {
+        isOnline: hookState.isOnline,
+        pendingSyncCount: hookState.pendingSyncCount,
+        failedSyncCount: hookState.failedSyncCount,
+        isSyncing: hookState.isSyncing,
+        syncPendingChanges: vi.fn(),
+        retryFailedSyncs,
+        conflictCount: hookState.conflictCount,
+        oldestPendingItemAge: hookState.oldestPendingItemAge,
+      };
+    },
+  };
+});
 vi.mock('@/components/ui/toaster', () => ({ toast }));
 vi.mock('./SyncConflictModal', () => ({ SyncConflictModal: () => null }));
 
@@ -47,6 +54,7 @@ beforeEach(() => {
     failedSyncCount: 0,
     isSyncing: false,
     conflictCount: 0,
+    oldestPendingItemAge: null,
     onSyncComplete: undefined,
   });
 });
@@ -83,6 +91,59 @@ describe('OfflineIndicator positioning', () => {
     const pill = container.firstElementChild;
     expect(pill).toHaveClass('fixed', 'right-4', 'above-bottom-nav');
     expect(pill).not.toHaveClass('bottom-4');
+  });
+});
+
+describe('OfflineIndicator pending-upload state', () => {
+  it('shows waiting-to-upload text and a spinner button when online with pending items', () => {
+    hookState.pendingSyncCount = 3;
+    hookState.oldestPendingItemAge = 30_000; // 30 seconds — not stuck
+    render(<OfflineIndicator />);
+
+    expect(screen.getByText('3 items waiting to upload')).toBeInTheDocument();
+  });
+
+  it('shows singular form for a single pending item', () => {
+    hookState.pendingSyncCount = 1;
+    hookState.oldestPendingItemAge = 10_000;
+    render(<OfflineIndicator />);
+
+    expect(screen.getByText('1 item waiting to upload')).toBeInTheDocument();
+  });
+});
+
+describe('OfflineIndicator stuck-sync state', () => {
+  it('shows the stuck warning when online and oldest item exceeds the 2-hour threshold', () => {
+    hookState.pendingSyncCount = 2;
+    // Just over the threshold.
+    hookState.oldestPendingItemAge = STUCK_SYNC_THRESHOLD_MS + 1;
+    render(<OfflineIndicator />);
+
+    expect(
+      screen.getByText(/haven't synced yet — keep the app open while on signal/i),
+    ).toBeInTheDocument();
+    // Should NOT show the "waiting to upload" button in stuck state.
+    expect(screen.queryByText(/waiting to upload/i)).not.toBeInTheDocument();
+  });
+
+  it('shows the waiting-to-upload pill (not stuck) when age is just below threshold', () => {
+    hookState.pendingSyncCount = 1;
+    hookState.oldestPendingItemAge = STUCK_SYNC_THRESHOLD_MS - 1;
+    render(<OfflineIndicator />);
+
+    expect(screen.getByText('1 item waiting to upload')).toBeInTheDocument();
+    expect(screen.queryByText(/haven't synced yet/i)).not.toBeInTheDocument();
+  });
+
+  it('does not show stuck warning when offline even if age exceeds threshold', () => {
+    hookState.isOnline = false;
+    hookState.pendingSyncCount = 2;
+    hookState.oldestPendingItemAge = STUCK_SYNC_THRESHOLD_MS + 1;
+    render(<OfflineIndicator />);
+
+    // Should show offline mode instead.
+    expect(screen.getByText('Offline Mode')).toBeInTheDocument();
+    expect(screen.queryByText(/haven't synced yet/i)).not.toBeInTheDocument();
   });
 });
 

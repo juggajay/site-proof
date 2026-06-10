@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   MAX_SYNC_ATTEMPTS,
   getFailedSyncCount,
   getLiveSyncCount,
+  getOldestPendingItemAge,
   getPendingSyncItems,
   getConflictedLotsCount,
   resetFailedSyncItems,
@@ -10,6 +11,11 @@ import {
 import { devWarn } from './logger';
 import { runExclusiveOfflineSync } from './offline/syncClient';
 import { syncSingleItem } from './offline/syncWorker';
+
+// Items older than this threshold are flagged as "stuck" in the indicator.
+export const STUCK_SYNC_THRESHOLD_MS = 2 * 60 * 60 * 1000; // 2 hours
+// Foreground flush interval: re-attempt sync every 60 s while pending items remain.
+const FOREGROUND_FLUSH_INTERVAL_MS = 60_000;
 
 // Type for sync notification callbacks
 export interface SyncCompleteResult {
@@ -30,6 +36,11 @@ export function useOfflineStatus(callbacks?: SyncCallbacks) {
   const [failedSyncCount, setFailedSyncCount] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
   const [conflictCount, setConflictCount] = useState(0);
+  const [oldestPendingItemAge, setOldestPendingItemAge] = useState<number | null>(null);
+  // Stable ref so foreground-flush effects can read latest isSyncing without
+  // being listed as deps (which would restart the interval on every sync tick).
+  const isSyncingRef = useRef(isSyncing);
+  isSyncingRef.current = isSyncing;
 
   // Update online status
   useEffect(() => {
@@ -50,14 +61,16 @@ export function useOfflineStatus(callbacks?: SyncCallbacks) {
   // retrying are surfaced separately as "failed" so they are never hidden.
   useEffect(() => {
     const updateCounts = async () => {
-      const [liveCount, failedCount, conflicts] = await Promise.all([
+      const [liveCount, failedCount, conflicts, ageMs] = await Promise.all([
         getLiveSyncCount(),
         getFailedSyncCount(),
         getConflictedLotsCount(),
+        getOldestPendingItemAge(),
       ]);
       setPendingSyncCount(liveCount);
       setFailedSyncCount(failedCount);
       setConflictCount(conflicts);
+      setOldestPendingItemAge(ageMs);
     };
 
     updateCounts();
@@ -98,14 +111,16 @@ export function useOfflineStatus(callbacks?: SyncCallbacks) {
         }
 
         // Update counts after sync
-        const [liveCount, failedCount, conflicts] = await Promise.all([
+        const [liveCount, failedCount, conflicts, ageMs] = await Promise.all([
           getLiveSyncCount(),
           getFailedSyncCount(),
           getConflictedLotsCount(),
+          getOldestPendingItemAge(),
         ]);
         setPendingSyncCount(liveCount);
         setFailedSyncCount(failedCount);
         setConflictCount(conflicts);
+        setOldestPendingItemAge(ageMs);
 
         // Notify of sync completion if any items were synced. The handler also
         // receives the number of items that ended up dead-lettered so the UI can
@@ -149,6 +164,53 @@ export function useOfflineStatus(callbacks?: SyncCallbacks) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enableSyncWorker, isOnline, pendingSyncCount, isSyncing]); // Don't include syncPendingChanges to prevent loops
 
+  // Flush on app start (once, when the worker is enabled and we are online).
+  // This catches items that were queued during a previous session.
+  useEffect(() => {
+    if (enableSyncWorker && navigator.onLine) {
+      syncPendingChanges();
+    }
+    // Run only once on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enableSyncWorker]);
+
+  // Flush when the document becomes visible (tab/app foregrounded on mobile).
+  // iOS never delivers a Background Sync event; visibilitychange is the only
+  // reliable foreground signal.
+  useEffect(() => {
+    if (!enableSyncWorker) return;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && navigator.onLine && !isSyncingRef.current) {
+        syncPendingChanges();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    // syncPendingChanges is intentionally omitted to avoid restarting the
+    // listener on every render; isSyncingRef provides a stable read of its value.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enableSyncWorker]);
+
+  // Foreground interval: flush every 60 s while there are pending items.
+  // The interval is cleared as soon as the queue empties so it doesn't spin
+  // indefinitely. It uses isSyncingRef to read the latest value without
+  // restarting the interval on every sync tick.
+  useEffect(() => {
+    if (!enableSyncWorker || pendingSyncCount === 0) return;
+
+    const id = setInterval(() => {
+      if (navigator.onLine && !isSyncingRef.current) {
+        syncPendingChanges();
+      }
+    }, FOREGROUND_FLUSH_INTERVAL_MS);
+
+    return () => clearInterval(id);
+    // syncPendingChanges omitted deliberately — see interval above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enableSyncWorker, pendingSyncCount]);
+
   return {
     isOnline,
     pendingSyncCount,
@@ -157,5 +219,6 @@ export function useOfflineStatus(callbacks?: SyncCallbacks) {
     syncPendingChanges,
     retryFailedSyncs,
     conflictCount,
+    oldestPendingItemAge,
   };
 }
