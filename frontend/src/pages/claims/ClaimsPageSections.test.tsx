@@ -8,6 +8,7 @@ import {
   ClaimsLoadingState,
   ClaimsPageHeader,
 } from './ClaimsPageSections';
+import { ClaimsTable } from './components/ClaimsTable';
 
 describe('ClaimsPageHeader', () => {
   it('hides CSV export when there are no claims', () => {
@@ -60,6 +61,36 @@ describe('ClaimsLoadingState', () => {
     const { container } = render(<ClaimsLoadingState />);
 
     expect(container.querySelector('.animate-spin')).toBeInTheDocument();
+  });
+});
+
+describe('ClaimsTable empty state', () => {
+  it('teaches the conformed-lot prerequisite and keeps the create CTA', async () => {
+    const onCreateClaim = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <ClaimsTable
+        claims={[]}
+        loadingCompleteness={false}
+        showCompletenessModal={null}
+        generatingEvidence={null}
+        onCreateClaim={onCreateClaim}
+        onSubmitClaim={vi.fn()}
+        onDisputeClaim={vi.fn()}
+        onCertifyClaim={vi.fn()}
+        onRecordPayment={vi.fn()}
+        onCompletenessCheck={vi.fn()}
+        onEvidencePackage={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('heading', { name: 'No claims yet' })).toBeInTheDocument();
+    expect(screen.getByText(/Claims are built from conformed lots/)).toBeInTheDocument();
+    expect(screen.queryByText(/Create your first progress claim/)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Create Claim' }));
+    expect(onCreateClaim).toHaveBeenCalledTimes(1);
   });
 });
 

@@ -108,6 +108,11 @@ export const ROLE_OPTIONS: RoleOption[] = [
   { value: 'viewer', label: 'Viewer' },
 ];
 
+// One-sentence explainer shown under both spec-set pickers (project create on
+// ProjectsPage and project settings) so the copy stays in sync.
+export const SPECIFICATION_SET_HELPER_TEXT =
+  'Determines which global ITP library templates this project can use. Must match the standard your templates are filed under (e.g. TfNSW).';
+
 // Specification standards a project can use. These values must match the
 // `stateSpec` tags on the seeded global ITP library so a project can see its
 // templates (see CreateProjectModal, which offers the same set).

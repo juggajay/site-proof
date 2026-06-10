@@ -16,6 +16,7 @@ import {
 } from '@/lib/numericInput';
 import { getCompanyRole, hasSubcontractorPortalIdentity } from '@/lib/subcontractorIdentity';
 import { ROLE_GROUPS, hasRoleInGroup } from '@/lib/roles';
+import { SPECIFICATION_SET_HELPER_TEXT } from './settings/types';
 
 interface Project {
   id: string;
@@ -428,6 +429,9 @@ export function ProjectsPage() {
                     </option>
                   ))}
                 </NativeSelect>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {SPECIFICATION_SET_HELPER_TEXT}
+                </p>
               </div>
 
               <div className="flex justify-end gap-3 pt-4">

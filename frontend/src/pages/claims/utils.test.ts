@@ -7,6 +7,7 @@ import {
   getCertificationDueStatus,
   getClaimIncrementError,
   getClaimPercentageError,
+  getClaimPeriodError,
   getPaymentDueStatus,
   parseClaimPercentageInput,
 } from './utils';
@@ -62,6 +63,25 @@ describe('getClaimIncrementError', () => {
 
   it('tolerates tiny floating-point drift at the remaining boundary', () => {
     expect(getClaimIncrementError('33.34', 33.33999)).toBeNull();
+  });
+});
+
+describe('getClaimPeriodError', () => {
+  it('accepts an ordered period, including a single-day period', () => {
+    expect(getClaimPeriodError('2026-06-01', '2026-06-30')).toBeNull();
+    expect(getClaimPeriodError('2026-06-01', '2026-06-01')).toBeNull();
+  });
+
+  it('rejects a period that ends before it starts (mirrors the backend rule)', () => {
+    expect(getClaimPeriodError('2026-06-10', '2026-06-01')).toBe(
+      'Period end must be on or after period start.',
+    );
+  });
+
+  it('requires both dates', () => {
+    expect(getClaimPeriodError('', '2026-06-30')).toBe('Period start and period end are required.');
+    expect(getClaimPeriodError('2026-06-01', '')).toBe('Period start and period end are required.');
+    expect(getClaimPeriodError('', '')).toBe('Period start and period end are required.');
   });
 });
 

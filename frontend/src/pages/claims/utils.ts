@@ -138,6 +138,22 @@ export function getClaimPercentageError(value: string): string | null {
 }
 
 /**
+ * Validate the claim period before submitting. Mirrors the backend rule in
+ * backend/src/routes/claims/workflowValidation.ts so the user gets an inline
+ * error instead of a server round-trip. Date inputs produce YYYY-MM-DD
+ * strings, so lexicographic comparison is chronological.
+ */
+export function getClaimPeriodError(periodStart: string, periodEnd: string): string | null {
+  if (!periodStart.trim() || !periodEnd.trim()) {
+    return 'Period start and period end are required.';
+  }
+  if (periodEnd < periodStart) {
+    return 'Period end must be on or after period start.';
+  }
+  return null;
+}
+
+/**
  * Validate a lot's claim increment, accounting for what has already been
  * claimed on prior claims. `remainingPercentage` is the cap for this claim.
  */
