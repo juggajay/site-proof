@@ -2630,10 +2630,11 @@ describe('NCR Access Hardening', () => {
       }
     });
 
-    it('does not notify a subcontractor whose NCRs portal module is disabled when assigned an NCR', async () => {
-      // Mirror the happy-path fixture, but with the NCRs portal module OFF.
-      // portalAccess.ncrs defaults to false via DEFAULT_SUBCONTRACTOR_PORTAL_ACCESS,
-      // so omitting it entirely leaves the module disabled.
+    it('auto-enables the NCRs portal module (and notifies) when an NCR is assigned to a subcontractor whose module was off', async () => {
+      // Start with the NCRs portal module OFF (its default). Assigning an NCR to
+      // the company is the head contractor's intent to share it, so it should
+      // auto-enable the module — which in turn unblocks the notification fan-out
+      // (which is gated on the same portalAccess.ncrs flag).
       const subcontractor = await prisma.subcontractorCompany.create({
         data: {
           projectId,
@@ -2674,9 +2675,16 @@ describe('NCR Access Hardening', () => {
         createdNcrId = createRes.body.ncr.id;
         expect(createRes.body.ncr.responsibleSubcontractorId).toBe(subcontractor.id);
 
-        // notifySubcontractorAssignment short-circuits on the disabled NCRs
-        // portal module, so the company's portal users get NO assignment
-        // notification (contrast the happy-path test which seeds ncrs: true).
+        // The assignment auto-enables the company's NCRs portal module so the
+        // subcontractor can actually see the NCR in their portal.
+        const updated = await prisma.subcontractorCompany.findUnique({
+          where: { id: subcontractor.id },
+          select: { portalAccess: true },
+        });
+        expect((updated?.portalAccess as { ncrs?: boolean } | null)?.ncrs).toBe(true);
+
+        // With the module now enabled, the assignment notification fan-out is no
+        // longer suppressed, so the company's portal users are notified.
         const notificationCount = await prisma.notification.count({
           where: {
             userId: subUser.userId,
@@ -2684,7 +2692,7 @@ describe('NCR Access Hardening', () => {
             type: { in: ['ncr_assigned', 'ncr_redirect'] },
           },
         });
-        expect(notificationCount).toBe(0);
+        expect(notificationCount).toBeGreaterThan(0);
       } finally {
         await prisma.notification.deleteMany({ where: { userId: subUser.userId } });
         if (createdNcrId) {

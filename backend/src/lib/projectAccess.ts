@@ -218,6 +218,45 @@ export async function requireSubcontractorPortalModuleAccess(args: {
 }
 
 /**
+ * Ensure a subcontractor company can see NCRs in their portal.
+ *
+ * The `ncrs` portal module is opt-in and defaults OFF (unlike the other
+ * modules), because an NCR is a non-conformance against the subcontractor's own
+ * work. But assigning an NCR to a subcontractor IS the head contractor's intent
+ * to share it — so the first time one is assigned we auto-enable their NCR
+ * portal access (preserving every other module flag). Without this the assigned
+ * subcontractor silently can't see the NCR.
+ *
+ * Idempotent: a no-op (no write) when the module is already enabled or the
+ * company no longer exists. Returns true only when access was newly enabled, so
+ * the caller can audit-log the permission change.
+ */
+export async function ensureSubcontractorNcrPortalAccess(
+  subcontractorCompanyId: string,
+): Promise<boolean> {
+  const company = await prisma.subcontractorCompany.findUnique({
+    where: { id: subcontractorCompanyId },
+    select: { portalAccess: true },
+  });
+
+  if (!company) {
+    return false;
+  }
+
+  const access = readPortalAccess(company.portalAccess);
+  if (access.ncrs) {
+    return false;
+  }
+
+  await prisma.subcontractorCompany.update({
+    where: { id: subcontractorCompanyId },
+    data: { portalAccess: { ...access, ncrs: true } },
+  });
+
+  return true;
+}
+
+/**
  * Check if a user has access to a project.
  * - Admin/owner users can access any project in their company.
  * - Other users need an active ProjectUser record.
