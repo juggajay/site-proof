@@ -1,4 +1,4 @@
-// InstallNudge — bottom-anchored install prompt for field-role users on mobile.
+// InstallNudge — bottom-anchored install prompt for all authenticated users on mobile.
 //
 // Shows after the user's second session (open-count >= 2) and only when the
 // app is not already installed.  Dismissed nudges re-appear no sooner than
@@ -11,8 +11,6 @@
 
 import { useEffect, useState } from 'react';
 import { X, Share, PlusSquare, Plus } from 'lucide-react';
-import { useAuth } from '@/lib/auth';
-import { ROLES } from '@/lib/roles';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { usePwaInstall } from '@/hooks/usePwaInstall';
 import {
@@ -22,13 +20,8 @@ import {
   writeInstallNudgeDismissedAt,
 } from '@/lib/storagePreferences';
 
-const FIELD_ROLES = [ROLES.FOREMAN, ROLES.SITE_MANAGER, ROLES.SUBCONTRACTOR] as const;
 const RE_NUDGE_DAYS = 14;
 const RE_NUDGE_MS = RE_NUDGE_DAYS * 24 * 60 * 60 * 1000;
-
-function isFieldRole(role: string | undefined | null): boolean {
-  return FIELD_ROLES.includes(role as (typeof FIELD_ROLES)[number]);
-}
 
 function shouldShowNudge(): boolean {
   // Gate 1: at least second session
@@ -44,7 +37,6 @@ function shouldShowNudge(): boolean {
 
 export function InstallNudge() {
   const isMobile = useIsMobile();
-  const { user } = useAuth();
   const { state: installState, canPromptInstall, promptInstall } = usePwaInstall();
   const [visible, setVisible] = useState(false);
 
@@ -56,13 +48,12 @@ export function InstallNudge() {
   // Decide whether to show the nudge after counting the open.
   useEffect(() => {
     if (!isMobile) return;
-    if (!isFieldRole(user?.role)) return;
     if (installState === 'installed' || installState === 'unsupported') return;
     // Show only for ios-manual or chromium (canPromptInstall may be false for
     // chromium until the event fires, so we show both as soon as state is set).
     if (installState !== 'ios-manual' && installState !== 'chromium') return;
     if (shouldShowNudge()) setVisible(true);
-  }, [isMobile, user?.role, installState]);
+  }, [isMobile, installState]);
 
   const handleDismiss = () => {
     writeInstallNudgeDismissedAt();
@@ -121,7 +112,8 @@ export function InstallNudge() {
                 <Share className="h-4 w-4" />
               </span>
               <span className="text-sm text-muted-foreground">
-                Tap the <strong>Share</strong> button at the bottom of Safari
+                Tap the <strong>Share</strong> button (bottom of Safari, or next to the address bar
+                in Chrome)
               </span>
             </li>
             <li className="flex items-center gap-3">

@@ -7,7 +7,7 @@
 //   - dismissed recently → renders nothing
 //   - first session (open-count 0) → renders nothing
 //   - dismiss button calls writeInstallNudgeDismissedAt and hides the nudge
-//   - non-field roles → renders nothing
+//   - all roles → renders (nudge available to any authenticated user on mobile)
 //   - desktop viewport → renders nothing
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -155,22 +155,16 @@ describe('InstallNudge', () => {
     });
   });
 
-  describe('non-field roles', () => {
-    it.each(['owner', 'admin', 'project_manager', 'quality_manager'])(
-      'renders nothing for %s role',
-      (role) => {
-        setupEngagedSession();
-        pwaInstallState.current = 'ios-manual';
-        userRole.current = role;
-
-        const { container } = render(<InstallNudge />);
-        expect(container).toBeEmptyDOMElement();
-      },
-    );
-  });
-
-  describe('field roles (foreman, site_manager, subcontractor)', () => {
-    it.each(['foreman', 'site_manager', 'subcontractor'])('renders for %s role', (role) => {
+  describe('all roles', () => {
+    it.each([
+      'owner',
+      'admin',
+      'project_manager',
+      'quality_manager',
+      'foreman',
+      'site_manager',
+      'subcontractor',
+    ])('renders for %s role on mobile when conditions are met', (role) => {
       setupEngagedSession();
       pwaInstallState.current = 'ios-manual';
       userRole.current = role;

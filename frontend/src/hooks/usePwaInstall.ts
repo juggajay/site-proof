@@ -5,9 +5,10 @@
 //   'installed'    — app is already running in standalone mode (no nudge needed)
 //   'chromium'     — Chromium browser; beforeinstallprompt available, custom
 //                    prompt can be shown
-//   'ios-manual'   — iOS Safari (iPhone/iPad), not standalone; the user must
-//                    use Share → Add to Home Screen manually
-//   'unsupported'  — neither Chromium nor iOS Safari (e.g. desktop Firefox)
+//   'ios-manual'   — any iOS browser (Safari, Chrome, Firefox, Edge — all
+//                    WebKit), not standalone; the user must use the share
+//                    menu's Add to Home Screen manually
+//   'unsupported'  — neither Chromium-with-prompt nor iOS (e.g. desktop Firefox)
 //
 // References: §4 item 9 of 12-mobile-overhaul-playbook-2026-06.md
 
@@ -46,11 +47,13 @@ function isStandalone(): boolean {
   return false;
 }
 
-function isIosSafari(): boolean {
+function isIosBrowser(): boolean {
   if (typeof window === 'undefined') return false;
   const ua = window.navigator.userAgent;
-  // Match iPhone or iPad UA without 'Chrome' or 'CriOS' (Chromium on iOS)
-  return /iphone|ipad/i.test(ua) && !/CriOS|FxiOS|EdgiOS/i.test(ua);
+  // ANY iOS browser (Safari, Chrome/CriOS, Firefox/FxiOS, Edge/EdgiOS) — they
+  // are all WebKit, none gets beforeinstallprompt, and all of them have
+  // "Add to Home Screen" in their share menu, so all get the manual steps.
+  return /iphone|ipad/i.test(ua);
 }
 
 export function usePwaInstall(): UsePwaInstallResult {
@@ -60,7 +63,7 @@ export function usePwaInstall(): UsePwaInstallResult {
   const [state, setState] = useState<PwaInstallState>(() => {
     if (typeof window === 'undefined') return 'unsupported';
     if (isStandalone()) return 'installed';
-    if (isIosSafari()) return 'ios-manual';
+    if (isIosBrowser()) return 'ios-manual';
     // 'chromium' is tentative — confirmed only when beforeinstallprompt fires;
     // we start as 'unsupported' and upgrade when the event arrives.
     return 'unsupported';
@@ -76,7 +79,7 @@ export function usePwaInstall(): UsePwaInstallResult {
       return;
     }
 
-    if (isIosSafari()) {
+    if (isIosBrowser()) {
       setState('ios-manual');
       return;
     }
