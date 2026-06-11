@@ -201,6 +201,7 @@ export function LotDetailTabPanel({
       {/* Photos Tab */}
       {currentTab === 'photos' && lotId && (
         <PhotosTab
+          projectId={projectId}
           itpInstance={itpInstance}
           lotId={lotId}
           onTabChange={handleTabChange}

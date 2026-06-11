@@ -46,7 +46,7 @@ export function PhotosSelectionToolbar({
   return (
     <div className="flex items-center justify-between">
       <p className="text-sm text-muted-foreground">
-        {photoCount} photo{photoCount !== 1 ? 's' : ''} attached to ITP checklist items
+        {photoCount} photo{photoCount !== 1 ? 's' : ''} on this lot
       </p>
       <div className="flex items-center gap-2">
         <label className="flex items-center gap-2 text-sm cursor-pointer">

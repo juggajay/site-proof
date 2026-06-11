@@ -1,7 +1,32 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PhotosTab } from './PhotosTab';
 import type { ITPInstance, ITPCompletion, ITPChecklistItem, ITPAttachment } from '../types';
+
+beforeEach(() => {
+  mockPhotosTabApi();
+});
+
+function mockPhotosTabApi({
+  lotDocuments = [],
+  echoInit = false,
+}: {
+  lotDocuments?: ReturnType<typeof makeLotPhotoDocument>[];
+  echoInit?: boolean;
+} = {}) {
+  authFetchMock.mockImplementation((url: string, init?: RequestInit) => {
+    if (typeof url === 'string' && url.startsWith('/api/documents/project-1?')) {
+      return Promise.resolve({ ok: true, json: async () => ({ documents: lotDocuments }) });
+    }
+    if (typeof url === 'string' && url.includes('/api/itp/instances/lot/')) {
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ instance: itpInstance }),
+      });
+    }
+    return Promise.resolve({ ok: true, json: async () => (echoInit ? { init } : {}) });
+  });
+}
 
 afterEach(() => {
   cleanup();
@@ -66,6 +91,21 @@ function makeAttachment(docId: string): ITPAttachment {
   };
 }
 
+function makeLotPhotoDocument(docId: string, filename = `lot-photo-${docId}.jpg`) {
+  return {
+    id: docId,
+    filename,
+    fileUrl: `/storage/documents/${filename}`,
+    caption: null,
+    uploadedAt: '2026-06-01T00:00:00.000Z',
+    uploadedBy: null,
+    gpsLatitude: null,
+    gpsLongitude: null,
+    documentType: 'photo',
+    category: 'progress',
+  };
+}
+
 function makeCompletion(
   id: string,
   checklistItemId: string,
@@ -109,12 +149,30 @@ const itpInstance: ITPInstance = {
 function renderPhotosTab() {
   return render(
     <PhotosTab
+      projectId="project-1"
       itpInstance={itpInstance}
       lotId="lot-1"
       onTabChange={vi.fn()}
       onItpInstanceUpdate={vi.fn()}
     />,
   );
+}
+
+async function selectFirstPhotoAndChooseItem1Evidence() {
+  const checkboxes = screen.getAllByRole('checkbox');
+  fireEvent.click(checkboxes[1]);
+
+  fireEvent.click(await screen.findByRole('button', { name: /Add to Evidence/ }));
+
+  const itemRows = screen
+    .getAllByRole('button')
+    .filter((btn) => btn.textContent?.includes('1. Item 1'));
+  fireEvent.click(itemRows[0]);
+}
+
+async function selectFirstPhotoAndSubmitAsItem1Evidence() {
+  await selectFirstPhotoAndChooseItem1Evidence();
+  fireEvent.click(screen.getByRole('button', { name: 'Add to Evidence' }));
 }
 
 // ---- desktop path -----------------------------------------------------------
@@ -130,17 +188,44 @@ describe('PhotosTab — desktop (modal) path', () => {
     expect(screen.getByAltText('photo-doc-2.jpg')).toBeInTheDocument();
   });
 
-  it('shows empty state when itpInstance has no photos', () => {
+  it('shows empty state when itpInstance has no photos', async () => {
     const emptyInstance: ITPInstance = { ...itpInstance, completions: [] };
     render(
       <PhotosTab
+        projectId="project-1"
         itpInstance={emptyInstance}
         lotId="lot-1"
         onTabChange={vi.fn()}
         onItpInstanceUpdate={vi.fn()}
       />,
     );
-    expect(screen.getByText('No Photos')).toBeInTheDocument();
+    expect(await screen.findByText('No Photos')).toBeInTheDocument();
+  });
+
+  it('renders lot-linked photo documents that are not attached to ITP items yet', async () => {
+    const emptyInstance: ITPInstance = {
+      ...itpInstance,
+      completions: [makeCompletion('comp-1', 'item-1')],
+    };
+    mockPhotosTabApi({
+      lotDocuments: [makeLotPhotoDocument('lot-doc-1', 'site-wide.jpg')],
+    });
+
+    render(
+      <PhotosTab
+        projectId="project-1"
+        itpInstance={emptyInstance}
+        lotId="lot-1"
+        onTabChange={vi.fn()}
+        onItpInstanceUpdate={vi.fn()}
+      />,
+    );
+
+    expect(await screen.findByAltText('site-wide.jpg')).toBeInTheDocument();
+    expect(screen.getByText('Lot photo')).toBeInTheDocument();
+    expect(authFetchMock).toHaveBeenCalledWith(
+      '/api/documents/project-1?lotId=lot-1&documentType=photo&limit=100',
+    );
   });
 
   it('opens the Bulk Caption sheet when toolbar button is clicked', async () => {
@@ -267,16 +352,7 @@ describe('PhotosTab — desktop (modal) path', () => {
   it('selecting a checklist item enables the Add to Evidence confirm button', async () => {
     renderPhotosTab();
 
-    const checkboxes = screen.getAllByRole('checkbox');
-    fireEvent.click(checkboxes[1]);
-
-    fireEvent.click(await screen.findByRole('button', { name: /Add to Evidence/ }));
-
-    // Click the first checklist item row.
-    const itemRows = screen
-      .getAllByRole('button')
-      .filter((btn) => btn.textContent?.includes('1. Item 1'));
-    fireEvent.click(itemRows[0]);
+    await selectFirstPhotoAndChooseItem1Evidence();
 
     expect(screen.getByRole('button', { name: 'Add to Evidence' })).not.toBeDisabled();
   });
@@ -297,29 +373,9 @@ describe('PhotosTab — desktop (modal) path', () => {
   });
 
   it('calls authFetch to attach photos and closes sheet on success', async () => {
-    authFetchMock.mockImplementation((url: string) => {
-      if (typeof url === 'string' && url.includes('/api/itp/instances/lot/')) {
-        return Promise.resolve({
-          ok: true,
-          json: async () => ({ instance: itpInstance }),
-        });
-      }
-      return Promise.resolve({ ok: true, json: async () => ({}) });
-    });
-
     renderPhotosTab();
 
-    const checkboxes = screen.getAllByRole('checkbox');
-    fireEvent.click(checkboxes[1]);
-
-    fireEvent.click(await screen.findByRole('button', { name: /Add to Evidence/ }));
-
-    const itemRows = screen
-      .getAllByRole('button')
-      .filter((btn) => btn.textContent?.includes('1. Item 1'));
-    fireEvent.click(itemRows[0]);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Add to Evidence' }));
+    await selectFirstPhotoAndSubmitAsItem1Evidence();
 
     await waitFor(() => {
       expect(authFetchMock).toHaveBeenCalledWith(
@@ -332,6 +388,40 @@ describe('PhotosTab — desktop (modal) path', () => {
       expect(
         screen.queryByRole('dialog', { name: 'Add Photos to Evidence' }),
       ).not.toBeInTheDocument();
+    });
+  });
+
+  it('attaches a lot-linked photo document to an ITP item as evidence', async () => {
+    const emptyInstance: ITPInstance = {
+      ...itpInstance,
+      completions: [makeCompletion('comp-1', 'item-1')],
+    };
+    mockPhotosTabApi({
+      lotDocuments: [makeLotPhotoDocument('lot-doc-1', 'site-wide.jpg')],
+      echoInit: true,
+    });
+
+    render(
+      <PhotosTab
+        projectId="project-1"
+        itpInstance={emptyInstance}
+        lotId="lot-1"
+        onTabChange={vi.fn()}
+        onItpInstanceUpdate={vi.fn()}
+      />,
+    );
+
+    await screen.findByAltText('site-wide.jpg');
+    await selectFirstPhotoAndSubmitAsItem1Evidence();
+
+    await waitFor(() => {
+      expect(authFetchMock).toHaveBeenCalledWith(
+        '/api/itp/completions/comp-1/attachments',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ documentId: 'lot-doc-1' }),
+        }),
+      );
     });
   });
 });

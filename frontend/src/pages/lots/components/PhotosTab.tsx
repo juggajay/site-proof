@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CheckCircle } from 'lucide-react';
 import { toast } from '@/components/ui/toaster';
 import { authFetch } from '@/lib/api';
@@ -12,19 +12,33 @@ import { PhotoViewerModal } from './PhotoViewerModal';
 import { PhotosEmptyState, PhotosSelectionToolbar } from './PhotosTabSections';
 
 interface PhotosTabProps {
+  projectId?: string;
   itpInstance: ITPInstance | null;
   lotId: string;
   onTabChange: (tab: LotTab) => void;
   onItpInstanceUpdate: (instance: ITPInstance) => void;
 }
 
-interface ITPPhoto {
+interface DisplayPhoto {
   attachment: ITPAttachment;
-  checklistItem: ITPChecklistItem;
-  completion: ITPCompletion;
+  checklistItem: ITPChecklistItem | null;
+  completion: ITPCompletion | null;
+  source: 'itp' | 'lot';
+}
+
+interface LotPhotoDocument {
+  id: string;
+  filename: string;
+  fileUrl: string;
+  caption: string | null;
+  uploadedAt: string;
+  uploadedBy: { id: string; fullName: string | null; email: string } | null;
+  gpsLatitude: number | null;
+  gpsLongitude: number | null;
 }
 
 export function PhotosTab({
+  projectId,
   itpInstance,
   lotId,
   onTabChange,
@@ -46,9 +60,53 @@ export function PhotosTab({
   const [selectedEvidenceItem, setSelectedEvidenceItem] = useState<string | null>(null);
   const [addingToEvidence, setAddingToEvidence] = useState(false);
   const addingToEvidenceRef = useRef(false);
+  const [lotPhotos, setLotPhotos] = useState<LotPhotoDocument[]>([]);
+  const [loadingLotPhotos, setLoadingLotPhotos] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function fetchLotPhotos() {
+      if (!projectId || !lotId) {
+        setLotPhotos([]);
+        return;
+      }
+
+      setLoadingLotPhotos(true);
+      try {
+        const params = new URLSearchParams({
+          lotId,
+          documentType: 'photo',
+          limit: '100',
+        });
+        const res = await authFetch(
+          `/api/documents/${encodeURIComponent(projectId)}?${params.toString()}`,
+        );
+        if (!res.ok) {
+          throw new Error('Failed to fetch lot photos');
+        }
+
+        const data = (await res.json()) as { documents?: LotPhotoDocument[] };
+        if (!cancelled) {
+          setLotPhotos(Array.isArray(data.documents) ? data.documents : []);
+        }
+      } catch (error) {
+        logError('Failed to fetch lot photos:', error);
+        if (!cancelled) setLotPhotos([]);
+      } finally {
+        if (!cancelled) setLoadingLotPhotos(false);
+      }
+    }
+
+    void fetchLotPhotos();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, lotId]);
 
   // Collect all photos from ITP completions
-  const itpPhotos: ITPPhoto[] = [];
+  const itpPhotos: DisplayPhoto[] = [];
   if (itpInstance) {
     itpInstance.completions.forEach((completion) => {
       if (completion.attachments && completion.attachments.length > 0) {
@@ -57,12 +115,41 @@ export function PhotosTab({
         );
         if (checklistItem) {
           completion.attachments.forEach((attachment) => {
-            itpPhotos.push({ attachment, checklistItem, completion });
+            itpPhotos.push({ attachment, checklistItem, completion, source: 'itp' });
           });
         }
       }
     });
   }
+  const attachedDocumentIds = new Set(itpPhotos.map((photo) => photo.attachment.document.id));
+  const lotPhotoEntries: DisplayPhoto[] = lotPhotos
+    .filter((doc) => !attachedDocumentIds.has(doc.id))
+    .map((doc) => ({
+      attachment: {
+        id: `lot-photo-${doc.id}`,
+        documentId: doc.id,
+        document: {
+          id: doc.id,
+          filename: doc.filename,
+          fileUrl: doc.fileUrl,
+          caption: doc.caption,
+          uploadedAt: doc.uploadedAt,
+          uploadedBy: doc.uploadedBy
+            ? {
+                id: doc.uploadedBy.id,
+                fullName: doc.uploadedBy.fullName || doc.uploadedBy.email,
+                email: doc.uploadedBy.email,
+              }
+            : null,
+          gpsLatitude: doc.gpsLatitude,
+          gpsLongitude: doc.gpsLongitude,
+        },
+      },
+      checklistItem: null,
+      completion: null,
+      source: 'lot',
+    }));
+  const allPhotos = [...itpPhotos, ...lotPhotoEntries];
 
   // Helper function to toggle photo selection
   const togglePhotoSelection = (photoId: string, e: React.MouseEvent) => {
@@ -80,10 +167,10 @@ export function PhotosTab({
 
   // Helper function to select/deselect all photos
   const toggleSelectAll = () => {
-    if (selectedPhotos.size === itpPhotos.length) {
+    if (selectedPhotos.size === allPhotos.length) {
       setSelectedPhotos(new Set());
     } else {
-      setSelectedPhotos(new Set(itpPhotos.map((p) => p.attachment.document.id)));
+      setSelectedPhotos(new Set(allPhotos.map((p) => p.attachment.document.id)));
     }
   };
 
@@ -192,7 +279,7 @@ export function PhotosTab({
       // Now add each selected photo as an attachment
       const attachmentPromises = Array.from(selectedPhotos).map(async (documentId) => {
         // Find the document details
-        const photoDoc = itpPhotos.find((p) => p.attachment.document.id === documentId);
+        const photoDoc = allPhotos.find((p) => p.attachment.document.id === documentId);
         if (!photoDoc) return null;
 
         const res = await authFetch(
@@ -247,7 +334,20 @@ export function PhotosTab({
   };
 
   // Empty state
-  if (itpPhotos.length === 0) {
+  if (allPhotos.length === 0) {
+    if (loadingLotPhotos) {
+      return (
+        <div className="space-y-4 animate-in fade-in duration-200">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold">Photos</h2>
+          </div>
+          <div className="rounded-lg border p-6 text-center text-sm text-muted-foreground">
+            Loading photos...
+          </div>
+        </div>
+      );
+    }
+
     return <PhotosEmptyState onOpenItpChecklist={() => onTabChange('itp')} />;
   }
 
@@ -260,9 +360,9 @@ export function PhotosTab({
       <div className="space-y-4">
         {/* Header with selection controls */}
         <PhotosSelectionToolbar
-          photoCount={itpPhotos.length}
+          photoCount={allPhotos.length}
           selectedCount={selectedPhotos.size}
-          allSelected={selectedPhotos.size === itpPhotos.length && itpPhotos.length > 0}
+          allSelected={selectedPhotos.size === allPhotos.length && allPhotos.length > 0}
           onToggleSelectAll={toggleSelectAll}
           onOpenBatchCaption={() => setShowBatchCaptionModal(true)}
           onOpenAddToEvidence={() => setShowAddToEvidenceModal(true)}
@@ -270,7 +370,7 @@ export function PhotosTab({
 
         {/* Photo grid */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {itpPhotos.map(({ attachment, checklistItem }) => {
+          {allPhotos.map(({ attachment, checklistItem, source }) => {
             const isSelected = selectedPhotos.has(attachment.document.id);
             return (
               <div
@@ -312,9 +412,15 @@ export function PhotosTab({
                 {/* ITP Reference Badge */}
                 <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2">
                   <p className="text-xs text-white truncate flex items-center gap-1">
-                    <span>📋</span>
-                    <span className="font-medium">ITP {checklistItem.order}:</span>
-                    <span className="truncate">{checklistItem.description}</span>
+                    {source === 'itp' && checklistItem ? (
+                      <>
+                        <span>📋</span>
+                        <span className="font-medium">ITP {checklistItem.order}:</span>
+                        <span className="truncate">{checklistItem.description}</span>
+                      </>
+                    ) : (
+                      <span className="font-medium">Lot photo</span>
+                    )}
                   </p>
                   {attachment.document.caption && (
                     <p className="text-xs text-white/80 truncate mt-0.5">
@@ -468,6 +574,7 @@ export function PhotosTab({
         selectedPhoto={selectedPhoto}
         photoZoom={photoZoom}
         itpInstance={itpInstance}
+        allPhotos={allPhotos.map((photo) => photo.attachment)}
         onClose={() => {
           setSelectedPhoto(null);
           setPhotoZoom(1);
