@@ -26,6 +26,7 @@ vi.mock('../offlineDb', () => ({
   markDocketSyncError: vi.fn(),
   getOfflinePhoto: vi.fn(),
   markPhotoSynced: vi.fn(),
+  markPhotoUploadedAwaitingAttach: vi.fn(),
   markPhotoSyncError: vi.fn(),
   getOfflineLot: vi.fn(),
   detectLotSyncConflict: vi.fn(),
@@ -74,6 +75,7 @@ import {
   markDocketSyncError,
   getOfflinePhoto,
   markPhotoSynced,
+  markPhotoUploadedAwaitingAttach,
   markPhotoSyncError,
   getOfflineLot,
   detectLotSyncConflict,
@@ -102,6 +104,7 @@ const markDocketServerIdMock = markDocketServerId as Mock;
 const markDocketSyncErrorMock = markDocketSyncError as Mock;
 const getOfflinePhotoMock = getOfflinePhoto as Mock;
 const markPhotoSyncedMock = markPhotoSynced as Mock;
+const markPhotoUploadedAwaitingAttachMock = markPhotoUploadedAwaitingAttach as Mock;
 const markPhotoSyncErrorMock = markPhotoSyncError as Mock;
 const getOfflineLotMock = getOfflineLot as Mock;
 const detectLotSyncConflictMock = detectLotSyncConflict as Mock;
@@ -722,6 +725,109 @@ describe('syncSingleItem — photo_upload (Slice 3, moved from the hook)', () =>
     expect(fd.has('gpsLongitude')).toBe(false);
     expect(fd.has('lotId')).toBe(false);
     expect(fd.has('category')).toBe(false);
+  });
+
+  // NCR evidence: the documents upload endpoint IGNORES entityType='ncr', so
+  // the executor must follow up with POST /api/ncrs/:id/evidence to link the
+  // created Document to the NCR. serverDocumentId persisted between the two
+  // steps makes a retried item attach-only (never a duplicate upload).
+  it('NCR photo with an entityId: uploads, then attaches via /api/ncrs/:id/evidence', async () => {
+    getOfflinePhotoMock.mockResolvedValue({
+      ...photoRecord,
+      entityType: 'ncr',
+      entityId: 'ncr-77',
+      documentType: 'ncr_evidence',
+    });
+    authFetchMock
+      .mockResolvedValueOnce(okJson({ document: { id: 'doc-20' } }))
+      .mockResolvedValueOnce(okJson({ evidence: { id: 'ev-1' } }));
+
+    const result = await syncSingleItem(
+      queueItem({ id: 50, type: 'photo_upload', data: { photoId: 'ph-ncr' } }),
+    );
+
+    expect(result).toEqual({ status: 'synced' });
+    expect(authFetchMock).toHaveBeenCalledTimes(2);
+    expect(authFetchMock.mock.calls[0][0]).toBe('/api/documents/upload');
+    const [attachUrl, attachOptions] = authFetchMock.mock.calls[1];
+    expect(attachUrl).toBe('/api/ncrs/ncr-77/evidence');
+    expect(attachOptions.method).toBe('POST');
+    expect(JSON.parse(attachOptions.body)).toEqual({
+      documentId: 'doc-20',
+      evidenceType: 'photo',
+      caption: 'a caption',
+    });
+    // documentId remembered between the two steps, then fully synced.
+    expect(markPhotoUploadedAwaitingAttachMock).toHaveBeenCalledWith('ph-ncr', 'doc-20');
+    expect(removeSyncQueueItemMock).toHaveBeenCalledWith(50);
+    expect(markPhotoSyncedMock).toHaveBeenCalledWith('ph-ncr', 'doc-20');
+  });
+
+  it('NCR photo: failed attach keeps the item queued WITHOUT marking the photo errored', async () => {
+    getOfflinePhotoMock.mockResolvedValue({
+      ...photoRecord,
+      entityType: 'ncr',
+      entityId: 'ncr-77',
+      documentType: 'ncr_evidence',
+    });
+    authFetchMock
+      .mockResolvedValueOnce(okJson({ document: { id: 'doc-20' } }))
+      .mockResolvedValueOnce(errorResponse(500, 'attach boom'));
+
+    const result = await syncSingleItem(
+      queueItem({ id: 51, type: 'photo_upload', data: { photoId: 'ph-ncr' } }),
+    );
+
+    expect(result).toEqual({ status: 'handled' });
+    // Upload succeeded and was recorded; the queue item stays for retry.
+    expect(markPhotoUploadedAwaitingAttachMock).toHaveBeenCalledWith('ph-ncr', 'doc-20');
+    expect(markSyncItemErrorMock).toHaveBeenCalledWith(51, 'attach boom');
+    expect(removeSyncQueueItemMock).not.toHaveBeenCalled();
+    expect(markPhotoSyncedMock).not.toHaveBeenCalled();
+    expect(markPhotoSyncErrorMock).not.toHaveBeenCalled();
+  });
+
+  it('NCR photo retry with serverDocumentId: attach-only, never re-uploads', async () => {
+    getOfflinePhotoMock.mockResolvedValue({
+      ...photoRecord,
+      entityType: 'ncr',
+      entityId: 'ncr-77',
+      documentType: 'ncr_evidence',
+      serverDocumentId: 'doc-20',
+    });
+    authFetchMock.mockResolvedValueOnce(okJson({ evidence: { id: 'ev-2' } }));
+
+    const result = await syncSingleItem(
+      queueItem({ id: 52, type: 'photo_upload', data: { photoId: 'ph-ncr' } }),
+    );
+
+    expect(result).toEqual({ status: 'synced' });
+    expect(globalFetchMock).not.toHaveBeenCalled(); // no blob read = no upload
+    expect(authFetchMock).toHaveBeenCalledTimes(1);
+    expect(authFetchMock.mock.calls[0][0]).toBe('/api/ncrs/ncr-77/evidence');
+    expect(removeSyncQueueItemMock).toHaveBeenCalledWith(52);
+    expect(markPhotoSyncedMock).toHaveBeenCalledWith('ph-ncr', 'doc-20');
+  });
+
+  it('NCR photo WITHOUT an entityId (captured offline, NCR never created): plain upload, no attach', async () => {
+    getOfflinePhotoMock.mockResolvedValue({
+      ...photoRecord,
+      entityType: 'ncr',
+      entityId: undefined,
+      documentType: 'ncr_evidence',
+    });
+    authFetchMock.mockResolvedValue(okJson({ document: { id: 'doc-21' } }));
+
+    const result = await syncSingleItem(
+      queueItem({ id: 53, type: 'photo_upload', data: { photoId: 'ph-ncr2' } }),
+    );
+
+    expect(result).toEqual({ status: 'synced' });
+    expect(authFetchMock).toHaveBeenCalledTimes(1);
+    expect(authFetchMock.mock.calls[0][0]).toBe('/api/documents/upload');
+    expect(markPhotoUploadedAwaitingAttachMock).not.toHaveBeenCalled();
+    expect(removeSyncQueueItemMock).toHaveBeenCalledWith(53);
+    expect(markPhotoSyncedMock).toHaveBeenCalledWith('ph-ncr2', 'doc-21');
   });
 
   it('removes the item (handled) when the photo no longer exists', async () => {

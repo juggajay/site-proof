@@ -29,6 +29,7 @@ import {
   compressImage,
   deleteOfflinePhoto,
   markPhotoSynced,
+  markPhotoUploadedAwaitingAttach,
   markPhotoSyncError,
   offlineDb,
   updateOfflinePhotoMeta,
@@ -106,11 +107,33 @@ describe('capturePhotoOffline', () => {
 });
 
 describe('photo sync-status markers', () => {
-  it('marks a photo synced with a refreshed localUpdatedAt and ignores the server document id', async () => {
+  // Behavior re-pin (NCR evidence fix): the server document id is now STORED
+  // on sync so retried follow-up steps (NCR evidence attach) never re-upload.
+  it('marks a photo synced with a refreshed localUpdatedAt and stores the server document id', async () => {
     await markPhotoSynced('photo-1', 'server-doc-9');
 
     expect(offlineDb.photos.update).toHaveBeenCalledWith('photo-1', {
       syncStatus: 'synced',
+      serverDocumentId: 'server-doc-9',
+      localUpdatedAt: expect.any(String),
+    });
+  });
+
+  it('marks a photo synced without a server document id (field omitted)', async () => {
+    await markPhotoSynced('photo-1');
+
+    expect(offlineDb.photos.update).toHaveBeenCalledWith('photo-1', {
+      syncStatus: 'synced',
+      localUpdatedAt: expect.any(String),
+    });
+  });
+
+  it('records an uploaded-awaiting-attach photo: document id stored, still pending', async () => {
+    await markPhotoUploadedAwaitingAttach('photo-1', 'server-doc-9');
+
+    expect(offlineDb.photos.update).toHaveBeenCalledWith('photo-1', {
+      serverDocumentId: 'server-doc-9',
+      syncStatus: 'pending',
       localUpdatedAt: expect.any(String),
     });
   });
