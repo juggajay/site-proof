@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SiteProof — Foreman v4</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* Quiet Authority tokens (frontend/src/index.css) */
+    --bg:hsl(40 14% 96%); --card:#fff; --ink:hsl(24 14% 9%);
+    --muted:hsl(30 8% 32%); --line:hsl(38 18% 89%);
+    --amber:hsl(32 95% 44%); --good:hsl(142 72% 29%); --bad:hsl(4 74% 40%);
+    --chip:hsl(40 15% 93%); --dim:hsl(30 8% 56%);
+    --r:12px; --r-lg:16px;
+    --sh-1:0 1px 2px hsl(24 14% 9% / .04);
+    --sh-2:0 1px 2px hsl(24 14% 9% / .05), 0 8px 24px hsl(24 14% 9% / .07);
+    --spring:cubic-bezier(.32,1.15,.35,1);
+    --mono:'IBM Plex Mono',monospace;
+    --cond:'IBM Plex Sans Condensed','IBM Plex Sans',sans-serif;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
+    font:15px/1.5 'IBM Plex Sans',sans-serif;overscroll-behavior-y:none}
+  svg{flex-shrink:0}
+
+  .screen{display:none;min-height:100vh;flex-direction:column}
+  .screen.active{display:flex}
+  .screen.active main > *{opacity:0;animation:rise .45s var(--spring) forwards}
+  .screen.active main > *:nth-child(1){animation-delay:.02s}
+  .screen.active main > *:nth-child(2){animation-delay:.06s}
+  .screen.active main > *:nth-child(3){animation-delay:.10s}
+  .screen.active main > *:nth-child(4){animation-delay:.14s}
+  .screen.active main > *:nth-child(5){animation-delay:.18s}
+  .screen.active main > *:nth-child(6){animation-delay:.22s}
+  @keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+  header{position:sticky;top:0;z-index:5;background:var(--bg);padding:12px 20px 14px;
+    border-bottom:1px solid var(--line)}
+  .topline{display:flex;align-items:center;gap:6px;min-height:40px}
+  .back{display:flex;align-items:center;justify-content:center;width:40px;height:40px;
+    margin-left:-10px;border:none;background:none;color:var(--ink);border-radius:10px;
+    transition:transform .15s,background .15s}
+  .back:active{transform:translateX(-3px);background:var(--chip)}
+  h1{font-family:var(--cond);font-size:27px;line-height:1.1;margin:0;font-weight:700;
+    letter-spacing:-.01em;flex:1}
+  .sub{color:var(--muted);font-size:13px;margin-top:3px;display:flex;align-items:center;gap:8px}
+  .sub .mono{font-family:var(--mono);font-size:12px;font-weight:500}
+  .sync{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;
+    background:var(--card);border:1px solid var(--line);border-radius:999px;
+    padding:7px 11px;color:var(--good);box-shadow:var(--sh-1);white-space:nowrap}
+  .sync.wait{color:var(--amber)}
+  .sync .dot{width:7px;height:7px;border-radius:99px;background:currentColor}
+
+  main{flex:1;padding:16px 20px;display:flex;flex-direction:column;gap:12px;padding-bottom:128px}
+
+  /* HERO — near-black primary (Quiet Authority), amber = attention only */
+  .hero{position:relative;overflow:hidden;background:var(--ink);color:hsl(40 33% 98%);
+    border:none;border-radius:var(--r-lg);padding:20px;text-align:left;width:100%;
+    box-shadow:var(--sh-2);transition:transform .18s var(--spring)}
+  .hero:active{transform:scale(.98)}
+  .hero::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;
+    background:repeating-linear-gradient(-55deg,var(--amber) 0 8px,transparent 8px 16px)}
+  .hero .kick{display:flex;align-items:center;gap:8px;font-family:var(--mono);
+    font-size:11.5px;font-weight:600;letter-spacing:.14em;color:var(--amber)}
+  .hero .big{font-family:var(--cond);font-size:25px;font-weight:700;margin-top:8px;letter-spacing:-.01em}
+  .hero .small{font-size:13.5px;opacity:.78;margin-top:5px}
+  .hero .progrow{display:flex;align-items:center;gap:12px;margin-top:16px}
+  .hero .prog{flex:1;height:6px;background:hsl(40 33% 98% / .18);border-radius:99px;overflow:hidden}
+  .hero .prog i{display:block;height:100%;width:0;background:var(--amber);border-radius:99px;
+    animation:fill .9s .25s var(--spring) forwards}
+  .hero .pct{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--amber)}
+  @keyframes fill{to{width:var(--w,50%)}}
+
+  /* hub tiles */
+  .hub{display:flex;align-items:center;gap:14px;background:var(--card);
+    border:1px solid var(--line);border-radius:var(--r-lg);padding:16px;min-height:76px;
+    color:var(--ink);width:100%;text-align:left;box-shadow:var(--sh-1);
+    transition:transform .18s var(--spring),box-shadow .18s}
+  .hub:active{transform:scale(.98);box-shadow:none}
+  .hub .ico{width:44px;height:44px;border-radius:12px;background:var(--chip);
+    display:flex;align-items:center;justify-content:center;color:var(--ink)}
+  .hub .grow{flex:1;min-width:0}
+  .hub .t{display:block;font-family:var(--cond);font-size:18.5px;font-weight:700;letter-spacing:-.005em}
+  .hub .d{display:block;font-size:13px;color:var(--muted);margin-top:1px}
+  .chipn{font-family:var(--mono);font-size:12px;font-weight:600;background:var(--chip);
+    border-radius:999px;padding:6px 11px;color:var(--amber);white-space:nowrap}
+  .chipn.ok{color:var(--good)}
+  .chev{color:var(--dim)}
+
+  /* camera bar */
+  .cambar{position:fixed;left:0;right:0;bottom:0;z-index:10;
+    padding:10px 20px calc(16px + env(safe-area-inset-bottom));
+    background:linear-gradient(transparent, var(--bg) 42%)}
+  .cambar button{width:100%;min-height:62px;border-radius:var(--r-lg);border:none;
+    background:var(--ink);color:hsl(40 33% 98%);font-family:var(--cond);font-size:19px;
+    font-weight:700;display:flex;align-items:center;justify-content:center;gap:12px;
+    box-shadow:var(--sh-2);transition:transform .18s var(--spring)}
+  .cambar button:active{transform:scale(.97)}
+
+  .primary{position:fixed;left:0;right:0;bottom:0;z-index:10;
+    padding:10px 20px calc(16px + env(safe-area-inset-bottom));
+    background:linear-gradient(transparent, var(--bg) 42%)}
+  .primary button{width:100%;min-height:58px;border-radius:var(--r-lg);border:none;
+    background:var(--ink);color:hsl(40 33% 98%);font-family:var(--cond);font-size:18px;
+    font-weight:700;display:flex;align-items:center;justify-content:center;gap:10px;
+    box-shadow:var(--sh-2);transition:transform .18s var(--spring)}
+  .primary button:active{transform:scale(.97)}
+
+  /* diary path */
+  .path{position:relative}
+  .path::before{content:'';position:absolute;left:21px;top:38px;bottom:38px;width:2px;
+    background:repeating-linear-gradient(var(--line) 0 5px, transparent 5px 10px)}
+  .node{display:flex;gap:14px;background:var(--card);border:1px solid var(--line);
+    border-radius:var(--r-lg);padding:15px 16px;min-height:78px;width:100%;text-align:left;
+    align-items:center;position:relative;margin-bottom:12px;box-shadow:var(--sh-1);
+    transition:transform .18s var(--spring)}
+  .node:active{transform:scale(.98)}
+  .nodenum{width:42px;height:42px;border-radius:999px;background:var(--chip);
+    display:flex;align-items:center;justify-content:center;font-family:var(--mono);
+    font-weight:600;font-size:16px;flex-shrink:0;border:1.5px solid var(--line);color:var(--muted)}
+  .node.done .nodenum{background:var(--good);color:#fff;border-color:var(--good)}
+  .node.now{border-color:var(--amber);box-shadow:0 0 0 3px hsl(32 95% 44% / .14),var(--sh-1)}
+  .node.now .nodenum{background:var(--amber);color:#fff;border-color:var(--amber)}
+  .node.locked{opacity:.45;box-shadow:none}
+  .node .t{display:block;font-family:var(--cond);font-size:17.5px;font-weight:700}
+  .node .d{display:block;font-size:13px;color:var(--muted);margin-top:2px}
+  .node .grow{flex:1;min-width:0}
+  .stepbar{font-family:var(--mono);font-size:11.5px;font-weight:600;color:var(--amber);letter-spacing:.12em}
+
+  .empty{color:var(--muted);text-align:center;padding:32px 20px;font-size:14px;line-height:1.6}
+  .bigadd{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .bigadd button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
+    background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);
+    min-height:88px;font-family:var(--cond);font-size:17px;font-weight:700;color:var(--ink);
+    box-shadow:var(--sh-1);transition:transform .15s var(--spring)}
+  .bigadd button:active{transform:scale(.96)}
+  label{font-size:12px;font-weight:600;display:block;margin:8px 0 6px;
+    text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+  input,select,textarea{width:100%;min-height:52px;border:1px solid var(--line);
+    border-radius:var(--r);padding:13px;font:15px 'IBM Plex Sans';background:var(--card);color:var(--ink)}
+  textarea{min-height:96px;line-height:1.5}
+  input:focus,select:focus,textarea:focus{outline:2px solid var(--amber);outline-offset:-1px;border-color:var(--amber)}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);
+    padding:16px;width:100%;text-align:left;box-shadow:var(--sh-1);
+    transition:transform .18s var(--spring)}
+  button.card:active{transform:scale(.98)}
+  .card .t{font-weight:600;font-size:15.5px}
+  .card .d{color:var(--muted);font-size:13.5px;margin-top:3px}
+  .row{display:flex;align-items:center;gap:10px}
+  .mono{font-family:var(--mono)}
+  .pillrow{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
+  .pill{font-family:var(--mono);font-size:11.5px;font-weight:600;background:var(--chip);
+    border-radius:999px;padding:5px 10px;color:var(--muted)}
+  .pill.g{color:var(--good)} .pill.a{color:var(--amber)}
+  .lotprog{height:5px;background:var(--chip);border-radius:99px;margin-top:12px;overflow:hidden}
+  .lotprog i{display:block;height:100%;width:0;background:var(--good);border-radius:99px;
+    animation:fill .8s .2s var(--spring) forwards}
+
+  /* ITP */
+  .tri{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:auto}
+  .tri button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
+    min-height:92px;border-radius:var(--r-lg);border:1.5px solid var(--line);
+    background:var(--card);font-family:var(--cond);font-size:18px;font-weight:700;
+    box-shadow:var(--sh-1);transition:transform .12s var(--spring)}
+  .tri button:active{transform:scale(.94)}
+  .tri .pass{border-color:var(--good);color:var(--good)}
+  .tri .fail{border-color:var(--bad);color:var(--bad)}
+  .tri .na{color:var(--muted)}
+  .itpq{font-size:19px;font-weight:600;line-height:1.45;margin:4px 0 0}
+  .photobtn{display:flex;align-items:center;justify-content:center;gap:9px;min-height:54px;
+    border:1.5px dashed var(--dim);border-radius:var(--r);background:none;color:var(--muted);
+    font-size:14px;font-weight:600;width:100%;transition:transform .15s}
+  .photobtn:active{transform:scale(.97)}
+  .passflash{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;
+    color:var(--good);background:hsl(142 72% 29% / .09);border-radius:var(--r);
+    padding:10px 13px;align-self:flex-start}
+
+  /* slider */
+  .slider{position:relative;height:64px;background:var(--chip);border:1px solid var(--line);
+    border-radius:999px;overflow:hidden}
+  .slider .label{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    font-family:var(--cond);font-weight:700;color:var(--muted);font-size:16px;letter-spacing:.02em}
+  .knob{position:absolute;top:5px;left:5px;width:54px;height:54px;border-radius:999px;
+    background:var(--ink);color:hsl(40 33% 98%);display:flex;align-items:center;
+    justify-content:center;touch-action:none;box-shadow:var(--sh-2)}
+  .done-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;
+    flex:1;gap:14px;text-align:center;padding:24px}
+  .bigtick{width:108px;height:108px;border-radius:999px;background:var(--good);color:#fff;
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:0 12px 40px hsl(142 72% 29% / .3);animation:pop .55s var(--spring)}
+  @keyframes pop{0%{transform:scale(.2);opacity:0}65%{transform:scale(1.08)}100%{transform:scale(1);opacity:1}}
+  .done-big{font-family:var(--cond);font-size:27px;font-weight:700}
+  .done-stats{font-family:var(--mono);font-size:12.5px;color:var(--muted)}
+  @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+</style>
+</head>
+<body>
+
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M2 4c3-1.5 6-1.5 9 0v16c-3-1.5-6-1.5-9 0zM13 4c3-1.5 6-1.5 9 0v16c-3-1.5-6-1.5-9 0z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+  <symbol id="i-cam" viewBox="0 0 24 24"><path d="M3 8a2 2 0 012-2h2l1.5-2h7L17 6h2a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="13" r="3.6" fill="none" stroke="currentColor" stroke-width="1.8"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s7-6.1 7-11a7 7 0 10-14 0c0 4.9 7 11 7 11z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="10" r="2.6" fill="none" stroke="currentColor" stroke-width="1.8"/></symbol>
+  <symbol id="i-doc" viewBox="0 0 24 24"><path d="M7 3h7l4 4v14H7z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 3v4h4M10 12h5M10 16h5" stroke="currentColor" stroke-width="1.8" fill="none"/></symbol>
+  <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 3L1.8 21h20.4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 9.5v5M12 17.6v.4" stroke="currentColor" stroke-width="1.9"/></symbol>
+  <symbol id="i-rule" viewBox="0 0 24 24"><path d="M3 17L17 3l4 4L7 21zM8 16l1.6 1.6M11 13l1.6 1.6M14 10l1.6 1.6M17 7l1.6 1.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-backc" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M4.5 12.5l5 5L19.5 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 7.5V12l3 2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+  <symbol id="i-truck" viewBox="0 0 24 24"><path d="M2 7h11v9H2zM13 10h4l3 3v3h-7z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="6.5" cy="17.5" r="1.8" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="16.5" cy="17.5" r="1.8" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-flag" viewBox="0 0 24 24"><path d="M5 21V4m0 1h13l-2.5 3.5L18 12H5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+  <symbol id="i-tool" viewBox="0 0 24 24"><path d="M14 7l3-3 3 3-3 3zM3 21l8-8M11 5l8 8-3 3-8-8z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 11v5M12 7.6v.4" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></symbol>
+</svg>
+
+<!-- HOME -->
+<section class="screen active" id="home">
+  <header>
+    <div class="sub" style="margin:0 0 2px"><span class="mono" style="letter-spacing:.14em;font-size:11px">SITEPROOF</span>
+      <span class="pill" style="padding:3px 8px;font-size:10.5px">FOREMAN</span></div>
+    <div class="topline"><h1>Morning, Jay</h1>
+      <span class="sync"><span class="dot"></span>All saved</span></div>
+    <div class="sub">Demo Walkthrough 2027 <span class="mono">THU 11 JUN</span></div>
+  </header>
+  <main style="padding-bottom:150px">
+    <button class="hero" style="--w:50%" onclick="go('diary')">
+      <div class="kick">TODAY'S DIARY — 2/4</div>
+      <div class="big">Finish today's diary</div>
+      <div class="small">Weather and crew are done — log the work, then submit.</div>
+      <div class="progrow"><div class="prog"><i></i></div><span class="pct">50%</span></div>
+    </button>
+    <button class="hub" onclick="go('lots')">
+      <span class="ico"><svg width="22" height="22"><use href="#i-pin"/></svg></span>
+      <span class="grow"><span class="t">Lots</span><span class="d">3 active — ITP checks live here</span></span>
+      <span class="chipn">10 due</span>
+      <svg class="chev" width="18" height="18"><use href="#i-chev"/></svg></button>
+    <button class="hub" onclick="go('dockets')">
+      <span class="ico"><svg width="22" height="22"><use href="#i-doc"/></svg></span>
+      <span class="grow"><span class="t">Dockets</span><span class="d">Subbie hours for approval</span></span>
+      <span class="chipn">2 waiting</span>
+      <svg class="chev" width="18" height="18"><use href="#i-chev"/></svg></button>
+    <button class="hub" onclick="go('issues')">
+      <span class="ico"><svg width="22" height="22"><use href="#i-warn"/></svg></span>
+      <span class="grow"><span class="t">Issues</span><span class="d">NCRs &amp; defects</span></span>
+      <span class="chipn ok">0 open</span>
+      <svg class="chev" width="18" height="18"><use href="#i-chev"/></svg></button>
+    <button class="hub" onclick="go('docs')">
+      <span class="ico"><svg width="22" height="22"><use href="#i-rule"/></svg></span>
+      <span class="grow"><span class="t">Drawings &amp; Docs</span><span class="d">Current revisions, by lot</span></span>
+      <svg class="chev" width="18" height="18"><use href="#i-chev"/></svg></button>
+  </main>
+  <div class="cambar"><button onclick="go('camera')">
+    <svg width="24" height="24"><use href="#i-cam"/></svg>Take a photo</button></div>
+</section>
+
+<!-- DIARY -->
+<section class="screen" id="diary">
+  <header>
+    <div class="topline">
+      <button class="back" onclick="go('home')"><svg width="22" height="22"><use href="#i-backc"/></svg></button>
+      <h1>Daily Diary</h1>
+      <span class="sync"><span class="dot"></span>Saved</span></div>
+    <div class="sub">Thursday 11 June <span class="stepbar">STEP 3/4</span></div>
+  </header>
+  <main>
+    <div class="path">
+      <button class="node done" onclick="go('todo')"><span class="nodenum"><svg width="18" height="18"><use href="#i-check"/></svg></span>
+        <span class="grow"><span class="t">Weather</span>
+        <span class="d">22° fine, light wind — auto-filled 6:45am</span></span>
+        <svg class="chev" width="16" height="16"><use href="#i-chev"/></svg></button>
+      <button class="node done" onclick="go('todo')"><span class="nodenum"><svg width="18" height="18"><use href="#i-check"/></svg></span>
+        <span class="grow"><span class="t">Crew &amp; Plant</span>
+        <span class="d">6 workers · 2 machines — carried from yesterday</span></span>
+        <svg class="chev" width="16" height="16"><use href="#i-chev"/></svg></button>
+      <button class="node now" onclick="go('work')"><span class="nodenum">3</span>
+        <span class="grow"><span class="t">Today's Work</span>
+        <span class="d">Nothing logged yet — takes a couple of minutes</span></span>
+        <svg class="chev" width="16" height="16"><use href="#i-chev"/></svg></button>
+      <button class="node locked"><span class="nodenum">4</span>
+        <span class="grow"><span class="t">Review &amp; Submit</span>
+        <span class="d">Unlocks when work is logged</span></span></button>
+    </div>
+  </main>
+  <div class="primary"><button onclick="go('work')">
+    <svg width="20" height="20"><use href="#i-plus"/></svg>Add today's work</button></div>
+</section>
+
+<!-- WORK -->
+<section class="screen" id="work">
+  <header>
+    <div class="topline">
+      <button class="back" onclick="go('diary')"><svg width="22" height="22"><use href="#i-backc"/></svg></button>
+      <h1>Today's Work</h1>
+      <span class="sync"><span class="dot"></span>Saved</span></div>
+    <div class="sub">Daily Diary <span class="stepbar">STEP 3/4</span></div>
+  </header>
+  <main>
+    <div class="bigadd">
+      <button onclick="go('activity')"><svg width="24" height="24"><use href="#i-tool"/></svg>Activity</button>
+      <button onclick="go('todo')"><svg width="24" height="24"><use href="#i-clock"/></svg>Delay</button>
+      <button onclick="go('todo')"><svg width="24" height="24"><use href="#i-truck"/></svg>Delivery</button>
+      <button onclick="go('todo')"><svg width="24" height="24"><use href="#i-flag"/></svg>Event</button>
+    </div>
+    <div class="empty">Nothing yet. Each entry takes about 20 seconds —<br>use the keyboard mic and just say it.</div>
+  </main>
+  <div class="primary"><button onclick="go('review')">Done — review &amp; submit</button></div>
+</section>
+
+<!-- ACTIVITY -->
+<section class="screen" id="activity">
+  <header>
+    <div class="topline">
+      <button class="back" onclick="go('work')"><svg width="22" height="22"><use href="#i-backc"/></svg></button>
+      <h1>Add Activity</h1>
+      <span class="sync"><span class="dot"></span>Saved</span></div>
+    <div class="sub">Auto-saves as you type — interruptions lose nothing</div>
+  </header>
+  <main>
+    <div><label>What was done</label>
+    <textarea placeholder="e.g. Placed and compacted select fill, layer 3"></textarea></div>
+    <div><label>Lot</label>
+    <select><option>LOT-001 — Embankment Ch 100–200</option><option>LOT-002 — Culvert Base</option></select></div>
+    <div><label>Quantity — optional</label>
+    <input inputmode="decimal" placeholder="e.g. 450 m³"></div>
+    <button class="photobtn"><svg width="19" height="19"><use href="#i-cam"/></svg>Add photos</button>
+  </main>
+  <div class="primary"><button onclick="go('work')">Save activity</button></div>
+</section>
+
+<!-- REVIEW -->
+<section class="screen" id="review">
+  <header>
+    <div class="topline">
+      <button class="back" onclick="go('diary')"><svg width="22" height="22"><use href="#i-backc"/></svg></button>
+      <h1>Review &amp; Submit</h1>
+      <span class="sync"><span class="dot"></span>Saved</span></div>
+    <div class="sub">Step 4 of 4 — the last thing between you and the ute</div>
+  </header>
+  <main>
+    <div class="card"><div class="t">Weather</div><div class="d">22° fine, light wind</div></div>
+    <div class="card"><div class="t">Crew &amp; Plant</div><div class="d">6 workers · 2 machines</div></div>
+    <div class="card"><div class="t">Work</div><div class="d">3 activities · 1 delay · 2 photos</div></div>
+    <div style="flex:1"></div>
+    <div class="sub" style="justify-content:center">Slide to lock the diary and send it to the office</div>
+    <div class="slider" id="slider">
+      <div class="label">Slide to submit</div>
+      <div class="knob" id="knob"><svg width="22" height="22"><use href="#i-arrow"/></svg></div>
+    </div>
+  </main>
+</section>
+
+<!-- DONE -->
+<section class="screen" id="done">
+  <header><div class="topline"><h1>Submitted</h1></div></header>
+  <main class="done-wrap">
+    <div class="bigtick"><svg width="54" height="54"><use href="#i-check"/></svg></div>
+    <div class="done-big">Thursday — done.</div>
+    <div class="done-stats">3 ACTIVITIES · 1 DELAY · 6 CREW · 2 PHOTOS</div>
+    <div class="sub" style="justify-content:center">Sent to the office. See you tomorrow.</div>
+  </main>
+  <div class="primary"><button onclick="go('home')">Back to home</button></div>
+</section>
+
+<!-- LOTS -->
+<section class="screen" id="lots">
+  <header>
+    <div class="topline">
+      <button class="back" onclick="go('home')"><svg width="22" height="22"><use href="#i-backc"/></svg></button>
+      <h1>Lots</h1>
+      <span class="sync"><span class="dot"></span>Saved</span></div>
+    <div class="sub">3 active <span class="mono">10 CHECKS DUE</span></div>
+  </header>
+  <main>
+    <button class="card" onclick="go('lot')">
+      <div class="row"><span class="t mono" style="flex:1">LOT-001 <span style="font-family:'IBM Plex Sans';font-weight:600;color:var(--muted)">— Embankment Ch 100–200</span></span>
+      <svg class="chev" width="16" height="16"><use href="#i-chev"/></svg></div>
+      <div class="pillrow"><span class="pill a">IN PROGRESS</span><span class="pill">ITP 14/22</span><span class="pill a">3 DUE</span></div>
+      <div class="lotprog"><i style="--w:64%"></i></div>
+    </button>
+    <button class="card" onclick="go('todo')">
+      <div class="row"><span class="t mono" style="flex:1">LOT-002 <span style="font-family:'IBM Plex Sans';font-weight:600;color:var(--muted)">— Culvert Base Ch 240</span></span>
+      <svg class="chev" width="16" height="16"><use href="#i-chev"/></svg></div>
+      <div class="pillrow"><span class="pill a">HOLD POINT</span><span class="pill">ITP 8/9</span><span class="pill a">AWAITING RELEASE</span></div>
+      <div class="lotprog"><i style="--w:88%"></i></div>
+    </button>
+    <button class="card" onclick="go('todo')">
+      <div class="row"><span class="t mono" style="flex:1">LOT-003 <span style="font-family:'IBM Plex Sans';font-weight:600;color:var(--muted)">— Subgrade Ch 200–300</span></span>
+      <svg class="chev" width="16" height="16"><use href="#i-chev"/></svg></div>
+      <div class="pillrow"><span class="pill g">CONFORMED</span><span class="pill">ITP COMPLETE</span></div>
+      <div class="lotprog"><i style="--w:100%"></i></div>
+    </button>
+  </main>
+</section>
+
+<!-- LOT DETAIL -->
+<section class="screen" id="lot">
+  <header>
+    <div class="topline">
+      <button class="back" onclick="go('lots')"><svg width="22" height="22"><use href="#i-backc"/></svg></button>
+      <h1 class="mono" style="font-family:var(--mono);font-weight:600;font-size:23px">LOT-001</h1>
+      <span class="sync"><span class="dot"></span>Saved</span></div>
+    <div class="sub">Embankment Ch 100–200 <span class="mono" style="color:var(--amber)">IN PROGRESS</span></div>
+  </header>
+  <main>
+    <button class="hub" onclick="go('itp')">
+      <span class="ico"><svg width="22" height="22"><use href="#i-check"/></svg></span>
+      <span class="grow"><span class="t">Inspections</span><span class="d">14 of 22 done · 3 due today</span></span>
+      <span class="chipn">3 due</span>
+      <svg class="chev" width="18" height="18"><use href="#i-chev"/></svg></button>
+    <button class="hub" onclick="go('todo')">
+      <span class="ico"><svg width="22" height="22"><use href="#i-cam"/></svg></span>
+      <span class="grow"><span class="t">Photos</span><span class="d">18 on this lot</span></span>
+      <svg class="chev" width="18" height="18"><use href="#i-chev"/></svg></button>
+    <button class="hub" onclick="go('docs')">
+      <span class="ico"><svg width="22" height="22"><use href="#i-rule"/></svg></span>
+      <span class="grow"><span class="t">Drawings</span><span class="d">2 current for this lot</span></span>
+      <svg class="chev" width="18" height="18"><use href="#i-chev"/></svg></button>
+    <button class="hub" onclick="go('todo')">
+      <span class="ico"><svg width="22" height="22"><use href="#i-info"/></svg></span>
+      <span class="grow"><span class="t">Details &amp; status</span><span class="d">Read-only — conformance is the office's call</span></span>
+      <svg class="chev" width="18" height="18"><use href="#i-chev"/></svg></button>
+  </main>
+  <div class="primary"><button onclick="go('itp')">Continue inspections — 3 due</button></div>
+</section>
+
+<!-- ITP -->
+<section class="screen" id="itp">
+  <header>
+    <div class="topline">
+      <button class="back" onclick="go('lot')"><svg width="22" height="22"><use href="#i-backc"/></svg></button>
+      <h1>Inspection</h1>
+      <span class="sync"><span class="dot"></span>Saved</span></div>
+    <div class="sub"><span class="mono">LOT-001</span> <span class="stepbar">CHECK 15/22</span></div>
+  </header>
+  <main>
+    <div class="pill a" style="align-self:flex-start">EARTHWORKS — LAYER 3</div>
+    <div class="itpq">Classify fill material — particle size distribution within spec?</div>
+    <div class="sub">Responsible: Contractor · test cert can be attached</div>
+    <button class="photobtn"><svg width="19" height="19"><use href="#i-cam"/></svg>Add evidence photo</button>
+    <div class="tri">
+      <button class="pass" onclick="go('itpnext')"><svg width="22" height="22"><use href="#i-check"/></svg>Pass</button>
+      <button class="fail" onclick="go('todo')"><svg width="22" height="22"><use href="#i-warn"/></svg>Fail</button>
+      <button class="na" onclick="go('itpnext')">N/A</button>
+    </div>
+  </main>
+</section>
+
+<!-- ITP NEXT -->
+<section class="screen" id="itpnext">
+  <header>
+    <div class="topline">
+      <button class="back" onclick="go('lot')"><svg width="22" height="22"><use href="#i-backc"/></svg></button>
+      <h1>Inspection</h1>
+      <span class="sync wait"><span class="dot"></span>1 waiting</span></div>
+    <div class="sub"><span class="mono">LOT-001</span> <span class="stepbar">CHECK 16/22</span></div>
+  </header>
+  <main>
+    <div class="passflash"><svg width="16" height="16"><use href="#i-check"/></svg>Check 15 passed — saved</div>
+    <div class="itpq">Perform density index testing on cohesionless (sandy) fill material</div>
+    <div class="sub">Responsible: Contractor · NATA cert required</div>
+    <button class="photobtn"><svg width="19" height="19"><use href="#i-cam"/></svg>Add evidence photo</button>
+    <div class="tri">
+      <button class="pass" onclick="go('lot')"><svg width="22" height="22"><use href="#i-check"/></svg>Pass</button>
+      <button class="fail" onclick="go('todo')"><svg width="22" height="22"><use href="#i-warn"/></svg>Fail</button>
+      <button class="na" onclick="go('lot')">N/A</button>
+    </div>
+  </main>
+</section>
+
+<!-- DOCKETS -->
+<section class="screen" id="dockets">
+  <header>
+    <div class="topline">
+      <button class="back" onclick="go('home')"><svg width="22" height="22"><use href="#i-backc"/></svg></button>
+      <h1>Dockets</h1>
+      <span class="sync"><span class="dot"></span>Saved</span></div>
+    <div class="sub">2 waiting for your approval</div>
+  </header>
+  <main>
+    <button class="card" onclick="go('docket')">
+      <div class="row"><span class="t mono" style="flex:1">DKT-0142 <span style="font-family:'IBM Plex Sans';font-weight:600;color:var(--muted)">— CivilWorx Pty Ltd</span></span>
+      <svg class="chev" width="16" height="16"><use href="#i-chev"/></svg></div>
+      <div class="d">Yesterday · <span class="mono">48</span> labour hrs · <span class="mono">16</span> plant hrs</div>
+    </button>
+    <button class="card" onclick="go('todo')">
+      <div class="row"><span class="t mono" style="flex:1">DKT-0143 <span style="font-family:'IBM Plex Sans';font-weight:600;color:var(--muted)">— H&amp;K Haulage</span></span>
+      <svg class="chev" width="16" height="16"><use href="#i-chev"/></svg></div>
+      <div class="d">Yesterday · <span class="mono">22</span> labour hrs · <span class="mono">9</span> plant hrs</div>
+    </button>
+  </main>
+</section>
+
+<!-- DOCKET -->
+<section class="screen" id="docket">
+  <header>
+    <div class="topline">
+      <button class="back" onclick="go('dockets')"><svg width="22" height="22"><use href="#i-backc"/></svg></button>
+      <h1 class="mono" style="font-family:var(--mono);font-weight:600;font-size:23px">DKT-0142</h1>
+      <span class="sync"><span class="dot"></span>Saved</span></div>
+    <div class="sub">CivilWorx Pty Ltd · Wednesday 10 June</div>
+  </header>
+  <main>
+    <div class="card"><div class="t">Labour — <span class="mono">48 hrs</span></div><div class="d">6 workers × 8 hrs · general labour, formwork</div></div>
+    <div class="card"><div class="t">Plant — <span class="mono">16 hrs</span></div><div class="d">20t excavator × 8 · padfoot roller × 8</div></div>
+    <div class="card"><div class="t">Notes</div><div class="d">Culvert base prep and backfill as directed.</div></div>
+    <div class="empty" style="padding:6px">Wrong hours? <u>Query</u> · <u>Reject</u></div>
+  </main>
+  <div class="primary"><button onclick="go('dockets')">Approve — 48 labour + 16 plant</button></div>
+</section>
+
+<!-- DOCS -->
+<section class="screen" id="docs">
+  <header>
+    <div class="topline">
+      <button class="back" onclick="back()"><svg width="22" height="22"><use href="#i-backc"/></svg></button>
+      <h1>Drawings &amp; Docs</h1>
+      <span class="sync"><span class="dot"></span>Saved</span></div>
+    <div class="sub">Current revisions — tap to open full screen</div>
+  </header>
+  <main>
+    <button class="card" onclick="go('todo')">
+      <div class="row"><span class="t mono" style="flex:1">DRG-1204 <span style="font-family:'IBM Plex Sans';font-weight:600;color:var(--muted)">— Embankment typical sections</span></span>
+      <svg class="chev" width="16" height="16"><use href="#i-chev"/></svg></div>
+      <div class="pillrow"><span class="pill g">REV C — CURRENT</span><span class="pill">LOT-001</span></div>
+    </button>
+    <button class="card" onclick="go('todo')">
+      <div class="row"><span class="t mono" style="flex:1">DRG-1209 <span style="font-family:'IBM Plex Sans';font-weight:600;color:var(--muted)">— Culvert details Ch 240</span></span>
+      <svg class="chev" width="16" height="16"><use href="#i-chev"/></svg></div>
+      <div class="pillrow"><span class="pill g">REV A — CURRENT</span><span class="pill">LOT-002</span></div>
+    </button>
+    <button class="card" onclick="go('todo')">
+      <div class="row"><span class="t mono" style="flex:1">SPEC-R44 <span style="font-family:'IBM Plex Sans';font-weight:600;color:var(--muted)">— Earthworks specification</span></span>
+      <svg class="chev" width="16" height="16"><use href="#i-chev"/></svg></div>
+      <div class="pillrow"><span class="pill">PROJECT-WIDE</span></div>
+    </button>
+  </main>
+</section>
+
+<!-- ISSUES -->
+<section class="screen" id="issues">
+  <header>
+    <div class="topline">
+      <button class="back" onclick="go('home')"><svg width="22" height="22"><use href="#i-backc"/></svg></button>
+      <h1>Issues</h1>
+      <span class="sync"><span class="dot"></span>Saved</span></div>
+    <div class="sub">NCRs &amp; defects on your lots</div>
+  </header>
+  <main>
+    <div class="empty">No open issues. Good.<br>Spot something wrong? Photo first — words later.</div>
+  </main>
+  <div class="primary"><button onclick="go('camera')">
+    <svg width="20" height="20"><use href="#i-cam"/></svg>Raise an issue</button></div>
+</section>
+
+<!-- CAMERA -->
+<section class="screen" id="camera">
+  <header>
+    <div class="topline">
+      <button class="back" onclick="back()"><svg width="22" height="22"><use href="#i-backc"/></svg></button>
+      <h1>Camera</h1>
+      <span class="sync"><span class="dot"></span>Saved</span></div>
+    <div class="sub">Opens your phone camera instantly in the real app</div>
+  </header>
+  <main>
+    <div class="empty" style="flex:1;display:flex;align-items:center;justify-content:center;background:var(--ink);color:hsl(30 8% 45%);border-radius:var(--r-lg)">[ viewfinder ]</div>
+    <div class="sub" style="justify-content:center;text-align:center">After the shot, one screen: file to lot · raise issue · just save.<br>Unfiled photos stay findable under Photos.</div>
+  </main>
+  <div class="primary"><button onclick="back()">
+    <svg width="20" height="20"><use href="#i-cam"/></svg>Capture</button></div>
+</section>
+
+<!-- TODO -->
+<section class="screen" id="todo">
+  <header>
+    <div class="topline">
+      <button class="back" onclick="back()"><svg width="22" height="22"><use href="#i-backc"/></svg></button>
+      <h1>Next round</h1></div>
+    <div class="sub">This flow gets designed in the next mock pass</div>
+  </header>
+  <main><div class="empty">Placeholder — back goes one level up, as always.</div></main>
+</section>
+
+<script>
+  const stack = ['home'];
+  function show(id){
+    document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+    const el = document.getElementById(id);
+    el.classList.add('active');
+    el.querySelectorAll('main > *').forEach(n=>{ n.style.animation='none'; n.offsetHeight; n.style.animation=''; });
+    window.scrollTo(0,0);
+  }
+  function go(id){ stack.push(id); show(id); }
+  function back(){ stack.pop(); show(stack[stack.length-1] || 'home'); }
+
+  const knob = document.getElementById('knob'), slider = document.getElementById('slider');
+  let dragging=false, startX=0;
+  knob.addEventListener('pointerdown', e=>{ dragging=true; startX=e.clientX-knob.offsetLeft; knob.setPointerCapture(e.pointerId); });
+  knob.addEventListener('pointermove', e=>{
+    if(!dragging) return;
+    const max = slider.clientWidth - knob.clientWidth - 10;
+    let x = Math.min(Math.max(e.clientX-startX, 5), max+5);
+    knob.style.left = x+'px';
+    if(x >= max){ dragging=false; knob.style.left='5px'; go('done'); }
+  });
+  knob.addEventListener('pointerup', ()=>{ dragging=false; knob.style.transition='left .3s var(--spring)'; knob.style.left='5px'; setTimeout(()=>knob.style.transition='',300); });
+</script>
+</body>
+</html>
