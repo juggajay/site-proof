@@ -12,7 +12,7 @@ import {
 /**
  * Characterizes the pure hold-point list presentation helper extracted verbatim
  * from backend/src/routes/holdpoints.ts (the GET /project/:projectId list route).
- * These freeze: the `pointType === 'hold_point'` filter, the persisted-vs-virtual
+ * These freeze: the release-gated item filter, the persisted-vs-virtual
  * id/fields selection, the `virtual-${lot.id}-${item.id}` key shape, the
  * completion `isCompleted`/`isVerified` derivations, and the
  * "lot number then sequence number" sort. All inputs are plain fixtures — no
@@ -32,6 +32,7 @@ function checklistItem(
   return {
     description: `desc-${overrides.id}`,
     pointType: 'hold_point',
+    responsibleParty: 'contractor',
     sequenceNumber: 1,
     ...overrides,
   };
@@ -52,7 +53,7 @@ function lot(
 }
 
 describe('buildHoldPointListItems', () => {
-  it('excludes checklist items that are not hold points', () => {
+  it('includes release-gated hold points and superintendent sign-off items only', () => {
     const result = buildHoldPointListItems([
       lot({
         id: 'lot1',
@@ -61,7 +62,19 @@ describe('buildHoldPointListItems', () => {
           template: {
             checklistItems: [
               checklistItem({ id: 'hp', pointType: 'hold_point', sequenceNumber: 1 }),
-              checklistItem({ id: 'wp', pointType: 'witness_point', sequenceNumber: 2 }),
+              checklistItem({
+                id: 'sup-review',
+                pointType: 'verification',
+                responsibleParty: 'superintendent',
+                sequenceNumber: 2,
+              }),
+              checklistItem({
+                id: 'sup-witness',
+                pointType: 'witness',
+                responsibleParty: 'superintendent',
+                sequenceNumber: 3,
+              }),
+              checklistItem({ id: 'wp', pointType: 'witness_point', sequenceNumber: 4 }),
               checklistItem({ id: 'std', pointType: 'standard', sequenceNumber: 3 }),
               checklistItem({ id: 'nullish', pointType: null, sequenceNumber: 4 }),
             ],
@@ -71,7 +84,7 @@ describe('buildHoldPointListItems', () => {
       }),
     ]);
 
-    expect(result.map((hp) => hp.itpChecklistItemId)).toEqual(['hp']);
+    expect(result.map((hp) => hp.itpChecklistItemId)).toEqual(['hp', 'sup-review']);
   });
 
   it('skips lots without an ITP instance, template, or checklist items', () => {

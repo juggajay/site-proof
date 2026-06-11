@@ -81,7 +81,7 @@ export interface ITPChecklistItem {
   category: string;
   responsibleParty: 'contractor' | 'subcontractor' | 'superintendent' | 'general';
   isHoldPoint: boolean;
-  pointType: 'standard' | 'witness' | 'hold_point';
+  pointType: 'standard' | 'verification' | 'witness' | 'hold_point';
   evidenceRequired: 'none' | 'photo' | 'test' | 'document';
   order: number;
   testType?: string | null;

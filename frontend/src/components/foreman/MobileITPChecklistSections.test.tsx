@@ -141,4 +141,35 @@ describe('MobileITPChecklistSections', () => {
     expect(screen.getByText('2')).toBeVisible();
     expect(onQuickComplete).not.toHaveBeenCalled();
   });
+
+  it('labels release-gated superintendent items and blocks quick-complete while release is required', () => {
+    const onQuickComplete = vi.fn();
+
+    render(
+      <MobileITPItem
+        item={{
+          ...checklistItem,
+          pointType: 'verification',
+          responsibleParty: 'superintendent',
+          isHoldPoint: false,
+        }}
+        status="pending"
+        hasNotes={false}
+        hasPhotos={false}
+        photoCount={0}
+        isUpdating={false}
+        canComplete={false}
+        releaseRequired={true}
+        onTap={vi.fn()}
+        onQuickComplete={onQuickComplete}
+      />,
+    );
+
+    expect(screen.getByText('H')).toBeVisible();
+    expect(screen.getByText('Release req')).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button'));
+
+    expect(onQuickComplete).not.toHaveBeenCalled();
+  });
 });

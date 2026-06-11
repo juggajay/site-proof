@@ -11,15 +11,17 @@
  * then sequence number. This is the pure, DB-free piece: given the already-loaded
  * lots it returns the same list, in the same shape and order, as the inline code.
  *
- * The hold-point filter (`pointType === 'hold_point'`) lives here so the helper is
- * self-contained and correct regardless of caller. The route's Prisma query also
- * filters checklist items to `pointType: 'hold_point'`, so in production this
- * filter removes nothing and the route's response is byte-identical to before.
+ * The release-gated filter lives here so the helper is self-contained and
+ * correct regardless of caller. Release-gated items include explicit hold
+ * points plus superintendent-responsible non-witness sign-off items, matching
+ * the ITP completion guard.
  *
  * Input types are minimal structural subsets of the Prisma rows actually read, so
  * the real Prisma objects pass unchanged. Unit-tested DB-free in
  * listPresentation.test.ts.
  */
+
+import { isReleaseGatedChecklistItem } from '../../lib/holdPointReleaseGating.js';
 
 // Shape of each item in the list response (formerly inline in holdpoints.ts).
 export interface HoldPointListItem {
@@ -45,6 +47,7 @@ export type HoldPointListChecklistItem = {
   id: string;
   description: string;
   pointType: string | null;
+  responsibleParty: string | null;
   sequenceNumber: number;
 };
 
@@ -103,7 +106,7 @@ export function buildHoldPointListItems(lots: HoldPointListLot[]): HoldPointList
     if (!lot.itpInstance?.template?.checklistItems) continue;
 
     for (const item of lot.itpInstance.template.checklistItems) {
-      if (item.pointType !== 'hold_point') continue;
+      if (!isReleaseGatedChecklistItem(item)) continue;
 
       // Find existing hold point record or create virtual one
       const existingHP = lot.holdPoints.find((hp) => hp.itpChecklistItemId === item.id);

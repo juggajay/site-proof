@@ -2,6 +2,8 @@
 // Features: Simple status buttons (Pass/N/A/Fail), notes, photos
 import { useState, useMemo } from 'react';
 import { useHaptics } from '@/hooks/useHaptics';
+import { isReleaseGatedChecklistItem } from '@/lib/itpReleaseGating';
+import type { ITPChecklistItem, ITPCompletion } from '@/pages/lots/types';
 import { MobileITPItemSheet } from './MobileITPItemSheet';
 import {
   MobileITPCategoryHeader,
@@ -20,41 +22,15 @@ import {
   groupItpItemsByCategory,
 } from './mobileItpChecklistHelpers';
 
-export interface ITPChecklistItem {
-  id: string;
-  description: string;
-  category: string;
-  responsibleParty: 'contractor' | 'subcontractor' | 'superintendent' | 'general';
-  isHoldPoint: boolean;
-  pointType: 'standard' | 'witness' | 'hold_point';
-  evidenceRequired: 'none' | 'photo' | 'test' | 'document';
-  order: number;
-  testType?: string | null;
-  acceptanceCriteria?: string | null;
-}
+export type { ITPChecklistItem, ITPCompletion } from '@/pages/lots/types';
 
-export interface ITPAttachment {
-  id: string;
-  documentId: string;
-  document: {
-    id: string;
-    filename: string;
-    fileUrl: string;
-    caption: string | null;
-  };
-}
-
-export interface ITPCompletion {
-  id: string;
-  checklistItemId: string;
-  isCompleted: boolean;
-  isNotApplicable?: boolean;
-  isFailed?: boolean;
-  isVerified?: boolean;
-  notes: string | null;
-  completedAt: string | null;
-  completedBy: { id: string; fullName: string; email: string } | null;
-  attachments: ITPAttachment[];
+function isReleaseRequired(
+  item: ITPChecklistItem | null,
+  completion: ITPCompletion | undefined,
+  status: 'pending' | 'completed' | 'na' | 'failed',
+): boolean {
+  if (!item || status !== 'pending') return false;
+  return isReleaseGatedChecklistItem(item) && !completion?.holdPointRelease?.releasedByName;
 }
 
 interface MobileITPChecklistProps {
@@ -130,6 +106,13 @@ export function MobileITPChecklist({
   const completedCount = countCompletedItpItems(completions);
   const totalCount = checklistItems.length;
   const progress = calculateItpProgressPercent(completedCount, totalCount);
+  const selectedCompletion = selectedItem ? getCompletion(selectedItem.id) : undefined;
+  const selectedStatus = selectedItem ? getItemStatus(selectedItem.id) : 'pending';
+  const selectedReleaseRequired = isReleaseRequired(
+    selectedItem,
+    selectedCompletion,
+    selectedStatus,
+  );
 
   return (
     <div className="flex flex-col h-full bg-background">
@@ -172,6 +155,8 @@ export function MobileITPChecklist({
                   const completion = getCompletion(item.id);
                   const hasNotes = !!completion?.notes;
                   const hasPhotos = (completion?.attachments?.length || 0) > 0;
+                  const releaseRequired = isReleaseRequired(item, completion, status);
+                  const canCompleteItem = canCompleteItems && !releaseRequired;
 
                   return (
                     <MobileITPItem
@@ -182,13 +167,14 @@ export function MobileITPChecklist({
                       hasPhotos={hasPhotos}
                       photoCount={completion?.attachments?.length || 0}
                       isUpdating={updatingItem === item.id}
-                      canComplete={canCompleteItems}
+                      canComplete={canCompleteItem}
+                      releaseRequired={releaseRequired}
                       onTap={() => {
                         trigger('light');
                         setSelectedItem(item);
                       }}
                       onQuickComplete={() => {
-                        if (!canCompleteItems) {
+                        if (!canCompleteItem) {
                           trigger('error');
                           return;
                         }
@@ -211,8 +197,9 @@ export function MobileITPChecklist({
       <MobileITPItemSheet
         isOpen={!!selectedItem}
         item={selectedItem}
-        completion={selectedItem ? getCompletion(selectedItem.id) : undefined}
-        canComplete={canCompleteItems}
+        completion={selectedCompletion}
+        canComplete={canCompleteItems && !selectedReleaseRequired}
+        releaseRequired={selectedReleaseRequired}
         onClose={() => setSelectedItem(null)}
         onPass={(notes) => {
           if (!selectedItem) return;

@@ -1,4 +1,5 @@
 import { Camera, ChevronDown, ChevronRight, Image, MessageSquare } from 'lucide-react';
+import { isReleaseGatedChecklistItem } from '@/lib/itpReleaseGating';
 import type { ITPChecklistItem } from './MobileITPChecklist';
 import type { ItpItemStatus } from './mobileItpChecklistHelpers';
 
@@ -115,6 +116,7 @@ interface MobileITPItemProps {
   photoCount: number;
   isUpdating: boolean;
   canComplete: boolean;
+  releaseRequired?: boolean;
   onTap: () => void;
   onQuickComplete: () => void;
 }
@@ -127,6 +129,7 @@ export function MobileITPItem({
   photoCount,
   isUpdating,
   canComplete,
+  releaseRequired = false,
   onTap,
   onQuickComplete,
 }: MobileITPItemProps) {
@@ -154,10 +157,16 @@ export function MobileITPItem({
       label: 'W',
       color: 'bg-warning/10 text-warning',
     },
+    verification: {
+      label: 'S',
+      color: 'bg-muted text-muted-foreground',
+    },
     hold_point: { label: 'H', color: 'bg-destructive/10 text-destructive' },
   };
 
-  const badge = pointTypeBadge[item.pointType];
+  const badge = isReleaseGatedChecklistItem(item)
+    ? pointTypeBadge.hold_point
+    : pointTypeBadge[item.pointType];
 
   return (
     <div
@@ -174,6 +183,7 @@ export function MobileITPItem({
           }
         }}
         disabled={isUpdating || status === 'na' || status === 'failed' || !canComplete}
+        title={releaseRequired ? 'Release this hold point before passing it' : undefined}
         className={`flex-shrink-0 w-12 h-12 rounded-full border-2 flex items-center justify-center text-xl font-bold transition-all touch-manipulation ${
           !canComplete ? statusColors.disabled : statusColors[status]
         } ${isUpdating ? 'animate-pulse' : ''} ${!canComplete ? 'cursor-not-allowed' : ''}`}
@@ -195,6 +205,9 @@ export function MobileITPItem({
           </span>
         </div>
         <div className="flex items-center gap-3 text-xs text-muted-foreground ml-7">
+          {releaseRequired && (
+            <span className="flex items-center gap-1 text-destructive">Release req</span>
+          )}
           {item.evidenceRequired === 'photo' && !hasPhotos && (
             <span className="flex items-center gap-1 text-warning">
               <Camera className="w-3 h-3" />

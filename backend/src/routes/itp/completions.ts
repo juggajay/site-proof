@@ -33,6 +33,7 @@ import {
 import { completionAttachmentRoutes } from './completionAttachmentRoutes.js';
 import { completionUpdateRoutes } from './completionUpdateRoutes.js';
 import { completionVerificationRoutes } from './completionVerificationRoutes.js';
+import { isReleaseGatedChecklistItem } from '../../lib/holdPointReleaseGating.js';
 
 // ============== Zod Schemas ==============
 const ITP_COMPLETION_NOTES_MAX_LENGTH = 5000;
@@ -206,10 +207,7 @@ completionsRouter.post(
     // blockers), and N/A / Failed flows stay open so a contractor can still mark
     // a hold point N/A or raise an NCR. The guard fires only when FINISHING the
     // item as 'completed'.
-    const isHoldPointSignoffItem =
-      checklistItem.pointType === 'hold_point' ||
-      (checklistItem.responsibleParty === 'superintendent' &&
-        checklistItem.pointType !== 'witness');
+    const isHoldPointSignoffItem = isReleaseGatedChecklistItem(checklistItem);
 
     if (newStatus === 'completed' && isHoldPointSignoffItem) {
       let holdPointReleased = false;

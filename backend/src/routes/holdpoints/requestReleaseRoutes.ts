@@ -27,6 +27,7 @@ import {
   getPrecedingChecklistItems,
 } from './prerequisites.js';
 import { buildHoldPointReleaseRequestedResponse } from './actionResponses.js';
+import { isReleaseGatedChecklistItem } from '../../lib/holdPointReleaseGating.js';
 
 // =============================================================================
 // Authenticated hold point RELEASE-REQUEST route. Moved verbatim from
@@ -109,8 +110,8 @@ holdPointRequestReleaseRouter.post(
     const holdPointItem = lot.itpInstance.template.checklistItems.find(
       (i) => i.id === itpChecklistItemId,
     );
-    if (!holdPointItem || holdPointItem.pointType !== 'hold_point') {
-      throw AppError.badRequest('Item is not a hold point');
+    if (!holdPointItem || !isReleaseGatedChecklistItem(holdPointItem)) {
+      throw AppError.badRequest('Item is not release-gated');
     }
 
     // Get all preceding items
