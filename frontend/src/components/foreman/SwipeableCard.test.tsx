@@ -10,6 +10,20 @@
  * swipePhysics.test.ts. These tests focus on render correctness and
  * callback wiring.
  *
+ * Semantics matrix (iOS / call-site convention — pinned here to catch regressions):
+ *
+ *   prop          | physical side | revealed by | callback    | drag offset
+ *   rightAction   | RIGHT side    | swipe LEFT  | onSwipeRight| negative (–x)
+ *   leftAction    | LEFT  side    | swipe RIGHT | onSwipeLeft | positive (+x)
+ *
+ * This matches the iOS Mail / iOS convention used by ALL call sites:
+ *   NCRMobileList  — rightAction=View  + onSwipeRight=select ; leftAction=CopyLink + onSwipeLeft=copy
+ *   LotMobileList  — rightAction=View  + onSwipeRight=navigate (single action, only left drag allowed)
+ *   DocketApprovals— rightAction=Approve + onSwipeRight=approve ; leftAction=Reject + onSwipeLeft=reject
+ *
+ * See swipePhysics-action-matrix.test.ts for the two-action mapping tests that
+ * pin the decideSwipe ↔ callback wiring for each call-site configuration.
+ *
  * See swipePhysics.test.ts for the full gesture-physics unit tests.
  */
 import React from 'react';
@@ -148,5 +162,55 @@ describe('SwipeableCard — threshold prop', () => {
   it('uses default threshold of 100 without prop', () => {
     // Just verifying no error when prop is omitted
     expect(() => renderCard({})).not.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Semantics: action label DOM placement
+//
+// Pin the iOS convention so a future refactor cannot silently swap sides.
+// rightAction must be rendered as the SECOND child (right side) and
+// leftAction as the FIRST child (left side) of the background container.
+// ---------------------------------------------------------------------------
+
+describe('SwipeableCard — iOS semantics: action DOM placement', () => {
+  it('rightAction is the SECOND child of the background container (right side, revealed by left swipe)', () => {
+    const { container } = renderCard({
+      rightAction: { label: 'VIEW_RIGHT', color: 'bg-primary' },
+      leftAction: { label: 'COPY_LEFT', color: 'bg-muted-foreground' },
+    });
+    // The background container is the first child of the outer wrapper.
+    // Its children: [0] = leftAction, [1] = rightAction.
+    const bg = container.querySelector('.absolute.inset-0.flex');
+    expect(bg).not.toBeNull();
+    const children = bg!.children;
+    expect(children.length).toBe(2);
+    // Second child must contain the rightAction label
+    expect(children[1].textContent).toContain('VIEW_RIGHT');
+    // First child must contain the leftAction label
+    expect(children[0].textContent).toContain('COPY_LEFT');
+  });
+
+  it('leftAction is the FIRST child of the background container (left side, revealed by right swipe)', () => {
+    const { container } = renderCard({
+      leftAction: { label: 'REJECT_LEFT', color: 'bg-destructive' },
+      rightAction: { label: 'APPROVE_RIGHT', color: 'bg-success' },
+    });
+    const bg = container.querySelector('.absolute.inset-0.flex');
+    const children = bg!.children;
+    expect(children[0].textContent).toContain('REJECT_LEFT');
+    expect(children[1].textContent).toContain('APPROVE_RIGHT');
+  });
+
+  it('single-action Lots style: only rightAction configured — card still renders', () => {
+    // LotMobileList only provides onSwipeRight + rightAction; no onSwipeLeft/leftAction.
+    // The card must render without error and show the rightAction label.
+    render(
+      <SwipeableCard onSwipeRight={vi.fn()} rightAction={{ label: 'View', color: 'bg-primary' }}>
+        <span>Lot card</span>
+      </SwipeableCard>,
+    );
+    expect(screen.getByText('View')).toBeInTheDocument();
+    expect(screen.getByText('Lot card')).toBeInTheDocument();
   });
 });
