@@ -1,7 +1,9 @@
 import { Prisma } from '@prisma/client';
 import { describe, expect, it } from 'vitest';
 import {
+  buildHoldPointEvidencePhotoDocuments,
   buildHoldPointEvidenceChecklist,
+  buildHoldPointEvidenceChecklistItemIdSet,
   buildHoldPointEvidencePackageResponse,
   buildHoldPointEvidenceSummary,
   buildPublicHoldPointEvidencePackageResponse,
@@ -72,7 +74,13 @@ describe('buildHoldPointEvidenceChecklist', () => {
         attachments: [
           {
             id: 'a1',
-            document: { filename: 'photo.jpg', fileUrl: 'https://x/photo.jpg', caption: 'cap' },
+            document: {
+              id: 'd1',
+              filename: 'photo.jpg',
+              fileUrl: 'https://x/photo.jpg',
+              caption: 'cap',
+              uploadedAt: UPLOADED_AT,
+            },
           },
         ],
       },
@@ -164,6 +172,55 @@ describe('hold point evidence-package response helpers', () => {
 });
 
 describe('mapHoldPointEvidenceTestResults', () => {
+  it('excludes test results outside the hold-point checklist boundary', () => {
+    const result = mapHoldPointEvidenceTestResults(
+      [
+        {
+          id: 'inside',
+          testType: 'compaction',
+          testRequestNumber: null,
+          laboratoryName: null,
+          resultValue: null,
+          resultUnit: null,
+          passFail: 'pass',
+          status: 'verified',
+          verifiedBy: null,
+          createdAt: CREATED_AT,
+          itpChecklistItemId: 'item-before-hp',
+        },
+        {
+          id: 'outside',
+          testType: 'slump',
+          testRequestNumber: null,
+          laboratoryName: null,
+          resultValue: null,
+          resultUnit: null,
+          passFail: 'pass',
+          status: 'verified',
+          verifiedBy: null,
+          createdAt: CREATED_AT,
+          itpChecklistItemId: 'item-after-hp',
+        },
+        {
+          id: 'lot-level',
+          testType: 'general',
+          testRequestNumber: null,
+          laboratoryName: null,
+          resultValue: null,
+          resultUnit: null,
+          passFail: 'pass',
+          status: 'verified',
+          verifiedBy: null,
+          createdAt: CREATED_AT,
+          itpChecklistItemId: null,
+        },
+      ],
+      { includedChecklistItemIds: new Set(['item-before-hp']) },
+    );
+
+    expect(result.map((item) => item.id)).toEqual(['inside']);
+  });
+
   it('maps fields and derives isVerified from status', () => {
     const testResults: EvidenceTestResultInput[] = [
       {
@@ -246,6 +303,69 @@ describe('mapHoldPointEvidenceTestResults', () => {
 });
 
 describe('mapHoldPointEvidencePhotos', () => {
+  it('maps only completion attachment photos inside the hold-point checklist boundary', () => {
+    const documents = buildHoldPointEvidencePhotoDocuments([
+      {
+        checklistItemId: 'item-before-hp',
+        status: 'completed',
+        completedAt: COMPLETED_AT,
+        completedBy: null,
+        verificationStatus: 'verified',
+        verifiedAt: VERIFIED_AT,
+        verifiedBy: null,
+        notes: null,
+        attachments: [
+          {
+            id: 'att-inside',
+            document: {
+              id: 'doc-inside',
+              filename: 'inside.jpg',
+              fileUrl: 'https://x/inside.jpg',
+              caption: 'inside',
+              uploadedAt: UPLOADED_AT,
+            },
+          },
+        ],
+      },
+      {
+        checklistItemId: 'item-after-hp',
+        status: 'completed',
+        completedAt: COMPLETED_AT,
+        completedBy: null,
+        verificationStatus: 'verified',
+        verifiedAt: VERIFIED_AT,
+        verifiedBy: null,
+        notes: null,
+        attachments: [
+          {
+            id: 'att-outside',
+            document: {
+              id: 'doc-outside',
+              filename: 'outside.jpg',
+              fileUrl: 'https://x/outside.jpg',
+              caption: 'outside',
+              uploadedAt: UPLOADED_AT,
+            },
+          },
+        ],
+      },
+    ]);
+
+    const result = mapHoldPointEvidencePhotos(documents, {
+      includedChecklistItemIds: new Set(['item-before-hp']),
+    });
+
+    expect(result).toEqual([
+      {
+        id: 'doc-inside',
+        filename: 'inside.jpg',
+        fileUrl: 'https://x/inside.jpg',
+        caption: 'inside',
+        uploadedAt: UPLOADED_AT,
+      },
+    ]);
+  });
+
   it('maps the document fields used by the evidence package', () => {
     const documents: EvidenceDocumentInput[] = [
       {
@@ -298,6 +418,10 @@ describe('buildHoldPointEvidenceSummary', () => {
 });
 
 describe('header mappers', () => {
+  it('buildHoldPointEvidenceChecklistItemIdSet returns ids up to and including the hold point', () => {
+    expect(Array.from(buildHoldPointEvidenceChecklistItemIdSet(items, 2))).toEqual(['i1', 'i2']);
+  });
+
   it('mapHoldPointEvidenceLot selects only the package lot fields', () => {
     const chainageStart = new Prisma.Decimal('100.0');
     const lot = {

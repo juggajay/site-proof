@@ -11,7 +11,12 @@ import { buildFrontendUrl } from '../../lib/runtimeConfig.js';
 import { logError } from '../../lib/serverLogger.js';
 import { releaseHoldPointSchema, parseHoldPointRouteParam } from './validation.js';
 import { parseReleaseDateTimeInput } from './dateParsing.js';
-import { HP_REQUEST_ROLES, requireHoldPointReadAccess, requireProjectRole } from './access.js';
+import {
+  HP_REQUEST_ROLES,
+  requireHoldPointReadAccess,
+  requireProjectRole,
+  type AuthenticatedUser,
+} from './access.js';
 import { HP_SUPERINTENDENT_RELEASE_ROLES } from './superintendentRecipients.js';
 import {
   buildHoldPointReleaseEmailNotification,
@@ -50,6 +55,18 @@ type HoldPointChaseTarget = {
 type HoldPointReleaseTokenRecipient = {
   recipientEmail: string;
   recipientName: string | null;
+};
+
+type ExistingHoldPointForRelease = {
+  status: string;
+  lotId: string;
+  lot: {
+    id: string;
+    projectId: string;
+    project: {
+      settings: string | null;
+    };
+  };
 };
 
 function buildTokenChaseTargets(
@@ -172,6 +189,76 @@ function buildChaseRecipientUrls(
   };
 }
 
+async function loadReleaseEvidenceDocumentForHoldPoint(
+  releaseEvidenceDocumentId: string | undefined,
+  holdPoint: ExistingHoldPointForRelease,
+) {
+  if (!releaseEvidenceDocumentId) {
+    return null;
+  }
+
+  const document = await prisma.document.findFirst({
+    where: {
+      id: releaseEvidenceDocumentId,
+      projectId: holdPoint.lot.projectId,
+      lotId: holdPoint.lotId,
+    },
+    select: {
+      id: true,
+      filename: true,
+      documentType: true,
+      category: true,
+    },
+  });
+
+  if (!document) {
+    throw AppError.badRequest('Release evidence document was not found for this hold point lot');
+  }
+
+  return document;
+}
+
+function getHoldPointApprovalRequirement(settings: string | null): string {
+  if (!settings) {
+    return 'any';
+  }
+
+  try {
+    const parsed = JSON.parse(settings) as { hpApprovalRequirement?: string };
+    return parsed.hpApprovalRequirement || 'any';
+  } catch (_e) {
+    return 'any';
+  }
+}
+
+async function requireHoldPointReleaseAccess(
+  holdPoint: ExistingHoldPointForRelease,
+  user: AuthenticatedUser,
+) {
+  await requireHoldPointReadAccess(holdPoint, user);
+  await requireProjectRole(
+    holdPoint.lot.projectId,
+    user,
+    HP_RELEASE_ROLES,
+    'You do not have permission to release hold points',
+  );
+
+  if (getHoldPointApprovalRequirement(holdPoint.lot.project.settings) === 'superintendent') {
+    await requireProjectRole(
+      holdPoint.lot.projectId,
+      user,
+      HP_SUPERINTENDENT_RELEASE_ROLES,
+      'This project requires superintendent approval to release hold points.',
+    );
+  }
+}
+
+function assertHoldPointNotReleased(holdPoint: ExistingHoldPointForRelease) {
+  if (holdPoint.status === 'released') {
+    throw AppError.badRequest('This hold point has already been released.');
+  }
+}
+
 // Release a hold point
 holdPointActionRouter.post(
   '/:id/release',
@@ -191,6 +278,7 @@ holdPointActionRouter.post(
       releaseMethod,
       releaseNotes,
       signatureDataUrl,
+      releaseEvidenceDocumentId,
     } = parseResult.data;
 
     // Feature #698 - Check HP approval requirements from project settings
@@ -210,40 +298,13 @@ holdPointActionRouter.post(
     }
 
     const user = req.user!;
-    await requireHoldPointReadAccess(existingHP, user);
-    await requireProjectRole(
-      existingHP.lot.projectId,
-      user,
-      HP_RELEASE_ROLES,
-      'You do not have permission to release hold points',
+    await requireHoldPointReleaseAccess(existingHP, user);
+    assertHoldPointNotReleased(existingHP);
+
+    const releaseEvidenceDocument = await loadReleaseEvidenceDocumentForHoldPoint(
+      releaseEvidenceDocumentId,
+      existingHP,
     );
-
-    // Check if project requires superintendent-only release
-    let approvalRequirement = 'any';
-    if (existingHP.lot.project.settings) {
-      try {
-        const settings = JSON.parse(existingHP.lot.project.settings);
-        if (settings.hpApprovalRequirement) {
-          approvalRequirement = settings.hpApprovalRequirement;
-        }
-      } catch (_e) {
-        // Invalid JSON, use default
-      }
-    }
-
-    // If superintendent-only, check user's role in the project
-    if (approvalRequirement === 'superintendent') {
-      await requireProjectRole(
-        existingHP.lot.projectId,
-        user,
-        HP_SUPERINTENDENT_RELEASE_ROLES,
-        'This project requires superintendent approval to release hold points.',
-      );
-    }
-
-    if (existingHP.status === 'released') {
-      throw AppError.badRequest('This hold point has already been released.');
-    }
 
     const releasedAt = parseReleaseDateTimeInput(releaseDate, releaseTime);
     const holdPoint = await prisma.$transaction(async (tx) => {
@@ -441,6 +502,10 @@ holdPointActionRouter.post(
         releaseMethod,
         releaseNotes,
         signatureDataUrl: signatureDataUrl ? '[captured]' : null,
+        releaseEvidenceDocumentId: releaseEvidenceDocument?.id ?? null,
+        releaseEvidenceFilename: releaseEvidenceDocument?.filename ?? null,
+        releaseEvidenceDocumentType: releaseEvidenceDocument?.documentType ?? null,
+        releaseEvidenceCategory: releaseEvidenceDocument?.category ?? null,
       },
       req,
     });

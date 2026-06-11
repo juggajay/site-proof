@@ -37,6 +37,8 @@ import {
 import { buildHoldPointDetailResponse, resolveHoldPointDetailSettings } from './detailResponse.js';
 import {
   buildHoldPointEvidenceChecklist,
+  buildHoldPointEvidenceChecklistItemIdSet,
+  buildHoldPointEvidencePhotoDocuments,
   buildHoldPointEvidencePackageResponse,
   buildHoldPointEvidenceSummary,
   mapHoldPointEvidenceItpTemplate,
@@ -284,11 +286,6 @@ holdPointReadRouter.get(
                 },
               },
             },
-            documents: {
-              where: {
-                OR: [{ documentType: 'photo' }, { category: 'itp_evidence' }],
-              },
-            },
           },
         },
       },
@@ -314,15 +311,23 @@ holdPointReadRouter.get(
 
     // Get all checklist items up to and including the hold point
     const holdPointItem = holdPoint.itpChecklistItem;
+    const includedChecklistItemIds = buildHoldPointEvidenceChecklistItemIdSet(
+      itpInstance.template.checklistItems,
+      holdPointItem.sequenceNumber,
+    );
     const checklistWithStatus = buildHoldPointEvidenceChecklist(
       itpInstance.template.checklistItems,
       itpInstance.completions,
       holdPointItem.sequenceNumber,
     );
 
-    const testResults = mapHoldPointEvidenceTestResults(lot.testResults);
+    const scope = { includedChecklistItemIds };
+    const testResults = mapHoldPointEvidenceTestResults(lot.testResults, scope);
 
-    const photos = mapHoldPointEvidencePhotos(lot.documents);
+    const photos = mapHoldPointEvidencePhotos(
+      buildHoldPointEvidencePhotoDocuments(itpInstance.completions),
+      scope,
+    );
 
     // Build evidence package response
     const evidencePackage = {
@@ -473,11 +478,6 @@ holdPointReadRouter.post(
             },
           },
         },
-        documents: {
-          where: {
-            OR: [{ documentType: 'photo' }, { category: 'itp_evidence' }],
-          },
-        },
       },
     });
 
@@ -508,15 +508,23 @@ holdPointReadRouter.post(
     }
 
     // Get all checklist items up to and including the hold point
+    const includedChecklistItemIds = buildHoldPointEvidenceChecklistItemIdSet(
+      itpInstance.template.checklistItems,
+      holdPointItem.sequenceNumber,
+    );
     const checklistWithStatus = buildHoldPointEvidenceChecklist(
       itpInstance.template.checklistItems,
       itpInstance.completions,
       holdPointItem.sequenceNumber,
     );
 
-    const testResults = mapHoldPointEvidenceTestResults(lot.testResults);
+    const scope = { includedChecklistItemIds };
+    const testResults = mapHoldPointEvidenceTestResults(lot.testResults, scope);
 
-    const photos = mapHoldPointEvidencePhotos(lot.documents);
+    const photos = mapHoldPointEvidencePhotos(
+      buildHoldPointEvidencePhotoDocuments(itpInstance.completions),
+      scope,
+    );
 
     // Build preview evidence package response
     const evidencePackage = {
