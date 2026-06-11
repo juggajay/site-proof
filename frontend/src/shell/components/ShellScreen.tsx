@@ -19,11 +19,14 @@
 
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft } from 'lucide-react';
 import { SyncChip } from './SyncChip';
 import { useTimeGreeting } from '../hooks/useTimeGreeting';
 import { useAuth } from '@/lib/auth';
 import { useEffectiveProjectId } from '@/hooks/useEffectiveProjectId';
+import { apiFetch } from '@/lib/api';
+import { queryKeys } from '@/lib/queryKeys';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -87,10 +90,17 @@ function HomeHeader({ roleLabel }: { roleLabel?: string }) {
     .format(new Date())
     .toUpperCase();
 
-  // Project name — we only have the id here; the ForemanDashboard query can
-  // provide the name, but for the shell we keep it lean and show the id
-  // until a richer project context hook is added.
-  const projectLabel = projectId ? `Project ${projectId.slice(0, 8)}` : 'No project';
+  // Project NAME, resolved from the same cached projects query the app
+  // header uses (queryKeys.projects) — shared cache, so no extra fetch in
+  // practice. Falls back to a neutral label while loading.
+  const { data: projectsData } = useQuery({
+    queryKey: queryKeys.projects,
+    queryFn: () => apiFetch<{ projects: { id: string; name: string }[] }>('/api/projects'),
+    enabled: !!projectId,
+    staleTime: 5 * 60 * 1000,
+  });
+  const projectName = projectsData?.projects?.find((p) => p.id === projectId)?.name;
+  const projectLabel = projectId ? (projectName ?? '…') : 'No project';
 
   return (
     <header className="sticky top-0 z-10 border-b border-border bg-background px-5 pb-[14px] pt-3">

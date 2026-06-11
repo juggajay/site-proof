@@ -90,9 +90,9 @@ describe('HomeScreen — diary hero states (data via QueryClient cache)', () => 
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false, enabled: false } } });
 
     const todayKey = new Intl.DateTimeFormat('en-CA').format(new Date());
-    qc.setQueryData(['diaries', 'proj-abc', todayKey], {
-      data: [{ id: 'd1', status: 'submitted' }],
-    });
+    // The hero query now caches the diary object directly (canonical by-date
+    // endpoint with ?missing=null), not a { data: [...] } list wrapper.
+    qc.setQueryData(['diaries', 'proj-abc', todayKey], { id: 'd1', status: 'submitted' });
 
     renderWithQueryClient(qc, <HomeScreen />);
 
@@ -105,16 +105,12 @@ describe('HomeScreen — diary hero states (data via QueryClient cache)', () => 
 
     const todayKey = new Intl.DateTimeFormat('en-CA').format(new Date());
     qc.setQueryData(['diaries', 'proj-abc', todayKey], {
-      data: [
-        {
-          id: 'd1',
-          status: 'draft',
-          weatherConditions: 'Fine',
-          personnel: [{ id: 'p1' }],
-          activities: [],
-          delays: [],
-        },
-      ],
+      id: 'd1',
+      status: 'draft',
+      weatherConditions: 'Fine',
+      personnel: [{ id: 'p1' }],
+      activities: [],
+      delays: [],
     });
 
     renderWithQueryClient(qc, <HomeScreen />);
