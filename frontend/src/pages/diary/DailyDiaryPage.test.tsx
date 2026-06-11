@@ -38,6 +38,7 @@ import type { DailyDiary } from './types';
 const apiFetchMock = vi.mocked(apiFetch) as unknown as MockInstance<
   (path: string, options?: RequestInit) => Promise<unknown>
 >;
+const lazyTabLoad = { timeout: 5000 };
 
 function buildDiary(): DailyDiary {
   const timestamp = '2026-06-10T00:00:00.000Z';
@@ -151,7 +152,9 @@ describe('DailyDiaryPage desktop entry tabs before the diary exists', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Create Diary Entry/ }));
 
     // Weather is the active tab first (lazy-loaded).
-    expect(await screen.findByText('Weather & General Notes')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Weather & General Notes', undefined, lazyTabLoad),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'personnel' }));
 
@@ -164,7 +167,9 @@ describe('DailyDiaryPage desktop entry tabs before the diary exists', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Go to Weather' }));
 
-    expect(await screen.findByText('Weather & General Notes')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Weather & General Notes', undefined, lazyTabLoad),
+    ).toBeInTheDocument();
     await waitFor(() =>
       expect(screen.queryByText('No diary for this date yet')).not.toBeInTheDocument(),
     );
@@ -174,11 +179,15 @@ describe('DailyDiaryPage desktop entry tabs before the diary exists', () => {
     mockApi({ diaryForDate: () => buildDiary() });
     renderPage();
 
-    expect(await screen.findByText('Weather & General Notes')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Weather & General Notes', undefined, lazyTabLoad),
+    ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /personnel/ }));
 
-    expect(await screen.findByText('Personnel on Site')).toBeInTheDocument();
+    expect(
+      await screen.findByText('Personnel on Site', undefined, lazyTabLoad),
+    ).toBeInTheDocument();
     expect(screen.getByText('Desk Foreman')).toBeInTheDocument();
     expect(screen.queryByText('No diary for this date yet')).not.toBeInTheDocument();
   });
