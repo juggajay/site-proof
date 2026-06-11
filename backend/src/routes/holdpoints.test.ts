@@ -1004,6 +1004,18 @@ describe('Hold Points API access control', () => {
     expect(rawToken).toBeDefined();
     expect(tokens.map((token) => token.token)).not.toContain(rawToken);
 
+    const tokenEmail = queuedEmails.find((email) =>
+      email.text?.includes(`/hp-release/${rawToken}`),
+    );
+    expect(tokenEmail?.text).toContain(
+      `View evidence package: http://localhost:5174/hp-release/${rawToken}#evidence-package`,
+    );
+    expect(tokenEmail?.html).toContain(
+      `href="http://localhost:5174/hp-release/${rawToken}#evidence-package"`,
+    );
+    expect(tokenEmail?.text).not.toContain('/evidence-preview');
+    expect(tokenEmail?.html).not.toContain('/evidence-preview');
+
     const publicRes = await request(app).get(`/api/holdpoints/public/${rawToken!}`);
     expect(publicRes.status).toBe(200);
 
@@ -1011,6 +1023,60 @@ describe('Hold Points API access control', () => {
       `/api/holdpoints/public/${encodeURIComponent(tokens[0].token)}`,
     );
     expect(storedHashRes.status).toBe(404);
+  });
+
+  it('sends chase reminders for token recipients with public evidence links', async () => {
+    clearEmailQueue();
+    await prisma.holdPointReleaseToken.deleteMany({ where: { holdPointId } });
+    const externalReviewer = await registerTestUser(
+      'Hold Points External Chase Reviewer',
+      'viewer',
+      companyId,
+    );
+    createdUserIds.push(externalReviewer.userId);
+
+    await prisma.projectUser.create({
+      data: {
+        projectId,
+        userId: externalReviewer.userId,
+        role: 'superintendent',
+        status: 'active',
+      },
+    });
+
+    const requestReleaseRes = await request(app)
+      .post('/api/holdpoints/request-release')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        lotId,
+        itpChecklistItemId: checklistItemId,
+        notificationSentTo: externalReviewer.email,
+      });
+    expect(requestReleaseRes.status).toBe(200);
+    expect(await prisma.holdPointReleaseToken.count({ where: { holdPointId } })).toBe(1);
+
+    clearEmailQueue();
+    const chaseRes = await request(app)
+      .post(`/api/holdpoints/${holdPointId}/chase`)
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(chaseRes.status).toBe(200);
+
+    const chaseEmail = getQueuedEmails().find((email) => email.to === externalReviewer.email);
+    expect(chaseEmail).toBeDefined();
+
+    const chaseToken = chaseEmail?.text?.match(/\/hp-release\/([a-f0-9]{64})/)?.[1];
+    expect(chaseToken).toBeDefined();
+    expect(chaseEmail?.text).toContain(
+      `View evidence package: http://localhost:5174/hp-release/${chaseToken}#evidence-package`,
+    );
+    expect(chaseEmail?.html).toContain(
+      `href="http://localhost:5174/hp-release/${chaseToken}#evidence-package"`,
+    );
+    expect(chaseEmail?.text).not.toContain('/evidence-preview');
+    expect(chaseEmail?.html).not.toContain('/evidence-preview');
+
+    const publicRes = await request(app).get(`/api/holdpoints/public/${chaseToken!}`);
+    expect(publicRes.status).toBe(200);
   });
 
   it('rejects explicit release request recipients who cannot approve superintendent-only hold points', async () => {

@@ -283,7 +283,7 @@ export function PublicHoldPointReleasePage() {
             </div>
           </div>
 
-          <div className="rounded-lg border bg-card shadow-sm">
+          <div id="evidence-package" className="scroll-mt-4 rounded-lg border bg-card shadow-sm">
             <div className="flex items-center justify-between gap-3 border-b px-5 py-4">
               <div>
                 <h2 className="font-semibold">Evidence Package</h2>
