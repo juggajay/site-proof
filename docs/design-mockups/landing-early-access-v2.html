@@ -404,8 +404,14 @@ section { padding:128px 0 0; position:relative; }
 .frow select { appearance:none; background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%237a726a' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 13px center; padding-right:36px; }
 .frow input:focus, .frow select:focus { outline:2px solid var(--ink); outline-offset:-1px; border-color:var(--ink); }
 .ea-form .btn { width:100%; margin-top:22px; }
-.form-ok { display:none; margin-top:22px; padding:16px 18px; border:1px solid #d8e9dc; background:#f0f7f1; color:var(--green-ink); border-radius:var(--radius); font-size:14.5px; }
-.form-ok.show { display:block; }
+.form-ok { display:none; }
+.form-ok.show { display:block; text-align:center; padding:18px 8px 8px; animation:ok-in .5s cubic-bezier(.16,.84,.3,1); }
+@keyframes ok-in { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:none; } }
+@media (prefers-reduced-motion: reduce){ .form-ok.show { animation:none; } }
+.form-ok .ok-ring { width:60px; height:60px; margin:0 auto; border-radius:50%; background:#f0f7f1; border:1.5px solid #d8e9dc; display:flex; align-items:center; justify-content:center; color:var(--green-ink); font-size:27px; font-weight:700; }
+.form-ok h4 { margin:18px 0 0; font-size:20px; font-weight:600; letter-spacing:-.02em; color:var(--ink); }
+.form-ok p { margin:9px auto 0; max-width:340px; font-size:14.5px; color:var(--ink-2); }
+.ea-form.sent > h3, .ea-form.sent > .fs, .ea-form.sent .frow, .ea-form.sent #ea-submit, .ea-form.sent > .form-fine, .ea-form.sent .form-err { display:none !important; }
 .form-err { display:none; margin-top:22px; padding:16px 18px; border:1px solid #f3d2cd; background:#fdf1ef; color:var(--red); border-radius:var(--radius); font-size:14.5px; }
 .form-err.show { display:block; }
 .form-err a { color:var(--red); font-weight:600; text-decoration:underline; }
@@ -799,7 +805,11 @@ footer { margin-top:128px; border-top:1px solid var(--hair); background:var(--ca
           </select>
         </div>
         <button class="btn primary lg" type="submit" id="ea-submit">Request early access<span class="ar">→</span></button>
-        <div class="form-ok" id="form-ok">Thanks — you're on the list. We'll be in touch directly, usually within a day or two.</div>
+        <div class="form-ok" id="form-ok" role="status" aria-live="polite">
+          <div class="ok-ring" aria-hidden="true">✓</div>
+          <h4>Request received</h4>
+          <p id="ok-body">Thanks — this went straight to the founder's inbox. You'll get a personal reply, usually within a day or two.</p>
+        </div>
         <div class="form-err" id="form-err">Something went wrong sending that. Email <a href="mailto:jaysonryan21@hotmail.com">jaysonryan21@hotmail.com</a> directly and we'll sort it.</div>
         <p class="form-fine">We'll only use this to contact you about SiteProof early access. No mailing-list spam.</p>
       </form>
@@ -966,8 +976,13 @@ document.getElementById('ea-form').addEventListener('submit', async (ev) => {
       headers: { Accept: 'application/json' },
     });
     if (res.ok) {
+      const first = (f.querySelector('#f-name')?.value || '').trim().split(' ')[0];
+      if (first) document.getElementById('ok-body').textContent =
+        `Thanks ${first} — this went straight to the founder's inbox. You'll get a personal reply, usually within a day or two.`;
       f.querySelectorAll('input, select, button[type="submit"]').forEach(el => el.disabled = true);
+      f.classList.add('sent');
       ok.classList.add('show');
+      ok.scrollIntoView({ block: 'center', behavior: 'smooth' });
     } else {
       throw new Error('formspree ' + res.status);
     }
