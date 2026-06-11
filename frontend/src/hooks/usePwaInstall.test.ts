@@ -49,6 +49,8 @@ const IPHONE_UA =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
 const ANDROID_CHROME_UA =
   'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36';
+const IPHONE_CHROME_UA =
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/121.0.6167.66 Mobile/15E148 Safari/604.1';
 const DESKTOP_FIREFOX_UA = 'Mozilla/5.0 (X11; Linux x86_64; rv:123.0) Gecko/20100101 Firefox/123.0';
 
 // ── beforeEach cleanup ───────────────────────────────────────────────────────
@@ -112,6 +114,15 @@ describe('usePwaInstall', () => {
     it('returns ios-manual for iPhone Safari UA when not standalone', () => {
       mockMatchMedia(false);
       setUserAgent(IPHONE_UA);
+
+      const { result } = renderHook(() => usePwaInstall());
+      expect(result.current.state).toBe('ios-manual');
+      expect(result.current.canPromptInstall).toBe(false);
+    });
+
+    it('returns ios-manual for Chrome on iPhone (CriOS) — all iOS browsers can Add to Home Screen', () => {
+      mockMatchMedia(false);
+      setUserAgent(IPHONE_CHROME_UA);
 
       const { result } = renderHook(() => usePwaInstall());
       expect(result.current.state).toBe('ios-manual');

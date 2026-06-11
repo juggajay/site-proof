@@ -112,7 +112,8 @@ export function InstallNudge() {
                 <Share className="h-4 w-4" />
               </span>
               <span className="text-sm text-muted-foreground">
-                Tap the <strong>Share</strong> button at the bottom of Safari
+                Tap the <strong>Share</strong> button (bottom of Safari, or next to the address bar
+                in Chrome)
               </span>
             </li>
             <li className="flex items-center gap-3">
