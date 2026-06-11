@@ -14,6 +14,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
+// Prevent useOfflineStatus → Dexie → MissingAPIError in jsdom.
+vi.mock('@/lib/useOfflineStatus', () => ({
+  useOfflineStatus: () => ({ isOnline: true, pendingSyncCount: 0, isSyncing: false }),
+}));
+
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom');
   return { ...actual, useNavigate: () => vi.fn() };
