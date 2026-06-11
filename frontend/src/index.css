@@ -472,6 +472,208 @@
       width: var(--shell-prog-w, 50%);
     }
   }
+
+  /* --------------------------------------------------------------------------
+     Lots + ITP run surface (PR-3) — design-foreman-shell-mock-v4.html #lots/#lot/#itp
+     -------------------------------------------------------------------------- */
+
+  /* Card — white tile used for lot cards (button or div) */
+  .shell-card {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    border-radius: 16px;
+    padding: 16px;
+    width: 100%;
+    text-align: left;
+    box-shadow: 0 1px 2px hsl(24 14% 9% / 0.04);
+    transition: transform 0.18s cubic-bezier(0.32, 1.15, 0.35, 1);
+  }
+  button.shell-card:active {
+    transform: scale(0.98);
+  }
+
+  /* Mono pill row + pills (lot status, ITP counts) */
+  .shell-pill {
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    font-size: 11.5px;
+    font-weight: 600;
+    background: hsl(var(--secondary));
+    border-radius: 9999px;
+    padding: 5px 10px;
+    color: hsl(var(--muted-foreground));
+    white-space: nowrap;
+  }
+  .shell-pill-attention {
+    color: hsl(var(--warning));
+  }
+  .shell-pill-good {
+    color: hsl(var(--success));
+  }
+  .shell-pill-bad {
+    color: hsl(var(--destructive));
+  }
+
+  /* Lot progress bar (green fill, animates in) */
+  .shell-lotprog {
+    height: 5px;
+    background: hsl(var(--secondary));
+    border-radius: 9999px;
+    margin-top: 12px;
+    overflow: hidden;
+  }
+  .shell-lotprog > i {
+    display: block;
+    height: 100%;
+    width: 0;
+    background: hsl(var(--success));
+    border-radius: 9999px;
+    animation: shell-fill 0.8s 0.2s cubic-bezier(0.32, 1.15, 0.35, 1) forwards;
+  }
+
+  /* ITP run: big question, evidence button, tri-state, pass-flash */
+  .shell-itpq {
+    font-size: 19px;
+    font-weight: 600;
+    line-height: 1.45;
+    margin: 4px 0 0;
+    color: hsl(var(--foreground));
+  }
+  .shell-photobtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    min-height: 54px;
+    border: 1.5px dashed hsl(var(--muted-foreground) / 0.55);
+    border-radius: 12px;
+    background: none;
+    color: hsl(var(--muted-foreground));
+    font-size: 14px;
+    font-weight: 600;
+    width: 100%;
+    transition: transform 0.15s;
+    cursor: pointer;
+  }
+  .shell-photobtn:active {
+    transform: scale(0.97);
+  }
+  .shell-tri {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+    margin-top: auto;
+  }
+  .shell-tri-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 92px;
+    border-radius: 16px;
+    border: 1.5px solid hsl(var(--border));
+    background: hsl(var(--card));
+    font-family: 'IBM Plex Sans Condensed', 'IBM Plex Sans', ui-sans-serif, sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    box-shadow: 0 1px 2px hsl(24 14% 9% / 0.04);
+    transition: transform 0.12s cubic-bezier(0.32, 1.15, 0.35, 1);
+    cursor: pointer;
+  }
+  .shell-tri-btn:active {
+    transform: scale(0.94);
+  }
+  .shell-tri-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .shell-tri-pass {
+    border-color: hsl(var(--success));
+    color: hsl(var(--success));
+  }
+  .shell-tri-fail {
+    border-color: hsl(var(--destructive));
+    color: hsl(var(--destructive));
+  }
+  .shell-tri-na {
+    color: hsl(var(--muted-foreground));
+  }
+  .shell-passflash {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: hsl(var(--success));
+    background: hsl(var(--success) / 0.09);
+    border-radius: 12px;
+    padding: 10px 13px;
+    align-self: flex-start;
+  }
+
+  /* Finished state — big tick ceremony for the ITP run */
+  .shell-bigtick {
+    width: 108px;
+    height: 108px;
+    border-radius: 9999px;
+    background: hsl(var(--success));
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 12px 40px hsl(var(--success) / 0.3);
+    animation: shell-pop 0.55s cubic-bezier(0.32, 1.15, 0.35, 1);
+  }
+  @keyframes shell-pop {
+    0% {
+      transform: scale(0.2);
+      opacity: 0;
+    }
+    65% {
+      transform: scale(1.08);
+    }
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+
+  /* Bottom-anchored primary action (lot hub "continue", finished "back") */
+  .shell-primary {
+    position: fixed;
+    inset-inline: 0;
+    bottom: 0;
+    z-index: 10;
+    padding: 10px 20px calc(16px + env(safe-area-inset-bottom, 0px));
+    background: linear-gradient(transparent, hsl(var(--background)) 42%);
+  }
+  .shell-primary-btn {
+    width: 100%;
+    min-height: 58px;
+    border-radius: 16px;
+    border: none;
+    background: hsl(var(--foreground));
+    color: hsl(40 33% 98%);
+    font-family: 'IBM Plex Sans Condensed', 'IBM Plex Sans', ui-sans-serif, sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    box-shadow:
+      0 1px 2px hsl(24 14% 9% / 0.05),
+      0 8px 24px hsl(24 14% 9% / 0.07);
+    transition: transform 0.18s cubic-bezier(0.32, 1.15, 0.35, 1);
+    cursor: pointer;
+  }
+  .shell-primary-btn:active {
+    transform: scale(0.97);
+  }
+  .shell-primary-btn:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
 }
 
 /* Staggered rise-in — applied to .stagger-rise > * children.
@@ -515,11 +717,17 @@
     .stagger-rise > * {
       animation-duration: 0.01ms !important;
     }
-    .shell-prog-fill {
+    .shell-prog-fill,
+    .shell-lotprog > i,
+    .shell-bigtick {
       animation-duration: 0.01ms !important;
     }
     .shell-hero,
-    .shell-hub {
+    .shell-hub,
+    .shell-card,
+    .shell-tri-btn,
+    .shell-photobtn,
+    .shell-primary-btn {
       transition-duration: 0.01ms !important;
     }
     .shell-cambar-btn {
