@@ -14,6 +14,7 @@ export const queryKeys = {
   // NCRs
   ncrs: (projectId?: string) => (projectId ? (['ncrs', projectId] as const) : (['ncrs'] as const)),
   ncrRole: (projectId: string) => ['ncr-role', projectId] as const,
+  ncrEvidence: (ncrId: string) => ['ncr-evidence', ncrId] as const,
 
   // Hold Points
   holdPoints: (projectId: string) => ['hold-points', projectId] as const,

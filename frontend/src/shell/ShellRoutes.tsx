@@ -8,8 +8,8 @@
  *   /m            → HomeScreen
  *   /m/diary      → DiaryShellRoutes (full guided path, PR-2)
  *   /m/lots       → LotsShellRoutes (list, mini-hub, ITP run, details — PR-3)
- *   /m/dockets    → ComingSoonScreen
- *   /m/issues     → ComingSoonScreen
+ *   /m/dockets    → DocketsShellRoutes (list, detail, approve/adjust/query/reject — PR-4)
+ *   /m/issues     → IssuesShellRoutes (NCRs & defects: list + detail — PR-5)
  *   /m/docs       → ComingSoonScreen
  *   /m/photos     → ComingSoonScreen (new photos surface, PR-2)
  *
@@ -23,6 +23,7 @@ import { ComingSoonScreen } from './screens/ComingSoonScreen';
 import { DiaryShellRoutes } from './screens/diary/DiaryShellRoutes';
 import { LotsShellRoutes } from './screens/lots/LotsShellRoutes';
 import { DocketsShellRoutes } from './screens/dockets/DocketsShellRoutes';
+import { IssuesShellRoutes } from './screens/issues/IssuesShellRoutes';
 
 export function ShellRoutes() {
   return (
@@ -39,13 +40,8 @@ export function ShellRoutes() {
       {/* Dockets — full sub-tree (PR-4): list, detail, approve/adjust/query/reject */}
       <Route path="dockets/*" element={<DocketsShellRoutes />} />
 
-      {/* Issues */}
-      <Route
-        path="issues"
-        element={
-          <ComingSoonScreen title="Issues" parent="/m" sub="NCRs &amp; defects — coming next" />
-        }
-      />
+      {/* Issues — full sub-tree (PR-5): list + detail (NCRs & defects) */}
+      <Route path="issues/*" element={<IssuesShellRoutes />} />
 
       {/* Drawings & Docs */}
       <Route

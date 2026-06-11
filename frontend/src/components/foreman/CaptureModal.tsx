@@ -39,6 +39,13 @@ interface CaptureModalProps {
   onCapture?: (result: { type: CaptureType; id: string }) => void;
   defaultLotId?: string;
   defaultItpId?: string;
+  /**
+   * Which capture type the categorize step starts on after a photo is taken.
+   * Defaults to 'photo' (existing behavior). The Issues shell opens the modal
+   * pre-set to 'ncr' so "Raise an issue" lands on the Defect affordance — the
+   * foreman still confirms with a description before the NCR is raised.
+   */
+  defaultCaptureType?: CaptureType;
 }
 
 export function CaptureModal({
@@ -48,6 +55,7 @@ export function CaptureModal({
   onCapture,
   defaultLotId,
   defaultItpId,
+  defaultCaptureType = 'photo',
 }: CaptureModalProps) {
   const { user } = useAuth();
   const { latitude, longitude } = useGeoLocation();
@@ -56,7 +64,7 @@ export function CaptureModal({
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [capturedFile, setCapturedFile] = useState<File | null>(null);
 
-  const [captureType, setCaptureType] = useState<CaptureType>('photo');
+  const [captureType, setCaptureType] = useState<CaptureType>(defaultCaptureType);
   const [linkedLot, setLinkedLot] = useState<string | null>(defaultLotId || null);
   const [linkedItp, setLinkedItp] = useState<string | null>(defaultItpId || null);
   const [description, setDescription] = useState('');
@@ -92,7 +100,7 @@ export function CaptureModal({
       setPhase('capture');
       setCapturedImage(null);
       setCapturedFile(null);
-      setCaptureType('photo');
+      setCaptureType(defaultCaptureType);
       setLinkedLot(defaultLotId || null);
       setLinkedItp(defaultItpId || null);
       setDescription('');
@@ -100,7 +108,7 @@ export function CaptureModal({
       const timer = setTimeout(() => fileInputRef.current?.click(), 150);
       return () => clearTimeout(timer);
     }
-  }, [isOpen, defaultLotId, defaultItpId, loadLots]);
+  }, [isOpen, defaultLotId, defaultItpId, defaultCaptureType, loadLots]);
 
   const handleFileSelect = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
