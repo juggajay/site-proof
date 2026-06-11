@@ -3,8 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 import { useAuth } from '@/lib/auth';
-import { getCompanyRole } from '@/lib/subcontractorIdentity';
-import { ROLES } from '@/lib/roles';
+import { isForemanDashboardUser } from '@/lib/subcontractorIdentity';
 
 interface ForemanDashboardProjectResponse {
   project: { id: string } | null;
@@ -36,7 +35,7 @@ export interface EffectiveProjectIdResult {
 export function useEffectiveProjectId(): EffectiveProjectIdResult {
   const { projectId: urlProjectId } = useParams();
   const { user } = useAuth();
-  const isForeman = getCompanyRole(user) === ROLES.FOREMAN;
+  const isForeman = isForemanDashboardUser(user);
 
   // Resolve the active-project fallback only for a foreman who has no project in
   // the URL. `/api/dashboard/foreman` returns the foreman's current project

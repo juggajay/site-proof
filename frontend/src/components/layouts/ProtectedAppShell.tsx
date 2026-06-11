@@ -8,8 +8,11 @@ import {
 import { OnboardingTour } from '@/components/OnboardingTour';
 import { SessionTimeoutWarning } from '@/components/SessionTimeoutWarning';
 import { useAuth } from '@/lib/auth';
-import { ROLES } from '@/lib/roles';
-import { getCompanyRole, hasSubcontractorPortalIdentity } from '@/lib/subcontractorIdentity';
+import {
+  getCompanyRole,
+  hasSubcontractorPortalIdentity,
+  isForemanDashboardUser,
+} from '@/lib/subcontractorIdentity';
 import { MainLayout } from './MainLayout';
 
 const SUBCONTRACTOR_ROLES = ['subcontractor', 'subcontractor_admin'];
@@ -51,7 +54,7 @@ function KeyboardShortcutsProvider({ children }: { children: ReactNode }) {
   // mobile-first foreman dashboard, while the tour walks desktop chrome
   // (sidebar navigation, Cmd+K, keyboard shortcuts). They can still start it
   // from the header user menu.
-  const autoShowGeneralOnboarding = showGeneralOnboarding && userRole !== ROLES.FOREMAN;
+  const autoShowGeneralOnboarding = showGeneralOnboarding && !isForemanDashboardUser(user);
 
   return (
     <>

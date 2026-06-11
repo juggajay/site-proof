@@ -109,6 +109,25 @@ describe('foreman mobile capture is a single shared workflow on /dashboard', () 
     await waitFor(() => expect(cameraOverlays()).toHaveLength(1));
   });
 
+  it('mounts the shared capture modal for project-role foremen whose company role is member', async () => {
+    useAuthMock.mockReturnValue({
+      user: {
+        id: 'u1',
+        fullName: 'Fred Foreman',
+        role: 'member',
+        roleInCompany: 'member',
+        dashboardRole: 'foreman',
+      },
+    } as unknown as ReturnType<typeof useAuth>);
+    useForemanMobileStore.setState({ isCameraOpen: true });
+
+    renderDashboardInLayout();
+
+    await screen.findByText(/Good (morning|afternoon|evening)/i);
+    expect(screen.getByText('Opening camera...')).toBeInTheDocument();
+    await waitFor(() => expect(cameraOverlays()).toHaveLength(1));
+  });
+
   it('opens that one shared modal from the dashboard quick-capture FAB', async () => {
     renderDashboardInLayout();
     await screen.findByText(/Good (morning|afternoon|evening)/i);

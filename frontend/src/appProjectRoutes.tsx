@@ -62,7 +62,7 @@ export function ProjectDetailRoute() {
   }
 
   return (
-    <RoleProtectedRoute allowedRoles={PROJECT_WORKSPACE_ROLES}>
+    <RoleProtectedRoute allowedRoles={PROJECT_WORKSPACE_ROLES} allowProjectScopedRole>
       <ProjectDetailPage />
     </RoleProtectedRoute>
   );

@@ -31,7 +31,11 @@ import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { queryKeys } from '@/lib/queryKeys';
 import { useUIStore } from '@/stores/uiStore'; // Feature #442: Zustand client state
-import { getCompanyRole, hasSubcontractorPortalIdentity } from '@/lib/subcontractorIdentity';
+import {
+  getCompanyRole,
+  hasSubcontractorPortalIdentity,
+  isForemanDashboardUser,
+} from '@/lib/subcontractorIdentity';
 import {
   ROLE_GROUPS,
   hasRoleInGroup,
@@ -236,7 +240,7 @@ export function Sidebar() {
   const hasCommercial = hasCommercialAccess(userRole);
   const hasAdmin = isAdminRole(userRole);
   const hasManagement = hasRoleInGroup(userRole, ROLE_GROUPS.MANAGEMENT);
-  const isForeman = userRole === 'foreman';
+  const isForeman = isForemanDashboardUser(user);
   const isSubcontractor = isSubcontractorRole(userRole);
 
   // Helper function to check if a menu item should be visible

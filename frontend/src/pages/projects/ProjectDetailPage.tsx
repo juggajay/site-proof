@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { ProjectDashboard } from '@/components/dashboard/ProjectDashboard';
+import { isForemanDashboardUser } from '@/lib/subcontractorIdentity';
 
 export function ProjectDetailPage() {
   const { projectId } = useParams();
@@ -10,8 +11,7 @@ export function ProjectDetailPage() {
   const { user } = useAuth();
   const isMobile = useIsMobile();
 
-  const userRole = user?.roleInCompany || user?.role;
-  const isForeman = userRole === 'foreman';
+  const isForeman = isForemanDashboardUser(user);
 
   // Redirect foreman mobile users to the new 5-tab foreman shell
   useEffect(() => {

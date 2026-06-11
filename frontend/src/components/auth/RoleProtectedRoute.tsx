@@ -3,18 +3,24 @@ import { ShieldAlert } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import type { ReactNode } from 'react';
 import { ROLE_GROUPS, hasRoleInGroup, isSubcontractorRole } from '@/lib/roles';
-import { hasSubcontractorPortalIdentity } from '@/lib/subcontractorIdentity';
+import {
+  getCompanyRole,
+  getProjectScopedRole,
+  hasSubcontractorPortalIdentity,
+} from '@/lib/subcontractorIdentity';
 
 interface RoleProtectedRouteProps {
   children: ReactNode;
   allowedRoles: readonly string[];
   redirectTo?: string;
+  allowProjectScopedRole?: boolean;
 }
 
 export function RoleProtectedRoute({
   children,
   allowedRoles,
   redirectTo: _redirectTo = '/dashboard',
+  allowProjectScopedRole = false,
 }: RoleProtectedRouteProps) {
   const { user, loading } = useAuth();
   const location = useLocation();
@@ -38,9 +44,10 @@ export function RoleProtectedRoute({
   }
 
   // Check if user's role is in allowed roles
-  const userRole = user.roleInCompany || user.role || 'member';
+  const companyRole = getCompanyRole(user) || 'member';
+  const userRole = allowProjectScopedRole ? getProjectScopedRole(user) || companyRole : companyRole;
   const allowsSubcontractorPortal = allowedRoles.some((role) => isSubcontractorRole(role));
-  const userHasSubcontractorRole = isSubcontractorRole(userRole);
+  const userHasSubcontractorRole = isSubcontractorRole(companyRole);
   const hasAccess =
     allowsSubcontractorPortal && hasSubcontractorPortalIdentity(user)
       ? true

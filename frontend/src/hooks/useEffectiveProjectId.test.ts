@@ -25,9 +25,18 @@ const useParamsMock = vi.mocked(useParams);
 const useAuthMock = vi.mocked(useAuth);
 const apiFetchMock = vi.mocked(apiFetch);
 
-function setUser(role: string | null) {
+type MockUser =
+  | string
+  | {
+      role?: string;
+      roleInCompany?: string;
+      dashboardRole?: 'project_manager' | 'quality_manager' | 'foreman' | null;
+    }
+  | null;
+
+function setUser(user: MockUser) {
   useAuthMock.mockReturnValue({
-    user: role ? { role } : null,
+    user: typeof user === 'string' ? { role: user } : user,
   } as unknown as ReturnType<typeof useAuth>);
 }
 
@@ -35,6 +44,16 @@ function createWrapper() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return ({ children }: { children: ReactNode }) =>
     createElement(QueryClientProvider, { client: queryClient }, children);
+}
+
+async function expectForemanFallbackProject(expectedProjectId = 'api-project') {
+  apiFetchMock.mockResolvedValue({ project: { id: expectedProjectId } });
+
+  const { result } = renderHook(() => useEffectiveProjectId(), { wrapper: createWrapper() });
+
+  await waitFor(() => expect(result.current.projectId).toBe(expectedProjectId));
+  expect(apiFetchMock).toHaveBeenCalledWith('/api/dashboard/foreman');
+  return result;
 }
 
 beforeEach(() => {
@@ -61,17 +80,18 @@ describe('useEffectiveProjectId', () => {
   });
 
   it("falls back to the foreman's active project when the URL has none", async () => {
-    apiFetchMock.mockResolvedValue({ project: { id: 'api-project' } });
-
-    const { result } = renderHook(() => useEffectiveProjectId(), { wrapper: createWrapper() });
-
-    await waitFor(() => expect(result.current.projectId).toBe('api-project'));
-    expect(apiFetchMock).toHaveBeenCalledWith('/api/dashboard/foreman');
+    const result = await expectForemanFallbackProject();
     expect(result.current).toEqual({
       projectId: 'api-project',
       isResolving: false,
       hasNoProject: false,
     });
+  });
+
+  it('falls back to the active project for project-role foremen whose company role is member', async () => {
+    setUser({ role: 'member', roleInCompany: 'member', dashboardRole: 'foreman' });
+
+    await expectForemanFallbackProject();
   });
 
   it('reports hasNoProject once a foreman with no active project resolves', async () => {

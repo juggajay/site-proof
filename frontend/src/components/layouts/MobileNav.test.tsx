@@ -12,6 +12,9 @@ vi.mock('@/lib/auth', () => ({ useAuth: vi.fn() }));
 vi.mock('@/stores/foremanMobileStore', () => ({
   useForemanMobileStore: () => ({ setIsCameraOpen: vi.fn() }),
 }));
+vi.mock('@/components/foreman/ForemanBottomNavV2', () => ({
+  ForemanBottomNavV2: () => <div>Foreman bottom nav</div>,
+}));
 
 import { MobileNav } from './MobileNav';
 import { useAuth } from '@/lib/auth';
@@ -21,6 +24,7 @@ const useAuthMock = vi.mocked(useAuth);
 type TestUser = {
   role?: string;
   roleInCompany?: string;
+  dashboardRole?: 'project_manager' | 'quality_manager' | 'foreman' | null;
   companyId?: string | null;
   hasSubcontractorPortalAccess?: boolean;
 };
@@ -100,6 +104,15 @@ describe('MobileNav menu trigger', () => {
 
     renderNav();
 
+    expect(screen.queryByRole('button', { name: /open menu/i })).not.toBeInTheDocument();
+  });
+
+  it('renders foreman bottom nav for project-role foremen whose company role is member', () => {
+    setUser({ role: 'member', roleInCompany: 'member', dashboardRole: 'foreman', companyId: 'c1' });
+
+    renderNav();
+
+    expect(screen.getByText('Foreman bottom nav')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /open menu/i })).not.toBeInTheDocument();
   });
 
