@@ -302,6 +302,51 @@ describe('checkConformancePrerequisites — gate wiring (mocked Prisma)', () => 
     mocks.holdPointFindMany.mockResolvedValue([]);
   });
 
+  it('loads only conformance fields and filters closed NCRs in the database query', async () => {
+    mocks.lotFindUnique.mockResolvedValue(
+      makeLot({
+        checklistItems: [NON_TEST_ITEM],
+        completionStatuses: { i1: 'completed' },
+        testResults: [],
+      }),
+    );
+
+    await checkConformancePrerequisites('lot-1');
+
+    expect(mocks.lotFindUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'lot-1' },
+        include: expect.objectContaining({
+          testResults: {
+            select: {
+              id: true,
+              testType: true,
+              passFail: true,
+              status: true,
+            },
+          },
+          ncrLots: {
+            where: {
+              ncr: {
+                status: { notIn: ['closed', 'closed_concession'] },
+              },
+            },
+            include: {
+              ncr: {
+                select: {
+                  id: true,
+                  ncrNumber: true,
+                  description: true,
+                  status: true,
+                },
+              },
+            },
+          },
+        }),
+      }),
+    );
+  });
+
   it('conforms a no-test-point lot with NO test result (testRequired false)', async () => {
     mocks.lotFindUnique.mockResolvedValue(
       makeLot({
