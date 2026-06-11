@@ -645,6 +645,57 @@ describe('syncSingleItem — photo_upload (Slice 3, moved from the hook)', () =>
     capturedAt: '2026-01-01T00:00:00.000Z',
   };
 
+  function itpAttachmentPhotoRecord(overrides: Record<string, unknown> = {}) {
+    return {
+      ...photoRecord,
+      entityType: 'itp',
+      entityId: 'completion-1',
+      completionId: 'completion-1',
+      attachAs: 'itp_completion_attachment',
+      category: 'itp_evidence',
+      ...overrides,
+    };
+  }
+
+  function expectPostUploadAttachQueued({
+    itemId,
+    photoId,
+    documentId,
+    message,
+  }: {
+    itemId: number;
+    photoId: string;
+    documentId: string;
+    message: string;
+  }) {
+    expect(markPhotoUploadedAwaitingAttachMock).toHaveBeenCalledWith(photoId, documentId);
+    expect(markSyncItemErrorMock).toHaveBeenCalledWith(itemId, message);
+    expect(removeSyncQueueItemMock).not.toHaveBeenCalled();
+    expect(markPhotoSyncedMock).not.toHaveBeenCalled();
+    expect(markPhotoSyncErrorMock).not.toHaveBeenCalled();
+  }
+
+  function expectAttachOnlySync({
+    result,
+    itemId,
+    photoId,
+    documentId,
+    attachUrl,
+  }: {
+    result: unknown;
+    itemId: number;
+    photoId: string;
+    documentId: string;
+    attachUrl: string;
+  }) {
+    expect(result).toEqual({ status: 'synced' });
+    expect(globalFetchMock).not.toHaveBeenCalled();
+    expect(authFetchMock).toHaveBeenCalledTimes(1);
+    expect(authFetchMock.mock.calls[0][0]).toBe(attachUrl);
+    expect(removeSyncQueueItemMock).toHaveBeenCalledWith(itemId);
+    expect(markPhotoSyncedMock).toHaveBeenCalledWith(photoId, documentId);
+  }
+
   it('reads the dataUrl blob, POSTs multipart, returns "synced" and marks the photo', async () => {
     getOfflinePhotoMock.mockResolvedValue(photoRecord);
     authFetchMock.mockResolvedValue(okJson({ id: 'doc-9' }));
@@ -679,10 +730,98 @@ describe('syncSingleItem — photo_upload (Slice 3, moved from the hook)', () =>
     expect(markPhotoSyncedMock).toHaveBeenCalledWith('ph-1', 'doc-9');
   });
 
-  it("sends entityType 'itp' + the completion entityId so the backend attaches the evidence", async () => {
-    // ITP evidence queued by uploadItpEvidencePhotoWithOfflineFallback: the
-    // upload FormData must carry the completion linkage the documents upload
-    // endpoint now resolves into an ITPCompletionAttachment.
+  it('ITP completion attachment photo: uploads, then attaches via /api/itp/completions/:id/attachments', async () => {
+    getOfflinePhotoMock.mockResolvedValue(itpAttachmentPhotoRecord());
+    authFetchMock
+      .mockResolvedValueOnce(okJson({ id: 'doc-10' }))
+      .mockResolvedValueOnce(okJson({ attachment: { id: 'att-1' } }));
+
+    const result = await syncSingleItem(
+      queueItem({ id: 42, type: 'photo_upload', data: { photoId: 'ph-2' } }),
+    );
+
+    expect(result).toEqual({ status: 'synced' });
+    expect(authFetchMock).toHaveBeenCalledTimes(2);
+
+    const [uploadUrl, uploadOptions] = authFetchMock.mock.calls[0];
+    expect(uploadUrl).toBe('/api/documents/upload');
+    const fd = uploadOptions.body as FormData;
+    expect(fd.get('category')).toBe('itp_evidence');
+    expect(fd.has('entityType')).toBe(false);
+    expect(fd.has('entityId')).toBe(false);
+
+    const [attachUrl, attachOptions] = authFetchMock.mock.calls[1];
+    expect(attachUrl).toBe('/api/itp/completions/completion-1/attachments');
+    expect(attachOptions.method).toBe('POST');
+    expect(JSON.parse(attachOptions.body)).toEqual({
+      documentId: 'doc-10',
+      caption: 'a caption',
+      gpsLatitude: -33.8,
+      gpsLongitude: 151.2,
+    });
+    expect(markPhotoUploadedAwaitingAttachMock).toHaveBeenCalledWith('ph-2', 'doc-10');
+    expect(removeSyncQueueItemMock).toHaveBeenCalledWith(42);
+    expect(markPhotoSyncedMock).toHaveBeenCalledWith('ph-2', 'doc-10');
+  });
+
+  it('ITP completion attachment photo: failed attach keeps the item queued without marking the photo errored', async () => {
+    getOfflinePhotoMock.mockResolvedValue(itpAttachmentPhotoRecord());
+    authFetchMock
+      .mockResolvedValueOnce(okJson({ id: 'doc-10' }))
+      .mockResolvedValueOnce(errorResponse(500, 'attach failed'));
+
+    const result = await syncSingleItem(
+      queueItem({ id: 43, type: 'photo_upload', data: { photoId: 'ph-2' } }),
+    );
+
+    expect(result).toEqual({ status: 'handled' });
+    expectPostUploadAttachQueued({
+      itemId: 43,
+      photoId: 'ph-2',
+      documentId: 'doc-10',
+      message: 'attach failed',
+    });
+  });
+
+  it('ITP completion attachment photo: thrown attach failure stays retryable after upload', async () => {
+    getOfflinePhotoMock.mockResolvedValue(itpAttachmentPhotoRecord());
+    authFetchMock
+      .mockResolvedValueOnce(okJson({ id: 'doc-10' }))
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'));
+
+    const result = await syncSingleItem(
+      queueItem({ id: 45, type: 'photo_upload', data: { photoId: 'ph-2' } }),
+    );
+
+    expect(result).toEqual({ status: 'handled' });
+    expectPostUploadAttachQueued({
+      itemId: 45,
+      photoId: 'ph-2',
+      documentId: 'doc-10',
+      message: 'Failed to fetch',
+    });
+  });
+
+  it('ITP completion attachment retry with serverDocumentId: attach-only, never re-uploads', async () => {
+    getOfflinePhotoMock.mockResolvedValue(itpAttachmentPhotoRecord({ serverDocumentId: 'doc-10' }));
+    authFetchMock.mockResolvedValueOnce(okJson({ attachment: { id: 'att-2' } }));
+
+    const result = await syncSingleItem(
+      queueItem({ id: 44, type: 'photo_upload', data: { photoId: 'ph-2' } }),
+    );
+
+    expectAttachOnlySync({
+      result,
+      itemId: 44,
+      photoId: 'ph-2',
+      documentId: 'doc-10',
+      attachUrl: '/api/itp/completions/completion-1/attachments',
+    });
+  });
+
+  it("keeps legacy ITP queued photos using entityType 'itp' + completion entityId", async () => {
+    // Older queued rows may not have attachAs/completionId. Keep sending the
+    // legacy metadata so the upload route can attach them server-side.
     getOfflinePhotoMock.mockResolvedValue({
       ...photoRecord,
       entityType: 'itp',
@@ -801,12 +940,13 @@ describe('syncSingleItem — photo_upload (Slice 3, moved from the hook)', () =>
       queueItem({ id: 52, type: 'photo_upload', data: { photoId: 'ph-ncr' } }),
     );
 
-    expect(result).toEqual({ status: 'synced' });
-    expect(globalFetchMock).not.toHaveBeenCalled(); // no blob read = no upload
-    expect(authFetchMock).toHaveBeenCalledTimes(1);
-    expect(authFetchMock.mock.calls[0][0]).toBe('/api/ncrs/ncr-77/evidence');
-    expect(removeSyncQueueItemMock).toHaveBeenCalledWith(52);
-    expect(markPhotoSyncedMock).toHaveBeenCalledWith('ph-ncr', 'doc-20');
+    expectAttachOnlySync({
+      result,
+      itemId: 52,
+      photoId: 'ph-ncr',
+      documentId: 'doc-20',
+      attachUrl: '/api/ncrs/ncr-77/evidence',
+    });
   });
 
   it('NCR photo WITHOUT an entityId (captured offline, NCR never created): plain upload, no attach', async () => {

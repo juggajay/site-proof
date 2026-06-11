@@ -17,10 +17,9 @@
  * evidence photos are never dropped on a flaky connection. The upload is
  * attempted online first; on ANY retriable network failure — browser offline,
  * request timeout, fetch-level failure, or a 5xx — the photo is written
- * through the offline pipeline (compressed -> IndexedDB -> sync queue with
- * entityType 'itp' + the completion id) and the sync worker delivers it
- * later; the documents upload endpoint attaches it to the completion
- * server-side. Definitive 4xx rejections still surface as errors.
+ * through the offline pipeline (compressed -> IndexedDB -> sync queue with an
+ * explicit ITP completion attachment intent) and the sync worker uploads then
+ * attaches it later. Definitive 4xx rejections still surface as errors.
  */
 import { useState } from 'react';
 import type { ChangeEvent, Dispatch, MutableRefObject, SetStateAction } from 'react';
@@ -119,10 +118,10 @@ export type ItpEvidenceUploadResult =
  * retriable network failure — browser offline, request timeout, fetch-level
  * failure, or a 5xx (per isRetriableNetworkFailure) — write the photo through
  * the offline pipeline instead: compressed into IndexedDB and queued with
- * entityType 'itp' + the completion id. The sync worker re-uploads it with
- * those fields and the documents upload endpoint attaches it to the same
- * completion, so the queued path converges on the data shape of the direct
- * path. Definitive rejections (4xx) are re-thrown for the caller's error UI.
+ * an explicit ITP completion attachment intent. The sync worker uploads the
+ * photo and then attaches the created document to the same completion, so the
+ * queued path converges on the data shape of the direct path. Definitive
+ * rejections (4xx) are re-thrown for the caller's error UI.
  *
  * The GPS fix is re-read on the fallback; getGPSLocation caches positions for
  * up to 60s, so this does not re-prompt and usually reuses the same fix.
@@ -151,6 +150,8 @@ export async function uploadItpEvidencePhotoWithOfflineFallback({
       lotId,
       entityType: 'itp',
       entityId: completionId,
+      completionId,
+      attachAs: 'itp_completion_attachment',
       documentType: 'photo',
       category: 'itp_evidence',
       caption: buildItpEvidenceCaption(),

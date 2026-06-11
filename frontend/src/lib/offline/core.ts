@@ -199,6 +199,8 @@ export interface OfflinePhoto {
   lotId?: string;
   entityType: 'lot' | 'ncr' | 'holdpoint' | 'itp' | 'test' | 'general';
   entityId?: string;
+  completionId?: string;
+  attachAs?: 'itp_completion_attachment' | 'ncr_evidence' | 'document_only';
   documentType: string;
   category?: string;
   fileName: string;

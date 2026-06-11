@@ -389,13 +389,24 @@ async function syncPhoto(item: PhotoUploadItem, itemId: number): Promise<SyncIte
         return HANDLED;
       }
 
-      // NCR evidence photos need a second step after upload: linking the
-      // created Document to the NCR (the upload endpoint ignores
-      // entityType='ncr'). serverDocumentId persisted after a successful
-      // upload makes a retried item skip straight to the attach step instead
-      // of re-uploading a duplicate file.
-      const needsNcrAttach = photo.entityType === 'ncr' && !!photo.entityId;
+      // Some evidence photos need a second step after upload: linking the
+      // created Document to its domain row. serverDocumentId persisted after a
+      // successful upload makes a retried item skip straight to the attach step
+      // instead of re-uploading a duplicate file.
+      const itpCompletionId =
+        photo.attachAs === 'itp_completion_attachment'
+          ? (photo.completionId ?? photo.entityId)
+          : undefined;
+      const needsItpAttach = !!itpCompletionId;
+      const needsNcrAttach =
+        (photo.attachAs === 'ncr_evidence' || (!photo.attachAs && photo.entityType === 'ncr')) &&
+        !!photo.entityId;
+      const needsPostUploadAttach = needsItpAttach || needsNcrAttach;
       let documentId = photo.serverDocumentId;
+      const keepPostUploadAttachQueued = async (message: string): Promise<SyncItemResult> => {
+        await markSyncItemError(itemId, message);
+        return HANDLED;
+      };
 
       if (!documentId) {
         // Convert base64 to blob for upload
@@ -409,8 +420,10 @@ async function syncPhoto(item: PhotoUploadItem, itemId: number): Promise<SyncIte
         if (photo.lotId) formData.append('lotId', photo.lotId);
         formData.append('documentType', photo.documentType);
         if (photo.category) formData.append('category', photo.category);
-        formData.append('entityType', photo.entityType);
-        if (photo.entityId) formData.append('entityId', photo.entityId);
+        if (!needsItpAttach) {
+          formData.append('entityType', photo.entityType);
+          if (photo.entityId) formData.append('entityId', photo.entityId);
+        }
         if (photo.caption) formData.append('caption', photo.caption);
         if (photo.tags) formData.append('tags', JSON.stringify(photo.tags));
         if (photo.gpsLatitude !== undefined) {
@@ -437,32 +450,74 @@ async function syncPhoto(item: PhotoUploadItem, itemId: number): Promise<SyncIte
         const result = await uploadResponse.json();
         documentId = (result?.id ?? result?.document?.id) as string | undefined;
 
-        if (needsNcrAttach && documentId) {
+        if (needsPostUploadAttach && !documentId) {
+          throw new Error('Document upload response did not include a document id');
+        }
+
+        if (needsPostUploadAttach && documentId) {
           // Upload succeeded; remember the document so a failed attach below
           // never re-uploads on retry.
           await markPhotoUploadedAwaitingAttach(photoId, documentId);
         }
       }
 
+      if (needsItpAttach && documentId && itpCompletionId) {
+        let attachResponse: Response;
+        try {
+          attachResponse = await authFetch(
+            apiUrl(`/api/itp/completions/${encodeURIComponent(itpCompletionId)}/attachments`),
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                documentId,
+                ...(photo.caption ? { caption: photo.caption } : {}),
+                gpsLatitude: photo.gpsLatitude ?? null,
+                gpsLongitude: photo.gpsLongitude ?? null,
+              }),
+            },
+          );
+        } catch (error) {
+          return keepPostUploadAttachQueued(
+            error instanceof Error ? error.message : 'Failed to attach ITP evidence',
+          );
+        }
+
+        if (!attachResponse.ok) {
+          // The file is safely on the server; only the ITP link is missing.
+          // Keep the queue item so the attach step retries.
+          const errorText = await attachResponse.text();
+          return keepPostUploadAttachQueued(errorText || 'Failed to attach ITP evidence');
+        }
+      }
+
       if (needsNcrAttach && documentId) {
-        const attachResponse = await authFetch(apiUrl(`/api/ncrs/${photo.entityId}/evidence`), {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            documentId,
-            evidenceType: 'photo',
-            ...(photo.caption ? { caption: photo.caption } : {}),
-          }),
-        });
+        let attachResponse: Response;
+        try {
+          attachResponse = await authFetch(apiUrl(`/api/ncrs/${photo.entityId}/evidence`), {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              documentId,
+              evidenceType: 'photo',
+              ...(photo.caption ? { caption: photo.caption } : {}),
+            }),
+          });
+        } catch (error) {
+          return keepPostUploadAttachQueued(
+            error instanceof Error ? error.message : 'Failed to attach NCR evidence',
+          );
+        }
 
         if (!attachResponse.ok) {
           // The file is safely on the server; only the NCR link is missing.
           // Keep the queue item so the attach step retries.
           const errorText = await attachResponse.text();
-          await markSyncItemError(itemId, errorText);
-          return HANDLED;
+          return keepPostUploadAttachQueued(errorText || 'Failed to attach NCR evidence');
         }
       }
 
