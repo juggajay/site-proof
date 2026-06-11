@@ -22,6 +22,7 @@ import { HomeScreen } from './screens/HomeScreen';
 import { ComingSoonScreen } from './screens/ComingSoonScreen';
 import { DiaryShellRoutes } from './screens/diary/DiaryShellRoutes';
 import { LotsShellRoutes } from './screens/lots/LotsShellRoutes';
+import { DocketsShellRoutes } from './screens/dockets/DocketsShellRoutes';
 
 export function ShellRoutes() {
   return (
@@ -35,13 +36,8 @@ export function ShellRoutes() {
       {/* Lots — full sub-tree (PR-3): list, mini-hub, ITP run, details */}
       <Route path="lots/*" element={<LotsShellRoutes />} />
 
-      {/* Dockets */}
-      <Route
-        path="dockets"
-        element={
-          <ComingSoonScreen title="Dockets" parent="/m" sub="Subbie approvals — coming next" />
-        }
-      />
+      {/* Dockets — full sub-tree (PR-4): list, detail, approve/adjust/query/reject */}
+      <Route path="dockets/*" element={<DocketsShellRoutes />} />
 
       {/* Issues */}
       <Route
