@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import type { Prisma } from '@prisma/client';
 
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
@@ -21,6 +22,15 @@ import { buildLotConformedResponse, buildLotStatusOverrideResponse } from './sta
 import { conformLotSchema, overrideStatusSchema } from './validation.js';
 
 export const lotQualityRouter = Router();
+
+const PENDING_TEST_STATUSES = ['pending', 'requested', 'submitted'];
+const LOT_PHOTO_DOCUMENT_FILTER: Prisma.DocumentWhereInput = {
+  OR: [
+    { documentType: { contains: 'photo', mode: 'insensitive' } },
+    { category: { contains: 'photo', mode: 'insensitive' } },
+    { mimeType: { startsWith: 'image/' } },
+  ],
+};
 
 // GET /api/lots/check-role/:projectId - Check user's role on a project
 lotQualityRouter.get(
@@ -73,21 +83,6 @@ lotQualityRouter.get(
         projectId: true,
         budgetAmount: true,
         claimedInId: true,
-        holdPoints: {
-          select: { status: true },
-        },
-        documents: {
-          select: {
-            documentType: true,
-            category: true,
-            mimeType: true,
-          },
-        },
-        testResults: {
-          select: {
-            status: true,
-          },
-        },
       },
     });
 
@@ -109,7 +104,23 @@ lotQualityRouter.get(
           throwIfProjectMissing: true,
         });
     const canViewCommercial = !isSubcontractorUser(user) && canViewLotBudget(effectiveProjectRole);
-    const conformStatus = await checkConformancePrerequisites(id);
+    const [
+      conformStatus,
+      unreleasedHoldPoints,
+      releasedHoldPoints,
+      documents,
+      photos,
+      pendingTests,
+    ] = await Promise.all([
+      checkConformancePrerequisites(id),
+      prisma.holdPoint.count({ where: { lotId: id, status: { not: 'released' } } }),
+      prisma.holdPoint.count({ where: { lotId: id, status: 'released' } }),
+      prisma.document.count({ where: { lotId: id } }),
+      prisma.document.count({ where: { lotId: id, ...LOT_PHOTO_DOCUMENT_FILTER } }),
+      prisma.testResult.count({
+        where: { lotId: id, status: { in: PENDING_TEST_STATUSES } },
+      }),
+    ]);
 
     if (!conformStatus.prerequisites) {
       throw AppError.notFound('Lot');
@@ -130,22 +141,13 @@ lotQualityRouter.get(
         prerequisites: conformStatus.prerequisites,
       },
       evidenceCounts: {
-        unreleasedHoldPoints: lot.holdPoints.filter((holdPoint) => holdPoint.status !== 'released')
-          .length,
-        releasedHoldPoints: lot.holdPoints.filter((holdPoint) => holdPoint.status === 'released')
-          .length,
+        unreleasedHoldPoints,
+        releasedHoldPoints,
         approvedDockets: 0,
         diaryEntries: 0,
-        documents: lot.documents.length,
-        photos: lot.documents.filter((document) => {
-          const type = `${document.documentType ?? ''} ${document.category ?? ''} ${
-            document.mimeType ?? ''
-          }`.toLowerCase();
-          return type.includes('photo') || type.includes('image/');
-        }).length,
-        pendingTests: lot.testResults.filter((test) =>
-          ['pending', 'requested', 'submitted'].includes(test.status),
-        ).length,
+        documents,
+        photos,
+        pendingTests,
       },
     });
 
