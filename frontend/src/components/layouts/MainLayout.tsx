@@ -7,13 +7,13 @@ import { useForemanMobileStore } from '@/stores/foremanMobileStore';
 import { CaptureModal } from '@/components/foreman/CaptureModal';
 import { EmailVerificationBanner } from '@/components/EmailVerificationBanner';
 import { useEffectiveProjectId } from '@/hooks/useEffectiveProjectId';
+import { isForemanDashboardUser } from '@/lib/subcontractorIdentity';
 
 export function MainLayout() {
   const { projectId: effectiveProjectId } = useEffectiveProjectId();
   const { user } = useAuth();
 
-  const userRole = user?.roleInCompany || user?.role || '';
-  const isForeman = userRole === 'foreman';
+  const isForeman = isForemanDashboardUser(user);
   const { isCameraOpen, setIsCameraOpen } = useForemanMobileStore();
 
   return (

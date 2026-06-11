@@ -158,7 +158,7 @@ function App() {
             <Route
               path="/m/*"
               element={
-                <RoleProtectedRoute allowedRoles={INTERNAL_ROLES}>
+                <RoleProtectedRoute allowedRoles={INTERNAL_ROLES} allowProjectScopedRole>
                   <ShellRoutes />
                 </RoleProtectedRoute>
               }
@@ -197,7 +197,7 @@ function App() {
               <Route
                 path="/projects/:projectId/foreman"
                 element={
-                  <RoleProtectedRoute allowedRoles={INTERNAL_ROLES}>
+                  <RoleProtectedRoute allowedRoles={INTERNAL_ROLES} allowProjectScopedRole>
                     <ForemanMobileShell />
                   </RoleProtectedRoute>
                 }
@@ -236,7 +236,7 @@ function App() {
               <Route
                 path="/projects/:projectId/lots"
                 element={
-                  <RoleProtectedRoute allowedRoles={PROJECT_WORKSPACE_ROLES}>
+                  <RoleProtectedRoute allowedRoles={PROJECT_WORKSPACE_ROLES} allowProjectScopedRole>
                     <LotsPage />
                   </RoleProtectedRoute>
                 }
@@ -244,7 +244,7 @@ function App() {
               <Route
                 path="/projects/:projectId/lots/:lotId"
                 element={
-                  <RoleProtectedRoute allowedRoles={PROJECT_WORKSPACE_ROLES}>
+                  <RoleProtectedRoute allowedRoles={PROJECT_WORKSPACE_ROLES} allowProjectScopedRole>
                     <LotDetailPage />
                   </RoleProtectedRoute>
                 }
@@ -262,7 +262,7 @@ function App() {
               <Route
                 path="/projects/:projectId/itp"
                 element={
-                  <RoleProtectedRoute allowedRoles={INTERNAL_ROLES}>
+                  <RoleProtectedRoute allowedRoles={INTERNAL_ROLES} allowProjectScopedRole>
                     <ITPPage />
                   </RoleProtectedRoute>
                 }
@@ -272,7 +272,7 @@ function App() {
               <Route
                 path="/projects/:projectId/hold-points"
                 element={
-                  <RoleProtectedRoute allowedRoles={INTERNAL_ROLES}>
+                  <RoleProtectedRoute allowedRoles={INTERNAL_ROLES} allowProjectScopedRole>
                     <HoldPointsPage />
                   </RoleProtectedRoute>
                 }
@@ -282,7 +282,7 @@ function App() {
               <Route
                 path="/projects/:projectId/tests"
                 element={
-                  <RoleProtectedRoute allowedRoles={INTERNAL_ROLES}>
+                  <RoleProtectedRoute allowedRoles={INTERNAL_ROLES} allowProjectScopedRole>
                     <TestResultsPage />
                   </RoleProtectedRoute>
                 }
@@ -292,7 +292,7 @@ function App() {
               <Route
                 path="/projects/:projectId/ncr"
                 element={
-                  <RoleProtectedRoute allowedRoles={INTERNAL_ROLES}>
+                  <RoleProtectedRoute allowedRoles={INTERNAL_ROLES} allowProjectScopedRole>
                     <NCRPage />
                   </RoleProtectedRoute>
                 }
@@ -302,7 +302,7 @@ function App() {
               <Route
                 path="/projects/:projectId/diary"
                 element={
-                  <RoleProtectedRoute allowedRoles={INTERNAL_ROLES}>
+                  <RoleProtectedRoute allowedRoles={INTERNAL_ROLES} allowProjectScopedRole>
                     <DailyDiaryPage />
                   </RoleProtectedRoute>
                 }
@@ -310,7 +310,7 @@ function App() {
               <Route
                 path="/projects/:projectId/delays"
                 element={
-                  <RoleProtectedRoute allowedRoles={INTERNAL_ROLES}>
+                  <RoleProtectedRoute allowedRoles={INTERNAL_ROLES} allowProjectScopedRole>
                     <DelayRegisterPage />
                   </RoleProtectedRoute>
                 }
@@ -320,7 +320,7 @@ function App() {
               <Route
                 path="/projects/:projectId/dockets"
                 element={
-                  <RoleProtectedRoute allowedRoles={INTERNAL_ROLES}>
+                  <RoleProtectedRoute allowedRoles={INTERNAL_ROLES} allowProjectScopedRole>
                     <DocketApprovalsPage />
                   </RoleProtectedRoute>
                 }
@@ -350,7 +350,7 @@ function App() {
               <Route
                 path="/projects/:projectId/documents"
                 element={
-                  <RoleProtectedRoute allowedRoles={INTERNAL_ROLES}>
+                  <RoleProtectedRoute allowedRoles={INTERNAL_ROLES} allowProjectScopedRole>
                     <DocumentsPage />
                   </RoleProtectedRoute>
                 }
@@ -360,7 +360,7 @@ function App() {
               <Route
                 path="/projects/:projectId/drawings"
                 element={
-                  <RoleProtectedRoute allowedRoles={REPORT_ROLES}>
+                  <RoleProtectedRoute allowedRoles={REPORT_ROLES} allowProjectScopedRole>
                     <DrawingsPage />
                   </RoleProtectedRoute>
                 }
@@ -380,7 +380,7 @@ function App() {
               <Route
                 path="/projects/:projectId/reports"
                 element={
-                  <RoleProtectedRoute allowedRoles={REPORT_ROLES}>
+                  <RoleProtectedRoute allowedRoles={REPORT_ROLES} allowProjectScopedRole>
                     <ReportsPage />
                   </RoleProtectedRoute>
                 }

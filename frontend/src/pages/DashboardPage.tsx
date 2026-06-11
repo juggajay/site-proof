@@ -40,7 +40,11 @@ import {
 import { QualityManagerDashboard } from '@/components/dashboard/QualityManagerDashboard';
 import { ProjectManagerDashboard } from '@/components/dashboard/ProjectManagerDashboard';
 import { SubcontractorDashboard } from '@/pages/subcontractor-portal/SubcontractorDashboard';
-import { getCompanyRole, hasSubcontractorPortalIdentity } from '@/lib/subcontractorIdentity';
+import {
+  getCompanyRole,
+  getDashboardRole,
+  hasSubcontractorPortalIdentity,
+} from '@/lib/subcontractorIdentity';
 import { ROLE_GROUPS, hasRoleInGroup } from '@/lib/roles';
 import { Button } from '@/components/ui/button';
 import { ContextHelp, HELP_CONTENT } from '@/components/ContextHelp';
@@ -71,10 +75,6 @@ interface DashboardProject {
 }
 
 type DashboardUser = ReturnType<typeof useAuth>['user'];
-type DashboardRoleUser = NonNullable<DashboardUser> & {
-  roleInCompany?: string | null;
-  dashboardRole?: 'project_manager' | 'quality_manager' | 'foreman' | null;
-};
 
 interface PendingInvitation {
   id: string;
@@ -91,10 +91,8 @@ export function DashboardPage() {
   const isMobile = useIsMobile();
 
   // Feature #292, #293, #294: Check user role for role-specific dashboards
-  const roleUser = user as DashboardRoleUser | null;
-  const userRole = roleUser?.roleInCompany || roleUser?.role;
-  const dashboardRole = roleUser?.dashboardRole || userRole;
-  const isSubcontractor = hasSubcontractorPortalIdentity(roleUser);
+  const dashboardRole = getDashboardRole(user);
+  const isSubcontractor = hasSubcontractorPortalIdentity(user);
   const isForeman = dashboardRole === 'foreman';
   const isQualityManager = dashboardRole === 'quality_manager';
   const isProjectManager = dashboardRole === 'project_manager';

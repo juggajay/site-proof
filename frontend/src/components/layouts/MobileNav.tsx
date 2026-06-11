@@ -26,7 +26,11 @@ import { useAuth } from '@/lib/auth';
 import { usePublishBottomNavHeight } from '@/hooks/useBottomNavHeight';
 import { ForemanBottomNavV2 } from '@/components/foreman/ForemanBottomNavV2';
 import { useForemanMobileStore } from '@/stores/foremanMobileStore';
-import { getCompanyRole, hasSubcontractorPortalIdentity } from '@/lib/subcontractorIdentity';
+import {
+  getCompanyRole,
+  getDashboardRole,
+  hasSubcontractorPortalIdentity,
+} from '@/lib/subcontractorIdentity';
 import {
   ROLE_GROUPS,
   hasRoleInGroup,
@@ -139,11 +143,12 @@ export function MobileNav() {
   const navRef = usePublishBottomNavHeight<HTMLElement>();
 
   const userRole = getCompanyRole(user);
+  const dashboardRole = getDashboardRole(user);
   const hasPortalIdentity = hasSubcontractorPortalIdentity(user);
   const hasCommercial = hasCommercialAccess(userRole);
   const hasAdmin = isAdminRole(userRole);
   const hasManagement = hasRoleInGroup(userRole, ROLE_GROUPS.MANAGEMENT);
-  const isForeman = userRole === 'foreman';
+  const isForeman = dashboardRole === 'foreman';
   const isSubcontractor = isSubcontractorRole(userRole);
   const { setIsCameraOpen } = useForemanMobileStore();
 
