@@ -401,6 +401,7 @@ export function HoldPointsPage() {
       setRecordReleaseError(null);
       try {
         let finalReleaseNotes = releaseNotes || '';
+        let releaseEvidenceDocumentId: string | undefined;
 
         if (evidenceFile && (releaseMethod === 'email' || releaseMethod === 'paper')) {
           const token = getAuthToken();
@@ -429,6 +430,7 @@ export function HoldPointsPage() {
           }
 
           const evidenceDocument = (await uploadResponse.json()) as UploadedEvidenceDocument;
+          releaseEvidenceDocumentId = evidenceDocument.id;
           finalReleaseNotes =
             `${finalReleaseNotes}\nEvidence uploaded: ${evidenceDocument.filename}`.trim();
         }
@@ -443,6 +445,7 @@ export function HoldPointsPage() {
             releaseMethod,
             releaseNotes: finalReleaseNotes.trim() || undefined,
             signatureDataUrl: signatureDataUrl || null,
+            releaseEvidenceDocumentId,
           }),
         });
         await refreshHoldPoints();

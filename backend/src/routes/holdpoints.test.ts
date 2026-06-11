@@ -4,6 +4,7 @@ import express from 'express';
 import crypto from 'crypto';
 import { authRouter } from './auth.js';
 import { prisma } from '../lib/prisma.js';
+import { AuditAction, parseAuditLogChanges } from '../lib/auditLog.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { holdpointsRouter } from './holdpoints.js';
 import { clearEmailQueue, getQueuedEmails } from '../lib/email.js';
@@ -230,19 +231,15 @@ describe('Hold Points API', () => {
   });
 
   describe('POST /api/holdpoints/:id/release', () => {
-    let holdPointId: string;
-    let completionId: string;
-
-    beforeAll(async () => {
+    async function createReleaseReadyHoldPoint(status = 'notified') {
       const hp = await prisma.holdPoint.create({
         data: {
           lotId,
           itpChecklistItemId: checklistItemId,
           pointType: 'hold_point',
-          status: 'pending',
+          status,
         },
       });
-      holdPointId = hp.id;
 
       const itpInstance = await prisma.iTPInstance.findUniqueOrThrow({
         where: { lotId },
@@ -255,18 +252,64 @@ describe('Hold Points API', () => {
           status: 'completed',
         },
       });
+
+      return { holdPoint: hp, completion };
+    }
+
+    async function createReleaseEvidenceDocument(
+      documentLotId: string,
+      filename = 'manual-release-email.pdf',
+    ) {
+      return prisma.document.create({
+        data: {
+          projectId,
+          lotId: documentLotId,
+          uploadedById: userId,
+          filename,
+          fileUrl: `/uploads/documents/${filename}`,
+          mimeType: 'application/pdf',
+          fileSize: 1234,
+          documentType: 'hold_point_release_evidence',
+          category: 'itp_evidence',
+        },
+      });
+    }
+
+    function emailReleasePayload(overrides: Record<string, unknown> = {}) {
+      return {
+        releasedByName: 'Email Release Reviewer',
+        releasedByOrg: 'Superintendent Team',
+        releaseDate: '2026-01-21',
+        releaseTime: '10:30',
+        releaseMethod: 'email',
+        releaseNotes: 'Email confirmation received',
+        signatureDataUrl: null,
+        ...overrides,
+      };
+    }
+
+    function postRelease(holdPointId: string, payload: Record<string, unknown>) {
+      return request(app)
+        .post(`/api/holdpoints/${holdPointId}/release`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send(payload);
+    }
+
+    let holdPointId: string;
+    let completionId: string;
+
+    beforeAll(async () => {
+      const { holdPoint, completion } = await createReleaseReadyHoldPoint('pending');
+      holdPointId = holdPoint.id;
       completionId = completion.id;
     });
 
     it('should reject invalid release date inputs without releasing the hold point', async () => {
-      const res = await request(app)
-        .post(`/api/holdpoints/${holdPointId}/release`)
-        .set('Authorization', `Bearer ${authToken}`)
-        .send({
-          releasedByName: 'HP Test User',
-          releaseDate: '2026-02-30T10:00:00Z',
-          releaseNotes: 'Invalid release date',
-        });
+      const res = await postRelease(holdPointId, {
+        releasedByName: 'HP Test User',
+        releaseDate: '2026-02-30T10:00:00Z',
+        releaseNotes: 'Invalid release date',
+      });
 
       expect(res.status).toBe(400);
 
@@ -276,16 +319,13 @@ describe('Hold Points API', () => {
     });
 
     it('should release hold point with notes', async () => {
-      const res = await request(app)
-        .post(`/api/holdpoints/${holdPointId}/release`)
-        .set('Authorization', `Bearer ${authToken}`)
-        .send({
-          releasedByName: 'HP Test User',
-          releaseDate: '2026-01-20',
-          releaseTime: '09:15',
-          releaseNotes: 'Approved by QM',
-          signatureDataUrl: 'data:image/png;base64,ZmFrZS1zaWduYXR1cmU=',
-        });
+      const res = await postRelease(holdPointId, {
+        releasedByName: 'HP Test User',
+        releaseDate: '2026-01-20',
+        releaseTime: '09:15',
+        releaseNotes: 'Approved by QM',
+        signatureDataUrl: 'data:image/png;base64,ZmFrZS1zaWduYXR1cmU=',
+      });
 
       const expectedReleasedAt = new Date(2026, 0, 20, 9, 15, 0, 0);
       expect(res.status).toBe(200);
@@ -337,15 +377,12 @@ describe('Hold Points API', () => {
       });
       expect(before).toBeNull();
 
-      const res = await request(app)
-        .post(`/api/holdpoints/${hp.id}/release`)
-        .set('Authorization', `Bearer ${authToken}`)
-        .send({
-          releasedByName: 'Superintendent Releaser',
-          releaseDate: '2026-01-22',
-          releaseTime: '11:00',
-          releaseNotes: 'Released without prior tick',
-        });
+      const res = await postRelease(hp.id, {
+        releasedByName: 'Superintendent Releaser',
+        releaseDate: '2026-01-22',
+        releaseTime: '11:00',
+        releaseNotes: 'Released without prior tick',
+      });
 
       expect(res.status).toBe(200);
       expect(res.body.holdPoint.status).toBe('released');
@@ -362,39 +399,9 @@ describe('Hold Points API', () => {
     });
 
     it('should accept email confirmation release with no signature data', async () => {
-      const hp = await prisma.holdPoint.create({
-        data: {
-          lotId,
-          itpChecklistItemId: checklistItemId,
-          pointType: 'hold_point',
-          status: 'notified',
-        },
-      });
+      const { holdPoint: hp } = await createReleaseReadyHoldPoint();
 
-      const itpInstance = await prisma.iTPInstance.findUniqueOrThrow({
-        where: { lotId },
-        select: { id: true },
-      });
-      await prisma.iTPCompletion.create({
-        data: {
-          itpInstanceId: itpInstance.id,
-          checklistItemId,
-          status: 'completed',
-        },
-      });
-
-      const res = await request(app)
-        .post(`/api/holdpoints/${hp.id}/release`)
-        .set('Authorization', `Bearer ${authToken}`)
-        .send({
-          releasedByName: 'Email Release Reviewer',
-          releasedByOrg: 'Superintendent Team',
-          releaseDate: '2026-01-21',
-          releaseTime: '10:30',
-          releaseMethod: 'email',
-          releaseNotes: 'Email confirmation received',
-          signatureDataUrl: null,
-        });
+      const res = await postRelease(hp.id, emailReleasePayload());
 
       expect(res.status).toBe(200);
       expect(res.body.holdPoint.status).toBe('released');
@@ -402,27 +409,69 @@ describe('Hold Points API', () => {
       expect(res.body.holdPoint.releaseSignatureUrl).toBeNull();
     });
 
-    it('notifies the team and emails confirmations when the release toggle is on (default)', async () => {
-      const hp = await prisma.holdPoint.create({
-        data: {
-          lotId,
-          itpChecklistItemId: checklistItemId,
-          pointType: 'hold_point',
-          status: 'notified',
-        },
-      });
+    it('records same-lot manual release evidence document ids in the release audit log', async () => {
+      const { holdPoint: hp } = await createReleaseReadyHoldPoint();
+      const evidenceDocument = await createReleaseEvidenceDocument(lotId);
 
-      const itpInstance = await prisma.iTPInstance.findUniqueOrThrow({
-        where: { lotId },
-        select: { id: true },
+      const res = await postRelease(
+        hp.id,
+        emailReleasePayload({
+          releasedByOrg: undefined,
+          signatureDataUrl: undefined,
+          releaseEvidenceDocumentId: evidenceDocument.id,
+        }),
+      );
+
+      expect(res.status).toBe(200);
+      const auditLog = await prisma.auditLog.findFirst({
+        where: { entityId: hp.id, action: AuditAction.HP_RELEASED },
+        orderBy: { createdAt: 'desc' },
       });
-      const completion = await prisma.iTPCompletion.create({
+      const changes = parseAuditLogChanges(auditLog?.changes ?? null) as Record<string, unknown>;
+      expect(changes).toMatchObject({
+        releaseMethod: 'email',
+        releaseEvidenceDocumentId: evidenceDocument.id,
+        releaseEvidenceFilename: 'manual-release-email.pdf',
+      });
+    });
+
+    it('rejects manual release evidence documents from another lot', async () => {
+      const { holdPoint: hp } = await createReleaseReadyHoldPoint();
+      const otherLot = await prisma.lot.create({
         data: {
-          itpInstanceId: itpInstance.id,
-          checklistItemId,
-          status: 'completed',
+          projectId,
+          lotNumber: `HP-OTHER-${Date.now()}`,
+          lotType: 'chainage',
+          activityType: 'Earthworks',
         },
       });
+      const evidenceDocument = await createReleaseEvidenceDocument(
+        otherLot.id,
+        'wrong-lot-release-email.pdf',
+      );
+
+      try {
+        const res = await postRelease(
+          hp.id,
+          emailReleasePayload({
+            releasedByOrg: undefined,
+            signatureDataUrl: undefined,
+            releaseEvidenceDocumentId: evidenceDocument.id,
+          }),
+        );
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.message).toContain('Release evidence document');
+        const unchanged = await prisma.holdPoint.findUniqueOrThrow({ where: { id: hp.id } });
+        expect(unchanged.status).toBe('notified');
+      } finally {
+        await prisma.document.delete({ where: { id: evidenceDocument.id } }).catch(() => {});
+        await prisma.lot.delete({ where: { id: otherLot.id } }).catch(() => {});
+      }
+    });
+
+    it('notifies the team and emails confirmations when the release toggle is on (default)', async () => {
+      const { holdPoint: hp, completion } = await createReleaseReadyHoldPoint();
 
       // A foreman receives the Feature #948 contractor confirmation email
       // (direct `to:` send), so it proves both the in-app and the confirmation

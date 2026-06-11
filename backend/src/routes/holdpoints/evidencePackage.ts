@@ -40,12 +40,19 @@ export type EvidenceCompletionInput = {
   notes: string | null;
   attachments?: Array<{
     id: string;
-    document: { filename: string; fileUrl: string; caption: string | null };
+    document: {
+      id: string;
+      filename: string;
+      fileUrl: string;
+      caption: string | null;
+      uploadedAt: Date;
+    };
   }> | null;
 };
 
 export type EvidenceTestResultInput = {
   id: string;
+  itpChecklistItemId?: string | null;
   testType: string;
   testRequestNumber: string | null;
   laboratoryName: string | null;
@@ -59,6 +66,7 @@ export type EvidenceTestResultInput = {
 
 export type EvidenceDocumentInput = {
   id: string;
+  itpChecklistItemId?: string | null;
   filename: string;
   fileUrl: string;
   caption: string | null;
@@ -85,6 +93,32 @@ export type EvidenceItpTemplateInput = {
   name: string;
   activityType: string | null;
 };
+
+export type HoldPointEvidenceScope = {
+  includedChecklistItemIds?: Set<string>;
+};
+
+function isChecklistItemInEvidenceScope(
+  checklistItemId: string | null | undefined,
+  scope?: HoldPointEvidenceScope,
+): boolean {
+  if (!scope?.includedChecklistItemIds) {
+    return true;
+  }
+
+  return Boolean(checklistItemId && scope.includedChecklistItemIds.has(checklistItemId));
+}
+
+export function buildHoldPointEvidenceChecklistItemIdSet(
+  checklistItems: EvidenceChecklistItemInput[],
+  holdPointSequenceNumber: number,
+): Set<string> {
+  return new Set(
+    checklistItems
+      .filter((item) => item.sequenceNumber <= holdPointSequenceNumber)
+      .map((item) => item.id),
+  );
+}
 
 // Map the checklist items up to and including the hold point, attaching each
 // item's completion status. Filters the full template list by sequence number
@@ -123,30 +157,66 @@ export function buildHoldPointEvidenceChecklist(
   });
 }
 
-export function mapHoldPointEvidenceTestResults(testResults: EvidenceTestResultInput[]) {
-  return testResults.map((t) => ({
-    id: t.id,
-    testType: t.testType,
-    testRequestNumber: t.testRequestNumber,
-    laboratoryName: t.laboratoryName,
-    resultValue: t.resultValue,
-    resultUnit: t.resultUnit,
-    passFail: t.passFail,
-    status: t.status,
-    isVerified: t.status === 'verified',
-    verifiedBy: t.verifiedBy?.fullName || null,
-    createdAt: t.createdAt,
-  }));
+export function mapHoldPointEvidenceTestResults(
+  testResults: EvidenceTestResultInput[],
+  scope?: HoldPointEvidenceScope,
+) {
+  return testResults
+    .filter((t) => isChecklistItemInEvidenceScope(t.itpChecklistItemId, scope))
+    .map((t) => ({
+      id: t.id,
+      testType: t.testType,
+      testRequestNumber: t.testRequestNumber,
+      laboratoryName: t.laboratoryName,
+      resultValue: t.resultValue,
+      resultUnit: t.resultUnit,
+      passFail: t.passFail,
+      status: t.status,
+      isVerified: t.status === 'verified',
+      verifiedBy: t.verifiedBy?.fullName || null,
+      createdAt: t.createdAt,
+    }));
 }
 
-export function mapHoldPointEvidencePhotos(documents: EvidenceDocumentInput[]) {
-  return documents.map((d) => ({
-    id: d.id,
-    filename: d.filename,
-    fileUrl: d.fileUrl,
-    caption: d.caption,
-    uploadedAt: d.uploadedAt,
-  }));
+export function buildHoldPointEvidencePhotoDocuments(
+  completions: EvidenceCompletionInput[],
+): EvidenceDocumentInput[] {
+  const documentsById = new Map<string, EvidenceDocumentInput>();
+
+  for (const completion of completions) {
+    for (const attachment of completion.attachments ?? []) {
+      const { document } = attachment;
+      if (documentsById.has(document.id)) {
+        continue;
+      }
+
+      documentsById.set(document.id, {
+        id: document.id,
+        itpChecklistItemId: completion.checklistItemId,
+        filename: document.filename,
+        fileUrl: document.fileUrl,
+        caption: document.caption,
+        uploadedAt: document.uploadedAt,
+      });
+    }
+  }
+
+  return Array.from(documentsById.values());
+}
+
+export function mapHoldPointEvidencePhotos(
+  documents: EvidenceDocumentInput[],
+  scope?: HoldPointEvidenceScope,
+) {
+  return documents
+    .filter((d) => isChecklistItemInEvidenceScope(d.itpChecklistItemId, scope))
+    .map((d) => ({
+      id: d.id,
+      filename: d.filename,
+      fileUrl: d.fileUrl,
+      caption: d.caption,
+      uploadedAt: d.uploadedAt,
+    }));
 }
 
 type EvidenceChecklistEntry = ReturnType<typeof buildHoldPointEvidenceChecklist>[number];

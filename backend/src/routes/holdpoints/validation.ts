@@ -200,6 +200,10 @@ export const releaseHoldPointSchema = z.object({
   releaseMethod: optionalReleaseMethodSchema,
   releaseNotes: optionalTrimmedStringSchema(MAX_NOTE_LENGTH, 'releaseNotes'),
   signatureDataUrl: nullableTrimmedStringSchema(MAX_SIGNATURE_DATA_URL_LENGTH, 'signatureDataUrl'),
+  releaseEvidenceDocumentId: optionalTrimmedStringSchema(
+    MAX_ID_LENGTH,
+    'releaseEvidenceDocumentId',
+  ),
 });
 
 export const escalateSchema = z.object({
