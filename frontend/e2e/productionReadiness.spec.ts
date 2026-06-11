@@ -352,20 +352,15 @@ test.describe('production readiness guardrails', () => {
   });
 
   test('landing page avoids unverifiable claims and unmounted CTA routes', async () => {
-    const landingSources = await Promise.all(
-      [
-        '../src/components/landing/Hero.tsx',
-        '../src/components/landing/Header.tsx',
-        '../src/components/landing/Pricing.tsx',
-        '../src/components/landing/FinalCTA.tsx',
-        '../src/components/landing/SocialProof.tsx',
-        '../src/components/landing/Footer.tsx',
-        '../src/components/landing/FAQ.tsx',
-        '../src/components/landing/MobileShowcase.tsx',
-      ].map((relativePath) => readFile(new URL(relativePath, import.meta.url), 'utf8')),
+    // The early-access landing is a single namespaced page (no fabricated
+    // stats, logos or testimonials, by design). Guard the source against
+    // invented proof and dead CTA routes.
+    const joinedSource = await readFile(
+      new URL('../src/pages/LandingPage.tsx', import.meta.url),
+      'utf8',
     );
-    const joinedSource = landingSources.join('\n');
 
+    // No invented social proof, customer names, or unsourced figures.
     expect(joinedSource).not.toContain('50+');
     expect(joinedSource).not.toContain('Pacific Civil');
     expect(joinedSource).not.toContain('Georgiou');
@@ -374,13 +369,17 @@ test.describe('production readiness guardrails', () => {
     expect(joinedSource).not.toContain('Setup in one week');
     expect(joinedSource).not.toContain('Most teams');
     expect(joinedSource).not.toContain('1300 555 123');
+    // No CTA points at a route that is not mounted in App.tsx.
     expect(joinedSource).not.toContain('to="/contact"');
     expect(joinedSource).not.toContain('to="/pricing"');
     expect(joinedSource).not.toContain('to="/about"');
     expect(joinedSource).not.toContain('to="/mobile"');
-    expect(joinedSource).not.toContain('to="#"');
-    expect(joinedSource).toContain('supportMailtoHref');
-    expect(joinedSource).toContain('id="mobile"');
+    expect(joinedSource).not.toContain('href="#"');
+    // The primary CTA is wired to a real endpoint, and the sample readiness
+    // board is always disclosed as illustrative — never presented as a real
+    // customer figure.
+    expect(joinedSource).toContain('formspree.io/f/');
+    expect(joinedSource).toContain('Illustrative data');
   });
 
   test('preview object URLs are revoked in upload flows', async () => {

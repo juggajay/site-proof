@@ -121,9 +121,11 @@ function App() {
       <AuthProvider>
         <Suspense fallback={<PageSkeleton />}>
           <Routes>
+            {/* Login (public, full-page survey-night layout — not in AuthLayout) */}
+            <Route path="/login" element={<LoginPage />} />
+
             {/* Auth Routes */}
             <Route element={<AuthLayout />}>
-              <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
               <Route path="/forgot-password" element={<ForgotPasswordPage />} />
               <Route path="/reset-password" element={<ResetPasswordPage />} />
