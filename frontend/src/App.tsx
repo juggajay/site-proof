@@ -98,6 +98,16 @@ const RoleSwitcher = ENABLE_DEV_TOOLS
   ? lazy(() => import('@/components/dev/RoleSwitcher').then((m) => ({ default: m.RoleSwitcher })))
   : null;
 
+// Shell v2 — foreman mobile shell (behind foremanShellV2 feature flag).
+// One lazy import; the flag guard + route are the only App.tsx changes.
+const ShellRoutes = lazy(() =>
+  import('@/shell/ShellRoutes').then((m) => ({ default: m.ShellRoutes })),
+);
+import { ShellGuard } from '@/shell/ShellGuard';
+import { applyShellFlagFromUrl } from '@/shell/shellFlag';
+// Apply ?shell= param immediately (runs once before first render)
+applyShellFlagFromUrl();
+
 function App() {
   // Request persistent storage once on app start so iOS/Safari cannot evict
   // the IndexedDB offline queue under storage pressure. No-throw: returns
@@ -139,11 +149,31 @@ function App() {
             {/* Public secure hold-point release link */}
             <Route path="/hp-release/:token" element={<PublicHoldPointReleasePage />} />
 
+            {/* Foreman shell v2 — /m/* subtree (lazy-loaded, flag-gated).
+                Must be OUTSIDE ProtectedAppShell so the shell can use its own
+                full-screen layout without the office sidebar/header. The shell
+                runs its own auth check via ShellGuard + useAuth. */}
+            <Route
+              path="/m/*"
+              element={
+                <RoleProtectedRoute allowedRoles={INTERNAL_ROLES}>
+                  <ShellRoutes />
+                </RoleProtectedRoute>
+              }
+            />
+
             {/* Protected Routes */}
             <Route element={<ProtectedAppShell />}>
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="/onboarding" element={<CompanyOnboardingPage />} />
-              <Route path="/dashboard" element={<DashboardPage />} />
+              <Route
+                path="/dashboard"
+                element={
+                  <ShellGuard>
+                    <DashboardPage />
+                  </ShellGuard>
+                }
+              />
 
               {/* Portfolio - Admin Only */}
               <Route

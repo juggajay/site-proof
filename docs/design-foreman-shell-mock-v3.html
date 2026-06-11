@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SiteProof — Foreman v3</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f6f3ed; --card:#fffdf9; --ink:#171411; --muted:#766f66;
+    --line:#e6e0d6; --amber:#c45c0c; --amber-deep:#9a4506;
+    --good:#1b7d3f; --bad:#b3261e; --chip:#efe9df; --dim:#b3aca1;
+    --shadow:0 1px 2px rgba(23,20,17,.05), 0 4px 16px rgba(23,20,17,.06);
+    --spring:cubic-bezier(.22,1.2,.36,1);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
+    font-family:'Barlow',sans-serif;overscroll-behavior-y:none}
+  body::after{content:'';position:fixed;inset:0;pointer-events:none;opacity:.5;z-index:99;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .025 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E")}
+
+  .screen{display:none;min-height:100vh;flex-direction:column}
+  .screen.active{display:flex}
+  .screen.active main > *{opacity:0;animation:rise .5s var(--spring) forwards}
+  .screen.active main > *:nth-child(1){animation-delay:.03s}
+  .screen.active main > *:nth-child(2){animation-delay:.08s}
+  .screen.active main > *:nth-child(3){animation-delay:.13s}
+  .screen.active main > *:nth-child(4){animation-delay:.18s}
+  .screen.active main > *:nth-child(5){animation-delay:.23s}
+  .screen.active main > *:nth-child(6){animation-delay:.28s}
+  @keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+
+  header{position:sticky;top:0;background:linear-gradient(var(--bg) 82%, rgba(246,243,237,0));
+    padding:14px 18px 14px;z-index:5}
+  .topline{display:flex;align-items:center;gap:8px;min-height:42px}
+  .back{font-size:32px;line-height:.9;padding:0 14px 6px 0;color:var(--ink);
+    background:none;border:none;min-width:44px;min-height:44px;text-align:left;font-weight:700;
+    transition:transform .15s}
+  .back:active{transform:translateX(-4px)}
+  h1{font-family:'Barlow Condensed';font-size:34px;margin:0;font-weight:800;
+    letter-spacing:.01em;flex:1;text-transform:uppercase}
+  .sub{color:var(--muted);font-size:14px;margin-top:1px;font-weight:500}
+  .stripe{height:4px;width:64px;margin-top:8px;border-radius:2px;
+    background:repeating-linear-gradient(-45deg,var(--amber) 0 7px,var(--ink) 7px 14px)}
+  .sync{font-size:12.5px;font-weight:700;background:var(--card);border:1px solid var(--line);
+    border-radius:999px;padding:8px 12px;color:var(--good);white-space:nowrap;box-shadow:var(--shadow)}
+  .sync.wait{color:var(--amber)}
+  main{flex:1;padding:18px;display:flex;flex-direction:column;gap:13px;padding-bottom:130px}
+
+  /* HOME */
+  .hero{position:relative;overflow:hidden;background:linear-gradient(135deg,var(--amber),var(--amber-deep));
+    color:#fff;border:none;border-radius:22px;padding:24px 20px 20px;text-align:left;width:100%;
+    box-shadow:0 6px 24px rgba(180,83,9,.32);transition:transform .15s var(--spring)}
+  .hero:active{transform:scale(.975)}
+  .hero::before{content:'';position:absolute;top:0;left:0;right:0;height:5px;
+    background:repeating-linear-gradient(-45deg,rgba(255,255,255,.85) 0 8px,transparent 8px 16px)}
+  .hero::after{content:'';position:absolute;top:-60%;left:-30%;width:60%;height:220%;
+    background:linear-gradient(100deg,transparent,rgba(255,255,255,.14),transparent);
+    transform:rotate(8deg);animation:sheen 4.5s ease-in-out infinite}
+  @keyframes sheen{0%,55%{left:-40%}85%,100%{left:120%}}
+  .hero .kick{font-family:'Barlow Condensed';font-size:13.5px;font-weight:700;letter-spacing:.22em;opacity:.85}
+  .hero .big{font-family:'Barlow Condensed';font-size:31px;font-weight:800;text-transform:uppercase;
+    letter-spacing:.015em;margin-top:3px}
+  .hero .small{font-size:14.5px;opacity:.93;margin-top:6px;font-weight:500}
+  .hero .prog{margin-top:16px;height:8px;background:rgba(0,0,0,.22);border-radius:99px;overflow:hidden}
+  .hero .prog i{display:block;height:100%;width:0;background:#fff;border-radius:99px;
+    animation:fill .9s .3s var(--spring) forwards}
+  @keyframes fill{to{width:var(--w,50%)}}
+
+  .hub{display:flex;align-items:center;gap:15px;background:var(--card);
+    border:1px solid var(--line);border-radius:18px;padding:17px 16px;min-height:78px;
+    color:var(--ink);width:100%;text-align:left;box-shadow:var(--shadow);
+    transition:transform .15s var(--spring)}
+  .hub:active{transform:scale(.975)}
+  .hub .ico{width:46px;height:46px;border-radius:14px;background:var(--chip);
+    display:flex;align-items:center;justify-content:center;font-size:23px;flex-shrink:0}
+  .hub .grow{flex:1}
+  .hub .t{display:block;font-family:'Barlow Condensed';font-size:21px;font-weight:700;
+    text-transform:uppercase;letter-spacing:.02em}
+  .hub .d{display:block;font-size:13.5px;color:var(--muted);margin-top:2px;font-weight:500}
+  .node .t,.node .d{display:block}
+  .chipn{font-size:13px;font-weight:800;background:var(--chip);border-radius:999px;
+    padding:6px 12px;color:var(--amber)}
+  .chipn.ok{color:var(--good)}
+  .chev{color:var(--dim);font-size:22px;font-weight:700}
+
+  /* camera bar (home) */
+  .cambar{position:fixed;left:0;right:0;bottom:0;z-index:10;
+    padding:12px 18px calc(16px + env(safe-area-inset-bottom));
+    background:linear-gradient(transparent, var(--bg) 40%)}
+  .cambar button{width:100%;min-height:66px;border-radius:20px;border:none;
+    background:var(--ink);color:#fff;font-family:'Barlow Condensed';font-size:22px;
+    font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+    display:flex;align-items:center;justify-content:center;gap:12px;
+    box-shadow:0 8px 28px rgba(23,20,17,.35);transition:transform .15s var(--spring)}
+  .cambar button:active{transform:scale(.97)}
+  .cambar .lens{width:34px;height:34px;border-radius:999px;background:#fff2;
+    display:flex;align-items:center;justify-content:center;font-size:18px}
+
+  /* primary action */
+  .primary{position:fixed;left:0;right:0;bottom:0;z-index:10;
+    padding:12px 18px calc(16px + env(safe-area-inset-bottom));
+    background:linear-gradient(transparent, var(--bg) 40%)}
+  .primary button{width:100%;min-height:62px;border-radius:18px;border:none;
+    background:var(--ink);color:#fff;font-family:'Barlow Condensed';font-size:21px;
+    font-weight:800;letter-spacing:.05em;text-transform:uppercase;
+    box-shadow:0 6px 22px rgba(23,20,17,.3);transition:transform .15s var(--spring)}
+  .primary button:active{transform:scale(.97)}
+  .primary .accent{background:linear-gradient(135deg,var(--amber),var(--amber-deep));
+    box-shadow:0 6px 22px rgba(180,83,9,.35)}
+
+  /* diary path */
+  .path{position:relative;padding-left:6px}
+  .path::before{content:'';position:absolute;left:34px;top:36px;bottom:36px;width:3px;
+    background:repeating-linear-gradient(var(--line) 0 6px, transparent 6px 12px)}
+  .node{display:flex;gap:15px;background:var(--card);border:1.5px solid var(--line);
+    border-radius:18px;padding:16px;min-height:82px;width:100%;text-align:left;
+    align-items:center;position:relative;margin-bottom:13px;box-shadow:var(--shadow);
+    transition:transform .15s var(--spring)}
+  .node:active{transform:scale(.975)}
+  .nodenum{width:46px;height:46px;border-radius:999px;background:var(--chip);
+    display:flex;align-items:center;justify-content:center;font-weight:800;
+    font-family:'Barlow Condensed';font-size:20px;flex-shrink:0;border:2px solid var(--line)}
+  .node.done .nodenum{background:var(--good);color:#fff;border-color:var(--good)}
+  .node.now{border-color:var(--amber)}
+  .node.now .nodenum{background:var(--amber);color:#fff;border-color:var(--amber)}
+  .node.now::after{content:'';position:absolute;inset:-2px;border-radius:18px;
+    border:2px solid var(--amber);animation:pulse 2s ease-out infinite;pointer-events:none}
+  @keyframes pulse{0%{opacity:.7;transform:scale(1)}70%,100%{opacity:0;transform:scale(1.035)}}
+  .node.locked{opacity:.42;box-shadow:none}
+  .node .t{font-family:'Barlow Condensed';font-size:20px;font-weight:700;text-transform:uppercase}
+  .node .d{font-size:13.5px;color:var(--muted);margin-top:3px;font-weight:500}
+  .node .grow{flex:1}
+  .stepbar{font-family:'Barlow Condensed';font-size:13.5px;font-weight:700;
+    color:var(--amber);letter-spacing:.18em}
+
+  .empty{color:var(--muted);text-align:center;padding:34px 20px;font-size:15px;font-weight:500;line-height:1.5}
+  .bigadd{display:grid;grid-template-columns:1fr 1fr;gap:13px}
+  .bigadd button{background:var(--card);border:1px solid var(--line);border-radius:18px;
+    min-height:92px;font-family:'Barlow Condensed';font-size:20px;font-weight:700;
+    text-transform:uppercase;letter-spacing:.03em;color:var(--ink);box-shadow:var(--shadow);
+    transition:transform .15s var(--spring)}
+  .bigadd button:active{transform:scale(.96)}
+  .bigadd .ico{display:block;font-size:26px;margin-bottom:7px}
+  label{font-size:13px;font-weight:800;display:block;margin:10px 0 6px;
+    text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+  input,select,textarea{width:100%;min-height:54px;border:1.5px solid var(--line);border-radius:14px;
+    padding:13px;font-size:17px;background:var(--card);color:var(--ink);font-family:'Barlow'}
+  textarea{min-height:100px}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--amber)}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:17px;
+    width:100%;text-align:left;box-shadow:var(--shadow);transition:transform .15s var(--spring)}
+  button.card:active{transform:scale(.975)}
+  .card .t{font-weight:700;font-size:16.5px}
+  .card .d{color:var(--muted);font-size:14px;margin-top:4px;font-weight:500}
+  .row{display:flex;align-items:center;gap:10px}
+  .pillrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:9px}
+  .pill{font-size:12.5px;font-weight:700;background:var(--chip);border-radius:999px;
+    padding:5px 11px;color:var(--muted)}
+  .pill.g{color:var(--good)} .pill.a{color:var(--amber)}
+  .lotprog{height:7px;background:var(--chip);border-radius:99px;margin-top:13px;overflow:hidden}
+  .lotprog i{display:block;height:100%;width:0;background:var(--good);border-radius:99px;
+    animation:fill .8s .25s var(--spring) forwards}
+
+  /* ITP */
+  .tri{display:grid;grid-template-columns:1fr 1fr 1fr;gap:11px;margin-top:auto}
+  .tri button{min-height:96px;border-radius:18px;border:2.5px solid var(--line);
+    background:var(--card);font-family:'Barlow Condensed';font-size:21px;font-weight:800;
+    letter-spacing:.05em;box-shadow:var(--shadow);transition:transform .12s var(--spring)}
+  .tri button:active{transform:scale(.93)}
+  .tri .pass{border-color:var(--good);color:var(--good)}
+  .tri .fail{border-color:var(--bad);color:var(--bad)}
+  .tri .na{color:var(--muted)}
+  .itpq{font-size:22px;font-weight:700;line-height:1.4;margin:6px 0 2px}
+  .photobtn{display:flex;align-items:center;justify-content:center;gap:9px;min-height:58px;
+    border:1.5px dashed var(--dim);border-radius:16px;background:none;color:var(--muted);
+    font-size:15.5px;font-weight:700;width:100%;transition:transform .15s}
+  .photobtn:active{transform:scale(.97)}
+  .passflash{font-size:14px;font-weight:700;color:var(--good);background:#e4f3e9;
+    border-radius:12px;padding:10px 14px;align-self:flex-start;animation:rise .4s var(--spring)}
+
+  /* slide to submit */
+  .slider{position:relative;height:68px;background:var(--chip);border:1.5px solid var(--line);
+    border-radius:999px;overflow:hidden}
+  .slider .label{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    font-family:'Barlow Condensed';font-weight:700;color:var(--muted);font-size:18px;
+    letter-spacing:.08em;text-transform:uppercase}
+  .slider .label::after{content:'';position:absolute;inset:0;
+    background:linear-gradient(100deg,transparent 30%,rgba(255,255,255,.7) 50%,transparent 70%);
+    animation:sheen 2.6s ease-in-out infinite}
+  .knob{position:absolute;top:5px;left:5px;width:58px;height:58px;border-radius:999px;
+    background:linear-gradient(135deg,var(--amber),var(--amber-deep));color:#fff;
+    display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:800;
+    touch-action:none;box-shadow:0 3px 12px rgba(180,83,9,.4)}
+
+  .done-wrap{display:flex;flex-direction:column;align-items:center;justify-content:center;
+    flex:1;gap:16px;text-align:center;padding:24px}
+  .bigtick{width:118px;height:118px;border-radius:999px;background:var(--good);color:#fff;
+    font-size:60px;display:flex;align-items:center;justify-content:center;
+    box-shadow:0 10px 40px rgba(27,125,63,.35);animation:pop .55s var(--spring)}
+  @keyframes pop{0%{transform:scale(.2);opacity:0}60%{transform:scale(1.12)}100%{transform:scale(1);opacity:1}}
+  .done-big{font-family:'Barlow Condensed';font-size:30px;font-weight:800;text-transform:uppercase}
+</style>
+</head>
+<body>
+
+<!-- HOME -->
+<section class="screen active" id="home">
+  <header>
+    <div class="topline"><h1>SiteProof</h1><span class="sync">✓ All saved</span></div>
+    <div class="sub">Demo Walkthrough 2027 · Thu 11 June</div>
+    <div class="stripe"></div>
+  </header>
+  <main style="padding-bottom:150px">
+    <button class="hero" style="--w:50%" onclick="go('diary')">
+      <div class="kick">TODAY'S DIARY · 2 OF 4 DONE</div>
+      <div class="big">Finish today's diary</div>
+      <div class="small">Weather ✓ · Crew ✓ · log work, then submit</div>
+      <div class="prog"><i></i></div>
+    </button>
+    <button class="hub" onclick="go('lots')"><span class="ico">📍</span>
+      <span class="grow"><span class="t">Lots</span>
+      <span class="d">3 active · ITP checks live here</span></span>
+      <span class="chipn">10 checks due</span><span class="chev">›</span></button>
+    <button class="hub" onclick="go('dockets')"><span class="ico">🧾</span>
+      <span class="grow"><span class="t">Dockets</span>
+      <span class="d">Subbie hours for approval</span></span>
+      <span class="chipn">2 waiting</span><span class="chev">›</span></button>
+    <button class="hub" onclick="go('issues')"><span class="ico">⚠️</span>
+      <span class="grow"><span class="t">Issues</span>
+      <span class="d">NCRs &amp; defects</span></span>
+      <span class="chipn ok">none open</span><span class="chev">›</span></button>
+    <button class="hub" onclick="go('docs')"><span class="ico">📐</span>
+      <span class="grow"><span class="t">Drawings &amp; Docs</span>
+      <span class="d">Current revisions, by lot</span></span><span class="chev">›</span></button>
+  </main>
+  <div class="cambar"><button onclick="go('camera')">
+    <span class="lens">📷</span> Take a photo</button></div>
+</section>
+
+<!-- DIARY -->
+<section class="screen" id="diary">
+  <header>
+    <div class="topline"><button class="back" onclick="go('home')">‹</button>
+      <h1>Daily Diary</h1><span class="sync">✓ Saved</span></div>
+    <div class="sub">Thursday 11 June · <span class="stepbar">STEP 3 OF 4</span></div>
+    <div class="stripe"></div>
+  </header>
+  <main>
+    <div class="path">
+      <button class="node done" onclick="go('todo')"><span class="nodenum">✓</span>
+        <span class="grow"><span class="t">Weather</span>
+        <span class="d">22° fine, light wind — auto-filled 6:45am</span></span><span class="chev">›</span></button>
+      <button class="node done" onclick="go('todo')"><span class="nodenum">✓</span>
+        <span class="grow"><span class="t">Crew &amp; Plant</span>
+        <span class="d">6 workers · 2 machines — carried from yesterday</span></span><span class="chev">›</span></button>
+      <button class="node now" onclick="go('work')"><span class="nodenum">3</span>
+        <span class="grow"><span class="t">Today's Work</span>
+        <span class="d">Nothing logged yet — a couple of minutes</span></span><span class="chev">›</span></button>
+      <button class="node locked"><span class="nodenum">4</span>
+        <span class="grow"><span class="t">Review &amp; Submit</span>
+        <span class="d">Unlocks when work is logged</span></span></button>
+    </div>
+  </main>
+  <div class="primary"><button class="accent" onclick="go('work')">Add today's work</button></div>
+</section>
+
+<!-- WORK -->
+<section class="screen" id="work">
+  <header>
+    <div class="topline"><button class="back" onclick="go('diary')">‹</button>
+      <h1>Today's Work</h1><span class="sync">✓ Saved</span></div>
+    <div class="sub">Daily Diary · step 3 of 4</div>
+    <div class="stripe"></div>
+  </header>
+  <main>
+    <div class="bigadd">
+      <button onclick="go('activity')"><span class="ico">🔨</span>Activity</button>
+      <button onclick="go('todo')"><span class="ico">⏳</span>Delay</button>
+      <button onclick="go('todo')"><span class="ico">🚚</span>Delivery</button>
+      <button onclick="go('todo')"><span class="ico">📌</span>Event</button>
+    </div>
+    <div class="empty">Nothing yet. Each entry takes about 20 seconds —<br>use the keyboard mic and just say it.</div>
+  </main>
+  <div class="primary"><button onclick="go('review')">Done — review &amp; submit</button></div>
+</section>
+
+<!-- ACTIVITY -->
+<section class="screen" id="activity">
+  <header>
+    <div class="topline"><button class="back" onclick="go('work')">‹</button>
+      <h1>Add Activity</h1><span class="sync">✓ Saved</span></div>
+    <div class="sub">Auto-saves as you type — interruptions lose nothing</div>
+    <div class="stripe"></div>
+  </header>
+  <main>
+    <div><label>What was done</label>
+    <textarea placeholder="e.g. Placed and compacted select fill, layer 3"></textarea></div>
+    <div><label>Lot</label>
+    <select><option>LOT-001 — Embankment Ch 100–200</option><option>LOT-002 — Culvert Base</option></select></div>
+    <div><label>Quantity (optional)</label>
+    <input inputmode="decimal" placeholder="e.g. 450 m³"></div>
+    <button class="photobtn">📷 Add photos</button>
+  </main>
+  <div class="primary"><button class="accent" onclick="go('work')">Save activity</button></div>
+</section>
+
+<!-- REVIEW -->
+<section class="screen" id="review">
+  <header>
+    <div class="topline"><button class="back" onclick="go('diary')">‹</button>
+      <h1>Review &amp; Submit</h1><span class="sync">✓ Saved</span></div>
+    <div class="sub">Step 4 of 4 — the last thing between you and the ute</div>
+    <div class="stripe"></div>
+  </header>
+  <main>
+    <div class="card"><div class="t">Weather</div><div class="d">22° fine, light wind</div></div>
+    <div class="card"><div class="t">Crew &amp; Plant</div><div class="d">6 workers · 2 machines</div></div>
+    <div class="card"><div class="t">Work</div><div class="d">3 activities · 1 delay · 2 photos</div></div>
+    <div style="flex:1"></div>
+    <div class="sub" style="text-align:center">Slide to lock the diary and send it to the office</div>
+    <div class="slider" id="slider">
+      <div class="label">Slide to submit →</div>
+      <div class="knob" id="knob">›</div>
+    </div>
+  </main>
+</section>
+
+<!-- DONE -->
+<section class="screen" id="done">
+  <header><div class="topline"><h1>Submitted</h1></div><div class="stripe"></div></header>
+  <main class="done-wrap">
+    <div class="bigtick">✓</div>
+    <div class="done-big">Thursday done.</div>
+    <div class="sub">3 activities · 1 delay · 6 workers · 2 photos<br>Sent to the office. See you tomorrow.</div>
+  </main>
+  <div class="primary"><button onclick="go('home')">Back to home</button></div>
+</section>
+
+<!-- LOTS -->
+<section class="screen" id="lots">
+  <header>
+    <div class="topline"><button class="back" onclick="go('home')">‹</button>
+      <h1>Lots</h1><span class="sync">✓ Saved</span></div>
+    <div class="sub">3 active · 10 checks due today</div>
+    <div class="stripe"></div>
+  </header>
+  <main>
+    <button class="card" onclick="go('lot')">
+      <div class="row"><span class="t" style="flex:1">LOT-001 — Embankment Ch 100–200</span><span class="chev">›</span></div>
+      <div class="pillrow"><span class="pill a">In progress</span><span class="pill">ITP 14/22</span><span class="pill a">3 checks due</span></div>
+      <div class="lotprog"><i style="--w:64%"></i></div>
+    </button>
+    <button class="card" onclick="go('todo')">
+      <div class="row"><span class="t" style="flex:1">LOT-002 — Culvert Base Ch 240</span><span class="chev">›</span></div>
+      <div class="pillrow"><span class="pill a">Hold point</span><span class="pill">ITP 8/9</span><span class="pill a">awaiting release</span></div>
+      <div class="lotprog"><i style="--w:88%"></i></div>
+    </button>
+    <button class="card" onclick="go('todo')">
+      <div class="row"><span class="t" style="flex:1">LOT-003 — Subgrade Ch 200–300</span><span class="chev">›</span></div>
+      <div class="pillrow"><span class="pill g">Conformed</span><span class="pill">ITP complete</span></div>
+      <div class="lotprog"><i style="--w:100%"></i></div>
+    </button>
+  </main>
+</section>
+
+<!-- LOT DETAIL -->
+<section class="screen" id="lot">
+  <header>
+    <div class="topline"><button class="back" onclick="go('lots')">‹</button>
+      <h1>LOT-001</h1><span class="sync">✓ Saved</span></div>
+    <div class="sub">Embankment Ch 100–200 · In progress</div>
+    <div class="stripe"></div>
+  </header>
+  <main>
+    <button class="hub" onclick="go('itp')"><span class="ico">✅</span>
+      <span class="grow"><span class="t">Inspections</span>
+      <span class="d">14 of 22 done · 3 due today</span></span>
+      <span class="chipn">3 due</span><span class="chev">›</span></button>
+    <button class="hub" onclick="go('todo')"><span class="ico">📷</span>
+      <span class="grow"><span class="t">Photos</span>
+      <span class="d">18 on this lot</span></span><span class="chev">›</span></button>
+    <button class="hub" onclick="go('docs')"><span class="ico">📐</span>
+      <span class="grow"><span class="t">Drawings</span>
+      <span class="d">2 current for this lot</span></span><span class="chev">›</span></button>
+    <button class="hub" onclick="go('todo')"><span class="ico">ℹ️</span>
+      <span class="grow"><span class="t">Details &amp; status</span></span><span class="chev">›</span></button>
+  </main>
+  <div class="primary"><button class="accent" onclick="go('itp')">Continue inspections — 3 due</button></div>
+</section>
+
+<!-- ITP -->
+<section class="screen" id="itp">
+  <header>
+    <div class="topline"><button class="back" onclick="go('lot')">‹</button>
+      <h1>Inspection</h1><span class="sync">✓ Saved</span></div>
+    <div class="sub">LOT-001 · <span class="stepbar">CHECK 15 OF 22</span></div>
+    <div class="stripe"></div>
+  </header>
+  <main>
+    <div class="pill a" style="align-self:flex-start">Earthworks — Layer 3</div>
+    <div class="itpq">Classify fill material — particle size distribution within spec?</div>
+    <div class="sub">Responsible: Contractor · test cert can be attached</div>
+    <button class="photobtn">📷 Add evidence photo</button>
+    <div class="tri">
+      <button class="pass" onclick="go('itpnext')">Pass</button>
+      <button class="fail" onclick="go('todo')">Fail</button>
+      <button class="na" onclick="go('itpnext')">N/A</button>
+    </div>
+  </main>
+</section>
+
+<!-- ITP NEXT -->
+<section class="screen" id="itpnext">
+  <header>
+    <div class="topline"><button class="back" onclick="go('lot')">‹</button>
+      <h1>Inspection</h1><span class="sync wait">↑ 1 waiting</span></div>
+    <div class="sub">LOT-001 · <span class="stepbar">CHECK 16 OF 22</span></div>
+    <div class="stripe"></div>
+  </header>
+  <main>
+    <div class="passflash">✓ Check 15 passed — saved</div>
+    <div class="itpq">Perform density index testing on cohesionless (sandy) fill material</div>
+    <div class="sub">Responsible: Contractor · NATA cert required</div>
+    <button class="photobtn">📷 Add evidence photo</button>
+    <div class="tri">
+      <button class="pass" onclick="go('lot')">Pass</button>
+      <button class="fail" onclick="go('todo')">Fail</button>
+      <button class="na" onclick="go('lot')">N/A</button>
+    </div>
+  </main>
+</section>
+
+<!-- DOCKETS -->
+<section class="screen" id="dockets">
+  <header>
+    <div class="topline"><button class="back" onclick="go('home')">‹</button>
+      <h1>Dockets</h1><span class="sync">✓ Saved</span></div>
+    <div class="sub">2 waiting for your approval</div>
+    <div class="stripe"></div>
+  </header>
+  <main>
+    <button class="card" onclick="go('docket')">
+      <div class="row"><span class="t" style="flex:1">DKT-0142 — CivilWorx Pty Ltd</span><span class="chev">›</span></div>
+      <div class="d">Yesterday · 48 labour hrs · 16 plant hrs</div>
+    </button>
+    <button class="card" onclick="go('todo')">
+      <div class="row"><span class="t" style="flex:1">DKT-0143 — H&amp;K Haulage</span><span class="chev">›</span></div>
+      <div class="d">Yesterday · 22 labour hrs · 9 plant hrs</div>
+    </button>
+  </main>
+</section>
+
+<!-- DOCKET -->
+<section class="screen" id="docket">
+  <header>
+    <div class="topline"><button class="back" onclick="go('dockets')">‹</button>
+      <h1>DKT-0142</h1><span class="sync">✓ Saved</span></div>
+    <div class="sub">CivilWorx Pty Ltd · Wednesday 10 June</div>
+    <div class="stripe"></div>
+  </header>
+  <main>
+    <div class="card"><div class="t">Labour — 48 hrs</div><div class="d">6 workers × 8 hrs · general labour, formwork</div></div>
+    <div class="card"><div class="t">Plant — 16 hrs</div><div class="d">20t excavator × 8 · padfoot roller × 8</div></div>
+    <div class="card"><div class="t">Notes</div><div class="d">Culvert base prep and backfill as directed.</div></div>
+    <div class="empty" style="padding:8px">Wrong hours? <u>Query</u> · <u>Reject</u></div>
+  </main>
+  <div class="primary"><button class="accent" onclick="go('dockets')">Approve · 48 labour + 16 plant</button></div>
+</section>
+
+<!-- DOCS -->
+<section class="screen" id="docs">
+  <header>
+    <div class="topline"><button class="back" onclick="back()">‹</button>
+      <h1>Drawings &amp; Docs</h1><span class="sync">✓ Saved</span></div>
+    <div class="sub">Current revisions · tap to open full screen</div>
+    <div class="stripe"></div>
+  </header>
+  <main>
+    <button class="card" onclick="go('todo')">
+      <div class="row"><span class="t" style="flex:1">DRG-1204 — Embankment typical sections</span><span class="chev">›</span></div>
+      <div class="pillrow"><span class="pill g">Rev C — current</span><span class="pill">LOT-001</span></div>
+    </button>
+    <button class="card" onclick="go('todo')">
+      <div class="row"><span class="t" style="flex:1">DRG-1209 — Culvert details Ch 240</span><span class="chev">›</span></div>
+      <div class="pillrow"><span class="pill g">Rev A — current</span><span class="pill">LOT-002</span></div>
+    </button>
+    <button class="card" onclick="go('todo')">
+      <div class="row"><span class="t" style="flex:1">SPEC-R44 — Earthworks specification</span><span class="chev">›</span></div>
+      <div class="pillrow"><span class="pill">Project-wide</span></div>
+    </button>
+  </main>
+</section>
+
+<!-- ISSUES -->
+<section class="screen" id="issues">
+  <header>
+    <div class="topline"><button class="back" onclick="go('home')">‹</button>
+      <h1>Issues</h1><span class="sync">✓ Saved</span></div>
+    <div class="sub">NCRs &amp; defects on your lots</div>
+    <div class="stripe"></div>
+  </header>
+  <main>
+    <div class="empty">No open issues. Good.<br>Spot something wrong? Photo first — words later.</div>
+  </main>
+  <div class="primary"><button class="accent" onclick="go('camera')">📷 Raise an issue</button></div>
+</section>
+
+<!-- CAMERA -->
+<section class="screen" id="camera">
+  <header>
+    <div class="topline"><button class="back" onclick="back()">‹</button>
+      <h1>Camera</h1><span class="sync">✓ Saved</span></div>
+    <div class="sub">Opens your phone camera instantly in the real app</div>
+    <div class="stripe"></div>
+  </header>
+  <main>
+    <div class="empty" style="flex:1;display:flex;align-items:center;justify-content:center;background:#171411;color:#776f64;border-radius:18px">[ viewfinder ]</div>
+    <div class="sub" style="text-align:center">After the shot, one screen: file to lot / raise issue / just save.<br>Under 10 seconds, then back to work.</div>
+  </main>
+  <div class="primary"><button class="accent" onclick="back()">📷 Capture</button></div>
+</section>
+
+<!-- TODO -->
+<section class="screen" id="todo">
+  <header>
+    <div class="topline"><button class="back" onclick="back()">‹</button>
+      <h1>Next round</h1></div>
+    <div class="sub">This flow gets designed in mock v4</div>
+    <div class="stripe"></div>
+  </header>
+  <main><div class="empty">Placeholder — back goes one level up, as always.</div></main>
+</section>
+
+<script>
+  const stack = ['home'];
+  function show(id){
+    document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+    const el = document.getElementById(id);
+    el.classList.add('active');
+    // retrigger stagger animation
+    el.querySelectorAll('main > *').forEach(n=>{ n.style.animation='none'; n.offsetHeight; n.style.animation=''; });
+    window.scrollTo(0,0);
+  }
+  function go(id){ stack.push(id); show(id); }
+  function back(){ stack.pop(); show(stack[stack.length-1] || 'home'); }
+
+  const knob = document.getElementById('knob'), slider = document.getElementById('slider');
+  let dragging=false, startX=0;
+  knob.addEventListener('pointerdown', e=>{ dragging=true; startX=e.clientX-knob.offsetLeft; knob.setPointerCapture(e.pointerId); });
+  knob.addEventListener('pointermove', e=>{
+    if(!dragging) return;
+    const max = slider.clientWidth - knob.clientWidth - 10;
+    let x = Math.min(Math.max(e.clientX-startX, 5), max+5);
+    knob.style.left = x+'px';
+    if(x >= max){ dragging=false; knob.style.left='5px'; go('done'); }
+  });
+  knob.addEventListener('pointerup', ()=>{ dragging=false; knob.style.transition='left .3s cubic-bezier(.22,1.2,.36,1)'; knob.style.left='5px'; setTimeout(()=>knob.style.transition='',300); });
+</script>
+</body>
+</html>

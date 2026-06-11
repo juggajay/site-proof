@@ -275,6 +275,259 @@
   }
 }
 
+/* ─── Shell v2 (foremanShellV2) ─────────────────────────────────────────────
+   Design spec: docs/design-foreman-shell-mock-v4.html
+   IBM Plex Sans Condensed 600/700 added in index.html for display titles.
+   CSS variables mirror the mock's :root so we write once.
+   -------------------------------------------------------------------------- */
+
+/* Spring easing from the mock. Used for hub tile + hero active states. */
+@layer utilities {
+  /* Condensed display title — hub tile labels, hero big text, section headings */
+  .shell-display-title {
+    font-family: 'IBM Plex Sans Condensed', 'IBM Plex Sans', ui-sans-serif, sans-serif;
+    font-size: 27px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    line-height: 1.1;
+    margin: 0;
+  }
+
+  /* Smaller condensed — inner header title */
+  .shell-display-title-sm {
+    font-family: 'IBM Plex Sans Condensed', 'IBM Plex Sans', ui-sans-serif, sans-serif;
+    font-size: 21px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    line-height: 1.15;
+    margin: 0;
+  }
+
+  /* Hub tile title (condensed 18.5 px per mock) */
+  .shell-tile-title {
+    font-family: 'IBM Plex Sans Condensed', 'IBM Plex Sans', ui-sans-serif, sans-serif;
+    font-size: 18.5px;
+    font-weight: 700;
+    letter-spacing: -0.005em;
+    line-height: 1.2;
+  }
+
+  /* Mono data text — docket numbers, lot IDs, time stamps */
+  .shell-mono {
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  /* Mono badge/kicker — e.g. "2/4", amber count chips */
+  .shell-mono-badge {
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  /* Role/status chip — monochrome */
+  .shell-chip {
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    font-weight: 600;
+    background: hsl(var(--secondary));
+    border-radius: 9999px;
+    padding: 3px 8px;
+    color: hsl(var(--muted-foreground));
+  }
+
+  /* Number/count chip on tiles — amber for attention, green for resolved */
+  .shell-count-chip {
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    font-size: 12px;
+    font-weight: 600;
+    background: hsl(var(--secondary));
+    border-radius: 9999px;
+    padding: 6px 11px;
+    white-space: nowrap;
+    color: hsl(var(--warning));
+  }
+  .shell-count-chip-ok {
+    color: hsl(var(--success));
+  }
+
+  /* Hero hazard-stripe top accent bar (repeating amber diagonal) */
+  .shell-hazard-stripe {
+    position: absolute;
+    inset: 0;
+    height: 4px;
+    background: repeating-linear-gradient(-55deg, hsl(var(--warning)) 0 8px, transparent 8px 16px);
+  }
+
+  /* Hero tile — near-black background, amber = attention only */
+  .shell-hero {
+    position: relative;
+    overflow: hidden;
+    background: hsl(var(--foreground));
+    color: hsl(40 33% 98%);
+    border: none;
+    border-radius: 16px;
+    padding: 20px;
+    text-align: left;
+    width: 100%;
+    box-shadow:
+      0 1px 2px hsl(24 14% 9% / 0.05),
+      0 8px 24px hsl(24 14% 9% / 0.07);
+    transition: transform 0.18s cubic-bezier(0.32, 1.15, 0.35, 1);
+  }
+  .shell-hero:active {
+    transform: scale(0.98);
+  }
+
+  /* Hub tile — white card with border */
+  .shell-hub {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    border-radius: 16px;
+    padding: 16px;
+    min-height: 76px;
+    width: 100%;
+    text-align: left;
+    box-shadow: 0 1px 2px hsl(24 14% 9% / 0.04);
+    transition:
+      transform 0.18s cubic-bezier(0.32, 1.15, 0.35, 1),
+      box-shadow 0.18s;
+  }
+  .shell-hub:active {
+    transform: scale(0.98);
+    box-shadow: none;
+  }
+
+  /* Hub tile icon container */
+  .shell-hub-ico {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: hsl(var(--secondary));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: hsl(var(--foreground));
+  }
+
+  /* Camera bar — fixed bottom action button (home screen) */
+  .shell-cambar {
+    position: fixed;
+    inset-inline: 0;
+    bottom: 0;
+    z-index: 10;
+    padding: 10px 20px calc(16px + env(safe-area-inset-bottom, 0px));
+    background: linear-gradient(transparent, hsl(var(--background)) 42%);
+  }
+  .shell-cambar-btn {
+    width: 100%;
+    min-height: 62px;
+    border-radius: 16px;
+    border: none;
+    background: hsl(var(--foreground));
+    color: hsl(40 33% 98%);
+    font-family: 'IBM Plex Sans Condensed', 'IBM Plex Sans', ui-sans-serif, sans-serif;
+    font-size: 19px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    box-shadow:
+      0 1px 2px hsl(24 14% 9% / 0.05),
+      0 8px 24px hsl(24 14% 9% / 0.07);
+    transition: transform 0.18s cubic-bezier(0.32, 1.15, 0.35, 1);
+    cursor: pointer;
+  }
+  .shell-cambar-btn:active {
+    transform: scale(0.97);
+  }
+  .shell-cambar-btn:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+
+  /* Progress bar inside the hero (amber fill animates in on mount) */
+  .shell-prog-track {
+    flex: 1;
+    height: 6px;
+    background: hsl(40 33% 98% / 0.18);
+    border-radius: 9999px;
+    overflow: hidden;
+  }
+  .shell-prog-fill {
+    display: block;
+    height: 100%;
+    background: hsl(var(--warning));
+    border-radius: 9999px;
+    width: 0;
+    animation: shell-fill 0.9s 0.25s cubic-bezier(0.32, 1.15, 0.35, 1) forwards;
+  }
+  @keyframes shell-fill {
+    to {
+      width: var(--shell-prog-w, 50%);
+    }
+  }
+}
+
+/* Staggered rise-in — applied to .stagger-rise > * children.
+   Opacity starts at 0; each child rises in order.
+   Respects prefers-reduced-motion. */
+@layer utilities {
+  .stagger-rise > * {
+    opacity: 0;
+    animation: shell-rise 0.45s cubic-bezier(0.32, 1.15, 0.35, 1) forwards;
+  }
+  .stagger-rise > *:nth-child(1) {
+    animation-delay: 0.02s;
+  }
+  .stagger-rise > *:nth-child(2) {
+    animation-delay: 0.06s;
+  }
+  .stagger-rise > *:nth-child(3) {
+    animation-delay: 0.1s;
+  }
+  .stagger-rise > *:nth-child(4) {
+    animation-delay: 0.14s;
+  }
+  .stagger-rise > *:nth-child(5) {
+    animation-delay: 0.18s;
+  }
+  .stagger-rise > *:nth-child(6) {
+    animation-delay: 0.22s;
+  }
+  @keyframes shell-rise {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .stagger-rise > * {
+      animation-duration: 0.01ms !important;
+    }
+    .shell-prog-fill {
+      animation-duration: 0.01ms !important;
+    }
+    .shell-hero,
+    .shell-hub {
+      transition-duration: 0.01ms !important;
+    }
+    .shell-cambar-btn {
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
