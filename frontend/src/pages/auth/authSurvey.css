@@ -1,0 +1,555 @@
+/* ============================================================
+   SiteProof — LOGIN · "Quiet Authority / survey plan at night"
+   Ported from docs/design-mockups/login.html. Every selector is
+   namespaced under .sp-auth so it never leaks into the rest of the
+   app. Fonts load in index.html (IBM Plex Sans / Mono).
+   ============================================================ */
+
+.sp-auth {
+  --ink: #1b1714;
+  --ink-2: #57514b;
+  --ink-faint: #7a726a;
+  --paper: #f7f6f3;
+  --card: #ffffff;
+  --hair: #e9e5de;
+  --hair-2: #f0ede7;
+  --hair-strong: #d9d3ca;
+  --night: #14100d;
+  --night-hair: #2e2720;
+  --bone: #f3efe8;
+  --bone-2: #b3a99c;
+  --bone-3: #877d70;
+  --amber: #d97706;
+  --amber-ink: #92400e;
+  --green: #15803d;
+  --green-ink: #166534;
+  --accent: #b45309;
+  --accent-night: #e8924a;
+  --red: #b42318;
+  --sh-card: 0 1px 2px rgba(40, 34, 28, 0.045), 0 1px 3px rgba(40, 34, 28, 0.025);
+  --sh-board: 0 24px 60px -12px rgba(0, 0, 0, 0.5), 0 4px 16px rgba(0, 0, 0, 0.25);
+  --sh-btn: 0 1px 1.5px rgba(40, 34, 28, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  --radius: 7px;
+
+  background: var(--night);
+  color: var(--ink);
+  font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  letter-spacing: -0.011em;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  overflow-x: clip;
+  position: relative;
+}
+
+.sp-auth * {
+  box-sizing: border-box;
+}
+.sp-auth .mono {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+.sp-auth .micro {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.sp-auth a {
+  color: inherit;
+  text-decoration: none;
+}
+.sp-auth ::selection {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* survey grid + grain on the night canvas */
+.sp-auth::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(243, 239, 232, 0.033) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(243, 239, 232, 0.033) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse 110% 95% at 50% 30%, #000 35%, transparent 80%);
+  -webkit-mask-image: radial-gradient(ellipse 110% 95% at 50% 30%, #000 35%, transparent 80%);
+}
+.sp-auth::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.5;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0.6 0 0 0 0 0.55 0 0 0 0 0.5 0 0 0 0.06 0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ---------- top bar ---------- */
+.sp-auth .top {
+  position: relative;
+  z-index: 2;
+}
+.sp-auth .top .wrap {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 0 28px;
+  display: flex;
+  align-items: center;
+  height: 66px;
+}
+.sp-auth .brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+  font-size: 17px;
+  letter-spacing: -0.02em;
+  color: var(--bone);
+}
+.sp-auth .brand svg {
+  width: 29px;
+  height: 29px;
+  display: block;
+}
+.sp-auth .top .back {
+  margin-left: auto;
+  font-size: 14px;
+  color: var(--bone-2);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  transition: color 0.14s;
+}
+.sp-auth .top .back:hover {
+  color: var(--bone);
+}
+.sp-auth .top .back .mono {
+  font-size: 12px;
+}
+
+/* ---------- centre stage ---------- */
+.sp-auth .stage {
+  position: relative;
+  z-index: 2;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px 70px;
+}
+.sp-auth .auth {
+  width: 100%;
+  max-width: 440px;
+}
+
+.sp-auth .kicker {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  justify-content: center;
+  margin-bottom: 18px;
+}
+.sp-auth .kicker .d {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent-night);
+  box-shadow: 0 0 12px rgba(232, 146, 74, 0.6);
+}
+.sp-auth .kicker .micro {
+  color: var(--accent-night);
+}
+
+.sp-auth .card {
+  background: var(--card);
+  border: 1px solid var(--hair);
+  border-radius: 14px;
+  box-shadow: var(--sh-board);
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(22px);
+  animation: spauth-card-in 0.65s cubic-bezier(0.16, 0.84, 0.3, 1) 0.1s forwards;
+}
+@keyframes spauth-card-in {
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sp-auth .card {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.sp-auth .card-h {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 24px 30px 0;
+}
+.sp-auth .card-h h1 {
+  margin: 0;
+  font-size: 23px;
+  font-weight: 600;
+  letter-spacing: -0.022em;
+}
+.sp-auth .card-h .mono {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.sp-auth .card-sub {
+  margin: 6px 0 0;
+  padding: 0 30px;
+  font-size: 14px;
+  color: var(--ink-faint);
+}
+.sp-auth .card-body {
+  padding: 22px 30px 30px;
+}
+
+.sp-auth .frow {
+  margin-top: 16px;
+  display: grid;
+  gap: 6px;
+}
+.sp-auth .frow:first-child {
+  margin-top: 0;
+}
+.sp-auth .frow label {
+  font-size: 13px;
+  font-weight: 550;
+}
+/* label + inline aux link share a baseline row, but the label text stays
+   clean ("Password") so it remains the input's sole accessible label */
+.sp-auth .lblrow {
+  display: flex;
+  align-items: baseline;
+}
+.sp-auth .lblrow .aux {
+  margin-left: auto;
+  font-size: 12.5px;
+  font-weight: 450;
+  color: var(--ink-faint);
+}
+.sp-auth .lblrow .aux:hover {
+  color: var(--accent);
+}
+.sp-auth .frow input {
+  font: inherit;
+  font-size: 15px;
+  height: 46px;
+  padding: 0 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--hair-strong);
+  background: var(--card);
+  color: var(--ink);
+  width: 100%;
+  transition:
+    border-color 0.12s,
+    box-shadow 0.12s;
+}
+.sp-auth .frow input:focus {
+  outline: none;
+  border-color: var(--ink);
+  box-shadow: 0 0 0 1px var(--ink);
+}
+.sp-auth .frow input.code {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 22px;
+  letter-spacing: 0.45em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.sp-auth .ferr {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  color: var(--red);
+}
+
+.sp-auth .remember {
+  margin-top: 16px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 14px;
+  color: var(--ink-2);
+  user-select: none;
+  cursor: pointer;
+}
+.sp-auth .remember input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--ink);
+  cursor: pointer;
+}
+
+.sp-auth .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 48px;
+  padding: 0 22px;
+  border-radius: var(--radius);
+  font: inherit;
+  font-size: 15.5px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--hair);
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: var(--sh-card);
+  transition:
+    border-color 0.14s,
+    background 0.14s,
+    transform 0.14s;
+}
+.sp-auth .btn:hover {
+  border-color: var(--hair-strong);
+  background: var(--paper);
+}
+.sp-auth .btn.primary {
+  background: var(--ink);
+  color: #fff;
+  border-color: var(--ink);
+  box-shadow: var(--sh-btn);
+  margin-top: 20px;
+}
+.sp-auth .btn.primary:hover {
+  background: #2b2520;
+  border-color: #2b2520;
+  transform: translateY(-1px);
+}
+.sp-auth .btn:disabled {
+  opacity: 0.6;
+  pointer-events: none;
+}
+.sp-auth .btn .ar {
+  font-family: 'IBM Plex Mono', monospace;
+  transition: transform 0.18s cubic-bezier(0.2, 0.6, 0.2, 1);
+}
+.sp-auth .btn:hover .ar {
+  transform: translateX(4px);
+}
+.sp-auth .btn svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+
+.sp-auth .divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 22px 0 0;
+  color: var(--ink-faint);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+.sp-auth .divider::before,
+.sp-auth .divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--hair);
+}
+.sp-auth .alts {
+  margin-top: 18px;
+  display: grid;
+  gap: 10px;
+}
+
+.sp-auth .swap {
+  margin-top: 20px;
+  text-align: center;
+  font-size: 13.5px;
+  color: var(--ink-faint);
+}
+.sp-auth .swap a,
+.sp-auth .swap button {
+  font: inherit;
+  font-size: 13.5px;
+  color: var(--ink-2);
+  font-weight: 500;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  padding: 0;
+}
+.sp-auth .swap a:hover,
+.sp-auth .swap button:hover {
+  color: var(--accent);
+}
+
+/* status banners */
+.sp-auth .note {
+  margin-top: 18px;
+  display: flex;
+  gap: 10px;
+  padding: 13px 15px;
+  border-radius: var(--radius);
+  font-size: 13.5px;
+  align-items: baseline;
+}
+.sp-auth .note .ic {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  flex: none;
+}
+.sp-auth .note.amber {
+  background: #fdf6ec;
+  border: 1px solid #f3e3c8;
+  color: var(--amber-ink);
+}
+.sp-auth .note.green {
+  background: #f0f7f1;
+  border: 1px solid #d8e9dc;
+  color: var(--green-ink);
+}
+.sp-auth .note.red {
+  background: #fdf1ef;
+  border: 1px solid #f3d2cd;
+  color: var(--red);
+}
+
+/* magic-link sent state */
+.sp-auth .sent {
+  text-align: center;
+  padding: 8px 0 4px;
+}
+.sp-auth .sent .ring {
+  width: 54px;
+  height: 54px;
+  margin: 0 auto;
+  border-radius: 50%;
+  background: #f0f7f1;
+  border: 1.5px solid #d8e9dc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--green-ink);
+  font-size: 22px;
+  font-weight: 700;
+}
+.sp-auth .sent h2 {
+  margin: 16px 0 0;
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.018em;
+}
+.sp-auth .sent p {
+  margin: 8px 0 0;
+  font-size: 14.5px;
+  color: var(--ink-2);
+}
+.sp-auth .sent p b {
+  color: var(--ink);
+  font-weight: 550;
+}
+.sp-auth .sent .fine {
+  margin-top: 14px;
+  font-size: 12.5px;
+  color: var(--ink-faint);
+}
+.sp-auth .sent .fine button {
+  font: inherit;
+  color: var(--ink-2);
+  background: none;
+  border: 0;
+  cursor: pointer;
+  padding: 0;
+  font-weight: 500;
+}
+.sp-auth .sent .fine button:hover {
+  color: var(--accent);
+}
+
+/* card footer */
+.sp-auth .card-f {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 30px;
+  border-top: 1px solid var(--hair);
+  background: var(--paper);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11.5px;
+  color: var(--ink-faint);
+}
+.sp-auth .card-f .d {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  flex: none;
+}
+
+/* below the card */
+.sp-auth .below {
+  margin-top: 22px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--bone-3);
+}
+.sp-auth .below a {
+  color: var(--bone-2);
+  font-weight: 500;
+}
+.sp-auth .below a:hover {
+  color: var(--accent-night);
+}
+
+/* chainage strip */
+.sp-auth .chainage {
+  position: relative;
+  z-index: 2;
+  height: 46px;
+  margin: 0 80px;
+  border-top: 1px solid rgba(243, 239, 232, 0.14);
+}
+@media (max-width: 640px) {
+  .sp-auth .chainage {
+    margin: 0 24px;
+  }
+}
+.sp-auth .chainage .tick {
+  position: absolute;
+  top: 0;
+  width: 1px;
+  height: 9px;
+  background: rgba(243, 239, 232, 0.14);
+}
+.sp-auth .chainage .tick.maj {
+  height: 15px;
+  background: var(--bone-3);
+}
+.sp-auth .chainage .lbl {
+  position: absolute;
+  top: 19px;
+  transform: translateX(-50%);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  color: var(--bone-3);
+}
