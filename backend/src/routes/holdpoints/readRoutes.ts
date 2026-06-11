@@ -49,6 +49,7 @@ import {
   buildNotificationTimeResponse,
   buildProjectWorkingHoursResponse,
 } from './workingHoursResponses.js';
+import { isReleaseGatedChecklistItem } from '../../lib/holdPointReleaseGating.js';
 
 // =============================================================================
 // Authenticated hold point READ routes: project list, lot/item detail,
@@ -120,7 +121,6 @@ holdPointReadRouter.get(
             template: {
               include: {
                 checklistItems: {
-                  where: { pointType: 'hold_point' },
                   orderBy: { sequenceNumber: 'asc' },
                 },
               },
@@ -194,7 +194,7 @@ holdPointReadRouter.get(
 
     // Find the hold point item
     const holdPointItem = lot.itpInstance.template.checklistItems.find((i) => i.id === itemId);
-    if (!holdPointItem || holdPointItem.pointType !== 'hold_point') {
+    if (!holdPointItem || !isReleaseGatedChecklistItem(holdPointItem)) {
       throw AppError.notFound('Hold point item');
     }
 

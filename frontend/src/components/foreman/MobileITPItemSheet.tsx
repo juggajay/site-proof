@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Camera, Image as ImageIcon } from 'lucide-react';
 import { SecureDocumentImage } from '@/components/documents/SecureDocumentImage';
+import { isReleaseGatedChecklistItem } from '@/lib/itpReleaseGating';
 import { BottomSheet } from './sheets/BottomSheet';
 import type { ITPChecklistItem, ITPCompletion } from './MobileITPChecklist';
 
@@ -9,6 +10,7 @@ interface MobileITPItemSheetProps {
   item: ITPChecklistItem | null;
   completion?: ITPCompletion;
   canComplete: boolean;
+  releaseRequired?: boolean;
   onClose: () => void;
   onPass: (notes: string | null) => void;
   /** Resolves true when saved; false keeps the sheet open with the reason intact. */
@@ -24,6 +26,7 @@ export function MobileITPItemSheet({
   item,
   completion,
   canComplete,
+  releaseRequired = false,
   onClose,
   onPass,
   onNA,
@@ -87,9 +90,11 @@ export function MobileITPItemSheet({
   const isNA = completion?.isNotApplicable;
   const isFailed = completion?.isFailed;
   const photos = completion?.attachments || [];
+  const isReleaseGated = isReleaseGatedChecklistItem(item);
 
   const pointTypeLabel = {
     standard: 'Standard Point',
+    verification: 'Verification Point',
     witness: 'Witness Point',
     hold_point: 'Hold Point',
   };
@@ -108,9 +113,13 @@ export function MobileITPItemSheet({
         {!canComplete && (
           <div className="flex items-center gap-2 p-3 rounded-lg bg-warning/10 border border-warning/20">
             <div>
-              <p className="text-sm font-medium text-warning-foreground">View Only</p>
+              <p className="text-sm font-medium text-warning-foreground">
+                {releaseRequired ? 'Release Required' : 'View Only'}
+              </p>
               <p className="text-xs text-muted-foreground">
-                Contact head contractor for completion access
+                {releaseRequired
+                  ? 'This item must be released through the hold-point flow before it can pass.'
+                  : 'Contact head contractor for completion access'}
               </p>
             </div>
           </div>
@@ -121,14 +130,14 @@ export function MobileITPItemSheet({
           <div className="flex items-center gap-2 mb-2 flex-wrap">
             <span
               className={`px-2 py-0.5 rounded text-xs font-medium ${
-                item.pointType === 'hold_point'
+                isReleaseGated
                   ? 'bg-destructive/10 text-destructive'
                   : item.pointType === 'witness'
                     ? 'bg-warning/10 text-warning'
                     : 'bg-muted text-muted-foreground'
               }`}
             >
-              {pointTypeLabel[item.pointType]}
+              {isReleaseGated ? 'Hold Point' : pointTypeLabel[item.pointType]}
             </span>
             <span className="px-2 py-0.5 rounded text-xs font-medium bg-muted">
               {responsiblePartyLabel[item.responsibleParty]}

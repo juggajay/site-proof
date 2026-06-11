@@ -1025,6 +1025,71 @@ describe('Hold Points API access control', () => {
     expect(storedHashRes.status).toBe(404);
   });
 
+  it('allows superintendent-responsible verification items through the hold-point release flow', async () => {
+    clearEmailQueue();
+    const existingItem = await prisma.iTPChecklistItem.findUniqueOrThrow({
+      where: { id: checklistItemId },
+      select: { templateId: true },
+    });
+    const releaseItem = await prisma.iTPChecklistItem.create({
+      data: {
+        templateId: existingItem.templateId,
+        description: 'Superintendent verification release',
+        pointType: 'verification',
+        responsibleParty: 'superintendent',
+        sequenceNumber: 0,
+        evidenceRequired: 'none',
+      },
+    });
+    const superintendent = await registerTestUser(
+      'Hold Points Superintendent Verification Reviewer',
+      'viewer',
+      companyId,
+    );
+    createdUserIds.push(superintendent.userId);
+
+    await prisma.projectUser.create({
+      data: {
+        projectId,
+        userId: superintendent.userId,
+        role: 'superintendent',
+        status: 'active',
+      },
+    });
+
+    try {
+      const detailRes = await request(app)
+        .get(`/api/holdpoints/lot/${lotId}/item/${releaseItem.id}`)
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(detailRes.status).toBe(200);
+      expect(detailRes.body.holdPoint.itpChecklistItemId).toBe(releaseItem.id);
+
+      const requestReleaseRes = await request(app)
+        .post('/api/holdpoints/request-release')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          lotId,
+          itpChecklistItemId: releaseItem.id,
+          notificationSentTo: superintendent.email,
+        });
+      expect(requestReleaseRes.status).toBe(200);
+      expect(requestReleaseRes.body.holdPoint.itpChecklistItemId).toBe(releaseItem.id);
+
+      const holdPoint = await prisma.holdPoint.findFirst({
+        where: { lotId, itpChecklistItemId: releaseItem.id },
+      });
+      expect(holdPoint?.status).toBe('notified');
+      expect(getQueuedEmails().some((email) => email.to === superintendent.email)).toBe(true);
+    } finally {
+      await prisma.holdPointReleaseToken.deleteMany({
+        where: { holdPoint: { itpChecklistItemId: releaseItem.id } },
+      });
+      await prisma.holdPoint.deleteMany({ where: { itpChecklistItemId: releaseItem.id } });
+      await prisma.iTPCompletion.deleteMany({ where: { checklistItemId: releaseItem.id } });
+      await prisma.iTPChecklistItem.delete({ where: { id: releaseItem.id } }).catch(() => {});
+    }
+  });
+
   it('sends chase reminders for token recipients with public evidence links', async () => {
     clearEmailQueue();
     await prisma.holdPointReleaseToken.deleteMany({ where: { holdPointId } });

@@ -1,4 +1,5 @@
 import { SecureDocumentImage } from '@/components/documents/SecureDocumentImage';
+import { isReleaseGatedChecklistItem } from '@/lib/itpReleaseGating';
 import type { ITPInstance, ITPAttachment, ITPCompletion } from '../types';
 
 // I1-core: human-readable hold-point release method for the attribution line.
@@ -51,9 +52,9 @@ export function ITPChecklistItemRow({
   // I1-core: a hold-point item cannot be ticked complete via the bare checkbox —
   // it must go through the hold-point release flow (which records attribution).
   // Once released, the completion mirrors that and the row reads as released.
-  const isHoldPoint = item.pointType === 'hold_point';
+  const isHoldPoint = isReleaseGatedChecklistItem(item);
   const isReleased = !!completion?.holdPointRelease?.releasedByName;
-  const isHoldPointLocked = isHoldPoint && !isReleased;
+  const isHoldPointLocked = isHoldPoint && !isReleased && !isNotApplicable && !isFailed;
 
   return (
     <div
@@ -115,21 +116,21 @@ export function ITPChecklistItemRow({
             {/* Point type indicator: S=Standard, W=Witness, H=Hold */}
             <span
               className={`inline-flex items-center justify-center w-6 h-6 text-xs font-bold rounded ${
-                item.pointType === 'hold_point'
+                isHoldPoint
                   ? 'bg-destructive/10 text-destructive'
                   : item.pointType === 'witness'
                     ? 'bg-warning/10 text-warning'
                     : 'bg-muted text-muted-foreground'
               }`}
               title={
-                item.pointType === 'hold_point'
+                isHoldPoint
                   ? 'Hold Point'
                   : item.pointType === 'witness'
                     ? 'Witness Point'
                     : 'Standard Point'
               }
             >
-              {item.pointType === 'hold_point' ? 'H' : item.pointType === 'witness' ? 'W' : 'S'}
+              {isHoldPoint ? 'H' : item.pointType === 'witness' ? 'W' : 'S'}
             </span>
             <span
               className={`font-medium ${isCompleted || isNotApplicable ? 'line-through text-muted-foreground' : ''}`}
@@ -142,7 +143,7 @@ export function ITPChecklistItemRow({
                 N/A
               </span>
             )}
-            {item.isHoldPoint && (
+            {isHoldPoint && (
               <span className="text-xs bg-destructive/10 text-destructive px-2 py-0.5 rounded">
                 Hold Point
               </span>
@@ -273,7 +274,7 @@ export function ITPChecklistItemRow({
               className="w-full px-2 py-1 text-sm border border-border rounded bg-background text-foreground"
             />
           </div>
-          {item.pointType === 'hold_point' && completion?.holdPointRelease?.releasedByName ? (
+          {isHoldPoint && completion?.holdPointRelease?.releasedByName ? (
             <p className="text-xs text-muted-foreground mt-1">
               Released by {completion.holdPointRelease.releasedByName}
               {completion.holdPointRelease.releasedByOrg &&
