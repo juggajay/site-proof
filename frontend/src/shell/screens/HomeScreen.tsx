@@ -52,10 +52,6 @@ interface ForemanTodayPayload {
   };
 }
 
-interface DiaryListResponse {
-  data: DailyDiary[];
-}
-
 // Minimal dockets response
 interface DocketListResponse {
   data: Array<{ status: string }>;
@@ -254,17 +250,22 @@ export function HomeScreen() {
   // ITP checks due — from the worklist dueToday
   const itpChecksDue = (todayData?.dueToday?.length ?? 0) + (todayData?.blocking?.length ?? 0);
 
-  // ── Today's diary: fetch the diary list to compute hero state ──────────────
+  // ── Today's diary: the canonical by-date endpoint (full relations), the
+  // same one the diary path uses — `?missing=null` returns null (not 404)
+  // when the day hasn't started. The previous list-style URL didn't exist,
+  // so the hero always showed 0%.
   const todayKey = new Intl.DateTimeFormat('en-CA').format(new Date()); // YYYY-MM-DD
-  const { data: diaryListData } = useQuery<DiaryListResponse>({
+  const { data: todayDiaryData } = useQuery<DailyDiary | null>({
     queryKey: [...queryKeys.diaries(projectId ?? 'default'), todayKey],
     queryFn: () =>
-      apiFetch<DiaryListResponse>(`/api/diary?projectId=${projectId}&date=${todayKey}`),
+      apiFetch<DailyDiary | null>(
+        `/api/diary/${encodeURIComponent(projectId!)}/${todayKey}?missing=null`,
+      ),
     enabled: !!projectId,
     staleTime: 60_000,
   });
 
-  const todayDiary: DailyDiary | null = diaryListData?.data?.[0] ?? null;
+  const todayDiary: DailyDiary | null = todayDiaryData ?? null;
   const diaryHeroState = computeDiaryHero(todayDiary);
 
   // ── Pending dockets count ─────────────────────────────────────────────────

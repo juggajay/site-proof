@@ -11,6 +11,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ShellScreen } from '../components/ShellScreen';
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
@@ -44,12 +45,18 @@ vi.mock('@/hooks/useEffectiveProjectId', () => ({
 // ── Helper ────────────────────────────────────────────────────────────────────
 
 function renderInRouter(ui: React.ReactElement, initialPath = '/m/screen') {
+  // The home header resolves the project NAME via a TanStack query, so every
+  // render needs a QueryClientProvider (queries disabled — name resolution is
+  // covered by its own test seeding the cache).
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false, enabled: false } } });
   return render(
-    <MemoryRouter initialEntries={[initialPath]}>
-      <Routes>
-        <Route path="*" element={ui} />
-      </Routes>
-    </MemoryRouter>,
+    <QueryClientProvider client={qc}>
+      <MemoryRouter initialEntries={[initialPath]}>
+        <Routes>
+          <Route path="*" element={ui} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 
@@ -143,6 +150,31 @@ describe('ShellScreen — home variant', () => {
       </ShellScreen>,
     );
     expect(screen.queryByRole('button', { name: /go back/i })).not.toBeInTheDocument();
+  });
+
+  it('shows the project NAME from the cached projects query (not the id)', () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false, enabled: false } } });
+    qc.setQueryData(['projects'], {
+      projects: [{ id: 'proj-123', name: 'Demo Walkthrough 2027' }],
+    });
+    render(
+      <QueryClientProvider client={qc}>
+        <MemoryRouter initialEntries={['/m']}>
+          <Routes>
+            <Route
+              path="*"
+              element={
+                <ShellScreen variant="home">
+                  <p>Content</p>
+                </ShellScreen>
+              }
+            />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    expect(screen.getByText('Demo Walkthrough 2027')).toBeInTheDocument();
+    expect(screen.queryByText(/proj-123|Project proj/)).not.toBeInTheDocument();
   });
 });
 
