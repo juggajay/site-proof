@@ -1432,8 +1432,8 @@ test.describe('production readiness guardrails', () => {
       new URL('../../backend/src/lib/readiness.ts', import.meta.url),
       'utf8',
     );
-    const testWorkflow = await readFile(
-      new URL('../../.github/workflows/test.yml', import.meta.url),
+    const ciWorkflow = await readFile(
+      new URL('../../.github/workflows/ci.yml', import.meta.url),
       'utf8',
     );
 
@@ -1487,18 +1487,15 @@ test.describe('production readiness guardrails', () => {
     );
     expect(readinessSource).toContain('prisma.$queryRaw`SELECT 1`');
     expect(readinessSource).toContain('Database unavailable');
-    expect(testWorkflow).toContain('http://localhost:3001/ready');
-    expect(testWorkflow).toContain('docker build -t siteproof-backend-ci .');
-    expect(testWorkflow).toContain('DOCKER_BUILDKIT: "1"');
+    expect(ciWorkflow).toContain('http://localhost:3001/ready');
+    expect(ciWorkflow).toContain('docker build -t siteproof-backend-ci .');
+    expect(ciWorkflow).toContain('DOCKER_BUILDKIT: "1"');
   });
 
   test('CI gates cover audits, formatting, migrations, lint, types, build, and tests', async () => {
+    const workflowFiles = await readdir(new URL('../../.github/workflows/', import.meta.url));
     const ciWorkflow = await readFile(
       new URL('../../.github/workflows/ci.yml', import.meta.url),
-      'utf8',
-    );
-    const testWorkflow = await readFile(
-      new URL('../../.github/workflows/test.yml', import.meta.url),
       'utf8',
     );
     const productionPreflightWorkflow = await readFile(
@@ -1522,10 +1519,11 @@ test.describe('production readiness guardrails', () => {
     expect(frontendPackage.scripts['format:check']).toContain('vitest.config.ts');
     expect(frontendPackage.scripts['test:unit']).toBe('vitest run');
     expect(frontendPackage.scripts['test:coverage']).toBe('vitest run --coverage');
+    expect(workflowFiles).not.toContain('test.yml');
 
     // Frontend unit coverage floor: the vitest config must keep v8 coverage
-    // with ratchet thresholds, and both PR-gating workflows must run the
-    // coverage variant so the thresholds actually enforce.
+    // with ratchet thresholds, and the PR-gating workflow must run the coverage
+    // variant so the thresholds actually enforce.
     const frontendVitestConfig = await readFile(
       new URL('../vitest.config.ts', import.meta.url),
       'utf8',
@@ -1543,25 +1541,21 @@ test.describe('production readiness guardrails', () => {
     expect(ciWorkflow).toContain('run: npm run build');
     expect(ciWorkflow).toContain('run: docker build -t siteproof-backend-ci .');
     expect(ciWorkflow).toContain('DOCKER_BUILDKIT: "1"');
-    expect(ciWorkflow).toContain('run: npm test');
-
-    expect(testWorkflow).toContain('run: cd backend && npm audit --audit-level=moderate');
-    expect(testWorkflow).toContain('run: cd backend && npm run format:check');
-    expect(testWorkflow).toContain('Validate Prisma migrations');
-    expect(testWorkflow).toContain('Verify test database migration status');
-    expect(testWorkflow).toContain('run: cd backend && npm run lint');
-    expect(testWorkflow).toContain('run: cd backend && npm run type-check');
-    expect(testWorkflow).toContain('run: cd backend && npm run build');
-    expect(testWorkflow).toContain('run: cd backend && docker build -t siteproof-backend-ci .');
-    expect(testWorkflow).toContain('DOCKER_BUILDKIT: "1"');
-    expect(testWorkflow).toContain('run: cd backend && npm run test:coverage');
-    expect(testWorkflow).toContain('run: cd frontend && npm audit --audit-level=moderate');
-    expect(testWorkflow).toContain('run: cd frontend && npm run format:check');
-    expect(testWorkflow).toContain('run: cd frontend && npm run test:coverage');
-    expect(testWorkflow).not.toContain('run: cd backend && npm test');
+    expect(ciWorkflow).toContain('name: Frontend E2E');
+    expect(ciWorkflow).toContain('needs: [backend, frontend]');
+    expect(ciWorkflow).toContain('POSTGRES_DB: siteproof_e2e');
+    expect(ciWorkflow).toContain('npm run seed:e2e');
+    expect(ciWorkflow).toContain('run: npm run test:e2e');
+    expect(ciWorkflow).toContain('name: backend-coverage-report');
+    expect(ciWorkflow).toContain('name: frontend-coverage-report');
+    expect(ciWorkflow).toContain('name: playwright-report');
+    expect(ciWorkflow).toContain('executeRawUnsafe|queryRawUnsafe');
+    expect(ciWorkflow).toContain('new PrismaClient');
+    expect(ciWorkflow).not.toContain('run: npm test');
+    expect(ciWorkflow).not.toContain('cd backend &&');
+    expect(ciWorkflow).not.toContain('cd frontend &&');
 
     expect(ciWorkflow).not.toContain('run: npm run preflight:integrations');
-    expect(testWorkflow).not.toContain('run: cd backend && npm run preflight:integrations');
     expect(productionPreflightWorkflow).toContain('run: npm run preflight:integrations');
     expect(productionPreflightWorkflow).toContain('SUPABASE_URL: ${{ secrets.SUPABASE_URL }}');
     expect(productionPreflightWorkflow).toContain(
