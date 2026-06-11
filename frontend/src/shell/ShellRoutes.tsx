@@ -11,7 +11,7 @@
  *   /m/dockets    → DocketsShellRoutes (list, detail, approve/adjust/query/reject — PR-4)
  *   /m/issues     → IssuesShellRoutes (NCRs & defects: list + detail — PR-5)
  *   /m/docs       → ComingSoonScreen
- *   /m/photos     → ComingSoonScreen (new photos surface, PR-2)
+ *   /m/photos     → PhotosShellRoutes (recent/unfiled grid + file-to-lot — PR-6)
  *
  * Back model: each screen's `parent` prop is the explicit return path; see
  * ShellScreen.tsx for implementation.
@@ -24,6 +24,7 @@ import { DiaryShellRoutes } from './screens/diary/DiaryShellRoutes';
 import { LotsShellRoutes } from './screens/lots/LotsShellRoutes';
 import { DocketsShellRoutes } from './screens/dockets/DocketsShellRoutes';
 import { IssuesShellRoutes } from './screens/issues/IssuesShellRoutes';
+import { PhotosShellRoutes } from './screens/photos/PhotosShellRoutes';
 
 export function ShellRoutes() {
   return (
@@ -55,13 +56,10 @@ export function ShellRoutes() {
         }
       />
 
-      {/* Photos surface (new in shell, research doc §photo pipeline) */}
-      <Route
-        path="photos"
-        element={
-          <ComingSoonScreen title="Photos" parent="/m" sub="Recent &amp; unfiled — coming next" />
-        }
-      />
+      {/* Photos — full sub-tree (PR-6): recent/unfiled grid + file-to-lot.
+          The new shell surface (research doc §photo pipeline) — closes the
+          unfiled-photos gap with existing endpoints only. */}
+      <Route path="photos/*" element={<PhotosShellRoutes />} />
 
       {/* Catch-all → home */}
       <Route path="*" element={<Navigate to="/m" replace />} />
