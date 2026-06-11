@@ -406,6 +406,10 @@ section { padding:128px 0 0; position:relative; }
 .ea-form .btn { width:100%; margin-top:22px; }
 .form-ok { display:none; margin-top:22px; padding:16px 18px; border:1px solid #d8e9dc; background:#f0f7f1; color:var(--green-ink); border-radius:var(--radius); font-size:14.5px; }
 .form-ok.show { display:block; }
+.form-err { display:none; margin-top:22px; padding:16px 18px; border:1px solid #f3d2cd; background:#fdf1ef; color:var(--red); border-radius:var(--radius); font-size:14.5px; }
+.form-err.show { display:block; }
+.form-err a { color:var(--red); font-weight:600; text-decoration:underline; }
+.btn[aria-busy="true"] { opacity:.65; pointer-events:none; }
 .form-fine { margin-top:14px; font-size:12.5px; color:var(--ink-faint); }
 
 /* ---------- faq ---------- */
@@ -759,9 +763,11 @@ footer { margin-top:128px; border-top:1px solid var(--hair); background:var(--ca
         </ul>
         <p class="ea-sign">— Jayson, founder · SiteProof</p>
       </div>
-      <form class="ea-form rv" id="ea-form" novalidate>
+      <form class="ea-form rv" id="ea-form" action="https://formspree.io/f/mzdqayao" method="POST" novalidate>
         <h3>Request early access</h3>
         <p class="fs">Tell us where it hurts. Takes 30 seconds — and a real person replies, not a sequence.</p>
+        <input type="hidden" name="_subject" value="SiteProof early access — new request" />
+        <input type="text" name="_gotcha" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0;" />
         <div class="frow">
           <label for="f-name">Name</label>
           <input id="f-name" name="name" type="text" autocomplete="name" required />
@@ -792,8 +798,9 @@ footer { margin-top:128px; border-top:1px solid var(--hair); background:var(--ca
             <option>All of it</option>
           </select>
         </div>
-        <button class="btn primary lg" type="submit">Request early access<span class="ar">→</span></button>
+        <button class="btn primary lg" type="submit" id="ea-submit">Request early access<span class="ar">→</span></button>
         <div class="form-ok" id="form-ok">Thanks — you're on the list. We'll be in touch directly, usually within a day or two.</div>
+        <div class="form-err" id="form-err">Something went wrong sending that. Email <a href="mailto:jaysonryan21@hotmail.com">jaysonryan21@hotmail.com</a> directly and we'll sort it.</div>
         <p class="form-fine">We'll only use this to contact you about SiteProof early access. No mailing-list spam.</p>
       </form>
     </div>
@@ -942,13 +949,32 @@ function navMode() {
 window.addEventListener('scroll', navMode, { passive: true });
 navMode();
 
-/* ---------- early-access form (front-end only; wire to backend later) ---------- */
-document.getElementById('ea-form').addEventListener('submit', (ev) => {
+/* ---------- early-access form → Formspree (AJAX, stays on page) ---------- */
+document.getElementById('ea-form').addEventListener('submit', async (ev) => {
   ev.preventDefault();
   const f = ev.target;
   if (!f.checkValidity()) { f.reportValidity(); return; }
-  f.querySelectorAll('input, select, button[type="submit"]').forEach(el => el.disabled = true);
-  document.getElementById('form-ok').classList.add('show');
+  const ok = document.getElementById('form-ok');
+  const err = document.getElementById('form-err');
+  const btn = document.getElementById('ea-submit');
+  err.classList.remove('show');
+  btn.setAttribute('aria-busy', 'true');
+  try {
+    const res = await fetch(f.action, {
+      method: 'POST',
+      body: new FormData(f),
+      headers: { Accept: 'application/json' },
+    });
+    if (res.ok) {
+      f.querySelectorAll('input, select, button[type="submit"]').forEach(el => el.disabled = true);
+      ok.classList.add('show');
+    } else {
+      throw new Error('formspree ' + res.status);
+    }
+  } catch (e) {
+    btn.removeAttribute('aria-busy');
+    err.classList.add('show');
+  }
 });
 </script>
 </body>
