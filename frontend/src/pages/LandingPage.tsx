@@ -155,6 +155,17 @@ export function LandingPage() {
     const prevScrollBehavior = document.documentElement.style.scrollBehavior;
     if (!prefersReduced) document.documentElement.style.scrollBehavior = 'smooth';
 
+    // The app shell's global CSS sets `body { overflow-x: hidden }`, which (per
+    // the CSS overflow spec) forces body's overflow-y to compute to `auto` —
+    // making <body> a second scroll container. On this body-scrolled page that
+    // breaks mouse-wheel scrolling: the wheel lands on the non-scrolling body
+    // and never reaches the html scrollbar (dragging the bar still works, which
+    // is the tell). `clip` prevents horizontal overflow WITHOUT creating a
+    // scroll container, so the document scrolls by wheel normally. The page
+    // wrapper (.sp-lp) already clips its own x-overflow. Restored on unmount.
+    const prevBodyOverflowX = document.body.style.overflowX;
+    document.body.style.overflowX = 'clip';
+
     // reveal on scroll (and convergence: the .conv stage shares this .in class)
     const io = new IntersectionObserver(
       (entries) => {
@@ -221,6 +232,7 @@ export function LandingPage() {
     return () => {
       document.title = prevTitle;
       document.documentElement.style.scrollBehavior = prevScrollBehavior;
+      document.body.style.overflowX = prevBodyOverflowX;
       io.disconnect();
       bio?.disconnect();
       if (boardTimer) window.clearTimeout(boardTimer);
