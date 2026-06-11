@@ -247,6 +247,20 @@
     bottom: calc(1rem + max(var(--bottom-nav-height, 0px), env(safe-area-inset-bottom, 0px)));
   }
 
+  /* On the diary screen the quick-add bar docks above the bottom nav, so
+     floating UI must clear both bars. DiaryQuickAddBar publishes
+     --quick-add-bar-height via usePublishQuickAddBarHeight. When the bar is
+     unmounted (diary submitted) the var is removed and this falls back to
+     the plain .above-bottom-nav offset automatically.
+     Usage: add this class alongside .above-bottom-nav on the diary screen,
+     or replace it on components that are only shown during active diaries. */
+  .above-quick-add-bar {
+    bottom: calc(
+      1rem + var(--quick-add-bar-height, 0px) +
+        max(var(--bottom-nav-height, 0px), env(safe-area-inset-bottom, 0px))
+    );
+  }
+
   /* Skeleton pulse animation */
   .skeleton-pulse {
     @apply animate-pulse bg-muted rounded;

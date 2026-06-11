@@ -89,8 +89,12 @@ describe('OfflineIndicator positioning', () => {
     const { container } = render(<OfflineIndicator />);
 
     const pill = container.firstElementChild;
-    expect(pill).toHaveClass('fixed', 'right-4', 'above-bottom-nav');
+    // Uses above-quick-add-bar which incorporates --quick-add-bar-height
+    // (diary screen) AND --bottom-nav-height. When the bar is absent the var
+    // is 0px, so the offset is identical to above-bottom-nav.
+    expect(pill).toHaveClass('fixed', 'right-4', 'above-quick-add-bar');
     expect(pill).not.toHaveClass('bottom-4');
+    expect(pill).not.toHaveClass('above-bottom-nav');
   });
 });
 

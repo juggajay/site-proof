@@ -136,7 +136,10 @@ export function DiaryMobileView(props: DiaryMobileViewProps) {
         )}
       </div>
 
-      {/* Scrollable content */}
+      {/* Scrollable content — bottom padding clears the docked quick-add bar
+          (--quick-add-bar-height) + bottom nav (--bottom-nav-height) with a
+          comfortable thumb-zone buffer. Falls back to a generous fixed value
+          so content is never hidden under the bars even before paint. */}
       <div ref={containerRef as React.RefObject<HTMLDivElement>} className="flex-1 overflow-y-auto">
         <PullToRefreshIndicator
           pullDistance={pullDistance}
@@ -144,7 +147,14 @@ export function DiaryMobileView(props: DiaryMobileViewProps) {
           progress={progress}
         />
 
-        <div className="p-4 space-y-3 pb-36">
+        <div
+          data-testid="diary-timeline-content"
+          className="p-4 space-y-3"
+          style={{
+            paddingBottom:
+              'calc(var(--quick-add-bar-height, 68px) + var(--bottom-nav-height, 72px) + 1rem)',
+          }}
+        >
           {/* Weather bar */}
           <DiaryWeatherBar
             weather={weather}

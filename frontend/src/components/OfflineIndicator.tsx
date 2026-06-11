@@ -69,10 +69,12 @@ export function OfflineIndicator() {
 
   return (
     <>
-      {/* above-bottom-nav keeps the pill clear of the mobile bottom nav
-          (height published by usePublishBottomNavHeight) and of the device
-          safe-area inset, so it never covers a nav tab. */}
-      <div className="fixed right-4 z-50 above-bottom-nav flex flex-col gap-2 items-end">
+      {/* above-quick-add-bar keeps the pill clear of the docked diary
+          quick-add bar (--quick-add-bar-height, published by
+          DiaryQuickAddBar) AND the mobile bottom nav (--bottom-nav-height).
+          When the bar is not mounted the var is 0px, so the offset reduces
+          to the plain above-bottom-nav value — no extra logic needed. */}
+      <div className="fixed right-4 z-50 above-quick-add-bar flex flex-col gap-2 items-end">
         {/* Conflict indicator */}
         {conflictCount > 0 && (
           <button
