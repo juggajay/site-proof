@@ -12,7 +12,10 @@
  * instance fetch + offline cache the run screen uses). Photos/Drawings counts
  * come from the lot register (`documentCount`) — the register has no
  * photo-vs-drawing split, so the Photos tile is honest about "documents on this
- * lot" and routes to a styled ComingSoon until the shell Photos surface ships.
+ * lot" and routes to the shell Photos surface. The Drawings tile routes to the
+ * shell Drawings & Docs register (/m/docs): drawings are project-wide in the data
+ * model (no lot link), so the register IS the drawings that apply to this lot — we
+ * deliberately don't ?lotId-scope it to an empty set.
  */
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
