@@ -2,7 +2,11 @@
 // Lot detail presentation: the pure response shaping behind GET /api/lots/:id.
 // Extracted from lots.ts to isolate the response transform from the route's
 // auth + Prisma fetch + subcontractor-company resolution. Behaviour preserved:
-//   - `projectId` and `assignedSubcontractorId` are stripped from the response.
+//   - `projectId` is retained because portal/detail clients need it for
+//     follow-up evidence/document requests.
+//   - `assignedSubcontractorId` is retained for head-contractor users and only
+//     retained for subcontractor users when it refers to their resolved company.
+//   - `budgetAmount` follows the same visibility rule as the lot list.
 //   - for subcontractor users, `subcontractorAssignments` is filtered to that
 //     user's resolved company, and `assignedSubcontractor` is nulled unless the
 //     lot's legacy `assignedSubcontractorId` matches that company.
@@ -22,6 +26,8 @@ export interface ShapeLotDetailResponseOptions {
   isSubcontractor: boolean;
   /** The subcontractor user's resolved company for this project (may be null). */
   subcontractorCompanyId: string | null;
+  /** When false, `budgetAmount` is nulled out for the caller. */
+  canViewBudgetAmount: boolean;
 }
 
 /**
@@ -32,32 +38,38 @@ export function shapeLotDetailResponse<
   TAssignment extends LotDetailAssignment,
   TLot extends {
     projectId: unknown;
+    budgetAmount: unknown;
     assignedSubcontractorId: string | null;
     assignedSubcontractor: unknown;
     subcontractorAssignments: TAssignment[];
   },
 >(lot: TLot, options: ShapeLotDetailResponseOptions) {
-  // Remove sensitive/internal fields before sending the response.
-  const {
-    projectId: _projectId,
-    assignedSubcontractorId: _assignedSubcontractorId,
-    ...lotResponse
-  } = lot;
+  const { projectId, budgetAmount, assignedSubcontractorId, ...lotResponse } = lot;
+
+  const visibleLotResponse = {
+    ...lotResponse,
+    projectId,
+    budgetAmount: options.canViewBudgetAmount ? budgetAmount : null,
+    assignedSubcontractorId:
+      !options.isSubcontractor || assignedSubcontractorId === options.subcontractorCompanyId
+        ? assignedSubcontractorId
+        : null,
+  };
 
   if (!options.isSubcontractor) {
-    return lotResponse;
+    return visibleLotResponse;
   }
 
   // Subcontractor users only see their own company's assignment, and the legacy
   // assignedSubcontractor is hidden unless it is their company.
   return {
-    ...lotResponse,
-    subcontractorAssignments: lotResponse.subcontractorAssignments.filter(
+    ...visibleLotResponse,
+    subcontractorAssignments: visibleLotResponse.subcontractorAssignments.filter(
       (assignment) => assignment.subcontractorCompanyId === options.subcontractorCompanyId,
     ),
     assignedSubcontractor:
       lot.assignedSubcontractorId === options.subcontractorCompanyId
-        ? lotResponse.assignedSubcontractor
+        ? visibleLotResponse.assignedSubcontractor
         : null,
   };
 }

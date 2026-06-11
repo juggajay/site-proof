@@ -7,6 +7,7 @@ const makeLot = (overrides: Record<string, unknown> = {}) => ({
   lotNumber: 'LOT-001',
   status: 'open',
   projectId: 'proj-1',
+  budgetAmount: 1250,
   assignedSubcontractorId: 'sub-A' as string | null,
   assignedSubcontractor: { id: 'sub-A', companyName: 'Acme' } as {
     id: string;
@@ -20,14 +21,16 @@ const makeLot = (overrides: Record<string, unknown> = {}) => ({
 });
 
 describe('shapeLotDetailResponse (pure)', () => {
-  it('head contractor: strips projectId/assignedSubcontractorId, keeps all assignments + assignedSubcontractor', () => {
+  it('head contractor: keeps edit contract fields, all assignments, and assignedSubcontractor', () => {
     const result = shapeLotDetailResponse(makeLot(), {
       isSubcontractor: false,
       subcontractorCompanyId: null,
+      canViewBudgetAmount: true,
     });
 
-    expect('projectId' in result).toBe(false);
-    expect('assignedSubcontractorId' in result).toBe(false);
+    expect(result.projectId).toBe('proj-1');
+    expect(result.assignedSubcontractorId).toBe('sub-A');
+    expect(result.budgetAmount).toBe(1250);
     expect(result.subcontractorAssignments.map((a) => a.subcontractorCompanyId)).toEqual([
       'sub-A',
       'sub-B',
@@ -42,8 +45,12 @@ describe('shapeLotDetailResponse (pure)', () => {
     const result = shapeLotDetailResponse(makeLot(), {
       isSubcontractor: true,
       subcontractorCompanyId: 'sub-B',
+      canViewBudgetAmount: false,
     });
 
+    expect(result.projectId).toBe('proj-1');
+    expect(result.budgetAmount).toBeNull();
+    expect(result.assignedSubcontractorId).toBeNull();
     expect(result.subcontractorAssignments.map((a) => a.subcontractorCompanyId)).toEqual(['sub-B']);
   });
 
@@ -51,6 +58,7 @@ describe('shapeLotDetailResponse (pure)', () => {
     const result = shapeLotDetailResponse(makeLot(), {
       isSubcontractor: true,
       subcontractorCompanyId: 'sub-B', // lot.assignedSubcontractorId is 'sub-A'
+      canViewBudgetAmount: false,
     });
 
     expect(result.assignedSubcontractor).toBeNull();
@@ -60,8 +68,10 @@ describe('shapeLotDetailResponse (pure)', () => {
     const result = shapeLotDetailResponse(makeLot(), {
       isSubcontractor: true,
       subcontractorCompanyId: 'sub-A',
+      canViewBudgetAmount: false,
     });
 
+    expect(result.assignedSubcontractorId).toBe('sub-A');
     expect(result.assignedSubcontractor).toEqual({ id: 'sub-A', companyName: 'Acme' });
     expect(result.subcontractorAssignments.map((a) => a.subcontractorCompanyId)).toEqual(['sub-A']);
   });
@@ -71,15 +81,21 @@ describe('shapeLotDetailResponse (pure)', () => {
     const result = shapeLotDetailResponse(makeLot(), {
       isSubcontractor: true,
       subcontractorCompanyId: null,
+      canViewBudgetAmount: false,
     });
 
     expect(result.subcontractorAssignments).toEqual([]);
+    expect(result.assignedSubcontractorId).toBeNull();
     expect(result.assignedSubcontractor).toBeNull();
   });
 
   it('does not mutate the input lot', () => {
     const lot = makeLot();
-    shapeLotDetailResponse(lot, { isSubcontractor: true, subcontractorCompanyId: 'sub-B' });
+    shapeLotDetailResponse(lot, {
+      isSubcontractor: true,
+      subcontractorCompanyId: 'sub-B',
+      canViewBudgetAmount: false,
+    });
 
     expect(lot.projectId).toBe('proj-1');
     expect(lot.assignedSubcontractorId).toBe('sub-A');

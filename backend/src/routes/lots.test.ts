@@ -633,6 +633,86 @@ describe('Lots API', () => {
       expect(res.body.lot.lotNumber).toBe('LOT-001');
     });
 
+    it('should include detail contract fields and filter commercial values by role', async () => {
+      const subcontractor = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `Lot Detail Contract Subcontractor ${Date.now()}`,
+          primaryContactName: 'Lot Detail Contract Subcontractor',
+          primaryContactEmail: `lot-detail-contract-sub-${Date.now()}@example.com`,
+          status: 'approved',
+        },
+      });
+      const detailLot = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `LOT-DETAIL-CONTRACT-${Date.now()}`,
+          description: 'Detail contract regression lot',
+          activityType: 'Earthworks',
+          lotType: 'chainage',
+          budgetAmount: 3210,
+          assignedSubcontractorId: subcontractor.id,
+        },
+      });
+      const foremanRes = await request(app)
+        .post('/api/auth/register')
+        .send({
+          email: `lots-detail-foreman-${Date.now()}@example.com`,
+          password: 'SecureP@ssword123!',
+          fullName: 'Lots Detail Foreman',
+          tosAccepted: true,
+        });
+      const foremanToken = foremanRes.body.token;
+      const foremanUserId = foremanRes.body.user.id;
+
+      await prisma.user.update({
+        where: { id: foremanUserId },
+        data: { companyId, roleInCompany: 'foreman' },
+      });
+      await prisma.projectUser.create({
+        data: {
+          projectId,
+          userId: foremanUserId,
+          role: 'foreman',
+          status: 'active',
+        },
+      });
+
+      try {
+        const commercialRes = await request(app)
+          .get(`/api/lots/${detailLot.id}`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(commercialRes.status).toBe(200);
+        expect(commercialRes.body.lot).toMatchObject({
+          id: detailLot.id,
+          projectId,
+          assignedSubcontractorId: subcontractor.id,
+        });
+        expect(Number(commercialRes.body.lot.budgetAmount)).toBe(3210);
+
+        const foremanDetailRes = await request(app)
+          .get(`/api/lots/${detailLot.id}`)
+          .set('Authorization', `Bearer ${foremanToken}`);
+
+        expect(foremanDetailRes.status).toBe(200);
+        expect(foremanDetailRes.body.lot).toMatchObject({
+          id: detailLot.id,
+          projectId,
+          assignedSubcontractorId: subcontractor.id,
+          budgetAmount: null,
+        });
+      } finally {
+        await prisma.lot.delete({ where: { id: detailLot.id } }).catch(() => {});
+        await prisma.projectUser.deleteMany({ where: { projectId, userId: foremanUserId } });
+        await prisma.emailVerificationToken.deleteMany({ where: { userId: foremanUserId } });
+        await prisma.user.delete({ where: { id: foremanUserId } }).catch(() => {});
+        await prisma.subcontractorCompany
+          .delete({ where: { id: subcontractor.id } })
+          .catch(() => {});
+      }
+    });
+
     it('should return 404 for non-existent lot', async () => {
       const res = await request(app)
         .get('/api/lots/non-existent-id')
@@ -757,18 +837,6 @@ describe('Lots API', () => {
     });
 
     it('should scope subcontractor lot detail and assignment access to assigned lots', async () => {
-      const targetLot = lotId
-        ? null
-        : await prisma.lot.create({
-            data: {
-              projectId,
-              lotNumber: `LOT-SUB-ASSIGNED-${Date.now()}`,
-              status: 'not_started',
-              lotType: 'chainage',
-              activityType: 'Earthworks',
-            },
-          });
-      const targetLotId = lotId || targetLot!.id;
       const subcontractorCompany = await prisma.subcontractorCompany.create({
         data: {
           projectId,
@@ -786,6 +854,18 @@ describe('Lots API', () => {
           },
         },
       });
+      const targetLot = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `LOT-SUB-ASSIGNED-${Date.now()}`,
+          status: 'not_started',
+          lotType: 'chainage',
+          activityType: 'Earthworks',
+          budgetAmount: 6543,
+          assignedSubcontractorId: subcontractorCompany.id,
+        },
+      });
+      const targetLotId = targetLot.id;
 
       const subcontractorRes = await request(app)
         .post('/api/auth/register')
@@ -839,6 +919,9 @@ describe('Lots API', () => {
           .set('Authorization', `Bearer ${subcontractorToken}`);
 
         expect(assignedRes.status).toBe(200);
+        expect(assignedRes.body.lot.projectId).toBe(projectId);
+        expect(assignedRes.body.lot.assignedSubcontractorId).toBe(subcontractorCompany.id);
+        expect(assignedRes.body.lot.budgetAmount).toBeNull();
         expect(assignedRes.body.lot.subcontractorAssignments).toHaveLength(1);
         expect(assignedRes.body.lot.subcontractorAssignments[0].subcontractorCompanyId).toBe(
           subcontractorCompany.id,
@@ -916,13 +999,11 @@ describe('Lots API', () => {
           where: { subcontractorCompanyId: subcontractorCompany.id },
         });
         await prisma.projectUser.deleteMany({ where: { projectId, userId: subcontractorUserId } });
+        await prisma.lot.delete({ where: { id: targetLot.id } }).catch(() => {});
+        await prisma.lot.delete({ where: { id: unassignedLot.id } }).catch(() => {});
         await prisma.subcontractorCompany
           .delete({ where: { id: subcontractorCompany.id } })
           .catch(() => {});
-        await prisma.lot.delete({ where: { id: unassignedLot.id } }).catch(() => {});
-        if (targetLot) {
-          await prisma.lot.delete({ where: { id: targetLot.id } }).catch(() => {});
-        }
         await prisma.emailVerificationToken.deleteMany({ where: { userId: subcontractorUserId } });
         await prisma.user.delete({ where: { id: subcontractorUserId } }).catch(() => {});
       }
