@@ -110,6 +110,25 @@ function buildConformanceItems(input: LotReadinessInput): EvidenceReadinessItem[
     );
   }
 
+  // N/A hold-point bypass guard: a hold-point sign-off item marked N/A is only
+  // accepted when its hold point is released. Surface this as a conformance
+  // blocker so field staff know exactly what still needs a superintendent sign-off.
+  const naHpBlockerCount = prerequisites.naHoldPointBlockerCount ?? 0;
+  if (!(prerequisites.noNaHoldPointBypass ?? true) || naHpBlockerCount > 0) {
+    items.push(
+      item({
+        code: 'na_hold_point_not_released',
+        severity: 'blocker',
+        area: 'hold_point',
+        title: 'Hold point items require release',
+        detail: `${naHpBlockerCount} hold point item${naHpBlockerCount === 1 ? '' : 's'} marked N/A but the hold point has not been released. Release the hold point to satisfy conformance.`,
+        blocksAction: true,
+        actionLabel: 'Review hold points',
+        count: naHpBlockerCount,
+      }),
+    );
+  }
+
   if (conformStatus.canConform && items.length === 0) {
     items.push(
       item({
