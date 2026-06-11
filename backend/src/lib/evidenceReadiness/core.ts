@@ -74,6 +74,11 @@ interface ConformancePrerequisiteSnapshot {
   testResults: { id: string; testType: string; passFail: string; status: string }[];
   noOpenNcrs: boolean;
   openNcrs: { id: string; ncrNumber: string; description: string; status: string }[];
+  // N/A hold-point bypass guard — optional for backward compatibility with
+  // callers that predate the field (e.g. existing tests / routes that haven't
+  // been regenerated yet). Defaults to no bypass blockers when absent.
+  naHoldPointBlockerCount?: number;
+  noNaHoldPointBypass?: boolean;
 }
 
 export interface LotReadinessInput {

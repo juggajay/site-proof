@@ -498,4 +498,40 @@ describe('evidence readiness helpers', () => {
     expect(lot.claim.state).toBe('ready');
     expect(review.summary.readyCount).toBe(1);
   });
+
+  it('surfaces N/A hold-point bypass as a conformance action blocker', () => {
+    // When the conform gate reports a hold-point item was N/A'd but the hold
+    // point is not released, the readiness layer must surface a conformance
+    // blocker with code 'na_hold_point_not_released'.
+    const readiness = buildLotReadinessFromInputs(
+      baseInput({
+        conformStatus: {
+          canConform: false,
+          blockingReasons: ['1 hold point item marked N/A but not released'],
+          prerequisites: {
+            itpAssigned: true,
+            itpCompleted: true, // N/A counts as finished for completeness
+            itpCompletedCount: 2,
+            itpTotalCount: 2,
+            itpIncompleteItems: [],
+            testRequired: false,
+            hasPassingTest: false,
+            testResults: [],
+            noOpenNcrs: true,
+            openNcrs: [],
+            naHoldPointBlockerCount: 1,
+            noNaHoldPointBypass: false,
+          },
+        },
+      }),
+    );
+
+    const codes = readiness.conformance.blockers.map((readinessItem) => readinessItem.code);
+    expect(codes).toContain('na_hold_point_not_released');
+    expect(
+      readiness.conformance.blockers.find((b) => b.code === 'na_hold_point_not_released')
+        ?.blocksAction,
+    ).toBe(true);
+    expect(readiness.conformance.state).toBe('blocked');
+  });
 });
