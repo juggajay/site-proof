@@ -154,8 +154,8 @@ export function SubcontractorLotITPPage() {
 
       // Reuse the shared resilient upload so the subbie and HC paths send the
       // same request shape: online upload-then-attach first, and on a retriable
-      // network failure the photo is queued through the offline pipeline
-      // (entityType 'itp' + completion id) and attached server-side after sync.
+      // network failure the photo is queued through the offline pipeline with
+      // an explicit ITP completion attachment intent and attached after sync.
       // AI classification stays HC-only (it lives in useLotPhotoUpload's
       // handlers, never in the shared function).
       const result = await uploadItpEvidencePhotoWithOfflineFallback({

@@ -25,6 +25,8 @@ export async function capturePhotoOffline(
     lotId?: string;
     entityType: OfflinePhoto['entityType'];
     entityId?: string;
+    completionId?: string;
+    attachAs?: OfflinePhoto['attachAs'];
     documentType?: string;
     category?: string;
     caption?: string;
@@ -43,6 +45,8 @@ export async function capturePhotoOffline(
     lotId: options.lotId,
     entityType: options.entityType,
     entityId: options.entityId,
+    completionId: options.completionId,
+    attachAs: options.attachAs,
     documentType: options.documentType ?? 'photo',
     category: options.category,
     fileName: file.name,

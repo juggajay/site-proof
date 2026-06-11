@@ -14,9 +14,9 @@ import type { ChangeEvent } from 'react';
  *
  * `uploadItpEvidencePhotoWithOfflineFallback` wraps it with the offline
  * pipeline: a retriable network failure (offline, timeout, fetch-level
- * failure, 5xx) queues the photo via capturePhotoOffline with
- * entityType 'itp' + the completion id (the sync worker re-uploads it and the
- * backend attaches it), while a definitive 4xx is re-thrown. The hook-level
+ * failure, 5xx) queues the photo via capturePhotoOffline with an explicit ITP
+ * completion attachment intent (the sync worker uploads then attaches it),
+ * while a definitive 4xx is re-thrown. The hook-level
  * tests prove the handlers surface each outcome honestly (merge + toast,
  * "Saved Offline" toast, error path) and hold the shared in-flight guard.
  */
@@ -263,6 +263,8 @@ describe('uploadItpEvidencePhotoWithOfflineFallback', () => {
       lotId: 'lot-1',
       entityType: 'itp',
       entityId: 'completion-1',
+      completionId: 'completion-1',
+      attachAs: 'itp_completion_attachment',
       documentType: 'photo',
       category: 'itp_evidence',
       capturedBy: 'user-7',
@@ -386,6 +388,19 @@ describe('useLotPhotoUpload — handleAddPhoto outcomes', () => {
     } as unknown as ChangeEvent<HTMLInputElement>;
   }
 
+  function expectItpPhotoQueuedForCompletion() {
+    expect(capturePhotoOffline).toHaveBeenCalledWith(
+      'project-1',
+      file,
+      expect.objectContaining({
+        entityType: 'itp',
+        entityId: 'completion-1',
+        completionId: 'completion-1',
+        attachAs: 'itp_completion_attachment',
+      }),
+    );
+  }
+
   it('success: merges the attachment into the instance and runs AI classification', async () => {
     getGPSLocationMock.mockResolvedValue(null);
     vi.mocked(authFetch).mockResolvedValue({
@@ -438,11 +453,7 @@ describe('useLotPhotoUpload — handleAddPhoto outcomes', () => {
       await rendered.result.current.handleAddPhoto('completion-1', 'item-1', changeEvent());
     });
 
-    expect(capturePhotoOffline).toHaveBeenCalledWith(
-      'project-1',
-      file,
-      expect.objectContaining({ entityType: 'itp', entityId: 'completion-1' }),
-    );
+    expectItpPhotoQueuedForCompletion();
     expect(toast).toHaveBeenCalledWith(
       expect.objectContaining({
         title: 'Saved Offline',
@@ -503,11 +514,7 @@ describe('useLotPhotoUpload — handleAddPhoto outcomes', () => {
       await rendered.result.current.handleMobileAddPhoto('item-1', file);
     });
 
-    expect(capturePhotoOffline).toHaveBeenCalledWith(
-      'project-1',
-      file,
-      expect.objectContaining({ entityType: 'itp', entityId: 'completion-1' }),
-    );
+    expectItpPhotoQueuedForCompletion();
     expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Saved Offline' }));
     expect(handleApiError).not.toHaveBeenCalled();
   });

@@ -311,8 +311,8 @@ describe('SubcontractorLotITPPage — photo upload (shared upload-then-attach)',
 
     await capturedProps!.onAddPhoto('item-1', imageFile);
 
-    // The photo went into the offline pipeline with the ITP completion linkage
-    // the sync worker + documents upload endpoint use to attach it after sync.
+    // The photo went into the offline pipeline with explicit ITP completion
+    // attachment intent for the sync worker to finish after upload.
     expect(capturePhotoOffline).toHaveBeenCalledWith(
       'project-1',
       imageFile,
@@ -320,6 +320,8 @@ describe('SubcontractorLotITPPage — photo upload (shared upload-then-attach)',
         lotId: 'lot-1',
         entityType: 'itp',
         entityId: 'completion-1',
+        completionId: 'completion-1',
+        attachAs: 'itp_completion_attachment',
         category: 'itp_evidence',
         capturedBy: 'subbie-1',
       }),

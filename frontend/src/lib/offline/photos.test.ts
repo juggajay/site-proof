@@ -104,6 +104,31 @@ describe('capturePhotoOffline', () => {
       mimeType: 'image/png',
     });
   });
+
+  it('stores explicit ITP completion attachment intent for queued evidence photos', async () => {
+    const file = new File(['photo-bytes'], 'itp.jpg', { type: 'image/jpeg' });
+
+    const photo = await capturePhotoOffline('project-1', file, {
+      lotId: 'lot-1',
+      entityType: 'itp',
+      entityId: 'completion-1',
+      completionId: 'completion-1',
+      attachAs: 'itp_completion_attachment',
+      documentType: 'photo',
+      category: 'itp_evidence',
+      capturedBy: 'user-3',
+    });
+
+    expect(photo).toMatchObject({
+      entityType: 'itp',
+      entityId: 'completion-1',
+      completionId: 'completion-1',
+      attachAs: 'itp_completion_attachment',
+      documentType: 'photo',
+      category: 'itp_evidence',
+    });
+    expect(offlineDb.photos.put).toHaveBeenCalledWith(photo);
+  });
 });
 
 describe('photo sync-status markers', () => {
