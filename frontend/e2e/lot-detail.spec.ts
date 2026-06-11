@@ -501,6 +501,15 @@ async function mockLotDetailApi(page: Page, options: MockLotDetailOptions = {}) 
       return;
     }
 
+    if (url.pathname === `/api/documents/${E2E_PROJECT_ID}`) {
+      await json({
+        documents: options.withPhotoEvidence
+          ? [E2E_ITP_INSTANCE_WITH_PHOTO.completions[0].attachments[0].document]
+          : [],
+      });
+      return;
+    }
+
     if (url.pathname === `/api/documents/${E2E_PHOTO_DOCUMENT_ID}/signed-url`) {
       await json({
         signedUrl: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==',
@@ -753,7 +762,7 @@ test.describe('Lot detail ITP workflow', () => {
 
     await page.getByRole('tab', { name: 'Photos' }).click();
 
-    await expect(page.getByText('1 photo attached to ITP checklist items')).toBeVisible();
+    await expect(page.getByText('1 photo on this lot')).toBeVisible();
     await expect(page.getByText('Existing Supabase evidence photo')).toBeVisible();
 
     await page.getByLabel('Select All').check();

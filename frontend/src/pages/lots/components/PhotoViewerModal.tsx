@@ -9,6 +9,7 @@ export interface PhotoViewerModalProps {
   selectedPhoto: ITPAttachment | null;
   photoZoom: number;
   itpInstance: ITPInstance | null;
+  allPhotos?: ITPAttachment[];
   onClose: () => void;
   onPhotoChange: (photo: ITPAttachment) => void;
   onZoomChange: (zoom: number) => void;
@@ -18,6 +19,7 @@ export function PhotoViewerModal({
   selectedPhoto,
   photoZoom,
   itpInstance,
+  allPhotos: providedPhotos,
   onClose,
   onPhotoChange,
   onZoomChange,
@@ -25,8 +27,8 @@ export function PhotoViewerModal({
   if (!selectedPhoto) return null;
 
   // Collect all photos for navigation
-  const allPhotos: ITPAttachment[] = [];
-  if (itpInstance) {
+  const allPhotos: ITPAttachment[] = providedPhotos ? [...providedPhotos] : [];
+  if (!providedPhotos && itpInstance) {
     itpInstance.completions.forEach((completion) => {
       if (completion.attachments && completion.attachments.length > 0) {
         completion.attachments.forEach((attachment) => {

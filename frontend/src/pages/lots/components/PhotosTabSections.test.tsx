@@ -26,7 +26,7 @@ describe('PhotosTabSections', () => {
       />,
     );
 
-    expect(screen.getByText('2 photos attached to ITP checklist items')).toBeVisible();
+    expect(screen.getByText('2 photos on this lot')).toBeVisible();
     expect(screen.getByRole('checkbox', { name: 'Select All' })).not.toBeChecked();
     expect(screen.queryByRole('button', { name: /Bulk Caption/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Add to Evidence/ })).not.toBeInTheDocument();
