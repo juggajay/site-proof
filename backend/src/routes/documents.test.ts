@@ -977,6 +977,24 @@ describe('Documents API', () => {
   });
 
   describe('POST /api/documents/upload', () => {
+    const validOfflinePngBytes = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
+
+    const newOfflinePhotoUpload = () =>
+      request(app)
+        .post('/api/documents/upload')
+        .set('Authorization', `Bearer ${authToken}`)
+        .field('projectId', projectId)
+        .field('lotId', lotId)
+        .field('documentType', 'photo');
+
+    const getStoredDocumentPath = (fileUrl: string) => path.join(uploadDir, path.basename(fileUrl));
+
+    const cleanupUploadedDocument = async (documentId: string, fileUrl: string) => {
+      await prisma.document.deleteMany({ where: { id: documentId } });
+      const storedPath = getStoredDocumentPath(fileUrl);
+      if (fs.existsSync(storedPath)) fs.unlinkSync(storedPath);
+    };
+
     it('stores uploads using safe filenames', async () => {
       const unsafeFilename = `unsafe<>name?-${Date.now()}.pdf`;
       const res = await request(app)
@@ -1076,17 +1094,11 @@ describe('Documents API', () => {
 
     it('stores browser-provided GPS coordinates from offline photo sync uploads', async () => {
       const filename = `offline-photo-${Date.now()}.png`;
-      const validPngBytes = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
 
-      const res = await request(app)
-        .post('/api/documents/upload')
-        .set('Authorization', `Bearer ${authToken}`)
-        .field('projectId', projectId)
-        .field('lotId', lotId)
-        .field('documentType', 'photo')
+      const res = await newOfflinePhotoUpload()
         .field('gpsLatitude', '-33.865143')
         .field('gpsLongitude', '151.2099')
-        .attach('file', validPngBytes, {
+        .attach('file', validOfflinePngBytes, {
           filename,
           contentType: 'image/png',
         });
@@ -1096,13 +1108,33 @@ describe('Documents API', () => {
       expect(Number(res.body.gpsLongitude)).toBeCloseTo(151.2099, 5);
 
       try {
-        const storedFilename = path.basename(res.body.fileUrl);
-        expect(fs.existsSync(path.join(uploadDir, storedFilename))).toBe(true);
+        expect(fs.existsSync(getStoredDocumentPath(res.body.fileUrl))).toBe(true);
       } finally {
-        const storedFilename = path.basename(res.body.fileUrl);
-        await prisma.document.deleteMany({ where: { id: res.body.id } });
-        const storedPath = path.join(uploadDir, storedFilename);
-        if (fs.existsSync(storedPath)) fs.unlinkSync(storedPath);
+        await cleanupUploadedDocument(res.body.id, res.body.fileUrl);
+      }
+    });
+
+    it('stores browser-provided capture timestamps from offline photo sync uploads', async () => {
+      const filename = `offline-photo-captured-${Date.now()}.png`;
+      const capturedAt = '2026-01-01T10:00:00.000Z';
+
+      const res = await newOfflinePhotoUpload()
+        .field('capturedAt', capturedAt)
+        .attach('file', validOfflinePngBytes, {
+          filename,
+          contentType: 'image/png',
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.captureTimestamp).toBe(capturedAt);
+
+      try {
+        expect(fs.existsSync(getStoredDocumentPath(res.body.fileUrl))).toBe(true);
+
+        const doc = await prisma.document.findUniqueOrThrow({ where: { id: res.body.id } });
+        expect(doc.captureTimestamp?.toISOString()).toBe(capturedAt);
+      } finally {
+        await cleanupUploadedDocument(res.body.id, res.body.fileUrl);
       }
     });
 

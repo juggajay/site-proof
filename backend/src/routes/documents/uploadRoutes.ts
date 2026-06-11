@@ -99,6 +99,29 @@ const optionalGpsCoordinateSchema = (fieldName: string, min: number, max: number
       .nullish(),
   );
 
+const optionalCaptureTimestampSchema = (fieldName: string) =>
+  z
+    .preprocess(
+      (value) => {
+        if (value === undefined || value === null) {
+          return undefined;
+        }
+
+        if (typeof value === 'string') {
+          const trimmed = value.trim();
+          return trimmed.length > 0 ? trimmed : undefined;
+        }
+
+        return value;
+      },
+      z
+        .string()
+        .max(64, `${fieldName} is too long`)
+        .datetime({ message: `${fieldName} must be a valid ISO 8601 datetime` })
+        .optional(),
+    )
+    .transform((value) => (value ? new Date(value) : undefined));
+
 function createUploadDocumentBodySchema({
   maxDocumentIdLength,
   maxDocumentTypeLength,
@@ -122,6 +145,7 @@ function createUploadDocumentBodySchema({
     tags: optionalFormStringSchema('tags', maxTagsLength),
     gpsLatitude: optionalGpsCoordinateSchema('gpsLatitude', -90, 90),
     gpsLongitude: optionalGpsCoordinateSchema('gpsLongitude', -180, 180),
+    capturedAt: optionalCaptureTimestampSchema('capturedAt'),
     // Entity linkage sent by the offline photo sync worker. Only
     // entityType 'itp' (ITP completion evidence) is acted on today; other
     // values are accepted and ignored so queued photos from older clients
@@ -190,6 +214,7 @@ export function createDocumentUploadRouter({
         tags,
         gpsLatitude,
         gpsLongitude,
+        capturedAt,
         entityType,
         entityId,
       } = bodyParse.data;
@@ -268,7 +293,7 @@ export function createDocumentUploadRouter({
             // Feature #479: Store extracted EXIF data
             gpsLatitude: gpsLatitude ?? photoMetadata.gpsLatitude,
             gpsLongitude: gpsLongitude ?? photoMetadata.gpsLongitude,
-            captureTimestamp: photoMetadata.captureTimestamp,
+            captureTimestamp: photoMetadata.captureTimestamp ?? capturedAt,
             // Store device info in aiClassification field as metadata
             aiClassification: photoMetadata.deviceInfo
               ? JSON.stringify({ deviceInfo: photoMetadata.deviceInfo })

@@ -115,6 +115,7 @@ describe('photo sync-status markers', () => {
     expect(offlineDb.photos.update).toHaveBeenCalledWith('photo-1', {
       syncStatus: 'synced',
       serverDocumentId: 'server-doc-9',
+      uploadedAt: expect.any(String),
       localUpdatedAt: expect.any(String),
     });
   });
@@ -124,6 +125,7 @@ describe('photo sync-status markers', () => {
 
     expect(offlineDb.photos.update).toHaveBeenCalledWith('photo-1', {
       syncStatus: 'synced',
+      uploadedAt: expect.any(String),
       localUpdatedAt: expect.any(String),
     });
   });

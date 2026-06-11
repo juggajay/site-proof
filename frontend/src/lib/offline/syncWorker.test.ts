@@ -647,7 +647,7 @@ describe('syncSingleItem — photo_upload (Slice 3, moved from the hook)', () =>
 
   it('reads the dataUrl blob, POSTs multipart, returns "synced" and marks the photo', async () => {
     getOfflinePhotoMock.mockResolvedValue(photoRecord);
-    authFetchMock.mockResolvedValue(okJson({ document: { id: 'doc-9' } }));
+    authFetchMock.mockResolvedValue(okJson({ id: 'doc-9' }));
 
     const result = await syncSingleItem(
       queueItem({ id: 41, type: 'photo_upload', data: { photoId: 'ph-1' } }),
@@ -689,7 +689,7 @@ describe('syncSingleItem — photo_upload (Slice 3, moved from the hook)', () =>
       entityId: 'completion-1',
       category: 'itp_evidence',
     });
-    authFetchMock.mockResolvedValue(okJson({ document: { id: 'doc-10' } }));
+    authFetchMock.mockResolvedValue(okJson({ id: 'doc-10' }));
 
     const result = await syncSingleItem(
       queueItem({ id: 42, type: 'photo_upload', data: { photoId: 'ph-2' } }),
@@ -716,7 +716,7 @@ describe('syncSingleItem — photo_upload (Slice 3, moved from the hook)', () =>
       capturedAt: '2026-01-01T00:00:00.000Z',
       // no lotId/category/entityId/caption/tags/gps*
     });
-    authFetchMock.mockResolvedValue(okJson({ document: { id: 'doc-9' } }));
+    authFetchMock.mockResolvedValue(okJson({ id: 'doc-9' }));
 
     await syncSingleItem(queueItem({ id: 41, type: 'photo_upload', data: { photoId: 'ph-1' } }));
 
@@ -739,7 +739,7 @@ describe('syncSingleItem — photo_upload (Slice 3, moved from the hook)', () =>
       documentType: 'ncr_evidence',
     });
     authFetchMock
-      .mockResolvedValueOnce(okJson({ document: { id: 'doc-20' } }))
+      .mockResolvedValueOnce(okJson({ id: 'doc-20' }))
       .mockResolvedValueOnce(okJson({ evidence: { id: 'ev-1' } }));
 
     const result = await syncSingleItem(
@@ -771,7 +771,7 @@ describe('syncSingleItem — photo_upload (Slice 3, moved from the hook)', () =>
       documentType: 'ncr_evidence',
     });
     authFetchMock
-      .mockResolvedValueOnce(okJson({ document: { id: 'doc-20' } }))
+      .mockResolvedValueOnce(okJson({ id: 'doc-20' }))
       .mockResolvedValueOnce(errorResponse(500, 'attach boom'));
 
     const result = await syncSingleItem(
@@ -816,7 +816,7 @@ describe('syncSingleItem — photo_upload (Slice 3, moved from the hook)', () =>
       entityId: undefined,
       documentType: 'ncr_evidence',
     });
-    authFetchMock.mockResolvedValue(okJson({ document: { id: 'doc-21' } }));
+    authFetchMock.mockResolvedValue(okJson({ id: 'doc-21' }));
 
     const result = await syncSingleItem(
       queueItem({ id: 53, type: 'photo_upload', data: { photoId: 'ph-ncr2' } }),

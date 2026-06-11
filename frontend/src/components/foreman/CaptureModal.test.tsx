@@ -132,6 +132,7 @@ describe('CaptureModal defect mode', () => {
         entityType: 'ncr',
         entityId: 'ncr-1',
         documentType: 'ncr_evidence',
+        category: 'ncr_evidence',
       }),
     );
 
@@ -196,7 +197,12 @@ describe('CaptureModal defect mode', () => {
     expect(capturePhotoOfflineMock).toHaveBeenCalledWith(
       'p1',
       expect.any(File),
-      expect.objectContaining({ entityType: 'ncr', entityId: undefined }),
+      expect.objectContaining({
+        entityType: 'ncr',
+        entityId: undefined,
+        documentType: 'ncr_evidence',
+        category: 'ncr_evidence',
+      }),
     );
 
     // Honest fallback wording - never a false success number.
