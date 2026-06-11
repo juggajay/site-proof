@@ -130,10 +130,29 @@ export async function checkConformancePrerequisites(
           completions: true,
         },
       },
-      testResults: true,
+      testResults: {
+        select: {
+          id: true,
+          testType: true,
+          passFail: true,
+          status: true,
+        },
+      },
       ncrLots: {
+        where: {
+          ncr: {
+            status: { notIn: ['closed', 'closed_concession'] },
+          },
+        },
         include: {
-          ncr: true,
+          ncr: {
+            select: {
+              id: true,
+              ncrNumber: true,
+              description: true,
+              status: true,
+            },
+          },
         },
       },
     },
@@ -233,19 +252,16 @@ export async function checkConformancePrerequisites(
     (t) => t.passFail === 'pass' && t.status === 'verified',
   );
 
-  // Check for open NCRs (any NCR that isn't closed)
-  // NCRs are linked to lots through the ncrLots join table
+  // Check for open NCRs (any NCR that isn't closed). The Prisma query already
+  // filters closed NCR links so large historical NCR lists do not get hydrated.
   const ncrs = lot.ncrLots.map((ncrLot) => ncrLot.ncr);
-  const openNcrs = ncrs.filter(
-    (ncr) => ncr.status !== 'closed' && ncr.status !== 'closed_concession',
-  );
-  prerequisites.openNcrs = openNcrs.map((ncr) => ({
+  prerequisites.openNcrs = ncrs.map((ncr) => ({
     id: ncr.id,
     ncrNumber: ncr.ncrNumber,
     description: ncr.description,
     status: ncr.status,
   }));
-  prerequisites.noOpenNcrs = openNcrs.length === 0;
+  prerequisites.noOpenNcrs = ncrs.length === 0;
 
   // Determine if lot can be conformed
   const canConform =
