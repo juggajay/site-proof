@@ -24,19 +24,14 @@
  * this hook exposes.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { apiFetch, ApiError, isRetriableNetworkFailure } from '@/lib/api';
+import { apiFetch, ApiError } from '@/lib/api';
 import { logError } from '@/lib/logger';
 import { extractErrorMessage, handleApiError } from '@/lib/errorHandling';
 import { toast } from '@/components/ui/toaster';
-import {
-  cacheITPChecklist,
-  getCachedITPChecklist,
-  getPendingSyncCount,
-  recordSyncedChecklistItem,
-  updateChecklistItemOffline,
-} from '@/lib/offlineDb';
+import { cacheITPChecklist, getCachedITPChecklist, getPendingSyncCount } from '@/lib/offlineDb';
 import type { ITPCompletion, ITPInstance, ITPTemplate, LotTab } from '../types';
 import { mergeCompletionIntoInstance } from '../lib/itpCompletionState';
+import { writeItpCompletionToggle } from '../lib/itpCompletionWrite';
 import { mapCachedToItpInstance, mapInstanceToOfflineItems } from '../lib/itpOfflineMapping';
 import { useItpMobileActions } from './useItpMobileActions';
 import { useItpReleasePolling } from './useItpReleasePolling';
@@ -268,89 +263,37 @@ export function useItpInstance({
     setUpdatingCompletion(checklistItemId);
 
     try {
-      const data = await apiFetch<{ completion: ITPCompletion }>('/api/itp/completions', {
-        method: 'POST',
-        body: JSON.stringify({
-          itpInstanceId: itpInstance.id,
-          checklistItemId,
-          isCompleted: !currentlyCompleted,
-          notes: existingNotes,
-          // Include witness data if provided
-          ...(witnessData && {
-            witnessPresent: witnessData.witnessPresent,
-            witnessName: witnessData.witnessName || null,
-            witnessCompany: witnessData.witnessCompany || null,
-          }),
-        }),
+      // Shared online-then-offline write primitive (itpCompletionWrite.ts), used
+      // identically by the foreman shell run screen.
+      const result = await writeItpCompletionToggle({
+        itpInstanceId: itpInstance.id,
+        lotId,
+        checklistItemId,
+        currentlyCompleted,
+        existingNotes,
+        witnessData,
       });
 
-      // Update the completions in state
-      setItpInstance((prev) => mergeCompletionIntoInstance(prev, data.completion));
+      setItpInstance((prev) => mergeCompletionIntoInstance(prev, result.completion));
 
-      // Write through to the offline cache without queueing a sync entry —
-      // the server already confirmed this write.
-      if (lotId) {
-        const newStatus = !currentlyCompleted ? 'completed' : 'pending';
-        await recordSyncedChecklistItem(
-          lotId,
-          checklistItemId,
-          newStatus,
-          existingNotes || undefined,
-          'Current User',
-        );
-      }
-    } catch (err) {
-      logError('Failed to update completion:', err);
-
-      // On any retriable network failure — browser offline, request timeout,
-      // fetch-level failure, or a 5xx — save to IndexedDB, queue for sync, and
-      // update local state so the tick is never lost on patchy connections.
-      // Definitive rejections (4xx) fall through to the error toast instead.
-      if (lotId && isRetriableNetworkFailure(err)) {
-        const newStatus = !currentlyCompleted ? 'completed' : 'pending';
-        await updateChecklistItemOffline(
-          lotId,
-          checklistItemId,
-          newStatus,
-          existingNotes || undefined,
-          'Current User (Offline)',
-        );
-
-        // Update local state optimistically
-        const newCompletion: ITPCompletion = {
-          id: `offline-${checklistItemId}-${Date.now()}`,
-          checklistItemId,
-          isCompleted: !currentlyCompleted,
-          isNotApplicable: false,
-          isFailed: false,
-          notes: existingNotes,
-          completedAt: !currentlyCompleted ? new Date().toISOString() : null,
-          completedBy: !currentlyCompleted
-            ? { id: 'offline', fullName: 'You (Offline)', email: '' }
-            : null,
-          isVerified: false,
-          verifiedAt: null,
-          verifiedBy: null,
-          attachments: [],
-        };
-        setItpInstance((prev) => mergeCompletionIntoInstance(prev, newCompletion));
-
-        // Update offline pending count
+      if (result.status === 'queued') {
+        // Update offline pending count, then surface the honest offline toast.
         const pendingCount = await getPendingSyncCount();
         setOfflinePendingCount(pendingCount);
-
         toast({
           title: 'Saved Offline',
           description: 'Your change is saved on this device and will sync automatically.',
           variant: 'default',
         });
-      } else {
-        toast({
-          title: 'Error',
-          description: 'Failed to update checklist item. Please try again.',
-          variant: 'error',
-        });
       }
+    } catch (err) {
+      // Definitive rejections (4xx, e.g. the hold-point guard) reach here.
+      logError('Failed to update completion:', err);
+      toast({
+        title: 'Error',
+        description: 'Failed to update checklist item. Please try again.',
+        variant: 'error',
+      });
     } finally {
       updatingCompletionRef.current = null;
       setUpdatingCompletion(null);

@@ -6,8 +6,8 @@
  *
  * Route map:
  *   /m            → HomeScreen
- *   /m/diary      → ComingSoonScreen (diary full flow ships in PR-2)
- *   /m/lots       → ComingSoonScreen
+ *   /m/diary      → DiaryShellRoutes (full guided path, PR-2)
+ *   /m/lots       → LotsShellRoutes (list, mini-hub, ITP run, details — PR-3)
  *   /m/dockets    → ComingSoonScreen
  *   /m/issues     → ComingSoonScreen
  *   /m/docs       → ComingSoonScreen
@@ -21,6 +21,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { HomeScreen } from './screens/HomeScreen';
 import { ComingSoonScreen } from './screens/ComingSoonScreen';
 import { DiaryShellRoutes } from './screens/diary/DiaryShellRoutes';
+import { LotsShellRoutes } from './screens/lots/LotsShellRoutes';
 
 export function ShellRoutes() {
   return (
@@ -31,17 +32,8 @@ export function ShellRoutes() {
       {/* Diary — full guided path (PR-2) */}
       <Route path="diary/*" element={<DiaryShellRoutes />} />
 
-      {/* Lots */}
-      <Route
-        path="lots"
-        element={
-          <ComingSoonScreen
-            title="Lots"
-            parent="/m"
-            sub="ITP checks &amp; hold points — coming next"
-          />
-        }
-      />
+      {/* Lots — full sub-tree (PR-3): list, mini-hub, ITP run, details */}
+      <Route path="lots/*" element={<LotsShellRoutes />} />
 
       {/* Dockets */}
       <Route
