@@ -28,11 +28,12 @@ function expectProjectRouteGuard(
   routePath: string,
   pageComponent: string,
   allowedRolesExpression = 'INTERNAL_ROLES',
+  routeGuardPropsPattern = '',
 ) {
   expect(appSource).toMatch(
     new RegExp(
       `<Route\\s+path="${escapeRegExp(routePath)}"\\s+element=\\{\\s*` +
-        `<RoleProtectedRoute\\s+allowedRoles=\\{${escapeRegExp(allowedRolesExpression)}\\}>\\s*` +
+        `<RoleProtectedRoute\\s+allowedRoles=\\{${escapeRegExp(allowedRolesExpression)}\\}${routeGuardPropsPattern}>\\s*` +
         `<${pageComponent}\\s*/>\\s*` +
         `</RoleProtectedRoute>\\s*` +
         `\\}\\s*/>`,
@@ -780,7 +781,7 @@ test.describe('production readiness guardrails', () => {
     // First-run auto-show excludes foremen (desktop-oriented steps); replay
     // from the header stays available to them.
     expect(protectedShellSource).toContain('const autoShowGeneralOnboarding =');
-    expect(protectedShellSource).toContain('userRole !== ROLES.FOREMAN');
+    expect(protectedShellSource).toContain('!isForemanDashboardUser(user)');
     expect(protectedShellSource).toContain(
       '<OnboardingTour enabled={showGeneralOnboarding} autoShow={autoShowGeneralOnboarding} />',
     );
@@ -999,9 +1000,27 @@ test.describe('production readiness guardrails', () => {
       'utf8',
     );
 
-    expectProjectRouteGuard(appSource, '/projects/:projectId/hold-points', 'HoldPointsPage');
-    expectProjectRouteGuard(appSource, '/projects/:projectId/ncr', 'NCRPage');
-    expectProjectRouteGuard(appSource, '/projects/:projectId/tests', 'TestResultsPage');
+    expectProjectRouteGuard(
+      appSource,
+      '/projects/:projectId/hold-points',
+      'HoldPointsPage',
+      'INTERNAL_ROLES',
+      '\\s+allowProjectScopedRole',
+    );
+    expectProjectRouteGuard(
+      appSource,
+      '/projects/:projectId/ncr',
+      'NCRPage',
+      'INTERNAL_ROLES',
+      '\\s+allowProjectScopedRole',
+    );
+    expectProjectRouteGuard(
+      appSource,
+      '/projects/:projectId/tests',
+      'TestResultsPage',
+      'INTERNAL_ROLES',
+      '\\s+allowProjectScopedRole',
+    );
     expect(holdPointsPage).toContain(
       '/projects/${encodeURIComponent(projectId)}/hold-points?hp=${encodeURIComponent(hpId)}',
     );
@@ -1034,9 +1053,21 @@ test.describe('production readiness guardrails', () => {
     ] as const;
 
     for (const [routePath, pageComponent] of internalProjectRoutes) {
-      expectProjectRouteGuard(appSource, routePath, pageComponent);
+      expectProjectRouteGuard(
+        appSource,
+        routePath,
+        pageComponent,
+        'INTERNAL_ROLES',
+        '\\s+allowProjectScopedRole',
+      );
     }
-    expectProjectRouteGuard(appSource, '/projects/:projectId/dockets', 'DocketApprovalsPage');
+    expectProjectRouteGuard(
+      appSource,
+      '/projects/:projectId/dockets',
+      'DocketApprovalsPage',
+      'INTERNAL_ROLES',
+      '\\s+allowProjectScopedRole',
+    );
   });
 
   test('foreman mobile quick navigation resolves to mounted routes', async () => {
