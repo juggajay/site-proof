@@ -264,6 +264,7 @@ lotReadRouter.get(
         description: true,
         status: true,
         activityType: true,
+        budgetAmount: true,
         chainageStart: true,
         chainageEnd: true,
         offset: true,
@@ -328,11 +329,22 @@ lotReadRouter.get(
     // Shape the response: strip internal fields and scope assignments for
     // subcontractor users (route owns resolving their company id via the DB).
     const isSubcontractor = isSubcontractorUser(user);
+    const effectiveProjectRole = isSubcontractor
+      ? null
+      : await getEffectiveProjectRole(user, lot.projectId, {
+          excludeSubcontractorProjectMemberships: true,
+          throwIfProjectMissing: true,
+        });
+    const canViewBudgetAmount = canViewLotBudget(effectiveProjectRole);
     const subcontractorCompanyId = isSubcontractor
       ? await getProjectSubcontractorCompanyId(user.id, lot.projectId)
       : null;
 
-    const lotResponse = shapeLotDetailResponse(lot, { isSubcontractor, subcontractorCompanyId });
+    const lotResponse = shapeLotDetailResponse(lot, {
+      isSubcontractor,
+      subcontractorCompanyId,
+      canViewBudgetAmount,
+    });
 
     res.json(buildLotDetailEnvelope(lotResponse));
   }),
