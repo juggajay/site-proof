@@ -31,6 +31,7 @@ export {
   getPendingPhotos,
   getPendingPhotosCount,
   markPhotoSynced,
+  markPhotoUploadedAwaitingAttach,
   markPhotoSyncError,
   updateOfflinePhotoMeta,
 } from './offline/photos';

@@ -35,6 +35,7 @@ import {
   markDocketSyncError,
   getOfflinePhoto,
   markPhotoSynced,
+  markPhotoUploadedAwaitingAttach,
   markPhotoSyncError,
   getOfflineLot,
   detectLotSyncConflict,
@@ -388,48 +389,88 @@ async function syncPhoto(item: PhotoUploadItem, itemId: number): Promise<SyncIte
         return HANDLED;
       }
 
-      // Convert base64 to blob for upload
-      const response = await fetch(photo.dataUrl);
-      const blob = await response.blob();
+      // NCR evidence photos need a second step after upload: linking the
+      // created Document to the NCR (the upload endpoint ignores
+      // entityType='ncr'). serverDocumentId persisted after a successful
+      // upload makes a retried item skip straight to the attach step instead
+      // of re-uploading a duplicate file.
+      const needsNcrAttach = photo.entityType === 'ncr' && !!photo.entityId;
+      let documentId = photo.serverDocumentId;
 
-      // Create FormData for multipart upload
-      const formData = new FormData();
-      formData.append('file', blob, photo.fileName);
-      formData.append('projectId', photo.projectId);
-      if (photo.lotId) formData.append('lotId', photo.lotId);
-      formData.append('documentType', photo.documentType);
-      if (photo.category) formData.append('category', photo.category);
-      formData.append('entityType', photo.entityType);
-      if (photo.entityId) formData.append('entityId', photo.entityId);
-      if (photo.caption) formData.append('caption', photo.caption);
-      if (photo.tags) formData.append('tags', JSON.stringify(photo.tags));
-      if (photo.gpsLatitude !== undefined) {
-        formData.append('gpsLatitude', String(photo.gpsLatitude));
-      }
-      if (photo.gpsLongitude !== undefined) {
-        formData.append('gpsLongitude', String(photo.gpsLongitude));
-      }
-      formData.append('capturedAt', photo.capturedAt);
+      if (!documentId) {
+        // Convert base64 to blob for upload
+        const response = await fetch(photo.dataUrl);
+        const blob = await response.blob();
 
-      // Upload to server
-      const uploadResponse = await authFetch(apiUrl('/api/documents/upload'), {
-        method: 'POST',
-        body: formData,
-      });
+        // Create FormData for multipart upload
+        const formData = new FormData();
+        formData.append('file', blob, photo.fileName);
+        formData.append('projectId', photo.projectId);
+        if (photo.lotId) formData.append('lotId', photo.lotId);
+        formData.append('documentType', photo.documentType);
+        if (photo.category) formData.append('category', photo.category);
+        formData.append('entityType', photo.entityType);
+        if (photo.entityId) formData.append('entityId', photo.entityId);
+        if (photo.caption) formData.append('caption', photo.caption);
+        if (photo.tags) formData.append('tags', JSON.stringify(photo.tags));
+        if (photo.gpsLatitude !== undefined) {
+          formData.append('gpsLatitude', String(photo.gpsLatitude));
+        }
+        if (photo.gpsLongitude !== undefined) {
+          formData.append('gpsLongitude', String(photo.gpsLongitude));
+        }
+        formData.append('capturedAt', photo.capturedAt);
 
-      if (uploadResponse.ok) {
+        // Upload to server
+        const uploadResponse = await authFetch(apiUrl('/api/documents/upload'), {
+          method: 'POST',
+          body: formData,
+        });
+
+        if (!uploadResponse.ok) {
+          const errorText = await uploadResponse.text();
+          await markSyncItemError(itemId, errorText);
+          await markPhotoSyncError(photoId);
+          return HANDLED;
+        }
+
         const result = await uploadResponse.json();
-        // Remove from sync queue
-        await removeSyncQueueItem(itemId);
-        // Mark photo as synced
-        await markPhotoSynced(photoId, result.document?.id);
-        return SYNCED;
-      } else {
-        const errorText = await uploadResponse.text();
-        await markSyncItemError(itemId, errorText);
-        await markPhotoSyncError(photoId);
-        return HANDLED;
+        documentId = result.document?.id as string | undefined;
+
+        if (needsNcrAttach && documentId) {
+          // Upload succeeded; remember the document so a failed attach below
+          // never re-uploads on retry.
+          await markPhotoUploadedAwaitingAttach(photoId, documentId);
+        }
       }
+
+      if (needsNcrAttach && documentId) {
+        const attachResponse = await authFetch(apiUrl(`/api/ncrs/${photo.entityId}/evidence`), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            documentId,
+            evidenceType: 'photo',
+            ...(photo.caption ? { caption: photo.caption } : {}),
+          }),
+        });
+
+        if (!attachResponse.ok) {
+          // The file is safely on the server; only the NCR link is missing.
+          // Keep the queue item so the attach step retries.
+          const errorText = await attachResponse.text();
+          await markSyncItemError(itemId, errorText);
+          return HANDLED;
+        }
+      }
+
+      // Remove from sync queue
+      await removeSyncQueueItem(itemId);
+      // Mark photo as synced
+      await markPhotoSynced(photoId, documentId);
+      return SYNCED;
     },
     async () => {
       if (item.data?.photoId) {

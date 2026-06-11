@@ -215,6 +215,12 @@ export interface OfflinePhoto {
   // Feature #317: Compression stats
   originalSize?: number; // Original file size in bytes
   compressedSize?: number; // Compressed size in bytes
+  /**
+   * Server Document id, recorded as soon as the upload succeeds. Lets the
+   * sync executor retry a failed post-upload step (attaching the document as
+   * NCR evidence) WITHOUT re-uploading and duplicating the file.
+   */
+  serverDocumentId?: string;
 }
 
 // Loose row shape for the Dexie lots table. The full OfflineLotEdit interface

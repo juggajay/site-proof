@@ -104,9 +104,25 @@ export async function getPendingPhotosCount(): Promise<number> {
 }
 
 // Mark photo as synced
-export async function markPhotoSynced(photoId: string, _serverDocumentId?: string): Promise<void> {
+export async function markPhotoSynced(photoId: string, serverDocumentId?: string): Promise<void> {
   await offlineDb.photos.update(photoId, {
     syncStatus: 'synced',
+    ...(serverDocumentId ? { serverDocumentId } : {}),
+    localUpdatedAt: new Date().toISOString(),
+  });
+}
+
+// Record the server Document id after a successful upload while a follow-up
+// step (attaching the document as NCR evidence) is still outstanding.
+// syncStatus stays 'pending' so the sync pill stays honest, and the executor
+// can retry the follow-up WITHOUT re-uploading the file.
+export async function markPhotoUploadedAwaitingAttach(
+  photoId: string,
+  serverDocumentId: string,
+): Promise<void> {
+  await offlineDb.photos.update(photoId, {
+    serverDocumentId,
+    syncStatus: 'pending',
     localUpdatedAt: new Date().toISOString(),
   });
 }
