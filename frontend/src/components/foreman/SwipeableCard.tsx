@@ -87,15 +87,23 @@ export function SwipeableCard({
 
   // ---------------------------------------------------------------------------
   // Derived motion values for background reveal
+  //
+  // Convention (iOS / call-site convention):
+  //   rightAction sits on the RIGHT side of the card — revealed by swiping LEFT
+  //                                                    (negative x)
+  //   leftAction  sits on the LEFT  side of the card — revealed by swiping RIGHT
+  //                                                    (positive x)
+  //   onSwipeRight fires after a LEFT  swipe that commits the right-side action
+  //   onSwipeLeft  fires after a RIGHT swipe that commits the left-side  action
   // ---------------------------------------------------------------------------
 
-  // Right action (swiping right → positive x): full opacity at threshold
-  const rightOpacity = useTransform(x, [0, threshold], [0, 1]);
-  const rightScale = useTransform(x, [0, threshold], [0.85, 1]);
+  // Right action — revealed by leftward (negative-x) drag
+  const rightOpacity = useTransform(x, [-threshold, 0], [1, 0]);
+  const rightScale = useTransform(x, [-threshold, 0], [1, 0.85]);
 
-  // Left action (swiping left → negative x): full opacity at -threshold
-  const leftOpacity = useTransform(x, [-threshold, 0], [1, 0]);
-  const leftScale = useTransform(x, [-threshold, 0], [1, 0.85]);
+  // Left action — revealed by rightward (positive-x) drag
+  const leftOpacity = useTransform(x, [0, threshold], [0, 1]);
+  const leftScale = useTransform(x, [0, threshold], [0.85, 1]);
 
   // ---------------------------------------------------------------------------
   // Spring helper — respects reduced-motion preference
@@ -114,11 +122,14 @@ export function SwipeableCard({
 
   // ---------------------------------------------------------------------------
   // Drag constraints — only allow drag toward configured actions
+  //
+  // leftward drag (negative x) reveals rightAction → gate on onSwipeRight
+  // rightward drag (positive x) reveals leftAction  → gate on onSwipeLeft
   // ---------------------------------------------------------------------------
 
   const dragConstraints = {
-    left: onSwipeLeft ? -MAX_REVEAL : 0,
-    right: onSwipeRight ? MAX_REVEAL : 0,
+    left: onSwipeRight ? -MAX_REVEAL : 0,
+    right: onSwipeLeft ? MAX_REVEAL : 0,
   };
 
   // ---------------------------------------------------------------------------
@@ -161,22 +172,25 @@ export function SwipeableCard({
       offsetX: info.offset.x,
       velocityX: info.velocity.x,
       distanceThreshold: threshold,
-      leftActionConfigured: !!onSwipeLeft,
-      rightActionConfigured: !!onSwipeRight,
+      // leftward drag (negative offset) reveals the right-side action → onSwipeRight
+      leftActionConfigured: !!onSwipeRight,
+      // rightward drag (positive offset) reveals the left-side action → onSwipeLeft
+      rightActionConfigured: !!onSwipeLeft,
     });
 
-    if (decision === 'right' && onSwipeRight) {
+    if (decision === 'left' && onSwipeRight) {
+      // Left swipe committed — fires the right-side action
       trigger('light');
-      // Brief over-commit then spring back
-      void animate(x, MAX_REVEAL, {
+      void animate(x, -MAX_REVEAL, {
         duration: prefersReducedMotion ? REDUCED_MOTION_DURATION : 0.12,
       }).then(() => {
         onSwipeRight();
         springTo(0);
       });
-    } else if (decision === 'left' && onSwipeLeft) {
+    } else if (decision === 'right' && onSwipeLeft) {
+      // Right swipe committed — fires the left-side action
       trigger('light');
-      void animate(x, -MAX_REVEAL, {
+      void animate(x, MAX_REVEAL, {
         duration: prefersReducedMotion ? REDUCED_MOTION_DURATION : 0.12,
       }).then(() => {
         onSwipeLeft();
@@ -195,26 +209,16 @@ export function SwipeableCard({
   return (
     <MotionConfig reducedMotion="user">
       <div className={cn('relative overflow-hidden rounded-lg', className)}>
-        {/* Background action layers — positioned absolutely behind the card */}
+        {/* Background action layers — positioned absolutely behind the card.
+            Layout: leftAction on the LEFT (revealed by rightward drag),
+                    rightAction on the RIGHT (revealed by leftward drag).
+            This matches iOS convention where the primary action is on the right
+            and revealed by swiping left. */}
         <div className="absolute inset-0 flex">
-          {/* Right action (approve) — revealed on positive-x drag */}
+          {/* Left action — revealed on rightward (positive-x) drag */}
           <motion.div
             className={cn(
               'flex flex-1 items-center justify-start px-6 text-primary-foreground',
-              rightAction.color,
-            )}
-            style={{ opacity: rightOpacity, scale: rightScale }}
-          >
-            <div className="flex flex-col items-center">
-              {rightAction.icon}
-              <span className="mt-1 text-xs font-medium">{rightAction.label}</span>
-            </div>
-          </motion.div>
-
-          {/* Left action (reject) — revealed on negative-x drag */}
-          <motion.div
-            className={cn(
-              'flex flex-1 items-center justify-end px-6 text-primary-foreground',
               leftAction.color,
             )}
             style={{ opacity: leftOpacity, scale: leftScale }}
@@ -222,6 +226,20 @@ export function SwipeableCard({
             <div className="flex flex-col items-center">
               {leftAction.icon}
               <span className="mt-1 text-xs font-medium">{leftAction.label}</span>
+            </div>
+          </motion.div>
+
+          {/* Right action — revealed on leftward (negative-x) drag */}
+          <motion.div
+            className={cn(
+              'flex flex-1 items-center justify-end px-6 text-primary-foreground',
+              rightAction.color,
+            )}
+            style={{ opacity: rightOpacity, scale: rightScale }}
+          >
+            <div className="flex flex-col items-center">
+              {rightAction.icon}
+              <span className="mt-1 text-xs font-medium">{rightAction.label}</span>
             </div>
           </motion.div>
         </div>
