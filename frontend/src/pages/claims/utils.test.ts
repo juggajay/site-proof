@@ -87,24 +87,27 @@ describe('getClaimPeriodError', () => {
 
 describe('SOPA due dates by project state', () => {
   // Submitted on Mon 2026-06-01 (a non-weekend) so business-day counting is
-  // deterministic. addBusinessDays skips Sat/Sun only.
+  // deterministic. Now that state calendars are populated, the reference
+  // calculation must also use the state so holidays are counted consistently.
   const submittedAt = '2026-06-01T00:00:00.000Z';
 
   it('uses NSW timeframes (10 cert / 15 payment business days) for NSW projects', () => {
+    // NSW King's Birthday (Mon 8 Jun) falls within both windows, so state-aware
+    // addBusinessDays is used as the reference to match calculateCertificationDueDate.
     expect(calculateCertificationDueDate(submittedAt, 'NSW')).toBe(
-      addBusinessDays(new Date(submittedAt), 10).toISOString(),
+      addBusinessDays(new Date(submittedAt), 10, 'NSW').toISOString(),
     );
     expect(calculatePaymentDueDate(submittedAt, 'NSW')).toBe(
-      addBusinessDays(new Date(submittedAt), 15).toISOString(),
+      addBusinessDays(new Date(submittedAt), 15, 'NSW').toISOString(),
     );
   });
 
   it('uses WA timeframes (15 cert / 20 payment business days) for WA projects', () => {
     expect(calculateCertificationDueDate(submittedAt, 'WA')).toBe(
-      addBusinessDays(new Date(submittedAt), 15).toISOString(),
+      addBusinessDays(new Date(submittedAt), 15, 'WA').toISOString(),
     );
     expect(calculatePaymentDueDate(submittedAt, 'WA')).toBe(
-      addBusinessDays(new Date(submittedAt), 20).toISOString(),
+      addBusinessDays(new Date(submittedAt), 20, 'WA').toISOString(),
     );
   });
 
