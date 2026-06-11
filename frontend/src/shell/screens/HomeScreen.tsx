@@ -36,6 +36,8 @@ import { queryKeys } from '@/lib/queryKeys';
 import { useEffectiveProjectId } from '@/hooks/useEffectiveProjectId';
 import { CaptureModal } from '@/components/foreman/CaptureModal';
 import { cn } from '@/lib/utils';
+import { deriveDiaryStepState } from './diary/diaryStepState';
+import type { DailyDiary } from '@/pages/diary/types';
 
 // ── Types matching the foreman/today endpoint ─────────────────────────────────
 
@@ -50,20 +52,8 @@ interface ForemanTodayPayload {
   };
 }
 
-// Minimal diary shape we need for hero computation
-interface DiaryShape {
-  id: string;
-  status: string;
-  weatherConditions?: string | null;
-  // Personnel
-  personnel?: unknown[];
-  // Activities/entries in the diary timeline
-  activities?: unknown[];
-  delays?: unknown[];
-}
-
 interface DiaryListResponse {
-  data: DiaryShape[];
+  data: DailyDiary[];
 }
 
 // Minimal dockets response
@@ -76,36 +66,37 @@ interface NcrListResponse {
   data: Array<{ status: string }>;
 }
 
-// ── Diary hero state computation ───────────────────────────────────────────────
+// ── Diary hero state computation — delegates to shared deriveDiaryStepState ───
+
+const TOTAL_STEPS = 4; // weather, crew, work, submitted
 
 type DiaryHeroState =
   | { kind: 'start' }
   | { kind: 'in-progress'; stepsComplete: number; totalSteps: number; missing: string }
   | { kind: 'submitted' };
 
-const TOTAL_STEPS = 4; // weather, crew, work, submitted
+function computeDiaryHero(diary: DailyDiary | null | undefined): DiaryHeroState {
+  const stepState = deriveDiaryStepState(diary);
 
-function computeDiaryHero(diary: DiaryShape | null | undefined): DiaryHeroState {
   if (!diary) return { kind: 'start' };
-  if (diary.status === 'submitted' || diary.status === 'locked') return { kind: 'submitted' };
+  if (stepState.allDone) return { kind: 'submitted' };
+  if (stepState.stepsComplete === 0) return { kind: 'start' };
 
-  let done = 0;
-  if (diary.weatherConditions) done++;
-  if ((diary.personnel?.length ?? 0) > 0) done++;
-  if ((diary.activities?.length ?? 0) + (diary.delays?.length ?? 0) > 0) done++;
-  // step 4 (submit) never done in in-progress state
+  const missing =
+    stepState.weather !== 'done'
+      ? 'Start with weather — it auto-fills from the forecast.'
+      : stepState.crew !== 'done'
+        ? 'Log crew & plant — carry from yesterday in one tap.'
+        : stepState.work !== 'done'
+          ? "Log today's work — takes about 30 seconds."
+          : "Review and submit when you're ready.";
 
-  if (done === 0) return { kind: 'start' };
-
-  const missing = !diary.weatherConditions
-    ? 'Start with weather — it auto-fills from the forecast.'
-    : (diary.personnel?.length ?? 0) === 0
-      ? 'Log crew & plant — carry from yesterday in one tap.'
-      : (diary.activities?.length ?? 0) + (diary.delays?.length ?? 0) === 0
-        ? "Log today's work — takes about 30 seconds."
-        : "Review and submit when you're ready.";
-
-  return { kind: 'in-progress', stepsComplete: done, totalSteps: TOTAL_STEPS, missing };
+  return {
+    kind: 'in-progress',
+    stepsComplete: stepState.stepsComplete,
+    totalSteps: TOTAL_STEPS,
+    missing,
+  };
 }
 
 // ── Hero tile ─────────────────────────────────────────────────────────────────
@@ -273,7 +264,7 @@ export function HomeScreen() {
     staleTime: 60_000,
   });
 
-  const todayDiary = diaryListData?.data?.[0] ?? null;
+  const todayDiary: DailyDiary | null = diaryListData?.data?.[0] ?? null;
   const diaryHeroState = computeDiaryHero(todayDiary);
 
   // ── Pending dockets count ─────────────────────────────────────────────────
@@ -302,7 +293,7 @@ export function HomeScreen() {
     }
   };
 
-  const diaryPath = projectId ? `/projects/${projectId}/diary` : '#';
+  const diaryPath = projectId ? `/m/diary?projectId=${projectId}` : '/m/diary';
 
   if (isResolving) {
     // Skeleton state while project resolves
@@ -334,7 +325,7 @@ export function HomeScreen() {
           </div>
         }
       >
-        {/* Diary hero tile */}
+        {/* Diary hero tile — navigates to the shell diary path */}
         <DiaryHero state={diaryHeroState} onPress={() => navigate(diaryPath)} />
 
         {/* Lots tile */}

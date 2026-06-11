@@ -20,6 +20,7 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { HomeScreen } from './screens/HomeScreen';
 import { ComingSoonScreen } from './screens/ComingSoonScreen';
+import { DiaryShellRoutes } from './screens/diary/DiaryShellRoutes';
 
 export function ShellRoutes() {
   return (
@@ -27,17 +28,8 @@ export function ShellRoutes() {
       {/* Home hub */}
       <Route index element={<HomeScreen />} />
 
-      {/* Diary — full flow ships in PR-2 */}
-      <Route
-        path="diary"
-        element={
-          <ComingSoonScreen
-            title="Daily Diary"
-            parent="/m"
-            sub="Full guided flow coming in the next shell PR"
-          />
-        }
-      />
+      {/* Diary — full guided path (PR-2) */}
+      <Route path="diary/*" element={<DiaryShellRoutes />} />
 
       {/* Lots */}
       <Route
