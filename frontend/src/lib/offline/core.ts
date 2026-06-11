@@ -221,6 +221,7 @@ export interface OfflinePhoto {
    * NCR evidence) WITHOUT re-uploading and duplicating the file.
    */
   serverDocumentId?: string;
+  uploadedAt?: string;
 }
 
 // Loose row shape for the Dexie lots table. The full OfflineLotEdit interface

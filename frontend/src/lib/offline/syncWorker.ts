@@ -435,7 +435,7 @@ async function syncPhoto(item: PhotoUploadItem, itemId: number): Promise<SyncIte
         }
 
         const result = await uploadResponse.json();
-        documentId = result.document?.id as string | undefined;
+        documentId = (result?.id ?? result?.document?.id) as string | undefined;
 
         if (needsNcrAttach && documentId) {
           // Upload succeeded; remember the document so a failed attach below

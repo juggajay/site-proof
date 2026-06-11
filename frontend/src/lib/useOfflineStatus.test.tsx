@@ -633,7 +633,7 @@ describe('photo_upload dispatch', () => {
   it('uploads the photo via FormData, removes the item, and marks it synced with the returned document id', async () => {
     getPendingSyncItemsMock.mockResolvedValue([photoItem({ photoId: 'ph-1' })]);
     getOfflinePhotoMock.mockResolvedValue(basePhoto);
-    authFetchMock.mockResolvedValue(okJson({ document: { id: 'doc-99' } }));
+    authFetchMock.mockResolvedValue(okJson({ id: 'doc-99' }));
 
     await runSync();
 

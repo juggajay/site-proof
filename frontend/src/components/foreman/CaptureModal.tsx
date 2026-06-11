@@ -166,6 +166,7 @@ export function CaptureModal({
         entityType,
         entityId: raisedNcr ? raisedNcr.id : linkedItp || undefined,
         documentType: captureType === 'ncr' ? 'ncr_evidence' : 'photo',
+        category: captureType === 'ncr' ? 'ncr_evidence' : undefined,
         caption: description.trim() || undefined,
         capturedBy: user.id,
         gpsLatitude: latitude ?? undefined,

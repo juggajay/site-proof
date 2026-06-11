@@ -105,10 +105,13 @@ export async function getPendingPhotosCount(): Promise<number> {
 
 // Mark photo as synced
 export async function markPhotoSynced(photoId: string, serverDocumentId?: string): Promise<void> {
+  const now = new Date().toISOString();
+
   await offlineDb.photos.update(photoId, {
     syncStatus: 'synced',
     ...(serverDocumentId ? { serverDocumentId } : {}),
-    localUpdatedAt: new Date().toISOString(),
+    uploadedAt: now,
+    localUpdatedAt: now,
   });
 }
 
