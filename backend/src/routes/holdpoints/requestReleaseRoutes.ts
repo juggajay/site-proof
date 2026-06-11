@@ -307,9 +307,6 @@ holdPointRequestReleaseRouter.post(
     try {
       const requestedBy = requestingUser?.fullName || requestingUser?.email || 'Unknown';
       const releaseUrl = buildFrontendUrl(`/projects/${lot.project.id}/lots/${lot.id}?tab=itp`);
-      const evidencePackageUrl = buildFrontendUrl(
-        `/projects/${lot.project.id}/lots/${lot.id}/evidence-preview?holdPointId=${holdPoint.id}`,
-      );
 
       // Format scheduled date for display
       const formattedScheduledDate = scheduledDateValue
@@ -324,6 +321,7 @@ holdPointRequestReleaseRouter.post(
       for (const recipient of releaseTokenEntries) {
         // Generate secure release URL
         const secureReleaseUrl = buildFrontendUrl(`/hp-release/${recipient.secureToken}`);
+        const evidencePackageUrl = `${secureReleaseUrl}#evidence-package`;
 
         await sendHPReleaseRequestEmail({
           to: recipient.email,

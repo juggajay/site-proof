@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import crypto from 'crypto';
 import { prisma } from '../../lib/prisma.js';
 import { sendNotificationIfEnabled } from '../notifications.js';
 import { sendHPChaseEmail, sendHPReleaseConfirmationEmail } from '../../lib/email.js';
@@ -25,6 +26,7 @@ import { buildHoldPointChaseEmail, selectHoldPointChaseRecipients } from './chas
 import { buildHoldPointChaseResponse, buildHoldPointReleasedResponse } from './actionResponses.js';
 import { holdPointEscalationRouter } from './escalationRoutes.js';
 import { isProjectNotificationEnabled } from '../../lib/projectNotificationPreferences.js';
+import { SECURE_LINK_EXPIRY_HOURS, hashHoldPointReleaseToken } from './tokens.js';
 
 // =============================================================================
 // Authenticated hold point ACTION routes (release, chase, escalate,
@@ -38,6 +40,138 @@ import { isProjectNotificationEnabled } from '../../lib/projectNotificationPrefe
 export const holdPointActionRouter = Router();
 
 const HP_RELEASE_ROLES = [...HP_REQUEST_ROLES, 'superintendent'];
+
+type HoldPointChaseTarget = {
+  email: string;
+  fullName: string | null;
+  secureToken?: string;
+};
+
+type HoldPointReleaseTokenRecipient = {
+  recipientEmail: string;
+  recipientName: string | null;
+};
+
+function buildTokenChaseTargets(
+  existingReleaseTokens: HoldPointReleaseTokenRecipient[],
+): HoldPointChaseTarget[] {
+  const tokenTargetsByEmail = new Map<string, HoldPointChaseTarget>();
+
+  for (const tokenRecipient of existingReleaseTokens) {
+    const email = tokenRecipient.recipientEmail.trim();
+    if (!email) continue;
+
+    const key = email.toLowerCase();
+    if (!tokenTargetsByEmail.has(key)) {
+      tokenTargetsByEmail.set(key, {
+        email,
+        fullName: tokenRecipient.recipientName,
+        secureToken: crypto.randomBytes(32).toString('hex'),
+      });
+    }
+  }
+
+  return Array.from(tokenTargetsByEmail.values());
+}
+
+async function createChaseReleaseTokens(
+  holdPointId: string,
+  tokenTargets: HoldPointChaseTarget[],
+): Promise<void> {
+  if (tokenTargets.length === 0) {
+    return;
+  }
+
+  const tokenExpiry = new Date(Date.now() + SECURE_LINK_EXPIRY_HOURS * 60 * 60 * 1000);
+
+  await prisma.holdPointReleaseToken.createMany({
+    data: tokenTargets.map((recipient) => ({
+      holdPointId,
+      recipientEmail: recipient.email,
+      recipientName: recipient.fullName,
+      token: hashHoldPointReleaseToken(recipient.secureToken!),
+      expiresAt: tokenExpiry,
+    })),
+  });
+}
+
+async function loadProjectChaseTargets(projectId: string): Promise<HoldPointChaseTarget[]> {
+  // Get project users with superintendent role to notify.
+  const superintendents = await prisma.projectUser.findMany({
+    where: {
+      projectId,
+      role: 'superintendent',
+      status: 'active',
+    },
+    include: {
+      user: { select: { id: true, email: true, fullName: true } },
+    },
+  });
+
+  // If no superintendents, also check for project managers. Keep the lookup
+  // lazy: project managers are only queried when there are no superintendents.
+  const projectManagers: typeof superintendents =
+    superintendents.length > 0
+      ? []
+      : await prisma.projectUser.findMany({
+          where: {
+            projectId,
+            role: 'project_manager',
+            status: 'active',
+          },
+          include: {
+            user: { select: { id: true, email: true, fullName: true } },
+          },
+        });
+
+  return selectHoldPointChaseRecipients(superintendents, projectManagers).map((recipient) => ({
+    email: recipient.user.email,
+    fullName: recipient.user.fullName,
+  }));
+}
+
+async function loadHoldPointChaseTargets(
+  holdPointId: string,
+  projectId: string,
+): Promise<HoldPointChaseTarget[]> {
+  const existingReleaseTokens = await prisma.holdPointReleaseToken.findMany({
+    where: {
+      holdPointId,
+      usedAt: null,
+      expiresAt: { gt: new Date() },
+    },
+    select: { recipientEmail: true, recipientName: true },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  const tokenTargets = buildTokenChaseTargets(existingReleaseTokens);
+  if (tokenTargets.length > 0) {
+    await createChaseReleaseTokens(holdPointId, tokenTargets);
+    return tokenTargets;
+  }
+
+  return loadProjectChaseTargets(projectId);
+}
+
+function buildChaseRecipientUrls(
+  recipient: HoldPointChaseTarget,
+  loggedInEvidencePackageUrl: string,
+  loggedInReleaseUrl: string,
+) {
+  if (recipient.secureToken) {
+    const secureReleaseUrl = buildFrontendUrl(`/hp-release/${recipient.secureToken}`);
+    return {
+      evidencePackageUrl: `${secureReleaseUrl}#evidence-package`,
+      releaseUrl: secureReleaseUrl,
+    };
+  }
+
+  return {
+    evidencePackageUrl: loggedInEvidencePackageUrl,
+    releaseUrl: loggedInReleaseUrl,
+  };
+}
+
 // Release a hold point
 holdPointActionRouter.post(
   '/:id/release',
@@ -360,39 +494,15 @@ holdPointActionRouter.post(
 
     // Feature #947 - Send HP chase email to superintendent
     try {
-      // Get project users with superintendent role to notify
-      const superintendents = await prisma.projectUser.findMany({
-        where: {
-          projectId: existingHP.lot.project.id,
-          role: 'superintendent',
-          status: 'active',
-        },
-        include: {
-          user: { select: { id: true, email: true, fullName: true } },
-        },
-      });
+      const recipientsToNotify = await loadHoldPointChaseTargets(
+        existingHP.id,
+        existingHP.lot.project.id,
+      );
 
-      // If no superintendents, also check for project managers. Keep the lookup
-      // lazy: project managers are only queried when there are no superintendents.
-      const projectManagers: typeof superintendents =
-        superintendents.length > 0
-          ? []
-          : await prisma.projectUser.findMany({
-              where: {
-                projectId: existingHP.lot.project.id,
-                role: 'project_manager',
-                status: 'active',
-              },
-              include: {
-                user: { select: { id: true, email: true, fullName: true } },
-              },
-            });
-      const recipientsToNotify = selectHoldPointChaseRecipients(superintendents, projectManagers);
-
-      const releaseUrl = buildFrontendUrl(
+      const loggedInReleaseUrl = buildFrontendUrl(
         `/projects/${existingHP.lot.project.id}/lots/${existingHP.lot.id}?tab=itp`,
       );
-      const evidencePackageUrl = buildFrontendUrl(
+      const loggedInEvidencePackageUrl = buildFrontendUrl(
         `/projects/${existingHP.lot.project.id}/lots/${existingHP.lot.id}/evidence-preview?holdPointId=${existingHP.id}`,
       );
 
@@ -415,13 +525,25 @@ holdPointActionRouter.post(
         originalRequestDate: formattedRequestDate,
         chaseCount: holdPoint.chaseCount,
         daysSinceRequest,
-        evidencePackageUrl,
-        releaseUrl,
         notificationSentTo: existingHP.notificationSentTo,
       };
 
       for (const recipient of recipientsToNotify) {
-        await sendHPChaseEmail(buildHoldPointChaseEmail(recipient, chaseContext));
+        const urls = buildChaseRecipientUrls(
+          recipient,
+          loggedInEvidencePackageUrl,
+          loggedInReleaseUrl,
+        );
+        await sendHPChaseEmail(
+          buildHoldPointChaseEmail(
+            { user: { email: recipient.email, fullName: recipient.fullName } },
+            {
+              ...chaseContext,
+              evidencePackageUrl: urls.evidencePackageUrl,
+              releaseUrl: urls.releaseUrl,
+            },
+          ),
+        );
       }
     } catch (emailError) {
       logError('[HP Chase] Failed to send chase email:', emailError);
