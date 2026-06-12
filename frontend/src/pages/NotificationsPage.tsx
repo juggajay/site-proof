@@ -95,13 +95,19 @@ export function NotificationsPage() {
   const markReadMutation = useMutation({
     mutationFn: (notificationId: string) =>
       apiFetch(`/api/notifications/${notificationId}/read`, { method: 'PUT' }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.notifications }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.notifications });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.notificationUnreadCount });
+    },
     onError: createMutationErrorHandler('Failed to mark notification as read'),
   });
 
   const markAllReadMutation = useMutation({
     mutationFn: () => apiFetch('/api/notifications/read-all', { method: 'PUT' }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.notifications }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.notifications });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.notificationUnreadCount });
+    },
     onError: createMutationErrorHandler('Failed to mark all notifications as read'),
   });
 

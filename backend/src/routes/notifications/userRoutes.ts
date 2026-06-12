@@ -52,28 +52,29 @@ notificationUserRouter.get(
       where.isRead = false;
     }
 
-    const notifications = await prisma.notification.findMany({
-      where,
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      take: limit,
-      skip: offset,
-      include: {
-        project: {
-          select: {
-            id: true,
-            name: true,
-            projectNumber: true,
+    const [notifications, unreadCount] = await Promise.all([
+      prisma.notification.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: limit,
+        skip: offset,
+        include: {
+          project: {
+            select: {
+              id: true,
+              name: true,
+              projectNumber: true,
+            },
           },
         },
-      },
-    });
-
-    const unreadCount = await prisma.notification.count({
-      where: {
-        userId,
-        isRead: false,
-      },
-    });
+      }),
+      prisma.notification.count({
+        where: {
+          userId,
+          isRead: false,
+        },
+      }),
+    ]);
 
     res.json(buildNotificationsListResponse(notifications, unreadCount));
   }),

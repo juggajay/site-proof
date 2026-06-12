@@ -74,14 +74,13 @@ export function Header() {
   });
   const projects = projectsData?.projects || [];
 
-  // Fetch notifications with polling (every 60 seconds)
-  const { data: notificationsData } = useQuery({
-    queryKey: queryKeys.notifications,
-    queryFn: () =>
-      apiFetch<{ notifications: unknown[]; unreadCount: number }>('/api/notifications'),
+  // Fetch notification badge count with polling (every 60 seconds)
+  const { data: unreadCountData } = useQuery({
+    queryKey: queryKeys.notificationUnreadCount,
+    queryFn: () => apiFetch<{ count: number }>('/api/notifications/unread-count'),
     refetchInterval: 60000,
   });
-  const unreadCount = notificationsData?.unreadCount || 0;
+  const unreadCount = unreadCountData?.count || 0;
 
   // Find the current project from the list
   const currentProject = projects.find((p) => p.id === projectId);

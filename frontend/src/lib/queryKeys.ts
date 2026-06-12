@@ -63,6 +63,7 @@ export const queryKeys = {
   profile: ['profile'] as const,
   auditLogs: (params: string) => ['audit-logs', params] as const,
   notifications: ['notifications'] as const,
+  notificationUnreadCount: ['notifications', 'unread-count'] as const,
 
   // Comments
   comments: (entityType: string, entityId: string, page: number) =>
