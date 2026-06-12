@@ -12,6 +12,7 @@ import {
   remainingClaimablePercentage,
   roundClaimAmountToCents,
   sanitizeCertificationDocumentFilename,
+  serializeDisputeNotesForStatusTransition,
   sumClaimedPercentages,
 } from './workflowValidation.js';
 
@@ -80,6 +81,24 @@ describe('claims workflow validation', () => {
 
     expect(sanitizeCertificationDocumentFilename('../bad:<name>.pdf', 42)).toBe('bad__name_.pdf');
     expect(sanitizeCertificationDocumentFilename('', 42)).toBe('certification-claim-42.pdf');
+  });
+
+  it('preserves certification metadata when serializing a certified claim dispute', () => {
+    const serialized = serializeDisputeNotesForStatusTransition(
+      JSON.stringify({
+        variationNotes: 'Approved before later dispute',
+        certificationDocumentId: 'document-1',
+        certifiedBy: 'user-1',
+      }),
+      'Certified quantity now disputed',
+    );
+
+    expect(JSON.parse(serialized || '{}')).toEqual({
+      variationNotes: 'Approved before later dispute',
+      certificationDocumentId: 'document-1',
+      certifiedBy: 'user-1',
+      disputeNotes: 'Certified quantity now disputed',
+    });
   });
 });
 

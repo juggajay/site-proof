@@ -246,6 +246,44 @@ export function assertGenericClaimStatusTransition(
   }
 }
 
+function parseClaimNotesRecord(value: string | null | undefined): Record<string, unknown> | null {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(value);
+    return typeof parsed === 'object' && parsed !== null
+      ? (parsed as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function hasCertificationMetadata(record: Record<string, unknown>): boolean {
+  return (
+    'certifiedBy' in record || 'variationNotes' in record || 'certificationDocumentId' in record
+  );
+}
+
+export function serializeDisputeNotesForStatusTransition(
+  existingDisputeNotes: string | null | undefined,
+  disputeNotes: string | null | undefined,
+): string | null {
+  const nextDisputeNotes = disputeNotes?.trim() || null;
+  const existingNotes = parseClaimNotesRecord(existingDisputeNotes);
+
+  if (!existingNotes || !hasCertificationMetadata(existingNotes)) {
+    return nextDisputeNotes;
+  }
+
+  return JSON.stringify({
+    ...existingNotes,
+    disputeNotes: nextDisputeNotes,
+  });
+}
+
 function getClaimAmountValue(value: unknown): number {
   if (value === null || value === undefined) {
     return 0;

@@ -1656,6 +1656,46 @@ describe('Progress Claims API', () => {
       });
     });
 
+    it('keeps the certification document recoverable after a certified claim is disputed', async () => {
+      const claim = await createSubmittedCertificationClaim(1000);
+      const fileUrl = `/uploads/documents/disputed-readback-${claim.claimNumber}.pdf`;
+
+      const certifyRes = await request(app)
+        .post(`/api/projects/${projectId}/claims/${claim.id}/certify`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          certifiedAmount: 900,
+          variationNotes: 'Approved before later dispute',
+          certificationDocumentUrl: fileUrl,
+          certificationDocumentFilename: 'disputed-readback-cert.pdf',
+        });
+
+      expect(certifyRes.status).toBe(200);
+      const certificationDocumentId = certifyRes.body.claim.certificationDocumentId as string;
+      expect(certificationDocumentId).toBeDefined();
+
+      await request(app)
+        .put(`/api/projects/${projectId}/claims/${claim.id}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          status: 'disputed',
+          disputeNotes: 'Certified quantity now disputed',
+        })
+        .expect(200);
+
+      const detailRes = await request(app)
+        .get(`/api/projects/${projectId}/claims/${claim.id}`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(detailRes.status).toBe(200);
+      expect(detailRes.body.claim.status).toBe('disputed');
+      expect(detailRes.body.claim.disputeNotes).toBe('Certified quantity now disputed');
+      expect(detailRes.body.claim.certification).toMatchObject({
+        variationNotes: 'Approved before later dispute',
+        certificationDocumentId,
+      });
+    });
+
     it('keeps a disputed claim disputeNotes as a plain string with no certification on read-back', async () => {
       const claim = await createSubmittedCertificationClaim(1000);
       await request(app)

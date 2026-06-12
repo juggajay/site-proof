@@ -164,6 +164,26 @@ export function buildClaimCertificationView(
   };
 }
 
+export function getClaimReadDisputeNotes(disputeNotes: string | null | undefined): string | null {
+  if (!disputeNotes) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(disputeNotes);
+    if (typeof parsed === 'object' && parsed !== null) {
+      const record = parsed as Record<string, unknown>;
+      if ('disputeNotes' in record) {
+        return typeof record.disputeNotes === 'string' ? record.disputeNotes : null;
+      }
+    }
+  } catch {
+    // Plain-string dispute notes are the normal disputed-claim read shape.
+  }
+
+  return disputeNotes;
+}
+
 export function mapClaimableLot(lot: ClaimableLot) {
   return {
     id: lot.id,
@@ -189,7 +209,7 @@ export function mapClaimListItem(
     certifiedAt: claim.certifiedAt ? claim.certifiedAt.toISOString() : null,
     paidAmount: claim.paidAmount ? Number(claim.paidAmount) : null,
     submittedAt: claim.submittedAt ? formatClaimDateKey(claim.submittedAt) : null,
-    disputeNotes: claim.disputeNotes || null,
+    disputeNotes: getClaimReadDisputeNotes(claim.disputeNotes),
     disputedAt: claim.disputedAt ? formatClaimDateKey(claim.disputedAt) : null,
     lotCount: claim._count.claimedLots,
     // The project's jurisdiction drives the SOPA certification/payment-due
