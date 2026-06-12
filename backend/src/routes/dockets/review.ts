@@ -24,7 +24,11 @@ import {
   buildDocketQueryResponseNotification,
   buildDocketRejectedNotifications,
 } from './notifications.js';
-import { buildDocketApprovedResponse, resolveDocketApprovedTotals } from './approvalResponse.js';
+import {
+  buildDocketApprovedResponse,
+  type DocketDiarySyncOutcome,
+  resolveDocketApprovedTotals,
+} from './approvalResponse.js';
 import {
   buildDocketQueriedResponse,
   buildDocketQueryResponseSubmittedResponse,
@@ -114,6 +118,11 @@ docketReviewRouter.post(
 
     // === DIARY AUTO-POPULATION ===
     // When a docket is approved, write its labour and plant data into the daily diary
+    let diarySync: DocketDiarySyncOutcome = {
+      status: 'synced',
+      message: 'Diary auto-populated from approved docket.',
+    };
+
     try {
       await prisma.$transaction(async (tx) => {
         // Find or create diary for this date
@@ -189,8 +198,30 @@ docketReviewRouter.post(
           }
         }
       });
-    } catch {
-      // Don't fail the approval if diary population fails
+    } catch (error) {
+      const diaryErrorMessage = error instanceof Error ? error.message : '';
+      if (diaryErrorMessage === 'Cannot modify locked diary') {
+        diarySync = {
+          status: 'skipped',
+          code: 'DIARY_LOCKED',
+          message:
+            'Docket approved, but diary auto-population was skipped because the daily diary is locked.',
+        };
+      } else if (diaryErrorMessage === 'Cannot modify submitted diary') {
+        diarySync = {
+          status: 'skipped',
+          code: 'DIARY_SUBMITTED',
+          message:
+            'Docket approved, but diary auto-population was skipped because the daily diary has already been submitted.',
+        };
+      } else {
+        diarySync = {
+          status: 'failed',
+          code: 'DIARY_SYNC_FAILED',
+          message:
+            'Docket approved, but diary auto-population failed. Add the docket labour and plant to the diary manually.',
+        };
+      }
     }
     // === END DIARY AUTO-POPULATION ===
 
@@ -215,7 +246,7 @@ docketReviewRouter.post(
       email: approvedEmail,
     });
 
-    res.json(buildDocketApprovedResponse({ updatedDocket, subcontractorUsers }));
+    res.json(buildDocketApprovedResponse({ updatedDocket, subcontractorUsers, diarySync }));
   }),
 );
 

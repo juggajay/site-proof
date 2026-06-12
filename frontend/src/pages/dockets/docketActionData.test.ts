@@ -4,6 +4,7 @@ import {
   buildDocketActionPath,
   buildDocketActionPayload,
   buildDocketDetailPath,
+  getDocketApprovalDiarySyncWarning,
   hasHoursChanged,
   parseHoursInput,
   resolveDocketActionEndpoint,
@@ -172,6 +173,35 @@ describe('buildDocketActionPayload', () => {
     expect(
       buildDocketActionPayload('reject', { actionNotes: '   ', adjustmentReason: '' }),
     ).toEqual({ reason: null });
+  });
+});
+
+describe('getDocketApprovalDiarySyncWarning', () => {
+  it('returns the diary sync message when approval succeeded but diary sync did not', () => {
+    expect(
+      getDocketApprovalDiarySyncWarning({
+        diarySync: {
+          status: 'skipped',
+          code: 'DIARY_LOCKED',
+          message:
+            'Docket approved, but diary auto-population was skipped because the daily diary is locked.',
+        },
+      }),
+    ).toBe(
+      'Docket approved, but diary auto-population was skipped because the daily diary is locked.',
+    );
+  });
+
+  it('does not warn when the diary sync succeeded or was not reported', () => {
+    expect(
+      getDocketApprovalDiarySyncWarning({
+        diarySync: {
+          status: 'synced',
+          message: 'Diary auto-populated from approved docket.',
+        },
+      }),
+    ).toBeNull();
+    expect(getDocketApprovalDiarySyncWarning({})).toBeNull();
   });
 });
 

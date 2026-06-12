@@ -1198,7 +1198,7 @@ describe('Dockets API', () => {
       });
     });
 
-    it('should not auto-populate a locked draft diary when approving a docket', async () => {
+    it('should return a diary sync warning when a locked draft diary prevents auto-population', async () => {
       const date = new Date(Date.now() + 950400000);
       const docket = await prisma.dailyDocket.create({
         data: {
@@ -1260,6 +1260,11 @@ describe('Dockets API', () => {
 
         expect(res.status).toBe(200);
         expect(res.body.docket.status).toBe('approved');
+        expect(res.body.diarySync).toMatchObject({
+          status: 'skipped',
+          code: 'DIARY_LOCKED',
+        });
+        expect(res.body.diarySync.message).toContain('daily diary is locked');
         await expect(prisma.diaryPersonnel.count({ where: { diaryId: diary.id } })).resolves.toBe(
           0,
         );

@@ -35,11 +35,24 @@ type ApprovedDocketResponseInput = {
     email: string;
     fullName: string | null;
   }>;
+  diarySync?: DocketDiarySyncOutcome;
 };
+
+export type DocketDiarySyncOutcome =
+  | {
+      status: 'synced';
+      message: string;
+    }
+  | {
+      status: 'skipped' | 'failed';
+      code: 'DIARY_LOCKED' | 'DIARY_SUBMITTED' | 'DIARY_SYNC_FAILED';
+      message: string;
+    };
 
 export function buildDocketApprovedResponse({
   updatedDocket,
   subcontractorUsers,
+  diarySync,
 }: ApprovedDocketResponseInput): {
   message: 'Docket approved successfully';
   docket: {
@@ -53,6 +66,7 @@ export function buildDocketApprovedResponse({
     email: string;
     fullName: string | null;
   }>;
+  diarySync?: DocketDiarySyncOutcome;
 } {
   return {
     message: 'Docket approved successfully',
@@ -67,5 +81,6 @@ export function buildDocketApprovedResponse({
       email: su.email,
       fullName: su.fullName,
     })),
+    ...(diarySync ? { diarySync } : {}),
   };
 }
