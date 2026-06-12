@@ -20,7 +20,7 @@
  *
  * Online-only (classic has no offline docket queue — we keep it that way).
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Plus, AlertTriangle, Loader2, Send, Check, Trash2 } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
@@ -326,10 +326,33 @@ export function DocketScreen() {
     }
   };
 
-  // ── Delete entries (confirm first) ──────────────────────────────────────────
+  // ── Delete entries (two-tap confirm) ────────────────────────────────────────
+  // The readiness guardrail forbids blocking dialogs (window.confirm). First tap
+  // arms the row's delete button ("Remove?"), a second tap within 4s deletes;
+  // anything else (timeout) disarms.
+  const [armedDelete, setArmedDelete] = useState<string | null>(null);
+  const armTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (armTimer.current) clearTimeout(armTimer.current);
+    },
+    [],
+  );
+  const confirmArmed = (key: string): boolean => {
+    if (armedDelete === key) {
+      if (armTimer.current) clearTimeout(armTimer.current);
+      setArmedDelete(null);
+      return true;
+    }
+    if (armTimer.current) clearTimeout(armTimer.current);
+    setArmedDelete(key);
+    armTimer.current = setTimeout(() => setArmedDelete(null), 4000);
+    return false;
+  };
+
   const deleteLabourEntry = async (entryId: string) => {
     if (!docket) return;
-    if (!window.confirm('Remove this crew entry?')) return;
+    if (!confirmArmed(`labour-${entryId}`)) return;
     try {
       await apiFetch(`/api/dockets/${docket.id}/labour/${entryId}`, { method: 'DELETE' });
       setDocket((prev) => {
@@ -349,7 +372,7 @@ export function DocketScreen() {
 
   const deletePlantEntry = async (entryId: string) => {
     if (!docket) return;
-    if (!window.confirm('Remove this plant entry?')) return;
+    if (!confirmArmed(`plant-${entryId}`)) return;
     try {
       await apiFetch(`/api/dockets/${docket.id}/plant/${entryId}`, { method: 'DELETE' });
       setDocket((prev) => {
@@ -648,9 +671,18 @@ export function DocketScreen() {
               type="button"
               onClick={() => deleteLabourEntry(entry.id)}
               aria-label={`Remove ${entry.employee.name}`}
-              className="-mr-1 flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground active:bg-secondary"
+              className={cn(
+                '-mr-1 flex h-9 items-center justify-center rounded-lg active:bg-secondary',
+                armedDelete === `labour-${entry.id}`
+                  ? 'px-2 text-[12px] font-semibold text-destructive'
+                  : 'w-9 text-muted-foreground',
+              )}
             >
-              <Trash2 size={17} aria-hidden="true" />
+              {armedDelete === `labour-${entry.id}` ? (
+                'Remove?'
+              ) : (
+                <Trash2 size={17} aria-hidden="true" />
+              )}
             </button>
           )}
         </div>
@@ -695,9 +727,18 @@ export function DocketScreen() {
               type="button"
               onClick={() => deletePlantEntry(entry.id)}
               aria-label={`Remove ${entry.plant.type}`}
-              className="-mr-1 flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground active:bg-secondary"
+              className={cn(
+                '-mr-1 flex h-9 items-center justify-center rounded-lg active:bg-secondary',
+                armedDelete === `plant-${entry.id}`
+                  ? 'px-2 text-[12px] font-semibold text-destructive'
+                  : 'w-9 text-muted-foreground',
+              )}
             >
-              <Trash2 size={17} aria-hidden="true" />
+              {armedDelete === `plant-${entry.id}` ? (
+                'Remove?'
+              ) : (
+                <Trash2 size={17} aria-hidden="true" />
+              )}
             </button>
           )}
         </div>

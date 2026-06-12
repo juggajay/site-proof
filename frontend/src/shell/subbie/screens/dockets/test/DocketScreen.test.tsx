@@ -513,4 +513,45 @@ describe('subbie shell DocketScreen', () => {
     const grandRow = grandLabel.closest('.grand')!;
     expect(within(grandRow as HTMLElement).getByText('$592')).toBeInTheDocument();
   });
+
+  it('entry delete is two-tap: first tap arms (no DELETE), second tap deletes', async () => {
+    setApi({
+      docket: makeDocket({
+        labourEntries: [
+          {
+            id: 'le-1',
+            employee: { id: APPROVED_EMP.id, name: 'Tommy Vella', role: 'Pipe Layer' },
+            startTime: '07:00',
+            finishTime: '15:00',
+            submittedHours: 8,
+            submittedCost: 592,
+            lotAllocations: [],
+          },
+        ],
+        totalLabourSubmitted: 592,
+      }),
+      existingDockets: [],
+    });
+    renderDocket('/p/docket/dk-1');
+
+    const removeBtn = await screen.findByRole('button', { name: /Remove Tommy Vella/ });
+    fireEvent.click(removeBtn);
+
+    // Armed, visibly asking for the second tap — and NO DELETE sent yet.
+    expect(removeBtn).toHaveTextContent('Remove?');
+    expect(
+      apiFetchMock.mock.calls.filter(
+        ([, opts]) => (opts as { method?: string })?.method === 'DELETE',
+      ),
+    ).toHaveLength(0);
+
+    fireEvent.click(removeBtn);
+    await waitFor(() => {
+      const deletes = apiFetchMock.mock.calls.filter(
+        ([, opts]) => (opts as { method?: string })?.method === 'DELETE',
+      );
+      expect(deletes).toHaveLength(1);
+      expect(deletes[0][0]).toBe('/api/dockets/dk-1/labour/le-1');
+    });
+  });
 });
