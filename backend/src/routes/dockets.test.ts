@@ -1264,7 +1264,7 @@ describe('Dockets API', () => {
           status: 'skipped',
           code: 'DIARY_LOCKED',
         });
-        expect(res.body.diarySync.message).toContain('locked diary');
+        expect(res.body.diarySync.message).toContain('daily diary is locked');
         await expect(prisma.diaryPersonnel.count({ where: { diaryId: diary.id } })).resolves.toBe(
           0,
         );
