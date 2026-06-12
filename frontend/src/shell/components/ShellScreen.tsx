@@ -47,6 +47,12 @@ interface ShellScreenInnerProps {
   parent: string;
   /** Sub-line below the title — context text (e.g. "Daily Diary  STEP 3/4"). */
   sub?: ReactNode;
+  /**
+   * Optional content pinned inside the sticky header, BELOW the sub-line — e.g.
+   * the ITP dot-track scrubber, which the v3 spec keeps at the top of the screen
+   * (mock #itp). Rendered inside <header> so it stays sticky and never scrolls.
+   */
+  headerExtra?: ReactNode;
   children: ReactNode;
   /** Bottom bar slot. */
   bottom?: ReactNode;
@@ -132,7 +138,17 @@ function HomeHeader({ roleLabel }: { roleLabel?: string }) {
 
 // ── Inner header ─────────────────────────────────────────────────────────────
 
-function InnerHeader({ title, parent, sub }: { title: string; parent: string; sub?: ReactNode }) {
+function InnerHeader({
+  title,
+  parent,
+  sub,
+  headerExtra,
+}: {
+  title: string;
+  parent: string;
+  sub?: ReactNode;
+  headerExtra?: ReactNode;
+}) {
   const navigate = useNavigate();
 
   return (
@@ -163,6 +179,8 @@ function InnerHeader({ title, parent, sub }: { title: string; parent: string; su
           {sub}
         </div>
       )}
+
+      {headerExtra}
     </header>
   );
 }
@@ -175,7 +193,12 @@ export function ShellScreen(props: ShellScreenProps) {
       {props.variant === 'home' ? (
         <HomeHeader roleLabel={props.roleLabel} />
       ) : (
-        <InnerHeader title={props.title} parent={props.parent} sub={props.sub} />
+        <InnerHeader
+          title={props.title}
+          parent={props.parent}
+          sub={props.sub}
+          headerExtra={props.headerExtra}
+        />
       )}
 
       {/* stagger-rise class triggers the CSS stagger animation on direct children */}

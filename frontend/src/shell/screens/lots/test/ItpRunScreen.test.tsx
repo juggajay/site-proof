@@ -168,9 +168,9 @@ describe('ItpRunScreen — hold-point gating', () => {
     expect(screen.getByText(/Awaiting hold point release/i)).toBeInTheDocument();
     // The tri-state Pass affordance must NOT be offered for an un-released HP.
     expect(screen.queryByRole('button', { name: /Pass this check/i })).toBeNull();
-    // N/A + Fail remain available on the hold point.
-    expect(screen.getByRole('button', { name: /N\/A/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Fail/i })).toBeInTheDocument();
+    // N/A + Fail remain available on the hold point (in the persistent bottom bar).
+    expect(screen.getByRole('button', { name: /Mark not applicable/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Fail this check/i })).toBeInTheDocument();
   });
 
   it('a released hold point CAN be passed', async () => {
@@ -237,6 +237,24 @@ describe('ItpRunScreen — dot track scrubber', () => {
     // The interactive question swaps to the jumped-to item.
     expect(screen.getByText('Second question')).toBeInTheDocument();
     expect(screen.getByText('CHECK 2/2')).toBeInTheDocument();
+  });
+
+  it('keeps Pass/Fail/N-A in the bottom bar and exposes the whole-screen scrub zone', () => {
+    // v3 refinements #2 + #5: the tri-state actions live in the persistent bottom
+    // bar (never hidden during a scrub) and the question area is a scrub zone with
+    // touch-action: pan-y so vertical scrolling still passes through.
+    _run = makeRun(
+      makeInstance([
+        makeItem({ id: 'a', description: 'First' }),
+        makeItem({ id: 'b', description: 'Second' }),
+      ]),
+    );
+    renderRun();
+    expect(screen.getByRole('button', { name: /Pass this check/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Fail this check/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Mark not applicable/i })).toBeInTheDocument();
+    const zone = screen.getByTestId('itp-content-zone');
+    expect(zone).toHaveStyle({ touchAction: 'pan-y' });
   });
 
   it('does not offer Pass for an un-released hold point landed on via the track', () => {

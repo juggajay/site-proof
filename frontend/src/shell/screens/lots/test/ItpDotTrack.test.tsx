@@ -120,6 +120,23 @@ describe('ItpDotTrack', () => {
     expect(onCommit).toHaveBeenCalled();
   });
 
+  it('focuses the current dot with a HALO (bg gap + ink ring), not the amber ring', () => {
+    // v3 refinement #3: the focused dot keeps its own state colour; selection is
+    // shown by a neutral halo that works on every colour — the old amber focus
+    // ring (hsl(var(--warning) / 0.3)) is gone.
+    const { container } = render(
+      <ItpDotTrack entries={makeEntries(6)} currentIndex={2} onCommit={vi.fn()} />,
+    );
+    const dots = container.querySelectorAll('[data-testid="itp-dot-track"] > span');
+    const focused = dots[2] as HTMLElement;
+    expect(focused.style.boxShadow).toContain('var(--background)');
+    expect(focused.style.boxShadow).toContain('var(--foreground)');
+    // No amber/warning focus ring anywhere on the track.
+    dots.forEach((d) => {
+      expect((d as HTMLElement).style.boxShadow).not.toContain('--warning');
+    });
+  });
+
   it('reflects a hold-point item state in its aria text when focused', () => {
     const entries = makeEntries(3);
     entries[1] = {
