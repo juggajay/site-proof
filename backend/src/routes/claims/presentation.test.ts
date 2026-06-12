@@ -123,6 +123,40 @@ describe('mapClaimListItem', () => {
     });
   });
 
+  it('shows the embedded dispute reason while retaining parsed certification metadata', () => {
+    const result = mapClaimListItem(
+      {
+        id: 'claim-disputed-cert',
+        claimNumber: 12,
+        claimPeriodStart: new Date('2026-05-01T10:00:00.000Z'),
+        claimPeriodEnd: new Date('2026-05-31T10:00:00.000Z'),
+        status: 'disputed',
+        totalClaimedAmount: '48000.25',
+        certifiedAmount: '47000.10',
+        certifiedAt: new Date('2026-06-03T04:05:06.000Z'),
+        paidAmount: null,
+        submittedAt: new Date('2026-06-01T12:00:00.000Z'),
+        disputeNotes: JSON.stringify({
+          variationNotes: 'Approved before later dispute',
+          certificationDocumentId: 'doc-10',
+          certifiedBy: 'user-8',
+          disputeNotes: 'Certified quantity now disputed',
+        }),
+        disputedAt: new Date('2026-06-04T00:00:00.000Z'),
+        _count: { claimedLots: 2 },
+      },
+      'NSW',
+      new Map([['user-8', 'Alex Principal']]),
+    );
+
+    expect(result.disputeNotes).toBe('Certified quantity now disputed');
+    expect(result.certification).toEqual({
+      certifiedByName: 'Alex Principal',
+      variationNotes: 'Approved before later dispute',
+      certificationDocumentId: 'doc-10',
+    });
+  });
+
   it('defaults projectState to null when the project state is unknown', () => {
     expect(
       mapClaimListItem({

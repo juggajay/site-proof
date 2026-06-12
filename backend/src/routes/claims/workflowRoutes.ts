@@ -8,8 +8,10 @@ import { prisma } from '../../lib/prisma.js';
 import { logError } from '../../lib/serverLogger.js';
 import { sendNotificationIfEnabled } from '../notifications.js';
 import {
+  buildClaimCertificationView,
   buildClaimCreatedResponse,
   buildClaimDetailResponse,
+  getClaimReadDisputeNotes,
   mapClaimCreateItem,
 } from './presentation.js';
 import { getCumulativeClaimedPercentByLot } from './cumulativeClaims.js';
@@ -26,6 +28,7 @@ import {
   isLotFullyClaimed,
   parseClaimDate,
   roundClaimAmountToCents,
+  serializeDisputeNotesForStatusTransition,
   updateClaimSchema,
 } from './workflowValidation.js';
 
@@ -364,7 +367,13 @@ export function createClaimWorkflowRouter({
             },
           },
         });
-        res.json(buildClaimDetailResponse(existingClaim));
+        res.json(
+          buildClaimDetailResponse({
+            ...existingClaim,
+            disputeNotes: getClaimReadDisputeNotes(existingClaim.disputeNotes),
+            certification: buildClaimCertificationView(existingClaim.disputeNotes),
+          }),
+        );
         return;
       }
 
@@ -387,7 +396,10 @@ export function createClaimWorkflowRouter({
         }
         if (status === 'disputed') {
           updateData.disputedAt = new Date();
-          updateData.disputeNotes = disputeNotes || null;
+          updateData.disputeNotes = serializeDisputeNotesForStatusTransition(
+            claim.disputeNotes,
+            disputeNotes,
+          );
         }
       }
 
@@ -551,7 +563,13 @@ export function createClaimWorkflowRouter({
         });
       }
 
-      res.json(buildClaimDetailResponse(updatedClaim));
+      res.json(
+        buildClaimDetailResponse({
+          ...updatedClaim,
+          disputeNotes: getClaimReadDisputeNotes(updatedClaim.disputeNotes),
+          certification: buildClaimCertificationView(updatedClaim.disputeNotes),
+        }),
+      );
     }),
   );
 
