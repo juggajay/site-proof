@@ -89,3 +89,12 @@ export function useTheme() {
   }
   return context;
 }
+
+/**
+ * Like useTheme, but returns undefined outside a ThemeProvider instead of
+ * throwing. For components that render a theme control only when theming is
+ * available (e.g. the mobile shell header, whose tests mount it bare).
+ */
+export function useOptionalTheme(): ThemeContextValue | undefined {
+  return useContext(ThemeContext);
+}

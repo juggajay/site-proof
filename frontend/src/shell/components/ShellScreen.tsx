@@ -20,10 +20,11 @@
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, Moon, Sun } from 'lucide-react';
 import { SyncChip } from './SyncChip';
 import { useTimeGreeting } from '../hooks/useTimeGreeting';
 import { useAuth } from '@/lib/auth';
+import { useOptionalTheme } from '@/lib/theme';
 import { useEffectiveProjectId } from '@/hooks/useEffectiveProjectId';
 import { apiFetch } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
@@ -93,6 +94,35 @@ function getRoleChipLabel(role: string | undefined): string {
   return ROLE_CHIP_LABELS[role] ?? role.toUpperCase();
 }
 
+// ── Theme toggle ─────────────────────────────────────────────────────────────
+
+/**
+ * Light/dark flip in the home header — the shell has no classic app Header, so
+ * without this a device that set dark mode in the classic portal is stuck in
+ * it. Mirrors the classic Header toggle exactly (flip on resolvedTheme; an
+ * explicit choice replaces 'system'). Renders nothing outside a ThemeProvider
+ * (bare test mounts).
+ */
+function ThemeToggle() {
+  const theme = useOptionalTheme();
+  if (!theme) return null;
+  const next = theme.resolvedTheme === 'dark' ? 'light' : 'dark';
+  return (
+    <button
+      type="button"
+      onClick={() => theme.setTheme(next)}
+      aria-label={`Switch to ${next} mode`}
+      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-card text-foreground shadow-sm transition-transform active:scale-95"
+    >
+      {theme.resolvedTheme === 'dark' ? (
+        <Sun size={18} aria-hidden="true" />
+      ) : (
+        <Moon size={18} aria-hidden="true" />
+      )}
+    </button>
+  );
+}
+
 // ── Home header ───────────────────────────────────────────────────────────────
 
 function HomeHeader({
@@ -157,6 +187,7 @@ function HomeHeader({
       {/* Main greeting row */}
       <div className="flex min-h-[40px] items-center gap-1.5">
         <h1 className="shell-display-title flex-1">{greeting}</h1>
+        <ThemeToggle />
         <SyncChip />
       </div>
 
