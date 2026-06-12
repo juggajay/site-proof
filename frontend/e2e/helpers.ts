@@ -14,7 +14,19 @@ export const E2E_ADMIN_USER = {
   hasPassword: true,
 };
 
-export async function mockAuthenticatedUserState(page: Page, user = E2E_ADMIN_USER): Promise<void> {
+export async function mockAuthenticatedUserState(
+  page: Page,
+  user = E2E_ADMIN_USER,
+  notificationUnreadCount = 0,
+): Promise<void> {
+  await page.route('**/api/notifications/unread-count**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ count: notificationUnreadCount }),
+    });
+  });
+
   await page.addInitScript((mockUser) => {
     localStorage.setItem('siteproof_remember_me', 'true');
     localStorage.setItem('siteproof_onboarding_completed', 'true');
