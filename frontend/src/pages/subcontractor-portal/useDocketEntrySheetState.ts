@@ -109,6 +109,12 @@ export function useDocketEntrySheetState(assignedLots: Lot[]) {
     setHoursOperated,
     setWetOrDry,
     setSelectedLotId,
+    // Exposed for in-sheet pickers (the /p/* shell picks the employee/plant
+    // INSIDE the sheet, per the mock). The classic page taps a roster row first
+    // and passes the selection to openAddLabour/openAddPlant, so it never reads
+    // these — adding them to the return is additive and changes nothing classic.
+    setSelectedEmployee,
+    setSelectedPlant,
     resetSheetState,
     openAddLabour,
     openAddPlant,

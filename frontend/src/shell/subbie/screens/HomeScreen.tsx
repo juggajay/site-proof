@@ -318,13 +318,24 @@ export function HomeScreen() {
   const notifications = notifData?.notifications ?? [];
 
   const currentProjectQuery = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
-  const myCompanyLink = `/my-company${currentProjectQuery}`;
+  // Keep the rate-counter notice inside the shell (My Company lives at /p/company).
+  const myCompanyLink = `/p/company${currentProjectQuery}`;
 
+  // buildNeedsAttentionItems emits classic /subcontractor-portal/docket/:id links
+  // (shared with the classic dashboard). Rewrite the docket links into the shell
+  // so the whole flow stays internal to /p now that the docket surface is real.
   const needsAttention = buildNeedsAttentionItems({
     recentDockets,
     notifications,
     myCompanyLink,
-  });
+  }).map((item) =>
+    item.link.startsWith('/subcontractor-portal/docket/')
+      ? {
+          ...item,
+          link: `/p/docket/${item.link.slice('/subcontractor-portal/docket/'.length)}${currentProjectQuery}`,
+        }
+      : item,
+  );
 
   // Prerequisite state — reused from the shared helper (drives nothing fatal in
   // the shell yet, but keeps the same honest model for later screens).

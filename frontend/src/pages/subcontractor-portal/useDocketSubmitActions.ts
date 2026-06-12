@@ -12,6 +12,19 @@ type UseDocketSubmitActionsParams = {
   queryResponse: string;
   saveDocketNotes: SaveDocketNotes;
   navigate: NavigateFunction;
+  /**
+   * Where to send the subbie after a successful submit / query-response. Defaults
+   * to the classic portal dashboard so the classic DocketEditPage stays
+   * byte-for-byte identical; the /p/* shell passes its own success target.
+   *
+   * If `onSubmitted` / `onResponded` is supplied it runs INSTEAD of the
+   * navigate(redirectTo) (the /p/* shell uses this to show its own confirmation
+   * state rather than leaving the screen). When omitted (classic), the hook
+   * navigates exactly as before.
+   */
+  redirectTo?: string;
+  onSubmitted?: () => void;
+  onResponded?: () => void;
 };
 
 export function useDocketSubmitActions({
@@ -19,6 +32,9 @@ export function useDocketSubmitActions({
   queryResponse,
   saveDocketNotes,
   navigate,
+  redirectTo = '/subcontractor-portal',
+  onSubmitted,
+  onResponded,
 }: UseDocketSubmitActionsParams) {
   const [submitting, setSubmitting] = useState(false);
   const [respondingToQuery, setRespondingToQuery] = useState(false);
@@ -48,13 +64,17 @@ export function useDocketSubmitActions({
         variant: 'success',
       });
 
-      navigate('/subcontractor-portal');
+      if (onSubmitted) {
+        onSubmitted();
+      } else {
+        navigate(redirectTo);
+      }
     } catch (err) {
       handleApiError(err, 'Failed to submit docket');
     } finally {
       setSubmitting(false);
     }
-  }, [docket, navigate, saveDocketNotes]);
+  }, [docket, navigate, redirectTo, onSubmitted, saveDocketNotes]);
 
   const respondToQuery = useCallback(async () => {
     if (!docket || !queryResponse.trim()) return;
@@ -73,13 +93,17 @@ export function useDocketSubmitActions({
         variant: 'success',
       });
 
-      navigate('/subcontractor-portal');
+      if (onResponded) {
+        onResponded();
+      } else {
+        navigate(redirectTo);
+      }
     } catch (err) {
       handleApiError(err, 'Failed to respond to query');
     } finally {
       setRespondingToQuery(false);
     }
-  }, [docket, navigate, queryResponse, saveDocketNotes]);
+  }, [docket, navigate, redirectTo, onResponded, queryResponse, saveDocketNotes]);
 
   return {
     submitting,

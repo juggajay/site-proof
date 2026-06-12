@@ -24,8 +24,9 @@ exclusive"). Keep it that way — the two shells share a device and the same
 - **A — foundation (THIS PR):** flag, `/p` routes, real Home screen, stubs for
   every other surface (DARK: override-only, zero behaviour change without the
   override).
-- **B — dockets:** the docket editor surface (`/p/docket`, `/p/dockets`) — the
-  primary action surface (labour/plant entry sheets, submit/respond).
+- **B — dockets (PR #858):** the docket editor surface (`/p/docket`,
+  `/p/docket/:id`, `/p/dockets`) — the primary action surface (labour/plant
+  entry sheets, submit/respond). DONE.
 - **C — inspections (PR #856):** `/p/work`, `/p/itps`, `/p/lots/:lotId/itp`
   (the editable ITP run, reusing — importing, not forking — the foreman ITP
   dot-track trio).
@@ -124,5 +125,42 @@ Modified:
   conditional NCR tile from `/p/quality` to `/p/ncrs`.
 - `frontend/src/shell/subbie/screens/test/HomeScreen.test.tsx` — added the NCR
   tile navigation-target assertion.
+
+### Files touched by PR B (docket surface) — PR #858
+
+New:
+
+- `frontend/src/shell/subbie/screens/dockets/DocketScreen.tsx` — `/p/docket` +
+  `/p/docket/:docketId`, one status-driven screen (lazy create, CREW/PLANT/NOTES,
+  totals, submit/respond/resubmit, the `#submitted` confirmation state).
+- `frontend/src/shell/subbie/screens/dockets/DocketEntrySheets.tsx` — labour +
+  plant add-entry bottom sheets (rebuilt mobile `BottomSheet`, approved-only
+  pickers, presets, wet/dry, live preview).
+- `frontend/src/shell/subbie/screens/dockets/DocketsListScreen.tsx` — `/p/dockets`
+  history (month-approved sub-line, All/Needs-attention/Pending/Approved chips,
+  month groups, foremanNotes snippets).
+- `frontend/src/shell/subbie/screens/dockets/test/DocketScreen.test.tsx`
+- `frontend/src/shell/subbie/screens/dockets/test/DocketsListScreen.test.tsx`
+
+Modified:
+
+- `frontend/src/shell/subbie/SubbieShellRoutes.tsx` — replaced the docket /
+  docket/:id / dockets stubs with the real screens (only those three route
+  blocks; all other stubs untouched).
+- `frontend/src/shell/subbie/screens/HomeScreen.tsx` — rewrote the
+  needs-attention docket links + rate-counter My-Company link into `/p` so the
+  docket flow is fully internal to the shell.
+- `frontend/src/index.css` — added docket-surface classes under the same
+  `shell-` prefix (`shell-sect`, `shell-entry`, `shell-lotchip`, `shell-addline`,
+  `shell-totals`, `shell-notes`, `shell-quote`, `shell-crewpick`/`shell-pickrow`,
+  `shell-presets`/`shell-wetdry`/`shell-segbtn`, `shell-preview`,
+  `shell-sheetbtn`, `shell-field-label`, `shell-input`).
+- `frontend/src/pages/subcontractor-portal/useDocketSubmitActions.ts` — added
+  OPTIONAL `redirectTo` / `onSubmitted` / `onResponded` params (defaulted →
+  classic `DocketEditPage` behaviour is byte-for-byte identical). This is the
+  single permitted classic-file touch.
+- `frontend/src/pages/subcontractor-portal/useDocketEntrySheetState.ts` — exposed
+  `setSelectedEmployee` / `setSelectedPlant` on the return (additive; the classic
+  page never reads them, so its behaviour is unchanged) for the in-sheet pickers.
 
 `frontend/src/shell/**` remains this workstream's exclusive zone.
