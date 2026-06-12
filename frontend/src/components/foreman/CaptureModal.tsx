@@ -21,7 +21,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { NativeSelect } from '@/components/ui/native-select';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, authFetch } from '@/lib/api';
 import { logError } from '@/lib/logger';
 
 type CaptureType = 'photo' | 'ncr' | 'note';
@@ -46,6 +46,11 @@ interface CaptureModalProps {
    * foreman still confirms with a description before the NCR is raised.
    */
   defaultCaptureType?: CaptureType;
+}
+
+interface UploadedDocumentResponse {
+  id?: string;
+  document?: { id?: string };
 }
 
 export function CaptureModal({
@@ -142,6 +147,8 @@ export function CaptureModal({
       // the new NCR; otherwise we still keep the photo and tell the foreman the
       // truth - they need to raise the NCR from the register when back online.
       let raisedNcr: { id: string; ncrNumber: string } | null = null;
+      let attachedNcrEvidenceDocumentId: string | null = null;
+      let uploadedNcrEvidenceDocumentId: string | null = null;
       if (captureType === 'ncr' && navigator.onLine) {
         try {
           const response = await apiFetch<{ ncr: { id: string; ncrNumber: string } }>('/api/ncrs', {
@@ -161,17 +168,67 @@ export function CaptureModal({
         }
       }
 
-      const photo = await capturePhotoOffline(projectId, capturedFile, {
-        lotId: linkedLot || undefined,
-        entityType,
-        entityId: raisedNcr ? raisedNcr.id : linkedItp || undefined,
-        documentType: captureType === 'ncr' ? 'ncr_evidence' : 'photo',
-        category: captureType === 'ncr' ? 'ncr_evidence' : undefined,
-        caption: description.trim() || undefined,
-        capturedBy: user.id,
-        gpsLatitude: latitude ?? undefined,
-        gpsLongitude: longitude ?? undefined,
-      });
+      const caption = description.trim() || undefined;
+
+      if (raisedNcr) {
+        try {
+          const formData = new FormData();
+          formData.append('file', capturedFile);
+          formData.append('projectId', projectId);
+          if (linkedLot) formData.append('lotId', linkedLot);
+          formData.append('documentType', 'ncr_evidence');
+          formData.append('category', 'ncr_evidence');
+          if (caption) formData.append('caption', caption);
+          if (latitude != null) formData.append('gpsLatitude', String(latitude));
+          if (longitude != null) formData.append('gpsLongitude', String(longitude));
+
+          const uploadResponse = await authFetch('/api/documents/upload', {
+            method: 'POST',
+            body: formData,
+          });
+
+          if (!uploadResponse.ok) {
+            throw new Error((await uploadResponse.text()) || 'Failed to upload NCR evidence');
+          }
+
+          const uploaded = (await uploadResponse.json()) as UploadedDocumentResponse;
+          uploadedNcrEvidenceDocumentId = uploaded.id ?? uploaded.document?.id ?? null;
+
+          if (!uploadedNcrEvidenceDocumentId) {
+            throw new Error('Document upload response did not include a document id');
+          }
+
+          await apiFetch(`/api/ncrs/${encodeURIComponent(raisedNcr.id)}/evidence`, {
+            method: 'POST',
+            body: JSON.stringify({
+              documentId: uploadedNcrEvidenceDocumentId,
+              evidenceType: 'photo',
+              ...(caption ? { caption } : {}),
+            }),
+          });
+          attachedNcrEvidenceDocumentId = uploadedNcrEvidenceDocumentId;
+        } catch (error) {
+          // The NCR exists, but the evidence link did not complete. Queue the
+          // photo against that NCR so the offline sync worker retries the attach.
+          logError('Failed to attach captured evidence to NCR:', error);
+        }
+      }
+
+      const photo =
+        attachedNcrEvidenceDocumentId && raisedNcr
+          ? null
+          : await capturePhotoOffline(projectId, capturedFile, {
+              lotId: linkedLot || undefined,
+              entityType,
+              entityId: raisedNcr ? raisedNcr.id : linkedItp || undefined,
+              documentType: captureType === 'ncr' ? 'ncr_evidence' : 'photo',
+              category: captureType === 'ncr' ? 'ncr_evidence' : undefined,
+              caption,
+              capturedBy: user.id,
+              gpsLatitude: latitude ?? undefined,
+              gpsLongitude: longitude ?? undefined,
+              serverDocumentId: uploadedNcrEvidenceDocumentId ?? undefined,
+            });
 
       if (captureType === 'ncr') {
         if (raisedNcr) {
@@ -191,7 +248,10 @@ export function CaptureModal({
         toast({ description: 'Photo saved', variant: 'success' });
       }
 
-      onCapture?.({ type: captureType, id: photo.id });
+      onCapture?.({
+        type: captureType,
+        id: raisedNcr?.id ?? attachedNcrEvidenceDocumentId ?? photo?.id ?? '',
+      });
       onClose();
     } catch (error) {
       logError('Failed to save:', error);
