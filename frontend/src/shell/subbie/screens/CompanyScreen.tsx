@@ -20,7 +20,7 @@
  * read currently collapses status to approved|pending and does not expose a
  * countered rate).
  */
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { ShellScreen } from '@/shell/components/ShellScreen';
@@ -104,11 +104,13 @@ function EmployeeRow({
   employee,
   canManage,
   saving,
+  armed,
   onDelete,
 }: {
   employee: Employee;
   canManage: boolean;
   saving: boolean;
+  armed: boolean;
   onDelete: () => void;
 }) {
   const counter = employee as Employee & CounterFields;
@@ -138,10 +140,13 @@ function EmployeeRow({
           type="button"
           onClick={onDelete}
           disabled={saving}
-          className="-mr-1 p-1.5 text-destructive hover:bg-destructive/10 rounded-lg disabled:opacity-50"
+          className={cn(
+            '-mr-1 rounded-lg p-1.5 text-destructive hover:bg-destructive/10 disabled:opacity-50',
+            armed && 'text-[12px] font-semibold',
+          )}
           aria-label={`Remove ${employee.name}`}
         >
-          <Trash2 size={16} aria-hidden="true" />
+          {armed ? 'Remove?' : <Trash2 size={16} aria-hidden="true" />}
         </button>
       )}
     </div>
@@ -152,11 +157,13 @@ function PlantRow({
   plant,
   canManage,
   saving,
+  armed,
   onDelete,
 }: {
   plant: Plant;
   canManage: boolean;
   saving: boolean;
+  armed: boolean;
   onDelete: () => void;
 }) {
   const counter = plant as Plant & CounterFields;
@@ -195,10 +202,13 @@ function PlantRow({
           type="button"
           onClick={onDelete}
           disabled={saving}
-          className="-mr-1 p-1.5 text-destructive hover:bg-destructive/10 rounded-lg disabled:opacity-50"
+          className={cn(
+            '-mr-1 rounded-lg p-1.5 text-destructive hover:bg-destructive/10 disabled:opacity-50',
+            armed && 'text-[12px] font-semibold',
+          )}
           aria-label={`Remove ${plant.description || plant.type}`}
         >
-          <Trash2 size={16} aria-hidden="true" />
+          {armed ? 'Remove?' : <Trash2 size={16} aria-hidden="true" />}
         </button>
       )}
     </div>
@@ -245,6 +255,28 @@ export function CompanyScreen() {
 
   const [sheet, setSheet] = useState<'employee' | 'plant' | null>(null);
   const [saving, setSaving] = useState(false);
+  // Two-tap delete confirm (readiness guardrail forbids window.confirm): first
+  // tap arms the row's delete button ("Remove?"), a second tap within 4s
+  // deletes; the timeout disarms.
+  const [armedDelete, setArmedDelete] = useState<string | null>(null);
+  const armTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (armTimer.current) clearTimeout(armTimer.current);
+    },
+    [],
+  );
+  const confirmArmed = (key: string): boolean => {
+    if (armedDelete === key) {
+      if (armTimer.current) clearTimeout(armTimer.current);
+      setArmedDelete(null);
+      return true;
+    }
+    if (armTimer.current) clearTimeout(armTimer.current);
+    setArmedDelete(key);
+    armTimer.current = setTimeout(() => setArmedDelete(null), 4000);
+    return false;
+  };
   const [formError, setFormError] = useState<string | null>(null);
   const [employeeForm, setEmployeeForm] = useState({
     name: '',
@@ -443,8 +475,9 @@ export function CompanyScreen() {
                 employee={e}
                 canManage={canManageRoster}
                 saving={saving}
+                armed={armedDelete === `emp-${e.id}`}
                 onDelete={() => {
-                  if (window.confirm(`Remove ${e.name} from your crew?`)) void deleteEmployee(e.id);
+                  if (confirmArmed(`emp-${e.id}`)) void deleteEmployee(e.id);
                 }}
               />
             ))}
@@ -470,8 +503,9 @@ export function CompanyScreen() {
                 plant={p}
                 canManage={canManageRoster}
                 saving={saving}
+                armed={armedDelete === `plant-${p.id}`}
                 onDelete={() => {
-                  if (window.confirm(`Remove ${p.description || p.type}?`)) void deletePlant(p.id);
+                  if (confirmArmed(`plant-${p.id}`)) void deletePlant(p.id);
                 }}
               />
             ))}

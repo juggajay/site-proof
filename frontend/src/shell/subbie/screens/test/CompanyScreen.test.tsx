@@ -3,7 +3,8 @@
  *
  * MOCKS @/lib/useOfflineStatus, the my-company data hook (useMyCompanyQuery), and
  * the BottomSheet (rendered inline when open so its form fields are queryable).
- * apiFetch + context mocked per test. window.confirm stubbed for deletes.
+ * apiFetch + context mocked per test. Deletes are two-tap armed confirms
+ * (the readiness guardrail forbids window.confirm).
  *
  * Pins:
  *   - admin vs non-admin: plain subcontractor sees NO add/delete + footer note
@@ -213,7 +214,7 @@ describe('subbie shell CompanyScreen', () => {
     );
   });
 
-  it('delete employee hits the classic endpoint with ?projectId=', async () => {
+  it('delete employee is two-tap (arm, then DELETE on the classic endpoint with ?projectId=)', async () => {
     _role = 'subcontractor_admin';
     _companyData = company({
       employees: [
@@ -227,9 +228,18 @@ describe('subbie shell CompanyScreen', () => {
         },
       ],
     });
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
     renderScreen();
-    fireEvent.click(screen.getByRole('button', { name: /Remove Tommy/i }));
+    const removeBtn = screen.getByRole('button', { name: /Remove Tommy/i });
+
+    // First tap arms only — no DELETE yet, button asks for confirmation.
+    fireEvent.click(removeBtn);
+    expect(removeBtn).toHaveTextContent('Remove?');
+    expect(apiFetchMock).not.toHaveBeenCalledWith(
+      '/api/subcontractors/my-company/employees/e9?projectId=proj-1',
+      { method: 'DELETE' },
+    );
+
+    fireEvent.click(removeBtn);
     await waitFor(() =>
       expect(apiFetchMock).toHaveBeenCalledWith(
         '/api/subcontractors/my-company/employees/e9?projectId=proj-1',
