@@ -12,9 +12,9 @@
  *   /p/docket                → "Today's docket" stub  → /subcontractor-portal/docket/new
  *   /p/docket/:docketId      → docket detail stub      → /subcontractor-portal/docket/:id
  *   /p/dockets               → My Dockets stub         → /subcontractor-portal/dockets
- *   /p/work                  → My Work stub            → /subcontractor-portal/work
- *   /p/itps                  → Inspections stub        → /subcontractor-portal/itps
- *   /p/lots/:lotId/itp       → ITP run stub            → /subcontractor-portal/lots/:id/itp
+ *   /p/work                  → WorkScreen              (PR C — real)
+ *   /p/itps                  → ItpsScreen              (PR C — real)
+ *   /p/lots/:lotId/itp       → SubbieItpRunScreen      (PR C — real)
  *   /p/quality               → Holds & Tests stub      → /subcontractor-portal/holdpoints
  *   /p/docs                  → Documents stub          → /subcontractor-portal/documents
  *   /p/company               → My Company stub         → /my-company
@@ -27,6 +27,9 @@ import { useMemo } from 'react';
 import { Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { HomeScreen } from './screens/HomeScreen';
 import { SubbieStubScreen } from './screens/SubbieStubScreen';
+import { WorkScreen } from './screens/WorkScreen';
+import { ItpsScreen } from './screens/ItpsScreen';
+import { SubbieItpRunScreen } from './screens/SubbieItpRunScreen';
 import { useSubbieShellData } from './subbieShellData';
 import { SubbieShellContext } from './subbieShellContext';
 
@@ -44,18 +47,6 @@ function DocketDetailStub() {
       title="Docket"
       classicHref={`/subcontractor-portal/docket/${docketId ?? ''}`}
       classicLabel="Open classic docket"
-    />
-  );
-}
-
-// :lotId ITP run stub — links to the matching classic lot ITP page.
-function LotItpStub() {
-  const { lotId } = useParams();
-  return (
-    <SubbieStubScreen
-      title="Inspection"
-      classicHref={`/subcontractor-portal/lots/${lotId ?? ''}/itp`}
-      classicLabel="Open classic ITP"
     />
   );
 }
@@ -93,29 +84,11 @@ export function SubbieShellRoutes() {
         />
 
         {/* My Work (lots) */}
-        <Route
-          path="work"
-          element={
-            <SubbieStubScreen
-              title="My Work"
-              classicHref="/subcontractor-portal/work"
-              classicLabel="Open classic work list"
-            />
-          }
-        />
+        <Route path="work" element={<WorkScreen />} />
 
         {/* Inspections (ITPs) */}
-        <Route
-          path="itps"
-          element={
-            <SubbieStubScreen
-              title="Inspections"
-              classicHref="/subcontractor-portal/itps"
-              classicLabel="Open classic inspections"
-            />
-          }
-        />
-        <Route path="lots/:lotId/itp" element={<LotItpStub />} />
+        <Route path="itps" element={<ItpsScreen />} />
+        <Route path="lots/:lotId/itp" element={<SubbieItpRunScreen />} />
 
         {/* Holds & Tests */}
         <Route

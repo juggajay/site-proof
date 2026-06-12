@@ -26,8 +26,9 @@ exclusive"). Keep it that way — the two shells share a device and the same
   override).
 - **B — dockets:** the docket editor surface (`/p/docket`, `/p/dockets`) — the
   primary action surface (labour/plant entry sheets, submit/respond).
-- **C — inspections:** `/p/work`, `/p/itps`, `/p/lots/:lotId/itp` (the editable
-  ITP run, reusing the foreman ITP dot-track trio).
+- **C — inspections (PR #856):** `/p/work`, `/p/itps`, `/p/lots/:lotId/itp`
+  (the editable ITP run, reusing — importing, not forking — the foreman ITP
+  dot-track trio).
 - **D — quality + docs + company:** `/p/quality` (holds & tests, NCRs),
   `/p/docs`, `/p/company`.
 
@@ -71,5 +72,32 @@ Modified:
 - `frontend/src/App.tsx` — lazy `/p/*` mount (mirrors `/m/*`, outside
   `ProtectedAppShell`, `RoleProtectedRoute` + `SUBCONTRACTOR_ROLES`); wrapped the
   `/subcontractor-portal` dashboard route in `SubbieShellGuard`.
+
+### Files touched by PR C (inspections) — PR #856
+
+New:
+
+- `frontend/src/shell/subbie/screens/WorkScreen.tsx` — `/p/work` assigned-lots
+  list (read-only; classic `portalModule=lots` query reused).
+- `frontend/src/shell/subbie/screens/ItpsScreen.tsx` — `/p/itps` inspection list
+  (classic `includeITP=true&portalModule=itps` query reused; canComplete pill).
+- `frontend/src/shell/subbie/screens/SubbieItpRunScreen.tsx` — `/p/lots/:lotId/itp`
+  the editable ITP run; IMPORTS (no fork) the foreman `ItpDotTrack`,
+  `itpTrackPhysics`, `useItpContentDrag`, `lotsShellState`.
+- `frontend/src/shell/subbie/screens/useSubbieItpRun.ts` — run data + actions
+  wiring the SHARED `useItpCompletionActions` hook + `subcontractorView=true`
+  reads, exactly as the classic `SubcontractorLotITPPage`.
+- `frontend/src/shell/subbie/screens/ShellAccessDenied.tsx` — dark-shell
+  equivalent of `PortalAccessDenied` (module-gate notice).
+- `frontend/src/shell/subbie/screens/test/WorkScreen.test.tsx`
+- `frontend/src/shell/subbie/screens/test/ItpsScreen.test.tsx`
+- `frontend/src/shell/subbie/screens/test/SubbieItpRunScreen.test.tsx`
+- `frontend/src/shell/subbie/screens/test/useSubbieItpRun.test.tsx`
+
+Modified:
+
+- `frontend/src/shell/subbie/SubbieShellRoutes.tsx` — replaced the `work`, `itps`
+  and `lots/:lotId/itp` stub routes with the real screens (docket/dockets/quality/
+  docs/company stubs left for PRs B/D; foreman files imports-only, unchanged).
 
 `frontend/src/shell/**` remains this workstream's exclusive zone.
