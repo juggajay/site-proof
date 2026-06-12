@@ -15,9 +15,10 @@
  *   /p/work                  → WorkScreen              (PR C — real)
  *   /p/itps                  → ItpsScreen              (PR C — real)
  *   /p/lots/:lotId/itp       → SubbieItpRunScreen      (PR C — real)
- *   /p/quality               → Holds & Tests stub      → /subcontractor-portal/holdpoints
- *   /p/docs                  → Documents stub          → /subcontractor-portal/documents
- *   /p/company               → My Company stub         → /my-company
+ *   /p/quality               → Holds & Tests (real)    — holdPoints + testResults
+ *   /p/ncrs                  → NCRs (real)             — ncrs module (default OFF)
+ *   /p/docs                  → Documents (real)        — documents module
+ *   /p/company               → My Company (real)       — crew/plant roster
  *   *                        → /p
  *
  * Back model: each screen's `parent` prop is the explicit return path (see
@@ -26,6 +27,10 @@
 import { useMemo } from 'react';
 import { Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { HomeScreen } from './screens/HomeScreen';
+import { QualityScreen } from './screens/QualityScreen';
+import { DocsScreen } from './screens/DocsScreen';
+import { NcrsScreen } from './screens/NcrsScreen';
+import { CompanyScreen } from './screens/CompanyScreen';
 import { SubbieStubScreen } from './screens/SubbieStubScreen';
 import { WorkScreen } from './screens/WorkScreen';
 import { ItpsScreen } from './screens/ItpsScreen';
@@ -90,41 +95,17 @@ export function SubbieShellRoutes() {
         <Route path="itps" element={<ItpsScreen />} />
         <Route path="lots/:lotId/itp" element={<SubbieItpRunScreen />} />
 
-        {/* Holds & Tests */}
-        <Route
-          path="quality"
-          element={
-            <SubbieStubScreen
-              title="Holds &amp; Tests"
-              classicHref="/subcontractor-portal/holdpoints"
-              classicLabel="Open classic hold points"
-            />
-          }
-        />
+        {/* Holds & Tests — read-only QA visibility (holdPoints + testResults) */}
+        <Route path="quality" element={<QualityScreen />} />
 
-        {/* Documents */}
-        <Route
-          path="docs"
-          element={
-            <SubbieStubScreen
-              title="Documents"
-              classicHref="/subcontractor-portal/documents"
-              classicLabel="Open classic documents"
-            />
-          }
-        />
+        {/* NCRs — module-conditional (ncrs defaults OFF) */}
+        <Route path="ncrs" element={<NcrsScreen />} />
 
-        {/* My Company */}
-        <Route
-          path="company"
-          element={
-            <SubbieStubScreen
-              title="My Company"
-              classicHref="/my-company"
-              classicLabel="Open classic My Company"
-            />
-          }
-        />
+        {/* Documents — view-only (documents module) */}
+        <Route path="docs" element={<DocsScreen />} />
+
+        {/* My Company — crew/plant roster (admin write gate) */}
+        <Route path="company" element={<CompanyScreen />} />
 
         {/* Catch-all → home */}
         <Route path="*" element={<Navigate to="/p" replace />} />
