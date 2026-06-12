@@ -13,6 +13,7 @@ import {
   buildClaimReadinessResponse,
   buildClaimableLotsResponse,
   buildClaimsListResponse,
+  getClaimReadDisputeNotes,
   mapClaimListItem,
   mapClaimReadinessItem,
   mapClaimableLot,
@@ -353,7 +354,13 @@ export function createClaimReadRouter({
       }
       const certification = buildClaimCertificationView(claim.disputeNotes, certifierNameById);
 
-      res.json(buildClaimDetailResponse({ ...claim, certification }));
+      res.json(
+        buildClaimDetailResponse({
+          ...claim,
+          disputeNotes: getClaimReadDisputeNotes(claim.disputeNotes),
+          certification,
+        }),
+      );
     }),
   );
 
