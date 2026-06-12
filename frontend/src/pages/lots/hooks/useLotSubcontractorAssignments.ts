@@ -11,6 +11,7 @@ interface UseLotSubcontractorAssignmentsParams {
   lotId: string | undefined;
   lot: Lot | null;
   isSubcontractor: boolean;
+  canManageAssignments?: boolean;
   setLot: Dispatch<SetStateAction<Lot | null>>;
 }
 
@@ -19,6 +20,7 @@ export function useLotSubcontractorAssignments({
   lotId,
   lot,
   isSubcontractor,
+  canManageAssignments = false,
   setLot,
 }: UseLotSubcontractorAssignmentsParams) {
   const queryClient = useQueryClient();
@@ -53,7 +55,7 @@ export function useLotSubcontractorAssignments({
       apiFetch<LotSubcontractorAssignment[]>(
         `/api/lots/${encodeURIComponent(lotId || '')}/subcontractors`,
       ),
-    enabled: !!lotId,
+    enabled: !!lotId && canManageAssignments,
   });
 
   const { data: myAssignment } = useQuery({

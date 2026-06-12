@@ -333,7 +333,14 @@ export function LotDetailPage() {
     removeAssignment,
     handleAssignSubcontractor,
     handleAssignmentSuccess,
-  } = useLotSubcontractorAssignments({ projectId, lotId, lot, isSubcontractor, setLot });
+  } = useLotSubcontractorAssignments({
+    projectId,
+    lotId,
+    lot,
+    isSubcontractor,
+    canManageAssignments: canManageLot,
+    setLot,
+  });
 
   // Subcontractors need canCompleteITP permission, others can complete by default
   const canCompleteITPItems = isSubcontractor ? (myAssignment?.canCompleteITP ?? false) : true;
