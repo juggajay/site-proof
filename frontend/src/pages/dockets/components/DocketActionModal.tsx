@@ -10,10 +10,12 @@ import { extractErrorMessage } from '@/lib/errorHandling';
 import { logError } from '@/lib/logger';
 import type { Docket } from '../docketApprovalsData';
 import {
+  type DocketActionResponse,
   type DocketActionType,
   HOURS_INPUT_ERROR,
   buildDocketActionPath,
   buildDocketActionPayload,
+  getDocketApprovalDiarySyncWarning,
   hasHoursChanged,
   parseHoursInput,
   resolveDocketActionEndpoint,
@@ -96,17 +98,20 @@ export function DocketActionModal({
     const endpoint = resolveDocketActionEndpoint(actionType);
 
     try {
-      await apiFetch(buildDocketActionPath(docket.id, endpoint), {
-        method: 'POST',
-        body: JSON.stringify(
-          buildDocketActionPayload(actionType, {
-            actionNotes,
-            adjustedLabourHours: adjustedLabourHoursValue,
-            adjustedPlantHours: adjustedPlantHoursValue,
-            adjustmentReason,
-          }),
-        ),
-      });
+      const response = await apiFetch<DocketActionResponse>(
+        buildDocketActionPath(docket.id, endpoint),
+        {
+          method: 'POST',
+          body: JSON.stringify(
+            buildDocketActionPayload(actionType, {
+              actionNotes,
+              adjustedLabourHours: adjustedLabourHoursValue,
+              adjustedPlantHours: adjustedPlantHoursValue,
+              adjustmentReason,
+            }),
+          ),
+        },
+      );
 
       const actionPastTense =
         actionType === 'approve' ? 'approved' : actionType === 'reject' ? 'rejected' : 'queried';
@@ -114,6 +119,14 @@ export function DocketActionModal({
         variant: 'success',
         description: `Docket ${actionPastTense} successfully`,
       });
+      const diarySyncWarning =
+        actionType === 'approve' ? getDocketApprovalDiarySyncWarning(response) : null;
+      if (diarySyncWarning) {
+        toast({
+          variant: 'warning',
+          description: diarySyncWarning,
+        });
+      }
       await onActionComplete();
     } catch (error) {
       logError(`Error ${actionType}ing docket:`, error);

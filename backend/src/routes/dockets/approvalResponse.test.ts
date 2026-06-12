@@ -66,4 +66,33 @@ describe('buildDocketApprovedResponse', () => {
       ],
     });
   });
+
+  it('includes a diary sync warning when approval cannot populate the diary', () => {
+    const approvedAt = new Date('2026-05-21T10:30:00.000Z');
+
+    const response = buildDocketApprovedResponse({
+      updatedDocket: {
+        id: 'abc123def456',
+        status: 'approved',
+        approvedAt,
+        subcontractorCompany: {
+          companyName: 'QA Civil Pty Ltd',
+        },
+      },
+      subcontractorUsers: [],
+      diarySync: {
+        status: 'skipped',
+        code: 'DIARY_LOCKED',
+        message:
+          'Docket approved, but diary auto-population was skipped because the daily diary is locked.',
+      },
+    });
+
+    expect(response.diarySync).toEqual({
+      status: 'skipped',
+      code: 'DIARY_LOCKED',
+      message:
+        'Docket approved, but diary auto-population was skipped because the daily diary is locked.',
+    });
+  });
 });

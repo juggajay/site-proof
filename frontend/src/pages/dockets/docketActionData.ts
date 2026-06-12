@@ -11,6 +11,21 @@ import type { DocketDetailResponse, LabourEntry, PlantEntry } from './docketAppr
 export type DocketActionType = 'approve' | 'reject' | 'query' | 'view';
 export type DocketActionEndpoint = 'approve' | 'reject' | 'query';
 
+export type DocketApprovalDiarySyncOutcome =
+  | {
+      status: 'synced';
+      message: string;
+    }
+  | {
+      status: 'skipped' | 'failed';
+      code: string;
+      message: string;
+    };
+
+export interface DocketActionResponse {
+  diarySync?: DocketApprovalDiarySyncOutcome;
+}
+
 // ===== Shared docket status display maps =====
 // Page-private constants on DocketApprovalsPage, now shared with the modal.
 // (DocketApprovalsMobileView keeps its own copies — intentionally untouched.)
@@ -134,6 +149,17 @@ export function buildDocketActionPayload(
   }
 
   return { reason: actionNotes.trim() || null };
+}
+
+export function getDocketApprovalDiarySyncWarning(
+  response: DocketActionResponse | null | undefined,
+): string | null {
+  const diarySync = response?.diarySync;
+  if (!diarySync || diarySync.status === 'synced') {
+    return null;
+  }
+
+  return diarySync.message || 'Docket approved, but diary auto-population did not complete.';
 }
 
 // ===== Detail entries query =====

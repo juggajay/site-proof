@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { DocketActionModal } from './DocketActionModal';
 import type { Docket } from '../docketApprovalsData';
@@ -24,6 +24,11 @@ vi.mock('@/lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api')>();
   return { ...actual, apiFetch: apiFetchMock };
 });
+
+const toastMock = vi.hoisted(() => vi.fn());
+vi.mock('@/components/ui/toaster', () => ({
+  toast: toastMock,
+}));
 
 function makeDocket(overrides: Partial<Docket> = {}): Docket {
   return {
@@ -83,6 +88,10 @@ function renderModal(
 }
 
 describe('DocketActionModal', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it('renders the dialog with docket summary fields', () => {
     renderModal();
 
@@ -149,6 +158,31 @@ describe('DocketActionModal', () => {
 
     await waitFor(() => {
       expect(props.onActionComplete).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('surfaces diary sync warnings returned by docket approval', async () => {
+    apiFetchMock
+      .mockResolvedValueOnce({ docket: { labourEntries: [], plantEntries: [] } })
+      .mockResolvedValueOnce({
+        diarySync: {
+          status: 'skipped',
+          code: 'DIARY_LOCKED',
+          message:
+            'Docket approved, but diary auto-population was skipped because the daily diary is locked.',
+        },
+      });
+    const { props } = renderModal();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
+
+    await waitFor(() => {
+      expect(props.onActionComplete).toHaveBeenCalledTimes(1);
+    });
+    expect(toastMock).toHaveBeenCalledWith({
+      variant: 'warning',
+      description:
+        'Docket approved, but diary auto-population was skipped because the daily diary is locked.',
     });
   });
 
