@@ -330,11 +330,13 @@ export function ItpRunScreen() {
   const bottom = (
     <div className="shell-primary">
       {reasonMode ? (
+        // Solid card background — this panel sits in the fixed bottom bar OVER
+        // the content, so it must be opaque to be legible.
         <div
           className={
             reasonMode === 'fail'
-              ? 'rounded-2xl border border-destructive/30 bg-destructive/10 p-3'
-              : 'rounded-2xl border border-border bg-secondary/40 p-3'
+              ? 'rounded-2xl border border-destructive/40 bg-card p-3 shadow-lg'
+              : 'rounded-2xl border border-border bg-card p-3 shadow-lg'
           }
         >
           <label className="mb-1.5 block text-[13px] font-semibold">
@@ -499,8 +501,6 @@ export function ItpRunScreen() {
           renderCell={(i) => {
             const cell = orderedItems[i];
             const cellState = trackEntries[i]?.state ?? 'open';
-            const isActive = i === currentIndex && !scrubbing;
-            const cellPhotoCount = isActive ? photoCount : 0;
             return (
               <>
                 <span className="shell-pill shell-pill-attention self-start">
@@ -514,63 +514,62 @@ export function ItpRunScreen() {
                     {cell.acceptanceCriteria}
                   </p>
                 )}
-                {/* State line while scrubbing (preview); on the active idle item
-                    we show the live evidence button instead. */}
-                {isActive ? (
-                  <>
-                    <button
-                      type="button"
-                      className="shell-photobtn"
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={busy}
-                      aria-label="Add evidence photo"
-                    >
-                      <Camera size={19} aria-hidden />
-                      {cellPhotoCount > 0
-                        ? `Evidence added (${cellPhotoCount})`
-                        : 'Add evidence photo'}
-                    </button>
-                    {gate.kind === 'awaiting-release' && (
-                      <div className="mt-1 rounded-2xl border border-warning/40 bg-warning/10 p-4">
-                        <div className="flex items-center gap-2 text-[14px] font-semibold text-warning">
-                          <Lock size={16} strokeWidth={2.2} aria-hidden />
-                          Awaiting hold point release
-                        </div>
-                        <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">
-                          This is a hold point. It can’t be ticked complete until it’s released
-                          (which records who released it, when, and how). Request the release from
-                          the Hold Points screen — you can still mark it N/A or raise an issue
-                          below.
-                        </p>
-                      </div>
-                    )}
-                    {run.isOfflineData && (
-                      <p className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
-                        <ChevronLeft size={12} className="rotate-90" aria-hidden />
-                        Showing cached checklist — changes sync when you’re back online.
-                      </p>
-                    )}
-                  </>
-                ) : (
-                  <p
-                    className={[
-                      'text-[13px] font-semibold',
-                      cellState === 'done'
-                        ? 'text-success'
-                        : cellState === 'failed'
-                          ? 'text-destructive'
-                          : cellState === 'hold'
-                            ? 'text-warning'
-                            : 'text-muted-foreground',
-                    ].join(' ')}
-                  >
-                    {STRIP_STATE_LINE[cellState]}
-                  </p>
-                )}
+                {/* State line — a scrub preview and the landed item read the same. */}
+                <p
+                  className={[
+                    'text-[13px] font-semibold',
+                    cellState === 'done'
+                      ? 'text-success'
+                      : cellState === 'failed'
+                        ? 'text-destructive'
+                        : cellState === 'hold'
+                          ? 'text-warning'
+                          : 'text-muted-foreground',
+                  ].join(' ')}
+                >
+                  {STRIP_STATE_LINE[cellState]}
+                </p>
               </>
             );
           }}
         />
+
+        {/* The landed item's actionable extras, pinned at the BOTTOM of the zone
+            (the strip above is flex-1) so the evidence button sits in the thumb
+            zone just above Pass/Fail — no dead-space chasm between the question
+            at the top and the actions at the bottom. They belong to the LANDED
+            item; a scrub preview above doesn't change them until release. */}
+        <div className="flex flex-col gap-3 pt-3">
+          {gate.kind === 'awaiting-release' && (
+            <div className="rounded-2xl border border-warning/40 bg-warning/10 p-4">
+              <div className="flex items-center gap-2 text-[14px] font-semibold text-warning">
+                <Lock size={16} strokeWidth={2.2} aria-hidden />
+                Awaiting hold point release
+              </div>
+              <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">
+                This is a hold point. It can’t be ticked complete until it’s released (which records
+                who released it, when, and how). Request the release from the Hold Points screen —
+                you can still mark it N/A or raise an issue below.
+              </p>
+            </div>
+          )}
+          {run.isOfflineData && (
+            <p className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+              <ChevronLeft size={12} className="rotate-90" aria-hidden />
+              Showing cached checklist — changes sync when you’re back online.
+            </p>
+          )}
+          <button
+            type="button"
+            className="shell-photobtn"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={busy}
+            aria-label="Add evidence photo"
+          >
+            <Camera size={19} aria-hidden />
+            {photoCount > 0 ? `Evidence added (${photoCount})` : 'Add evidence photo'}
+          </button>
+        </div>
       </div>
 
       <input

@@ -87,6 +87,32 @@ export const TRACK_PHYSICS = {
    * through. Mirrors the SwipeableCard direction-lock threshold idiom.
    */
   DRAG_ENGAGE_PX: 10,
+  /**
+   * Directional commit threshold: a slow, deliberate drag that has travelled at
+   * least this fraction of one item toward a neighbour COMMITS to it on release
+   * even with zero velocity — the carousel "tilt" idiom. Without this, a paused
+   * finger at lift (vx ≈ 0) snaps back below 0.5 items and the hold-drag feels
+   * dead (the exact failure the owner reported on device).
+   */
+  COMMIT_FRACTION: 0.25,
+  /**
+   * Velocity smoothing for the content drag: each move sample blends into the
+   * running velocity as `vx = α·sample + (1−α)·vx`. Raw per-sample velocity is
+   * far too noisy on real touch hardware to gate a fling on.
+   */
+  VELOCITY_SMOOTHING: 0.6,
+  /**
+   * If the pointer has not moved for this long before lift-off, the release
+   * velocity is treated as zero (the finger STOPPED — a stale earlier flick
+   * must not throw the strip somewhere unintended).
+   */
+  VELOCITY_STALE_MS: 90,
+  /** Reserved headroom (px) INSIDE the track's clip box so a dot magnified to
+   *  MAX_SCALE, lifted, never clips at the top (the mock's 22px wrap padding). */
+  TRACK_TOP_PAD_PX: 22,
+  /** Bottom padding (px) inside the track — with the top pad this gives the
+   *  pointer surface a ≥44px thumb target (22 + 13 + 10). */
+  TRACK_BOTTOM_PAD_PX: 10,
 } as const;
 
 // ── Magnification falloff ────────────────────────────────────────────────────
@@ -358,6 +384,52 @@ export function projectFling(frac: number, vx: number, count: number): number {
   if (count <= 0) return 0;
   const projected = frac - vx * TRACK_PHYSICS.FLING_FACTOR;
   return snapFrac(projected, count);
+}
+
+/**
+ * Settle a content-drag release into a landed index — the full release rule:
+ *
+ *   1. Project the fling: `projected = frac − vx · FLING_FACTOR` (vx px/ms).
+ *   2. Snap to the nearest index.
+ *   3. DIRECTIONAL COMMIT: if the snap would land back on the starting item but
+ *      the drag deliberately travelled ≥ COMMIT_FRACTION of an item toward a
+ *      neighbour, commit one step in the drag direction instead — the carousel
+ *      "tilt" rule. A slow, paused-finger drag (vx ≈ 0) past a quarter item must
+ *      advance, never demoralisingly snap back; tiny wiggles still return home.
+ *
+ * Clamped to [0, count−1] at both ends. Reduced motion passes vx = 0: the fling
+ * is disabled but the directional commit still applies (direct positioning).
+ */
+export function settleRelease(startFrac: number, frac: number, vx: number, count: number): number {
+  if (count <= 0) return 0;
+  const projected = frac - vx * TRACK_PHYSICS.FLING_FACTOR;
+  let target = Math.round(projected);
+  const start = Math.round(startFrac);
+  const delta = projected - startFrac;
+  if (target === start && Math.abs(delta) >= TRACK_PHYSICS.COMMIT_FRACTION) {
+    target = start + Math.sign(delta);
+  }
+  return Math.min(Math.max(target, 0), count - 1);
+}
+
+/**
+ * Exponentially-smoothed drag velocity: blends the newest per-move sample into
+ * the running value (`α·sample + (1−α)·previous`). Raw per-sample velocities on
+ * touch hardware are far too noisy to gate a fling on; smoothing makes a real
+ * flick register reliably and a jitter not.
+ */
+export function smoothVelocity(previous: number, sample: number): number {
+  const a = TRACK_PHYSICS.VELOCITY_SMOOTHING;
+  return a * sample + (1 - a) * previous;
+}
+
+/**
+ * Release velocity guard: if the pointer rested for longer than
+ * VELOCITY_STALE_MS before lift-off, the finger had STOPPED — treat the carried
+ * velocity as zero so an earlier flick can't throw the strip after a pause.
+ */
+export function releaseVelocity(vx: number, msSinceLastMove: number): number {
+  return msSinceLastMove > TRACK_PHYSICS.VELOCITY_STALE_MS ? 0 : vx;
 }
 
 export type DragAxis = 'undecided' | 'horizontal' | 'vertical';

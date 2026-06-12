@@ -21,7 +21,10 @@ import {
   fracFromPointerX,
   isNumberVisible,
   projectFling,
+  releaseVelocity,
   resolveDragAxis,
+  settleRelease,
+  smoothVelocity,
   snapFrac,
   trackAriaValueText,
   trackShiftPx,
@@ -498,6 +501,100 @@ describe('projectFling — frac -= vx * FLING_FACTOR, snapped + clamped', () => 
 
   it('returns 0 for an empty list', () => {
     expect(projectFling(3, -5, 0)).toBe(0);
+  });
+});
+
+// ── settleRelease — fling + directional commit (the release rule) ─────────────
+
+describe('settleRelease — release rule with directional commit', () => {
+  const count = 22;
+
+  it('a tiny wiggle with no velocity returns home (no accidental advance)', () => {
+    expect(settleRelease(10, 10.1, 0, count)).toBe(10);
+    expect(settleRelease(10, 9.9, 0, count)).toBe(10);
+  });
+
+  it('a deliberate quarter-item drag with a STOPPED finger commits forward', () => {
+    // The owner-reported failure: hold, drag ~0.3 item, pause, lift → must
+    // advance, never snap back.
+    expect(settleRelease(10, 10.3, 0, count)).toBe(11);
+    expect(settleRelease(10, 10.49, 0, count)).toBe(11);
+  });
+
+  it('a deliberate quarter-item drag backward commits backward', () => {
+    expect(settleRelease(10, 9.7, 0, count)).toBe(9);
+  });
+
+  it('below the commit fraction it snaps back', () => {
+    expect(settleRelease(10, 10.2, 0, count)).toBe(10); // 0.2 < 0.25
+    expect(TRACK_PHYSICS.COMMIT_FRACTION).toBe(0.25);
+  });
+
+  it('past the halfway point it lands on the neighbour by plain rounding', () => {
+    expect(settleRelease(10, 10.6, 0, count)).toBe(11);
+  });
+
+  it('velocity projects further (fling carries several items)', () => {
+    // frac 10.4 with a leftward flick (vx −2 px/ms) → 10.4 + 1.8 = 12.2 → 12.
+    expect(settleRelease(10, 10.4, -2, count)).toBe(12);
+  });
+
+  it('fling clamps at the END (no overshoot past the last item)', () => {
+    expect(settleRelease(20, 20.8, -50, count)).toBe(count - 1);
+  });
+
+  it('fling clamps at the START', () => {
+    expect(settleRelease(1, 0.4, 50, count)).toBe(0);
+  });
+
+  it('directional commit also clamps at the ends', () => {
+    expect(settleRelease(count - 1, count - 1, 0, count)).toBe(count - 1);
+    expect(settleRelease(0, 0, 0, count)).toBe(0);
+  });
+
+  it('reduced motion (vx = 0) keeps the directional commit', () => {
+    expect(settleRelease(5, 5.3, 0, count)).toBe(6);
+  });
+
+  it('returns 0 for an empty list', () => {
+    expect(settleRelease(3, 3.4, -5, 0)).toBe(0);
+  });
+});
+
+// ── smoothVelocity / releaseVelocity — robust release velocity ────────────────
+
+describe('smoothVelocity — exponential blend of move samples', () => {
+  it('blends the sample toward the running value with α = VELOCITY_SMOOTHING', () => {
+    const a = TRACK_PHYSICS.VELOCITY_SMOOTHING;
+    expect(smoothVelocity(0, 2)).toBeCloseTo(a * 2, 6);
+    expect(smoothVelocity(2, 0)).toBeCloseTo((1 - a) * 2, 6);
+  });
+
+  it('converges to a sustained velocity', () => {
+    let v = 0;
+    for (let i = 0; i < 20; i++) v = smoothVelocity(v, -3);
+    expect(v).toBeCloseTo(-3, 2);
+  });
+
+  it('a single jitter spike does not dominate', () => {
+    // Steady slow drag (−0.2) with one wild spike (−5) — the smoothed value
+    // stays far below the spike.
+    let v = 0;
+    for (let i = 0; i < 10; i++) v = smoothVelocity(v, -0.2);
+    v = smoothVelocity(v, -5);
+    expect(Math.abs(v)).toBeLessThan(3.2);
+  });
+});
+
+describe('releaseVelocity — stale guard (the finger STOPPED)', () => {
+  it('keeps fresh velocity', () => {
+    expect(releaseVelocity(-2, 16)).toBe(-2);
+    expect(releaseVelocity(-2, TRACK_PHYSICS.VELOCITY_STALE_MS)).toBe(-2);
+  });
+
+  it('zeroes velocity after a pre-lift pause', () => {
+    expect(releaseVelocity(-2, TRACK_PHYSICS.VELOCITY_STALE_MS + 1)).toBe(0);
+    expect(releaseVelocity(3, 500)).toBe(0);
   });
 });
 

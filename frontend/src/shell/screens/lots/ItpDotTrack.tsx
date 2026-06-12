@@ -308,12 +308,8 @@ export function ItpDotTrack({
   const shift = prefersReduced ? 0 : trackShiftPx(frac, count, liveScrubbing);
 
   return (
-    // overflow-visible so magnified dots can lift above the track into the
-    // reserved top padding without being clipped by the header.
-    <div className="relative -mx-5 mt-3" style={{ overflow: 'visible' }}>
-      {/* ≥40px vertical hit zone via padding even though dots draw small;
-          reserved top padding gives lifted dots room. */}
-      <div className="relative" style={{ touchAction: 'none', paddingTop: 18 }}>
+    <div className="relative -mx-5 mt-1" style={{ overflow: 'visible' }}>
+      <div className="relative" style={{ touchAction: 'none' }}>
         {/* Scroll regime: edge-fade gradients hint more dots exist. */}
         {!layout.fits && (
           <>
@@ -328,7 +324,16 @@ export function ItpDotTrack({
           </>
         )}
 
-        <div ref={scrollRef} className="overflow-x-hidden" style={{ scrollbarWidth: 'none' }}>
+        {/* The wrapper clips horizontally in the scroll regime; the magnified-
+            dot headroom + the ≥44px thumb hit zone live as padding ON the track
+            element itself, INSIDE this clip box, so a dot scaled to 2.2× and
+            lifted never clips at the top (the bug behind "the dots slide behind
+            the header") and the pointer surface is a real thumb target. */}
+        <div
+          ref={scrollRef}
+          className={layout.fits ? undefined : 'overflow-x-hidden'}
+          style={{ scrollbarWidth: 'none' }}
+        >
           <motion.div
             ref={trackRef}
             role="slider"
@@ -345,7 +350,7 @@ export function ItpDotTrack({
             onPointerCancel={handlePointerUp}
             onKeyDown={handleKeyDown}
             data-testid="itp-dot-track"
-            className="relative flex cursor-pointer items-end pb-1 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="relative flex cursor-pointer items-end outline-none focus-visible:ring-2 focus-visible:ring-ring"
             animate={{ x: shift }}
             transition={
               prefersReduced
@@ -362,6 +367,10 @@ export function ItpDotTrack({
               gap: layout.fits ? undefined : layout.gap,
               paddingLeft: layout.padding,
               paddingRight: layout.padding,
+              // Headroom for the 2.2× magnified + lifted dot, and a ≥44px-tall
+              // pointer surface (TOP_PAD + dot + BOTTOM_PAD).
+              paddingTop: TRACK_PHYSICS.TRACK_TOP_PAD_PX,
+              paddingBottom: TRACK_PHYSICS.TRACK_BOTTOM_PAD_PX,
               width: layout.fits ? '100%' : layout.contentWidth,
             }}
           >
@@ -462,8 +471,15 @@ export function ItpContentStrip({
   return (
     // Isolation wrapper: a fresh stacking/transform context so the parent
     // stagger animation (which animates transform on <main>'s children) cannot
-    // clobber the strip's translateX.
-    <div className="overflow-hidden" style={{ isolation: 'isolate' }}>
+    // clobber the strip's translateX. flex-1 lets the strip absorb the zone's
+    // spare height so siblings below it sit at the bottom (thumb zone);
+    // min-h-0 + overflow-y-auto lets an unusually tall question/criteria cell
+    // scroll vertically instead of clipping (the direction lock yields vertical
+    // drags to this native scroll).
+    <div
+      className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto"
+      style={{ isolation: 'isolate', scrollbarWidth: 'none' }}
+    >
       <motion.div
         className="flex"
         style={{ width: '100%' }}

@@ -165,7 +165,8 @@ describe('ItpRunScreen — hold-point gating', () => {
       ]),
     );
     renderRun();
-    expect(screen.getByText(/Awaiting hold point release/i)).toBeInTheDocument();
+    // Appears in both the strip state line and the explanatory banner.
+    expect(screen.getAllByText(/Awaiting hold point release/i).length).toBeGreaterThanOrEqual(1);
     // The tri-state Pass affordance must NOT be offered for an un-released HP.
     expect(screen.queryByRole('button', { name: /Pass this check/i })).toBeNull();
     // N/A + Fail remain available on the hold point (in the persistent bottom bar).
@@ -272,7 +273,8 @@ describe('ItpRunScreen — dot track scrubber', () => {
     renderRun();
     const slider = screen.getByRole('slider');
     fireEvent.keyDown(slider, { key: 'End' }); // jump to the hold point
-    expect(screen.getByText(/Awaiting hold point release/i)).toBeInTheDocument();
+    // Appears in both the strip state line and the explanatory banner.
+    expect(screen.getAllByText(/Awaiting hold point release/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.queryByRole('button', { name: /Pass this check/i })).toBeNull();
   });
 });
