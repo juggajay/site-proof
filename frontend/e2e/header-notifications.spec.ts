@@ -149,7 +149,11 @@ async function mockHeaderApis(page: Page) {
     await json({ message: `Unhandled E2E API route: ${url.pathname}` }, 404);
   });
 
-  await mockAuthenticatedUserState(page, E2E_ADMIN_USER);
+  await mockAuthenticatedUserState(
+    page,
+    E2E_ADMIN_USER,
+    notifications.filter((notification) => !notification.isRead).length,
+  );
 }
 
 test.describe('Header notifications', () => {
