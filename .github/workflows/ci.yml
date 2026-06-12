@@ -5,13 +5,65 @@ on:
     branches: [main, master, develop]
   pull_request:
     branches: [main, master, develop]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - id: filter
+        name: Detect changed areas
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "${{ github.event_name }}" != "pull_request" ]]; then
+            backend=true
+            frontend=true
+          else
+            base_sha="${{ github.event.pull_request.base.sha }}"
+            head_sha="${{ github.event.pull_request.head.sha }}"
+            git fetch --no-tags --prune --depth=1 origin "$base_sha" "$head_sha"
+            git diff --name-only "$base_sha" "$head_sha" > /tmp/changed-files
+
+            echo "Changed files:"
+            cat /tmp/changed-files
+
+            if grep -Eq '^(backend/|\.github/workflows/ci\.yml|package\.json|package-lock\.json)$' /tmp/changed-files; then
+              backend=true
+            else
+              backend=false
+            fi
+
+            if grep -Eq '^(frontend/|\.github/workflows/ci\.yml|package\.json|package-lock\.json)$' /tmp/changed-files; then
+              frontend=true
+            else
+              frontend=false
+            fi
+          fi
+
+          echo "backend=$backend" >> "$GITHUB_OUTPUT"
+          echo "frontend=$frontend" >> "$GITHUB_OUTPUT"
+
   backend:
     name: Backend
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -93,11 +145,11 @@ jobs:
 
       - name: Upload backend coverage report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: always()
+        if: failure()
         with:
           name: backend-coverage-report
           path: backend/coverage/
-          retention-days: 30
+          retention-days: 7
 
       - name: Check for unsafe patterns
         run: |
@@ -117,6 +169,8 @@ jobs:
 
   frontend:
     name: Frontend
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -151,11 +205,11 @@ jobs:
 
       - name: Upload frontend coverage report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: always()
+        if: failure()
         with:
           name: frontend-coverage-report
           path: frontend/coverage/
-          retention-days: 30
+          retention-days: 7
 
       - name: Production readiness guardrails
         run: npm run test:readiness
@@ -169,6 +223,7 @@ jobs:
     name: Frontend E2E
     runs-on: ubuntu-latest
     needs: [backend, frontend]
+    if: github.event_name != 'pull_request'
     services:
       postgres:
         image: postgres:15
@@ -244,11 +299,11 @@ jobs:
 
       - name: Upload Playwright report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: always()
+        if: failure()
         with:
           name: playwright-report
           path: frontend/playwright-report/
-          retention-days: 30
+          retention-days: 7
 
       - name: Upload Playwright screenshots
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
