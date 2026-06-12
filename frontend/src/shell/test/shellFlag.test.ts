@@ -101,9 +101,12 @@ describe('isShellActiveForRole (foreman default, owner decision 2026-06-12)', ()
   });
 });
 
-describe('isSubbieShellActiveForRole (DARK: default-off, override-only)', () => {
-  it('SUBBIE_SHELL_DEFAULT_ROLES is empty (dark ship)', () => {
-    expect(SUBBIE_SHELL_DEFAULT_ROLES.size).toBe(0);
+describe('isSubbieShellActiveForRole (default-ON for portal roles)', () => {
+  it('SUBBIE_SHELL_DEFAULT_ROLES is exactly the two portal roles', () => {
+    expect([...SUBBIE_SHELL_DEFAULT_ROLES].sort()).toEqual([
+      'subcontractor',
+      'subcontractor_admin',
+    ]);
   });
 
   // Full role × override matrix.
@@ -118,9 +121,9 @@ describe('isSubbieShellActiveForRole (DARK: default-off, override-only)', () => 
     'foreman',
   ];
 
-  it('subbie roles with no override: OFF by default (dark)', () => {
+  it('subbie roles with no override: ON by default (the shell IS the portal)', () => {
     for (const role of subbieRoles) {
-      expect(isSubbieShellActiveForRole(role, null)).toBe(false);
+      expect(isSubbieShellActiveForRole(role, null)).toBe(true);
     }
   });
 

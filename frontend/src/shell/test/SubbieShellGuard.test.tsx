@@ -3,8 +3,8 @@
  *
  * Covers:
  *   - Redirects /subcontractor-portal → /p when the subbie shell is active
- *   - Renders the classic dashboard when the subbie shell is inactive (dark
- *     default — the no-override path for everyone)
+ *   - Renders the classic dashboard when the subbie shell is inactive
+ *     (?shell=off, desktop viewport, or unauthenticated)
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -53,7 +53,7 @@ describe('SubbieShellGuard', () => {
     expect(screen.queryByTestId('classic-dashboard')).not.toBeInTheDocument();
   });
 
-  it('renders the classic dashboard when the subbie shell is inactive (dark default)', () => {
+  it('renders the classic dashboard when the subbie shell is inactive (?shell=off / desktop)', () => {
     renderWithRouter(false);
     expect(screen.getByTestId('classic-dashboard')).toBeInTheDocument();
     expect(screen.queryByTestId('subbie-shell-home')).not.toBeInTheDocument();

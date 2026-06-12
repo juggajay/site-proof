@@ -104,7 +104,7 @@ const ShellRoutes = lazy(() =>
   import('@/shell/ShellRoutes').then((m) => ({ default: m.ShellRoutes })),
 );
 import { ShellGuard } from '@/shell/ShellGuard';
-// Subbie portal shell — /p/* subtree (lazy-loaded, DARK: override-only).
+// Subbie portal shell — /p/* subtree (lazy-loaded; default-ON for portal roles).
 const SubbieShellRoutes = lazy(() =>
   import('@/shell/subbie/SubbieShellRoutes').then((m) => ({ default: m.SubbieShellRoutes })),
 );
@@ -169,9 +169,9 @@ function App() {
               }
             />
 
-            {/* Subbie portal shell v1 — /p/* subtree (lazy-loaded, DARK:
-                override-only activation). Mirrors the foreman /m/* mount: OUTSIDE
-                ProtectedAppShell so the shell uses its own full-screen layout,
+            {/* Subbie portal shell — /p/* subtree (lazy-loaded; default-ON for
+                portal roles, ?shell=off reverts). Mirrors the foreman /m/* mount:
+                OUTSIDE ProtectedAppShell so the shell uses its own full-screen layout,
                 and runs its own auth check via RoleProtectedRoute + SubbieShellGuard. */}
             <Route
               path="/p/*"

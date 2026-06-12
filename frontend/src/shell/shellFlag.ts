@@ -32,15 +32,17 @@ const FLAG_KEY = 'siteproof.shell.v2';
 const SHELL_DEFAULT_ROLES = new Set(['foreman']);
 
 /**
- * Subbie shell default roles — DARK for now (empty set). The subbie portal
- * shell (/p) ships override-only: no subcontractor gets it without ?shell=v2.
- * A later commit flips one role in here after the owner's phone test, exactly
- * as the foreman shell did with `foreman`. Keep this separate from
- * SHELL_DEFAULT_ROLES — the two shells are PARALLEL activations on a shared
- * device (a subbie role can't get /m, an internal role can't get /p), and the
- * role check is the only thing keeping them apart.
+ * Subbie shell default roles — the /p shell IS the subbie portal mobile
+ * experience (owner-approved 2026-06-12). Both portal roles get it with no
+ * flag set; `?shell=off` still reverts a device to the classic portal. Keep
+ * this separate from SHELL_DEFAULT_ROLES — the two shells are PARALLEL
+ * activations on a shared device (a subbie role can't get /m, an internal
+ * role can't get /p), and the role check is the only thing keeping them apart.
  */
-export const SUBBIE_SHELL_DEFAULT_ROLES: ReadonlySet<string> = new Set([]);
+export const SUBBIE_SHELL_DEFAULT_ROLES: ReadonlySet<string> = new Set([
+  'subcontractor',
+  'subcontractor_admin',
+]);
 
 export type ShellOverride = 'on' | 'off' | null;
 
@@ -109,8 +111,8 @@ export function isShellActiveForRole(
  *
  * Reuses the SAME per-device override (`getShellOverride`, ?shell=v2/?shell=off)
  * as the foreman shell — on a shared device the role check is what separates
- * the two. Default-OFF today (SUBBIE_SHELL_DEFAULT_ROLES is empty), so without
- * ?shell=v2 no subbie sees /p.
+ * the two. Default-ON for both portal roles (SUBBIE_SHELL_DEFAULT_ROLES);
+ * ?shell=off reverts a device to the classic portal.
  *
  * Exported for exhaustive unit testing.
  */
