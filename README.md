@@ -141,6 +141,15 @@ cd backend
 CONFIRM_RESTORE=<backup-file-name> DATABASE_URL=postgresql://user:password@db.example.com:5432/siteproof npx tsx scripts/backup.ts restore <backup-file>
 ```
 
+Retention cleanup is also destructive. Run `check` first, then confirm the
+database host/name before applying:
+
+```bash
+cd backend
+DATABASE_URL=postgresql://user:password@db.example.com:5432/siteproof npx tsx scripts/data-retention.ts check
+CONFIRM_RETENTION_APPLY=db.example.com/siteproof DATABASE_URL=postgresql://user:password@db.example.com:5432/siteproof npx tsx scripts/data-retention.ts apply
+```
+
 #### Frontend
 
 ```bash
