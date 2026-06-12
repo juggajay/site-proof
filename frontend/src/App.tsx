@@ -104,6 +104,11 @@ const ShellRoutes = lazy(() =>
   import('@/shell/ShellRoutes').then((m) => ({ default: m.ShellRoutes })),
 );
 import { ShellGuard } from '@/shell/ShellGuard';
+// Subbie portal shell — /p/* subtree (lazy-loaded, DARK: override-only).
+const SubbieShellRoutes = lazy(() =>
+  import('@/shell/subbie/SubbieShellRoutes').then((m) => ({ default: m.SubbieShellRoutes })),
+);
+import { SubbieShellGuard } from '@/shell/SubbieShellGuard';
 import { applyShellFlagFromUrl } from '@/shell/shellFlag';
 // Apply ?shell= param immediately (runs once before first render)
 applyShellFlagFromUrl();
@@ -160,6 +165,19 @@ function App() {
               element={
                 <RoleProtectedRoute allowedRoles={INTERNAL_ROLES} allowProjectScopedRole>
                   <ShellRoutes />
+                </RoleProtectedRoute>
+              }
+            />
+
+            {/* Subbie portal shell v1 — /p/* subtree (lazy-loaded, DARK:
+                override-only activation). Mirrors the foreman /m/* mount: OUTSIDE
+                ProtectedAppShell so the shell uses its own full-screen layout,
+                and runs its own auth check via RoleProtectedRoute + SubbieShellGuard. */}
+            <Route
+              path="/p/*"
+              element={
+                <RoleProtectedRoute allowedRoles={SUBCONTRACTOR_ROLES}>
+                  <SubbieShellRoutes />
                 </RoleProtectedRoute>
               }
             />
@@ -438,7 +456,9 @@ function App() {
                 path="/subcontractor-portal"
                 element={
                   <RoleProtectedRoute allowedRoles={SUBCONTRACTOR_ROLES}>
-                    <SubcontractorDashboard />
+                    <SubbieShellGuard>
+                      <SubcontractorDashboard />
+                    </SubbieShellGuard>
                   </RoleProtectedRoute>
                 }
               />

@@ -31,6 +31,17 @@ const FLAG_KEY = 'siteproof.shell.v2';
 /** Roles that get the shell with no flag set. */
 const SHELL_DEFAULT_ROLES = new Set(['foreman']);
 
+/**
+ * Subbie shell default roles — DARK for now (empty set). The subbie portal
+ * shell (/p) ships override-only: no subcontractor gets it without ?shell=v2.
+ * A later commit flips one role in here after the owner's phone test, exactly
+ * as the foreman shell did with `foreman`. Keep this separate from
+ * SHELL_DEFAULT_ROLES — the two shells are PARALLEL activations on a shared
+ * device (a subbie role can't get /m, an internal role can't get /p), and the
+ * role check is the only thing keeping them apart.
+ */
+export const SUBBIE_SHELL_DEFAULT_ROLES: ReadonlySet<string> = new Set([]);
+
 export type ShellOverride = 'on' | 'off' | null;
 
 // ── persistence helpers ──────────────────────────────────────────────────────
@@ -91,6 +102,28 @@ export function isShellActiveForRole(
   return SHELL_DEFAULT_ROLES.has(role);
 }
 
+/**
+ * Pure decision: should the SUBBIE shell (/p) be active for this role +
+ * override state? The mirror of isShellActiveForRole, gated to the inverse
+ * role set: only a subcontractor portal role can ever get the subbie shell.
+ *
+ * Reuses the SAME per-device override (`getShellOverride`, ?shell=v2/?shell=off)
+ * as the foreman shell — on a shared device the role check is what separates
+ * the two. Default-OFF today (SUBBIE_SHELL_DEFAULT_ROLES is empty), so without
+ * ?shell=v2 no subbie sees /p.
+ *
+ * Exported for exhaustive unit testing.
+ */
+export function isSubbieShellActiveForRole(
+  role: string | null | undefined,
+  override: ShellOverride,
+): boolean {
+  if (!role || !isSubcontractorRole(role)) return false;
+  if (override === 'on') return true;
+  if (override === 'off') return false;
+  return SUBBIE_SHELL_DEFAULT_ROLES.has(role);
+}
+
 // ── react hook ───────────────────────────────────────────────────────────────
 
 /**
@@ -120,4 +153,33 @@ export function useShellV2Enabled(): boolean {
   if (!isMobile || !user) return false;
 
   return isShellActiveForRole(getCompanyRole(user), override);
+}
+
+/**
+ * Returns true when the SUBBIE shell (/p) should render:
+ *  - viewport is mobile-width
+ *  - authenticated subcontractor portal role
+ *  - and: forced on, OR (no override AND the role defaults to the subbie shell —
+ *    which today it never does, since SUBBIE_SHELL_DEFAULT_ROLES is empty)
+ *
+ * Mirrors useShellV2Enabled exactly, including reading ?shell= on mount, so the
+ * URL param is honoured on first render and a ?shell=off navigation disables it
+ * without a full reload.
+ */
+export function useSubbieShellActive(): boolean {
+  const isMobile = useIsMobile();
+  const { user } = useAuth();
+
+  const [override, setOverride] = useState<ShellOverride>(() => {
+    applyShellFlagFromUrl();
+    return getShellOverride();
+  });
+
+  useEffect(() => {
+    setOverride(getShellOverride());
+  }, []);
+
+  if (!isMobile || !user) return false;
+
+  return isSubbieShellActiveForRole(getCompanyRole(user), override);
 }
