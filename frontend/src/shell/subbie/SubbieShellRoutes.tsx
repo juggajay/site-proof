@@ -22,7 +22,8 @@
  *   *                        → /p
  *
  * Back model: each screen's `parent` prop is the explicit return path (see
- * ShellScreen). All stubs declare /p as parent.
+ * ShellScreen). Every surface is now a real screen — the SubbieStubScreen
+ * placeholders from the staged build are gone.
  */
 import { useMemo } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
@@ -31,7 +32,6 @@ import { QualityScreen } from './screens/QualityScreen';
 import { DocsScreen } from './screens/DocsScreen';
 import { NcrsScreen } from './screens/NcrsScreen';
 import { CompanyScreen } from './screens/CompanyScreen';
-import { SubbieStubScreen } from './screens/SubbieStubScreen';
 import { WorkScreen } from './screens/WorkScreen';
 import { ItpsScreen } from './screens/ItpsScreen';
 import { SubbieItpRunScreen } from './screens/SubbieItpRunScreen';
