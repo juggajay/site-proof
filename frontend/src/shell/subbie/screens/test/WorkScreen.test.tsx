@@ -39,7 +39,7 @@ vi.mock('../../subbieShellContext', () => ({
 import { WorkScreen } from '../WorkScreen';
 
 function makeCtx(over: Partial<SubbieShellData> = {}): SubbieShellData {
-  const portalAccess: PortalAccess = { ...DEFAULT_PORTAL_ACCESS, ...(over.company as never) };
+  const portalAccess: PortalAccess = { ...DEFAULT_PORTAL_ACCESS };
   return {
     projectId: 'proj-1',
     company: { portalAccess } as never,
