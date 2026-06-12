@@ -380,81 +380,99 @@ export function ItpRunScreen() {
             </button>
           </div>
         </div>
-      ) : gate.kind === 'awaiting-release' ? (
-        // Hold point: NO Pass. N/A + Fail stay available.
-        <div className="grid grid-cols-2 gap-3">
-          <button
-            type="button"
-            className="shell-tri-btn shell-tri-na min-h-[58px]"
-            disabled={busy}
-            onClick={() => {
-              setReasonMode('na');
-              setReason('');
-              setReasonError(null);
-            }}
-            aria-label="Mark not applicable"
-          >
-            N/A
-          </button>
-          <button
-            type="button"
-            className="shell-tri-btn shell-tri-fail min-h-[58px]"
-            disabled={busy}
-            onClick={() => {
-              setReasonMode('fail');
-              setReason('');
-              setReasonError(null);
-            }}
-            aria-label="Fail this check"
-          >
-            <AlertTriangle size={20} aria-hidden />
-            Fail
-          </button>
-        </div>
       ) : (
-        // Standard tri-state PASS / FAIL / N-A.
-        <div className="grid grid-cols-3 gap-3">
-          <button
-            type="button"
-            className="shell-tri-pass shell-tri-btn min-h-[58px]"
-            disabled={busy}
-            onClick={handlePass}
-            aria-label="Pass this check"
-          >
-            <Check size={22} strokeWidth={2.4} aria-hidden />
-            Pass
-          </button>
-          <button
-            type="button"
-            className="shell-tri-fail shell-tri-btn min-h-[58px]"
-            disabled={busy}
-            onClick={() => {
-              setReasonMode('fail');
-              setReason('');
-              setReasonError(null);
-            }}
-            aria-label="Fail this check"
-          >
-            <AlertTriangle size={22} aria-hidden />
-            Fail
-          </button>
-          <button
-            type="button"
-            className="shell-tri-na shell-tri-btn min-h-[58px]"
-            disabled={busy}
-            onClick={() => {
-              setReasonMode('na');
-              setReason('');
-              setReasonError(null);
-            }}
-            aria-label="Mark not applicable"
-          >
-            N/A
-          </button>
-        </div>
+        // Owner refinement (final): the EVIDENCE button lives in the fixed
+        // bottom bar; the tri-state moved UP into the content zone's bottom
+        // cluster — the natural one-handed thumb arc — see triStateCluster.
+        <button
+          type="button"
+          className="shell-photobtn min-h-[58px] w-full"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={busy}
+          aria-label="Add evidence photo"
+        >
+          <Camera size={19} aria-hidden />
+          {photoCount > 0 ? `Evidence added (${photoCount})` : 'Add evidence photo'}
+        </button>
       )}
     </div>
   );
+
+  // Tri-state PASS / FAIL / N-A — pinned at the bottom of the content zone,
+  // ABOVE the fixed bar: the natural thumb range for one-handed use (owner
+  // refinement). Hold points still never offer Pass.
+  const triStateCluster =
+    gate.kind === 'awaiting-release' ? (
+      <div className="grid grid-cols-2 gap-3">
+        <button
+          type="button"
+          className="shell-tri-btn shell-tri-na min-h-[58px]"
+          disabled={busy}
+          onClick={() => {
+            setReasonMode('na');
+            setReason('');
+            setReasonError(null);
+          }}
+          aria-label="Mark not applicable"
+        >
+          N/A
+        </button>
+        <button
+          type="button"
+          className="shell-tri-btn shell-tri-fail min-h-[58px]"
+          disabled={busy}
+          onClick={() => {
+            setReasonMode('fail');
+            setReason('');
+            setReasonError(null);
+          }}
+          aria-label="Fail this check"
+        >
+          <AlertTriangle size={20} aria-hidden />
+          Fail
+        </button>
+      </div>
+    ) : (
+      <div className="grid grid-cols-3 gap-3">
+        <button
+          type="button"
+          className="shell-tri-pass shell-tri-btn min-h-[58px]"
+          disabled={busy}
+          onClick={handlePass}
+          aria-label="Pass this check"
+        >
+          <Check size={22} strokeWidth={2.4} aria-hidden />
+          Pass
+        </button>
+        <button
+          type="button"
+          className="shell-tri-fail shell-tri-btn min-h-[58px]"
+          disabled={busy}
+          onClick={() => {
+            setReasonMode('fail');
+            setReason('');
+            setReasonError(null);
+          }}
+          aria-label="Fail this check"
+        >
+          <AlertTriangle size={22} aria-hidden />
+          Fail
+        </button>
+        <button
+          type="button"
+          className="shell-tri-na shell-tri-btn min-h-[58px]"
+          disabled={busy}
+          onClick={() => {
+            setReasonMode('na');
+            setReason('');
+            setReasonError(null);
+          }}
+          aria-label="Mark not applicable"
+        >
+          N/A
+        </button>
+      </div>
+    );
 
   return (
     <ShellScreen
@@ -559,16 +577,7 @@ export function ItpRunScreen() {
               Showing cached checklist — changes sync when you’re back online.
             </p>
           )}
-          <button
-            type="button"
-            className="shell-photobtn"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={busy}
-            aria-label="Add evidence photo"
-          >
-            <Camera size={19} aria-hidden />
-            {photoCount > 0 ? `Evidence added (${photoCount})` : 'Add evidence photo'}
-          </button>
+          {triStateCluster}
         </div>
       </div>
 
