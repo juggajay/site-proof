@@ -36,6 +36,8 @@ import {
   runItemOrder,
   runProgress,
 } from './lotsShellState';
+import { ItpDotTrack, ItpContentStrip, type ItpDotTrackItem } from './ItpDotTrack';
+import { dotStateFor, snapFrac } from './itpTrackPhysics';
 import type { ITPChecklistItem } from '@/pages/lots/types';
 
 const RESPONSIBLE_LABEL: Record<string, string> = {
@@ -57,6 +59,15 @@ function subline(item: ITPChecklistItem): string {
   const suffix = EVIDENCE_SUFFIX[item.evidenceRequired] ?? '';
   return suffix ? `Responsible: ${who} · ${suffix}` : `Responsible: ${who}`;
 }
+
+// Status line shown under each question in the scrub-preview content strip.
+const STRIP_STATE_LINE: Record<string, string> = {
+  done: '✓ Passed — saved',
+  failed: '✕ Failed — needs attention',
+  na: 'N/A — reason recorded',
+  hold: 'Awaiting hold point release',
+  open: 'Not started',
+};
 
 // Pass-flash auto-advance timing — long enough to register the green flash,
 // short enough not to stall a foreman moving fast. Reduced-motion users still
@@ -80,6 +91,9 @@ export function ItpRunScreen() {
   const completions = run.instance?.completions ?? [];
 
   const [currentIndex, setCurrentIndex] = useState<number>(-1);
+  // Live fractional scrub position while the dot track is being dragged; null
+  // when idle. Drives the synced content-strip preview + the live CHECK n/m.
+  const [scrubFrac, setScrubFrac] = useState<number | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
   // Inline reason capture for N/A and FAIL (reuses the existing reason semantics).
   const [reasonMode, setReasonMode] = useState<null | 'na' | 'fail'>(null);
@@ -110,6 +124,34 @@ export function ItpRunScreen() {
   const gate = currentItem
     ? holdPointGateDecision(currentItem, currentCompletion)
     : { kind: 'open' as const };
+
+  // Dot-track entries: each run item + its completion + derived on-track state,
+  // straight from the run's EXISTING data (no new fetch / no behavior change).
+  const trackEntries: ItpDotTrackItem[] = useMemo(
+    () =>
+      orderedItems.map((it) => {
+        const completion = run.completionFor(it.id);
+        return { item: it, completion, state: dotStateFor(it, completion) };
+      }),
+    [orderedItems, run],
+  );
+
+  // Jump to a track index (tap or snap-on-release). Cancels any in-flight reason
+  // capture so the landed item starts clean; never mutates completions.
+  const jumpTo = (index: number) => {
+    if (index < 0 || index >= orderedItems.length) return;
+    setScrubFrac(null);
+    setReasonMode(null);
+    setReason('');
+    setReasonError(null);
+    setCurrentIndex(index);
+  };
+
+  // While scrubbing, the header counter + content strip follow the finger.
+  const scrubbing = scrubFrac !== null;
+  const liveIndex = scrubbing ? snapFrac(scrubFrac, orderedItems.length) : currentIndex;
+  const liveCheckNumber =
+    orderedItems.length === 0 ? 0 : Math.min(Math.max(liveIndex + 1, 1), orderedItems.length);
 
   const resetReason = () => {
     setReasonMode(null);
@@ -247,14 +289,28 @@ export function ItpRunScreen() {
   const sub = (
     <span className="flex items-center gap-2">
       <span className="shell-mono font-semibold text-foreground">{run.instance.template.name}</span>
-      <span className="shell-mono text-[12px] font-semibold uppercase tracking-[0.1em] text-warning">
-        CHECK {progress.checkNumber}/{progress.total}
+      <span
+        className="shell-mono text-[12px] font-semibold uppercase tracking-[0.1em] text-warning"
+        aria-live="polite"
+      >
+        {/* Live-updates during a scrub (like the mock), snaps on release. */}
+        CHECK {scrubbing ? liveCheckNumber : progress.checkNumber}/{progress.total}
       </span>
     </span>
   );
 
   return (
     <ShellScreen variant="inner" title="Inspection" parent={`/m/lots/${lotId}`} sub={sub}>
+      {/* Dot track scrubber — tap-to-jump + hold-and-drag scrub. Wrapped in a
+          plain <div> (this is one stagger child) so the strip's own transforms
+          live below the stagger boundary, never fighting it. */}
+      <ItpDotTrack
+        entries={trackEntries}
+        currentIndex={currentIndex}
+        onCommit={jumpTo}
+        onScrubChange={setScrubFrac}
+      />
+
       {/* Pass-flash on advance */}
       {flash && (
         <div className="shell-passflash" role="status">
@@ -263,182 +319,231 @@ export function ItpRunScreen() {
         </div>
       )}
 
-      {/* Category pill */}
-      <span className="shell-pill shell-pill-attention self-start">{categoryLabel}</span>
-
-      {/* The big question */}
-      <p className="shell-itpq">{item.description}</p>
-
-      {/* Responsible + evidence subline */}
-      <p className="text-[13px] text-muted-foreground">{subline(item)}</p>
-      {item.acceptanceCriteria && (
-        <p className="rounded-xl bg-secondary/60 px-3 py-2 text-[13px] text-muted-foreground">
-          <span className="font-semibold text-foreground">Criteria:</span> {item.acceptanceCriteria}
-        </p>
-      )}
-
-      {/* Evidence photo (reuses the entityType 'itp' upload incl. offline) */}
-      <button
-        type="button"
-        className="shell-photobtn"
-        onClick={() => fileInputRef.current?.click()}
-        disabled={busy}
-        aria-label="Add evidence photo"
-      >
-        <Camera size={19} aria-hidden />
-        {photoCount > 0 ? `Evidence added (${photoCount})` : 'Add evidence photo'}
-      </button>
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="hidden"
-        onChange={onPhotoSelected}
-      />
-
-      {/* Hold-point awaiting-release state — NO complete affordance */}
-      {gate.kind === 'awaiting-release' ? (
-        <div className="mt-2 rounded-2xl border border-warning/40 bg-warning/10 p-4">
-          <div className="flex items-center gap-2 text-[14px] font-semibold text-warning">
-            <Lock size={16} strokeWidth={2.2} aria-hidden />
-            Awaiting hold point release
-          </div>
-          <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">
-            This is a hold point. It can’t be ticked complete until it’s released (which records who
-            released it, when, and how). Request the release from the Hold Points screen — you can
-            still mark it N/A or raise an issue here.
-          </p>
-          {/* N/A and FAIL stay available even on a hold point. */}
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              className="shell-tri-btn shell-tri-na min-h-[64px]"
-              disabled={busy}
-              onClick={() => {
-                setReasonMode('na');
-                setReason('');
-                setReasonError(null);
-              }}
-            >
-              N/A
-            </button>
-            <button
-              type="button"
-              className="shell-tri-btn shell-tri-fail min-h-[64px]"
-              disabled={busy}
-              onClick={() => {
-                setReasonMode('fail');
-                setReason('');
-                setReasonError(null);
-              }}
-            >
-              <AlertTriangle size={20} aria-hidden />
-              Fail
-            </button>
-          </div>
-        </div>
+      {/* Question content. While scrubbing, the synced translating strip previews
+          every item live (translateX(-frac*100%)); idle shows the static item.
+          The strip sits in its own isolated transform context so the stagger
+          entry animation on <main>'s children never clobbers translateX. */}
+      {scrubbing ? (
+        <ItpContentStrip
+          count={orderedItems.length}
+          frac={scrubFrac ?? currentIndex}
+          scrubbing={scrubbing}
+          renderCell={(i) => {
+            const cell = orderedItems[i];
+            const cellState = trackEntries[i]?.state ?? 'open';
+            return (
+              <>
+                <span className="shell-pill shell-pill-attention self-start">
+                  {(cell.category || 'GENERAL').toUpperCase()}
+                </span>
+                <p className="shell-itpq">{cell.description}</p>
+                <p className="text-[13px] text-muted-foreground">{subline(cell)}</p>
+                <p
+                  className={[
+                    'text-[13px] font-semibold',
+                    cellState === 'done'
+                      ? 'text-success'
+                      : cellState === 'failed'
+                        ? 'text-destructive'
+                        : cellState === 'hold'
+                          ? 'text-warning'
+                          : 'text-muted-foreground',
+                  ].join(' ')}
+                >
+                  {STRIP_STATE_LINE[cellState]}
+                </p>
+              </>
+            );
+          }}
+        />
       ) : (
-        /* Tri-state PASS / FAIL / N-A */
-        <div className="shell-tri">
-          <button
-            type="button"
-            className="shell-tri-pass shell-tri-btn"
-            disabled={busy}
-            onClick={handlePass}
-            aria-label="Pass this check"
-          >
-            <Check size={22} strokeWidth={2.4} aria-hidden />
-            Pass
-          </button>
-          <button
-            type="button"
-            className="shell-tri-fail shell-tri-btn"
-            disabled={busy}
-            onClick={() => {
-              setReasonMode('fail');
-              setReason('');
-              setReasonError(null);
-            }}
-            aria-label="Fail this check"
-          >
-            <AlertTriangle size={22} aria-hidden />
-            Fail
-          </button>
-          <button
-            type="button"
-            className="shell-tri-na shell-tri-btn"
-            disabled={busy}
-            onClick={() => {
-              setReasonMode('na');
-              setReason('');
-              setReasonError(null);
-            }}
-            aria-label="Mark not applicable"
-          >
-            N/A
-          </button>
-        </div>
-      )}
+        <>
+          {/* Category pill */}
+          <span className="shell-pill shell-pill-attention self-start">{categoryLabel}</span>
 
-      {/* Inline reason capture (N/A or FAIL) — reuses existing reason semantics */}
-      {reasonMode && (
-        <div
-          className={
-            reasonMode === 'fail'
-              ? 'rounded-2xl border border-destructive/30 bg-destructive/10 p-3'
-              : 'rounded-2xl border border-border bg-secondary/40 p-3'
-          }
-        >
-          <label className="mb-1.5 block text-[13px] font-semibold">
-            {reasonMode === 'na' ? 'Reason for N/A' : 'What failed?'}
-          </label>
-          <textarea
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder={
-              reasonMode === 'na' ? 'Why is this not applicable?' : 'Describe the issue…'
-            }
-            className="min-h-[80px] w-full rounded-xl border border-border bg-background px-3 py-2 text-[14px]"
-            autoFocus
-            autoCapitalize="sentences"
-          />
-          {reasonError && (
-            <p role="alert" className="mt-1 text-[13px] text-destructive">
-              {reasonError}
+          {/* The big question */}
+          <p className="shell-itpq">{item.description}</p>
+
+          {/* Responsible + evidence subline */}
+          <p className="text-[13px] text-muted-foreground">{subline(item)}</p>
+          {item.acceptanceCriteria && (
+            <p className="rounded-xl bg-secondary/60 px-3 py-2 text-[13px] text-muted-foreground">
+              <span className="font-semibold text-foreground">Criteria:</span>{' '}
+              {item.acceptanceCriteria}
             </p>
           )}
-          <div className="mt-2 flex gap-2">
-            <button
-              type="button"
-              className="flex-1 rounded-xl border border-border py-3 text-[14px] font-semibold"
-              disabled={submitting}
-              onClick={resetReason}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              className={
-                reasonMode === 'fail'
-                  ? 'flex-1 rounded-xl bg-destructive py-3 text-[14px] font-semibold text-destructive-foreground disabled:opacity-60'
-                  : 'flex-1 rounded-xl bg-foreground py-3 text-[14px] font-semibold text-background disabled:opacity-60'
-              }
-              disabled={submitting}
-              onClick={handleSubmitReason}
-            >
-              {submitting ? 'Saving…' : reasonMode === 'na' ? 'Mark N/A' : 'Mark failed'}
-            </button>
-          </div>
-        </div>
+        </>
       )}
 
-      {/* Offline cache banner */}
-      {run.isOfflineData && (
-        <p className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
-          <ChevronLeft size={12} className="rotate-90" aria-hidden />
-          Showing cached checklist — changes sync when you’re back online.
-        </p>
+      {/* Item interaction (photo + tri-state + reason). Hidden while scrubbing —
+          the foreman is navigating, not acting; it returns on snap. The
+          completion mutations themselves are untouched. */}
+      {!scrubbing && (
+        <>
+          {/* Evidence photo (reuses the entityType 'itp' upload incl. offline) */}
+          <button
+            type="button"
+            className="shell-photobtn"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={busy}
+            aria-label="Add evidence photo"
+          >
+            <Camera size={19} aria-hidden />
+            {photoCount > 0 ? `Evidence added (${photoCount})` : 'Add evidence photo'}
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={onPhotoSelected}
+          />
+
+          {/* Hold-point awaiting-release state — NO complete affordance */}
+          {gate.kind === 'awaiting-release' ? (
+            <div className="mt-2 rounded-2xl border border-warning/40 bg-warning/10 p-4">
+              <div className="flex items-center gap-2 text-[14px] font-semibold text-warning">
+                <Lock size={16} strokeWidth={2.2} aria-hidden />
+                Awaiting hold point release
+              </div>
+              <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">
+                This is a hold point. It can’t be ticked complete until it’s released (which records
+                who released it, when, and how). Request the release from the Hold Points screen —
+                you can still mark it N/A or raise an issue here.
+              </p>
+              {/* N/A and FAIL stay available even on a hold point. */}
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  className="shell-tri-btn shell-tri-na min-h-[64px]"
+                  disabled={busy}
+                  onClick={() => {
+                    setReasonMode('na');
+                    setReason('');
+                    setReasonError(null);
+                  }}
+                >
+                  N/A
+                </button>
+                <button
+                  type="button"
+                  className="shell-tri-btn shell-tri-fail min-h-[64px]"
+                  disabled={busy}
+                  onClick={() => {
+                    setReasonMode('fail');
+                    setReason('');
+                    setReasonError(null);
+                  }}
+                >
+                  <AlertTriangle size={20} aria-hidden />
+                  Fail
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* Tri-state PASS / FAIL / N-A */
+            <div className="shell-tri">
+              <button
+                type="button"
+                className="shell-tri-pass shell-tri-btn"
+                disabled={busy}
+                onClick={handlePass}
+                aria-label="Pass this check"
+              >
+                <Check size={22} strokeWidth={2.4} aria-hidden />
+                Pass
+              </button>
+              <button
+                type="button"
+                className="shell-tri-fail shell-tri-btn"
+                disabled={busy}
+                onClick={() => {
+                  setReasonMode('fail');
+                  setReason('');
+                  setReasonError(null);
+                }}
+                aria-label="Fail this check"
+              >
+                <AlertTriangle size={22} aria-hidden />
+                Fail
+              </button>
+              <button
+                type="button"
+                className="shell-tri-na shell-tri-btn"
+                disabled={busy}
+                onClick={() => {
+                  setReasonMode('na');
+                  setReason('');
+                  setReasonError(null);
+                }}
+                aria-label="Mark not applicable"
+              >
+                N/A
+              </button>
+            </div>
+          )}
+
+          {/* Inline reason capture (N/A or FAIL) — reuses existing reason semantics */}
+          {reasonMode && (
+            <div
+              className={
+                reasonMode === 'fail'
+                  ? 'rounded-2xl border border-destructive/30 bg-destructive/10 p-3'
+                  : 'rounded-2xl border border-border bg-secondary/40 p-3'
+              }
+            >
+              <label className="mb-1.5 block text-[13px] font-semibold">
+                {reasonMode === 'na' ? 'Reason for N/A' : 'What failed?'}
+              </label>
+              <textarea
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder={
+                  reasonMode === 'na' ? 'Why is this not applicable?' : 'Describe the issue…'
+                }
+                className="min-h-[80px] w-full rounded-xl border border-border bg-background px-3 py-2 text-[14px]"
+                autoFocus
+                autoCapitalize="sentences"
+              />
+              {reasonError && (
+                <p role="alert" className="mt-1 text-[13px] text-destructive">
+                  {reasonError}
+                </p>
+              )}
+              <div className="mt-2 flex gap-2">
+                <button
+                  type="button"
+                  className="flex-1 rounded-xl border border-border py-3 text-[14px] font-semibold"
+                  disabled={submitting}
+                  onClick={resetReason}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className={
+                    reasonMode === 'fail'
+                      ? 'flex-1 rounded-xl bg-destructive py-3 text-[14px] font-semibold text-destructive-foreground disabled:opacity-60'
+                      : 'flex-1 rounded-xl bg-foreground py-3 text-[14px] font-semibold text-background disabled:opacity-60'
+                  }
+                  disabled={submitting}
+                  onClick={handleSubmitReason}
+                >
+                  {submitting ? 'Saving…' : reasonMode === 'na' ? 'Mark N/A' : 'Mark failed'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Offline cache banner */}
+          {run.isOfflineData && (
+            <p className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+              <ChevronLeft size={12} className="rotate-90" aria-hidden />
+              Showing cached checklist — changes sync when you’re back online.
+            </p>
+          )}
+        </>
       )}
     </ShellScreen>
   );

@@ -205,6 +205,60 @@ describe('ItpRunScreen — hold-point gating', () => {
   });
 });
 
+describe('ItpRunScreen — dot track scrubber', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('renders the dot track with one slider over the run items', () => {
+    _run = makeRun(
+      makeInstance([
+        makeItem({ id: 'a', description: 'First' }),
+        makeItem({ id: 'b', description: 'Second' }),
+        makeItem({ id: 'c', description: 'Third' }),
+      ]),
+    );
+    renderRun();
+    const slider = screen.getByRole('slider', { name: /Inspection checks/i });
+    expect(slider).toBeInTheDocument();
+    expect(slider).toHaveAttribute('aria-valuemax', '3');
+  });
+
+  it('arrow-key navigation on the track jumps to another item (changes the question)', () => {
+    _run = makeRun(
+      makeInstance([
+        makeItem({ id: 'a', description: 'First question' }),
+        makeItem({ id: 'b', description: 'Second question' }),
+      ]),
+    );
+    renderRun();
+    // Lands on the first incomplete item.
+    expect(screen.getByText('First question')).toBeInTheDocument();
+    const slider = screen.getByRole('slider');
+    fireEvent.keyDown(slider, { key: 'ArrowRight' });
+    // The interactive question swaps to the jumped-to item.
+    expect(screen.getByText('Second question')).toBeInTheDocument();
+    expect(screen.getByText('CHECK 2/2')).toBeInTheDocument();
+  });
+
+  it('does not offer Pass for an un-released hold point landed on via the track', () => {
+    _run = makeRun(
+      makeInstance([
+        makeItem({ id: 'a', description: 'Open one' }),
+        makeItem({
+          id: 'hp',
+          description: 'HP check',
+          pointType: 'hold_point',
+          isHoldPoint: true,
+        }),
+      ]),
+    );
+    renderRun();
+    const slider = screen.getByRole('slider');
+    fireEvent.keyDown(slider, { key: 'End' }); // jump to the hold point
+    expect(screen.getByText(/Awaiting hold point release/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Pass this check/i })).toBeNull();
+  });
+});
+
 describe('ItpRunScreen — finished + empty', () => {
   beforeEach(() => vi.clearAllMocks());
 
