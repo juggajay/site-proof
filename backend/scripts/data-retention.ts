@@ -16,7 +16,8 @@
  *
  * Usage:
  *   npx ts-node scripts/data-retention.ts check    - Check what would be affected
- *   npx ts-node scripts/data-retention.ts apply    - Apply retention policies
+ *   CONFIRM_RETENTION_APPLY=<host>/<database> npx ts-node scripts/data-retention.ts apply
+ *                                                     - Apply retention policies
  *   npx ts-node scripts/data-retention.ts report   - Generate retention report
  */
 
@@ -62,6 +63,42 @@ interface RetentionReport {
     recordsToArchive: number;
     recordsToDelete: number;
   };
+}
+
+function resolveRetentionApplyTarget(env: NodeJS.ProcessEnv = process.env): string {
+  const databaseUrl = env.DATABASE_URL?.trim();
+  if (!databaseUrl) {
+    throw new Error('DATABASE_URL is required before retention policies can be applied.');
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(databaseUrl);
+  } catch {
+    throw new Error('DATABASE_URL must be a valid PostgreSQL connection string.');
+  }
+
+  if (parsed.protocol !== 'postgresql:' && parsed.protocol !== 'postgres:') {
+    throw new Error('DATABASE_URL must be a PostgreSQL connection string.');
+  }
+
+  const databaseName = parsed.pathname.replace(/^\/+/, '').split('/')[0];
+  if (!databaseName) {
+    throw new Error('DATABASE_URL must include a database name.');
+  }
+
+  return `${parsed.hostname}/${databaseName}`;
+}
+
+function requireRetentionApplyConfirmation(env: NodeJS.ProcessEnv = process.env): void {
+  const target = resolveRetentionApplyTarget(env);
+  const confirmation = env.CONFIRM_RETENTION_APPLY?.trim();
+
+  if (confirmation !== target) {
+    throw new Error(
+      `Refusing retention apply. Check the database host/name, then set CONFIRM_RETENTION_APPLY=${target} to confirm this destructive operation.`,
+    );
+  }
 }
 
 async function checkRetentionPolicies(): Promise<RetentionReport> {
@@ -310,6 +347,10 @@ async function main() {
   const command = process.argv[2] || 'check';
 
   try {
+    if (command === 'apply') {
+      requireRetentionApplyConfirmation();
+    }
+
     await prisma.$connect();
 
     switch (command) {
@@ -351,7 +392,7 @@ Retention Periods:
 
 Examples:
   npx ts-node scripts/data-retention.ts check
-  npx ts-node scripts/data-retention.ts apply
+  CONFIRM_RETENTION_APPLY=<host>/<database> npx ts-node scripts/data-retention.ts apply
   npx ts-node scripts/data-retention.ts report
 `);
     }

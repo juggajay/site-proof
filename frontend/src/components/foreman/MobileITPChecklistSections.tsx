@@ -153,20 +153,21 @@ export function MobileITPItem({
       label: 'S',
       color: 'bg-muted text-muted-foreground',
     },
+    verification: {
+      label: 'V',
+      color: 'bg-primary/10 text-primary',
+    },
     witness: {
       label: 'W',
       color: 'bg-warning/10 text-warning',
     },
-    verification: {
-      label: 'S',
-      color: 'bg-muted text-muted-foreground',
-    },
     hold_point: { label: 'H', color: 'bg-destructive/10 text-destructive' },
+    unknown: { label: '?', color: 'bg-muted text-muted-foreground' },
   };
 
   const badge = isReleaseGatedChecklistItem(item)
     ? pointTypeBadge.hold_point
-    : pointTypeBadge[item.pointType];
+    : (pointTypeBadge[item.pointType] ?? pointTypeBadge.unknown);
 
   return (
     <div

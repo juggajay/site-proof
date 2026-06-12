@@ -141,12 +141,21 @@ export function DocketScreen() {
     closeSheet,
   } = useDocketEntrySheetState(assignedLots);
 
-  // Seed the local editing buffer from the loaded docket (re-runs on docketId change).
+  // Seed the local editing buffer from the loaded docket — ONCE per docket id.
+  // After the lazy create, ensureDocket's navigate(replace) enables this query
+  // while the first entry POST is still in flight; the GET was dispatched
+  // before the entry existed, so if its response lands AFTER the entry was
+  // appended locally, a blind overwrite would erase the entry (and grey out
+  // Submit). The id guard makes the local optimistic state authoritative for
+  // a docket we've already seeded or created.
+  const seededDocketIdRef = useRef<string | null>(null);
   useEffect(() => {
-    if (docketQuery.data) {
-      setDocket(docketQuery.data);
-      setNotes(docketQuery.data.notes || '');
-    }
+    const fresh = docketQuery.data;
+    if (!fresh) return;
+    if (seededDocketIdRef.current === fresh.id) return;
+    seededDocketIdRef.current = fresh.id;
+    setDocket(fresh);
+    setNotes(fresh.notes || '');
   }, [docketQuery.data]);
 
   // A docket already exists for today → redirect to it (history.replace), staying in /p.
@@ -162,7 +171,12 @@ export function DocketScreen() {
   const loading =
     companyQuery.isLoading ||
     (Boolean(company) && lotsQuery.isLoading) ||
-    (isNewDocket ? Boolean(company) && existingDocketsQuery.isLoading : docketQuery.isLoading) ||
+    // The docket GET only blocks when we have no local docket yet — after the
+    // lazy create we already hold the authoritative local copy, and the GET
+    // fired by the URL rewrite must not flash a spinner over it.
+    (isNewDocket
+      ? Boolean(company) && existingDocketsQuery.isLoading
+      : !docket && docketQuery.isLoading) ||
     Boolean(todayDocket);
 
   const error = companyQuery.isError
@@ -186,6 +200,9 @@ export function DocketScreen() {
         totalLabourSubmitted: 0,
         totalPlantSubmitted: 0,
       };
+      // We created it — local state is authoritative; the GET fired by the
+      // navigate below must not re-seed (see seededDocketIdRef above).
+      seededDocketIdRef.current = newDocket.id;
       setDocket(newDocket);
       const projectQuery = company?.projectId
         ? `?projectId=${encodeURIComponent(company.projectId)}`

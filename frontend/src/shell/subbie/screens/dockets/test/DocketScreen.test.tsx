@@ -554,4 +554,68 @@ describe('subbie shell DocketScreen', () => {
       expect(deletes[0][0]).toBe('/api/dockets/dk-1/labour/le-1');
     });
   });
+
+  it('a slow docket GET after the lazy create cannot erase the first entry (seed-once guard)', async () => {
+    // The race: ensureDocket's navigate(replace) enables the docket GET while
+    // the first labour POST is still in flight. The GET was dispatched before
+    // the entry existed — if its (entry-less) response lands AFTER the entry
+    // was appended locally, a blind re-seed would erase the entry and grey out
+    // Submit. Defer the GET to force exactly that ordering.
+    let resolveStaleGet: (value: unknown) => void = () => {};
+    apiFetchMock.mockReset();
+    apiFetchMock.mockImplementation((url: string, opts?: { method?: string; body?: string }) => {
+      const method = opts?.method ?? 'GET';
+      if (url.startsWith('/api/subcontractors/my-company'))
+        return Promise.resolve({
+          company: {
+            id: 'c1',
+            projectId: PROJECT_ID,
+            projectName: 'Demo',
+            employees: [APPROVED_EMP, PENDING_EMP],
+            plant: [APPROVED_PLANT],
+          },
+        });
+      if (url.startsWith('/api/lots')) return Promise.resolve({ lots: ASSIGNED_LOTS });
+      if (/^\/api\/dockets\?/.test(url)) return Promise.resolve({ dockets: [] });
+      if (url === '/api/dockets' && method === 'POST')
+        return Promise.resolve({ docket: makeDocket() });
+      if (/\/labour$/.test(url) && method === 'POST')
+        return Promise.resolve({
+          labourEntry: {
+            id: 'le-1',
+            employee: { id: APPROVED_EMP.id, name: 'Tommy Vella', role: 'Pipe Layer' },
+            startTime: '07:00',
+            finishTime: '15:00',
+            submittedHours: 8,
+            hourlyRate: 74,
+            submittedCost: 592,
+            lotAllocations: [],
+          },
+          runningTotal: { cost: 592 },
+        });
+      if (/^\/api\/dockets\/dk-1$/.test(url) && method === 'GET')
+        return new Promise((resolve) => {
+          resolveStaleGet = resolve;
+        });
+      return Promise.resolve({});
+    });
+
+    renderDocket('/p/docket');
+    fireEvent.click(await screen.findByRole('button', { name: 'Add crew hours' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Tommy Vella/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Add to docket' }));
+
+    // The entry landed locally and Submit is live. (findByRole — the appended
+    // ?projectId= re-keys the my-company query, so a brief loading frame can
+    // sit between renders here.)
+    await screen.findByRole('button', { name: /Remove Tommy Vella/ });
+    expect(await screen.findByRole('button', { name: /Submit for approval/ })).not.toBeDisabled();
+
+    // NOW the stale, entry-less GET response arrives — it must be ignored.
+    resolveStaleGet({ docket: makeDocket() });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Remove Tommy Vella/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Submit for approval/ })).not.toBeDisabled();
+    });
+  });
 });
