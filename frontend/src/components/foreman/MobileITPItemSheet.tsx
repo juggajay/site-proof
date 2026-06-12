@@ -97,6 +97,7 @@ export function MobileITPItemSheet({
     verification: 'Verification Point',
     witness: 'Witness Point',
     hold_point: 'Hold Point',
+    unknown: 'Checklist Point',
   };
 
   const responsiblePartyLabel = {
@@ -104,7 +105,14 @@ export function MobileITPItemSheet({
     subcontractor: 'Subcontractor',
     superintendent: 'Superintendent',
     general: 'General',
+    unknown: 'General',
   };
+
+  const pointTypeText = isReleaseGated
+    ? pointTypeLabel.hold_point
+    : (pointTypeLabel[item.pointType] ?? pointTypeLabel.unknown);
+  const responsiblePartyText =
+    responsiblePartyLabel[item.responsibleParty] ?? responsiblePartyLabel.unknown;
 
   return (
     <BottomSheet isOpen={isOpen} onClose={onClose} title={`Item ${item.order}`}>
@@ -137,10 +145,10 @@ export function MobileITPItemSheet({
                     : 'bg-muted text-muted-foreground'
               }`}
             >
-              {isReleaseGated ? 'Hold Point' : pointTypeLabel[item.pointType]}
+              {pointTypeText}
             </span>
             <span className="px-2 py-0.5 rounded text-xs font-medium bg-muted">
-              {responsiblePartyLabel[item.responsibleParty]}
+              {responsiblePartyText}
             </span>
           </div>
           <p className="text-base font-medium">{item.description}</p>
