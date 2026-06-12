@@ -22,19 +22,20 @@ vi.mock('@/components/ui/VoiceInputButton', () => ({ VoiceInputButton: () => nul
 vi.mock('@/lib/auth', () => ({ useAuth: vi.fn() }));
 vi.mock('@/lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api')>();
-  return { ...actual, apiFetch: vi.fn() };
+  return { ...actual, apiFetch: vi.fn(), authFetch: vi.fn() };
 });
 
 import { CaptureModal } from './CaptureModal';
 import { capturePhotoOffline } from '@/lib/offlineDb';
 import { toast } from '@/components/ui/toaster';
 import { useAuth } from '@/lib/auth';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, authFetch } from '@/lib/api';
 
 const capturePhotoOfflineMock = vi.mocked(capturePhotoOffline);
 const toastMock = vi.mocked(toast);
 const useAuthMock = vi.mocked(useAuth);
 const apiFetchMock = vi.mocked(apiFetch);
+const authFetchMock = vi.mocked(authFetch);
 
 function setOnline(value: boolean) {
   Object.defineProperty(navigator, 'onLine', { configurable: true, value });
@@ -71,6 +72,12 @@ beforeEach(() => {
     user: { id: 'u1', fullName: 'Fred Foreman' },
   } as unknown as ReturnType<typeof useAuth>);
   mockApi({ ncr: { id: 'ncr-1', ncrNumber: 'NCR-0007' } });
+  authFetchMock.mockResolvedValue(
+    new Response(JSON.stringify({ id: 'doc-1' }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }),
+  );
   capturePhotoOfflineMock.mockResolvedValue({ id: 'photo-1' } as unknown as Awaited<
     ReturnType<typeof capturePhotoOffline>
   >);
@@ -98,7 +105,7 @@ describe('CaptureModal defect mode', () => {
     expect(screen.queryByRole('button', { name: 'Save NCR' })).not.toBeInTheDocument();
   });
 
-  it('online: raises a real NCR, links the photo to it, and toasts the real number', async () => {
+  it('online: raises a real NCR, attaches the photo evidence, and toasts the real number', async () => {
     const onClose = vi.fn();
     const { container } = renderWithProviders(
       <CaptureModal projectId="p1" isOpen onClose={onClose} />,
@@ -123,18 +130,22 @@ describe('CaptureModal defect mode', () => {
       category: 'general',
     });
 
-    // The photo is captured and linked to the new NCR (entityType ncr + its id).
-    await waitFor(() => expect(capturePhotoOfflineMock).toHaveBeenCalledTimes(1));
-    expect(capturePhotoOfflineMock).toHaveBeenCalledWith(
-      'p1',
-      expect.any(File),
-      expect.objectContaining({
-        entityType: 'ncr',
-        entityId: 'ncr-1',
-        documentType: 'ncr_evidence',
-        category: 'ncr_evidence',
+    await waitFor(() =>
+      expect(authFetchMock).toHaveBeenCalledWith(
+        '/api/documents/upload',
+        expect.objectContaining({ method: 'POST', body: expect.any(FormData) }),
+      ),
+    );
+    await waitFor(() =>
+      expect(apiFetchMock).toHaveBeenCalledWith('/api/ncrs/ncr-1/evidence', {
+        method: 'POST',
+        body: JSON.stringify({
+          documentId: 'doc-1',
+          evidenceType: 'photo',
+        }),
       }),
     );
+    expect(capturePhotoOfflineMock).not.toHaveBeenCalled();
 
     // The toast carries the real NCR number from the response.
     await waitFor(() => expect(toastMock).toHaveBeenCalled());
@@ -145,6 +156,44 @@ describe('CaptureModal defect mode', () => {
       }),
     );
     expect(descriptionsFromToasts().some((d) => d.includes('Photo saved offline'))).toBe(false);
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+  });
+
+  it('online: attaches the captured file to the raised NCR via the evidence contract', async () => {
+    const onClose = vi.fn();
+    const { container } = renderWithProviders(
+      <CaptureModal projectId="p1" isOpen onClose={onClose} />,
+    );
+    await captureAPhoto(container);
+
+    fireEvent.click(screen.getByText('Defect'));
+    fireEvent.change(screen.getByPlaceholderText('Brief defect description'), {
+      target: { value: 'Cracked kerb face' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Defect Photo' }));
+
+    await waitFor(() =>
+      expect(authFetchMock).toHaveBeenCalledWith(
+        '/api/documents/upload',
+        expect.objectContaining({ method: 'POST', body: expect.any(FormData) }),
+      ),
+    );
+    const uploadForm = authFetchMock.mock.calls[0][1]?.body as FormData;
+    expect(uploadForm.get('projectId')).toBe('p1');
+    expect(uploadForm.get('documentType')).toBe('ncr_evidence');
+    expect(uploadForm.get('category')).toBe('ncr_evidence');
+    expect(uploadForm.get('caption')).toBe('Cracked kerb face');
+
+    await waitFor(() =>
+      expect(apiFetchMock).toHaveBeenCalledWith('/api/ncrs/ncr-1/evidence', {
+        method: 'POST',
+        body: JSON.stringify({
+          documentId: 'doc-1',
+          evidenceType: 'photo',
+          caption: 'Cracked kerb face',
+        }),
+      }),
+    );
     await waitFor(() => expect(onClose).toHaveBeenCalled());
   });
 
