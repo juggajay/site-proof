@@ -7,11 +7,11 @@
  * portalAccess / selected-project without re-fetching — the foreman per-domain
  * context pattern (DocketsShellRoutes, LotsShellRoutes).
  *
- * Route map (this PR — only Home is real; the rest are rebuild stubs):
- *   /p                       → HomeScreen
- *   /p/docket                → "Today's docket" stub  → /subcontractor-portal/docket/new
- *   /p/docket/:docketId      → docket detail stub      → /subcontractor-portal/docket/:id
- *   /p/dockets               → My Dockets stub         → /subcontractor-portal/dockets
+ * Route map:
+ *   /p                       → HomeScreen              (PR A — real)
+ *   /p/docket                → DocketScreen            (PR B — real, today)
+ *   /p/docket/:docketId      → DocketScreen            (PR B — real, by id)
+ *   /p/dockets               → DocketsListScreen       (PR B — real)
  *   /p/work                  → WorkScreen              (PR C — real)
  *   /p/itps                  → ItpsScreen              (PR C — real)
  *   /p/lots/:lotId/itp       → SubbieItpRunScreen      (PR C — real)
@@ -22,19 +22,21 @@
  *   *                        → /p
  *
  * Back model: each screen's `parent` prop is the explicit return path (see
- * ShellScreen). All stubs declare /p as parent.
+ * ShellScreen). Every surface is now a real screen — the SubbieStubScreen
+ * placeholders from the staged build are gone.
  */
 import { useMemo } from 'react';
-import { Routes, Route, Navigate, useParams } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { HomeScreen } from './screens/HomeScreen';
 import { QualityScreen } from './screens/QualityScreen';
 import { DocsScreen } from './screens/DocsScreen';
 import { NcrsScreen } from './screens/NcrsScreen';
 import { CompanyScreen } from './screens/CompanyScreen';
-import { SubbieStubScreen } from './screens/SubbieStubScreen';
 import { WorkScreen } from './screens/WorkScreen';
 import { ItpsScreen } from './screens/ItpsScreen';
 import { SubbieItpRunScreen } from './screens/SubbieItpRunScreen';
+import { DocketScreen } from './screens/dockets/DocketScreen';
+import { DocketsListScreen } from './screens/dockets/DocketsListScreen';
 import { useSubbieShellData } from './subbieShellData';
 import { SubbieShellContext } from './subbieShellContext';
 
@@ -44,18 +46,6 @@ function SubbieShellProvider({ children }: { children: React.ReactNode }) {
   return <SubbieShellContext.Provider value={value}>{children}</SubbieShellContext.Provider>;
 }
 
-// :docketId detail stub — links to the matching classic docket editor.
-function DocketDetailStub() {
-  const { docketId } = useParams();
-  return (
-    <SubbieStubScreen
-      title="Docket"
-      classicHref={`/subcontractor-portal/docket/${docketId ?? ''}`}
-      classicLabel="Open classic docket"
-    />
-  );
-}
-
 export function SubbieShellRoutes() {
   return (
     <SubbieShellProvider>
@@ -63,30 +53,12 @@ export function SubbieShellRoutes() {
         {/* Home hub — the only real screen in this PR */}
         <Route index element={<HomeScreen />} />
 
-        {/* Today's docket */}
-        <Route
-          path="docket"
-          element={
-            <SubbieStubScreen
-              title="Today's Docket"
-              classicHref="/subcontractor-portal/docket/new"
-              classicLabel="Open classic docket"
-            />
-          }
-        />
-        <Route path="docket/:docketId" element={<DocketDetailStub />} />
+        {/* Today's docket — one status-driven screen for both today + :id */}
+        <Route path="docket" element={<DocketScreen />} />
+        <Route path="docket/:docketId" element={<DocketScreen />} />
 
-        {/* My Dockets */}
-        <Route
-          path="dockets"
-          element={
-            <SubbieStubScreen
-              title="My Dockets"
-              classicHref="/subcontractor-portal/dockets"
-              classicLabel="Open classic dockets"
-            />
-          }
-        />
+        {/* My Dockets — history / payment trail */}
+        <Route path="dockets" element={<DocketsListScreen />} />
 
         {/* My Work (lots) */}
         <Route path="work" element={<WorkScreen />} />

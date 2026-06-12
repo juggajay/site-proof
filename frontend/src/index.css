@@ -738,6 +738,311 @@
     outline: 2px solid hsl(var(--ring));
     outline-offset: 2px;
   }
+
+  /* --------------------------------------------------------------------------
+     Docket surface (PR B) — design-subbie-shell-mock-v1.html #docket / #queried
+     CREW/PLANT/NOTES sections, entry rows, add-line, totals, entry sheets.
+     -------------------------------------------------------------------------- */
+
+  /* Section heading row (CREW · 2 on site) */
+  .shell-sect {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 4px;
+  }
+  .shell-sect > .t {
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    color: hsl(var(--muted-foreground));
+  }
+  .shell-sect > .n {
+    font-size: 12.5px;
+    color: hsl(var(--muted-foreground));
+  }
+
+  /* Entry row — name + meta on the left, cost + hours right-aligned */
+  .shell-entry {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    border-radius: 14px;
+    padding: 13px 14px;
+    width: 100%;
+    text-align: left;
+    box-shadow: 0 1px 2px hsl(24 14% 9% / 0.04);
+  }
+  .shell-entry .grow {
+    flex: 1;
+    min-width: 0;
+  }
+  .shell-entry .t {
+    font-size: 14.5px;
+    font-weight: 600;
+    color: hsl(var(--foreground));
+  }
+  .shell-entry .d {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 3px;
+    font-size: 12.5px;
+    color: hsl(var(--muted-foreground));
+  }
+  .shell-entry .cost {
+    display: block;
+    text-align: right;
+    font-size: 15px;
+    font-weight: 700;
+    color: hsl(var(--foreground));
+  }
+  .shell-entry .hrs {
+    display: block;
+    text-align: right;
+    margin-top: 2px;
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    font-size: 11.5px;
+    color: hsl(var(--muted-foreground));
+  }
+
+  /* Lot chip inside an entry row */
+  .shell-lotchip {
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    font-size: 11px;
+    font-weight: 600;
+    background: hsl(var(--secondary));
+    border-radius: 6px;
+    padding: 2px 7px;
+    color: hsl(var(--muted-foreground));
+    white-space: nowrap;
+  }
+
+  /* Dashed add-line button (Add crew / Add plant hours) */
+  .shell-addline {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    min-height: 52px;
+    border: 1.5px dashed hsl(var(--muted-foreground) / 0.5);
+    border-radius: 14px;
+    background: none;
+    color: hsl(var(--muted-foreground));
+    font-size: 14px;
+    font-weight: 600;
+    width: 100%;
+    transition: transform 0.15s;
+    cursor: pointer;
+  }
+  .shell-addline:active {
+    transform: scale(0.98);
+  }
+
+  /* Totals card */
+  .shell-totals {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    border-radius: 16px;
+    padding: 14px 16px;
+    box-shadow: 0 1px 2px hsl(24 14% 9% / 0.04);
+  }
+  .shell-totals .ln {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 13.5px;
+    color: hsl(var(--muted-foreground));
+    padding: 3px 0;
+  }
+  .shell-totals .grand {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 8px;
+    padding-top: 10px;
+    border-top: 1px solid hsl(var(--border));
+    font-size: 16px;
+    font-weight: 700;
+    color: hsl(var(--foreground));
+  }
+
+  /* Auto-saving notes textarea on the docket surface */
+  .shell-notes {
+    width: 100%;
+    min-height: 90px;
+    resize: vertical;
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    border-radius: 14px;
+    padding: 13px 14px;
+    font-size: 14px;
+    line-height: 1.5;
+    color: hsl(var(--foreground));
+  }
+  .shell-notes:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 1px;
+  }
+  .shell-notes::placeholder {
+    color: hsl(var(--muted-foreground));
+  }
+
+  /* Quoted foreman query inside a warn notice */
+  .shell-quote {
+    margin-top: 5px;
+    font-style: italic;
+    color: hsl(28 70% 24%);
+  }
+
+  /* Entry-sheet building blocks (labour / plant add sheets) */
+  .shell-crewpick {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .shell-pickrow {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    text-align: left;
+    background: hsl(var(--card));
+    border: 1.5px solid hsl(var(--border));
+    border-radius: 14px;
+    padding: 13px 14px;
+    transition: border-color 0.15s;
+    cursor: pointer;
+  }
+  .shell-pickrow.on {
+    border-color: hsl(var(--foreground));
+    background: hsl(var(--secondary));
+  }
+  .shell-pickrow:disabled,
+  .shell-pickrow.locked {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  .shell-pickrow .grow {
+    flex: 1;
+    min-width: 0;
+  }
+  .shell-pickrow .t {
+    font-size: 14.5px;
+    font-weight: 600;
+    color: hsl(var(--foreground));
+  }
+  .shell-pickrow .d {
+    margin-top: 2px;
+    font-size: 12px;
+    color: hsl(var(--muted-foreground));
+  }
+  .shell-pickrow .rate {
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    font-size: 13px;
+    font-weight: 600;
+    color: hsl(var(--foreground));
+    white-space: nowrap;
+  }
+
+  /* Time presets + wet/dry toggle */
+  .shell-presets,
+  .shell-wetdry {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .shell-segbtn {
+    min-height: 44px;
+    padding: 0 14px;
+    border-radius: 10px;
+    border: 1.5px solid hsl(var(--border));
+    background: hsl(var(--card));
+    font-size: 14px;
+    font-weight: 600;
+    color: hsl(var(--foreground));
+    cursor: pointer;
+    transition: border-color 0.12s;
+  }
+  .shell-segbtn.on {
+    border-color: hsl(var(--foreground));
+    background: hsl(var(--secondary));
+  }
+  .shell-wetdry .shell-segbtn {
+    flex: 1;
+  }
+
+  /* Live hours + cost preview in a sheet */
+  .shell-preview {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: hsl(var(--secondary));
+    border-radius: 14px;
+    padding: 13px 16px;
+  }
+  .shell-preview .l {
+    font-size: 13.5px;
+    color: hsl(var(--muted-foreground));
+  }
+  .shell-preview .v {
+    font-size: 19px;
+    font-weight: 700;
+    color: hsl(var(--foreground));
+  }
+
+  /* Full-width primary button inside a sheet */
+  .shell-sheetbtn {
+    width: 100%;
+    min-height: 54px;
+    border-radius: 14px;
+    border: none;
+    background: hsl(var(--foreground));
+    color: hsl(40 33% 98%);
+    font-family: 'IBM Plex Sans Condensed', 'IBM Plex Sans', ui-sans-serif, sans-serif;
+    font-size: 17px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    cursor: pointer;
+    transition: transform 0.15s;
+  }
+  .shell-sheetbtn:active {
+    transform: scale(0.98);
+  }
+  .shell-sheetbtn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  /* Sheet field label + native inputs */
+  .shell-field-label {
+    display: block;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: hsl(var(--muted-foreground));
+    margin-bottom: 6px;
+  }
+  .shell-input {
+    width: 100%;
+    min-height: 48px;
+    border-radius: 12px;
+    border: 1.5px solid hsl(var(--border));
+    background: hsl(var(--card));
+    padding: 0 13px;
+    font-size: 16px;
+    color: hsl(var(--foreground));
+  }
+  .shell-input:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 1px;
+  }
 }
 
 /* Staggered rise-in — applied to .stagger-rise > * children.
