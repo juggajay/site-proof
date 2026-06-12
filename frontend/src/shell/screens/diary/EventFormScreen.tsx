@@ -68,7 +68,10 @@ export function EventFormScreen() {
     void runSave(
       () =>
         handlers.addEventFromSheet({
-          eventType,
+          // The backend enum is lowercase ('visitor'|'safety'|...); the chips
+          // display capitalized labels. AddEventSheet lowercases at save time
+          // — the shell port missed this line, 400-ing every event save.
+          eventType: eventType.toLowerCase(),
           description: description.trim(),
           notes: notes || undefined,
           lotId: lotId || undefined,
