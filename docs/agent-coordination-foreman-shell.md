@@ -29,8 +29,10 @@ exclusive"). Keep it that way — the two shells share a device and the same
 - **C — inspections (PR #856):** `/p/work`, `/p/itps`, `/p/lots/:lotId/itp`
   (the editable ITP run, reusing — importing, not forking — the foreman ITP
   dot-track trio).
-- **D — quality + docs + company:** `/p/quality` (holds & tests, NCRs),
-  `/p/docs`, `/p/company`.
+- **D — quality + docs + company (PR #857):** `/p/quality` (holds &
+  tests), `/p/ncrs` (module-conditional), `/p/docs`, `/p/company` — read-only QA
+  visibility + admin-gated roster. Stubs replaced for quality/docs/company; new
+  `/p/ncrs` route added; Home NCR tile retargeted to `/p/ncrs`.
 
 Each subsequent PR replaces the matching stub in `SubbieStubScreen` usage with a
 real screen and keeps the classic `/subcontractor-portal/*` pages untouched until
@@ -99,5 +101,28 @@ Modified:
 - `frontend/src/shell/subbie/SubbieShellRoutes.tsx` — replaced the `work`, `itps`
   and `lots/:lotId/itp` stub routes with the real screens (docket/dockets/quality/
   docs/company stubs left for PRs B/D; foreman files imports-only, unchanged).
+
+### Files touched by PR D (quality + docs + company) — PR #857
+
+New:
+
+- `frontend/src/shell/subbie/screens/QualityScreen.tsx`
+- `frontend/src/shell/subbie/screens/DocsScreen.tsx`
+- `frontend/src/shell/subbie/screens/NcrsScreen.tsx`
+- `frontend/src/shell/subbie/screens/CompanyScreen.tsx`
+- `frontend/src/shell/subbie/screens/test/QualityScreen.test.tsx`
+- `frontend/src/shell/subbie/screens/test/DocsScreen.test.tsx`
+- `frontend/src/shell/subbie/screens/test/NcrsScreen.test.tsx`
+- `frontend/src/shell/subbie/screens/test/CompanyScreen.test.tsx`
+
+Modified:
+
+- `frontend/src/shell/subbie/SubbieShellRoutes.tsx` — replaced the quality/docs/
+  company stubs with the real screens; added the `/p/ncrs` route. Docket /
+  dockets / work / itps / lots-run stubs left untouched for their PRs.
+- `frontend/src/shell/subbie/screens/HomeScreen.tsx` — retargeted the
+  conditional NCR tile from `/p/quality` to `/p/ncrs`.
+- `frontend/src/shell/subbie/screens/test/HomeScreen.test.tsx` — added the NCR
+  tile navigation-target assertion.
 
 `frontend/src/shell/**` remains this workstream's exclusive zone.

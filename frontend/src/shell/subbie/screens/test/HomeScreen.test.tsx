@@ -110,6 +110,7 @@ function renderHome() {
         <Routes>
           <Route path="/p" element={<HomeScreen />} />
           <Route path="/p/docket" element={<div>docket editor</div>} />
+          <Route path="/p/ncrs" element={<div>ncrs screen</div>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -180,6 +181,14 @@ describe('subbie shell HomeScreen', () => {
     _ctx = makeCtx({ isModuleEnabled: (m) => portalAccess[m] });
     renderHome();
     expect(screen.getByRole('button', { name: 'NCRs' })).toBeInTheDocument();
+  });
+
+  it('NCRs tile navigates to /p/ncrs (not the classic page)', () => {
+    const portalAccess: PortalAccess = { ...DEFAULT_PORTAL_ACCESS, ncrs: true };
+    _ctx = makeCtx({ isModuleEnabled: (m) => portalAccess[m] });
+    renderHome();
+    fireEvent.click(screen.getByRole('button', { name: 'NCRs' }));
+    expect(screen.getByText('ncrs screen')).toBeInTheDocument();
   });
 
   it('hides a module tile when its module is disabled (documents off)', () => {

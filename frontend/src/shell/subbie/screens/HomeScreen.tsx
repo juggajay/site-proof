@@ -434,7 +434,7 @@ export function HomeScreen() {
           icon={Flag}
           title="NCRs"
           description="Non-conformances on your lots"
-          onPress={() => navigate('/p/quality')}
+          onPress={() => navigate('/p/ncrs')}
           ariaLabel="NCRs"
         />
       )}
