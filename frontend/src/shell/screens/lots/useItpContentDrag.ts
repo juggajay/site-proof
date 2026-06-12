@@ -22,8 +22,10 @@ import { useCallback, useRef, useState } from 'react';
 import { useReducedMotion } from 'framer-motion';
 import {
   contentFracFromDrag,
-  projectFling,
+  releaseVelocity,
   resolveDragAxis,
+  settleRelease,
+  smoothVelocity,
   type DragAxis,
 } from './itpTrackPhysics';
 
@@ -116,8 +118,10 @@ export function useItpContentDrag({
       if (s.axis !== 'horizontal') return;
 
       const now = performance.now();
-      // Velocity in px/ms (same units as the mock's vx).
-      s.vx = (e.clientX - s.lastX) / Math.max(1, now - s.lastT);
+      // Velocity in px/ms (the mock's vx units), exponentially smoothed — raw
+      // per-sample velocity is too noisy on real touch hardware to fling on.
+      const sample = (e.clientX - s.lastX) / Math.max(1, now - s.lastT);
+      s.vx = smoothVelocity(s.vx, sample);
       s.lastX = e.clientX;
       s.lastT = now;
 
@@ -154,9 +158,12 @@ export function useItpContentDrag({
         zoneWidth: s.zoneWidth,
         count,
       });
-      // Carry release velocity into extra items (fling) — disabled for reduced
-      // motion so positioning is direct.
-      const landed = projectFling(f, prefersReduced ? 0 : s.vx, count);
+      // Release rule (settleRelease): fling projection + directional commit so
+      // a deliberate quarter-item drag advances even with a stopped finger.
+      // Velocity is zeroed when the finger rested before lift (stale guard) and
+      // for reduced motion (direct positioning, no fling).
+      const vx = prefersReduced ? 0 : releaseVelocity(s.vx, performance.now() - s.lastT);
+      const landed = settleRelease(s.startFrac, f, vx, count);
       onCommit(landed);
       // Let the suppressed-click flag clear after this event loop tick.
       setTimeout(() => setEngaged(false), 0);

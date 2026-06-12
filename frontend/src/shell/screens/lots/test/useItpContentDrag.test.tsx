@@ -113,6 +113,30 @@ describe('useItpContentDrag', () => {
     expect(onCommit).not.toHaveBeenCalled();
   });
 
+  it('a slow quarter-drag with a PAUSED finger commits forward (no snap-back)', () => {
+    // The owner-reported failure mode: hold, drag ~a third of the screen,
+    // pause, lift. The stale-velocity guard zeroes the fling and the
+    // directional commit still advances one item. The clock is value-based so
+    // unrelated performance.now() consumers (React scheduler, framer) are
+    // harmless — they just read the current scripted time.
+    let now = 0;
+    const nowSpy = vi.spyOn(performance, 'now').mockImplementation(() => now);
+    try {
+      const { result, onCommit } = setup();
+      act(() => result.current.handlers.onPointerDown(evt(300, 200)));
+      now = 60;
+      act(() => result.current.handlers.onPointerMove(evt(250, 201)));
+      now = 120;
+      act(() => result.current.handlers.onPointerMove(evt(190, 201))); // 110px ≈ 0.31 item
+      now = 400; // long pause before lift — stale guard must zero the fling
+      act(() => result.current.handlers.onPointerUp(evt(190, 201)));
+      expect(onCommit).toHaveBeenCalledTimes(1);
+      expect(onCommit.mock.calls[0][0]).toBe(11); // forward one — never back to 10
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
+
   it('reduced motion still commits (direct positioning, no fling)', () => {
     reducedMotion = true;
     const { result, onCommit } = setup();
