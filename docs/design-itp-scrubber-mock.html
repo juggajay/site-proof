@@ -489,7 +489,7 @@
   <div class="primary"><button onclick="go('itp')">Continue — next due check</button></div>
 </section>
 
-<!-- ITP (interactive scrubber) -->
+<!-- ITP (interactive scrubber, v3: top track + whole-screen scrub + halo) -->
 <section class="screen" id="itp">
   <header>
     <div class="topline">
@@ -497,13 +497,17 @@
       <h1>Inspection</h1>
       <span class="sync"><span class="dot"></span>Saved</span></div>
     <div class="sub"><span class="mono">LOT-001</span> <span class="stepbar" id="itpCounter">CHECK 15/22</span></div>
-    <div id="itpTrack" style="position:relative;display:flex;gap:7px;align-items:center;padding:16px 4px 6px;touch-action:none;cursor:pointer"></div>
-    <div id="itpBubble" style="position:absolute;display:none;background:var(--ink);color:#fff;font-family:var(--mono);font-size:12px;font-weight:600;padding:4px 9px;border-radius:8px;transform:translate(-50%,-115%);pointer-events:none;z-index:20"></div>
+    <div id="itpTrackWrap" style="overflow:visible;padding:22px 0 2px">
+      <div id="itpTrack" style="display:flex;gap:7px;align-items:flex-end;justify-content:center;padding:0 18px;touch-action:none;cursor:pointer;min-height:34px;transition:transform .25s var(--spring)"></div>
+    </div>
+    <div id="itpBubble" style="position:fixed;display:none;background:var(--ink);color:#fff;font-family:var(--mono);font-size:13px;font-weight:600;padding:6px 12px;border-radius:10px;transform:translate(-50%,0);pointer-events:none;z-index:30;box-shadow:var(--sh-2);white-space:nowrap"></div>
   </header>
   <main style="overflow:hidden;padding-left:0;padding-right:0">
-    <div style="overflow:hidden"><div id="itpStrip" style="display:flex;width:100%;transition:transform .28s var(--spring)"></div></div>
+    <div id="itpDragZone" style="overflow:hidden;touch-action:pan-y;cursor:grab;min-height:300px">
+      <div id="itpStrip" style="display:flex;width:100%;transition:transform .28s var(--spring)"></div>
+    </div>
   </main>
-  <div class="primary" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:11px;background:linear-gradient(transparent, var(--bg) 30%)">
+  <div class="primary" id="itpActions" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:11px;background:linear-gradient(transparent, var(--bg) 30%);transition:opacity .18s">
     <button onclick="itpPass()" style="background:var(--card);color:var(--good);border:2px solid var(--good);box-shadow:var(--sh-1)">✓ Pass</button>
     <button style="background:var(--card);color:var(--bad);border:2px solid var(--bad);box-shadow:var(--sh-1)">Fail</button>
     <button style="background:var(--card);color:var(--muted);border:1.5px solid var(--line);box-shadow:var(--sh-1)">N/A</button>
@@ -528,8 +532,10 @@
 
   const track = document.getElementById('itpTrack');
   const strip = document.getElementById('itpStrip');
+  const zone = document.getElementById('itpDragZone');
   const counter = document.getElementById('itpCounter');
   const bubble = document.getElementById('itpBubble');
+  const INSET = 42, MAX_SHIFT = 30;
   let idx = 14, dots = [];
 
   function dotStyle(s, el) {
@@ -549,7 +555,7 @@
       dotStyle(states[i], d);
       track.appendChild(d); dots.push(d);
       const card = document.createElement('div');
-      card.style.cssText = 'flex:0 0 100%;padding:16px 20px;display:flex;flex-direction:column;gap:12px';
+      card.style.cssText = 'flex:0 0 100%;padding:16px 20px;display:flex;flex-direction:column;gap:12px;user-select:none';
       card.innerHTML = '<span class="pill a" style="align-self:flex-start">' + cat(i) + '</span>' +
         '<div class="itpq">' + qs[i] + '</div>' +
         '<div class="sub" style="color:' + stateColor[states[i]] + ';font-weight:600">' + stateLine[states[i]] + '</div>' +
@@ -565,55 +571,96 @@
     const cur = Math.round(frac);
     dots.forEach((d, i) => {
       const dist = Math.abs(i - frac);
-      const s = dist < .5 ? 2.2 : dist < 1.5 ? 1.6 : dist < 2.5 ? 1.15 : 1;
-      d.style.transform = 'scale(' + s + ')';
-      d.style.boxShadow = i === cur ? '0 0 0 3px hsl(32 95% 44% / .3)' : 'none';
-      // Numbers live INSIDE the bubbles — only the focused dot and its
-      // immediate neighbours carry their number; the rest stay clean dots.
+      const s = dist < .5 ? 2.3 : dist < 1.5 ? 1.65 : dist < 2.5 ? 1.18 : 1;
+      const lift = (s - 1) * 11;
+      d.style.transform = 'scale(' + s + ') translateY(' + (-lift / s) + 'px)';
+      // HALO focus: dot keeps its own colour; a bg gap + neutral ink outline
+      // reads as "selected" on every state colour (no amber clash).
+      d.style.boxShadow = i === cur
+        ? '0 0 0 2px var(--bg), 0 0 0 3.5px var(--ink)'
+        : 'none';
       if (dist < 1.5) {
         d.textContent = i + 1;
         const st = states[i];
         d.style.color = (st==='done'||st==='failed') ? '#fff' : 'var(--ink)';
-      } else {
-        d.textContent = '';
-      }
+        d.style.zIndex = dist < .5 ? 3 : 2;
+      } else { d.textContent = ''; d.style.zIndex = 1; }
     });
+    const half = (N - 1) / 2;
+    const shift = scrubbing ? ((half - frac) / half) * MAX_SHIFT : 0;
+    track.style.transition = scrubbing ? 'none' : 'transform .25s var(--spring)';
+    track.style.transform = 'translateX(' + shift + 'px)';
     counter.textContent = 'CHECK ' + (cur + 1) + '/' + N;
   }
 
   function fracFromX(clientX) {
-    const r = track.getBoundingClientRect();
-    return Math.max(0, Math.min(N - 1, (clientX - r.left - 8) / (r.width - 16) * (N - 1)));
+    const r = track.parentElement.getBoundingClientRect();
+    return Math.max(0, Math.min(N - 1, (clientX - r.left - INSET) / (r.width - 2 * INSET) * (N - 1)));
   }
 
+  function showBubble(f) {
+    const cur = Math.round(f);
+    const dr = dots[cur].getBoundingClientRect();
+    const r = track.parentElement.getBoundingClientRect();
+    bubble.style.display = 'block';
+    const x = Math.max(58, Math.min(window.innerWidth - 58, dr.left + dr.width / 2));
+    bubble.style.left = x + 'px';
+    bubble.style.top = (r.bottom + 6) + 'px';
+    bubble.textContent = (cur + 1) + ' · ' + (states[cur] || '').toUpperCase();
+  }
+
+  // ── Track scrub (fast travel) ──
   let scrubbing = false;
   track.addEventListener('pointerdown', e => {
     scrubbing = true; track.setPointerCapture(e.pointerId);
-    const f = fracFromX(e.clientX); render(f, true); showBubble(e.clientX, f);
+    const f = fracFromX(e.clientX); render(f, true); showBubble(f);
   });
   track.addEventListener('pointermove', e => {
     if (!scrubbing) return;
-    const f = fracFromX(e.clientX); render(f, true); showBubble(e.clientX, f);
+    const f = fracFromX(e.clientX); render(f, true); showBubble(f);
   });
-  track.addEventListener('pointerup', e => {
+  function endScrub(e) {
+    if (!scrubbing) return;
     scrubbing = false; bubble.style.display = 'none';
     idx = Math.round(fracFromX(e.clientX)); render(idx, false);
-  });
-
-  function showBubble(x, f) {
-    const r = track.getBoundingClientRect();
-    bubble.style.display = 'block';
-    bubble.style.left = x + 'px';
-    bubble.style.top = (r.top + 14) + 'px';
-    bubble.textContent = (Math.round(f) + 1) + ' · ' + (states[Math.round(f)] || '').toUpperCase();
   }
+  track.addEventListener('pointerup', endScrub);
+  track.addEventListener('pointercancel', endScrub);
+
+  // ── Whole-screen drag (scroll anywhere on the question area) ──
+  let dragging = false, startX = 0, startFrac = 0, lastX = 0, lastT = 0, vx = 0;
+  zone.addEventListener('pointerdown', e => {
+    dragging = true; zone.setPointerCapture(e.pointerId);
+    startX = lastX = e.clientX; startFrac = idx; vx = 0; lastT = performance.now();
+    zone.style.cursor = 'grabbing';
+  });
+  zone.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    const now = performance.now();
+    vx = (e.clientX - lastX) / Math.max(1, now - lastT); lastX = e.clientX; lastT = now;
+    const w = zone.getBoundingClientRect().width;
+    const f = Math.max(0, Math.min(N - 1, startFrac + (startX - e.clientX) / w));
+    render(f, true); showBubble(f);
+  });
+  function endDrag(e) {
+    if (!dragging) return;
+    dragging = false; bubble.style.display = 'none'; zone.style.cursor = 'grab';
+    const w = zone.getBoundingClientRect().width;
+    let f = startFrac + (startX - e.clientX) / w;
+    // fling: carry velocity (px/ms) into extra items
+    f -= vx * 0.9;
+    idx = Math.max(0, Math.min(N - 1, Math.round(f)));
+    render(idx, false);
+  }
+  zone.addEventListener('pointerup', endDrag);
+  zone.addEventListener('pointercancel', endDrag);
 
   window.itpPass = () => {
-    if (states[idx] !== 'done') { states[idx] = 'done'; dotStyle('done', dots[idx]); }
+    if (states[idx] !== 'done') { states[idx] = 'done'; }
     let next = -1;
     for (let i = idx + 1; i < N; i++) if (states[i]==='open'||states[i]==='due') { next = i; break; }
     if (next === -1) for (let i = 0; i < N; i++) if (states[i]==='open'||states[i]==='due') { next = i; break; }
-    build(); // refresh card state lines
+    build();
     idx = next === -1 ? idx : next;
     render(idx, false);
   };

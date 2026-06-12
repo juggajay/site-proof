@@ -60,6 +60,33 @@ export const TRACK_PHYSICS = {
   NUMBER_VISIBLE_DIST: 1.5,
   /** Snap-back spring (framer-motion) used on pointer release. */
   SNAP_SPRING: { type: 'spring', stiffness: 360, damping: 34 } as const,
+
+  // ── Whole-screen content drag (the v3 "thumb never runs out of room" model) ──
+  /**
+   * Inset (px) the finger maps INTO from each bezel before the first / last dot
+   * is selected — the mock's INSET. A tap ~40px inside the edge already snaps to
+   * the end dot, so a thumb stroke never has to reach the glass edge.
+   */
+  POINTER_INSET_PX: 42,
+  /**
+   * Max horizontal shift (px) the whole track slides toward centre at the
+   * extremes, so the focused end dot "meets" the finger rather than hugging the
+   * bezel — the mock's MAX_SHIFT. Only applied live (while scrubbing).
+   */
+  MAX_TRACK_SHIFT_PX: 30,
+  /**
+   * Fling factor: extra fractional items carried per px/ms of release velocity
+   * (the mock's `f -= vx * 0.9`). vx is measured in px/ms; one comfortable thumb
+   * stroke + flick (~1–2 px/ms) projects several checks forward, satisfying the
+   * owner's "thumb never runs out of room" requirement for content dragging.
+   */
+  FLING_FACTOR: 0.9,
+  /**
+   * Horizontal movement (px) required before a content drag engages, so taps on
+   * buttons/photos inside the card aren't swallowed and vertical scroll passes
+   * through. Mirrors the SwipeableCard direction-lock threshold idiom.
+   */
+  DRAG_ENGAGE_PX: 10,
 } as const;
 
 // ── Magnification falloff ────────────────────────────────────────────────────
@@ -231,6 +258,12 @@ export interface FracFromPointerArgs {
  * viewport, panned by `scrollLeft`. We convert the pointer to a CONTENT-space x
  * (add scrollLeft) and map over the content's inner width so a finger near either
  * edge resolves to the dots scrolled into view (the caller auto-pans).
+ *
+ * INSET (fit regime): the finger maps from POINTER_INSET_PX inside each bezel —
+ * the mock's INSET=42 — so the last/first dot is already selected ~40px before
+ * the glass edge ("thumb never runs out of room"). The inset is never smaller
+ * than the layout's edge padding, so an end dot at focus magnification can't
+ * clip. The scroll regime keeps its content-space padding mapping unchanged.
  */
 export function fracFromPointerX(args: FracFromPointerArgs): number {
   const { clientX, trackLeft, trackWidth, count, layout, scrollLeft = 0 } = args;
@@ -239,8 +272,10 @@ export function fracFromPointerX(args: FracFromPointerArgs): number {
   const pad = layout.padding;
 
   if (layout.fits) {
-    const inner = Math.max(trackWidth - 2 * pad, 1);
-    const frac = ((clientX - trackLeft - pad) / inner) * (count - 1);
+    // Inset the finger mapping (>= padding so ends never clip).
+    const inset = Math.max(pad, TRACK_PHYSICS.POINTER_INSET_PX);
+    const inner = Math.max(trackWidth - 2 * inset, 1);
+    const frac = ((clientX - trackLeft - inset) / inner) * (count - 1);
     return clampFrac(frac, count);
   }
 
@@ -274,6 +309,88 @@ export function centerScrollLeft(
   const target = itemX - viewport / 2;
   const maxScroll = Math.max(layout.contentWidth - viewport, 0);
   return Math.min(Math.max(target, 0), maxScroll);
+}
+
+// ── Whole-screen content drag (v3 refinement #2) ─────────────────────────────
+
+export interface ContentDragArgs {
+  /** Fractional focus position when the drag began (the landed index). */
+  startFrac: number;
+  /** Pointer clientX at drag start. */
+  startX: number;
+  /** Current pointer clientX. */
+  x: number;
+  /** Width of the drag zone (the content area) in px. */
+  zoneWidth: number;
+  /** Number of items (for clamping). */
+  count: number;
+}
+
+/**
+ * Fractional focus position for a horizontal content drag, mirroring the mock:
+ *   frac = startFrac + (startX - x) / zoneWidth
+ * Dragging the content LEFT (x < startX) advances forward (frac increases), like
+ * scrolling a strip. One full zone-width of travel moves exactly one item, so a
+ * thumb stroke is calibrated to the visible content — the release fling then
+ * carries several more (see projectFling).
+ *
+ * Always clamped into [0, count-1]; degenerate widths resolve to startFrac.
+ */
+export function contentFracFromDrag(args: ContentDragArgs): number {
+  const { startFrac, startX, x, zoneWidth, count } = args;
+  if (count <= 1) return 0;
+  const w = Math.max(zoneWidth, 1);
+  const frac = startFrac + (startX - x) / w;
+  return clampFrac(frac, count);
+}
+
+/**
+ * Project a release into a landed index using carried velocity (the mock's
+ * `f -= vx * FLING_FACTOR`). `vx` is in px/ms with the SAME sign convention as a
+ * pointer's clientX delta: a leftward flick (content moving left → advancing) has
+ * negative vx, so subtracting `vx * factor` ADDS forward items. The result is
+ * snapped to the nearest index and clamped to both ends so a hard flick at an
+ * extreme never overshoots out of range.
+ *
+ * Reduced motion: callers pass vx = 0 to disable the fling (direct positioning).
+ */
+export function projectFling(frac: number, vx: number, count: number): number {
+  if (count <= 0) return 0;
+  const projected = frac - vx * TRACK_PHYSICS.FLING_FACTOR;
+  return snapFrac(projected, count);
+}
+
+export type DragAxis = 'undecided' | 'horizontal' | 'vertical';
+
+/**
+ * Direction-lock decision for the content drag (the SwipeableCard idiom): until
+ * the pointer has moved `threshold` px in some direction the axis is undecided
+ * (taps on buttons/photos stay taps). Past the threshold the DOMINANT axis wins:
+ * a mostly-horizontal move engages the scrub; a mostly-vertical move yields to
+ * native vertical scrolling (touch-action: pan-y) and never scrubs.
+ */
+export function resolveDragAxis(
+  dx: number,
+  dy: number,
+  threshold: number = TRACK_PHYSICS.DRAG_ENGAGE_PX,
+): DragAxis {
+  const ax = Math.abs(dx);
+  const ay = Math.abs(dy);
+  if (ax < threshold && ay < threshold) return 'undecided';
+  return ax > ay ? 'horizontal' : 'vertical';
+}
+
+/**
+ * The live edge-meet shift (px) the whole track slides toward centre while
+ * scrubbing, so the focused end dot meets the finger instead of hugging the
+ * bezel — the mock's `((half - frac) / half) * MAX_SHIFT`. Zero at centre, ±MAX
+ * at the ends. Returns 0 when not scrubbing or for a single item.
+ */
+export function trackShiftPx(frac: number, count: number, scrubbing: boolean): number {
+  if (!scrubbing || count <= 1) return 0;
+  const half = (count - 1) / 2;
+  if (half <= 0) return 0;
+  return ((half - frac) / half) * TRACK_PHYSICS.MAX_TRACK_SHIFT_PX;
 }
 
 // ── Per-dot run state (colour/semantics) ─────────────────────────────────────

@@ -1,27 +1,32 @@
 /**
- * ItpDotTrack — the owner-approved ITP "dot track scrubber".
+ * ItpDotTrack — the owner-approved ITP "dot track scrubber" (v3).
  *
- * A thin horizontal track of dots (one per checklist item in run order) under the
- * run header. Replaces linear-only navigation:
+ * A thin horizontal track of dots (one per checklist item in run order), pinned
+ * at the TOP of the run screen inside the sticky header (under the sub-line).
+ * Replaces linear-only navigation:
  *   1. TAP a dot       → jump to that item (onCommit).
- *   2. HOLD + DRAG     → scrub: dots magnify under the finger with falloff, the
- *      focused dot + immediate neighbours show their NUMBER inside the bubble, a
- *      dark tooltip above the finger shows "N · STATE", and the QUESTION CONTENT
- *      strip scrolls live in sync (translateX(-frac*100%)). Release → spring-snap
- *      to the nearest item (onCommit).
+ *   2. HOLD + DRAG the track → fast travel: dots magnify under the finger with
+ *      falloff, the focused dot + neighbours show their NUMBER, the whole track
+ *      slides toward centre at the extremes so an end dot meets the finger
+ *      (edge-meet shift), a dark "N · STATE" BUBBLE sits BELOW the track anchored
+ *      to the focused dot (clamped on-screen), and the question content mirrors
+ *      live. Release → spring-snap to the nearest item (onCommit).
+ *
+ * The whole-screen content drag (drag anywhere on the question area) is wired in
+ * ItpRunScreen via ItpContentStrip; the track here mirrors that live scrub by
+ * receiving an external `scrubFrac` so both gestures share one focus model.
+ *
+ * Focus is shown with a HALO (a bg gap + neutral ink outline) so the current
+ * dot keeps its own state colour and reads as "selected" on every colour — no
+ * amber focus ring (v3 refinement #3).
  *
  * All geometry / state decisions are pure functions in itpTrackPhysics.ts; this
  * component is the renderer + pointer/keyboard wiring only.
  *
- * No-overflow guarantee: computeTrackLayout fits all dots in the measured width
- * (shrinking gap then dot size). If they can't fit even at floors, the track
- * scrolls horizontally, auto-centres the current item (and follows the finger),
- * with edge-fade gradients hinting more dots exist.
+ * Reduced motion: useReducedMotion → instant positioning (no springs).
  *
- * Reduced motion: useReducedMotion → instant positioning (no springs). Scrubbing
- * still works; the strip just snaps without animating.
- *
- * Reference: docs/design-itp-scrubber-mock.html #itp.
+ * Reference: docs/design-itp-scrubber-mock.html #itp (v3: top track, halo,
+ * bubble-below-anchored-to-dot, whole-screen drag).
  */
 
 import {
@@ -45,6 +50,7 @@ import {
   isNumberVisible,
   snapFrac,
   trackAriaValueText,
+  trackShiftPx,
   type ItpDotState,
   type TrackLayout,
 } from './itpTrackPhysics';
@@ -64,11 +70,17 @@ interface ItpDotTrackProps {
   /** Commit a jump/snap to an item index (tap or release). */
   onCommit: (index: number) => void;
   /**
-   * Live fractional scrub position, or null when not scrubbing. The screen uses
-   * this to drive the synced question-content strip and the live CHECK n/m
-   * counter. Emitting null signals "scrub ended / not scrubbing".
+   * Live fractional scrub position emitted by the TRACK's own gesture (or null
+   * when its gesture is idle). The screen forwards this to the content strip.
    */
   onScrubChange?: (frac: number | null) => void;
+  /**
+   * Live fractional position driven by the WHOLE-SCREEN content drag (or null
+   * when that gesture is idle). When set, the track mirrors it (same falloff /
+   * numbers / bubble) so both gestures share one focus model. The track's own
+   * pointer gesture takes precedence while active.
+   */
+  externalFrac?: number | null;
 }
 
 const STATE_DOT_CLASS: Record<ItpDotState, string> = {
@@ -87,7 +99,20 @@ function numberColor(state: ItpDotState): string {
     : 'hsl(var(--foreground))';
 }
 
-export function ItpDotTrack({ entries, currentIndex, onCommit, onScrubChange }: ItpDotTrackProps) {
+/**
+ * HALO focus shadow (v3 refinement #3): a background-coloured gap then a neutral
+ * ink ring. Reads as "selected" on top of every state colour (no amber clash)
+ * and is the same selected-swatch idiom that works on every colour.
+ */
+const HALO_SHADOW = '0 0 0 2px hsl(var(--background)), 0 0 0 3.5px hsl(var(--foreground))';
+
+export function ItpDotTrack({
+  entries,
+  currentIndex,
+  onCommit,
+  onScrubChange,
+  externalFrac = null,
+}: ItpDotTrackProps) {
   const prefersReduced = useReducedMotion();
   const count = entries.length;
 
@@ -98,14 +123,25 @@ export function ItpDotTrack({ entries, currentIndex, onCommit, onScrubChange }: 
   // Live focus fraction. When not scrubbing it equals currentIndex.
   const [frac, setFrac] = useState(currentIndex);
   const [scrubbing, setScrubbing] = useState(false);
-  const [tooltip, setTooltip] = useState<{ x: number; index: number } | null>(null);
+  // Bubble anchor — measured x of the focused dot (clamped on-screen) + its top.
+  const [bubble, setBubble] = useState<{ x: number; top: number; index: number } | null>(null);
   // Scroll offset (scroll regime only) so the pointer mapping stays correct.
   const [scrollLeft, setScrollLeft] = useState(0);
 
-  // Keep focus synced to the landed index whenever we are NOT scrubbing.
+  // The whole-screen content drag drives focus too; when it's active and the
+  // track isn't being touched directly, mirror its fraction.
+  const externalActive = externalFrac !== null && !scrubbing;
+  const liveScrubbing = scrubbing || externalActive;
+
+  // Keep focus synced to the landed index whenever neither gesture is active.
   useEffect(() => {
-    if (!scrubbing) setFrac(currentIndex);
-  }, [currentIndex, scrubbing]);
+    if (!scrubbing && externalFrac === null) setFrac(currentIndex);
+  }, [currentIndex, scrubbing, externalFrac]);
+
+  // Mirror the whole-screen content drag onto the track.
+  useEffect(() => {
+    if (externalActive && externalFrac !== null) setFrac(externalFrac);
+  }, [externalActive, externalFrac]);
 
   // Measure the track width (and re-measure on resize) for the fit algorithm.
   useLayoutEffect(() => {
@@ -132,19 +168,39 @@ export function ItpDotTrack({ entries, currentIndex, onCommit, onScrubChange }: 
     const el = scrollRef.current;
     if (el) {
       if (prefersReduced) el.scrollLeft = target;
-      else el.scrollTo({ left: target, behavior: scrubbing ? 'auto' : 'smooth' });
+      else el.scrollTo({ left: target, behavior: liveScrubbing ? 'auto' : 'smooth' });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [frac, layout, viewport, count, scrubbing, prefersReduced]);
+  }, [frac, layout, viewport, count, liveScrubbing, prefersReduced]);
 
   const focusIndex = snapFrac(frac, count);
 
-  const emitScrub = useCallback(
-    (next: number | null) => {
-      onScrubChange?.(next);
+  // Position the bubble below the track, anchored to the FOCUSED dot's centre
+  // (not the finger), clamped fully on-screen (v3 refinement #4).
+  const positionBubble = useCallback(
+    (f: number) => {
+      const idx = snapFrac(f, count);
+      const dotEl = trackRef.current?.children[idx] as HTMLElement | undefined;
+      const wrapEl = trackRef.current?.parentElement;
+      if (!dotEl || !wrapEl) {
+        setBubble({ x: 0, top: 0, index: idx });
+        return;
+      }
+      const dr = dotEl.getBoundingClientRect();
+      const wr = wrapEl.getBoundingClientRect();
+      const HALF_BUBBLE = 58; // keeps the rounded label fully on-screen
+      const vw = typeof window === 'undefined' ? wr.width : window.innerWidth;
+      const x = Math.max(HALF_BUBBLE, Math.min(vw - HALF_BUBBLE, dr.left + dr.width / 2));
+      setBubble({ x, top: wr.bottom + 6, index: idx });
     },
-    [onScrubChange],
+    [count],
   );
+
+  // Reposition the bubble when the external (content-drag) fraction moves.
+  useEffect(() => {
+    if (externalActive && externalFrac !== null) positionBubble(externalFrac);
+    else if (!scrubbing) setBubble(null);
+  }, [externalActive, externalFrac, scrubbing, positionBubble]);
 
   const updateFromPointer = useCallback(
     (clientX: number) => {
@@ -160,10 +216,10 @@ export function ItpDotTrack({ entries, currentIndex, onCommit, onScrubChange }: 
         scrollLeft,
       });
       setFrac(f);
-      emitScrub(f);
-      setTooltip({ x: clientX - rect.left, index: snapFrac(f, count) });
+      onScrubChange?.(f);
+      positionBubble(f);
     },
-    [count, layout, scrollLeft, emitScrub],
+    [count, layout, scrollLeft, onScrubChange, positionBubble],
   );
 
   const handlePointerDown = useCallback(
@@ -192,8 +248,8 @@ export function ItpDotTrack({ entries, currentIndex, onCommit, onScrubChange }: 
     (clientX: number) => {
       if (!scrubbing) return;
       setScrubbing(false);
-      setTooltip(null);
-      emitScrub(null);
+      setBubble(null);
+      onScrubChange?.(null);
       const el = trackRef.current;
       let landed = focusIndex;
       if (el && count > 0) {
@@ -211,7 +267,7 @@ export function ItpDotTrack({ entries, currentIndex, onCommit, onScrubChange }: 
       setFrac(landed);
       onCommit(landed);
     },
-    [scrubbing, focusIndex, count, layout, scrollLeft, emitScrub, onCommit],
+    [scrubbing, focusIndex, count, layout, scrollLeft, onScrubChange, onCommit],
   );
 
   const handlePointerUp = useCallback(
@@ -246,12 +302,18 @@ export function ItpDotTrack({ entries, currentIndex, onCommit, onScrubChange }: 
     focusedEntry?.state ?? 'open',
   );
 
-  const tooltipEntry = tooltip ? entries[tooltip.index] : null;
+  const bubbleEntry = bubble ? entries[bubble.index] : null;
+  // Edge-meet shift: slide the whole track toward centre at the extremes while
+  // either gesture is live (the mock's MAX_SHIFT). Disabled for reduced motion.
+  const shift = prefersReduced ? 0 : trackShiftPx(frac, count, liveScrubbing);
 
   return (
-    <div className="relative -mx-5">
-      {/* ≥40px vertical hit zone via padding even though dots draw small. */}
-      <div className="relative" style={{ touchAction: 'none' }}>
+    // overflow-visible so magnified dots can lift above the track into the
+    // reserved top padding without being clipped by the header.
+    <div className="relative -mx-5 mt-3" style={{ overflow: 'visible' }}>
+      {/* ≥40px vertical hit zone via padding even though dots draw small;
+          reserved top padding gives lifted dots room. */}
+      <div className="relative" style={{ touchAction: 'none', paddingTop: 18 }}>
         {/* Scroll regime: edge-fade gradients hint more dots exist. */}
         {!layout.fits && (
           <>
@@ -267,7 +329,7 @@ export function ItpDotTrack({ entries, currentIndex, onCommit, onScrubChange }: 
         )}
 
         <div ref={scrollRef} className="overflow-x-hidden" style={{ scrollbarWidth: 'none' }}>
-          <div
+          <motion.div
             ref={trackRef}
             role="slider"
             tabIndex={0}
@@ -283,7 +345,15 @@ export function ItpDotTrack({ entries, currentIndex, onCommit, onScrubChange }: 
             onPointerCancel={handlePointerUp}
             onKeyDown={handleKeyDown}
             data-testid="itp-dot-track"
-            className="relative flex cursor-pointer items-center py-4 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="relative flex cursor-pointer items-end pb-1 outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            animate={{ x: shift }}
+            transition={
+              prefersReduced
+                ? { duration: 0 }
+                : liveScrubbing
+                  ? { duration: 0 }
+                  : { type: 'spring', stiffness: 420, damping: 36 }
+            }
             style={{
               // Fit regime: dots spread evenly across the measured width with the
               // computed edge padding, so a tap maps 1:1 to the frac formula.
@@ -301,9 +371,13 @@ export function ItpDotTrack({ entries, currentIndex, onCommit, onScrubChange }: 
               const isFocus = i === focusIndex;
               const transition = prefersReduced
                 ? { duration: 0 }
-                : scrubbing
+                : liveScrubbing
                   ? { duration: 0.06 }
                   : TRACK_PHYSICS.SNAP_SPRING;
+              // Lift magnified dots upward into the reserved top padding (the #851
+              // lift): proportional to how far past resting they are, divided out
+              // of the scale so the visual rise is constant.
+              const lift = ((scale - 1) * 11) / scale;
               return (
                 <motion.span
                   key={entry.item.id}
@@ -318,9 +392,12 @@ export function ItpDotTrack({ entries, currentIndex, onCommit, onScrubChange }: 
                     height: layout.dotSize,
                     fontSize: 7,
                     transformOrigin: 'center bottom',
-                    boxShadow: isFocus ? '0 0 0 3px hsl(var(--warning) / 0.3)' : 'none',
+                    // HALO focus: dot keeps its own colour; a bg gap + neutral ink
+                    // outline reads as "selected" on every state colour.
+                    boxShadow: isFocus ? HALO_SHADOW : 'none',
+                    zIndex: isFocus ? 3 : Math.abs(i - frac) < 1.5 ? 2 : 1,
                   }}
-                  animate={{ scale }}
+                  animate={{ scale, y: -lift }}
                   transition={transition}
                 >
                   {showNumber ? (
@@ -335,24 +412,26 @@ export function ItpDotTrack({ entries, currentIndex, onCommit, onScrubChange }: 
                 </motion.span>
               );
             })}
-          </div>
+          </motion.div>
         </div>
-
-        {/* Scrub tooltip — dark "N · STATE" above the finger. */}
-        {tooltip && tooltipEntry && (
-          <div
-            aria-hidden
-            className="pointer-events-none absolute z-20 rounded-lg bg-foreground px-2.5 py-1 font-mono text-[12px] font-semibold text-background"
-            style={{
-              left: tooltip.x,
-              top: 0,
-              transform: 'translate(-50%, -100%)',
-            }}
-          >
-            {tooltip.index + 1} · {dotStateLabel(tooltipEntry.state)}
-          </div>
-        )}
       </div>
+
+      {/* Scrub bubble — dark "N · STATE" BELOW the track, anchored to the focused
+          dot (clamped on-screen). Fixed so it can sit just under the header. */}
+      {bubble && bubbleEntry && (
+        <div
+          aria-hidden
+          className="pointer-events-none fixed z-30 rounded-[10px] bg-foreground px-3 py-1.5 font-mono text-[13px] font-semibold text-background shadow-lg"
+          style={{
+            left: bubble.x,
+            top: bubble.top,
+            transform: 'translate(-50%, 0)',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {bubble.index + 1} · {dotStateLabel(bubbleEntry.state)}
+        </div>
+      )}
     </div>
   );
 }

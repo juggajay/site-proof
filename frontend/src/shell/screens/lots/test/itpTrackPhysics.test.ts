@@ -12,6 +12,7 @@ import {
   centerScrollLeft,
   clampFrac,
   computeTrackLayout,
+  contentFracFromDrag,
   contentWidthFor,
   dotStateFor,
   dotStateLabel,
@@ -19,8 +20,11 @@ import {
   falloffScale,
   fracFromPointerX,
   isNumberVisible,
+  projectFling,
+  resolveDragAxis,
   snapFrac,
   trackAriaValueText,
+  trackShiftPx,
   type ItpDotState,
 } from '../itpTrackPhysics';
 import type { ITPChecklistItem, ITPCompletion } from '@/pages/lots/types';
@@ -225,15 +229,23 @@ describe('edgePaddingFor / contentWidthFor', () => {
 
 // ── fracFromPointerX ──────────────────────────────────────────────────────────
 
-describe('fracFromPointerX — fit regime (mock parity)', () => {
+describe('fracFromPointerX — fit regime (mock parity, inset finger mapping)', () => {
   const count = 22;
   const layout = computeTrackLayout(PHONE_W, count);
   const trackLeft = 0;
   const trackWidth = PHONE_W;
+  // The fit regime insets the finger by POINTER_INSET_PX (>= padding) so the
+  // first/last dot is selected ~40px before the bezel (#851 kept behavior).
+  const inset = Math.max(layout.padding, TRACK_PHYSICS.POINTER_INSET_PX);
 
-  it('left padding edge maps to item 0', () => {
+  it('insets the finger mapping by POINTER_INSET_PX (>= edge padding)', () => {
+    expect(inset).toBe(TRACK_PHYSICS.POINTER_INSET_PX);
+    expect(inset).toBeGreaterThanOrEqual(layout.padding);
+  });
+
+  it('left inset edge maps to item 0', () => {
     const f = fracFromPointerX({
-      clientX: layout.padding,
+      clientX: inset,
       trackLeft,
       trackWidth,
       count,
@@ -242,9 +254,9 @@ describe('fracFromPointerX — fit regime (mock parity)', () => {
     expect(f).toBeCloseTo(0, 5);
   });
 
-  it('right padding edge maps to the last item', () => {
+  it('the last dot is already selected ~40px before the right bezel', () => {
     const f = fracFromPointerX({
-      clientX: trackWidth - layout.padding,
+      clientX: trackWidth - inset,
       trackLeft,
       trackWidth,
       count,
@@ -274,7 +286,7 @@ describe('fracFromPointerX — fit regime (mock parity)', () => {
   it('respects a non-zero track left offset', () => {
     const off = 30;
     const f = fracFromPointerX({
-      clientX: off + layout.padding,
+      clientX: off + inset,
       trackLeft: off,
       trackWidth,
       count,
@@ -372,6 +384,192 @@ describe('centerScrollLeft — auto-centre in the scroll regime', () => {
 
   it('returns 0 for a single item', () => {
     expect(centerScrollLeft(0, PHONE_W, layout, 1)).toBe(0);
+  });
+});
+
+// ── contentFracFromDrag — whole-screen scrub (v3 refinement #2) ───────────────
+
+describe('contentFracFromDrag — frac = startFrac + (startX - x)/zoneWidth', () => {
+  const zoneWidth = 360;
+  const count = 22;
+
+  it('no movement keeps the starting fraction', () => {
+    expect(contentFracFromDrag({ startFrac: 5, startX: 200, x: 200, zoneWidth, count })).toBe(5);
+  });
+
+  it('dragging the content LEFT advances forward (frac increases)', () => {
+    // x < startX → (startX - x) positive → frac grows.
+    const f = contentFracFromDrag({
+      startFrac: 5,
+      startX: 300,
+      x: 300 - zoneWidth,
+      zoneWidth,
+      count,
+    });
+    expect(f).toBeCloseTo(6, 5); // exactly one zone-width = one item
+  });
+
+  it('dragging the content RIGHT goes backward (frac decreases)', () => {
+    const f = contentFracFromDrag({
+      startFrac: 5,
+      startX: 100,
+      x: 100 + zoneWidth,
+      zoneWidth,
+      count,
+    });
+    expect(f).toBeCloseTo(4, 5);
+  });
+
+  it('a half-zone drag moves half an item', () => {
+    const f = contentFracFromDrag({
+      startFrac: 10,
+      startX: 300,
+      x: 300 - zoneWidth / 2,
+      zoneWidth,
+      count,
+    });
+    expect(f).toBeCloseTo(10.5, 5);
+  });
+
+  it('clamps at both ends (never out of range)', () => {
+    expect(
+      contentFracFromDrag({ startFrac: 0, startX: 300, x: 300 + zoneWidth * 3, zoneWidth, count }),
+    ).toBe(0);
+    expect(
+      contentFracFromDrag({
+        startFrac: count - 1,
+        startX: 300,
+        x: 300 - zoneWidth * 3,
+        zoneWidth,
+        count,
+      }),
+    ).toBe(count - 1);
+  });
+
+  it('degenerate width resolves to the start fraction', () => {
+    expect(
+      contentFracFromDrag({ startFrac: 7, startX: 50, x: 80, zoneWidth: 0, count }),
+    ).not.toBeNaN();
+  });
+
+  it('single item always resolves to 0', () => {
+    expect(contentFracFromDrag({ startFrac: 0, startX: 0, x: 999, zoneWidth, count: 1 })).toBe(0);
+  });
+});
+
+// ── projectFling — velocity carry on release (one stroke + flick = several) ────
+
+describe('projectFling — frac -= vx * FLING_FACTOR, snapped + clamped', () => {
+  const count = 22;
+
+  it('zero velocity lands on the nearest item (no fling)', () => {
+    expect(projectFling(7.4, 0, count)).toBe(7);
+    expect(projectFling(7.6, 0, count)).toBe(8);
+  });
+
+  it('a leftward flick (negative vx) carries FORWARD several items', () => {
+    // vx = -2 px/ms → -(-2)*0.9 = +1.8 items projected forward, then snapped.
+    expect(projectFling(7, -2, count)).toBe(9); // 7 + 1.8 = 8.8 → 9
+  });
+
+  it('a rightward flick (positive vx) carries BACKWARD', () => {
+    expect(projectFling(10, 2, count)).toBe(8); // 10 - 1.8 = 8.2 → 8
+  });
+
+  it('one comfortable stroke + flick traverses several checks', () => {
+    // A real release velocity around 1.5–3 px/ms should move multiple items.
+    const moved = Math.abs(projectFling(10, -3, count) - 10);
+    expect(moved).toBeGreaterThanOrEqual(2);
+  });
+
+  it('clamps a hard flick at the END (no overshoot past the last item)', () => {
+    expect(projectFling(count - 1, -50, count)).toBe(count - 1);
+  });
+
+  it('clamps a hard flick at the START (no overshoot below item 0)', () => {
+    expect(projectFling(0, 50, count)).toBe(0);
+  });
+
+  it('uses the documented FLING_FACTOR', () => {
+    // frac 5, vx -1 → 5 + 0.9 = 5.9 → 6.
+    expect(projectFling(5, -1, count)).toBe(6);
+    expect(TRACK_PHYSICS.FLING_FACTOR).toBe(0.9);
+  });
+
+  it('returns 0 for an empty list', () => {
+    expect(projectFling(3, -5, 0)).toBe(0);
+  });
+});
+
+// ── resolveDragAxis — direction lock (SwipeableCard idiom) ─────────────────────
+
+describe('resolveDragAxis — engage horizontal only after horizontal intent', () => {
+  it('is undecided below the engage threshold in both axes', () => {
+    expect(resolveDragAxis(5, 4)).toBe('undecided');
+    expect(resolveDragAxis(-9, 9)).toBe('undecided'); // both < 10
+  });
+
+  it('locks horizontal when the dominant move is sideways past threshold', () => {
+    expect(resolveDragAxis(20, 5)).toBe('horizontal');
+    expect(resolveDragAxis(-30, 10)).toBe('horizontal');
+  });
+
+  it('locks vertical when the dominant move is up/down past threshold', () => {
+    expect(resolveDragAxis(5, 20)).toBe('vertical');
+    expect(resolveDragAxis(10, -30)).toBe('vertical');
+  });
+
+  it('crosses the threshold on EITHER axis to leave undecided', () => {
+    // dx under threshold but dy over → vertical (dominant axis wins).
+    expect(resolveDragAxis(3, 15)).toBe('vertical');
+    // dx over threshold, dy under → horizontal.
+    expect(resolveDragAxis(15, 3)).toBe('horizontal');
+  });
+
+  it('ties resolve to vertical (yield to scrolling — ax must strictly exceed ay)', () => {
+    expect(resolveDragAxis(20, 20)).toBe('vertical');
+  });
+
+  it('honours a custom threshold', () => {
+    expect(resolveDragAxis(8, 0, 10)).toBe('undecided');
+    expect(resolveDragAxis(8, 0, 5)).toBe('horizontal');
+  });
+
+  it('default threshold matches DRAG_ENGAGE_PX', () => {
+    expect(TRACK_PHYSICS.DRAG_ENGAGE_PX).toBe(10);
+    expect(resolveDragAxis(TRACK_PHYSICS.DRAG_ENGAGE_PX, 0)).toBe('horizontal');
+    expect(resolveDragAxis(TRACK_PHYSICS.DRAG_ENGAGE_PX - 1, 0)).toBe('undecided');
+  });
+});
+
+// ── trackShiftPx — edge-meet shift (#851 kept, extracted pure) ────────────────
+
+describe('trackShiftPx — slide the track toward centre at the extremes', () => {
+  const count = 22;
+
+  it('is 0 at the centre', () => {
+    expect(trackShiftPx((count - 1) / 2, count, true)).toBeCloseTo(0, 5);
+  });
+
+  it('is +MAX_TRACK_SHIFT at the start (slides right so item 0 meets the finger)', () => {
+    expect(trackShiftPx(0, count, true)).toBeCloseTo(TRACK_PHYSICS.MAX_TRACK_SHIFT_PX, 5);
+  });
+
+  it('is -MAX_TRACK_SHIFT at the end', () => {
+    expect(trackShiftPx(count - 1, count, true)).toBeCloseTo(-TRACK_PHYSICS.MAX_TRACK_SHIFT_PX, 5);
+  });
+
+  it('is 0 when not scrubbing (no resting shift)', () => {
+    expect(trackShiftPx(0, count, false)).toBe(0);
+    expect(trackShiftPx(count - 1, count, false)).toBe(0);
+  });
+
+  it('is 0 for a single item', () => {
+    expect(trackShiftPx(0, 1, true)).toBe(0);
+  });
+
+  it('uses MAX_TRACK_SHIFT_PX of 30 (the mock value)', () => {
+    expect(TRACK_PHYSICS.MAX_TRACK_SHIFT_PX).toBe(30);
   });
 });
 
