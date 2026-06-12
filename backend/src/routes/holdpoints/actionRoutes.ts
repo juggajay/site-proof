@@ -155,7 +155,6 @@ async function loadHoldPointChaseTargets(
     where: {
       holdPointId,
       usedAt: null,
-      expiresAt: { gt: new Date() },
     },
     select: { recipientEmail: true, recipientName: true },
     orderBy: { createdAt: 'desc' },

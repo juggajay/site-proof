@@ -34,6 +34,7 @@ export async function capturePhotoOffline(
     capturedBy: string;
     gpsLatitude?: number;
     gpsLongitude?: number;
+    serverDocumentId?: string;
   },
 ): Promise<OfflinePhoto> {
   // Feature #317: Apply compression before storing
@@ -63,6 +64,7 @@ export async function capturePhotoOffline(
     // Feature #317: Store compression stats
     originalSize,
     compressedSize,
+    serverDocumentId: options.serverDocumentId,
   };
 
   // Store the photo

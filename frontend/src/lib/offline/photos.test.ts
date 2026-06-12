@@ -105,6 +105,28 @@ describe('capturePhotoOffline', () => {
     });
   });
 
+  it('stores an existing server document id for attach-only retry photos', async () => {
+    const file = new File(['photo-bytes'], 'defect.jpg', { type: 'image/jpeg' });
+
+    const photo = await capturePhotoOffline('project-1', file, {
+      entityType: 'ncr',
+      entityId: 'ncr-1',
+      documentType: 'ncr_evidence',
+      category: 'ncr_evidence',
+      capturedBy: 'user-2',
+      serverDocumentId: 'doc-1',
+    });
+
+    expect(photo).toMatchObject({
+      entityType: 'ncr',
+      entityId: 'ncr-1',
+      documentType: 'ncr_evidence',
+      category: 'ncr_evidence',
+      serverDocumentId: 'doc-1',
+    });
+    expect(offlineDb.photos.put).toHaveBeenCalledWith(photo);
+  });
+
   it('stores explicit ITP completion attachment intent for queued evidence photos', async () => {
     const file = new File(['photo-bytes'], 'itp.jpg', { type: 'image/jpeg' });
 
