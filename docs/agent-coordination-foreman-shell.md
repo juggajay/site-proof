@@ -26,7 +26,7 @@ exclusive"). Keep it that way — the two shells share a device and the same
   override).
 - **B — dockets:** the docket editor surface (`/p/docket`, `/p/dockets`) — the
   primary action surface (labour/plant entry sheets, submit/respond).
-- **C — inspections (PR #PENDING):** `/p/work`, `/p/itps`, `/p/lots/:lotId/itp`
+- **C — inspections (PR #856):** `/p/work`, `/p/itps`, `/p/lots/:lotId/itp`
   (the editable ITP run, reusing — importing, not forking — the foreman ITP
   dot-track trio).
 - **D — quality + docs + company:** `/p/quality` (holds & tests, NCRs),
@@ -73,7 +73,7 @@ Modified:
   `ProtectedAppShell`, `RoleProtectedRoute` + `SUBCONTRACTOR_ROLES`); wrapped the
   `/subcontractor-portal` dashboard route in `SubbieShellGuard`.
 
-### Files touched by PR C (inspections) — PR #PENDING
+### Files touched by PR C (inspections) — PR #856
 
 New:
 
