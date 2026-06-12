@@ -14,6 +14,8 @@ import {
   isShellFlagSet,
   getShellOverride,
   isShellActiveForRole,
+  isSubbieShellActiveForRole,
+  SUBBIE_SHELL_DEFAULT_ROLES,
   applyShellFlagFromUrl,
 } from '../shellFlag';
 import {
@@ -96,6 +98,69 @@ describe('isShellActiveForRole (foreman default, owner decision 2026-06-12)', ()
   it('no role: never', () => {
     expect(isShellActiveForRole(null, 'on')).toBe(false);
     expect(isShellActiveForRole(undefined, null)).toBe(false);
+  });
+});
+
+describe('isSubbieShellActiveForRole (DARK: default-off, override-only)', () => {
+  it('SUBBIE_SHELL_DEFAULT_ROLES is empty (dark ship)', () => {
+    expect(SUBBIE_SHELL_DEFAULT_ROLES.size).toBe(0);
+  });
+
+  // Full role × override matrix.
+  const subbieRoles = ['subcontractor', 'subcontractor_admin'];
+  const internalRoles = [
+    'owner',
+    'admin',
+    'project_manager',
+    'site_manager',
+    'quality_manager',
+    'site_engineer',
+    'foreman',
+  ];
+
+  it('subbie roles with no override: OFF by default (dark)', () => {
+    for (const role of subbieRoles) {
+      expect(isSubbieShellActiveForRole(role, null)).toBe(false);
+    }
+  });
+
+  it('subbie roles forced on (?shell=v2): ON', () => {
+    for (const role of subbieRoles) {
+      expect(isSubbieShellActiveForRole(role, 'on')).toBe(true);
+    }
+  });
+
+  it('subbie roles forced off (?shell=off): OFF (escape hatch)', () => {
+    for (const role of subbieRoles) {
+      expect(isSubbieShellActiveForRole(role, 'off')).toBe(false);
+    }
+  });
+
+  it('internal (non-subbie) roles: NEVER, regardless of override', () => {
+    for (const role of internalRoles) {
+      expect(isSubbieShellActiveForRole(role, 'on')).toBe(false);
+      expect(isSubbieShellActiveForRole(role, 'off')).toBe(false);
+      expect(isSubbieShellActiveForRole(role, null)).toBe(false);
+    }
+  });
+
+  it('no role: never', () => {
+    expect(isSubbieShellActiveForRole(null, 'on')).toBe(false);
+    expect(isSubbieShellActiveForRole(undefined, null)).toBe(false);
+    expect(isSubbieShellActiveForRole('', 'on')).toBe(false);
+  });
+
+  it('the foreman and subbie role gates are mutually exclusive', () => {
+    // No single role is active in BOTH shells for any override — the guard that
+    // keeps /m and /p from bleeding into each other on a shared device.
+    const allRoles = [...subbieRoles, ...internalRoles, 'viewer', 'member'];
+    for (const role of allRoles) {
+      for (const override of ['on', 'off', null] as const) {
+        const foreman = isShellActiveForRole(role, override);
+        const subbie = isSubbieShellActiveForRole(role, override);
+        expect(foreman && subbie).toBe(false);
+      }
+    }
   });
 });
 

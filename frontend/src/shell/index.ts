@@ -6,8 +6,10 @@
  */
 
 export { ShellGuard } from './ShellGuard';
+export { SubbieShellGuard } from './SubbieShellGuard';
 export {
   useShellV2Enabled,
+  useSubbieShellActive,
   enableShellFlag,
   disableShellFlag,
   applyShellFlagFromUrl,

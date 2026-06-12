@@ -37,6 +37,20 @@ interface ShellScreenHomeProps {
   bottom?: ReactNode;
   /** Optional role label override; defaults to user's role. */
   roleLabel?: string;
+  /**
+   * Optional project label override. When provided, it REPLACES the
+   * projects-query lookup (the foreman default). Subbies cannot call
+   * /api/projects, so the subbie shell passes the company/project name it
+   * already has from the my-company bootstrap. Foreman call sites omit this and
+   * keep the existing query-based lookup unchanged.
+   */
+  projectLabel?: ReactNode;
+  /**
+   * Optional content pinned inside the sticky header below the project/date row
+   * — the subbie shell uses it for the multi-project switcher. Foreman home
+   * omits it (unchanged).
+   */
+  headerExtra?: ReactNode;
 }
 
 interface ShellScreenInnerProps {
@@ -70,6 +84,8 @@ const ROLE_CHIP_LABELS: Record<string, string> = {
   site_manager: 'SITE MGR',
   foreman: 'FOREMAN',
   site_engineer: 'SITE ENG',
+  subcontractor: 'SUBCONTRACTOR',
+  subcontractor_admin: 'SUBCONTRACTOR',
 };
 
 function getRoleChipLabel(role: string | undefined): string {
@@ -79,13 +95,25 @@ function getRoleChipLabel(role: string | undefined): string {
 
 // ── Home header ───────────────────────────────────────────────────────────────
 
-function HomeHeader({ roleLabel }: { roleLabel?: string }) {
+function HomeHeader({
+  roleLabel,
+  projectLabel: projectLabelOverride,
+  headerExtra,
+}: {
+  roleLabel?: string;
+  projectLabel?: ReactNode;
+  headerExtra?: ReactNode;
+}) {
   const { user } = useAuth();
   const greeting = useTimeGreeting(user?.fullName ?? user?.name);
   const { projectId } = useEffectiveProjectId();
 
   const role = user?.roleInCompany ?? user?.role;
   const chipLabel = roleLabel ?? getRoleChipLabel(role);
+
+  // When a caller supplies projectLabel (e.g. the subbie shell, which cannot
+  // call /api/projects), it REPLACES the lookup entirely.
+  const hasOverride = projectLabelOverride !== undefined;
 
   // Today's date — short format matching the mock (e.g. "WED 11 JUN")
   const dateStr = new Intl.DateTimeFormat('en-AU', {
@@ -98,15 +126,20 @@ function HomeHeader({ roleLabel }: { roleLabel?: string }) {
 
   // Project NAME, resolved from the same cached projects query the app
   // header uses (queryKeys.projects) — shared cache, so no extra fetch in
-  // practice. Falls back to a neutral label while loading.
+  // practice. Falls back to a neutral label while loading. Skipped entirely
+  // when a projectLabel override is provided.
   const { data: projectsData } = useQuery({
     queryKey: queryKeys.projects,
     queryFn: () => apiFetch<{ projects: { id: string; name: string }[] }>('/api/projects'),
-    enabled: !!projectId,
+    enabled: !!projectId && !hasOverride,
     staleTime: 5 * 60 * 1000,
   });
   const projectName = projectsData?.projects?.find((p) => p.id === projectId)?.name;
-  const projectLabel = projectId ? (projectName ?? '…') : 'No project';
+  const projectLabel = hasOverride
+    ? projectLabelOverride
+    : projectId
+      ? (projectName ?? '…')
+      : 'No project';
 
   return (
     <header className="sticky top-0 z-10 border-b border-border bg-background px-5 pb-[14px] pt-3">
@@ -132,6 +165,8 @@ function HomeHeader({ roleLabel }: { roleLabel?: string }) {
         <span>{projectLabel}</span>
         <span className="font-mono text-[12px] font-[500]">{dateStr}</span>
       </div>
+
+      {headerExtra}
     </header>
   );
 }
@@ -191,7 +226,11 @@ export function ShellScreen(props: ShellScreenProps) {
   return (
     <div className="flex min-h-[100dvh] flex-col bg-background text-foreground">
       {props.variant === 'home' ? (
-        <HomeHeader roleLabel={props.roleLabel} />
+        <HomeHeader
+          roleLabel={props.roleLabel}
+          projectLabel={props.projectLabel}
+          headerExtra={props.headerExtra}
+        />
       ) : (
         <InnerHeader
           title={props.title}
