@@ -15,4 +15,13 @@ describe('data retention reporting', () => {
       'Read notifications older than ${RETENTION_POLICIES.readNotifications} days are retained until notification archiving is implemented',
     );
   });
+
+  it('requires an explicit database confirmation before applying deletes', () => {
+    const source = readFileSync(join(process.cwd(), 'scripts', 'data-retention.ts'), 'utf8');
+
+    expect(source).toContain('CONFIRM_RETENTION_APPLY');
+    expect(source).toContain('requireRetentionApplyConfirmation');
+    expect(source).toContain('Refusing retention apply');
+    expect(source).toContain('database host/name');
+  });
 });

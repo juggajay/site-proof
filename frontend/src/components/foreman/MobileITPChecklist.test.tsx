@@ -97,6 +97,51 @@ describe('MobileITPChecklist default expansion', () => {
   });
 });
 
+describe('MobileITPChecklist point metadata', () => {
+  it('renders and opens a verification point with verification metadata', () => {
+    renderChecklist({
+      checklistItems: [
+        makeItem({
+          id: 'verification-item',
+          description: 'Verify subcontractor compaction records',
+          category: 'Verification',
+          pointType: 'verification',
+          responsibleParty: 'subcontractor',
+          order: 1,
+        }),
+      ],
+      completions: [],
+      canCompleteItems: false,
+    });
+
+    expect(screen.getByText('V')).toBeVisible();
+    fireEvent.click(screen.getByText(/Verify subcontractor compaction records/i));
+
+    expect(screen.getByText('Verification Point')).toBeInTheDocument();
+    expect(screen.getByText('Subcontractor')).toBeInTheDocument();
+  });
+
+  it('falls back to generic point metadata for unknown point types', () => {
+    renderChecklist({
+      checklistItems: [
+        makeItem({
+          id: 'unknown-point-type',
+          description: 'Review imported checklist row',
+          category: 'Imported',
+          pointType: 'inspection' as ITPChecklistItem['pointType'],
+          order: 1,
+        }),
+      ],
+      completions: [],
+    });
+
+    expect(screen.getByText('?')).toBeVisible();
+    fireEvent.click(screen.getByText(/Review imported checklist row/i));
+
+    expect(screen.getByText('Checklist Point')).toBeInTheDocument();
+  });
+});
+
 describe('MobileITPChecklist N/A and Fail keep failure context', () => {
   it('keeps the sheet open with the typed reason and an inline error when N/A fails', async () => {
     const onMarkNotApplicable = vi.fn().mockResolvedValue(false);

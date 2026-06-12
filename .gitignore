@@ -66,6 +66,13 @@ init.sh
 *.bak
 *.backup
 *.original
+*.dump
+*.dump.sha256
+backups/
+backend/backups/
+reports/
+backend/reports/
+retention-report-*.json
 
 # PWA
 sw.js
