@@ -713,6 +713,11 @@ describe('Subcontractors API', () => {
 
   describe('GET /api/subcontractors/invitation/:id', () => {
     it('should get invitation details (public endpoint)', async () => {
+      const storedInvitation = await prisma.subcontractorCompany.findUniqueOrThrow({
+        where: { id: subcontractorCompanyId },
+        select: { primaryContactEmail: true, primaryContactName: true },
+      });
+
       const res = await request(app).get(
         `/api/subcontractors/invitation/${subcontractorCompanyId}`,
       );
@@ -720,6 +725,14 @@ describe('Subcontractors API', () => {
       expect(res.status).toBe(200);
       expect(res.body.invitation).toBeDefined();
       expect(res.body.invitation.companyName).toBe('Test Subcontractor Co');
+      expect(res.body.invitation.primaryContactEmail).toBe('');
+      expect(res.body.invitation.primaryContactName).toBe('');
+      expect(res.body.invitation.primaryContactEmailMasked).toMatch(/^\w\*\*\*@/);
+      expect(storedInvitation.primaryContactEmail).toBeTruthy();
+      expect(storedInvitation.primaryContactName).toBeTruthy();
+      const invitationPayload = JSON.stringify(res.body.invitation);
+      expect(invitationPayload).not.toContain(storedInvitation.primaryContactEmail!);
+      expect(invitationPayload).not.toContain(storedInvitation.primaryContactName!);
       expect(res.body.invitation.expiresAt).toBeDefined();
     });
 

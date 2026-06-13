@@ -53,6 +53,25 @@ describe('presentLotList (pure)', () => {
     expect(lot.subcontractorAssignments.map((a) => a.subcontractorCompanyId)).toEqual(['sub-B']);
   });
 
+  it('hides legacy assigned subcontractor fields when they belong to a different subcontractor', () => {
+    const [lot] = presentLotList(
+      [
+        makeLot({
+          assignedSubcontractorId: 'sub-A',
+          assignedSubcontractor: { companyName: 'Alpha Civil' },
+        }),
+      ],
+      {
+        canViewBudgetAmount: true,
+        subcontractorCompanyId: 'sub-B',
+        includeITP: false,
+      },
+    );
+
+    expect((lot as Record<string, unknown>).assignedSubcontractorId).toBeNull();
+    expect((lot as Record<string, unknown>).assignedSubcontractor).toBeNull();
+  });
+
   it('includeITP true wraps a present itpInstance into itpInstances', () => {
     const itpInstance = { id: 'itp-1', templateId: 't-1', status: 'in_progress' };
     const [lot] = presentLotList([makeLot({ itpInstance })], {

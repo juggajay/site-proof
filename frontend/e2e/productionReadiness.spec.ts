@@ -1437,7 +1437,7 @@ test.describe('production readiness guardrails', () => {
     expect(productionPreflightWorkflow).toMatch(/permissions:\s*\r?\n\s+contents:\s+read/);
     expect(productionPreflightWorkflow).toContain('validate-dispatch:');
     expect(productionPreflightWorkflow).toContain(
-      'Production preflight can only run from refs/heads/master.',
+      'Production preflight can only run from refs/heads/main or refs/heads/master.',
     );
     expect(productionPreflightWorkflow).toContain('needs: validate-dispatch');
     expect(productionPreflightWorkflow).toContain(
@@ -1594,6 +1594,9 @@ test.describe('production readiness guardrails', () => {
     expect(ciWorkflow).toContain('run: npm run build');
     expect(ciWorkflow).toContain('run: docker build -t siteproof-backend-ci .');
     expect(ciWorkflow).toContain('DOCKER_BUILDKIT: "1"');
+    expect(ciWorkflow).toContain('name: Frontend PR E2E smoke');
+    expect(ciWorkflow).toContain("if: github.event_name == 'pull_request'");
+    expect(ciWorkflow).toContain('npx playwright test --grep @pr-smoke');
     expect(ciWorkflow).toContain('name: Frontend E2E');
     expect(ciWorkflow).toContain('needs: [backend, frontend]');
     expect(ciWorkflow).toContain('POSTGRES_DB: siteproof_e2e');
@@ -1609,6 +1612,9 @@ test.describe('production readiness guardrails', () => {
     expect(ciWorkflow).not.toContain('cd frontend &&');
 
     expect(ciWorkflow).not.toContain('run: npm run preflight:integrations');
+    expect(productionPreflightWorkflow).toContain('schedule:');
+    expect(productionPreflightWorkflow).toContain('branches: [main, master]');
+    expect(productionPreflightWorkflow).toContain("inputs.environment || 'production'");
     expect(productionPreflightWorkflow).toContain('run: npm run preflight:integrations');
     expect(productionPreflightWorkflow).toContain('SUPABASE_URL: ${{ secrets.SUPABASE_URL }}');
     expect(productionPreflightWorkflow).toContain(

@@ -357,7 +357,7 @@ test.describe('Authentication', () => {
     await expect(page).toHaveURL(/login/);
   });
 
-  test('should preserve protected route query params after login', async ({ page }) => {
+  test('should preserve protected route query params after login @pr-smoke', async ({ page }) => {
     let loginRequest: unknown;
 
     await page.route('**/api/auth/login', async (route) => {

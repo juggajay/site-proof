@@ -1,3 +1,5 @@
+import { maskInvitedEmail } from '../../lib/subcontractorInvitations.js';
+
 type NullableText = string | null | undefined;
 
 type InvitationDetailsSource = {
@@ -52,8 +54,11 @@ export function buildSubcontractorInvitationDetailsResponse(
       companyName: subcontractor.companyName,
       projectName: subcontractor.project.name,
       headContractorName,
-      primaryContactEmail: subcontractor.primaryContactEmail,
-      primaryContactName: subcontractor.primaryContactName,
+      primaryContactEmail: '',
+      primaryContactEmailMasked: subcontractor.primaryContactEmail
+        ? maskInvitedEmail(subcontractor.primaryContactEmail)
+        : '',
+      primaryContactName: '',
       status: subcontractor.status,
       expiresAt: subcontractor.invitationExpiresAt?.toISOString() ?? null,
       canAccept,

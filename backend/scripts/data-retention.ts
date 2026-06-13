@@ -22,13 +22,15 @@
  */
 
 import { PrismaClient } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
 const prisma = new PrismaClient();
 
 // Retention periods in days
-const RETENTION_POLICIES = {
+export const RETENTION_POLICIES = {
   // Construction records (7 years per Australian standards)
   projectRecords: 7 * 365, // 2555 days
 
@@ -39,6 +41,7 @@ const RETENTION_POLICIES = {
   expiredSessions: 30,
   passwordResetTokens: 1,
   emailVerificationTokens: 7,
+  usedHoldPointReleaseTokens: 30,
 
   // Notifications
   readNotifications: 90,
@@ -46,6 +49,28 @@ const RETENTION_POLICIES = {
   // Sync queue (processed items)
   processedSyncItems: 7,
 };
+
+const DAYS_TO_MS = 24 * 60 * 60 * 1000;
+
+export function buildExpiredDocumentSignedUrlTokenWhere(
+  now: Date,
+): Prisma.DocumentSignedUrlTokenWhereInput {
+  return {
+    expiresAt: { lt: now },
+  };
+}
+
+export function buildExpiredOrOldUsedHoldPointReleaseTokenWhere(
+  now: Date,
+): Prisma.HoldPointReleaseTokenWhereInput {
+  const usedCutoff = new Date(
+    now.getTime() - RETENTION_POLICIES.usedHoldPointReleaseTokens * DAYS_TO_MS,
+  );
+
+  return {
+    OR: [{ expiresAt: { lt: now } }, { usedAt: { not: null, lt: usedCutoff } }],
+  };
+}
 
 interface RetentionReport {
   timestamp: string;
@@ -148,7 +173,7 @@ async function checkRetentionPolicies(): Promise<RetentionReport> {
   // Check old read notifications. The Notification schema currently has no archive field/table, so
   // these must be reported as retained rather than as a promised archive action.
   const notificationCutoff = new Date(
-    now.getTime() - RETENTION_POLICIES.readNotifications * 24 * 60 * 60 * 1000,
+    now.getTime() - RETENTION_POLICIES.readNotifications * DAYS_TO_MS,
   );
   const oldNotifications = await prisma.notification.count({
     where: {
@@ -169,9 +194,7 @@ async function checkRetentionPolicies(): Promise<RetentionReport> {
   }
 
   // Check processed sync queue items
-  const syncCutoff = new Date(
-    now.getTime() - RETENTION_POLICIES.processedSyncItems * 24 * 60 * 60 * 1000,
-  );
+  const syncCutoff = new Date(now.getTime() - RETENTION_POLICIES.processedSyncItems * DAYS_TO_MS);
   const processedSyncItems = await prisma.syncQueue.count({
     where: {
       status: 'synced',
@@ -190,10 +213,42 @@ async function checkRetentionPolicies(): Promise<RetentionReport> {
     });
   }
 
-  // Check audit logs (report only - don't delete within retention period)
-  const auditLogCutoff = new Date(
-    now.getTime() - RETENTION_POLICIES.auditLogs * 24 * 60 * 60 * 1000,
+  // Check expired bearer-link document tokens
+  const expiredDocumentSignedUrlTokens = await prisma.documentSignedUrlToken.count({
+    where: buildExpiredDocumentSignedUrlTokenWhere(now),
+  });
+  totalChecked += expiredDocumentSignedUrlTokens;
+  if (expiredDocumentSignedUrlTokens > 0) {
+    toDelete += expiredDocumentSignedUrlTokens;
+    findings.push({
+      category: 'Document Signed URL Tokens (Expired)',
+      count: expiredDocumentSignedUrlTokens,
+      action: 'delete',
+      reason: 'Signed document-link bearer tokens have expired and are no longer valid',
+    });
+  }
+
+  // Check expired or old used hold-point release tokens
+  const usedHoldPointTokenCutoff = new Date(
+    now.getTime() - RETENTION_POLICIES.usedHoldPointReleaseTokens * DAYS_TO_MS,
   );
+  const expiredOrOldUsedHoldPointReleaseTokens = await prisma.holdPointReleaseToken.count({
+    where: buildExpiredOrOldUsedHoldPointReleaseTokenWhere(now),
+  });
+  totalChecked += expiredOrOldUsedHoldPointReleaseTokens;
+  if (expiredOrOldUsedHoldPointReleaseTokens > 0) {
+    toDelete += expiredOrOldUsedHoldPointReleaseTokens;
+    findings.push({
+      category: 'Hold Point Release Tokens (Expired or Used)',
+      count: expiredOrOldUsedHoldPointReleaseTokens,
+      oldestDate: usedHoldPointTokenCutoff,
+      action: 'delete',
+      reason: `Expired release-link bearer tokens and used release tokens older than ${RETENTION_POLICIES.usedHoldPointReleaseTokens} days`,
+    });
+  }
+
+  // Check audit logs (report only - don't delete within retention period)
+  const auditLogCutoff = new Date(now.getTime() - RETENTION_POLICIES.auditLogs * DAYS_TO_MS);
   const retainedAuditLogs = await prisma.auditLog.count({
     where: {
       createdAt: { gte: auditLogCutoff },
@@ -251,6 +306,10 @@ function displayReport(report: RetentionReport): void {
     `  • Read Notifications: ${report.policies.readNotifications} days (retained pending archive support)`,
   );
   console.log(`  • Sync Queue: ${report.policies.processedSyncItems} days`);
+  console.log('  • Document Signed URL Tokens: expired tokens deleted');
+  console.log(
+    `  • Hold Point Release Tokens: expired tokens and used tokens older than ${report.policies.usedHoldPointReleaseTokens} days deleted`,
+  );
   console.log('');
 
   console.log('Findings:');
@@ -306,9 +365,7 @@ async function applyRetentionPolicies(): Promise<void> {
   }
 
   // Delete old processed sync queue items
-  const syncCutoff = new Date(
-    now.getTime() - RETENTION_POLICIES.processedSyncItems * 24 * 60 * 60 * 1000,
-  );
+  const syncCutoff = new Date(now.getTime() - RETENTION_POLICIES.processedSyncItems * DAYS_TO_MS);
   const deletedSyncItems = await prisma.syncQueue.deleteMany({
     where: {
       status: 'synced',
@@ -318,6 +375,28 @@ async function applyRetentionPolicies(): Promise<void> {
   if (deletedSyncItems.count > 0) {
     console.log(`✅ Deleted ${deletedSyncItems.count} processed sync queue items`);
     totalDeleted += deletedSyncItems.count;
+  }
+
+  // Delete expired bearer-link document tokens
+  const deletedDocumentSignedUrlTokens = await prisma.documentSignedUrlToken.deleteMany({
+    where: buildExpiredDocumentSignedUrlTokenWhere(now),
+  });
+  if (deletedDocumentSignedUrlTokens.count > 0) {
+    console.log(
+      `✅ Deleted ${deletedDocumentSignedUrlTokens.count} expired document signed-link tokens`,
+    );
+    totalDeleted += deletedDocumentSignedUrlTokens.count;
+  }
+
+  // Delete expired release-link tokens and old used release-link tokens
+  const deletedHoldPointReleaseTokens = await prisma.holdPointReleaseToken.deleteMany({
+    where: buildExpiredOrOldUsedHoldPointReleaseTokenWhere(now),
+  });
+  if (deletedHoldPointReleaseTokens.count > 0) {
+    console.log(
+      `✅ Deleted ${deletedHoldPointReleaseTokens.count} expired or old used hold point release-link tokens`,
+    );
+    totalDeleted += deletedHoldPointReleaseTokens.count;
   }
 
   // Note: Notifications are retained until a real archive field/table exists
@@ -388,6 +467,7 @@ Retention Periods:
   • Audit Logs: 7 years
   • Read Notifications: 90 days (retained pending archive support)
   • Expired Tokens: Immediate deletion
+  • Used Hold Point Release Tokens: ${RETENTION_POLICIES.usedHoldPointReleaseTokens} days
   • Processed Sync Items: 7 days
 
 Examples:
@@ -404,4 +484,9 @@ Examples:
   }
 }
 
-main();
+const currentModulePath = fileURLToPath(import.meta.url);
+const invokedScriptPath = process.argv[1] ? path.resolve(process.argv[1]) : '';
+
+if (invokedScriptPath === currentModulePath) {
+  main();
+}

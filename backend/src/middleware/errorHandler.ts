@@ -3,6 +3,7 @@ import type { Request, Response, NextFunction } from 'express';
 import fs from 'fs';
 import path from 'path';
 import { AppError } from '../lib/AppError.js';
+import { fetchWithTimeout } from '../lib/fetchWithTimeout.js';
 import { ZodError } from 'zod';
 import multer from 'multer';
 import {
@@ -34,6 +35,28 @@ interface ErrorLogEntry {
   metadata?: Record<string, unknown>;
 }
 
+interface MonitoringErrorEvent {
+  source: 'siteproof-backend';
+  timestamp: string;
+  environment: string;
+  release?: string;
+  error: {
+    message: string;
+    code: string;
+    statusCode: number;
+    level: ErrorLogEntry['level'];
+  };
+  request: {
+    method: string;
+    path: string;
+    query: Record<string, unknown>;
+    requestId?: unknown;
+    contentType?: unknown;
+    origin?: unknown;
+    authenticated: boolean;
+  };
+}
+
 type PrismaKnownRequestErrorLike = {
   name: 'PrismaClientKnownRequestError';
   code: string;
@@ -62,6 +85,7 @@ const ERROR_LOG_FILE = path.join(ERROR_LOG_DIR, 'errors.log');
 const DEFAULT_MAX_ERROR_LOG_BYTES = 5 * 1024 * 1024;
 const MIN_MAX_ERROR_LOG_BYTES = 64 * 1024;
 const MAX_RECENT_ERROR_LIMIT = 500;
+const DEFAULT_MONITORING_TIMEOUT_MS = 2500;
 
 function getErrorLogMaxBytes(): number {
   const configured = Number(process.env.ERROR_LOG_MAX_BYTES);
@@ -167,13 +191,118 @@ function logError(entry: ErrorLogEntry) {
     });
   }
 
-  // Hook for external monitoring services (e.g., Sentry, DataDog)
+  // Optional external monitoring webhook. Disabled unless explicitly configured.
   sendToMonitoringService(sanitizedEntry);
 }
 
-// Placeholder for external monitoring integration
-function sendToMonitoringService(_entry: ErrorLogEntry) {
-  // External monitoring SDK integration belongs here when a provider is wired.
+function getMonitoringEndpointUrl(): string | null {
+  const rawValue = process.env.ERROR_MONITORING_ENDPOINT_URL?.trim();
+  if (!rawValue) {
+    return null;
+  }
+
+  try {
+    const url = new URL(rawValue);
+    if (url.protocol !== 'https:') {
+      throw new Error('endpoint must use https');
+    }
+
+    return url.toString();
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : 'invalid endpoint';
+    console.error(
+      'External error monitoring endpoint is invalid; skipping external error event:',
+      sanitizeLogText(reason),
+    );
+    return null;
+  }
+}
+
+function getMonitoringTimeoutMs(): number {
+  const configured = Number(process.env.ERROR_MONITORING_TIMEOUT_MS);
+  if (!Number.isInteger(configured) || configured <= 0) {
+    return DEFAULT_MONITORING_TIMEOUT_MS;
+  }
+
+  return Math.min(configured, 10_000);
+}
+
+function getMonitoringEnvironment(): string {
+  return process.env.ERROR_MONITORING_ENVIRONMENT?.trim() || process.env.NODE_ENV || 'unknown';
+}
+
+function getMonitoringRelease(): string | undefined {
+  return (
+    process.env.ERROR_MONITORING_RELEASE?.trim() ||
+    process.env.RAILWAY_GIT_COMMIT_SHA?.trim() ||
+    process.env.SOURCE_VERSION?.trim() ||
+    undefined
+  );
+}
+
+function buildMonitoringErrorEvent(entry: ErrorLogEntry): MonitoringErrorEvent {
+  const release = getMonitoringRelease();
+
+  return {
+    source: 'siteproof-backend',
+    timestamp: entry.timestamp,
+    environment: sanitizeLogText(getMonitoringEnvironment()),
+    release: release ? sanitizeLogText(release) : undefined,
+    error: {
+      message: entry.message,
+      code: entry.code,
+      statusCode: entry.statusCode,
+      level: entry.level,
+    },
+    request: {
+      method: entry.context.method,
+      path: entry.context.path,
+      query: entry.context.query,
+      requestId: entry.metadata?.requestId,
+      contentType: entry.metadata?.contentType,
+      origin: entry.metadata?.origin,
+      authenticated: Boolean(entry.context.userId),
+    },
+  };
+}
+
+async function postMonitoringErrorEvent(
+  endpointUrl: string,
+  payload: MonitoringErrorEvent,
+): Promise<void> {
+  try {
+    const response = await fetchWithTimeout(
+      endpointUrl,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+      },
+      getMonitoringTimeoutMs(),
+    );
+
+    if (!response.ok) {
+      console.error('External error monitoring endpoint returned non-success status:', {
+        status: response.status,
+      });
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('Failed to forward external error monitoring event:', sanitizeLogText(message));
+  }
+}
+
+function sendToMonitoringService(entry: ErrorLogEntry) {
+  if (process.env.NODE_ENV !== 'production' || entry.statusCode < 500) {
+    return;
+  }
+
+  const endpointUrl = getMonitoringEndpointUrl();
+  if (!endpointUrl) {
+    return;
+  }
+
+  void postMonitoringErrorEvent(endpointUrl, buildMonitoringErrorEvent(entry));
 }
 
 // Export the log function for use elsewhere

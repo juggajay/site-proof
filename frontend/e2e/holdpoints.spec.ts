@@ -303,7 +303,7 @@ async function mockSeededHoldPointsApi(page: Page, options: MockHoldPointsOption
 }
 
 test.describe('Hold points seeded release contract', () => {
-  test('renders seeded hold points, requests release, filters notified items, and chases release', async ({
+  test('renders seeded hold points, requests release, filters notified items, and chases release @pr-smoke', async ({
     page,
   }) => {
     const api = await mockSeededHoldPointsApi(page);

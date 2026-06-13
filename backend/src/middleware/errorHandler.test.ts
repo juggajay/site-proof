@@ -9,6 +9,7 @@ const ORIGINAL_ENV = { ...process.env };
 afterEach(() => {
   process.env = { ...ORIGINAL_ENV };
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 function mockRequest(): Request {
@@ -187,6 +188,92 @@ describe('errorHandler', () => {
 
     expect(status).toHaveBeenCalledWith(500);
     expect(mkdirSpy).not.toHaveBeenCalled();
+  });
+
+  it('does not call external monitoring when no monitoring endpoint is configured', () => {
+    process.env.NODE_ENV = 'production';
+    delete process.env.ERROR_MONITORING_ENDPOINT_URL;
+    suppressErrorLogOutput();
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+    const { res, status } = mockResponse();
+
+    errorHandler(new Error('Unexpected failure'), mockRequest(), res, vi.fn() as NextFunction);
+
+    expect(status).toHaveBeenCalledWith(500);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('forwards sanitized production server errors to the configured monitoring endpoint', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.ERROR_LOG_TO_FILE = 'false';
+    process.env.ERROR_MONITORING_ENDPOINT_URL =
+      'https://monitoring.example/events?api_key=endpoint_secret';
+    process.env.ERROR_MONITORING_ENVIRONMENT = 'railway-production';
+    const fetchSpy = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchSpy);
+    suppressErrorLogOutput();
+    const { res, status } = mockResponse();
+
+    errorHandler(
+      new Error('Database exploded token=error_secret while using Bearer jwt_secret'),
+      mockRequest(),
+      res,
+      vi.fn() as NextFunction,
+    );
+
+    expect(status).toHaveBeenCalledWith(500);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [url, options] = fetchSpy.mock.calls[0]!;
+    expect(url).toBe('https://monitoring.example/events?api_key=endpoint_secret');
+    expect(options.method).toBe('POST');
+    expect(options.headers).toEqual({ 'content-type': 'application/json' });
+
+    const payload = JSON.parse(String(options.body));
+    expect(payload).toMatchObject({
+      source: 'siteproof-backend',
+      environment: 'railway-production',
+      error: {
+        message: 'Database exploded token=[REDACTED] while using Bearer [REDACTED]',
+        code: 'INTERNAL_ERROR',
+        statusCode: 500,
+      },
+      request: {
+        method: 'GET',
+        path: '/api/auth/validate-reset-token',
+        query: {
+          token: '[REDACTED]',
+          search: 'lot 123',
+        },
+        requestId: 'request-1',
+        origin: 'https://app.siteproof.example?token=[REDACTED]',
+        authenticated: false,
+      },
+    });
+
+    const serializedPayload = JSON.stringify(payload);
+    expect(serializedPayload).not.toContain('error_secret');
+    expect(serializedPayload).not.toContain('jwt_secret');
+    expect(serializedPayload).not.toContain('reset_secret');
+    expect(serializedPayload).not.toContain('endpoint_secret');
+    expect(serializedPayload).not.toContain('127.0.0.1');
+    expect(serializedPayload).not.toContain('vitest');
+  });
+
+  it('does not forward warnings or non-production errors to external monitoring', () => {
+    process.env.NODE_ENV = 'development';
+    process.env.ERROR_MONITORING_ENDPOINT_URL = 'https://monitoring.example/events';
+    suppressErrorLogOutput();
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+    const { res, status } = mockResponse();
+
+    errorHandler(AppError.badRequest('Invalid token=bad_secret'), mockRequest(), res, vi.fn());
+    process.env.NODE_ENV = 'production';
+    errorHandler(AppError.badRequest('Invalid token=bad_secret'), mockRequest(), res, vi.fn());
+
+    expect(status).toHaveBeenCalledWith(400);
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it('still handles requests when the local error log directory cannot be created', () => {
