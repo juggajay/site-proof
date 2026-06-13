@@ -1,6 +1,10 @@
 name: Production Preflight
 
 on:
+  push:
+    branches: [main, master]
+  schedule:
+    - cron: "23 18 * * *"
   workflow_dispatch:
     inputs:
       environment:
@@ -28,7 +32,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          requested_environment="${{ github.event.inputs.environment }}"
+          requested_environment="${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'production' }}"
           case "$requested_environment" in
             staging|production)
               ;;
@@ -38,9 +42,15 @@ jobs:
               ;;
           esac
 
-          if [[ "$requested_environment" == "production" && "${{ github.ref }}" != "refs/heads/master" ]]; then
-            echo "::error::Production preflight can only run from refs/heads/master."
-            exit 1
+          if [[ "$requested_environment" == "production" ]]; then
+            case "${{ github.ref }}" in
+              refs/heads/main|refs/heads/master)
+                ;;
+              *)
+                echo "::error::Production preflight can only run from refs/heads/main or refs/heads/master."
+                exit 1
+                ;;
+            esac
           fi
 
           echo "environment=$requested_environment" >> "$GITHUB_OUTPUT"

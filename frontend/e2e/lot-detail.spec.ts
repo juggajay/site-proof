@@ -731,7 +731,7 @@ test.describe('Lot detail ITP workflow', () => {
     await expect(modal.getByRole('button', { name: 'Assign Subcontractor' })).toBeEnabled();
   });
 
-  test('guards duplicate checklist completion submissions', async ({ page }) => {
+  test('guards duplicate checklist completion submissions @pr-smoke', async ({ page }) => {
     const api = await mockLotDetailApi(page);
 
     await page.goto(`/projects/${E2E_PROJECT_ID}/lots/${E2E_LOT_ID}`);

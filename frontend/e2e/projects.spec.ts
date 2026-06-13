@@ -270,7 +270,9 @@ test.describe('Projects seeded account contract', () => {
     await expect(page.getByRole('link', { name: /E2E Bridge Widening/ })).toContainText('On Hold');
   });
 
-  test('creates a project with trimmed text and opens the new project', async ({ page }) => {
+  test('creates a project with trimmed text and opens the new project @pr-smoke', async ({
+    page,
+  }) => {
     const api = await mockProjectsApi(page, { projects: [] });
 
     await page.goto('/projects');

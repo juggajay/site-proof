@@ -10,7 +10,7 @@ import {
 } from './invitationResponses.js';
 
 describe('invitationResponses', () => {
-  it('builds public invitation details', () => {
+  it('builds public invitation details without exposing the full invited contact', () => {
     expect(
       buildSubcontractorInvitationDetailsResponse(
         {
@@ -31,8 +31,9 @@ describe('invitationResponses', () => {
         companyName: 'Civil Subbie Pty Ltd',
         projectName: 'M1 Upgrade',
         headContractorName: 'Head Contractor Pty Ltd',
-        primaryContactEmail: 'subbie@example.com',
-        primaryContactName: 'Sam',
+        primaryContactEmail: '',
+        primaryContactEmailMasked: 's***@example.com',
+        primaryContactName: '',
         status: 'approved',
         expiresAt: '2026-06-01T00:00:00.000Z',
         canAccept: true,

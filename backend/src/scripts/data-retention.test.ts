@@ -1,6 +1,46 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { pathToFileURL } from 'node:url';
+import { describe, expect, it, vi } from 'vitest';
+
+const prismaMock = {
+  $connect: vi.fn().mockResolvedValue(undefined),
+  $disconnect: vi.fn().mockResolvedValue(undefined),
+  passwordResetToken: {
+    count: vi.fn().mockResolvedValue(0),
+    deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+  },
+  emailVerificationToken: {
+    count: vi.fn().mockResolvedValue(0),
+    deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+  },
+  notification: { count: vi.fn().mockResolvedValue(0) },
+  syncQueue: {
+    count: vi.fn().mockResolvedValue(0),
+    deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+  },
+  auditLog: { count: vi.fn().mockResolvedValue(0) },
+  project: { count: vi.fn().mockResolvedValue(0) },
+  documentSignedUrlToken: {
+    count: vi.fn().mockResolvedValue(0),
+    deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+  },
+  holdPointReleaseToken: {
+    count: vi.fn().mockResolvedValue(0),
+    deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+  },
+};
+
+vi.mock('@prisma/client', () => ({
+  PrismaClient: vi.fn(function PrismaClient() {
+    return prismaMock;
+  }),
+}));
+
+async function importDataRetentionScript() {
+  const scriptUrl = pathToFileURL(join(process.cwd(), 'scripts', 'data-retention.ts')).href;
+  return import(/* @vite-ignore */ scriptUrl);
+}
 
 describe('data retention reporting', () => {
   it('does not report read notifications as archived before an archive path exists', () => {
@@ -23,5 +63,27 @@ describe('data retention reporting', () => {
     expect(source).toContain('requireRetentionApplyConfirmation');
     expect(source).toContain('Refusing retention apply');
     expect(source).toContain('database host/name');
+  });
+
+  it('builds document signed-link cleanup from expiry only', async () => {
+    const { buildExpiredDocumentSignedUrlTokenWhere } = await importDataRetentionScript();
+    const now = new Date('2026-06-13T00:00:00.000Z');
+
+    expect(buildExpiredDocumentSignedUrlTokenWhere(now)).toEqual({
+      expiresAt: { lt: now },
+    });
+  });
+
+  it('builds hold-point release-token cleanup for expired or old used tokens only', async () => {
+    const { buildExpiredOrOldUsedHoldPointReleaseTokenWhere, RETENTION_POLICIES } =
+      await importDataRetentionScript();
+    const now = new Date('2026-06-13T00:00:00.000Z');
+    const usedCutoff = new Date(
+      now.getTime() - RETENTION_POLICIES.usedHoldPointReleaseTokens * 24 * 60 * 60 * 1000,
+    );
+
+    expect(buildExpiredOrOldUsedHoldPointReleaseTokenWhere(now)).toEqual({
+      OR: [{ expiresAt: { lt: now } }, { usedAt: { not: null, lt: usedCutoff } }],
+    });
   });
 });

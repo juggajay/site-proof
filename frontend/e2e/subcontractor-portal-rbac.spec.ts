@@ -285,7 +285,7 @@ test.describe('Subcontractor portal RBAC', () => {
     await expect(page.getByText('E2E Civil Subcontractors')).toBeVisible();
   });
 
-  test('redirects linked portal identities from project detail to assigned work', async ({
+  test('redirects linked portal identities from project detail to assigned work @pr-smoke', async ({
     page,
   }) => {
     await mockSubcontractorPortalApi(page, subcontractorPortalUser);

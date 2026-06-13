@@ -271,7 +271,7 @@ async function mockSeededLotsApi(page: Page, options: MockSeededLotsOptions = {}
 }
 
 test.describe('Lots seeded UI contract', () => {
-  test('renders the seeded lot register with hard assertions', async ({ page }) => {
+  test('renders the seeded lot register with hard assertions @pr-smoke', async ({ page }) => {
     await mockSeededLotsApi(page);
 
     await page.goto(`/projects/${E2E_PROJECT_ID}/lots`);
