@@ -86,12 +86,63 @@ jobs:
       - name: Build backend
         run: npm run build
 
+      - id: preflight-config
+        name: Check production preflight configuration
+        shell: bash
+        env:
+          DATABASE_URL_PRESENT: ${{ secrets.DATABASE_URL != '' }}
+          JWT_SECRET_PRESENT: ${{ secrets.JWT_SECRET != '' }}
+          ENCRYPTION_KEY_PRESENT: ${{ secrets.ENCRYPTION_KEY != '' }}
+          FRONTEND_URL_PRESENT: ${{ secrets.FRONTEND_URL != '' }}
+          BACKEND_URL_PRESENT: ${{ secrets.BACKEND_URL != '' }}
+          API_URL_PRESENT: ${{ secrets.API_URL != '' }}
+          RESEND_API_KEY_PRESENT: ${{ secrets.RESEND_API_KEY != '' }}
+          EMAIL_FROM_PRESENT: ${{ secrets.EMAIL_FROM != '' }}
+          SUPABASE_URL_PRESENT: ${{ secrets.SUPABASE_URL != '' }}
+          SUPABASE_SERVICE_ROLE_KEY_PRESENT: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY != '' }}
+          GOOGLE_CLIENT_ID_PRESENT: ${{ secrets.GOOGLE_CLIENT_ID != '' }}
+          GOOGLE_CLIENT_SECRET_PRESENT: ${{ secrets.GOOGLE_CLIENT_SECRET != '' }}
+          GOOGLE_REDIRECT_URI_PRESENT: ${{ secrets.GOOGLE_REDIRECT_URI != '' }}
+        run: |
+          set -euo pipefail
+
+          missing=()
+          [[ "$DATABASE_URL_PRESENT" == "true" ]] || missing+=("DATABASE_URL")
+          [[ "$JWT_SECRET_PRESENT" == "true" ]] || missing+=("JWT_SECRET")
+          [[ "$ENCRYPTION_KEY_PRESENT" == "true" ]] || missing+=("ENCRYPTION_KEY")
+          [[ "$FRONTEND_URL_PRESENT" == "true" ]] || missing+=("FRONTEND_URL")
+          [[ "$BACKEND_URL_PRESENT" == "true" ]] || missing+=("BACKEND_URL")
+          [[ "$API_URL_PRESENT" == "true" ]] || missing+=("API_URL")
+          [[ "$RESEND_API_KEY_PRESENT" == "true" ]] || missing+=("RESEND_API_KEY")
+          [[ "$EMAIL_FROM_PRESENT" == "true" ]] || missing+=("EMAIL_FROM")
+          [[ "$SUPABASE_URL_PRESENT" == "true" ]] || missing+=("SUPABASE_URL")
+          [[ "$SUPABASE_SERVICE_ROLE_KEY_PRESENT" == "true" ]] || missing+=("SUPABASE_SERVICE_ROLE_KEY")
+          [[ "$GOOGLE_CLIENT_ID_PRESENT" == "true" ]] || missing+=("GOOGLE_CLIENT_ID")
+          [[ "$GOOGLE_CLIENT_SECRET_PRESENT" == "true" ]] || missing+=("GOOGLE_CLIENT_SECRET")
+          [[ "$GOOGLE_REDIRECT_URI_PRESENT" == "true" ]] || missing+=("GOOGLE_REDIRECT_URI")
+
+          if (( ${#missing[@]} > 0 )); then
+            message="Production preflight is not configured; missing GitHub secrets: ${missing[*]}"
+            if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+              echo "::error::$message"
+              exit 1
+            fi
+
+            echo "::warning::$message. Skipping integration checks for this automatic run."
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "configured=true" >> "$GITHUB_OUTPUT"
+
       - name: Verify database migration status
+        if: steps.preflight-config.outputs.configured == 'true'
         run: npm run migrate:status
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       - name: Run production integration preflight
+        if: steps.preflight-config.outputs.configured == 'true'
         run: npm run preflight:integrations
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}

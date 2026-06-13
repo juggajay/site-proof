@@ -1443,6 +1443,18 @@ test.describe('production readiness guardrails', () => {
     expect(productionPreflightWorkflow).toContain(
       'name: ${{ needs.validate-dispatch.outputs.environment }}',
     );
+    expect(productionPreflightWorkflow).toContain('Check production preflight configuration');
+    expect(productionPreflightWorkflow).toContain('DATABASE_URL_PRESENT');
+    expect(productionPreflightWorkflow).toContain(
+      'Production preflight is not configured; missing GitHub secrets',
+    );
+    expect(productionPreflightWorkflow).toContain(
+      'if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then',
+    );
+    expect(productionPreflightWorkflow).toContain('configured=false');
+    expect(productionPreflightWorkflow).toContain(
+      "if: steps.preflight-config.outputs.configured == 'true'",
+    );
     expect(productionPreflightWorkflow).toContain('npm run migrate:status');
     expect(productionPreflightWorkflow).toContain('npm run preflight:integrations');
     expect(productionPreflightWorkflow).toContain('secrets.RESEND_API_KEY');
