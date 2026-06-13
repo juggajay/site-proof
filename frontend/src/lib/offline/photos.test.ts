@@ -12,6 +12,7 @@ vi.mock('./core', () => ({
       update: vi.fn(),
       delete: vi.fn(),
       get: vi.fn(),
+      filter: vi.fn(),
     },
     syncQueue: {
       add: vi.fn(),
@@ -28,6 +29,7 @@ import {
   capturePhotoOffline,
   compressImage,
   deleteOfflinePhoto,
+  getUnsyncedPhotos,
   markPhotoSynced,
   markPhotoUploadedAwaitingAttach,
   markPhotoSyncError,
@@ -36,6 +38,7 @@ import {
 } from '@/lib/offlineDb';
 
 const compressImageMock = vi.mocked(compressImage);
+const photosFilterMock = vi.mocked(offlineDb.photos.filter);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -43,6 +46,26 @@ beforeEach(() => {
     dataUrl: 'data:image/jpeg;base64,compressed',
     originalSize: 2048,
     compressedSize: 512,
+  });
+});
+
+describe('offline photo queries', () => {
+  it('returns both pending and errored photos that still need user attention', async () => {
+    const toArray = vi.fn().mockResolvedValue([
+      { id: 'pending-photo', syncStatus: 'pending' },
+      { id: 'errored-photo', syncStatus: 'error' },
+    ]);
+    photosFilterMock.mockReturnValue({
+      toArray,
+    } as unknown as ReturnType<typeof offlineDb.photos.filter>);
+
+    const photos = await getUnsyncedPhotos();
+
+    expect(photos).toEqual([
+      { id: 'pending-photo', syncStatus: 'pending' },
+      { id: 'errored-photo', syncStatus: 'error' },
+    ]);
+    expect(photosFilterMock).toHaveBeenCalledWith(expect.any(Function));
   });
 });
 

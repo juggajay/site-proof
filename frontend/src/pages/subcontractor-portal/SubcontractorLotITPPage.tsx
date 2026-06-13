@@ -120,6 +120,14 @@ export function SubcontractorLotITPPage() {
       },
     });
 
+  const handleToggleCompletionForChecklist = async (
+    checklistItemId: string,
+    isCompleted: boolean,
+    notes: string | null,
+  ): Promise<void> => {
+    await handleToggleCompletion(checklistItemId, isCompleted, notes);
+  };
+
   const handleAddPhoto = async (checklistItemId: string, file: File) => {
     if (!itpInstance || !lot) return;
     if (!requireCompletionAccess()) return;
@@ -162,6 +170,7 @@ export function SubcontractorLotITPPage() {
         projectId: lot.projectId,
         lotId: lot.id,
         completionId: completion.id,
+        checklistItemId,
         file,
         capturedBy: user?.id ?? 'unknown',
       });
@@ -260,7 +269,7 @@ export function SubcontractorLotITPPage() {
         templateName={itpInstance.template.name}
         checklistItems={itpInstance.template.checklistItems}
         completions={itpInstance.completions}
-        onToggleCompletion={handleToggleCompletion}
+        onToggleCompletion={handleToggleCompletionForChecklist}
         onMarkNotApplicable={handleMarkNotApplicable}
         onMarkFailed={handleMarkFailed}
         onUpdateNotes={handleUpdateNotes}

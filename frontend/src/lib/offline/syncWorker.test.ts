@@ -764,6 +764,63 @@ describe('syncSingleItem — photo_upload (Slice 3, moved from the hook)', () =>
     expect(markPhotoSyncedMock).toHaveBeenCalledWith('ph-2', 'doc-10');
   });
 
+  it('ITP completion attachment photo: resolves an offline completion id before upload and attach', async () => {
+    getOfflinePhotoMock.mockResolvedValue(
+      itpAttachmentPhotoRecord({
+        entityId: 'offline-ci-1-12345',
+        completionId: 'offline-ci-1-12345',
+        checklistItemId: 'ci-1',
+      }),
+    );
+    authFetchMock
+      .mockResolvedValueOnce(
+        okJson({
+          instance: {
+            completions: [{ id: 'completion-real-9', checklistItemId: 'ci-1' }],
+          },
+        }),
+      )
+      .mockResolvedValueOnce(okJson({ id: 'doc-10' }))
+      .mockResolvedValueOnce(okJson({ attachment: { id: 'att-1' } }));
+
+    const result = await syncSingleItem(
+      queueItem({ id: 42, type: 'photo_upload', data: { photoId: 'ph-2' } }),
+    );
+
+    expect(result).toEqual({ status: 'synced' });
+    expect(authFetchMock).toHaveBeenNthCalledWith(1, '/api/itp/instances/lot/lot-1');
+    expect(authFetchMock.mock.calls[2][0]).toBe(
+      '/api/itp/completions/completion-real-9/attachments',
+    );
+    expect(globalFetchMock).toHaveBeenCalledWith('data:image/jpeg;base64,abc');
+    expect(markPhotoSyncedMock).toHaveBeenCalledWith('ph-2', 'doc-10');
+  });
+
+  it('ITP completion attachment photo: keeps offline completion id queued until the real completion exists', async () => {
+    getOfflinePhotoMock.mockResolvedValue(
+      itpAttachmentPhotoRecord({
+        entityId: 'offline-ci-1-12345',
+        completionId: 'offline-ci-1-12345',
+        checklistItemId: 'ci-1',
+      }),
+    );
+    authFetchMock.mockResolvedValueOnce(okJson({ instance: { completions: [] } }));
+
+    const result = await syncSingleItem(
+      queueItem({ id: 42, type: 'photo_upload', data: { photoId: 'ph-2' } }),
+    );
+
+    expect(result).toEqual({ status: 'handled' });
+    expect(authFetchMock).toHaveBeenCalledTimes(1);
+    expect(globalFetchMock).not.toHaveBeenCalled();
+    expect(markSyncItemErrorMock).toHaveBeenCalledWith(
+      42,
+      'Waiting for synced ITP completion before attaching evidence',
+    );
+    expect(markPhotoSyncErrorMock).not.toHaveBeenCalled();
+    expect(removeSyncQueueItemMock).not.toHaveBeenCalled();
+  });
+
   it('ITP completion attachment photo: failed attach keeps the item queued without marking the photo errored', async () => {
     getOfflinePhotoMock.mockResolvedValue(itpAttachmentPhotoRecord());
     authFetchMock

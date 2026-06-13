@@ -30,6 +30,7 @@ export {
   getOfflinePhotosForLot,
   getPendingPhotos,
   getPendingPhotosCount,
+  getUnsyncedPhotos,
   markPhotoSynced,
   markPhotoUploadedAwaitingAttach,
   markPhotoSyncError,

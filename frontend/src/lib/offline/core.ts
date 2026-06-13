@@ -200,6 +200,7 @@ export interface OfflinePhoto {
   entityType: 'lot' | 'ncr' | 'holdpoint' | 'itp' | 'test' | 'general';
   entityId?: string;
   completionId?: string;
+  checklistItemId?: string;
   attachAs?: 'itp_completion_attachment' | 'ncr_evidence' | 'document_only';
   documentType: string;
   category?: string;

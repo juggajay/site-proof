@@ -385,6 +385,23 @@ describe('useItpCompletionActions — HC param set (same hook, HC wire)', () => 
 });
 
 describe('useItpCompletionActions — success flag for the mobile sheet', () => {
+  it('toggle resolves true on success and false when the write fails', async () => {
+    const { params } = portalParams();
+    const { result } = renderHook(() => useItpCompletionActions(params));
+
+    let returned: boolean | undefined;
+    await act(async () => {
+      returned = await result.current.handleToggleCompletion('item-1', true, 'note');
+    });
+    expect(returned).toBe(true);
+
+    vi.mocked(apiFetch).mockRejectedValueOnce(new Error('network down'));
+    await act(async () => {
+      returned = await result.current.handleToggleCompletion('item-1', true, 'note');
+    });
+    expect(returned).toBe(false);
+  });
+
   it('mark N/A resolves true on success and false when the write fails', async () => {
     const { params } = portalParams();
     const { result } = renderHook(() => useItpCompletionActions(params));
@@ -427,13 +444,17 @@ describe('useItpCompletionActions — success flag for the mobile sheet', () => 
 
     const returns: (boolean | undefined)[] = [];
     await act(async () => {
+      returns.push(await gatedHook.result.current.handleToggleCompletion('item-1', true, null));
       returns.push(await gatedHook.result.current.handleMarkNotApplicable('item-1', 'x'));
       returns.push(await gatedHook.result.current.handleMarkFailed('item-1', 'x'));
+      returns.push(
+        await noInstanceHook.result.current.handleToggleCompletion('item-1', true, null),
+      );
       returns.push(await noInstanceHook.result.current.handleMarkNotApplicable('item-1', 'x'));
       returns.push(await noInstanceHook.result.current.handleMarkFailed('item-1', 'x'));
     });
 
-    expect(returns).toEqual([false, false, false, false]);
+    expect(returns).toEqual([false, false, false, false, false, false]);
     expect(apiFetch).not.toHaveBeenCalled();
   });
 });

@@ -109,6 +109,10 @@ type DocketItem = Extract<SyncQueueItem, { type: 'docket_create' | 'docket_submi
 type PhotoUploadItem = Extract<SyncQueueItem, { type: 'photo_upload' }>;
 type LotEditItem = Extract<SyncQueueItem, { type: 'lot_edit' }>;
 
+function isOfflineCompletionId(completionId: string): boolean {
+  return completionId.startsWith('offline-');
+}
+
 async function syncItpCompletion(item: ItpCompletionItem, itemId: number): Promise<SyncItemResult> {
   return runSyncStep(item, async () => {
     const completion = item.data;
@@ -393,7 +397,7 @@ async function syncPhoto(item: PhotoUploadItem, itemId: number): Promise<SyncIte
       // created Document to its domain row. serverDocumentId persisted after a
       // successful upload makes a retried item skip straight to the attach step
       // instead of re-uploading a duplicate file.
-      const itpCompletionId =
+      let itpCompletionId =
         photo.attachAs === 'itp_completion_attachment'
           ? (photo.completionId ?? photo.entityId)
           : undefined;
@@ -407,6 +411,42 @@ async function syncPhoto(item: PhotoUploadItem, itemId: number): Promise<SyncIte
         await markSyncItemError(itemId, message);
         return HANDLED;
       };
+
+      if (
+        needsItpAttach &&
+        itpCompletionId &&
+        isOfflineCompletionId(itpCompletionId) &&
+        photo.lotId &&
+        photo.checklistItemId
+      ) {
+        try {
+          const instanceResponse = await authFetch(apiUrl(`/api/itp/instances/lot/${photo.lotId}`));
+
+          if (!instanceResponse.ok) {
+            return keepPostUploadAttachQueued(
+              'Waiting for synced ITP completion before attaching evidence',
+            );
+          }
+
+          const instanceData = await instanceResponse.json();
+          const serverCompletion = instanceData.instance?.completions?.find(
+            (completion: { id?: string; checklistItemId?: string }) =>
+              completion.checklistItemId === photo.checklistItemId,
+          );
+
+          if (!serverCompletion?.id) {
+            return keepPostUploadAttachQueued(
+              'Waiting for synced ITP completion before attaching evidence',
+            );
+          }
+
+          itpCompletionId = serverCompletion.id;
+        } catch {
+          return keepPostUploadAttachQueued(
+            'Waiting for synced ITP completion before attaching evidence',
+          );
+        }
+      }
 
       if (!documentId) {
         // Convert base64 to blob for upload
