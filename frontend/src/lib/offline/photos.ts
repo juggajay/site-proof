@@ -26,6 +26,7 @@ export async function capturePhotoOffline(
     entityType: OfflinePhoto['entityType'];
     entityId?: string;
     completionId?: string;
+    checklistItemId?: string;
     attachAs?: OfflinePhoto['attachAs'];
     documentType?: string;
     category?: string;
@@ -47,6 +48,7 @@ export async function capturePhotoOffline(
     entityType: options.entityType,
     entityId: options.entityId,
     completionId: options.completionId,
+    checklistItemId: options.checklistItemId,
     attachAs: options.attachAs,
     documentType: options.documentType ?? 'photo',
     category: options.category,
@@ -102,6 +104,14 @@ export async function getOfflinePhotosForEntity(
 // Get all pending photos
 export async function getPendingPhotos(): Promise<OfflinePhoto[]> {
   return offlineDb.photos.where('syncStatus').equals('pending').toArray();
+}
+
+// Get photos that still need attention in the UI: new pending captures plus
+// dead-lettered/error captures that should remain visible for retry/removal.
+export async function getUnsyncedPhotos(): Promise<OfflinePhoto[]> {
+  return offlineDb.photos
+    .filter((photo) => photo.syncStatus === 'pending' || photo.syncStatus === 'error')
+    .toArray();
 }
 
 // Get pending photos count

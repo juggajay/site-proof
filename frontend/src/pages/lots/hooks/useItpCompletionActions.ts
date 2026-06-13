@@ -101,9 +101,9 @@ export function useItpCompletionActions({
     checklistItemId: string,
     isCompleted: boolean,
     notes: string | null,
-  ) => {
-    if (!itpInstance) return;
-    if (!requireAccess()) return;
+  ): Promise<boolean> => {
+    if (!itpInstance) return false;
+    if (!requireAccess()) return false;
     setUpdatingItem(checklistItemId);
 
     try {
@@ -119,8 +119,10 @@ export function useItpCompletionActions({
 
       await onAfterMutate();
       toast({ title: copy.toggleTitle, description: copy.toggleDescription, variant: 'success' });
+      return true;
     } catch (err) {
       handleApiError(err, 'Failed to update item');
+      return false;
     } finally {
       setUpdatingItem(null);
     }

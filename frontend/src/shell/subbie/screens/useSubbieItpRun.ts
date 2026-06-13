@@ -150,8 +150,7 @@ export function useSubbieItpRun(lotId: string | undefined): SubbieItpRun {
       const existing = instance?.completions.find((c) => c.checklistItemId === checklistItemId);
       if (existing?.isCompleted) return true; // idempotent advance
       try {
-        await handleToggleCompletion(checklistItemId, true, notes);
-        return true;
+        return await handleToggleCompletion(checklistItemId, true, notes);
       } catch {
         return false;
       }
@@ -207,6 +206,7 @@ export function useSubbieItpRun(lotId: string | undefined): SubbieItpRun {
           projectId: lot.projectId,
           lotId: lot.id,
           completionId: completion.id,
+          checklistItemId,
           file,
           capturedBy: user?.id ?? 'unknown',
         });

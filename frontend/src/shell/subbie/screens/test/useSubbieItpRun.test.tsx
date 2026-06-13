@@ -30,14 +30,26 @@ vi.mock('@/pages/lots/hooks/useLotPhotoUpload', () => ({
   uploadItpEvidencePhotoWithOfflineFallback: (...args: unknown[]) => uploadMock(...args),
 }));
 
+const {
+  handleToggleCompletionMock,
+  handleMarkNotApplicableMock,
+  handleMarkFailedMock,
+  handleUpdateNotesMock,
+} = vi.hoisted(() => ({
+  handleToggleCompletionMock: vi.fn(),
+  handleMarkNotApplicableMock: vi.fn(),
+  handleMarkFailedMock: vi.fn(),
+  handleUpdateNotesMock: vi.fn(),
+}));
+
 // The shared completion-action hook has its own suite; here we only need it to
 // not throw and to expose the four handlers.
 vi.mock('@/pages/lots/hooks/useItpCompletionActions', () => ({
   useItpCompletionActions: () => ({
-    handleToggleCompletion: vi.fn(),
-    handleMarkNotApplicable: vi.fn(),
-    handleMarkFailed: vi.fn(),
-    handleUpdateNotes: vi.fn(),
+    handleToggleCompletion: handleToggleCompletionMock,
+    handleMarkNotApplicable: handleMarkNotApplicableMock,
+    handleMarkFailed: handleMarkFailedMock,
+    handleUpdateNotes: handleUpdateNotesMock,
   }),
 }));
 
@@ -99,6 +111,10 @@ function setApi({
 describe('useSubbieItpRun', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    handleToggleCompletionMock.mockResolvedValue(true);
+    handleMarkNotApplicableMock.mockResolvedValue(true);
+    handleMarkFailedMock.mockResolvedValue(true);
+    handleUpdateNotesMock.mockResolvedValue(undefined);
     uploadMock.mockResolvedValue({ status: 'uploaded', attachment: { id: 'att-1' } });
   });
 
@@ -190,5 +206,20 @@ describe('useSubbieItpRun', () => {
     expect(uploadMock).toHaveBeenCalledWith(
       expect.objectContaining({ completionId: 'comp-existing' }),
     );
+  });
+
+  it('pass returns false when the shared completion action reports a failed save', async () => {
+    handleToggleCompletionMock.mockResolvedValueOnce(false);
+    setApi({ canComplete: true, completions: [] });
+    const { result } = renderHook(() => useSubbieItpRun('lot-1'));
+    await waitFor(() => expect(result.current.instance).not.toBeNull());
+
+    let saved: boolean | undefined;
+    await act(async () => {
+      saved = await result.current.pass('item-1', 'ready');
+    });
+
+    expect(saved).toBe(false);
+    expect(handleToggleCompletionMock).toHaveBeenCalledWith('item-1', true, 'ready');
   });
 });

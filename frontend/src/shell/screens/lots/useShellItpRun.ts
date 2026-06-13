@@ -243,6 +243,7 @@ export function useShellItpRun(
           projectId,
           lotId,
           completionId: completion.id,
+          checklistItemId,
           file,
           capturedBy: user?.id ?? 'unknown',
         });

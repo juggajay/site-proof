@@ -13,30 +13,55 @@
  */
 
 import { useOfflineStatus } from '@/lib/useOfflineStatus';
-import { deriveSyncState } from './syncChipState';
+import { deriveSyncState, type SyncState } from './syncChipState';
+
+function syncChipLabel(state: SyncState, pendingSyncCount: number, failedSyncCount: number) {
+  switch (state) {
+    case 'saved':
+      return 'All saved';
+    case 'syncing':
+      return 'Syncing…';
+    case 'failed':
+      return `${failedSyncCount} failed`;
+    case 'waiting':
+      return `${pendingSyncCount} waiting ↑`;
+  }
+}
+
+function syncChipAriaLabel(state: SyncState, pendingSyncCount: number, failedSyncCount: number) {
+  switch (state) {
+    case 'saved':
+      return 'All changes saved';
+    case 'syncing':
+      return 'Syncing changes';
+    case 'failed':
+      return `${failedSyncCount} change${failedSyncCount === 1 ? '' : 's'} failed to sync`;
+    case 'waiting':
+      return `${pendingSyncCount} change${pendingSyncCount === 1 ? '' : 's'} waiting to sync`;
+  }
+}
+
+function syncChipToneClass(state: SyncState) {
+  if (state === 'failed') return 'text-destructive';
+  if (state === 'waiting' || state === 'syncing') return 'text-warning';
+  return 'text-success';
+}
 
 export function SyncChip() {
-  const { isOnline, pendingSyncCount, isSyncing } = useOfflineStatus();
-  const state = deriveSyncState(isOnline, pendingSyncCount, isSyncing);
-
-  const isAmber = state === 'waiting' || state === 'syncing';
+  const { isOnline, pendingSyncCount, failedSyncCount, isSyncing } = useOfflineStatus();
+  const state = deriveSyncState(isOnline, pendingSyncCount, isSyncing, failedSyncCount);
+  const label = syncChipLabel(state, pendingSyncCount, failedSyncCount);
 
   return (
     <span
       role="status"
-      aria-label={
-        state === 'saved'
-          ? 'All changes saved'
-          : state === 'syncing'
-            ? 'Syncing changes'
-            : `${pendingSyncCount} change${pendingSyncCount === 1 ? '' : 's'} waiting to sync`
-      }
+      aria-label={syncChipAriaLabel(state, pendingSyncCount, failedSyncCount)}
       className={[
         'inline-flex items-center gap-1.5 whitespace-nowrap',
         'rounded-full px-[11px] py-[7px]',
         'border border-border bg-card shadow-sm',
         'text-[12px] font-semibold leading-none',
-        isAmber ? 'text-warning' : 'text-success',
+        syncChipToneClass(state),
       ].join(' ')}
     >
       {/* Status dot */}
@@ -48,9 +73,7 @@ export function SyncChip() {
         ].join(' ')}
       />
 
-      {state === 'saved' && 'All saved'}
-      {state === 'syncing' && 'Syncing…'}
-      {state === 'waiting' && `${pendingSyncCount} waiting ↑`}
+      {label}
     </span>
   );
 }

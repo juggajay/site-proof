@@ -9,11 +9,11 @@
  *   `queryKeys.documents(projectId)` cache so a re-file invalidation refreshes
  *   both surfaces. Each row already carries lotId/lot, caption, gps and fileUrl.
  *
- *   OFFLINE-PENDING PHOTOS — `getPendingPhotos()` from the offline store
- *   (lib/offlineDb), so a just-captured photo that hasn't uploaded yet is shown
- *   at the top marked "uploading/waiting" and is never invisible. Read through a
- *   short-interval TanStack query (no new package; Dexie has no react binding
- *   here) so it refreshes as the sync worker drains the queue.
+ *   OFFLINE-UNSYNCED PHOTOS — `getUnsyncedPhotos()` from the offline store
+ *   (lib/offlineDb), so a just-captured photo or failed upload remains visible
+ *   at the top marked "uploading/waiting" or "error". Read through a short
+ *   interval TanStack query (no new package; Dexie has no react binding here)
+ *   so it refreshes as the sync worker drains the queue.
  *
  * The screens merge + order + filter client-side via the pure helpers in
  * photosShellState — mirroring the dockets/lots/issues shell pattern.
@@ -23,7 +23,7 @@ import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api';
 import { getAuthToken } from '@/lib/auth';
 import { queryKeys } from '@/lib/queryKeys';
-import { getPendingPhotos } from '@/lib/offlineDb';
+import { getUnsyncedPhotos } from '@/lib/offlineDb';
 import {
   mergePhotoItems,
   unfiledPhotoCount,
@@ -70,7 +70,7 @@ export function usePhotosShellData(projectId: string | null): PhotosShellData {
   const pendingQuery = useQuery({
     queryKey: ['shell-pending-photos', projectId ?? 'none'] as const,
     queryFn: async (): Promise<OfflinePendingPhoto[]> => {
-      const all = await getPendingPhotos();
+      const all = await getUnsyncedPhotos();
       // Scope to the active project; a pending capture always carries projectId.
       return all.filter((p) => !projectId || p.projectId === projectId);
     },

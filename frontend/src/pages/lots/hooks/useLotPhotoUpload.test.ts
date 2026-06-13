@@ -234,6 +234,7 @@ describe('uploadItpEvidencePhotoWithOfflineFallback', () => {
     projectId: 'project-1',
     lotId: 'lot-1',
     completionId: 'completion-1',
+    checklistItemId: 'item-1',
     file,
     capturedBy: 'user-7',
   };
@@ -264,6 +265,7 @@ describe('uploadItpEvidencePhotoWithOfflineFallback', () => {
       entityType: 'itp',
       entityId: 'completion-1',
       completionId: 'completion-1',
+      checklistItemId: 'item-1',
       attachAs: 'itp_completion_attachment',
       documentType: 'photo',
       category: 'itp_evidence',
@@ -396,6 +398,7 @@ describe('useLotPhotoUpload — handleAddPhoto outcomes', () => {
         entityType: 'itp',
         entityId: 'completion-1',
         completionId: 'completion-1',
+        checklistItemId: 'item-1',
         attachAs: 'itp_completion_attachment',
       }),
     );

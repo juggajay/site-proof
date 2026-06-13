@@ -20,6 +20,12 @@ describe('deriveSyncState', () => {
   it('returns "syncing" when isSyncing is true regardless of pending count', () => {
     expect(deriveSyncState(true, 0, true)).toBe('syncing');
     expect(deriveSyncState(false, 5, true)).toBe('syncing');
+    expect(deriveSyncState(true, 0, true, 2)).toBe('syncing');
+  });
+
+  it('returns "failed" when failed sync items exist and no sync is active', () => {
+    expect(deriveSyncState(true, 0, false, 1)).toBe('failed');
+    expect(deriveSyncState(true, 3, false, 2)).toBe('failed');
   });
 
   it('returns "waiting" when offline', () => {
@@ -54,6 +60,7 @@ describe('SyncChip — render', () => {
     mockOfflineStatus.mockReturnValue({
       isOnline: true,
       pendingSyncCount: 0,
+      failedSyncCount: 0,
       isSyncing: false,
     });
     render(<SyncChip />);
@@ -66,6 +73,7 @@ describe('SyncChip — render', () => {
     mockOfflineStatus.mockReturnValue({
       isOnline: true,
       pendingSyncCount: 3,
+      failedSyncCount: 0,
       isSyncing: false,
     });
     render(<SyncChip />);
@@ -77,6 +85,7 @@ describe('SyncChip — render', () => {
     mockOfflineStatus.mockReturnValue({
       isOnline: true,
       pendingSyncCount: 1,
+      failedSyncCount: 0,
       isSyncing: false,
     });
     render(<SyncChip />);
@@ -88,6 +97,7 @@ describe('SyncChip — render', () => {
     mockOfflineStatus.mockReturnValue({
       isOnline: true,
       pendingSyncCount: 2,
+      failedSyncCount: 0,
       isSyncing: true,
     });
     render(<SyncChip />);
@@ -99,9 +109,22 @@ describe('SyncChip — render', () => {
     mockOfflineStatus.mockReturnValue({
       isOnline: false,
       pendingSyncCount: 0,
+      failedSyncCount: 0,
       isSyncing: false,
     });
     render(<SyncChip />);
     expect(screen.getByRole('status')).toHaveTextContent('0 waiting ↑');
+  });
+
+  it('shows failed syncs instead of "All saved"', () => {
+    mockOfflineStatus.mockReturnValue({
+      isOnline: true,
+      pendingSyncCount: 0,
+      failedSyncCount: 2,
+      isSyncing: false,
+    });
+    render(<SyncChip />);
+    expect(screen.getByRole('status')).toHaveTextContent('2 failed');
+    expect(screen.getByRole('status')).toHaveAttribute('aria-label', '2 changes failed to sync');
   });
 });

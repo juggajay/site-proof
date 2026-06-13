@@ -130,12 +130,14 @@ export async function uploadItpEvidencePhotoWithOfflineFallback({
   projectId,
   lotId,
   completionId,
+  checklistItemId,
   file,
   capturedBy,
 }: {
   projectId: string | undefined;
   lotId: string | undefined;
   completionId: string;
+  checklistItemId?: string;
   file: File;
   capturedBy: string;
 }): Promise<ItpEvidenceUploadResult> {
@@ -151,6 +153,7 @@ export async function uploadItpEvidencePhotoWithOfflineFallback({
       entityType: 'itp',
       entityId: completionId,
       completionId,
+      checklistItemId,
       attachAs: 'itp_completion_attachment',
       documentType: 'photo',
       category: 'itp_evidence',
@@ -208,11 +211,13 @@ export function useLotPhotoUpload({
   const uploadEvidencePhoto = (
     completionId: string,
     file: File,
+    checklistItemId?: string,
   ): Promise<ItpEvidenceUploadResult> =>
     uploadItpEvidencePhotoWithOfflineFallback({
       projectId,
       lotId,
       completionId,
+      checklistItemId,
       file,
       capturedBy: user?.id ?? 'unknown',
     });
@@ -269,7 +274,7 @@ export function useLotPhotoUpload({
         return;
       }
 
-      const result = await uploadEvidencePhoto(completion.id, file);
+      const result = await uploadEvidencePhoto(completion.id, file, checklistItemId);
 
       if (result.status === 'queued') {
         notifyEvidenceSavedOffline();
@@ -332,7 +337,7 @@ export function useLotPhotoUpload({
     setUpdatingCompletion(checklistItemId);
 
     try {
-      const result = await uploadEvidencePhoto(completionId, file);
+      const result = await uploadEvidencePhoto(completionId, file, checklistItemId);
 
       if (result.status === 'queued') {
         notifyEvidenceSavedOffline();
