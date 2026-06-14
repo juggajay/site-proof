@@ -250,7 +250,8 @@ export function DangerZone({ projectId, project, onProjectUpdate }: DangerZonePr
           <h2 className="text-lg font-semibold text-destructive">Danger Zone</h2>
         </div>
         <p className="text-sm text-muted-foreground mb-4">
-          Once you delete a project, there is no going back. Please be certain.
+          Permanent delete is only for empty setup projects. Archive projects that have lots,
+          dockets, NCRs, documents, or audit history.
         </p>
         <Button type="button" variant="destructive" onClick={handleDeleteClick}>
           Delete Project
@@ -262,9 +263,9 @@ export function DangerZone({ projectId, project, onProjectUpdate }: DangerZonePr
         <Modal onClose={handleCancelDelete} alert>
           <AlertModalHeader>Delete Project</AlertModalHeader>
           <AlertModalDescription>
-            This action cannot be undone. This will permanently delete the project
-            <strong className="text-foreground"> {project?.name || projectId}</strong> and all
-            associated data.
+            This action cannot be undone. This will permanently delete the empty setup project
+            <strong className="text-foreground"> {project?.name || projectId}</strong>. Projects
+            with retained records must be archived instead.
           </AlertModalDescription>
           <ModalBody>
             <p className="text-sm text-muted-foreground mb-4">

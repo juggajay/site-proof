@@ -6,7 +6,7 @@ import { authRouter } from './auth.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { AuditAction, parseAuditLogChanges } from '../lib/auditLog.js';
-import { registerTestUser } from '../test/routeTestHarness.js';
+import { registerTestUser, TEST_USER_PASSWORD } from '../test/routeTestHarness.js';
 
 const app = express();
 app.use(express.json());
@@ -1352,6 +1352,106 @@ describe('Projects API', () => {
   });
 
   describe('DELETE /api/projects/:id', () => {
+    it('should hard-delete an empty setup project and preserve a deletion audit tombstone', async () => {
+      const createRes = await request(app)
+        .post('/api/projects')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          name: 'Empty Delete Project',
+          projectNumber: `PROJ-DELETE-EMPTY-${Date.now()}`,
+          state: 'NSW',
+          specificationSet: 'TfNSW',
+        });
+
+      expect(createRes.status).toBe(201);
+      const deleteProjectId = createRes.body.project.id as string;
+
+      try {
+        const res = await request(app)
+          .delete(`/api/projects/${deleteProjectId}`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ password: TEST_USER_PASSWORD });
+
+        expect(res.status).toBe(200);
+        expect(res.body.deletedProject.id).toBe(deleteProjectId);
+
+        const deletedProject = await prisma.project.findUnique({ where: { id: deleteProjectId } });
+        expect(deletedProject).toBeNull();
+
+        const deleteAudit = await prisma.auditLog.findFirst({
+          where: {
+            projectId: null,
+            userId,
+            entityType: 'project',
+            entityId: deleteProjectId,
+            action: AuditAction.PROJECT_DELETED,
+          },
+        });
+
+        expect(deleteAudit).toBeTruthy();
+        const changes = parseAuditLogChanges(deleteAudit!.changes) as Record<string, unknown>;
+        expect(changes.deletionType).toBe('empty_project_hard_delete');
+      } finally {
+        await prisma.auditLog.deleteMany({
+          where: { entityType: 'project', entityId: deleteProjectId },
+        });
+        await prisma.projectUser.deleteMany({ where: { projectId: deleteProjectId } });
+        await prisma.project.delete({ where: { id: deleteProjectId } }).catch(() => {});
+      }
+    });
+
+    it('should reject permanent deletion when a project contains retained records', async () => {
+      const createRes = await request(app)
+        .post('/api/projects')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          name: 'Retained Records Project',
+          projectNumber: `PROJ-DELETE-RETAINED-${Date.now()}`,
+          state: 'NSW',
+          specificationSet: 'TfNSW',
+        });
+
+      expect(createRes.status).toBe(201);
+      const retainedProjectId = createRes.body.project.id as string;
+
+      const lot = await prisma.lot.create({
+        data: {
+          projectId: retainedProjectId,
+          lotNumber: `LOT-RETAINED-${Date.now()}`,
+          lotType: 'area',
+          activityType: 'earthworks',
+          createdById: userId,
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .delete(`/api/projects/${retainedProjectId}`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ password: TEST_USER_PASSWORD });
+
+        expect(res.status).toBe(409);
+        expect(res.body.error.message).toContain('cannot be permanently deleted');
+        expect(res.body.error.details.retainedRecordCounts.lots).toBe(1);
+
+        const retainedProject = await prisma.project.findUnique({
+          where: { id: retainedProjectId },
+        });
+        expect(retainedProject).not.toBeNull();
+
+        const retainedLot = await prisma.lot.findUnique({ where: { id: lot.id } });
+        expect(retainedLot).not.toBeNull();
+      } finally {
+        await prisma.lot.deleteMany({ where: { projectId: retainedProjectId } });
+        await prisma.auditLog.deleteMany({ where: { projectId: retainedProjectId } });
+        await prisma.auditLog.deleteMany({
+          where: { entityType: 'project', entityId: retainedProjectId },
+        });
+        await prisma.projectUser.deleteMany({ where: { projectId: retainedProjectId } });
+        await prisma.project.delete({ where: { id: retainedProjectId } }).catch(() => {});
+      }
+    });
+
     it('should reject malformed password confirmation', async () => {
       const res = await request(app)
         .delete(`/api/projects/${projectId}`)
