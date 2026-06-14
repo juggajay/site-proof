@@ -232,21 +232,30 @@ describe('POST /api/projects/sample', () => {
     expect(membership).toMatchObject({ status: 'active' });
   });
 
-  it('deletes through the normal project-deletion path', async () => {
+  it('rejects permanent deletion of seeded samples and allows archiving instead', async () => {
     const res = await request(app)
       .delete(`/api/projects/${sampleProjectId}`)
       .set('Authorization', `Bearer ${adminToken}`)
       .send({ password: TEST_USER_PASSWORD });
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(409);
+    expect(res.body.error.message).toContain('cannot be permanently deleted');
 
     const remaining = await prisma.project.findUnique({ where: { id: sampleProjectId! } });
-    expect(remaining).toBeNull();
+    expect(remaining).not.toBeNull();
     const remainingLots = await prisma.lot.count({ where: { projectId: sampleProjectId! } });
-    expect(remainingLots).toBe(0);
+    expect(remainingLots).toBeGreaterThan(0);
     const remainingTemplates = await prisma.iTPTemplate.count({
       where: { projectId: sampleProjectId! },
     });
-    expect(remainingTemplates).toBe(0);
+    expect(remainingTemplates).toBeGreaterThan(0);
+
+    const archiveRes = await request(app)
+      .patch(`/api/projects/${sampleProjectId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ status: 'archived' });
+
+    expect(archiveRes.status).toBe(200);
+    expect(archiveRes.body.project.status).toBe('archived');
   });
 });
