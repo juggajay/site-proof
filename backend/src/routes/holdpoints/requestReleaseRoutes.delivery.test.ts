@@ -1,0 +1,165 @@
+import express from 'express';
+import request from 'supertest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const mocks = vi.hoisted(() => {
+  const tx = {
+    holdPoint: {
+      update: vi.fn(),
+      create: vi.fn(),
+    },
+    holdPointReleaseToken: {
+      deleteMany: vi.fn(),
+      createMany: vi.fn(),
+    },
+  };
+
+  return {
+    tx,
+    prisma: {
+      lot: { findUnique: vi.fn() },
+      user: { findUnique: vi.fn() },
+      projectUser: { findMany: vi.fn() },
+      $transaction: vi.fn(async (callback: (transaction: typeof tx) => Promise<unknown>) =>
+        callback(tx),
+      ),
+    },
+    sendHPReleaseRequestEmail: vi.fn(),
+    createAuditLog: vi.fn(),
+    requireLotReadAccess: vi.fn(),
+    requireProjectRole: vi.fn(),
+    requireSuperintendentApprovalRecipients: vi.fn(),
+  };
+});
+
+vi.mock('../../lib/prisma.js', () => ({ prisma: mocks.prisma }));
+
+vi.mock('../../lib/email.js', () => ({
+  sendHPReleaseRequestEmail: mocks.sendHPReleaseRequestEmail,
+}));
+
+vi.mock('../../middleware/authMiddleware.js', () => ({
+  requireAuth: (req: express.Request, _res: express.Response, next: express.NextFunction) => {
+    req.user = {
+      id: 'admin-user',
+      userId: 'admin-user',
+      email: 'admin@example.com',
+      fullName: 'Admin User',
+      roleInCompany: 'admin',
+      role: 'admin',
+      companyId: 'company-1',
+    };
+    next();
+  },
+}));
+
+vi.mock('../../lib/auditLog.js', () => ({
+  AuditAction: {
+    HP_RELEASE_REQUESTED: 'hp_release_requested',
+  },
+  createAuditLog: mocks.createAuditLog,
+}));
+
+vi.mock('./access.js', () => ({
+  HP_REQUEST_ROLES: ['admin'],
+  requireLotReadAccess: mocks.requireLotReadAccess,
+  requireProjectRole: mocks.requireProjectRole,
+}));
+
+vi.mock('./superintendentRecipients.js', () => ({
+  requireSuperintendentApprovalRecipients: mocks.requireSuperintendentApprovalRecipients,
+}));
+
+import { errorHandler } from '../../middleware/errorHandler.js';
+import { holdPointRequestReleaseRouter } from './requestReleaseRoutes.js';
+
+const app = express();
+app.use(express.json());
+app.use('/api/holdpoints', holdPointRequestReleaseRouter);
+app.use(errorHandler);
+
+function releaseReadyLot() {
+  return {
+    id: 'lot-1',
+    projectId: 'project-1',
+    lotNumber: 'LOT-1',
+    project: {
+      id: 'project-1',
+      name: 'Bridge Upgrade',
+      settings: null,
+      workingDays: '1,2,3,4,5',
+    },
+    itpInstance: {
+      template: {
+        checklistItems: [
+          {
+            id: 'item-1',
+            description: 'Footing inspection',
+            pointType: 'hold_point',
+            responsibleParty: 'contractor',
+            sequenceNumber: 1,
+          },
+        ],
+      },
+      completions: [],
+    },
+    holdPoints: [
+      {
+        id: 'hp-1',
+        status: 'pending',
+      },
+    ],
+  };
+}
+
+describe('hold point request-release delivery failure', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+
+    mocks.prisma.lot.findUnique.mockResolvedValue(releaseReadyLot());
+    mocks.prisma.user.findUnique.mockResolvedValue({
+      fullName: 'Admin User',
+      email: 'admin@example.com',
+    });
+    mocks.requireProjectRole.mockResolvedValue('admin');
+    mocks.requireSuperintendentApprovalRecipients.mockImplementation(
+      async (_projectId, _settings, recipients) => recipients,
+    );
+    mocks.tx.holdPoint.update.mockResolvedValue({
+      id: 'hp-1',
+      status: 'notified',
+      itpChecklistItem: { id: 'item-1' },
+    });
+    mocks.tx.holdPoint.create.mockResolvedValue({
+      id: 'hp-created',
+      status: 'notified',
+      itpChecklistItem: { id: 'item-1' },
+    });
+    mocks.tx.holdPointReleaseToken.deleteMany.mockResolvedValue({ count: 1 });
+    mocks.tx.holdPointReleaseToken.createMany.mockResolvedValue({ count: 1 });
+    mocks.sendHPReleaseRequestEmail.mockResolvedValue({
+      success: true,
+      messageId: 'mock-message',
+      provider: 'mock',
+    });
+  });
+
+  it('returns 502 and skips audit when email delivery is not accepted', async () => {
+    mocks.sendHPReleaseRequestEmail.mockResolvedValueOnce({
+      success: false,
+      error: 'Resend rejected the message',
+      provider: 'resend',
+    });
+
+    const res = await request(app).post('/api/holdpoints/request-release').send({
+      lotId: 'lot-1',
+      itpChecklistItemId: 'item-1',
+      notificationSentTo: 'superintendent@example.com',
+    });
+
+    expect(res.status).toBe(502);
+    expect(res.body.error.message).toBe('Failed to send hold point release request email');
+    expect(mocks.sendHPReleaseRequestEmail).toHaveBeenCalledOnce();
+    expect(mocks.createAuditLog).not.toHaveBeenCalled();
+  });
+});

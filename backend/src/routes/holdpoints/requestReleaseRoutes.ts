@@ -113,6 +113,17 @@ holdPointRequestReleaseRouter.post(
     if (!holdPointItem || !isReleaseGatedChecklistItem(holdPointItem)) {
       throw AppError.badRequest('Item is not release-gated');
     }
+    const releaseLot = lot;
+    const releaseHoldPointItem = holdPointItem;
+    const existingHoldPoint = lot.holdPoints[0];
+
+    if (existingHoldPoint?.status === 'released') {
+      throw AppError.badRequest('This hold point has already been released.');
+    }
+
+    if (existingHoldPoint?.status === 'completed') {
+      throw AppError.badRequest('This hold point has already been completed.');
+    }
 
     // Get all preceding items
     const precedingItems = getPrecedingChecklistItems(
@@ -251,8 +262,67 @@ holdPointRequestReleaseRouter.post(
     }
 
     const releaseTokenEntries = Array.from(uniqueRecipients.values());
+    if (releaseTokenEntries.length === 0) {
+      throw AppError.badRequest('At least one valid hold point release recipient is required.');
+    }
 
     const notificationSentAt = new Date();
+    const requestedBy = requestingUser?.fullName || requestingUser?.email || 'Unknown';
+    const releaseUrl = buildFrontendUrl(
+      `/projects/${releaseLot.project.id}/lots/${releaseLot.id}?tab=itp`,
+    );
+
+    // Format scheduled date for display
+    const formattedScheduledDate = scheduledDateValue
+      ? scheduledDateValue.toLocaleDateString('en-AU', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+        })
+      : undefined;
+
+    async function sendReleaseRequestEmail(recipient: HoldPointReleaseRecipient) {
+      const secureReleaseUrl = buildFrontendUrl(`/hp-release/${recipient.secureToken}`);
+      const evidencePackageUrl = `${secureReleaseUrl}#evidence-package`;
+
+      let result: Awaited<ReturnType<typeof sendHPReleaseRequestEmail>>;
+      try {
+        result = await sendHPReleaseRequestEmail({
+          to: recipient.email,
+          superintendentName: recipient.fullName || 'Reviewer',
+          projectName: releaseLot.project.name,
+          lotNumber: releaseLot.lotNumber,
+          holdPointDescription: releaseHoldPointItem.description,
+          scheduledDate: formattedScheduledDate,
+          scheduledTime: scheduledTime || undefined,
+          evidencePackageUrl,
+          releaseUrl,
+          secureReleaseUrl, // Feature #23 - Include secure release link
+          requestedBy,
+          noticeOverrideReason: noticePeriodOverrideReason || undefined,
+        });
+      } catch (emailError) {
+        logError('[HP Release Request] Failed to send superintendent email:', emailError);
+        throw new AppError(
+          502,
+          'Failed to send hold point release request email',
+          'EXTERNAL_SERVICE_ERROR',
+        );
+      }
+
+      if (!result.success) {
+        logError('[HP Release Request] Superintendent email was not accepted for delivery:', {
+          error: result.error || 'Unknown email delivery failure',
+          provider: result.provider,
+        });
+        throw new AppError(
+          502,
+          'Failed to send hold point release request email',
+          'EXTERNAL_SERVICE_ERROR',
+        );
+      }
+    }
 
     const holdPoint = await prisma.$transaction(async (tx) => {
       const data = {
@@ -264,23 +334,22 @@ holdPointRequestReleaseRouter.post(
         ...(overrideNote && { releaseNotes: overrideNote }),
       };
 
-      const savedHoldPoint =
-        lot.holdPoints.length > 0
-          ? await tx.holdPoint.update({
-              where: { id: lot.holdPoints[0].id },
-              data,
-              include: { itpChecklistItem: true },
-            })
-          : await tx.holdPoint.create({
-              data: {
-                lotId,
-                itpChecklistItemId,
-                pointType: 'hold_point',
-                description: holdPointItem.description,
-                ...data,
-              },
-              include: { itpChecklistItem: true },
-            });
+      const savedHoldPoint = existingHoldPoint
+        ? await tx.holdPoint.update({
+            where: { id: existingHoldPoint.id },
+            data,
+            include: { itpChecklistItem: true },
+          })
+        : await tx.holdPoint.create({
+            data: {
+              lotId,
+              itpChecklistItemId,
+              pointType: 'hold_point',
+              description: holdPointItem.description,
+              ...data,
+            },
+            include: { itpChecklistItem: true },
+          });
 
       await tx.holdPointReleaseToken.deleteMany({
         where: {
@@ -301,48 +370,13 @@ holdPointRequestReleaseRouter.post(
         });
       }
 
+      // Keep the state/token write atomic with delivery acceptance. If delivery
+      // is rejected, the transaction rolls back and the hold point is not marked
+      // as notified with unusable or unsent links.
+      await Promise.all(releaseTokenEntries.map(sendReleaseRequestEmail));
+
       return savedHoldPoint;
     });
-
-    // Feature #946 - Send HP release request email to superintendent
-    try {
-      const requestedBy = requestingUser?.fullName || requestingUser?.email || 'Unknown';
-      const releaseUrl = buildFrontendUrl(`/projects/${lot.project.id}/lots/${lot.id}?tab=itp`);
-
-      // Format scheduled date for display
-      const formattedScheduledDate = scheduledDateValue
-        ? scheduledDateValue.toLocaleDateString('en-AU', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-          })
-        : undefined;
-
-      for (const recipient of releaseTokenEntries) {
-        // Generate secure release URL
-        const secureReleaseUrl = buildFrontendUrl(`/hp-release/${recipient.secureToken}`);
-        const evidencePackageUrl = `${secureReleaseUrl}#evidence-package`;
-
-        await sendHPReleaseRequestEmail({
-          to: recipient.email,
-          superintendentName: recipient.fullName || 'Reviewer',
-          projectName: lot.project.name,
-          lotNumber: lot.lotNumber,
-          holdPointDescription: holdPointItem.description,
-          scheduledDate: formattedScheduledDate,
-          scheduledTime: scheduledTime || undefined,
-          evidencePackageUrl,
-          releaseUrl,
-          secureReleaseUrl, // Feature #23 - Include secure release link
-          requestedBy,
-          noticeOverrideReason: noticePeriodOverrideReason || undefined,
-        });
-      }
-    } catch (emailError) {
-      logError('[HP Release Request] Failed to send superintendent email:', emailError);
-      // Don't fail the main request
-    }
 
     // Audit log for HP release request
     await createAuditLog({

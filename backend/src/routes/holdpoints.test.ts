@@ -230,6 +230,139 @@ describe('Hold Points API', () => {
     });
   });
 
+  describe('POST /api/holdpoints/request-release', () => {
+    async function createRequestReleaseLot(label: string) {
+      const lot = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `HP-REQUEST-${label}-${Date.now()}`,
+          status: 'in_progress',
+          lotType: 'chainage',
+          activityType: 'Earthworks',
+        },
+      });
+
+      await prisma.iTPInstance.create({
+        data: {
+          templateId,
+          lotId: lot.id,
+          status: 'in_progress',
+        },
+      });
+
+      return lot;
+    }
+
+    async function cleanupRequestReleaseLot(lotIdToDelete: string, holdPointIdToDelete?: string) {
+      if (holdPointIdToDelete) {
+        await prisma.holdPointReleaseToken.deleteMany({
+          where: { holdPointId: holdPointIdToDelete },
+        });
+        await prisma.holdPoint.delete({ where: { id: holdPointIdToDelete } }).catch(() => {});
+      }
+      await prisma.iTPInstance.deleteMany({ where: { lotId: lotIdToDelete } });
+      await prisma.lot.delete({ where: { id: lotIdToDelete } }).catch(() => {});
+    }
+
+    async function createTerminalHoldPoint(status: 'released' | 'completed') {
+      const lot = await createRequestReleaseLot(status);
+      const holdPoint = await prisma.holdPoint.create({
+        data: {
+          lotId: lot.id,
+          itpChecklistItemId: checklistItemId,
+          pointType: 'hold_point',
+          description: `${status} hold point`,
+          status,
+          notificationSentAt: new Date('2026-01-19T00:00:00.000Z'),
+          notificationSentTo: 'old-reviewer@example.com',
+          scheduledDate: new Date('2026-01-20T00:00:00.000Z'),
+          scheduledTime: '09:30',
+          releasedAt: status === 'released' ? new Date('2026-01-20T02:00:00.000Z') : null,
+          releasedByName: status === 'released' ? 'Original Reviewer' : null,
+          releaseNotes: 'Existing terminal state',
+        },
+      });
+
+      await prisma.holdPointReleaseToken.create({
+        data: {
+          holdPointId: holdPoint.id,
+          token: hashHoldPointReleaseTokenForTest(`terminal-${status}-${Date.now()}`),
+          recipientEmail: 'old-reviewer@example.com',
+          recipientName: 'Old Reviewer',
+          expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+        },
+      });
+
+      return { lot, holdPoint };
+    }
+
+    it('rejects release requests for terminal hold points without changing state or tokens', async () => {
+      for (const status of ['released', 'completed'] as const) {
+        clearEmailQueue();
+        const { lot, holdPoint } = await createTerminalHoldPoint(status);
+
+        try {
+          const res = await request(app)
+            .post('/api/holdpoints/request-release')
+            .set('Authorization', `Bearer ${authToken}`)
+            .send({
+              lotId: lot.id,
+              itpChecklistItemId: checklistItemId,
+              notificationSentTo: 'new-reviewer@example.com',
+            });
+
+          expect(res.status, status).toBe(400);
+          expect(res.body.error.message, status).toContain(
+            status === 'released' ? 'already been released' : 'already been completed',
+          );
+
+          const unchangedHoldPoint = await prisma.holdPoint.findUniqueOrThrow({
+            where: { id: holdPoint.id },
+          });
+          expect(unchangedHoldPoint.status, status).toBe(status);
+          expect(unchangedHoldPoint.notificationSentTo, status).toBe('old-reviewer@example.com');
+          expect(unchangedHoldPoint.scheduledTime, status).toBe('09:30');
+          expect(unchangedHoldPoint.releaseNotes, status).toBe('Existing terminal state');
+
+          const tokens = await prisma.holdPointReleaseToken.findMany({
+            where: { holdPointId: holdPoint.id },
+          });
+          expect(tokens, status).toHaveLength(1);
+          expect(tokens[0].recipientEmail, status).toBe('old-reviewer@example.com');
+          expect(getQueuedEmails(), status).toHaveLength(0);
+        } finally {
+          await cleanupRequestReleaseLot(lot.id, holdPoint.id);
+        }
+      }
+    });
+
+    it('rejects release requests with no valid recipient before creating hold point state', async () => {
+      clearEmailQueue();
+      const lot = await createRequestReleaseLot('no-recipient');
+
+      try {
+        const res = await request(app)
+          .post('/api/holdpoints/request-release')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            lotId: lot.id,
+            itpChecklistItemId: checklistItemId,
+          });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.message).toContain('At least one valid hold point release recipient');
+
+        const holdPoint = await prisma.holdPoint.findFirst({
+          where: { lotId: lot.id, itpChecklistItemId: checklistItemId },
+        });
+        expect(holdPoint).toBeNull();
+        expect(getQueuedEmails()).toHaveLength(0);
+      } finally {
+        await cleanupRequestReleaseLot(lot.id);
+      }
+    });
+  });
+
   describe('POST /api/holdpoints/:id/release', () => {
     async function createReleaseReadyHoldPoint(status = 'notified') {
       const hp = await prisma.holdPoint.create({
