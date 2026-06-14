@@ -155,23 +155,46 @@ docketsRouter.post(
       throw AppError.forbidden('Only subcontractors can create dockets');
     }
 
-    const docket = await prisma.dailyDocket.create({
-      data: {
-        projectId,
-        subcontractorCompanyId: subcontractorUser.subcontractorCompanyId,
-        date: parseDocketDate(date),
-        status: 'draft',
-        notes,
-        totalLabourSubmitted: labourHours || 0,
-        totalPlantSubmitted: plantHours || 0,
-      },
-      include: {
-        subcontractorCompany: {
-          select: {
-            companyName: true,
+    const docketDate = parseDocketDate(date);
+    const docket = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw<Array<{ id: string }>>`
+        SELECT id
+        FROM subcontractor_companies
+        WHERE id = ${subcontractorUser.subcontractorCompanyId}
+        FOR UPDATE
+      `;
+
+      const existingDocket = await tx.dailyDocket.findFirst({
+        where: {
+          projectId,
+          subcontractorCompanyId: subcontractorUser.subcontractorCompanyId,
+          date: docketDate,
+        },
+        select: { id: true },
+      });
+
+      if (existingDocket) {
+        throw AppError.conflict('A docket already exists for this subcontractor on this date');
+      }
+
+      return tx.dailyDocket.create({
+        data: {
+          projectId,
+          subcontractorCompanyId: subcontractorUser.subcontractorCompanyId,
+          date: docketDate,
+          status: 'draft',
+          notes,
+          totalLabourSubmitted: labourHours || 0,
+          totalPlantSubmitted: plantHours || 0,
+        },
+        include: {
+          subcontractorCompany: {
+            select: {
+              companyName: true,
+            },
           },
         },
-      },
+      });
     });
 
     res.status(201).json(buildDocketCreatedResponse(docket));

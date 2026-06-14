@@ -1,4 +1,6 @@
 import type { Prisma } from '@prisma/client';
+import { AppError } from '../../lib/AppError.js';
+import { isDocketEntryEditable } from './access.js';
 
 // =============================================================================
 // Docket entry totals: the transaction-scoped row lock and the labour/plant
@@ -13,13 +15,27 @@ export type DocketEntryMutationTx = Prisma.TransactionClient;
 export async function lockDocketForEntryMutation(
   tx: DocketEntryMutationTx,
   docketId: string,
-): Promise<void> {
-  await tx.$queryRaw<Array<{ id: string }>>`
-    SELECT id
+): Promise<{ id: string; status: string } | null> {
+  const rows = await tx.$queryRaw<Array<{ id: string; status: string }>>`
+    SELECT id, status
     FROM daily_dockets
     WHERE id = ${docketId}
     FOR UPDATE
   `;
+  return rows[0] ?? null;
+}
+
+export async function lockEditableDocketForEntryMutation(
+  tx: DocketEntryMutationTx,
+  docketId: string,
+): Promise<void> {
+  const docket = await lockDocketForEntryMutation(tx, docketId);
+  if (!docket) {
+    throw AppError.notFound('Docket');
+  }
+  if (!isDocketEntryEditable(docket.status)) {
+    throw AppError.badRequest('Can only modify entries on draft, queried, or rejected dockets');
+  }
 }
 
 export async function refreshLabourSubmittedTotals(

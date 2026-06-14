@@ -7,8 +7,8 @@ describe('resolveDocketApprovedTotals', () => {
       resolveDocketApprovedTotals({
         adjustedLabourHours: 0,
         adjustedPlantHours: 4.5,
-        totalLabourSubmitted: 12,
-        totalPlantSubmitted: 8,
+        submittedLabourHours: 12,
+        submittedPlantHours: 8,
       }),
     ).toEqual({
       labourApproved: 0,
@@ -16,14 +16,14 @@ describe('resolveDocketApprovedTotals', () => {
     });
   });
 
-  it('falls back to submitted totals when adjusted totals are omitted', () => {
+  it('falls back to submitted hours when adjusted totals are omitted', () => {
     const labourSubmitted = { toString: () => '12.5' };
     const plantSubmitted = null;
 
     expect(
       resolveDocketApprovedTotals({
-        totalLabourSubmitted: labourSubmitted,
-        totalPlantSubmitted: plantSubmitted,
+        submittedLabourHours: labourSubmitted,
+        submittedPlantHours: plantSubmitted,
       }),
     ).toEqual({
       labourApproved: labourSubmitted,

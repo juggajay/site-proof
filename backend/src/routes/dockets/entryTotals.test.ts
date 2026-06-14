@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  lockEditableDocketForEntryMutation,
   lockDocketForEntryMutation,
   refreshLabourSubmittedTotals,
   refreshPlantSubmittedTotals,
@@ -113,16 +114,32 @@ describe('docket entry totals helpers (pure, DB-free)', () => {
 
   describe('lockDocketForEntryMutation', () => {
     it('issues one $queryRaw and binds the docket id as a parameter (not string-concatenated)', async () => {
-      const queryRaw = vi.fn().mockResolvedValue([]);
+      const queryRaw = vi.fn().mockResolvedValue([{ id: 'docket-123', status: 'queried' }]);
       const tx = { $queryRaw: queryRaw } as unknown as DocketEntryMutationTx;
 
-      await expect(lockDocketForEntryMutation(tx, 'docket-123')).resolves.toBeUndefined();
+      await expect(lockDocketForEntryMutation(tx, 'docket-123')).resolves.toEqual({
+        id: 'docket-123',
+        status: 'queried',
+      });
 
       expect(queryRaw).toHaveBeenCalledTimes(1);
       // Tagged-template call shape: [templateStrings, ...interpolatedValues].
       // The docket id must be the sole bound parameter.
       const [, ...values] = queryRaw.mock.calls[0];
       expect(values).toEqual(['docket-123']);
+    });
+  });
+
+  describe('lockEditableDocketForEntryMutation', () => {
+    it('rejects stale entry mutations when the locked docket is no longer editable', async () => {
+      const queryRaw = vi
+        .fn()
+        .mockResolvedValue([{ id: 'docket-123', status: 'pending_approval' }]);
+      const tx = { $queryRaw: queryRaw } as unknown as DocketEntryMutationTx;
+
+      await expect(lockEditableDocketForEntryMutation(tx, 'docket-123')).rejects.toThrow(
+        'Can only modify entries on draft, queried, or rejected dockets',
+      );
     });
   });
 });

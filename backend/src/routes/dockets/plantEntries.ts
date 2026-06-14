@@ -13,7 +13,7 @@ import {
   parseDocketRouteParam,
   updatePlantEntrySchema,
 } from './validation.js';
-import { lockDocketForEntryMutation, refreshPlantSubmittedTotals } from './entryTotals.js';
+import { lockEditableDocketForEntryMutation, refreshPlantSubmittedTotals } from './entryTotals.js';
 import { buildDocketPlantEntryMutationResponse } from './entryMutationResponses.js';
 import {
   buildDocketEntryDeletedResponse,
@@ -116,7 +116,7 @@ plantDocketEntriesRouter.post(
     const cost = Number(hoursOperated) * hourlyRate;
 
     const { entry, totals } = await prisma.$transaction(async (tx) => {
-      await lockDocketForEntryMutation(tx, id);
+      await lockEditableDocketForEntryMutation(tx, id);
 
       const created = await tx.docketPlant.create({
         data: {
@@ -191,7 +191,7 @@ plantDocketEntriesRouter.put(
     const plantCost = calculatePlantEntryCost(hours, wetOrDry || entry.wetOrDry, entry.plant);
 
     const updated = await prisma.$transaction(async (tx) => {
-      await lockDocketForEntryMutation(tx, id);
+      await lockEditableDocketForEntryMutation(tx, id);
 
       const refreshed = await tx.docketPlant.update({
         where: { id: entryId },
@@ -248,7 +248,7 @@ plantDocketEntriesRouter.delete(
     }
 
     await prisma.$transaction(async (tx) => {
-      await lockDocketForEntryMutation(tx, id);
+      await lockEditableDocketForEntryMutation(tx, id);
 
       // Delete entry
       await tx.docketPlant.delete({ where: { id: entryId } });

@@ -1,24 +1,24 @@
 import { formatDocketNumber } from './formatting.js';
 
-type ApprovedTotalInput<TLabourSubmitted, TPlantSubmitted> = {
+type ApprovedTotalInput<TSubmittedLabourHours, TSubmittedPlantHours> = {
   adjustedLabourHours?: number;
   adjustedPlantHours?: number;
-  totalLabourSubmitted: TLabourSubmitted;
-  totalPlantSubmitted: TPlantSubmitted;
+  submittedLabourHours: TSubmittedLabourHours;
+  submittedPlantHours: TSubmittedPlantHours;
 };
 
-export function resolveDocketApprovedTotals<TLabourSubmitted, TPlantSubmitted>({
+export function resolveDocketApprovedTotals<TSubmittedLabourHours, TSubmittedPlantHours>({
   adjustedLabourHours,
   adjustedPlantHours,
-  totalLabourSubmitted,
-  totalPlantSubmitted,
-}: ApprovedTotalInput<TLabourSubmitted, TPlantSubmitted>): {
-  labourApproved: number | TLabourSubmitted;
-  plantApproved: number | TPlantSubmitted;
+  submittedLabourHours,
+  submittedPlantHours,
+}: ApprovedTotalInput<TSubmittedLabourHours, TSubmittedPlantHours>): {
+  labourApproved: number | TSubmittedLabourHours;
+  plantApproved: number | TSubmittedPlantHours;
 } {
   return {
-    labourApproved: adjustedLabourHours !== undefined ? adjustedLabourHours : totalLabourSubmitted,
-    plantApproved: adjustedPlantHours !== undefined ? adjustedPlantHours : totalPlantSubmitted,
+    labourApproved: adjustedLabourHours !== undefined ? adjustedLabourHours : submittedLabourHours,
+    plantApproved: adjustedPlantHours !== undefined ? adjustedPlantHours : submittedPlantHours,
   };
 }
 

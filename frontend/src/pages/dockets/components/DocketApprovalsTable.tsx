@@ -114,7 +114,7 @@ export function DocketApprovalsTable({
                 </td>
                 <td className="px-4 py-3 text-sm">
                   {docket.status === 'approved' &&
-                  docket.totalLabourApproved !== docket.totalLabourSubmitted ? (
+                  docket.totalLabourApproved !== docket.labourHours ? (
                     <span>
                       <span className="font-medium">{docket.totalLabourApproved}h</span>
                       <span className="text-muted-foreground line-through ml-1 text-xs">
@@ -127,7 +127,7 @@ export function DocketApprovalsTable({
                 </td>
                 <td className="px-4 py-3 text-sm">
                   {docket.status === 'approved' &&
-                  docket.totalPlantApproved !== docket.totalPlantSubmitted ? (
+                  docket.totalPlantApproved !== docket.plantHours ? (
                     <span>
                       <span className="font-medium">{docket.totalPlantApproved}h</span>
                       <span className="text-muted-foreground line-through ml-1 text-xs">
