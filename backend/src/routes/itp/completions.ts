@@ -34,6 +34,10 @@ import { completionAttachmentRoutes } from './completionAttachmentRoutes.js';
 import { completionUpdateRoutes } from './completionUpdateRoutes.js';
 import { completionVerificationRoutes } from './completionVerificationRoutes.js';
 import { isReleaseGatedChecklistItem } from '../../lib/holdPointReleaseGating.js';
+import {
+  isSubcontractorVisibleChecklistItem,
+  resolveChecklistItemForInstance,
+} from './helpers/templateSnapshot.js';
 
 // ============== Zod Schemas ==============
 const ITP_COMPLETION_NOTES_MAX_LENGTH = 5000;
@@ -144,6 +148,7 @@ completionsRouter.post(
       select: {
         lotId: true,
         templateId: true,
+        templateSnapshot: true,
         lot: { select: { projectId: true } },
         template: { select: { projectId: true } },
       },
@@ -190,11 +195,37 @@ completionsRouter.post(
         id: checklistItemId,
         templateId: itpInstanceForAccess.templateId,
       },
-      select: { id: true, pointType: true, responsibleParty: true },
+      select: {
+        id: true,
+        description: true,
+        sequenceNumber: true,
+        pointType: true,
+        responsibleParty: true,
+        evidenceRequired: true,
+        acceptanceCriteria: true,
+        testType: true,
+      },
     });
 
     if (!checklistItem) {
       throw AppError.badRequest('Checklist item does not belong to this ITP instance');
+    }
+
+    const checklistItemForInstance = resolveChecklistItemForInstance(
+      itpInstanceForAccess,
+      checklistItemId,
+      checklistItem,
+    );
+
+    if (!checklistItemForInstance) {
+      throw AppError.badRequest('Checklist item does not belong to this ITP instance');
+    }
+
+    if (
+      isItpSubcontractorUser(user) &&
+      !isSubcontractorVisibleChecklistItem(checklistItemForInstance)
+    ) {
+      throw AppError.forbidden('ITP completion write access required');
     }
 
     // I1-core GUARD: a hold-point (or superintendent sign-off) item must be
@@ -207,7 +238,7 @@ completionsRouter.post(
     // blockers), and N/A / Failed flows stay open so a contractor can still mark
     // a hold point N/A or raise an NCR. The guard fires only when FINISHING the
     // item as 'completed'.
-    const isHoldPointSignoffItem = isReleaseGatedChecklistItem(checklistItem);
+    const isHoldPointSignoffItem = isReleaseGatedChecklistItem(checklistItemForInstance);
 
     if (newStatus === 'completed' && isHoldPointSignoffItem) {
       let holdPointReleased = false;
@@ -316,6 +347,13 @@ completionsRouter.post(
           checklistItemId,
         },
       });
+      if (existingCompletion?.verificationStatus === 'verified') {
+        throw AppError.conflict(
+          'Verified ITP completions cannot be changed through the standard completion path',
+          { verificationStatus: existingCompletion.verificationStatus },
+        );
+      }
+
       const shouldCreateFailedNcr = shouldCreateFailedItpNcr(newStatus, existingCompletion?.status);
 
       if (existingCompletion) {

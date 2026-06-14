@@ -1,6 +1,6 @@
 import { prisma } from '../../../lib/prisma.js';
 import { logError } from '../../../lib/serverLogger.js';
-import type { ChecklistItem, TemplateSnapshot } from './witnessPoints.js';
+import { getChecklistItemsForInstance, type ChecklistItem } from './templateSnapshot.js';
 
 /**
  * Auto-progress lot status based on ITP completion state
@@ -35,14 +35,8 @@ export async function updateLotStatusFromITP(itpInstanceId: string) {
       return;
     }
 
-    // Get checklist items from snapshot or template
-    let checklistItems: ChecklistItem[];
-    if (instance.templateSnapshot) {
-      const snapshot: TemplateSnapshot = JSON.parse(instance.templateSnapshot);
-      checklistItems = snapshot.checklistItems || [];
-    } else {
-      checklistItems = instance.template.checklistItems;
-    }
+    // Get checklist items from snapshot or template.
+    const checklistItems: ChecklistItem[] = getChecklistItemsForInstance(instance);
 
     const totalItems = checklistItems.length;
     if (totalItems === 0) {

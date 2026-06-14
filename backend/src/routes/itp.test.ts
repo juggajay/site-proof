@@ -1582,6 +1582,115 @@ describe('ITP Completion Attachments', () => {
     }
   });
 
+  it('should reject subcontractor note and attachment writes for hidden superintendent items', async () => {
+    const suffix = Date.now();
+    const hiddenItem = await prisma.iTPChecklistItem.create({
+      data: {
+        templateId,
+        description: `Hidden superintendent attachment item ${suffix}`,
+        pointType: 'witness',
+        responsibleParty: 'superintendent',
+        sequenceNumber: 50,
+      },
+    });
+    const hiddenCompletion = await prisma.iTPCompletion.create({
+      data: {
+        itpInstanceId: instanceId,
+        checklistItemId: hiddenItem.id,
+        status: 'pending',
+        notes: 'Original hidden note',
+      },
+    });
+    const hiddenAttachment = await prisma.iTPCompletionAttachment.create({
+      data: {
+        completionId: hiddenCompletion.id,
+        documentId,
+      },
+    });
+    const subcontractorCompany = await prisma.subcontractorCompany.create({
+      data: {
+        projectId,
+        companyName: `ITP Hidden Attachment Subcontractor ${suffix}`,
+        status: 'approved',
+        portalAccess: { itps: true },
+      },
+    });
+    const subcontractor = await registerTestUser(
+      'itp-hidden-attachment-subcontractor',
+      'ITP Hidden Attachment Subcontractor',
+    );
+
+    await prisma.user.update({
+      where: { id: subcontractor.userId },
+      data: { companyId: null, roleInCompany: 'subcontractor' },
+    });
+    await prisma.subcontractorUser.create({
+      data: {
+        userId: subcontractor.userId,
+        subcontractorCompanyId: subcontractorCompany.id,
+        role: 'user',
+      },
+    });
+    await prisma.lotSubcontractorAssignment.create({
+      data: {
+        projectId,
+        lotId,
+        subcontractorCompanyId: subcontractorCompany.id,
+        status: 'active',
+        canCompleteITP: true,
+      },
+    });
+
+    try {
+      const noteUpdate = await request(app)
+        .patch(`/api/itp/completions/${hiddenCompletion.id}`)
+        .set('Authorization', `Bearer ${subcontractor.token}`)
+        .send({ notes: 'Subcontractor hidden note update' });
+      expect(noteUpdate.status).toBe(403);
+
+      const addAttachment = await request(app)
+        .post(`/api/itp/completions/${hiddenCompletion.id}/attachments`)
+        .set('Authorization', `Bearer ${subcontractor.token}`)
+        .send({ documentId });
+      expect(addAttachment.status).toBe(403);
+
+      const listAttachments = await request(app)
+        .get(`/api/itp/completions/${hiddenCompletion.id}/attachments`)
+        .set('Authorization', `Bearer ${subcontractor.token}`);
+      expect(listAttachments.status).toBe(403);
+
+      const deleteAttachment = await request(app)
+        .delete(`/api/itp/completions/${hiddenCompletion.id}/attachments/${hiddenAttachment.id}`)
+        .set('Authorization', `Bearer ${subcontractor.token}`);
+      expect(deleteAttachment.status).toBe(403);
+
+      const unchangedCompletion = await prisma.iTPCompletion.findUniqueOrThrow({
+        where: { id: hiddenCompletion.id },
+        select: { notes: true },
+      });
+      expect(unchangedCompletion.notes).toBe('Original hidden note');
+
+      const attachmentStillPresent = await prisma.iTPCompletionAttachment.findUnique({
+        where: { id: hiddenAttachment.id },
+      });
+      expect(attachmentStillPresent).toBeTruthy();
+    } finally {
+      await prisma.iTPCompletionAttachment.deleteMany({
+        where: { completionId: hiddenCompletion.id },
+      });
+      await prisma.iTPCompletion.deleteMany({ where: { id: hiddenCompletion.id } });
+      await prisma.iTPChecklistItem.deleteMany({ where: { id: hiddenItem.id } });
+      await prisma.lotSubcontractorAssignment.deleteMany({
+        where: { subcontractorCompanyId: subcontractorCompany.id },
+      });
+      await prisma.subcontractorUser.deleteMany({ where: { userId: subcontractor.userId } });
+      await prisma.subcontractorCompany
+        .delete({ where: { id: subcontractorCompany.id } })
+        .catch(() => {});
+      await cleanupTestUser(subcontractor.userId);
+    }
+  });
+
   it('should not create duplicate completions for concurrent checklist item writes', async () => {
     const concurrentChecklistItem = await prisma.iTPChecklistItem.create({
       data: {
@@ -1589,6 +1698,35 @@ describe('ITP Completion Attachments', () => {
         description: `Concurrent completion item ${Date.now()}`,
         pointType: 'verification',
         sequenceNumber: 99,
+      },
+    });
+    const originalInstance = await prisma.iTPInstance.findUniqueOrThrow({
+      where: { id: instanceId },
+      select: { templateSnapshot: true },
+    });
+    await prisma.iTPInstance.update({
+      where: { id: instanceId },
+      data: {
+        templateSnapshot: JSON.stringify({
+          id: templateId,
+          name: 'Attachment Test ITP',
+          checklistItems: [
+            {
+              id: checklistItemId,
+              description: 'Upload evidence photo',
+              sequenceNumber: 1,
+              pointType: 'verification',
+              responsibleParty: 'contractor',
+            },
+            {
+              id: concurrentChecklistItem.id,
+              description: concurrentChecklistItem.description,
+              sequenceNumber: concurrentChecklistItem.sequenceNumber,
+              pointType: concurrentChecklistItem.pointType,
+              responsibleParty: concurrentChecklistItem.responsibleParty,
+            },
+          ],
+        }),
       },
     });
 
@@ -1662,6 +1800,10 @@ describe('ITP Completion Attachments', () => {
       releaseReads();
       await prisma.iTPCompletion.deleteMany({
         where: { checklistItemId: concurrentChecklistItem.id },
+      });
+      await prisma.iTPInstance.update({
+        where: { id: instanceId },
+        data: { templateSnapshot: originalInstance.templateSnapshot },
       });
       await prisma.iTPChecklistItem
         .delete({ where: { id: concurrentChecklistItem.id } })
@@ -2962,6 +3104,121 @@ describe('ITP Completion Decision Logic (characterization)', () => {
 
     const ncrCountAfterRepeat = await prisma.nCR.count({ where: { projectId } });
     expect(ncrCountAfterRepeat).toBe(1);
+  });
+
+  it('rejects subcontractor completion writes to hidden superintendent checklist items', async () => {
+    const suffix = Date.now();
+    const subcontractorCompany = await prisma.subcontractorCompany.create({
+      data: {
+        projectId,
+        companyName: `ITP Hidden Completion ${suffix}`,
+        status: 'approved',
+        portalAccess: { itps: true },
+      },
+    });
+    const subcontractor = await registerTestUser(
+      'itp-hidden-completion-subcontractor',
+      'ITP Hidden Completion Subcontractor',
+    );
+
+    await prisma.user.update({
+      where: { id: subcontractor.userId },
+      data: { companyId: null, roleInCompany: 'subcontractor' },
+    });
+    await prisma.subcontractorUser.create({
+      data: {
+        userId: subcontractor.userId,
+        subcontractorCompanyId: subcontractorCompany.id,
+        role: 'user',
+      },
+    });
+    await prisma.lotSubcontractorAssignment.create({
+      data: {
+        projectId,
+        lotId,
+        subcontractorCompanyId: subcontractorCompany.id,
+        status: 'active',
+        canCompleteITP: true,
+      },
+    });
+    await prisma.iTPCompletion.deleteMany({
+      where: { itpInstanceId: instanceId, checklistItemId: witnessItemId },
+    });
+
+    try {
+      const res = await request(app)
+        .post('/api/itp/completions')
+        .set('Authorization', `Bearer ${subcontractor.token}`)
+        .send({
+          itpInstanceId: instanceId,
+          checklistItemId: witnessItemId,
+          status: 'completed',
+        });
+
+      expect(res.status).toBe(403);
+
+      const completion = await prisma.iTPCompletion.findFirst({
+        where: { itpInstanceId: instanceId, checklistItemId: witnessItemId },
+      });
+      expect(completion).toBeNull();
+    } finally {
+      await prisma.iTPCompletion.deleteMany({
+        where: { itpInstanceId: instanceId, checklistItemId: witnessItemId },
+      });
+      await prisma.lotSubcontractorAssignment.deleteMany({
+        where: { subcontractorCompanyId: subcontractorCompany.id },
+      });
+      await prisma.subcontractorUser.deleteMany({ where: { userId: subcontractor.userId } });
+      await prisma.subcontractorCompany
+        .delete({ where: { id: subcontractorCompany.id } })
+        .catch(() => {});
+      await cleanupTestUser(subcontractor.userId);
+    }
+  });
+
+  it('rejects bare POST completion overwrites for verified checklist items', async () => {
+    await resetContractorCompletion();
+    await prisma.iTPCompletion.create({
+      data: {
+        itpInstanceId: instanceId,
+        checklistItemId: contractorItemId,
+        status: 'completed',
+        notes: 'Verified completion baseline',
+        completedById: userId,
+        completedAt: new Date('2026-01-01T00:00:00.000Z'),
+        verificationStatus: 'verified',
+        verifiedById: userId,
+        verifiedAt: new Date('2026-01-02T00:00:00.000Z'),
+      },
+    });
+
+    try {
+      const res = await request(app)
+        .post('/api/itp/completions')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          itpInstanceId: instanceId,
+          checklistItemId: contractorItemId,
+          status: 'pending',
+          notes: 'Unreviewed verified overwrite',
+        });
+
+      expect(res.status).toBe(409);
+      expect(res.body.error.message).toContain('Verified ITP completions');
+
+      const unchanged = await prisma.iTPCompletion.findFirstOrThrow({
+        where: { itpInstanceId: instanceId, checklistItemId: contractorItemId },
+        select: { status: true, notes: true, verificationStatus: true, verifiedAt: true },
+      });
+      expect(unchanged.status).toBe('completed');
+      expect(unchanged.notes).toBe('Verified completion baseline');
+      expect(unchanged.verificationStatus).toBe('verified');
+      expect(unchanged.verifiedAt?.toISOString()).toBe('2026-01-02T00:00:00.000Z');
+    } finally {
+      await prisma.iTPCompletion.deleteMany({
+        where: { itpInstanceId: instanceId, checklistItemId: contractorItemId },
+      });
+    }
   });
 
   it('auto-verifies a subcontractor completion when the project does not require verification', async () => {

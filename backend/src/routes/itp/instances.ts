@@ -5,7 +5,13 @@ import { prisma } from '../../lib/prisma.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
-import type { TemplateSnapshot, ChecklistItem } from './helpers/witnessPoints.js';
+import {
+  buildTemplateSnapshot,
+  isSubcontractorVisibleChecklistItem,
+  parseTemplateSnapshot,
+  type ChecklistItem,
+  type TemplateSnapshot,
+} from './helpers/templateSnapshot.js';
 import type { AuthUser } from '../../lib/auth.js';
 import {
   ITP_MANAGE_ROLES,
@@ -160,23 +166,8 @@ instancesRouter.post(
       throw AppError.badRequest('ITP template is not available for this lot project');
     }
 
-    // Create a snapshot of the template at assignment time
-    const templateSnapshot = {
-      id: template.id,
-      name: template.name,
-      description: template.description,
-      activityType: template.activityType,
-      checklistItems: template.checklistItems.map((item) => ({
-        id: item.id,
-        description: item.description,
-        sequenceNumber: item.sequenceNumber,
-        pointType: item.pointType,
-        responsibleParty: item.responsibleParty,
-        evidenceRequired: item.evidenceRequired,
-        acceptanceCriteria: item.acceptanceCriteria,
-        testType: item.testType,
-      })),
-    };
+    // Create a snapshot of the template at assignment time.
+    const templateSnapshot = buildTemplateSnapshot(template);
 
     // Create instance and link the lot atomically.
     const instance = await prisma.$transaction(async (tx) => {
@@ -297,44 +288,26 @@ instancesRouter.get(
       return;
     }
 
-    // Use snapshot if available, otherwise fall back to live template
-    let templateData: TransformedTemplateData;
-    if (instance.templateSnapshot) {
-      // Parse the snapshot (template state at assignment time)
-      const snapshot: TemplateSnapshot = JSON.parse(instance.templateSnapshot);
-      templateData = {
-        ...snapshot,
-        checklistItems: snapshot.checklistItems.map((item) => ({
+    // Use snapshot if available, otherwise fall back to live template for legacy instances.
+    const snapshot = parseTemplateSnapshot(instance.templateSnapshot);
+    const templateSource = snapshot ?? instance.template;
+    const templateData: TransformedTemplateData = {
+      ...templateSource,
+      checklistItems: (snapshot?.checklistItems ?? instance.template.checklistItems).map(
+        (item) => ({
           id: item.id,
-          description: item.description,
+          description: item.description ?? '',
           category: item.responsibleParty || 'general',
           responsibleParty: item.responsibleParty || 'contractor',
           isHoldPoint: item.pointType === 'hold_point',
           pointType: item.pointType || 'standard',
           evidenceRequired: item.evidenceRequired || 'none',
-          order: item.sequenceNumber,
+          order: item.sequenceNumber ?? 0,
           acceptanceCriteria: item.acceptanceCriteria,
           testType: item.testType || null,
-        })),
-      };
-    } else {
-      // Fall back to live template for backwards compatibility
-      templateData = {
-        ...instance.template,
-        checklistItems: instance.template.checklistItems.map((item) => ({
-          id: item.id,
-          description: item.description,
-          category: item.responsibleParty || 'general',
-          responsibleParty: item.responsibleParty || 'contractor',
-          isHoldPoint: item.pointType === 'hold_point',
-          pointType: item.pointType || 'standard',
-          evidenceRequired: item.evidenceRequired || 'none',
-          order: item.sequenceNumber,
-          acceptanceCriteria: item.acceptanceCriteria,
-          testType: item.testType || null,
-        })),
-      };
-    }
+        }),
+      ),
+    };
 
     // Feature #271: Filter the checklist for the subcontractor portal view.
     //
@@ -351,11 +324,10 @@ instancesRouter.get(
     // We use an allow-list (not "!== superintendent") so any future/unknown
     // responsible-party value defaults to hidden in the subcontractor view.
     const useSubcontractorView = subcontractorView || isItpSubcontractorUser(user);
-    const SUBCONTRACTOR_VISIBLE_PARTIES = new Set(['contractor', 'subcontractor', 'general']);
 
     if (useSubcontractorView) {
       templateData.checklistItems = templateData.checklistItems.filter((item) =>
-        SUBCONTRACTOR_VISIBLE_PARTIES.has(item.responsibleParty ?? ''),
+        isSubcontractorVisibleChecklistItem(item),
       );
     }
 

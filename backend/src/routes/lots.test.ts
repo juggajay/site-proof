@@ -309,6 +309,101 @@ describe('Lots API', () => {
       });
     });
 
+    it('should snapshot the assigned ITP template when creating a lot with an ITP', async () => {
+      const suffix = Date.now();
+      const template = await prisma.iTPTemplate.create({
+        data: {
+          projectId,
+          name: `Lot Create Snapshot ITP ${suffix}`,
+          description: 'Snapshot should be preserved on the lot-created instance',
+          activityType: 'Earthworks',
+          checklistItems: {
+            create: [
+              {
+                description: 'First snapshot item',
+                sequenceNumber: 2,
+                pointType: 'verification',
+                responsibleParty: 'subcontractor',
+                evidenceRequired: 'photo',
+                acceptanceCriteria: 'Photo attached',
+              },
+              {
+                description: 'Hold point snapshot item',
+                sequenceNumber: 1,
+                pointType: 'hold_point',
+                responsibleParty: 'superintendent',
+                evidenceRequired: 'none',
+                testType: 'density',
+              },
+            ],
+          },
+        },
+        include: { checklistItems: { orderBy: { sequenceNumber: 'asc' } } },
+      });
+      const lotNumber = `LOT-ITP-SNAPSHOT-${suffix}`;
+      let createdLotId: string | undefined;
+
+      try {
+        const res = await request(app)
+          .post('/api/lots')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            projectId,
+            lotNumber,
+            itpTemplateId: template.id,
+          });
+
+        expect(res.status).toBe(201);
+        createdLotId = res.body.lot.id;
+
+        const instance = await prisma.iTPInstance.findUniqueOrThrow({
+          where: { lotId: createdLotId },
+          select: { templateId: true, templateSnapshot: true },
+        });
+        expect(instance.templateId).toBe(template.id);
+        expect(instance.templateSnapshot).toBeTruthy();
+
+        const snapshot = JSON.parse(instance.templateSnapshot ?? 'null');
+        expect(snapshot).toMatchObject({
+          id: template.id,
+          name: template.name,
+          description: template.description,
+          activityType: template.activityType,
+        });
+        expect(snapshot.checklistItems.map((item: { id: string }) => item.id)).toEqual(
+          template.checklistItems.map((item) => item.id),
+        );
+        expect(snapshot.checklistItems).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              description: 'Hold point snapshot item',
+              sequenceNumber: 1,
+              pointType: 'hold_point',
+              responsibleParty: 'superintendent',
+              testType: 'density',
+            }),
+            expect.objectContaining({
+              description: 'First snapshot item',
+              sequenceNumber: 2,
+              pointType: 'verification',
+              responsibleParty: 'subcontractor',
+              evidenceRequired: 'photo',
+              acceptanceCriteria: 'Photo attached',
+            }),
+          ]),
+        );
+      } finally {
+        if (createdLotId) {
+          await prisma.iTPInstance.deleteMany({ where: { lotId: createdLotId } });
+          await prisma.lot.delete({ where: { id: createdLotId } }).catch(() => {});
+        } else {
+          await prisma.lot.deleteMany({ where: { projectId, lotNumber } });
+        }
+        await prisma.iTPChecklistItem.deleteMany({ where: { templateId: template.id } });
+        await prisma.iTPTemplate.delete({ where: { id: template.id } }).catch(() => {});
+      }
+    });
+
     it('should reject unauthenticated requests', async () => {
       const res = await request(app).post('/api/lots').send({
         projectId,
