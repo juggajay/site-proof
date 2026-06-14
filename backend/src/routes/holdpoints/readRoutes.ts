@@ -52,6 +52,11 @@ import {
   buildProjectWorkingHoursResponse,
 } from './workingHoursResponses.js';
 import { isReleaseGatedChecklistItem } from '../../lib/holdPointReleaseGating.js';
+import {
+  getHoldPointChecklistItemsForInstance,
+  getHoldPointItpTemplateForInstance,
+  resolveHoldPointChecklistItemForInstance,
+} from './itpSnapshot.js';
 
 // =============================================================================
 // Authenticated hold point READ routes: project list, lot/item detail,
@@ -194,17 +199,17 @@ holdPointReadRouter.get(
     await requireLotReadAccess(lot, user);
     const hasRequestPermission = await canRequestHoldPointRelease(lot.projectId, user);
 
-    // Find the hold point item
-    const holdPointItem = lot.itpInstance.template.checklistItems.find((i) => i.id === itemId);
+    const checklistItems = getHoldPointChecklistItemsForInstance(lot.itpInstance);
+
+    // Find the hold point item from the assigned ITP snapshot, falling back to
+    // the live template only for legacy instances without a snapshot.
+    const holdPointItem = resolveHoldPointChecklistItemForInstance(lot.itpInstance, itemId);
     if (!holdPointItem || !isReleaseGatedChecklistItem(holdPointItem)) {
       throw AppError.notFound('Hold point item');
     }
 
     // Get all preceding items (items with lower sequence number)
-    const precedingItems = getPrecedingChecklistItems(
-      lot.itpInstance.template.checklistItems,
-      holdPointItem.sequenceNumber,
-    );
+    const precedingItems = getPrecedingChecklistItems(checklistItems, holdPointItem.sequenceNumber);
 
     // Check completion status of each preceding item
     const prerequisites = buildHoldPointPrerequisites(precedingItems, lot.itpInstance.completions);
@@ -309,17 +314,30 @@ holdPointReadRouter.get(
       throw AppError.badRequest('No ITP assigned to this lot');
     }
 
+    const checklistItems = getHoldPointChecklistItemsForInstance(itpInstance);
+
     // Get all checklist items up to and including the hold point
-    const holdPointItem = holdPoint.itpChecklistItem;
+    const holdPointItem = resolveHoldPointChecklistItemForInstance(
+      itpInstance,
+      holdPoint.itpChecklistItemId,
+      holdPoint.itpChecklistItem,
+    );
+    if (!holdPointItem) {
+      throw AppError.notFound('Hold point checklist item');
+    }
     const includedChecklistItemIds = buildHoldPointEvidenceChecklistItemIdSet(
-      itpInstance.template.checklistItems,
+      checklistItems,
       holdPointItem.sequenceNumber,
     );
     const checklistWithStatus = buildHoldPointEvidenceChecklist(
-      itpInstance.template.checklistItems,
+      checklistItems,
       itpInstance.completions,
       holdPointItem.sequenceNumber,
     );
+    const itpTemplate = getHoldPointItpTemplateForInstance(itpInstance);
+    if (!itpTemplate) {
+      throw AppError.badRequest('No ITP template assigned to this lot');
+    }
 
     const scope = { includedChecklistItemIds };
     const testResults = mapHoldPointEvidenceTestResults(lot.testResults, scope);
@@ -343,7 +361,7 @@ holdPointReadRouter.get(
       },
       lot: mapHoldPointEvidenceLot(lot),
       project: mapHoldPointEvidenceProject(lot.project),
-      itpTemplate: mapHoldPointEvidenceItpTemplate(itpInstance.template),
+      itpTemplate: mapHoldPointEvidenceItpTemplate(itpTemplate),
       checklist: checklistWithStatus,
       testResults,
       photos,
@@ -498,10 +516,10 @@ holdPointReadRouter.post(
       throw AppError.badRequest('No ITP assigned to this lot');
     }
 
-    // Get the hold point checklist item
-    const holdPointItem = itpInstance.template.checklistItems.find(
-      (item) => item.id === itpChecklistItemId,
-    );
+    const checklistItems = getHoldPointChecklistItemsForInstance(itpInstance);
+
+    // Get the hold point checklist item from the assigned ITP snapshot.
+    const holdPointItem = resolveHoldPointChecklistItemForInstance(itpInstance, itpChecklistItemId);
 
     if (!holdPointItem) {
       throw AppError.notFound('Hold point checklist item');
@@ -509,14 +527,18 @@ holdPointReadRouter.post(
 
     // Get all checklist items up to and including the hold point
     const includedChecklistItemIds = buildHoldPointEvidenceChecklistItemIdSet(
-      itpInstance.template.checklistItems,
+      checklistItems,
       holdPointItem.sequenceNumber,
     );
     const checklistWithStatus = buildHoldPointEvidenceChecklist(
-      itpInstance.template.checklistItems,
+      checklistItems,
       itpInstance.completions,
       holdPointItem.sequenceNumber,
     );
+    const itpTemplate = getHoldPointItpTemplateForInstance(itpInstance);
+    if (!itpTemplate) {
+      throw AppError.badRequest('No ITP template assigned to this lot');
+    }
 
     const scope = { includedChecklistItemIds };
     const testResults = mapHoldPointEvidenceTestResults(lot.testResults, scope);
@@ -540,7 +562,7 @@ holdPointReadRouter.post(
       },
       lot: mapHoldPointEvidenceLot(lot),
       project: mapHoldPointEvidenceProject(lot.project),
-      itpTemplate: mapHoldPointEvidenceItpTemplate(itpInstance.template),
+      itpTemplate: mapHoldPointEvidenceItpTemplate(itpTemplate),
       checklist: checklistWithStatus,
       testResults,
       photos,

@@ -30,6 +30,11 @@ import { buildPublicHoldPointReleasedResponse } from './holdpoints/actionRespons
 import { holdPointReadRouter } from './holdpoints/readRoutes.js';
 import { holdPointRequestReleaseRouter } from './holdpoints/requestReleaseRoutes.js';
 import { holdPointActionRouter } from './holdpoints/actionRoutes.js';
+import {
+  getHoldPointChecklistItemsForInstance,
+  getHoldPointItpTemplateForInstance,
+  resolveHoldPointChecklistItemForInstance,
+} from './holdpoints/itpSnapshot.js';
 
 const holdpointsRouter = Router();
 
@@ -148,17 +153,31 @@ holdpointsRouter.get(
       throw AppError.badRequest('No ITP assigned to this lot');
     }
 
-    // Get all checklist items up to and including the hold point
-    const holdPointItem = holdPoint.itpChecklistItem;
+    const checklistItems = getHoldPointChecklistItemsForInstance(itpInstance);
+
+    // Get all checklist items up to and including the hold point from the
+    // assigned ITP snapshot, falling back to live data only for legacy instances.
+    const holdPointItem = resolveHoldPointChecklistItemForInstance(
+      itpInstance,
+      holdPoint.itpChecklistItemId,
+      holdPoint.itpChecklistItem,
+    );
+    if (!holdPointItem) {
+      throw AppError.notFound('Hold point checklist item');
+    }
     const includedChecklistItemIds = buildHoldPointEvidenceChecklistItemIdSet(
-      itpInstance.template.checklistItems,
+      checklistItems,
       holdPointItem.sequenceNumber,
     );
     const checklistWithStatus = buildHoldPointEvidenceChecklist(
-      itpInstance.template.checklistItems,
+      checklistItems,
       itpInstance.completions,
       holdPointItem.sequenceNumber,
     );
+    const itpTemplate = getHoldPointItpTemplateForInstance(itpInstance);
+    if (!itpTemplate) {
+      throw AppError.badRequest('No ITP template assigned to this lot');
+    }
 
     const scope = { includedChecklistItemIds };
     const testResults = mapHoldPointEvidenceTestResults(lot.testResults, scope);
@@ -183,7 +202,7 @@ holdpointsRouter.get(
       },
       lot: mapHoldPointEvidenceLot(lot),
       project: mapHoldPointEvidenceProject(lot.project),
-      itpTemplate: mapHoldPointEvidenceItpTemplate(itpInstance.template),
+      itpTemplate: mapHoldPointEvidenceItpTemplate(itpTemplate),
       checklist: checklistWithStatus,
       testResults,
       photos,

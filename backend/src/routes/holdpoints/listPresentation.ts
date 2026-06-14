@@ -22,6 +22,8 @@
  */
 
 import { isReleaseGatedChecklistItem } from '../../lib/holdPointReleaseGating.js';
+import { getHoldPointChecklistItemsForInstance } from './itpSnapshot.js';
+import type { ChecklistItem } from '../itp/helpers/templateSnapshot.js';
 
 // Shape of each item in the list response (formerly inline in holdpoints.ts).
 export interface HoldPointListItem {
@@ -43,13 +45,7 @@ export interface HoldPointListItem {
   createdAt: Date;
 }
 
-export type HoldPointListChecklistItem = {
-  id: string;
-  description: string;
-  pointType: string | null;
-  responsibleParty: string | null;
-  sequenceNumber: number;
-};
+export type HoldPointListChecklistItem = ChecklistItem;
 
 export type HoldPointListCompletion = {
   checklistItemId: string;
@@ -74,6 +70,7 @@ export type HoldPointListLot = {
   lotNumber: string;
   createdAt: Date;
   itpInstance: {
+    templateSnapshot?: string | null;
     template: {
       checklistItems: HoldPointListChecklistItem[];
     } | null;
@@ -103,9 +100,9 @@ export function buildHoldPointListItems(lots: HoldPointListLot[]): HoldPointList
   const holdPoints: HoldPointListItem[] = [];
 
   for (const lot of lots) {
-    if (!lot.itpInstance?.template?.checklistItems) continue;
+    if (!lot.itpInstance) continue;
 
-    for (const item of lot.itpInstance.template.checklistItems) {
+    for (const item of getHoldPointChecklistItemsForInstance(lot.itpInstance)) {
       if (!isReleaseGatedChecklistItem(item)) continue;
 
       // Find existing hold point record or create virtual one

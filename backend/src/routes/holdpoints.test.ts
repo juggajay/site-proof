@@ -9,6 +9,7 @@ import { errorHandler } from '../middleware/errorHandler.js';
 import { holdpointsRouter } from './holdpoints.js';
 import { clearEmailQueue, getQueuedEmails } from '../lib/email.js';
 import { registerTestUser as registerSharedTestUser } from '../test/routeTestHarness.js';
+import { buildTemplateSnapshot } from './itp/helpers/templateSnapshot.js';
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
@@ -147,6 +148,123 @@ describe('Hold Points API', () => {
         .set('Authorization', `Bearer ${authToken}`);
 
       expect([200, 404]).toContain(res.status);
+    });
+
+    it('uses the assigned ITP snapshot for detail and evidence after live template edits', async () => {
+      const template = await prisma.iTPTemplate.create({
+        data: {
+          projectId,
+          name: 'Snapshot Hold Point Template',
+          activityType: 'Earthworks',
+          checklistItems: {
+            create: [
+              {
+                sequenceNumber: 1,
+                description: 'Snapshot prerequisite',
+                pointType: 'standard',
+                responsibleParty: 'contractor',
+              },
+              {
+                sequenceNumber: 2,
+                description: 'Snapshot hold point',
+                pointType: 'hold_point',
+                responsibleParty: 'contractor',
+              },
+            ],
+          },
+        },
+        include: { checklistItems: { orderBy: { sequenceNumber: 'asc' } } },
+      });
+      const snapshot = buildTemplateSnapshot(template);
+      const snapshotHoldPointItem = template.checklistItems[1];
+
+      const snapshotLot = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `HP-SNAPSHOT-${Date.now()}`,
+          status: 'not_started',
+          lotType: 'chainage',
+          activityType: 'Earthworks',
+        },
+      });
+      await prisma.iTPInstance.create({
+        data: {
+          templateId: template.id,
+          lotId: snapshotLot.id,
+          templateSnapshot: JSON.stringify(snapshot),
+          status: 'not_started',
+        },
+      });
+      const holdPoint = await prisma.holdPoint.create({
+        data: {
+          lotId: snapshotLot.id,
+          itpChecklistItemId: snapshotHoldPointItem.id,
+          pointType: 'hold_point',
+          description: 'Snapshot hold point',
+          status: 'pending',
+        },
+      });
+
+      await prisma.iTPTemplate.update({
+        where: { id: template.id },
+        data: { name: 'Live Template After Assignment' },
+      });
+      await prisma.iTPChecklistItem.update({
+        where: { id: snapshotHoldPointItem.id },
+        data: { description: 'Live mutated hold point' },
+      });
+      const liveOnlyHoldPoint = await prisma.iTPChecklistItem.create({
+        data: {
+          templateId: template.id,
+          sequenceNumber: 3,
+          description: 'Live-only hold point',
+          pointType: 'hold_point',
+          responsibleParty: 'contractor',
+        },
+      });
+
+      const detailRes = await request(app)
+        .get(`/api/holdpoints/lot/${snapshotLot.id}/item/${snapshotHoldPointItem.id}`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(detailRes.status).toBe(200);
+      expect(detailRes.body.holdPoint.description).toBe('Snapshot hold point');
+
+      const liveOnlyDetailRes = await request(app)
+        .get(`/api/holdpoints/lot/${snapshotLot.id}/item/${liveOnlyHoldPoint.id}`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(liveOnlyDetailRes.status).toBe(404);
+
+      const liveOnlyRequestRes = await request(app)
+        .post('/api/holdpoints/request-release')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          lotId: snapshotLot.id,
+          itpChecklistItemId: liveOnlyHoldPoint.id,
+          notificationSentTo: 'snapshot-reviewer@example.com',
+        });
+
+      expect(liveOnlyRequestRes.status).toBe(400);
+      expect(liveOnlyRequestRes.body.error.message).toContain('Item is not release-gated');
+
+      const evidenceRes = await request(app)
+        .get(`/api/holdpoints/${holdPoint.id}/evidence-package`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(evidenceRes.status).toBe(200);
+      expect(evidenceRes.body.evidencePackage.itpTemplate.name).toBe(
+        'Snapshot Hold Point Template',
+      );
+      expect(evidenceRes.body.evidencePackage.checklist).toEqual(
+        expect.arrayContaining([expect.objectContaining({ description: 'Snapshot hold point' })]),
+      );
+      expect(JSON.stringify(evidenceRes.body.evidencePackage.checklist)).not.toContain(
+        'Live mutated hold point',
+      );
+      expect(JSON.stringify(evidenceRes.body.evidencePackage.checklist)).not.toContain(
+        'Live-only hold point',
+      );
     });
   });
 
@@ -1570,6 +1688,10 @@ describe('Hold Point Token Release', () => {
       },
     });
     checklistItemId = checklistItem.id;
+    const templateSnapshotSource = await prisma.iTPTemplate.findUniqueOrThrow({
+      where: { id: templateId },
+      include: { checklistItems: { orderBy: { sequenceNumber: 'asc' } } },
+    });
 
     const lot = await prisma.lot.create({
       data: {
@@ -1586,8 +1708,17 @@ describe('Hold Point Token Release', () => {
       data: {
         templateId,
         lotId,
+        templateSnapshot: JSON.stringify(buildTemplateSnapshot(templateSnapshotSource)),
         status: 'not_started',
       },
+    });
+    await prisma.iTPTemplate.update({
+      where: { id: templateId },
+      data: { name: 'Live Mutated Token Template' },
+    });
+    await prisma.iTPChecklistItem.update({
+      where: { id: checklistItemId },
+      data: { description: 'Live Mutated External Hold Point' },
     });
     const completion = await prisma.iTPCompletion.create({
       data: {
@@ -1639,6 +1770,13 @@ describe('Hold Point Token Release', () => {
     expect(res.status).toBe(200);
     expect(res.body.evidencePackage).toBeDefined();
     expect(res.body.evidencePackage.holdPoint).toBeDefined();
+    expect(res.body.evidencePackage.itpTemplate.name).toBe('Token Test Template');
+    expect(res.body.evidencePackage.checklist).toEqual(
+      expect.arrayContaining([expect.objectContaining({ description: 'External Hold Point' })]),
+    );
+    expect(JSON.stringify(res.body.evidencePackage.checklist)).not.toContain(
+      'Live Mutated External Hold Point',
+    );
     expect(res.body.tokenInfo).toBeDefined();
   });
 
