@@ -486,6 +486,22 @@ ncrClosureWorkflowRouter.post(
       },
     });
 
+    await createAuditLog({
+      projectId: ncr.projectId,
+      userId: user.userId,
+      entityType: 'ncr',
+      entityId: ncr.id,
+      action: AuditAction.NCR_STATUS_CHANGED,
+      changes: {
+        ncrNumber: ncr.ncrNumber,
+        status: { from: ncr.status, to: updatedNcr.status },
+        rectificationNotesPresent: Boolean(rectificationNotes),
+        evidenceCount: ncr.ncrEvidence.length,
+        submissionPath: 'submit-for-verification',
+      },
+      req,
+    });
+
     res.json(buildNcrSubmittedForVerificationResponse(updatedNcr));
   }),
 );

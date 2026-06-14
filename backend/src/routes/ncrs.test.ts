@@ -1592,6 +1592,69 @@ describe('NCR Workflow', () => {
     });
   });
 
+  it('should audit submit-for-verification from the UI path', async () => {
+    const ncrRes = await request(app)
+      .post('/api/ncrs')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        projectId,
+        description: 'Submit for verification should be audited',
+        category: 'Workmanship',
+        severity: 'minor',
+        responsibleUserId: userId,
+      });
+    expect(ncrRes.status).toBe(201);
+    const ncrId = ncrRes.body.ncr.id as string;
+
+    await request(app)
+      .post(`/api/ncrs/${ncrId}/respond`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        rootCauseCategory: 'Method',
+        rootCauseDescription: 'Incorrect method used',
+        proposedCorrectiveAction: 'Rework and submit evidence',
+      });
+
+    await request(app)
+      .post(`/api/ncrs/${ncrId}/qm-review`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        action: 'accept',
+        comments: 'Response accepted',
+      });
+
+    await createNcrEvidence(projectId, userId, ncrId);
+
+    const res = await request(app)
+      .post(`/api/ncrs/${ncrId}/submit-for-verification`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        rectificationNotes: 'Ready for verification from UI path',
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.ncr.status).toBe('verification');
+
+    const auditLog = await prisma.auditLog.findFirst({
+      where: {
+        projectId,
+        userId,
+        entityType: 'ncr',
+        entityId: ncrId,
+        action: AuditAction.NCR_STATUS_CHANGED,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    expect(auditLog).toBeTruthy();
+    expect(parseAuditLogChanges(auditLog!.changes)).toMatchObject({
+      status: { from: 'rectification', to: 'verification' },
+      rectificationNotesPresent: true,
+      evidenceCount: 1,
+      submissionPath: 'submit-for-verification',
+    });
+  });
+
   it('should reject rectification and write an audit log', async () => {
     const ncrRes = await request(app)
       .post('/api/ncrs')
