@@ -32,6 +32,7 @@ import {
   getOldestPendingItemAge,
   getPendingSyncCount,
   getPendingSyncItems,
+  markSyncItemTerminalError,
   markSyncItemError,
   offlineDb,
   removeSyncQueueItem,
@@ -144,6 +145,21 @@ describe('sync queue mutations', () => {
     await markSyncItemError(2, 'Upload failed');
 
     expect(offlineDb.syncQueue.update).not.toHaveBeenCalled();
+  });
+
+  it('dead-letters terminal server rejections immediately', async () => {
+    vi.mocked(offlineDb.syncQueue.get).mockResolvedValue({
+      id: 2,
+      type: 'itp_completion',
+      attempts: 0,
+    } as SyncQueueItem);
+
+    await markSyncItemTerminalError(2, 'Validation failed');
+
+    expect(offlineDb.syncQueue.update).toHaveBeenCalledWith(2, {
+      attempts: MAX_SYNC_ATTEMPTS,
+      lastError: 'Validation failed',
+    });
   });
 });
 

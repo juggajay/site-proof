@@ -3229,6 +3229,48 @@ describe('ITP Completion Decision Logic (characterization)', () => {
     }
   });
 
+  it('rejects bare POST completion overwrites for failed checklist items', async () => {
+    await resetContractorCompletion();
+    await prisma.iTPCompletion.create({
+      data: {
+        itpInstanceId: instanceId,
+        checklistItemId: contractorItemId,
+        status: 'failed',
+        notes: 'Failed baseline from server',
+        completedById: userId,
+        completedAt: new Date('2026-01-01T00:00:00.000Z'),
+      },
+    });
+
+    try {
+      const res = await request(app)
+        .post('/api/itp/completions')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          itpInstanceId: instanceId,
+          checklistItemId: contractorItemId,
+          status: 'completed',
+          notes: 'Stale offline pass',
+        });
+
+      expect(res.status).toBe(409);
+      expect(res.body.error.message).toContain('Failed ITP completions');
+
+      const unchanged = await prisma.iTPCompletion.findFirstOrThrow({
+        where: { itpInstanceId: instanceId, checklistItemId: contractorItemId },
+        select: { status: true, notes: true, completedAt: true, completedById: true },
+      });
+      expect(unchanged.status).toBe('failed');
+      expect(unchanged.notes).toBe('Failed baseline from server');
+      expect(unchanged.completedAt?.toISOString()).toBe('2026-01-01T00:00:00.000Z');
+      expect(unchanged.completedById).toBe(userId);
+    } finally {
+      await prisma.iTPCompletion.deleteMany({
+        where: { itpInstanceId: instanceId, checklistItemId: contractorItemId },
+      });
+    }
+  });
+
   it('auto-verifies a subcontractor completion when the project does not require verification', async () => {
     const suffix = Date.now();
     const subcontractorCompany = await prisma.subcontractorCompany.create({

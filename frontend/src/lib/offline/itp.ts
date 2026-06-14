@@ -12,6 +12,17 @@ import {
 
 type ItpCompletionQueueItem = Extract<SyncQueueItem, { type: 'itp_completion' }>;
 
+export interface ItpServerCompletionSnapshot {
+  checklistItemId?: string;
+  status?: string | null;
+  isCompleted?: boolean | null;
+  isNotApplicable?: boolean | null;
+  isFailed?: boolean | null;
+  notes?: string | null;
+  completedAt?: string | null;
+  completedBy?: { fullName?: string | null } | null;
+}
+
 function isItpCompletionQueueItem(item: SyncQueueItem): item is ItpCompletionQueueItem {
   return item.type === 'itp_completion';
 }
@@ -48,6 +59,7 @@ function buildCompletionRecord(
   syncStatus: OfflineITPCompletion['syncStatus'],
   notes?: string,
   completedBy?: string,
+  completedAt?: string | null,
 ): OfflineITPCompletion {
   return {
     id: `${lotId}-${checklistItemId}`,
@@ -55,7 +67,12 @@ function buildCompletionRecord(
     checklistItemId,
     status,
     notes,
-    completedAt: status === 'completed' ? new Date().toISOString() : undefined,
+    completedAt:
+      completedAt !== undefined
+        ? (completedAt ?? undefined)
+        : status === 'completed'
+          ? new Date().toISOString()
+          : undefined,
     completedBy,
     syncStatus,
     localUpdatedAt: new Date().toISOString(),
@@ -70,6 +87,7 @@ async function patchCachedChecklistItem(
   status: OfflineITPCompletion['status'],
   notes?: string,
   completedBy?: string,
+  completedAt?: string | null,
 ): Promise<void> {
   const cachedChecklist = await getCachedITPChecklist(lotId);
   if (!cachedChecklist) {
@@ -82,7 +100,12 @@ async function patchCachedChecklistItem(
         ...item,
         status,
         notes,
-        completedAt: status === 'completed' ? new Date().toISOString() : undefined,
+        completedAt:
+          completedAt !== undefined
+            ? (completedAt ?? undefined)
+            : status === 'completed'
+              ? new Date().toISOString()
+              : undefined,
         completedBy,
       };
     }
@@ -171,6 +194,56 @@ export async function recordSyncedChecklistItem(
 
   await offlineDb.itpCompletions.put(completion);
   await patchCachedChecklistItem(lotId, checklistItemId, status, notes, completedBy);
+}
+
+function serverCompletionStatus(
+  serverCompletion?: ItpServerCompletionSnapshot,
+): OfflineITPCompletion['status'] {
+  if (!serverCompletion) {
+    return 'pending';
+  }
+  if (serverCompletion.isCompleted) {
+    return 'completed';
+  }
+  if (serverCompletion.isNotApplicable) {
+    return 'na';
+  }
+  if (serverCompletion.isFailed) {
+    return 'failed';
+  }
+  if (serverCompletion.status === 'completed') {
+    return 'completed';
+  }
+  if (serverCompletion.status === 'not_applicable') {
+    return 'na';
+  }
+  if (serverCompletion.status === 'failed') {
+    return 'failed';
+  }
+  return 'pending';
+}
+
+export async function reconcileItpCompletionFromServer(
+  lotId: string,
+  checklistItemId: string,
+  serverCompletion?: ItpServerCompletionSnapshot,
+): Promise<void> {
+  const status = serverCompletionStatus(serverCompletion);
+  const notes = serverCompletion?.notes ?? undefined;
+  const completedAt = serverCompletion ? (serverCompletion.completedAt ?? null) : null;
+  const completedBy = serverCompletion?.completedBy?.fullName ?? undefined;
+  const completion = buildCompletionRecord(
+    lotId,
+    checklistItemId,
+    status,
+    'synced',
+    notes,
+    completedBy,
+    completedAt,
+  );
+
+  await offlineDb.itpCompletions.put(completion);
+  await patchCachedChecklistItem(lotId, checklistItemId, status, notes, completedBy, completedAt);
 }
 
 export async function markCompletionSynced(lotId: string, checklistItemId: string): Promise<void> {

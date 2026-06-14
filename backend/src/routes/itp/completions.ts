@@ -353,6 +353,12 @@ completionsRouter.post(
           { verificationStatus: existingCompletion.verificationStatus },
         );
       }
+      if (existingCompletion?.status === 'failed' && newStatus !== 'failed') {
+        throw AppError.conflict(
+          'Failed ITP completions cannot be changed through the standard completion path',
+          { currentStatus: existingCompletion.status },
+        );
+      }
 
       const shouldCreateFailedNcr = shouldCreateFailedItpNcr(newStatus, existingCompletion?.status);
 
