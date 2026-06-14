@@ -2023,6 +2023,90 @@ describe('Major NCR QM Approval', () => {
     expect(res.body.error.message).toContain('Quality Manager approval');
   });
 
+  it('should allow company owners to review and approve major NCRs', async () => {
+    const owner = await registerSharedTestUser(app, {
+      emailPrefix: 'major-ncr-owner',
+      fullName: 'Major NCR Owner',
+      companyId,
+      roleInCompany: 'owner',
+    });
+
+    try {
+      const ncrRes = await request(app)
+        .post('/api/ncrs')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          projectId,
+          description: 'Major defect requiring owner quality approval',
+          category: 'Material',
+          severity: 'major',
+          responsibleUserId: userId,
+        });
+      expect(ncrRes.status).toBe(201);
+      const createdOwnerNcrId = ncrRes.body.ncr.id as string;
+
+      const respondRes = await request(app)
+        .post(`/api/ncrs/${createdOwnerNcrId}/respond`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          rootCauseCategory: 'Material',
+          rootCauseDescription: 'Owner approval workflow defect',
+          proposedCorrectiveAction: 'Repair and verify',
+        });
+      expect(respondRes.status).toBe(200);
+      expect(respondRes.body.ncr.status).toBe('investigating');
+
+      const reviewRes = await request(app)
+        .post(`/api/ncrs/${createdOwnerNcrId}/qm-review`)
+        .set('Authorization', `Bearer ${owner.token}`)
+        .send({
+          action: 'accept',
+          comments: 'Owner accepts the response',
+        });
+      expect(reviewRes.status).toBe(200);
+      expect(reviewRes.body.ncr.status).toBe('rectification');
+
+      await createNcrEvidence(projectId, userId, createdOwnerNcrId);
+
+      const rectifyRes = await request(app)
+        .post(`/api/ncrs/${createdOwnerNcrId}/rectify`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ rectificationNotes: 'Repair complete' });
+      expect(rectifyRes.status).toBe(200);
+      expect(rectifyRes.body.ncr.status).toBe('verification');
+
+      const approvalRes = await request(app)
+        .post(`/api/ncrs/${createdOwnerNcrId}/qm-approve`)
+        .set('Authorization', `Bearer ${owner.token}`)
+        .set('User-Agent', 'ncr-owner-qm-approval-test');
+
+      expect(approvalRes.status).toBe(200);
+      expect(approvalRes.body.message).toContain('approval granted');
+
+      const auditLog = await prisma.auditLog.findFirst({
+        where: {
+          projectId,
+          userId: owner.userId,
+          entityType: 'ncr',
+          entityId: createdOwnerNcrId,
+          action: AuditAction.NCR_QM_APPROVED,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      expect(auditLog).toBeTruthy();
+      expect(auditLog!.userAgent).toBe('ncr-owner-qm-approval-test');
+      expect(parseAuditLogChanges(auditLog!.changes)).toMatchObject({
+        severity: 'major',
+        qmApprovalRequired: true,
+        qmApproved: true,
+      });
+    } finally {
+      await prisma.auditLog.deleteMany({ where: { userId: owner.userId } }).catch(() => {});
+      await cleanupTestUser(owner.userId);
+    }
+  });
+
   it('should grant QM approval', async () => {
     const res = await request(app)
       .post(`/api/ncrs/${majorNcrId}/qm-approve`)
@@ -2583,6 +2667,80 @@ describe('NCR Access Hardening', () => {
 
     expect(res.status).toBe(400);
     expect(res.body.error.message).toContain('Responsible user');
+  });
+
+  it('should audit NCR reassignment to a different responsible user', async () => {
+    const assignee = await registerSharedTestUser(app, {
+      emailPrefix: 'ncr-reassign-audit',
+      fullName: 'NCR Reassignment Audit User',
+      companyId,
+      roleInCompany: 'quality_manager',
+    });
+
+    await prisma.projectUser.create({
+      data: {
+        projectId,
+        userId: assignee.userId,
+        role: 'quality_manager',
+        status: 'active',
+      },
+    });
+
+    await prisma.nCR.update({
+      where: { id: ncrId },
+      data: { responsibleUserId: null, responsibleSubcontractorId: null },
+    });
+
+    await prisma.auditLog.deleteMany({
+      where: {
+        projectId,
+        userId,
+        entityType: 'ncr',
+        entityId: ncrId,
+        action: AuditAction.NCR_UPDATED,
+      },
+    });
+
+    try {
+      const res = await request(app)
+        .patch(`/api/ncrs/${ncrId}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .set('User-Agent', 'ncr-reassignment-audit-test')
+        .send({
+          responsibleUserId: assignee.userId,
+          comments: 'Redirecting to the responsible quality user',
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.ncr.responsibleUserId).toBe(assignee.userId);
+
+      const auditLog = await prisma.auditLog.findFirst({
+        where: {
+          projectId,
+          userId,
+          entityType: 'ncr',
+          entityId: ncrId,
+          action: AuditAction.NCR_UPDATED,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      expect(auditLog).toBeTruthy();
+      expect(auditLog!.userAgent).toBe('ncr-reassignment-audit-test');
+      expect(parseAuditLogChanges(auditLog!.changes)).toMatchObject({
+        responsibleUserId: { from: null, to: assignee.userId },
+        commentsPresent: true,
+      });
+    } finally {
+      await prisma.nCR
+        .update({
+          where: { id: ncrId },
+          data: { responsibleUserId: null, responsibleSubcontractorId: null },
+        })
+        .catch(() => {});
+      await prisma.projectUser.deleteMany({ where: { projectId, userId: assignee.userId } });
+      await cleanupTestUser(assignee.userId);
+    }
   });
 
   describe('Feature N1 - subcontractor responsible party', () => {

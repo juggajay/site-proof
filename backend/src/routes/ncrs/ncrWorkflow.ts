@@ -6,6 +6,7 @@ import { requireAuth } from '../../middleware/authMiddleware.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import {
+  NCR_QUALITY_MANAGEMENT_ROLES,
   parseNcrRouteParam,
   requireActiveProjectUser,
   requireNcrResponsibleOrProjectRole,
@@ -132,8 +133,8 @@ ncrWorkflowRouter.post(
     await requireActiveProjectUser(
       ncr.projectId,
       user,
-      'Only Quality Managers, Project Managers, or Admins can review NCR responses',
-      ['quality_manager', 'admin', 'project_manager'],
+      'Only project quality roles can review NCR responses',
+      NCR_QUALITY_MANAGEMENT_ROLES,
     );
 
     if (isAcceptedRetry) {
@@ -405,8 +406,8 @@ ncrWorkflowRouter.post(
     await requireActiveProjectUser(
       ncr.projectId,
       user,
-      'Only Quality Managers, Project Managers, or Admins can reject rectification',
-      ['quality_manager', 'admin', 'project_manager', 'site_manager'],
+      'Only project quality roles can reject rectification',
+      NCR_QUALITY_MANAGEMENT_ROLES,
     );
 
     // Get reviewer info for notifications

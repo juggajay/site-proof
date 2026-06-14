@@ -27,6 +27,17 @@ import { ncrListRouter } from './ncrListRoute.js';
 
 export const ncrCoreRouter = Router();
 
+function addNcrUpdateAuditChange(
+  changes: Record<string, unknown>,
+  field: string,
+  from: string | null,
+  to: string | null,
+) {
+  if (from !== to) {
+    changes[field] = { from, to };
+  }
+}
+
 async function requireNcrLotsInProject(projectId: string, lotIds: string[]): Promise<string[]> {
   const uniqueLotIds = [...new Set(lotIds)];
   if (uniqueLotIds.length === 0) {
@@ -467,6 +478,9 @@ ncrCoreRouter.patch(
 
     // Build update data
     const updateData: Prisma.NCRUncheckedUpdateInput = {};
+    const auditChanges: Record<string, unknown> = {
+      ncrNumber: ncr.ncrNumber,
+    };
     const notificationsEnabled = isProjectNotificationEnabled(
       ncr.project.settings,
       'ncrAssignments',
@@ -497,9 +511,21 @@ ncrCoreRouter.patch(
       await requireActiveResponsibleUser(ncr.projectId, responsibleUserId);
 
       updateData.responsibleUserId = responsibleUserId || null;
+      addNcrUpdateAuditChange(
+        auditChanges,
+        'responsibleUserId',
+        ncr.responsibleUserId,
+        responsibleUserId || null,
+      );
       // Swap target type: assigning to a user clears any subcontractor.
       if (assigningUser) {
         updateData.responsibleSubcontractorId = null;
+        addNcrUpdateAuditChange(
+          auditChanges,
+          'responsibleSubcontractorId',
+          ncr.responsibleSubcontractorId,
+          null,
+        );
       }
 
       // If redirecting to a new user, create a notification. Respect the
@@ -531,9 +557,16 @@ ncrCoreRouter.patch(
       await requireActiveResponsibleSubcontractor(ncr.projectId, responsibleSubcontractorId);
 
       updateData.responsibleSubcontractorId = responsibleSubcontractorId || null;
+      addNcrUpdateAuditChange(
+        auditChanges,
+        'responsibleSubcontractorId',
+        ncr.responsibleSubcontractorId,
+        responsibleSubcontractorId || null,
+      );
       // Swap target type: assigning to a subcontractor clears any user.
       if (assigningSubcontractor) {
         updateData.responsibleUserId = null;
+        addNcrUpdateAuditChange(auditChanges, 'responsibleUserId', ncr.responsibleUserId, null);
       }
 
       if (responsibleSubcontractorId) {
@@ -567,6 +600,7 @@ ncrCoreRouter.patch(
     // If comments are provided, add them as revision comments
     if (comments) {
       updateData.qmReviewComments = comments;
+      auditChanges.commentsPresent = true;
     }
 
     if (Object.keys(updateData).length === 0) {
@@ -586,6 +620,16 @@ ncrCoreRouter.patch(
           },
         },
       },
+    });
+
+    await createAuditLog({
+      projectId: ncr.projectId,
+      userId: user.userId,
+      entityType: 'ncr',
+      entityId: ncr.id,
+      action: AuditAction.NCR_UPDATED,
+      changes: auditChanges,
+      req,
     });
 
     res.json(buildNcrUpdatedResponse(updatedNcr));

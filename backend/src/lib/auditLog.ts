@@ -155,6 +155,7 @@ export const AuditAction = {
   LOT_SUBCONTRACTOR_ASSIGNMENT_UPDATED: 'lot_subcontractor_assignment_updated',
   LOT_SUBCONTRACTOR_ASSIGNMENT_REMOVED: 'lot_subcontractor_assignment_removed',
   NCR_CREATED: 'ncr_created',
+  NCR_UPDATED: 'ncr_updated',
   NCR_STATUS_CHANGED: 'ncr_status_changed',
   NCR_EVIDENCE_ADDED: 'ncr_evidence_added',
   NCR_EVIDENCE_REMOVED: 'ncr_evidence_removed',
