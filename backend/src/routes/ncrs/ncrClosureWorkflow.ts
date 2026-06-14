@@ -5,6 +5,7 @@ import { type AuthUser } from '../../lib/auth.js';
 import { AuditAction, createAuditLog } from '../../lib/auditLog.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
+import { sendEmail } from '../../lib/email.js';
 import { prisma } from '../../lib/prisma.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
 import {
@@ -230,6 +231,10 @@ ncrClosureWorkflowRouter.post(
     const id = parseNcrRouteParam(req.params.id, 'id');
     const { recipientEmail, additionalMessage } = validation.data;
 
+    if (!recipientEmail) {
+      throw AppError.badRequest('Recipient email is required to notify the client');
+    }
+
     const ncr = await prisma.nCR.findUnique({
       where: { id },
       include: {
@@ -288,6 +293,31 @@ ncrClosureWorkflowRouter.post(
       notifiedAt: new Date().toISOString(),
       additionalMessage: additionalMessage || null,
     };
+
+    const emailResult = await sendEmail({
+      to: recipientEmail,
+      subject: `Major NCR notification: ${ncr.ncrNumber} - ${ncr.project.name}`,
+      text: [
+        `Major NCR notification: ${ncr.ncrNumber}`,
+        '',
+        `Project: ${notificationPackage.project}`,
+        `Severity: ${notificationPackage.severity}`,
+        `Category: ${notificationPackage.category}`,
+        `Affected lots: ${notificationPackage.affectedLots}`,
+        `Specification reference: ${notificationPackage.specificationReference}`,
+        `Raised by: ${notificationPackage.raisedBy}`,
+        `Raised at: ${new Date(ncr.raisedAt).toLocaleString('en-AU')}`,
+        `Notified by: ${notificationPackage.notifiedBy}`,
+        '',
+        'Description:',
+        ncr.description,
+        ...(additionalMessage ? ['', 'Additional message:', additionalMessage] : []),
+      ].join('\n'),
+    });
+
+    if (!emailResult.success) {
+      throw AppError.internal('Client notification email could not be sent');
+    }
 
     // Update NCR with notification timestamp
     const updatedNcr = await prisma.nCR.update({

@@ -435,6 +435,7 @@ completionsRouter.post(
               category: ncrCategory || 'workmanship',
               severity: ncrSeverity || 'minor',
               qmApprovalRequired: isMajor,
+              clientNotificationRequired: isMajor,
               raisedById: user.userId,
               // Store ITP item reference in rectification notes for traceability. The
               // human-readable sentence keeps context for reviewers; the trailing

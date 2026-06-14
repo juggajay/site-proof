@@ -13,7 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 
 const notifyClientSchema = z.object({
-  recipientEmail: z.string().trim().optional().default(''),
+  recipientEmail: z.string().trim().min(1, 'Client email is required').email(),
   additionalMessage: z.string().trim().optional().default(''),
 });
 
@@ -97,7 +97,7 @@ function NotifyClientModalInner({ isOpen, ncr, onClose, onSuccess }: NotifyClien
         <form id="notify-client-form" onSubmit={handleSubmit(onFormSubmit)}>
           <div className="space-y-4">
             <div>
-              <Label>Client Email (optional)</Label>
+              <Label>Client Email</Label>
               <Input
                 type="email"
                 {...register('recipientEmail')}
@@ -110,7 +110,7 @@ function NotifyClientModalInner({ isOpen, ncr, onClose, onSuccess }: NotifyClien
                 </p>
               )}
               <p className="text-xs text-muted-foreground mt-1">
-                Leave blank to record notification without sending email
+                The NCR is marked notified only after this email is sent.
               </p>
             </div>
 

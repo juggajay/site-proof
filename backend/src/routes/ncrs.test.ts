@@ -7,6 +7,7 @@ import { lotsRouter } from './lots.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { AuditAction, parseAuditLogChanges } from '../lib/auditLog.js';
+import { clearEmailQueue, getQueuedEmails } from '../lib/email.js';
 import { registerTestUser as registerSharedTestUser } from '../test/routeTestHarness.js';
 
 const app = express();
@@ -1262,10 +1263,43 @@ describe('NCR Workflow', () => {
     expect(afterNcr.lessonsLearned).toBe(beforeNcr.lessonsLearned);
   });
 
-  it('should audit client notification with metadata only', async () => {
+  it('should reject client notification without a recipient and leave notification state untouched', async () => {
+    const createRes = await request(app)
+      .post('/api/ncrs')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        projectId,
+        description: 'Major NCR needs a real recipient',
+        category: 'Workmanship',
+        severity: 'major',
+        responsibleUserId: userId,
+      });
+
+    expect(createRes.status).toBe(201);
+    const ncrId = createRes.body.ncr.id as string;
+
+    const notifyRes = await request(app)
+      .post(`/api/ncrs/${ncrId}/notify-client`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        additionalMessage: 'Please review',
+      });
+
+    expect(notifyRes.status).toBe(400);
+    expect(notifyRes.body.error.message).toContain('Recipient email is required');
+
+    const unchanged = await prisma.nCR.findUniqueOrThrow({
+      where: { id: ncrId },
+      select: { clientNotifiedAt: true },
+    });
+    expect(unchanged.clientNotifiedAt).toBeNull();
+  });
+
+  it('should send client notification email and audit metadata only', async () => {
     const sensitiveDescription = `Client notification leak sentinel ${Date.now()}`;
     const sensitiveMessage = `Private client context ${Date.now()}`;
     const sensitiveRecipient = `client-${Date.now()}@example.com`;
+    clearEmailQueue();
 
     const createRes = await request(app)
       .post('/api/ncrs')
@@ -1291,6 +1325,11 @@ describe('NCR Workflow', () => {
       });
 
     expect(notifyRes.status).toBe(200);
+
+    const queuedEmail = getQueuedEmails().find((email) => email.to === sensitiveRecipient);
+    expect(queuedEmail).toBeDefined();
+    expect(queuedEmail?.subject).toContain(createRes.body.ncr.ncrNumber);
+    expect(queuedEmail?.text).toContain(sensitiveDescription);
 
     const auditLog = await prisma.auditLog.findFirst({
       where: {
