@@ -28,6 +28,7 @@ import {
   markCompletionSynced,
   offlineDb,
   recordSyncedChecklistItem,
+  reconcileItpCompletionFromServer,
   updateChecklistItemOffline,
   type OfflineChecklistItem,
   type OfflineITPChecklist,
@@ -287,6 +288,127 @@ describe('recordSyncedChecklistItem', () => {
       ],
       cachedAt: expect.any(String),
     });
+  });
+});
+
+describe('reconcileItpCompletionFromServer', () => {
+  it('stores the server failed state and patches the cached checklist after a rejected optimistic sync', async () => {
+    mockChecklistLookup({
+      id: 'lot-1-template-1',
+      lotId: 'lot-1',
+      templateId: 'template-1',
+      templateName: 'Earthworks ITP',
+      items: [
+        {
+          ...checklistItems[0],
+          status: 'completed',
+          notes: 'Local optimistic pass',
+          completedAt: '2026-06-12T00:00:00.000Z',
+          completedBy: 'Offline Foreman',
+        },
+        checklistItems[1],
+      ],
+      cachedAt: '2026-06-06T00:00:00.000Z',
+    });
+
+    await reconcileItpCompletionFromServer('lot-1', 'item-1', {
+      checklistItemId: 'item-1',
+      isFailed: true,
+      notes: 'Server rejected after QA review',
+      completedAt: '2026-06-13T01:02:03.000Z',
+      completedBy: { fullName: 'QA Manager' },
+    });
+
+    expect(offlineDb.itpCompletions.put).toHaveBeenCalledWith({
+      id: 'lot-1-item-1',
+      lotId: 'lot-1',
+      checklistItemId: 'item-1',
+      status: 'failed',
+      notes: 'Server rejected after QA review',
+      completedAt: '2026-06-13T01:02:03.000Z',
+      completedBy: 'QA Manager',
+      syncStatus: 'synced',
+      localUpdatedAt: expect.any(String),
+    });
+    expect(offlineDb.itpChecklists.update).toHaveBeenCalledWith('lot-1-template-1', {
+      items: [
+        expect.objectContaining({
+          id: 'item-1',
+          status: 'failed',
+          notes: 'Server rejected after QA review',
+          completedAt: '2026-06-13T01:02:03.000Z',
+          completedBy: 'QA Manager',
+        }),
+        checklistItems[1],
+      ],
+      cachedAt: expect.any(String),
+    });
+  });
+
+  it('clears an optimistic local completion when the server has no completion row', async () => {
+    mockChecklistLookup({
+      id: 'lot-1-template-1',
+      lotId: 'lot-1',
+      templateId: 'template-1',
+      templateName: 'Earthworks ITP',
+      items: [
+        {
+          ...checklistItems[0],
+          status: 'completed',
+          notes: 'Local optimistic pass',
+          completedAt: '2026-06-12T00:00:00.000Z',
+          completedBy: 'Offline Foreman',
+        },
+        checklistItems[1],
+      ],
+      cachedAt: '2026-06-06T00:00:00.000Z',
+    });
+
+    await reconcileItpCompletionFromServer('lot-1', 'item-1');
+
+    expect(offlineDb.itpCompletions.put).toHaveBeenCalledWith({
+      id: 'lot-1-item-1',
+      lotId: 'lot-1',
+      checklistItemId: 'item-1',
+      status: 'pending',
+      notes: undefined,
+      completedAt: undefined,
+      completedBy: undefined,
+      syncStatus: 'synced',
+      localUpdatedAt: expect.any(String),
+    });
+    expect(offlineDb.itpChecklists.update).toHaveBeenCalledWith('lot-1-template-1', {
+      items: [
+        expect.objectContaining({
+          id: 'item-1',
+          status: 'pending',
+          notes: undefined,
+          completedAt: undefined,
+          completedBy: undefined,
+        }),
+        checklistItems[1],
+      ],
+      cachedAt: expect.any(String),
+    });
+  });
+
+  it('falls back to raw server status when derived flags are absent', async () => {
+    mockChecklistLookup(undefined);
+
+    await reconcileItpCompletionFromServer('lot-1', 'item-1', {
+      checklistItemId: 'item-1',
+      status: 'not_applicable',
+      notes: 'Server raw status',
+    });
+
+    expect(offlineDb.itpCompletions.put).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'lot-1-item-1',
+        status: 'na',
+        notes: 'Server raw status',
+        syncStatus: 'synced',
+      }),
+    );
   });
 });
 

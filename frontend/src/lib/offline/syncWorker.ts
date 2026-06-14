@@ -23,7 +23,9 @@ import {
   offlineDb,
   removeSyncQueueItem,
   markSyncItemError,
+  markSyncItemTerminalError,
   markCompletionSynced,
+  reconcileItpCompletionFromServer,
   markDiarySynced,
   markDiarySyncError,
   markDeliverySynced,
@@ -41,6 +43,7 @@ import {
   detectLotSyncConflict,
   markLotSynced,
   markLotSyncError,
+  type ItpServerCompletionSnapshot,
   type SyncQueueItem,
 } from '../offlineDb';
 import { readResponseError, syncOfflineDiarySnapshot, syncOfflineDocketDraft } from './syncClient';
@@ -113,6 +116,17 @@ function isOfflineCompletionId(completionId: string): boolean {
   return completionId.startsWith('offline-');
 }
 
+function isTerminalItpSyncRejection(status: number): boolean {
+  return status >= 400 && status < 500 && status !== 408 && status !== 429;
+}
+
+interface ItpInstanceSyncResponse {
+  instance?: {
+    id?: string;
+    completions?: ItpServerCompletionSnapshot[];
+  } | null;
+}
+
 async function syncItpCompletion(item: ItpCompletionItem, itemId: number): Promise<SyncItemResult> {
   return runSyncStep(item, async () => {
     const completion = item.data;
@@ -125,7 +139,7 @@ async function syncItpCompletion(item: ItpCompletionItem, itemId: number): Promi
       return HANDLED;
     }
 
-    const instanceData = await instanceResponse.json();
+    const instanceData = (await instanceResponse.json()) as ItpInstanceSyncResponse;
     const itpInstanceId = instanceData.instance?.id;
 
     if (!itpInstanceId) {
@@ -165,6 +179,19 @@ async function syncItpCompletion(item: ItpCompletionItem, itemId: number): Promi
       return SYNCED;
     } else {
       const errorText = await response.text();
+      if (isTerminalItpSyncRejection(response.status)) {
+        const serverCompletion = instanceData.instance?.completions?.find(
+          (candidate) => candidate.checklistItemId === completion.checklistItemId,
+        );
+        await reconcileItpCompletionFromServer(
+          completion.lotId,
+          completion.checklistItemId,
+          serverCompletion,
+        );
+        await markSyncItemTerminalError(itemId, errorText);
+        return HANDLED;
+      }
+
       await markSyncItemError(itemId, errorText);
       return HANDLED;
     }

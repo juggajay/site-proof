@@ -36,7 +36,9 @@ vi.mock('./offlineDb', () => ({
   getPendingSyncItems: vi.fn(),
   removeSyncQueueItem: vi.fn(),
   markSyncItemError: vi.fn(),
+  markSyncItemTerminalError: vi.fn(),
   markCompletionSynced: vi.fn(),
+  reconcileItpCompletionFromServer: vi.fn(),
   getOfflinePhoto: vi.fn(),
   markPhotoSynced: vi.fn(),
   markPhotoSyncError: vi.fn(),
@@ -101,7 +103,9 @@ import {
   getPendingSyncItems,
   removeSyncQueueItem,
   markSyncItemError,
+  markSyncItemTerminalError,
   markCompletionSynced,
+  reconcileItpCompletionFromServer,
   getOfflinePhoto,
   markPhotoSynced,
   markPhotoSyncError,
@@ -138,7 +142,9 @@ import { useOfflineStatus, type SyncCallbacks } from './useOfflineStatus';
 const getPendingSyncItemsMock = getPendingSyncItems as Mock;
 const removeSyncQueueItemMock = removeSyncQueueItem as Mock;
 const markSyncItemErrorMock = markSyncItemError as Mock;
+const markSyncItemTerminalErrorMock = markSyncItemTerminalError as Mock;
 const markCompletionSyncedMock = markCompletionSynced as Mock;
+const reconcileItpCompletionFromServerMock = reconcileItpCompletionFromServer as Mock;
 const getOfflinePhotoMock = getOfflinePhoto as Mock;
 const markPhotoSyncedMock = markPhotoSynced as Mock;
 const markPhotoSyncErrorMock = markPhotoSyncError as Mock;
@@ -399,17 +405,32 @@ describe('itp_completion dispatch', () => {
     expect(markSyncItemErrorMock).toHaveBeenCalledWith(11, 'No ITP instance found for lot');
   });
 
-  it('marks an error with the response text when the completion POST is not ok (no removal)', async () => {
+  it('dead-letters and reconciles from the server when the completion POST is terminally rejected', async () => {
+    const serverCompletion = {
+      checklistItemId: 'item-6',
+      isFailed: true,
+      notes: 'Server already failed',
+      completedAt: '2026-06-13T01:02:03.000Z',
+      completedBy: { fullName: 'QA Manager' },
+    };
     getPendingSyncItemsMock.mockResolvedValue([
       itpItem({ lotId: 'lot-6', checklistItemId: 'item-6', status: 'completed' }),
     ]);
     authFetchMock
-      .mockResolvedValueOnce(okJson({ instance: { id: 'inst-6' } }))
+      .mockResolvedValueOnce(
+        okJson({ instance: { id: 'inst-6', completions: [serverCompletion] } }),
+      )
       .mockResolvedValueOnce(errorResponse(422, 'validation failed'));
 
     const { onSyncComplete } = await runSync();
 
-    expect(markSyncItemErrorMock).toHaveBeenCalledWith(11, 'validation failed');
+    expect(reconcileItpCompletionFromServerMock).toHaveBeenCalledWith(
+      'lot-6',
+      'item-6',
+      serverCompletion,
+    );
+    expect(markSyncItemTerminalErrorMock).toHaveBeenCalledWith(11, 'validation failed');
+    expect(markSyncItemErrorMock).not.toHaveBeenCalled();
     expect(removeSyncQueueItemMock).not.toHaveBeenCalled();
     expect(markCompletionSyncedMock).not.toHaveBeenCalled();
     // syncedCount stayed 0, so the completion callback is suppressed.

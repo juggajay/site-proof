@@ -67,6 +67,16 @@ export async function markSyncItemError(id: number, error: string): Promise<void
   }
 }
 
+export async function markSyncItemTerminalError(id: number, error: string): Promise<void> {
+  const item = await offlineDb.syncQueue.get(id);
+  if (item) {
+    await offlineDb.syncQueue.update(id, {
+      attempts: MAX_SYNC_ATTEMPTS,
+      lastError: error,
+    });
+  }
+}
+
 // Age in milliseconds of the oldest item still pending in the sync queue.
 // Returns null when the queue is empty (no age to report).
 // Uses the ISO `createdAt` string already present on every SyncQueueBase row.

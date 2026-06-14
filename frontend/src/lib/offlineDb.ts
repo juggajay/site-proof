@@ -77,7 +77,9 @@ export {
   getCachedITPChecklist,
   markCompletionSynced,
   recordSyncedChecklistItem,
+  reconcileItpCompletionFromServer,
   updateChecklistItemOffline,
+  type ItpServerCompletionSnapshot,
 } from './offline/itp';
 
 // The offline docket persistence (create/submit/update/query and sync-status
@@ -107,6 +109,7 @@ export {
   getOldestPendingItemAge,
   getPendingSyncCount,
   getPendingSyncItems,
+  markSyncItemTerminalError,
   markSyncItemError,
   removeSyncQueueItem,
   resetFailedSyncItems,

@@ -14,7 +14,9 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vite
 vi.mock('../offlineDb', () => ({
   removeSyncQueueItem: vi.fn(),
   markSyncItemError: vi.fn(),
+  markSyncItemTerminalError: vi.fn(),
   markCompletionSynced: vi.fn(),
+  reconcileItpCompletionFromServer: vi.fn(),
   markDiarySynced: vi.fn(),
   markDiarySyncError: vi.fn(),
   markDeliverySynced: vi.fn(),
@@ -63,7 +65,9 @@ vi.mock('../logger', () => ({
 import {
   removeSyncQueueItem,
   markSyncItemError,
+  markSyncItemTerminalError,
   markCompletionSynced,
+  reconcileItpCompletionFromServer,
   markDiarySynced,
   markDiarySyncError,
   markDeliverySynced,
@@ -92,7 +96,9 @@ import { syncSingleItem } from './syncWorker';
 
 const removeSyncQueueItemMock = removeSyncQueueItem as Mock;
 const markSyncItemErrorMock = markSyncItemError as Mock;
+const markSyncItemTerminalErrorMock = markSyncItemTerminalError as Mock;
 const markCompletionSyncedMock = markCompletionSynced as Mock;
+const reconcileItpCompletionFromServerMock = reconcileItpCompletionFromServer as Mock;
 const markDiarySyncedMock = markDiarySynced as Mock;
 const markDiarySyncErrorMock = markDiarySyncError as Mock;
 const markDeliverySyncedMock = markDeliverySynced as Mock;
@@ -239,9 +245,16 @@ describe('syncSingleItem — itp_completion', () => {
     expect(removeSyncQueueItemMock).not.toHaveBeenCalled();
   });
 
-  it('error-marks with the response text when the completion POST is not ok', async () => {
+  it('dead-letters and reconciles from the server when the completion POST is terminally rejected', async () => {
+    const serverCompletion = {
+      checklistItemId: 'c',
+      isFailed: true,
+      notes: 'Server already failed',
+      completedAt: '2026-06-13T01:02:03.000Z',
+      completedBy: { fullName: 'QA Manager' },
+    };
     authFetchMock
-      .mockResolvedValueOnce(okJson({ instance: { id: 'i' } }))
+      .mockResolvedValueOnce(okJson({ instance: { id: 'i', completions: [serverCompletion] } }))
       .mockResolvedValueOnce(errorResponse(422, 'validation failed'));
 
     const result = await syncSingleItem(
@@ -253,8 +266,30 @@ describe('syncSingleItem — itp_completion', () => {
     );
 
     expect(result).toEqual({ status: 'handled' });
-    expect(markSyncItemErrorMock).toHaveBeenCalledWith(11, 'validation failed');
+    expect(reconcileItpCompletionFromServerMock).toHaveBeenCalledWith('l', 'c', serverCompletion);
+    expect(markSyncItemTerminalErrorMock).toHaveBeenCalledWith(11, 'validation failed');
+    expect(markSyncItemErrorMock).not.toHaveBeenCalled();
     expect(markCompletionSyncedMock).not.toHaveBeenCalled();
+    expect(removeSyncQueueItemMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps retriable completion POST failures on the normal retry path', async () => {
+    authFetchMock
+      .mockResolvedValueOnce(okJson({ instance: { id: 'i' } }))
+      .mockResolvedValueOnce(errorResponse(500, 'server unavailable'));
+
+    const result = await syncSingleItem(
+      queueItem({
+        id: 11,
+        type: 'itp_completion',
+        data: { lotId: 'l', checklistItemId: 'c', status: 'completed' },
+      }),
+    );
+
+    expect(result).toEqual({ status: 'handled' });
+    expect(markSyncItemErrorMock).toHaveBeenCalledWith(11, 'server unavailable');
+    expect(markSyncItemTerminalErrorMock).not.toHaveBeenCalled();
+    expect(reconcileItpCompletionFromServerMock).not.toHaveBeenCalled();
   });
 
   it('catches a thrown error via the shared runSyncStep wrapper', async () => {
