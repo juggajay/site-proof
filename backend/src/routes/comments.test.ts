@@ -2204,6 +2204,57 @@ describe('Comments API', () => {
       expect(res.body.error.message).toContain('Attachment file');
     });
 
+    it('should proxy Supabase attachment downloads instead of redirecting to storage', async () => {
+      process.env.SUPABASE_URL = 'https://fixture-project.supabase.co';
+      mockIsSupabaseConfigured.mockReturnValue(true);
+      const storagePath = `comments/${projectId}/comment-download.txt`;
+      const fileUrl = `${process.env.SUPABASE_URL}/storage/v1/object/public/documents/${storagePath}`;
+      const createRes = await request(app)
+        .post('/api/comments')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          entityType: 'Lot',
+          entityId: lotId,
+          content: 'Comment with Supabase attachment',
+        });
+
+      const attachment = await prisma.commentAttachment.create({
+        data: {
+          commentId: createRes.body.comment.id,
+          filename: 'comment-download.txt',
+          fileUrl,
+          fileSize: 13,
+          mimeType: 'text/plain',
+        },
+      });
+
+      const download = vi.fn().mockResolvedValue({
+        data: new Blob([Buffer.from('download body')], { type: 'text/plain' }),
+        error: null,
+      });
+      const from = vi.fn(() => ({ download }));
+      mockGetSupabaseClient.mockReturnValue({
+        storage: { from },
+      } as unknown as ReturnType<typeof supabaseLib.getSupabaseClient>);
+
+      const res = await request(app)
+        .get(`/api/comments/attachments/${attachment.id}/download`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.headers.location).toBeUndefined();
+      expect(res.headers['content-type']).toContain('text/plain');
+      expect(res.headers['content-disposition']).toBe(
+        'attachment; filename="comment-download.txt"',
+      );
+      expect(res.headers['cache-control']).toBe('private, no-store, max-age=0');
+      expect(res.headers['referrer-policy']).toBe('no-referrer');
+      expect(res.headers['x-content-type-options']).toBe('nosniff');
+      expect(res.text).toBe('download body');
+      expect(from).toHaveBeenCalledWith('documents');
+      expect(download).toHaveBeenCalledWith(storagePath);
+    });
+
     it('should not redirect legacy attachment records to Supabase-path URLs on untrusted hosts', async () => {
       const createRes = await request(app)
         .post('/api/comments')

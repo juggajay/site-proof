@@ -150,7 +150,7 @@ commentsRouter.get(
       attachment.comment.entityType,
       attachment.comment.entityId,
     );
-    sendCommentAttachmentFile(attachment, projectId, res);
+    await sendCommentAttachmentFile(attachment, projectId, res);
   }),
 );
 

@@ -464,24 +464,19 @@ test.describe('production readiness guardrails', () => {
     }
   });
 
-  test('comment attachment direct opens are restricted to the configured Supabase origin', async () => {
+  test('comment attachment downloads go through the authenticated API', async () => {
     const commentsSection = await readFile(
       new URL('../src/components/comments/CommentsSection.tsx', import.meta.url),
       'utf8',
     );
-    const commentsSectionHelpers = await readFile(
-      new URL('../src/components/comments/commentsSectionHelpers.ts', import.meta.url),
-      'utf8',
-    );
-    const configSource = await readFile(new URL('../src/lib/config.ts', import.meta.url), 'utf8');
 
-    expect(configSource).toContain('export const SUPABASE_URL');
-    expect(commentsSection).toContain("import { SUPABASE_URL } from '@/lib/config'");
     expect(commentsSection).toContain(
-      'isSupabaseCommentAttachmentUrl(attachment.fileUrl, SUPABASE_URL)',
+      'authFetch(`/api/comments/attachments/${attachment.id}/download`)',
     );
-    expect(commentsSectionHelpers).toContain('if (!supabaseUrl) return false');
-    expect(commentsSectionHelpers).toContain('if (url.origin !== expectedOrigin) return false');
+    expect(commentsSection).toContain("downloadBlob(blob, attachment.filename, 'attachment')");
+    expect(commentsSection).not.toContain('window.open(attachment.fileUrl');
+    expect(commentsSection).not.toContain('SUPABASE_URL');
+    expect(commentsSection).not.toContain('isSupabaseCommentAttachmentUrl');
   });
 
   test('comment submissions with files use a single multipart create request', async () => {

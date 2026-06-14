@@ -30,25 +30,6 @@ export function buildCommentFormData({
   return formData;
 }
 
-export function isSupabaseCommentAttachmentUrl(
-  fileUrl: string,
-  supabaseUrl: string | undefined,
-): boolean {
-  if (!/^https?:\/\//i.test(fileUrl)) return false;
-  if (!supabaseUrl) return false;
-
-  try {
-    const url = new URL(fileUrl);
-    const expectedOrigin = new URL(supabaseUrl).origin;
-    if (url.origin !== expectedOrigin) return false;
-
-    const pathname = decodeURIComponent(url.pathname);
-    return pathname.includes('/storage/v1/object/public/') && pathname.includes('/comments/');
-  } catch {
-    return false;
-  }
-}
-
 export function formatCommentDate(dateStr: string): string {
   const date = new Date(dateStr);
   if (Number.isNaN(date.getTime())) {

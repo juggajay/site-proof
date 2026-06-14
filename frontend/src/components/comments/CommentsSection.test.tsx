@@ -24,9 +24,19 @@ vi.mock('@/lib/api', async (importOriginal) => {
   return { ...actual, apiFetch: vi.fn(), authFetch: vi.fn() };
 });
 
+vi.mock('@/lib/config', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/config')>();
+  return { ...actual, SUPABASE_URL: 'https://example.supabase.co' };
+});
+
 vi.mock('@/lib/auth', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/auth')>();
   return { ...actual, useAuth: vi.fn() };
+});
+
+vi.mock('@/lib/downloads', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/downloads')>();
+  return { ...actual, downloadBlob: vi.fn() };
 });
 
 vi.mock('@/components/ui/toaster', async (importOriginal) => {
@@ -36,6 +46,7 @@ vi.mock('@/components/ui/toaster', async (importOriginal) => {
 
 import { apiFetch, authFetch } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { downloadBlob } from '@/lib/downloads';
 import { CommentsSection } from './CommentsSection';
 import { type Comment, type CommentsPagination } from './commentsData';
 
@@ -46,6 +57,7 @@ const authFetchMock = vi.mocked(authFetch) as unknown as MockInstance<
   (path: string, options?: RequestInit) => Promise<Response>
 >;
 const useAuthMock = vi.mocked(useAuth);
+const downloadBlobMock = vi.mocked(downloadBlob);
 
 const author = {
   id: 'user-1',
@@ -126,6 +138,7 @@ describe('CommentsSection characterization', () => {
     });
 
     authFetchMock.mockResolvedValue({ ok: true } as Response);
+    downloadBlobMock.mockReset();
 
     useAuthMock.mockReturnValue({
       user: { id: 'user-1', email: 'author@example.com', fullName: 'Test Author' },
@@ -209,6 +222,44 @@ describe('CommentsSection characterization', () => {
     // The accepted draft is cleared after posting, revoking its preview URL.
     await waitFor(() => expect(revokeObjectURLMock).toHaveBeenCalledWith('blob:preview-1'));
     expect(screen.queryByText('photo.png')).not.toBeInTheDocument();
+  });
+
+  it('downloads Supabase-backed comment attachments through the authenticated API', async () => {
+    const attachment = {
+      id: 'att-1',
+      filename: 'evidence.png',
+      fileUrl:
+        'https://example.supabase.co/storage/v1/object/public/documents/comments/lot-1/evidence.png',
+      fileSize: 12,
+      mimeType: 'image/png',
+      createdAt: '2026-06-01T00:00:00.000Z',
+    };
+    commentsRoute = () => ({
+      comments: [{ ...makeComment('c1', 'With evidence'), attachments: [attachment] }],
+      pagination: { ...singlePagePagination, total: 1 },
+    });
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+    authFetchMock.mockResolvedValueOnce(
+      new Response('evidence bytes', { status: 200, headers: { 'Content-Type': 'image/png' } }),
+    );
+
+    try {
+      renderComments();
+      await screen.findByText('evidence.png');
+      fireEvent.click(screen.getByRole('button', { name: 'Download evidence.png' }));
+
+      await waitFor(() =>
+        expect(authFetchMock).toHaveBeenCalledWith('/api/comments/attachments/att-1/download'),
+      );
+      expect(openSpy).not.toHaveBeenCalled();
+      expect(downloadBlobMock).toHaveBeenCalledTimes(1);
+      const [blob, filename, fallback] = downloadBlobMock.mock.calls[0];
+      expect(blob.type).toBe('image/png');
+      expect(filename).toBe('evidence.png');
+      expect(fallback).toBe('attachment');
+    } finally {
+      openSpy.mockRestore();
+    }
   });
 
   it('switching entities resets the composer draft, pending delete, and previews', async () => {
