@@ -1,27 +1,7 @@
 // Feature #175 - Auto-notification before witness point
 import { prisma } from '../../../lib/prisma.js';
 import { logError } from '../../../lib/serverLogger.js';
-
-// Type for checklist items from snapshot or template
-export interface ChecklistItem {
-  id: string;
-  description: string;
-  sequenceNumber: number;
-  pointType?: string | null;
-  responsibleParty?: string | null;
-  evidenceRequired?: string | null;
-  acceptanceCriteria?: string | null;
-  testType?: string | null;
-}
-
-// Type for template snapshot
-export interface TemplateSnapshot {
-  id: string;
-  name: string;
-  description?: string | null;
-  activityType: string | null;
-  checklistItems: ChecklistItem[];
-}
+import { getChecklistItemsForInstance, type ChecklistItem } from './templateSnapshot.js';
 
 // Nested witness point notification settings as saved by the project settings UI
 // (frontend/src/pages/projects/settings). This is the shape the frontend writes.
@@ -118,14 +98,8 @@ export async function checkAndNotifyWitnessPoint(
       return null;
     }
 
-    // Get checklist items from snapshot or template
-    let checklistItems: ChecklistItem[];
-    if (instance.templateSnapshot) {
-      const snapshot: TemplateSnapshot = JSON.parse(instance.templateSnapshot);
-      checklistItems = snapshot.checklistItems || [];
-    } else {
-      checklistItems = instance.template.checklistItems;
-    }
+    // Get checklist items from snapshot or template.
+    const checklistItems: ChecklistItem[] = getChecklistItemsForInstance(instance);
 
     // Find the completed item's sequence number
     const completedItem = checklistItems.find((item) => item.id === completedItemId);
@@ -134,6 +108,9 @@ export async function checkAndNotifyWitnessPoint(
     }
 
     const completedSequence = completedItem.sequenceNumber;
+    if (typeof completedSequence !== 'number') {
+      return null;
+    }
 
     // Check project settings for witness point notification configuration
     const project = instance.lot.project;
@@ -230,8 +207,8 @@ export async function checkAndNotifyWitnessPoint(
           userId: pu.user.id,
           projectId: project.id,
           type: 'witness_point_approaching',
-          title: `Witness Point Approaching: ${nextItem.description}`,
-          message: `${userName} completed "${completedItem.description}" on lot ${instance.lot.lotNumber}. The next item is a witness point that requires client notification.`,
+          title: `Witness Point Approaching: ${nextItem.description ?? 'ITP item'}`,
+          message: `${userName} completed "${completedItem.description ?? 'ITP item'}" on lot ${instance.lot.lotNumber}. The next item is a witness point that requires client notification.`,
           linkUrl: `/projects/${project.id}/lots/${instance.lot.id}?tab=itp&highlight=${nextItem.id}`,
         },
       });

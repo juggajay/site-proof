@@ -43,6 +43,7 @@ import {
   buildLotCreatedResponse,
   buildLotsCreatedResponse,
 } from './coreResponses.js';
+import { buildTemplateSnapshot, type TemplateSnapshot } from '../itp/helpers/templateSnapshot.js';
 
 export const lotCreateRouter = Router();
 
@@ -95,8 +96,23 @@ lotCreateRouter.post(
       'You do not have permission to create lots in this project.',
     );
 
+    let templateSnapshot: TemplateSnapshot | null = null;
     if (itpTemplateId) {
       await requireItpTemplateForProject(itpTemplateId, projectId);
+      const template = await prisma.iTPTemplate.findUnique({
+        where: { id: itpTemplateId },
+        include: {
+          checklistItems: {
+            orderBy: { sequenceNumber: 'asc' },
+          },
+        },
+      });
+
+      if (!template) {
+        throw AppError.notFound('ITP template');
+      }
+
+      templateSnapshot = buildTemplateSnapshot(template);
     }
 
     if (assignedSubcontractorId) {
@@ -136,6 +152,7 @@ lotCreateRouter.post(
           data: {
             lotId: createdLot.id,
             templateId: itpTemplateId,
+            templateSnapshot: JSON.stringify(templateSnapshot),
             status: 'not_started',
           },
         });

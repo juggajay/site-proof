@@ -16,6 +16,10 @@ import {
 } from './helpers/access.js';
 import { buildItpCompletionStatusResponse } from './completionResponses.js';
 import { parseCompletionRouteParam } from './completionValidation.js';
+import {
+  isSubcontractorVisibleChecklistItem,
+  resolveChecklistItemForInstance,
+} from './helpers/templateSnapshot.js';
 
 const ITP_COMPLETION_REVISION_REASON_MAX_LENGTH = 1000;
 
@@ -52,9 +56,22 @@ completionUpdateRoutes.patch(
         checklistItemId: true,
         notes: true,
         verificationStatus: true,
+        checklistItem: {
+          select: {
+            id: true,
+            description: true,
+            sequenceNumber: true,
+            pointType: true,
+            responsibleParty: true,
+            evidenceRequired: true,
+            acceptanceCriteria: true,
+            testType: true,
+          },
+        },
         itpInstance: {
           select: {
             lotId: true,
+            templateSnapshot: true,
             lot: { select: { projectId: true } },
             template: { select: { projectId: true } },
           },
@@ -97,6 +114,19 @@ completionUpdateRoutes.patch(
       if (isItpSubcontractorUser(user)) {
         throw AppError.forbidden('ITP completion write access required');
       }
+    }
+
+    const checklistItemForInstance = resolveChecklistItemForInstance(
+      completionForAccess.itpInstance,
+      completionForAccess.checklistItemId,
+      completionForAccess.checklistItem,
+    );
+
+    if (
+      isItpSubcontractorUser(user) &&
+      (!checklistItemForInstance || !isSubcontractorVisibleChecklistItem(checklistItemForInstance))
+    ) {
+      throw AppError.forbidden('ITP completion write access required');
     }
 
     const revisionReason = parseResult.data.revisionReason;

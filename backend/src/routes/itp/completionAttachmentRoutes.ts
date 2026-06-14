@@ -21,11 +21,42 @@ import {
   buildItpCompletionAttachmentsResponse,
 } from './completionResponses.js';
 import { parseCompletionRouteParam, parseOptionalGpsCoordinate } from './completionValidation.js';
+import {
+  isSubcontractorVisibleChecklistItem,
+  resolveChecklistItemForInstance,
+  type ChecklistItem,
+} from './helpers/templateSnapshot.js';
 
 const ITP_ATTACHMENT_FILENAME_MAX_LENGTH = 180;
 const ITP_ATTACHMENT_URL_MAX_LENGTH = 2048;
 const ITP_ATTACHMENT_CAPTION_MAX_LENGTH = 2000;
 const ITP_ATTACHMENT_MIME_TYPE_MAX_LENGTH = 120;
+
+function requireVisibleCompletionItemForSubcontractor(
+  user: AuthUser,
+  completion: {
+    checklistItemId: string;
+    checklistItem: ChecklistItem;
+    itpInstance: {
+      templateSnapshot?: string | null;
+      template?: Record<string, unknown> | null;
+    };
+  },
+  message: string,
+) {
+  const checklistItem = resolveChecklistItemForInstance(
+    completion.itpInstance,
+    completion.checklistItemId,
+    completion.checklistItem,
+  );
+
+  if (
+    isItpSubcontractorUser(user) &&
+    (!checklistItem || !isSubcontractorVisibleChecklistItem(checklistItem))
+  ) {
+    throw AppError.forbidden(message);
+  }
+}
 
 function optionalTrimmedAttachmentString(fieldName: string, maxLength: number) {
   return z
@@ -153,6 +184,12 @@ completionAttachmentRoutes.post(
         throw AppError.forbidden('ITP attachment write access required');
       }
     }
+
+    requireVisibleCompletionItemForSubcontractor(
+      user,
+      completion,
+      'ITP attachment write access required',
+    );
 
     const parsedGpsLatitude = parseOptionalGpsCoordinate(gpsLatitude, 'gpsLatitude', -90, 90);
     const parsedGpsLongitude = parseOptionalGpsCoordinate(gpsLongitude, 'gpsLongitude', -180, 180);
@@ -285,10 +322,25 @@ completionAttachmentRoutes.get(
     const completion = await prisma.iTPCompletion.findUnique({
       where: { id: completionId },
       select: {
+        checklistItemId: true,
+        checklistItem: {
+          select: {
+            id: true,
+            description: true,
+            sequenceNumber: true,
+            pointType: true,
+            responsibleParty: true,
+            evidenceRequired: true,
+            acceptanceCriteria: true,
+            testType: true,
+          },
+        },
         itpInstance: {
           select: {
             lotId: true,
+            templateSnapshot: true,
             lot: { select: { projectId: true } },
+            template: { select: { projectId: true } },
           },
         },
       },
@@ -298,7 +350,8 @@ completionAttachmentRoutes.get(
       throw AppError.notFound('Completion');
     }
 
-    const projectId = completion.itpInstance?.lot?.projectId;
+    const projectId =
+      completion.itpInstance?.lot?.projectId || completion.itpInstance?.template.projectId;
     if (!projectId) {
       throw AppError.badRequest('Unable to determine project for ITP completion');
     }
@@ -311,6 +364,12 @@ completionAttachmentRoutes.get(
     } else {
       await requireItpLotAccess(user, projectId, completion.itpInstance.lotId);
     }
+
+    requireVisibleCompletionItemForSubcontractor(
+      user,
+      completion,
+      'ITP attachment access required',
+    );
 
     const attachments = await prisma.iTPCompletionAttachment.findMany({
       where: { completionId },
@@ -347,10 +406,25 @@ completionAttachmentRoutes.delete(
       include: {
         completion: {
           select: {
+            checklistItemId: true,
+            checklistItem: {
+              select: {
+                id: true,
+                description: true,
+                sequenceNumber: true,
+                pointType: true,
+                responsibleParty: true,
+                evidenceRequired: true,
+                acceptanceCriteria: true,
+                testType: true,
+              },
+            },
             itpInstance: {
               select: {
                 lotId: true,
+                templateSnapshot: true,
                 lot: { select: { projectId: true } },
+                template: { select: { projectId: true } },
               },
             },
           },
@@ -362,7 +436,9 @@ completionAttachmentRoutes.delete(
       throw AppError.notFound('Attachment not found');
     }
 
-    const projectId = attachment.completion.itpInstance?.lot?.projectId;
+    const projectId =
+      attachment.completion.itpInstance?.lot?.projectId ||
+      attachment.completion.itpInstance?.template.projectId;
     if (!projectId) {
       throw AppError.badRequest('Unable to determine project for ITP completion');
     }
@@ -391,6 +467,12 @@ completionAttachmentRoutes.delete(
         throw AppError.forbidden('ITP attachment write access required');
       }
     }
+
+    requireVisibleCompletionItemForSubcontractor(
+      user,
+      attachment.completion,
+      'ITP attachment write access required',
+    );
 
     // Delete the attachment (document remains for record keeping)
     await prisma.iTPCompletionAttachment.delete({

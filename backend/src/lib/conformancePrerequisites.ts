@@ -1,4 +1,5 @@
 import { prisma } from './prisma.js';
+import { getChecklistItemsForInstance } from '../routes/itp/helpers/templateSnapshot.js';
 
 // A checklist item counts as finished for conformance when its completion
 // status is 'completed' OR 'not_applicable'. Owner decision (2026-06-11):
@@ -182,7 +183,11 @@ export async function checkConformancePrerequisites(
   // 'failed', 'pending', 'in_progress', and missing completions still block.
   if (lot.itpInstance) {
     prerequisites.itpAssigned = true;
-    const checklistItems = lot.itpInstance.template.checklistItems;
+    const checklistItems = getChecklistItemsForInstance(lot.itpInstance).map((item) => ({
+      ...item,
+      description: item.description ?? 'ITP item',
+      pointType: item.pointType ?? 'standard',
+    }));
 
     const completeness = buildItpChecklistCompleteness(checklistItems, lot.itpInstance.completions);
 

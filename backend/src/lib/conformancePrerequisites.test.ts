@@ -220,6 +220,7 @@ interface ChecklistItemFixture {
 function makeLot(opts: {
   status?: string;
   checklistItems: ChecklistItemFixture[];
+  templateSnapshot?: string | null;
   completionStatuses: Record<string, string>;
   testResults?: { id: string; testType: string; passFail: string; status: string }[];
   ncrs?: { id: string; ncrNumber: string; description: string; status: string }[];
@@ -230,6 +231,7 @@ function makeLot(opts: {
     status: opts.status ?? 'completed',
     projectId: 'project-1',
     itpInstance: {
+      templateSnapshot: opts.templateSnapshot ?? null,
       template: {
         checklistItems: opts.checklistItems.map((item) => ({
           ...item,
@@ -365,6 +367,28 @@ describe('checkConformancePrerequisites — gate wiring (mocked Prisma)', () => 
     expect(result.blockingReasons).not.toContain(
       'ITP requires a test, but no passing verified test result was recorded',
     );
+  });
+
+  it('uses the assigned ITP snapshot instead of later live-template items', async () => {
+    mocks.lotFindUnique.mockResolvedValue(
+      makeLot({
+        checklistItems: [NON_TEST_ITEM, TEST_ITEM],
+        templateSnapshot: JSON.stringify({
+          id: 'template-1',
+          name: 'Assigned no-test template',
+          checklistItems: [NON_TEST_ITEM],
+        }),
+        completionStatuses: { i1: 'completed' },
+        testResults: [],
+      }),
+    );
+
+    const result = await checkConformancePrerequisites('lot-1');
+
+    expect(result.prerequisites?.itpTotalCount).toBe(1);
+    expect(result.prerequisites?.testRequired).toBe(false);
+    expect(result.canConform).toBe(true);
+    expect(result.blockingReasons).toEqual([]);
   });
 
   it('blocks a test-point lot until a passing verified test exists', async () => {
