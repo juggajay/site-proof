@@ -3079,7 +3079,15 @@ describe('ITP Completion Decision Logic (characterization)', () => {
     expect(res.body.completion.linkedNcr).not.toBeNull();
     expect(res.body.ncr.severity).toBe('major');
     expect(res.body.ncr.qmApprovalRequired).toBe(true);
+    expect(res.body.ncr.clientNotificationRequired).toBe(true);
     expect(res.body.ncr.specificationReference).toBe('SPEC-DECISION-1');
+
+    const persistedNcr = await prisma.nCR.findUniqueOrThrow({
+      where: { id: res.body.ncr.id },
+      select: { clientNotificationRequired: true, clientNotifiedAt: true },
+    });
+    expect(persistedNcr.clientNotificationRequired).toBe(true);
+    expect(persistedNcr.clientNotifiedAt).toBeNull();
 
     const lot = await prisma.lot.findUniqueOrThrow({ where: { id: lotId } });
     expect(lot.status).toBe('ncr_raised');
