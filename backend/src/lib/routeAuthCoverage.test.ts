@@ -591,7 +591,16 @@ describe('route authentication coverage', () => {
     ).toContain('AuditAction.ACCOUNT_DELETION_REQUESTED');
     expect(
       routeSourceForDescriptor(accountDeletionRoutesSource, 'DELETE /delete-account'),
-    ).toContain('tx.iTPCompletion.deleteMany');
+    ).toContain('tx.iTPCompletion.updateMany');
+    expect(
+      routeSourceForDescriptor(accountDeletionRoutesSource, 'DELETE /delete-account'),
+    ).toContain('where: { completedById: userId }');
+    expect(
+      routeSourceForDescriptor(accountDeletionRoutesSource, 'DELETE /delete-account'),
+    ).toContain('where: { verifiedById: userId }');
+    expect(
+      routeSourceForDescriptor(accountDeletionRoutesSource, 'DELETE /delete-account'),
+    ).not.toContain('tx.iTPCompletion.deleteMany');
     expect(
       routeSourceForDescriptor(accountDeletionRoutesSource, 'DELETE /delete-account'),
     ).toContain('tx.user.delete');

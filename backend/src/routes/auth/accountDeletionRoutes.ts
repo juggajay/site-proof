@@ -108,9 +108,14 @@ export function createAccountDeletionRouter({
         // Delete all user-related data in order (respecting foreign key constraints)
         // The order matters due to foreign key relationships
 
-        // 1. Delete ITP completions by user
-        await tx.iTPCompletion.deleteMany({
+        // 1. Preserve QA evidence while removing deleted-user attribution.
+        await tx.iTPCompletion.updateMany({
           where: { completedById: userId },
+          data: { completedById: null },
+        });
+        await tx.iTPCompletion.updateMany({
+          where: { verifiedById: userId },
+          data: { verifiedById: null },
         });
 
         // 2. Delete email verification tokens

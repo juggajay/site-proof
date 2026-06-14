@@ -2874,4 +2874,136 @@ describe('Account Deletion', () => {
       },
     });
   });
+
+  it('should preserve ITP completion evidence while anonymising deleted user references', async () => {
+    const timestamp = Date.now();
+    const email = `delete-itp-evidence-${timestamp}@example.com`;
+    const password = 'SecureP@ssword123!';
+    const regRes = await request(app).post('/api/auth/register').send({
+      email,
+      password,
+      fullName: 'Delete ITP Evidence User',
+      tosAccepted: true,
+    });
+
+    const userId = regRes.body.user.id;
+    const company = await prisma.company.create({
+      data: { name: `Delete ITP Evidence Company ${timestamp}` },
+    });
+    const project = await prisma.project.create({
+      data: {
+        companyId: company.id,
+        name: `Delete ITP Evidence Project ${timestamp}`,
+        projectNumber: `DEL-ITP-${timestamp}`,
+        status: 'active',
+        state: 'NSW',
+        specificationSet: 'TfNSW',
+      },
+    });
+    const template = await prisma.iTPTemplate.create({
+      data: {
+        projectId: project.id,
+        name: `Delete ITP Evidence Template ${timestamp}`,
+        activityType: 'Earthworks',
+      },
+    });
+    const checklistItem = await prisma.iTPChecklistItem.create({
+      data: {
+        templateId: template.id,
+        sequenceNumber: 1,
+        description: 'Proof rolling inspection',
+        pointType: 'standard',
+        evidenceRequired: 'photo',
+      },
+    });
+    const lot = await prisma.lot.create({
+      data: {
+        projectId: project.id,
+        lotNumber: `DEL-ITP-LOT-${timestamp}`,
+        lotType: 'chainage',
+        activityType: 'Earthworks',
+        status: 'in_progress',
+        itpTemplateId: template.id,
+      },
+    });
+    const itpInstance = await prisma.iTPInstance.create({
+      data: {
+        lotId: lot.id,
+        templateId: template.id,
+        status: 'completed',
+      },
+    });
+    const completedAt = new Date('2026-02-03T04:05:06.000Z');
+    const verifiedAt = new Date('2026-02-03T05:06:07.000Z');
+    const completion = await prisma.iTPCompletion.create({
+      data: {
+        itpInstanceId: itpInstance.id,
+        checklistItemId: checklistItem.id,
+        status: 'passed',
+        completedById: userId,
+        completedAt,
+        notes: 'Compaction passed with photo evidence.',
+        witnessPresent: true,
+        witnessName: 'Site Witness',
+        witnessCompany: 'Client QA',
+        verificationStatus: 'verified',
+        verifiedById: userId,
+        verifiedAt,
+        verificationNotes: 'Reviewed before account deletion.',
+      },
+    });
+
+    try {
+      const res = await request(app)
+        .delete('/api/auth/delete-account')
+        .set('Authorization', `Bearer ${regRes.body.token}`)
+        .send({
+          confirmEmail: email,
+          password,
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+
+      const deletedUser = await prisma.user.findUnique({ where: { id: userId } });
+      expect(deletedUser).toBeNull();
+
+      const retainedCompletion = await prisma.iTPCompletion.findUnique({
+        where: { id: completion.id },
+      });
+      expect(retainedCompletion).not.toBeNull();
+      if (!retainedCompletion) {
+        throw new Error('Expected ITP completion evidence to be retained');
+      }
+      expect(retainedCompletion.status).toBe('passed');
+      expect(retainedCompletion.completedById).toBeNull();
+      expect(retainedCompletion.verifiedById).toBeNull();
+      expect(retainedCompletion.completedAt?.toISOString()).toBe(completedAt.toISOString());
+      expect(retainedCompletion.verifiedAt?.toISOString()).toBe(verifiedAt.toISOString());
+      expect(retainedCompletion.notes).toBe('Compaction passed with photo evidence.');
+      expect(retainedCompletion.verificationStatus).toBe('verified');
+      expect(retainedCompletion.verificationNotes).toBe('Reviewed before account deletion.');
+    } finally {
+      await prisma.auditLog.deleteMany({
+        where: {
+          OR: [
+            { userId },
+            {
+              entityId: userId,
+              action: AuditAction.ACCOUNT_DELETION_REQUESTED,
+            },
+          ],
+        },
+      });
+      await prisma.iTPCompletion.deleteMany({ where: { itpInstanceId: itpInstance.id } });
+      await prisma.iTPInstance.delete({ where: { id: itpInstance.id } }).catch(() => {});
+      await prisma.lot.delete({ where: { id: lot.id } }).catch(() => {});
+      await prisma.iTPChecklistItem.delete({ where: { id: checklistItem.id } }).catch(() => {});
+      await prisma.iTPTemplate.delete({ where: { id: template.id } }).catch(() => {});
+      await prisma.project.delete({ where: { id: project.id } }).catch(() => {});
+      await prisma.company.delete({ where: { id: company.id } }).catch(() => {});
+      await prisma.emailVerificationToken.deleteMany({ where: { userId } });
+      await prisma.user.delete({ where: { id: userId } }).catch(() => {});
+    }
+  });
 });
