@@ -28,6 +28,10 @@ import {
 } from './prerequisites.js';
 import { buildHoldPointReleaseRequestedResponse } from './actionResponses.js';
 import { isReleaseGatedChecklistItem } from '../../lib/holdPointReleaseGating.js';
+import {
+  getHoldPointChecklistItemsForInstance,
+  resolveHoldPointChecklistItemForInstance,
+} from './itpSnapshot.js';
 
 // =============================================================================
 // Authenticated hold point RELEASE-REQUEST route. Moved verbatim from
@@ -106,9 +110,13 @@ holdPointRequestReleaseRouter.post(
       'You do not have permission to request hold point release',
     );
 
-    // Find the hold point item
-    const holdPointItem = lot.itpInstance.template.checklistItems.find(
-      (i) => i.id === itpChecklistItemId,
+    const checklistItems = getHoldPointChecklistItemsForInstance(lot.itpInstance);
+
+    // Find the hold point item from the assigned ITP snapshot, falling back to
+    // the live template only for legacy instances without a snapshot.
+    const holdPointItem = resolveHoldPointChecklistItemForInstance(
+      lot.itpInstance,
+      itpChecklistItemId,
     );
     if (!holdPointItem || !isReleaseGatedChecklistItem(holdPointItem)) {
       throw AppError.badRequest('Item is not release-gated');
@@ -126,10 +134,7 @@ holdPointRequestReleaseRouter.post(
     }
 
     // Get all preceding items
-    const precedingItems = getPrecedingChecklistItems(
-      lot.itpInstance.template.checklistItems,
-      holdPointItem.sequenceNumber,
-    );
+    const precedingItems = getPrecedingChecklistItems(checklistItems, holdPointItem.sequenceNumber);
 
     // Check completion status of preceding items
     const prerequisites = buildHoldPointPrerequisites(precedingItems, lot.itpInstance.completions);

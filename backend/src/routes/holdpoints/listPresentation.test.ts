@@ -87,6 +87,46 @@ describe('buildHoldPointListItems', () => {
     expect(result.map((hp) => hp.itpChecklistItemId)).toEqual(['hp', 'sup-review']);
   });
 
+  it('uses the assigned ITP snapshot instead of live template edits', () => {
+    const result = buildHoldPointListItems([
+      lot({
+        id: 'lot1',
+        lotNumber: 'A',
+        itpInstance: {
+          templateSnapshot: JSON.stringify({
+            id: 'template-1',
+            name: 'Assigned template',
+            checklistItems: [
+              checklistItem({
+                id: 'snapshot-hp',
+                description: 'Original assigned hold point',
+                pointType: 'hold_point',
+                sequenceNumber: 1,
+              }),
+            ],
+          }),
+          template: {
+            checklistItems: [
+              checklistItem({
+                id: 'live-hp',
+                description: 'Later live-template hold point',
+                pointType: 'hold_point',
+                sequenceNumber: 1,
+              }),
+            ],
+          },
+          completions: [],
+        },
+      }),
+    ]);
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      itpChecklistItemId: 'snapshot-hp',
+      description: 'Original assigned hold point',
+    });
+  });
+
   it('skips lots without an ITP instance, template, or checklist items', () => {
     const result = buildHoldPointListItems([
       lot({ id: 'noInstance', lotNumber: 'A', itpInstance: null }),
