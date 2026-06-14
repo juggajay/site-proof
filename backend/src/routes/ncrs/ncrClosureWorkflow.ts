@@ -52,8 +52,8 @@ ncrClosureWorkflowRouter.post(
     await requireActiveProjectUser(
       ncr.projectId,
       user,
-      'Only Quality Managers, Project Managers, or Admins can approve major NCR closures',
-      ['quality_manager', 'admin', 'project_manager'],
+      'Only project quality roles can approve major NCR closures',
+      NCR_QUALITY_MANAGEMENT_ROLES,
     );
 
     if (!ncr.qmApprovalRequired) {

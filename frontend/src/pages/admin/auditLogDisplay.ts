@@ -70,6 +70,7 @@ const ACTION_LABELS: Record<string, string> = {
   ncr_evidence_removed: 'NCR evidence removed',
   ncr_qm_approved: 'NCR QM approved',
   ncr_status_changed: 'NCR status changed',
+  ncr_updated: 'NCR updated',
   password_changed: 'Password changed',
   password_reset_requested: 'Password reset requested',
   project_created: 'Project created',
