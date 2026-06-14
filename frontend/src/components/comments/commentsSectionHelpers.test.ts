@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  buildCommentFormData,
-  formatCommentDate,
-  isSupabaseCommentAttachmentUrl,
-} from './commentsSectionHelpers';
+import { buildCommentFormData, formatCommentDate } from './commentsSectionHelpers';
 import type { PendingAttachment } from './commentAttachmentDrafts';
 
 function makePendingAttachment(name: string, type = 'image/png'): PendingAttachment {
@@ -45,48 +41,6 @@ describe('buildCommentFormData', () => {
 
     expect(formData.get('parentId')).toBeNull();
     expect(formData.getAll('files')).toEqual([]);
-  });
-});
-
-describe('isSupabaseCommentAttachmentUrl', () => {
-  const supabaseUrl = 'https://example.supabase.co';
-
-  it('accepts public Supabase comment attachment URLs for the configured origin', () => {
-    expect(
-      isSupabaseCommentAttachmentUrl(
-        'https://example.supabase.co/storage/v1/object/public/documents/comments/file.png',
-        supabaseUrl,
-      ),
-    ).toBe(true);
-  });
-
-  it('rejects non-http URLs, missing config, other origins, and non-comment storage paths', () => {
-    expect(isSupabaseCommentAttachmentUrl('/uploads/comments/file.png', supabaseUrl)).toBe(false);
-    expect(
-      isSupabaseCommentAttachmentUrl(
-        'https://example.supabase.co/storage/v1/object/public/documents/comments/file.png',
-        undefined,
-      ),
-    ).toBe(false);
-    expect(
-      isSupabaseCommentAttachmentUrl(
-        'https://other.supabase.co/storage/v1/object/public/documents/comments/file.png',
-        supabaseUrl,
-      ),
-    ).toBe(false);
-    expect(
-      isSupabaseCommentAttachmentUrl(
-        'https://example.supabase.co/storage/v1/object/public/documents/general/file.png',
-        supabaseUrl,
-      ),
-    ).toBe(false);
-  });
-
-  it('rejects malformed URLs safely', () => {
-    expect(isSupabaseCommentAttachmentUrl('https://[bad-url', supabaseUrl)).toBe(false);
-    expect(
-      isSupabaseCommentAttachmentUrl('https://example.supabase.co/file.png', 'not a url'),
-    ).toBe(false);
   });
 });
 

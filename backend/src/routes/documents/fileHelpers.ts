@@ -268,8 +268,7 @@ async function sendSupabaseDocumentFile(
 ): Promise<void> {
   const storagePath = getSupabaseStoragePath(document.fileUrl, DOCUMENTS_BUCKET);
   if (!storagePath || !isSupabaseConfigured()) {
-    res.redirect(document.fileUrl);
-    return;
+    throw AppError.notFound('File');
   }
 
   const { data, error } = await getSupabaseClient()
@@ -310,12 +309,7 @@ export async function sendDocumentFile(
       throw AppError.notFound('File');
     }
 
-    if (contentDisposition === 'inline') {
-      await sendSupabaseDocumentFile(document, res, contentType, contentDisposition);
-      return;
-    }
-
-    res.redirect(document.fileUrl);
+    await sendSupabaseDocumentFile(document, res, contentType, contentDisposition);
     return;
   }
 

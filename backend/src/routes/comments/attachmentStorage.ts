@@ -247,17 +247,14 @@ function parseAttachmentMimeType(value: unknown): string | null {
 export function sendCommentAttachmentFile(
   attachment: { fileUrl: string; filename: string; mimeType: string | null },
   projectId: string,
-  res: Pick<Response, 'redirect' | 'setHeader' | 'sendFile'>,
-): void {
+  res: Pick<Response, 'setHeader' | 'send' | 'sendFile'>,
+): Promise<void> | void {
   if (isExternalAttachmentUrl(attachment.fileUrl)) {
     if (!isSafeAttachmentUrl(attachment.fileUrl, projectId)) {
       throw AppError.notFound('Attachment file');
     }
 
-    res.setHeader('Cache-Control', 'private, no-store, max-age=0');
-    res.setHeader('Referrer-Policy', 'no-referrer');
-    res.redirect(attachment.fileUrl);
-    return;
+    return sendSupabaseCommentAttachmentFile(attachment, projectId, res);
   }
 
   let filePath: string;
@@ -280,6 +277,38 @@ export function sendCommentAttachmentFile(
   res.setHeader('Referrer-Policy', 'no-referrer');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.sendFile(filePath);
+}
+
+async function sendSupabaseCommentAttachmentFile(
+  attachment: { fileUrl: string; filename: string; mimeType: string | null },
+  projectId: string,
+  res: Pick<Response, 'setHeader' | 'send'>,
+): Promise<void> {
+  const storagePath = getOwnedCommentAttachmentStoragePath(attachment.fileUrl, projectId);
+  if (!storagePath || !isSupabaseConfigured()) {
+    throw AppError.notFound('Attachment file');
+  }
+
+  const { data, error } = await getSupabaseClient()
+    .storage.from(DOCUMENTS_BUCKET)
+    .download(storagePath);
+
+  if (error || !data) {
+    logWarn('Supabase comment attachment download failed:', error);
+    throw AppError.notFound('Attachment file');
+  }
+
+  const buffer = Buffer.from(await data.arrayBuffer());
+  res.setHeader(
+    'Content-Disposition',
+    `attachment; filename="${getSafeAttachmentFilename(attachment.filename)}"`,
+  );
+  res.setHeader('Content-Type', getSafeAttachmentMimeType(attachment.mimeType));
+  res.setHeader('Content-Length', String(buffer.length));
+  res.setHeader('Cache-Control', 'private, no-store, max-age=0');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.send(buffer);
 }
 
 export function getValidAttachments(attachments: unknown, projectId: string): AttachmentInput[] {

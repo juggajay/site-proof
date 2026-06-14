@@ -3,7 +3,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import { MessageSquare } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { apiFetch, authFetch } from '@/lib/api';
-import { SUPABASE_URL } from '@/lib/config';
 import { toast } from '@/components/ui/toaster';
 import { devLog, logError } from '@/lib/logger';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -22,11 +21,7 @@ import {
   type PendingAttachment,
 } from './commentAttachmentDrafts';
 import { NewCommentForm } from './NewCommentForm';
-import {
-  buildCommentFormData,
-  formatCommentDate,
-  isSupabaseCommentAttachmentUrl,
-} from './commentsSectionHelpers';
+import { buildCommentFormData, formatCommentDate } from './commentsSectionHelpers';
 
 interface CommentsSectionProps {
   entityType: string;
@@ -322,11 +317,6 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
 
   const downloadAttachment = async (attachment: CommentAttachment) => {
     try {
-      if (isSupabaseCommentAttachmentUrl(attachment.fileUrl, SUPABASE_URL)) {
-        window.open(attachment.fileUrl, '_blank', 'noopener,noreferrer');
-        return;
-      }
-
       const response = await authFetch(`/api/comments/attachments/${attachment.id}/download`);
 
       if (!response.ok) {

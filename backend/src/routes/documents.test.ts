@@ -437,9 +437,11 @@ describe('Documents API', () => {
       }
     });
 
-    it('should redirect configured Supabase stored documents after signed token validation', async () => {
+    it('should proxy configured Supabase stored document downloads instead of redirecting to storage', async () => {
       process.env.SUPABASE_URL = 'https://siteproof-test.supabase.co';
-      const externalUrl = `${process.env.SUPABASE_URL}/storage/v1/object/public/documents/${projectId}/test-photo.jpg`;
+      mockIsSupabaseConfigured.mockReturnValue(true);
+      const storagePath = `${projectId}/test-photo.jpg`;
+      const externalUrl = `${process.env.SUPABASE_URL}/storage/v1/object/public/documents/${storagePath}`;
       const externalDocument = await prisma.document.create({
         data: {
           projectId,
@@ -454,6 +456,15 @@ describe('Documents API', () => {
         },
       });
 
+      const download = vi.fn().mockResolvedValue({
+        data: new Blob([Buffer.from('signed image bytes')], { type: 'image/jpeg' }),
+        error: null,
+      });
+      const from = vi.fn(() => ({ download }));
+      mockGetSupabaseClient.mockReturnValue({
+        storage: { from },
+      } as unknown as ReturnType<typeof supabaseLib.getSupabaseClient>);
+
       try {
         const createRes = await request(app)
           .post(`/api/documents/${externalDocument.id}/signed-url`)
@@ -463,10 +474,17 @@ describe('Documents API', () => {
           `/api/documents/download/${externalDocument.id}?token=${createRes.body.token}`,
         );
 
-        expect(res.status).toBe(302);
-        expect(res.headers.location).toBe(externalUrl);
+        expect(res.status).toBe(200);
+        expect(res.headers.location).toBeUndefined();
+        expect(res.headers['content-type']).toContain('image/jpeg');
+        expect(res.headers['content-disposition']).toBe(
+          'attachment; filename="supabase-test-photo.jpg"',
+        );
         expect(res.headers['referrer-policy']).toBe('no-referrer');
         expect(res.headers['cache-control']).toContain('no-store');
+        expect(res.body.toString()).toBe('signed image bytes');
+        expect(from).toHaveBeenCalledWith('documents');
+        expect(download).toHaveBeenCalledWith(storagePath);
       } finally {
         await prisma.document.deleteMany({ where: { id: externalDocument.id } });
       }
