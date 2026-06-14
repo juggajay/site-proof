@@ -91,13 +91,30 @@ describe('DocketApprovalsTable', () => {
   it('shows approved-hours adjustments with the submitted value struck through', () => {
     const docket = makeDocket({
       status: 'approved',
+      labourHours: 8,
       totalLabourApproved: 6,
-      totalLabourSubmitted: 8,
+      totalLabourSubmitted: 364,
     });
     renderTable({ filteredDockets: [docket], submittedDockets: [docket] });
 
     expect(screen.getByText('6h')).toBeInTheDocument();
     expect(screen.getByText('8h').className).toContain('line-through');
+  });
+
+  it('does not treat submitted cost totals as hour adjustments', () => {
+    const docket = makeDocket({
+      status: 'approved',
+      labourHours: 8,
+      totalLabourSubmitted: 364,
+      totalLabourApproved: 8,
+      plantHours: 4,
+      totalPlantSubmitted: 600,
+      totalPlantApproved: 4,
+    });
+    renderTable({ filteredDockets: [docket], submittedDockets: [docket] });
+
+    expect(screen.getByText('8h').className).not.toContain('line-through');
+    expect(screen.getByText('4h').className).not.toContain('line-through');
   });
 
   it('gates approve/query/reject on pending status and approver role', () => {

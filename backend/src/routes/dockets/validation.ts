@@ -228,18 +228,21 @@ export function assertValidDateComponent(value: string, errorMessage: string) {
 }
 
 export function parseDocketDate(date?: unknown): Date {
-  if (date === undefined || date === null || date === '') return new Date();
+  if (date === undefined || date === null || date === '') {
+    const now = new Date();
+    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  }
   if (typeof date !== 'string') {
     throw AppError.badRequest('Date must be valid');
   }
 
   const trimmed = date.trim();
-  if (!trimmed) return new Date();
-
-  assertValidDateComponent(trimmed, 'Date must be valid');
-  const parsed = new Date(trimmed);
-  if (Number.isNaN(parsed.getTime())) {
-    throw AppError.badRequest('Date must be valid');
+  if (!trimmed) {
+    const now = new Date();
+    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   }
-  return parsed;
+
+  const match = DATE_COMPONENT_INPUT_PATTERN.exec(trimmed);
+  assertValidDateComponent(trimmed, 'Date must be valid');
+  return new Date(Date.UTC(Number(match![1]), Number(match![2]) - 1, Number(match![3])));
 }

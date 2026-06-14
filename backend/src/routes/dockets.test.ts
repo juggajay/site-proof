@@ -189,6 +189,50 @@ describe('Dockets API', () => {
       docketId = res.body.docket.id;
     });
 
+    it('should reject duplicate daily dockets for the same subcontractor and date', async () => {
+      const date = '2031-05-20';
+      let createdDocketId: string | undefined;
+
+      try {
+        const firstRes = await request(app)
+          .post('/api/dockets')
+          .set('Authorization', `Bearer ${subcontractorToken}`)
+          .send({
+            projectId,
+            date: `${date}T13:45:00+10:00`,
+            notes: 'First docket for the day',
+          });
+
+        expect(firstRes.status).toBe(201);
+        createdDocketId = firstRes.body.docket.id;
+
+        const duplicateRes = await request(app)
+          .post('/api/dockets')
+          .set('Authorization', `Bearer ${subcontractorToken}`)
+          .send({
+            projectId,
+            date,
+            notes: 'Duplicate docket for the same day',
+          });
+
+        expect(duplicateRes.status).toBe(409);
+        expect(duplicateRes.body.error.message).toContain('already exists');
+
+        const storedForDate = await prisma.dailyDocket.findMany({
+          where: {
+            projectId,
+            subcontractorCompanyId,
+            date: new Date('2031-05-20T00:00:00.000Z'),
+          },
+        });
+        expect(storedForDate).toHaveLength(1);
+      } finally {
+        if (createdDocketId) {
+          await prisma.dailyDocket.delete({ where: { id: createdDocketId } }).catch(() => {});
+        }
+      }
+    });
+
     it('should reject docket without projectId', async () => {
       const res = await request(app)
         .post('/api/dockets')
@@ -1169,6 +1213,74 @@ describe('Dockets API', () => {
       });
       expect(stored?.foremanNotes).toBeNull();
       expect(stored?.adjustmentReason).toBeNull();
+    });
+
+    it('should fall back to submitted entry hours, not submitted costs, when approving without adjustments', async () => {
+      const docket = await prisma.dailyDocket.create({
+        data: {
+          projectId,
+          subcontractorCompanyId,
+          date: new Date(Date.now() + 1_296_000_000),
+          status: 'pending_approval',
+          submittedAt: new Date(),
+          totalLabourSubmitted: 364,
+          totalPlantSubmitted: 450,
+        },
+      });
+      const labour = await prisma.docketLabour.create({
+        data: {
+          docketId: docket.id,
+          employeeId,
+          startTime: '06:30',
+          finishTime: '14:30',
+          submittedHours: 8,
+          hourlyRate: 45.5,
+          submittedCost: 364,
+          lotAllocations: {
+            create: {
+              lotId: assignedLotId,
+              hours: 8,
+            },
+          },
+        },
+      });
+      const plantEntry = await prisma.docketPlant.create({
+        data: {
+          docketId: docket.id,
+          plantId,
+          hoursOperated: 3,
+          hourlyRate: 150,
+          submittedCost: 450,
+          lotAllocations: {
+            create: {
+              lotId: assignedLotId,
+              hours: 3,
+            },
+          },
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .post(`/api/dockets/${docket.id}/approve`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ foremanNotes: 'Approve with submitted hours' });
+
+        expect(res.status).toBe(200);
+
+        const stored = await prisma.dailyDocket.findUniqueOrThrow({
+          where: { id: docket.id },
+          select: { totalLabourApproved: true, totalPlantApproved: true },
+        });
+        expect(Number(stored.totalLabourApproved)).toBe(8);
+        expect(Number(stored.totalPlantApproved)).toBe(3);
+      } finally {
+        await prisma.docketLabourLot.deleteMany({ where: { docketLabourId: labour.id } });
+        await prisma.docketPlantLot.deleteMany({ where: { docketPlantId: plantEntry.id } });
+        await prisma.docketLabour.deleteMany({ where: { docketId: docket.id } });
+        await prisma.docketPlant.deleteMany({ where: { docketId: docket.id } });
+        await prisma.dailyDocket.delete({ where: { id: docket.id } }).catch(() => {});
+      }
     });
 
     it('should approve docket', async () => {

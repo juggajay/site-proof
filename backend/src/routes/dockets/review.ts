@@ -36,8 +36,26 @@ import {
 } from './reviewResponses.js';
 import { notifyDocketSubcontractorUsers } from './reviewNotificationDelivery.js';
 import { parseDocketReviewRequest, requireNonBlankReviewText } from './reviewRequest.js';
+import type { Prisma } from '@prisma/client';
 
 export const docketReviewRouter = Router();
+
+async function applyDocketStatusTransition(
+  tx: Prisma.TransactionClient,
+  id: string,
+  expectedStatus: string,
+  data: Prisma.DailyDocketUpdateManyMutationInput,
+  failureMessage: string,
+): Promise<void> {
+  const transition = await tx.dailyDocket.updateMany({
+    where: { id, status: expectedStatus },
+    data,
+  });
+
+  if (transition.count !== 1) {
+    throw AppError.badRequest(failureMessage);
+  }
+}
 
 // POST /api/dockets/:id/approve - Approve a docket
 docketReviewRouter.post(
@@ -58,6 +76,12 @@ docketReviewRouter.post(
         project: {
           select: { id: true, name: true },
         },
+        labourEntries: {
+          select: { submittedHours: true },
+        },
+        plantEntries: {
+          select: { hoursOperated: true },
+        },
       },
     });
 
@@ -73,28 +97,43 @@ docketReviewRouter.post(
     const { labourApproved, plantApproved } = resolveDocketApprovedTotals({
       adjustedLabourHours,
       adjustedPlantHours,
-      totalLabourSubmitted: docket.totalLabourSubmitted,
-      totalPlantSubmitted: docket.totalPlantSubmitted,
+      submittedLabourHours: docket.labourEntries.reduce(
+        (sum, entry) => sum + (Number(entry.submittedHours) || 0),
+        0,
+      ),
+      submittedPlantHours: docket.plantEntries.reduce(
+        (sum, entry) => sum + (Number(entry.hoursOperated) || 0),
+        0,
+      ),
     });
 
-    const updatedDocket = await prisma.dailyDocket.update({
-      where: { id },
-      data: {
-        status: 'approved',
-        approvedById: user.id,
-        approvedAt: new Date(),
-        foremanNotes,
-        adjustmentReason,
-        totalLabourApproved: labourApproved,
-        totalPlantApproved: plantApproved,
-      },
-      include: {
-        subcontractorCompany: {
-          select: {
-            companyName: true,
+    const updatedDocket = await prisma.$transaction(async (tx) => {
+      await applyDocketStatusTransition(
+        tx,
+        id,
+        'pending_approval',
+        {
+          status: 'approved',
+          approvedById: user.id,
+          approvedAt: new Date(),
+          foremanNotes,
+          adjustmentReason,
+          totalLabourApproved: labourApproved,
+          totalPlantApproved: plantApproved,
+        },
+        'Only pending dockets can be approved',
+      );
+
+      return tx.dailyDocket.findUniqueOrThrow({
+        where: { id },
+        include: {
+          subcontractorCompany: {
+            select: {
+              companyName: true,
+            },
           },
         },
-      },
+      });
     });
 
     await createAuditLog({
@@ -284,14 +323,21 @@ docketReviewRouter.post(
       throw AppError.badRequest('Only pending dockets can be rejected');
     }
 
-    const updatedDocket = await prisma.dailyDocket.update({
-      where: { id },
-      data: {
-        status: 'rejected',
-        approvedById: user.id,
-        approvedAt: new Date(),
-        foremanNotes: reason,
-      },
+    const updatedDocket = await prisma.$transaction(async (tx) => {
+      await applyDocketStatusTransition(
+        tx,
+        id,
+        'pending_approval',
+        {
+          status: 'rejected',
+          approvedById: user.id,
+          approvedAt: new Date(),
+          foremanNotes: reason,
+        },
+        'Only pending dockets can be rejected',
+      );
+
+      return tx.dailyDocket.findUniqueOrThrow({ where: { id } });
     });
 
     await createAuditLog({
@@ -368,12 +414,19 @@ docketReviewRouter.post(
     }
 
     // Step 5 - Update status to 'queried'
-    const updatedDocket = await prisma.dailyDocket.update({
-      where: { id },
-      data: {
-        status: 'queried',
-        foremanNotes: questions, // Store the query in foreman notes
-      },
+    const updatedDocket = await prisma.$transaction(async (tx) => {
+      await applyDocketStatusTransition(
+        tx,
+        id,
+        'pending_approval',
+        {
+          status: 'queried',
+          foremanNotes: questions, // Store the query in foreman notes
+        },
+        'Only pending dockets can be queried',
+      );
+
+      return tx.dailyDocket.findUniqueOrThrow({ where: { id } });
     });
 
     await createAuditLog({
@@ -452,12 +505,19 @@ docketReviewRouter.post(
     // Update status back to pending_approval and append response to notes
     const newNotes = buildQueryResponseNotes(docket.notes, response);
 
-    const updatedDocket = await prisma.dailyDocket.update({
-      where: { id },
-      data: {
-        status: 'pending_approval', // Back to pending for re-review
-        notes: newNotes,
-      },
+    const updatedDocket = await prisma.$transaction(async (tx) => {
+      await applyDocketStatusTransition(
+        tx,
+        id,
+        'queried',
+        {
+          status: 'pending_approval', // Back to pending for re-review
+          notes: newNotes,
+        },
+        'Only queried dockets can be responded to',
+      );
+
+      return tx.dailyDocket.findUniqueOrThrow({ where: { id } });
     });
 
     await createAuditLog({

@@ -787,6 +787,49 @@ describe('Progress Claims API', () => {
       expect(claimedLots).toHaveLength(1);
     });
 
+    it('serializes concurrent cumulative claims against the same lot', async () => {
+      const lot = await createCumulativeLot(100000);
+
+      const first = await claimLot(lot.id, 70);
+      expect(first.status).toBe(201);
+
+      await prisma.$executeRaw`
+        CREATE OR REPLACE FUNCTION test_delay_claimed_lot_insert()
+        RETURNS trigger AS $$
+        BEGIN
+          PERFORM pg_sleep(0.2);
+          RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+      `;
+      await prisma.$executeRaw`DROP TRIGGER IF EXISTS test_delay_claimed_lot_insert_trigger ON claimed_lots;`;
+      await prisma.$executeRaw`
+        CREATE TRIGGER test_delay_claimed_lot_insert_trigger
+        BEFORE INSERT ON claimed_lots
+        FOR EACH ROW
+        EXECUTE FUNCTION test_delay_claimed_lot_insert();
+      `;
+
+      try {
+        const responses = await Promise.all([claimLot(lot.id, 20), claimLot(lot.id, 20)]);
+
+        expect(responses.map((res) => res.status).sort((a, b) => a - b)).toEqual([201, 400]);
+        const rejected = responses.find((res) => res.status === 400);
+        expect(rejected?.body.error.details?.code).toBe('OVER_CLAIM');
+
+        const claimedLots = await prisma.claimedLot.findMany({ where: { lotId: lot.id } });
+        expect(claimedLots).toHaveLength(2);
+        const cumulativePercentage = claimedLots.reduce(
+          (sum, claimedLot) => sum + Number(claimedLot.percentageComplete ?? 0),
+          0,
+        );
+        expect(cumulativePercentage).toBe(90);
+      } finally {
+        await prisma.$executeRaw`DROP TRIGGER IF EXISTS test_delay_claimed_lot_insert_trigger ON claimed_lots;`;
+        await prisma.$executeRaw`DROP FUNCTION IF EXISTS test_delay_claimed_lot_insert();`;
+      }
+    });
+
     it('allows claiming exactly the remaining percentage at the 100% boundary', async () => {
       const lot = await createCumulativeLot(100000);
 

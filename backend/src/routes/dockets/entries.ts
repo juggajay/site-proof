@@ -14,7 +14,7 @@ import {
   parseDocketRouteParam,
   updateLabourEntrySchema,
 } from './validation.js';
-import { lockDocketForEntryMutation, refreshLabourSubmittedTotals } from './entryTotals.js';
+import { lockEditableDocketForEntryMutation, refreshLabourSubmittedTotals } from './entryTotals.js';
 import { buildDocketLabourEntryMutationResponse } from './entryMutationResponses.js';
 import {
   buildDocketEntryDeletedResponse,
@@ -128,7 +128,7 @@ docketEntriesRouter.post(
     const cost = calculateLabourEntryCost(hours, hourlyRate);
 
     const { entry, totals } = await prisma.$transaction(async (tx) => {
-      await lockDocketForEntryMutation(tx, id);
+      await lockEditableDocketForEntryMutation(tx, id);
 
       const created = await tx.docketLabour.create({
         data: {
@@ -214,7 +214,7 @@ docketEntriesRouter.put(
     const cost = calculateLabourEntryCost(hours, hourlyRate);
 
     const updated = await prisma.$transaction(async (tx) => {
-      await lockDocketForEntryMutation(tx, id);
+      await lockEditableDocketForEntryMutation(tx, id);
 
       await tx.docketLabour.update({
         where: { id: entryId },
@@ -286,7 +286,7 @@ docketEntriesRouter.delete(
     }
 
     await prisma.$transaction(async (tx) => {
-      await lockDocketForEntryMutation(tx, id);
+      await lockEditableDocketForEntryMutation(tx, id);
 
       // Delete entry (cascade deletes lot allocations)
       await tx.docketLabour.delete({ where: { id: entryId } });

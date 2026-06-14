@@ -283,16 +283,23 @@ describe('dockets validation helpers', () => {
   });
 
   describe('parseDocketDate', () => {
-    it('returns a valid Date (now) for missing/blank input', () => {
+    it('returns today at UTC midnight for missing/blank input', () => {
       for (const value of [undefined, null, '', '   ']) {
         const result = parseDocketDate(value);
         expect(result).toBeInstanceOf(Date);
         expect(Number.isNaN(result.getTime())).toBe(false);
+        expect(result.toISOString()).toContain('T00:00:00.000Z');
       }
     });
 
     it('parses a valid date-only string as UTC midnight', () => {
       expect(parseDocketDate('2026-01-15').toISOString()).toBe('2026-01-15T00:00:00.000Z');
+    });
+
+    it('normalizes date-time strings to the provided date component at UTC midnight', () => {
+      expect(parseDocketDate('2026-01-15T13:45:00+11:00').toISOString()).toBe(
+        '2026-01-15T00:00:00.000Z',
+      );
     });
 
     it('throws on non-string values', () => {

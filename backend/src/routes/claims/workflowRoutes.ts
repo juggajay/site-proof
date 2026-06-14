@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 
 import { createAuditLog, AuditAction } from '../../lib/auditLog.js';
 import { AppError } from '../../lib/AppError.js';
@@ -61,6 +61,27 @@ function isUniqueConstraintOn(error: unknown, fields: string[]) {
   return fields.every((field) => normalizedTarget.includes(normalizeUniqueTargetField(field)));
 }
 
+function isPrismaTransactionWriteConflict(error: unknown) {
+  return (error as { code?: unknown })?.code === 'P2034';
+}
+
+async function lockClaimLotsForUpdate(
+  tx: Prisma.TransactionClient,
+  projectId: string,
+  lotIds: string[],
+): Promise<void> {
+  if (lotIds.length === 0) return;
+
+  await tx.$queryRaw<Array<{ id: string }>>`
+    SELECT id
+    FROM lots
+    WHERE project_id = ${projectId}
+      AND id IN (${Prisma.join([...lotIds].sort())})
+    ORDER BY id
+    FOR UPDATE
+  `;
+}
+
 interface ClaimWorkflowRouterDependencies {
   parseClaimRouteParam: (value: unknown, field: string) => string;
   requireCommercialProjectAccess: (user: AuthUser, projectId: string) => Promise<void>;
@@ -115,6 +136,8 @@ export function createClaimWorkflowRouter({
       for (let attempt = 1; attempt <= CLAIM_NUMBER_RETRY_LIMIT; attempt += 1) {
         try {
           claimResult = await prisma.$transaction(async (tx) => {
+            await lockClaimLotsForUpdate(tx, projectId, uniqueLotIds);
+
             // Get the next claim number for this project. A retry handles concurrent creates.
             const lastClaim = await tx.progressClaim.findFirst({
               where: { projectId },
@@ -260,7 +283,8 @@ export function createClaimWorkflowRouter({
         } catch (error) {
           if (
             attempt < CLAIM_NUMBER_RETRY_LIMIT &&
-            isUniqueConstraintOn(error, ['projectId', 'claimNumber'])
+            (isUniqueConstraintOn(error, ['projectId', 'claimNumber']) ||
+              isPrismaTransactionWriteConflict(error))
           ) {
             continue;
           }
