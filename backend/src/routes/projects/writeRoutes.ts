@@ -2,6 +2,7 @@ import { Router, type Request } from 'express';
 import { prisma } from '../../lib/prisma.js';
 import { createAuditLog, AuditAction } from '../../lib/auditLog.js';
 import { TIER_PROJECT_LIMITS } from '../../lib/tierLimits.js';
+import { Prisma } from '@prisma/client';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
@@ -36,6 +37,43 @@ type ProjectWriteRouterDependencies = {
   projectStateMaxLength: number;
   projectStatuses: ReadonlySet<string>;
 };
+
+const RETAINED_PROJECT_RELATIONS = [
+  'projectAreas',
+  'lots',
+  'itpTemplates',
+  'ncrs',
+  'dailyDiaries',
+  'subcontractorCompanies',
+  'dailyDockets',
+  'progressClaims',
+  'documents',
+  'drawings',
+  'notifications',
+  'notificationAlerts',
+  'testResults',
+  'lotSubcontractorAssignments',
+  'scheduledReports',
+  'auditLogs',
+] as const;
+
+type RetainedProjectRelation = (typeof RETAINED_PROJECT_RELATIONS)[number];
+type RetainedProjectCounts = Record<RetainedProjectRelation, number>;
+
+function nonZeroRetainedProjectCounts(
+  counts: RetainedProjectCounts,
+): Partial<RetainedProjectCounts> {
+  return Object.fromEntries(
+    RETAINED_PROJECT_RELATIONS.filter((relation) => counts[relation] > 0).map((relation) => [
+      relation,
+      counts[relation],
+    ]),
+  );
+}
+
+function retainedProjectRecordTotal(counts: RetainedProjectCounts): number {
+  return RETAINED_PROJECT_RELATIONS.reduce((total, relation) => total + counts[relation], 0);
+}
 
 export function createProjectWriteRouter({
   canCreateProjectForCompany,
@@ -417,6 +455,8 @@ export function createProjectWriteRouter({
         select: {
           id: true,
           name: true,
+          projectNumber: true,
+          status: true,
           companyId: true,
         },
       });
@@ -433,9 +473,76 @@ export function createProjectWriteRouter({
         throw AppError.forbidden('You do not have permission to delete this project');
       }
 
-      // Delete the project (cascading deletes will handle related records)
-      await prisma.project.delete({
-        where: { id },
+      await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw(Prisma.sql`SELECT id FROM projects WHERE id = ${id} FOR UPDATE`);
+
+        const retainedRecords = await tx.project.findUnique({
+          where: { id },
+          select: {
+            _count: {
+              select: {
+                projectAreas: true,
+                lots: true,
+                itpTemplates: true,
+                ncrs: true,
+                dailyDiaries: true,
+                subcontractorCompanies: true,
+                dailyDockets: true,
+                progressClaims: true,
+                documents: true,
+                drawings: true,
+                notifications: true,
+                notificationAlerts: true,
+                testResults: true,
+                lotSubcontractorAssignments: true,
+                scheduledReports: true,
+              },
+            },
+          },
+        });
+
+        if (!retainedRecords) {
+          throw AppError.notFound('Project');
+        }
+
+        const retainedRecordCounts = {
+          ...retainedRecords._count,
+          auditLogs: await tx.auditLog.count({
+            where: {
+              projectId: id,
+              action: { not: AuditAction.PROJECT_CREATED },
+            },
+          }),
+        };
+
+        if (retainedProjectRecordTotal(retainedRecordCounts) > 0) {
+          throw AppError.conflict(
+            'Project contains retained records and cannot be permanently deleted. Archive the project instead.',
+            {
+              retainedRecordCounts: nonZeroRetainedProjectCounts(retainedRecordCounts),
+            },
+          );
+        }
+
+        // Only empty setup projects can be hard-deleted. Projects with compliance
+        // records must be archived so retention evidence and audit history survive.
+        await tx.project.delete({
+          where: { id },
+        });
+      });
+
+      await createAuditLog({
+        userId: user.id,
+        entityType: 'project',
+        entityId: project.id,
+        action: AuditAction.PROJECT_DELETED,
+        changes: {
+          name: project.name,
+          projectNumber: project.projectNumber,
+          status: project.status,
+          deletionType: 'empty_project_hard_delete',
+        },
+        req,
       });
 
       res.json(buildProjectDeletedResponse(project));
