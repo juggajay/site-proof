@@ -884,6 +884,58 @@ describe('Progress Claims API', () => {
       expect(relockedLot?.claimedInId).toBe(reclaim.body.claim.id);
     });
 
+    it('writes an audit log when a draft claim is deleted', async () => {
+      const claim = await createDraftWorkflowClaim(1200);
+      const auditCountBefore = await prisma.auditLog.count({
+        where: {
+          projectId,
+          entityType: 'progress_claim',
+          entityId: claim.id,
+          action: AuditAction.CLAIM_DELETED,
+        },
+      });
+
+      const del = await request(app)
+        .delete(`/api/projects/${projectId}/claims/${claim.id}`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(del.status).toBe(200);
+
+      const auditLog = await prisma.auditLog.findFirst({
+        where: {
+          projectId,
+          entityType: 'progress_claim',
+          entityId: claim.id,
+          action: AuditAction.CLAIM_DELETED,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      expect(auditLog).not.toBeNull();
+      expect(
+        await prisma.auditLog.count({
+          where: {
+            projectId,
+            entityType: 'progress_claim',
+            entityId: claim.id,
+            action: AuditAction.CLAIM_DELETED,
+          },
+        }),
+      ).toBe(auditCountBefore + 1);
+
+      const changes = JSON.parse(auditLog!.changes ?? '{}') as {
+        claimNumber?: number;
+        previousStatus?: string;
+        totalClaimedAmount?: number;
+        lotCount?: number;
+      };
+      expect(changes).toMatchObject({
+        claimNumber: claim.claimNumber,
+        previousStatus: 'draft',
+        totalClaimedAmount: 1200,
+        lotCount: 1,
+      });
+    });
+
     it('reports remaining percentage in claim readiness for a partially claimed lot', async () => {
       const lot = await createCumulativeLot(100000);
       expect((await claimLot(lot.id, 25)).status).toBe(201);

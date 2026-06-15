@@ -492,10 +492,14 @@ export function createClaimPostEvidenceWorkflowRouter({
     asyncHandler(async (req, res) => {
       const projectId = parseClaimRouteParam(req.params.projectId, 'projectId');
       const claimId = parseClaimRouteParam(req.params.claimId, 'claimId');
+      const userId = req.user!.userId;
       await requireCommercialProjectAccess(req.user!, projectId);
 
       const claim = await prisma.progressClaim.findFirst({
         where: { id: claimId, projectId },
+        include: {
+          _count: { select: { claimedLots: true } },
+        },
       });
 
       if (!claim) {
@@ -511,7 +515,7 @@ export function createClaimPostEvidenceWorkflowRouter({
       // own. Lots this claim had taken to 100% (status `claimed`, linked via
       // claimedInId) must be returned to `conformed` so they can be claimed
       // again.
-      await prisma.$transaction([
+      const [releasedClaimedLots, clearedStaleLotLinks] = await prisma.$transaction([
         prisma.lot.updateMany({
           where: { claimedInId: claimId, projectId, status: 'claimed' },
           data: { claimedInId: null, status: 'conformed' },
@@ -526,6 +530,23 @@ export function createClaimPostEvidenceWorkflowRouter({
           where: { id: claimId },
         }),
       ]);
+
+      await createAuditLog({
+        projectId,
+        userId,
+        entityType: 'progress_claim',
+        entityId: claimId,
+        action: AuditAction.CLAIM_DELETED,
+        changes: {
+          claimNumber: claim.claimNumber,
+          previousStatus: claim.status,
+          totalClaimedAmount: Number(claim.totalClaimedAmount),
+          lotCount: claim._count.claimedLots,
+          releasedClaimedLots: releasedClaimedLots.count,
+          clearedStaleLotLinks: clearedStaleLotLinks.count,
+        },
+        req,
+      });
 
       res.json(buildClaimDeletedResponse());
     }),
