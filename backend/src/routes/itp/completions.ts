@@ -21,6 +21,7 @@ import { createNcrWithAllocatedNumber } from '../ncrs/ncrNumberAllocation.js';
 import { buildChecklistItemNcrMarker } from './instances/ncrLinks.js';
 import { buildItpCompletionResultResponse } from './completionResponses.js';
 import {
+  assertExpectedPreviousItpCompletion,
   buildItpCompletionTransform,
   buildItpCompletionWitnessData,
   buildItpSubbieCompletionNotifications,
@@ -44,6 +45,7 @@ const ITP_COMPLETION_NOTES_MAX_LENGTH = 5000;
 const ITP_COMPLETION_FAILURE_DESCRIPTION_MAX_LENGTH = 5000;
 const ITP_COMPLETION_SHORT_TEXT_MAX_LENGTH = 160;
 const ITP_SIGNATURE_DATA_URL_MAX_LENGTH = 512_000;
+const itpCompletionStatusSchema = z.enum(['pending', 'completed', 'not_applicable', 'failed']);
 
 // POST /completions - Complete/update checklist item
 const createCompletionSchema = z.object({
@@ -58,7 +60,23 @@ const createCompletionSchema = z.object({
     )
     .optional()
     .nullable(),
-  status: z.enum(['pending', 'completed', 'not_applicable', 'failed']).optional(),
+  status: itpCompletionStatusSchema.optional(),
+  expectedPreviousCompletion: z
+    .object({
+      exists: z.boolean(),
+      id: z.string().uuid().optional().nullable(),
+      status: itpCompletionStatusSchema.optional().nullable(),
+      notes: z
+        .string()
+        .max(
+          ITP_COMPLETION_NOTES_MAX_LENGTH,
+          `Notes must be ${ITP_COMPLETION_NOTES_MAX_LENGTH} characters or less`,
+        )
+        .optional()
+        .nullable(),
+      completedAt: z.string().datetime({ offset: true }).optional().nullable(),
+    })
+    .optional(),
   // NCR details for failed status
   ncrDescription: z
     .string()
@@ -132,6 +150,7 @@ completionsRouter.post(
       witnessCompany,
       // Feature #463: Signature capture
       signatureDataUrl,
+      expectedPreviousCompletion,
     } = parseResult.data;
 
     // Validate required reasons and derive the completion status (direct status
@@ -347,6 +366,7 @@ completionsRouter.post(
           checklistItemId,
         },
       });
+      assertExpectedPreviousItpCompletion(existingCompletion, expectedPreviousCompletion);
       if (existingCompletion?.verificationStatus === 'verified') {
         throw AppError.conflict(
           'Verified ITP completions cannot be changed through the standard completion path',

@@ -62,6 +62,7 @@ describe('writeItpCompletionToggle — online', () => {
       'completed',
       undefined,
       'Current User',
+      serverCompletion,
     );
     expect(mockUpdateOffline).not.toHaveBeenCalled();
   });

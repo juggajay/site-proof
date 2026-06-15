@@ -7,12 +7,14 @@ import {
   type OfflineChecklistItem,
   type OfflineITPChecklist,
   type OfflineITPCompletion,
+  type ItpCompletionServerBase,
   type SyncQueueItem,
 } from './core';
 
 type ItpCompletionQueueItem = Extract<SyncQueueItem, { type: 'itp_completion' }>;
 
 export interface ItpServerCompletionSnapshot {
+  id?: string | null;
   checklistItemId?: string;
   status?: string | null;
   isCompleted?: boolean | null;
@@ -60,6 +62,7 @@ function buildCompletionRecord(
   notes?: string,
   completedBy?: string,
   completedAt?: string | null,
+  serverCompletionBase?: ItpCompletionServerBase,
 ): OfflineITPCompletion {
   return {
     id: `${lotId}-${checklistItemId}`,
@@ -76,6 +79,29 @@ function buildCompletionRecord(
     completedBy,
     syncStatus,
     localUpdatedAt: new Date().toISOString(),
+    ...(serverCompletionBase !== undefined ? { serverCompletionBase } : {}),
+  };
+}
+
+function serverStatusFromOfflineStatus(
+  status: OfflineITPCompletion['status'],
+): ItpCompletionServerBase['status'] {
+  return status === 'na' ? 'not_applicable' : status;
+}
+
+function buildServerCompletionBase(
+  serverCompletion?: ItpServerCompletionSnapshot,
+): ItpCompletionServerBase {
+  if (!serverCompletion) {
+    return { exists: false };
+  }
+
+  return {
+    exists: true,
+    ...(serverCompletion.id ? { id: serverCompletion.id } : {}),
+    status: serverStatusFromOfflineStatus(serverCompletionStatus(serverCompletion)),
+    notes: serverCompletion.notes ?? null,
+    completedAt: serverCompletion.completedAt ?? null,
   };
 }
 
@@ -88,6 +114,7 @@ async function patchCachedChecklistItem(
   notes?: string,
   completedBy?: string,
   completedAt?: string | null,
+  serverCompletionBase?: ItpCompletionServerBase,
 ): Promise<void> {
   const cachedChecklist = await getCachedITPChecklist(lotId);
   if (!cachedChecklist) {
@@ -107,6 +134,7 @@ async function patchCachedChecklistItem(
               ? new Date().toISOString()
               : undefined,
         completedBy,
+        ...(serverCompletionBase !== undefined ? { serverCompletionBase } : {}),
       };
     }
     return item;
@@ -130,8 +158,13 @@ async function enqueueItpCompletionSync(completion: OfflineITPCompletion): Promi
     .first();
 
   if (existing && typeof existing.id === 'number') {
+    const existingCompletion = existing.data as OfflineITPCompletion;
+    const queuedCompletion =
+      completion.serverCompletionBase || !existingCompletion.serverCompletionBase
+        ? completion
+        : { ...completion, serverCompletionBase: existingCompletion.serverCompletionBase };
     await offlineDb.syncQueue.update(existing.id, {
-      data: completion,
+      data: queuedCompletion,
       createdAt: new Date().toISOString(),
       attempts: 0,
       lastError: undefined,
@@ -155,6 +188,8 @@ export async function updateChecklistItemOffline(
   notes?: string,
   completedBy?: string,
 ): Promise<void> {
+  const cachedChecklist = await getCachedITPChecklist(lotId);
+  const cachedItem = cachedChecklist?.items.find((item) => item.id === checklistItemId);
   const completion = buildCompletionRecord(
     lotId,
     checklistItemId,
@@ -162,6 +197,8 @@ export async function updateChecklistItemOffline(
     'pending',
     notes,
     completedBy,
+    undefined,
+    cachedItem?.serverCompletionBase,
   );
 
   // Store the completion
@@ -182,7 +219,11 @@ export async function recordSyncedChecklistItem(
   status: 'pending' | 'completed' | 'na' | 'failed',
   notes?: string,
   completedBy?: string,
+  serverCompletion?: ItpServerCompletionSnapshot,
 ): Promise<void> {
+  const serverCompletionBase = serverCompletion
+    ? buildServerCompletionBase(serverCompletion)
+    : undefined;
   const completion = buildCompletionRecord(
     lotId,
     checklistItemId,
@@ -190,10 +231,20 @@ export async function recordSyncedChecklistItem(
     'synced',
     notes,
     completedBy,
+    serverCompletion?.completedAt,
+    serverCompletionBase,
   );
 
   await offlineDb.itpCompletions.put(completion);
-  await patchCachedChecklistItem(lotId, checklistItemId, status, notes, completedBy);
+  await patchCachedChecklistItem(
+    lotId,
+    checklistItemId,
+    status,
+    notes,
+    completedBy,
+    serverCompletion?.completedAt,
+    serverCompletionBase,
+  );
 }
 
 function serverCompletionStatus(
@@ -232,6 +283,7 @@ export async function reconcileItpCompletionFromServer(
   const notes = serverCompletion?.notes ?? undefined;
   const completedAt = serverCompletion ? (serverCompletion.completedAt ?? null) : null;
   const completedBy = serverCompletion?.completedBy?.fullName ?? undefined;
+  const serverCompletionBase = buildServerCompletionBase(serverCompletion);
   const completion = buildCompletionRecord(
     lotId,
     checklistItemId,
@@ -240,10 +292,19 @@ export async function reconcileItpCompletionFromServer(
     notes,
     completedBy,
     completedAt,
+    serverCompletionBase,
   );
 
   await offlineDb.itpCompletions.put(completion);
-  await patchCachedChecklistItem(lotId, checklistItemId, status, notes, completedBy, completedAt);
+  await patchCachedChecklistItem(
+    lotId,
+    checklistItemId,
+    status,
+    notes,
+    completedBy,
+    completedAt,
+    serverCompletionBase,
+  );
 }
 
 export async function markCompletionSynced(lotId: string, checklistItemId: string): Promise<void> {

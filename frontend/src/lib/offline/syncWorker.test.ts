@@ -195,6 +195,38 @@ describe('syncSingleItem — itp_completion', () => {
     expect(markCompletionSyncedMock).toHaveBeenCalledWith('lot-1', 'ci-1');
   });
 
+  it('posts the expected previous server completion for queued offline conflict detection', async () => {
+    const serverCompletionBase = {
+      exists: true,
+      id: 'completion-1',
+      status: 'pending',
+      notes: null,
+      completedAt: null,
+    };
+    authFetchMock
+      .mockResolvedValueOnce(okJson({ instance: { id: 'inst-1' } }))
+      .mockResolvedValueOnce(okJson({ ok: true }));
+
+    await syncSingleItem(
+      queueItem({
+        id: 11,
+        type: 'itp_completion',
+        data: {
+          lotId: 'lot-1',
+          checklistItemId: 'ci-1',
+          status: 'completed',
+          serverCompletionBase,
+        },
+      }),
+    );
+
+    expect(JSON.parse(authFetchMock.mock.calls[1][1].body)).toMatchObject({
+      itpInstanceId: 'inst-1',
+      checklistItemId: 'ci-1',
+      expectedPreviousCompletion: serverCompletionBase,
+    });
+  });
+
   it("maps 'na' -> not_applicable and 'failed' -> failed", async () => {
     authFetchMock
       .mockResolvedValueOnce(okJson({ instance: { id: 'i' } }))

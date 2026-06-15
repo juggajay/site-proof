@@ -16,6 +16,7 @@ export type {
   OfflineITPChecklist,
   OfflineITPCompletion,
   OfflinePhoto,
+  ItpCompletionServerBase,
   SyncQueueItem,
 } from './offline/core';
 

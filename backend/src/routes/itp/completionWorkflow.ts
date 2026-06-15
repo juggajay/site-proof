@@ -127,6 +127,103 @@ export function shouldCreateFailedItpNcr(
   return newStatus === 'failed' && existingStatus !== 'failed';
 }
 
+export interface ExpectedPreviousItpCompletion {
+  exists: boolean;
+  id?: string | null;
+  status?: string | null;
+  notes?: string | null;
+  completedAt?: string | null;
+}
+
+export interface ItpCompletionForExpectedPrevious {
+  id: string;
+  status: string;
+  notes?: string | null;
+  completedAt?: Date | string | null;
+}
+
+function normalizeNullableDate(value: Date | string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toISOString();
+}
+
+function throwStaleItpCompletionConflict(
+  currentCompletion: ItpCompletionForExpectedPrevious | null | undefined,
+): never {
+  throw AppError.conflict('ITP completion changed while this offline update was queued', {
+    currentCompletionId: currentCompletion?.id ?? null,
+    currentStatus: currentCompletion?.status ?? null,
+  });
+}
+
+function hasExpectedBaseField(
+  expectedPreviousCompletion: ExpectedPreviousItpCompletion,
+  field: keyof ExpectedPreviousItpCompletion,
+): boolean {
+  return Object.prototype.hasOwnProperty.call(expectedPreviousCompletion, field);
+}
+
+/**
+ * Offline ITP sync uses optimistic concurrency: the queued request includes
+ * the completion row the user saw before going offline. If the server row no
+ * longer matches that base, replaying the queued write would overwrite newer
+ * field work, so the route rejects with 409 and the client reconciles from the
+ * current instance snapshot.
+ */
+export function assertExpectedPreviousItpCompletion(
+  currentCompletion: ItpCompletionForExpectedPrevious | null | undefined,
+  expectedPreviousCompletion?: ExpectedPreviousItpCompletion,
+): void {
+  if (!expectedPreviousCompletion) {
+    return;
+  }
+
+  if (!expectedPreviousCompletion.exists) {
+    if (currentCompletion) {
+      throwStaleItpCompletionConflict(currentCompletion);
+    }
+    return;
+  }
+
+  if (!currentCompletion) {
+    throwStaleItpCompletionConflict(currentCompletion);
+  }
+
+  if (expectedPreviousCompletion.id && currentCompletion.id !== expectedPreviousCompletion.id) {
+    throwStaleItpCompletionConflict(currentCompletion);
+  }
+
+  if (
+    expectedPreviousCompletion.status &&
+    currentCompletion.status !== expectedPreviousCompletion.status
+  ) {
+    throwStaleItpCompletionConflict(currentCompletion);
+  }
+
+  if (
+    hasExpectedBaseField(expectedPreviousCompletion, 'notes') &&
+    (expectedPreviousCompletion.notes ?? null) !== (currentCompletion.notes ?? null)
+  ) {
+    throwStaleItpCompletionConflict(currentCompletion);
+  }
+
+  if (
+    hasExpectedBaseField(expectedPreviousCompletion, 'completedAt') &&
+    normalizeNullableDate(expectedPreviousCompletion.completedAt) !==
+      normalizeNullableDate(currentCompletion.completedAt)
+  ) {
+    throwStaleItpCompletionConflict(currentCompletion);
+  }
+}
+
 /** A project manager / superintendent recipient of the subbie completion notice. */
 export interface ItpSubbieNotificationRecipient {
   userId: string;
