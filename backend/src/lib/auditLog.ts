@@ -192,6 +192,7 @@ export const AuditAction = {
   // Claims
   CLAIM_CREATED: 'claim_created',
   CLAIM_STATUS_CHANGED: 'claim_status_changed',
+  CLAIM_DELETED: 'claim_deleted',
   CLAIM_CERTIFIED: 'claim_certified',
   CLAIM_PAYMENT_RECORDED: 'claim_payment_recorded',
   // Subcontractors
