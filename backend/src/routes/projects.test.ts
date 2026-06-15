@@ -1452,6 +1452,121 @@ describe('Projects API', () => {
       }
     });
 
+    it('should reject permanent deletion when a project has retained comments', async () => {
+      const createRes = await request(app)
+        .post('/api/projects')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          name: 'Retained Comments Project',
+          projectNumber: `PROJ-DELETE-COMMENTS-${Date.now()}`,
+          state: 'NSW',
+          specificationSet: 'TfNSW',
+        });
+
+      expect(createRes.status).toBe(201);
+      const retainedProjectId = createRes.body.project.id as string;
+
+      const comment = await prisma.comment.create({
+        data: {
+          entityType: 'Project',
+          entityId: retainedProjectId,
+          content: 'Legacy retained project comment',
+          authorId: userId,
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .delete(`/api/projects/${retainedProjectId}`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ password: TEST_USER_PASSWORD });
+
+        expect(res.status).toBe(409);
+        expect(res.body.error.message).toContain('cannot be permanently deleted');
+        expect(res.body.error.details.retainedRecordCounts.comments).toBe(1);
+
+        const retainedProject = await prisma.project.findUnique({
+          where: { id: retainedProjectId },
+        });
+        expect(retainedProject).not.toBeNull();
+
+        const retainedComment = await prisma.comment.findUnique({ where: { id: comment.id } });
+        expect(retainedComment).not.toBeNull();
+      } finally {
+        await prisma.commentAttachment.deleteMany({ where: { commentId: comment.id } });
+        await prisma.comment.deleteMany({ where: { id: comment.id } });
+        await prisma.auditLog.deleteMany({ where: { projectId: retainedProjectId } });
+        await prisma.auditLog.deleteMany({
+          where: { entityType: 'project', entityId: retainedProjectId },
+        });
+        await prisma.projectUser.deleteMany({ where: { projectId: retainedProjectId } });
+        await prisma.project.delete({ where: { id: retainedProjectId } }).catch(() => {});
+      }
+    });
+
+    it('should include project-owned child comments in retained record counts', async () => {
+      const createRes = await request(app)
+        .post('/api/projects')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          name: 'Retained Child Comments Project',
+          projectNumber: `PROJ-DELETE-CHILD-COMMENTS-${Date.now()}`,
+          state: 'NSW',
+          specificationSet: 'TfNSW',
+        });
+
+      expect(createRes.status).toBe(201);
+      const retainedProjectId = createRes.body.project.id as string;
+
+      const lot = await prisma.lot.create({
+        data: {
+          projectId: retainedProjectId,
+          lotNumber: `LOT-COMMENT-${Date.now()}`,
+          lotType: 'area',
+          activityType: 'earthworks',
+          createdById: userId,
+        },
+      });
+
+      const comment = await prisma.comment.create({
+        data: {
+          entityType: 'itp',
+          entityId: lot.id,
+          content: 'Legacy retained lot ITP comment',
+          authorId: userId,
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .delete(`/api/projects/${retainedProjectId}`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ password: TEST_USER_PASSWORD });
+
+        expect(res.status).toBe(409);
+        expect(res.body.error.details.retainedRecordCounts.lots).toBe(1);
+        expect(res.body.error.details.retainedRecordCounts.comments).toBe(1);
+
+        const retainedProject = await prisma.project.findUnique({
+          where: { id: retainedProjectId },
+        });
+        expect(retainedProject).not.toBeNull();
+
+        const retainedComment = await prisma.comment.findUnique({ where: { id: comment.id } });
+        expect(retainedComment).not.toBeNull();
+      } finally {
+        await prisma.commentAttachment.deleteMany({ where: { commentId: comment.id } });
+        await prisma.comment.deleteMany({ where: { id: comment.id } });
+        await prisma.lot.deleteMany({ where: { projectId: retainedProjectId } });
+        await prisma.auditLog.deleteMany({ where: { projectId: retainedProjectId } });
+        await prisma.auditLog.deleteMany({
+          where: { entityType: 'project', entityId: retainedProjectId },
+        });
+        await prisma.projectUser.deleteMany({ where: { projectId: retainedProjectId } });
+        await prisma.project.delete({ where: { id: retainedProjectId } }).catch(() => {});
+      }
+    });
+
     it('should reject malformed password confirmation', async () => {
       const res = await request(app)
         .delete(`/api/projects/${projectId}`)
