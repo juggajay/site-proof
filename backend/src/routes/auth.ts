@@ -1,7 +1,14 @@
 import { Router } from 'express';
 import type { NextFunction, Request, Response } from 'express';
 import { prisma } from '../lib/prisma.js';
-import { generateToken, generateExpiredToken, verifyPassword, verifyToken } from '../lib/auth.js';
+import {
+  generateToken,
+  generateExpiredToken,
+  hashPassword,
+  needsPasswordRehash,
+  verifyPassword,
+  verifyToken,
+} from '../lib/auth.js';
 import crypto from 'crypto';
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
@@ -295,6 +302,7 @@ authRouter.post(
       throw AppError.unauthorized('Invalid email or password');
     }
 
+    const shouldUpgradePasswordHash = needsPasswordRehash(user.password_hash);
     let loginMethod = 'password';
 
     // Check if MFA is enabled
@@ -337,6 +345,13 @@ authRouter.post(
           message: 'MFA verification required',
         });
       }
+    }
+
+    if (shouldUpgradePasswordHash) {
+      await prisma.user.updateMany({
+        where: { id: user.id, passwordHash: user.password_hash },
+        data: { passwordHash: hashPassword(normalizedPassword) },
+      });
     }
 
     // Get company name

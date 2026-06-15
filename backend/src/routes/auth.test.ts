@@ -33,7 +33,7 @@ import { authRouter, getSafeDataExportFilename } from './auth.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { encrypt } from '../lib/encryption.js';
-import { verifyToken } from '../lib/auth.js';
+import { needsPasswordRehash, verifyPassword, verifyToken } from '../lib/auth.js';
 import { AuditAction, parseAuditLogChanges } from '../lib/auditLog.js';
 import { deleteMfaBackupCodes, enableMfaAndReplaceBackupCodes } from '../lib/mfaBackupCodes.js';
 import {
@@ -60,6 +60,14 @@ const tinyPngBytes = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
 
 function hashAuthTokenForTest(token: string): string {
   return `sha256:${crypto.createHash('sha256').update(token).digest('hex')}`;
+}
+
+function legacyPasswordHashForTest(password: string): string {
+  const authSecret = process.env.JWT_SECRET || 'dev-secret-change-in-production';
+  return crypto
+    .createHash('sha256')
+    .update(password + authSecret)
+    .digest('hex');
 }
 
 async function clearUserAuditLogs(userId: string) {
@@ -729,6 +737,43 @@ describe('POST /api/auth/login', () => {
     expect(changes).toEqual({ method: 'password' });
     expect(JSON.stringify(changes)).not.toContain(loginPassword);
     expect(JSON.stringify(changes)).not.toMatch(/token|secret|code/i);
+  });
+
+  it('rehashes a legacy SHA256 password after successful login', async () => {
+    const email = `legacy-login-${Date.now()}@example.com`;
+    const password = 'SecureP@ssword123!';
+    const legacyHash = legacyPasswordHashForTest(password);
+    const user = await prisma.user.create({
+      data: {
+        email,
+        passwordHash: legacyHash,
+        fullName: 'Legacy Login User',
+        roleInCompany: 'admin',
+        emailVerified: true,
+        tosAcceptedAt: new Date(),
+        tosVersion: '2026-06-01',
+      },
+    });
+
+    try {
+      expect(needsPasswordRehash(legacyHash)).toBe(true);
+
+      const res = await request(app).post('/api/auth/login').send({ email, password });
+
+      expect(res.status).toBe(200);
+
+      const refreshedUser = await prisma.user.findUnique({
+        where: { id: user.id },
+        select: { passwordHash: true },
+      });
+      expect(refreshedUser?.passwordHash).toBeDefined();
+      expect(refreshedUser?.passwordHash).not.toBe(legacyHash);
+      expect(needsPasswordRehash(refreshedUser!.passwordHash!)).toBe(false);
+      expect(verifyPassword(password, refreshedUser!.passwordHash!)).toBe(true);
+    } finally {
+      await clearUserAuditLogs(user.id);
+      await prisma.user.delete({ where: { id: user.id } }).catch(() => {});
+    }
   });
 
   it('exposes email verification state on the login payload and refreshes it via /me', async () => {
