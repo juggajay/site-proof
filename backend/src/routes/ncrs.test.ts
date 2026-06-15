@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import { ncrsRouter } from './ncrs/index.js';
@@ -7,7 +7,7 @@ import { lotsRouter } from './lots.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { AuditAction, parseAuditLogChanges } from '../lib/auditLog.js';
-import { clearEmailQueue, getQueuedEmails } from '../lib/email.js';
+import * as emailService from '../lib/email.js';
 import { registerTestUser as registerSharedTestUser } from '../test/routeTestHarness.js';
 
 const app = express();
@@ -1346,7 +1346,7 @@ describe('NCR Workflow', () => {
     const sensitiveDescription = `Client notification leak sentinel ${Date.now()}`;
     const sensitiveMessage = `Private client context ${Date.now()}`;
     const sensitiveRecipient = `client-${Date.now()}@example.com`;
-    clearEmailQueue();
+    emailService.clearEmailQueue();
 
     const createRes = await request(app)
       .post('/api/ncrs')
@@ -1373,7 +1373,9 @@ describe('NCR Workflow', () => {
 
     expect(notifyRes.status).toBe(200);
 
-    const queuedEmail = getQueuedEmails().find((email) => email.to === sensitiveRecipient);
+    const queuedEmail = emailService
+      .getQueuedEmails()
+      .find((email) => email.to === sensitiveRecipient);
     expect(queuedEmail).toBeDefined();
     expect(queuedEmail?.subject).toContain(createRes.body.ncr.ncrNumber);
     expect(queuedEmail?.text).toContain(sensitiveDescription);
@@ -1407,6 +1409,65 @@ describe('NCR Workflow', () => {
     expect(serializedChanges).not.toContain(sensitiveMessage);
     expect(serializedChanges).not.toContain(sensitiveDescription);
     expect(serializedChanges).not.toContain('notificationPackage');
+  });
+
+  it('should not mark client notified or audit when client notification email fails', async () => {
+    const recipientEmail = `failed-client-${Date.now()}@example.com`;
+    const sendEmailSpy = vi.spyOn(emailService, 'sendEmail').mockResolvedValueOnce({
+      success: false,
+      error: 'simulated delivery failure',
+    });
+
+    try {
+      const createRes = await request(app)
+        .post('/api/ncrs')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          projectId,
+          description: 'Major NCR notification must fail closed',
+          category: 'Workmanship',
+          severity: 'major',
+          responsibleUserId: userId,
+        });
+
+      expect(createRes.status).toBe(201);
+      const failedNotifyNcrId = createRes.body.ncr.id as string;
+
+      const notifyRes = await request(app)
+        .post(`/api/ncrs/${failedNotifyNcrId}/notify-client`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          recipientEmail,
+          additionalMessage: 'This message should not mark the NCR notified.',
+        });
+
+      expect(sendEmailSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: recipientEmail,
+        }),
+      );
+      expect(notifyRes.status).toBe(500);
+      expect(notifyRes.body.error.message).toContain('Client notification email could not be sent');
+
+      const unchanged = await prisma.nCR.findUniqueOrThrow({
+        where: { id: failedNotifyNcrId },
+        select: { clientNotifiedAt: true },
+      });
+      expect(unchanged.clientNotifiedAt).toBeNull();
+
+      const auditLog = await prisma.auditLog.findFirst({
+        where: {
+          projectId,
+          userId,
+          entityType: 'ncr',
+          entityId: failedNotifyNcrId,
+          action: AuditAction.NCR_CLIENT_NOTIFIED,
+        },
+      });
+      expect(auditLog).toBeNull();
+    } finally {
+      sendEmailSpy.mockRestore();
+    }
   });
 
   it('should submit response to NCR', async () => {
