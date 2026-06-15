@@ -29,6 +29,7 @@ import { useForemanMobileStore } from '@/stores/foremanMobileStore';
 import {
   getCompanyRole,
   getDashboardRole,
+  getProjectScopedRole,
   hasSubcontractorPortalIdentity,
 } from '@/lib/subcontractorIdentity';
 import {
@@ -144,8 +145,9 @@ export function MobileNav() {
 
   const userRole = getCompanyRole(user);
   const dashboardRole = getDashboardRole(user);
+  const projectScopedRole = getProjectScopedRole(user);
   const hasPortalIdentity = hasSubcontractorPortalIdentity(user);
-  const hasCommercial = hasCommercialAccess(userRole);
+  const hasCommercial = hasCommercialAccess(projectScopedRole);
   const hasAdmin = isAdminRole(userRole);
   const hasManagement = hasRoleInGroup(userRole, ROLE_GROUPS.MANAGEMENT);
   const isForeman = dashboardRole === 'foreman';

@@ -242,7 +242,7 @@ export function Sidebar() {
   const hasPortalIdentity = hasSubcontractorPortalIdentity(user);
 
   // Role-based access checks
-  const hasCommercial = hasCommercialAccess(userRole);
+  const hasCommercial = hasCommercialAccess(projectScopedRole);
   const hasAdmin = isAdminRole(userRole);
   const hasManagement = hasRoleInGroup(userRole, ROLE_GROUPS.MANAGEMENT);
   const isForeman = isForemanDashboardUser(user);
