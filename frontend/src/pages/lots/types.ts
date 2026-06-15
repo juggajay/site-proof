@@ -108,6 +108,7 @@ export interface ITPAttachment {
 export interface ITPCompletion {
   id: string;
   checklistItemId: string;
+  status?: 'pending' | 'completed' | 'not_applicable' | 'failed';
   isCompleted: boolean;
   isNotApplicable?: boolean;
   isFailed?: boolean;

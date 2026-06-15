@@ -427,6 +427,7 @@ describe('useItpInstance — completion mutations', () => {
       'completed',
       undefined,
       'Current User',
+      merged,
     );
     // A server-confirmed write must add exactly zero sync-queue entries.
     expect(updateChecklistItemOffline).not.toHaveBeenCalled();

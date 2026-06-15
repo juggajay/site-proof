@@ -17,6 +17,14 @@
 import Dexie, { Table } from 'dexie';
 
 // Define types for offline storage
+export interface ItpCompletionServerBase {
+  exists: boolean;
+  id?: string | null;
+  status?: 'pending' | 'completed' | 'not_applicable' | 'failed' | null;
+  notes?: string | null;
+  completedAt?: string | null;
+}
+
 export interface OfflineITPCompletion {
   id: string;
   lotId: string;
@@ -27,6 +35,7 @@ export interface OfflineITPCompletion {
   completedBy?: string;
   syncStatus: 'synced' | 'pending' | 'error';
   localUpdatedAt: string;
+  serverCompletionBase?: ItpCompletionServerBase;
 }
 
 export interface OfflineITPChecklist {
@@ -48,6 +57,7 @@ export interface OfflineChecklistItem {
   notes?: string;
   completedAt?: string;
   completedBy?: string;
+  serverCompletionBase?: ItpCompletionServerBase;
 }
 
 interface SyncQueueBase<TType extends string, TAction extends 'create' | 'update', TData> {

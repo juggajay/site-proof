@@ -43,6 +43,7 @@ const checklistItems: OfflineChecklistItem[] = [
     responsibleParty: 'contractor',
     isHoldPoint: false,
     status: 'pending',
+    serverCompletionBase: { exists: false },
   },
   {
     id: 'item-2',
@@ -51,6 +52,7 @@ const checklistItems: OfflineChecklistItem[] = [
     responsibleParty: 'superintendent',
     isHoldPoint: true,
     status: 'pending',
+    serverCompletionBase: { exists: false },
   },
 ];
 
@@ -144,6 +146,7 @@ describe('updateChecklistItemOffline', () => {
       completedBy: 'Foreman QA',
       syncStatus: 'pending',
       localUpdatedAt: expect.any(String),
+      serverCompletionBase: { exists: false },
     });
     expect(offlineDb.syncQueue.add).toHaveBeenCalledWith({
       type: 'itp_completion',
@@ -168,6 +171,43 @@ describe('updateChecklistItemOffline', () => {
       ],
       cachedAt: expect.any(String),
     });
+  });
+
+  it('queues the server completion base from the cached item so stale offline sync can be rejected', async () => {
+    const serverCompletionBase = {
+      exists: true,
+      id: 'completion-1',
+      status: 'pending' as const,
+      notes: 'Server baseline note',
+      completedAt: null,
+    };
+    mockChecklistLookup({
+      id: 'lot-1-template-1',
+      lotId: 'lot-1',
+      templateId: 'template-1',
+      templateName: 'Earthworks ITP',
+      items: [
+        {
+          ...checklistItems[0],
+          notes: 'Server baseline note',
+          serverCompletionBase,
+        },
+        checklistItems[1],
+      ],
+      cachedAt: '2026-06-06T00:00:00.000Z',
+    });
+
+    await updateChecklistItemOffline('lot-1', 'item-1', 'completed', 'Offline pass');
+
+    expect(offlineDb.syncQueue.add).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: 'completed',
+          notes: 'Offline pass',
+          serverCompletionBase,
+        }),
+      }),
+    );
   });
 
   it('does not patch a cached checklist when no cache exists', async () => {
@@ -199,6 +239,13 @@ describe('updateChecklistItemOffline', () => {
           status: 'completed',
           syncStatus: 'pending',
           localUpdatedAt: '2026-06-09T00:00:00.000Z',
+          serverCompletionBase: {
+            exists: true,
+            id: 'completion-1',
+            status: 'pending',
+            notes: null,
+            completedAt: null,
+          },
         },
         createdAt: '2026-06-09T00:00:00.000Z',
         attempts: 3,
@@ -214,6 +261,13 @@ describe('updateChecklistItemOffline', () => {
         id: 'lot-1-item-1',
         status: 'pending',
         notes: 'unticked again',
+        serverCompletionBase: {
+          exists: true,
+          id: 'completion-1',
+          status: 'pending',
+          notes: null,
+          completedAt: null,
+        },
       }),
       createdAt: expect.any(String),
       attempts: 0,
@@ -329,6 +383,12 @@ describe('reconcileItpCompletionFromServer', () => {
       completedBy: 'QA Manager',
       syncStatus: 'synced',
       localUpdatedAt: expect.any(String),
+      serverCompletionBase: {
+        exists: true,
+        status: 'failed',
+        notes: 'Server rejected after QA review',
+        completedAt: '2026-06-13T01:02:03.000Z',
+      },
     });
     expect(offlineDb.itpChecklists.update).toHaveBeenCalledWith('lot-1-template-1', {
       items: [
@@ -376,6 +436,7 @@ describe('reconcileItpCompletionFromServer', () => {
       completedBy: undefined,
       syncStatus: 'synced',
       localUpdatedAt: expect.any(String),
+      serverCompletionBase: { exists: false },
     });
     expect(offlineDb.itpChecklists.update).toHaveBeenCalledWith('lot-1-template-1', {
       items: [

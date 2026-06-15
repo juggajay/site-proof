@@ -74,6 +74,7 @@ export async function writeItpCompletionToggle({
         nextCompleted ? 'completed' : 'pending',
         existingNotes || undefined,
         'Current User',
+        data.completion,
       );
     }
 

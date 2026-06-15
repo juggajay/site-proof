@@ -168,6 +168,9 @@ async function syncItpCompletion(item: ItpCompletionItem, itemId: number): Promi
         isCompleted,
         status: directStatus,
         notes: completion.notes,
+        ...(completion.serverCompletionBase
+          ? { expectedPreviousCompletion: completion.serverCompletionBase }
+          : {}),
       }),
     });
 

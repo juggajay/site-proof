@@ -94,6 +94,29 @@ describe('mapInstanceToOfflineItems', () => {
     expect(mapInstanceToOfflineItems(makeInstance(items, completions))[0].status).toBe('pending');
   });
 
+  it('stores the server completion base used to reject stale offline sync later', () => {
+    const items = [makeChecklistItem({ id: 'a' })];
+    const completions = [
+      makeCompletion({
+        id: 'completion-1',
+        checklistItemId: 'a',
+        isCompleted: true,
+        notes: 'Server pass',
+        completedAt: '2026-06-12T00:00:00.000Z',
+      }),
+    ];
+
+    expect(
+      mapInstanceToOfflineItems(makeInstance(items, completions))[0].serverCompletionBase,
+    ).toEqual({
+      exists: true,
+      id: 'completion-1',
+      status: 'completed',
+      notes: 'Server pass',
+      completedAt: '2026-06-12T00:00:00.000Z',
+    });
+  });
+
   it('prefers completed over na/failed when multiple flags are set (precedence)', () => {
     const items = [makeChecklistItem({ id: 'a' })];
     const completions = [
@@ -106,6 +129,23 @@ describe('mapInstanceToOfflineItems', () => {
     ];
 
     expect(mapInstanceToOfflineItems(makeInstance(items, completions))[0].status).toBe('completed');
+  });
+
+  it('trusts the raw server status over derived flags when both are present', () => {
+    const items = [makeChecklistItem({ id: 'a' })];
+    const completions = [
+      makeCompletion({
+        checklistItemId: 'a',
+        status: 'not_applicable',
+        isCompleted: true,
+        isNotApplicable: true,
+      }),
+    ];
+
+    const [mapped] = mapInstanceToOfflineItems(makeInstance(items, completions));
+
+    expect(mapped.status).toBe('na');
+    expect(mapped.serverCompletionBase?.status).toBe('not_applicable');
   });
 
   it('maps checklist fields: description->name, acceptanceCriteria->description, party + hold point passthrough', () => {

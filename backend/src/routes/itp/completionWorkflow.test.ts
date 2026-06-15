@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { AppError } from '../../lib/AppError.js';
 import {
+  assertExpectedPreviousItpCompletion,
   buildItpCompletionTransform,
   buildItpCompletionWitnessData,
   buildItpSubbieCompletionNotifications,
@@ -188,6 +189,60 @@ describe('shouldCreateFailedItpNcr', () => {
     expect(shouldCreateFailedItpNcr('failed', 'failed')).toBe(false);
     expect(shouldCreateFailedItpNcr('completed', 'pending')).toBe(false);
     expect(shouldCreateFailedItpNcr('pending', 'failed')).toBe(false);
+  });
+});
+
+describe('assertExpectedPreviousItpCompletion', () => {
+  const currentCompletion = {
+    id: 'completion-1',
+    status: 'completed',
+    notes: 'Server already passed this',
+    completedAt: new Date('2026-06-12T00:00:00.000Z'),
+  };
+
+  it('allows a queued offline write when the server row still matches the expected base', () => {
+    expect(() =>
+      assertExpectedPreviousItpCompletion(currentCompletion, {
+        exists: true,
+        id: 'completion-1',
+        status: 'completed',
+        notes: 'Server already passed this',
+        completedAt: '2026-06-12T00:00:00.000Z',
+      }),
+    ).not.toThrow();
+  });
+
+  it('rejects a queued offline write when another user changed the completion state', () => {
+    expect(() =>
+      assertExpectedPreviousItpCompletion(currentCompletion, {
+        exists: true,
+        id: 'completion-1',
+        status: 'pending',
+        notes: null,
+        completedAt: null,
+      }),
+    ).toThrow('ITP completion changed while this offline update was queued');
+  });
+
+  it('rejects a queued offline write when the user started from no row but one now exists', () => {
+    expect(() =>
+      assertExpectedPreviousItpCompletion(currentCompletion, {
+        exists: false,
+      }),
+    ).toThrow('ITP completion changed while this offline update was queued');
+  });
+
+  it('allows old clients and online writes that do not send an expected base', () => {
+    expect(() => assertExpectedPreviousItpCompletion(currentCompletion, undefined)).not.toThrow();
+  });
+
+  it('compares only expected-base fields that were supplied', () => {
+    expect(() =>
+      assertExpectedPreviousItpCompletion(currentCompletion, {
+        exists: true,
+        id: 'completion-1',
+      }),
+    ).not.toThrow();
   });
 });
 

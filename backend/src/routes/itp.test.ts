@@ -3365,6 +3365,101 @@ describe('ITP Completion Decision Logic (characterization)', () => {
     }
   });
 
+  it('rejects stale queued offline completion writes when the server row changed since the user cached it', async () => {
+    await resetContractorCompletion();
+    await prisma.iTPCompletion.create({
+      data: {
+        itpInstanceId: instanceId,
+        checklistItemId: contractorItemId,
+        status: 'completed',
+        notes: 'Server pass from another user',
+        completedById: userId,
+        completedAt: new Date('2026-06-12T00:00:00.000Z'),
+      },
+    });
+
+    try {
+      const res = await request(app)
+        .post('/api/itp/completions')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          itpInstanceId: instanceId,
+          checklistItemId: contractorItemId,
+          status: 'pending',
+          notes: 'Stale offline untick',
+          expectedPreviousCompletion: {
+            exists: true,
+            status: 'pending',
+            notes: null,
+            completedAt: null,
+          },
+        });
+
+      expect(res.status).toBe(409);
+      expect(res.body.error.message).toContain(
+        'ITP completion changed while this offline update was queued',
+      );
+
+      const unchanged = await prisma.iTPCompletion.findFirstOrThrow({
+        where: { itpInstanceId: instanceId, checklistItemId: contractorItemId },
+        select: { status: true, notes: true, completedAt: true, completedById: true },
+      });
+      expect(unchanged.status).toBe('completed');
+      expect(unchanged.notes).toBe('Server pass from another user');
+      expect(unchanged.completedAt?.toISOString()).toBe('2026-06-12T00:00:00.000Z');
+      expect(unchanged.completedById).toBe(userId);
+    } finally {
+      await prisma.iTPCompletion.deleteMany({
+        where: { itpInstanceId: instanceId, checklistItemId: contractorItemId },
+      });
+    }
+  });
+
+  it('rejects queued offline completion writes that started from no row after a server row appears', async () => {
+    await resetContractorCompletion();
+    await prisma.iTPCompletion.create({
+      data: {
+        itpInstanceId: instanceId,
+        checklistItemId: contractorItemId,
+        status: 'not_applicable',
+        notes: 'Server N/A from supervisor',
+        completedById: userId,
+        completedAt: new Date('2026-06-12T00:00:00.000Z'),
+      },
+    });
+
+    try {
+      const res = await request(app)
+        .post('/api/itp/completions')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          itpInstanceId: instanceId,
+          checklistItemId: contractorItemId,
+          status: 'completed',
+          notes: 'Stale offline pass',
+          expectedPreviousCompletion: { exists: false },
+        });
+
+      expect(res.status).toBe(409);
+      expect(res.body.error.message).toContain(
+        'ITP completion changed while this offline update was queued',
+      );
+
+      const unchanged = await prisma.iTPCompletion.findFirstOrThrow({
+        where: { itpInstanceId: instanceId, checklistItemId: contractorItemId },
+        select: { status: true, notes: true, completedAt: true, completedById: true },
+      });
+      expect(unchanged.status).toBe('not_applicable');
+      expect(unchanged.notes).toBe('Server N/A from supervisor');
+      expect(unchanged.completedAt?.toISOString()).toBe('2026-06-12T00:00:00.000Z');
+      expect(unchanged.completedById).toBe(userId);
+    } finally {
+      await prisma.iTPCompletion.deleteMany({
+        where: { itpInstanceId: instanceId, checklistItemId: contractorItemId },
+      });
+    }
+  });
+
   it('auto-verifies a subcontractor completion when the project does not require verification', async () => {
     const suffix = Date.now();
     const subcontractorCompany = await prisma.subcontractorCompany.create({

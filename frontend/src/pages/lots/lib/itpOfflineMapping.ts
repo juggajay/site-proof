@@ -14,8 +14,48 @@
  * IndexedDB into its runtime graph.
  */
 import type { ITPChecklistItem, ITPCompletion, ITPInstance } from '../types';
-import type { OfflineChecklistItem, OfflineITPChecklist } from '@/lib/offlineDb';
+import type {
+  ItpCompletionServerBase,
+  OfflineChecklistItem,
+  OfflineITPChecklist,
+} from '@/lib/offlineDb';
 import { normalizeResponsibleParty } from './itpEvidence';
+
+function completionStatusForCache(completion?: ITPCompletion): OfflineChecklistItem['status'] {
+  if (!completion) {
+    return 'pending';
+  }
+  if (completion.status === 'completed') return 'completed';
+  if (completion.status === 'not_applicable') return 'na';
+  if (completion.status === 'failed') return 'failed';
+  if (completion.isCompleted) return 'completed';
+  if (completion.isNotApplicable) return 'na';
+  if (completion.isFailed) return 'failed';
+  return 'pending';
+}
+
+function serverStatusForCache(
+  status: OfflineChecklistItem['status'],
+): ItpCompletionServerBase['status'] {
+  return status === 'na' ? 'not_applicable' : status;
+}
+
+function buildServerCompletionBase(
+  completion: ITPCompletion | undefined,
+  status: OfflineChecklistItem['status'],
+): ItpCompletionServerBase {
+  if (!completion) {
+    return { exists: false };
+  }
+
+  return {
+    exists: true,
+    id: completion.id,
+    status: serverStatusForCache(status),
+    notes: completion.notes ?? null,
+    completedAt: completion.completedAt ?? null,
+  };
+}
 
 /**
  * Project a server `ITPInstance` into `OfflineChecklistItem[]` for caching.
@@ -28,10 +68,7 @@ export function mapInstanceToOfflineItems(instance: ITPInstance): OfflineCheckli
     const completion = instance.completions.find(
       (c: ITPCompletion) => c.checklistItemId === item.id,
     );
-    let status: 'pending' | 'completed' | 'na' | 'failed' = 'pending';
-    if (completion?.isCompleted) status = 'completed';
-    else if (completion?.isNotApplicable) status = 'na';
-    else if (completion?.isFailed) status = 'failed';
+    const status = completionStatusForCache(completion);
 
     return {
       id: item.id,
@@ -43,6 +80,7 @@ export function mapInstanceToOfflineItems(instance: ITPInstance): OfflineCheckli
       notes: completion?.notes || undefined,
       completedAt: completion?.completedAt || undefined,
       completedBy: completion?.completedBy?.fullName || undefined,
+      serverCompletionBase: buildServerCompletionBase(completion, status),
     };
   });
 }
