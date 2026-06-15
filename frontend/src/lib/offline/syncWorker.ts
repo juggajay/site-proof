@@ -120,6 +120,13 @@ function isTerminalItpSyncRejection(status: number): boolean {
   return status >= 400 && status < 500 && status !== 408 && status !== 429;
 }
 
+function isAlreadySubmittedDiarySyncError(errorText: string): boolean {
+  return (
+    errorText.includes('Diary already submitted') ||
+    errorText.includes('Cannot modify submitted diary')
+  );
+}
+
 interface ItpInstanceSyncResponse {
   instance?: {
     id?: string;
@@ -227,7 +234,7 @@ async function syncDiary(item: DiaryItem, itemId: number): Promise<SyncItemResul
 
         if (!response.ok) {
           const errorText = await readResponseError(response);
-          if (!errorText.includes('Diary already submitted')) {
+          if (!isAlreadySubmittedDiarySyncError(errorText)) {
             await markSyncItemError(itemId, errorText);
             await markDiarySyncError(diaryId);
             return HANDLED;
