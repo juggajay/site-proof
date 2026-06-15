@@ -33,6 +33,7 @@ import { queryKeys } from '@/lib/queryKeys';
 import { useUIStore } from '@/stores/uiStore'; // Feature #442: Zustand client state
 import {
   getCompanyRole,
+  getProjectScopedRole,
   hasSubcontractorPortalIdentity,
   isForemanDashboardUser,
 } from '@/lib/subcontractorIdentity';
@@ -42,6 +43,7 @@ import {
   isAdminRole,
   isSubcontractorRole,
   hasCommercialAccess,
+  isViewerRole,
 } from '@/lib/roles';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -71,6 +73,8 @@ const FOREMAN_MENU_ITEMS = [
   'Daily Diary',
   'Docket Approvals',
 ];
+
+const VIEWER_PROJECT_MENU_ITEMS = ['Lots', 'Reports'];
 
 interface NavigationItem {
   name: string;
@@ -234,6 +238,7 @@ export function Sidebar() {
   const toggleSidebar = zustandToggleSidebar;
 
   const userRole = getCompanyRole(user);
+  const projectScopedRole = getProjectScopedRole(user);
   const hasPortalIdentity = hasSubcontractorPortalIdentity(user);
 
   // Role-based access checks
@@ -242,6 +247,7 @@ export function Sidebar() {
   const hasManagement = hasRoleInGroup(userRole, ROLE_GROUPS.MANAGEMENT);
   const isForeman = isForemanDashboardUser(user);
   const isSubcontractor = isSubcontractorRole(userRole);
+  const isViewer = isViewerRole(projectScopedRole);
 
   // Helper function to check if a menu item should be visible
   const shouldShowItem = (item: NavigationItem): boolean => {
@@ -289,6 +295,12 @@ export function Sidebar() {
     );
   }
 
+  if (isViewer) {
+    filteredProjectNavigation = filteredProjectNavigation.filter((item) =>
+      VIEWER_PROJECT_MENU_ITEMS.includes(item.name),
+    );
+  }
+
   // Feature #700 - Filter by enabled modules
   filteredProjectNavigation = filteredProjectNavigation.filter((item) => {
     // Check if this nav item is controlled by a module
@@ -301,9 +313,6 @@ export function Sidebar() {
     // If not controlled by a module, always show
     return true;
   });
-
-  // Viewer gets read-only items (no create/edit features - just viewing)
-  // For now, viewers can see most items but actions will be disabled elsewhere
 
   // Filter settings navigation
   const filteredSettingsNavigation = settingsNavigation.filter(shouldShowItem);
