@@ -60,6 +60,54 @@ function parseClaimReportStatuses(
   return [...new Set(statuses)];
 }
 
+type ClaimReportAmountInput = {
+  totalClaimedAmount: unknown;
+  certifiedAmount: unknown;
+  paidAmount: unknown;
+};
+
+type ClaimReportAmounts = {
+  totalClaimedAmount: number;
+  certifiedAmount: number | null;
+  paidAmount: number | null;
+  variance: number | null;
+  outstanding: number | null;
+};
+
+function hasReportAmount(value: unknown): boolean {
+  return value !== null && value !== undefined;
+}
+
+function reportAmountOrZero(value: unknown): number {
+  return hasReportAmount(value) ? Number(value) : 0;
+}
+
+function reportAmountOrNull(value: unknown): number | null {
+  return hasReportAmount(value) ? Number(value) : null;
+}
+
+export function buildClaimReportAmounts({
+  totalClaimedAmount,
+  certifiedAmount,
+  paidAmount,
+}: ClaimReportAmountInput): ClaimReportAmounts {
+  const reportedTotalClaimedAmount = reportAmountOrZero(totalClaimedAmount);
+  const reportedCertifiedAmount = reportAmountOrNull(certifiedAmount);
+  const reportedPaidAmount = reportAmountOrNull(paidAmount);
+
+  return {
+    totalClaimedAmount: reportedTotalClaimedAmount,
+    certifiedAmount: reportedCertifiedAmount,
+    paidAmount: reportedPaidAmount,
+    variance:
+      hasReportAmount(totalClaimedAmount) && hasReportAmount(certifiedAmount)
+        ? Number(totalClaimedAmount) - Number(certifiedAmount)
+        : null,
+    outstanding:
+      reportedCertifiedAmount === null ? null : reportedCertifiedAmount - (reportedPaidAmount ?? 0),
+  };
+}
+
 export function createClaimReportRouter({
   parseRequiredString,
   parseOptionalDateQuery,
@@ -136,9 +184,9 @@ export function createClaimReportRouter({
       let totalLots = 0;
 
       for (const claim of claims) {
-        totalClaimed += claim.totalClaimedAmount ? Number(claim.totalClaimedAmount) : 0;
-        totalCertified += claim.certifiedAmount ? Number(claim.certifiedAmount) : 0;
-        totalPaid += claim.paidAmount ? Number(claim.paidAmount) : 0;
+        totalClaimed += reportAmountOrZero(claim.totalClaimedAmount);
+        totalCertified += reportAmountOrZero(claim.certifiedAmount);
+        totalPaid += reportAmountOrZero(claim.paidAmount);
         totalLots += claim.claimedLots.length;
       }
 
@@ -158,13 +206,9 @@ export function createClaimReportRouter({
         if (!monthlyData[monthKey]) {
           monthlyData[monthKey] = { claimed: 0, certified: 0, paid: 0, count: 0 };
         }
-        monthlyData[monthKey].claimed += claim.totalClaimedAmount
-          ? Number(claim.totalClaimedAmount)
-          : 0;
-        monthlyData[monthKey].certified += claim.certifiedAmount
-          ? Number(claim.certifiedAmount)
-          : 0;
-        monthlyData[monthKey].paid += claim.paidAmount ? Number(claim.paidAmount) : 0;
+        monthlyData[monthKey].claimed += reportAmountOrZero(claim.totalClaimedAmount);
+        monthlyData[monthKey].certified += reportAmountOrZero(claim.certifiedAmount);
+        monthlyData[monthKey].paid += reportAmountOrZero(claim.paidAmount);
         monthlyData[monthKey].count++;
       }
 
@@ -178,44 +222,36 @@ export function createClaimReportRouter({
         }));
 
       // Transform claims for export
-      const claimsData = claims.map((claim) => ({
-        id: claim.id,
-        claimNumber: claim.claimNumber,
-        periodStart: claim.claimPeriodStart.toISOString().split('T')[0],
-        periodEnd: claim.claimPeriodEnd.toISOString().split('T')[0],
-        status: claim.status,
-        totalClaimedAmount: claim.totalClaimedAmount ? Number(claim.totalClaimedAmount) : 0,
-        certifiedAmount: claim.certifiedAmount ? Number(claim.certifiedAmount) : null,
-        paidAmount: claim.paidAmount ? Number(claim.paidAmount) : null,
-        variance:
-          claim.certifiedAmount && claim.totalClaimedAmount
-            ? Number(claim.totalClaimedAmount) - Number(claim.certifiedAmount)
+      const claimsData = claims.map((claim) => {
+        const amounts = buildClaimReportAmounts(claim);
+
+        return {
+          id: claim.id,
+          claimNumber: claim.claimNumber,
+          periodStart: claim.claimPeriodStart.toISOString().split('T')[0],
+          periodEnd: claim.claimPeriodEnd.toISOString().split('T')[0],
+          status: claim.status,
+          ...amounts,
+          submittedAt: claim.submittedAt?.toISOString().split('T')[0] || null,
+          certifiedAt: claim.certifiedAt?.toISOString().split('T')[0] || null,
+          paidAt: claim.paidAt?.toISOString().split('T')[0] || null,
+          paymentReference: claim.paymentReference || null,
+          lotCount: claim.claimedLots.length,
+          lots: claim.claimedLots.map((cl) => ({
+            lotNumber: cl.lot.lotNumber,
+            description: cl.lot.description,
+            activityType: cl.lot.activityType,
+            amountClaimed: reportAmountOrZero(cl.amountClaimed),
+          })),
+          preparedBy: claim.preparedBy
+            ? {
+                name: claim.preparedBy.fullName || claim.preparedBy.email,
+                email: claim.preparedBy.email,
+              }
             : null,
-        outstanding:
-          claim.certifiedAmount && claim.paidAmount
-            ? Number(claim.certifiedAmount) - Number(claim.paidAmount)
-            : claim.certifiedAmount
-              ? Number(claim.certifiedAmount)
-              : null,
-        submittedAt: claim.submittedAt?.toISOString().split('T')[0] || null,
-        certifiedAt: claim.certifiedAt?.toISOString().split('T')[0] || null,
-        paidAt: claim.paidAt?.toISOString().split('T')[0] || null,
-        paymentReference: claim.paymentReference || null,
-        lotCount: claim.claimedLots.length,
-        lots: claim.claimedLots.map((cl) => ({
-          lotNumber: cl.lot.lotNumber,
-          description: cl.lot.description,
-          activityType: cl.lot.activityType,
-          amountClaimed: cl.amountClaimed ? Number(cl.amountClaimed) : 0,
-        })),
-        preparedBy: claim.preparedBy
-          ? {
-              name: claim.preparedBy.fullName || claim.preparedBy.email,
-              email: claim.preparedBy.email,
-            }
-          : null,
-        preparedAt: claim.preparedAt?.toISOString().split('T')[0] || null,
-      }));
+          preparedAt: claim.preparedAt?.toISOString().split('T')[0] || null,
+        };
+      });
 
       const report = {
         generatedAt: new Date().toISOString(),
