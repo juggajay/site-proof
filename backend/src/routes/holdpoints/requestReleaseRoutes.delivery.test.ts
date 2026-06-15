@@ -162,4 +162,47 @@ describe('hold point request-release delivery failure', () => {
     expect(mocks.sendHPReleaseRequestEmail).toHaveBeenCalledOnce();
     expect(mocks.createAuditLog).not.toHaveBeenCalled();
   });
+
+  it('commits release tokens before sending recipient emails so accepted links stay valid when a later send fails', async () => {
+    const events: string[] = [];
+    mocks.prisma.$transaction.mockImplementationOnce(async (callback) => {
+      events.push('transaction:start');
+      const result = await callback(mocks.tx);
+      events.push('transaction:commit');
+      return result;
+    });
+    mocks.sendHPReleaseRequestEmail.mockImplementation(async ({ to }: { to: string }) => {
+      events.push(`email:${to}`);
+      if (to === 'second@example.com') {
+        return {
+          success: false,
+          error: 'Resend rejected the second message',
+          provider: 'resend',
+        };
+      }
+
+      return {
+        success: true,
+        messageId: `mock-${to}`,
+        provider: 'mock',
+      };
+    });
+
+    const res = await request(app).post('/api/holdpoints/request-release').send({
+      lotId: 'lot-1',
+      itpChecklistItemId: 'item-1',
+      notificationSentTo: 'first@example.com, second@example.com',
+    });
+
+    expect(res.status).toBe(502);
+    expect(events).toEqual([
+      'transaction:start',
+      'transaction:commit',
+      'email:first@example.com',
+      'email:second@example.com',
+    ]);
+    expect(mocks.tx.holdPointReleaseToken.createMany).toHaveBeenCalledOnce();
+    expect(mocks.sendHPReleaseRequestEmail).toHaveBeenCalledTimes(2);
+    expect(mocks.createAuditLog).not.toHaveBeenCalled();
+  });
 });
