@@ -230,6 +230,8 @@ const bulkUpdateStatusSchema = z.object({
 const bulkAssignSubcontractorSchema = z.object({
   lotIds: lotIdArraySchema,
   subcontractorId: requiredIdSchema('subcontractorId').nullable().optional(),
+  canCompleteITP: z.boolean().optional(),
+  itpRequiresVerification: z.boolean().optional(),
 });
 
 // Schema for assigning subcontractor to lot

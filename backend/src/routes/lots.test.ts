@@ -2926,6 +2926,8 @@ describe('Lot Bulk Operations', () => {
       },
     });
     expect(activeAssignments).toHaveLength(targetLotIds.length);
+    expect(activeAssignments.every((assignment) => !assignment.canCompleteITP)).toBe(true);
+    expect(activeAssignments.every((assignment) => assignment.itpRequiresVerification)).toBe(true);
 
     const assignedLots = await prisma.lot.findMany({
       where: { id: { in: targetLotIds } },
@@ -2957,6 +2959,42 @@ describe('Lot Bulk Operations', () => {
     });
     expect(remainingActiveAssignments).toBe(0);
     expect(unassignedLots.every((lot) => lot.assignedSubcontractorId === null)).toBe(true);
+  });
+
+  it('should persist explicit ITP permissions when bulk assigning a subcontractor', async () => {
+    const subcontractor = await prisma.subcontractorCompany.create({
+      data: {
+        projectId,
+        companyName: `Bulk Assign ITP Permissions ${Date.now()}`,
+        primaryContactName: 'Bulk Assign ITP Permissions',
+        primaryContactEmail: `bulk-assign-itp-${Date.now()}@example.com`,
+        status: 'approved',
+      },
+    });
+    const targetLotIds = bulkLotIds.slice(0, 2);
+
+    const assignRes = await request(app)
+      .post('/api/lots/bulk-assign-subcontractor')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        lotIds: targetLotIds,
+        subcontractorId: subcontractor.id,
+        canCompleteITP: true,
+        itpRequiresVerification: false,
+      });
+
+    expect(assignRes.status).toBe(200);
+
+    const activeAssignments = await prisma.lotSubcontractorAssignment.findMany({
+      where: {
+        lotId: { in: targetLotIds },
+        subcontractorCompanyId: subcontractor.id,
+        status: 'active',
+      },
+    });
+    expect(activeAssignments).toHaveLength(targetLotIds.length);
+    expect(activeAssignments.every((assignment) => assignment.canCompleteITP)).toBe(true);
+    expect(activeAssignments.every((assignment) => !assignment.itpRequiresVerification)).toBe(true);
   });
 
   describe('POST /api/lots/bulk-delete - deletion blockers (characterization)', () => {

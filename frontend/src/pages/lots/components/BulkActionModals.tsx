@@ -10,6 +10,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { NativeSelect } from '@/components/ui/native-select';
 import { Label } from '@/components/ui/label';
+import type { BulkAssignSubcontractorOptions } from '../lotsPageTypes';
 
 // =====================
 // Bulk Delete Modal
@@ -144,7 +145,7 @@ interface BulkAssignModalProps {
   selectedCount: number;
   subcontractors: { id: string; companyName: string }[];
   onClose: () => void;
-  onConfirm: (subcontractorId: string) => Promise<void>;
+  onConfirm: (subcontractorId: string, options?: BulkAssignSubcontractorOptions) => Promise<void>;
 }
 
 export function BulkAssignModal({
@@ -156,12 +157,22 @@ export function BulkAssignModal({
 }: BulkAssignModalProps) {
   const [assigning, setAssigning] = useState(false);
   const [selectedSubcontractorId, setSelectedSubcontractorId] = useState<string>('');
+  const [canCompleteITP, setCanCompleteITP] = useState(false);
+  const [itpRequiresVerification, setItpRequiresVerification] = useState(true);
 
   const handleAssign = async () => {
     if (assigning) return;
     setAssigning(true);
     try {
-      await onConfirm(selectedSubcontractorId);
+      await onConfirm(
+        selectedSubcontractorId,
+        selectedSubcontractorId
+          ? {
+              canCompleteITP,
+              itpRequiresVerification: canCompleteITP ? itpRequiresVerification : true,
+            }
+          : undefined,
+      );
     } finally {
       setAssigning(false);
     }
@@ -192,6 +203,44 @@ export function BulkAssignModal({
             ))}
           </NativeSelect>
         </div>
+        {selectedSubcontractorId && (
+          <div className="mt-4 rounded-lg bg-muted/50 p-3">
+            <p className="text-sm font-medium text-foreground">ITP Permissions</p>
+            <div className="mt-3 flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="bulk-can-complete-itp"
+                checked={canCompleteITP}
+                onChange={(e) => {
+                  setCanCompleteITP(e.target.checked);
+                  if (!e.target.checked) {
+                    setItpRequiresVerification(true);
+                  }
+                }}
+                className="h-4 w-4 rounded border-border accent-primary focus:ring-primary"
+              />
+              <label htmlFor="bulk-can-complete-itp" className="text-sm text-foreground">
+                Allow ITP completion
+              </label>
+            </div>
+            <div className="mt-3 flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="bulk-itp-requires-verification"
+                checked={itpRequiresVerification}
+                onChange={(e) => setItpRequiresVerification(e.target.checked)}
+                disabled={!canCompleteITP}
+                className="h-4 w-4 rounded border-border accent-primary focus:ring-primary disabled:opacity-50"
+              />
+              <label
+                htmlFor="bulk-itp-requires-verification"
+                className={`text-sm ${canCompleteITP ? 'text-foreground' : 'text-muted-foreground'}`}
+              >
+                Require verification (recommended)
+              </label>
+            </div>
+          </div>
+        )}
       </ModalBody>
       <ModalFooter>
         <Button variant="outline" onClick={onClose} disabled={assigning}>
