@@ -33,7 +33,12 @@ import { authRouter, getSafeDataExportFilename } from './auth.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { encrypt } from '../lib/encryption.js';
-import { needsPasswordRehash, verifyPassword, verifyToken } from '../lib/auth.js';
+import {
+  generateRefreshToken,
+  needsPasswordRehash,
+  verifyPassword,
+  verifyToken,
+} from '../lib/auth.js';
 import { AuditAction, parseAuditLogChanges } from '../lib/auditLog.js';
 import { deleteMfaBackupCodes, enableMfaAndReplaceBackupCodes } from '../lib/mfaBackupCodes.js';
 import {
@@ -439,6 +444,30 @@ describe('POST /api/auth/register', () => {
 });
 
 describe('JWT invalidation precision', () => {
+  it('rejects typed refresh tokens as bearer sessions', async () => {
+    const email = `refresh-token-bearer-${Date.now()}@example.com`;
+    const regRes = await request(app).post('/api/auth/register').send({
+      email,
+      password: 'SecureP@ssword123!',
+      fullName: 'Refresh Token Bearer User',
+      tosAccepted: true,
+    });
+
+    const userId = regRes.body.user.id as string;
+    const refreshToken = generateRefreshToken(userId);
+
+    try {
+      const meRes = await request(app)
+        .get('/api/auth/me')
+        .set('Authorization', `Bearer ${refreshToken}`);
+
+      expect(meRes.status).toBe(401);
+    } finally {
+      await prisma.emailVerificationToken.deleteMany({ where: { userId } });
+      await prisma.user.delete({ where: { id: userId } }).catch(() => {});
+    }
+  });
+
   it('rejects tokens invalidated in the same JWT iat second', async () => {
     const email = `jwt-precision-${Date.now()}@example.com`;
     const regRes = await request(app).post('/api/auth/register').send({
@@ -1158,6 +1187,7 @@ describe('POST /api/auth/login', () => {
       expect(challengeRes.status).toBe(200);
       expect(challengeRes.body.mfaRequired).toBe(true);
       expect(challengeRes.body.userId).toBe(user!.id);
+      expect(typeof challengeRes.body.mfaChallengeToken).toBe('string');
 
       const res = await request(app).post('/api/auth/login').send({
         email: loginEmail,

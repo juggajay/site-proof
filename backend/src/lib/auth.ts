@@ -26,9 +26,12 @@ interface TokenPayload {
   userId: string;
   email: string;
   role: string;
+  type?: string;
   authTime?: number;
   iat?: number; // Issued at timestamp (added by JWT)
 }
+
+const MFA_CHALLENGE_TOKEN_TYPE = 'mfa_challenge';
 
 export interface AuthUser {
   id?: string;
@@ -51,6 +54,9 @@ export interface AuthUser {
 export async function verifyToken(token: string): Promise<AuthUser | null> {
   try {
     const payload = jwt.verify(token, EFFECTIVE_JWT_SECRET) as TokenPayload;
+    if (payload.type && payload.type !== 'access') {
+      return null;
+    }
 
     // Get user from database, including token_invalidated_at for session invalidation check
     const userResult = await prisma.$queryRaw<
@@ -135,7 +141,9 @@ export async function verifyToken(token: string): Promise<AuthUser | null> {
 }
 
 export function generateToken(payload: TokenPayload): string {
-  return jwt.sign({ ...payload, authTime: Date.now() }, EFFECTIVE_JWT_SECRET, { expiresIn: '24h' });
+  return jwt.sign({ ...payload, type: 'access', authTime: Date.now() }, EFFECTIVE_JWT_SECRET, {
+    expiresIn: '24h',
+  });
 }
 
 export function getTokenAuthTime(token: string): number | null {
@@ -155,6 +163,27 @@ export function generateExpiredToken(payload: TokenPayload): string {
 
 export function generateRefreshToken(userId: string): string {
   return jwt.sign({ userId, type: 'refresh' }, EFFECTIVE_JWT_SECRET, { expiresIn: '7d' });
+}
+
+export function generateMfaChallengeToken(userId: string): string {
+  return jwt.sign(
+    { userId, type: MFA_CHALLENGE_TOKEN_TYPE, authTime: Date.now() },
+    EFFECTIVE_JWT_SECRET,
+    { expiresIn: '5m' },
+  );
+}
+
+export function verifyMfaChallengeToken(token: string, expectedUserId: string): boolean {
+  try {
+    const payload = jwt.verify(token, EFFECTIVE_JWT_SECRET) as {
+      userId?: unknown;
+      type?: unknown;
+    };
+
+    return payload.type === MFA_CHALLENGE_TOKEN_TYPE && payload.userId === expectedUserId;
+  } catch {
+    return false;
+  }
 }
 
 /**

@@ -3,7 +3,7 @@
 
 import { Router, type Request } from 'express';
 import { prisma } from '../lib/prisma.js';
-import { verifyPassword } from '../lib/auth.js';
+import { verifyMfaChallengeToken, verifyPassword } from '../lib/auth.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
 import { generateSecret, verify as verifyOtp, generateURI } from 'otplib';
 import QRCode from 'qrcode';
@@ -325,13 +325,15 @@ mfaRouter.post(
   '/verify',
   authRateLimiter,
   asyncHandler(async (req, res) => {
-    const { userId, code } = req.body;
+    const { userId, code, mfaChallengeToken } = req.body;
 
     if (typeof userId !== 'string' || !userId.trim() || typeof code !== 'string' || !code.trim()) {
       throw AppError.badRequest('User ID and code are required');
     }
     const normalizedUserId = userId.trim();
     const normalizedCode = code.trim();
+    const normalizedChallengeToken =
+      typeof mfaChallengeToken === 'string' ? mfaChallengeToken.trim() : '';
     const clientIp = getClientIp(req);
 
     if (!TOTP_CODE_PATTERN.test(normalizedCode)) {
@@ -346,6 +348,14 @@ mfaRouter.post(
         'ACCOUNT_LOCKED',
         { retryAfter: accountLockout.remainingSeconds, locked: true },
       );
+    }
+
+    if (
+      !normalizedChallengeToken ||
+      !verifyMfaChallengeToken(normalizedChallengeToken, normalizedUserId)
+    ) {
+      await recordFailedAuthAttempt(clientIp, normalizedUserId);
+      throw AppError.unauthorized('Invalid verification code');
     }
 
     // Get user's MFA secret
