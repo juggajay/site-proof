@@ -123,14 +123,8 @@ jobs:
 
           if (( ${#missing[@]} > 0 )); then
             message="Production preflight is not configured; missing GitHub secrets: ${missing[*]}"
-            if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-              echo "::error::$message"
-              exit 1
-            fi
-
-            echo "::warning::$message. Skipping integration checks for this automatic run."
-            echo "configured=false" >> "$GITHUB_OUTPUT"
-            exit 0
+            echo "::error::$message"
+            exit 1
           fi
 
           echo "configured=true" >> "$GITHUB_OUTPUT"
