@@ -1443,10 +1443,11 @@ test.describe('production readiness guardrails', () => {
     expect(productionPreflightWorkflow).toContain(
       'Production preflight is not configured; missing GitHub secrets',
     );
-    expect(productionPreflightWorkflow).toContain(
-      'if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then',
+    expect(productionPreflightWorkflow).toContain('echo "::error::$message"');
+    expect(productionPreflightWorkflow).not.toContain(
+      'Skipping integration checks for this automatic run',
     );
-    expect(productionPreflightWorkflow).toContain('configured=false');
+    expect(productionPreflightWorkflow).not.toContain('configured=false');
     expect(productionPreflightWorkflow).toContain(
       "if: steps.preflight-config.outputs.configured == 'true'",
     );
@@ -1619,6 +1620,8 @@ test.describe('production readiness guardrails', () => {
     expect(ciWorkflow).not.toContain('cd frontend &&');
 
     expect(ciWorkflow).not.toContain('run: npm run preflight:integrations');
+    expect(ciWorkflow).toContain('production-preflight\\.yml$');
+    expect(ciWorkflow.split('production-preflight\\.yml$').length - 1).toBeGreaterThanOrEqual(2);
     expect(productionPreflightWorkflow).toContain('schedule:');
     expect(productionPreflightWorkflow).toContain('branches: [main, master]');
     expect(productionPreflightWorkflow).toContain("inputs.environment || 'production'");
