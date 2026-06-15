@@ -45,6 +45,34 @@ describe('ncrWorkflowValidation', () => {
     }
   });
 
+  it('requires concession justification and risk assessment when closing with concession', () => {
+    const result = closeNcrSchema.safeParse({
+      withConcession: true,
+      concessionJustification: '  ',
+      concessionRiskAssessment: 'Accepted after engineering review',
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0]?.message).toBe(
+        'Concession justification is required when closing with concession',
+      );
+    }
+
+    const missingRisk = closeNcrSchema.safeParse({
+      withConcession: true,
+      concessionJustification: 'Approved by superintendent',
+      concessionRiskAssessment: '  ',
+    });
+
+    expect(missingRisk.success).toBe(false);
+    if (!missingRisk.success) {
+      expect(missingRisk.error.issues[0]?.message).toBe(
+        'Concession risk assessment is required when closing with concession',
+      );
+    }
+  });
+
   it('accepts blank recipient email as omitted', () => {
     const result = notifyClientSchema.parse({
       recipientEmail: '   ',
