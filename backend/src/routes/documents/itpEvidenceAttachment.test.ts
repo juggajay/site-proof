@@ -52,13 +52,35 @@ const user: AuthUser = {
   role: 'foreman',
 };
 
-function completionRecord(overrides: { lotId?: string | null; lotProjectId?: string | null } = {}) {
+function completionRecord(
+  overrides: {
+    lotId?: string | null;
+    lotProjectId?: string | null;
+    responsibleParty?: string | null;
+    templateSnapshot?: string | null;
+  } = {},
+) {
   const lotId = overrides.lotId === undefined ? 'lot-1' : overrides.lotId;
   const lotProjectId = overrides.lotProjectId === undefined ? 'project-1' : overrides.lotProjectId;
+  const responsibleParty =
+    overrides.responsibleParty === undefined ? 'contractor' : overrides.responsibleParty;
   return {
     id: 'completion-1',
+    checklistItemId: 'checklist-item-1',
+    checklistItem: {
+      id: 'checklist-item-1',
+      description: 'Inspect work',
+      sequenceNumber: 1,
+      pointType: 'standard',
+      responsibleParty,
+      evidenceRequired: 'none',
+      acceptanceCriteria: null,
+      testType: null,
+    },
     itpInstance: {
       lotId,
+      templateSnapshot:
+        overrides.templateSnapshot === undefined ? null : overrides.templateSnapshot,
       lot: lotId ? { projectId: lotProjectId } : null,
       template: { projectId: 'project-1' },
     },
@@ -205,6 +227,58 @@ describe('resolveItpEvidenceAttachmentTarget', () => {
         lotId: 'lot-1',
       }),
     ).rejects.toMatchObject({ statusCode: 403 });
+  });
+
+  it('rejects subcontractor uploads to hidden ITP checklist items', async () => {
+    mocks.completionFindUnique.mockResolvedValue(
+      completionRecord({ responsibleParty: 'superintendent' }),
+    );
+    mocks.isItpSubcontractorUser.mockReturnValue(true);
+
+    await expect(
+      resolveItpEvidenceAttachmentTarget(user, {
+        entityType: 'itp',
+        entityId: 'completion-1',
+        projectId: 'project-1',
+        lotId: 'lot-1',
+      }),
+    ).rejects.toMatchObject({
+      statusCode: 403,
+      message: 'ITP attachment write access required',
+    });
+  });
+
+  it('uses the ITP instance snapshot when checking subcontractor item visibility', async () => {
+    mocks.completionFindUnique.mockResolvedValue(
+      completionRecord({
+        responsibleParty: 'contractor',
+        templateSnapshot: JSON.stringify({
+          id: 'template-1',
+          name: 'Snapshot',
+          checklistItems: [
+            {
+              id: 'checklist-item-1',
+              description: 'Superintendent witness',
+              sequenceNumber: 1,
+              responsibleParty: 'superintendent',
+            },
+          ],
+        }),
+      }),
+    );
+    mocks.isItpSubcontractorUser.mockReturnValue(true);
+
+    await expect(
+      resolveItpEvidenceAttachmentTarget(user, {
+        entityType: 'itp',
+        entityId: 'completion-1',
+        projectId: 'project-1',
+        lotId: 'lot-1',
+      }),
+    ).rejects.toMatchObject({
+      statusCode: 403,
+      message: 'ITP attachment write access required',
+    });
   });
 
   it('falls back to the template project and forbids subcontractors when the instance has no lot', async () => {
