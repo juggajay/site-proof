@@ -571,6 +571,7 @@ model ITPCompletionAttachment {
   completion ITPCompletion @relation(fields: [completionId], references: [id], onDelete: Cascade)
   document   Document      @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
+  @@unique([completionId, documentId])
   @@map("itp_completion_attachments")
 }
 

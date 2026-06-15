@@ -281,7 +281,15 @@ completionAttachmentRoutes.post(
       });
     }
 
-    const existingAttachment = await prisma.iTPCompletionAttachment.findFirst({
+    const insertResult = await prisma.iTPCompletionAttachment.createMany({
+      data: {
+        completionId,
+        documentId: document.id,
+      },
+      skipDuplicates: true,
+    });
+
+    const attachment = await prisma.iTPCompletionAttachment.findFirstOrThrow({
       where: {
         completionId,
         documentId: document.id,
@@ -291,23 +299,9 @@ completionAttachmentRoutes.post(
       },
     });
 
-    if (existingAttachment) {
-      res.json(buildItpCompletionAttachmentResponse(existingAttachment));
-      return;
-    }
-
-    // Create the attachment link
-    const attachment = await prisma.iTPCompletionAttachment.create({
-      data: {
-        completionId,
-        documentId: document.id,
-      },
-      include: {
-        document: true,
-      },
-    });
-
-    res.status(201).json(buildItpCompletionAttachmentResponse(attachment));
+    res
+      .status(insertResult.count === 1 ? 201 : 200)
+      .json(buildItpCompletionAttachmentResponse(attachment));
   }),
 );
 
