@@ -176,6 +176,7 @@ export function getClaimReadDisputeNotes(disputeNotes: string | null | undefined
       if ('disputeNotes' in record) {
         return typeof record.disputeNotes === 'string' ? record.disputeNotes : null;
       }
+      return null;
     }
   } catch {
     // Plain-string dispute notes are the normal disputed-claim read shape.

@@ -116,11 +116,36 @@ describe('mapClaimListItem', () => {
     );
 
     expect(result.certifiedAt).toBe('2026-06-03T04:05:06.000Z');
+    expect(result.disputeNotes).toBeNull();
     expect(result.certification).toEqual({
       certifiedByName: 'Jane Principal',
       variationNotes: 'Variation approved',
       certificationDocumentId: 'doc-9',
     });
+  });
+
+  it('does not expose payment metadata JSON as dispute notes', () => {
+    const result = mapClaimListItem({
+      id: 'claim-paid-json',
+      claimNumber: 13,
+      claimPeriodStart: new Date('2026-05-01T10:00:00.000Z'),
+      claimPeriodEnd: new Date('2026-05-31T10:00:00.000Z'),
+      status: 'paid',
+      totalClaimedAmount: '1000',
+      certifiedAmount: '1000',
+      certifiedAt: new Date('2026-06-03T04:05:06.000Z'),
+      paidAmount: '1000',
+      submittedAt: new Date('2026-06-01T12:00:00.000Z'),
+      disputeNotes: JSON.stringify({
+        paymentHistory: [{ amount: 1000, recordedBy: 'user-internal-id' }],
+        lastPaymentNotes: 'Internal payment note',
+      }),
+      disputedAt: null,
+      _count: { claimedLots: 1 },
+    });
+
+    expect(result.disputeNotes).toBeNull();
+    expect(result.certification).toBeNull();
   });
 
   it('shows the embedded dispute reason while retaining parsed certification metadata', () => {
