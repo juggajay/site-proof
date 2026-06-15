@@ -96,6 +96,12 @@ export const MAX_RELEASE_TOKEN_LENGTH = 512;
 export const DATE_ONLY_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 export const DATE_COMPONENT_RE = /^(\d{4})-(\d{2})-(\d{2})(?:$|[T\s])/;
 export const TIME_24H_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+const BASE64_DATA_RE =
+  '(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{4}|[A-Za-z0-9+/]{3}=|[A-Za-z0-9+/]{2}==)';
+export const SIGNATURE_IMAGE_DATA_URL_RE = new RegExp(
+  `^data:image\\/(?:png|jpe?g|webp);base64,${BASE64_DATA_RE}$`,
+  'i',
+);
 export const RELEASE_METHODS = ['digital', 'email', 'paper'] as const;
 
 export const requiredIdSchema = (fieldName: string) =>
@@ -152,6 +158,14 @@ export const optionalReleaseMethodSchema = z.preprocess((value) => {
   return trimmed.length > 0 ? trimmed : undefined;
 }, z.enum(RELEASE_METHODS).optional());
 
+export const nullableSignatureDataUrlSchema = nullableTrimmedStringSchema(
+  MAX_SIGNATURE_DATA_URL_LENGTH,
+  'signatureDataUrl',
+).refine(
+  (value) => value === null || value === undefined || SIGNATURE_IMAGE_DATA_URL_RE.test(value),
+  'signatureDataUrl must be a base64 PNG, JPEG, or WebP image data URL',
+);
+
 export const nullableScheduledDateSchema = nullableTrimmedStringSchema(
   MAX_DATE_INPUT_LENGTH,
   'scheduledDate',
@@ -199,7 +213,7 @@ export const releaseHoldPointSchema = z.object({
   releaseTime: nullableReleaseTimeSchema,
   releaseMethod: optionalReleaseMethodSchema,
   releaseNotes: optionalTrimmedStringSchema(MAX_NOTE_LENGTH, 'releaseNotes'),
-  signatureDataUrl: nullableTrimmedStringSchema(MAX_SIGNATURE_DATA_URL_LENGTH, 'signatureDataUrl'),
+  signatureDataUrl: nullableSignatureDataUrlSchema,
   releaseEvidenceDocumentId: optionalTrimmedStringSchema(
     MAX_ID_LENGTH,
     'releaseEvidenceDocumentId',
@@ -225,7 +239,7 @@ export const publicReleaseSchema = z.object({
   releasedByName: requiredTrimmedStringSchema('Released by name', MAX_NAME_LENGTH),
   releasedByOrg: optionalTrimmedStringSchema(MAX_ORG_LENGTH, 'releasedByOrg'),
   releaseNotes: optionalTrimmedStringSchema(MAX_NOTE_LENGTH, 'releaseNotes'),
-  signatureDataUrl: nullableTrimmedStringSchema(MAX_SIGNATURE_DATA_URL_LENGTH, 'signatureDataUrl'),
+  signatureDataUrl: nullableSignatureDataUrlSchema,
 });
 
 // =============================================================================
