@@ -149,6 +149,14 @@ function errorResponse(status: number, text: string): Response {
   return new Response(text, { status });
 }
 
+function expectDiarySubmitSynced(result: unknown, itemId: number, diaryId: string): void {
+  expect(result).toEqual({ status: 'synced' });
+  expect(markSyncItemErrorMock).not.toHaveBeenCalled();
+  expect(markDiarySyncErrorMock).not.toHaveBeenCalled();
+  expect(removeSyncQueueItemMock).toHaveBeenCalledWith(itemId);
+  expect(markDiarySyncedMock).toHaveBeenCalledWith(diaryId);
+}
+
 // The photo_upload executor reads its in-memory base64 dataUrl via the global
 // `fetch` (NOT authFetch) and calls `.blob()` on it. jsdom's Blob lacks a
 // `.stream()` method, so wrapping a real Blob in a real Response throws; mirror
@@ -384,11 +392,20 @@ describe('syncSingleItem — diary', () => {
       queueItem({ id: 21, type: 'diary_submit', data: { diaryId: 'd-3' } }),
     );
 
-    expect(result).toEqual({ status: 'synced' });
-    expect(markSyncItemErrorMock).not.toHaveBeenCalled();
-    expect(markDiarySyncErrorMock).not.toHaveBeenCalled();
-    expect(removeSyncQueueItemMock).toHaveBeenCalledWith(21);
-    expect(markDiarySyncedMock).toHaveBeenCalledWith('d-3');
+    expectDiarySubmitSynced(result, 21, 'd-3');
+  });
+
+  it('diary_submit treats an already submitted server diary as synced after a lost response', async () => {
+    diariesGetMock.mockResolvedValue({ id: 'd-3b' });
+    syncOfflineDiarySnapshotMock.mockResolvedValue('server-d-3b');
+    authFetchMock.mockResolvedValue(errorResponse(400, 'Cannot modify submitted diary'));
+    readResponseErrorMock.mockResolvedValue('Cannot modify submitted diary');
+
+    const result = await syncSingleItem(
+      queueItem({ id: 22, type: 'diary_submit', data: { diaryId: 'd-3b' } }),
+    );
+
+    expectDiarySubmitSynced(result, 22, 'd-3b');
   });
 
   it('diary_submit other error returns "handled" and error-marks item + diary', async () => {
