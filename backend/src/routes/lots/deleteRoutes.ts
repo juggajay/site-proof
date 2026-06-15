@@ -27,10 +27,12 @@ lotDeleteRouter.delete(
     const lot = await prisma.lot.findUnique({
       where: { id },
       include: {
-        // Check for actual hold point records that aren't released
+        // Fetch all hold point records: unreleased records block active work,
+        // released records block deletion because release evidence is retained.
         holdPoints: {
-          where: {
-            status: { not: 'released' },
+          select: {
+            id: true,
+            status: true,
           },
         },
         // Also check for ITP instances with hold point items (virtual hold points)
@@ -108,10 +110,7 @@ lotDeleteRouter.post(
         lotNumber: true,
         status: true,
         holdPoints: {
-          where: {
-            status: { not: 'released' },
-          },
-          select: { id: true },
+          select: { id: true, status: true },
         },
         itpInstance: {
           select: {
