@@ -163,7 +163,8 @@ export function createClaimEvidenceRouter({
                 }
               : null,
             claimAmount: claimedLot.amountClaimed ? Number(claimedLot.amountClaimed) : 0,
-            percentComplete: claimedLot.percentageComplete || 100,
+            percentComplete:
+              claimedLot.percentageComplete === null ? 100 : Number(claimedLot.percentageComplete),
 
             // ITP data
             itp: itpInstance
