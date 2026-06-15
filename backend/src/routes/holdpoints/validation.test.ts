@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { AppError } from '../../lib/AppError.js';
-import { MAX_ID_LENGTH, MAX_RELEASE_TOKEN_LENGTH, parseHoldPointRouteParam } from './validation.js';
+import {
+  MAX_ID_LENGTH,
+  MAX_RELEASE_TOKEN_LENGTH,
+  parseHoldPointRouteParam,
+  publicReleaseSchema,
+  releaseHoldPointSchema,
+} from './validation.js';
 
 function captureError(fn: () => unknown): AppError {
   try {
@@ -60,5 +66,45 @@ describe('parseHoldPointRouteParam (pure, DB-free)', () => {
     // The token bound is intentionally larger than the default id bound, so the
     // long (valid) token above only passes because the custom maxLength is used.
     expect(longToken.length).toBeGreaterThan(MAX_ID_LENGTH);
+  });
+});
+
+describe('hold point release signature validation (pure, DB-free)', () => {
+  const validSignature = 'data:image/png;base64,ZmFrZS1zaWduYXR1cmU=';
+
+  it('accepts browser-generated image signature data URLs', () => {
+    expect(
+      releaseHoldPointSchema.safeParse({
+        releaseMethod: 'digital',
+        signatureDataUrl: validSignature,
+      }).success,
+    ).toBe(true);
+
+    expect(
+      publicReleaseSchema.safeParse({
+        releasedByName: 'External Superintendent',
+        signatureDataUrl: validSignature,
+      }).success,
+    ).toBe(true);
+  });
+
+  it('rejects non-image or non-data-url signature values', () => {
+    const invalidSignatures = [
+      'not-a-data-url',
+      'https://example.invalid/signature.png',
+      'data:text/html;base64,PHNjcmlwdD5hPC9zY3JpcHQ=',
+      'data:image/svg+xml;base64,PHN2Zy8+',
+      'data:image/png;base64,',
+    ];
+
+    for (const signatureDataUrl of invalidSignatures) {
+      expect(releaseHoldPointSchema.safeParse({ signatureDataUrl }).success).toBe(false);
+      expect(
+        publicReleaseSchema.safeParse({
+          releasedByName: 'External Superintendent',
+          signatureDataUrl,
+        }).success,
+      ).toBe(false);
+    }
   });
 });
