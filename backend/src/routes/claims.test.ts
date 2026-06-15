@@ -2137,6 +2137,37 @@ describe('Progress Claims API', () => {
       expect(Array.isArray(res.body.lots)).toBe(true);
     });
 
+    it('preserves a zero claimed percentage in the evidence package', async () => {
+      const claimedLot = await prisma.claimedLot.findFirstOrThrow({
+        where: { claimId: evidenceClaimId },
+      });
+      await prisma.claimedLot.update({
+        where: { id: claimedLot.id },
+        data: {
+          amountClaimed: 0,
+          percentageComplete: 0,
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .get(`/api/projects/${projectId}/claims/${evidenceClaimId}/evidence-package`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.lots[0].claimAmount).toBe(0);
+        expect(res.body.lots[0].percentComplete).toBe(0);
+      } finally {
+        await prisma.claimedLot.update({
+          where: { id: claimedLot.id },
+          data: {
+            amountClaimed: 2000,
+            percentageComplete: 100,
+          },
+        });
+      }
+    });
+
     it('should get claim evidence review data with readiness-shaped buckets', async () => {
       const res = await request(app)
         .get(`/api/projects/${projectId}/claims/${evidenceClaimId}/completeness-check`)
