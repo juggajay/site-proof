@@ -182,9 +182,9 @@ export function verifyPassword(password: string, hash: string): boolean {
       .createHash('sha256')
       .update(password + EFFECTIVE_JWT_SECRET)
       .digest('hex');
-    if (sha256Hash === hash) {
-      // Log that this user needs password rehash (for monitoring migration progress)
-      logInfo('[AUTH] Legacy SHA256 hash verified - user should be prompted to update password');
+    if (crypto.timingSafeEqual(Buffer.from(sha256Hash, 'hex'), Buffer.from(hash, 'hex'))) {
+      // Track remaining legacy-hash authentication during the migration period.
+      logInfo('[AUTH] Legacy SHA256 hash verified');
       return true;
     }
   }
