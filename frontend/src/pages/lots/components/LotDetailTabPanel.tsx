@@ -106,6 +106,18 @@ export function LotDetailTabPanel({
   loadingHistory,
 }: LotDetailTabPanelProps) {
   const navigate = useNavigate();
+  const lotDocumentsPath = (() => {
+    const params = new URLSearchParams();
+    if (lotId) params.set('lotId', lotId);
+    const query = params.toString();
+    return `/projects/${encodeURIComponent(projectId || '')}/documents${query ? `?${query}` : ''}`;
+  })();
+  const lotDocumentsUploadPath = (() => {
+    const params = new URLSearchParams();
+    if (lotId) params.set('lotId', lotId);
+    params.set('upload', '1');
+    return `/projects/${encodeURIComponent(projectId || '')}/documents?${params.toString()}`;
+  })();
 
   return (
     <div
@@ -214,17 +226,30 @@ export function LotDetailTabPanel({
         <div className="space-y-4 animate-in fade-in duration-200">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold">Documents</h2>
-            <button className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90">
+            <button
+              type="button"
+              onClick={() => navigate(lotDocumentsUploadPath)}
+              disabled={!projectId}
+              className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+            >
               Upload Document
             </button>
           </div>
           <div className="rounded-lg border p-6 text-center">
             <div className="text-4xl mb-2">📄</div>
-            <h3 className="text-lg font-semibold mb-2">No Documents</h3>
-            <p className="text-muted-foreground">
-              No documents have been attached to this lot yet. Upload drawings, specifications, or
-              other documents.
+            <h3 className="text-lg font-semibold mb-2">Lot Documents</h3>
+            <p className="mx-auto max-w-xl text-muted-foreground">
+              View drawings, specifications, photos, certificates, and other project documents
+              filtered to this lot in the Documents register.
             </p>
+            <button
+              type="button"
+              onClick={() => navigate(lotDocumentsPath)}
+              disabled={!projectId}
+              className="mt-4 rounded-lg border px-4 py-2 text-sm font-medium hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              View Lot Documents
+            </button>
           </div>
         </div>
       )}
