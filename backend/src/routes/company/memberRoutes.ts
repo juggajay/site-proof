@@ -9,6 +9,7 @@ import { assertCanRemoveUserFromProjectAdminRoles } from '../../lib/projectAdmin
 import { logError } from '../../lib/serverLogger.js';
 import { AuditAction, createAuditLog } from '../../lib/auditLog.js';
 import { sendCompanyMemberInvitationEmail } from '../../lib/email.js';
+import { TIER_USER_LIMITS } from '../../lib/tierLimits.js';
 import {
   buildCompanyLeftResponse,
   buildCompanyMemberInvitedResponse,
@@ -175,9 +176,16 @@ companyMemberRoutes.post(
         throw AppError.forbidden('Only company owners and admins can invite company members');
       }
 
+      await tx.$queryRaw`
+        SELECT id
+        FROM companies
+        WHERE id = ${companyId}
+        FOR UPDATE
+      `;
+
       const company = await tx.company.findUnique({
         where: { id: companyId },
-        select: { id: true, name: true },
+        select: { id: true, name: true, subscriptionTier: true },
       });
 
       if (!company) {
@@ -220,6 +228,21 @@ companyMemberRoutes.post(
 
       if (existingUser?.roleInCompany === 'owner') {
         throw AppError.badRequest('Company owners are managed through ownership transfer');
+      }
+
+      const consumesSeat = !existingUser || existingUser.companyId !== companyId;
+      if (consumesSeat) {
+        const tier = company.subscriptionTier || 'basic';
+        const userLimit = TIER_USER_LIMITS[tier] ?? TIER_USER_LIMITS.basic;
+
+        if (Number.isFinite(userLimit)) {
+          const userCount = await tx.user.count({ where: { companyId } });
+          if (userCount >= userLimit) {
+            throw AppError.forbidden(
+              `Your ${tier} subscription allows up to ${userLimit} users. Upgrade your plan or remove a member before inviting another user.`,
+            );
+          }
+        }
       }
 
       const member = existingUser
