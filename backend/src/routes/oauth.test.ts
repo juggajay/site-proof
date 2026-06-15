@@ -14,6 +14,7 @@ app.use(errorHandler);
 
 // Store original env vars to restore later
 const originalEnv = { ...process.env };
+const originalFetch = global.fetch;
 const testStartedAt = new Date();
 
 function hashOAuthStateForTest(state: string): string {
@@ -102,12 +103,15 @@ describe('OAuth Routes', () => {
     process.env.GOOGLE_CLIENT_ID = 'test-client-id.apps.googleusercontent.com';
     process.env.GOOGLE_CLIENT_SECRET = 'test-client-secret';
     process.env.GOOGLE_REDIRECT_URI = 'http://localhost:4007/api/auth/google/callback';
+    process.env.ALLOW_TEST_GOOGLE_CREDENTIALS = 'true';
     delete process.env.ALLOW_MOCK_OAUTH;
   });
 
   afterEach(() => {
     // Restore original env vars
     process.env = { ...originalEnv };
+    global.fetch = originalFetch;
+    vi.restoreAllMocks();
   });
 
   afterAll(async () => {
@@ -756,6 +760,39 @@ describe('OAuth Routes', () => {
       expect(JSON.stringify(registrationChanges)).not.toMatch(/token|secret|credential|code/i);
     });
 
+    it('should reject unsigned Google credentials unless test fixture mode is enabled', async () => {
+      delete process.env.ALLOW_TEST_GOOGLE_CREDENTIALS;
+      const forgedEmail = `oauth-forged-${Date.now()}@example.com`;
+      global.fetch = vi.fn().mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        statusText: 'Bad Request',
+      } as Response);
+
+      const header = Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).toString('base64');
+      const payload = Buffer.from(
+        JSON.stringify({
+          sub: `google_${Date.now()}`,
+          email: forgedEmail,
+          name: 'Forged OAuth User',
+          email_verified: true,
+          aud: process.env.GOOGLE_CLIENT_ID,
+        }),
+      ).toString('base64');
+      const signature = Buffer.from('unsigned-test-signature').toString('base64');
+      const credential = `${header}.${payload}.${signature}`;
+
+      const res = await request(app).post('/api/auth/google/token').send({ credential });
+
+      expect(res.status).toBe(401);
+      expect(res.body.error.message).toContain('Invalid Google credential');
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining('https://oauth2.googleapis.com/tokeninfo?id_token='),
+        expect.any(Object),
+      );
+      await expect(prisma.user.findUnique({ where: { email: forgedEmail } })).resolves.toBeNull();
+    });
+
     it('should update existing user with OAuth provider info', async () => {
       // Create a user first
       const existingUser = await prisma.user.create({
@@ -963,7 +1000,7 @@ describe('OAuth Routes', () => {
           sub: `google_${Date.now()}`,
           email: `unverified-${Date.now()}@example.com`,
           email_verified: false,
-          aud: 'different-client-id',
+          aud: process.env.GOOGLE_CLIENT_ID,
         }),
       ).toString('base64');
       const signature = Buffer.from('mock-signature').toString('base64');
@@ -971,7 +1008,7 @@ describe('OAuth Routes', () => {
 
       const res = await request(app)
         .post('/api/auth/google/token')
-        .send({ credential, clientId: 'different-client-id' });
+        .send({ credential, clientId: process.env.GOOGLE_CLIENT_ID });
 
       expect(res.status).toBe(400);
       expect(res.body.error.message).toContain('email is not verified');
@@ -998,14 +1035,13 @@ describe('OAuth Routes', () => {
       expect(res.body.error.message).toContain('Invalid email address');
     });
 
-    it('should allow mismatched client ID in development', async () => {
-      process.env.NODE_ENV = 'development';
-
+    it('should reject mismatched client ID in test fixture credentials', async () => {
       const header = Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).toString('base64');
+      const email = `oauth-mismatch-${Date.now()}@example.com`;
       const payload = Buffer.from(
         JSON.stringify({
           sub: `google_dev_${Date.now()}`,
-          email: `oauth-dev-${Date.now()}@example.com`,
+          email,
           name: 'Dev User',
           email_verified: true,
           aud: 'different-client-id',
@@ -1016,14 +1052,9 @@ describe('OAuth Routes', () => {
 
       const res = await request(app).post('/api/auth/google/token').send({ credential });
 
-      expect(res.status).toBe(200);
-      expect(res.body.user).toBeDefined();
-      expect(res.body.token).toBeDefined();
-
-      // Cleanup
-      await prisma.user.delete({ where: { id: res.body.user.id } }).catch(() => {});
-
-      process.env.NODE_ENV = 'test';
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toContain('Invalid client ID');
+      await expect(prisma.user.findUnique({ where: { email } })).resolves.toBeNull();
     });
   });
 

@@ -198,9 +198,7 @@ oauthRouter.get(
   }),
 );
 
-async function verifyProductionGoogleCredential(
-  credential: string,
-): Promise<GoogleCredentialPayload> {
+async function verifyGoogleCredential(credential: string): Promise<GoogleCredentialPayload> {
   const response = await fetchWithTimeout(
     `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`,
   );
@@ -215,24 +213,25 @@ async function verifyProductionGoogleCredential(
   return (await response.json()) as GoogleCredentialPayload;
 }
 
+function isTestGoogleCredentialFixtureEnabled(): boolean {
+  return process.env.NODE_ENV === 'test' && process.env.ALLOW_TEST_GOOGLE_CREDENTIALS === 'true';
+}
+
 function validateGoogleCredentialPayload(
   payload: GoogleCredentialPayload,
 ): Required<Pick<GoogleCredentialPayload, 'sub' | 'email'>> & GoogleCredentialPayload {
-  const expectedClientId = process.env.GOOGLE_CLIENT_ID;
+  const expectedClientId = process.env.GOOGLE_CLIENT_ID?.trim();
 
-  if (process.env.NODE_ENV === 'production' && !expectedClientId) {
+  if (!expectedClientId) {
     throw AppError.internal('Google OAuth is not configured');
   }
 
   if (expectedClientId && payload.aud !== expectedClientId) {
     logWarn('[OAuth] Client ID mismatch:', payload.aud, 'vs', expectedClientId);
-    if (process.env.NODE_ENV === 'production') {
-      throw AppError.badRequest('Invalid client ID');
-    }
+    throw AppError.badRequest('Invalid client ID');
   }
 
   if (
-    process.env.NODE_ENV === 'production' &&
     payload.iss &&
     !['accounts.google.com', 'https://accounts.google.com'].includes(payload.iss)
   ) {
@@ -256,10 +255,9 @@ function validateGoogleCredentialPayload(
 }
 
 async function getGoogleCredentialPayload(credential: string) {
-  const payload =
-    process.env.NODE_ENV === 'production'
-      ? await verifyProductionGoogleCredential(credential)
-      : decodeJwtPayload(credential);
+  const payload = isTestGoogleCredentialFixtureEnabled()
+    ? decodeJwtPayload(credential)
+    : await verifyGoogleCredential(credential);
 
   return validateGoogleCredentialPayload(payload);
 }
