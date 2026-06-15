@@ -14,6 +14,48 @@ app.use('/api/auth', authRouter);
 app.use('/api/lots', lotsRouter);
 app.use(errorHandler);
 
+async function createLotWithReleasedHoldPoint(projectId: string, lotNumber: string) {
+  const template = await prisma.iTPTemplate.create({
+    data: {
+      projectId,
+      name: `Released HP Template ${lotNumber}`,
+      activityType: 'Earthworks',
+    },
+  });
+  const checklistItem = await prisma.iTPChecklistItem.create({
+    data: {
+      templateId: template.id,
+      sequenceNumber: 1,
+      description: 'Released hold point',
+      pointType: 'hold_point',
+    },
+  });
+  const lot = await prisma.lot.create({
+    data: {
+      projectId,
+      lotNumber,
+      lotType: 'roadworks',
+      activityType: 'Earthworks',
+      status: 'in_progress',
+    },
+  });
+  await prisma.holdPoint.create({
+    data: {
+      lotId: lot.id,
+      itpChecklistItemId: checklistItem.id,
+      pointType: 'hold_point',
+      description: 'Released hold point',
+      status: 'released',
+      releasedAt: new Date(),
+      releasedByName: 'External Superintendent',
+      releasedByOrg: 'Client Org',
+      releaseMethod: 'email',
+      releaseNotes: 'Evidence accepted',
+    },
+  });
+  return lot;
+}
+
 describe('Lots API', () => {
   let authToken: string;
   let userId: string;
@@ -2499,6 +2541,30 @@ describe('Lots API', () => {
       const stillExists = await prisma.lot.findUnique({ where: { id: lot.id } });
       expect(stillExists).not.toBeNull();
     });
+
+    it('rejects deleting a lot that has released hold-point evidence', async () => {
+      const lot = await createLotWithReleasedHoldPoint(
+        projectId,
+        `LOT-DEL-RELEASED-HP-${Date.now()}`,
+      );
+
+      const res = await request(app)
+        .delete(`/api/lots/${lot.id}`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toBe(
+        'This lot has 1 released hold point(s). Released hold point evidence must be retained; archive the lot instead of deleting it.',
+      );
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+      expect(res.body.error.details).toEqual({
+        code: 'RELEASED_HOLD_POINTS',
+        releasedHoldPoints: 1,
+      });
+
+      const stillExists = await prisma.lot.findUnique({ where: { id: lot.id } });
+      expect(stillExists).not.toBeNull();
+    });
   });
 });
 
@@ -3199,6 +3265,28 @@ describe('Lot Bulk Operations', () => {
       );
       expect(res.body.error.code).toBe('VALIDATION_ERROR');
       expect(res.body.error.details).toEqual({ code: 'HAS_DOCKET_ALLOCATIONS' });
+
+      const stillExists = await prisma.lot.findUnique({ where: { id: lot.id } });
+      expect(stillExists).not.toBeNull();
+    });
+
+    it('rejects a bulk delete that includes released hold-point evidence', async () => {
+      const lot = await createLotWithReleasedHoldPoint(
+        projectId,
+        `BULK-DEL-RELEASED-HP-${Date.now()}`,
+      );
+
+      const res = await request(app)
+        .post('/api/lots/bulk-delete')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ lotIds: [lot.id] });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toBe(
+        `Cannot delete 1 lot(s) with released hold points: ${lot.lotNumber}`,
+      );
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+      expect(res.body.error.details).toEqual({ code: 'RELEASED_HOLD_POINTS' });
 
       const stillExists = await prisma.lot.findUnique({ where: { id: lot.id } });
       expect(stillExists).not.toBeNull();
