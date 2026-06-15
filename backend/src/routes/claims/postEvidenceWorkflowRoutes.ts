@@ -40,6 +40,7 @@ interface ClaimWorkflowRouterDependencies {
 }
 
 async function getProjectCertificationDocumentId(
+  client: Pick<typeof prisma, 'document'>,
   projectId: string,
   documentId: string | undefined,
 ): Promise<string | undefined> {
@@ -53,7 +54,7 @@ async function getProjectCertificationDocumentId(
     return undefined;
   }
 
-  const document = await prisma.document.findFirst({
+  const document = await client.document.findFirst({
     where: { id: normalized, projectId },
     select: { id: true },
   });
@@ -99,75 +100,95 @@ export function createClaimPostEvidenceWorkflowRouter({
       const certifiedAt =
         parseOptionalClaimDate(certificationDate, 'certificationDate') ?? new Date();
 
-      // Get the claim
-      const claim = await prisma.progressClaim.findFirst({
-        where: { id: claimId, projectId },
-        include: {
-          project: { select: { id: true, name: true } },
-        },
-      });
+      const certificationResult = await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`
+        SELECT id
+        FROM progress_claims
+        WHERE id = ${claimId} AND project_id = ${projectId}
+        FOR UPDATE
+      `;
 
-      if (!claim) {
-        throw AppError.notFound('Claim');
-      }
-
-      // Only allow certification of submitted claims
-      if (claim.status !== 'submitted' && claim.status !== 'disputed') {
-        throw AppError.badRequest(
-          `Can only certify submitted or disputed claims. Current status: ${claim.status}`,
-        );
-      }
-
-      assertCertifiedAmountWithinClaimTotal(certifiedAmount, claim.totalClaimedAmount);
-
-      const previousStatus = claim.status;
-
-      // Create certification document record if URL provided
-      let certDocId = await getProjectCertificationDocumentId(
-        projectId,
-        validation.data.certificationDocumentId,
-      );
-      if (certificationDocumentUrl && !certDocId) {
-        const certDoc = await prisma.document.create({
-          data: {
-            projectId,
-            documentType: 'certificate',
-            category: 'certification',
-            filename: sanitizeCertificationDocumentFilename(
-              certificationDocumentFilename,
-              claim.claimNumber,
-            ),
-            fileUrl: certificationDocumentUrl,
-            uploadedById: userId,
-            caption: `Certification document for Claim #${claim.claimNumber}`,
+        // Get the claim while holding the row lock so concurrent certify
+        // requests see the committed status transition.
+        const claim = await tx.progressClaim.findFirst({
+          where: { id: claimId, projectId },
+          include: {
+            project: { select: { id: true, name: true } },
           },
         });
-        certDocId = certDoc.id;
-      }
 
-      const certificationMetadata =
-        variationNotes || certDocId
-          ? JSON.stringify({
-              variationNotes: variationNotes || null,
-              certificationDocumentId: certDocId || null,
-              certifiedBy: userId,
-            })
-          : claim.disputeNotes;
+        if (!claim) {
+          throw AppError.notFound('Claim');
+        }
 
-      // Update the claim with certification details
-      const updatedClaim = await prisma.progressClaim.update({
-        where: { id: claimId },
-        data: {
-          status: 'certified',
-          certifiedAmount: certifiedAmount,
-          certifiedAt,
-          // Store variation notes and document reference in disputeNotes field as JSON.
-          disputeNotes: certificationMetadata,
-        },
-        include: {
-          claimedLots: true,
-        },
+        // Only allow certification of submitted claims
+        if (claim.status !== 'submitted' && claim.status !== 'disputed') {
+          throw AppError.badRequest(
+            `Can only certify submitted or disputed claims. Current status: ${claim.status}`,
+          );
+        }
+
+        assertCertifiedAmountWithinClaimTotal(certifiedAmount, claim.totalClaimedAmount);
+
+        const previousStatus = claim.status;
+
+        // Create certification document record if URL provided
+        let certDocId = await getProjectCertificationDocumentId(
+          tx,
+          projectId,
+          validation.data.certificationDocumentId,
+        );
+        if (certificationDocumentUrl && !certDocId) {
+          const certDoc = await tx.document.create({
+            data: {
+              projectId,
+              documentType: 'certificate',
+              category: 'certification',
+              filename: sanitizeCertificationDocumentFilename(
+                certificationDocumentFilename,
+                claim.claimNumber,
+              ),
+              fileUrl: certificationDocumentUrl,
+              uploadedById: userId,
+              caption: `Certification document for Claim #${claim.claimNumber}`,
+            },
+          });
+          certDocId = certDoc.id;
+        }
+
+        const certificationMetadata =
+          variationNotes || certDocId
+            ? JSON.stringify({
+                variationNotes: variationNotes || null,
+                certificationDocumentId: certDocId || null,
+                certifiedBy: userId,
+              })
+            : claim.disputeNotes;
+
+        // Update the claim with certification details
+        const updatedClaim = await tx.progressClaim.update({
+          where: { id: claimId },
+          data: {
+            status: 'certified',
+            certifiedAmount: certifiedAmount,
+            certifiedAt,
+            // Store variation notes and document reference in disputeNotes field as JSON.
+            disputeNotes: certificationMetadata,
+          },
+          include: {
+            claimedLots: true,
+          },
+        });
+
+        return {
+          claim,
+          updatedClaim,
+          previousStatus,
+          certDocId,
+        };
       });
+
+      const { claim, updatedClaim, previousStatus, certDocId } = certificationResult;
 
       // Send notifications to project managers
       try {
