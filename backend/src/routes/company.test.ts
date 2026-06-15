@@ -1342,6 +1342,211 @@ describe('Company API', () => {
       expect(res.status).toBe(409);
       expect(res.body.error.message).toContain('already belongs to another company');
     });
+
+    it('rejects new company member invites that exceed the subscription seat limit', async () => {
+      const limitedCompany = await prisma.company.create({
+        data: {
+          name: `Seat Limited Company ${Date.now()}`,
+          subscriptionTier: 'basic',
+        },
+      });
+      invitedCompanyIds.push(limitedCompany.id);
+
+      const ownerRes = await request(app)
+        .post('/api/auth/register')
+        .send({
+          email: `seat-limit-owner-${Date.now()}@example.com`,
+          password: 'SecureP@ssword123!',
+          fullName: 'Seat Limit Owner',
+          tosAccepted: true,
+        });
+      invitedUserIds.push(ownerRes.body.user.id);
+
+      await prisma.user.update({
+        where: { id: ownerRes.body.user.id },
+        data: { companyId: limitedCompany.id, roleInCompany: 'owner' },
+      });
+
+      for (let index = 0; index < 4; index += 1) {
+        const member = await prisma.user.create({
+          data: {
+            email: `seat-limit-member-${Date.now()}-${index}@example.com`,
+            fullName: `Seat Limit Member ${index}`,
+            companyId: limitedCompany.id,
+            roleInCompany: 'foreman',
+            emailVerified: true,
+            emailVerifiedAt: new Date(),
+          },
+        });
+        invitedUserIds.push(member.id);
+      }
+
+      const overLimitEmail = `seat-limit-over-${Date.now()}@example.com`;
+      const res = await request(app)
+        .post('/api/company/members/invite')
+        .set('Authorization', `Bearer ${ownerRes.body.token}`)
+        .send({ email: overLimitEmail, roleInCompany: 'site_engineer' });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.message).toContain('basic subscription allows up to 5 users');
+      await expect(prisma.user.findUnique({ where: { email: overLimitEmail } })).resolves.toBe(
+        null,
+      );
+    });
+
+    it('allows updating an existing company member at the subscription seat limit', async () => {
+      const limitedCompany = await prisma.company.create({
+        data: {
+          name: `Seat Limit Existing Member Company ${Date.now()}`,
+          subscriptionTier: 'basic',
+        },
+      });
+      invitedCompanyIds.push(limitedCompany.id);
+
+      const ownerRes = await request(app)
+        .post('/api/auth/register')
+        .send({
+          email: `seat-existing-owner-${Date.now()}@example.com`,
+          password: 'SecureP@ssword123!',
+          fullName: 'Seat Existing Owner',
+          tosAccepted: true,
+        });
+      invitedUserIds.push(ownerRes.body.user.id);
+
+      await prisma.user.update({
+        where: { id: ownerRes.body.user.id },
+        data: { companyId: limitedCompany.id, roleInCompany: 'owner' },
+      });
+
+      const existingMember = await prisma.user.create({
+        data: {
+          email: `seat-existing-member-${Date.now()}@example.com`,
+          fullName: 'Seat Existing Member',
+          companyId: limitedCompany.id,
+          roleInCompany: 'foreman',
+          emailVerified: true,
+          emailVerifiedAt: new Date(),
+        },
+      });
+      invitedUserIds.push(existingMember.id);
+
+      for (let index = 0; index < 3; index += 1) {
+        const member = await prisma.user.create({
+          data: {
+            email: `seat-existing-fill-${Date.now()}-${index}@example.com`,
+            fullName: `Seat Existing Fill ${index}`,
+            companyId: limitedCompany.id,
+            roleInCompany: 'foreman',
+            emailVerified: true,
+            emailVerifiedAt: new Date(),
+          },
+        });
+        invitedUserIds.push(member.id);
+      }
+
+      const res = await request(app)
+        .post('/api/company/members/invite')
+        .set('Authorization', `Bearer ${ownerRes.body.token}`)
+        .send({ email: existingMember.email, roleInCompany: 'site_engineer' });
+
+      expect(res.status).toBe(201);
+      expect(res.body.member.id).toBe(existingMember.id);
+      expect(res.body.member.roleInCompany).toBe('site_engineer');
+      await expect(prisma.user.count({ where: { companyId: limitedCompany.id } })).resolves.toBe(5);
+    });
+
+    it('serializes concurrent member invites against the subscription seat limit', async () => {
+      const limitedCompany = await prisma.company.create({
+        data: {
+          name: `Concurrent Seat Limited Company ${Date.now()}`,
+          subscriptionTier: 'basic',
+        },
+      });
+      invitedCompanyIds.push(limitedCompany.id);
+
+      const ownerRes = await request(app)
+        .post('/api/auth/register')
+        .send({
+          email: `seat-race-owner-${Date.now()}@example.com`,
+          password: 'SecureP@ssword123!',
+          fullName: 'Seat Race Owner',
+          tosAccepted: true,
+        });
+      invitedUserIds.push(ownerRes.body.user.id);
+
+      await prisma.user.update({
+        where: { id: ownerRes.body.user.id },
+        data: { companyId: limitedCompany.id, roleInCompany: 'owner' },
+      });
+
+      for (let index = 0; index < 3; index += 1) {
+        const member = await prisma.user.create({
+          data: {
+            email: `seat-race-member-${Date.now()}-${index}@example.com`,
+            fullName: `Seat Race Member ${index}`,
+            companyId: limitedCompany.id,
+            roleInCompany: 'foreman',
+            emailVerified: true,
+            emailVerifiedAt: new Date(),
+          },
+        });
+        invitedUserIds.push(member.id);
+      }
+
+      const inviteEmails = [
+        `seat-race-a-${Date.now()}@example.com`,
+        `seat-race-b-${Date.now()}@example.com`,
+      ];
+
+      await prisma.$executeRaw`
+        CREATE OR REPLACE FUNCTION test_delay_company_member_invite_insert()
+        RETURNS trigger AS $$
+        BEGIN
+          PERFORM pg_sleep(0.2);
+          RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+      `;
+      await prisma.$executeRaw`
+        DROP TRIGGER IF EXISTS test_delay_company_member_invite_insert_trigger ON users
+      `;
+      await prisma.$executeRaw`
+        CREATE TRIGGER test_delay_company_member_invite_insert_trigger
+        BEFORE INSERT ON users
+        FOR EACH ROW
+        EXECUTE FUNCTION test_delay_company_member_invite_insert();
+      `;
+
+      try {
+        const responses = await Promise.all(
+          inviteEmails.map((email) =>
+            request(app)
+              .post('/api/company/members/invite')
+              .set('Authorization', `Bearer ${ownerRes.body.token}`)
+              .send({ email, roleInCompany: 'site_engineer' }),
+          ),
+        );
+
+        const createdInvitees = await prisma.user.findMany({
+          where: { email: { in: inviteEmails } },
+          select: { id: true },
+        });
+        invitedUserIds.push(...createdInvitees.map((invitee) => invitee.id));
+
+        expect(responses.map((res) => res.status).sort((a, b) => a - b)).toEqual([201, 403]);
+        expect(createdInvitees).toHaveLength(1);
+        await expect(prisma.user.count({ where: { companyId: limitedCompany.id } })).resolves.toBe(
+          5,
+        );
+      } finally {
+        await prisma.$executeRaw`
+          DROP TRIGGER IF EXISTS test_delay_company_member_invite_insert_trigger ON users
+        `;
+        await prisma.$executeRaw`
+          DROP FUNCTION IF EXISTS test_delay_company_member_invite_insert()
+        `;
+      }
+    });
   });
 
   describe('POST /api/company/transfer-ownership', () => {
