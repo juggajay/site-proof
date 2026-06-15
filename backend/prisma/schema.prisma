@@ -1439,6 +1439,7 @@ model PasswordResetToken {
   id        String    @id @default(uuid())
   userId    String    @map("user_id")
   token     String    @unique
+  purpose   String    @default("password_reset")
   expiresAt DateTime  @map("expires_at")
   usedAt    DateTime? @map("used_at")
   createdAt DateTime  @default(now()) @map("created_at")
@@ -1446,6 +1447,7 @@ model PasswordResetToken {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, usedAt, expiresAt])
+  @@index([userId, purpose, usedAt, expiresAt])
   @@index([expiresAt])
   @@map("password_reset_tokens")
 }

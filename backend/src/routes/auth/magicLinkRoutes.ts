@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import { Router } from 'express';
 import type { Request } from 'express';
-import type { PrismaClient } from '@prisma/client';
+import type { Prisma, PrismaClient } from '@prisma/client';
 
 import { generateToken } from '../../lib/auth.js';
 import { sendMagicLinkEmail } from '../../lib/email.js';
@@ -11,12 +11,11 @@ import { buildFrontendUrl } from '../../lib/runtimeConfig.js';
 import { AuditAction } from '../../lib/auditLog.js';
 
 const MAGIC_LINK_EXPIRY_MINUTES = 15;
+const MAGIC_LINK_TOKEN_PURPOSE = 'magic_link';
 
 type MagicLinkPrismaClient = Pick<PrismaClient, 'user' | 'passwordResetToken'>;
 
-type OneTimeTokenLookup = (rawToken: string) => {
-  OR: Array<{ token: string }>;
-};
+type OneTimeTokenLookup = (rawToken: string) => Prisma.PasswordResetTokenWhereInput;
 
 type MagicLinkRoutesDependencies = {
   prisma: MagicLinkPrismaClient;
@@ -76,10 +75,15 @@ export function createMagicLinkRouter({
       const token = crypto.randomBytes(32).toString('hex');
       const expiresAt = new Date(Date.now() + MAGIC_LINK_EXPIRY_MINUTES * 60 * 1000);
 
-      // Store token using password reset token table (reusing existing infrastructure)
-      // Delete any existing tokens for this user first
-      await prisma.passwordResetToken.deleteMany({
-        where: { userId: user.id },
+      // Invalidate only existing magic-link tokens for this user.
+      await prisma.passwordResetToken.updateMany({
+        where: {
+          userId: user.id,
+          purpose: MAGIC_LINK_TOKEN_PURPOSE,
+          usedAt: null,
+          expiresAt: { gt: new Date() },
+        },
+        data: { usedAt: new Date() },
       });
 
       // Create new magic link token
@@ -87,6 +91,7 @@ export function createMagicLinkRouter({
         data: {
           userId: user.id,
           token: hashOneTimeToken(`magic_${token}`), // Prefix remains in the emailed token only.
+          purpose: MAGIC_LINK_TOKEN_PURPOSE,
           expiresAt,
         },
       });
@@ -125,7 +130,10 @@ export function createMagicLinkRouter({
 
       // Find the token
       const tokenRecord = await prisma.passwordResetToken.findFirst({
-        where: oneTimeTokenLookup(token),
+        where: {
+          ...oneTimeTokenLookup(token),
+          purpose: MAGIC_LINK_TOKEN_PURPOSE,
+        },
         include: {
           user: {
             select: {
