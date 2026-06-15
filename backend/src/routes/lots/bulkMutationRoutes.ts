@@ -96,7 +96,7 @@ lotBulkMutationRouter.post(
     if (!validation.success) {
       throw AppError.fromZodError(validation.error);
     }
-    const { lotIds, subcontractorId } = validation.data;
+    const { lotIds, subcontractorId, canCompleteITP, itpRequiresVerification } = validation.data;
     const uniqueLotIds = getUniqueLotIds(lotIds);
 
     // Check that lots exist and can be updated (not conformed or claimed)
@@ -154,6 +154,8 @@ lotBulkMutationRouter.post(
           projectId: lot.projectId,
           subcontractorId,
           assignedById: user.id,
+          canCompleteITP,
+          itpRequiresVerification,
         });
       }
 

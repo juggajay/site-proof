@@ -22,3 +22,8 @@ export interface Lot {
   holdPointCount?: number;
   notes?: string | null;
 }
+
+export interface BulkAssignSubcontractorOptions {
+  canCompleteITP: boolean;
+  itpRequiresVerification: boolean;
+}

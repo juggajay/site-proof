@@ -4,7 +4,7 @@ import { apiFetch } from '@/lib/api';
 import { toast } from '@/components/ui/toaster';
 import { handleApiError } from '@/lib/errorHandling';
 import { writeLocalStorageItem } from '@/lib/storagePreferences';
-import type { Lot } from '../lotsPageTypes';
+import type { BulkAssignSubcontractorOptions, Lot } from '../lotsPageTypes';
 
 interface UseLotsActionsParams {
   lots: Lot[];
@@ -246,7 +246,7 @@ export function useLotsActions({
   }, [fetchSubcontractors]);
 
   const handleBulkAssignSubcontractor = useCallback(
-    async (selectedSubcontractorId: string) => {
+    async (selectedSubcontractorId: string, options?: BulkAssignSubcontractorOptions) => {
       if (selectedLots.size === 0) return;
       try {
         const data = await apiFetch<{ message: string }>('/api/lots/bulk-assign-subcontractor', {
@@ -254,6 +254,12 @@ export function useLotsActions({
           body: JSON.stringify({
             lotIds: Array.from(selectedLots),
             subcontractorId: selectedSubcontractorId || null,
+            ...(selectedSubcontractorId && options
+              ? {
+                  canCompleteITP: options.canCompleteITP,
+                  itpRequiresVerification: options.itpRequiresVerification,
+                }
+              : {}),
           }),
         });
         const selectedSub = subcontractors.find((s) => s.id === selectedSubcontractorId);
