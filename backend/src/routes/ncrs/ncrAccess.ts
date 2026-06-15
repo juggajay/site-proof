@@ -38,6 +38,7 @@ export const NCR_QUALITY_MANAGEMENT_ROLES = [
   'site_manager',
   'quality_manager',
 ];
+export const NCR_QM_APPROVAL_ROLES = ['owner', 'quality_manager'];
 export const NCR_EVIDENCE_MUTATION_ROLES = [
   ...NCR_QUALITY_MANAGEMENT_ROLES,
   'site_engineer',

@@ -1179,6 +1179,53 @@ describe('NCR Workflow', () => {
     await prisma.company.delete({ where: { id: companyId } }).catch(() => {});
   });
 
+  async function createVerificationNcr(description: string, severity: 'minor' | 'major' = 'minor') {
+    const ncrRes = await request(app)
+      .post('/api/ncrs')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        projectId,
+        description,
+        category: 'Workmanship',
+        severity,
+        responsibleUserId: userId,
+      });
+    expect(ncrRes.status).toBe(201);
+    const createdNcrId = ncrRes.body.ncr.id as string;
+
+    const respondRes = await request(app)
+      .post(`/api/ncrs/${createdNcrId}/respond`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        rootCauseCategory: 'Method',
+        rootCauseDescription: 'Incorrect procedure followed',
+        proposedCorrectiveAction: 'Retrain workers on correct method',
+      });
+    expect(respondRes.status).toBe(200);
+
+    const reviewRes = await request(app)
+      .post(`/api/ncrs/${createdNcrId}/qm-review`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        action: 'accept',
+        comments: 'Response is acceptable',
+      });
+    expect(reviewRes.status).toBe(200);
+
+    await createNcrEvidence(projectId, userId, createdNcrId);
+
+    const rectifyRes = await request(app)
+      .post(`/api/ncrs/${createdNcrId}/rectify`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        rectificationNotes: 'Work has been rectified',
+      });
+    expect(rectifyRes.status).toBe(200);
+    expect(rectifyRes.body.ncr.status).toBe('verification');
+
+    return createdNcrId;
+  }
+
   it('should reject oversized workflow text without mutating the NCR', async () => {
     const oversizedWorkflowCases = [
       {
@@ -1782,6 +1829,42 @@ describe('NCR Workflow', () => {
     expect(ncr.closedById).toBeNull();
   });
 
+  it('should reject concession closure without justification and risk assessment', async () => {
+    const ncrId = await createVerificationNcr('Concession close should require rationale');
+
+    const res = await request(app)
+      .post(`/api/ncrs/${ncrId}/close`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        verificationNotes: 'Accepting with concession',
+        withConcession: true,
+      });
+
+    expect(res.status).toBe(400);
+    expect(JSON.stringify(res.body.error.details)).toContain(
+      'Concession justification is required',
+    );
+    expect(JSON.stringify(res.body.error.details)).toContain(
+      'Concession risk assessment is required',
+    );
+
+    const ncr = await prisma.nCR.findUniqueOrThrow({
+      where: { id: ncrId },
+      select: {
+        status: true,
+        closedAt: true,
+        closedById: true,
+        concessionJustification: true,
+        concessionRiskAssessment: true,
+      },
+    });
+    expect(ncr.status).toBe('verification');
+    expect(ncr.closedAt).toBeNull();
+    expect(ncr.closedById).toBeNull();
+    expect(ncr.concessionJustification).toBeNull();
+    expect(ncr.concessionRiskAssessment).toBeNull();
+  });
+
   it('should close NCR', async () => {
     const res = await request(app)
       .post(`/api/ncrs/${workflowNcrId}/close`)
@@ -2076,6 +2159,48 @@ describe('Major NCR QM Approval', () => {
     await prisma.company.delete({ where: { id: companyId } }).catch(() => {});
   });
 
+  async function createMajorNcrInVerification(description: string) {
+    const ncrRes = await request(app)
+      .post('/api/ncrs')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        projectId,
+        description,
+        category: 'Material',
+        severity: 'major',
+        responsibleUserId: userId,
+      });
+    expect(ncrRes.status).toBe(201);
+    const createdNcrId = ncrRes.body.ncr.id as string;
+
+    const respondRes = await request(app)
+      .post(`/api/ncrs/${createdNcrId}/respond`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        rootCauseCategory: 'Material',
+        rootCauseDescription: 'Defective material',
+        proposedCorrectiveAction: 'Replace material',
+      });
+    expect(respondRes.status).toBe(200);
+
+    const reviewRes = await request(app)
+      .post(`/api/ncrs/${createdNcrId}/qm-review`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({ action: 'accept' });
+    expect(reviewRes.status).toBe(200);
+
+    await createNcrEvidence(projectId, userId, createdNcrId);
+
+    const rectifyRes = await request(app)
+      .post(`/api/ncrs/${createdNcrId}/rectify`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({ rectificationNotes: 'Material replaced' });
+    expect(rectifyRes.status).toBe(200);
+    expect(rectifyRes.body.ncr.status).toBe('verification');
+
+    return createdNcrId;
+  }
+
   it('should reject closing major NCR without QM approval', async () => {
     const res = await request(app)
       .post(`/api/ncrs/${majorNcrId}/close`)
@@ -2084,6 +2209,43 @@ describe('Major NCR QM Approval', () => {
 
     expect(res.status).toBe(403);
     expect(res.body.error.message).toContain('Quality Manager approval');
+  });
+
+  it('should reject project managers granting QM approval for major NCRs', async () => {
+    const projectManager = await registerSharedTestUser(app, {
+      emailPrefix: 'major-ncr-pm',
+      fullName: 'Major NCR Project Manager',
+      companyId,
+      roleInCompany: 'project_manager',
+    });
+    await prisma.projectUser.create({
+      data: {
+        projectId,
+        userId: projectManager.userId,
+        role: 'project_manager',
+        status: 'active',
+      },
+    });
+    const ncrId = await createMajorNcrInVerification('Project manager cannot QM approve major NCR');
+
+    try {
+      const res = await request(app)
+        .post(`/api/ncrs/${ncrId}/qm-approve`)
+        .set('Authorization', `Bearer ${projectManager.token}`);
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.message).toContain('Quality Manager');
+
+      const ncr = await prisma.nCR.findUniqueOrThrow({
+        where: { id: ncrId },
+        select: { qmApprovedAt: true, qmApprovedById: true },
+      });
+      expect(ncr.qmApprovedAt).toBeNull();
+      expect(ncr.qmApprovedById).toBeNull();
+    } finally {
+      await prisma.projectUser.deleteMany({ where: { userId: projectManager.userId } });
+      await cleanupTestUser(projectManager.userId);
+    }
   });
 
   it('should allow company owners to review and approve major NCRs', async () => {
@@ -2201,14 +2363,70 @@ describe('Major NCR QM Approval', () => {
     });
   });
 
-  it('should close major NCR after QM approval', async () => {
-    const res = await request(app)
-      .post(`/api/ncrs/${majorNcrId}/close`)
-      .set('Authorization', `Bearer ${authToken}`)
-      .send({ verificationNotes: 'Verified' });
+  it('should reject closing a major NCR by the same user who granted QM approval', async () => {
+    const ncrId = await createMajorNcrInVerification('Same approver cannot close major NCR');
+    const approvalRes = await request(app)
+      .post(`/api/ncrs/${ncrId}/qm-approve`)
+      .set('Authorization', `Bearer ${authToken}`);
+    expect(approvalRes.status).toBe(200);
 
-    expect(res.status).toBe(200);
-    expect(res.body.ncr.status).toBe('closed');
+    const res = await request(app)
+      .post(`/api/ncrs/${ncrId}/close`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({ verificationNotes: 'Verified by approving user' });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error.message).toContain('different user');
+
+    const ncr = await prisma.nCR.findUniqueOrThrow({
+      where: { id: ncrId },
+      select: { status: true, closedAt: true, closedById: true },
+    });
+    expect(ncr.status).toBe('verification');
+    expect(ncr.closedAt).toBeNull();
+    expect(ncr.closedById).toBeNull();
+  });
+
+  it('should close major NCR after QM approval', async () => {
+    const ncrId = await createMajorNcrInVerification('Different quality user closes major NCR');
+    const approvalRes = await request(app)
+      .post(`/api/ncrs/${ncrId}/qm-approve`)
+      .set('Authorization', `Bearer ${authToken}`);
+    expect(approvalRes.status).toBe(200);
+
+    const closer = await registerSharedTestUser(app, {
+      emailPrefix: 'major-ncr-closer',
+      fullName: 'Major NCR Closer',
+      companyId,
+      roleInCompany: 'quality_manager',
+    });
+    await prisma.projectUser.create({
+      data: {
+        projectId,
+        userId: closer.userId,
+        role: 'quality_manager',
+        status: 'active',
+      },
+    });
+
+    try {
+      const res = await request(app)
+        .post(`/api/ncrs/${ncrId}/close`)
+        .set('Authorization', `Bearer ${closer.token}`)
+        .send({ verificationNotes: 'Verified' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.ncr.status).toBe('closed');
+
+      const ncr = await prisma.nCR.findUniqueOrThrow({
+        where: { id: ncrId },
+        select: { closedById: true },
+      });
+      expect(ncr.closedById).toBe(closer.userId);
+    } finally {
+      await prisma.projectUser.deleteMany({ where: { userId: closer.userId } });
+      await cleanupTestUser(closer.userId);
+    }
   });
 });
 

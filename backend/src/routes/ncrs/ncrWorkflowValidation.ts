@@ -72,22 +72,44 @@ export const rejectRectificationSchema = z.object({
   ),
 });
 
-export const closeNcrSchema = z.object({
-  verificationNotes: optionalTrimmedWorkflowString(
-    'Verification notes',
-    NCR_WORKFLOW_TEXT_MAX_LENGTH,
-  ),
-  lessonsLearned: optionalTrimmedWorkflowString('Lessons learned', NCR_WORKFLOW_TEXT_MAX_LENGTH),
-  withConcession: z.boolean().optional(),
-  concessionJustification: optionalTrimmedWorkflowString(
-    'Concession justification',
-    NCR_WORKFLOW_TEXT_MAX_LENGTH,
-  ),
-  concessionRiskAssessment: optionalTrimmedWorkflowString(
-    'Concession risk assessment',
-    NCR_WORKFLOW_TEXT_MAX_LENGTH,
-  ),
-});
+export const closeNcrSchema = z
+  .object({
+    verificationNotes: optionalTrimmedWorkflowString(
+      'Verification notes',
+      NCR_WORKFLOW_TEXT_MAX_LENGTH,
+    ),
+    lessonsLearned: optionalTrimmedWorkflowString('Lessons learned', NCR_WORKFLOW_TEXT_MAX_LENGTH),
+    withConcession: z.boolean().optional(),
+    concessionJustification: optionalTrimmedWorkflowString(
+      'Concession justification',
+      NCR_WORKFLOW_TEXT_MAX_LENGTH,
+    ),
+    concessionRiskAssessment: optionalTrimmedWorkflowString(
+      'Concession risk assessment',
+      NCR_WORKFLOW_TEXT_MAX_LENGTH,
+    ),
+  })
+  .superRefine((data, ctx) => {
+    if (!data.withConcession) {
+      return;
+    }
+
+    if (!data.concessionJustification) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['concessionJustification'],
+        message: 'Concession justification is required when closing with concession',
+      });
+    }
+
+    if (!data.concessionRiskAssessment) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['concessionRiskAssessment'],
+        message: 'Concession risk assessment is required when closing with concession',
+      });
+    }
+  });
 
 export const notifyClientSchema = z.object({
   recipientEmail: optionalTrimmedWorkflowString(

@@ -9,6 +9,7 @@ import { sendEmail } from '../../lib/email.js';
 import { prisma } from '../../lib/prisma.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
 import {
+  NCR_QM_APPROVAL_ROLES,
   NCR_QUALITY_MANAGEMENT_ROLES,
   parseNcrRouteParam,
   requireActiveProjectUser,
@@ -52,8 +53,8 @@ ncrClosureWorkflowRouter.post(
     await requireActiveProjectUser(
       ncr.projectId,
       user,
-      'Only project quality roles can approve major NCR closures',
-      NCR_QUALITY_MANAGEMENT_ROLES,
+      'Only a Quality Manager or company owner can approve major NCR closures',
+      NCR_QM_APPROVAL_ROLES,
     );
 
     if (!ncr.qmApprovalRequired) {
@@ -142,11 +143,19 @@ ncrClosureWorkflowRouter.post(
       });
     }
 
-    // CRITICAL: For major NCRs, require QM approval before closing
-    if (ncr.severity === 'major' && ncr.qmApprovalRequired && !ncr.qmApprovedAt) {
-      throw AppError.forbidden(
-        'Major NCRs require Quality Manager approval before closure. Please request QM approval first.',
-      );
+    // CRITICAL: For major NCRs, require independent QM approval before closing.
+    if (ncr.severity === 'major' && ncr.qmApprovalRequired) {
+      if (!ncr.qmApprovedAt || !ncr.qmApprovedById) {
+        throw AppError.forbidden(
+          'Major NCRs require Quality Manager approval before closure. Please request QM approval first.',
+        );
+      }
+
+      if (ncr.qmApprovedById === user.userId) {
+        throw AppError.forbidden(
+          'Major NCR closure must be completed by a different user than the QM approver.',
+        );
+      }
     }
 
     const closeStatus = withConcession ? 'closed_concession' : 'closed';
