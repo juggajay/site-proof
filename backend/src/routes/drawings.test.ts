@@ -509,6 +509,64 @@ describe('Drawings API', () => {
       expect(res.body.error.message).toContain('already exists');
     });
 
+    it('should enforce drawing number and revision uniqueness at the database level', async () => {
+      const drawingNumber = `DRW-DB-GUARD-${Date.now()}`;
+      const documentIds: string[] = [];
+
+      try {
+        const firstDoc = await prisma.document.create({
+          data: {
+            projectId,
+            documentType: 'drawing',
+            filename: `${drawingNumber}-1.pdf`,
+            fileUrl: `/uploads/drawings/${drawingNumber}-1.pdf`,
+            fileSize: 2048,
+            mimeType: 'application/pdf',
+            uploadedById: userId,
+          },
+        });
+        documentIds.push(firstDoc.id);
+
+        const secondDoc = await prisma.document.create({
+          data: {
+            projectId,
+            documentType: 'drawing',
+            filename: `${drawingNumber}-2.pdf`,
+            fileUrl: `/uploads/drawings/${drawingNumber}-2.pdf`,
+            fileSize: 2048,
+            mimeType: 'application/pdf',
+            uploadedById: userId,
+          },
+        });
+        documentIds.push(secondDoc.id);
+
+        await prisma.drawing.create({
+          data: {
+            projectId,
+            documentId: firstDoc.id,
+            drawingNumber,
+            revision: 'A',
+            status: 'preliminary',
+          },
+        });
+
+        await expect(
+          prisma.drawing.create({
+            data: {
+              projectId,
+              documentId: secondDoc.id,
+              drawingNumber,
+              revision: 'A',
+              status: 'preliminary',
+            },
+          }),
+        ).rejects.toMatchObject({ code: 'P2002' });
+      } finally {
+        await prisma.drawing.deleteMany({ where: { projectId, drawingNumber } });
+        await prisma.document.deleteMany({ where: { id: { in: documentIds } } });
+      }
+    });
+
     it('should default to preliminary status if not provided', async () => {
       const res = await request(app)
         .post('/api/drawings')
@@ -744,6 +802,73 @@ describe('Drawings API', () => {
       expect(invalidDateRes.status).toBe(400);
       expect(invalidStatusRes.status).toBe(400);
       expect(invalidSupersededByRes.status).toBe(400);
+    });
+
+    it('should reject revision updates that duplicate another drawing in the project', async () => {
+      const drawingNumber = `DRW-PATCH-DUPE-${Date.now()}`;
+      const documentIds: string[] = [];
+      const drawingIds: string[] = [];
+
+      try {
+        const firstDoc = await prisma.document.create({
+          data: {
+            projectId,
+            documentType: 'drawing',
+            filename: `${drawingNumber}-1.pdf`,
+            fileUrl: `/uploads/drawings/${drawingNumber}-1.pdf`,
+            fileSize: 2048,
+            mimeType: 'application/pdf',
+            uploadedById: userId,
+          },
+        });
+        documentIds.push(firstDoc.id);
+
+        const secondDoc = await prisma.document.create({
+          data: {
+            projectId,
+            documentType: 'drawing',
+            filename: `${drawingNumber}-2.pdf`,
+            fileUrl: `/uploads/drawings/${drawingNumber}-2.pdf`,
+            fileSize: 2048,
+            mimeType: 'application/pdf',
+            uploadedById: userId,
+          },
+        });
+        documentIds.push(secondDoc.id);
+
+        const existingDrawing = await prisma.drawing.create({
+          data: {
+            projectId,
+            documentId: firstDoc.id,
+            drawingNumber,
+            revision: 'A',
+            status: 'preliminary',
+          },
+        });
+        drawingIds.push(existingDrawing.id);
+
+        const drawingToUpdate = await prisma.drawing.create({
+          data: {
+            projectId,
+            documentId: secondDoc.id,
+            drawingNumber,
+            revision: 'B',
+            status: 'preliminary',
+          },
+        });
+        drawingIds.push(drawingToUpdate.id);
+
+        const res = await request(app)
+          .patch(`/api/drawings/${drawingToUpdate.id}`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ revision: 'A' });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.message).toContain('already exists');
+      } finally {
+        await prisma.drawing.deleteMany({ where: { id: { in: drawingIds } } });
+        await prisma.document.deleteMany({ where: { id: { in: documentIds } } });
+      }
     });
 
     it('should return 404 for non-existent drawing', async () => {

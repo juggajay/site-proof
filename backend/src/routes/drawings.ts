@@ -193,6 +193,22 @@ router.patch(
     await requireDrawingWriteAccess(req.user!, drawing.projectId);
     await requireSupersededByInProject(drawing.projectId, drawingId, supersededById);
 
+    if (revision !== undefined) {
+      const existingRevision = await prisma.drawing.findFirst({
+        where: {
+          projectId: drawing.projectId,
+          drawingNumber: drawing.drawingNumber,
+          revision,
+          id: { not: drawingId },
+        },
+        select: { id: true },
+      });
+
+      if (existingRevision) {
+        throw AppError.badRequest('Drawing with this number and revision already exists');
+      }
+    }
+
     const issueDateValue =
       issueDate !== undefined ? parseDrawingDate(issueDate, 'issueDate') : undefined;
 

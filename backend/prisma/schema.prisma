@@ -1362,7 +1362,7 @@ model Drawing {
   supersededBy Drawing?  @relation("DrawingSupersedes", fields: [supersededById], references: [id], onDelete: SetNull)
   supersedes   Drawing[] @relation("DrawingSupersedes")
 
-  @@index([projectId, drawingNumber, revision])
+  @@unique([projectId, drawingNumber, revision])
   @@index([projectId, status])
   @@index([projectId, supersededById])
   @@index([documentId])
