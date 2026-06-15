@@ -307,8 +307,11 @@ holdPointActionRouter.post(
 
     const releasedAt = parseReleaseDateTimeInput(releaseDate, releaseTime);
     const holdPoint = await prisma.$transaction(async (tx) => {
-      const updatedHoldPoint = await tx.holdPoint.update({
-        where: { id },
+      const releaseTransition = await tx.holdPoint.updateMany({
+        where: {
+          id,
+          status: { not: 'released' },
+        },
         data: {
           status: 'released',
           releasedAt,
@@ -318,11 +321,23 @@ holdPointActionRouter.post(
           releaseSignatureUrl: signatureDataUrl || null,
           releaseNotes: releaseNotes || null,
         },
+      });
+
+      if (releaseTransition.count !== 1) {
+        throw AppError.badRequest('This hold point has already been released.');
+      }
+
+      const updatedHoldPoint = await tx.holdPoint.findUnique({
+        where: { id },
         include: {
           itpChecklistItem: true,
           lot: true,
         },
       });
+
+      if (!updatedHoldPoint) {
+        throw AppError.notFound('Hold point');
+      }
 
       // Also mark the ITP completion as verified in the same transaction.
       const itpInstance = await tx.iTPInstance.findUnique({

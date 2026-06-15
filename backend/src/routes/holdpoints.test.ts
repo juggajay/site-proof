@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import crypto from 'crypto';
@@ -658,6 +658,83 @@ describe('Hold Points API', () => {
       expect(res.body.holdPoint.status).toBe('released');
       expect(res.body.holdPoint.releaseMethod).toBe('email');
       expect(res.body.holdPoint.releaseSignatureUrl).toBeNull();
+    });
+
+    it('allows only one authenticated release when two users release the same hold point together', async () => {
+      const { holdPoint: hp, completion } = await createReleaseReadyHoldPoint();
+      const originalFindUnique = prisma.holdPoint.findUnique.bind(prisma.holdPoint);
+      let releaseReads = 0;
+      let unblockReleaseReads!: () => void;
+      const releaseReadsBarrier = new Promise<void>((resolve) => {
+        unblockReleaseReads = resolve;
+      });
+      const findUniqueSpy = vi.spyOn(prisma.holdPoint, 'findUnique').mockImplementation(((args) => {
+        return originalFindUnique(args).then(async (result) => {
+          if (args?.where?.id === hp.id && releaseReads < 2) {
+            releaseReads += 1;
+            if (releaseReads === 2) {
+              unblockReleaseReads();
+            }
+            await releaseReadsBarrier;
+          }
+          return result;
+        }) as ReturnType<typeof prisma.holdPoint.findUnique>;
+      }) as Parameters<typeof findUniqueSpy.mockImplementation>[0]);
+
+      try {
+        clearEmailQueue();
+        await prisma.notification.deleteMany({ where: { projectId, type: 'hold_point_release' } });
+        const projectUserCount = await prisma.projectUser.count({
+          where: { projectId, status: 'active' },
+        });
+
+        const [firstRes, secondRes] = await Promise.all([
+          postRelease(hp.id, {
+            releasedByName: 'First Releaser',
+            releaseDate: '2026-01-24',
+            releaseTime: '09:00',
+            releaseNotes: 'First release wins',
+          }),
+          postRelease(hp.id, {
+            releasedByName: 'Second Releaser',
+            releaseDate: '2026-01-24',
+            releaseTime: '10:00',
+            releaseNotes: 'Second release should not overwrite',
+          }),
+        ]);
+
+        const statuses = [firstRes.status, secondRes.status].sort();
+        expect(statuses).toEqual([200, 400]);
+        const successRes = [firstRes, secondRes].find((res) => res.status === 200);
+        const rejectedRes = [firstRes, secondRes].find((res) => res.status === 400);
+        expect(successRes?.body.holdPoint.status).toBe('released');
+        expect(rejectedRes?.body.error.message).toContain('already been released');
+
+        const holdPoint = await prisma.holdPoint.findUniqueOrThrow({ where: { id: hp.id } });
+        expect(holdPoint.releasedByName).toBe(successRes?.body.holdPoint.releasedByName);
+        expect(holdPoint.releaseNotes).toBe(successRes?.body.holdPoint.releaseNotes);
+
+        const releaseAudits = await prisma.auditLog.findMany({
+          where: { entityId: hp.id, action: AuditAction.HP_RELEASED },
+        });
+        expect(releaseAudits).toHaveLength(1);
+
+        const completions = await prisma.iTPCompletion.findMany({
+          where: { id: completion.id },
+        });
+        expect(completions).toHaveLength(1);
+
+        const notifications = await prisma.notification.findMany({
+          where: { projectId, type: 'hold_point_release' },
+        });
+        expect(notifications).toHaveLength(projectUserCount);
+      } finally {
+        findUniqueSpy.mockRestore();
+        await prisma.notification.deleteMany({ where: { projectId, type: 'hold_point_release' } });
+        await prisma.iTPCompletion.delete({ where: { id: completion.id } }).catch(() => {});
+        await prisma.holdPoint.delete({ where: { id: hp.id } }).catch(() => {});
+        clearEmailQueue();
+      }
     });
 
     it('records same-lot manual release evidence document ids in the release audit log', async () => {
