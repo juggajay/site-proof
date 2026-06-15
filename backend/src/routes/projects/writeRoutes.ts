@@ -55,6 +55,7 @@ const RETAINED_PROJECT_RELATIONS = [
   'lotSubcontractorAssignments',
   'scheduledReports',
   'auditLogs',
+  'comments',
 ] as const;
 
 type RetainedProjectRelation = (typeof RETAINED_PROJECT_RELATIONS)[number];
@@ -73,6 +74,116 @@ function nonZeroRetainedProjectCounts(
 
 function retainedProjectRecordTotal(counts: RetainedProjectCounts): number {
   return RETAINED_PROJECT_RELATIONS.reduce((total, relation) => total + counts[relation], 0);
+}
+
+function parseCommentCount(value: number | bigint | null | undefined): number {
+  if (typeof value === 'bigint') {
+    return Number(value);
+  }
+
+  return value ?? 0;
+}
+
+async function countRetainedProjectComments(
+  tx: Prisma.TransactionClient,
+  projectId: string,
+): Promise<number> {
+  const rows = await tx.$queryRaw<Array<{ count: number | bigint }>>(Prisma.sql`
+    WITH normalized_comments AS (
+      SELECT
+        id,
+        entity_id,
+        lower(replace(replace(entity_type, ' ', '_'), '-', '_')) AS entity_type
+      FROM comments
+    )
+    SELECT COUNT(*)::int AS count
+    FROM normalized_comments c
+    WHERE
+      (c.entity_type = 'project' AND c.entity_id = ${projectId})
+      OR (
+        c.entity_type = 'lot'
+        AND EXISTS (
+          SELECT 1 FROM lots l WHERE l.id = c.entity_id AND l.project_id = ${projectId}
+        )
+      )
+      OR (
+        c.entity_type = 'ncr'
+        AND EXISTS (
+          SELECT 1 FROM ncrs n WHERE n.id = c.entity_id AND n.project_id = ${projectId}
+        )
+      )
+      OR (
+        c.entity_type = 'document'
+        AND EXISTS (
+          SELECT 1 FROM documents d WHERE d.id = c.entity_id AND d.project_id = ${projectId}
+        )
+      )
+      OR (
+        c.entity_type = 'drawing'
+        AND EXISTS (
+          SELECT 1 FROM drawings d WHERE d.id = c.entity_id AND d.project_id = ${projectId}
+        )
+      )
+      OR (
+        c.entity_type IN ('docket', 'daily_docket', 'dailydocket')
+        AND EXISTS (
+          SELECT 1 FROM daily_dockets dd WHERE dd.id = c.entity_id AND dd.project_id = ${projectId}
+        )
+      )
+      OR (
+        c.entity_type IN ('diary', 'daily_diary', 'dailydiary')
+        AND EXISTS (
+          SELECT 1 FROM daily_diaries dd WHERE dd.id = c.entity_id AND dd.project_id = ${projectId}
+        )
+      )
+      OR (
+        c.entity_type IN ('test', 'test_result', 'testresult')
+        AND EXISTS (
+          SELECT 1 FROM test_results tr WHERE tr.id = c.entity_id AND tr.project_id = ${projectId}
+        )
+      )
+      OR (
+        c.entity_type IN ('progress_claim', 'progressclaim')
+        AND EXISTS (
+          SELECT 1 FROM progress_claims pc WHERE pc.id = c.entity_id AND pc.project_id = ${projectId}
+        )
+      )
+      OR (
+        c.entity_type IN ('holdpoint', 'hold_point')
+        AND EXISTS (
+          SELECT 1
+          FROM hold_points hp
+          JOIN lots l ON l.id = hp.lot_id
+          WHERE hp.id = c.entity_id AND l.project_id = ${projectId}
+        )
+      )
+      OR (
+        c.entity_type IN ('itp', 'itp_instance', 'itpinstance')
+        AND (
+          EXISTS (
+            SELECT 1
+            FROM itp_instances ii
+            JOIN lots l ON l.id = ii.lot_id
+            WHERE ii.id = c.entity_id AND l.project_id = ${projectId}
+          )
+          OR EXISTS (
+            SELECT 1 FROM lots l WHERE l.id = c.entity_id AND l.project_id = ${projectId}
+          )
+        )
+      )
+      OR (
+        c.entity_type IN ('itp_completion', 'itpcompletion')
+        AND EXISTS (
+          SELECT 1
+          FROM itp_completions ic
+          JOIN itp_instances ii ON ii.id = ic.itp_instance_id
+          JOIN lots l ON l.id = ii.lot_id
+          WHERE ic.id = c.entity_id AND l.project_id = ${projectId}
+        )
+      )
+  `);
+
+  return parseCommentCount(rows[0]?.count);
 }
 
 export function createProjectWriteRouter({
@@ -513,6 +624,7 @@ export function createProjectWriteRouter({
               action: { not: AuditAction.PROJECT_CREATED },
             },
           }),
+          comments: await countRetainedProjectComments(tx, id),
         };
 
         if (retainedProjectRecordTotal(retainedRecordCounts) > 0) {
