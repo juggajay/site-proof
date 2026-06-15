@@ -1675,6 +1675,76 @@ describe('Progress Claims API', () => {
       expect(certificationMetadata.certifiedBy).toBe(userId);
     });
 
+    it('should only certify a submitted claim once under concurrent requests', async () => {
+      const claim = await createSubmittedCertificationClaim(1000);
+      const fileUrl = `/uploads/documents/concurrent-certification-${claim.claimNumber}.pdf`;
+
+      await prisma.$executeRaw`
+        CREATE OR REPLACE FUNCTION test_delay_claim_certification_update()
+        RETURNS trigger AS $$
+        BEGIN
+          PERFORM pg_sleep(0.2);
+          RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+      `;
+      await prisma.$executeRaw`
+        DROP TRIGGER IF EXISTS test_delay_claim_certification_update_trigger ON progress_claims
+      `;
+      await prisma.$executeRaw`
+        CREATE TRIGGER test_delay_claim_certification_update_trigger
+        BEFORE UPDATE ON progress_claims
+        FOR EACH ROW
+        EXECUTE FUNCTION test_delay_claim_certification_update();
+      `;
+
+      try {
+        const responses = await Promise.all([
+          request(app)
+            .post(`/api/projects/${projectId}/claims/${claim.id}/certify`)
+            .set('Authorization', `Bearer ${authToken}`)
+            .send({
+              certifiedAmount: 900,
+              certificationDocumentUrl: fileUrl,
+              certificationDocumentFilename: 'concurrent-certification.pdf',
+            }),
+          request(app)
+            .post(`/api/projects/${projectId}/claims/${claim.id}/certify`)
+            .set('Authorization', `Bearer ${authToken}`)
+            .send({
+              certifiedAmount: 900,
+              certificationDocumentUrl: fileUrl,
+              certificationDocumentFilename: 'concurrent-certification.pdf',
+            }),
+        ]);
+
+        expect(responses.map((res) => res.status).sort()).toEqual([200, 400]);
+
+        const updatedClaim = await prisma.progressClaim.findUnique({ where: { id: claim.id } });
+        expect(updatedClaim?.status).toBe('certified');
+        expect(Number(updatedClaim?.certifiedAmount)).toBe(900);
+
+        await expect(prisma.document.count({ where: { projectId, fileUrl } })).resolves.toBe(1);
+        await expect(
+          prisma.auditLog.count({
+            where: {
+              projectId,
+              entityType: 'progress_claim',
+              entityId: claim.id,
+              action: AuditAction.CLAIM_CERTIFIED,
+            },
+          }),
+        ).resolves.toBe(1);
+      } finally {
+        await prisma.$executeRaw`
+          DROP TRIGGER IF EXISTS test_delay_claim_certification_update_trigger ON progress_claims
+        `;
+        await prisma.$executeRaw`
+          DROP FUNCTION IF EXISTS test_delay_claim_certification_update()
+        `;
+      }
+    });
+
     it('should certify with a configured Supabase document URL', async () => {
       process.env.SUPABASE_URL = 'https://siteproof.supabase.co';
       const claim = await createSubmittedCertificationClaim();
