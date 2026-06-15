@@ -9,6 +9,8 @@ import { sendPasswordResetEmail } from '../../lib/email.js';
 import { buildFrontendUrl } from '../../lib/runtimeConfig.js';
 import { logWarn } from '../../lib/serverLogger.js';
 
+const PASSWORD_RESET_TOKEN_PURPOSE = 'password_reset';
+
 type PasswordResetPrismaClient = Pick<PrismaClient, 'user' | 'passwordResetToken' | '$transaction'>;
 
 type PasswordValidation = {
@@ -99,6 +101,7 @@ export function createPasswordResetRouter({
         await prisma.passwordResetToken.updateMany({
           where: {
             userId: user.id,
+            purpose: PASSWORD_RESET_TOKEN_PURPOSE,
             usedAt: null,
             expiresAt: { gt: new Date() },
           },
@@ -110,6 +113,7 @@ export function createPasswordResetRouter({
           data: {
             userId: user.id,
             token: hashOneTimeToken(token),
+            purpose: PASSWORD_RESET_TOKEN_PURPOSE,
             expiresAt,
           },
         });
@@ -159,7 +163,10 @@ export function createPasswordResetRouter({
 
       // Find the token
       const resetToken = await prisma.passwordResetToken.findFirst({
-        where: oneTimeTokenLookup(token),
+        where: {
+          ...oneTimeTokenLookup(token),
+          purpose: PASSWORD_RESET_TOKEN_PURPOSE,
+        },
         select: {
           id: true,
           userId: true,
@@ -234,7 +241,10 @@ export function createPasswordResetRouter({
       }
 
       const resetToken = await prisma.passwordResetToken.findFirst({
-        where: oneTimeTokenLookup(normalizedToken),
+        where: {
+          ...oneTimeTokenLookup(normalizedToken),
+          purpose: PASSWORD_RESET_TOKEN_PURPOSE,
+        },
       });
 
       if (!resetToken) {

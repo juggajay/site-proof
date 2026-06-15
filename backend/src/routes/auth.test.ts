@@ -1369,6 +1369,7 @@ describe('Password Reset Flow', () => {
       orderBy: { createdAt: 'desc' },
     });
     expect(storedToken?.token).toMatch(/^sha256:[a-f0-9]{64}$/);
+    expect(storedToken?.purpose).toBe('password_reset');
 
     const { auditLog, changes } = await expectLatestUserAuditLog(
       user!.id,
@@ -1416,6 +1417,7 @@ describe('Password Reset Flow', () => {
       data: {
         userId: user!.id,
         token: hashAuthTokenForTest(token),
+        purpose: 'magic_link',
         expiresAt: new Date(Date.now() + 15 * 60 * 1000),
       },
     });
@@ -1754,6 +1756,7 @@ describe('Magic Link Authentication', () => {
       orderBy: { createdAt: 'desc' },
     });
     expect(storedToken?.token).toMatch(/^sha256:[a-f0-9]{64}$/);
+    expect(storedToken?.purpose).toBe('magic_link');
     expect(storedToken?.token.startsWith('magic_')).toBe(false);
 
     const { auditLog, changes } = await expectLatestUserAuditLog(
@@ -1764,6 +1767,43 @@ describe('Magic Link Authentication', () => {
     expect(changes).toEqual({ method: 'magic_link', expiresInMinutes: 15 });
     expect(JSON.stringify(changes)).not.toContain(storedToken!.token);
     expect(JSON.stringify(changes)).not.toMatch(/token|secret|password/i);
+  });
+
+  it('should not invalidate active password reset tokens when requesting a magic link', async () => {
+    const user = await prisma.user.findUnique({ where: { email: magicEmail } });
+    expect(user).toBeDefined();
+
+    const resetToken = `reset_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    const resetTokenHash = hashAuthTokenForTest(resetToken);
+    const resetRecord = await prisma.passwordResetToken.create({
+      data: {
+        userId: user!.id,
+        token: resetTokenHash,
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      },
+    });
+
+    try {
+      const res = await request(app)
+        .post('/api/auth/magic-link/request')
+        .send({ email: magicEmail });
+
+      expect(res.status).toBe(200);
+
+      const preservedResetToken = await prisma.passwordResetToken.findUnique({
+        where: { id: resetRecord.id },
+      });
+      expect(preservedResetToken?.usedAt).toBeNull();
+
+      const validateRes = await request(app)
+        .get('/api/auth/validate-reset-token')
+        .query({ token: resetToken });
+
+      expect(validateRes.status).toBe(200);
+      expect(validateRes.body.valid).toBe(true);
+    } finally {
+      await prisma.passwordResetToken.deleteMany({ where: { userId: user!.id } });
+    }
   });
 
   it('should not reveal non-existent email', async () => {
@@ -1792,6 +1832,7 @@ describe('Magic Link Authentication', () => {
       data: {
         userId: user!.id,
         token: hashAuthTokenForTest(token),
+        purpose: 'magic_link',
         expiresAt: new Date(Date.now() + 15 * 60 * 1000),
       },
     });
@@ -1833,6 +1874,7 @@ describe('Magic Link Authentication', () => {
       data: {
         userId: user!.id,
         token: hashAuthTokenForTest(token),
+        purpose: 'magic_link',
         expiresAt: new Date(Date.now() + 15 * 60 * 1000),
       },
     });
