@@ -1428,6 +1428,100 @@ describe('ITP Completion Attachments', () => {
     expect(Number(updatedDocument.gpsLongitude)).toBeCloseTo(151.2099, 5);
   });
 
+  it('should enforce one attachment link per completion and document at the database level', async () => {
+    const timestamp = Date.now();
+    const duplicateGuardDocument = await prisma.document.create({
+      data: {
+        projectId,
+        lotId,
+        documentType: 'photo',
+        category: 'itp_evidence',
+        filename: `duplicate-guard-${timestamp}.jpg`,
+        fileUrl: `/uploads/documents/duplicate-guard-${timestamp}.jpg`,
+        fileSize: 1024,
+        mimeType: 'image/jpeg',
+        uploadedById: userId,
+      },
+    });
+
+    try {
+      await prisma.iTPCompletionAttachment.create({
+        data: {
+          completionId,
+          documentId: duplicateGuardDocument.id,
+        },
+      });
+
+      await expect(
+        prisma.iTPCompletionAttachment.create({
+          data: {
+            completionId,
+            documentId: duplicateGuardDocument.id,
+          },
+        }),
+      ).rejects.toMatchObject({ code: 'P2002' });
+
+      const attachmentCount = await prisma.iTPCompletionAttachment.count({
+        where: {
+          completionId,
+          documentId: duplicateGuardDocument.id,
+        },
+      });
+      expect(attachmentCount).toBe(1);
+    } finally {
+      await prisma.iTPCompletionAttachment.deleteMany({
+        where: { documentId: duplicateGuardDocument.id },
+      });
+      await prisma.document.delete({ where: { id: duplicateGuardDocument.id } }).catch(() => {});
+    }
+  });
+
+  it('should handle concurrent duplicate attachment requests idempotently', async () => {
+    const timestamp = Date.now();
+    const concurrentDocument = await prisma.document.create({
+      data: {
+        projectId,
+        lotId,
+        documentType: 'photo',
+        category: 'itp_evidence',
+        filename: `concurrent-attach-${timestamp}.jpg`,
+        fileUrl: `/uploads/documents/concurrent-attach-${timestamp}.jpg`,
+        fileSize: 1024,
+        mimeType: 'image/jpeg',
+        uploadedById: userId,
+      },
+    });
+
+    try {
+      const responses = await Promise.all([
+        request(app)
+          .post(`/api/itp/completions/${completionId}/attachments`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ documentId: concurrentDocument.id }),
+        request(app)
+          .post(`/api/itp/completions/${completionId}/attachments`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ documentId: concurrentDocument.id }),
+      ]);
+
+      expect(responses.map((res) => res.status).sort()).toEqual([200, 201]);
+      expect(new Set(responses.map((res) => res.body.attachment.id)).size).toBe(1);
+
+      const attachmentCount = await prisma.iTPCompletionAttachment.count({
+        where: {
+          completionId,
+          documentId: concurrentDocument.id,
+        },
+      });
+      expect(attachmentCount).toBe(1);
+    } finally {
+      await prisma.iTPCompletionAttachment.deleteMany({
+        where: { documentId: concurrentDocument.id },
+      });
+      await prisma.document.delete({ where: { id: concurrentDocument.id } }).catch(() => {});
+    }
+  });
+
   it('should reject malformed or out-of-range GPS coordinates on attachments', async () => {
     const malformedLatitude = await request(app)
       .post(`/api/itp/completions/${completionId}/attachments`)
