@@ -1877,7 +1877,7 @@ describe('Progress Claims API', () => {
       expect(certificationDocumentId).toBeDefined();
 
       // Detail GET surfaces the parsed certification sub-object (who/notes/cert)
-      // while keeping the raw disputeNotes JSON intact.
+      // without exposing the raw disputeNotes JSON metadata.
       const detailRes = await request(app)
         .get(`/api/projects/${projectId}/claims/${claim.id}`)
         .set('Authorization', `Bearer ${authToken}`);
@@ -1888,6 +1888,7 @@ describe('Progress Claims API', () => {
         certificationDocumentId,
       });
       expect(detailRes.body.claim.certification.certifiedByName).toBeTruthy();
+      expect(detailRes.body.claim.disputeNotes).toBeNull();
 
       // List GET surfaces the same certification read-back for the certified claim.
       const listRes = await request(app)
@@ -1895,13 +1896,18 @@ describe('Progress Claims API', () => {
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(listRes.status).toBe(200);
-      const listed = (listRes.body.claims as Array<{ id: string; certification?: unknown }>).find(
-        (c) => c.id === claim.id,
-      );
+      const listed = (
+        listRes.body.claims as Array<{
+          id: string;
+          certification?: unknown;
+          disputeNotes?: unknown;
+        }>
+      ).find((c) => c.id === claim.id);
       expect(listed?.certification).toMatchObject({
         variationNotes: 'Approved with a minor variation',
         certificationDocumentId,
       });
+      expect(listed?.disputeNotes).toBeNull();
     });
 
     it('keeps the certification document recoverable after a certified claim is disputed', async () => {
