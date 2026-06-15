@@ -1,6 +1,6 @@
 // Feature #248: Documents & Photos management page
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '../../lib/api';
 import { queryKeys } from '@/lib/queryKeys';
@@ -63,9 +63,12 @@ interface LotsResponse {
 
 export function DocumentsPage() {
   const { projectId } = useParams<{ projectId: string }>();
+  const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const deletingDocumentRef = useRef<string | null>(null);
   const favouriteDocumentRef = useRef<string | null>(null);
+  const queryLotId = searchParams.get('lotId') || '';
+  const shouldOpenUploadFromQuery = searchParams.get('upload') === '1';
 
   // Upload workflow (modal state, drag/drop, multi-file progress, upload mutation)
   const upload = useDocumentUpload(projectId);
@@ -73,7 +76,7 @@ export function DocumentsPage() {
   // Filters
   const [filterType, setFilterType] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
-  const [filterLot, setFilterLot] = useState('');
+  const [filterLot, setFilterLot] = useState(() => queryLotId);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -90,8 +93,31 @@ export function DocumentsPage() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [documentPendingDelete, setDocumentPendingDelete] = useState<Document | null>(null);
   const viewerRef = useRef<HTMLDivElement>(null);
+  const appliedUploadQueryRef = useRef<string | null>(null);
 
   const triggerSearch = () => setCommittedSearch(searchQuery.trim());
+  const uploadQueryKey = `${queryLotId}:${shouldOpenUploadFromQuery ? 'open' : 'closed'}`;
+
+  const openUploadForCurrentLot = () => {
+    if (filterLot) {
+      upload.updateUploadForm({ lotId: filterLot });
+    }
+    upload.openUploadModal();
+  };
+
+  useEffect(() => {
+    setFilterLot(queryLotId);
+  }, [queryLotId]);
+
+  useEffect(() => {
+    if (!shouldOpenUploadFromQuery || appliedUploadQueryRef.current === uploadQueryKey) return;
+
+    appliedUploadQueryRef.current = uploadQueryKey;
+    if (queryLotId) {
+      upload.updateUploadForm({ lotId: queryLotId });
+    }
+    upload.openUploadModal();
+  }, [queryLotId, shouldOpenUploadFromQuery, upload, uploadQueryKey]);
 
   // Build documents query path
   const docsQueryPath = (() => {
@@ -338,7 +364,7 @@ export function DocumentsPage() {
   return (
     <div ref={upload.dropZoneRef} className="space-y-6 relative" {...upload.containerDragHandlers}>
       <DocumentDragOverlay isDragging={upload.isDragging} />
-      <DocumentsPageHeader onUpload={upload.openUploadModal} />
+      <DocumentsPageHeader onUpload={openUploadForCurrentLot} />
 
       {/* Filters */}
       <DocumentFiltersPanel

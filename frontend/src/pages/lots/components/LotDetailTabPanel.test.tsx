@@ -1,5 +1,6 @@
 import { createRef } from 'react';
-import { cleanup, screen } from '@testing-library/react';
+import { Route, Routes, useLocation } from 'react-router-dom';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '@/test/renderWithProviders';
 import { LotDetailTabPanel } from './LotDetailTabPanel';
@@ -84,6 +85,11 @@ function renderPanel(overrides: Partial<Parameters<typeof LotDetailTabPanel>[0]>
   return { props, ...result };
 }
 
+function LocationProbe() {
+  const location = useLocation();
+  return <div data-testid="location-probe">{`${location.pathname}${location.search}`}</div>;
+}
+
 describe('LotDetailTabPanel', () => {
   it('keeps the readiness panel chrome and attaches the page-owned ref', () => {
     const tabSectionRef = createRef<HTMLDivElement>();
@@ -120,6 +126,28 @@ describe('LotDetailTabPanel', () => {
     expect(captured.checklistTab).toMatchObject({ autoOpenAssignTemplate: true });
     expect(captured.checklistTab?.onAutoOpenAssignTemplateHandled).toBe(
       handleAssignItpActionHandled,
+    );
+  });
+
+  it('opens the project documents page with the current lot selected for uploads', () => {
+    const { props } = renderPanel({
+      currentTab: 'documents',
+      currentTabLabel: 'Documents',
+    });
+    cleanup();
+
+    renderWithProviders(
+      <Routes>
+        <Route path="/" element={<LotDetailTabPanel {...props} />} />
+        <Route path="/projects/:projectId/documents" element={<LocationProbe />} />
+      </Routes>,
+      { initialEntries: ['/'] },
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Upload Document' }));
+
+    expect(screen.getByTestId('location-probe')).toHaveTextContent(
+      '/projects/project-1/documents?lotId=lot-1&upload=1',
     );
   });
 });
