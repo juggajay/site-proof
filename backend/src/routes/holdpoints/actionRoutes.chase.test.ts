@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => {
     holdPointReleaseToken: {
       findMany: vi.fn(),
       createMany: vi.fn(),
+      deleteMany: vi.fn(),
     },
     projectUser: {
       findMany: vi.fn(),
@@ -102,6 +103,7 @@ describe('hold point chase action route', () => {
       chaseCount: 2,
     });
     mocks.prisma.holdPointReleaseToken.createMany.mockResolvedValue({ count: 1 });
+    mocks.prisma.holdPointReleaseToken.deleteMany.mockResolvedValue({ count: 1 });
     mocks.prisma.projectUser.findMany.mockResolvedValue([]);
     mocks.createAuditLog.mockResolvedValue(undefined);
     mocks.sendHPChaseEmail.mockResolvedValue({ success: true });
@@ -144,5 +146,30 @@ describe('hold point chase action route', () => {
     });
     expect(tokenCreatePayload.data[0].token).toMatch(/^sha256:[a-f0-9]{64}$/);
     expect(tokenCreatePayload.data[0].expiresAt.getTime()).toBeGreaterThan(Date.now());
+    expect(mocks.prisma.holdPointReleaseToken.deleteMany).toHaveBeenCalledWith({
+      where: {
+        holdPointId: 'hp-1',
+        recipientEmail: 'external.super@example.com',
+        usedAt: null,
+        token: { not: tokenCreatePayload.data[0].token },
+      },
+    });
+  });
+
+  it('keeps old external tokens valid when the chase email send fails', async () => {
+    mocks.prisma.holdPointReleaseToken.findMany.mockResolvedValue([
+      {
+        recipientEmail: 'external.super@example.com',
+        recipientName: 'External Superintendent',
+      },
+    ]);
+    mocks.sendHPChaseEmail.mockResolvedValue({ success: false, error: 'provider rejected' });
+
+    const res = await request(app).post('/api/holdpoints/hp-1/chase');
+
+    expect(res.status).toBe(200);
+    expect(mocks.prisma.holdPointReleaseToken.createMany).toHaveBeenCalledOnce();
+    expect(mocks.sendHPChaseEmail).toHaveBeenCalledOnce();
+    expect(mocks.prisma.holdPointReleaseToken.deleteMany).not.toHaveBeenCalled();
   });
 });

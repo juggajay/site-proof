@@ -112,6 +112,24 @@ async function createChaseReleaseTokens(
   });
 }
 
+async function revokeSupersededChaseReleaseTokens(
+  holdPointId: string,
+  tokenTarget: HoldPointChaseTarget,
+): Promise<void> {
+  if (!tokenTarget.secureToken) {
+    return;
+  }
+
+  await prisma.holdPointReleaseToken.deleteMany({
+    where: {
+      holdPointId,
+      recipientEmail: tokenTarget.email,
+      usedAt: null,
+      token: { not: hashHoldPointReleaseToken(tokenTarget.secureToken) },
+    },
+  });
+}
+
 async function loadProjectChaseTargets(projectId: string): Promise<HoldPointChaseTarget[]> {
   // Get project users with superintendent role to notify.
   const superintendents = await prisma.projectUser.findMany({
@@ -613,7 +631,7 @@ holdPointActionRouter.post(
           loggedInEvidencePackageUrl,
           loggedInReleaseUrl,
         );
-        await sendHPChaseEmail(
+        const emailResult = await sendHPChaseEmail(
           buildHoldPointChaseEmail(
             { user: { email: recipient.email, fullName: recipient.fullName } },
             {
@@ -623,6 +641,10 @@ holdPointActionRouter.post(
             },
           ),
         );
+
+        if (emailResult.success) {
+          await revokeSupersededChaseReleaseTokens(existingHP.id, recipient);
+        }
       }
     } catch (emailError) {
       logError('[HP Chase] Failed to send chase email:', emailError);
