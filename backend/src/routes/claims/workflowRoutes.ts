@@ -340,102 +340,129 @@ export function createClaimWorkflowRouter({
         throw AppError.badRequest('Paid amount is required when marking a claim as paid');
       }
 
-      const claim = await prisma.progressClaim.findFirst({
-        where: { id: claimId, projectId },
-        include: {
-          project: {
-            select: { id: true, name: true },
+      const updateResult = await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw<Array<{ id: string }>>`
+          SELECT id
+          FROM progress_claims
+          WHERE id = ${claimId} AND project_id = ${projectId}
+          FOR UPDATE
+        `;
+
+        const claim = await tx.progressClaim.findFirst({
+          where: { id: claimId, projectId },
+          include: {
+            project: {
+              select: { id: true, name: true },
+            },
           },
-        },
-      });
+        });
 
-      if (!claim) {
-        throw AppError.notFound('Claim');
-      }
-
-      // Don't allow updates to paid claims
-      if (claim.status === 'paid') {
-        throw AppError.badRequest('Cannot update a paid claim');
-      }
-
-      assertGenericClaimStatusTransition(claim.status, status);
-
-      if (status === 'certified' && certifiedAmount !== undefined) {
-        assertCertifiedAmountWithinClaimTotal(certifiedAmount, claim.totalClaimedAmount);
-      }
-
-      if (status === 'paid' && paidAmount !== undefined) {
-        const certifiedTotal = claim.certifiedAmount ? Number(claim.certifiedAmount) : 0;
-        if (claim.status !== 'certified' || certifiedTotal <= 0) {
-          throw AppError.badRequest(
-            'Can only mark certified claims with a certified amount as paid',
-          );
+        if (!claim) {
+          throw AppError.notFound('Claim');
         }
 
-        if (Math.abs(paidAmount - certifiedTotal) > CLAIM_AMOUNT_EPSILON) {
-          throw AppError.badRequest(
-            'Paid amount must equal the certified amount when marking a claim as paid',
-          );
+        // Don't allow updates to paid claims
+        if (claim.status === 'paid') {
+          throw AppError.badRequest('Cannot update a paid claim');
         }
-      }
 
-      if (
-        (status === 'certified' && claim.status === 'certified' && claim.certifiedAt) ||
-        (status === 'disputed' && claim.status === 'disputed' && claim.disputedAt)
-      ) {
-        const existingClaim = await prisma.progressClaim.findUniqueOrThrow({
+        assertGenericClaimStatusTransition(claim.status, status);
+
+        if (status === 'certified' && certifiedAmount !== undefined) {
+          assertCertifiedAmountWithinClaimTotal(certifiedAmount, claim.totalClaimedAmount);
+        }
+
+        if (status === 'paid' && paidAmount !== undefined) {
+          const certifiedTotal = claim.certifiedAmount ? Number(claim.certifiedAmount) : 0;
+          if (claim.status !== 'certified' || certifiedTotal <= 0) {
+            throw AppError.badRequest(
+              'Can only mark certified claims with a certified amount as paid',
+            );
+          }
+
+          if (Math.abs(paidAmount - certifiedTotal) > CLAIM_AMOUNT_EPSILON) {
+            throw AppError.badRequest(
+              'Paid amount must equal the certified amount when marking a claim as paid',
+            );
+          }
+        }
+
+        if (
+          (status === 'certified' && claim.status === 'certified' && claim.certifiedAt) ||
+          (status === 'disputed' && claim.status === 'disputed' && claim.disputedAt)
+        ) {
+          const existingClaim = await tx.progressClaim.findUniqueOrThrow({
+            where: { id: claimId },
+            include: {
+              _count: {
+                select: { claimedLots: true },
+              },
+            },
+          });
+          return {
+            claim,
+            updatedClaim: existingClaim,
+            previousStatus: claim.status,
+            idempotentRetry: true,
+          };
+        }
+
+        const updateData: Prisma.ProgressClaimUpdateInput = {};
+        const previousStatus = claim.status;
+
+        if (status) {
+          updateData.status = status;
+          if (status === 'submitted') {
+            updateData.submittedAt = new Date();
+          }
+          if (status === 'certified' && certifiedAmount !== undefined) {
+            updateData.certifiedAmount = certifiedAmount;
+            updateData.certifiedAt = new Date();
+          }
+          if (status === 'paid' && paidAmount !== undefined) {
+            updateData.paidAmount = paidAmount;
+            updateData.paidAt = new Date();
+            updateData.paymentReference = paymentReference || null;
+          }
+          if (status === 'disputed') {
+            updateData.disputedAt = new Date();
+            updateData.disputeNotes = serializeDisputeNotesForStatusTransition(
+              claim.disputeNotes,
+              disputeNotes,
+            );
+          }
+        }
+
+        const updatedClaim = await tx.progressClaim.update({
           where: { id: claimId },
+          data: updateData,
           include: {
             _count: {
               select: { claimedLots: true },
             },
           },
         });
+
+        return {
+          claim,
+          updatedClaim,
+          previousStatus,
+          idempotentRetry: false,
+        };
+      });
+
+      const { claim, updatedClaim, previousStatus } = updateResult;
+
+      if (updateResult.idempotentRetry) {
         res.json(
           buildClaimDetailResponse({
-            ...existingClaim,
-            disputeNotes: getClaimReadDisputeNotes(existingClaim.disputeNotes),
-            certification: buildClaimCertificationView(existingClaim.disputeNotes),
+            ...updatedClaim,
+            disputeNotes: getClaimReadDisputeNotes(updatedClaim.disputeNotes),
+            certification: buildClaimCertificationView(updatedClaim.disputeNotes),
           }),
         );
         return;
       }
-
-      const updateData: Prisma.ProgressClaimUpdateInput = {};
-      const previousStatus = claim.status;
-
-      if (status) {
-        updateData.status = status;
-        if (status === 'submitted') {
-          updateData.submittedAt = new Date();
-        }
-        if (status === 'certified' && certifiedAmount !== undefined) {
-          updateData.certifiedAmount = certifiedAmount;
-          updateData.certifiedAt = new Date();
-        }
-        if (status === 'paid' && paidAmount !== undefined) {
-          updateData.paidAmount = paidAmount;
-          updateData.paidAt = new Date();
-          updateData.paymentReference = paymentReference || null;
-        }
-        if (status === 'disputed') {
-          updateData.disputedAt = new Date();
-          updateData.disputeNotes = serializeDisputeNotesForStatusTransition(
-            claim.disputeNotes,
-            disputeNotes,
-          );
-        }
-      }
-
-      const updatedClaim = await prisma.progressClaim.update({
-        where: { id: claimId },
-        data: updateData,
-        include: {
-          _count: {
-            select: { claimedLots: true },
-          },
-        },
-      });
 
       // Feature #931 - Notify project managers when a claim is certified
       if (

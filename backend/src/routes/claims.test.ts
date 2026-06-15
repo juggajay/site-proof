@@ -1410,6 +1410,89 @@ describe('Progress Claims API', () => {
       expect(Number(res.body.claim.paidAmount)).toBe(4800);
     });
 
+    it('should only mark a certified claim paid once under concurrent generic updates', async () => {
+      const claim = await createSubmittedCertificationClaim(1000);
+      await prisma.progressClaim.update({
+        where: { id: claim.id },
+        data: {
+          status: 'certified',
+          certifiedAmount: 1000,
+          certifiedAt: new Date(),
+        },
+      });
+
+      await prisma.$executeRaw`
+        CREATE OR REPLACE FUNCTION test_delay_generic_claim_paid_update()
+        RETURNS trigger AS $$
+        BEGIN
+          IF OLD.status = 'certified' AND NEW.status = 'paid' THEN
+            PERFORM pg_sleep(0.25);
+          END IF;
+          RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+      `;
+      await prisma.$executeRaw`
+        DROP TRIGGER IF EXISTS test_delay_generic_claim_paid_update_trigger ON progress_claims
+      `;
+      await prisma.$executeRaw`
+        CREATE TRIGGER test_delay_generic_claim_paid_update_trigger
+        BEFORE UPDATE ON progress_claims
+        FOR EACH ROW
+        EXECUTE FUNCTION test_delay_generic_claim_paid_update();
+      `;
+
+      try {
+        const markPaid = (paymentReference: string) =>
+          request(app)
+            .put(`/api/projects/${projectId}/claims/${claim.id}`)
+            .set('Authorization', `Bearer ${authToken}`)
+            .send({
+              status: 'paid',
+              paidAmount: 1000,
+              paymentReference,
+            });
+
+        const responses = await Promise.all([
+          markPaid('PAY-GENERIC-CONCURRENT-001'),
+          markPaid('PAY-GENERIC-CONCURRENT-002'),
+        ]);
+        const statuses = responses.map((response) => response.status).sort((a, b) => a - b);
+
+        expect(statuses).toEqual([200, 400]);
+
+        const updatedClaim = await prisma.progressClaim.findUnique({ where: { id: claim.id } });
+        expect(updatedClaim?.status).toBe('paid');
+        expect(Number(updatedClaim?.paidAmount)).toBe(1000);
+
+        const notificationCount = await prisma.notification.count({
+          where: {
+            projectId,
+            type: 'claim_paid',
+            message: { contains: `Claim #${claim.claimNumber}` },
+          },
+        });
+        expect(notificationCount).toBe(1);
+
+        const auditCount = await prisma.auditLog.count({
+          where: {
+            projectId,
+            entityType: 'progress_claim',
+            entityId: claim.id,
+            action: AuditAction.CLAIM_STATUS_CHANGED,
+          },
+        });
+        expect(auditCount).toBe(1);
+      } finally {
+        await prisma.$executeRaw`
+          DROP TRIGGER IF EXISTS test_delay_generic_claim_paid_update_trigger ON progress_claims
+        `;
+        await prisma.$executeRaw`
+          DROP FUNCTION IF EXISTS test_delay_generic_claim_paid_update()
+        `;
+      }
+    });
+
     it('should reject updates to paid claims', async () => {
       const res = await request(app)
         .put(`/api/projects/${projectId}/claims/${claimId}`)
