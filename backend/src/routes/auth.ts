@@ -2,8 +2,9 @@ import { Router } from 'express';
 import type { NextFunction, Request, Response } from 'express';
 import { prisma } from '../lib/prisma.js';
 import {
-  generateToken,
   generateExpiredToken,
+  generateMfaChallengeToken,
+  generateToken,
   hashPassword,
   needsPasswordRehash,
   verifyPassword,
@@ -342,6 +343,7 @@ authRouter.post(
         return res.status(200).json({
           mfaRequired: true,
           userId: user.id,
+          mfaChallengeToken: generateMfaChallengeToken(user.id),
           message: 'MFA verification required',
         });
       }
