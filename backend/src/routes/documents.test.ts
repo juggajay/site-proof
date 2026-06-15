@@ -1211,6 +1211,7 @@ describe('Documents API', () => {
     let itpInstanceId: string;
     let checklistItemId: string;
     let completionId: string;
+    let hiddenCompletionId: string;
     let foreignCompanyId: string;
     let foreignProjectId: string;
     let foreignLotId: string;
@@ -1224,13 +1225,26 @@ describe('Documents API', () => {
           name: `Evidence Pipeline Template ${suffix}`,
           activityType: 'Earthworks',
           checklistItems: {
-            create: [{ sequenceNumber: 1, description: 'Compaction evidence' }],
+            create: [
+              { sequenceNumber: 1, description: 'Compaction evidence' },
+              {
+                sequenceNumber: 2,
+                description: 'Superintendent release evidence',
+                pointType: 'hold_point',
+                responsibleParty: 'superintendent',
+              },
+            ],
           },
         },
         include: { checklistItems: true },
       });
       templateId = template.id;
-      checklistItemId = template.checklistItems[0].id;
+      const visibleItem = template.checklistItems.find((item) => item.sequenceNumber === 1);
+      const hiddenItem = template.checklistItems.find((item) => item.sequenceNumber === 2);
+      if (!visibleItem || !hiddenItem) {
+        throw new Error('Failed to create ITP evidence fixture checklist items');
+      }
+      checklistItemId = visibleItem.id;
 
       const instance = await prisma.iTPInstance.create({
         data: { lotId, templateId, status: 'in_progress' },
@@ -1241,6 +1255,15 @@ describe('Documents API', () => {
         data: { itpInstanceId, checklistItemId, status: 'pending' },
       });
       completionId = completion.id;
+
+      const hiddenCompletion = await prisma.iTPCompletion.create({
+        data: {
+          itpInstanceId,
+          checklistItemId: hiddenItem.id,
+          status: 'pending',
+        },
+      });
+      hiddenCompletionId = hiddenCompletion.id;
 
       // A completion in another company's project: resolvable by id, but the
       // upload must reject it (cross-project/cross-company evidence).
@@ -1298,11 +1321,14 @@ describe('Documents API', () => {
     });
 
     afterAll(async () => {
+      const completionIds = [completionId, hiddenCompletionId, foreignCompletionId].filter(
+        (id): id is string => Boolean(id),
+      );
       await prisma.iTPCompletionAttachment.deleteMany({
-        where: { completionId: { in: [completionId, foreignCompletionId] } },
+        where: { completionId: { in: completionIds } },
       });
       await prisma.iTPCompletion.deleteMany({
-        where: { id: { in: [completionId, foreignCompletionId] } },
+        where: { id: { in: completionIds } },
       });
       await prisma.iTPInstance.deleteMany({
         where: { OR: [{ id: itpInstanceId }, { lotId: foreignLotId }] },
@@ -1315,10 +1341,12 @@ describe('Documents API', () => {
       await prisma.company.deleteMany({ where: { id: foreignCompanyId } });
     });
 
-    async function uploadEvidence(fields: Record<string, string>, filename: string) {
-      let req = request(app)
-        .post('/api/documents/upload')
-        .set('Authorization', `Bearer ${authToken}`);
+    async function uploadEvidence(
+      fields: Record<string, string>,
+      filename: string,
+      token = authToken,
+    ) {
+      let req = request(app).post('/api/documents/upload').set('Authorization', `Bearer ${token}`);
       for (const [name, value] of Object.entries(fields)) {
         req = req.field(name, value);
       }
@@ -1412,6 +1440,81 @@ describe('Documents API', () => {
       expect(attachments).toBe(0);
       const leakedFiles = fs.readdirSync(uploadDir).filter((file) => file.includes(filename));
       expect(leakedFiles).toHaveLength(0);
+    });
+
+    it('rejects subcontractor offline uploads to hidden ITP checklist items and stores nothing', async () => {
+      const suffix = Date.now();
+      const filename = `itp-evidence-hidden-${suffix}.png`;
+      const subcontractorCompany = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `Hidden Evidence Subcontractor ${suffix}`,
+          status: 'approved',
+          portalAccess: { itps: true },
+        },
+      });
+      const subcontractor = await registerTestUser(app, {
+        emailPrefix: 'documents-hidden-itp-evidence-sub',
+        fullName: 'Documents Hidden ITP Evidence Subcontractor',
+        roleInCompany: 'subcontractor',
+      });
+
+      try {
+        await prisma.user.update({
+          where: { id: subcontractor.userId },
+          data: { companyId: null, roleInCompany: 'subcontractor' },
+        });
+        await prisma.subcontractorUser.create({
+          data: {
+            userId: subcontractor.userId,
+            subcontractorCompanyId: subcontractorCompany.id,
+            role: 'user',
+          },
+        });
+        await prisma.lotSubcontractorAssignment.create({
+          data: {
+            projectId,
+            lotId,
+            subcontractorCompanyId: subcontractorCompany.id,
+            status: 'active',
+            canCompleteITP: true,
+          },
+        });
+
+        const res = await uploadEvidence(
+          {
+            projectId,
+            lotId,
+            documentType: 'photo',
+            category: 'itp_evidence',
+            entityType: 'itp',
+            entityId: hiddenCompletionId,
+          },
+          filename,
+          subcontractor.token,
+        );
+
+        expect(res.status).toBe(403);
+
+        const createdDocument = await prisma.document.findFirst({ where: { projectId, filename } });
+        expect(createdDocument).toBeNull();
+        const attachments = await prisma.iTPCompletionAttachment.count({
+          where: { completionId: hiddenCompletionId },
+        });
+        expect(attachments).toBe(0);
+        const leakedFiles = fs.readdirSync(uploadDir).filter((file) => file.includes(filename));
+        expect(leakedFiles).toHaveLength(0);
+      } finally {
+        await prisma.lotSubcontractorAssignment.deleteMany({
+          where: { subcontractorCompanyId: subcontractorCompany.id },
+        });
+        await prisma.subcontractorUser.deleteMany({ where: { userId: subcontractor.userId } });
+        await prisma.emailVerificationToken.deleteMany({ where: { userId: subcontractor.userId } });
+        await prisma.user.delete({ where: { id: subcontractor.userId } }).catch(() => {});
+        await prisma.subcontractorCompany
+          .delete({ where: { id: subcontractorCompany.id } })
+          .catch(() => {});
+      }
     });
 
     it('ignores non-itp entity types (additive: existing offline photo uploads unchanged)', async () => {

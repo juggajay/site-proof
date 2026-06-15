@@ -34,6 +34,10 @@ import {
   requireItpProjectRole,
   requireItpSubcontractorCompletionPermission,
 } from '../itp/helpers/access.js';
+import {
+  isSubcontractorVisibleChecklistItem,
+  resolveChecklistItemForInstance,
+} from '../itp/helpers/templateSnapshot.js';
 
 export const ITP_EVIDENCE_ENTITY_TYPE = 'itp';
 
@@ -71,11 +75,41 @@ export async function resolveItpEvidenceAttachmentTarget(
     where: { id: entityId },
     select: {
       id: true,
+      checklistItemId: true,
+      checklistItem: {
+        select: {
+          id: true,
+          description: true,
+          sequenceNumber: true,
+          pointType: true,
+          responsibleParty: true,
+          evidenceRequired: true,
+          acceptanceCriteria: true,
+          testType: true,
+        },
+      },
       itpInstance: {
         select: {
           lotId: true,
+          templateSnapshot: true,
           lot: { select: { projectId: true } },
-          template: { select: { projectId: true } },
+          template: {
+            select: {
+              projectId: true,
+              checklistItems: {
+                select: {
+                  id: true,
+                  description: true,
+                  sequenceNumber: true,
+                  pointType: true,
+                  responsibleParty: true,
+                  evidenceRequired: true,
+                  acceptanceCriteria: true,
+                  testType: true,
+                },
+              },
+            },
+          },
         },
       },
     },
@@ -124,6 +158,16 @@ export async function resolveItpEvidenceAttachmentTarget(
     if (isItpSubcontractorUser(user)) {
       throw AppError.forbidden('ITP attachment write access required');
     }
+  }
+
+  const checklistItem = resolveChecklistItemForInstance(
+    completion.itpInstance,
+    completion.checklistItemId,
+    completion.checklistItem,
+  );
+
+  if (isItpSubcontractorUser(user) && !isSubcontractorVisibleChecklistItem(checklistItem ?? {})) {
+    throw AppError.forbidden('ITP attachment write access required');
   }
 
   return { completionId: completion.id };
