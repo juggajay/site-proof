@@ -375,13 +375,13 @@ holdPointRequestReleaseRouter.post(
         });
       }
 
-      // Keep the state/token write atomic with delivery acceptance. If delivery
-      // is rejected, the transaction rolls back and the hold point is not marked
-      // as notified with unusable or unsent links.
-      await Promise.all(releaseTokenEntries.map(sendReleaseRequestEmail));
-
       return savedHoldPoint;
     });
+
+    // Send only after token persistence commits. Email delivery is an external
+    // side effect, so it cannot be rolled back safely; committing first ensures
+    // any accepted email contains a release link that remains valid.
+    await Promise.all(releaseTokenEntries.map(sendReleaseRequestEmail));
 
     // Audit log for HP release request
     await createAuditLog({
