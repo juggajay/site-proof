@@ -102,4 +102,22 @@ describe('Sidebar project navigation', () => {
     expect(screen.getByRole('link', { name: /Hold Points/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /NCRs/i })).toBeInTheDocument();
   });
+
+  it('shows commercial project links for project-scoped project managers', () => {
+    useAuthMock.mockReturnValue({
+      user: {
+        id: 'project-pm-1',
+        email: 'project-pm@example.com',
+        role: 'member',
+        roleInCompany: 'member',
+        dashboardRole: 'project_manager',
+        companyId: 'company-1',
+      },
+    } as unknown as ReturnType<typeof useAuth>);
+
+    renderProjectSidebar();
+
+    expect(screen.getByRole('link', { name: /Progress Claims/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Costs/i })).toBeInTheDocument();
+  });
 });

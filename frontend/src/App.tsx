@@ -348,7 +348,7 @@ function App() {
               <Route
                 path="/projects/:projectId/claims"
                 element={
-                  <RoleProtectedRoute allowedRoles={COMMERCIAL_ROLES}>
+                  <RoleProtectedRoute allowedRoles={COMMERCIAL_ROLES} allowProjectScopedRole>
                     <ClaimsPage />
                   </RoleProtectedRoute>
                 }
@@ -358,7 +358,7 @@ function App() {
               <Route
                 path="/projects/:projectId/costs"
                 element={
-                  <RoleProtectedRoute allowedRoles={COMMERCIAL_ROLES}>
+                  <RoleProtectedRoute allowedRoles={COMMERCIAL_ROLES} allowProjectScopedRole>
                     <CostsPage />
                   </RoleProtectedRoute>
                 }
