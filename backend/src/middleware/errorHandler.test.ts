@@ -276,6 +276,40 @@ describe('errorHandler', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
+  it('does not expose arbitrary legacy 4xx error messages in production', () => {
+    process.env.NODE_ENV = 'production';
+    suppressErrorLogOutput();
+    const { res, status, json } = mockResponse();
+    const err = new Error('library leaked token=legacy_secret');
+    Object.assign(err, { statusCode: 403, code: 'LEAKY_LIBRARY_CODE' });
+
+    errorHandler(err, mockRequest(), res, vi.fn() as NextFunction);
+
+    expect(status).toHaveBeenCalledWith(403);
+    expect(json).toHaveBeenCalledWith({
+      error: {
+        message: 'You do not have permission to perform this action',
+        code: 'FORBIDDEN',
+      },
+    });
+  });
+
+  it('continues to expose trusted AppError 4xx messages', () => {
+    process.env.NODE_ENV = 'production';
+    suppressErrorLogOutput();
+    const { res, status, json } = mockResponse();
+
+    errorHandler(AppError.badRequest('Invalid request payload'), mockRequest(), res, vi.fn());
+
+    expect(status).toHaveBeenCalledWith(400);
+    expect(json).toHaveBeenCalledWith({
+      error: {
+        message: 'Invalid request payload',
+        code: 'VALIDATION_ERROR',
+      },
+    });
+  });
+
   it('still handles requests when the local error log directory cannot be created', () => {
     process.env.ERROR_LOG_TO_FILE = 'true';
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
