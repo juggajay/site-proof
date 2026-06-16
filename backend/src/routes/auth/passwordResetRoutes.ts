@@ -5,6 +5,7 @@ import { hashPassword } from '../../lib/auth.js';
 import { AuditAction } from '../../lib/auditLog.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
+import { revokeActiveApiKeysForUser } from '../../lib/apiKeyRevocation.js';
 import { sendPasswordResetEmail } from '../../lib/email.js';
 import { buildFrontendUrl } from '../../lib/runtimeConfig.js';
 import { logWarn } from '../../lib/serverLogger.js';
@@ -195,7 +196,7 @@ export function createPasswordResetRouter({
       const newPasswordHash = hashPassword(normalizedPassword);
 
       // Update user password only if this request wins the one-time token consume.
-      await prisma.$transaction(async (tx) => {
+      const apiKeyRevocation = await prisma.$transaction(async (tx) => {
         const consumeResult = await tx.passwordResetToken.updateMany({
           where: {
             id: resetToken.id,
@@ -216,11 +217,14 @@ export function createPasswordResetRouter({
             tokenInvalidatedAt: consumedAt,
           },
         });
+
+        return revokeActiveApiKeysForUser(tx, resetToken.userId);
       });
 
       await auditUserAuthEvent(req, resetToken.userId, AuditAction.PASSWORD_CHANGED, {
         method: 'password_reset',
         sessionsInvalidated: true,
+        ...(apiKeyRevocation.count > 0 ? { apiAccessRevoked: apiKeyRevocation.count } : {}),
       });
 
       res.json({

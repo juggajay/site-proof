@@ -14,6 +14,18 @@ app.use('/api/auth', authRouter);
 app.use('/api/api-keys', apiKeysRouter);
 app.use(errorHandler);
 
+async function createApiKeyUserIdTestApp() {
+  const testApp = express();
+  testApp.use(express.json());
+
+  const { authenticateApiKey } = await import('./apiKeys.js');
+  testApp.get('/test', authenticateApiKey, (req, res) => {
+    res.json({ userId: (req as any).user.id });
+  });
+
+  return testApp;
+}
+
 describe('API Keys Management', () => {
   let authToken: string;
   let userId: string;
@@ -518,15 +530,7 @@ describe('API Keys Management', () => {
 
   describe('API Key Authentication Middleware', () => {
     it('should authenticate requests with valid API key via x-api-key header', async () => {
-      // Create a simple test route to verify authentication
-      const testApp = express();
-      testApp.use(express.json());
-
-      // Import and use the authenticateApiKey middleware
-      const { authenticateApiKey } = await import('./apiKeys.js');
-      testApp.get('/test', authenticateApiKey, (req, res) => {
-        res.json({ userId: (req as any).user.id });
-      });
+      const testApp = await createApiKeyUserIdTestApp();
 
       const res = await request(testApp).get('/test').set('x-api-key', generatedApiKey);
 
@@ -560,13 +564,7 @@ describe('API Keys Management', () => {
     });
 
     it('should authenticate requests with valid API key via Authorization header', async () => {
-      const testApp = express();
-      testApp.use(express.json());
-
-      const { authenticateApiKey } = await import('./apiKeys.js');
-      testApp.get('/test', authenticateApiKey, (req, res) => {
-        res.json({ userId: (req as any).user.id });
-      });
+      const testApp = await createApiKeyUserIdTestApp();
 
       const res = await request(testApp)
         .get('/test')
@@ -591,6 +589,45 @@ describe('API Keys Management', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.userId).toBe(userId);
+    });
+
+    it('should reject API keys after the owner logs out all devices', async () => {
+      const user = await registerTestUser(app, {
+        emailPrefix: 'apikeys-logout-all',
+        fullName: 'API Key Logout User',
+      });
+      const createRes = await request(app)
+        .post('/api/api-keys')
+        .set('Authorization', `Bearer ${user.token}`)
+        .send({
+          name: 'Logout All Revoked Key',
+          scopes: 'read',
+        });
+      const keyId = createRes.body.apiKey.id as string;
+      const apiKey = createRes.body.apiKey.key as string;
+
+      const testApp = await createApiKeyUserIdTestApp();
+      testApp.use(errorHandler);
+
+      try {
+        expect((await request(testApp).get('/test').set('x-api-key', apiKey)).status).toBe(200);
+
+        const logoutRes = await request(app)
+          .post('/api/auth/logout-all-devices')
+          .set('Authorization', `Bearer ${user.token}`);
+        expect(logoutRes.status).toBe(200);
+
+        const revokedRes = await request(testApp).get('/test').set('x-api-key', apiKey);
+        expect(revokedRes.status).toBe(401);
+        expect(revokedRes.body.error.message).toContain('Invalid or expired');
+
+        const keyRecord = await prisma.apiKey.findUnique({ where: { id: keyId } });
+        expect(keyRecord?.isActive).toBe(false);
+      } finally {
+        await prisma.apiKey.deleteMany({ where: { userId: user.userId } });
+        await prisma.emailVerificationToken.deleteMany({ where: { userId: user.userId } });
+        await prisma.user.delete({ where: { id: user.userId } }).catch(() => {});
+      }
     });
 
     it('should reject read-scoped API keys on mutating requests', async () => {
