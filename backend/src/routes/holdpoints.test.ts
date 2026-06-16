@@ -496,8 +496,30 @@ describe('Hold Points API', () => {
         where: { lotId },
         select: { id: true },
       });
-      const completion = await prisma.iTPCompletion.create({
-        data: {
+      const completion = await prisma.iTPCompletion.upsert({
+        where: {
+          itpInstanceId_checklistItemId: {
+            itpInstanceId: itpInstance.id,
+            checklistItemId,
+          },
+        },
+        update: {
+          status: 'completed',
+          completedById: null,
+          completedAt: null,
+          notes: null,
+          signatureUrl: null,
+          witnessPresent: null,
+          witnessName: null,
+          witnessCompany: null,
+          verificationStatus: 'none',
+          verifiedById: null,
+          verifiedAt: null,
+          verificationNotes: null,
+          gpsLatitude: null,
+          gpsLongitude: null,
+        },
+        create: {
           itpInstanceId: itpInstance.id,
           checklistItemId,
           status: 'completed',

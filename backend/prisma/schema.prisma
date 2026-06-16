@@ -558,7 +558,7 @@ model ITPCompletion {
   attachments ITPCompletionAttachment[]
 
   @@index([itpInstanceId])
-  @@index([itpInstanceId, checklistItemId])
+  @@unique([itpInstanceId, checklistItemId])
   @@index([verificationStatus])
   @@map("itp_completions")
 }
