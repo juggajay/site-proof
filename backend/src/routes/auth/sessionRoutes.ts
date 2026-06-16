@@ -32,6 +32,31 @@ export function createSessionRouter({
 }: CreateSessionRouterDependencies) {
   const sessionRouter = Router();
 
+  async function invalidateBearerSession(req: Request) {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      throw AppError.unauthorized('Authentication required');
+    }
+
+    const token = authHeader.substring(7);
+    const user = await verifyToken(token);
+
+    if (!user) {
+      throw AppError.unauthorized('Invalid or expired token');
+    }
+
+    // Use the app clock and current token authTime so DB clock skew cannot leave
+    // the request token valid when logout happens immediately after login.
+    const tokenAuthTime = getTokenAuthTime(token);
+    const invalidatedAt = new Date(Math.max(Date.now(), tokenAuthTime ?? 0) + 1);
+    await prisma.user.update({
+      where: { id: user.userId },
+      data: { tokenInvalidatedAt: invalidatedAt },
+    });
+
+    return { invalidatedAt, userId: user.userId };
+  }
+
   // GET /api/auth/me
   sessionRouter.get(
     '/me',
@@ -56,38 +81,31 @@ export function createSessionRouter({
   );
 
   // POST /api/auth/logout
-  sessionRouter.post('/logout', (_req, res) => {
-    // For JWT-based auth, client simply clears the token
-    res.json({ message: 'Logged out successfully' });
-  });
+  sessionRouter.post(
+    '/logout',
+    asyncHandler(async (req, res) => {
+      const { invalidatedAt, userId } = await invalidateBearerSession(req);
+
+      await auditUserAuthEvent(req, userId, AuditAction.USER_LOGOUT, {
+        scope: 'all_devices',
+        requestedScope: 'current_session',
+        sessionsInvalidated: true,
+      });
+
+      res.json({
+        message: 'Logged out successfully',
+        loggedOutAt: invalidatedAt.toISOString(),
+      });
+    }),
+  );
 
   // POST /api/auth/logout-all-devices - Invalidate all existing sessions
   sessionRouter.post(
     '/logout-all-devices',
     asyncHandler(async (req, res) => {
-      // Get the authorization header
-      const authHeader = req.headers.authorization;
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        throw AppError.unauthorized('Authentication required');
-      }
+      const { invalidatedAt, userId } = await invalidateBearerSession(req);
 
-      const token = authHeader.substring(7);
-      const user = await verifyToken(token);
-
-      if (!user) {
-        throw AppError.unauthorized('Invalid or expired token');
-      }
-
-      // Use the app clock and current token authTime so DB clock skew cannot leave
-      // the request token valid when logout happens immediately after login.
-      const tokenAuthTime = getTokenAuthTime(token);
-      const invalidatedAt = new Date(Math.max(Date.now(), tokenAuthTime ?? 0) + 1);
-      await prisma.user.update({
-        where: { id: user.userId },
-        data: { tokenInvalidatedAt: invalidatedAt },
-      });
-
-      await auditUserAuthEvent(req, user.userId, AuditAction.USER_LOGOUT, {
+      await auditUserAuthEvent(req, userId, AuditAction.USER_LOGOUT, {
         scope: 'all_devices',
         sessionsInvalidated: true,
       });

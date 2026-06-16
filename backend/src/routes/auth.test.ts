@@ -469,6 +469,44 @@ describe('POST /api/auth/register', () => {
 });
 
 describe('JWT invalidation precision', () => {
+  async function expectLogoutEndpointInvalidatesImmediateToken(
+    endpoint: '/api/auth/logout' | '/api/auth/logout-all-devices',
+    expectedAuditChanges: Record<string, unknown>,
+  ) {
+    const email = `${endpoint.split('/').at(-1)}-immediate-${Date.now()}@example.com`;
+    const regRes = await request(app).post('/api/auth/register').send({
+      email,
+      password: 'SecureP@ssword123!',
+      fullName: 'Immediate Logout User',
+      tosAccepted: true,
+    });
+
+    const token = regRes.body.token as string;
+    const userId = regRes.body.user.id as string;
+
+    try {
+      await clearUserAuditLogs(userId);
+
+      const logoutRes = await request(app).post(endpoint).set('Authorization', `Bearer ${token}`);
+
+      expect(logoutRes.status).toBe(200);
+
+      const oldSessionRes = await request(app)
+        .get('/api/auth/me')
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(oldSessionRes.status).toBe(401);
+
+      const { auditLog, changes } = await expectLatestUserAuditLog(userId, AuditAction.USER_LOGOUT);
+      expect(auditLog.userId).toBe(userId);
+      expect(changes).toEqual(expectedAuditChanges);
+    } finally {
+      await prisma.emailVerificationToken.deleteMany({ where: { userId } });
+      await clearUserAuditLogs(userId);
+      await prisma.user.delete({ where: { id: userId } }).catch(() => {});
+    }
+  }
+
   it('rejects typed refresh tokens as bearer sessions', async () => {
     const email = `refresh-token-bearer-${Date.now()}@example.com`;
     const regRes = await request(app).post('/api/auth/register').send({
@@ -525,44 +563,19 @@ describe('JWT invalidation precision', () => {
     }
   });
 
-  it('invalidates logout-all-devices immediately after login', async () => {
-    const email = `logout-all-immediate-${Date.now()}@example.com`;
-    const regRes = await request(app).post('/api/auth/register').send({
-      email,
-      password: 'SecureP@ssword123!',
-      fullName: 'Immediate Logout User',
-      tosAccepted: true,
+  it('invalidates normal logout immediately after login', async () => {
+    await expectLogoutEndpointInvalidatesImmediateToken('/api/auth/logout', {
+      scope: 'all_devices',
+      requestedScope: 'current_session',
+      sessionsInvalidated: true,
     });
+  });
 
-    const token = regRes.body.token as string;
-    const userId = regRes.body.user.id as string;
-
-    try {
-      await clearUserAuditLogs(userId);
-
-      const logoutRes = await request(app)
-        .post('/api/auth/logout-all-devices')
-        .set('Authorization', `Bearer ${token}`);
-
-      expect(logoutRes.status).toBe(200);
-
-      const oldSessionRes = await request(app)
-        .get('/api/auth/me')
-        .set('Authorization', `Bearer ${token}`);
-
-      expect(oldSessionRes.status).toBe(401);
-
-      const { auditLog, changes } = await expectLatestUserAuditLog(userId, AuditAction.USER_LOGOUT);
-      expect(auditLog.userId).toBe(userId);
-      expect(changes).toEqual({
-        scope: 'all_devices',
-        sessionsInvalidated: true,
-      });
-    } finally {
-      await prisma.emailVerificationToken.deleteMany({ where: { userId } });
-      await clearUserAuditLogs(userId);
-      await prisma.user.delete({ where: { id: userId } }).catch(() => {});
-    }
+  it('invalidates logout-all-devices immediately after login', async () => {
+    await expectLogoutEndpointInvalidatesImmediateToken('/api/auth/logout-all-devices', {
+      scope: 'all_devices',
+      sessionsInvalidated: true,
+    });
   });
 });
 

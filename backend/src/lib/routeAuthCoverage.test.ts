@@ -468,11 +468,14 @@ describe('route authentication coverage', () => {
     expect(routeSourceForDescriptor(sessionRoutesSource, 'POST /logout')).toContain(
       'Logged out successfully',
     );
-    expect(routeSourceForDescriptor(sessionRoutesSource, 'POST /logout-all-devices')).toContain(
-      'verifyToken(token)',
+    expect(routeSourceForDescriptor(sessionRoutesSource, 'POST /logout')).toContain(
+      'invalidateBearerSession(req)',
+    );
+    expect(routeSourceForDescriptor(sessionRoutesSource, 'POST /logout')).toContain(
+      'AuditAction.USER_LOGOUT',
     );
     expect(routeSourceForDescriptor(sessionRoutesSource, 'POST /logout-all-devices')).toContain(
-      'getTokenAuthTime(token)',
+      'invalidateBearerSession(req)',
     );
     expect(routeSourceForDescriptor(sessionRoutesSource, 'POST /logout-all-devices')).toContain(
       'AuditAction.USER_LOGOUT',
