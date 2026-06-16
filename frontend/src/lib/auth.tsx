@@ -256,6 +256,19 @@ async function fetchCurrentUser(token: string): Promise<CurrentUserResult> {
   return { status: 'ok', user: data.user };
 }
 
+async function revokeServerSession(token: string): Promise<void> {
+  const response = await fetchWithTimeout(apiUrl('/api/auth/logout'), {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok && response.status !== 401) {
+    throw new Error('Logout request failed');
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const [actualUser, setActualUser] = useState<User | null>(null);
@@ -408,6 +421,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async (options?: SignOutOptions) => {
+    const storedAuth = readStoredAuth();
+
+    if (storedAuth?.auth.token) {
+      try {
+        await revokeServerSession(storedAuth.auth.token);
+      } catch (error) {
+        logError('Failed to revoke server session during sign out:', error);
+      }
+    }
+
     clearAuthFromAllStorages();
     queryClient.clear();
     // Automatic sign-outs (e.g. inactivity timeout) keep offline work so a

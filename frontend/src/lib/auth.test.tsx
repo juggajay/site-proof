@@ -11,13 +11,19 @@ import { act, render } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { clearAllOfflineData, clearOfflineOwnerId, clearAuthFromAllStorages, writeAuthToStorage } =
-  vi.hoisted(() => ({
-    clearAllOfflineData: vi.fn(),
-    clearOfflineOwnerId: vi.fn(),
-    clearAuthFromAllStorages: vi.fn(),
-    writeAuthToStorage: vi.fn(() => true),
-  }));
+const {
+  clearAllOfflineData,
+  clearOfflineOwnerId,
+  clearAuthFromAllStorages,
+  readAuthFromStorage,
+  writeAuthToStorage,
+} = vi.hoisted(() => ({
+  clearAllOfflineData: vi.fn(),
+  clearOfflineOwnerId: vi.fn(),
+  clearAuthFromAllStorages: vi.fn(),
+  readAuthFromStorage: vi.fn((): { source: 'local' | 'session'; value: string } | null => null),
+  writeAuthToStorage: vi.fn(() => true),
+}));
 
 const fetchWithTimeout = vi.hoisted(() => vi.fn());
 
@@ -31,7 +37,7 @@ vi.mock('./authStorage', () => ({
   clearAuthFromAllStorages,
   getOfflineOwnerId: vi.fn(() => null),
   setOfflineOwnerId: vi.fn(),
-  readAuthFromStorage: vi.fn(() => null),
+  readAuthFromStorage,
   writeAuthToStorage,
   writeRememberMePreference: vi.fn(() => true),
 }));
@@ -73,6 +79,7 @@ function jsonResponse(body: unknown, status = 201): Response {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  readAuthFromStorage.mockReturnValue(null);
 });
 
 afterEach(() => {
@@ -80,6 +87,31 @@ afterEach(() => {
 });
 
 describe('signOut offline-data handling', () => {
+  it('revokes the stored server session before clearing local auth', async () => {
+    renderAuth();
+    readAuthFromStorage.mockReturnValue({
+      source: 'local',
+      value: JSON.stringify({
+        user: { id: 'user-1', email: 'user@example.com' },
+        token: 'session-token',
+      }),
+    });
+    fetchWithTimeout.mockResolvedValue(jsonResponse({}, 200));
+
+    await act(async () => {
+      await triggerSignOut();
+    });
+
+    expect(fetchWithTimeout).toHaveBeenCalledWith(
+      expect.stringContaining('/api/auth/logout'),
+      expect.objectContaining({
+        method: 'POST',
+        headers: { Authorization: 'Bearer session-token' },
+      }),
+    );
+    expect(clearAuthFromAllStorages).toHaveBeenCalled();
+  });
+
   it('wipes offline data on a manual (default) sign-out', async () => {
     renderAuth();
 
