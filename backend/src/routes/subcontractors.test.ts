@@ -1,10 +1,11 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import { authRouter } from './auth.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { AuditAction, parseAuditLogChanges } from '../lib/auditLog.js';
+import * as emailService from '../lib/email.js';
 import { registerTestUser as registerSharedTestUser } from '../test/routeTestHarness.js';
 
 // Import subcontractors router
@@ -131,6 +132,36 @@ describe('Subcontractors API', () => {
         primaryContactEmail: expect.stringContaining('@example.com'),
         status: 'pending_approval',
       });
+    });
+
+    it('should reject subcontractor invite when the invitation email fails', async () => {
+      const email = `sub-email-fail-${Date.now()}@example.com`;
+      const sendInviteSpy = vi
+        .spyOn(emailService, 'sendSubcontractorInvitationEmail')
+        .mockResolvedValueOnce({
+          success: false,
+          error: 'simulated invite email failure',
+        });
+
+      try {
+        const res = await request(app)
+          .post('/api/subcontractors/invite')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            projectId,
+            companyName: `Email Failure Subcontractor ${Date.now()}`,
+            primaryContactName: 'Email Failure Contact',
+            primaryContactEmail: email,
+          });
+
+        expect(sendInviteSpy).toHaveBeenCalledTimes(1);
+        expect(res.status).toBe(500);
+        expect(res.body.error.message).toContain(
+          'Subcontractor invitation email could not be sent',
+        );
+      } finally {
+        sendInviteSpy.mockRestore();
+      }
     });
 
     it('should reject duplicate company name for same project', async () => {
