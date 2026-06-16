@@ -45,23 +45,10 @@ import {
   hasCommercialAccess,
   isViewerRole,
 } from '@/lib/roles';
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function parseSettings(settings: unknown) {
-  if (typeof settings === 'string') {
-    try {
-      const parsed: unknown = JSON.parse(settings);
-      return isRecord(parsed) ? parsed : null;
-    } catch {
-      return null;
-    }
-  }
-
-  return isRecord(settings) ? settings : null;
-}
+import {
+  getEnabledProjectModules,
+  isProjectModuleNavigationItemEnabled,
+} from './projectModuleNavigation';
 
 // Foreman simplified menu - only sees essential field items
 const FOREMAN_MENU_ITEMS = [
@@ -153,15 +140,6 @@ const subcontractorNavigation: NavigationItem[] = [
   },
 ];
 
-// Module to navigation mapping (Feature #700)
-const MODULE_NAV_MAPPING: Record<string, string[]> = {
-  costTracking: ['Costs'],
-  progressClaims: ['Progress Claims'],
-  subcontractors: ['Subcontractors'],
-  dockets: ['Docket Approvals'],
-  dailyDiary: ['Daily Diary'],
-};
-
 // "Quiet Authority" nav item styling (docs/DESIGN.md). Monochrome by default;
 // the single active item carries THE brand signature: a deep-amber (--brand)
 // left rail + amber icon on a subtle warm bg. Everything else stays neutral.
@@ -195,14 +173,6 @@ export function Sidebar() {
   const isCollapsed = sidebar.isCollapsed;
 
   // Feature #700 - Enabled modules via TanStack Query
-  const defaultModules: Record<string, boolean> = {
-    costTracking: true,
-    progressClaims: true,
-    subcontractors: true,
-    dockets: true,
-    dailyDiary: true,
-  };
-
   const { data: projectData } = useQuery({
     queryKey: queryKeys.projectModules(projectId!),
     queryFn: () =>
@@ -210,24 +180,7 @@ export function Sidebar() {
     enabled: !!projectId,
   });
 
-  const enabledModules = (() => {
-    if (!projectData?.project?.settings) return defaultModules;
-    const settings = parseSettings(projectData.project.settings);
-    const enabledModulesSetting = settings?.enabledModules;
-    if (isRecord(enabledModulesSetting)) {
-      return Object.keys(defaultModules).reduce<Record<string, boolean>>(
-        (modules, key) => {
-          const value = enabledModulesSetting[key];
-          if (typeof value === 'boolean') {
-            modules[key] = value;
-          }
-          return modules;
-        },
-        { ...defaultModules },
-      );
-    }
-    return defaultModules;
-  })();
+  const enabledModules = getEnabledProjectModules(projectData?.project?.settings);
 
   // Feature #442: Update current project in Zustand store when projectId changes
   useEffect(() => {
@@ -302,17 +255,9 @@ export function Sidebar() {
   }
 
   // Feature #700 - Filter by enabled modules
-  filteredProjectNavigation = filteredProjectNavigation.filter((item) => {
-    // Check if this nav item is controlled by a module
-    for (const [moduleKey, navNames] of Object.entries(MODULE_NAV_MAPPING)) {
-      if (navNames.includes(item.name)) {
-        // If the module is disabled, hide the nav item
-        return enabledModules[moduleKey] !== false;
-      }
-    }
-    // If not controlled by a module, always show
-    return true;
-  });
+  filteredProjectNavigation = filteredProjectNavigation.filter((item) =>
+    isProjectModuleNavigationItemEnabled(item.name, enabledModules),
+  );
 
   // Filter settings navigation
   const filteredSettingsNavigation = settingsNavigation.filter(shouldShowItem);

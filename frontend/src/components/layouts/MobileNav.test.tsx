@@ -1,6 +1,7 @@
-import { render, screen, fireEvent } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { screen, fireEvent, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Route, Routes } from 'react-router-dom';
+import { renderWithProviders } from '@/test/renderWithProviders';
 
 // MobileNav reaches the full slide-out drawer (Test Results, Documents, Reports,
 // Subcontractors, etc.) only via a bottom-bar "Menu" trigger. These tests lock
@@ -9,6 +10,10 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 // never stranded as desktop-only on a phone. The auth + foreman store boundaries
 // are mocked; the role helpers run for real so the gating logic is exercised.
 vi.mock('@/lib/auth', () => ({ useAuth: vi.fn() }));
+vi.mock('@/lib/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/api')>();
+  return { ...actual, apiFetch: vi.fn() };
+});
 vi.mock('@/stores/foremanMobileStore', () => ({
   useForemanMobileStore: () => ({ setIsCameraOpen: vi.fn() }),
 }));
@@ -18,13 +23,15 @@ vi.mock('@/components/foreman/ForemanBottomNavV2', () => ({
 
 import { MobileNav } from './MobileNav';
 import { useAuth } from '@/lib/auth';
+import { apiFetch } from '@/lib/api';
 
 const useAuthMock = vi.mocked(useAuth);
+const apiFetchMock = vi.mocked(apiFetch);
 
 type TestUser = {
   role?: string;
   roleInCompany?: string;
-  dashboardRole?: 'project_manager' | 'quality_manager' | 'foreman' | null;
+  dashboardRole?: 'project_manager' | 'quality_manager' | 'foreman' | 'viewer' | null;
   companyId?: string | null;
   hasSubcontractorPortalAccess?: boolean;
 };
@@ -37,13 +44,14 @@ function setUser(user: TestUser | null) {
 // Render MobileNav under a real route so useParams() resolves :projectId the same
 // way it does inside the app's project routes.
 function renderNav(initialPath = '/projects/p1/lots') {
-  render(
-    <MemoryRouter initialEntries={[initialPath]}>
+  renderWithProviders(
+    <>
       <Routes>
         <Route path="/projects/:projectId/*" element={<MobileNav />} />
         <Route path="*" element={<MobileNav />} />
       </Routes>
-    </MemoryRouter>,
+    </>,
+    { initialEntries: [initialPath] },
   );
 }
 
@@ -52,6 +60,12 @@ afterEach(() => {
 });
 
 describe('MobileNav menu trigger', () => {
+  beforeEach(() => {
+    apiFetchMock.mockResolvedValue({
+      project: { name: 'Project One', settings: { enabledModules: {} } },
+    });
+  });
+
   it('shows a Menu trigger for an admin on mobile', () => {
     setUser({ role: 'admin', companyId: 'c1' });
 
@@ -154,5 +168,53 @@ describe('MobileNav menu trigger', () => {
     // project-only section (e.g. Test Results) stays hidden until a project is set.
     expect(screen.getByRole('button', { name: /close menu/i })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /test results/i })).not.toBeInTheDocument();
+  });
+
+  it('hides drawer links for disabled project modules', async () => {
+    setUser({ role: 'project_manager', companyId: 'c1' });
+    apiFetchMock.mockResolvedValue({
+      project: {
+        name: 'Project One',
+        settings: {
+          enabledModules: {
+            dailyDiary: false,
+            dockets: false,
+            progressClaims: false,
+            costTracking: false,
+            subcontractors: false,
+          },
+        },
+      },
+    });
+
+    renderNav();
+    fireEvent.click(screen.getByRole('button', { name: /open menu/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole('link', { name: /daily diary/i })).not.toBeInTheDocument();
+    });
+    expect(screen.queryByRole('link', { name: /docket approvals/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /progress claims/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /costs/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /subcontractors/i })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: /lots/i }).length).toBeGreaterThan(0);
+    expect(screen.getByRole('link', { name: /documents/i })).toBeInTheDocument();
+  });
+
+  it('limits viewer project drawer links to lots and reports', () => {
+    setUser({
+      role: 'member',
+      roleInCompany: 'member',
+      dashboardRole: 'viewer',
+      companyId: 'c1',
+    });
+
+    renderNav();
+    fireEvent.click(screen.getByRole('button', { name: /open menu/i }));
+
+    expect(screen.getAllByRole('link', { name: /lots/i }).length).toBeGreaterThan(0);
+    expect(screen.getByRole('link', { name: /reports/i })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /itps/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /documents/i })).not.toBeInTheDocument();
   });
 });
