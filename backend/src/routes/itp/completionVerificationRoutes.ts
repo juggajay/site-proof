@@ -53,6 +53,12 @@ const completionVerificationResponseInclude = {
 
 export const completionVerificationRoutes = Router();
 
+function assertDifferentVerifier(completedById: string | null, verifierId: string): void {
+  if (completedById && completedById === verifierId) {
+    throw AppError.forbidden('ITP completions must be verified by a different user');
+  }
+}
+
 // Verify a completed checklist item (for hold points)
 completionVerificationRoutes.post(
   '/completions/:id/verify',
@@ -64,6 +70,7 @@ completionVerificationRoutes.post(
     const completionForAccess = await prisma.iTPCompletion.findUnique({
       where: { id },
       select: {
+        completedById: true,
         verificationStatus: true,
         itpInstance: {
           select: {
@@ -113,6 +120,8 @@ completionVerificationRoutes.post(
         verificationStatus: completionForAccess.verificationStatus,
       });
     }
+
+    assertDifferentVerifier(completionForAccess.completedById, user.userId);
 
     const completion = await prisma.iTPCompletion.update({
       where: { id },
@@ -187,6 +196,7 @@ completionVerificationRoutes.post(
     const completionForAccess = await prisma.iTPCompletion.findUnique({
       where: { id },
       select: {
+        completedById: true,
         verificationStatus: true,
         itpInstance: {
           select: {
@@ -218,6 +228,8 @@ completionVerificationRoutes.post(
         verificationStatus: completionForAccess.verificationStatus,
       });
     }
+
+    assertDifferentVerifier(completionForAccess.completedById, user.userId);
 
     const completion = await prisma.iTPCompletion.update({
       where: { id },

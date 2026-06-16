@@ -1238,6 +1238,7 @@ describe('ITP Instances', () => {
 describe('ITP Completion Attachments', () => {
   let authToken: string;
   let userId: string;
+  let completionAuthorUserId: string;
   let companyId: string;
   let projectId: string;
   let otherProjectId: string;
@@ -1294,6 +1295,12 @@ describe('ITP Completion Attachments', () => {
         { projectId: otherProjectId, userId, role: 'admin', status: 'active' },
       ],
     });
+
+    const completionAuthor = await registerTestUser(
+      'itp-completion-author',
+      'ITP Completion Author',
+    );
+    completionAuthorUserId = completionAuthor.userId;
 
     const template = await prisma.iTPTemplate.create({
       data: {
@@ -1392,8 +1399,46 @@ describe('ITP Completion Attachments', () => {
       where: { id: { in: [projectId, otherProjectId].filter(Boolean) } },
     });
     await cleanupTestUser(userId);
+    await cleanupTestUser(completionAuthorUserId);
     await prisma.company.delete({ where: { id: companyId } }).catch(() => {});
   });
+
+  async function markCompletionPendingVerification(completedById: string | null) {
+    await prisma.iTPCompletion.update({
+      where: { id: completionId },
+      data: {
+        status: 'completed',
+        completedById,
+        completedAt: new Date('2026-01-01T00:00:00.000Z'),
+        verificationStatus: 'pending_verification',
+        verifiedAt: null,
+        verifiedById: null,
+        verificationNotes: null,
+      },
+    });
+  }
+
+  async function resetCompletionWorkflowState() {
+    await prisma.iTPCompletion.update({
+      where: { id: completionId },
+      data: {
+        status: 'pending',
+        completedById: null,
+        completedAt: null,
+        verificationStatus: 'none',
+        verifiedAt: null,
+        verifiedById: null,
+        verificationNotes: null,
+      },
+    });
+  }
+
+  async function getCompletionVerificationState() {
+    return prisma.iTPCompletion.findUniqueOrThrow({
+      where: { id: completionId },
+      select: { verificationStatus: true, verifiedAt: true, verifiedById: true },
+    });
+  }
 
   it('should attach an already uploaded document without duplicating it', async () => {
     const res = await request(app)
@@ -2014,24 +2059,50 @@ describe('ITP Completion Attachments', () => {
     }
   });
 
+  it('should reject self-verification and self-rejection of pending ITP completions', async () => {
+    try {
+      await markCompletionPendingVerification(userId);
+
+      const selfVerify = await request(app)
+        .post(`/api/itp/completions/${completionId}/verify`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(selfVerify.status).toBe(403);
+      expect(selfVerify.body.error.message).toContain('different user');
+
+      const afterSelfVerify = await getCompletionVerificationState();
+      expect(afterSelfVerify).toEqual({
+        verificationStatus: 'pending_verification',
+        verifiedAt: null,
+        verifiedById: null,
+      });
+
+      const selfReject = await request(app)
+        .post(`/api/itp/completions/${completionId}/reject`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ reason: 'Rejecting my own completion' });
+
+      expect(selfReject.status).toBe(403);
+      expect(selfReject.body.error.message).toContain('different user');
+
+      const afterSelfReject = await getCompletionVerificationState();
+      expect(afterSelfReject).toEqual({
+        verificationStatus: 'pending_verification',
+        verifiedAt: null,
+        verifiedById: null,
+      });
+    } finally {
+      await resetCompletionWorkflowState();
+    }
+  });
+
   it('should write audit context when verifying a pending ITP completion', async () => {
     await prisma.auditLog.deleteMany({
       where: { entityId: completionId, action: AuditAction.ITP_ITEM_VERIFIED },
     });
 
     try {
-      await prisma.iTPCompletion.update({
-        where: { id: completionId },
-        data: {
-          status: 'completed',
-          completedById: userId,
-          completedAt: new Date('2026-01-01T00:00:00.000Z'),
-          verificationStatus: 'pending_verification',
-          verifiedAt: null,
-          verifiedById: null,
-          verificationNotes: null,
-        },
-      });
+      await markCompletionPendingVerification(completionAuthorUserId);
 
       const res = await request(app)
         .post(`/api/itp/completions/${completionId}/verify`)
@@ -2059,18 +2130,7 @@ describe('ITP Completion Attachments', () => {
       await prisma.auditLog.deleteMany({
         where: { entityId: completionId, action: AuditAction.ITP_ITEM_VERIFIED },
       });
-      await prisma.iTPCompletion.update({
-        where: { id: completionId },
-        data: {
-          status: 'pending',
-          completedById: null,
-          completedAt: null,
-          verificationStatus: 'none',
-          verifiedAt: null,
-          verifiedById: null,
-          verificationNotes: null,
-        },
-      });
+      await resetCompletionWorkflowState();
     }
   });
 
@@ -2080,18 +2140,7 @@ describe('ITP Completion Attachments', () => {
     });
 
     try {
-      await prisma.iTPCompletion.update({
-        where: { id: completionId },
-        data: {
-          status: 'completed',
-          completedById: userId,
-          completedAt: new Date('2026-01-01T00:00:00.000Z'),
-          verificationStatus: 'pending_verification',
-          verifiedAt: null,
-          verifiedById: null,
-          verificationNotes: null,
-        },
-      });
+      await markCompletionPendingVerification(completionAuthorUserId);
 
       const res = await request(app)
         .post(`/api/itp/completions/${completionId}/reject`)
@@ -2121,18 +2170,7 @@ describe('ITP Completion Attachments', () => {
       await prisma.auditLog.deleteMany({
         where: { entityId: completionId, action: AuditAction.ITP_ITEM_REJECTED },
       });
-      await prisma.iTPCompletion.update({
-        where: { id: completionId },
-        data: {
-          status: 'pending',
-          completedById: null,
-          completedAt: null,
-          verificationStatus: 'none',
-          verifiedAt: null,
-          verifiedById: null,
-          verificationNotes: null,
-        },
-      });
+      await resetCompletionWorkflowState();
     }
   });
 
