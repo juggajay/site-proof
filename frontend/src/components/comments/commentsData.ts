@@ -12,7 +12,7 @@ export interface CommentAuthor {
 export interface CommentAttachment {
   id: string;
   filename: string;
-  fileUrl: string;
+  downloadUrl?: string;
   fileSize: number | null;
   mimeType: string | null;
   createdAt: string;

@@ -389,10 +389,15 @@ describe('Comments API', () => {
       });
       expect(persistedAttachment).not.toBeNull();
 
-      if (res.body.comment.attachments[0].fileUrl.startsWith('/uploads/')) {
+      expect(res.body.comment.attachments[0].fileUrl).toBeUndefined();
+      expect(res.body.comment.attachments[0].downloadUrl).toBe(
+        `/api/comments/attachments/${res.body.comment.attachments[0].id}/download`,
+      );
+
+      if (persistedAttachment?.fileUrl.startsWith('/uploads/')) {
         const uploadedPath = path.join(
           process.cwd(),
-          res.body.comment.attachments[0].fileUrl.replace(/^\//, ''),
+          persistedAttachment.fileUrl.replace(/^\//, ''),
         );
         expect(fs.existsSync(uploadedPath)).toBe(true);
       }
@@ -1075,7 +1080,10 @@ describe('Comments API', () => {
       );
       expect(commentWithAttachments).toBeDefined();
       expect(commentWithAttachments.attachments[0].filename).toBeDefined();
-      expect(commentWithAttachments.attachments[0].fileUrl).toBeDefined();
+      expect(commentWithAttachments.attachments[0].fileUrl).toBeUndefined();
+      expect(commentWithAttachments.attachments[0].downloadUrl).toBe(
+        `/api/comments/attachments/${commentWithAttachments.attachments[0].id}/download`,
+      );
     });
 
     it('should not include deleted comments', async () => {
@@ -1595,6 +1603,10 @@ describe('Comments API', () => {
       expect(res.body.count).toBe(2);
       expect(res.body.attachments).toBeDefined();
       expect(res.body.attachments.length).toBe(2);
+      expect(res.body.attachments[0].fileUrl).toBeUndefined();
+      expect(res.body.attachments[0].downloadUrl).toBe(
+        `/api/comments/attachments/${res.body.attachments[0].id}/download`,
+      );
     });
 
     it('should require authentication', async () => {

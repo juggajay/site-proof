@@ -228,8 +228,7 @@ describe('CommentsSection characterization', () => {
     const attachment = {
       id: 'att-1',
       filename: 'evidence.png',
-      fileUrl:
-        'https://example.supabase.co/storage/v1/object/public/documents/comments/lot-1/evidence.png',
+      downloadUrl: '/api/comments/attachments/att-1/download',
       fileSize: 12,
       mimeType: 'image/png',
       createdAt: '2026-06-01T00:00:00.000Z',

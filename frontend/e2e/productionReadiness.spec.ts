@@ -470,9 +470,9 @@ test.describe('production readiness guardrails', () => {
       'utf8',
     );
 
-    expect(commentsSection).toContain(
-      'authFetch(`/api/comments/attachments/${attachment.id}/download`)',
-    );
+    expect(commentsSection).toContain('attachment.downloadUrl ??');
+    expect(commentsSection).toContain('`/api/comments/attachments/${attachment.id}/download`');
+    expect(commentsSection).toContain('authFetch(downloadUrl)');
     expect(commentsSection).toContain("downloadBlob(blob, attachment.filename, 'attachment')");
     expect(commentsSection).not.toContain('window.open(attachment.fileUrl');
     expect(commentsSection).not.toContain('SUPABASE_URL');
