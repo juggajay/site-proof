@@ -5,6 +5,7 @@ import { getTokenAuthTime, hashPassword, verifyPassword, verifyToken } from '../
 import { AuditAction } from '../../lib/auditLog.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
+import { revokeActiveApiKeysForUser } from '../../lib/apiKeyRevocation.js';
 
 type PasswordValidation = {
   valid: boolean;
@@ -104,10 +105,12 @@ export function createSessionRouter({
     '/logout-all-devices',
     asyncHandler(async (req, res) => {
       const { invalidatedAt, userId } = await invalidateBearerSession(req);
+      const apiKeyRevocation = await revokeActiveApiKeysForUser(prisma, userId);
 
       await auditUserAuthEvent(req, userId, AuditAction.USER_LOGOUT, {
         scope: 'all_devices',
         sessionsInvalidated: true,
+        ...(apiKeyRevocation.count > 0 ? { apiAccessRevoked: apiKeyRevocation.count } : {}),
       });
 
       const now = invalidatedAt.toISOString();
@@ -189,17 +192,22 @@ export function createSessionPasswordRouter({
 
       // Hash and update password
       const newPasswordHash = hashPassword(normalizedNewPassword);
-      await prisma.user.update({
-        where: { id: user.id },
-        data: {
-          passwordHash: newPasswordHash,
-          tokenInvalidatedAt: new Date(),
-        },
+      const apiKeyRevocation = await prisma.$transaction(async (tx) => {
+        await tx.user.update({
+          where: { id: user.id },
+          data: {
+            passwordHash: newPasswordHash,
+            tokenInvalidatedAt: new Date(),
+          },
+        });
+
+        return revokeActiveApiKeysForUser(tx, user.id);
       });
 
       await auditUserAuthEvent(req, user.id, AuditAction.PASSWORD_CHANGED, {
         method: 'password_change',
         sessionsInvalidated: true,
+        ...(apiKeyRevocation.count > 0 ? { apiAccessRevoked: apiKeyRevocation.count } : {}),
       });
 
       res.json({ message: 'Password changed successfully' });

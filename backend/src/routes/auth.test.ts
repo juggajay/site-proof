@@ -108,6 +108,25 @@ async function clearUserAuditLogs(userId: string) {
   });
 }
 
+async function createActiveApiKeyForUser(userId: string, name: string) {
+  const apiKey = `sp_${crypto.randomBytes(32).toString('hex')}`;
+  return prisma.apiKey.create({
+    data: {
+      userId,
+      name,
+      keyHash: crypto.createHash('sha256').update(apiKey).digest('hex'),
+      keyPrefix: apiKey.substring(0, 11),
+      scopes: 'read',
+    },
+  });
+}
+
+async function expectApiKeyInactive(apiKeyId: string) {
+  await expect(prisma.apiKey.findUnique({ where: { id: apiKeyId } })).resolves.toMatchObject({
+    isActive: false,
+  });
+}
+
 async function expectLatestUserAuditLog(userId: string, action: string) {
   const auditLog = await prisma.auditLog.findFirst({
     where: {
@@ -1736,6 +1755,7 @@ describe('Password Reset Flow', () => {
         expiresAt: new Date(Date.now() + 60 * 60 * 1000),
       },
     });
+    const apiKeyRecord = await createActiveApiKeyForUser(userId, 'Password Reset API Key');
 
     try {
       await clearUserAuditLogs(userId);
@@ -1752,6 +1772,7 @@ describe('Password Reset Flow', () => {
         .set('Authorization', `Bearer ${oldToken}`);
 
       expect(oldSessionRes.status).toBe(401);
+      await expectApiKeyInactive(apiKeyRecord.id);
 
       const { auditLog, changes } = await expectLatestUserAuditLog(
         userId,
@@ -1761,6 +1782,7 @@ describe('Password Reset Flow', () => {
       expect(changes).toEqual({
         method: 'password_reset',
         sessionsInvalidated: true,
+        apiAccessRevoked: 1,
       });
       expect(JSON.stringify(changes)).not.toContain(oldPassword);
       expect(JSON.stringify(changes)).not.toContain(newPassword);
@@ -1768,6 +1790,7 @@ describe('Password Reset Flow', () => {
       expect(JSON.stringify(changes)).not.toMatch(/token|secret/i);
     } finally {
       await prisma.passwordResetToken.deleteMany({ where: { userId } });
+      await prisma.apiKey.deleteMany({ where: { userId } });
       await prisma.emailVerificationToken.deleteMany({ where: { userId } });
       await clearUserAuditLogs(userId);
       await prisma.user.delete({ where: { id: userId } }).catch(() => {});
@@ -1820,6 +1843,7 @@ describe('Password Change', () => {
 
     const userId = regRes.body.user.id;
     const oldToken = regRes.body.token;
+    const apiKeyRecord = await createActiveApiKeyForUser(userId, 'Password Change API Key');
 
     try {
       await clearUserAuditLogs(userId);
@@ -1840,6 +1864,7 @@ describe('Password Change', () => {
         .set('Authorization', `Bearer ${oldToken}`);
 
       expect(oldSessionRes.status).toBe(401);
+      await expectApiKeyInactive(apiKeyRecord.id);
 
       const { auditLog, changes } = await expectLatestUserAuditLog(
         userId,
@@ -1849,11 +1874,13 @@ describe('Password Change', () => {
       expect(changes).toEqual({
         method: 'password_change',
         sessionsInvalidated: true,
+        apiAccessRevoked: 1,
       });
       expect(JSON.stringify(changes)).not.toContain(password);
       expect(JSON.stringify(changes)).not.toContain(newPassword);
       expect(JSON.stringify(changes)).not.toMatch(/token|secret/i);
     } finally {
+      await prisma.apiKey.deleteMany({ where: { userId } });
       await prisma.emailVerificationToken.deleteMany({ where: { userId } });
       await clearUserAuditLogs(userId);
       await prisma.user.delete({ where: { id: userId } }).catch(() => {});
