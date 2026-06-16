@@ -136,6 +136,7 @@ describe('Subcontractors API', () => {
 
     it('should reject subcontractor invite when the invitation email fails', async () => {
       const email = `sub-email-fail-${Date.now()}@example.com`;
+      const companyName = `Email Failure Subcontractor ${Date.now()}`;
       const sendInviteSpy = vi
         .spyOn(emailService, 'sendSubcontractorInvitationEmail')
         .mockResolvedValueOnce({
@@ -149,7 +150,7 @@ describe('Subcontractors API', () => {
           .set('Authorization', `Bearer ${authToken}`)
           .send({
             projectId,
-            companyName: `Email Failure Subcontractor ${Date.now()}`,
+            companyName,
             primaryContactName: 'Email Failure Contact',
             primaryContactEmail: email,
           });
@@ -159,6 +160,26 @@ describe('Subcontractors API', () => {
         expect(res.body.error.message).toContain(
           'Subcontractor invitation email could not be sent',
         );
+
+        const lingeringInvite = await prisma.subcontractorCompany.findFirst({
+          where: { projectId, primaryContactEmail: email },
+        });
+        expect(lingeringInvite).toBeNull();
+
+        const lingeringGlobal = await prisma.globalSubcontractor.findFirst({
+          where: { organizationId: companyId, primaryContactEmail: email },
+        });
+        expect(lingeringGlobal).toBeNull();
+
+        const lingeringAuditLog = await prisma.auditLog.findFirst({
+          where: {
+            projectId,
+            entityType: 'subcontractor',
+            action: AuditAction.SUBCONTRACTOR_INVITED,
+            changes: { contains: companyName },
+          },
+        });
+        expect(lingeringAuditLog).toBeNull();
       } finally {
         sendInviteSpy.mockRestore();
       }

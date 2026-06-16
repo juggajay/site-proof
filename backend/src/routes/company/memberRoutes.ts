@@ -33,8 +33,68 @@ const ONE_TIME_TOKEN_HASH_PREFIX = 'sha256:';
 
 export const companyMemberRoutes = Router();
 
+type CompanyMemberInvitationRollbackState = {
+  id: string;
+  fullName: string | null;
+  companyId: string | null;
+  roleInCompany: string;
+  emailVerified: boolean;
+  emailVerifiedAt: Date | null;
+};
+
 function hashOneTimeToken(token: string): string {
   return `${ONE_TIME_TOKEN_HASH_PREFIX}${crypto.createHash('sha256').update(token).digest('hex')}`;
+}
+
+async function cleanupFailedCompanyMemberInvitation(params: {
+  memberId: string;
+  setupToken: string;
+  createdUser: boolean;
+  previousMemberState: CompanyMemberInvitationRollbackState | null;
+  previousActiveSetupTokenIds: string[];
+}) {
+  const setupTokenHash = hashOneTimeToken(params.setupToken);
+
+  await prisma.$transaction(async (tx) => {
+    await tx.passwordResetToken.deleteMany({
+      where: { userId: params.memberId, token: setupTokenHash, usedAt: null },
+    });
+
+    await tx.auditLog.deleteMany({
+      where: {
+        entityType: 'user',
+        entityId: params.memberId,
+        action: AuditAction.USER_INVITED,
+      },
+    });
+
+    if (params.createdUser) {
+      await tx.emailVerificationToken.deleteMany({ where: { userId: params.memberId } });
+      await tx.projectUser.deleteMany({ where: { userId: params.memberId } });
+      await tx.user.delete({ where: { id: params.memberId } }).catch(() => {});
+      return;
+    }
+
+    if (params.previousActiveSetupTokenIds.length > 0) {
+      await tx.passwordResetToken.updateMany({
+        where: { id: { in: params.previousActiveSetupTokenIds } },
+        data: { usedAt: null },
+      });
+    }
+
+    if (params.previousMemberState) {
+      await tx.user.update({
+        where: { id: params.memberId },
+        data: {
+          fullName: params.previousMemberState.fullName,
+          companyId: params.previousMemberState.companyId,
+          roleInCompany: params.previousMemberState.roleInCompany,
+          emailVerified: params.previousMemberState.emailVerified,
+          emailVerifiedAt: params.previousMemberState.emailVerifiedAt,
+        },
+      });
+    }
+  });
 }
 
 // POST /api/company/leave - Leave the current company
@@ -158,7 +218,14 @@ companyMemberRoutes.post(
       Date.now() + COMPANY_MEMBER_INVITATION_EXPIRES_DAYS * 24 * 60 * 60 * 1000,
     );
 
-    const { company, member, setupRequired } = await prisma.$transaction(async (tx) => {
+    const {
+      company,
+      member,
+      setupRequired,
+      createdUser,
+      previousMemberState,
+      previousActiveSetupTokenIds,
+    } = await prisma.$transaction(async (tx) => {
       const currentUser = await tx.user.findUnique({
         where: { id: user.userId },
         select: { companyId: true, roleInCompany: true },
@@ -201,6 +268,8 @@ companyMemberRoutes.post(
           companyId: true,
           roleInCompany: true,
           passwordHash: true,
+          emailVerified: true,
+          emailVerifiedAt: true,
           createdAt: true,
           updatedAt: true,
         },
@@ -229,6 +298,30 @@ companyMemberRoutes.post(
       if (existingUser?.roleInCompany === 'owner') {
         throw AppError.badRequest('Company owners are managed through ownership transfer');
       }
+
+      const previousMemberState: CompanyMemberInvitationRollbackState | null = existingUser
+        ? {
+            id: existingUser.id,
+            fullName: existingUser.fullName,
+            companyId: existingUser.companyId,
+            roleInCompany: existingUser.roleInCompany,
+            emailVerified: existingUser.emailVerified,
+            emailVerifiedAt: existingUser.emailVerifiedAt,
+          }
+        : null;
+      const createdUser = !existingUser;
+      const previousActiveSetupTokenIds = existingUser
+        ? (
+            await tx.passwordResetToken.findMany({
+              where: {
+                userId: existingUser.id,
+                usedAt: null,
+                expiresAt: { gt: new Date() },
+              },
+              select: { id: true },
+            })
+          ).map((token) => token.id)
+        : [];
 
       const consumesSeat = !existingUser || existingUser.companyId !== companyId;
       if (consumesSeat) {
@@ -305,7 +398,14 @@ companyMemberRoutes.post(
         });
       }
 
-      return { company, member, setupRequired };
+      return {
+        company,
+        member,
+        setupRequired,
+        createdUser,
+        previousMemberState,
+        previousActiveSetupTokenIds,
+      };
     });
 
     await createAuditLog({
@@ -337,11 +437,25 @@ companyMemberRoutes.post(
         });
       } catch (emailError) {
         logError('[Company Member Invite] Failed to send email:', emailError);
+        await cleanupFailedCompanyMemberInvitation({
+          memberId: member.id,
+          setupToken,
+          createdUser,
+          previousMemberState,
+          previousActiveSetupTokenIds,
+        });
         throw AppError.internal('Company invitation email could not be sent');
       }
 
       if (!emailResult.success) {
         logError('[Company Member Invite] Failed to send email:', emailResult.error);
+        await cleanupFailedCompanyMemberInvitation({
+          memberId: member.id,
+          setupToken,
+          createdUser,
+          previousMemberState,
+          previousActiveSetupTokenIds,
+        });
         throw AppError.internal('Company invitation email could not be sent');
       }
     }
