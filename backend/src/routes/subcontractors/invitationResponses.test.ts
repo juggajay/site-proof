@@ -7,6 +7,7 @@ import {
   buildSubcontractorInvitedResponse,
   buildSubcontractorsForProjectResponse,
   buildUserPendingSubcontractorInvitationResponse,
+  calculateApprovedDocketTotalCost,
 } from './invitationResponses.js';
 
 describe('invitationResponses', () => {
@@ -145,5 +146,18 @@ describe('invitationResponses', () => {
     const subcontractors = [{ id: 'subbie-1', companyName: 'Civil Subbie Pty Ltd' }];
 
     expect(buildSubcontractorsForProjectResponse(subcontractors)).toEqual({ subcontractors });
+  });
+
+  it('calculates approved docket cost from submitted costs instead of approved hours', () => {
+    expect(
+      calculateApprovedDocketTotalCost([
+        {
+          totalLabourSubmitted: '640',
+          totalPlantSubmitted: '360',
+          totalLabourApproved: '8',
+          totalPlantApproved: '2',
+        },
+      ]),
+    ).toBe(1000);
   });
 });
