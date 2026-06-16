@@ -373,6 +373,112 @@ describe('Dockets API', () => {
       expect(res.body.docket.id).toBe(docketId);
     });
 
+    it('should hide foreman diary comparison from subcontractor docket detail', async () => {
+      const date = new Date(Date.now() + 1000 * 60 * 60 * 24 * 3650);
+      const docket = await prisma.dailyDocket.create({
+        data: {
+          projectId,
+          subcontractorCompanyId,
+          date,
+          status: 'draft',
+          notes: 'Subcontractor-visible docket',
+        },
+      });
+      await prisma.docketLabour.create({
+        data: {
+          docketId: docket.id,
+          employeeId,
+          startTime: '07:00',
+          finishTime: '15:00',
+          submittedHours: 8,
+          hourlyRate: 45.5,
+          submittedCost: 364,
+          lotAllocations: {
+            create: {
+              lotId: assignedLotId,
+              hours: 8,
+            },
+          },
+        },
+      });
+      await prisma.docketPlant.create({
+        data: {
+          docketId: docket.id,
+          plantId,
+          hoursOperated: 4,
+          wetOrDry: 'dry',
+          hourlyRate: 150,
+          submittedCost: 600,
+          lotAllocations: {
+            create: {
+              lotId: assignedLotId,
+              hours: 4,
+            },
+          },
+        },
+      });
+      const diary = await prisma.dailyDiary.create({
+        data: {
+          projectId,
+          date,
+          status: 'draft',
+          weatherConditions: 'Rain',
+          personnel: {
+            create: [
+              { name: 'Head contractor worker', company: 'Head contractor', role: 'Supervisor' },
+              { name: 'Other crew member', company: 'Other subcontractor', role: 'Labourer' },
+            ],
+          },
+          plant: {
+            create: [
+              { description: 'Grader', idRego: 'GR-001' },
+              { description: 'Roller', idRego: 'RO-001' },
+            ],
+          },
+          activities: {
+            create: [{ description: 'Bulk earthworks', lotId: assignedLotId }],
+          },
+          delays: {
+            create: [{ delayType: 'weather', durationHours: 2, description: 'Rain delay' }],
+          },
+        },
+      });
+
+      try {
+        const subcontractorRes = await request(app)
+          .get(`/api/dockets/${docket.id}`)
+          .set('Authorization', `Bearer ${subcontractorToken}`);
+
+        expect(subcontractorRes.status).toBe(200);
+        expect(subcontractorRes.body.docket.id).toBe(docket.id);
+        expect(subcontractorRes.body.foremanDiary).toBeNull();
+        expect(subcontractorRes.body.discrepancies).toBeNull();
+
+        const headContractorRes = await request(app)
+          .get(`/api/dockets/${docket.id}`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(headContractorRes.status).toBe(200);
+        expect(headContractorRes.body.foremanDiary).toMatchObject({
+          personnelCount: 2,
+          plantCount: 2,
+          activitiesCount: 1,
+          weatherConditions: 'Rain',
+          weatherHoursLost: 2,
+        });
+        expect(headContractorRes.body.discrepancies).toEqual(
+          expect.arrayContaining([
+            'Personnel count may differ: docket has 1 entries, diary has 2',
+            'Plant/equipment count may differ: docket has 1 entries, diary has 2',
+            'Weather hours lost noted in diary: 2 hours',
+          ]),
+        );
+      } finally {
+        await prisma.dailyDiary.delete({ where: { id: diary.id } }).catch(() => {});
+        await prisma.dailyDocket.delete({ where: { id: docket.id } }).catch(() => {});
+      }
+    });
+
     it('should return 404 for non-existent docket', async () => {
       const res = await request(app)
         .get('/api/dockets/non-existent-id')
