@@ -62,6 +62,46 @@ async function releaseClientNotificationClaim(ncrId: string, notificationTime: D
   });
 }
 
+async function ensureQmApprovalClaimed(ncrId: string, updateCount: number) {
+  if (updateCount === 1) {
+    return;
+  }
+
+  const currentNcr = await prisma.nCR.findUnique({
+    where: { id: ncrId },
+    select: { qmApprovedAt: true },
+  });
+
+  if (currentNcr?.qmApprovedAt) {
+    throw AppError.badRequest('This NCR has already been approved by QM');
+  }
+
+  throw AppError.badRequest('QM approval state changed. Please retry.');
+}
+
+async function ensureCloseClaimed(ncrId: string, updateCount: number) {
+  if (updateCount === 1) {
+    return;
+  }
+
+  const currentNcr = await prisma.nCR.findUnique({
+    where: { id: ncrId },
+    select: { status: true },
+  });
+
+  throw AppError.badRequest('NCR must be in verification status to close', {
+    currentStatus: currentNcr?.status,
+  });
+}
+
+async function ensureReopenClaimed(updateCount: number) {
+  if (updateCount === 1) {
+    return;
+  }
+
+  throw AppError.badRequest('NCR is not closed');
+}
+
 // POST /api/ncrs/:id/qm-approve - QM approval for major NCRs (Quality Manager only)
 ncrClosureWorkflowRouter.post(
   '/:id/qm-approve',
@@ -96,12 +136,18 @@ ncrClosureWorkflowRouter.post(
       throw AppError.badRequest('This NCR has already been approved by QM');
     }
 
-    const updatedNcr = await prisma.nCR.update({
-      where: { id },
+    const qmApprovedAt = new Date();
+    const approvalUpdate = await prisma.nCR.updateMany({
+      where: { id, qmApprovalRequired: true, qmApprovedAt: null },
       data: {
         qmApprovedById: user.userId,
-        qmApprovedAt: new Date(),
+        qmApprovedAt,
       },
+    });
+    await ensureQmApprovalClaimed(id, approvalUpdate.count);
+
+    const updatedNcr = await prisma.nCR.findUniqueOrThrow({
+      where: { id },
       include: {
         qmApprovedBy: { select: { fullName: true, email: true } },
       },
@@ -190,20 +236,26 @@ ncrClosureWorkflowRouter.post(
     }
 
     const closeStatus = withConcession ? 'closed_concession' : 'closed';
+    const closedAt = new Date();
 
-    const updatedNcr = await prisma.nCR.update({
-      where: { id },
+    const closeUpdate = await prisma.nCR.updateMany({
+      where: { id, status: 'verification' },
       data: {
         status: closeStatus,
         verifiedById: user.userId,
-        verifiedAt: new Date(),
+        verifiedAt: closedAt,
         verificationNotes,
         closedById: user.userId,
-        closedAt: new Date(),
+        closedAt,
         lessonsLearned,
         concessionJustification: withConcession ? concessionJustification : null,
         concessionRiskAssessment: withConcession ? concessionRiskAssessment : null,
       },
+    });
+    await ensureCloseClaimed(id, closeUpdate.count);
+
+    const updatedNcr = await prisma.nCR.findUniqueOrThrow({
+      where: { id },
       include: {
         closedBy: { select: { fullName: true, email: true } },
         qmApprovedBy: { select: { fullName: true, email: true } },
@@ -431,8 +483,8 @@ ncrClosureWorkflowRouter.post(
       'project_manager',
     ]);
 
-    const updatedNcr = await prisma.nCR.update({
-      where: { id },
+    const reopenUpdate = await prisma.nCR.updateMany({
+      where: { id, status: { in: ['closed', 'closed_concession'] } },
       data: {
         status: 'rectification',
         verifiedById: null,
@@ -446,6 +498,11 @@ ncrClosureWorkflowRouter.post(
           ? `[Reopened: ${reason}] ${ncr.lessonsLearned || ''}`
           : ncr.lessonsLearned,
       },
+    });
+    await ensureReopenClaimed(reopenUpdate.count);
+
+    const updatedNcr = await prisma.nCR.findUniqueOrThrow({
+      where: { id },
     });
 
     await createAuditLog({
