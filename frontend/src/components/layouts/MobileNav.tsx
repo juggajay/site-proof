@@ -23,9 +23,12 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
+import { apiFetch } from '@/lib/api';
+import { useQuery } from '@tanstack/react-query';
 import { usePublishBottomNavHeight } from '@/hooks/useBottomNavHeight';
 import { ForemanBottomNavV2 } from '@/components/foreman/ForemanBottomNavV2';
 import { useForemanMobileStore } from '@/stores/foremanMobileStore';
+import { queryKeys } from '@/lib/queryKeys';
 import {
   getCompanyRole,
   getDashboardRole,
@@ -38,7 +41,12 @@ import {
   isAdminRole,
   isSubcontractorRole,
   hasCommercialAccess,
+  isViewerRole,
 } from '@/lib/roles';
+import {
+  getEnabledProjectModules,
+  isProjectModuleNavigationItemEnabled,
+} from './projectModuleNavigation';
 
 const FOREMAN_MENU_ITEMS = [
   'Lots',
@@ -49,6 +57,8 @@ const FOREMAN_MENU_ITEMS = [
   'Daily Diary',
   'Docket Approvals',
 ];
+
+const VIEWER_PROJECT_MENU_ITEMS = ['Lots', 'Reports'];
 
 // Subcontractor-specific navigation
 const subcontractorNavigation = [
@@ -151,8 +161,18 @@ export function MobileNav() {
   const hasAdmin = isAdminRole(userRole);
   const hasManagement = hasRoleInGroup(userRole, ROLE_GROUPS.MANAGEMENT);
   const isForeman = dashboardRole === 'foreman';
-  const isSubcontractor = isSubcontractorRole(userRole);
+  const isSubcontractor = isSubcontractorRole(userRole) || hasPortalIdentity;
+  const isViewer = isViewerRole(projectScopedRole);
   const { setIsCameraOpen } = useForemanMobileStore();
+
+  const { data: projectData } = useQuery({
+    queryKey: queryKeys.projectModules(projectId!),
+    queryFn: () =>
+      apiFetch<{ project?: { name?: string; settings?: unknown } }>(`/api/projects/${projectId}`),
+    enabled: !!projectId,
+  });
+
+  const enabledModules = getEnabledProjectModules(projectData?.project?.settings);
 
   const shouldShowItem = (item: NavigationItem): boolean => {
     if (item.requiresCommercialAccess && !hasCommercial) return false;
@@ -165,7 +185,13 @@ export function MobileNav() {
     ) {
       return false;
     }
-    if (item.excludeRoles && item.excludeRoles.includes(userRole)) return false;
+    if (
+      item.excludeRoles &&
+      (item.excludeRoles.includes(userRole) ||
+        (item.excludeRoles.some((role) => isSubcontractorRole(role)) && hasPortalIdentity))
+    ) {
+      return false;
+    }
     return true;
   };
 
@@ -175,6 +201,14 @@ export function MobileNav() {
       FOREMAN_MENU_ITEMS.includes(item.name),
     );
   }
+  if (isViewer) {
+    filteredProjectNavigation = filteredProjectNavigation.filter((item) =>
+      VIEWER_PROJECT_MENU_ITEMS.includes(item.name),
+    );
+  }
+  filteredProjectNavigation = filteredProjectNavigation.filter((item) =>
+    isProjectModuleNavigationItemEnabled(item.name, enabledModules),
+  );
 
   // Foreman uses research-backed 5-tab nav: Capture, Today, Approve, Diary, Lots
   if (isForeman) {
