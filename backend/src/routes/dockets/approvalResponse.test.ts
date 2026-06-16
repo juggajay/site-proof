@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { buildDocketApprovedResponse, resolveDocketApprovedTotals } from './approvalResponse.js';
+import {
+  buildDocketApprovalEntryUpdates,
+  buildDocketApprovedResponse,
+  resolveDocketApprovedTotals,
+} from './approvalResponse.js';
 
 describe('resolveDocketApprovedTotals', () => {
   it('uses adjusted totals when they are provided, including zero', () => {
@@ -28,6 +32,68 @@ describe('resolveDocketApprovedTotals', () => {
     ).toEqual({
       labourApproved: labourSubmitted,
       plantApproved: plantSubmitted,
+    });
+  });
+});
+
+describe('buildDocketApprovalEntryUpdates', () => {
+  it('copies submitted entry hours and costs when approval totals are unchanged', () => {
+    expect(
+      buildDocketApprovalEntryUpdates({
+        labourEntries: [
+          { id: 'labour-1', submittedHours: 8, hourlyRate: 45.5, submittedCost: 364 },
+        ],
+        plantEntries: [{ id: 'plant-1', hoursOperated: 3, hourlyRate: 150, submittedCost: 450 }],
+        labourApprovedHours: 8,
+        plantApprovedHours: 3,
+        adjustmentReason: null,
+      }),
+    ).toEqual({
+      labour: [
+        {
+          id: 'labour-1',
+          approvedHours: 8,
+          approvedCost: 364,
+          adjustmentReason: null,
+        },
+      ],
+      plant: [
+        {
+          id: 'plant-1',
+          approvedCost: 450,
+          adjustmentReason: null,
+        },
+      ],
+    });
+  });
+
+  it('pro-rates approved entry costs from adjusted total hours', () => {
+    expect(
+      buildDocketApprovalEntryUpdates({
+        labourEntries: [
+          { id: 'labour-1', submittedHours: 8, hourlyRate: 45.5, submittedCost: 364 },
+        ],
+        plantEntries: [{ id: 'plant-1', hoursOperated: 3, hourlyRate: 150, submittedCost: 450 }],
+        labourApprovedHours: 7,
+        plantApprovedHours: 2.5,
+        adjustmentReason: 'Approved less time after review',
+      }),
+    ).toEqual({
+      labour: [
+        {
+          id: 'labour-1',
+          approvedHours: 7,
+          approvedCost: 318.5,
+          adjustmentReason: 'Approved less time after review',
+        },
+      ],
+      plant: [
+        {
+          id: 'plant-1',
+          approvedCost: 375,
+          adjustmentReason: 'Approved less time after review',
+        },
+      ],
     });
   });
 });

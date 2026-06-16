@@ -421,6 +421,18 @@ subcontractorsRouter.get(
             id: true,
             totalLabourSubmitted: true,
             totalPlantSubmitted: true,
+            labourEntries: {
+              select: {
+                submittedCost: true,
+                approvedCost: true,
+              },
+            },
+            plantEntries: {
+              select: {
+                submittedCost: true,
+                approvedCost: true,
+              },
+            },
           },
         },
         lotAssignments: {

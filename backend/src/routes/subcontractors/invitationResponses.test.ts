@@ -148,7 +148,7 @@ describe('invitationResponses', () => {
     expect(buildSubcontractorsForProjectResponse(subcontractors)).toEqual({ subcontractors });
   });
 
-  it('calculates approved docket cost from submitted costs instead of approved hours', () => {
+  it('calculates approved docket cost from entry approved costs', () => {
     expect(
       calculateApprovedDocketTotalCost([
         {
@@ -156,6 +156,21 @@ describe('invitationResponses', () => {
           totalPlantSubmitted: '360',
           totalLabourApproved: '8',
           totalPlantApproved: '2',
+          labourEntries: [{ submittedCost: '640', approvedCost: '560' }],
+          plantEntries: [{ submittedCost: '360', approvedCost: '180' }],
+        },
+      ]),
+    ).toBe(740);
+  });
+
+  it('falls back to submitted entry costs when approved entry costs are absent', () => {
+    expect(
+      calculateApprovedDocketTotalCost([
+        {
+          totalLabourSubmitted: '640',
+          totalPlantSubmitted: '360',
+          labourEntries: [{ submittedCost: '640', approvedCost: null }],
+          plantEntries: [{ submittedCost: '360', approvedCost: undefined }],
         },
       ]),
     ).toBe(1000);

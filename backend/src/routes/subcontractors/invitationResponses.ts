@@ -49,6 +49,14 @@ type ApprovedDocketCostSource = {
   totalPlantSubmitted: NumericLike;
   totalLabourApproved?: NumericLike;
   totalPlantApproved?: NumericLike;
+  labourEntries?: Array<{
+    submittedCost: NumericLike;
+    approvedCost: NumericLike;
+  }>;
+  plantEntries?: Array<{
+    submittedCost: NumericLike;
+    approvedCost: NumericLike;
+  }>;
 };
 
 function numericValue(value: NumericLike): number {
@@ -56,11 +64,29 @@ function numericValue(value: NumericLike): number {
 }
 
 export function calculateApprovedDocketTotalCost(dockets: ApprovedDocketCostSource[]): number {
-  return dockets.reduce(
-    (sum, docket) =>
-      sum + numericValue(docket.totalLabourSubmitted) + numericValue(docket.totalPlantSubmitted),
-    0,
-  );
+  return dockets.reduce((sum, docket) => {
+    const labourCost = docket.labourEntries?.length
+      ? docket.labourEntries.reduce(
+          (entrySum, entry) =>
+            entrySum +
+            (entry.approvedCost == null
+              ? numericValue(entry.submittedCost)
+              : numericValue(entry.approvedCost)),
+          0,
+        )
+      : numericValue(docket.totalLabourSubmitted);
+    const plantCost = docket.plantEntries?.length
+      ? docket.plantEntries.reduce(
+          (entrySum, entry) =>
+            entrySum +
+            (entry.approvedCost == null
+              ? numericValue(entry.submittedCost)
+              : numericValue(entry.approvedCost)),
+          0,
+        )
+      : numericValue(docket.totalPlantSubmitted);
+    return sum + labourCost + plantCost;
+  }, 0);
 }
 
 export function buildSubcontractorInvitationDetailsResponse(
