@@ -1524,6 +1524,83 @@ describe('Foreman Dashboard API', () => {
       expect(res.body.pendingDockets).toHaveProperty('totalPlantHours');
     });
 
+    it('should total pending docket hours from entry hours instead of submitted cost totals', async () => {
+      const suffix = Date.now();
+      const subcontractorCompany = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `Foreman Hours Subcontractor ${suffix}`,
+          status: 'approved',
+        },
+      });
+      const employee = await prisma.employeeRoster.create({
+        data: {
+          subcontractorCompanyId: subcontractorCompany.id,
+          name: 'Foreman Labour',
+          role: 'Labourer',
+          hourlyRate: 100,
+          status: 'approved',
+        },
+      });
+      const plant = await prisma.plantRegister.create({
+        data: {
+          subcontractorCompanyId: subcontractorCompany.id,
+          type: 'Excavator',
+          description: 'Foreman dashboard plant',
+          dryRate: 100,
+          status: 'approved',
+        },
+      });
+      const docket = await prisma.dailyDocket.create({
+        data: {
+          projectId,
+          subcontractorCompanyId: subcontractorCompany.id,
+          date: new Date(),
+          status: 'pending_approval',
+          totalLabourSubmitted: 800,
+          totalPlantSubmitted: 200,
+          labourEntries: {
+            create: {
+              employeeId: employee.id,
+              submittedHours: 8,
+              hourlyRate: 100,
+              submittedCost: 800,
+            },
+          },
+          plantEntries: {
+            create: {
+              plantId: plant.id,
+              hoursOperated: 2,
+              wetOrDry: 'dry',
+              hourlyRate: 100,
+              submittedCost: 200,
+            },
+          },
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .get('/api/dashboard/foreman')
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.pendingDockets).toEqual(
+          expect.objectContaining({
+            totalLabourHours: 8,
+            totalPlantHours: 2,
+          }),
+        );
+      } finally {
+        await prisma.dailyDocket.delete({ where: { id: docket.id } }).catch(() => {});
+        await prisma.employeeRoster.delete({ where: { id: employee.id } }).catch(() => {});
+        await prisma.plantRegister.delete({ where: { id: plant.id } }).catch(() => {});
+        await prisma.subcontractorCompany
+          .delete({ where: { id: subcontractorCompany.id } })
+          .catch(() => {});
+      }
+    });
+
     it('should include inspections due today structure', async () => {
       const res = await request(app)
         .get('/api/dashboard/foreman')
