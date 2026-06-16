@@ -339,8 +339,9 @@ export function createSubcontractorInvitationRouters({
         `/subcontractor-portal/accept-invite?id=${subcontractor.id}`,
       );
 
+      let emailResult;
       try {
-        await sendSubcontractorInvitationEmail({
+        emailResult = await sendSubcontractorInvitationEmail({
           to: finalContactEmail,
           contactName: finalContactName,
           companyName: finalCompanyName,
@@ -350,7 +351,12 @@ export function createSubcontractorInvitationRouters({
         });
       } catch (emailError) {
         logError('[Subcontractor Invite] Failed to send email:', emailError);
-        // Don't fail the invite if email fails
+        throw AppError.internal('Subcontractor invitation email could not be sent');
+      }
+
+      if (!emailResult.success) {
+        logError('[Subcontractor Invite] Failed to send email:', emailResult.error);
+        throw AppError.internal('Subcontractor invitation email could not be sent');
       }
 
       res.status(201).json(buildSubcontractorInvitedResponse(subcontractor));

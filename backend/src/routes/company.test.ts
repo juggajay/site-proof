@@ -23,6 +23,7 @@ import { authRouter } from './auth.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { AuditAction, parseAuditLogChanges } from '../lib/auditLog.js';
+import * as emailService from '../lib/email.js';
 import { registerTestUser } from '../test/routeTestHarness.js';
 
 const mockIsSupabaseConfigured = vi.mocked(supabaseLib.isSupabaseConfigured);
@@ -1219,6 +1220,41 @@ describe('Company API', () => {
       });
       expect(setupTokens).toHaveLength(1);
       expect(setupTokens[0].token).toMatch(/^sha256:/);
+    });
+
+    it('rejects new company member invites when the invitation email fails', async () => {
+      const email = `company-invite-email-fail-${Date.now()}@example.com`;
+      const sendInviteSpy = vi
+        .spyOn(emailService, 'sendCompanyMemberInvitationEmail')
+        .mockResolvedValueOnce({
+          success: false,
+          error: 'simulated company invite email failure',
+        });
+
+      try {
+        const res = await request(app)
+          .post('/api/company/members/invite')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            email,
+            fullName: 'Email Failure Member',
+            roleInCompany: 'foreman',
+          });
+
+        expect(sendInviteSpy).toHaveBeenCalledTimes(1);
+        expect(res.status).toBe(500);
+        expect(res.body.error.message).toContain('Company invitation email could not be sent');
+
+        const invitedUser = await prisma.user.findUnique({
+          where: { email },
+          select: { id: true },
+        });
+        if (invitedUser) {
+          invitedUserIds.push(invitedUser.id);
+        }
+      } finally {
+        sendInviteSpy.mockRestore();
+      }
     });
 
     it('includes pending members in the company member list', async () => {

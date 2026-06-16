@@ -325,8 +325,9 @@ companyMemberRoutes.post(
 
     if (setupRequired) {
       const setupUrl = buildFrontendUrl(`/reset-password?token=${setupToken}`);
+      let emailResult;
       try {
-        await sendCompanyMemberInvitationEmail({
+        emailResult = await sendCompanyMemberInvitationEmail({
           to: member.email,
           userName: member.fullName,
           companyName: company.name,
@@ -336,6 +337,12 @@ companyMemberRoutes.post(
         });
       } catch (emailError) {
         logError('[Company Member Invite] Failed to send email:', emailError);
+        throw AppError.internal('Company invitation email could not be sent');
+      }
+
+      if (!emailResult.success) {
+        logError('[Company Member Invite] Failed to send email:', emailResult.error);
+        throw AppError.internal('Company invitation email could not be sent');
       }
     }
 
