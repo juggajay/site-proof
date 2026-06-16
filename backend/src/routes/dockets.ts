@@ -245,31 +245,40 @@ docketsRouter.get(
     }
     await requireDocketReadAccess(req.user!, docket);
 
-    // Get foreman diary for the same date to compare (Feature #265 Step 3)
-    const diary = await prisma.dailyDiary.findFirst({
-      where: {
-        projectId: docket.projectId,
-        date: docket.date,
-      },
-      include: {
-        personnel: {
-          select: { id: true, name: true, company: true, role: true },
-        },
-        plant: {
-          select: { id: true, description: true, idRego: true },
-        },
-        activities: {
-          select: { id: true, description: true, lotId: true },
-        },
-        delays: {
-          select: { id: true, delayType: true, durationHours: true, description: true },
-        },
-      },
-    });
+    const canViewDiaryComparison = !isSubcontractorUser(req.user!);
 
-    // Feature #265 Steps 3-4 - Summarize the same-day foreman diary and flag
-    // docket/diary discrepancies (pure comparison; see dockets/diaryComparison).
-    const { foremanDiary, discrepancies } = buildDocketDiaryComparison(docket, diary);
+    // Get foreman diary for the same date to compare (Feature #265 Step 3).
+    // Subcontractor docket access is scoped to their own docket; it must not
+    // expose head-contractor diary aggregates for the full project day.
+    const diary = canViewDiaryComparison
+      ? await prisma.dailyDiary.findFirst({
+          where: {
+            projectId: docket.projectId,
+            date: docket.date,
+          },
+          include: {
+            personnel: {
+              select: { id: true, name: true, company: true, role: true },
+            },
+            plant: {
+              select: { id: true, description: true, idRego: true },
+            },
+            activities: {
+              select: { id: true, description: true, lotId: true },
+            },
+            delays: {
+              select: { id: true, delayType: true, durationHours: true, description: true },
+            },
+          },
+        })
+      : null;
+
+    const { foremanDiary, discrepancies } = canViewDiaryComparison
+      ? buildDocketDiaryComparison(docket, diary)
+      : {
+          foremanDiary: null,
+          discrepancies: [],
+        };
 
     // Fetch project/user info separately since they're not relations on
     // DailyDocket; the three lookups are independent, so run them together.
