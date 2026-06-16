@@ -5,7 +5,10 @@ import { requireAuth } from '../middleware/authMiddleware.js';
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
 import { activeSubcontractorCompanyWhere } from '../lib/projectAccess.js';
-import { buildSubcontractorsForProjectResponse } from './subcontractors/invitationResponses.js';
+import {
+  buildSubcontractorsForProjectResponse,
+  calculateApprovedDocketTotalCost,
+} from './subcontractors/invitationResponses.js';
 import { createSubcontractorAdminRouter } from './subcontractors/adminRoutes.js';
 import {
   createSubcontractorAbnValidationRouter,
@@ -416,8 +419,8 @@ subcontractorsRouter.get(
           where: { status: 'approved' },
           select: {
             id: true,
-            totalLabourApproved: true,
-            totalPlantApproved: true,
+            totalLabourSubmitted: true,
+            totalPlantSubmitted: true,
           },
         },
         lotAssignments: {
@@ -431,11 +434,7 @@ subcontractorsRouter.get(
     // Calculate totals for each subcontractor
     const formattedSubcontractors = subcontractors.map((sub) => {
       const totalApprovedDockets = sub.dailyDockets.length;
-      const totalCost = sub.dailyDockets.reduce((sum, docket) => {
-        return (
-          sum + (Number(docket.totalLabourApproved) || 0) + (Number(docket.totalPlantApproved) || 0)
-        );
-      }, 0);
+      const totalCost = calculateApprovedDocketTotalCost(sub.dailyDockets);
 
       return {
         id: sub.id,

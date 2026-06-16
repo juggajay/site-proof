@@ -1,6 +1,7 @@
 import { maskInvitedEmail } from '../../lib/subcontractorInvitations.js';
 
 type NullableText = string | null | undefined;
+type NumericLike = number | string | { toString(): string } | null | undefined;
 
 type InvitationDetailsSource = {
   id: string;
@@ -42,6 +43,25 @@ type InvitedSubcontractorSource = {
 type AcceptedSubcontractorSource = InvitedSubcontractorSource & {
   project: { name: string };
 };
+
+type ApprovedDocketCostSource = {
+  totalLabourSubmitted: NumericLike;
+  totalPlantSubmitted: NumericLike;
+  totalLabourApproved?: NumericLike;
+  totalPlantApproved?: NumericLike;
+};
+
+function numericValue(value: NumericLike): number {
+  return Number(value) || 0;
+}
+
+export function calculateApprovedDocketTotalCost(dockets: ApprovedDocketCostSource[]): number {
+  return dockets.reduce(
+    (sum, docket) =>
+      sum + numericValue(docket.totalLabourSubmitted) + numericValue(docket.totalPlantSubmitted),
+    0,
+  );
+}
 
 export function buildSubcontractorInvitationDetailsResponse(
   subcontractor: InvitationDetailsSource,
