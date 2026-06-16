@@ -6,8 +6,8 @@ import { ROLE_GROUPS, hasRoleInGroup } from '@/lib/roles';
  * Commercial access allows viewing contract values, budgets, rates, and claims.
  */
 export function useCommercialAccess() {
-  const { user } = useAuth();
-  const role = user?.role;
+  const { user, actualRole } = useAuth();
+  const role = user?.dashboardRole || actualRole || user?.roleInCompany || user?.role;
 
   const hasCommercialAccess = hasRoleInGroup(role, ROLE_GROUPS.COMMERCIAL);
   const canViewSubcontractorRates = hasRoleInGroup(role, ROLE_GROUPS.RATE_VIEWERS);
