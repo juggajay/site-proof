@@ -48,6 +48,78 @@ async function createNcrEvidence(projectId: string, userId: string, ncrId: strin
   });
 }
 
+function holdNextTwoNcrReads(ncrId: string) {
+  const originalFindUnique = prisma.nCR.findUnique.bind(prisma.nCR);
+  let reads = 0;
+  let unblockReads!: () => void;
+  const readsBarrier = new Promise<void>((resolve) => {
+    unblockReads = resolve;
+  });
+
+  const findUniqueSpy = vi.spyOn(prisma.nCR, 'findUnique');
+  findUniqueSpy.mockImplementation(((args) => {
+    return originalFindUnique(args).then(async (result) => {
+      if (args?.where?.id === ncrId && reads < 2) {
+        reads += 1;
+        if (reads === 2) {
+          unblockReads();
+        }
+        await readsBarrier;
+      }
+      return result;
+    }) as ReturnType<typeof prisma.nCR.findUnique>;
+  }) as Parameters<typeof findUniqueSpy.mockImplementation>[0]);
+
+  return findUniqueSpy;
+}
+
+async function findStatusTransitionAudits(
+  projectId: string,
+  userId: string,
+  ncrId: string,
+  from: string,
+  to: string,
+) {
+  const auditLogs = await prisma.auditLog.findMany({
+    where: {
+      projectId,
+      userId,
+      entityType: 'ncr',
+      entityId: ncrId,
+      action: AuditAction.NCR_STATUS_CHANGED,
+    },
+  });
+
+  return auditLogs.filter((auditLog) => {
+    const changes = parseAuditLogChanges(auditLog.changes) as {
+      status?: { from?: string; to?: string };
+    };
+    return changes.status?.from === from && changes.status.to === to;
+  });
+}
+
+async function expectConcurrentNcrTerminalState(
+  responses: Array<{ status: number }>,
+  ncrId: string,
+  expected: { status: string; closedById: string | null },
+) {
+  expect(responses.map((response) => response.status).sort()).toEqual([200, 400]);
+
+  const ncr = await prisma.nCR.findUniqueOrThrow({
+    where: { id: ncrId },
+    select: { status: true, closedAt: true, closedById: true },
+  });
+  expect(ncr.status).toBe(expected.status);
+
+  if (expected.closedById) {
+    expect(ncr.closedAt).toBeInstanceOf(Date);
+    expect(ncr.closedById).toBe(expected.closedById);
+  } else {
+    expect(ncr.closedAt).toBeNull();
+    expect(ncr.closedById).toBeNull();
+  }
+}
+
 describe('NCR API', () => {
   let authToken: string;
   let userId: string;
@@ -2008,6 +2080,40 @@ describe('NCR Workflow', () => {
     });
   });
 
+  it('should close only once when concurrent close requests race', async () => {
+    const raceNcrId = await createVerificationNcr('Concurrent close race');
+    const findUniqueSpy = holdNextTwoNcrReads(raceNcrId);
+
+    try {
+      const [firstCloseRes, secondCloseRes] = await Promise.all([
+        request(app)
+          .post(`/api/ncrs/${raceNcrId}/close`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ verificationNotes: 'First close wins' }),
+        request(app)
+          .post(`/api/ncrs/${raceNcrId}/close`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ verificationNotes: 'Second close should be rejected' }),
+      ]);
+
+      await expectConcurrentNcrTerminalState([firstCloseRes, secondCloseRes], raceNcrId, {
+        status: 'closed',
+        closedById: userId,
+      });
+
+      const closeAudits = await findStatusTransitionAudits(
+        projectId,
+        userId,
+        raceNcrId,
+        'verification',
+        'closed',
+      );
+      expect(closeAudits).toHaveLength(1);
+    } finally {
+      findUniqueSpy.mockRestore();
+    }
+  });
+
   it('should reopen closed NCR and write an audit log', async () => {
     const res = await request(app)
       .post(`/api/ncrs/${workflowNcrId}/reopen`)
@@ -2034,6 +2140,46 @@ describe('NCR Workflow', () => {
       status: { from: 'closed', to: 'rectification' },
       reasonPresent: true,
     });
+  });
+
+  it('should reopen only once when concurrent reopen requests race', async () => {
+    const raceNcrId = await createVerificationNcr('Concurrent reopen race');
+    const closeRes = await request(app)
+      .post(`/api/ncrs/${raceNcrId}/close`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({ verificationNotes: 'Ready to close before reopen race' });
+    expect(closeRes.status).toBe(200);
+
+    const findUniqueSpy = holdNextTwoNcrReads(raceNcrId);
+
+    try {
+      const [firstReopenRes, secondReopenRes] = await Promise.all([
+        request(app)
+          .post(`/api/ncrs/${raceNcrId}/reopen`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ reason: 'First reopen wins' }),
+        request(app)
+          .post(`/api/ncrs/${raceNcrId}/reopen`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ reason: 'Second reopen should be rejected' }),
+      ]);
+
+      await expectConcurrentNcrTerminalState([firstReopenRes, secondReopenRes], raceNcrId, {
+        status: 'rectification',
+        closedById: null,
+      });
+
+      const reopenAudits = await findStatusTransitionAudits(
+        projectId,
+        userId,
+        raceNcrId,
+        'closed',
+        'rectification',
+      );
+      expect(reopenAudits).toHaveLength(1);
+    } finally {
+      findUniqueSpy.mockRestore();
+    }
   });
 });
 
@@ -2473,6 +2619,44 @@ describe('Major NCR QM Approval', () => {
       qmApprovalRequired: true,
       qmApproved: true,
     });
+  });
+
+  it('should grant QM approval only once when concurrent approval requests race', async () => {
+    const raceNcrId = await createMajorNcrInVerification('Concurrent QM approval race');
+    const findUniqueSpy = holdNextTwoNcrReads(raceNcrId);
+
+    try {
+      const [firstApprovalRes, secondApprovalRes] = await Promise.all([
+        request(app)
+          .post(`/api/ncrs/${raceNcrId}/qm-approve`)
+          .set('Authorization', `Bearer ${authToken}`),
+        request(app)
+          .post(`/api/ncrs/${raceNcrId}/qm-approve`)
+          .set('Authorization', `Bearer ${authToken}`),
+      ]);
+
+      expect([firstApprovalRes.status, secondApprovalRes.status].sort()).toEqual([200, 400]);
+
+      const ncr = await prisma.nCR.findUniqueOrThrow({
+        where: { id: raceNcrId },
+        select: { qmApprovedAt: true, qmApprovedById: true },
+      });
+      expect(ncr.qmApprovedAt).toBeInstanceOf(Date);
+      expect(ncr.qmApprovedById).toBe(userId);
+
+      const approvalAuditLogs = await prisma.auditLog.findMany({
+        where: {
+          projectId,
+          userId,
+          entityType: 'ncr',
+          entityId: raceNcrId,
+          action: AuditAction.NCR_QM_APPROVED,
+        },
+      });
+      expect(approvalAuditLogs).toHaveLength(1);
+    } finally {
+      findUniqueSpy.mockRestore();
+    }
   });
 
   it('should reject closing a major NCR by the same user who granted QM approval', async () => {
