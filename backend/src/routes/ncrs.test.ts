@@ -1411,6 +1411,57 @@ describe('NCR Workflow', () => {
     expect(serializedChanges).not.toContain('notificationPackage');
   });
 
+  it('should send only one client notification when concurrent requests race', async () => {
+    const recipientEmail = `client-race-${Date.now()}@example.com`;
+    const sendEmailSpy = vi.spyOn(emailService, 'sendEmail').mockImplementation(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      return { success: true };
+    });
+
+    try {
+      const createRes = await request(app)
+        .post('/api/ncrs')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          projectId,
+          description: 'Major NCR client notify race',
+          category: 'Workmanship',
+          severity: 'major',
+          responsibleUserId: userId,
+        });
+
+      expect(createRes.status).toBe(201);
+      const raceNcrId = createRes.body.ncr.id as string;
+
+      const [firstNotifyRes, secondNotifyRes] = await Promise.all([
+        request(app)
+          .post(`/api/ncrs/${raceNcrId}/notify-client`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ recipientEmail }),
+        request(app)
+          .post(`/api/ncrs/${raceNcrId}/notify-client`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ recipientEmail }),
+      ]);
+
+      expect([firstNotifyRes.status, secondNotifyRes.status].sort()).toEqual([200, 400]);
+      expect(sendEmailSpy).toHaveBeenCalledTimes(1);
+
+      const auditLogs = await prisma.auditLog.findMany({
+        where: {
+          projectId,
+          userId,
+          entityType: 'ncr',
+          entityId: raceNcrId,
+          action: AuditAction.NCR_CLIENT_NOTIFIED,
+        },
+      });
+      expect(auditLogs).toHaveLength(1);
+    } finally {
+      sendEmailSpy.mockRestore();
+    }
+  });
+
   it('should not mark client notified or audit when client notification email fails', async () => {
     const recipientEmail = `failed-client-${Date.now()}@example.com`;
     const sendEmailSpy = vi.spyOn(emailService, 'sendEmail').mockResolvedValueOnce({

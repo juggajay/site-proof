@@ -31,6 +31,37 @@ import {
 
 export const ncrClosureWorkflowRouter = Router();
 
+async function claimClientNotification(ncrId: string, notificationTime: Date) {
+  const notificationClaim = await prisma.nCR.updateMany({
+    where: { id: ncrId, clientNotificationRequired: true, clientNotifiedAt: null },
+    data: { clientNotifiedAt: notificationTime },
+  });
+
+  if (notificationClaim.count === 1) {
+    return;
+  }
+
+  const currentNcr = await prisma.nCR.findUnique({
+    where: { id: ncrId },
+    select: { clientNotifiedAt: true },
+  });
+
+  if (currentNcr?.clientNotifiedAt) {
+    throw AppError.badRequest(
+      `Client was already notified on ${currentNcr.clientNotifiedAt.toLocaleDateString('en-AU')}`,
+    );
+  }
+
+  throw AppError.badRequest('Client notification state changed. Please retry.');
+}
+
+async function releaseClientNotificationClaim(ncrId: string, notificationTime: Date) {
+  await prisma.nCR.updateMany({
+    where: { id: ncrId, clientNotifiedAt: notificationTime },
+    data: { clientNotifiedAt: null },
+  });
+}
+
 // POST /api/ncrs/:id/qm-approve - QM approval for major NCRs (Quality Manager only)
 ncrClosureWorkflowRouter.post(
   '/:id/qm-approve',
@@ -286,6 +317,9 @@ ncrClosureWorkflowRouter.post(
       select: { fullName: true, email: true },
     });
 
+    const notificationTime = new Date();
+    await claimClientNotification(id, notificationTime);
+
     // Generate notification package content
     const lotNumbers = ncr.ncrLots.map((nl) => nl.lot.lotNumber).join(', ') || 'N/A';
     const notificationPackage = {
@@ -299,7 +333,7 @@ ncrClosureWorkflowRouter.post(
       raisedBy: ncr.raisedBy?.fullName || ncr.raisedBy?.email || 'Unknown',
       raisedAt: ncr.raisedAt,
       notifiedBy: notifiedByUser?.fullName || notifiedByUser?.email || 'Unknown',
-      notifiedAt: new Date().toISOString(),
+      notifiedAt: notificationTime.toISOString(),
       additionalMessage: additionalMessage || null,
     };
 
@@ -322,18 +356,18 @@ ncrClosureWorkflowRouter.post(
         ncr.description,
         ...(additionalMessage ? ['', 'Additional message:', additionalMessage] : []),
       ].join('\n'),
+    }).catch(async (error: unknown) => {
+      await releaseClientNotificationClaim(id, notificationTime);
+      throw error;
     });
 
     if (!emailResult.success) {
+      await releaseClientNotificationClaim(id, notificationTime);
       throw AppError.internal('Client notification email could not be sent');
     }
 
-    // Update NCR with notification timestamp
-    const updatedNcr = await prisma.nCR.update({
+    const updatedNcr = await prisma.nCR.findUniqueOrThrow({
       where: { id },
-      data: {
-        clientNotifiedAt: new Date(),
-      },
       include: {
         project: { select: { name: true } },
         raisedBy: { select: { fullName: true, email: true } },
