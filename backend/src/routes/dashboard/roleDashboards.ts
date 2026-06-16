@@ -28,6 +28,37 @@ import { projectManagerDashboardRouter } from './projectManagerDashboardRoute.js
 
 export const dashboardRoleDashboardsRouter = Router();
 
+type PendingDocketHoursSource = {
+  totalLabourSubmitted?: unknown;
+  totalPlantSubmitted?: unknown;
+  labourEntries: Array<{ submittedHours: unknown }>;
+  plantEntries: Array<{ hoursOperated: unknown }>;
+};
+
+export function calculatePendingDocketStats(pendingDockets: PendingDocketHoursSource[]) {
+  return {
+    count: pendingDockets.length,
+    totalLabourHours: pendingDockets.reduce(
+      (sum, docket) =>
+        sum +
+        docket.labourEntries.reduce(
+          (entrySum, entry) => entrySum + (Number(entry.submittedHours) || 0),
+          0,
+        ),
+      0,
+    ),
+    totalPlantHours: pendingDockets.reduce(
+      (sum, docket) =>
+        sum +
+        docket.plantEntries.reduce(
+          (entrySum, entry) => entrySum + (Number(entry.hoursOperated) || 0),
+          0,
+        ),
+      0,
+    ),
+  };
+}
+
 // Feature #292: GET /api/dashboard/foreman - Simplified dashboard for foreman role
 // Shows today's diary status, pending dockets, inspections due today, and weather
 dashboardRoleDashboardsRouter.get(
@@ -99,8 +130,16 @@ dashboardRoleDashboardsRouter.get(
           status: 'pending_approval',
         },
         select: {
-          totalLabourSubmitted: true,
-          totalPlantSubmitted: true,
+          labourEntries: {
+            select: {
+              submittedHours: true,
+            },
+          },
+          plantEntries: {
+            select: {
+              hoursOperated: true,
+            },
+          },
         },
       }),
       // 3. Inspections Due Today (Hold Points + ITPs that are scheduled for today)
@@ -148,17 +187,7 @@ dashboardRoleDashboardsRouter.get(
       }),
     ]);
 
-    const docketStats = {
-      count: pendingDockets.length,
-      totalLabourHours: pendingDockets.reduce(
-        (sum, d) => sum + Number(d.totalLabourSubmitted || 0),
-        0,
-      ),
-      totalPlantHours: pendingDockets.reduce(
-        (sum, d) => sum + Number(d.totalPlantSubmitted || 0),
-        0,
-      ),
-    };
+    const docketStats = calculatePendingDocketStats(pendingDockets);
 
     const inspectionItems = [
       ...holdPointsDueToday.map((hp) => ({
