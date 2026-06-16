@@ -170,21 +170,25 @@ export function createMagicLinkRouter({
         throw AppError.badRequest('This link has already been used. Please request a new one.');
       }
 
+      const consumedAt = new Date();
+      const consumeResult = await prisma.passwordResetToken.updateMany({
+        where: {
+          id: tokenRecord.id,
+          usedAt: null,
+          expiresAt: { gt: consumedAt },
+        },
+        data: { usedAt: consumedAt },
+      });
+
+      if (consumeResult.count !== 1) {
+        throw AppError.badRequest('This link has already been used. Please request a new one.');
+      }
+
       if (tokenRecord.user.twoFactorEnabled) {
-        await prisma.passwordResetToken.update({
-          where: { id: tokenRecord.id },
-          data: { usedAt: new Date() },
-        });
         throw AppError.forbidden(
           'MFA-enabled accounts must sign in with email, password, and MFA code',
         );
       }
-
-      // Mark token as used
-      await prisma.passwordResetToken.update({
-        where: { id: tokenRecord.id },
-        data: { usedAt: new Date() },
-      });
 
       // Generate JWT token for the user
       const authToken = generateToken({
