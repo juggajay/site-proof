@@ -1,6 +1,7 @@
 import { devLog } from '../logger';
 import { formatDateKey } from '../localDate';
 import { getJsPDF } from './jsPdfRuntime';
+import { savePdf } from './pdfSave';
 import type { NCRDetailData } from './types';
 
 /**
@@ -287,7 +288,7 @@ export async function generateNCRDetailPDF(data: NCRDetailData): Promise<void> {
 
   // Save the PDF
   const filename = `NCR-${data.ncr.ncrNumber}-${formatDateKey()}.pdf`;
-  doc.save(filename);
+  savePdf(doc, filename, 'ncr-detail.pdf');
 
   devLog(`NCR detail PDF generated in ${Date.now() - startTime}ms`);
 }

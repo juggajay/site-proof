@@ -1,6 +1,7 @@
 import { devLog } from '../logger';
 import { formatDateKey } from '../localDate';
 import { getJsPDF } from './jsPdfRuntime';
+import { savePdf } from './pdfSave';
 import type { TestCertificateData } from './types';
 
 /**
@@ -230,7 +231,7 @@ export async function generateTestCertificatePDF(data: TestCertificateData): Pro
 
   // Save the PDF
   const filename = `Test-Certificate-${data.test.testRequestNumber || data.test.id}-${formatDateKey()}.pdf`;
-  doc.save(filename);
+  savePdf(doc, filename, 'test-certificate.pdf');
 
   devLog(`Test certificate PDF generated in ${Date.now() - startTime}ms`);
 }

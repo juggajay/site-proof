@@ -1,6 +1,7 @@
 import { devLog } from '../logger';
 import { formatDateKey } from '../localDate';
 import { getJsPDF } from './jsPdfRuntime';
+import { savePdf } from './pdfSave';
 import type { DashboardPDFAttentionItem, DashboardPDFData } from './types';
 
 export async function generateDashboardPDF(data: DashboardPDFData): Promise<void> {
@@ -171,7 +172,7 @@ export async function generateDashboardPDF(data: DashboardPDFData): Promise<void
   doc.text(`Generated from SiteProof on ${formatDateTime(data.generatedAt)}`, margin, footerY);
 
   const filenameDate = formatDateKey(new Date(data.generatedAt));
-  doc.save(`siteproof-dashboard-${filenameDate}.pdf`);
+  savePdf(doc, `siteproof-dashboard-${filenameDate}.pdf`, 'siteproof-dashboard.pdf');
 
   devLog(`Dashboard PDF generated in ${Date.now() - startTime}ms`);
 }

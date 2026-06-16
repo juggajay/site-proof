@@ -1,5 +1,6 @@
 import { formatDateKey } from '../localDate';
 import { getJsPDF } from './jsPdfRuntime';
+import { savePdf } from './pdfSave';
 import { defaultHPPackageOptions } from './types';
 import type { HPEvidencePackageData, HPPackageOptions } from './types';
 
@@ -399,5 +400,5 @@ export async function generateHPEvidencePackagePDF(
 
   // Save the PDF
   const filename = `HP-Evidence-Package-${data.lot.lotNumber}-${formatDateKey()}.pdf`;
-  doc.save(filename);
+  savePdf(doc, filename, 'hold-point-evidence-package.pdf');
 }

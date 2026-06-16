@@ -1,5 +1,6 @@
 import { devLog } from '../logger';
 import { getJsPDF } from './jsPdfRuntime';
+import { savePdf } from './pdfSave';
 import type { DocketDetailPDFData } from './types';
 
 /**
@@ -303,7 +304,7 @@ export async function generateDocketDetailPDF(data: DocketDetailPDFData): Promis
 
   // Save the PDF
   const filename = `Docket-${data.docket.docketNumber}-${data.docket.status}.pdf`;
-  doc.save(filename);
+  savePdf(doc, filename, 'docket.pdf');
 
   devLog(`Docket detail PDF generated in ${Date.now() - startTime}ms`);
 }

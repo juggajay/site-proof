@@ -1,5 +1,6 @@
 import { devLog } from '../logger';
 import { getJsPDF } from './jsPdfRuntime';
+import { savePdf } from './pdfSave';
 import type { DailyDiaryPDFData } from './types';
 
 /**
@@ -466,7 +467,7 @@ export async function generateDailyDiaryPDF(data: DailyDiaryPDFData): Promise<vo
   // Save the PDF
   const diaryDate = data.diary.date.split('T')[0];
   const filename = `Daily-Diary-${diaryDate}-${data.diary.status}.pdf`;
-  doc.save(filename);
+  savePdf(doc, filename, 'daily-diary.pdf');
 
   devLog(`Daily diary PDF generated in ${Date.now() - startTime}ms`);
 }

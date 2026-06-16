@@ -1,5 +1,6 @@
 import { formatDateKey } from '../localDate';
 import { getJsPDF } from './jsPdfRuntime';
+import { savePdf } from './pdfSave';
 import { defaultConformanceOptions } from './types';
 import type { ConformanceFormat, ConformanceFormatOptions, ConformanceReportData } from './types';
 
@@ -544,5 +545,5 @@ export async function generateConformanceReportPDF(
   // Save the PDF with format-specific filename
   const formatSuffix = options.format !== 'standard' ? `-${options.format.toUpperCase()}` : '';
   const filename = `Conformance-Report-${data.lot.lotNumber}${formatSuffix}-${formatDateKey()}.pdf`;
-  doc.save(filename);
+  savePdf(doc, filename, 'conformance-report.pdf');
 }
