@@ -10,10 +10,61 @@ import {
 
 describe('comment response helpers', () => {
   it('preserves comment list pagination envelope', () => {
-    const comments = [{ id: 'comment-1', content: 'Looks good' }];
+    const comments = [
+      {
+        id: 'comment-1',
+        content: 'Looks good',
+        attachments: [
+          {
+            id: 'attachment-1',
+            filename: 'photo.jpg',
+            fileUrl: 'https://storage.example/object/public/documents/comments/project/photo.jpg',
+          },
+        ],
+        replies: [
+          {
+            id: 'reply-1',
+            content: 'Reply',
+            attachments: [
+              {
+                id: 'attachment-2',
+                filename: 'reply-photo.jpg',
+                fileUrl:
+                  'https://storage.example/object/public/documents/comments/project/reply-photo.jpg',
+              },
+            ],
+          },
+        ],
+      },
+    ];
 
     expect(buildCommentListResponse(comments, 26, 2, 25)).toEqual({
-      comments,
+      comments: [
+        {
+          id: 'comment-1',
+          content: 'Looks good',
+          attachments: [
+            {
+              id: 'attachment-1',
+              filename: 'photo.jpg',
+              downloadUrl: '/api/comments/attachments/attachment-1/download',
+            },
+          ],
+          replies: [
+            {
+              id: 'reply-1',
+              content: 'Reply',
+              attachments: [
+                {
+                  id: 'attachment-2',
+                  filename: 'reply-photo.jpg',
+                  downloadUrl: '/api/comments/attachments/attachment-2/download',
+                },
+              ],
+            },
+          ],
+        },
+      ],
       pagination: {
         page: 2,
         limit: 25,
@@ -32,9 +83,31 @@ describe('comment response helpers', () => {
   });
 
   it('preserves create and update comment envelopes', () => {
-    const comment = { id: 'comment-1', content: 'Updated' };
+    const comment = {
+      id: 'comment-1',
+      content: 'Updated',
+      attachments: [
+        {
+          id: 'attachment-1',
+          filename: 'photo.jpg',
+          fileUrl: 'https://storage.example/object/public/documents/comments/project/photo.jpg',
+        },
+      ],
+    };
 
-    expect(buildCommentMutationResponse(comment)).toEqual({ comment });
+    expect(buildCommentMutationResponse(comment)).toEqual({
+      comment: {
+        id: 'comment-1',
+        content: 'Updated',
+        attachments: [
+          {
+            id: 'attachment-1',
+            filename: 'photo.jpg',
+            downloadUrl: '/api/comments/attachments/attachment-1/download',
+          },
+        ],
+      },
+    });
   });
 
   it('preserves delete success response', () => {
@@ -42,11 +115,23 @@ describe('comment response helpers', () => {
   });
 
   it('preserves attachment append response envelope', () => {
-    const attachments = [{ id: 'attachment-1', filename: 'photo.jpg' }];
+    const attachments = [
+      {
+        id: 'attachment-1',
+        filename: 'photo.jpg',
+        fileUrl: 'https://storage.example/object/public/documents/comments/project/photo.jpg',
+      },
+    ];
 
     expect(buildCommentAttachmentsCreatedResponse(2, attachments)).toEqual({
       count: 2,
-      attachments,
+      attachments: [
+        {
+          id: 'attachment-1',
+          filename: 'photo.jpg',
+          downloadUrl: '/api/comments/attachments/attachment-1/download',
+        },
+      ],
     });
   });
 });

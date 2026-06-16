@@ -317,7 +317,9 @@ export function CommentsSection({ entityType, entityId }: CommentsSectionProps) 
 
   const downloadAttachment = async (attachment: CommentAttachment) => {
     try {
-      const response = await authFetch(`/api/comments/attachments/${attachment.id}/download`);
+      const downloadUrl =
+        attachment.downloadUrl ?? `/api/comments/attachments/${attachment.id}/download`;
+      const response = await authFetch(downloadUrl);
 
       if (!response.ok) {
         throw new Error('Failed to download attachment');
