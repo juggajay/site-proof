@@ -2,7 +2,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import fs from 'fs';
 import path from 'path';
-import { AppError } from '../lib/AppError.js';
+import { AppError, ErrorCodes } from '../lib/AppError.js';
 import { fetchWithTimeout } from '../lib/fetchWithTimeout.js';
 import { ZodError } from 'zod';
 import multer from 'multer';
@@ -63,6 +63,31 @@ type PrismaKnownRequestErrorLike = {
   message: string;
   meta?: Record<string, unknown>;
 };
+
+const GENERIC_CLIENT_ERRORS: Readonly<Record<number, { message: string; code: string }>> = {
+  400: { message: 'Bad request', code: ErrorCodes.VALIDATION_ERROR },
+  401: { message: 'Authentication required', code: ErrorCodes.UNAUTHORIZED },
+  403: {
+    message: 'You do not have permission to perform this action',
+    code: ErrorCodes.FORBIDDEN,
+  },
+  404: { message: 'Resource not found', code: ErrorCodes.NOT_FOUND },
+  409: { message: 'Resource conflict', code: ErrorCodes.CONFLICT },
+  413: { message: 'Uploaded file is too large', code: ErrorCodes.FILE_TOO_LARGE },
+  422: { message: 'Invalid request', code: ErrorCodes.INVALID_REFERENCE },
+  429: { message: 'Too many requests', code: ErrorCodes.RATE_LIMITED },
+};
+
+function genericClientErrorForStatus(statusCode: number): { message: string; code: string } {
+  const knownClientError = GENERIC_CLIENT_ERRORS[statusCode];
+  if (knownClientError) {
+    return knownClientError;
+  }
+
+  return statusCode < 500
+    ? { message: 'Request failed', code: ErrorCodes.INVALID_INPUT }
+    : { message: 'Internal Server Error', code: ErrorCodes.INTERNAL_ERROR };
+}
 
 function getPrismaForeignKeyField(meta: Record<string, unknown> | undefined): string | undefined {
   const field = meta?.field_name ?? meta?.fieldName ?? meta?.field;
@@ -398,10 +423,18 @@ function normalizeError(err: unknown): {
   // Legacy errors with statusCode (e.g. from libraries)
   if (err instanceof Error && 'statusCode' in err) {
     const legacyErr = err as Error & { statusCode?: number; code?: string };
+    const statusCode = legacyErr.statusCode || 500;
+    const genericError = genericClientErrorForStatus(statusCode);
     return {
-      statusCode: legacyErr.statusCode || 500,
-      message: legacyErr.message || 'Internal Server Error',
-      code: legacyErr.code || 'INTERNAL_ERROR',
+      statusCode,
+      message:
+        process.env.NODE_ENV !== 'production'
+          ? legacyErr.message || genericError.message
+          : genericError.message,
+      code:
+        process.env.NODE_ENV !== 'production'
+          ? legacyErr.code || genericError.code
+          : genericError.code,
     };
   }
 
