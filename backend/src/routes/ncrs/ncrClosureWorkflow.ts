@@ -28,6 +28,7 @@ import {
   reopenNcrSchema,
   submitForVerificationSchema,
 } from './ncrWorkflowValidation.js';
+import { claimNcrVerificationSubmission } from './ncrVerificationSubmission.js';
 
 export const ncrClosureWorkflowRouter = Router();
 
@@ -570,13 +571,14 @@ ncrClosureWorkflowRouter.post(
       );
     }
 
-    const updatedNcr = await prisma.nCR.update({
+    await claimNcrVerificationSubmission({
+      ncrId: id,
+      rectificationNotes,
+      submittedAt: new Date(),
+    });
+
+    const updatedNcr = await prisma.nCR.findUniqueOrThrow({
       where: { id },
-      data: {
-        status: 'verification',
-        rectificationNotes,
-        rectificationSubmittedAt: new Date(),
-      },
       include: {
         ncrEvidence: {
           include: {

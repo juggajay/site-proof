@@ -23,6 +23,7 @@ import {
   respondNcrSchema,
 } from './ncrWorkflowValidation.js';
 import { ncrClosureWorkflowRouter } from './ncrClosureWorkflow.js';
+import { claimNcrVerificationSubmission } from './ncrVerificationSubmission.js';
 
 const qmReviewedNcrInclude = {
   project: { select: { name: true } },
@@ -344,13 +345,14 @@ ncrWorkflowRouter.post(
       );
     }
 
-    const updatedNcr = await prisma.nCR.update({
+    await claimNcrVerificationSubmission({
+      ncrId: id,
+      rectificationNotes,
+      submittedAt: new Date(),
+    });
+
+    const updatedNcr = await prisma.nCR.findUniqueOrThrow({
       where: { id },
-      data: {
-        status: 'verification',
-        rectificationNotes,
-        rectificationSubmittedAt: new Date(),
-      },
     });
 
     await createAuditLog({

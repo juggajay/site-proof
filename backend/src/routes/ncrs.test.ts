@@ -1251,6 +1251,35 @@ describe('NCR Workflow', () => {
     await prisma.company.delete({ where: { id: companyId } }).catch(() => {});
   });
 
+  async function createRectificationNcrWithEvidence(
+    description: string,
+    severity: 'minor' | 'major' = 'minor',
+  ) {
+    const ncr = await prisma.nCR.create({
+      data: {
+        projectId,
+        ncrNumber: `NCR-RACE-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        description,
+        category: 'Workmanship',
+        severity,
+        status: 'rectification',
+        raisedById: userId,
+        responsibleUserId: userId,
+        rootCauseCategory: 'Method',
+        rootCauseDescription: 'Incorrect procedure followed',
+        proposedCorrectiveAction: 'Retrain workers on correct method',
+        responseSubmittedAt: new Date(),
+        qmReviewedAt: new Date(),
+        qmReviewedById: userId,
+        qmReviewComments: 'Response is acceptable',
+      },
+    });
+
+    await createNcrEvidence(projectId, userId, ncr.id);
+
+    return ncr.id;
+  }
+
   async function createVerificationNcr(description: string, severity: 'minor' | 'major' = 'minor') {
     const ncrRes = await request(app)
       .post('/api/ncrs')
@@ -1296,6 +1325,54 @@ describe('NCR Workflow', () => {
     expect(rectifyRes.body.ncr.status).toBe('verification');
 
     return createdNcrId;
+  }
+
+  async function expectConcurrentVerificationSubmit(
+    path: 'rectify' | 'submit-for-verification',
+    description: string,
+  ) {
+    const raceNcrId = await createRectificationNcrWithEvidence(description);
+    const findUniqueSpy = holdNextTwoNcrReads(raceNcrId);
+
+    try {
+      const [firstSubmitRes, secondSubmitRes] = await Promise.all([
+        request(app)
+          .post(`/api/ncrs/${raceNcrId}/${path}`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ rectificationNotes: 'First submit wins' }),
+        request(app)
+          .post(`/api/ncrs/${raceNcrId}/${path}`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ rectificationNotes: 'Second submit should be rejected' }),
+      ]);
+
+      expect([firstSubmitRes.status, secondSubmitRes.status].sort()).toEqual([200, 400]);
+
+      const ncr = await prisma.nCR.findUniqueOrThrow({
+        where: { id: raceNcrId },
+        select: {
+          status: true,
+          rectificationNotes: true,
+          rectificationSubmittedAt: true,
+        },
+      });
+      expect(ncr.status).toBe('verification');
+      expect(['First submit wins', 'Second submit should be rejected']).toContain(
+        ncr.rectificationNotes,
+      );
+      expect(ncr.rectificationSubmittedAt).toBeInstanceOf(Date);
+
+      const submitAudits = await findStatusTransitionAudits(
+        projectId,
+        userId,
+        raceNcrId,
+        'rectification',
+        'verification',
+      );
+      expect(submitAudits).toHaveLength(1);
+    } finally {
+      findUniqueSpy.mockRestore();
+    }
   }
 
   it('should reject oversized workflow text without mutating the NCR', async () => {
@@ -1823,6 +1900,10 @@ describe('NCR Workflow', () => {
     });
   });
 
+  it('should submit rectification only once when concurrent legacy rectify requests race', async () => {
+    await expectConcurrentVerificationSubmit('rectify', 'Concurrent legacy rectify race');
+  });
+
   it('should audit submit-for-verification from the UI path', async () => {
     const ncrRes = await request(app)
       .post('/api/ncrs')
@@ -1884,6 +1965,13 @@ describe('NCR Workflow', () => {
       evidenceCount: 1,
       submissionPath: 'submit-for-verification',
     });
+  });
+
+  it('should submit for verification only once when concurrent UI submit requests race', async () => {
+    await expectConcurrentVerificationSubmit(
+      'submit-for-verification',
+      'Concurrent UI submit-for-verification race',
+    );
   });
 
   it('should reject rectification and write an audit log', async () => {
