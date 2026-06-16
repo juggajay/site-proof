@@ -11,7 +11,7 @@
  * submit before `uploading` re-renders.
  */
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { queryKeys } from '@/lib/queryKeys';
@@ -61,6 +61,7 @@ export function useDocumentUpload(projectId: string | undefined): UseDocumentUpl
   const uploadingRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
+  const imageDimensionObjectUrlRef = useRef<string | null>(null);
 
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -72,63 +73,85 @@ export function useDocumentUpload(projectId: string | undefined): UseDocumentUpl
   const [imageDimensions, setImageDimensions] = useState<ImageDimensions | null>(null);
   const [dimensionWarning, setDimensionWarning] = useState<string | null>(null);
 
+  const revokeImageDimensionObjectUrl = useCallback((expectedUrl?: string) => {
+    const objectUrl = imageDimensionObjectUrlRef.current;
+    if (!objectUrl || (expectedUrl && objectUrl !== expectedUrl)) return;
+    URL.revokeObjectURL(objectUrl);
+    imageDimensionObjectUrlRef.current = null;
+  }, []);
+
+  useEffect(() => () => revokeImageDimensionObjectUrl(), [revokeImageDimensionObjectUrl]);
+
   const updateUploadForm = useCallback((patch: Partial<UploadDocumentForm>) => {
     setUploadForm((prev) => ({ ...prev, ...patch }));
+  }, []);
+
+  const applySelectedFiles = useCallback((fileArray: File[]) => {
+    setSelectedFiles(fileArray);
+    setImageDimensions(null);
+    setDimensionWarning(null);
+
+    const firstFile = fileArray[0];
+    const detected = firstFile ? detectDocumentTypeFromFile(firstFile) : null;
+    if (detected) setUploadForm((prev) => ({ ...prev, documentType: detected }));
+    return firstFile;
   }, []);
 
   const openUploadModal = useCallback(() => setShowUploadModal(true), []);
 
   const closeUploadModal = useCallback(() => {
+    revokeImageDimensionObjectUrl();
     setShowUploadModal(false);
     setSelectedFiles([]);
     setUploadForm(EMPTY_UPLOAD_FORM);
-  }, []);
+    setImageDimensions(null);
+    setDimensionWarning(null);
+  }, [revokeImageDimensionObjectUrl]);
 
-  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files && files.length > 0) {
-      const fileArray = Array.from(files);
-      setSelectedFiles(fileArray);
-      setImageDimensions(null);
-      setDimensionWarning(null);
+  const handleFileSelect = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = e.target.files;
+      if (files && files.length > 0) {
+        revokeImageDimensionObjectUrl();
+        const fileArray = Array.from(files);
+        const firstFile = applySelectedFiles(fileArray);
 
-      const firstFile = fileArray[0];
-      const detected = detectDocumentTypeFromFile(firstFile);
-      if (detected) setUploadForm((prev) => ({ ...prev, documentType: detected }));
-
-      // Check image dimensions for a single image selection.
-      if (firstFile.type.startsWith('image/') && fileArray.length === 1) {
-        const objectUrl = URL.createObjectURL(firstFile);
-        const img = new window.Image();
-        img.onload = () => {
-          const width = img.naturalWidth;
-          const height = img.naturalHeight;
-          setImageDimensions({ width, height });
-          const warning = evaluateImageDimensions(width, height);
-          if (warning) setDimensionWarning(warning);
-          URL.revokeObjectURL(objectUrl);
-        };
-        img.onerror = () => {
-          URL.revokeObjectURL(objectUrl);
-        };
-        img.src = objectUrl;
+        // Check image dimensions for a single image selection.
+        if (firstFile?.type.startsWith('image/') && fileArray.length === 1) {
+          const objectUrl = URL.createObjectURL(firstFile);
+          imageDimensionObjectUrlRef.current = objectUrl;
+          const img = new window.Image();
+          img.onload = () => {
+            if (imageDimensionObjectUrlRef.current !== objectUrl) return;
+            const width = img.naturalWidth;
+            const height = img.naturalHeight;
+            setImageDimensions({ width, height });
+            const warning = evaluateImageDimensions(width, height);
+            if (warning) setDimensionWarning(warning);
+            revokeImageDimensionObjectUrl(objectUrl);
+          };
+          img.onerror = () => {
+            revokeImageDimensionObjectUrl(objectUrl);
+          };
+          img.src = objectUrl;
+        }
       }
-    }
-  }, []);
+    },
+    [applySelectedFiles, revokeImageDimensionObjectUrl],
+  );
 
-  const handleModalDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const files = e.dataTransfer.files;
-    if (files && files.length > 0) {
-      const fileArray = Array.from(files);
-      setSelectedFiles(fileArray);
-      setImageDimensions(null);
-      setDimensionWarning(null);
-      const detected = detectDocumentTypeFromFile(fileArray[0]);
-      if (detected) setUploadForm((prev) => ({ ...prev, documentType: detected }));
-    }
-  }, []);
+  const handleModalDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const files = e.dataTransfer.files;
+      if (files && files.length > 0) {
+        revokeImageDimensionObjectUrl();
+        applySelectedFiles(Array.from(files));
+      }
+    },
+    [applySelectedFiles, revokeImageDimensionObjectUrl],
+  );
 
   const uploadDocsMutation = useMutation({
     mutationFn: async ({ files, form }: { files: File[]; form: UploadDocumentForm }) => {
@@ -161,10 +184,13 @@ export function useDocumentUpload(projectId: string | undefined): UseDocumentUpl
       return uploadedDocs;
     },
     onSuccess: (uploadedDocs: UploadedDocument[]) => {
+      revokeImageDimensionObjectUrl();
       queryClient.invalidateQueries({ queryKey: queryKeys.documents(projectId!) });
       setShowUploadModal(false);
       setSelectedFiles([]);
       setUploadForm(EMPTY_UPLOAD_FORM);
+      setImageDimensions(null);
+      setDimensionWarning(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
       setUploading(false);
       uploadingRef.current = false;
@@ -229,20 +255,21 @@ export function useDocumentUpload(projectId: string | undefined): UseDocumentUpl
     e.stopPropagation();
   }, []);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragging(false);
 
-    const files = e.dataTransfer.files;
-    if (files && files.length > 0) {
-      const fileArray = Array.from(files);
-      setSelectedFiles(fileArray);
-      const detected = detectDocumentTypeFromFile(fileArray[0]);
-      if (detected) setUploadForm((prev) => ({ ...prev, documentType: detected }));
-      setShowUploadModal(true);
-    }
-  }, []);
+      const files = e.dataTransfer.files;
+      if (files && files.length > 0) {
+        revokeImageDimensionObjectUrl();
+        applySelectedFiles(Array.from(files));
+        setShowUploadModal(true);
+      }
+    },
+    [applySelectedFiles, revokeImageDimensionObjectUrl],
+  );
 
   return {
     showUploadModal,
