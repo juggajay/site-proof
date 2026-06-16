@@ -85,6 +85,8 @@ describe('pdfGenerator characterization', () => {
         'Civil Execution and Conformance Platform',
       ]),
     );
+    expect(textContent).not.toContain('4200 hrs');
+    expect(textContent).not.toContain('1800 hrs');
     expect(textContent).not.toContain('SiteProof v2');
   });
 

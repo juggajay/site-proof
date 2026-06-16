@@ -66,6 +66,8 @@ export async function generateDocketDetailPDF(data: DocketDetailPDFData): Promis
     yPos += 6;
   };
 
+  const formatHours = (hours: number): string => `${hours} hrs`;
+
   // ========== HEADER ==========
   // Status-based header color
   const statusColors: Record<string, [number, number, number]> = {
@@ -151,18 +153,20 @@ export async function generateDocketDetailPDF(data: DocketDetailPDFData): Promis
   yPos += 9;
 
   // Labour hours row
+  const submittedLabourHours = data.docket.labourHours || 0;
+  const approvedLabourHours =
+    data.docket.status === 'approved' ? data.docket.totalLabourApproved || 0 : null;
+
   doc.setFont('helvetica', 'normal');
   doc.text('Labour Hours', margin + 5, yPos + 5);
+  doc.text(formatHours(submittedLabourHours), margin + 70, yPos + 5);
   doc.text(
-    `${data.docket.totalLabourSubmitted || data.docket.labourHours} hrs`,
-    margin + 70,
+    approvedLabourHours === null ? '-' : formatHours(approvedLabourHours),
+    margin + 110,
     yPos + 5,
   );
-  doc.text(`${data.docket.totalLabourApproved || '-'} hrs`, margin + 110, yPos + 5);
-  const labourVariance =
-    (data.docket.totalLabourApproved || 0) -
-    (data.docket.totalLabourSubmitted || data.docket.labourHours);
-  if (data.docket.status === 'approved' && labourVariance !== 0) {
+  const labourVariance = (approvedLabourHours ?? 0) - submittedLabourHours;
+  if (approvedLabourHours !== null && labourVariance !== 0) {
     doc.setTextColor(
       labourVariance < 0 ? 239 : 34,
       labourVariance < 0 ? 68 : 197,
@@ -176,17 +180,19 @@ export async function generateDocketDetailPDF(data: DocketDetailPDFData): Promis
   yPos += 7;
 
   // Plant hours row
+  const submittedPlantHours = data.docket.plantHours || 0;
+  const approvedPlantHours =
+    data.docket.status === 'approved' ? data.docket.totalPlantApproved || 0 : null;
+
   doc.text('Plant Hours', margin + 5, yPos + 5);
+  doc.text(formatHours(submittedPlantHours), margin + 70, yPos + 5);
   doc.text(
-    `${data.docket.totalPlantSubmitted || data.docket.plantHours} hrs`,
-    margin + 70,
+    approvedPlantHours === null ? '-' : formatHours(approvedPlantHours),
+    margin + 110,
     yPos + 5,
   );
-  doc.text(`${data.docket.totalPlantApproved || '-'} hrs`, margin + 110, yPos + 5);
-  const plantVariance =
-    (data.docket.totalPlantApproved || 0) -
-    (data.docket.totalPlantSubmitted || data.docket.plantHours);
-  if (data.docket.status === 'approved' && plantVariance !== 0) {
+  const plantVariance = (approvedPlantHours ?? 0) - submittedPlantHours;
+  if (approvedPlantHours !== null && plantVariance !== 0) {
     doc.setTextColor(
       plantVariance < 0 ? 239 : 34,
       plantVariance < 0 ? 68 : 197,
