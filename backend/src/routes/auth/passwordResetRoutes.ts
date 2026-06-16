@@ -189,23 +189,34 @@ export function createPasswordResetRouter({
         throw AppError.badRequest(genericResetTokenValidationMessage);
       }
 
+      const consumedAt = new Date();
+
       // Hash the new password
       const newPasswordHash = hashPassword(normalizedPassword);
 
-      // Update user password and mark token as used
-      await prisma.$transaction([
-        prisma.user.update({
+      // Update user password only if this request wins the one-time token consume.
+      await prisma.$transaction(async (tx) => {
+        const consumeResult = await tx.passwordResetToken.updateMany({
+          where: {
+            id: resetToken.id,
+            usedAt: null,
+            expiresAt: { gt: consumedAt },
+          },
+          data: { usedAt: consumedAt },
+        });
+
+        if (consumeResult.count !== 1) {
+          throw AppError.badRequest(genericResetTokenValidationMessage);
+        }
+
+        await tx.user.update({
           where: { id: resetToken.userId },
           data: {
             passwordHash: newPasswordHash,
-            tokenInvalidatedAt: new Date(),
+            tokenInvalidatedAt: consumedAt,
           },
-        }),
-        prisma.passwordResetToken.update({
-          where: { id: resetToken.id },
-          data: { usedAt: new Date() },
-        }),
-      ]);
+        });
+      });
 
       await auditUserAuthEvent(req, resetToken.userId, AuditAction.PASSWORD_CHANGED, {
         method: 'password_reset',

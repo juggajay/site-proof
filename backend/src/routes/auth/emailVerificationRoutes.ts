@@ -87,20 +87,35 @@ export function createEmailVerificationRouter({
         throw AppError.badRequest('Email is already verified');
       }
 
-      // Update user and mark token as used
-      await prisma.$transaction([
-        prisma.user.update({
+      const consumedAt = new Date();
+
+      // Verify the user only if this request wins the one-time token consume.
+      await prisma.$transaction(async (tx) => {
+        const consumeResult = await tx.emailVerificationToken.updateMany({
+          where: {
+            id: verificationToken.id,
+            usedAt: null,
+            expiresAt: { gt: consumedAt },
+          },
+          data: { usedAt: consumedAt },
+        });
+
+        if (consumeResult.count !== 1) {
+          throw AppError.badRequest(
+            verificationToken.user.emailVerified
+              ? 'This verification token has already been used'
+              : 'This verification token has already been used or replaced',
+          );
+        }
+
+        await tx.user.update({
           where: { id: verificationToken.userId },
           data: {
             emailVerified: true,
-            emailVerifiedAt: new Date(),
+            emailVerifiedAt: consumedAt,
           },
-        }),
-        prisma.emailVerificationToken.update({
-          where: { id: verificationToken.id },
-          data: { usedAt: new Date() },
-        }),
-      ]);
+        });
+      });
 
       await auditUserAuthEvent(req, verificationToken.userId, AuditAction.USER_EMAIL_VERIFIED, {
         emailVerified: { from: false, to: true },

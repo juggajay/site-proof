@@ -67,6 +67,31 @@ function hashAuthTokenForTest(token: string): string {
   return `sha256:${crypto.createHash('sha256').update(token).digest('hex')}`;
 }
 
+function blockFirstTwoFindFirstCalls<TArgs extends unknown[], TResult>(delegate: {
+  findFirst: (...args: TArgs) => Promise<TResult>;
+}) {
+  const originalFindFirst = delegate.findFirst.bind(delegate);
+  let reads = 0;
+  let unblockReads!: () => void;
+  const bothReadsStarted = new Promise<void>((resolve) => {
+    unblockReads = resolve;
+  });
+
+  return vi.spyOn(delegate, 'findFirst').mockImplementation(async (...args: TArgs) => {
+    const result = await originalFindFirst(...args);
+
+    if (reads < 2) {
+      reads += 1;
+      if (reads === 2) {
+        unblockReads();
+      }
+      await bothReadsStarted;
+    }
+
+    return result;
+  });
+}
+
 function legacyPasswordHashForTest(password: string): string {
   const authSecret = process.env.JWT_SECRET || 'dev-secret-change-in-production';
   return crypto
@@ -592,6 +617,65 @@ describe('Email verification tokens', () => {
       expect(JSON.stringify(changes)).not.toContain(rawToken);
       expect(JSON.stringify(changes)).not.toMatch(/token|secret|code/i);
     } finally {
+      if (userId) {
+        await prisma.emailVerificationToken.deleteMany({ where: { userId } });
+        await clearUserAuditLogs(userId);
+        await prisma.user.delete({ where: { id: userId } }).catch(() => {});
+      }
+    }
+  });
+
+  it('allows only one concurrent email verification token consume', async () => {
+    const email = `verify-race-${Date.now()}@example.com`;
+    const rawToken = `verify_race_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    let userId: string | undefined;
+    let restoreFindFirstSpy: (() => void) | undefined;
+
+    try {
+      const regRes = await request(app).post('/api/auth/register').send({
+        email,
+        password: 'SecureP@ssword123!',
+        fullName: 'Verification Race User',
+        tosAccepted: true,
+      });
+
+      expect(regRes.status).toBe(201);
+      userId = regRes.body.user.id as string;
+
+      await prisma.emailVerificationToken.deleteMany({ where: { userId } });
+      await prisma.emailVerificationToken.create({
+        data: {
+          userId,
+          token: hashAuthTokenForTest(rawToken),
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        },
+      });
+      await clearUserAuditLogs(userId);
+
+      const findFirstSpy = blockFirstTwoFindFirstCalls(prisma.emailVerificationToken);
+      restoreFindFirstSpy = () => findFirstSpy.mockRestore();
+      const responses = await Promise.all([
+        request(app).post('/api/auth/verify-email').send({ token: rawToken }),
+        request(app).post('/api/auth/verify-email').send({ token: rawToken }),
+      ]);
+
+      expect(responses.map((res) => res.status).sort()).toEqual([200, 400]);
+
+      const tokenRecord = await prisma.emailVerificationToken.findFirstOrThrow({
+        where: { token: hashAuthTokenForTest(rawToken) },
+      });
+      expect(tokenRecord.usedAt).toBeInstanceOf(Date);
+
+      const auditLogs = await prisma.auditLog.findMany({
+        where: {
+          entityType: 'user',
+          entityId: userId,
+          action: AuditAction.USER_EMAIL_VERIFIED,
+        },
+      });
+      expect(auditLogs).toHaveLength(1);
+    } finally {
+      restoreFindFirstSpy?.();
       if (userId) {
         await prisma.emailVerificationToken.deleteMany({ where: { userId } });
         await clearUserAuditLogs(userId);
@@ -1551,6 +1635,73 @@ describe('Password Reset Flow', () => {
     }
   });
 
+  it('allows only one concurrent password reset token consume', async () => {
+    const email = `reset-race-${Date.now()}@example.com`;
+    const oldPassword = 'OldPassword123!';
+    const firstPassword = 'FirstNewPassword123!';
+    const secondPassword = 'SecondNewPassword123!';
+    const token = `reset_race_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    const regRes = await request(app).post('/api/auth/register').send({
+      email,
+      password: oldPassword,
+      fullName: 'Reset Race User',
+      tosAccepted: true,
+    });
+    const userId = regRes.body.user.id as string;
+    const findFirstSpy = blockFirstTwoFindFirstCalls(prisma.passwordResetToken);
+
+    await prisma.passwordResetToken.create({
+      data: {
+        userId,
+        token: hashAuthTokenForTest(token),
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      },
+    });
+
+    try {
+      await clearUserAuditLogs(userId);
+
+      const responses = await Promise.all([
+        request(app).post('/api/auth/reset-password').send({
+          token,
+          password: firstPassword,
+        }),
+        request(app).post('/api/auth/reset-password').send({
+          token,
+          password: secondPassword,
+        }),
+      ]);
+
+      expect(responses.map((res) => res.status).sort()).toEqual([200, 400]);
+
+      const tokenRecord = await prisma.passwordResetToken.findFirstOrThrow({
+        where: { token: hashAuthTokenForTest(token) },
+      });
+      expect(tokenRecord.usedAt).toBeInstanceOf(Date);
+
+      const loginResponses = await Promise.all([
+        request(app).post('/api/auth/login').send({ email, password: firstPassword }),
+        request(app).post('/api/auth/login').send({ email, password: secondPassword }),
+      ]);
+      expect(loginResponses.filter((res) => res.status === 200)).toHaveLength(1);
+
+      const auditLogs = await prisma.auditLog.findMany({
+        where: {
+          entityType: 'user',
+          entityId: userId,
+          action: AuditAction.PASSWORD_CHANGED,
+        },
+      });
+      expect(auditLogs).toHaveLength(1);
+    } finally {
+      findFirstSpy.mockRestore();
+      await prisma.passwordResetToken.deleteMany({ where: { userId } });
+      await prisma.emailVerificationToken.deleteMany({ where: { userId } });
+      await clearUserAuditLogs(userId);
+      await prisma.user.delete({ where: { id: userId } }).catch(() => {});
+    }
+  });
+
   it('should invalidate existing sessions after password reset', async () => {
     const email = `reset-invalidates-session-${Date.now()}@example.com`;
     const oldPassword = 'OldPassword123!';
@@ -1854,6 +2005,53 @@ describe('Magic Link Authentication', () => {
       expect(JSON.stringify(changes)).not.toMatch(/password|token|secret|code/i);
     } finally {
       await prisma.passwordResetToken.deleteMany({ where: { token: hashAuthTokenForTest(token) } });
+    }
+  });
+
+  it('allows only one concurrent magic link token consume', async () => {
+    const user = await prisma.user.findUnique({ where: { email: magicEmail } });
+    expect(user).toBeDefined();
+
+    const token = `magic_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    const findFirstSpy = blockFirstTwoFindFirstCalls(prisma.passwordResetToken);
+
+    await prisma.passwordResetToken.create({
+      data: {
+        userId: user!.id,
+        token: hashAuthTokenForTest(token),
+        purpose: 'magic_link',
+        expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+      },
+    });
+
+    try {
+      await clearUserAuditLogs(user!.id);
+
+      const responses = await Promise.all([
+        request(app).post('/api/auth/magic-link/verify').send({ token }),
+        request(app).post('/api/auth/magic-link/verify').send({ token }),
+      ]);
+
+      expect(responses.map((res) => res.status).sort()).toEqual([200, 400]);
+      expect(responses.filter((res) => res.body.token)).toHaveLength(1);
+
+      const tokenRecord = await prisma.passwordResetToken.findFirstOrThrow({
+        where: { token: hashAuthTokenForTest(token) },
+      });
+      expect(tokenRecord.usedAt).toBeInstanceOf(Date);
+
+      const auditLogs = await prisma.auditLog.findMany({
+        where: {
+          entityType: 'user',
+          entityId: user!.id,
+          action: AuditAction.USER_LOGIN,
+        },
+      });
+      expect(auditLogs).toHaveLength(1);
+    } finally {
+      findFirstSpy.mockRestore();
+      await prisma.passwordResetToken.deleteMany({ where: { token: hashAuthTokenForTest(token) } });
+      await clearUserAuditLogs(user!.id);
     }
   });
 
