@@ -1173,6 +1173,37 @@ describe('Company API', () => {
       }
     });
 
+    async function expectFailedCompanyMemberInvite(params: {
+      email: string;
+      fullName: string;
+      emailError: string;
+    }) {
+      const sendInviteSpy = vi
+        .spyOn(emailService, 'sendCompanyMemberInvitationEmail')
+        .mockResolvedValueOnce({
+          success: false,
+          error: params.emailError,
+        });
+
+      try {
+        const res = await request(app)
+          .post('/api/company/members/invite')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            email: params.email,
+            fullName: params.fullName,
+            roleInCompany: 'foreman',
+          });
+
+        expect(sendInviteSpy).toHaveBeenCalledTimes(1);
+        expect(res.status).toBe(500);
+        expect(res.body.error.message).toContain('Company invitation email could not be sent');
+        return res;
+      } finally {
+        sendInviteSpy.mockRestore();
+      }
+    }
+
     it('creates a pending company member and one-time setup token', async () => {
       const email = `company-invite-${Date.now()}@example.com`;
 
@@ -1224,37 +1255,88 @@ describe('Company API', () => {
 
     it('rejects new company member invites when the invitation email fails', async () => {
       const email = `company-invite-email-fail-${Date.now()}@example.com`;
-      const sendInviteSpy = vi
-        .spyOn(emailService, 'sendCompanyMemberInvitationEmail')
-        .mockResolvedValueOnce({
-          success: false,
-          error: 'simulated company invite email failure',
-        });
+      await expectFailedCompanyMemberInvite({
+        email,
+        fullName: 'Email Failure Member',
+        emailError: 'simulated company invite email failure',
+      });
 
-      try {
-        const res = await request(app)
-          .post('/api/company/members/invite')
-          .set('Authorization', `Bearer ${authToken}`)
-          .send({
-            email,
-            fullName: 'Email Failure Member',
-            roleInCompany: 'foreman',
-          });
+      const invitedUser = await prisma.user.findUnique({
+        where: { email },
+        select: { id: true },
+      });
+      expect(invitedUser).toBeNull();
 
-        expect(sendInviteSpy).toHaveBeenCalledTimes(1);
-        expect(res.status).toBe(500);
-        expect(res.body.error.message).toContain('Company invitation email could not be sent');
+      const lingeringAuditLog = await prisma.auditLog.findFirst({
+        where: {
+          entityType: 'user',
+          action: AuditAction.USER_INVITED,
+          changes: { contains: email },
+        },
+      });
+      expect(lingeringAuditLog).toBeNull();
+    });
 
-        const invitedUser = await prisma.user.findUnique({
-          where: { email },
-          select: { id: true },
-        });
-        if (invitedUser) {
-          invitedUserIds.push(invitedUser.id);
-        }
-      } finally {
-        sendInviteSpy.mockRestore();
-      }
+    it('restores an existing pending user when the invitation email fails', async () => {
+      const email = `company-invite-existing-email-fail-${Date.now()}@example.com`;
+      const existingUser = await prisma.user.create({
+        data: {
+          email,
+          fullName: 'Existing Pending Member',
+          companyId: null,
+          roleInCompany: 'member',
+          emailVerified: false,
+          emailVerifiedAt: null,
+        },
+      });
+      invitedUserIds.push(existingUser.id);
+
+      const existingToken = await prisma.passwordResetToken.create({
+        data: {
+          userId: existingUser.id,
+          token: `sha256:existing-company-invite-${Date.now()}`,
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        },
+      });
+
+      await expectFailedCompanyMemberInvite({
+        email,
+        fullName: 'Updated Pending Member',
+        emailError: 'simulated existing company invite email failure',
+      });
+
+      const restoredUser = await prisma.user.findUnique({
+        where: { id: existingUser.id },
+        select: {
+          companyId: true,
+          roleInCompany: true,
+          fullName: true,
+          emailVerified: true,
+          emailVerifiedAt: true,
+        },
+      });
+      expect(restoredUser).toMatchObject({
+        companyId: null,
+        roleInCompany: 'member',
+        fullName: 'Existing Pending Member',
+        emailVerified: false,
+        emailVerifiedAt: null,
+      });
+
+      const activeTokens = await prisma.passwordResetToken.findMany({
+        where: { userId: existingUser.id, usedAt: null },
+      });
+      expect(activeTokens).toHaveLength(1);
+      expect(activeTokens[0].id).toBe(existingToken.id);
+
+      const lingeringAuditLog = await prisma.auditLog.findFirst({
+        where: {
+          entityType: 'user',
+          entityId: existingUser.id,
+          action: AuditAction.USER_INVITED,
+        },
+      });
+      expect(lingeringAuditLog).toBeNull();
     });
 
     it('includes pending members in the company member list', async () => {

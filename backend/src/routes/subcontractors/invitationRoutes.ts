@@ -50,6 +50,36 @@ export interface SubcontractorInvitationRouters {
   authenticatedRouter: Router;
 }
 
+async function cleanupFailedSubcontractorInvitation(params: {
+  subcontractorId: string;
+  globalSubcontractorId: string | null;
+  createdGlobalSubcontractor: boolean;
+}) {
+  const { subcontractorId, globalSubcontractorId, createdGlobalSubcontractor } = params;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.auditLog.deleteMany({
+      where: {
+        entityType: 'subcontractor',
+        entityId: subcontractorId,
+        action: AuditAction.SUBCONTRACTOR_INVITED,
+      },
+    });
+    await tx.subcontractorCompany.delete({ where: { id: subcontractorId } }).catch(() => {});
+
+    if (createdGlobalSubcontractor && globalSubcontractorId) {
+      await tx.globalSubcontractor
+        .deleteMany({
+          where: {
+            id: globalSubcontractorId,
+            projectSubcontractors: { none: {} },
+          },
+        })
+        .catch(() => {});
+    }
+  });
+}
+
 export function createSubcontractorInvitationRouters({
   blockedSubcontractorStatuses,
   headContractorCompanyRoles,
@@ -208,6 +238,7 @@ export function createSubcontractorInvitationRouters({
       let finalContactEmail: string;
       let finalContactPhone: string | null;
       let globalId: string | null = null;
+      let createdGlobalSubcontractor = false;
 
       if (globalSubcontractorId) {
         // Selecting from directory - fetch the global subcontractor
@@ -295,6 +326,7 @@ export function createSubcontractorInvitationRouters({
             },
           });
           globalId = newGlobalSub.id;
+          createdGlobalSubcontractor = true;
         }
 
         finalCompanyName = inputCompanyName!;
@@ -351,11 +383,21 @@ export function createSubcontractorInvitationRouters({
         });
       } catch (emailError) {
         logError('[Subcontractor Invite] Failed to send email:', emailError);
+        await cleanupFailedSubcontractorInvitation({
+          subcontractorId: subcontractor.id,
+          globalSubcontractorId: globalId,
+          createdGlobalSubcontractor,
+        });
         throw AppError.internal('Subcontractor invitation email could not be sent');
       }
 
       if (!emailResult.success) {
         logError('[Subcontractor Invite] Failed to send email:', emailResult.error);
+        await cleanupFailedSubcontractorInvitation({
+          subcontractorId: subcontractor.id,
+          globalSubcontractorId: globalId,
+          createdGlobalSubcontractor,
+        });
         throw AppError.internal('Subcontractor invitation email could not be sent');
       }
 
