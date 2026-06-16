@@ -4,6 +4,7 @@ import {
   approvedDocketDetailFixture,
   majorNcrDetailFixture,
   notifiedHpEvidencePackageFixture,
+  passingTestCertificateFixture,
   releasedHpEvidencePackageFixture,
   submittedClaimEvidencePackageFixture,
   submittedDailyDiaryFixture,
@@ -14,6 +15,7 @@ import {
   generateDocketDetailPDF,
   generateHPEvidencePackagePDF,
   generateNCRDetailPDF,
+  generateTestCertificatePDF,
 } from '../../pdfGenerator';
 
 import { JsPdfRecorder, latestPdf, renderedText } from './pdfTestRecorder';
@@ -88,6 +90,54 @@ describe('pdfGenerator characterization', () => {
     expect(textContent).not.toContain('4200 hrs');
     expect(textContent).not.toContain('1800 hrs');
     expect(textContent).not.toContain('SiteProof v2');
+  });
+
+  it('sanitizes unsafe generated PDF filenames before saving', async () => {
+    const assertSafeFilename = (filename: string | null) => {
+      expect(filename).toBeTruthy();
+      const characters = Array.from(filename ?? '');
+      expect(
+        characters.some((char) => '<>:"/\\|?*'.includes(char) || char.charCodeAt(0) < 32),
+      ).toBe(false);
+    };
+
+    await generateNCRDetailPDF({
+      ...majorNcrDetailFixture,
+      ncr: { ...majorNcrDetailFixture.ncr, ncrNumber: '../NCR:bad?name\r\n' },
+    });
+    assertSafeFilename(latestPdf().savedFilename);
+    expect(latestPdf().savedFilename).toContain('NCR-..-NCR-bad-name');
+    expect(latestPdf().savedFilename).toMatch(/-2026-05-28\.pdf$/);
+
+    await generateDocketDetailPDF({
+      ...approvedDocketDetailFixture,
+      docket: {
+        ...approvedDocketDetailFixture.docket,
+        docketNumber: '..\\SD:0042*',
+      },
+    });
+    expect(latestPdf().savedFilename).toBe('Docket-..-SD-0042--approved.pdf');
+    assertSafeFilename(latestPdf().savedFilename);
+
+    await generateHPEvidencePackagePDF({
+      ...notifiedHpEvidencePackageFixture,
+      lot: {
+        ...notifiedHpEvidencePackageFixture.lot,
+        lotNumber: 'LOT/01:bad*name',
+      },
+    });
+    expect(latestPdf().savedFilename).toBe('HP-Evidence-Package-LOT-01-bad-name-2026-05-28.pdf');
+    assertSafeFilename(latestPdf().savedFilename);
+
+    await generateTestCertificatePDF({
+      ...passingTestCertificateFixture,
+      test: {
+        ...passingTestCertificateFixture.test,
+        testRequestNumber: 'TR/001:bad*name',
+      },
+    });
+    expect(latestPdf().savedFilename).toBe('Test-Certificate-TR-001-bad-name-2026-05-28.pdf');
+    assertSafeFilename(latestPdf().savedFilename);
   });
 
   it('preserves docket detail PDF headings, totals, approval fields, and filename', async () => {

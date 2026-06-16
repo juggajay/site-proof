@@ -1,6 +1,7 @@
 import { devLog } from '../logger';
 import { formatDateKey } from '../localDate';
 import { getJsPDF } from './jsPdfRuntime';
+import { savePdf } from './pdfSave';
 import { defaultPackageOptions } from './types';
 import type { ClaimEvidencePackageData, ClaimPackageOptions } from './types';
 
@@ -464,7 +465,7 @@ export async function generateClaimEvidencePackagePDF(
 
   // Save the PDF
   const filename = `Claim-${data.claim.claimNumber}-Evidence-Package-${formatDateKey()}.pdf`;
-  doc.save(filename);
+  savePdf(doc, filename, 'claim-evidence-package.pdf');
 
   devLog(`Claim evidence package PDF generated in ${Date.now() - startTime}ms`);
 }
