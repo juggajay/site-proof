@@ -25,6 +25,7 @@ import {
   buildDocketRejectedNotifications,
 } from './notifications.js';
 import {
+  buildDocketApprovalEntryUpdates,
   buildDocketApprovedResponse,
   type DocketDiarySyncOutcome,
   resolveDocketApprovedTotals,
@@ -77,10 +78,20 @@ docketReviewRouter.post(
           select: { id: true, name: true },
         },
         labourEntries: {
-          select: { submittedHours: true },
+          select: {
+            id: true,
+            submittedHours: true,
+            hourlyRate: true,
+            submittedCost: true,
+          },
         },
         plantEntries: {
-          select: { hoursOperated: true },
+          select: {
+            id: true,
+            hoursOperated: true,
+            hourlyRate: true,
+            submittedCost: true,
+          },
         },
       },
     });
@@ -106,6 +117,21 @@ docketReviewRouter.post(
         0,
       ),
     });
+    const approvalEntryUpdates = buildDocketApprovalEntryUpdates({
+      labourEntries: docket.labourEntries,
+      plantEntries: docket.plantEntries,
+      labourApprovedHours: labourApproved,
+      plantApprovedHours: plantApproved,
+      adjustmentReason,
+    });
+    const labourApprovedCost = approvalEntryUpdates.labour.reduce(
+      (sum, entry) => sum + entry.approvedCost,
+      0,
+    );
+    const plantApprovedCost = approvalEntryUpdates.plant.reduce(
+      (sum, entry) => sum + entry.approvedCost,
+      0,
+    );
 
     const updatedDocket = await prisma.$transaction(async (tx) => {
       await applyDocketStatusTransition(
@@ -123,6 +149,28 @@ docketReviewRouter.post(
         },
         'Only pending dockets can be approved',
       );
+
+      await Promise.all([
+        ...approvalEntryUpdates.labour.map((entry) =>
+          tx.docketLabour.update({
+            where: { id: entry.id },
+            data: {
+              approvedHours: entry.approvedHours,
+              approvedCost: entry.approvedCost,
+              adjustmentReason: entry.adjustmentReason,
+            },
+          }),
+        ),
+        ...approvalEntryUpdates.plant.map((entry) =>
+          tx.docketPlant.update({
+            where: { id: entry.id },
+            data: {
+              approvedCost: entry.approvedCost,
+              adjustmentReason: entry.adjustmentReason,
+            },
+          }),
+        ),
+      ]);
 
       return tx.dailyDocket.findUniqueOrThrow({
         where: { id },
@@ -150,6 +198,8 @@ docketReviewRouter.post(
         approvedTotals: {
           labourHours: labourApproved,
           plantHours: plantApproved,
+          labourCost: labourApprovedCost,
+          plantCost: plantApprovedCost,
         },
       },
       req,

@@ -1182,45 +1182,12 @@ describe('Dockets API', () => {
       expect(res.status).toBe(400);
     });
 
-    it('should approve docket when optional approval text fields are null', async () => {
-      const nullableApprovalDocket = await prisma.dailyDocket.create({
-        data: {
-          projectId,
-          subcontractorCompanyId,
-          date: new Date(Date.now() + 777600000),
-          status: 'pending_approval',
-          submittedAt: new Date(),
-          totalLabourSubmitted: 8,
-          totalPlantSubmitted: 0,
-        },
-      });
-
-      const res = await request(app)
-        .post(`/api/dockets/${nullableApprovalDocket.id}/approve`)
-        .set('Authorization', `Bearer ${authToken}`)
-        .send({
-          foremanNotes: null,
-          adjustmentReason: null,
-          adjustedLabourHours: 8,
-          adjustedPlantHours: 0,
-        });
-
-      expect(res.status).toBe(200);
-      expect(res.body.docket.status).toBe('approved');
-
-      const stored = await prisma.dailyDocket.findUnique({
-        where: { id: nullableApprovalDocket.id },
-      });
-      expect(stored?.foremanNotes).toBeNull();
-      expect(stored?.adjustmentReason).toBeNull();
-    });
-
-    it('should fall back to submitted entry hours, not submitted costs, when approving without adjustments', async () => {
+    async function createCostedPendingDocket(dateOffsetMs: number) {
       const docket = await prisma.dailyDocket.create({
         data: {
           projectId,
           subcontractorCompanyId,
-          date: new Date(Date.now() + 1_296_000_000),
+          date: new Date(Date.now() + dateOffsetMs),
           status: 'pending_approval',
           submittedAt: new Date(),
           totalLabourSubmitted: 364,
@@ -1259,6 +1226,57 @@ describe('Dockets API', () => {
           },
         },
       });
+      return { docket, labour, plantEntry };
+    }
+
+    async function deleteCostedPendingDocket({
+      docket,
+      labour,
+      plantEntry,
+    }: Awaited<ReturnType<typeof createCostedPendingDocket>>) {
+      await prisma.docketLabourLot.deleteMany({ where: { docketLabourId: labour.id } });
+      await prisma.docketPlantLot.deleteMany({ where: { docketPlantId: plantEntry.id } });
+      await prisma.docketLabour.deleteMany({ where: { docketId: docket.id } });
+      await prisma.docketPlant.deleteMany({ where: { docketId: docket.id } });
+      await prisma.dailyDocket.delete({ where: { id: docket.id } }).catch(() => {});
+    }
+
+    it('should approve docket when optional approval text fields are null', async () => {
+      const nullableApprovalDocket = await prisma.dailyDocket.create({
+        data: {
+          projectId,
+          subcontractorCompanyId,
+          date: new Date(Date.now() + 777600000),
+          status: 'pending_approval',
+          submittedAt: new Date(),
+          totalLabourSubmitted: 8,
+          totalPlantSubmitted: 0,
+        },
+      });
+
+      const res = await request(app)
+        .post(`/api/dockets/${nullableApprovalDocket.id}/approve`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          foremanNotes: null,
+          adjustmentReason: null,
+          adjustedLabourHours: 8,
+          adjustedPlantHours: 0,
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.docket.status).toBe('approved');
+
+      const stored = await prisma.dailyDocket.findUnique({
+        where: { id: nullableApprovalDocket.id },
+      });
+      expect(stored?.foremanNotes).toBeNull();
+      expect(stored?.adjustmentReason).toBeNull();
+    });
+
+    it('should fall back to submitted entry hours, not submitted costs, when approving without adjustments', async () => {
+      const costedDocket = await createCostedPendingDocket(1_296_000_000);
+      const { docket, labour, plantEntry } = costedDocket;
 
       try {
         const res = await request(app)
@@ -1274,12 +1292,62 @@ describe('Dockets API', () => {
         });
         expect(Number(stored.totalLabourApproved)).toBe(8);
         expect(Number(stored.totalPlantApproved)).toBe(3);
+
+        const approvedLabour = await prisma.docketLabour.findUniqueOrThrow({
+          where: { id: labour.id },
+          select: { approvedHours: true, approvedCost: true },
+        });
+        const approvedPlant = await prisma.docketPlant.findUniqueOrThrow({
+          where: { id: plantEntry.id },
+          select: { approvedCost: true },
+        });
+        expect(Number(approvedLabour.approvedHours)).toBe(8);
+        expect(Number(approvedLabour.approvedCost)).toBe(364);
+        expect(Number(approvedPlant.approvedCost)).toBe(450);
       } finally {
-        await prisma.docketLabourLot.deleteMany({ where: { docketLabourId: labour.id } });
-        await prisma.docketPlantLot.deleteMany({ where: { docketPlantId: plantEntry.id } });
-        await prisma.docketLabour.deleteMany({ where: { docketId: docket.id } });
-        await prisma.docketPlant.deleteMany({ where: { docketId: docket.id } });
-        await prisma.dailyDocket.delete({ where: { id: docket.id } }).catch(() => {});
+        await deleteCostedPendingDocket(costedDocket);
+      }
+    });
+
+    it('should calculate approved entry costs from adjusted approval hours', async () => {
+      const costedDocket = await createCostedPendingDocket(1_382_400_000);
+      const { docket, labour, plantEntry } = costedDocket;
+
+      try {
+        const res = await request(app)
+          .post(`/api/dockets/${docket.id}/approve`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            adjustedLabourHours: 7,
+            adjustedPlantHours: 2.5,
+            adjustmentReason: 'Approved less time after review',
+          });
+
+        expect(res.status).toBe(200);
+
+        const stored = await prisma.dailyDocket.findUniqueOrThrow({
+          where: { id: docket.id },
+          select: { totalLabourApproved: true, totalPlantApproved: true },
+        });
+        expect(Number(stored.totalLabourApproved)).toBe(7);
+        expect(Number(stored.totalPlantApproved)).toBe(2.5);
+
+        const approvedLabour = await prisma.docketLabour.findUniqueOrThrow({
+          where: { id: labour.id },
+          select: { approvedHours: true, approvedCost: true, adjustmentReason: true },
+        });
+        const approvedPlant = await prisma.docketPlant.findUniqueOrThrow({
+          where: { id: plantEntry.id },
+          select: { approvedCost: true, adjustmentReason: true },
+        });
+
+        expect(Number(approvedLabour.approvedHours)).toBe(7);
+        expect(Number(approvedLabour.approvedCost)).toBe(318.5);
+        expect(approvedLabour.adjustmentReason).toBe('Approved less time after review');
+        expect(Number(approvedPlant.approvedCost)).toBe(375);
+        expect(approvedPlant.adjustmentReason).toBe('Approved less time after review');
+      } finally {
+        await deleteCostedPendingDocket(costedDocket);
       }
     });
 
