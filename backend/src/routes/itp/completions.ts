@@ -360,10 +360,12 @@ completionsRouter.post(
         throw AppError.notFound('ITP instance');
       }
 
-      const existingCompletion = await tx.iTPCompletion.findFirst({
+      const existingCompletion = await tx.iTPCompletion.findUnique({
         where: {
-          itpInstanceId,
-          checklistItemId,
+          itpInstanceId_checklistItemId: {
+            itpInstanceId,
+            checklistItemId,
+          },
         },
       });
       assertExpectedPreviousItpCompletion(existingCompletion, expectedPreviousCompletion);
