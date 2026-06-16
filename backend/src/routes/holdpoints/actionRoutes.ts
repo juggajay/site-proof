@@ -130,6 +130,24 @@ async function revokeSupersededChaseReleaseTokens(
   });
 }
 
+async function revokeFreshChaseReleaseToken(
+  holdPointId: string,
+  tokenTarget: HoldPointChaseTarget,
+): Promise<void> {
+  if (!tokenTarget.secureToken) {
+    return;
+  }
+
+  await prisma.holdPointReleaseToken.deleteMany({
+    where: {
+      holdPointId,
+      recipientEmail: tokenTarget.email,
+      usedAt: null,
+      token: hashHoldPointReleaseToken(tokenTarget.secureToken),
+    },
+  });
+}
+
 async function loadProjectChaseTargets(projectId: string): Promise<HoldPointChaseTarget[]> {
   // Get project users with superintendent role to notify.
   const superintendents = await prisma.projectUser.findMany({
@@ -631,23 +649,31 @@ holdPointActionRouter.post(
           loggedInEvidencePackageUrl,
           loggedInReleaseUrl,
         );
-        const emailResult = await sendHPChaseEmail(
-          buildHoldPointChaseEmail(
-            { user: { email: recipient.email, fullName: recipient.fullName } },
-            {
-              ...chaseContext,
-              evidencePackageUrl: urls.evidencePackageUrl,
-              releaseUrl: urls.releaseUrl,
-            },
-          ),
-        );
 
-        if (emailResult.success) {
-          await revokeSupersededChaseReleaseTokens(existingHP.id, recipient);
+        try {
+          const emailResult = await sendHPChaseEmail(
+            buildHoldPointChaseEmail(
+              { user: { email: recipient.email, fullName: recipient.fullName } },
+              {
+                ...chaseContext,
+                evidencePackageUrl: urls.evidencePackageUrl,
+                releaseUrl: urls.releaseUrl,
+              },
+            ),
+          );
+
+          if (emailResult.success) {
+            await revokeSupersededChaseReleaseTokens(existingHP.id, recipient);
+          } else {
+            await revokeFreshChaseReleaseToken(existingHP.id, recipient);
+          }
+        } catch (emailError) {
+          await revokeFreshChaseReleaseToken(existingHP.id, recipient);
+          logError('[HP Chase] Failed to send chase email:', emailError);
         }
       }
     } catch (emailError) {
-      logError('[HP Chase] Failed to send chase email:', emailError);
+      logError('[HP Chase] Failed to prepare chase email:', emailError);
       // Don't fail the main request
     }
 

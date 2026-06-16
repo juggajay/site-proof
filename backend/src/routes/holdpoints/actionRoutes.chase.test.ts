@@ -156,7 +156,7 @@ describe('hold point chase action route', () => {
     });
   });
 
-  it('keeps old external tokens valid when the chase email send fails', async () => {
+  it('keeps old external tokens valid and removes the new token when the chase email send fails', async () => {
     mocks.prisma.holdPointReleaseToken.findMany.mockResolvedValue([
       {
         recipientEmail: 'external.super@example.com',
@@ -170,6 +170,22 @@ describe('hold point chase action route', () => {
     expect(res.status).toBe(200);
     expect(mocks.prisma.holdPointReleaseToken.createMany).toHaveBeenCalledOnce();
     expect(mocks.sendHPChaseEmail).toHaveBeenCalledOnce();
-    expect(mocks.prisma.holdPointReleaseToken.deleteMany).not.toHaveBeenCalled();
+    const tokenCreatePayload = mocks.prisma.holdPointReleaseToken.createMany.mock.calls[0][0];
+    expect(mocks.prisma.holdPointReleaseToken.deleteMany).toHaveBeenCalledWith({
+      where: {
+        holdPointId: 'hp-1',
+        recipientEmail: 'external.super@example.com',
+        usedAt: null,
+        token: tokenCreatePayload.data[0].token,
+      },
+    });
+    expect(mocks.prisma.holdPointReleaseToken.deleteMany).not.toHaveBeenCalledWith({
+      where: {
+        holdPointId: 'hp-1',
+        recipientEmail: 'external.super@example.com',
+        usedAt: null,
+        token: { not: tokenCreatePayload.data[0].token },
+      },
+    });
   });
 });

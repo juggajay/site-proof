@@ -6,6 +6,8 @@ const mocks = vi.hoisted(() => {
   const tx = {
     holdPoint: {
       update: vi.fn(),
+      updateMany: vi.fn(),
+      findUnique: vi.fn(),
       create: vi.fn(),
     },
     holdPointReleaseToken: {
@@ -130,6 +132,12 @@ describe('hold point request-release delivery failure', () => {
       status: 'notified',
       itpChecklistItem: { id: 'item-1' },
     });
+    mocks.tx.holdPoint.updateMany.mockResolvedValue({ count: 1 });
+    mocks.tx.holdPoint.findUnique.mockResolvedValue({
+      id: 'hp-1',
+      status: 'notified',
+      itpChecklistItem: { id: 'item-1' },
+    });
     mocks.tx.holdPoint.create.mockResolvedValue({
       id: 'hp-created',
       status: 'notified',
@@ -203,6 +211,28 @@ describe('hold point request-release delivery failure', () => {
     ]);
     expect(mocks.tx.holdPointReleaseToken.createMany).toHaveBeenCalledOnce();
     expect(mocks.sendHPReleaseRequestEmail).toHaveBeenCalledTimes(2);
+    expect(mocks.createAuditLog).not.toHaveBeenCalled();
+  });
+
+  it('does not re-notify a hold point that becomes released before the transaction writes', async () => {
+    mocks.tx.holdPoint.updateMany.mockResolvedValueOnce({ count: 0 });
+    mocks.tx.holdPoint.findUnique.mockResolvedValueOnce({
+      id: 'hp-1',
+      status: 'released',
+      itpChecklistItem: { id: 'item-1' },
+    });
+
+    const res = await request(app).post('/api/holdpoints/request-release').send({
+      lotId: 'lot-1',
+      itpChecklistItemId: 'item-1',
+      notificationSentTo: 'superintendent@example.com',
+    });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toBe('This hold point has already been released.');
+    expect(mocks.tx.holdPointReleaseToken.deleteMany).not.toHaveBeenCalled();
+    expect(mocks.tx.holdPointReleaseToken.createMany).not.toHaveBeenCalled();
+    expect(mocks.sendHPReleaseRequestEmail).not.toHaveBeenCalled();
     expect(mocks.createAuditLog).not.toHaveBeenCalled();
   });
 });

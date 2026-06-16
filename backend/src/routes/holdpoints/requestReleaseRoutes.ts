@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { sendHPReleaseRequestEmail } from '../../lib/email.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
@@ -49,7 +50,66 @@ interface HoldPointReleaseRecipient {
   tokenExpiry: Date;
 }
 
+type HoldPointRequestStateData = {
+  status: 'notified';
+  notificationSentAt: Date;
+  notificationSentTo: string | null;
+  scheduledDate: Date | null;
+  scheduledTime: string | null;
+  releaseNotes?: string;
+};
+
 export const holdPointRequestReleaseRouter = Router();
+
+function rejectTerminalHoldPointRequest(status: string): never {
+  if (status === 'released') {
+    throw AppError.badRequest('This hold point has already been released.');
+  }
+
+  if (status === 'completed') {
+    throw AppError.badRequest('This hold point has already been completed.');
+  }
+
+  throw AppError.badRequest('This hold point can no longer be requested for release.');
+}
+
+async function updateExistingHoldPointForReleaseRequest(
+  tx: Prisma.TransactionClient,
+  holdPointId: string,
+  data: HoldPointRequestStateData,
+) {
+  const updateResult = await tx.holdPoint.updateMany({
+    where: {
+      id: holdPointId,
+      status: { notIn: ['released', 'completed'] },
+    },
+    data,
+  });
+
+  if (updateResult.count !== 1) {
+    const currentHoldPoint = await tx.holdPoint.findUnique({
+      where: { id: holdPointId },
+      select: { status: true },
+    });
+
+    if (!currentHoldPoint) {
+      throw AppError.notFound('Hold point');
+    }
+
+    rejectTerminalHoldPointRequest(currentHoldPoint.status);
+  }
+
+  const savedHoldPoint = await tx.holdPoint.findUnique({
+    where: { id: holdPointId },
+    include: { itpChecklistItem: true },
+  });
+
+  if (!savedHoldPoint) {
+    throw AppError.notFound('Hold point');
+  }
+
+  return savedHoldPoint;
+}
 
 // Request hold point release - checks prerequisites first
 holdPointRequestReleaseRouter.post(
@@ -330,7 +390,7 @@ holdPointRequestReleaseRouter.post(
     }
 
     const holdPoint = await prisma.$transaction(async (tx) => {
-      const data = {
+      const data: HoldPointRequestStateData = {
         status: 'notified',
         notificationSentAt,
         notificationSentTo: normalizedNotificationSentTo,
@@ -339,22 +399,26 @@ holdPointRequestReleaseRouter.post(
         ...(overrideNote && { releaseNotes: overrideNote }),
       };
 
-      const savedHoldPoint = existingHoldPoint
-        ? await tx.holdPoint.update({
-            where: { id: existingHoldPoint.id },
-            data,
-            include: { itpChecklistItem: true },
-          })
-        : await tx.holdPoint.create({
-            data: {
-              lotId,
-              itpChecklistItemId,
-              pointType: 'hold_point',
-              description: holdPointItem.description,
-              ...data,
-            },
-            include: { itpChecklistItem: true },
-          });
+      let savedHoldPoint;
+
+      if (existingHoldPoint) {
+        savedHoldPoint = await updateExistingHoldPointForReleaseRequest(
+          tx,
+          existingHoldPoint.id,
+          data,
+        );
+      } else {
+        savedHoldPoint = await tx.holdPoint.create({
+          data: {
+            lotId,
+            itpChecklistItemId,
+            pointType: 'hold_point',
+            description: holdPointItem.description,
+            ...data,
+          },
+          include: { itpChecklistItem: true },
+        });
+      }
 
       await tx.holdPointReleaseToken.deleteMany({
         where: {
