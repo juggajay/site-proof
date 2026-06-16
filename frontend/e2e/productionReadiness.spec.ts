@@ -1431,8 +1431,10 @@ test.describe('production readiness guardrails', () => {
     expect(productionPreflightWorkflow).toContain('workflow_dispatch');
     expect(productionPreflightWorkflow).toMatch(/permissions:\s*\r?\n\s+contents:\s+read/);
     expect(productionPreflightWorkflow).toContain('validate-dispatch:');
+    expect(productionPreflightWorkflow).not.toContain('push:');
+    expect(productionPreflightWorkflow).not.toContain('schedule:');
     expect(productionPreflightWorkflow).toContain(
-      'Production preflight can only run from refs/heads/main or refs/heads/master.',
+      'Production preflight can only run from refs/heads/master.',
     );
     expect(productionPreflightWorkflow).toContain('needs: validate-dispatch');
     expect(productionPreflightWorkflow).toContain(
@@ -1622,9 +1624,12 @@ test.describe('production readiness guardrails', () => {
     expect(ciWorkflow).not.toContain('run: npm run preflight:integrations');
     expect(ciWorkflow).toContain('production-preflight\\.yml$');
     expect(ciWorkflow.split('production-preflight\\.yml$').length - 1).toBeGreaterThanOrEqual(2);
-    expect(productionPreflightWorkflow).toContain('schedule:');
-    expect(productionPreflightWorkflow).toContain('branches: [main, master]');
-    expect(productionPreflightWorkflow).toContain("inputs.environment || 'production'");
+    expect(productionPreflightWorkflow).toContain('workflow_dispatch:');
+    expect(productionPreflightWorkflow).not.toContain('push:');
+    expect(productionPreflightWorkflow).not.toContain('schedule:');
+    expect(productionPreflightWorkflow).not.toContain('branches: [main, master]');
+    expect(productionPreflightWorkflow).not.toContain("inputs.environment || 'production'");
+    expect(productionPreflightWorkflow).toContain('github.event.inputs.environment');
     expect(productionPreflightWorkflow).toContain('run: npm run preflight:integrations');
     expect(productionPreflightWorkflow).toContain('SUPABASE_URL: ${{ secrets.SUPABASE_URL }}');
     expect(productionPreflightWorkflow).toContain(
