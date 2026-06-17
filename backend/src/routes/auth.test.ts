@@ -4,6 +4,7 @@ import express from 'express';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import jwt from 'jsonwebtoken';
 
 vi.mock('otplib', async () => {
   const actual = await vi.importActual<typeof import('otplib')>('otplib');
@@ -33,12 +34,7 @@ import { authRouter, getSafeDataExportFilename } from './auth.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { encrypt } from '../lib/encryption.js';
-import {
-  generateRefreshToken,
-  needsPasswordRehash,
-  verifyPassword,
-  verifyToken,
-} from '../lib/auth.js';
+import { needsPasswordRehash, verifyPassword, verifyToken } from '../lib/auth.js';
 import { AuditAction, parseAuditLogChanges } from '../lib/auditLog.js';
 import { deleteMfaBackupCodes, enableMfaAndReplaceBackupCodes } from '../lib/mfaBackupCodes.js';
 import {
@@ -536,7 +532,11 @@ describe('JWT invalidation precision', () => {
     });
 
     const userId = regRes.body.user.id as string;
-    const refreshToken = generateRefreshToken(userId);
+    const refreshToken = jwt.sign(
+      { userId, type: 'refresh' },
+      process.env.JWT_SECRET || 'dev-secret-change-in-production',
+      { expiresIn: '7d' },
+    );
 
     try {
       const meRes = await request(app)

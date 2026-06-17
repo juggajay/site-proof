@@ -161,10 +161,6 @@ export function generateExpiredToken(payload: TokenPayload): string {
   return jwt.sign(payload, EFFECTIVE_JWT_SECRET, { expiresIn: '-1h' }); // Already expired
 }
 
-export function generateRefreshToken(userId: string): string {
-  return jwt.sign({ userId, type: 'refresh' }, EFFECTIVE_JWT_SECRET, { expiresIn: '7d' });
-}
-
 export function generateMfaChallengeToken(userId: string): string {
   return jwt.sign(
     { userId, type: MFA_CHALLENGE_TOKEN_TYPE, authTime: Date.now() },
