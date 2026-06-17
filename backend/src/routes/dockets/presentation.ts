@@ -170,6 +170,8 @@ export type DocketListItemSource = {
   totalLabourApproved: NumericLike;
   totalPlantSubmitted: NumericLike;
   totalPlantApproved: NumericLike;
+  totalLabourApprovedCost?: NumericLike;
+  totalPlantApprovedCost?: NumericLike;
   submittedAt: Date | null;
   approvedAt: Date | null;
   foremanNotes: string | null;
@@ -196,6 +198,8 @@ export function mapDocketListItem(docket: DocketListItemSource) {
     totalLabourApproved: Number(docket.totalLabourApproved) || 0,
     totalPlantSubmitted: Number(docket.totalPlantSubmitted) || 0,
     totalPlantApproved: Number(docket.totalPlantApproved) || 0,
+    totalLabourApprovedCost: Number(docket.totalLabourApprovedCost) || 0,
+    totalPlantApprovedCost: Number(docket.totalPlantApprovedCost) || 0,
     submittedAt: docket.submittedAt,
     approvedAt: docket.approvedAt,
     foremanNotes: docket.foremanNotes,
@@ -270,6 +274,8 @@ export type DocketDetailSource = {
   totalLabourApproved: NumericLike;
   totalPlantSubmitted: NumericLike;
   totalPlantApproved: NumericLike;
+  totalLabourApprovedCost?: NumericLike;
+  totalPlantApprovedCost?: NumericLike;
   labourEntries: DocketLabourEntrySource[];
   plantEntries: DocketPlantEntrySource[];
 };
@@ -305,6 +311,8 @@ export function buildDocketDetailResponse(input: {
       totalLabourApproved: Number(docket.totalLabourApproved) || 0,
       totalPlantSubmitted: Number(docket.totalPlantSubmitted) || 0,
       totalPlantApproved: Number(docket.totalPlantApproved) || 0,
+      totalLabourApprovedCost: Number(docket.totalLabourApprovedCost) || 0,
+      totalPlantApprovedCost: Number(docket.totalPlantApprovedCost) || 0,
       labourEntries: docket.labourEntries.map((entry) => mapDocketLabourEntry(entry)),
       plantEntries: docket.plantEntries.map((entry) => mapDocketPlantEntry(entry)),
     },

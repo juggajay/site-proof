@@ -33,6 +33,9 @@ import { cn } from '@/lib/utils';
 import { ShellScreen } from '@/shell/components/ShellScreen';
 import {
   findTodayDocket,
+  getDocketDisplayLabourCost,
+  getDocketDisplayPlantCost,
+  getDocketDisplayTotalCost,
   useAssignedLotsQuery,
   useDocketEditQuery,
   useExistingDocketsQuery,
@@ -417,7 +420,7 @@ export function DocketScreen() {
     onSubmitted: () => {
       if (!docket) return;
       setSubmittedConfirm({
-        total: (docket.totalLabourSubmitted || 0) + (docket.totalPlantSubmitted || 0),
+        total: getDocketDisplayTotalCost(docket),
         entryCount: docket.labourEntries.length + docket.plantEntries.length,
         date: docket.date,
       });
@@ -428,9 +431,9 @@ export function DocketScreen() {
   // ── Derived state ───────────────────────────────────────────────────────────
   const approvedEmployees = company?.employees ?? [];
   const approvedPlant = company?.plant ?? [];
-  const totalLabour = docket?.totalLabourSubmitted || 0;
-  const totalPlant = docket?.totalPlantSubmitted || 0;
-  const totalCost = totalLabour + totalPlant;
+  const totalLabour = docket ? getDocketDisplayLabourCost(docket) : 0;
+  const totalPlant = docket ? getDocketDisplayPlantCost(docket) : 0;
+  const totalCost = docket ? getDocketDisplayTotalCost(docket) : 0;
   const labourEntries = docket?.labourEntries ?? [];
   const plantEntries = docket?.plantEntries ?? [];
 

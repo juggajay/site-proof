@@ -72,7 +72,7 @@ export function TermsOfServicePage() {
               <li>Hold point management and notifications</li>
               <li>Non-conformance report (NCR) lifecycle management</li>
               <li>Daily diary and site activity recording</li>
-              <li>Progress claim preparation with SOPA compliance</li>
+              <li>Progress claim preparation and supporting evidence packages</li>
               <li>Document and photo management</li>
               <li>Reporting and analytics dashboards</li>
             </ul>

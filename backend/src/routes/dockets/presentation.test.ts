@@ -64,6 +64,8 @@ const listSource: DocketListItemSource = {
   totalLabourApproved: 550,
   totalPlantSubmitted: 800,
   totalPlantApproved: 780,
+  totalLabourApprovedCost: 520,
+  totalPlantApprovedCost: 760,
   submittedAt: new Date('2026-03-05T01:00:00.000Z'),
   approvedAt: new Date('2026-03-06T02:00:00.000Z'),
   foremanNotes: 'approved with notes',
@@ -97,6 +99,8 @@ const detailDocket: DocketDetailSource = {
   totalLabourApproved: 550,
   totalPlantSubmitted: 800,
   totalPlantApproved: 780,
+  totalLabourApprovedCost: 520,
+  totalPlantApprovedCost: 760,
   labourEntries: [labourSource],
   plantEntries: [plantSource],
 };
@@ -313,6 +317,8 @@ describe('dockets presentation helpers (pure)', () => {
         totalLabourApproved: 550,
         totalPlantSubmitted: 800,
         totalPlantApproved: 780,
+        totalLabourApprovedCost: 520,
+        totalPlantApprovedCost: 760,
         submittedAt: listSource.submittedAt, // Date passed through unchanged
         approvedAt: listSource.approvedAt,
         foremanNotes: 'approved with notes',
@@ -332,6 +338,8 @@ describe('dockets presentation helpers (pure)', () => {
         'totalLabourApproved',
         'totalPlantSubmitted',
         'totalPlantApproved',
+        'totalLabourApprovedCost',
+        'totalPlantApprovedCost',
         'submittedAt',
         'approvedAt',
         'foremanNotes',
@@ -356,6 +364,8 @@ describe('dockets presentation helpers (pure)', () => {
         totalLabourApproved: undefined,
         totalPlantSubmitted: null,
         totalPlantApproved: 'oops',
+        totalLabourApprovedCost: undefined,
+        totalPlantApprovedCost: 'also-oops',
         submittedAt: null,
         approvedAt: null,
         foremanNotes: null,
@@ -366,6 +376,8 @@ describe('dockets presentation helpers (pure)', () => {
       expect(result.totalLabourApproved).toBe(0);
       expect(result.totalPlantSubmitted).toBe(0);
       expect(result.totalPlantApproved).toBe(0);
+      expect(result.totalLabourApprovedCost).toBe(0);
+      expect(result.totalPlantApprovedCost).toBe(0);
       // Nullable optional fields pass through untouched.
       expect(result.notes).toBeNull();
       expect(result.foremanNotes).toBeNull();
@@ -474,6 +486,8 @@ describe('dockets presentation helpers (pure)', () => {
         totalLabourApproved: 550,
         totalPlantSubmitted: 800,
         totalPlantApproved: 780,
+        totalLabourApprovedCost: 520,
+        totalPlantApprovedCost: 760,
         labourEntries: [mapDocketLabourEntry(labourSource)],
         plantEntries: [mapDocketPlantEntry(plantSource)],
       });
@@ -502,6 +516,8 @@ describe('dockets presentation helpers (pure)', () => {
         'totalLabourApproved',
         'totalPlantSubmitted',
         'totalPlantApproved',
+        'totalLabourApprovedCost',
+        'totalPlantApprovedCost',
         'labourEntries',
         'plantEntries',
       ]);
@@ -531,6 +547,8 @@ describe('dockets presentation helpers (pure)', () => {
           totalLabourApproved: 'not-a-number',
           totalPlantSubmitted: undefined,
           totalPlantApproved: '12.5',
+          totalLabourApprovedCost: null,
+          totalPlantApprovedCost: '42.25',
         },
         project: null,
         submittedBy: null,
@@ -542,6 +560,8 @@ describe('dockets presentation helpers (pure)', () => {
       expect(result.docket.totalLabourApproved).toBe(0);
       expect(result.docket.totalPlantSubmitted).toBe(0);
       expect(result.docket.totalPlantApproved).toBe(12.5);
+      expect(result.docket.totalLabourApprovedCost).toBe(0);
+      expect(result.docket.totalPlantApprovedCost).toBe(42.25);
     });
 
     it('reuses the labour/plant entry mappers (detail shape omits adjustmentReason)', () => {

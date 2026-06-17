@@ -61,6 +61,11 @@ export function DocketActionModal({
 
   const adjustedLabourValidation = validateHours(adjustedLabourHours);
   const adjustedPlantValidation = validateHours(adjustedPlantHours);
+  const approvalHoursChanged =
+    hasHoursChanged(adjustedLabourHours, docket.labourHours || 0) ||
+    hasHoursChanged(adjustedPlantHours, docket.plantHours || 0);
+  const approvalAdjustmentReasonRequired =
+    actionType === 'approve' && approvalHoursChanged && !adjustmentReason.trim();
 
   const modalTitle =
     actionType === 'approve'
@@ -82,6 +87,10 @@ export function DocketActionModal({
       const parsedAdjustedPlantHours = parseHoursInput(adjustedPlantHours);
       if (parsedAdjustedLabourHours === null || parsedAdjustedPlantHours === null) {
         toast({ variant: 'warning', description: HOURS_INPUT_ERROR });
+        return;
+      }
+      if (approvalHoursChanged && !adjustmentReason.trim()) {
+        toast({ variant: 'warning', description: 'Enter an adjustment reason before approving.' });
         return;
       }
       adjustedLabourHoursValue = parsedAdjustedLabourHours;
@@ -158,6 +167,7 @@ export function DocketActionModal({
           onClick={handleAction}
           disabled={
             actionInProgress ||
+            approvalAdjustmentReasonRequired ||
             ((actionType === 'reject' || actionType === 'query') && !actionNotes.trim())
           }
         >
@@ -458,10 +468,7 @@ export function DocketActionModal({
             </div>
             <div>
               <label htmlFor="adjustment-reason" className="block text-sm font-medium mb-1">
-                Adjustment Reason{' '}
-                {(hasHoursChanged(adjustedLabourHours, docket.labourHours || 0) ||
-                  hasHoursChanged(adjustedPlantHours, docket.plantHours || 0)) &&
-                  '*'}
+                Adjustment Reason {approvalHoursChanged && '*'}
               </label>
               <input
                 id="adjustment-reason"

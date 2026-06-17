@@ -17,6 +17,8 @@ export interface Docket {
   totalLabourApproved: number;
   totalPlantSubmitted: number;
   totalPlantApproved: number;
+  totalLabourApprovedCost?: number | null;
+  totalPlantApprovedCost?: number | null;
   submittedAt: string | null;
   approvedAt: string | null;
   foremanNotes: string | null;

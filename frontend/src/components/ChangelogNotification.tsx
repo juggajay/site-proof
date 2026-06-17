@@ -49,7 +49,7 @@ const CHANGELOG: ChangelogEntry[] = [
     title: 'Quality Management Updates',
     highlights: [
       { icon: 'feature', text: 'NCR dispute workflow' },
-      { icon: 'feature', text: 'Claim certification tracking with SOPA compliance' },
+      { icon: 'feature', text: 'Claim certification tracking with evidence packages' },
       { icon: 'security', text: 'Email verification for account registration' },
       { icon: 'improvement', text: 'Enhanced ITP photo attachments' },
     ],

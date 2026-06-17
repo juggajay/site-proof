@@ -1116,24 +1116,26 @@ model PlantRegister {
 }
 
 model DailyDocket {
-  id                     String    @id @default(uuid())
-  subcontractorCompanyId String    @map("subcontractor_company_id")
-  projectId              String    @map("project_id")
-  date                   DateTime
-  status                 String    @default("draft")
-  submittedById          String?   @map("submitted_by")
-  submittedAt            DateTime? @map("submitted_at")
-  approvedById           String?   @map("approved_by")
-  approvedAt             DateTime? @map("approved_at")
-  foremanNotes           String?   @map("foreman_notes")
-  adjustmentReason       String?   @map("adjustment_reason")
-  notes                  String?
-  totalLabourSubmitted   Decimal?  @map("total_labour_submitted")
-  totalLabourApproved    Decimal?  @map("total_labour_approved")
-  totalPlantSubmitted    Decimal?  @map("total_plant_submitted")
-  totalPlantApproved     Decimal?  @map("total_plant_approved")
-  createdAt              DateTime  @default(now()) @map("created_at")
-  updatedAt              DateTime  @updatedAt @map("updated_at")
+  id                      String    @id @default(uuid())
+  subcontractorCompanyId  String    @map("subcontractor_company_id")
+  projectId               String    @map("project_id")
+  date                    DateTime
+  status                  String    @default("draft")
+  submittedById           String?   @map("submitted_by")
+  submittedAt             DateTime? @map("submitted_at")
+  approvedById            String?   @map("approved_by")
+  approvedAt              DateTime? @map("approved_at")
+  foremanNotes            String?   @map("foreman_notes")
+  adjustmentReason        String?   @map("adjustment_reason")
+  notes                   String?
+  totalLabourSubmitted    Decimal?  @map("total_labour_submitted")
+  totalLabourApproved     Decimal?  @map("total_labour_approved")
+  totalPlantSubmitted     Decimal?  @map("total_plant_submitted")
+  totalPlantApproved      Decimal?  @map("total_plant_approved")
+  totalLabourApprovedCost Decimal?  @map("total_labour_approved_cost")
+  totalPlantApprovedCost  Decimal?  @map("total_plant_approved_cost")
+  createdAt               DateTime  @default(now()) @map("created_at")
+  updatedAt               DateTime  @updatedAt @map("updated_at")
 
   subcontractorCompany SubcontractorCompany @relation(fields: [subcontractorCompanyId], references: [id], onDelete: Cascade)
   project              Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)

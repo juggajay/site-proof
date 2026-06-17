@@ -4,7 +4,13 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import type { Docket, Employee, Plant } from '../docketEditData';
+import {
+  getDocketDisplayLabourCost,
+  getDocketDisplayPlantCost,
+  type Docket,
+  type Employee,
+  type Plant,
+} from '../docketEditData';
 import { formatCurrency, formatDate } from '../docketEditDisplay';
 
 // Extracted from DocketEditPage: the labour/plant/summary tab selector and the
@@ -182,7 +188,7 @@ export function DocketEditTabs({
               <div className="text-right p-2">
                 <p className="text-sm text-muted-foreground">Labour Subtotal</p>
                 <p className="text-lg font-semibold text-foreground">
-                  {formatCurrency(docket.totalLabourSubmitted)}
+                  {formatCurrency(getDocketDisplayLabourCost(docket))}
                 </p>
               </div>
             </div>
@@ -267,7 +273,7 @@ export function DocketEditTabs({
               <div className="text-right p-2">
                 <p className="text-sm text-muted-foreground">Plant Subtotal</p>
                 <p className="text-lg font-semibold text-foreground">
-                  {formatCurrency(docket.totalPlantSubmitted)}
+                  {formatCurrency(getDocketDisplayPlantCost(docket))}
                 </p>
               </div>
             </div>
@@ -290,7 +296,7 @@ export function DocketEditTabs({
                     Labour ({docket?.labourEntries.length || 0} entries)
                   </p>
                   <p className="text-lg font-semibold text-foreground">
-                    {formatCurrency(docket?.totalLabourSubmitted || 0)}
+                    {formatCurrency(docket ? getDocketDisplayLabourCost(docket) : 0)}
                   </p>
                 </div>
                 <div>
@@ -298,7 +304,7 @@ export function DocketEditTabs({
                     Plant ({docket?.plantEntries.length || 0} entries)
                   </p>
                   <p className="text-lg font-semibold text-foreground">
-                    {formatCurrency(docket?.totalPlantSubmitted || 0)}
+                    {formatCurrency(docket ? getDocketDisplayPlantCost(docket) : 0)}
                   </p>
                 </div>
               </div>

@@ -44,6 +44,7 @@ import {
   getToday,
   type NeedsAttentionItem,
 } from '@/pages/subcontractor-portal/subcontractorDashboardHelpers';
+import { getDocketDisplayTotalCost } from '@/pages/subcontractor-portal/docketEditData';
 import { useSubbieShellContext } from '../subbieShellContext';
 
 // ── Minimal response shapes (existing portal contracts) ───────────────────────
@@ -54,6 +55,8 @@ interface Docket {
   status: string;
   totalLabourSubmitted: number;
   totalPlantSubmitted: number;
+  totalLabourApprovedCost?: number | null;
+  totalPlantApprovedCost?: number | null;
   foremanNotes?: string;
 }
 
@@ -116,7 +119,7 @@ const HERO_COPY: Record<
 
 function computeHero(todaysDocket: Docket | null): HeroState {
   if (!todaysDocket) return { kind: 'none' };
-  const total = (todaysDocket.totalLabourSubmitted ?? 0) + (todaysDocket.totalPlantSubmitted ?? 0);
+  const total = getDocketDisplayTotalCost(todaysDocket);
   const kind = (
     ['draft', 'pending_approval', 'approved', 'queried', 'rejected'].includes(todaysDocket.status)
       ? todaysDocket.status

@@ -102,11 +102,11 @@ export async function generateClaimEvidencePackagePDF(
     }
   }
 
-  // SOPA Compliance note
+  // Payment claim evidence note
   doc.setFontSize(9);
   doc.setFont('helvetica', 'italic');
   doc.text(
-    'This evidence package is prepared for Security of Payment Act compliance.',
+    'This evidence package supports your payment claim evidence record.',
     pageWidth / 2,
     240,
     { align: 'center' },
