@@ -74,8 +74,18 @@ export interface Docket {
   foremanNotes?: string;
   totalLabourSubmitted: number;
   totalPlantSubmitted: number;
+  totalLabourApprovedCost?: number | null;
+  totalPlantApprovedCost?: number | null;
   labourEntries: LabourEntry[];
   plantEntries: PlantEntry[];
+}
+
+export interface DocketCostSummary {
+  status: string;
+  totalLabourSubmitted?: number | null;
+  totalPlantSubmitted?: number | null;
+  totalLabourApprovedCost?: number | null;
+  totalPlantApprovedCost?: number | null;
 }
 
 export interface Company {
@@ -127,6 +137,32 @@ export function normalizeExistingDockets(data: { dockets?: Docket[] }): Docket[]
 
 export function findTodayDocket(dockets: Docket[], today: string): Docket | undefined {
   return dockets.find((docket) => docket.date === today);
+}
+
+function moneyValue(value: number | null | undefined): number {
+  return Number.isFinite(Number(value)) ? Number(value) : 0;
+}
+
+function hasApprovedCost(value: number | null | undefined): boolean {
+  return value !== null && value !== undefined && Number.isFinite(Number(value));
+}
+
+export function getDocketDisplayLabourCost(docket: DocketCostSummary): number {
+  if (docket.status === 'approved' && hasApprovedCost(docket.totalLabourApprovedCost)) {
+    return moneyValue(docket.totalLabourApprovedCost);
+  }
+  return moneyValue(docket.totalLabourSubmitted);
+}
+
+export function getDocketDisplayPlantCost(docket: DocketCostSummary): number {
+  if (docket.status === 'approved' && hasApprovedCost(docket.totalPlantApprovedCost)) {
+    return moneyValue(docket.totalPlantApprovedCost);
+  }
+  return moneyValue(docket.totalPlantSubmitted);
+}
+
+export function getDocketDisplayTotalCost(docket: DocketCostSummary): number {
+  return getDocketDisplayLabourCost(docket) + getDocketDisplayPlantCost(docket);
 }
 
 // ===== Fetchers =====

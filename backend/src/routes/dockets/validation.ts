@@ -92,12 +92,24 @@ export const updateDocketSchema = z.object({
     .optional(),
 });
 
-export const approveDocketSchema = z.object({
-  foremanNotes: optionalNullableTextSchema('Foreman notes', MAX_DOCKET_REASON_LENGTH),
-  adjustmentReason: optionalNullableTextSchema('Adjustment reason', MAX_DOCKET_REASON_LENGTH),
-  adjustedLabourHours: finiteNonNegativeNumber('Adjusted labour total').optional(),
-  adjustedPlantHours: finiteNonNegativeNumber('Adjusted plant total').optional(),
-});
+export const approveDocketSchema = z
+  .object({
+    foremanNotes: optionalNullableTextSchema('Foreman notes', MAX_DOCKET_REASON_LENGTH),
+    adjustmentReason: optionalNullableTextSchema('Adjustment reason', MAX_DOCKET_REASON_LENGTH),
+    adjustedLabourHours: finiteNonNegativeNumber('Adjusted labour total').optional(),
+    adjustedPlantHours: finiteNonNegativeNumber('Adjusted plant total').optional(),
+  })
+  .superRefine((value, ctx) => {
+    const hasAdjustedHours =
+      value.adjustedLabourHours !== undefined || value.adjustedPlantHours !== undefined;
+    if (hasAdjustedHours && !value.adjustmentReason?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['adjustmentReason'],
+        message: 'Adjustment reason is required when approving adjusted hours',
+      });
+    }
+  });
 
 export const rejectDocketSchema = z.object({
   reason: optionalNullableTextSchema('Reason', MAX_DOCKET_REASON_LENGTH),

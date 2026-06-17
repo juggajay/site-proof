@@ -311,7 +311,7 @@ describe('pdfGenerator characterization', () => {
         'Conformed Lots: 1',
         'Status: SUBMITTED',
         'Prepared by: Morgan Estimator',
-        'This evidence package is prepared for Security of Payment Act compliance.',
+        'This evidence package supports your payment claim evidence record.',
         'State: NSW',
       ]),
     );

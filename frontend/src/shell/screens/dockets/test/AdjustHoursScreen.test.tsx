@@ -108,6 +108,20 @@ describe('AdjustHoursScreen', () => {
     );
   });
 
+  it('requires an adjustment reason once hours change', () => {
+    renderScreen();
+    const submit = screen.getByRole('button', { name: /Approve with adjusted hours/i });
+    expect(submit).toBeEnabled();
+
+    fireEvent.change(screen.getByLabelText(/Labour hours/i), { target: { value: '40' } });
+    expect(submit).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText(/Adjustment reason/i), {
+      target: { value: 'Rounded down' },
+    });
+    expect(submit).toBeEnabled();
+  });
+
   it('disables submit offline with an honest note', () => {
     _online = false;
     renderScreen();

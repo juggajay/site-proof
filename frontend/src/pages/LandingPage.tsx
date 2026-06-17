@@ -51,7 +51,7 @@ const FIELD_CARDS = [
   {
     micro: 'Patchy signal',
     h3: 'Key field workflows keep working offline.',
-    p: 'ITP completions, photos, diary entries and dockets queue locally when coverage drops and sync when it returns — with conflict handling when two people touched the same lot.',
+    p: 'ITP completions, photos and core diary updates queue locally when coverage drops and sync when it returns — with conflict handling when two people touched the same lot.',
   },
   {
     micro: 'Zero friction',
@@ -93,7 +93,7 @@ const FAQ_ITEMS = [
     q: 'Q.5',
     summary: 'Does it work where there’s no signal?',
     answer: [
-      'The field workflows that matter keep working offline — ITP completions, photos, diary entries, docket create and submit. Work queues on the device and syncs when coverage returns, and if two people touched the same lot you choose how to merge. Admin and reporting need a connection.',
+      'The core field workflows keep working offline — ITP completions, photos and selected diary actions. Work queues on the device and syncs when coverage returns, and lot-edit conflicts can be reviewed before sync. Docket submission, admin and reporting need a connection.',
     ],
   },
 ];

@@ -146,6 +146,8 @@ docketReviewRouter.post(
           adjustmentReason,
           totalLabourApproved: labourApproved,
           totalPlantApproved: plantApproved,
+          totalLabourApprovedCost: labourApprovedCost,
+          totalPlantApprovedCost: plantApprovedCost,
         },
         'Only pending dockets can be approved',
       );

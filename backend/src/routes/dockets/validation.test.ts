@@ -77,14 +77,33 @@ describe('dockets validation helpers', () => {
       expect(approveDocketSchema.safeParse({}).success).toBe(true);
     });
 
-    it('accepts null adjustment text and zero adjusted hours', () => {
+    it('accepts null adjustment text when hours are not adjusted', () => {
       const result = approveDocketSchema.safeParse({
         foremanNotes: null,
         adjustmentReason: null,
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('accepts adjusted hours when an adjustment reason is supplied', () => {
+      const result = approveDocketSchema.safeParse({
+        foremanNotes: null,
+        adjustmentReason: 'Rounded after review',
         adjustedLabourHours: 0,
         adjustedPlantHours: 0,
       });
       expect(result.success).toBe(true);
+    });
+
+    it('rejects adjusted hours without an adjustment reason', () => {
+      const result = approveDocketSchema.safeParse({
+        adjustmentReason: null,
+        adjustedLabourHours: 0,
+      });
+      expect(result.success).toBe(false);
+      expect(firstMessage(result)).toBe(
+        'Adjustment reason is required when approving adjusted hours',
+      );
     });
 
     it('rejects negative adjusted labour totals', () => {

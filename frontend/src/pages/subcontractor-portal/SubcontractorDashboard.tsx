@@ -31,6 +31,11 @@ import {
   getToday,
   LOTS_MODULE_DISABLED_DOCKET_MESSAGE,
 } from './subcontractorDashboardHelpers';
+import {
+  getDocketDisplayLabourCost,
+  getDocketDisplayPlantCost,
+  getDocketDisplayTotalCost,
+} from './docketEditData';
 import { PortalQuickLinks } from './SubcontractorDashboardSections';
 
 interface PortalAccess {
@@ -77,6 +82,8 @@ interface Docket {
   status: string;
   totalLabourSubmitted: number;
   totalPlantSubmitted: number;
+  totalLabourApprovedCost?: number | null;
+  totalPlantApprovedCost?: number | null;
   foremanNotes?: string;
 }
 
@@ -344,7 +351,7 @@ export function SubcontractorDashboard() {
                     Labour
                   </p>
                   <p className="mt-1.5 font-mono text-xl font-medium tabular-nums text-foreground">
-                    {formatCurrency(todaysDocket.totalLabourSubmitted)}
+                    {formatCurrency(getDocketDisplayLabourCost(todaysDocket))}
                   </p>
                 </div>
                 <div className="bg-card p-3">
@@ -352,7 +359,7 @@ export function SubcontractorDashboard() {
                     Plant
                   </p>
                   <p className="mt-1.5 font-mono text-xl font-medium tabular-nums text-foreground">
-                    {formatCurrency(todaysDocket.totalPlantSubmitted)}
+                    {formatCurrency(getDocketDisplayPlantCost(todaysDocket))}
                   </p>
                 </div>
               </div>
@@ -361,9 +368,7 @@ export function SubcontractorDashboard() {
                   Total
                 </p>
                 <p className="font-mono text-xl font-semibold tabular-nums text-foreground">
-                  {formatCurrency(
-                    todaysDocket.totalLabourSubmitted + todaysDocket.totalPlantSubmitted,
-                  )}
+                  {formatCurrency(getDocketDisplayTotalCost(todaysDocket))}
                 </p>
               </div>
               <Link
@@ -524,7 +529,7 @@ export function SubcontractorDashboard() {
                     <div>
                       <p className="font-medium text-foreground">{formatDate(docket.date)}</p>
                       <p className="font-mono text-sm tabular-nums text-muted-foreground">
-                        {formatCurrency(docket.totalLabourSubmitted + docket.totalPlantSubmitted)}
+                        {formatCurrency(getDocketDisplayTotalCost(docket))}
                       </p>
                     </div>
                   </div>

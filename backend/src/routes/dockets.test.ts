@@ -1395,8 +1395,6 @@ describe('Dockets API', () => {
         .send({
           foremanNotes: null,
           adjustmentReason: null,
-          adjustedLabourHours: 8,
-          adjustedPlantHours: 0,
         });
 
       expect(res.status).toBe(200);
@@ -1423,10 +1421,17 @@ describe('Dockets API', () => {
 
         const stored = await prisma.dailyDocket.findUniqueOrThrow({
           where: { id: docket.id },
-          select: { totalLabourApproved: true, totalPlantApproved: true },
+          select: {
+            totalLabourApproved: true,
+            totalPlantApproved: true,
+            totalLabourApprovedCost: true,
+            totalPlantApprovedCost: true,
+          },
         });
         expect(Number(stored.totalLabourApproved)).toBe(8);
         expect(Number(stored.totalPlantApproved)).toBe(3);
+        expect(Number(stored.totalLabourApprovedCost)).toBe(364);
+        expect(Number(stored.totalPlantApprovedCost)).toBe(450);
 
         const approvedLabour = await prisma.docketLabour.findUniqueOrThrow({
           where: { id: labour.id },
@@ -1462,10 +1467,17 @@ describe('Dockets API', () => {
 
         const stored = await prisma.dailyDocket.findUniqueOrThrow({
           where: { id: docket.id },
-          select: { totalLabourApproved: true, totalPlantApproved: true },
+          select: {
+            totalLabourApproved: true,
+            totalPlantApproved: true,
+            totalLabourApprovedCost: true,
+            totalPlantApprovedCost: true,
+          },
         });
         expect(Number(stored.totalLabourApproved)).toBe(7);
         expect(Number(stored.totalPlantApproved)).toBe(2.5);
+        expect(Number(stored.totalLabourApprovedCost)).toBe(318.5);
+        expect(Number(stored.totalPlantApprovedCost)).toBe(375);
 
         const approvedLabour = await prisma.docketLabour.findUniqueOrThrow({
           where: { id: labour.id },

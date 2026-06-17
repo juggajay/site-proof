@@ -4,6 +4,9 @@ import {
   buildDocketDetailPath,
   buildDocketEditRoute,
   buildExistingDocketsPath,
+  getDocketDisplayLabourCost,
+  getDocketDisplayPlantCost,
+  getDocketDisplayTotalCost,
   buildMyCompanyPath,
   findTodayDocket,
   normalizeAssignedLots,
@@ -81,5 +84,50 @@ describe('docket edit data – findTodayDocket', () => {
   it('returns undefined when no docket matches today', () => {
     expect(findTodayDocket([baseDocket], '2026-06-04')).toBeUndefined();
     expect(findTodayDocket([], '2026-06-03')).toBeUndefined();
+  });
+});
+
+describe('docket edit data – display costs', () => {
+  it('uses submitted costs before approval', () => {
+    const docket = {
+      ...baseDocket,
+      status: 'pending_approval',
+      totalLabourSubmitted: 1200,
+      totalPlantSubmitted: 300,
+      totalLabourApprovedCost: 900,
+      totalPlantApprovedCost: 200,
+    };
+
+    expect(getDocketDisplayLabourCost(docket)).toBe(1200);
+    expect(getDocketDisplayPlantCost(docket)).toBe(300);
+    expect(getDocketDisplayTotalCost(docket)).toBe(1500);
+  });
+
+  it('uses approved costs after approval', () => {
+    const docket = {
+      ...baseDocket,
+      status: 'approved',
+      totalLabourSubmitted: 1200,
+      totalPlantSubmitted: 300,
+      totalLabourApprovedCost: 900,
+      totalPlantApprovedCost: 200,
+    };
+
+    expect(getDocketDisplayLabourCost(docket)).toBe(900);
+    expect(getDocketDisplayPlantCost(docket)).toBe(200);
+    expect(getDocketDisplayTotalCost(docket)).toBe(1100);
+  });
+
+  it('falls back to submitted costs for older approved dockets without approved cost fields', () => {
+    const docket = {
+      ...baseDocket,
+      status: 'approved',
+      totalLabourSubmitted: 1200,
+      totalPlantSubmitted: 300,
+      totalLabourApprovedCost: null,
+      totalPlantApprovedCost: undefined,
+    };
+
+    expect(getDocketDisplayTotalCost(docket)).toBe(1500);
   });
 });

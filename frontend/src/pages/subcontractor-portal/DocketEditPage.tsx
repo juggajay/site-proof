@@ -9,6 +9,7 @@ import { useAuth } from '@/lib/auth';
 import {
   buildDocketEditRoute,
   findTodayDocket,
+  getDocketDisplayTotalCost,
   useAssignedLotsQuery,
   useDocketEditQuery,
   useExistingDocketsQuery,
@@ -380,7 +381,7 @@ export function DocketEditPage() {
     : '/my-company';
 
   // Total cost
-  const totalCost = (docket?.totalLabourSubmitted || 0) + (docket?.totalPlantSubmitted || 0);
+  const totalCost = docket ? getDocketDisplayTotalCost(docket) : 0;
 
   const canEdit = isEditableDocketStatus(docket?.status);
   const canSubmit = Boolean(

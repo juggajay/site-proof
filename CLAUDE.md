@@ -75,7 +75,7 @@ import { useAuth } from '@/lib/auth'
 
 function Component() {
   const { user, signIn, signOut } = useAuth()
-  // user.role: 'owner' | 'admin' | 'project_manager' | 'site_manager' | 'foreman' | 'subcontractor'
+  // Canonical role names live in backend/src/lib/roles.ts.
 }
 ```
 

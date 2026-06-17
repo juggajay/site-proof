@@ -10,8 +10,7 @@
  *   - hours validated with the shared parseHoursInput / validateHours
  *     (non-negative decimals; a soft >24 warning, exactly like the modal);
  *   - the adjustment reason is marked required (*) once either field differs from
- *     the submitted hours — matching the modal's `*` cue (which, like the modal,
- *     is an honest prompt, not a hard backend gate);
+ *     the submitted hours — matching the modal's `*` cue and backend gate;
  *   - the payload is the modal's approve payload via buildDocketActionPayload:
  *     { foremanNotes, adjustedLabourHours, adjustedPlantHours, adjustmentReason }.
  *
@@ -69,6 +68,10 @@ export function AdjustHoursScreen() {
       toast({ variant: 'warning', description: HOURS_INPUT_ERROR });
       return;
     }
+    if (hoursChanged && !reason.trim()) {
+      toast({ variant: 'warning', description: 'Enter an adjustment reason before approving.' });
+      return;
+    }
     void runAction({
       docketId: docket.id,
       actionType: 'approve',
@@ -85,7 +88,8 @@ export function AdjustHoursScreen() {
   };
 
   const parseOk = parseHoursInput(labour) !== null && parseHoursInput(plant) !== null;
-  const canSubmit = parseOk && isOnline && Boolean(docket);
+  const hasRequiredReason = !hoursChanged || Boolean(reason.trim());
+  const canSubmit = parseOk && hasRequiredReason && isOnline && Boolean(docket);
 
   if (!docket) {
     return (

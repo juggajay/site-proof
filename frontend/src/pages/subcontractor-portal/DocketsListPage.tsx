@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { formatDateKey } from '@/lib/localDate';
 import { formatStatusLabel } from '@/lib/statusLabels';
+import { getDocketDisplayTotalCost } from './docketEditData';
 
 interface Docket {
   id: string;
@@ -27,6 +28,8 @@ interface Docket {
   status: string;
   totalLabourSubmitted: number;
   totalPlantSubmitted: number;
+  totalLabourApprovedCost?: number | null;
+  totalPlantApprovedCost?: number | null;
   foremanNotes?: string;
 }
 
@@ -300,9 +303,7 @@ export function DocketsListPage() {
                                 {formatDate(docket.date)}
                               </p>
                               <p className="font-mono text-sm tabular-nums text-muted-foreground">
-                                {formatCurrency(
-                                  docket.totalLabourSubmitted + docket.totalPlantSubmitted,
-                                )}
+                                {formatCurrency(getDocketDisplayTotalCost(docket))}
                               </p>
                             </div>
                           </div>

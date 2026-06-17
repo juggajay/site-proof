@@ -161,6 +161,22 @@ describe('DocketActionModal', () => {
     });
   });
 
+  it('requires an adjustment reason when approve hours are changed', () => {
+    renderModal();
+
+    fireEvent.change(screen.getByLabelText('Adjusted Labour Hours'), {
+      target: { value: '7' },
+    });
+
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled();
+
+    fireEvent.change(screen.getByLabelText(/Adjustment Reason/), {
+      target: { value: 'Rounded down after review' },
+    });
+
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
+  });
+
   it('surfaces diary sync warnings returned by docket approval', async () => {
     apiFetchMock
       .mockResolvedValueOnce({ docket: { labourEntries: [], plantEntries: [] } })

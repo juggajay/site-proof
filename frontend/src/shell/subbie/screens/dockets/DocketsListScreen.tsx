@@ -21,6 +21,7 @@ import { useAuth } from '@/lib/auth';
 import { cn } from '@/lib/utils';
 import { ShellScreen } from '@/shell/components/ShellScreen';
 import { formatCurrency } from '@/pages/subcontractor-portal/subcontractorDashboardHelpers';
+import { getDocketDisplayTotalCost } from '@/pages/subcontractor-portal/docketEditData';
 import { useSubbieShellContext } from '../../subbieShellContext';
 
 interface Docket {
@@ -29,6 +30,8 @@ interface Docket {
   status: string;
   totalLabourSubmitted: number;
   totalPlantSubmitted: number;
+  totalLabourApprovedCost?: number | null;
+  totalPlantApprovedCost?: number | null;
   labourEntries?: { id: string }[];
   plantEntries?: { id: string }[];
   foremanNotes?: string;
@@ -71,7 +74,7 @@ function entryCount(d: Docket): number {
 }
 
 function docketTotal(d: Docket): number {
-  return (d.totalLabourSubmitted || 0) + (d.totalPlantSubmitted || 0);
+  return getDocketDisplayTotalCost(d);
 }
 
 function formatRowDate(dateStr: string): string {
