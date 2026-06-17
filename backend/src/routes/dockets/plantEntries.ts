@@ -20,7 +20,7 @@ import {
   buildDocketPlantEntriesResponse,
   mapDocketPlantEntry,
 } from './presentation.js';
-import { calculatePlantEntryCost, selectPlantHourlyRate } from './entryCalculations.js';
+import { calculatePlantEntryCost } from './entryCalculations.js';
 
 export const plantDocketEntriesRouter = Router();
 // ============================================================================
@@ -112,8 +112,7 @@ plantDocketEntriesRouter.post(
     }
     requireApprovedDocketResource(plant.status, 'Plant');
 
-    const hourlyRate = selectPlantHourlyRate(wetOrDry, plant);
-    const cost = Number(hoursOperated) * hourlyRate;
+    const plantCost = calculatePlantEntryCost(hoursOperated, wetOrDry, plant);
 
     const { entry, totals } = await prisma.$transaction(async (tx) => {
       await lockEditableDocketForEntryMutation(tx, id);
@@ -122,10 +121,10 @@ plantDocketEntriesRouter.post(
         data: {
           docketId: id,
           plantId,
-          hoursOperated,
+          hoursOperated: plantCost.hours,
           wetOrDry: wetOrDry || 'dry',
-          hourlyRate,
-          submittedCost: cost,
+          hourlyRate: plantCost.hourlyRate,
+          submittedCost: plantCost.cost,
         },
         include: {
           plant: {

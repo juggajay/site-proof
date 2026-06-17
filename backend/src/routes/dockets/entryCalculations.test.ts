@@ -5,6 +5,7 @@ import {
   calculateHoursFromTimeRange,
   calculateLabourEntryCost,
   calculatePlantEntryCost,
+  roundDocketAmountToCents,
   selectPlantHourlyRate,
 } from './entryCalculations.js';
 
@@ -22,6 +23,13 @@ describe('docket entry calculations', () => {
   it('calculates labour cost from numeric-ish rates', () => {
     expect(calculateLabourEntryCost(8.5, '85')).toBe(722.5);
     expect(calculateLabourEntryCost(8.5, null)).toBe(0);
+  });
+
+  it('rounds docket money to cents before persistence', () => {
+    expect(roundDocketAmountToCents(2.675)).toBe(2.68);
+    expect(roundDocketAmountToCents(10.075)).toBe(10.08);
+    expect(calculateLabourEntryCost(0.1, 0.2)).toBe(0.02);
+    expect(calculateLabourEntryCost(1.005, 1)).toBe(1.01);
   });
 
   it('builds labour lot allocation payloads without changing values', () => {
@@ -50,5 +58,6 @@ describe('docket entry calculations', () => {
       hourlyRate: 200,
       cost: 1600,
     });
+    expect(calculatePlantEntryCost(0.1, 'dry', { wetRate: '200', dryRate: 0.2 }).cost).toBe(0.02);
   });
 });

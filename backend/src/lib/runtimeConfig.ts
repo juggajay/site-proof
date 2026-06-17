@@ -191,6 +191,24 @@ function assertProductionStorageConfig(): void {
   assertProductionSecret('SUPABASE_SERVICE_ROLE_KEY', supabaseServiceRoleKey);
 }
 
+function assertProductionSentryConfig(): void {
+  const dsn = process.env.SENTRY_DSN?.trim();
+  if (!dsn) {
+    throw new Error('FATAL: SENTRY_DSN is required in production for error visibility (Sentry)');
+  }
+
+  let parsedDsn: URL;
+  try {
+    parsedDsn = new URL(dsn);
+  } catch {
+    throw new Error('FATAL: SENTRY_DSN must be a valid Sentry DSN URL in production');
+  }
+
+  if (parsedDsn.protocol !== 'https:') {
+    throw new Error('FATAL: SENTRY_DSN must use https in production');
+  }
+}
+
 function assertOptionalPositiveInteger(name: string): void {
   const value = process.env[name]?.trim();
   if (!value) {
@@ -408,6 +426,7 @@ export function validateRuntimeConfig(): void {
   assertProductionPublicUrl('FRONTEND_URL', frontendUrl);
   assertProductionPublicUrl('BACKEND_URL/API_URL', backendUrl);
   assertProductionStorageConfig();
+  assertProductionSentryConfig();
 
   assertProductionGoogleOAuthConfig();
 }

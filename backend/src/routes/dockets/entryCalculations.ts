@@ -20,7 +20,13 @@ export function calculateHoursFromTimeRange(
 }
 
 export function calculateLabourEntryCost(hours: number, hourlyRate: unknown): number {
-  return hours * (Number(hourlyRate) || 0);
+  return roundDocketAmountToCents(hours * (Number(hourlyRate) || 0));
+}
+
+/** Round docket money to cents before writing to DECIMAL columns. */
+export function roundDocketAmountToCents(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Number(`${Math.round(Number(`${value}e2`))}e-2`);
 }
 
 export function buildLabourLotAllocationCreate(lotAllocations?: DocketLotAllocationInput[]):
@@ -61,6 +67,6 @@ export function calculatePlantEntryCost(
   return {
     hours,
     hourlyRate,
-    cost: hours * hourlyRate,
+    cost: roundDocketAmountToCents(hours * hourlyRate),
   };
 }

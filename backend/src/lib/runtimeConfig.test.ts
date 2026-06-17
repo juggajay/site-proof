@@ -50,6 +50,7 @@ function configureProductionBase() {
   delete process.env.VAPID_SUBJECT;
   process.env.SUPABASE_URL = 'https://siteproof.supabase.co';
   process.env.SUPABASE_SERVICE_ROLE_KEY = VALID_SUPABASE_SERVICE_ROLE_KEY;
+  process.env.SENTRY_DSN = 'https://examplePublicKey@o123456.ingest.us.sentry.io/7891011';
   delete process.env.SUPABASE_ANON_KEY;
   delete process.env.ALLOW_LOCAL_FILE_STORAGE;
 }
@@ -311,6 +312,21 @@ describe('runtimeConfig', () => {
     expect(() => validateRuntimeConfig()).toThrow('ERROR_LOG_MAX_BYTES');
 
     process.env.ERROR_LOG_MAX_BYTES = '5242880';
+    expect(() => validateRuntimeConfig()).not.toThrow();
+  });
+
+  it('requires Sentry error monitoring to be configured in production', () => {
+    configureProductionBase();
+    process.env.FRONTEND_URL = 'https://app.siteproof.example';
+    process.env.BACKEND_URL = 'https://api.siteproof.example';
+
+    delete process.env.SENTRY_DSN;
+    expect(() => validateRuntimeConfig()).toThrow('SENTRY_DSN');
+
+    process.env.SENTRY_DSN = 'http://examplePublicKey@o123456.ingest.us.sentry.io/7891011';
+    expect(() => validateRuntimeConfig()).toThrow('SENTRY_DSN must use https in production');
+
+    process.env.SENTRY_DSN = 'https://examplePublicKey@o123456.ingest.us.sentry.io/7891011';
     expect(() => validateRuntimeConfig()).not.toThrow();
   });
 

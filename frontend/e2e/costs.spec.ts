@@ -144,7 +144,9 @@ async function mockSeededCostsApi(page: Page, options: SeededCostsApiOptions = {
 }
 
 test.describe('Costs seeded commercial contract', () => {
-  test('renders cost data, filters tables, and exports filtered CSV', async ({ page }) => {
+  test('renders cost data, filters tables, and exports filtered CSV @pr-smoke', async ({
+    page,
+  }) => {
     const api = await mockSeededCostsApi(page);
 
     await page.goto(`/projects/${E2E_PROJECT_ID}/costs`);
@@ -219,7 +221,7 @@ test.describe('Costs seeded commercial contract', () => {
     );
   });
 
-  test('shows access denied for forbidden project costs instead of cost controls', async ({
+  test('shows access denied for forbidden project costs instead of cost controls @pr-smoke', async ({
     page,
   }) => {
     await mockSeededCostsApi(page, { forbidCosts: true });

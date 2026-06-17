@@ -8,14 +8,22 @@ async function readEnvExample() {
   return readFile(envExamplePath, 'utf8');
 }
 
+function expectDocumentedEnvVars(envExample: string, envNames: string[]): void {
+  for (const envName of envNames) {
+    expect(envExample).toMatch(new RegExp(`^${envName}=`, 'm'));
+  }
+}
+
 describe('.env.example', () => {
   it('documents the production storage configuration expected by runtime validation', async () => {
     const envExample = await readEnvExample();
 
-    expect(envExample).toMatch(/^SUPABASE_URL=/m);
-    expect(envExample).toMatch(/^SUPABASE_SERVICE_ROLE_KEY=/m);
-    expect(envExample).toMatch(/^SUPABASE_ANON_KEY=/m);
-    expect(envExample).toMatch(/^ALLOW_LOCAL_FILE_STORAGE=/m);
+    expectDocumentedEnvVars(envExample, [
+      'SUPABASE_URL',
+      'SUPABASE_SERVICE_ROLE_KEY',
+      'SUPABASE_ANON_KEY',
+      'ALLOW_LOCAL_FILE_STORAGE',
+    ]);
     expect(envExample).not.toMatch(/^SUPABASE_SERVICE_KEY=/m);
   });
 
@@ -33,7 +41,7 @@ describe('.env.example', () => {
 
   it('documents configurable support contact values used by the support API', async () => {
     const envExample = await readEnvExample();
-    const supportEnvNames = [
+    expectDocumentedEnvVars(envExample, [
       'SUPPORT_EMAIL',
       'SUPPORT_PHONE',
       'SUPPORT_PHONE_LABEL',
@@ -43,18 +51,16 @@ describe('.env.example', () => {
       'SUPPORT_RESPONSE_CRITICAL',
       'SUPPORT_RESPONSE_STANDARD',
       'SUPPORT_RESPONSE_GENERAL',
-    ];
-
-    for (const envName of supportEnvNames) {
-      expect(envExample).toMatch(new RegExp(`^${envName}=`, 'm'));
-    }
+    ]);
   });
 
   it('documents the dedicated public endpoint rate limits', async () => {
     const envExample = await readEnvExample();
 
-    expect(envExample).toMatch(/^VERIFICATION_RESEND_RATE_LIMIT_MAX=/m);
-    expect(envExample).toMatch(/^SUPPORT_RATE_LIMIT_MAX=/m);
+    expectDocumentedEnvVars(envExample, [
+      'VERIFICATION_RESEND_RATE_LIMIT_MAX',
+      'SUPPORT_RATE_LIMIT_MAX',
+    ]);
   });
 
   it('documents the configurable webhook delivery timeout', async () => {
@@ -66,7 +72,18 @@ describe('.env.example', () => {
   it('documents bounded local error logging controls', async () => {
     const envExample = await readEnvExample();
 
-    expect(envExample).toMatch(/^ERROR_LOG_TO_FILE=/m);
-    expect(envExample).toMatch(/^ERROR_LOG_MAX_BYTES=/m);
+    expectDocumentedEnvVars(envExample, ['ERROR_LOG_TO_FILE', 'ERROR_LOG_MAX_BYTES']);
+  });
+
+  it('documents the Sentry error monitoring configuration required in production', async () => {
+    const envExample = await readEnvExample();
+
+    expectDocumentedEnvVars(envExample, [
+      'SENTRY_DSN',
+      'SENTRY_ENVIRONMENT',
+      'SENTRY_RELEASE',
+      'SENTRY_TRACES_SAMPLE_RATE',
+    ]);
+    expect(envExample).not.toMatch(/^ERROR_MONITORING_ENDPOINT_URL=/m);
   });
 });

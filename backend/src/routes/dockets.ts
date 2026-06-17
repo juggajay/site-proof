@@ -197,7 +197,13 @@ docketsRouter.post(
       });
     });
 
-    res.status(201).json(buildDocketCreatedResponse(docket));
+    res.status(201).json(
+      buildDocketCreatedResponse({
+        ...docket,
+        labourHours: labourHours || 0,
+        plantHours: plantHours || 0,
+      }),
+    );
   }),
 );
 

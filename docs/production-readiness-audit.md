@@ -27,12 +27,15 @@ Latest local `npm run preflight:integrations` result: failed as expected because
 | Real-backend E2E coverage                | Full Playwright suite against disposable PostgreSQL and actual backend server                                                                              | Passed                                   |
 | Dependency vulnerability floor           | `npm audit --audit-level=moderate` in backend and frontend with valid TLS trust                                                                            | Passed                                   |
 | Database migration safety                | Prisma generate, deploy, status, and drift checks                                                                                                          | Passed                                   |
+| Unique-index data preconditions          | `npm run db:migration-preconditions` checks target data for duplicate rows before unique-index migrations can be safely applied                            | Implemented in production preflight      |
 | Production startup safety                | Compiled backend fail-closed check for missing `DATABASE_URL`                                                                                              | Passed                                   |
 | Production smoke                         | Compiled backend smoke with disposable PostgreSQL, `/health`, `/ready`, and HTTPS redirect checks                                                          | Passed                                   |
 | Backend Docker image                     | Local Docker build and runtime sanity check                                                                                                                | Passed                                   |
 | CI release gates                         | Workflows cover audits, format, migrations, lint, type checks, builds, Docker image build, preflight, backend tests, coverage, readiness, and frontend E2E | Enforced                                 |
 | Production integration preflight         | `backend/scripts/preflight-production-integrations.ts` and `npm run preflight:integrations`                                                                | Implemented and CI skip-mode passed      |
 | Manual live preflight workflow           | `.github/workflows/production-preflight.yml` uses GitHub Environment secrets for staging or production checks                                              | Implemented, live execution out of scope |
+| Automated database backup                | `.github/workflows/database-backup.yml` runs the backup helper and uploads encrypted, verified dump artifacts off Railway disk                            | Implemented, live execution required     |
+| Database restore runbook                 | `docs/database-backup-restore-runbook.md` documents scheduled backups, restore drills, and production restore procedure                                   | Implemented, drill required              |
 | Resend live email                        | Requires real `RESEND_API_KEY`, verified domain, and `EMAIL_FROM`                                                                                          | Out of scope for this codebase audit     |
 | Supabase Storage live uploads            | Requires real `SUPABASE_URL`, service role key, and `documents` bucket                                                                                     | Out of scope for this codebase audit     |
 | Google OAuth live sign-in                | Requires real Google client, secret, and HTTPS redirect URI configured in Google Cloud                                                                     | Out of scope for this codebase audit     |
@@ -77,6 +80,8 @@ Required secrets:
 - `EMAIL_FROM`
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
+- `SENTRY_DSN` (backend error monitoring; startup fails without it)
+- `VITE_SENTRY_DSN` (frontend error monitoring; production build fails without it)
 
 Optional secrets, required when the feature is enabled:
 
@@ -90,3 +95,7 @@ Optional secrets, required when the feature is enabled:
 Optional environment variable:
 
 - `EMAIL_ENABLED`: set to `false` only when production email delivery is intentionally disabled for that environment.
+
+Scheduled database backups also require a repository secret named
+`DATABASE_BACKUP_URL` or `DATABASE_URL`, plus
+`DATABASE_BACKUP_ENCRYPTION_KEY` for encrypted artifact upload.
