@@ -16,7 +16,7 @@ import { formatDateKey } from '@/lib/localDate';
 
 const recordReleaseSchema = z.object({
   releasedByName: z.string().trim().min(1, 'Name of person releasing is required'),
-  releasedByOrg: z.string().trim().optional().default(''),
+  releasedByOrg: z.string().trim().min(1, 'Organisation of person releasing is required'),
   releaseDate: z.string().trim().min(1, 'Release date is required'),
   releaseTime: z.string().trim().min(1, 'Release time is required'),
   releaseNotes: z.string().trim().optional().default(''),
@@ -77,6 +77,7 @@ export function RecordReleaseModal({
 
   const releaseMethod = watch('releaseMethod');
   const releasedByName = watch('releasedByName');
+  const releasedByOrg = watch('releasedByOrg');
 
   useEffect(() => {
     if (releaseMethod !== 'digital' && signatureDataUrl) {
@@ -103,6 +104,8 @@ export function RecordReleaseModal({
     };
 
   const onFormSubmit = (data: RecordReleaseFormData) => {
+    const evidenceFile = getEvidenceFileForMethod(data.releaseMethod);
+
     // Feature #884: Require signature for digital release
     if (data.releaseMethod === 'digital' && !signatureDataUrl) {
       toast({
@@ -112,15 +115,23 @@ export function RecordReleaseModal({
       });
       return;
     }
+    if ((data.releaseMethod === 'email' || data.releaseMethod === 'paper') && !evidenceFile) {
+      toast({
+        title: 'Release evidence required',
+        description: 'Upload the email, form, or screenshot that proves the release was approved',
+        variant: 'error',
+      });
+      return;
+    }
     onSubmit(
       data.releasedByName.trim(),
-      data.releasedByOrg?.trim() || '',
+      data.releasedByOrg.trim(),
       data.releaseDate.trim(),
       data.releaseTime.trim(),
       data.releaseNotes?.trim() || '',
       data.releaseMethod,
       data.releaseMethod === 'digital' ? signatureDataUrl : null,
-      getEvidenceFileForMethod(data.releaseMethod),
+      evidenceFile,
     );
   };
 
@@ -133,9 +144,9 @@ export function RecordReleaseModal({
         variant="success"
         type="submit"
         form="record-release-form"
-        disabled={recording || !releasedByName?.trim()}
+        disabled={recording || !releasedByName?.trim() || !releasedByOrg?.trim()}
       >
-        {recording ? 'Recording...' : 'Record Release'}
+        {recording ? 'Recording...' : 'Record Manual Release'}
       </Button>
     </>
   );
@@ -144,7 +155,7 @@ export function RecordReleaseModal({
     <ResponsiveSheet
       open={true}
       onClose={onClose}
-      title="Record Hold Point Release"
+      title="Record Manual Hold Point Release"
       footer={footer}
       className="max-w-lg"
     >
@@ -231,12 +242,20 @@ export function RecordReleaseModal({
         </div>
 
         <div>
-          <Label>Organization</Label>
+          <Label>
+            Organisation <span className="text-destructive">*</span>
+          </Label>
           <Input
             type="text"
             {...register('releasedByOrg')}
-            placeholder="Enter organization (e.g., Superintendent's Rep)"
+            className={errors.releasedByOrg ? 'border-destructive' : ''}
+            placeholder="Enter organisation (e.g., Superintendent's Rep)"
           />
+          {errors.releasedByOrg && (
+            <p className="mt-1 text-sm text-destructive" role="alert">
+              {errors.releasedByOrg.message}
+            </p>
+          )}
         </div>
 
         {/* Date / time: full-width rows on mobile, side-by-side on desktop */}
@@ -308,7 +327,9 @@ export function RecordReleaseModal({
           </div>
         ) : releaseMethod === 'email' ? (
           <div className="space-y-2">
-            <Label>Email Evidence</Label>
+            <Label>
+              Email Evidence <span className="text-destructive">*</span>
+            </Label>
             <div className="p-4 border border-dashed border-border rounded-lg bg-muted">
               <input
                 type="file"
@@ -330,7 +351,9 @@ export function RecordReleaseModal({
           </div>
         ) : (
           <div className="space-y-2">
-            <Label>Paper Form Evidence</Label>
+            <Label>
+              Paper Form Evidence <span className="text-destructive">*</span>
+            </Label>
             <div className="p-4 border border-dashed border-border rounded-lg bg-muted">
               <input
                 type="file"

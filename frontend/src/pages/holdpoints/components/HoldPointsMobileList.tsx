@@ -10,6 +10,7 @@ import {
   isNoticeExpired,
   isOverdue,
 } from './holdPointTableUtils';
+import { getReleaseIdentityParts } from '../holdPointReleaseIdentity';
 
 interface HoldPointsMobileListProps {
   holdPoints: HoldPoint[];
@@ -158,6 +159,7 @@ function HoldPointMobileCard({
   const overdue = isOverdue(hp);
   const noticeExpired = isNoticeExpired(hp);
   const isVirtual = hp.id.startsWith('virtual-');
+  const releaseIdentity = hp.releasedAt ? getReleaseIdentityParts(hp) : null;
 
   return (
     <MobileDataCard
@@ -197,8 +199,13 @@ function HoldPointMobileCard({
           value: hp.releasedAt ? (
             <span>
               {formatHoldPointDate(hp.releasedAt)}
-              {hp.releasedByName && (
-                <span className="block text-xs text-muted-foreground">{hp.releasedByName}</span>
+              {releaseIdentity && (
+                <span className="block text-xs text-muted-foreground">
+                  {releaseIdentity.primary}
+                  {releaseIdentity.secondary && (
+                    <span className="block">{releaseIdentity.secondary}</span>
+                  )}
+                </span>
               )}
             </span>
           ) : (
@@ -224,7 +231,7 @@ function HoldPointMobileCard({
                 onClick={() => onRecordRelease(hp)}
               >
                 <ClipboardCheck className="h-4 w-4" />
-                Record Release
+                Record Manual Release
               </Button>
               <Button
                 variant="outline"

@@ -75,6 +75,8 @@ describe('hold point release signature validation (pure, DB-free)', () => {
   it('accepts browser-generated image signature data URLs', () => {
     expect(
       releaseHoldPointSchema.safeParse({
+        releasedByName: 'External Superintendent',
+        releasedByOrg: 'Client Company',
         releaseMethod: 'digital',
         signatureDataUrl: validSignature,
       }).success,
@@ -98,7 +100,13 @@ describe('hold point release signature validation (pure, DB-free)', () => {
     ];
 
     for (const signatureDataUrl of invalidSignatures) {
-      expect(releaseHoldPointSchema.safeParse({ signatureDataUrl }).success).toBe(false);
+      expect(
+        releaseHoldPointSchema.safeParse({
+          releasedByName: 'External Superintendent',
+          releasedByOrg: 'Client Company',
+          signatureDataUrl,
+        }).success,
+      ).toBe(false);
       expect(
         publicReleaseSchema.safeParse({
           releasedByName: 'External Superintendent',

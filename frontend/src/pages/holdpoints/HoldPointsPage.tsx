@@ -62,6 +62,7 @@ import { RequestReleaseModal } from './components/RequestReleaseModal';
 import { RecordReleaseModal } from './components/RecordReleaseModal';
 import { downloadCsv } from '@/lib/csv';
 import { useIsMobile } from '@/hooks/useMediaQuery';
+import { getReleaseIdentityText, getReleaseMethodLabel } from './holdPointReleaseIdentity';
 import { useRegisterDeepLink } from '@/hooks/useRegisterDeepLink';
 
 // Read side of the "Copy link" action (?hp=<id>): stable references so the
@@ -439,7 +440,7 @@ export function HoldPointsPage() {
           method: 'POST',
           body: JSON.stringify({
             releasedByName: releasedByName.trim(),
-            releasedByOrg: releasedByOrg.trim() || undefined,
+            releasedByOrg: releasedByOrg.trim(),
             releaseDate: releaseDate || undefined,
             releaseTime: releaseTime || undefined,
             releaseMethod,
@@ -476,6 +477,7 @@ export function HoldPointsPage() {
       'Scheduled Date',
       'Released At',
       'Released By',
+      'Release Method',
       'Release Notes',
     ];
     const rows = holdPoints.map((hp) => [
@@ -485,7 +487,8 @@ export function HoldPointsPage() {
       getStatusLabel(hp.status),
       formatHoldPointDate(hp.scheduledDate),
       formatHoldPointDate(hp.releasedAt),
-      hp.releasedByName || '-',
+      hp.releasedAt ? getReleaseIdentityText(hp) : '-',
+      getReleaseMethodLabel(hp.releaseMethod) || '-',
       hp.releaseNotes || '-',
     ]);
     downloadCsv(`hold-points-${projectId}-${formatDateKey()}.csv`, [headers, ...rows]);

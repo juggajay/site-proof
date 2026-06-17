@@ -95,14 +95,14 @@ describe('RecordReleaseModal — desktop', () => {
 
     expect(screen.getByPlaceholderText('Enter name of person releasing')).toBeInTheDocument();
     expect(screen.getByText('Superintendent Approval Required')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Record Release' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Record Manual Release' })).toBeInTheDocument();
   });
 
-  it('shows the cancel button and Record Release submit', () => {
+  it('shows the cancel button and Record Manual Release submit', () => {
     renderModal({ isMobile: false });
 
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Record Release' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Record Manual Release' })).toBeInTheDocument();
   });
 });
 
@@ -112,7 +112,7 @@ describe('RecordReleaseModal — mobile (BottomSheet)', () => {
 
     const sheet = screen.getByTestId('bottom-sheet');
     expect(sheet).toBeInTheDocument();
-    expect(sheet).toHaveAttribute('aria-label', 'Record Hold Point Release');
+    expect(sheet).toHaveAttribute('aria-label', 'Record Manual Hold Point Release');
   });
 
   it('renders form fields inside the bottom sheet', () => {

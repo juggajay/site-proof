@@ -38,6 +38,9 @@ export interface HoldPointListItem {
   scheduledDate: Date | null | undefined;
   releasedAt: Date | null | undefined;
   releasedByName: string | null | undefined;
+  releasedByOrg: string | null | undefined;
+  releaseMethod: string | null | undefined;
+  releaseRecipientEmail: string | null | undefined;
   releaseNotes: string | null | undefined;
   sequenceNumber: number;
   isCompleted: boolean;
@@ -61,6 +64,12 @@ export type HoldPointListPersistedHoldPoint = {
   scheduledDate: Date | null;
   releasedAt: Date | null;
   releasedByName: string | null;
+  releasedByOrg?: string | null;
+  releaseMethod?: string | null;
+  releaseTokens?: Array<{
+    recipientEmail: string;
+    usedAt: Date | null;
+  }>;
   releaseNotes: string | null;
   createdAt: Date;
 };
@@ -123,6 +132,10 @@ export function buildHoldPointListItems(lots: HoldPointListLot[]): HoldPointList
         scheduledDate: existingHP?.scheduledDate,
         releasedAt: existingHP?.releasedAt,
         releasedByName: existingHP?.releasedByName,
+        releasedByOrg: existingHP?.releasedByOrg,
+        releaseMethod: existingHP?.releaseMethod,
+        releaseRecipientEmail:
+          existingHP?.releaseTokens?.find((token) => token.usedAt)?.recipientEmail ?? null,
         releaseNotes: existingHP?.releaseNotes,
         sequenceNumber: item.sequenceNumber,
         isCompleted: completion?.status === 'completed',

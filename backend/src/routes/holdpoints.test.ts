@@ -572,7 +572,7 @@ describe('Hold Points API', () => {
     let completionId: string;
 
     beforeAll(async () => {
-      const { holdPoint, completion } = await createReleaseReadyHoldPoint('pending');
+      const { holdPoint, completion } = await createReleaseReadyHoldPoint('notified');
       holdPointId = holdPoint.id;
       completionId = completion.id;
     });
@@ -580,6 +580,7 @@ describe('Hold Points API', () => {
     it('should reject invalid release date inputs without releasing the hold point', async () => {
       const res = await postRelease(holdPointId, {
         releasedByName: 'HP Test User',
+        releasedByOrg: 'SiteProof QA',
         releaseDate: '2026-02-30T10:00:00Z',
         releaseNotes: 'Invalid release date',
       });
@@ -587,13 +588,37 @@ describe('Hold Points API', () => {
       expect(res.status).toBe(400);
 
       const holdPoint = await prisma.holdPoint.findUniqueOrThrow({ where: { id: holdPointId } });
-      expect(holdPoint.status).toBe('pending');
+      expect(holdPoint.status).toBe('notified');
       expect(holdPoint.releasedAt).toBeNull();
+    });
+
+    it('rejects manual release before the hold point has been requested', async () => {
+      const { holdPoint: hp } = await createReleaseReadyHoldPoint('pending');
+
+      try {
+        const res = await postRelease(hp.id, {
+          releasedByName: 'Premature Releaser',
+          releasedByOrg: 'SiteProof QA',
+          releaseDate: '2026-01-20',
+          releaseTime: '09:15',
+          releaseNotes: 'Should not skip request release',
+        });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.message).toContain('Request hold point release');
+
+        const unchanged = await prisma.holdPoint.findUniqueOrThrow({ where: { id: hp.id } });
+        expect(unchanged.status).toBe('pending');
+        expect(unchanged.releasedAt).toBeNull();
+      } finally {
+        await prisma.holdPoint.delete({ where: { id: hp.id } }).catch(() => {});
+      }
     });
 
     it('should release hold point with notes', async () => {
       const res = await postRelease(holdPointId, {
         releasedByName: 'HP Test User',
+        releasedByOrg: 'SiteProof QA',
         releaseDate: '2026-01-20',
         releaseTime: '09:15',
         releaseNotes: 'Approved by QM',
@@ -641,7 +666,7 @@ describe('Hold Points API', () => {
           lotId,
           itpChecklistItemId: freshItem.id,
           pointType: 'hold_point',
-          status: 'pending',
+          status: 'notified',
         },
       });
 
@@ -652,6 +677,7 @@ describe('Hold Points API', () => {
 
       const res = await postRelease(hp.id, {
         releasedByName: 'Superintendent Releaser',
+        releasedByOrg: 'Client Company',
         releaseDate: '2026-01-22',
         releaseTime: '11:00',
         releaseNotes: 'Released without prior tick',
@@ -713,12 +739,14 @@ describe('Hold Points API', () => {
         const [firstRes, secondRes] = await Promise.all([
           postRelease(hp.id, {
             releasedByName: 'First Releaser',
+            releasedByOrg: 'Client Company',
             releaseDate: '2026-01-24',
             releaseTime: '09:00',
             releaseNotes: 'First release wins',
           }),
           postRelease(hp.id, {
             releasedByName: 'Second Releaser',
+            releasedByOrg: 'Client Company',
             releaseDate: '2026-01-24',
             releaseTime: '10:00',
             releaseNotes: 'Second release should not overwrite',
@@ -766,7 +794,6 @@ describe('Hold Points API', () => {
       const res = await postRelease(
         hp.id,
         emailReleasePayload({
-          releasedByOrg: undefined,
           signatureDataUrl: undefined,
           releaseEvidenceDocumentId: evidenceDocument.id,
         }),
@@ -804,7 +831,6 @@ describe('Hold Points API', () => {
         const res = await postRelease(
           hp.id,
           emailReleasePayload({
-            releasedByOrg: undefined,
             signatureDataUrl: undefined,
             releaseEvidenceDocumentId: evidenceDocument.id,
           }),
@@ -839,6 +865,7 @@ describe('Hold Points API', () => {
           .set('Authorization', `Bearer ${authToken}`)
           .send({
             releasedByName: 'Toggle On Releaser',
+            releasedByOrg: 'SiteProof QA',
             releaseDate: '2026-01-23',
             releaseTime: '12:00',
             releaseNotes: 'Team should be notified',
@@ -900,6 +927,7 @@ describe('Hold Points API', () => {
           .set('Authorization', `Bearer ${authToken}`)
           .send({
             releasedByName: 'Toggle Off Releaser',
+            releasedByOrg: 'SiteProof QA',
             releaseDate: '2026-01-22',
             releaseTime: '11:00',
             releaseNotes: 'Should not notify the team',
@@ -936,6 +964,7 @@ describe('Hold Points API', () => {
         .set('Authorization', `Bearer ${authToken}`)
         .send({
           releasedByName: 'Second Releaser',
+          releasedByOrg: 'SiteProof QA',
           releaseNotes: 'This should not replace the original release',
         });
 
@@ -952,7 +981,7 @@ describe('Hold Points API', () => {
           lotId,
           itpChecklistItemId: checklistItemId,
           pointType: 'hold_point',
-          status: 'pending',
+          status: 'notified',
         },
       });
 
@@ -967,6 +996,7 @@ describe('Hold Points API', () => {
           .set('Authorization', `Bearer ${authToken}`)
           .send({
             releasedByName: 'Company Admin Releaser',
+            releasedByOrg: 'SiteProof QA',
             releaseNotes: 'Company admin should not be downgraded by project membership',
           });
 
@@ -1679,6 +1709,7 @@ describe('Hold Points API access control', () => {
       .set('Authorization', `Bearer ${user.token}`)
       .send({
         releasedByName: 'Unauthorized Viewer',
+        releasedByOrg: 'SiteProof QA',
         releaseMethod: 'digital',
       });
 

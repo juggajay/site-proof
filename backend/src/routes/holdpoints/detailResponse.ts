@@ -17,6 +17,12 @@ type ExistingHoldPointDetail = {
   scheduledDate: Date | null;
   releasedAt: Date | null;
   releasedByName: string | null;
+  releasedByOrg?: string | null;
+  releaseMethod?: string | null;
+  releaseTokens?: Array<{
+    recipientEmail: string;
+    usedAt: Date | null;
+  }>;
   releaseNotes: string | null;
 };
 
@@ -97,6 +103,9 @@ export function buildHoldPointDetailResponse({
     scheduledDate: Date | null | undefined;
     releasedAt: Date | null | undefined;
     releasedByName: string | null | undefined;
+    releasedByOrg: string | null | undefined;
+    releaseMethod: string | null | undefined;
+    releaseRecipientEmail: string | null | undefined;
     releaseNotes: string | null | undefined;
   };
   prerequisites: HoldPointPrerequisite[];
@@ -118,6 +127,10 @@ export function buildHoldPointDetailResponse({
       scheduledDate: existingHoldPoint?.scheduledDate,
       releasedAt: existingHoldPoint?.releasedAt,
       releasedByName: existingHoldPoint?.releasedByName,
+      releasedByOrg: existingHoldPoint?.releasedByOrg,
+      releaseMethod: existingHoldPoint?.releaseMethod,
+      releaseRecipientEmail:
+        existingHoldPoint?.releaseTokens?.find((token) => token.usedAt)?.recipientEmail ?? null,
       releaseNotes: existingHoldPoint?.releaseNotes,
     },
     prerequisites,

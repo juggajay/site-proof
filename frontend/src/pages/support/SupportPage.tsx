@@ -468,8 +468,8 @@ export function SupportPage() {
           <div className="p-4 rounded-lg bg-muted/50">
             <h3 className="font-medium mb-1">How do I approve a hold point?</h3>
             <p className="text-sm text-muted-foreground">
-              Find the lot with a pending hold point, open it, and use "Record Release" after the
-              inspection or approval is complete. You may need appropriate permissions.
+              Find the lot with a requested hold point, open it, and use "Record Manual Release"
+              after the inspection or approval is complete. You may need appropriate permissions.
             </p>
           </div>
           <div className="p-4 rounded-lg bg-muted/50">
