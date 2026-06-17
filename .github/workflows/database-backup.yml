@@ -88,7 +88,10 @@ jobs:
             --symmetric --cipher-algo AES256 \
             --output "$archive_path.gpg" "$archive_path"
 
-          sha256sum "$archive_path.gpg" > "$archive_path.gpg.sha256"
+          (
+            cd "$BACKUP_DIR"
+            sha256sum "$(basename "$archive_path.gpg")" > "$(basename "$archive_path.gpg").sha256"
+          )
           rm -f "$BACKUP_DIR"/*.dump "$BACKUP_DIR"/*.dump.sha256 "$archive_path"
 
       - name: Upload verified backup artifact
