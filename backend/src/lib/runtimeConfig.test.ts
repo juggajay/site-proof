@@ -39,6 +39,7 @@ function configureProductionBase() {
   delete process.env.AUTH_LOCKOUT_DURATION_MS;
   delete process.env.WEBHOOK_DELIVERY_TIMEOUT_MS;
   delete process.env.ERROR_LOG_MAX_BYTES;
+  delete process.env.ERROR_MONITORING_TIMEOUT_MS;
   delete process.env.SUPPORT_EMAIL;
   delete process.env.ALLOW_MOCK_OAUTH;
   delete process.env.ALLOW_TEST_AUTH_ENDPOINTS;
@@ -50,6 +51,7 @@ function configureProductionBase() {
   delete process.env.VAPID_SUBJECT;
   process.env.SUPABASE_URL = 'https://siteproof.supabase.co';
   process.env.SUPABASE_SERVICE_ROLE_KEY = VALID_SUPABASE_SERVICE_ROLE_KEY;
+  process.env.ERROR_MONITORING_ENDPOINT_URL = 'https://monitoring.siteproof.example/events';
   delete process.env.SUPABASE_ANON_KEY;
   delete process.env.ALLOW_LOCAL_FILE_STORAGE;
 }
@@ -311,6 +313,27 @@ describe('runtimeConfig', () => {
     expect(() => validateRuntimeConfig()).toThrow('ERROR_LOG_MAX_BYTES');
 
     process.env.ERROR_LOG_MAX_BYTES = '5242880';
+    process.env.ERROR_MONITORING_TIMEOUT_MS = 'soon';
+    expect(() => validateRuntimeConfig()).toThrow('ERROR_MONITORING_TIMEOUT_MS');
+
+    process.env.ERROR_MONITORING_TIMEOUT_MS = '10000';
+    expect(() => validateRuntimeConfig()).not.toThrow();
+  });
+
+  it('requires production error monitoring to be configured', () => {
+    configureProductionBase();
+    process.env.FRONTEND_URL = 'https://app.siteproof.example';
+    process.env.BACKEND_URL = 'https://api.siteproof.example';
+
+    delete process.env.ERROR_MONITORING_ENDPOINT_URL;
+    expect(() => validateRuntimeConfig()).toThrow('ERROR_MONITORING_ENDPOINT_URL');
+
+    process.env.ERROR_MONITORING_ENDPOINT_URL = 'http://localhost:9000/events';
+    expect(() => validateRuntimeConfig()).toThrow(
+      'ERROR_MONITORING_ENDPOINT_URL must use https in production',
+    );
+
+    process.env.ERROR_MONITORING_ENDPOINT_URL = 'https://monitoring.siteproof.example/events';
     expect(() => validateRuntimeConfig()).not.toThrow();
   });
 

@@ -90,6 +90,7 @@ jobs:
           EMAIL_FROM_PRESENT: ${{ secrets.EMAIL_FROM != '' }}
           SUPABASE_URL_PRESENT: ${{ secrets.SUPABASE_URL != '' }}
           SUPABASE_SERVICE_ROLE_KEY_PRESENT: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY != '' }}
+          ERROR_MONITORING_ENDPOINT_URL_PRESENT: ${{ secrets.ERROR_MONITORING_ENDPOINT_URL != '' }}
           GOOGLE_CLIENT_ID_PRESENT: ${{ secrets.GOOGLE_CLIENT_ID != '' }}
           GOOGLE_CLIENT_SECRET_PRESENT: ${{ secrets.GOOGLE_CLIENT_SECRET != '' }}
           GOOGLE_REDIRECT_URI_PRESENT: ${{ secrets.GOOGLE_REDIRECT_URI != '' }}
@@ -108,6 +109,7 @@ jobs:
           [[ "$EMAIL_FROM_PRESENT" == "true" ]] || missing+=("EMAIL_FROM")
           [[ "$SUPABASE_URL_PRESENT" == "true" ]] || missing+=("SUPABASE_URL")
           [[ "$SUPABASE_SERVICE_ROLE_KEY_PRESENT" == "true" ]] || missing+=("SUPABASE_SERVICE_ROLE_KEY")
+          [[ "$ERROR_MONITORING_ENDPOINT_URL_PRESENT" == "true" ]] || missing+=("ERROR_MONITORING_ENDPOINT_URL")
           if [[ "$GOOGLE_CLIENT_ID_PRESENT" == "true" || "$GOOGLE_CLIENT_SECRET_PRESENT" == "true" || "$GOOGLE_REDIRECT_URI_PRESENT" == "true" ]]; then
             [[ "$GOOGLE_CLIENT_ID_PRESENT" == "true" ]] || missing+=("GOOGLE_CLIENT_ID")
             [[ "$GOOGLE_CLIENT_SECRET_PRESENT" == "true" ]] || missing+=("GOOGLE_CLIENT_SECRET")
@@ -120,6 +122,12 @@ jobs:
           fi
 
           echo "configured=true" >> "$GITHUB_OUTPUT"
+
+      - name: Check unique-index migration preconditions
+        if: steps.preflight-config.outputs.configured == 'true'
+        run: npm run db:migration-preconditions
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       - name: Verify database migration status
         if: steps.preflight-config.outputs.configured == 'true'
@@ -143,6 +151,7 @@ jobs:
           EMAIL_PROVIDER: resend
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ERROR_MONITORING_ENDPOINT_URL: ${{ secrets.ERROR_MONITORING_ENDPOINT_URL }}
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           GOOGLE_REDIRECT_URI: ${{ secrets.GOOGLE_REDIRECT_URI }}

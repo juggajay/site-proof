@@ -31,7 +31,8 @@ export function ClaimsPageHeader({
           <ContextHelp title={HELP_CONTENT.claims.title} content={HELP_CONTENT.claims.content} />
         </div>
         <p className="text-muted-foreground mt-1">
-          SOPA-compliant progress claims and payment tracking
+          Progress claims and indicative payment tracking. Confirm SOPA deadlines against your
+          contract.
         </p>
       </div>
       <div className="flex gap-2">

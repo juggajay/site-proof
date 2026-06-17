@@ -306,7 +306,9 @@ async function mockSubcontractorDocketEditApi(page: Page) {
 }
 
 test.describe('Dockets seeded approval contract', () => {
-  test('renders and approves the seeded pending docket with hard assertions', async ({ page }) => {
+  test('renders and approves the seeded pending docket with hard assertions @pr-smoke', async ({
+    page,
+  }) => {
     const api = await mockSeededDocketsApi(page);
 
     await page.goto(`/projects/${E2E_PROJECT_ID}/dockets`);
@@ -412,7 +414,9 @@ test.describe('Dockets seeded approval contract', () => {
     });
   });
 
-  test('keeps subcontractors out of the project docket approvals workspace', async ({ page }) => {
+  test('keeps subcontractors out of the project docket approvals workspace @pr-smoke', async ({
+    page,
+  }) => {
     const api = await mockSeededDocketsApi(page, { user: E2E_SUBCONTRACTOR_USER });
 
     await page.goto(`/projects/${E2E_PROJECT_ID}/dockets`);

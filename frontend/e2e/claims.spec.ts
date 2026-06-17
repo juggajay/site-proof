@@ -307,7 +307,7 @@ async function mockSeededClaimsApi(page: Page, options: SeededClaimsApiOptions =
 }
 
 test.describe('Claims seeded commercial contract', () => {
-  test('renders a seeded draft claim, downloads claim CSV, submits it, and disputes it', async ({
+  test('renders a seeded draft claim, downloads claim CSV, submits it, and disputes it @pr-smoke', async ({
     page,
   }) => {
     const api = await mockSeededClaimsApi(page);
@@ -316,7 +316,9 @@ test.describe('Claims seeded commercial contract', () => {
 
     await expect(page.getByRole('heading', { name: 'Progress Claims' })).toBeVisible();
     await expect(
-      page.getByText('SOPA-compliant progress claims and payment tracking'),
+      page.getByText(
+        'Progress claims and indicative payment tracking. Confirm SOPA deadlines against your contract.',
+      ),
     ).toBeVisible();
     await expect(page.getByRole('button', { name: 'New Claim' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Export CSV' })).toBeVisible();
@@ -419,7 +421,7 @@ test.describe('Claims seeded commercial contract', () => {
     await expect(page.getByRole('row').filter({ hasText: 'Claim 7' })).toBeVisible();
   });
 
-  test('shows access denied for forbidden project claims instead of claim actions', async ({
+  test('shows access denied for forbidden project claims instead of claim actions @pr-smoke', async ({
     page,
   }) => {
     await mockSeededClaimsApi(page, { forbidClaimLoads: true });

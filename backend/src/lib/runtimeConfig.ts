@@ -191,6 +191,20 @@ function assertProductionStorageConfig(): void {
   assertProductionSecret('SUPABASE_SERVICE_ROLE_KEY', supabaseServiceRoleKey);
 }
 
+function assertProductionMonitoringConfig(): void {
+  const endpointUrl = process.env.ERROR_MONITORING_ENDPOINT_URL?.trim();
+  if (!endpointUrl) {
+    throw new Error(
+      'FATAL: ERROR_MONITORING_ENDPOINT_URL is required in production for error visibility',
+    );
+  }
+
+  assertProductionPublicUrl(
+    'ERROR_MONITORING_ENDPOINT_URL',
+    normalizePublicUrl('ERROR_MONITORING_ENDPOINT_URL', endpointUrl),
+  );
+}
+
 function assertOptionalPositiveInteger(name: string): void {
   const value = process.env[name]?.trim();
   if (!value) {
@@ -384,6 +398,7 @@ export function validateRuntimeConfig(): void {
   assertOptionalPositiveInteger('AUTH_LOCKOUT_DURATION_MS');
   assertOptionalPositiveInteger('WEBHOOK_DELIVERY_TIMEOUT_MS');
   assertOptionalPositiveInteger('ERROR_LOG_MAX_BYTES');
+  assertOptionalPositiveInteger('ERROR_MONITORING_TIMEOUT_MS');
   if (process.env.RATE_LIMIT_KEY_SALT?.trim()) {
     assertProductionSecret('RATE_LIMIT_KEY_SALT', process.env.RATE_LIMIT_KEY_SALT, 16);
   }
@@ -408,6 +423,7 @@ export function validateRuntimeConfig(): void {
   assertProductionPublicUrl('FRONTEND_URL', frontendUrl);
   assertProductionPublicUrl('BACKEND_URL/API_URL', backendUrl);
   assertProductionStorageConfig();
+  assertProductionMonitoringConfig();
 
   assertProductionGoogleOAuthConfig();
 }

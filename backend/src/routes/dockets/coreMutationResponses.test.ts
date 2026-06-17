@@ -8,6 +8,8 @@ describe('coreMutationResponses', () => {
       subcontractorCompany: { companyName: 'Civil Subbie Pty Ltd' },
       date: new Date('2026-05-21T00:00:00.000Z'),
       status: 'draft',
+      labourHours: '8.5',
+      plantHours: '6',
       totalLabourSubmitted: '8.5',
       totalPlantSubmitted: '6',
       notes: 'Initial notes',
@@ -22,6 +24,8 @@ describe('coreMutationResponses', () => {
         status: 'draft',
         labourHours: 8.5,
         plantHours: 6,
+        totalLabourSubmitted: 8.5,
+        totalPlantSubmitted: 6,
         notes: 'Initial notes',
       },
     });

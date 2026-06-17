@@ -189,6 +189,35 @@ describe('Dockets API', () => {
       docketId = res.body.docket.id;
     });
 
+    it('returns legacy create-hour fields separately from submitted totals', async () => {
+      const date = '2031-05-21';
+      let createdDocketId: string | undefined;
+
+      try {
+        const res = await request(app)
+          .post('/api/dockets')
+          .set('Authorization', `Bearer ${subcontractorToken}`)
+          .send({
+            projectId,
+            date,
+            labourHours: 3.25,
+            plantHours: 2,
+            notes: 'Offline-created docket',
+          });
+
+        expect(res.status).toBe(201);
+        createdDocketId = res.body.docket.id;
+        expect(res.body.docket.labourHours).toBe(3.25);
+        expect(res.body.docket.plantHours).toBe(2);
+        expect(res.body.docket.totalLabourSubmitted).toBe(3.25);
+        expect(res.body.docket.totalPlantSubmitted).toBe(2);
+      } finally {
+        if (createdDocketId) {
+          await prisma.dailyDocket.delete({ where: { id: createdDocketId } }).catch(() => {});
+        }
+      }
+    });
+
     it('should reject duplicate daily dockets for the same subcontractor and date', async () => {
       const date = '2031-05-20';
       let createdDocketId: string | undefined;
