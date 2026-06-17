@@ -108,10 +108,12 @@ jobs:
             exit 1
           fi
 
-          (
-            cd "$(dirname "$encrypted_archive")"
-            sha256sum -c "$(basename "$checksum_file")"
-          )
+          expected_checksum="$(awk '{print $1}' "$checksum_file")"
+          actual_checksum="$(sha256sum "$encrypted_archive" | awk '{print $1}')"
+          if [[ "$actual_checksum" != "$expected_checksum" ]]; then
+            echo "::error::Encrypted backup checksum verification failed."
+            exit 1
+          fi
 
           archive_path="${encrypted_archive%.gpg}"
           gpg --batch --yes --pinentry-mode loopback \
