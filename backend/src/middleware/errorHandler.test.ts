@@ -3,6 +3,14 @@ import fs from 'fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AppError } from '../lib/AppError.js';
 import { errorHandler, sanitizeLogQuery, trimErrorLogContent } from './errorHandler.js';
+import { captureServerError } from '../lib/sentry.js';
+
+vi.mock('../lib/sentry.js', () => ({
+  initSentry: vi.fn(),
+  captureServerError: vi.fn(),
+  isSentryEnabled: vi.fn(() => false),
+  scrubSentryEvent: vi.fn((event) => event),
+}));
 
 const ORIGINAL_ENV = { ...process.env };
 
@@ -190,54 +198,23 @@ describe('errorHandler', () => {
     expect(mkdirSpy).not.toHaveBeenCalled();
   });
 
-  it('does not call external monitoring when no monitoring endpoint is configured', () => {
+  it('captures production server errors via Sentry with sanitized request context', () => {
     process.env.NODE_ENV = 'production';
-    delete process.env.ERROR_MONITORING_ENDPOINT_URL;
-    suppressErrorLogOutput();
-    const fetchSpy = vi.fn();
-    vi.stubGlobal('fetch', fetchSpy);
-    const { res, status } = mockResponse();
-
-    errorHandler(new Error('Unexpected failure'), mockRequest(), res, vi.fn() as NextFunction);
-
-    expect(status).toHaveBeenCalledWith(500);
-    expect(fetchSpy).not.toHaveBeenCalled();
-  });
-
-  it('forwards sanitized production server errors to the configured monitoring endpoint', () => {
-    process.env.NODE_ENV = 'production';
-    process.env.ERROR_LOG_TO_FILE = 'false';
-    process.env.ERROR_MONITORING_ENDPOINT_URL =
-      'https://monitoring.example/events?api_key=endpoint_secret';
-    process.env.ERROR_MONITORING_ENVIRONMENT = 'railway-production';
-    const fetchSpy = vi.fn().mockResolvedValue({ ok: true });
-    vi.stubGlobal('fetch', fetchSpy);
+    vi.mocked(captureServerError).mockClear();
     suppressErrorLogOutput();
     const { res, status } = mockResponse();
+    const error = new Error('Database exploded token=error_secret while using Bearer jwt_secret');
 
-    errorHandler(
-      new Error('Database exploded token=error_secret while using Bearer jwt_secret'),
-      mockRequest(),
-      res,
-      vi.fn() as NextFunction,
-    );
+    errorHandler(error, mockRequest(), res, vi.fn() as NextFunction);
 
     expect(status).toHaveBeenCalledWith(500);
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
-    const [url, options] = fetchSpy.mock.calls[0]!;
-    expect(url).toBe('https://monitoring.example/events?api_key=endpoint_secret');
-    expect(options.method).toBe('POST');
-    expect(options.headers).toEqual({ 'content-type': 'application/json' });
-
-    const payload = JSON.parse(String(options.body));
-    expect(payload).toMatchObject({
-      source: 'siteproof-backend',
-      environment: 'railway-production',
-      error: {
-        message: 'Database exploded token=[REDACTED] while using Bearer [REDACTED]',
-        code: 'INTERNAL_ERROR',
-        statusCode: 500,
-      },
+    expect(vi.mocked(captureServerError)).toHaveBeenCalledTimes(1);
+    const [capturedError, context] = vi.mocked(captureServerError).mock.calls[0]!;
+    // The real error object is forwarded so Sentry gets a full stack trace.
+    expect(capturedError).toBe(error);
+    expect(context).toMatchObject({
+      statusCode: 500,
+      code: 'INTERNAL_ERROR',
       request: {
         method: 'GET',
         path: '/api/auth/validate-reset-token',
@@ -246,34 +223,29 @@ describe('errorHandler', () => {
           search: 'lot 123',
         },
         requestId: 'request-1',
-        origin: 'https://app.siteproof.example?token=[REDACTED]',
         authenticated: false,
       },
     });
-
-    const serializedPayload = JSON.stringify(payload);
-    expect(serializedPayload).not.toContain('error_secret');
-    expect(serializedPayload).not.toContain('jwt_secret');
-    expect(serializedPayload).not.toContain('reset_secret');
-    expect(serializedPayload).not.toContain('endpoint_secret');
-    expect(serializedPayload).not.toContain('127.0.0.1');
-    expect(serializedPayload).not.toContain('vitest');
+    // Request context handed to Sentry must already be sanitized.
+    const serializedContext = JSON.stringify(context);
+    expect(serializedContext).not.toContain('reset_secret');
   });
 
-  it('does not forward warnings or non-production errors to external monitoring', () => {
-    process.env.NODE_ENV = 'development';
-    process.env.ERROR_MONITORING_ENDPOINT_URL = 'https://monitoring.example/events';
+  it('does not capture client 4xx errors via Sentry', () => {
+    process.env.NODE_ENV = 'production';
+    vi.mocked(captureServerError).mockClear();
     suppressErrorLogOutput();
-    const fetchSpy = vi.fn();
-    vi.stubGlobal('fetch', fetchSpy);
     const { res, status } = mockResponse();
 
-    errorHandler(AppError.badRequest('Invalid token=bad_secret'), mockRequest(), res, vi.fn());
-    process.env.NODE_ENV = 'production';
-    errorHandler(AppError.badRequest('Invalid token=bad_secret'), mockRequest(), res, vi.fn());
+    errorHandler(
+      AppError.badRequest('Invalid token=bad_secret'),
+      mockRequest(),
+      res,
+      vi.fn() as NextFunction,
+    );
 
     expect(status).toHaveBeenCalledWith(400);
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(vi.mocked(captureServerError)).not.toHaveBeenCalled();
   });
 
   it('does not expose arbitrary legacy 4xx error messages in production', () => {

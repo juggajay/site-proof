@@ -39,7 +39,6 @@ function configureProductionBase() {
   delete process.env.AUTH_LOCKOUT_DURATION_MS;
   delete process.env.WEBHOOK_DELIVERY_TIMEOUT_MS;
   delete process.env.ERROR_LOG_MAX_BYTES;
-  delete process.env.ERROR_MONITORING_TIMEOUT_MS;
   delete process.env.SUPPORT_EMAIL;
   delete process.env.ALLOW_MOCK_OAUTH;
   delete process.env.ALLOW_TEST_AUTH_ENDPOINTS;
@@ -51,7 +50,7 @@ function configureProductionBase() {
   delete process.env.VAPID_SUBJECT;
   process.env.SUPABASE_URL = 'https://siteproof.supabase.co';
   process.env.SUPABASE_SERVICE_ROLE_KEY = VALID_SUPABASE_SERVICE_ROLE_KEY;
-  process.env.ERROR_MONITORING_ENDPOINT_URL = 'https://monitoring.siteproof.example/events';
+  process.env.SENTRY_DSN = 'https://examplePublicKey@o123456.ingest.us.sentry.io/7891011';
   delete process.env.SUPABASE_ANON_KEY;
   delete process.env.ALLOW_LOCAL_FILE_STORAGE;
 }
@@ -313,27 +312,21 @@ describe('runtimeConfig', () => {
     expect(() => validateRuntimeConfig()).toThrow('ERROR_LOG_MAX_BYTES');
 
     process.env.ERROR_LOG_MAX_BYTES = '5242880';
-    process.env.ERROR_MONITORING_TIMEOUT_MS = 'soon';
-    expect(() => validateRuntimeConfig()).toThrow('ERROR_MONITORING_TIMEOUT_MS');
-
-    process.env.ERROR_MONITORING_TIMEOUT_MS = '10000';
     expect(() => validateRuntimeConfig()).not.toThrow();
   });
 
-  it('requires production error monitoring to be configured', () => {
+  it('requires Sentry error monitoring to be configured in production', () => {
     configureProductionBase();
     process.env.FRONTEND_URL = 'https://app.siteproof.example';
     process.env.BACKEND_URL = 'https://api.siteproof.example';
 
-    delete process.env.ERROR_MONITORING_ENDPOINT_URL;
-    expect(() => validateRuntimeConfig()).toThrow('ERROR_MONITORING_ENDPOINT_URL');
+    delete process.env.SENTRY_DSN;
+    expect(() => validateRuntimeConfig()).toThrow('SENTRY_DSN');
 
-    process.env.ERROR_MONITORING_ENDPOINT_URL = 'http://localhost:9000/events';
-    expect(() => validateRuntimeConfig()).toThrow(
-      'ERROR_MONITORING_ENDPOINT_URL must use https in production',
-    );
+    process.env.SENTRY_DSN = 'http://examplePublicKey@o123456.ingest.us.sentry.io/7891011';
+    expect(() => validateRuntimeConfig()).toThrow('SENTRY_DSN must use https in production');
 
-    process.env.ERROR_MONITORING_ENDPOINT_URL = 'https://monitoring.siteproof.example/events';
+    process.env.SENTRY_DSN = 'https://examplePublicKey@o123456.ingest.us.sentry.io/7891011';
     expect(() => validateRuntimeConfig()).not.toThrow();
   });
 

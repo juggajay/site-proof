@@ -72,11 +72,18 @@ describe('.env.example', () => {
   it('documents bounded local error logging controls', async () => {
     const envExample = await readEnvExample();
 
+    expectDocumentedEnvVars(envExample, ['ERROR_LOG_TO_FILE', 'ERROR_LOG_MAX_BYTES']);
+  });
+
+  it('documents the Sentry error monitoring configuration required in production', async () => {
+    const envExample = await readEnvExample();
+
     expectDocumentedEnvVars(envExample, [
-      'ERROR_LOG_TO_FILE',
-      'ERROR_LOG_MAX_BYTES',
-      'ERROR_MONITORING_ENDPOINT_URL',
-      'ERROR_MONITORING_TIMEOUT_MS',
+      'SENTRY_DSN',
+      'SENTRY_ENVIRONMENT',
+      'SENTRY_RELEASE',
+      'SENTRY_TRACES_SAMPLE_RATE',
     ]);
+    expect(envExample).not.toMatch(/^ERROR_MONITORING_ENDPOINT_URL=/m);
   });
 });

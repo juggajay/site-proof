@@ -218,6 +218,10 @@ jobs:
         run: npm run build
         env:
           VITE_API_URL: /api
+          # Production build requires a Sentry DSN (see vite.config.ts). CI uses a
+          # non-reporting placeholder; the real DSN is injected by the deploy
+          # platform (Vercel). The build artifact here is not deployed.
+          VITE_SENTRY_DSN: https://ci-placeholder@o0.ingest.sentry.io/0
 
   frontend-pr-e2e-smoke:
     name: Frontend PR E2E smoke

@@ -191,18 +191,22 @@ function assertProductionStorageConfig(): void {
   assertProductionSecret('SUPABASE_SERVICE_ROLE_KEY', supabaseServiceRoleKey);
 }
 
-function assertProductionMonitoringConfig(): void {
-  const endpointUrl = process.env.ERROR_MONITORING_ENDPOINT_URL?.trim();
-  if (!endpointUrl) {
-    throw new Error(
-      'FATAL: ERROR_MONITORING_ENDPOINT_URL is required in production for error visibility',
-    );
+function assertProductionSentryConfig(): void {
+  const dsn = process.env.SENTRY_DSN?.trim();
+  if (!dsn) {
+    throw new Error('FATAL: SENTRY_DSN is required in production for error visibility (Sentry)');
   }
 
-  assertProductionPublicUrl(
-    'ERROR_MONITORING_ENDPOINT_URL',
-    normalizePublicUrl('ERROR_MONITORING_ENDPOINT_URL', endpointUrl),
-  );
+  let parsedDsn: URL;
+  try {
+    parsedDsn = new URL(dsn);
+  } catch {
+    throw new Error('FATAL: SENTRY_DSN must be a valid Sentry DSN URL in production');
+  }
+
+  if (parsedDsn.protocol !== 'https:') {
+    throw new Error('FATAL: SENTRY_DSN must use https in production');
+  }
 }
 
 function assertOptionalPositiveInteger(name: string): void {
@@ -398,7 +402,6 @@ export function validateRuntimeConfig(): void {
   assertOptionalPositiveInteger('AUTH_LOCKOUT_DURATION_MS');
   assertOptionalPositiveInteger('WEBHOOK_DELIVERY_TIMEOUT_MS');
   assertOptionalPositiveInteger('ERROR_LOG_MAX_BYTES');
-  assertOptionalPositiveInteger('ERROR_MONITORING_TIMEOUT_MS');
   if (process.env.RATE_LIMIT_KEY_SALT?.trim()) {
     assertProductionSecret('RATE_LIMIT_KEY_SALT', process.env.RATE_LIMIT_KEY_SALT, 16);
   }
@@ -423,7 +426,7 @@ export function validateRuntimeConfig(): void {
   assertProductionPublicUrl('FRONTEND_URL', frontendUrl);
   assertProductionPublicUrl('BACKEND_URL/API_URL', backendUrl);
   assertProductionStorageConfig();
-  assertProductionMonitoringConfig();
+  assertProductionSentryConfig();
 
   assertProductionGoogleOAuthConfig();
 }

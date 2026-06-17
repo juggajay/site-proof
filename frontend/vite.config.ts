@@ -1,6 +1,7 @@
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import { sentryVitePlugin } from '@sentry/vite-plugin';
 import path from 'path';
 
 const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '0.0.0.0']);
@@ -97,6 +98,12 @@ function validateProductionPublicBaseUrl(name: string, value: string | undefined
 function validateProductionPublicEnv(env: Record<string, string | undefined>): void {
   validateProductionPublicBaseUrl('VITE_API_URL', env.VITE_API_URL);
   validateProductionPublicBaseUrl('VITE_SUPABASE_URL', env.VITE_SUPABASE_URL);
+  if (!env.VITE_SENTRY_DSN?.trim()) {
+    throw new Error(
+      'VITE_SENTRY_DSN is required for production builds (frontend error monitoring). ' +
+        'Set it in the build environment; it never crashes the browser app at runtime.',
+    );
+  }
 }
 
 function shouldDeferHtmlModulePreload(dep: string): boolean {
@@ -177,6 +184,15 @@ export default defineConfig(({ mode }) => {
 
   const apiProxyTarget = env.VITE_API_URL || 'http://localhost:3001';
 
+  // Upload source maps to Sentry only when the build environment provides the
+  // upload credentials (auth token + org + project). Otherwise build normally
+  // without emitting/uploading maps.
+  const sentryAuthToken = env.SENTRY_AUTH_TOKEN;
+  const sentryOrg = env.SENTRY_ORG;
+  const sentryProject = env.SENTRY_PROJECT || env.SENTRY_FRONTEND_PROJECT;
+  const uploadSentrySourcemaps =
+    mode === 'production' && Boolean(sentryAuthToken && sentryOrg && sentryProject);
+
   return {
     plugins: [
       react(),
@@ -236,6 +252,20 @@ export default defineConfig(({ mode }) => {
           importScripts: ['sw-push.js'],
         },
       }),
+      ...(uploadSentrySourcemaps
+        ? [
+            sentryVitePlugin({
+              org: sentryOrg,
+              project: sentryProject,
+              authToken: sentryAuthToken,
+              telemetry: false,
+              ...(env.VITE_SENTRY_RELEASE ? { release: { name: env.VITE_SENTRY_RELEASE } } : {}),
+              sourcemaps: {
+                filesToDeleteAfterUpload: ['./dist/**/*.map'],
+              },
+            }),
+          ]
+        : []),
     ],
     resolve: {
       alias: {
@@ -252,6 +282,9 @@ export default defineConfig(({ mode }) => {
       },
     },
     build: {
+      // Emit source maps only when we are uploading them to Sentry; the plugin
+      // deletes the emitted .map files after upload so they are never shipped.
+      sourcemap: uploadSentrySourcemaps,
       modulePreload: {
         resolveDependencies: resolveModulePreloadDependencies,
       },

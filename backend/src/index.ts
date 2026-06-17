@@ -43,6 +43,10 @@ process.on('unhandledRejection', (reason, promise) => {
 async function bootstrap(): Promise<void> {
   await import('dotenv/config');
 
+  // Initialize error monitoring before any routes handle requests.
+  const { initSentry } = await import('./lib/sentry.js');
+  initSentry();
+
   const { validateRuntimeConfig } = await import('./lib/runtimeConfig.js');
   validateRuntimeConfig();
 

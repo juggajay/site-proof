@@ -80,7 +80,8 @@ Required secrets:
 - `EMAIL_FROM`
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
-- `ERROR_MONITORING_ENDPOINT_URL`
+- `SENTRY_DSN` (backend error monitoring; startup fails without it)
+- `VITE_SENTRY_DSN` (frontend error monitoring; production build fails without it)
 
 Optional secrets, required when the feature is enabled:
 
