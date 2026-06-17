@@ -2030,6 +2030,93 @@ describe('Hold Point Token Release', () => {
     }
   });
 
+  it('creates the ITP completion when a public token releases a never-ticked hold point', async () => {
+    const freshLot = await prisma.lot.create({
+      data: {
+        projectId,
+        lotNumber: `TOK-FRESH-${Date.now()}`,
+        status: 'not_started',
+        lotType: 'chainage',
+        activityType: 'Earthworks',
+      },
+    });
+    const templateSnapshotSource = await prisma.iTPTemplate.findUniqueOrThrow({
+      where: { id: templateId },
+      include: { checklistItems: { orderBy: { sequenceNumber: 'asc' } } },
+    });
+    const freshInstance = await prisma.iTPInstance.create({
+      data: {
+        templateId,
+        lotId: freshLot.id,
+        templateSnapshot: JSON.stringify(buildTemplateSnapshot(templateSnapshotSource)),
+        status: 'not_started',
+      },
+    });
+    const freshHoldPoint = await prisma.holdPoint.create({
+      data: {
+        lotId: freshLot.id,
+        itpChecklistItemId: checklistItemId,
+        pointType: 'hold_point',
+        status: 'pending',
+      },
+    });
+    const rawFreshToken = `fresh-public-token-${Date.now()}`;
+    await prisma.holdPointReleaseToken.create({
+      data: {
+        holdPointId: freshHoldPoint.id,
+        token: hashHoldPointReleaseTokenForTest(rawFreshToken),
+        recipientEmail: 'fresh-external@example.com',
+        recipientName: 'Fresh External Reviewer',
+        expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+      },
+    });
+
+    try {
+      const before = await prisma.iTPCompletion.findUnique({
+        where: {
+          itpInstanceId_checklistItemId: {
+            itpInstanceId: freshInstance.id,
+            checklistItemId,
+          },
+        },
+      });
+      expect(before).toBeNull();
+
+      const res = await request(app).post(`/api/holdpoints/public/${rawFreshToken}/release`).send({
+        releasedByName: 'Fresh External Reviewer',
+        releasedByOrg: 'Client Company',
+        releaseNotes: 'Approved from secure link before anyone ticked the ITP item',
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.body.holdPoint.status).toBe('released');
+
+      const created = await prisma.iTPCompletion.findUniqueOrThrow({
+        where: {
+          itpInstanceId_checklistItemId: {
+            itpInstanceId: freshInstance.id,
+            checklistItemId,
+          },
+        },
+      });
+      expect(created.status).toBe('completed');
+      expect(created.completedAt).toBeInstanceOf(Date);
+      expect(created.completedById).toBeNull();
+      expect(created.verificationStatus).toBe('verified');
+      expect(created.verifiedAt).toBeInstanceOf(Date);
+      expect(created.verifiedById).toBeNull();
+
+      const updatedLot = await prisma.lot.findUniqueOrThrow({ where: { id: freshLot.id } });
+      expect(updatedLot.status).toBe('completed');
+    } finally {
+      await prisma.holdPointReleaseToken.deleteMany({ where: { holdPointId: freshHoldPoint.id } });
+      await prisma.holdPoint.delete({ where: { id: freshHoldPoint.id } }).catch(() => {});
+      await prisma.iTPCompletion.deleteMany({ where: { itpInstanceId: freshInstance.id } });
+      await prisma.iTPInstance.delete({ where: { id: freshInstance.id } }).catch(() => {});
+      await prisma.lot.delete({ where: { id: freshLot.id } }).catch(() => {});
+    }
+  });
+
   it('should release hold point via public token', async () => {
     const res = await request(app).post(`/api/holdpoints/public/${releaseToken}/release`).send({
       releasedByName: 'External Reviewer',

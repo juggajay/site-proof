@@ -71,19 +71,20 @@ export async function updateLotStatusFromITP(itpInstanceId: string) {
     // Determine new status
     let newStatus: string | null = null;
 
-    if (lot.status === 'not_started' && completedCount > 0) {
-      // First item completed - transition to in_progress
-      newStatus = 'in_progress';
-    } else if (lot.status === 'in_progress' || lot.status === 'not_started') {
-      // Check if all non-test items are complete
-      if (nonTestItems.length > 0 && completedNonTestCount === nonTestItems.length) {
-        if (testItems.length > 0 && completedTestCount < testItems.length) {
-          // All non-test items done, but test items remain
-          newStatus = 'awaiting_test';
-        } else if (testItems.length === 0 || completedTestCount === testItems.length) {
-          // All items complete (or no test items)
-          newStatus = 'completed';
-        }
+    if (lot.status === 'in_progress' || lot.status === 'not_started') {
+      if (completedCount === totalItems) {
+        newStatus = 'completed';
+      } else if (
+        nonTestItems.length > 0 &&
+        completedNonTestCount === nonTestItems.length &&
+        testItems.length > 0
+      ) {
+        // All non-test items done, but test items remain.
+        newStatus = 'awaiting_test';
+      }
+      if (!newStatus && lot.status === 'not_started' && completedCount > 0) {
+        // First item completed, but the ITP still has outstanding work.
+        newStatus = 'in_progress';
       }
     } else if (lot.status === 'awaiting_test') {
       // Check if all test items are now complete

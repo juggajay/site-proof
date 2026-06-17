@@ -30,6 +30,7 @@ import { buildPublicHoldPointReleasedResponse } from './holdpoints/actionRespons
 import { holdPointReadRouter } from './holdpoints/readRoutes.js';
 import { holdPointRequestReleaseRouter } from './holdpoints/requestReleaseRoutes.js';
 import { holdPointActionRouter } from './holdpoints/actionRoutes.js';
+import { updateLotStatusFromITP } from './itp/helpers/lotProgression.js';
 import {
   getHoldPointChecklistItemsForInstance,
   getHoldPointItpTemplateForInstance,
@@ -297,6 +298,7 @@ holdpointsRouter.post(
     );
 
     const releasedAt = new Date();
+    let releasedItpInstanceId: string | null = null;
     const holdPoint = await prisma.$transaction(async (tx) => {
       const tokenUpdate = await tx.holdPointReleaseToken.updateMany({
         where: {
@@ -359,6 +361,7 @@ holdpointsRouter.post(
       });
 
       if (itpInstance) {
+        releasedItpInstanceId = itpInstance.id;
         // I1-core RECONCILE: releasing the hold point satisfies the ITP item.
         // Set status='completed' + completedAt (releasedAt) alongside the
         // verification fields, and CREATE the completion row if the hold point
@@ -399,6 +402,10 @@ holdpointsRouter.post(
 
       return updatedHoldPoint;
     });
+
+    if (releasedItpInstanceId) {
+      await updateLotStatusFromITP(releasedItpInstanceId);
+    }
 
     // Create in-app notifications for project team members
     const projectUsers = await prisma.projectUser.findMany({

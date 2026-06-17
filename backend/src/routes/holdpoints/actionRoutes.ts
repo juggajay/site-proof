@@ -32,6 +32,7 @@ import { buildHoldPointChaseResponse, buildHoldPointReleasedResponse } from './a
 import { holdPointEscalationRouter } from './escalationRoutes.js';
 import { isProjectNotificationEnabled } from '../../lib/projectNotificationPreferences.js';
 import { SECURE_LINK_EXPIRY_HOURS, hashHoldPointReleaseToken } from './tokens.js';
+import { updateLotStatusFromITP } from '../itp/helpers/lotProgression.js';
 
 // =============================================================================
 // Authenticated hold point ACTION routes (release, chase, escalate,
@@ -342,6 +343,7 @@ holdPointActionRouter.post(
     );
 
     const releasedAt = parseReleaseDateTimeInput(releaseDate, releaseTime);
+    let releasedItpInstanceId: string | null = null;
     const holdPoint = await prisma.$transaction(async (tx) => {
       const releaseTransition = await tx.holdPoint.updateMany({
         where: {
@@ -382,6 +384,7 @@ holdPointActionRouter.post(
       });
 
       if (itpInstance) {
+        releasedItpInstanceId = itpInstance.id;
         // I1-core RECONCILE: releasing the hold point satisfies the ITP item.
         // Set status='completed' + completedAt (releasedAt) alongside the
         // verification fields, and CREATE the completion row if the hold point
@@ -421,6 +424,10 @@ holdPointActionRouter.post(
 
       return updatedHoldPoint;
     });
+
+    if (releasedItpInstanceId) {
+      await updateLotStatusFromITP(releasedItpInstanceId);
+    }
 
     // Feature #925 - HP release notification to team
     // Get project team members to notify about HP release
