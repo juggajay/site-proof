@@ -24,6 +24,27 @@ vi.mock('@/lib/auth', () => ({
   useAuth: () => ({ user: _userId ? { id: _userId, fullName: 'Jay' } : null }),
 }));
 
+vi.mock('@/components/documents/SecureDocumentImage', () => ({
+  SecureDocumentImage: ({
+    documentId,
+    fileUrl,
+    alt,
+    className,
+  }: {
+    documentId: string;
+    fileUrl?: string | null;
+    alt?: string;
+    className?: string;
+  }) => (
+    <img
+      src={`/secure-doc/${documentId}`}
+      data-file-url={fileUrl}
+      alt={alt}
+      className={className}
+    />
+  ),
+}));
+
 let _photos: NcrEvidenceItem[] = [];
 vi.mock('../useNcrEvidence', () => ({
   useNcrEvidence: () => ({
@@ -121,7 +142,8 @@ describe('IssueDetailScreen', () => {
     renderScreen();
     const img = screen.getByAltText('slump cone') as HTMLImageElement;
     expect(img).toBeInTheDocument();
-    expect(img.src).toContain('pour3.jpg');
+    expect(img).toHaveAttribute('src', '/secure-doc/d1');
+    expect(img).toHaveAttribute('data-file-url', 'https://storage/pour3.jpg');
   });
 
   it('shows an Add photo affordance (foreman adds evidence)', () => {

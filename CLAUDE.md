@@ -50,7 +50,7 @@ site-proofv3/
 | Backend | Express.js, tRPC v10 |
 | Database | PostgreSQL via Prisma ORM, **hosted on Railway** (project `hearty-harmony`). Supabase is **not** the database. |
 | Auth | JWT, MFA support. Supabase Auth is **not** in use; the Supabase project is storage-only. |
-| Storage | Supabase Storage. Single public bucket `documents` in project `vhlvutvzdliwxorfhxxv`. Covers all six customer-facing upload surfaces: documents, comment attachments, drawings, test result certificates, avatars, and company logos. Upload + delete + replacement-cleanup verified end-to-end in production (PR #7 and PR #9 smokes, 2026-05-12). See [docs/supabase-storage-setup.md](docs/supabase-storage-setup.md). |
+| Storage | Supabase Storage. Single `documents` bucket in project `vhlvutvzdliwxorfhxxv`. Backend-mediated access is required for document, comment, drawing, test-certificate, and photo files; stored Supabase URLs are object locators, not UI access URLs. See [docs/supabase-storage-setup.md](docs/supabase-storage-setup.md). |
 | Email | Resend |
 
 ## Key Patterns
@@ -242,7 +242,7 @@ VITE_API_URL=http://localhost:3001
 
 ### Production file storage (Supabase)
 - File uploads in production **require** `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in the backend env. Without them, `isSupabaseConfigured()` returns false and uploads fall back to local Railway disk, which is **ephemeral** — files vanish on the next redeploy.
-- The `documents` bucket must remain **public**. Stored URLs are public `/storage/v1/object/public/documents/...` paths.
+- Do not add new browser surfaces that render raw Supabase `fileUrl` values. Use `getDocumentAccessUrl`, `openDocumentAccessUrl`, `SecureDocumentImage`, or an authenticated backend download route. The stored `/storage/v1/object/public/documents/...` values are legacy object locators and should not be treated as durable user-facing links.
 - Never commit Supabase keys, the Railway database URL, or any production secret to git. Local credential scratch (e.g. `.gstack/dev-browser/new-supabase-credentials.txt`) lives under git-ignored directories — keep it that way.
 
 ## Common Tasks

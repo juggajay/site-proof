@@ -17,9 +17,12 @@ migrated there).
 - **Public URL host:** `https://vhlvutvzdliwxorfhxxv.supabase.co`
 - **Region:** Sydney (`ap-southeast-2`)
 - **Bucket:** `documents`
-- **Bucket visibility:** **public** (the app stores public
-  `/storage/v1/object/public/documents/...` URLs in DB rows; the bucket
-  must stay public for those links to resolve in browsers)
+- **Bucket visibility:** currently **public** in production, with the app
+  moving toward private-bucket operation. DB rows still store
+  `/storage/v1/object/public/documents/...` object locator URLs for
+  backwards-compatible path parsing, but browser-facing document, comment,
+  drawing, certificate, and photo access must go through backend access
+  routes rather than rendering those raw URLs directly.
 
 Previous project ref `dwumiirtsuqxratjjvhb` was deprovisioned by Supabase
 after the free-tier 90-day deletion window. URLs referencing that host no
@@ -41,7 +44,7 @@ under `<projectId>`; per-user / per-company surfaces nest under
 | Avatars | `avatars/<userId>/avatar-<userId>-<uuid>.<ext>` | `backend/src/routes/auth.ts` |
 | Company logos | `company-logos/<companyId>/company-logo-<companyId>-<uuid>.<ext>` | `backend/src/routes/company.ts` |
 
-The full public URL for a stored object is:
+The stored locator URL for an object is:
 
 ```
 https://vhlvutvzdliwxorfhxxv.supabase.co/storage/v1/object/public/documents/<prefix>/<scope-id>/<filename>
@@ -66,8 +69,11 @@ where `<scope-id>` is the `projectId` for the first four surfaces, the
 ```
 
 The backend holds the Supabase **service role key** and writes/reads on
-the server side. The frontend renders public URLs directly (no Supabase
-SDK required in the browser).
+the server side. Frontend document/photo viewers request backend access
+URLs (`/api/documents/:id/signed-url`, `/api/documents/file/:id`, or
+domain-specific download routes) instead of rendering Supabase URLs
+directly. Avatars and company logos still store direct image URLs and
+need their own access endpoint before the bucket can be made fully private.
 
 ## Verified durable flows
 
@@ -75,7 +81,7 @@ All six customer-facing upload surfaces have been verified end-to-end
 against production with a real owner account and throwaway 1×1 PNG /
 PDF fixtures:
 
-| Flow | Upload | Public download | Replacement removes old object | Delete removes Supabase object |
+| Flow | Upload | Backend/browser access | Replacement removes old object | Delete removes Supabase object |
 |---|---|---|---|---|
 | Documents | ✅ | ✅ | n/a (new versions, prior objects retained by design) | ✅ |
 | Comment attachments | ✅ | ✅ | n/a | ✅ |
@@ -91,7 +97,8 @@ Smoke evidence:
   Verified URL prefix, 200 on public GET after upload, 200 on the new
   URL after replacement, 4xx (Supabase storage 400) on the previous URL
   after replacement, and (for avatars) 4xx on the deleted URL after
-  DELETE.
+  DELETE. Those older smoke checks pre-date the private-bucket hardening
+  work and should not be used as a pattern for new UI access.
 - Company-logo PATCH cleanup — PR #9 production smoke on 2026-05-12.
   Verified that PATCH `/api/company` with the same Supabase URL plus a
   querystring leaves the object intact (path-based comparison), and
@@ -130,8 +137,9 @@ production env must always have these set.
 
 For the **frontend** (Vercel): `VITE_SUPABASE_URL` and
 `VITE_SUPABASE_ANON_KEY` should be left **blank** unless the frontend
-needs direct browser Supabase access. Uploads go through the Railway
-backend; the browser only needs the public file URL returned by the API.
+needs direct browser Supabase access. Uploads and document reads go
+through the Railway backend; browser UI should use backend-issued access
+URLs/components rather than raw Supabase object URLs.
 
 ## Operational warnings
 
@@ -152,6 +160,10 @@ These apply regardless of which file you are editing:
 - **File uploads in production require Supabase env vars to be present.**
   See the table above. If those vars go missing, uploads silently fall
   back to ephemeral disk.
+- **Do not introduce new raw Supabase URL rendering in the browser.**
+  Use `frontend/src/lib/documentAccess.ts`, `SecureDocumentImage`, or a
+  backend download route so the object remains reachable after the bucket
+  is made private.
 - **Never commit Supabase keys** (or the Railway database URL) to git.
   Keep credential scratch files inside `.gstack/` or another
   git-ignored directory.
@@ -237,16 +249,16 @@ hit a real Supabase project.
 ### Upload returns 5xx with "Supabase upload failed"
 - Confirm `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are set in the
   Railway backend env (Variables tab).
-- Confirm the `documents` bucket exists in the Supabase project and is
-  public.
+- Confirm the `documents` bucket exists in the Supabase project and the
+  service role key has storage access.
 - Check Railway logs for the error returned by `@supabase/supabase-js`.
 
-### File link returns 404 / 400 from the public URL
+### File link returns 404 / 400 from a stored Supabase URL
 - If `file_url` host matches the current `SUPABASE_URL` and the path
-  starts with `/storage/v1/object/public/documents/`: confirm the
-  object exists via the Supabase dashboard's Storage browser or a
-  service-role list call. Could be a recent delete (cache may serve
-  stale 200 briefly via CloudFlare).
+  starts with `/storage/v1/object/public/documents/`: treat it as a
+  storage locator, not a browser access URL. Confirm the object exists
+  via the Supabase dashboard's Storage browser or a service-role list
+  call, then verify the relevant backend access route.
 - If `file_url` host is `dwumiirtsuqxratjjvhb.supabase.co`: that
   project is deprovisioned and every row of this shape was deleted by
   the 2026-05-12 orphan cleanup. A row matching this pattern in

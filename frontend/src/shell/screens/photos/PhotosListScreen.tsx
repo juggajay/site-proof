@@ -17,6 +17,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ImageOff, Loader2, AlertTriangle } from 'lucide-react';
+import { SecureDocumentImage } from '@/components/documents/SecureDocumentImage';
 import { cn } from '@/lib/utils';
 import { ShellScreen } from '../../components/ShellScreen';
 import { usePhotosShellContext } from './photosShellContext';
@@ -50,13 +51,24 @@ function PhotoTile({ item, onPress }: { item: PhotoItem; onPress: () => void }) 
     >
       {/* Aspect-ratio box — fixes layout before the image loads (no shift). */}
       <span className="block aspect-square w-full">
-        <img
-          src={item.src}
-          alt={item.caption || 'Site photo'}
-          loading="lazy"
-          decoding="async"
-          className="h-full w-full object-cover"
-        />
+        {isPending || !item.documentId ? (
+          <img
+            src={item.src}
+            alt={item.caption || 'Site photo'}
+            loading="lazy"
+            decoding="async"
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <SecureDocumentImage
+            documentId={item.documentId}
+            fileUrl={item.src}
+            alt={item.caption || 'Site photo'}
+            loading="lazy"
+            decoding="async"
+            className="h-full w-full object-cover"
+          />
+        )}
       </span>
 
       {/* Top-left: status chip — UNFILED (amber) or filed lot chip. */}

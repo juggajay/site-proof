@@ -17,6 +17,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ImagePlus, Loader2 } from 'lucide-react';
+import { SecureDocumentImage } from '@/components/documents/SecureDocumentImage';
 import { useAuth } from '@/lib/auth';
 import { useOfflineStatus } from '@/lib/useOfflineStatus';
 import { cn } from '@/lib/utils';
@@ -309,9 +310,10 @@ export function IssueDetailScreen() {
           <div className="-mx-1 mt-2 flex gap-2 overflow-x-auto px-1 pb-1">
             {photos.map((item) =>
               item.document?.fileUrl ? (
-                <img
+                <SecureDocumentImage
                   key={item.id}
-                  src={item.document.fileUrl}
+                  documentId={item.document.id}
+                  fileUrl={item.document.fileUrl}
                   alt={item.document.caption || item.document.filename || 'NCR evidence photo'}
                   loading="lazy"
                   className="h-[88px] w-[88px] flex-shrink-0 rounded-xl border border-border object-cover"

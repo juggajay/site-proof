@@ -20,6 +20,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MapPin, Search, Loader2, FolderInput, Check } from 'lucide-react';
+import { SecureDocumentImage } from '@/components/documents/SecureDocumentImage';
 import { cn } from '@/lib/utils';
 import { useOfflineStatus } from '@/lib/useOfflineStatus';
 import { useLotsShellData } from '../lots/useLotsShellData';
@@ -214,13 +215,24 @@ export function PhotoDetailScreen() {
     >
       {/* Full-width photo */}
       <div className="overflow-hidden rounded-2xl border border-border bg-secondary">
-        <img
-          src={item.src}
-          alt={item.caption || 'Site photo'}
-          loading="lazy"
-          decoding="async"
-          className="block w-full object-contain"
-        />
+        {isPending || !item.documentId ? (
+          <img
+            src={item.src}
+            alt={item.caption || 'Site photo'}
+            loading="lazy"
+            decoding="async"
+            className="block w-full object-contain"
+          />
+        ) : (
+          <SecureDocumentImage
+            documentId={item.documentId}
+            fileUrl={item.src}
+            alt={item.caption || 'Site photo'}
+            loading="lazy"
+            decoding="async"
+            className="block w-full object-contain"
+          />
+        )}
       </div>
 
       {/* Status pills */}

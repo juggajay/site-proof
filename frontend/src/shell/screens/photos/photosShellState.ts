@@ -64,7 +64,7 @@ export interface PhotoItem {
   id: string;
   /** 'server' = uploaded Document; 'pending' = local offline capture. */
   source: 'server' | 'pending';
-  /** Renderable image src — a public/stored fileUrl, or a local data URL. */
+  /** Stored fileUrl locator for server rows, or a local data URL for pending offline photos. */
   src: string;
   /** Server document id, present only for source='server' (drives re-file). */
   documentId: string | null;
