@@ -1,0 +1,145 @@
+name: Database Restore Drill
+
+on:
+  workflow_dispatch:
+    inputs:
+      backup_run_id:
+        description: GitHub Actions run id from a successful Database Backup workflow
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  restore-drill:
+    name: Restore backup into disposable PostgreSQL
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: siteproof_restore
+          POSTGRES_USER: restore
+          POSTGRES_PASSWORD: restore
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      DATABASE_URL: postgresql://restore:restore@localhost:5432/siteproof_restore
+      DATABASE_BACKUP_ENCRYPTION_KEY: ${{ secrets.DATABASE_BACKUP_ENCRYPTION_KEY }}
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Configure restore directory
+        run: echo "BACKUP_DIR=$RUNNER_TEMP/siteproof-restore-drill" >> "$GITHUB_ENV"
+
+      - name: Validate drill inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "${{ github.event.inputs.backup_run_id }}" =~ ^[0-9]+$ ]]; then
+            echo "::error::backup_run_id must be a numeric GitHub Actions run id."
+            exit 1
+          fi
+          if [[ -z "${DATABASE_BACKUP_ENCRYPTION_KEY:-}" ]]; then
+            echo "::error::Set DATABASE_BACKUP_ENCRYPTION_KEY as a repository secret before restore drills."
+            exit 1
+          fi
+          echo "::add-mask::$DATABASE_BACKUP_ENCRYPTION_KEY"
+
+      - name: Install PostgreSQL 17 client
+        run: |
+          sudo install -d /etc/apt/keyrings
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo tee /etc/apt/keyrings/postgresql.asc >/dev/null
+          . /etc/os-release
+          echo "deb [signed-by=/etc/apt/keyrings/postgresql.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
+          export PATH="/usr/lib/postgresql/17/bin:$PATH"
+          command -v pg_restore
+          pg_restore --version
+
+      - name: Download encrypted backup artifact
+        shell: bash
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BACKUP_RUN_ID: ${{ github.event.inputs.backup_run_id }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$BACKUP_DIR"
+          gh run download "$BACKUP_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "siteproof-db-backup-$BACKUP_RUN_ID" \
+            --dir "$BACKUP_DIR"
+
+      - name: Decrypt backup artifact
+        id: decrypt
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          encrypted_archive="$(find "$BACKUP_DIR" -type f -name '*.tar.gpg' -print -quit)"
+          if [[ -z "$encrypted_archive" ]]; then
+            echo "::error::No encrypted backup archive found in artifact."
+            exit 1
+          fi
+
+          checksum_file="$encrypted_archive.sha256"
+          if [[ ! -f "$checksum_file" ]]; then
+            echo "::error::Encrypted backup checksum file is missing."
+            exit 1
+          fi
+
+          (
+            cd "$(dirname "$encrypted_archive")"
+            sha256sum -c "$(basename "$checksum_file")"
+          )
+
+          archive_path="${encrypted_archive%.gpg}"
+          gpg --batch --yes --pinentry-mode loopback \
+            --passphrase "$DATABASE_BACKUP_ENCRYPTION_KEY" \
+            --decrypt --output "$archive_path" "$encrypted_archive"
+
+          tar -C "$BACKUP_DIR" -xf "$archive_path"
+          dump_path="$(find "$BACKUP_DIR" -maxdepth 1 -type f -name '*.dump' -print -quit)"
+          if [[ -z "$dump_path" ]]; then
+            echo "::error::No PostgreSQL dump was found after decrypting the archive."
+            exit 1
+          fi
+
+          echo "backup_file=$(basename "$dump_path")" >> "$GITHUB_OUTPUT"
+
+      - name: Install backend dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Verify backup readability
+        run: npx tsx scripts/backup.ts verify "${{ steps.decrypt.outputs.backup_file }}"
+
+      - name: Restore into disposable database
+        run: npx tsx scripts/backup.ts restore "${{ steps.decrypt.outputs.backup_file }}"
+        env:
+          CONFIRM_RESTORE: ${{ steps.decrypt.outputs.backup_file }}
+
+      - name: Verify restored migration status
+        run: npm run migrate:status
