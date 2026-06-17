@@ -69,11 +69,24 @@ export function buildLotListSelect(includeITP: boolean): Prisma.LotSelect {
         id: true,
         templateId: true,
         status: true,
+        templateSnapshot: true,
+        completions: {
+          select: {
+            checklistItemId: true,
+            status: true,
+          },
+        },
         template: {
           select: {
             id: true,
             name: true,
             activityType: true,
+            checklistItems: {
+              select: {
+                id: true,
+                sequenceNumber: true,
+              },
+            },
           },
         },
       },
