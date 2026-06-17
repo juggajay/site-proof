@@ -37,6 +37,9 @@ function buildHoldPoints(
       scheduledDate: requestedScheduledDate,
       releasedAt: null,
       releasedByName: null,
+      releasedByOrg: null,
+      releaseMethod: null,
+      releaseRecipientEmail: null,
       releaseNotes: null,
       sequenceNumber: 3,
       isCompleted: false,
@@ -55,6 +58,9 @@ function buildHoldPoints(
       scheduledDate: '2026-01-16',
       releasedAt: notifiedReleaseRecorded ? now : null,
       releasedByName: notifiedReleaseRecorded ? 'E2E Release Reviewer' : null,
+      releasedByOrg: notifiedReleaseRecorded ? 'E2E Superintendent Org' : null,
+      releaseMethod: notifiedReleaseRecorded ? 'email' : null,
+      releaseRecipientEmail: null,
       releaseNotes: notifiedReleaseRecorded ? 'Release accepted from seeded test' : null,
       sequenceNumber: 4,
       isCompleted: false,
@@ -73,6 +79,9 @@ function buildHoldPoints(
       scheduledDate: '2026-01-16',
       releasedAt: now,
       releasedByName: 'E2E Superintendent',
+      releasedByOrg: 'E2E Superintendent Org',
+      releaseMethod: 'secure_link',
+      releaseRecipientEmail: 'e2e.super@example.com',
       releaseNotes: 'Released in seeded data',
       sequenceNumber: 5,
       isCompleted: true,
@@ -95,6 +104,9 @@ function buildManyHoldPoints(count: number) {
     scheduledDate: null,
     releasedAt: null,
     releasedByName: null,
+    releasedByOrg: null,
+    releaseMethod: null,
+    releaseRecipientEmail: null,
     releaseNotes: null,
     sequenceNumber: index + 1,
     isCompleted: false,
@@ -333,13 +345,16 @@ test.describe('Hold points seeded release contract', () => {
     await expect(notifiedRow.getByText('Superintendent release for basecourse')).toBeVisible();
     await expect(notifiedRow.getByText('Awaiting Release')).toBeVisible();
     await expect(notifiedRow.getByText('OVERDUE')).toBeVisible();
-    await expect(notifiedRow.getByRole('button', { name: 'Record Release' })).toBeVisible();
+    await expect(notifiedRow.getByRole('button', { name: 'Record Manual Release' })).toBeVisible();
     await expect(notifiedRow.getByRole('button', { name: 'Chase' })).toBeVisible();
 
     const releasedRow = page.getByRole('row').filter({ hasText: 'LOT-HP-003' });
     await expect(releasedRow).toBeVisible();
     await expect(releasedRow.getByText('Released asphalt witness point')).toBeVisible();
     await expect(releasedRow.getByText('E2E Superintendent')).toBeVisible();
+    await expect(releasedRow.getByText('E2E Superintendent Org')).toBeVisible();
+    await expect(releasedRow.getByText('Secure link')).toBeVisible();
+    await expect(releasedRow.getByText('sent to e2e.super@example.com')).toBeVisible();
     await expect(releasedRow.getByRole('button', { name: 'Evidence PDF' })).toBeVisible();
 
     await pendingRow.getByRole('button', { name: 'Request Release' }).click();
@@ -365,7 +380,7 @@ test.describe('Hold points seeded release contract', () => {
       noticePeriodOverride: false,
     });
     await expect(pendingRow.getByText('Awaiting Release')).toBeVisible();
-    await expect(pendingRow.getByRole('button', { name: 'Record Release' })).toBeVisible();
+    await expect(pendingRow.getByRole('button', { name: 'Record Manual Release' })).toBeVisible();
 
     await page.locator('select').selectOption('notified');
     await expect(releasedRow).toBeHidden();
@@ -376,34 +391,45 @@ test.describe('Hold points seeded release contract', () => {
     await expect.poll(() => api.getChaseCount()).toBe(1);
 
     await page.locator('select').selectOption('all');
-    await notifiedRow.getByRole('button', { name: 'Record Release' }).click();
+    await notifiedRow.getByRole('button', { name: 'Record Manual Release' }).click();
 
-    const recordModal = page.getByRole('dialog').filter({ hasText: 'Record Hold Point Release' });
+    const recordModal = page
+      .getByRole('dialog')
+      .filter({ hasText: 'Record Manual Hold Point Release' });
     await expect(recordModal.getByText('Superintendent Approval Required')).toBeVisible();
     await recordModal.getByLabel('Email Confirmation').check();
+    await recordModal.locator('#evidence-upload').setInputFiles({
+      name: 'release-email.eml',
+      mimeType: 'message/rfc822',
+      buffer: Buffer.from('Subject: Release approved\n\nApproved by email.'),
+    });
     await recordModal
       .getByPlaceholder('Enter name of person releasing')
       .fill('E2E Release Reviewer');
     await recordModal
-      .getByPlaceholder("Enter organization (e.g., Superintendent's Rep)")
+      .getByPlaceholder("Enter organisation (e.g., Superintendent's Rep)")
       .fill('E2E Superintendent Org');
     await recordModal.locator('input[type="date"]').fill('2026-02-03');
     await recordModal.locator('input[type="time"]').fill('14:20');
     await recordModal
       .getByPlaceholder('Any additional notes about the release...')
       .fill('Release accepted from seeded test');
-    await recordModal.getByRole('button', { name: 'Record Release' }).click();
+    await recordModal.getByRole('button', { name: 'Record Manual Release' }).click();
 
-    expect(api.getRecordReleaseRequest()).toMatchObject({
-      releasedByName: 'E2E Release Reviewer',
-      releasedByOrg: 'E2E Superintendent Org',
-      releaseDate: '2026-02-03',
-      releaseTime: '14:20',
-      releaseMethod: 'email',
-      releaseNotes: 'Release accepted from seeded test',
-    });
+    await expect
+      .poll(() => api.getRecordReleaseRequest())
+      .toMatchObject({
+        releasedByName: 'E2E Release Reviewer',
+        releasedByOrg: 'E2E Superintendent Org',
+        releaseDate: '2026-02-03',
+        releaseTime: '14:20',
+        releaseMethod: 'email',
+        releaseNotes:
+          'Release accepted from seeded test\nEvidence uploaded: release-evidence-1.pdf',
+      });
     await expect(notifiedRow.getByText('Released', { exact: true }).first()).toBeVisible();
     await expect(notifiedRow.getByText('E2E Release Reviewer')).toBeVisible();
+    await expect(notifiedRow.getByText('E2E Superintendent Org')).toBeVisible();
   });
 
   test('surfaces hold point load failures with retry and no false empty state', async ({
@@ -454,11 +480,13 @@ test.describe('Hold points seeded release contract', () => {
 
     const notifiedRow = page.getByRole('row').filter({ hasText: 'LOT-HP-002' });
     await expect(notifiedRow).toBeVisible();
-    await notifiedRow.getByRole('button', { name: 'Record Release' }).click();
+    await notifiedRow.getByRole('button', { name: 'Record Manual Release' }).click();
 
-    const recordModal = page.getByRole('dialog').filter({ hasText: 'Record Hold Point Release' });
+    const recordModal = page
+      .getByRole('dialog')
+      .filter({ hasText: 'Record Manual Hold Point Release' });
     await expect(
-      recordModal.getByRole('heading', { name: 'Record Hold Point Release' }),
+      recordModal.getByRole('heading', { name: 'Record Manual Hold Point Release' }),
     ).toBeVisible();
 
     await recordModal.getByLabel('Email Confirmation').check();
@@ -471,20 +499,30 @@ test.describe('Hold points seeded release contract', () => {
 
     await recordModal.getByLabel('Paper Form').check();
     await expect(recordModal.getByText('Selected: release-email.eml')).toBeHidden();
+    await recordModal.locator('#paper-evidence-upload').setInputFiles({
+      name: 'paper-release.pdf',
+      mimeType: 'application/pdf',
+      buffer: Buffer.from('%PDF-1.4 paper release'),
+    });
+    await expect(recordModal.getByText('Selected: paper-release.pdf')).toBeVisible();
 
     await recordModal.getByPlaceholder('Enter name of person releasing').fill('E2E Paper Reviewer');
+    await recordModal
+      .getByPlaceholder("Enter organisation (e.g., Superintendent's Rep)")
+      .fill('E2E Superintendent Org');
     await recordModal.locator('input[type="date"]').fill('2026-02-03');
     await recordModal.locator('input[type="time"]').fill('14:20');
-    await recordModal.getByRole('button', { name: 'Record Release' }).click();
+    await recordModal.getByRole('button', { name: 'Record Manual Release' }).click();
 
     await expect
       .poll(() => api.getRecordReleaseRequest())
       .toMatchObject({
         releasedByName: 'E2E Paper Reviewer',
+        releasedByOrg: 'E2E Superintendent Org',
         releaseMethod: 'paper',
         signatureDataUrl: null,
       });
-    expect(api.getEvidenceUploadCount()).toBe(0);
+    expect(api.getEvidenceUploadCount()).toBe(1);
   });
 
   test('shows backend validation errors inside the record release modal', async ({ page }) => {
@@ -496,20 +534,30 @@ test.describe('Hold points seeded release contract', () => {
 
     const notifiedRow = page.getByRole('row').filter({ hasText: 'LOT-HP-002' });
     await expect(notifiedRow).toBeVisible();
-    await notifiedRow.getByRole('button', { name: 'Record Release' }).click();
+    await notifiedRow.getByRole('button', { name: 'Record Manual Release' }).click();
 
-    const recordModal = page.getByRole('dialog').filter({ hasText: 'Record Hold Point Release' });
+    const recordModal = page
+      .getByRole('dialog')
+      .filter({ hasText: 'Record Manual Hold Point Release' });
     await expect(
-      recordModal.getByRole('heading', { name: 'Record Hold Point Release' }),
+      recordModal.getByRole('heading', { name: 'Record Manual Hold Point Release' }),
     ).toBeVisible();
 
     await recordModal.getByLabel('Email Confirmation').check();
+    await recordModal.locator('#evidence-upload').setInputFiles({
+      name: 'release-email.eml',
+      mimeType: 'message/rfc822',
+      buffer: Buffer.from('Subject: Release approved\n\nApproved by email.'),
+    });
     await recordModal
       .getByPlaceholder('Enter name of person releasing')
       .fill('E2E Release Reviewer');
+    await recordModal
+      .getByPlaceholder("Enter organisation (e.g., Superintendent's Rep)")
+      .fill('E2E Superintendent Org');
     await recordModal.locator('input[type="date"]').fill('2026-02-03');
     await recordModal.locator('input[type="time"]').fill('14:20');
-    await recordModal.getByRole('button', { name: 'Record Release' }).click();
+    await recordModal.getByRole('button', { name: 'Record Manual Release' }).click();
 
     await expect(recordModal.getByRole('alert')).toContainText('Release date must be a valid date');
     await expect(recordModal).toBeVisible();
@@ -548,7 +596,7 @@ test.describe('Hold points mobile card layout', () => {
     expect(buttonWidth).toBeGreaterThan(cardWidth * 0.8);
 
     // Per-status actions are preserved on mobile.
-    await expect(page.getByRole('button', { name: 'Record Release' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Record Manual Release' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Chase' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Evidence PDF' })).toBeVisible();
 

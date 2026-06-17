@@ -10,6 +10,7 @@ import {
   isNoticeExpired,
   isOverdue,
 } from './holdPointTableUtils';
+import { getReleaseIdentityParts } from '../holdPointReleaseIdentity';
 
 interface HoldPointsTableProps {
   holdPoints: HoldPoint[];
@@ -292,6 +293,7 @@ function HoldPointRow({
 }: HoldPointRowProps) {
   const overdue = isOverdue(hp);
   const noticeExpired = isNoticeExpired(hp);
+  const releaseIdentity = hp.releasedAt ? getReleaseIdentityParts(hp) : null;
 
   return (
     <tr
@@ -339,8 +341,13 @@ function HoldPointRow({
         {hp.releasedAt ? (
           <div>
             <div>{formatHoldPointDate(hp.releasedAt)}</div>
-            {hp.releasedByName && (
-              <div className="text-xs text-muted-foreground">{hp.releasedByName}</div>
+            {releaseIdentity && (
+              <>
+                <div className="text-xs text-muted-foreground">{releaseIdentity.primary}</div>
+                {releaseIdentity.secondary && (
+                  <div className="text-xs text-muted-foreground">{releaseIdentity.secondary}</div>
+                )}
+              </>
             )}
           </div>
         ) : (
@@ -380,7 +387,7 @@ function HoldPointRow({
                     title="Record hold point release"
                   >
                     <ClipboardCheck className="h-3 w-3" />
-                    <span>Record Release</span>
+                    <span>Record Manual Release</span>
                   </button>
                   <button
                     onClick={() => onChase(hp)}

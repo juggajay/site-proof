@@ -467,8 +467,8 @@ export function NotificationsTab({
                 Release Authorization
               </Label>
               <p className="text-xs text-muted-foreground mb-2">
-                Specify who is authorized to release hold points. This affects the Record Release
-                functionality.
+                Specify who is authorized to release hold points. This affects the Record Manual
+                Release functionality.
               </p>
               <NativeSelect
                 id="hp-approval-requirement"

@@ -15,6 +15,9 @@ export interface HoldPoint {
   scheduledDate: string | null;
   releasedAt: string | null;
   releasedByName: string | null;
+  releasedByOrg?: string | null;
+  releaseMethod?: string | null;
+  releaseRecipientEmail?: string | null;
   releaseNotes: string | null;
   sequenceNumber: number;
   isCompleted: boolean;

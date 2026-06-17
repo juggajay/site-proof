@@ -207,8 +207,8 @@ export const requestReleaseSchema = z
   });
 
 export const releaseHoldPointSchema = z.object({
-  releasedByName: optionalTrimmedStringSchema(MAX_NAME_LENGTH, 'releasedByName'),
-  releasedByOrg: optionalTrimmedStringSchema(MAX_ORG_LENGTH, 'releasedByOrg'),
+  releasedByName: requiredTrimmedStringSchema('releasedByName', MAX_NAME_LENGTH),
+  releasedByOrg: requiredTrimmedStringSchema('releasedByOrg', MAX_ORG_LENGTH),
   releaseDate: nullableReleaseDateSchema,
   releaseTime: nullableReleaseTimeSchema,
   releaseMethod: optionalReleaseMethodSchema,

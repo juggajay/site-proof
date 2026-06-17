@@ -138,6 +138,17 @@ holdPointReadRouter.get(
         holdPoints: {
           include: {
             itpChecklistItem: true,
+            releaseTokens: {
+              where: {
+                usedAt: { not: null },
+              },
+              orderBy: { usedAt: 'desc' },
+              take: 1,
+              select: {
+                recipientEmail: true,
+                usedAt: true,
+              },
+            },
           },
         },
       },
@@ -186,7 +197,20 @@ holdPointReadRouter.get(
         },
         holdPoints: {
           where: { itpChecklistItemId: itemId },
-          include: { itpChecklistItem: true },
+          include: {
+            itpChecklistItem: true,
+            releaseTokens: {
+              where: {
+                usedAt: { not: null },
+              },
+              orderBy: { usedAt: 'desc' },
+              take: 1,
+              select: {
+                recipientEmail: true,
+                usedAt: true,
+              },
+            },
+          },
         },
       },
     });

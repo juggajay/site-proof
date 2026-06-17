@@ -295,6 +295,12 @@ function assertHoldPointNotReleased(holdPoint: ExistingHoldPointForRelease) {
   }
 }
 
+function assertHoldPointReleaseRequested(holdPoint: ExistingHoldPointForRelease) {
+  if (holdPoint.status !== 'notified') {
+    throw AppError.badRequest('Request hold point release before recording a manual release.');
+  }
+}
+
 // Release a hold point
 holdPointActionRouter.post(
   '/:id/release',
@@ -336,6 +342,7 @@ holdPointActionRouter.post(
     const user = req.user!;
     await requireHoldPointReleaseAccess(existingHP, user);
     assertHoldPointNotReleased(existingHP);
+    assertHoldPointReleaseRequested(existingHP);
 
     const releaseEvidenceDocument = await loadReleaseEvidenceDocumentForHoldPoint(
       releaseEvidenceDocumentId,

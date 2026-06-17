@@ -95,7 +95,7 @@ test.describe('Support seeded account contract', () => {
     );
     await expect(page.getByText('Level 4, 10 Support Street, Sydney NSW')).toBeVisible();
     await expect(page.getByText('Critical issues: Within 1 hour')).toBeVisible();
-    await expect(page.getByText('Record Release')).toBeVisible();
+    await expect(page.getByText('Record Manual Release')).toBeVisible();
     await expect(page.getByText('Project Settings → Team')).toBeVisible();
 
     await page.getByLabel('Category').selectOption('technical');
