@@ -103,7 +103,7 @@ interface AuthContextType {
   signOut: (options?: SignOutOptions) => Promise<void>;
   handleSessionExpired: () => void;
   refreshUser: () => Promise<void>;
-  setToken: (token: string) => Promise<void>; // Feature #414: OAuth callback support
+  setToken: (token: string) => Promise<User>; // Feature #414: OAuth callback support
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -480,7 +480,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   // Feature #414: Set token from OAuth callback
-  const setToken = async (token: string) => {
+  const setToken = async (token: string): Promise<User> => {
     try {
       // Verify the token and get user info
       const result = await fetchCurrentUser(token);
@@ -497,6 +497,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         setActualUser(result.user);
         setSessionExpired(false);
+        return result.user;
       } else {
         throw new Error('Invalid token');
       }

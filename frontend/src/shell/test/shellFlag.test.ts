@@ -15,6 +15,8 @@ import {
   getShellOverride,
   isShellActiveForRole,
   isSubbieShellActiveForRole,
+  isForemanShellActiveForUser,
+  getActiveShellHomePath,
   SUBBIE_SHELL_DEFAULT_ROLES,
   applyShellFlagFromUrl,
 } from '../shellFlag';
@@ -164,6 +166,75 @@ describe('isSubbieShellActiveForRole (default-ON for portal roles)', () => {
         expect(foreman && subbie).toBe(false);
       }
     }
+  });
+});
+
+describe('active shell home path', () => {
+  it('routes a mobile subcontractor portal user to the subbie shell by default', () => {
+    expect(
+      getActiveShellHomePath(
+        {
+          role: 'subcontractor',
+          roleInCompany: 'subcontractor',
+          companyId: null,
+          hasSubcontractorPortalAccess: true,
+        },
+        { isMobile: true, override: null },
+      ),
+    ).toBe('/p');
+  });
+
+  it('routes a mobile company foreman to the foreman shell by default', () => {
+    expect(
+      getActiveShellHomePath(
+        {
+          role: 'foreman',
+          roleInCompany: 'foreman',
+          companyId: 'company-1',
+        },
+        { isMobile: true, override: null },
+      ),
+    ).toBe('/m');
+  });
+
+  it('uses dashboardRole for project-scoped foreman shell defaults', () => {
+    const projectForeman = {
+      role: 'member',
+      roleInCompany: 'member',
+      dashboardRole: 'foreman' as const,
+      companyId: 'company-1',
+    };
+
+    expect(isForemanShellActiveForUser(projectForeman, null)).toBe(true);
+    expect(getActiveShellHomePath(projectForeman, { isMobile: true, override: null })).toBe('/m');
+  });
+
+  it('does not let subcontractor portal users borrow dashboardRole into the foreman shell', () => {
+    const portalUserWithDashboardRole = {
+      role: 'subcontractor',
+      roleInCompany: 'subcontractor',
+      dashboardRole: 'foreman' as const,
+      companyId: null,
+      hasSubcontractorPortalAccess: true,
+    };
+
+    expect(isForemanShellActiveForUser(portalUserWithDashboardRole, null)).toBe(false);
+    expect(
+      getActiveShellHomePath(portalUserWithDashboardRole, { isMobile: true, override: null }),
+    ).toBe('/p');
+  });
+
+  it('returns no shell path on desktop even when the role defaults to a shell', () => {
+    expect(
+      getActiveShellHomePath(
+        {
+          role: 'foreman',
+          roleInCompany: 'foreman',
+          companyId: 'company-1',
+        },
+        { isMobile: false, override: null },
+      ),
+    ).toBeNull();
   });
 });
 

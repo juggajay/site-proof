@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { useAuth } from '@/lib/auth';
 import { logError } from '@/lib/logger';
 import { passwordSchema, MIN_PASSWORD_LENGTH } from '@/lib/validation';
+import { getDefaultPostLoginRedirect } from './postLoginRedirect';
 import { Check, X, Mail, FileText } from 'lucide-react';
 
 // Zod validation schema for registration
@@ -84,7 +85,7 @@ export function RegisterPage() {
         // protected shell; the company-onboarding gate forwards brand-new
         // accounts to company setup. The email-verification nudge lives in
         // the app banner, so no dead-stop screen is needed here.
-        navigate('/dashboard', { replace: true });
+        navigate(getDefaultPostLoginRedirect(user), { replace: true });
         return;
       }
       // No session came back: fall back to the manual sign-in screen.

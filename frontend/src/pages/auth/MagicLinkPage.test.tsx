@@ -38,7 +38,13 @@ afterEach(() => {
 describe('MagicLinkPage', () => {
   it('consumes the one-time token only once when StrictMode reruns effects', async () => {
     mocks.apiFetch.mockResolvedValue({ token: 'jwt-token' });
-    mocks.setToken.mockResolvedValue(undefined);
+    mocks.setToken.mockResolvedValue({
+      id: 'user-1',
+      email: 'user@example.com',
+      role: 'owner',
+      roleInCompany: 'owner',
+      companyId: 'company-1',
+    });
 
     renderWithProviders(
       <StrictMode>
