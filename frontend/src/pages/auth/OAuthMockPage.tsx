@@ -4,6 +4,7 @@ import { apiUrl } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { fetchWithTimeout } from '@/lib/fetchWithTimeout';
 import { devLog, logError } from '@/lib/logger';
+import { getDefaultPostLoginRedirect } from './postLoginRedirect';
 
 /**
  * Mock OAuth page for development - simulates the Google OAuth flow
@@ -44,11 +45,11 @@ export function OAuthMockPage() {
       const data = await response.json();
 
       if (response.ok && data.token) {
-        await setToken(data.token);
+        const signedInUser = await setToken(data.token);
         devLog(`[OAuth Mock] Successfully signed in as ${data.user.email}`);
         // Small delay to ensure auth state propagates before navigation
         await new Promise((resolve) => setTimeout(resolve, 100));
-        navigate('/dashboard', { replace: true });
+        navigate(getDefaultPostLoginRedirect(signedInUser), { replace: true });
       } else {
         setError(data.message || 'Mock OAuth failed');
       }

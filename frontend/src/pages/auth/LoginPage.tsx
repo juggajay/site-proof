@@ -7,8 +7,8 @@ import { useAuth } from '@/lib/auth';
 import { MfaRequiredError } from '@/lib/authErrors';
 import { apiFetch, apiUrl } from '@/lib/api';
 import { loginSchema, emailSchema } from '@/lib/validation';
-import { hasSubcontractorPortalIdentity } from '@/lib/subcontractorIdentity';
 import { renderChainageTicks } from '@/lib/chainageTicks';
+import { getPostLoginRedirect } from './postLoginRedirect';
 import './authSurvey.css';
 
 /* ============================================================
@@ -33,61 +33,6 @@ const mfaSchema = z.object({
     .regex(/^(?:\d{6}|[A-Fa-f0-9]{10})$/, 'Enter a 6-digit code or 10-character backup code'),
 });
 type MfaFormData = z.infer<typeof mfaSchema>;
-
-type RedirectUser = {
-  companyId?: string | null;
-  hasSubcontractorPortalAccess?: boolean;
-};
-
-function getSafeRedirectPath(redirect: string | null): string | null {
-  if (!redirect || !redirect.startsWith('/') || redirect.startsWith('//')) {
-    return null;
-  }
-  return redirect;
-}
-
-function getSafeLocationRedirect(from: unknown): string | null {
-  if (!from || typeof from !== 'object') return null;
-
-  const location = from as { pathname?: unknown; search?: unknown; hash?: unknown };
-  if (typeof location.pathname !== 'string') return null;
-  if (!location.pathname.startsWith('/') || location.pathname.startsWith('//')) return null;
-
-  const search =
-    typeof location.search === 'string' && location.search.startsWith('?') ? location.search : '';
-  const hash =
-    typeof location.hash === 'string' && location.hash.startsWith('#') ? location.hash : '';
-
-  return `${location.pathname}${search}${hash}`;
-}
-
-function getDefaultPostLoginRedirect(user: RedirectUser): string {
-  return hasSubcontractorPortalIdentity(user) ? '/subcontractor-portal' : '/dashboard';
-}
-
-function isAllowedPostLoginRedirect(redirect: string, user: RedirectUser): boolean {
-  if (redirect === '/subcontractor-portal' || redirect.startsWith('/subcontractor-portal/')) {
-    return hasSubcontractorPortalIdentity(user);
-  }
-
-  return true;
-}
-
-function getPostLoginRedirect(
-  searchParams: URLSearchParams,
-  locationState: unknown,
-  user: RedirectUser,
-): string {
-  const redirect =
-    getSafeRedirectPath(searchParams.get('redirect')) ||
-    getSafeLocationRedirect((locationState as { from?: unknown } | null)?.from);
-
-  if (redirect && isAllowedPostLoginRedirect(redirect, user)) {
-    return redirect;
-  }
-
-  return getDefaultPostLoginRedirect(user);
-}
 
 function getLoginErrorMessage(error: string | null): string | null {
   if (error === 'mfa_required') {
@@ -228,7 +173,7 @@ export function LoginPage() {
     try {
       const mfaCode = mfaRequired ? mfaForm.getValues('mfaCode') : undefined;
       const signedInUser = await signIn(data.email, data.password, data.rememberMe, mfaCode);
-      // Navigate to the original destination or dashboard
+      // Navigate to the original destination, with mobile shell entry points resolved up front.
       const from = getPostLoginRedirect(searchParams, location.state, signedInUser);
       navigate(from, { replace: true });
     } catch (err) {

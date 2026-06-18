@@ -22,11 +22,17 @@
 import { useEffect, useState } from 'react';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { useAuth } from '@/lib/auth';
-import { getCompanyRole } from '@/lib/subcontractorIdentity';
+import {
+  getCompanyRole,
+  getDashboardRole,
+  hasSubcontractorPortalIdentity,
+} from '@/lib/subcontractorIdentity';
 import { isSubcontractorRole } from '@/lib/roles';
 import { readLocalStorageItem, writeLocalStorageItem } from '@/lib/storagePreferences';
 
 const FLAG_KEY = 'siteproof.shell.v2';
+const MOBILE_QUERY = '(max-width: 767px)';
+type ShellUser = Parameters<typeof getCompanyRole>[0];
 
 /** Roles that get the shell with no flag set. */
 const SHELL_DEFAULT_ROLES = new Set(['foreman']);
@@ -126,6 +132,33 @@ export function isSubbieShellActiveForRole(
   return SUBBIE_SHELL_DEFAULT_ROLES.has(role);
 }
 
+function isMobileViewport(): boolean {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return false;
+  }
+  return window.matchMedia(MOBILE_QUERY).matches;
+}
+
+export function isForemanShellActiveForUser(user: ShellUser, override: ShellOverride): boolean {
+  if (!user || hasSubcontractorPortalIdentity(user)) return false;
+  const companyRole = getCompanyRole(user);
+  if (isSubcontractorRole(companyRole)) return false;
+  return isShellActiveForRole(getDashboardRole(user), override);
+}
+
+export function getActiveShellHomePath(
+  user: ShellUser,
+  options: { isMobile?: boolean; override?: ShellOverride } = {},
+): '/m' | '/p' | null {
+  const isMobile = options.isMobile ?? isMobileViewport();
+  if (!isMobile || !user) return null;
+
+  const override = options.override ?? getShellOverride();
+  if (isForemanShellActiveForUser(user, override)) return '/m';
+  if (isSubbieShellActiveForRole(getCompanyRole(user), override)) return '/p';
+  return null;
+}
+
 // ── react hook ───────────────────────────────────────────────────────────────
 
 /**
@@ -152,17 +185,14 @@ export function useShellV2Enabled(): boolean {
     setOverride(getShellOverride());
   }, []);
 
-  if (!isMobile || !user) return false;
-
-  return isShellActiveForRole(getCompanyRole(user), override);
+  return getActiveShellHomePath(user, { isMobile, override }) === '/m';
 }
 
 /**
  * Returns true when the SUBBIE shell (/p) should render:
  *  - viewport is mobile-width
  *  - authenticated subcontractor portal role
- *  - and: forced on, OR (no override AND the role defaults to the subbie shell —
- *    which today it never does, since SUBBIE_SHELL_DEFAULT_ROLES is empty)
+ *  - and: forced on, OR (no override AND the role defaults to the subbie shell)
  *
  * Mirrors useShellV2Enabled exactly, including reading ?shell= on mount, so the
  * URL param is honoured on first render and a ?shell=off navigation disables it
@@ -181,7 +211,5 @@ export function useSubbieShellActive(): boolean {
     setOverride(getShellOverride());
   }, []);
 
-  if (!isMobile || !user) return false;
-
-  return isSubbieShellActiveForRole(getCompanyRole(user), override);
+  return getActiveShellHomePath(user, { isMobile, override }) === '/p';
 }
