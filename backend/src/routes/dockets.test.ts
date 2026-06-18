@@ -262,6 +262,52 @@ describe('Dockets API', () => {
       }
     });
 
+    it('should enforce daily docket uniqueness at the database layer', async () => {
+      const docketDate = new Date('2031-05-21T00:00:00.000Z');
+
+      try {
+        await prisma.dailyDocket.create({
+          data: {
+            projectId,
+            subcontractorCompanyId,
+            date: docketDate,
+            status: 'draft',
+            notes: 'First database-level docket',
+          },
+        });
+
+        await expect(
+          prisma.dailyDocket.create({
+            data: {
+              projectId,
+              subcontractorCompanyId,
+              date: docketDate,
+              status: 'draft',
+              notes: 'Duplicate database-level docket',
+            },
+          }),
+        ).rejects.toMatchObject({ code: 'P2002' });
+
+        await expect(
+          prisma.dailyDocket.count({
+            where: {
+              projectId,
+              subcontractorCompanyId,
+              date: docketDate,
+            },
+          }),
+        ).resolves.toBe(1);
+      } finally {
+        await prisma.dailyDocket.deleteMany({
+          where: {
+            projectId,
+            subcontractorCompanyId,
+            date: docketDate,
+          },
+        });
+      }
+    });
+
     it('should reject docket without projectId', async () => {
       const res = await request(app)
         .post('/api/dockets')
