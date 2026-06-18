@@ -1150,6 +1150,7 @@ model DailyDocket {
 
   @@index([projectId, date])
   @@index([projectId, status])
+  @@unique([subcontractorCompanyId, projectId, date], map: "daily_dockets_subcontractor_company_id_project_id_date_key")
   @@index([subcontractorCompanyId, date])
   @@index([subcontractorCompanyId, status])
   @@map("daily_dockets")
