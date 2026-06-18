@@ -12,7 +12,12 @@ import {
   requireSubcontractorPortalModuleAccess,
 } from '../../lib/projectAccess.js';
 import { buildNcrListResponse } from './ncrCoreResponses.js';
-import { getOptionalQueryString, parseNcrSortBy } from './ncrCoreValidation.js';
+import {
+  getOptionalQueryString,
+  parseNcrSeverityFilter,
+  parseNcrSortBy,
+  parseNcrStatusFilter,
+} from './ncrCoreValidation.js';
 
 export const ncrListRouter = Router();
 
@@ -23,8 +28,8 @@ ncrListRouter.get(
   asyncHandler(async (req: Request, res: Response) => {
     const user = req.user as AuthUser;
     const requestedProjectId = getOptionalQueryString(req.query, 'projectId');
-    const status = getOptionalQueryString(req.query, 'status');
-    const severity = getOptionalQueryString(req.query, 'severity');
+    const status = parseNcrStatusFilter(getOptionalQueryString(req.query, 'status'));
+    const severity = parseNcrSeverityFilter(getOptionalQueryString(req.query, 'severity'));
     const lotId = getOptionalQueryString(req.query, 'lotId');
     const search = getOptionalQueryString(req.query, 'search');
     const { page, limit, sortBy, sortOrder } = parsePagination(req.query);
@@ -110,11 +115,11 @@ ncrListRouter.get(
     }
 
     if (status) {
-      where.status = status as string;
+      where.status = status;
     }
 
     if (severity) {
-      where.severity = severity as string;
+      where.severity = severity;
     }
 
     // Filter by lotId - find NCRs linked to this lot

@@ -724,6 +724,22 @@ describe('NCR API', () => {
       expect(res.body.error.message).toContain('sortBy must be one of');
     });
 
+    it('should reject unsupported status and severity filters', async () => {
+      const invalidStatusRes = await request(app)
+        .get('/api/ncrs?status=deleted')
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(invalidStatusRes.status).toBe(400);
+      expect(invalidStatusRes.body.error.message).toContain('status must be one of');
+
+      const invalidSeverityRes = await request(app)
+        .get('/api/ncrs?severity=critical')
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(invalidSeverityRes.status).toBe(400);
+      expect(invalidSeverityRes.body.error.message).toContain('severity must be one of');
+    });
+
     it('should reject malformed NCR search parameters', async () => {
       const duplicateSearchRes = await request(app)
         .get('/api/ncrs')

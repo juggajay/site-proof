@@ -39,6 +39,34 @@ const duplicateChecks: DuplicateCheck[] = [
     remediation:
       'Resolve duplicate drawings before applying 20260615162000_add_drawing_revision_unique.',
   },
+  {
+    name: 'ncr_evidence ncr/document duplicates',
+    sql: Prisma.sql`
+      SELECT COUNT(*)::int AS count
+      FROM (
+        SELECT ncr_id, document_id
+        FROM ncr_evidence
+        GROUP BY ncr_id, document_id
+        HAVING COUNT(*) > 1
+      ) duplicates
+    `,
+    remediation:
+      'Delete duplicate ncr_evidence rows before applying a unique constraint on (ncr_id, document_id).',
+  },
+  {
+    name: 'daily_dockets subcontractor/project/date duplicates',
+    sql: Prisma.sql`
+      SELECT COUNT(*)::int AS count
+      FROM (
+        SELECT subcontractor_company_id, project_id, date
+        FROM daily_dockets
+        GROUP BY subcontractor_company_id, project_id, date
+        HAVING COUNT(*) > 1
+      ) duplicates
+    `,
+    remediation:
+      'Resolve duplicate daily_dockets rows before applying a unique constraint on (subcontractor_company_id, project_id, date).',
+  },
 ];
 
 async function countDuplicates(sql: Prisma.Sql): Promise<number> {

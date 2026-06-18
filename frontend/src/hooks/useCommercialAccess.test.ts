@@ -12,6 +12,8 @@ type MockUser = {
   role?: string;
   roleInCompany?: string;
   dashboardRole?: 'project_manager' | 'quality_manager' | 'foreman' | null;
+  companyId?: string | null;
+  hasSubcontractorPortalAccess?: boolean;
 };
 
 function setAuth(user: MockUser | null, actualRole: string | null = user?.role ?? null) {
@@ -78,5 +80,23 @@ describe('useCommercialAccess', () => {
 
     expect(result.current.hasCommercialAccess).toBe(true);
     expect(result.current.canViewSubcontractorRates).toBe(true);
+  });
+
+  it('does not let subcontractor portal users borrow a project dashboard role for commercial access', () => {
+    setAuth(
+      {
+        role: 'subcontractor',
+        roleInCompany: 'subcontractor',
+        dashboardRole: 'project_manager',
+        companyId: null,
+        hasSubcontractorPortalAccess: true,
+      },
+      null,
+    );
+
+    const { result } = renderHook(() => useCommercialAccess());
+
+    expect(result.current.hasCommercialAccess).toBe(false);
+    expect(result.current.canViewDocketAmounts).toBe(false);
   });
 });

@@ -22,6 +22,15 @@ const NCR_SORT_FIELDS = new Set([
   'severity',
   'category',
 ]);
+const NCR_STATUS_FILTERS = new Set([
+  'open',
+  'investigating',
+  'rectification',
+  'verification',
+  'closed',
+  'closed_concession',
+]);
+const NCR_SEVERITY_FILTERS = new Set(['minor', 'major']);
 
 function requiredTrimmedNcrString(fieldName: string, maxLength: number, requiredMessage: string) {
   return z
@@ -232,4 +241,28 @@ export function parseNcrSortBy(
   }
 
   return sortBy as keyof Prisma.NCROrderByWithRelationInput;
+}
+
+export function parseNcrStatusFilter(status?: string): string | undefined {
+  if (!status) {
+    return undefined;
+  }
+
+  if (!NCR_STATUS_FILTERS.has(status)) {
+    throw AppError.badRequest(`status must be one of: ${[...NCR_STATUS_FILTERS].join(', ')}`);
+  }
+
+  return status;
+}
+
+export function parseNcrSeverityFilter(severity?: string): string | undefined {
+  if (!severity) {
+    return undefined;
+  }
+
+  if (!NCR_SEVERITY_FILTERS.has(severity)) {
+    throw AppError.badRequest(`severity must be one of: ${[...NCR_SEVERITY_FILTERS].join(', ')}`);
+  }
+
+  return severity;
 }

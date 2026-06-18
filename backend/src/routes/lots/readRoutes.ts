@@ -61,6 +61,7 @@ import {
 } from './coreResponses.js';
 
 export const lotReadRouter = Router();
+const MAX_SUGGEST_NUMBER_LOT_SCAN_RESULTS = 10_000;
 
 // GET /api/lots - List all lots for a project (paginated)
 lotReadRouter.get(
@@ -236,6 +237,7 @@ lotReadRouter.get(
       },
       select: { lotNumber: true },
       orderBy: { lotNumber: 'desc' },
+      take: MAX_SUGGEST_NUMBER_LOT_SCAN_RESULTS,
     });
 
     const { suggestedNumber, nextNumber } = suggestLotNumber({

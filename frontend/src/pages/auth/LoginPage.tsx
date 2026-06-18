@@ -124,7 +124,7 @@ export function LoginPage() {
   const [magicLinkEmail, setMagicLinkEmail] = useState('');
   // MFA state (Feature #22, #421)
   const [mfaRequired, setMfaRequired] = useState(false);
-  const { signIn } = useAuth();
+  const { signIn, user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -166,6 +166,12 @@ export function LoginPage() {
       document.title = prevTitle;
     };
   }, []);
+
+  useEffect(() => {
+    if (!authLoading && user) {
+      navigate(getPostLoginRedirect(searchParams, location.state, user), { replace: true });
+    }
+  }, [authLoading, location.state, navigate, searchParams, user]);
 
   const onLoginSubmit = async (data: LoginFormData) => {
     setLoading(true);

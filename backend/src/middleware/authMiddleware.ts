@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { verifyToken } from '../lib/auth.js';
 import { AppError } from '../lib/AppError.js';
+import { ROLE_HIERARCHY, type Role } from '../lib/roles.js';
 
 // Type alias for requests that will have user populated
 export type AuthRequest = Request;
@@ -79,20 +80,6 @@ export async function optionalAuth(req: Request, _res: Response, next: NextFunct
   }
 }
 
-// Role hierarchy for permission checks
-const ROLE_HIERARCHY: Record<string, number> = {
-  owner: 100,
-  admin: 90,
-  project_manager: 80,
-  site_manager: 70,
-  foreman: 60,
-  site_engineer: 50,
-  subcontractor_admin: 40,
-  subcontractor: 30,
-  viewer: 20,
-  member: 10,
-};
-
 /**
  * Middleware factory that checks if user has required role level
  * Returns 403 if user's role is below the required level
@@ -124,8 +111,8 @@ export function requireMinRole(minRole: string) {
     }
 
     const userRole = req.user.roleInCompany || 'member';
-    const userLevel = ROLE_HIERARCHY[userRole] || 0;
-    const requiredLevel = ROLE_HIERARCHY[minRole] || 100;
+    const userLevel = ROLE_HIERARCHY[userRole as Role] ?? 0;
+    const requiredLevel = ROLE_HIERARCHY[minRole as Role] ?? 100;
 
     if (userLevel < requiredLevel) {
       throw AppError.forbidden('You do not have permission to perform this action.');
