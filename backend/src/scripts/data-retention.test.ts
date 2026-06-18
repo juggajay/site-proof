@@ -58,11 +58,15 @@ describe('data retention reporting', () => {
 
   it('requires an explicit database confirmation before applying deletes', () => {
     const source = readFileSync(join(process.cwd(), 'scripts', 'data-retention.ts'), 'utf8');
+    const helperSource = readFileSync(
+      join(process.cwd(), 'scripts', 'lib', 'database-target.ts'),
+      'utf8',
+    );
 
     expect(source).toContain('CONFIRM_RETENTION_APPLY');
     expect(source).toContain('requireRetentionApplyConfirmation');
-    expect(source).toContain('Refusing retention apply');
-    expect(source).toContain('database host/name');
+    expect(helperSource).toContain('Refusing ${actionDescription}');
+    expect(helperSource).toContain('database host/name');
   });
 
   it('builds document signed-link cleanup from expiry only', async () => {

@@ -1910,7 +1910,7 @@ describe('Hold Point Token Release', () => {
     expect(res.body.tokenInfo).toBeDefined();
   });
 
-  it('should keep legacy plaintext public tokens valid until expiry', async () => {
+  it('should keep legacy plaintext public tokens valid until expiry and upgrade storage', async () => {
     const legacyToken = `legacy-token-${Date.now()}`;
     const legacyRecord = await prisma.holdPointReleaseToken.create({
       data: {
@@ -1927,6 +1927,11 @@ describe('Hold Point Token Release', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.evidencePackage).toBeDefined();
+
+      const upgradedRecord = await prisma.holdPointReleaseToken.findUniqueOrThrow({
+        where: { id: legacyRecord.id },
+      });
+      expect(upgradedRecord.token).toBe(hashHoldPointReleaseTokenForTest(legacyToken));
     } finally {
       await prisma.holdPointReleaseToken.delete({ where: { id: legacyRecord.id } }).catch(() => {});
     }
