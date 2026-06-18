@@ -180,6 +180,17 @@ function isSafeAttachmentUrl(fileUrl: string, projectId: string): boolean {
     return false;
   }
 
+  try {
+    if (
+      isSupabaseConfigured() &&
+      getOwnedCommentAttachmentStoragePath(fileUrl, projectId) !== null
+    ) {
+      return true;
+    }
+  } catch {
+    return false;
+  }
+
   if (fileUrl.startsWith('/uploads/comments/')) {
     try {
       resolveUploadPath(fileUrl, 'comments');
@@ -189,17 +200,7 @@ function isSafeAttachmentUrl(fileUrl: string, projectId: string): boolean {
     }
   }
 
-  if (!/^https?:\/\//i.test(fileUrl)) {
-    return false;
-  }
-
-  try {
-    return (
-      isSupabaseConfigured() && getOwnedCommentAttachmentStoragePath(fileUrl, projectId) !== null
-    );
-  } catch {
-    return false;
-  }
+  return false;
 }
 
 function isExternalAttachmentUrl(fileUrl: string): boolean {
@@ -249,12 +250,12 @@ export function sendCommentAttachmentFile(
   projectId: string,
   res: Pick<Response, 'setHeader' | 'send' | 'sendFile'>,
 ): Promise<void> | void {
-  if (isExternalAttachmentUrl(attachment.fileUrl)) {
-    if (!isSafeAttachmentUrl(attachment.fileUrl, projectId)) {
-      throw AppError.notFound('Attachment file');
-    }
-
+  if (getOwnedCommentAttachmentStoragePath(attachment.fileUrl, projectId)) {
     return sendSupabaseCommentAttachmentFile(attachment, projectId, res);
+  }
+
+  if (isExternalAttachmentUrl(attachment.fileUrl)) {
+    throw AppError.notFound('Attachment file');
   }
 
   let filePath: string;

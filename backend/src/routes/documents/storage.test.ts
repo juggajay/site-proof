@@ -1,6 +1,25 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('../../lib/supabase.js', async () => {
+  const actual =
+    await vi.importActual<typeof import('../../lib/supabase.js')>('../../lib/supabase.js');
+  return {
+    ...actual,
+    getSupabaseClient: vi.fn(),
+    isSupabaseConfigured: vi.fn(),
+  };
+});
+
+import * as supabaseLib from '../../lib/supabase.js';
 import { getSupabaseStorageReference } from '../../lib/supabase.js';
-import { getOwnedDocumentStoragePath } from './storage.js';
+import { getOwnedDocumentStoragePath, loadDocumentImageAsBase64 } from './storage.js';
+
+const mockGetSupabaseClient = vi.mocked(supabaseLib.getSupabaseClient);
+const mockIsSupabaseConfigured = vi.mocked(supabaseLib.isSupabaseConfigured);
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 describe('document Supabase storage ownership', () => {
   it('accepts canonical storage references inside the document project prefix', () => {
@@ -40,5 +59,32 @@ describe('document Supabase storage ownership', () => {
         'drawing',
       ),
     ).toBeNull();
+  });
+
+  it('loads canonical storage reference images through Supabase', async () => {
+    const download = vi.fn().mockResolvedValue({
+      data: new Blob([Buffer.from('image bytes')], { type: 'image/png' }),
+      error: null,
+    });
+    const from = vi.fn(() => ({ download }));
+
+    mockIsSupabaseConfigured.mockReturnValue(true);
+    mockGetSupabaseClient.mockReturnValue({
+      storage: { from },
+    } as unknown as ReturnType<typeof supabaseLib.getSupabaseClient>);
+
+    await expect(
+      loadDocumentImageAsBase64(
+        {
+          fileUrl: 'supabase://documents/project-a/photo.png',
+          projectId: 'project-a',
+          documentType: 'image',
+        },
+        'image/png',
+      ),
+    ).resolves.toBe(Buffer.from('image bytes').toString('base64'));
+
+    expect(from).toHaveBeenCalledWith('documents');
+    expect(download).toHaveBeenCalledWith('project-a/photo.png');
   });
 });
