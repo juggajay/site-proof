@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import { authRouter } from './auth.js';
-import { auditLogRouter } from './auditLog.js';
+import { auditLogRouter, MAX_AUDIT_LOG_USER_FILTER_RESULTS } from './auditLog.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { registerTestUser as registerSharedTestUser } from '../test/routeTestHarness.js';
@@ -897,6 +897,39 @@ describe('Audit Log API', () => {
         const currentEmail = users[i].email || '';
         const nextEmail = users[i + 1].email || '';
         expect(currentEmail.localeCompare(nextEmail)).toBeLessThanOrEqual(0);
+      }
+    });
+
+    it('should bound and order the user filter lookup', async () => {
+      const findManySpy = vi.spyOn(prisma.user, 'findMany').mockResolvedValueOnce([
+        {
+          id: 'bounded-user-id',
+          email: 'bounded-user@example.com',
+          fullName: 'Bounded User',
+        },
+      ] as Awaited<ReturnType<typeof prisma.user.findMany>>);
+
+      try {
+        const res = await request(app)
+          .get('/api/audit-logs/users')
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.users).toEqual([
+          {
+            id: 'bounded-user-id',
+            email: 'bounded-user@example.com',
+            fullName: 'Bounded User',
+          },
+        ]);
+        expect(findManySpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            take: MAX_AUDIT_LOG_USER_FILTER_RESULTS,
+            orderBy: [{ email: 'asc' }, { id: 'asc' }],
+          }),
+        );
+      } finally {
+        findManySpy.mockRestore();
       }
     });
 
