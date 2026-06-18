@@ -14,12 +14,9 @@
  * (good tone) : "VIEW ONLY — ASK YOUR PM" (eye icon). Tapping opens the shell ITP
  * run (/p/lots/:lotId/itp).
  *
- * NOTE — the mock shows "X of Y checks done — next: …" and an "N LEFT" pill. The
- * itps-list payload (includeITP) returns only instance `status` + template name;
- * it carries no per-item completion counts, so those are NOT derivable here
- * without an extra fetch per lot. We surface the instance status as the honest
- * substitute and keep the load-bearing permission pill the mock emphasises. The
- * full per-check breakdown lives one tap deeper, on the run screen.
+ * The list endpoint returns a derived instance `status` plus completionPercentage
+ * from the server-side completion rows. The full per-check breakdown lives one
+ * tap deeper, on the run screen.
  */
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -36,6 +33,7 @@ import { useSubbieShellContext } from '../subbieShellContext';
 interface ITPInstanceSummary {
   id: string;
   status: string;
+  completionPercentage?: number;
   template: { id: string; name: string; activityType?: string };
 }
 
@@ -58,9 +56,12 @@ const STATUS_LABEL: Record<string, string> = {
   completed: 'Complete',
 };
 
-// Status-derived progress (no per-item counts in the list payload — honest, not
-// fabricated): complete → full, in progress → partial, else empty.
-function itpProgressPct(status: string): number {
+// Prefer the server-derived percentage; keep the old status fallback for older
+// cached responses while a deploy rolls through.
+function itpProgressPct(status: string, completionPercentage?: number): number {
+  if (typeof completionPercentage === 'number' && completionPercentage > 0) {
+    return completionPercentage;
+  }
   if (status === 'completed') return 100;
   if (status === 'in_progress') return 55;
   return 0;
@@ -71,7 +72,7 @@ function ItpLotCard({ lot, onPress }: { lot: Lot; onPress: () => void }) {
   const canComplete = lot.subcontractorAssignments?.some((a) => a.canCompleteITP) ?? false;
   const status = itp?.status ?? 'not_started';
   const statusLabel = STATUS_LABEL[status] ?? status;
-  const pct = itpProgressPct(status);
+  const pct = itpProgressPct(status, itp?.completionPercentage);
 
   return (
     <button
