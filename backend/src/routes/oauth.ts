@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Request } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { generateToken } from '../lib/auth.js';
 import { AppError } from '../lib/AppError.js';
@@ -75,48 +75,15 @@ oauthRouter.get(
   '/google/callback',
   asyncHandler(async (req, res) => {
     const frontendUrl = getFrontendUrl();
-    const code = parseOAuthCallbackQueryParam(req.query.code);
-    const state = parseOAuthCallbackQueryParam(req.query.state);
-    const error = parseOAuthCallbackQueryParam(req.query.error);
-
-    if (error === null) {
-      logWarn('[OAuth] Malformed OAuth error callback parameter');
-      return res.redirect(`${frontendUrl}/login?error=oauth_failed`);
+    const callbackParams = parseGoogleCallbackRequest(req.query);
+    if ('redirect' in callbackParams) {
+      return res.redirect(buildOAuthLoginRedirect(frontendUrl, callbackParams.redirect));
     }
 
-    if (state === null) {
-      logWarn('[OAuth] Malformed OAuth state callback parameter');
-      return res.redirect(`${frontendUrl}/login?error=invalid_state`);
-    }
-
-    if (code === null) {
-      logWarn('[OAuth] Malformed OAuth authorization code callback parameter');
-      return res.redirect(`${frontendUrl}/login?error=no_code`);
-    }
-
-    // Handle OAuth errors
-    if (error) {
-      logWarn('[OAuth] Google OAuth error:', error);
-      return res.redirect(
-        `${frontendUrl}/login?error=oauth_failed&message=${encodeURIComponent(error)}`,
-      );
-    }
-
-    // Verify state token using database storage
-    if (!state) {
-      logWarn('[OAuth] No state token provided');
-      return res.redirect(`${frontendUrl}/login?error=invalid_state`);
-    }
-
-    const stateVerification = await verifyOAuthState(state);
+    const stateVerification = await verifyOAuthState(callbackParams.state);
     if (!stateVerification.valid) {
       logWarn('[OAuth] Invalid or expired state token');
       return res.redirect(`${frontendUrl}/login?error=invalid_state`);
-    }
-
-    if (!code) {
-      logWarn('[OAuth] No authorization code received');
-      return res.redirect(`${frontendUrl}/login?error=no_code`);
     }
 
     const clientId = process.env.GOOGLE_CLIENT_ID;
@@ -127,61 +94,42 @@ oauthRouter.get(
       return res.redirect(`${frontendUrl}/login?error=oauth_not_configured`);
     }
 
-    // Exchange code for tokens
-    const tokenResponse = await fetchWithTimeout('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        code,
-        client_id: clientId!,
-        client_secret: clientSecret!,
-        redirect_uri: redirectUri,
-        grant_type: 'authorization_code',
-      }),
+    const tokens = await exchangeGoogleCodeForTokens({
+      code: callbackParams.code,
+      clientId: clientId!,
+      clientSecret: clientSecret!,
+      redirectUri,
     });
-
-    if (!tokenResponse.ok) {
-      logWarn(
-        `[OAuth] Token exchange failed with status ${formatOAuthProviderStatus(tokenResponse)}`,
-      );
+    if (!tokens) {
       return res.redirect(`${frontendUrl}/login?error=token_exchange_failed`);
     }
 
-    const tokens = (await tokenResponse.json()) as { access_token: string; id_token?: string };
-
-    // Get user info from Google
-    const userInfoResponse = await fetchWithTimeout(
-      'https://www.googleapis.com/oauth2/v2/userinfo',
-      {
-        headers: { Authorization: `Bearer ${tokens.access_token}` },
-      },
-    );
-
-    if (!userInfoResponse.ok) {
-      logWarn('[OAuth] Failed to get user info');
-      return res.redirect(`${frontendUrl}/login?error=user_info_failed`);
+    const verifiedIdentity = await getVerifiedGoogleCallbackIdentity(tokens.id_token);
+    if (!verifiedIdentity) {
+      return res.redirect(`${frontendUrl}/login?error=invalid_google_token`);
     }
 
-    const googleUser = (await userInfoResponse.json()) as {
-      id: string;
-      email: string;
-      name?: string;
-      picture?: string;
-      verified_email?: boolean;
-    };
+    const googleUser = await getGoogleCallbackUserInfo(tokens.access_token);
+    if (!googleUser) {
+      return res.redirect(`${frontendUrl}/login?error=user_info_failed`);
+    }
 
     if (!isVerifiedEmail(googleUser.verified_email)) {
       logWarn('[OAuth] Google callback email is not verified');
       return res.redirect(`${frontendUrl}/login?error=email_not_verified`);
     }
 
+    if (!doesGoogleCallbackUserInfoMatchIdentity(googleUser, verifiedIdentity)) {
+      return res.redirect(`${frontendUrl}/login?error=invalid_google_token`);
+    }
+
     // Find or create user, then hand off a one-time code instead of putting the JWT in the URL.
     const { user, mfaEnabled, created } = await findOrCreateOAuthUser({
       provider: 'google',
-      providerId: googleUser.id,
-      email: googleUser.email,
-      fullName: googleUser.name,
-      avatarUrl: googleUser.picture,
+      providerId: verifiedIdentity.providerId,
+      email: verifiedIdentity.email,
+      fullName: googleUser.name ?? verifiedIdentity.name,
+      avatarUrl: googleUser.picture ?? verifiedIdentity.picture,
       emailVerified: true,
     });
 
@@ -197,6 +145,171 @@ oauthRouter.get(
     res.redirect(`${frontendUrl}/auth/oauth-callback?code=${callbackCode}&provider=google`);
   }),
 );
+
+type OAuthLoginRedirect = {
+  error: string;
+  message?: string;
+};
+
+type GoogleCallbackRequest = { code: string; state: string } | { redirect: OAuthLoginRedirect };
+
+type GoogleTokenResponse = {
+  access_token: string;
+  id_token?: string;
+};
+
+type GoogleCallbackUserInfo = {
+  id: string;
+  email: string;
+  name?: string;
+  picture?: string;
+  verified_email?: boolean;
+};
+
+type VerifiedGoogleCallbackIdentity = {
+  providerId: string;
+  email: string;
+  name?: string;
+  picture?: string;
+};
+
+function buildOAuthLoginRedirect(frontendUrl: string, redirect: OAuthLoginRedirect): string {
+  const params = new URLSearchParams({ error: redirect.error });
+  if (redirect.message) {
+    params.set('message', redirect.message);
+  }
+  return `${frontendUrl}/login?${params.toString()}`;
+}
+
+function parseGoogleCallbackRequest(query: Request['query']): GoogleCallbackRequest {
+  const code = parseOAuthCallbackQueryParam(query.code);
+  const state = parseOAuthCallbackQueryParam(query.state);
+  const error = parseOAuthCallbackQueryParam(query.error);
+
+  if (error === null) {
+    logWarn('[OAuth] Malformed OAuth error callback parameter');
+    return { redirect: { error: 'oauth_failed' } } satisfies GoogleCallbackRequest;
+  }
+
+  if (state === null) {
+    logWarn('[OAuth] Malformed OAuth state callback parameter');
+    return { redirect: { error: 'invalid_state' } } satisfies GoogleCallbackRequest;
+  }
+
+  if (code === null) {
+    logWarn('[OAuth] Malformed OAuth authorization code callback parameter');
+    return { redirect: { error: 'no_code' } } satisfies GoogleCallbackRequest;
+  }
+
+  if (error) {
+    logWarn('[OAuth] Google OAuth error:', error);
+    return { redirect: { error: 'oauth_failed', message: error } } satisfies GoogleCallbackRequest;
+  }
+
+  if (!state) {
+    logWarn('[OAuth] No state token provided');
+    return { redirect: { error: 'invalid_state' } } satisfies GoogleCallbackRequest;
+  }
+
+  if (!code) {
+    logWarn('[OAuth] No authorization code received');
+    return { redirect: { error: 'no_code' } } satisfies GoogleCallbackRequest;
+  }
+
+  return { code, state } satisfies GoogleCallbackRequest;
+}
+
+async function exchangeGoogleCodeForTokens(params: {
+  code: string;
+  clientId: string;
+  clientSecret: string;
+  redirectUri: string;
+}): Promise<GoogleTokenResponse | null> {
+  const tokenResponse = await fetchWithTimeout('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      code: params.code,
+      client_id: params.clientId,
+      client_secret: params.clientSecret,
+      redirect_uri: params.redirectUri,
+      grant_type: 'authorization_code',
+    }),
+  });
+
+  if (!tokenResponse.ok) {
+    logWarn(
+      `[OAuth] Token exchange failed with status ${formatOAuthProviderStatus(tokenResponse)}`,
+    );
+    return null;
+  }
+
+  return (await tokenResponse.json()) as GoogleTokenResponse;
+}
+
+async function getGoogleCallbackUserInfo(
+  accessToken: string,
+): Promise<GoogleCallbackUserInfo | null> {
+  const userInfoResponse = await fetchWithTimeout('https://www.googleapis.com/oauth2/v2/userinfo', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!userInfoResponse.ok) {
+    logWarn('[OAuth] Failed to get user info');
+    return null;
+  }
+
+  return (await userInfoResponse.json()) as GoogleCallbackUserInfo;
+}
+
+async function getVerifiedGoogleCallbackIdentity(
+  idToken: string | undefined,
+): Promise<VerifiedGoogleCallbackIdentity | null> {
+  if (!idToken || typeof idToken !== 'string') {
+    logWarn('[OAuth] Google token response did not include an ID token');
+    return null;
+  }
+
+  let payload: Awaited<ReturnType<typeof getGoogleCredentialPayload>>;
+  try {
+    payload = await getGoogleCredentialPayload(idToken);
+  } catch {
+    logWarn('[OAuth] Google callback ID token verification failed');
+    return null;
+  }
+
+  try {
+    return {
+      providerId: payload.sub,
+      email: normalizeOAuthEmail(payload.email),
+      name: payload.name,
+      picture: payload.picture,
+    };
+  } catch {
+    logWarn('[OAuth] Google callback ID token email is invalid');
+    return null;
+  }
+}
+
+function doesGoogleCallbackUserInfoMatchIdentity(
+  googleUser: GoogleCallbackUserInfo,
+  verifiedIdentity: VerifiedGoogleCallbackIdentity,
+): boolean {
+  let userInfoEmail: string;
+  try {
+    userInfoEmail = normalizeOAuthEmail(googleUser.email);
+  } catch {
+    logWarn('[OAuth] Google callback userinfo email is invalid');
+    return false;
+  }
+
+  if (googleUser.id !== verifiedIdentity.providerId || userInfoEmail !== verifiedIdentity.email) {
+    logWarn('[OAuth] Google callback userinfo did not match verified ID token');
+    return false;
+  }
+
+  return true;
+}
 
 async function verifyGoogleCredential(credential: string): Promise<GoogleCredentialPayload> {
   const response = await fetchWithTimeout(
