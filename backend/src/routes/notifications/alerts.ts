@@ -58,7 +58,7 @@ import {
 import { notificationSystemAlertsRouter } from './systemAlerts.js';
 
 export const notificationAlertsRouter = Router();
-const MAX_ALERT_LIST_RESULTS = 500;
+export const MAX_ALERT_LIST_RESULTS = 500;
 
 // ============================================================================
 // ALERT ESCALATION SYSTEM
@@ -162,29 +162,43 @@ notificationAlertsRouter.get(
       MAX_NOTIFICATION_FILTER_LENGTH,
     );
 
-    const accessibleProjectIds = new Set(await getAccessibleActiveProjectIds(user));
-    const alertWhere: Prisma.NotificationAlertWhereInput = {
-      OR: [
-        { assignedToId: userId },
-        { projectId: { in: [...accessibleProjectIds] } },
-        // Keep escalated recipients visible even when they are not project members.
-        // JSON array contains filters are not portable across the test/runtime DBs.
-        { escalationLevel: { gt: 0 } },
-      ],
-    };
+    const accessibleProjectIdList = await getAccessibleActiveProjectIds(user);
+    const accessibleProjectIds = new Set(accessibleProjectIdList);
+    const alertFilters: Prisma.NotificationAlertWhereInput[] = [
+      {
+        OR: [
+          { assignedToId: userId },
+          ...(accessibleProjectIdList.length > 0
+            ? [{ projectId: { in: accessibleProjectIdList } }]
+            : []),
+          // Keep escalated recipients visible even when they are not project members.
+          // JSON array contains filters are not portable across the test/runtime DBs.
+          { escalationLevel: { gt: 0 } },
+        ],
+      },
+    ];
 
     if (status === 'active') {
-      alertWhere.resolvedAt = null;
+      alertFilters.push({ resolvedAt: null });
     } else if (status === 'resolved') {
-      alertWhere.resolvedAt = { not: null };
+      alertFilters.push({ resolvedAt: { not: null } });
     } else if (status === 'escalated') {
-      alertWhere.resolvedAt = null;
-      alertWhere.escalationLevel = { gt: 0 };
+      alertFilters.push({ resolvedAt: null, escalationLevel: { gt: 0 } });
+    }
+
+    if (type) {
+      alertFilters.push({ type });
+    }
+
+    if (assignedTo) {
+      alertFilters.push({
+        OR: [{ assignedToId: assignedTo }, { escalationLevel: { gt: 0 } }],
+      });
     }
 
     const alertRecords = await prisma.notificationAlert.findMany({
-      where: alertWhere,
-      orderBy: { createdAt: 'desc' },
+      where: { AND: alertFilters },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: MAX_ALERT_LIST_RESULTS,
     });
 
@@ -196,20 +210,6 @@ notificationAlertsRouter.get(
           alert.escalatedTo?.includes(userId) ||
           (alert.projectId ? accessibleProjectIds.has(alert.projectId) : false),
       );
-
-    // Filter by status
-    if (status === 'active') {
-      alerts = alerts.filter((a) => !a.resolvedAt);
-    } else if (status === 'resolved') {
-      alerts = alerts.filter((a) => !!a.resolvedAt);
-    } else if (status === 'escalated') {
-      alerts = alerts.filter((a) => a.escalationLevel > 0 && !a.resolvedAt);
-    }
-
-    // Filter by type
-    if (type) {
-      alerts = alerts.filter((a) => a.type === type);
-    }
 
     // Filter by assigned user
     if (assignedTo) {
