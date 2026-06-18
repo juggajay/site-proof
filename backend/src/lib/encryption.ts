@@ -9,6 +9,14 @@ const IV_LENGTH = 12; // 96 bits recommended for GCM
 const AUTH_TAG_LENGTH = 16; // 128 bits
 const ENCRYPTED_FORMAT_REGEX = /^[a-f0-9]{24}:[a-f0-9]{32}:[a-f0-9]+$/i;
 
+function isPlaintextSecretStorageAllowed(): boolean {
+  return (
+    process.env.NODE_ENV === 'development' ||
+    process.env.NODE_ENV === 'test' ||
+    process.env.ALLOW_PLAINTEXT_SECRET_STORAGE === 'true'
+  );
+}
+
 // Get encryption key from environment (64 char hex string = 32 bytes = 256 bits)
 function getEncryptionKey(): Buffer | null {
   const keyHex = process.env.ENCRYPTION_KEY;
@@ -36,9 +44,10 @@ function getEncryptionKey(): Buffer | null {
 export function encrypt(plaintext: string): string {
   const key = getEncryptionKey();
 
-  // In development without key, return plaintext as fallback
+  // Local/test fallback. Staging-like environments must configure ENCRYPTION_KEY
+  // instead of silently storing MFA and webhook secrets in plaintext.
   if (!key) {
-    if (process.env.NODE_ENV !== 'production') {
+    if (isPlaintextSecretStorageAllowed()) {
       return plaintext;
     }
     throw new Error('Encryption key not configured');
@@ -77,9 +86,9 @@ export function decrypt(encryptedValue: string): string {
     return encryptedValue;
   }
 
-  // In development without key, return as-is (assuming it's plaintext)
+  // Local/test fallback for values that only look encrypted.
   if (!key) {
-    if (process.env.NODE_ENV !== 'production') {
+    if (isPlaintextSecretStorageAllowed()) {
       // If it looks encrypted but no key, this is likely plaintext that happens to match format
       return encryptedValue;
     }
