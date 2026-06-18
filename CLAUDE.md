@@ -197,14 +197,22 @@ npm run fallow:audit    # audits only files changed vs origin/master
 
 ## User Roles
 
+Canonical role values and hierarchy live in `backend/src/lib/roles.ts`. Keep
+route guards and docs aligned with that file.
+
 | Role | Access Level |
 |------|--------------|
 | `owner` | Full access, company settings |
 | `admin` | Full project access |
 | `project_manager` | Project management, commercial data |
+| `quality_manager` | Quality review, NCR, verification, and approval workflows |
 | `site_manager` | Field operations, subcontractor management |
 | `foreman` | Daily operations, diary, dockets |
+| `site_engineer` | Site engineering support and assigned project work |
+| `subcontractor_admin` | Subcontractor portal administration for their company |
 | `subcontractor` | Own dockets, assigned work |
+| `viewer` | Read-only project access where allowed |
+| `member` | Base company membership; project permissions come from project assignments |
 
 ## Environment Variables
 
