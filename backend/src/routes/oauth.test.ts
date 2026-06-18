@@ -27,6 +27,44 @@ function hashOAuthCallbackCodeForTest(code: string): string {
   return crypto.createHash('sha256').update(`${code}:${salt}`).digest('hex');
 }
 
+function createGoogleIdTokenForTest(overrides: Record<string, unknown> = {}): string {
+  const header = Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).toString('base64url');
+  const payload = Buffer.from(
+    JSON.stringify({
+      sub: `google_${crypto.randomUUID()}`,
+      email: `oauth-token-${Date.now()}@example.com`,
+      email_verified: true,
+      aud: process.env.GOOGLE_CLIENT_ID,
+      iss: 'https://accounts.google.com',
+      exp: Math.floor(Date.now() / 1000) + 10 * 60,
+      ...overrides,
+    }),
+  ).toString('base64url');
+  const signature = Buffer.from('mock-signature').toString('base64url');
+  return `${header}.${payload}.${signature}`;
+}
+
+function mockGoogleCallbackFetch(params: { idToken?: string; userInfo?: Record<string, unknown> }) {
+  const tokenPayload =
+    params.idToken === undefined
+      ? { access_token: 'google-access-token' }
+      : { access_token: 'google-access-token', id_token: params.idToken };
+  const fetchMock = vi.fn().mockResolvedValueOnce({
+    ok: true,
+    json: async () => tokenPayload,
+  } as Response);
+
+  if (params.userInfo) {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => params.userInfo,
+    } as Response);
+  }
+
+  global.fetch = fetchMock;
+  return fetchMock;
+}
+
 async function clearUserAuditLogs(userId: string) {
   await prisma.auditLog.deleteMany({
     where: {
@@ -75,6 +113,15 @@ async function createStoredOAuthState(params: {
     },
   });
   return id;
+}
+
+async function createValidOAuthStateForTest(): Promise<string> {
+  const state = crypto.randomBytes(16).toString('hex');
+  await createStoredOAuthState({
+    state,
+    expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+  });
+  return state;
 }
 
 async function createStoredOAuthCallbackCode(params: {
@@ -358,28 +405,25 @@ describe('OAuth Routes', () => {
     });
 
     it('should redirect with a one-time code instead of a JWT and exchange it once', async () => {
-      const state = crypto.randomBytes(16).toString('hex');
+      const state = await createValidOAuthStateForTest();
       const email = `oauth-callback-${Date.now()}@example.com`;
-      await createStoredOAuthState({
-        state,
-        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+      const googleSub = `google-callback-${Date.now()}`;
+      const idToken = createGoogleIdTokenForTest({
+        sub: googleSub,
+        email,
+        name: 'OAuth Callback User',
+        email_verified: true,
       });
 
-      global.fetch = vi
-        .fn()
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ access_token: 'google-access-token' }),
-        } as Response)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            id: `google-callback-${Date.now()}`,
-            email,
-            name: 'OAuth Callback User',
-            verified_email: true,
-          }),
-        } as Response);
+      mockGoogleCallbackFetch({
+        idToken,
+        userInfo: {
+          id: googleSub,
+          email,
+          name: 'OAuth Callback User',
+          verified_email: true,
+        },
+      });
 
       try {
         const res = await request(app).get('/api/auth/google/callback').query({
@@ -455,28 +499,154 @@ describe('OAuth Routes', () => {
       }
     });
 
-    it('should reject callback users when Google does not explicitly verify the email', async () => {
-      const state = crypto.randomBytes(16).toString('hex');
-      const email = `oauth-callback-unverified-${Date.now()}@example.com`;
-      await createStoredOAuthState({
-        state,
-        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
-      });
+    it('should reject callback token responses that do not include an ID token', async () => {
+      const state = await createValidOAuthStateForTest();
+      const email = `oauth-callback-missing-id-token-${Date.now()}@example.com`;
+
+      mockGoogleCallbackFetch({});
+
+      try {
+        const res = await request(app).get('/api/auth/google/callback').query({
+          code: 'test-code',
+          state,
+        });
+
+        expect(res.status).toBe(302);
+        expect(res.headers.location).toContain('/login?error=invalid_google_token');
+        expect(global.fetch).toHaveBeenCalledTimes(1);
+        await expect(prisma.user.findUnique({ where: { email } })).resolves.toBeNull();
+      } finally {
+        vi.restoreAllMocks();
+      }
+    });
+
+    it('should reject callback ID tokens that fail Google verification', async () => {
+      delete process.env.ALLOW_TEST_GOOGLE_CREDENTIALS;
+      const state = await createValidOAuthStateForTest();
+      const email = `oauth-callback-forged-${Date.now()}@example.com`;
 
       global.fetch = vi
         .fn()
         .mockResolvedValueOnce({
           ok: true,
-          json: async () => ({ access_token: 'google-access-token' }),
+          json: async () => ({
+            access_token: 'google-access-token',
+            id_token: createGoogleIdTokenForTest({ email }),
+          }),
         } as Response)
         .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            id: `google-callback-unverified-${Date.now()}`,
-            email,
-            name: 'Unverified OAuth Callback User',
-          }),
+          ok: false,
+          status: 400,
+          statusText: 'Bad Request',
         } as Response);
+
+      try {
+        const res = await request(app).get('/api/auth/google/callback').query({
+          code: 'test-code',
+          state,
+        });
+
+        expect(res.status).toBe(302);
+        expect(res.headers.location).toContain('/login?error=invalid_google_token');
+        expect(global.fetch).toHaveBeenCalledTimes(2);
+        expect(global.fetch).toHaveBeenCalledWith(
+          expect.stringContaining('https://oauth2.googleapis.com/tokeninfo?id_token='),
+          expect.any(Object),
+        );
+        await expect(prisma.user.findUnique({ where: { email } })).resolves.toBeNull();
+      } finally {
+        vi.restoreAllMocks();
+      }
+    });
+
+    it('should reject callback userinfo that does not match the verified ID token subject', async () => {
+      const state = await createValidOAuthStateForTest();
+      const email = `oauth-callback-sub-mismatch-${Date.now()}@example.com`;
+      const idToken = createGoogleIdTokenForTest({
+        sub: 'verified-google-sub',
+        email,
+        email_verified: true,
+      });
+
+      mockGoogleCallbackFetch({
+        idToken,
+        userInfo: {
+          id: 'different-google-sub',
+          email,
+          verified_email: true,
+        },
+      });
+
+      try {
+        const res = await request(app).get('/api/auth/google/callback').query({
+          code: 'test-code',
+          state,
+        });
+
+        expect(res.status).toBe(302);
+        expect(res.headers.location).toContain('/login?error=invalid_google_token');
+        await expect(prisma.user.findUnique({ where: { email } })).resolves.toBeNull();
+      } finally {
+        vi.restoreAllMocks();
+      }
+    });
+
+    it('should reject callback userinfo that does not match the verified ID token email', async () => {
+      const state = await createValidOAuthStateForTest();
+      const email = `oauth-callback-email-${Date.now()}@example.com`;
+      const userInfoEmail = `oauth-callback-other-${Date.now()}@example.com`;
+      const googleSub = `google-callback-email-${Date.now()}`;
+      const idToken = createGoogleIdTokenForTest({
+        sub: googleSub,
+        email,
+        email_verified: true,
+      });
+
+      mockGoogleCallbackFetch({
+        idToken,
+        userInfo: {
+          id: googleSub,
+          email: userInfoEmail,
+          verified_email: true,
+        },
+      });
+
+      try {
+        const res = await request(app).get('/api/auth/google/callback').query({
+          code: 'test-code',
+          state,
+        });
+
+        expect(res.status).toBe(302);
+        expect(res.headers.location).toContain('/login?error=invalid_google_token');
+        await expect(prisma.user.findUnique({ where: { email } })).resolves.toBeNull();
+        await expect(
+          prisma.user.findUnique({ where: { email: userInfoEmail } }),
+        ).resolves.toBeNull();
+      } finally {
+        vi.restoreAllMocks();
+      }
+    });
+
+    it('should reject callback users when Google does not explicitly verify the email', async () => {
+      const state = await createValidOAuthStateForTest();
+      const email = `oauth-callback-unverified-${Date.now()}@example.com`;
+      const googleSub = `google-callback-unverified-${Date.now()}`;
+      const idToken = createGoogleIdTokenForTest({
+        sub: googleSub,
+        email,
+        name: 'Unverified OAuth Callback User',
+        email_verified: true,
+      });
+
+      mockGoogleCallbackFetch({
+        idToken,
+        userInfo: {
+          id: googleSub,
+          email,
+          name: 'Unverified OAuth Callback User',
+        },
+      });
 
       try {
         const res = await request(app).get('/api/auth/google/callback').query({
@@ -501,8 +671,15 @@ describe('OAuth Routes', () => {
     });
 
     it('should not issue callback codes for MFA-enabled OAuth users', async () => {
-      const state = crypto.randomBytes(16).toString('hex');
+      const state = await createValidOAuthStateForTest();
       const email = `oauth-callback-mfa-${Date.now()}@example.com`;
+      const googleSub = `google-callback-mfa-${Date.now()}`;
+      const idToken = createGoogleIdTokenForTest({
+        sub: googleSub,
+        email,
+        name: 'OAuth MFA User',
+        email_verified: true,
+      });
       const user = await prisma.user.create({
         data: {
           email,
@@ -511,26 +688,16 @@ describe('OAuth Routes', () => {
           twoFactorEnabled: true,
         },
       });
-      await createStoredOAuthState({
-        state,
-        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
-      });
 
-      global.fetch = vi
-        .fn()
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({ access_token: 'google-access-token' }),
-        } as Response)
-        .mockResolvedValueOnce({
-          ok: true,
-          json: async () => ({
-            id: `google-callback-mfa-${Date.now()}`,
-            email,
-            name: 'OAuth MFA User',
-            verified_email: true,
-          }),
-        } as Response);
+      mockGoogleCallbackFetch({
+        idToken,
+        userInfo: {
+          id: googleSub,
+          email,
+          name: 'OAuth MFA User',
+          verified_email: true,
+        },
+      });
 
       try {
         const res = await request(app).get('/api/auth/google/callback').query({
