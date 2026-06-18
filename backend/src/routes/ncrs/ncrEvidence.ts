@@ -1,4 +1,5 @@
 // NCR evidence: add, list, delete evidence attachments
+import type { Prisma } from '@prisma/client';
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { prisma } from '../../lib/prisma.js';
@@ -21,6 +22,7 @@ import {
   buildNcrEvidenceListResponse,
   buildNcrEvidenceRemovedResponse,
 } from './ncrEvidenceResponses.js';
+import { isUniqueConstraintOn } from './ncrCoreValidation.js';
 
 const MAX_DOCUMENT_FILE_SIZE_BYTES = 2_147_483_647;
 const MAX_EVIDENCE_TYPE_LENGTH = 80;
@@ -29,6 +31,18 @@ const MAX_EVIDENCE_FILE_URL_LENGTH = 2048;
 const MAX_EVIDENCE_MIME_TYPE_LENGTH = 120;
 const MAX_EVIDENCE_CAPTION_LENGTH = 2000;
 const MAX_EVIDENCE_PROJECT_ID_LENGTH = 120;
+
+const ncrEvidenceDocumentInclude = {
+  document: {
+    select: {
+      id: true,
+      filename: true,
+      fileUrl: true,
+      mimeType: true,
+      uploadedAt: true,
+    },
+  },
+} as const;
 
 function optionalTrimmedEvidenceString(fieldName: string, maxLength: number) {
   return z
@@ -91,7 +105,110 @@ const addEvidenceSchema = z
     }
   });
 
+type AddEvidenceInput = z.infer<typeof addEvidenceSchema>;
+type NcrEvidenceWithDocument = Prisma.NCREvidenceGetPayload<{
+  include: typeof ncrEvidenceDocumentInclude;
+}>;
+
 export const ncrEvidenceRouter = Router();
+
+async function resolveNcrEvidenceDocumentId(
+  projectId: string,
+  userId: string,
+  evidenceInput: AddEvidenceInput,
+): Promise<string> {
+  const { documentId, evidenceType, filename, fileUrl, fileSize, mimeType, caption } =
+    evidenceInput;
+
+  if (documentId) {
+    const existingDocument = await prisma.document.findFirst({
+      where: {
+        id: documentId,
+        projectId,
+      },
+      select: { id: true },
+    });
+
+    if (!existingDocument) {
+      throw AppError.notFound('Document');
+    }
+
+    return documentId;
+  }
+
+  if (!filename || !fileUrl) {
+    throw AppError.badRequest('Either documentId or filename and fileUrl are required');
+  }
+
+  if (!isStoredDocumentUploadPath(fileUrl)) {
+    throw AppError.badRequest('fileUrl must reference an uploaded document file');
+  }
+
+  const document = await prisma.document.create({
+    data: {
+      projectId,
+      documentType: evidenceType || 'ncr_evidence',
+      category: 'ncr_evidence',
+      filename,
+      fileUrl,
+      fileSize,
+      mimeType,
+      uploadedById: userId,
+      caption,
+    },
+  });
+
+  return document.id;
+}
+
+async function findNcrEvidenceLink(
+  ncrId: string,
+  documentId: string,
+): Promise<NcrEvidenceWithDocument | null> {
+  return prisma.nCREvidence.findUnique({
+    where: {
+      ncrId_documentId: {
+        ncrId,
+        documentId,
+      },
+    },
+    include: ncrEvidenceDocumentInclude,
+  });
+}
+
+async function createNcrEvidenceLink(
+  ncrId: string,
+  documentId: string,
+  evidenceType?: string,
+): Promise<{ evidence: NcrEvidenceWithDocument; created: boolean }> {
+  const existingEvidence = await findNcrEvidenceLink(ncrId, documentId);
+  if (existingEvidence) {
+    return { evidence: existingEvidence, created: false };
+  }
+
+  try {
+    const evidence = await prisma.nCREvidence.create({
+      data: {
+        ncrId,
+        documentId,
+        evidenceType: evidenceType || 'photo',
+      },
+      include: ncrEvidenceDocumentInclude,
+    });
+    return { evidence, created: true };
+  } catch (error) {
+    if (!isUniqueConstraintOn(error, ['ncrId', 'documentId'])) {
+      throw error;
+    }
+
+    const linkedEvidence = await findNcrEvidenceLink(ncrId, documentId);
+    if (!linkedEvidence) {
+      throw error;
+    }
+
+    return { evidence: linkedEvidence, created: false };
+  }
+}
 
 // POST /api/ncrs/:id/evidence - Add evidence to NCR
 ncrEvidenceRouter.post(
@@ -105,16 +222,7 @@ ncrEvidenceRouter.post(
 
     const user = req.user as AuthUser;
     const id = parseNcrRouteParam(req.params.id, 'id');
-    const {
-      documentId,
-      evidenceType,
-      filename,
-      fileUrl,
-      fileSize,
-      mimeType,
-      caption,
-      projectId: _providedProjectId,
-    } = validation.data;
+    const { evidenceType, projectId: _providedProjectId } = validation.data;
 
     const ncr = await prisma.nCR.findUnique({
       where: { id },
@@ -131,90 +239,17 @@ ncrEvidenceRouter.post(
       NCR_EVIDENCE_MUTATION_ROLES,
     );
 
-    // If documentId is provided, link existing document
-    // Otherwise, create a new document first
-    let finalDocumentId = documentId;
+    const finalDocumentId = await resolveNcrEvidenceDocumentId(
+      ncr.projectId,
+      user.userId,
+      validation.data,
+    );
 
-    if (documentId) {
-      const existingDocument = await prisma.document.findFirst({
-        where: {
-          id: documentId,
-          projectId: ncr.projectId,
-        },
-        select: { id: true },
-      });
-
-      if (!existingDocument) {
-        throw AppError.notFound('Document');
-      }
-    } else {
-      // Create a new document for this evidence
-      if (!filename || !fileUrl) {
-        throw AppError.badRequest('Either documentId or filename and fileUrl are required');
-      }
-
-      if (!isStoredDocumentUploadPath(fileUrl)) {
-        throw AppError.badRequest('fileUrl must reference an uploaded document file');
-      }
-
-      const document = await prisma.document.create({
-        data: {
-          projectId: ncr.projectId,
-          documentType: evidenceType || 'ncr_evidence',
-          category: 'ncr_evidence',
-          filename,
-          fileUrl,
-          fileSize,
-          mimeType,
-          uploadedById: user.userId,
-          caption,
-        },
-      });
-      finalDocumentId = document.id;
-    }
-
-    const existingEvidence = await prisma.nCREvidence.findFirst({
-      where: {
-        ncrId: id,
-        documentId: finalDocumentId!,
-      },
-      include: {
-        document: {
-          select: {
-            id: true,
-            filename: true,
-            fileUrl: true,
-            mimeType: true,
-            uploadedAt: true,
-          },
-        },
-      },
-    });
-
-    if (existingEvidence) {
-      res.json(buildNcrEvidenceAlreadyLinkedResponse(existingEvidence));
+    const { evidence, created } = await createNcrEvidenceLink(id, finalDocumentId, evidenceType);
+    if (!created) {
+      res.json(buildNcrEvidenceAlreadyLinkedResponse(evidence));
       return;
     }
-
-    // Create the NCR evidence link
-    const evidence = await prisma.nCREvidence.create({
-      data: {
-        ncrId: id,
-        documentId: finalDocumentId!,
-        evidenceType: evidenceType || 'photo',
-      },
-      include: {
-        document: {
-          select: {
-            id: true,
-            filename: true,
-            fileUrl: true,
-            mimeType: true,
-            uploadedAt: true,
-          },
-        },
-      },
-    });
 
     await createAuditLog({
       projectId: ncr.projectId,

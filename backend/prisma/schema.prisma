@@ -798,6 +798,7 @@ model NCREvidence {
   ncr      NCR      @relation(fields: [ncrId], references: [id], onDelete: Cascade)
   document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
+  @@unique([ncrId, documentId])
   @@map("ncr_evidence")
 }
 
