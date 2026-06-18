@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { ApiError, apiFetch } from '@/lib/api';
@@ -23,8 +23,14 @@ export function MagicLinkPage() {
   const [error, setError] = useState('');
   const navigate = useNavigate();
   const { setToken } = useAuth();
+  const handledRef = useRef(false);
 
   useEffect(() => {
+    if (handledRef.current) {
+      return;
+    }
+    handledRef.current = true;
+
     const token = searchParams.get('token');
 
     if (!token) {
@@ -35,6 +41,8 @@ export function MagicLinkPage() {
 
     const verifyMagicLink = async () => {
       try {
+        window.history.replaceState(null, document.title, '/auth/magic-link');
+
         const data = await apiFetch<{ token: string }>('/api/auth/magic-link/verify', {
           method: 'POST',
           body: JSON.stringify({ token }),

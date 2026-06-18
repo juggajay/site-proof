@@ -309,7 +309,8 @@ export function LoginPage() {
             <div className="ring">✓</div>
             <h2>Magic link sent</h2>
             <p>
-              We&rsquo;ve sent a sign-in link to <b>{magicLinkEmail}</b>.<br />
+              If an account exists for <b>{magicLinkEmail}</b>, we&rsquo;ve sent a sign-in link.
+              <br />
               Click it on this device to get straight in.
             </p>
             <p className="fine">
