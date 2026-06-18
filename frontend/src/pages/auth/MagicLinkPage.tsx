@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { ApiError, apiFetch } from '@/lib/api';
+import { getDefaultPostLoginRedirect } from './postLoginRedirect';
 
 function getMagicLinkErrorMessage(error: unknown): string {
   if (error instanceof ApiError) {
@@ -23,8 +24,14 @@ export function MagicLinkPage() {
   const [error, setError] = useState('');
   const navigate = useNavigate();
   const { setToken } = useAuth();
+  const handledRef = useRef(false);
 
   useEffect(() => {
+    if (handledRef.current) {
+      return;
+    }
+    handledRef.current = true;
+
     const token = searchParams.get('token');
 
     if (!token) {
@@ -35,6 +42,8 @@ export function MagicLinkPage() {
 
     const verifyMagicLink = async () => {
       try {
+        window.history.replaceState(null, document.title, '/auth/magic-link');
+
         const data = await apiFetch<{ token: string }>('/api/auth/magic-link/verify', {
           method: 'POST',
           body: JSON.stringify({ token }),
@@ -42,13 +51,13 @@ export function MagicLinkPage() {
 
         if (data.token) {
           // Use the centralized setToken which handles storage properly
-          await setToken(data.token);
+          const signedInUser = await setToken(data.token);
 
           setStatus('success');
 
-          // Redirect to dashboard after brief delay
+          // Redirect to the right app entry point after a brief success state.
           setTimeout(() => {
-            navigate('/dashboard', { replace: true });
+            navigate(getDefaultPostLoginRedirect(signedInUser), { replace: true });
           }, 1500);
         } else {
           setStatus('error');
@@ -89,7 +98,7 @@ export function MagicLinkPage() {
           </svg>
         </div>
         <h2 className="text-2xl font-bold">Success!</h2>
-        <p className="text-muted-foreground">You've been signed in. Redirecting to dashboard...</p>
+        <p className="text-muted-foreground">You've been signed in. Redirecting...</p>
       </div>
     );
   }

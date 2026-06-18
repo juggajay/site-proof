@@ -528,6 +528,7 @@ model ITPInstance {
   template    ITPTemplate     @relation(fields: [templateId], references: [id], onDelete: Restrict)
   completions ITPCompletion[]
 
+  @@index([templateId])
   @@map("itp_instances")
 }
 
@@ -557,8 +558,8 @@ model ITPCompletion {
 
   attachments ITPCompletionAttachment[]
 
-  @@index([itpInstanceId])
   @@unique([itpInstanceId, checklistItemId])
+  @@index([itpInstanceId])
   @@index([verificationStatus])
   @@map("itp_completions")
 }
@@ -615,6 +616,7 @@ model HoldPoint {
   releaseTokens    HoldPointReleaseToken[]
 
   @@index([lotId])
+  @@index([lotId, status])
   @@index([status, createdAt])
   @@index([status, scheduledDate])
   @@map("hold_points")
@@ -796,6 +798,7 @@ model NCREvidence {
   ncr      NCR      @relation(fields: [ncrId], references: [id], onDelete: Cascade)
   document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
+  @@unique([ncrId, documentId])
   @@map("ncr_evidence")
 }
 
@@ -1147,7 +1150,9 @@ model DailyDocket {
 
   @@index([projectId, date])
   @@index([projectId, status])
+  @@unique([subcontractorCompanyId, projectId, date], map: "daily_dockets_subcontractor_company_id_project_id_date_key")
   @@index([subcontractorCompanyId, date])
+  @@index([subcontractorCompanyId, status])
   @@map("daily_dockets")
 }
 

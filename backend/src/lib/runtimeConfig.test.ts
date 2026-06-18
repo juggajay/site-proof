@@ -41,6 +41,7 @@ function configureProductionBase() {
   delete process.env.ERROR_LOG_MAX_BYTES;
   delete process.env.SUPPORT_EMAIL;
   delete process.env.ALLOW_MOCK_OAUTH;
+  delete process.env.ALLOW_TEST_GOOGLE_CREDENTIALS;
   delete process.env.ALLOW_TEST_AUTH_ENDPOINTS;
   delete process.env.GOOGLE_CLIENT_ID;
   delete process.env.GOOGLE_CLIENT_SECRET;
@@ -248,6 +249,15 @@ describe('runtimeConfig', () => {
     process.env.ALLOW_MOCK_OAUTH = 'true';
 
     expect(() => validateRuntimeConfig()).toThrow('ALLOW_MOCK_OAUTH=true');
+  });
+
+  it('rejects production Google credential fixture opt-in', () => {
+    configureProductionBase();
+    process.env.FRONTEND_URL = 'https://app.siteproof.example';
+    process.env.BACKEND_URL = 'https://api.siteproof.example';
+    process.env.ALLOW_TEST_GOOGLE_CREDENTIALS = 'true';
+
+    expect(() => validateRuntimeConfig()).toThrow('ALLOW_TEST_GOOGLE_CREDENTIALS=true');
   });
 
   it('rejects production test auth endpoint opt-in', () => {

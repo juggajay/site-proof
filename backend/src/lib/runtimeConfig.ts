@@ -391,6 +391,9 @@ export function validateRuntimeConfig(): void {
   if (isExplicitlyEnabled(process.env.ALLOW_MOCK_OAUTH)) {
     throw new Error('FATAL: ALLOW_MOCK_OAUTH=true is not allowed in production');
   }
+  if (isExplicitlyEnabled(process.env.ALLOW_TEST_GOOGLE_CREDENTIALS)) {
+    throw new Error('FATAL: ALLOW_TEST_GOOGLE_CREDENTIALS=true is not allowed in production');
+  }
   if (isExplicitlyEnabled(process.env.ALLOW_TEST_AUTH_ENDPOINTS)) {
     throw new Error('FATAL: ALLOW_TEST_AUTH_ENDPOINTS=true is not allowed in production');
   }

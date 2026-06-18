@@ -9,6 +9,7 @@ import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { buildFrontendUrl } from '../../lib/runtimeConfig.js';
 import { AuditAction } from '../../lib/auditLog.js';
+import { upgradeLegacyPasswordResetTokenStorage } from './legacyTokenStorage.js';
 
 const MAGIC_LINK_EXPIRY_MINUTES = 15;
 const MAGIC_LINK_TOKEN_PURPOSE = 'magic_link';
@@ -155,6 +156,14 @@ export function createMagicLinkRouter({
       if (!tokenRecord) {
         throw AppError.badRequest('Invalid or expired link');
       }
+
+      await upgradeLegacyPasswordResetTokenStorage(
+        prisma,
+        'Magic Link',
+        tokenRecord,
+        token,
+        hashOneTimeToken,
+      );
 
       // Check if token has expired
       if (tokenRecord.expiresAt < new Date()) {

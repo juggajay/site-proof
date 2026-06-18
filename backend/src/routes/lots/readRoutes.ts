@@ -61,6 +61,7 @@ import {
 } from './coreResponses.js';
 
 export const lotReadRouter = Router();
+const MAX_SUGGEST_NUMBER_LOT_SCAN_RESULTS = 10_000;
 
 // GET /api/lots - List all lots for a project (paginated)
 lotReadRouter.get(
@@ -144,23 +145,20 @@ lotReadRouter.get(
 
       if (subcontractorUser) {
         const subCompanyId = subcontractorUser.subcontractorCompanyId;
-
-        // Get lots assigned via LotSubcontractorAssignment (new model)
-        const lotAssignments = await prisma.lotSubcontractorAssignment.findMany({
-          where: {
-            subcontractorCompanyId: subCompanyId,
-            status: 'active',
-            projectId,
-          },
-          select: { lotId: true },
-        });
         subcontractorCompanyId = subCompanyId;
-        const assignedLotIds = lotAssignments.map((a) => a.lotId);
 
         // Include lots from both legacy field AND new assignment model
         whereClause.OR = [
           { assignedSubcontractorId: subCompanyId },
-          ...(assignedLotIds.length > 0 ? [{ id: { in: assignedLotIds } }] : []),
+          {
+            subcontractorAssignments: {
+              some: {
+                subcontractorCompanyId: subCompanyId,
+                status: 'active',
+                projectId,
+              },
+            },
+          },
         ];
       } else {
         // No subcontractor company found - return empty result with pagination
@@ -236,6 +234,7 @@ lotReadRouter.get(
       },
       select: { lotNumber: true },
       orderBy: { lotNumber: 'desc' },
+      take: MAX_SUGGEST_NUMBER_LOT_SCAN_RESULTS,
     });
 
     const { suggestedNumber, nextNumber } = suggestLotNumber({

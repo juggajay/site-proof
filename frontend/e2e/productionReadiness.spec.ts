@@ -561,7 +561,7 @@ test.describe('production readiness guardrails', () => {
     expect(commentAttachmentStorage).toContain('getSafeAttachmentMimeType(attachment.mimeType)');
   });
 
-  test('document downloads only redirect to configured Supabase storage URLs', async () => {
+  test('document downloads only serve configured Supabase storage URLs', async () => {
     const documentsRoute = await readFile(
       new URL('../../backend/src/routes/documents.ts', import.meta.url),
       'utf8',
@@ -579,7 +579,12 @@ test.describe('production readiness guardrails', () => {
     expect(documentFileHelpers).toContain(
       'getSupabaseStoragePath(fileUrl, DOCUMENTS_BUCKET) !== null',
     );
-    expect(documentFileHelpers).toContain('if (!isSafeExternalDocumentUrl(document.fileUrl))');
+    expect(documentFileHelpers).toContain('if (isSafeExternalDocumentUrl(document.fileUrl))');
+    expect(documentFileHelpers).toContain(
+      'await sendSupabaseDocumentFile(document, res, contentType, contentDisposition)',
+    );
+    expect(documentFileHelpers).toContain('if (isExternalFileUrl(document.fileUrl))');
+    expect(documentFileHelpers).toContain("throw AppError.notFound('File')");
     expect(documentsRoute).toContain('sendDocumentFile');
     expect(supabaseSource).toContain('parsedFileUrl.origin !== parsedSupabaseUrl.origin');
     expect(supabaseSource).toContain('parsedFileUrl.username || parsedFileUrl.password');
@@ -718,6 +723,12 @@ test.describe('production readiness guardrails', () => {
     );
     expect(runtimeConfig).toContain('isExplicitlyEnabled(process.env.ALLOW_MOCK_OAUTH)');
     expect(runtimeConfig).toContain('ALLOW_MOCK_OAUTH=true is not allowed in production');
+    expect(runtimeConfig).toContain(
+      'isExplicitlyEnabled(process.env.ALLOW_TEST_GOOGLE_CREDENTIALS)',
+    );
+    expect(runtimeConfig).toContain(
+      'ALLOW_TEST_GOOGLE_CREDENTIALS=true is not allowed in production',
+    );
     expect(authRoute).toContain("process.env.NODE_ENV === 'production'");
     expect(authRoute).toContain("process.env.ALLOW_TEST_AUTH_ENDPOINTS !== 'true'");
     expect(runtimeConfig).toContain('isExplicitlyEnabled(process.env.ALLOW_TEST_AUTH_ENDPOINTS)');
@@ -2048,6 +2059,14 @@ test.describe('production readiness guardrails', () => {
     expect(oauthSource).toMatch(
       /fetchWithTimeout\(\s*`https:\/\/oauth2\.googleapis\.com\/tokeninfo/,
     );
+    expect(oauthSource).toContain(
+      'const verifiedIdentity = await getVerifiedGoogleCallbackIdentity(tokens.id_token)',
+    );
+    expect(oauthSource).toContain("if (!idToken || typeof idToken !== 'string')");
+    expect(oauthSource).toContain('payload = await getGoogleCredentialPayload(idToken)');
+    expect(oauthSource).toContain('doesGoogleCallbackUserInfoMatchIdentity');
+    expect(oauthSource).toContain('googleUser.id !== verifiedIdentity.providerId');
+    expect(oauthSource).toContain('Google callback userinfo did not match verified ID token');
     expect(documentClassificationSource).toContain(
       "fetchWithTimeout('https://api.anthropic.com/v1/messages'",
     );

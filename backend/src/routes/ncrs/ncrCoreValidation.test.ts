@@ -4,7 +4,9 @@ import {
   getNextNcrNumber,
   getOptionalQueryString,
   isUniqueConstraintOn,
+  parseNcrSeverityFilter,
   parseNcrSortBy,
+  parseNcrStatusFilter,
   parseOptionalNcrDueDate,
   updateNcrSchema,
 } from './ncrCoreValidation.js';
@@ -116,5 +118,19 @@ describe('ncrCoreValidation', () => {
     expect(() => parseNcrSortBy('projectId')).toThrow(
       'sortBy must be one of: createdAt, updatedAt, raisedAt, dueDate, ncrNumber, status, severity, category',
     );
+  });
+
+  it('parses list status filters using the NCR workflow allow-list', () => {
+    expect(parseNcrStatusFilter(undefined)).toBeUndefined();
+    expect(parseNcrStatusFilter('verification')).toBe('verification');
+    expect(parseNcrStatusFilter('closed_concession')).toBe('closed_concession');
+    expect(() => parseNcrStatusFilter('deleted')).toThrow('status must be one of');
+  });
+
+  it('parses list severity filters using the NCR severity allow-list', () => {
+    expect(parseNcrSeverityFilter(undefined)).toBeUndefined();
+    expect(parseNcrSeverityFilter('minor')).toBe('minor');
+    expect(parseNcrSeverityFilter('major')).toBe('major');
+    expect(() => parseNcrSeverityFilter('critical')).toThrow('severity must be one of');
   });
 });

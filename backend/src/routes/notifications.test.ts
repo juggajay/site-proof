@@ -6,6 +6,7 @@ import { notificationsRouter } from './notifications.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { registerTestUser } from '../test/routeTestHarness.js';
+import { MAX_ALERT_LIST_RESULTS } from './notifications/alerts.js';
 
 const app = express();
 app.use(express.json());
@@ -1228,6 +1229,103 @@ describe('Notifications API', () => {
     });
 
     describe('GET /api/notifications/alerts', () => {
+      const createAlertFlood = async ({
+        prefix,
+        count,
+        type,
+        assignedToId,
+        createdAtStart,
+        resolved,
+      }: {
+        prefix: string;
+        count: number;
+        type: string;
+        assignedToId: string;
+        createdAtStart: Date;
+        resolved?: boolean;
+      }) => {
+        await prisma.notificationAlert.createMany({
+          data: Array.from({ length: count }, (_, index) => {
+            const createdAt = new Date(createdAtStart.getTime() + index * 1000);
+            return {
+              id: `${prefix}-flood-${index}`,
+              type,
+              severity: 'low',
+              title: `${prefix} flood ${index}`,
+              message: 'Filter regression filler alert',
+              entityId: `${prefix}-entity-${index}`,
+              entityType: 'ncr',
+              projectId,
+              assignedToId,
+              createdAt,
+              resolvedAt: resolved ? new Date(createdAt.getTime() + 500) : null,
+            };
+          }),
+        });
+      };
+
+      const expectOlderAlertVisibleAfterFlood = async ({
+        prefix,
+        requestPath,
+        olderCreatedAt,
+        matchingAlert,
+        flood,
+        assertAlerts,
+      }: {
+        prefix: string;
+        requestPath: string;
+        olderCreatedAt: Date;
+        matchingAlert: {
+          title: string;
+          type: string;
+          entityType: string;
+          assignedToId: string;
+          resolvedAt?: Date;
+        };
+        flood: {
+          type: string;
+          assignedToId: string;
+        };
+        assertAlerts: (alerts: any[]) => void;
+      }) => {
+        try {
+          await prisma.notificationAlert.create({
+            data: {
+              id: `${prefix}-match`,
+              type: matchingAlert.type,
+              severity: 'medium',
+              title: matchingAlert.title,
+              message: 'Older matching alert must not be hidden by newer non-matching alerts',
+              entityId: `${prefix}-match-entity`,
+              entityType: matchingAlert.entityType,
+              projectId,
+              assignedToId: matchingAlert.assignedToId,
+              createdAt: olderCreatedAt,
+              resolvedAt: matchingAlert.resolvedAt,
+            },
+          });
+
+          await createAlertFlood({
+            prefix,
+            count: MAX_ALERT_LIST_RESULTS + 5,
+            type: flood.type,
+            assignedToId: flood.assignedToId,
+            createdAtStart: new Date(olderCreatedAt.getTime() + 1000),
+          });
+
+          const res = await request(app)
+            .get(requestPath)
+            .set('Authorization', `Bearer ${authToken}`);
+
+          expect(res.status).toBe(200);
+          const alerts = res.body.alerts as any[];
+          expect(alerts.map((alert) => alert.title)).toContain(matchingAlert.title);
+          assertAlerts(alerts);
+        } finally {
+          await prisma.notificationAlert.deleteMany({ where: { id: { startsWith: prefix } } });
+        }
+      };
+
       beforeAll(async () => {
         await request(app)
           .post('/api/notifications/alerts')
@@ -1278,6 +1376,53 @@ describe('Notifications API', () => {
         expect(allCorrectType).toBe(true);
       });
 
+      it('should apply alert type filtering before the capped list query', async () => {
+        const prefix = `alert-type-filter-${Date.now()}`;
+        const olderCreatedAt = new Date('2032-01-01T00:00:00.000Z');
+
+        await expectOlderAlertVisibleAfterFlood({
+          prefix,
+          requestPath: '/api/notifications/alerts?type=stale_hold_point',
+          olderCreatedAt,
+          matchingAlert: {
+            title: `${prefix} older matching type`,
+            type: 'stale_hold_point',
+            entityType: 'holdpoint',
+            assignedToId: userId,
+          },
+          flood: {
+            type: 'overdue_ncr',
+            assignedToId: userId,
+          },
+          assertAlerts: (alerts) =>
+            expect(alerts.every((alert) => alert.type === 'stale_hold_point')).toBe(true),
+        });
+      });
+
+      it('should apply resolved status filtering before the capped list query', async () => {
+        const prefix = `alert-status-filter-${Date.now()}`;
+        const olderCreatedAt = new Date('2032-02-01T00:00:00.000Z');
+
+        await expectOlderAlertVisibleAfterFlood({
+          prefix,
+          requestPath: '/api/notifications/alerts?status=resolved',
+          olderCreatedAt,
+          matchingAlert: {
+            title: `${prefix} older resolved alert`,
+            type: 'overdue_ncr',
+            entityType: 'ncr',
+            assignedToId: userId,
+            resolvedAt: new Date(olderCreatedAt.getTime() + 500),
+          },
+          flood: {
+            type: 'overdue_ncr',
+            assignedToId: userId,
+          },
+          assertAlerts: (alerts) =>
+            expect(alerts.every((alert) => Boolean(alert.resolvedAt))).toBe(true),
+        });
+      });
+
       it('should filter by assigned user', async () => {
         const res = await request(app)
           .get(`/api/notifications/alerts?assignedTo=${userId}`)
@@ -1285,6 +1430,33 @@ describe('Notifications API', () => {
 
         expect(res.status).toBe(200);
         expect(res.body.alerts).toBeDefined();
+      });
+
+      it('should apply assigned user filtering before the capped list query', async () => {
+        const prefix = `alert-assigned-filter-${Date.now()}`;
+        const olderCreatedAt = new Date('2032-03-01T00:00:00.000Z');
+
+        await expectOlderAlertVisibleAfterFlood({
+          prefix,
+          requestPath: `/api/notifications/alerts?assignedTo=${userId}`,
+          olderCreatedAt,
+          matchingAlert: {
+            title: `${prefix} older assigned alert`,
+            type: 'overdue_ncr',
+            entityType: 'ncr',
+            assignedToId: userId,
+          },
+          flood: {
+            type: 'overdue_ncr',
+            assignedToId: secondUserId,
+          },
+          assertAlerts: (alerts) =>
+            expect(
+              alerts.every(
+                (alert) => alert.assignedTo === userId || alert.escalatedTo?.includes(userId),
+              ),
+            ).toBe(true),
+        });
       });
 
       it('should reject malformed alert filters', async () => {

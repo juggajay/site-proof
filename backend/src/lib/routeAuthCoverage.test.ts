@@ -621,7 +621,10 @@ describe('route authentication coverage', () => {
     ]);
     expect(routeSourceForDescriptor(oauthSource, 'GET /google')).toContain('createOAuthState');
     expect(routeSourceForDescriptor(oauthSource, 'GET /google/callback')).toContain(
-      'verifyOAuthState(state)',
+      'verifyOAuthState(callbackParams.state)',
+    );
+    expect(routeSourceForDescriptor(oauthSource, 'GET /google/callback')).toContain(
+      'getVerifiedGoogleCallbackIdentity(tokens.id_token)',
     );
     expect(routeSourceForDescriptor(oauthSource, 'GET /google/callback')).toContain(
       'createOAuthCallbackCode',

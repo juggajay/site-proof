@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { ApiError, apiFetch } from '@/lib/api';
+import { getDefaultPostLoginRedirect } from './postLoginRedirect';
 
 function getOAuthErrorMessage(error: string | null): string {
   if (error === 'mfa_required') {
@@ -60,8 +61,8 @@ export function OAuthCallbackPage() {
           body: JSON.stringify({ code }),
         });
 
-        await setToken(data.token);
-        navigate('/dashboard', { replace: true });
+        const signedInUser = await setToken(data.token);
+        navigate(getDefaultPostLoginRedirect(signedInUser), { replace: true });
       } catch (err) {
         setError(getApiErrorMessage(err));
         setTimeout(() => navigate('/login'), 3000);
