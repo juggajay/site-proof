@@ -94,11 +94,15 @@ export async function loadDocumentImageAsBase64(
     return base64Match[1];
   }
 
-  if (isExternalFileUrl(document.fileUrl)) {
+  if (getOwnedDocumentStoragePath(document.fileUrl, document.projectId, document.documentType)) {
     if (!isSupabaseConfigured()) {
       throw AppError.notFound('Image file');
     }
     return loadSupabaseDocumentImageAsBase64(document);
+  }
+
+  if (isExternalFileUrl(document.fileUrl)) {
+    throw AppError.notFound('Image file');
   }
 
   const filePath = resolveLocalDocumentFilePath(document.fileUrl);

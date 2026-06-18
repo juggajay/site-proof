@@ -34,7 +34,13 @@ describe('sendDocumentFile', () => {
     vi.clearAllMocks();
   });
 
-  it('streams Supabase attachment downloads instead of redirecting to storage', async () => {
+  it.each([
+    [
+      'public URL',
+      'https://siteproof-test.supabase.co/storage/v1/object/public/documents/project-1/evidence.pdf',
+    ],
+    ['private storage reference', 'supabase://documents/project-1/evidence.pdf'],
+  ])('streams Supabase attachment downloads from a %s', async (_label, fileUrl) => {
     const storagePath = 'project-1/evidence.pdf';
     const download = vi.fn().mockResolvedValue({
       data: new Blob([Buffer.from('document bytes')], { type: 'application/pdf' }),
@@ -51,8 +57,7 @@ describe('sendDocumentFile', () => {
 
     await sendDocumentFile(
       {
-        fileUrl:
-          'https://siteproof-test.supabase.co/storage/v1/object/public/documents/project-1/evidence.pdf',
+        fileUrl,
         filename: 'evidence.pdf',
         mimeType: 'application/pdf',
       },

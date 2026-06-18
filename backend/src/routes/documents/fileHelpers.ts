@@ -304,13 +304,13 @@ export async function sendDocumentFile(
   const contentType = getSafeServedDocumentMimeType(document);
   const contentDisposition = getDocumentContentDisposition(disposition, contentType);
 
-  if (isExternalFileUrl(document.fileUrl)) {
-    if (!isSafeExternalDocumentUrl(document.fileUrl)) {
-      throw AppError.notFound('File');
-    }
-
+  if (isSafeExternalDocumentUrl(document.fileUrl)) {
     await sendSupabaseDocumentFile(document, res, contentType, contentDisposition);
     return;
+  }
+
+  if (isExternalFileUrl(document.fileUrl)) {
+    throw AppError.notFound('File');
   }
 
   const filePath = resolveLocalDocumentFilePath(document.fileUrl);
