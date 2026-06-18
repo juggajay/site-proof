@@ -1,5 +1,10 @@
 import { useAuth } from '@/lib/auth';
 import { ROLE_GROUPS, hasRoleInGroup } from '@/lib/roles';
+import {
+  getProjectScopedRole,
+  hasSubcontractorPortalIdentity,
+  isSubcontractorUser,
+} from '@/lib/subcontractorIdentity';
 
 /**
  * Hook to check if the current user has commercial access.
@@ -7,7 +12,14 @@ import { ROLE_GROUPS, hasRoleInGroup } from '@/lib/roles';
  */
 export function useCommercialAccess() {
   const { user, actualRole } = useAuth();
-  const role = user?.dashboardRole || actualRole || user?.roleInCompany || user?.role;
+  const projectScopedRole = getProjectScopedRole(user);
+  const actualRoleHasCommercialAccess = hasRoleInGroup(actualRole, ROLE_GROUPS.COMMERCIAL);
+  const role =
+    isSubcontractorUser(user) || hasSubcontractorPortalIdentity(user)
+      ? projectScopedRole
+      : actualRoleHasCommercialAccess
+        ? actualRole
+        : projectScopedRole;
 
   const hasCommercialAccess = hasRoleInGroup(role, ROLE_GROUPS.COMMERCIAL);
   const canViewSubcontractorRates = hasRoleInGroup(role, ROLE_GROUPS.RATE_VIEWERS);

@@ -123,3 +123,6 @@ frontend/.env.production
 
 # fallow analysis cache
 .fallow/
+
+# Local security/deep audit output
+.deepsec/

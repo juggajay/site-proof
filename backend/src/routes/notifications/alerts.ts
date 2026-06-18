@@ -13,6 +13,7 @@
  */
 
 import { Router } from 'express';
+import { type Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
@@ -57,6 +58,7 @@ import {
 import { notificationSystemAlertsRouter } from './systemAlerts.js';
 
 export const notificationAlertsRouter = Router();
+const MAX_ALERT_LIST_RESULTS = 500;
 
 // ============================================================================
 // ALERT ESCALATION SYSTEM
@@ -161,16 +163,29 @@ notificationAlertsRouter.get(
     );
 
     const accessibleProjectIds = new Set(await getAccessibleActiveProjectIds(user));
+    const alertWhere: Prisma.NotificationAlertWhereInput = {
+      OR: [
+        { assignedToId: userId },
+        { projectId: { in: [...accessibleProjectIds] } },
+        // Keep escalated recipients visible even when they are not project members.
+        // JSON array contains filters are not portable across the test/runtime DBs.
+        { escalationLevel: { gt: 0 } },
+      ],
+    };
+
+    if (status === 'active') {
+      alertWhere.resolvedAt = null;
+    } else if (status === 'resolved') {
+      alertWhere.resolvedAt = { not: null };
+    } else if (status === 'escalated') {
+      alertWhere.resolvedAt = null;
+      alertWhere.escalationLevel = { gt: 0 };
+    }
+
     const alertRecords = await prisma.notificationAlert.findMany({
-      where: {
-        OR: [
-          { assignedToId: userId },
-          { projectId: { in: [...accessibleProjectIds] } },
-          // Keep escalated recipients visible even when they are not project members.
-          // JSON array contains filters are not portable across the test/runtime DBs.
-          { escalationLevel: { gt: 0 } },
-        ],
-      },
+      where: alertWhere,
+      orderBy: { createdAt: 'desc' },
+      take: MAX_ALERT_LIST_RESULTS,
     });
 
     let alerts = alertRecords

@@ -6,6 +6,7 @@ import { prisma } from '../../lib/prisma.js';
 import { buildSubcontractorDirectoryResponse } from './invitationResponses.js';
 
 type AuthenticatedUser = NonNullable<Request['user']>;
+const MAX_SUBCONTRACTOR_DIRECTORY_RESULTS = 1000;
 
 export interface SubcontractorDirectoryRouterDependencies {
   isHeadContractorRole(user: AuthenticatedUser): boolean;
@@ -43,6 +44,7 @@ export function createSubcontractorDirectoryRouter({
           status: 'active',
         },
         orderBy: { companyName: 'asc' },
+        take: MAX_SUBCONTRACTOR_DIRECTORY_RESULTS,
       });
 
       res.json(buildSubcontractorDirectoryResponse(globalSubcontractors));
