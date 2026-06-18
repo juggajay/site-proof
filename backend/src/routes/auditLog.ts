@@ -19,6 +19,7 @@ const COMPANY_AUDIT_ROLES = new Set(['owner', 'admin']);
 const AUDIT_SUBCONTRACTOR_ROLES = new Set(['subcontractor', 'subcontractor_admin']);
 const AUDIT_FILTER_MAX_LENGTH = 120;
 const AUDIT_SEARCH_MAX_LENGTH = 200;
+export const MAX_AUDIT_LOG_USER_FILTER_RESULTS = 500;
 const DATE_COMPONENT_QUERY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})(?:$|[T\s])/;
 
 // Apply authentication middleware to all audit log routes
@@ -326,29 +327,20 @@ auditLogRouter.get(
   '/users',
   asyncHandler(async (req, res) => {
     const accessWhere = await getAuditLogAccessWhere(req);
-    const usersWithLogs = await prisma.auditLog.findMany({
+    const users = await prisma.user.findMany({
       select: {
-        userId: true,
-        user: {
-          select: {
-            id: true,
-            email: true,
-            fullName: true,
-          },
+        id: true,
+        email: true,
+        fullName: true,
+      },
+      where: {
+        auditLogs: {
+          some: accessWhere,
         },
       },
-      distinct: ['userId'],
-      where: combineWhere(accessWhere, { userId: { not: null } }),
+      orderBy: [{ email: 'asc' }, { id: 'asc' }],
+      take: MAX_AUDIT_LOG_USER_FILTER_RESULTS,
     });
-
-    const users = usersWithLogs
-      .filter((log) => log.user)
-      .map((log) => ({
-        id: log.user!.id,
-        email: log.user!.email,
-        fullName: log.user!.fullName,
-      }))
-      .sort((a, b) => (a.email || '').localeCompare(b.email || ''));
 
     res.json(buildAuditUsersResponse(users));
   }),
