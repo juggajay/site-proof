@@ -3903,6 +3903,44 @@ describe('NCR Access Hardening', () => {
     expect(linkedEvidence).toBe(0);
   });
 
+  it('should treat linking the same NCR evidence document as idempotent', async () => {
+    const document = await prisma.document.create({
+      data: {
+        projectId,
+        documentType: 'ncr_evidence',
+        category: 'ncr_evidence',
+        filename: `duplicate-link-evidence-${Date.now()}.jpg`,
+        fileUrl: `/uploads/documents/duplicate-link-evidence-${Date.now()}.jpg`,
+        uploadedById: userId,
+      },
+    });
+
+    const firstRes = await request(app)
+      .post(`/api/ncrs/${ncrId}/evidence`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        documentId: document.id,
+        evidenceType: 'photo',
+      });
+    expect(firstRes.status).toBe(201);
+
+    const duplicateRes = await request(app)
+      .post(`/api/ncrs/${ncrId}/evidence`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        documentId: document.id,
+        evidenceType: 'photo',
+      });
+    expect(duplicateRes.status).toBe(200);
+    expect(duplicateRes.body.message).toBe('Evidence already linked to NCR');
+    expect(duplicateRes.body.evidence.id).toBe(firstRes.body.evidence.id);
+
+    const linkedEvidence = await prisma.nCREvidence.findMany({
+      where: { ncrId, documentId: document.id },
+    });
+    expect(linkedEvidence).toHaveLength(1);
+  });
+
   it('should reject inline data URLs for evidence documents', async () => {
     const res = await request(app)
       .post(`/api/ncrs/${ncrId}/evidence`)
