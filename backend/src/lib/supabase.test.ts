@@ -39,14 +39,27 @@ describe('supabase storage client', () => {
     expect(storage.getSupabasePublicUrl('documents', 'project/file.pdf')).toBe(
       'https://siteproof.supabase.co/storage/v1/object/public/documents/project/file.pdf',
     );
+    expect(storage.getSupabaseStorageReference('documents', 'project/file.pdf')).toBe(
+      'supabase://documents/project/file.pdf',
+    );
     const publicUrlWithReservedChars = storage.getSupabasePublicUrl(
+      'documents',
+      'project qa/file #1%25?.pdf',
+    );
+    const referenceWithReservedChars = storage.getSupabaseStorageReference(
       'documents',
       'project qa/file #1%25?.pdf',
     );
     expect(publicUrlWithReservedChars).toBe(
       'https://siteproof.supabase.co/storage/v1/object/public/documents/project%20qa/file%20%231%2525%3F.pdf',
     );
+    expect(referenceWithReservedChars).toBe(
+      'supabase://documents/project%20qa/file%20%231%2525%3F.pdf',
+    );
     expect(storage.getSupabaseStoragePath(publicUrlWithReservedChars)).toBe(
+      'project qa/file #1%25?.pdf',
+    );
+    expect(storage.getSupabaseStoragePath(referenceWithReservedChars)).toBe(
       'project qa/file #1%25?.pdf',
     );
     expect(
@@ -77,6 +90,10 @@ describe('supabase storage client', () => {
         'https://siteproof.supabase.co/storage/v1/object/public/documents/project/file.pdf',
       ),
     ).toBe('project/file.pdf');
+
+    expect(storage.getSupabaseStoragePath('supabase://documents/project/file.pdf')).toBe(
+      'project/file.pdf',
+    );
   });
 
   it('only parses storage paths from the configured Supabase origin and bucket', async () => {
@@ -111,6 +128,22 @@ describe('supabase storage client', () => {
         'https://siteproof.supabase.co/storage/v1/object/public/documents/project/../file.pdf',
       ),
     ).toBeNull();
+    expect(
+      storage.getSupabaseStoragePath(
+        'https://siteproof.supabase.co/storage/v1/object/public/documents/project/%2E%2E/file.pdf',
+      ),
+    ).toBeNull();
+    expect(storage.getSupabaseStoragePath('supabase://comments/project/file.pdf')).toBeNull();
+    expect(
+      storage.getSupabaseStoragePath('supabase://user:pass@documents/project/file.pdf'),
+    ).toBeNull();
+    expect(storage.getSupabaseStoragePath('supabase://documents/project/../file.pdf')).toBeNull();
+    expect(
+      storage.getSupabaseStoragePath('supabase://documents/project/%2E%2E/file.pdf'),
+    ).toBeNull();
+    expect(
+      storage.getSupabaseStoragePath('supabase://documents/project/file.pdf?download=1'),
+    ).toBeNull();
   });
 
   it('can require a storage path to stay inside an expected owner prefix', async () => {
@@ -137,6 +170,18 @@ describe('supabase storage client', () => {
         'https://siteproof.supabase.co/storage/v1/object/public/documents/comments/project-a-file.pdf',
         { bucket: 'documents', expectedPrefix: 'comments/project-a/' },
       ),
+    ).toBeNull();
+    expect(
+      storage.getSupabaseStoragePath('supabase://documents/comments/project-a/file.pdf', {
+        bucket: 'documents',
+        expectedPrefix: 'comments/project-a/',
+      }),
+    ).toBe('comments/project-a/file.pdf');
+    expect(
+      storage.getSupabaseStoragePath('supabase://documents/comments/project-b/file.pdf', {
+        bucket: 'documents',
+        expectedPrefix: 'comments/project-a/',
+      }),
     ).toBeNull();
   });
 });

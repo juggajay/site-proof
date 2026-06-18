@@ -13,6 +13,7 @@ const hasSupabaseCredentials = Boolean(
   supabaseUrl && supabaseServiceKey && supabaseUrl !== 'http://localhost:54321',
 );
 const normalizedSupabaseUrl = getNormalizedSupabaseUrl();
+const UNSAFE_STORAGE_PATH_SEGMENT_PATTERN = /(?:^|\/)(?:\.|%2e)(?:\.|%2e)?(?:\/|$)/i;
 
 if (!hasSupabaseCredentials) {
   logWarn('Supabase credentials not configured. File storage will use local filesystem.');
@@ -47,6 +48,23 @@ function encodeStorageObjectPath(path: string): string {
     .join('/');
 }
 
+function parseStoragePathSegments(encodedStoragePath: string): string | null {
+  if (!encodedStoragePath) {
+    return null;
+  }
+
+  try {
+    const storagePath = decodeURIComponent(encodedStoragePath);
+    const segments = storagePath.split('/');
+    if (segments.some((segment) => !segment || segment === '.' || segment === '..')) {
+      return null;
+    }
+    return storagePath;
+  } catch {
+    return null;
+  }
+}
+
 // Get the public URL for a file in Supabase storage
 export function getSupabasePublicUrl(bucket: string, path: string): string {
   if (!isSupabaseConfigured()) {
@@ -58,6 +76,11 @@ export function getSupabasePublicUrl(bucket: string, path: string): string {
 
 // Documents bucket name
 export const DOCUMENTS_BUCKET = 'documents';
+export const SUPABASE_STORAGE_REFERENCE_SCHEME = 'supabase:';
+
+export function getSupabaseStorageReference(bucket: string, path: string): string {
+  return `${SUPABASE_STORAGE_REFERENCE_SCHEME}//${bucket}/${encodeStorageObjectPath(path)}`;
+}
 
 interface SupabaseStoragePathOptions {
   bucket?: string;
@@ -82,6 +105,28 @@ function normalizeStoragePathPrefix(prefix: string | undefined): string | null {
   return normalized.endsWith('/') ? normalized : `${normalized}/`;
 }
 
+function parseSupabaseStorageReference(fileUrl: string, bucket: string): string | null {
+  let parsedReference: URL;
+  try {
+    parsedReference = new URL(fileUrl);
+  } catch {
+    return null;
+  }
+
+  if (
+    parsedReference.protocol !== SUPABASE_STORAGE_REFERENCE_SCHEME ||
+    parsedReference.hostname !== bucket ||
+    parsedReference.username ||
+    parsedReference.password ||
+    parsedReference.search ||
+    parsedReference.hash
+  ) {
+    return null;
+  }
+
+  return parseStoragePathSegments(parsedReference.pathname.replace(/^\/+/, ''));
+}
+
 export function getSupabaseStoragePath(
   fileUrl: string,
   bucketOrOptions: string | SupabaseStoragePathOptions = DOCUMENTS_BUCKET,
@@ -103,8 +148,20 @@ export function getSupabaseStoragePath(
     return null;
   }
 
+  if (fileUrl.includes('\\') || UNSAFE_STORAGE_PATH_SEGMENT_PATTERN.test(fileUrl)) {
+    return null;
+  }
+
+  const storageReferencePath = parseSupabaseStorageReference(fileUrl, bucket);
+  if (storageReferencePath) {
+    if (expectedStoragePrefix && !storageReferencePath.startsWith(expectedStoragePrefix)) {
+      return null;
+    }
+    return storageReferencePath;
+  }
+
   const configuredSupabaseUrl = getNormalizedSupabaseUrl();
-  if (!configuredSupabaseUrl || fileUrl.includes('\\') || /(^|\/)\.{1,2}(\/|$)/.test(fileUrl)) {
+  if (!configuredSupabaseUrl) {
     return null;
   }
 
@@ -134,17 +191,13 @@ export function getSupabaseStoragePath(
     return null;
   }
 
-  try {
-    const storagePath = decodeURIComponent(encodedStoragePath);
-    const segments = storagePath.split('/');
-    if (segments.some((segment) => !segment || segment === '.' || segment === '..')) {
-      return null;
-    }
-    if (expectedStoragePrefix && !storagePath.startsWith(expectedStoragePrefix)) {
-      return null;
-    }
-    return storagePath;
-  } catch {
+  const storagePath = parseStoragePathSegments(encodedStoragePath);
+  if (!storagePath) {
     return null;
   }
+
+  if (expectedStoragePrefix && !storagePath.startsWith(expectedStoragePrefix)) {
+    return null;
+  }
+  return storagePath;
 }
