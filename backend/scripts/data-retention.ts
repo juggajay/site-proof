@@ -26,6 +26,7 @@ import type { Prisma } from '@prisma/client';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { requireDatabaseTargetConfirmation } from './lib/database-target.js';
 
 const prisma = new PrismaClient();
 
@@ -90,40 +91,8 @@ interface RetentionReport {
   };
 }
 
-function resolveRetentionApplyTarget(env: NodeJS.ProcessEnv = process.env): string {
-  const databaseUrl = env.DATABASE_URL?.trim();
-  if (!databaseUrl) {
-    throw new Error('DATABASE_URL is required before retention policies can be applied.');
-  }
-
-  let parsed: URL;
-  try {
-    parsed = new URL(databaseUrl);
-  } catch {
-    throw new Error('DATABASE_URL must be a valid PostgreSQL connection string.');
-  }
-
-  if (parsed.protocol !== 'postgresql:' && parsed.protocol !== 'postgres:') {
-    throw new Error('DATABASE_URL must be a PostgreSQL connection string.');
-  }
-
-  const databaseName = parsed.pathname.replace(/^\/+/, '').split('/')[0];
-  if (!databaseName) {
-    throw new Error('DATABASE_URL must include a database name.');
-  }
-
-  return `${parsed.hostname}/${databaseName}`;
-}
-
-function requireRetentionApplyConfirmation(env: NodeJS.ProcessEnv = process.env): void {
-  const target = resolveRetentionApplyTarget(env);
-  const confirmation = env.CONFIRM_RETENTION_APPLY?.trim();
-
-  if (confirmation !== target) {
-    throw new Error(
-      `Refusing retention apply. Check the database host/name, then set CONFIRM_RETENTION_APPLY=${target} to confirm this destructive operation.`,
-    );
-  }
+function requireRetentionApplyConfirmation(): void {
+  requireDatabaseTargetConfirmation('CONFIRM_RETENTION_APPLY', 'retention apply');
 }
 
 async function checkRetentionPolicies(): Promise<RetentionReport> {

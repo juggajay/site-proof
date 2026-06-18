@@ -3,6 +3,7 @@ import 'dotenv/config';
 
 import { Prisma } from '@prisma/client';
 import { prisma } from '../src/lib/prisma.js';
+import { runScript } from './lib/run-script.js';
 
 interface DuplicateCheck {
   name: string;
@@ -100,11 +101,4 @@ async function main(): Promise<void> {
   console.log('Unique-index migration preconditions passed.');
 }
 
-void main()
-  .catch((error) => {
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+runScript(main, () => prisma.$disconnect());

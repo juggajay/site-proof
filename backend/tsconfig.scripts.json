@@ -7,6 +7,9 @@
   "include": [
     "scripts/migrate.ts",
     "scripts/backup.ts",
+    "scripts/lib/database-target.ts",
+    "scripts/lib/run-script.ts",
+    "scripts/backfill-one-time-token-hashes.ts",
     "scripts/check-unique-migration-preconditions.ts",
     "scripts/data-retention.ts",
     "scripts/migrate-passwords.ts",
