@@ -7,7 +7,7 @@ import { AppError } from '../../lib/AppError.js';
 import {
   DOCUMENTS_BUCKET,
   getSupabaseClient,
-  getSupabasePublicUrl,
+  getSupabaseStorageReference,
   getSupabaseStoragePath,
   isSupabaseConfigured,
 } from '../../lib/supabase.js';
@@ -100,7 +100,7 @@ async function uploadCommentAttachmentToSupabase(
     throw AppError.internal('Failed to upload attachment');
   }
 
-  return getSupabasePublicUrl(DOCUMENTS_BUCKET, storagePath);
+  return getSupabaseStorageReference(DOCUMENTS_BUCKET, storagePath);
 }
 
 async function uploadCommentAttachmentToDisk(file: Express.Multer.File): Promise<string> {
