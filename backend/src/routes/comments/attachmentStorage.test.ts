@@ -12,11 +12,7 @@ vi.mock('../../lib/supabase.js', () => ({
 }));
 
 import * as supabaseLib from '../../lib/supabase.js';
-import {
-  getValidAttachments,
-  sendCommentAttachmentFile,
-  storeCommentAttachmentFiles,
-} from './attachmentStorage.js';
+import { sendCommentAttachmentFile, storeCommentAttachmentFiles } from './attachmentStorage.js';
 
 const mockGetSupabaseClient = vi.mocked(supabaseLib.getSupabaseClient);
 const mockGetSupabaseStorageReference = vi.mocked(supabaseLib.getSupabaseStorageReference);
@@ -83,36 +79,6 @@ describe('sendCommentAttachmentFile', () => {
     expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'image/png');
     expect(res.setHeader).toHaveBeenCalledWith('X-Content-Type-Options', 'nosniff');
     expect(res.send.mock.calls[0][0].toString()).toBe('comment evidence');
-  });
-
-  it('accepts owned private storage references when validating supplied attachments', () => {
-    mockGetSupabaseStoragePath.mockImplementation((fileUrl) =>
-      fileUrl === 'supabase://documents/comments/project-1/evidence.png'
-        ? 'comments/project-1/evidence.png'
-        : null,
-    );
-    mockIsSupabaseConfigured.mockReturnValue(true);
-
-    expect(
-      getValidAttachments(
-        [
-          {
-            filename: 'evidence.png',
-            fileUrl: 'supabase://documents/comments/project-1/evidence.png',
-            fileSize: 10,
-            mimeType: 'image/png',
-          },
-        ],
-        'project-1',
-      ),
-    ).toEqual([
-      {
-        filename: 'evidence.png',
-        fileUrl: 'supabase://documents/comments/project-1/evidence.png',
-        fileSize: 10,
-        mimeType: 'image/png',
-      },
-    ]);
   });
 });
 

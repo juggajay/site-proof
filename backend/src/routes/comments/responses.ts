@@ -64,10 +64,6 @@ export function buildCommentListResponse(
   };
 }
 
-export function buildUploadedCommentAttachmentsResponse(attachments: unknown[]) {
-  return { attachments };
-}
-
 export function buildCommentMutationResponse(comment: unknown) {
   return { comment: stripCommentAttachmentFileUrls(comment) };
 }

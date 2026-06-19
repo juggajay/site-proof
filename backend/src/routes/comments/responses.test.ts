@@ -14,7 +14,6 @@ import {
   buildCommentListResponse,
   buildCommentMutationResponse,
   buildCommentSuccessResponse,
-  buildUploadedCommentAttachmentsResponse,
 } from './responses.js';
 
 describe('comment response helpers', () => {
@@ -83,12 +82,6 @@ describe('comment response helpers', () => {
         hasPrevPage: true,
       },
     });
-  });
-
-  it('preserves uploaded attachment response envelope', () => {
-    const attachments = [{ filename: 'photo.jpg', fileUrl: '/uploads/photo.jpg' }];
-
-    expect(buildUploadedCommentAttachmentsResponse(attachments)).toEqual({ attachments });
   });
 
   it('serializes comment author Supabase avatars as signed backend URLs', () => {
