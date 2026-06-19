@@ -363,6 +363,63 @@ describe('subbie shell DocketScreen', () => {
     expect(screen.getByText(/waiting on the foreman/i)).toBeInTheDocument();
   });
 
+  it('approved docket rows show approved costs and approved labour hours', async () => {
+    setApi({
+      docket: makeDocket({
+        status: 'approved',
+        labourEntries: [
+          {
+            id: 'le-1',
+            employee: { id: 'e', name: 'Tommy', role: 'Pipe Layer', hourlyRate: 74 },
+            startTime: '07:00',
+            finishTime: '15:00',
+            submittedHours: 8,
+            hourlyRate: 74,
+            submittedCost: 592,
+            approvedHours: 6,
+            approvedCost: 444,
+            lotAllocations: [{ lotId: 'lot-1', lotNumber: 'LOT-014', hours: 8 }],
+          },
+        ],
+        plantEntries: [
+          {
+            id: 'pe-1',
+            plant: {
+              id: 'plant-1',
+              type: 'Excavator',
+              description: 'CAT 320',
+              dryRate: 150,
+              wetRate: 180,
+            },
+            hoursOperated: 3,
+            wetOrDry: 'dry',
+            hourlyRate: 150,
+            submittedCost: 450,
+            approvedCost: 300,
+          },
+        ],
+        totalLabourSubmitted: 592,
+        totalPlantSubmitted: 450,
+        totalLabourApprovedCost: 444,
+        totalPlantApprovedCost: 300,
+      }),
+      existingDockets: [],
+    });
+
+    renderDocket('/p/docket/dk-1');
+
+    expect(await screen.findByText('Tommy')).toBeInTheDocument();
+    expect(screen.getAllByText('$444').length).toBeGreaterThan(0);
+    expect(screen.getByText('6 h')).toBeInTheDocument();
+    expect(screen.getAllByText('$300').length).toBeGreaterThan(0);
+    expect(screen.getByText('was 8 h / $592')).toBeInTheDocument();
+    expect(screen.getByText('was $450')).toBeInTheDocument();
+
+    const grandLabel = screen.getByText("Today's total");
+    const grandRow = grandLabel.closest('.grand')!;
+    expect(within(grandRow as HTMLElement).getByText('$744')).toBeInTheDocument();
+  });
+
   it('submit is disabled when the draft has no entries', async () => {
     setApi({ docket: makeDocket(), existingDockets: [] });
     renderDocket('/p/docket/dk-1');

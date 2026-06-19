@@ -5,8 +5,13 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import {
+  getDocketDisplayLabourEntryCost,
+  getDocketDisplayLabourEntryHours,
   getDocketDisplayLabourCost,
+  getDocketDisplayPlantEntryCost,
   getDocketDisplayPlantCost,
+  hasDocketLabourEntryAdjustment,
+  hasDocketPlantEntryCostAdjustment,
   type Docket,
   type Employee,
   type Plant,
@@ -153,38 +158,50 @@ export function DocketEditTabs({
           {docket?.labourEntries && docket.labourEntries.length > 0 && (
             <div className="space-y-2">
               <h3 className="font-medium text-sm text-muted-foreground">Today's Entries</h3>
-              {docket.labourEntries.map((entry) => (
-                <div key={entry.id} className="border border-border rounded-lg bg-card p-4">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="font-medium text-foreground">{entry.employee.name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {entry.startTime} - {entry.finishTime}
-                      </p>
-                      <p className="text-sm text-foreground">
-                        {entry.submittedHours}h × ${entry.hourlyRate}/hr ={' '}
-                        {formatCurrency(entry.submittedCost)}
-                      </p>
-                      {entry.lotAllocations.length > 0 && (
-                        <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-                          <MapPin className="h-3 w-3" />
-                          {entry.lotAllocations.map((a) => a.lotNumber).join(', ')}
+              {docket.labourEntries.map((entry) => {
+                const displayHours = getDocketDisplayLabourEntryHours(docket, entry);
+                const displayCost = getDocketDisplayLabourEntryCost(docket, entry);
+                const adjusted = hasDocketLabourEntryAdjustment(docket, entry);
+
+                return (
+                  <div key={entry.id} className="border border-border rounded-lg bg-card p-4">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="font-medium text-foreground">{entry.employee.name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {entry.startTime} - {entry.finishTime}
                         </p>
+                        <p className="text-sm text-foreground">
+                          {displayHours}h × ${entry.hourlyRate}/hr ={' '}
+                          <span className="font-medium">{formatCurrency(displayCost)}</span>
+                        </p>
+                        {adjusted && (
+                          <p className="text-xs text-muted-foreground line-through">
+                            Submitted: {entry.submittedHours}h /{' '}
+                            {formatCurrency(entry.submittedCost)}
+                          </p>
+                        )}
+                        {entry.lotAllocations.length > 0 && (
+                          <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
+                            <MapPin className="h-3 w-3" />
+                            {entry.lotAllocations.map((a) => a.lotNumber).join(', ')}
+                          </p>
+                        )}
+                      </div>
+                      {canEdit && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => onDeleteLabour(entry.id)}
+                          className="text-destructive hover:bg-destructive/10"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       )}
                     </div>
-                    {canEdit && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => onDeleteLabour(entry.id)}
-                        className="text-destructive hover:bg-destructive/10"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
               <div className="text-right p-2">
                 <p className="text-sm text-muted-foreground">Labour Subtotal</p>
                 <p className="text-lg font-semibold text-foreground">
@@ -246,30 +263,50 @@ export function DocketEditTabs({
           {docket?.plantEntries && docket.plantEntries.length > 0 && (
             <div className="space-y-2">
               <h3 className="font-medium text-sm text-muted-foreground">Today's Entries</h3>
-              {docket.plantEntries.map((entry) => (
-                <div key={entry.id} className="border border-border rounded-lg bg-card p-4">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="font-medium text-foreground">{entry.plant.type}</p>
-                      <p className="text-sm text-muted-foreground">{entry.plant.description}</p>
-                      <p className="text-sm text-foreground">
-                        {entry.hoursOperated}h × ${entry.hourlyRate}/hr ({entry.wetOrDry}) ={' '}
-                        {formatCurrency(entry.submittedCost)}
-                      </p>
+              {docket.plantEntries.map((entry) => {
+                const displayCost = getDocketDisplayPlantEntryCost(docket, entry);
+                const adjusted = hasDocketPlantEntryCostAdjustment(docket, entry);
+
+                return (
+                  <div key={entry.id} className="border border-border rounded-lg bg-card p-4">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="font-medium text-foreground">{entry.plant.type}</p>
+                        <p className="text-sm text-muted-foreground">{entry.plant.description}</p>
+                        <p className="text-sm text-foreground">
+                          {adjusted ? (
+                            <>
+                              Approved:{' '}
+                              <span className="font-medium">{formatCurrency(displayCost)}</span>
+                            </>
+                          ) : (
+                            <>
+                              {entry.hoursOperated}h × ${entry.hourlyRate}/hr ({entry.wetOrDry}) ={' '}
+                              {formatCurrency(displayCost)}
+                            </>
+                          )}
+                        </p>
+                        {adjusted && (
+                          <p className="text-xs text-muted-foreground line-through">
+                            Submitted: {entry.hoursOperated}h × ${entry.hourlyRate}/hr (
+                            {entry.wetOrDry}) = {formatCurrency(entry.submittedCost)}
+                          </p>
+                        )}
+                      </div>
+                      {canEdit && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => onDeletePlant(entry.id)}
+                          className="text-destructive hover:bg-destructive/10"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
-                    {canEdit && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => onDeletePlant(entry.id)}
-                        className="text-destructive hover:bg-destructive/10"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
               <div className="text-right p-2">
                 <p className="text-sm text-muted-foreground">Plant Subtotal</p>
                 <p className="text-lg font-semibold text-foreground">
