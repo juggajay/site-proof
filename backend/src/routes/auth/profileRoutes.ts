@@ -9,6 +9,12 @@ import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { AuditAction } from '../../lib/auditLog.js';
 import {
+  buildAvatarDisplayUrl,
+  getAvatarStoragePrefix,
+  getOwnedAvatarStoragePath,
+  validateAvatarAccessToken,
+} from '../../lib/avatarUrls.js';
+import {
   assertUploadedImageFile,
   getSafeImageExtensionForMimeType,
 } from '../../lib/imageValidation.js';
@@ -17,8 +23,7 @@ import { logError, logWarn } from '../../lib/serverLogger.js';
 import {
   DOCUMENTS_BUCKET,
   getSupabaseClient,
-  getSupabasePublicUrl,
-  getSupabaseStoragePath,
+  getSupabaseStorageReference,
   isSupabaseConfigured,
 } from '../../lib/supabase.js';
 import { ensureUploadSubdirectory, getUploadSubdirectoryPath } from '../../lib/uploadPaths.js';
@@ -44,11 +49,17 @@ type CreateProfileRouterDependencies = {
   profileFullNameMaxLength: number;
 };
 
-const AVATAR_STORAGE_PREFIX = 'avatars';
 const avatarUploadDir = getUploadSubdirectoryPath('avatars');
 const AVATAR_PATH_PREFIX = '/uploads/avatars/';
 const PROFILE_PHONE_MAX_LENGTH = 40;
 const PROFILE_PHONE_PATTERN = /^[0-9+().\-\s]*$/;
+const AVATAR_MIME_BY_EXTENSION = new Map([
+  ['.jpg', 'image/jpeg'],
+  ['.jpeg', 'image/jpeg'],
+  ['.png', 'image/png'],
+  ['.gif', 'image/gif'],
+  ['.webp', 'image/webp'],
+]);
 
 // Avatar uploads use Supabase Storage (memory-buffered) in production and fall
 // back to the local filesystem when Supabase is not configured. Path inside
@@ -101,26 +112,15 @@ function buildAvatarStorageFilename(userId: string, mimetype: string): string | 
   return `avatar-${userId}-${crypto.randomUUID()}${ext}`;
 }
 
-function getAvatarStoragePrefix(userId: string): string {
-  return `${AVATAR_STORAGE_PREFIX}/${userId}/`;
-}
-
-function getOwnedAvatarStoragePath(fileUrl: string, userId: string): string | null {
-  return getSupabaseStoragePath(fileUrl, {
-    bucket: DOCUMENTS_BUCKET,
-    expectedPrefix: getAvatarStoragePrefix(userId),
-  });
-}
-
 async function uploadAvatarToSupabase(
   file: Express.Multer.File,
   userId: string,
-): Promise<{ url: string; storagePath: string }> {
+): Promise<{ storageReference: string; storagePath: string }> {
   const filename = buildAvatarStorageFilename(userId, file.mimetype);
   if (!filename) {
     throw AppError.badRequest('Invalid file type. Only JPEG, PNG, GIF and WebP are allowed.');
   }
-  const storagePath = `${AVATAR_STORAGE_PREFIX}/${userId}/${filename}`;
+  const storagePath = `${getAvatarStoragePrefix(userId)}${filename}`;
 
   const { error } = await getSupabaseClient()
     .storage.from(DOCUMENTS_BUCKET)
@@ -135,7 +135,7 @@ async function uploadAvatarToSupabase(
   }
 
   return {
-    url: getSupabasePublicUrl(DOCUMENTS_BUCKET, storagePath),
+    storageReference: getSupabaseStorageReference(DOCUMENTS_BUCKET, storagePath),
     storagePath,
   };
 }
@@ -220,6 +220,10 @@ function deleteLocalAvatarFile(avatarUrl: string | null | undefined, userId: str
   }
 }
 
+function getAvatarContentType(storagePath: string): string {
+  return AVATAR_MIME_BY_EXTENSION.get(path.extname(storagePath).toLowerCase()) || 'image/jpeg';
+}
+
 export function createProfileRouter({
   prisma,
   requireJwtAuth,
@@ -300,6 +304,48 @@ export function createProfileRouter({
     }),
   );
 
+  // GET /api/auth/avatar/file/:userId - Serve a signed Supabase-backed avatar URL.
+  profileRouter.get(
+    '/avatar/file/:userId',
+    asyncHandler(async (req, res) => {
+      const userId = req.params.userId;
+      if (!userId) {
+        throw AppError.badRequest('userId is required');
+      }
+
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { avatarUrl: true },
+      });
+
+      const storagePath = getOwnedAvatarStoragePath(user?.avatarUrl, userId);
+      if (!storagePath || !isSupabaseConfigured()) {
+        throw AppError.notFound('Avatar');
+      }
+
+      const token = typeof req.query.token === 'string' ? req.query.token : undefined;
+      if (!validateAvatarAccessToken(token, userId, storagePath)) {
+        throw AppError.unauthorized('Invalid or expired avatar URL');
+      }
+
+      const { data, error } = await getSupabaseClient()
+        .storage.from(DOCUMENTS_BUCKET)
+        .download(storagePath);
+
+      if (error || !data) {
+        logWarn('Supabase avatar download failed:', error);
+        throw AppError.notFound('Avatar');
+      }
+
+      const buffer = Buffer.from(await data.arrayBuffer());
+      res.setHeader('Cache-Control', 'private, max-age=300');
+      res.setHeader('Content-Type', getAvatarContentType(storagePath));
+      res.setHeader('Content-Length', String(buffer.length));
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.send(buffer);
+    }),
+  );
+
   // POST /api/auth/avatar - Upload user avatar (Feature #690)
   profileRouter.post(
     '/avatar',
@@ -329,7 +375,7 @@ export function createProfileRouter({
       try {
         if (isSupabaseConfigured() && uploadedFile.buffer) {
           const uploaded = await uploadAvatarToSupabase(uploadedFile, userData.id);
-          avatarUrl = uploaded.url;
+          avatarUrl = uploaded.storageReference;
         } else {
           avatarUrl = buildApiUrl(`/uploads/avatars/${uploadedFile.filename}`);
         }
@@ -371,15 +417,17 @@ export function createProfileRouter({
         }
       }
 
+      const displayAvatarUrl = buildAvatarDisplayUrl(updatedUser.id, updatedUser.avatarUrl);
+
       res.json({
         message: 'Avatar uploaded successfully',
-        avatarUrl: updatedUser.avatarUrl,
+        avatarUrl: displayAvatarUrl,
         user: {
           id: updatedUser.id,
           email: updatedUser.email,
           fullName: updatedUser.fullName,
           name: updatedUser.fullName,
-          avatarUrl: updatedUser.avatarUrl,
+          avatarUrl: displayAvatarUrl,
           phone: updatedUser.phone,
           role: updatedUser.roleInCompany,
           companyId: updatedUser.companyId,

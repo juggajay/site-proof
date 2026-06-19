@@ -1,4 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('../../lib/supabase.js', async () => {
+  const actual =
+    await vi.importActual<typeof import('../../lib/supabase.js')>('../../lib/supabase.js');
+  return {
+    ...actual,
+    isSupabaseConfigured: vi.fn(() => true),
+  };
+});
 
 import {
   buildMentionableProjectFilter,
@@ -98,5 +107,20 @@ describe('buildMentionableUsersResponse', () => {
     ];
 
     expect(buildMentionableUsersResponse(users)).toEqual({ users });
+  });
+
+  it('serializes Supabase avatar refs as signed backend URLs', () => {
+    const response = buildMentionableUsersResponse([
+      {
+        id: 'u1',
+        email: 'one@example.com',
+        fullName: 'One User',
+        avatarUrl: 'supabase://documents/avatars/u1/avatar-u1.png',
+      },
+    ]);
+
+    expect(response.users[0].avatarUrl).toContain('/api/auth/avatar/file/u1?token=');
+    expect(response.users[0].avatarUrl).not.toContain('supabase://');
+    expect(response.users[0].avatarUrl).not.toContain('/storage/v1/object/public/');
   });
 });

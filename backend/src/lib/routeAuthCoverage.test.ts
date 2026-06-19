@@ -14,6 +14,7 @@ const allowedPublicRouteFiles = new Set([
   'auth/magicLinkRoutes.ts',
   'auth/passwordResetRoutes.ts',
   'auth/emailVerificationRoutes.ts',
+  'auth/profileRoutes.ts',
   'auth/accountPrivacyRoutes.ts',
   'auth/accountDeletionRoutes.ts',
   'oauth.ts',
@@ -370,6 +371,7 @@ describe('route authentication coverage', () => {
       'POST /logout',
       'POST /logout-all-devices',
       'PATCH /profile',
+      'GET /avatar/file/:userId',
       'POST /avatar',
       'DELETE /avatar',
       'POST /change-password',
@@ -515,11 +517,15 @@ describe('route authentication coverage', () => {
     expect(passwordResetRoutesSource).toContain('AuditAction.PASSWORD_CHANGED');
     expect(extractedProfileRouteDescriptors(profileRoutesSource)).toEqual([
       'PATCH /profile',
+      'GET /avatar/file/:userId',
       'POST /avatar',
       'DELETE /avatar',
     ]);
     expect(routeSourceForDescriptor(profileRoutesSource, 'PATCH /profile')).toContain(
       'requireJwtAuth',
+    );
+    expect(routeSourceForDescriptor(profileRoutesSource, 'GET /avatar/file/:userId')).toContain(
+      'validateAvatarAccessToken',
     );
     expect(routeSourceForDescriptor(profileRoutesSource, 'POST /avatar')).toContain(
       'requireJwtAuth',

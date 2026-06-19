@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import { prisma } from './prisma.js';
 import { logInfo, logWarn } from './serverLogger.js';
 import { resolveDashboardRoleForUser, type DashboardRole } from './dashboardRole.js';
+import { buildAvatarDisplayUrl } from './avatarUrls.js';
 
 // JWT_SECRET is required - no fallback for security
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -126,7 +127,7 @@ export async function verifyToken(token: string): Promise<AuthUser | null> {
       companyName: user.company_name,
       role: user.role_in_company,
       createdAt: user.created_at,
-      avatarUrl: user.avatar_url,
+      avatarUrl: buildAvatarDisplayUrl(user.id, user.avatar_url),
       emailVerified: Boolean(user.email_verified),
       hasPassword: Boolean(user.has_password),
       hasSubcontractorPortalAccess: Boolean(user.has_subcontractor_portal_access),

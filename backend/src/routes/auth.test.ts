@@ -2550,6 +2550,116 @@ describe('Avatar Upload', () => {
       }
     });
 
+    it('returns and serves signed backend URLs for Supabase-backed avatars', async () => {
+      const email = `avatar-supabase-signed-${Date.now()}@example.com`;
+      const password = 'SecureP@ssword123!';
+      let userId: string | undefined;
+
+      process.env.SUPABASE_URL = 'https://fixture-project.supabase.co';
+      const mockDownload = vi.fn().mockResolvedValue({
+        data: new Blob([tinyPngBytes], { type: 'image/png' }),
+        error: null,
+      });
+      mockIsSupabaseConfigured.mockReturnValue(true);
+      mockGetSupabaseClient.mockReturnValue({
+        storage: { from: () => ({ download: mockDownload }) },
+      } as unknown as ReturnType<typeof supabaseLib.getSupabaseClient>);
+
+      try {
+        const regRes = await request(app).post('/api/auth/register').send({
+          email,
+          password,
+          fullName: 'Avatar Supabase Signed User',
+          tosAccepted: true,
+        });
+        userId = regRes.body.user.id;
+        const storedAvatarRef = `supabase://documents/avatars/${userId}/avatar-${userId}-signed.png`;
+
+        await prisma.user.update({
+          where: { id: userId },
+          data: { avatarUrl: storedAvatarRef },
+        });
+
+        const meRes = await request(app)
+          .get('/api/auth/me')
+          .set('Authorization', `Bearer ${regRes.body.token}`);
+
+        expect(meRes.status).toBe(200);
+        expect(meRes.body.user.avatarUrl).toContain(`/api/auth/avatar/file/${userId}?token=`);
+        expect(meRes.body.user.avatarUrl).not.toContain('supabase://');
+        expect(meRes.body.user.avatarUrl).not.toContain('/storage/v1/object/public/');
+
+        const signedAvatarUrl = new URL(meRes.body.user.avatarUrl);
+        const avatarRes = await request(app).get(
+          `${signedAvatarUrl.pathname}${signedAvatarUrl.search}`,
+        );
+
+        expect(avatarRes.status).toBe(200);
+        expect(avatarRes.headers['content-type']).toContain('image/png');
+        expect(mockDownload).toHaveBeenCalledWith(`avatars/${userId}/avatar-${userId}-signed.png`);
+
+        await prisma.user.update({
+          where: { id: userId },
+          data: { avatarUrl: `supabase://documents/avatars/${userId}/avatar-${userId}-new.png` },
+        });
+
+        const staleAvatarRes = await request(app).get(
+          `${signedAvatarUrl.pathname}${signedAvatarUrl.search}`,
+        );
+        expect(staleAvatarRes.status).toBe(401);
+      } finally {
+        if (userId) {
+          await prisma.auditLog.deleteMany({ where: { userId } });
+          await prisma.emailVerificationToken.deleteMany({ where: { userId } });
+          await prisma.user.delete({ where: { id: userId } }).catch(() => {});
+        }
+      }
+    });
+
+    it('removes the Supabase object on DELETE when the avatarUrl is a stored object reference', async () => {
+      const email = `avatar-supabase-ref-delete-${Date.now()}@example.com`;
+      const password = 'SecureP@ssword123!';
+      let userId: string | undefined;
+
+      process.env.SUPABASE_URL = 'https://fixture-project.supabase.co';
+      const mockRemove = vi.fn().mockResolvedValue({ data: null, error: null });
+      mockIsSupabaseConfigured.mockReturnValue(true);
+      mockGetSupabaseClient.mockReturnValue({
+        storage: { from: () => ({ remove: mockRemove }) },
+      } as unknown as ReturnType<typeof supabaseLib.getSupabaseClient>);
+
+      try {
+        const regRes = await request(app).post('/api/auth/register').send({
+          email,
+          password,
+          fullName: 'Avatar Supabase Ref Delete User',
+          tosAccepted: true,
+        });
+        userId = regRes.body.user.id;
+        await prisma.user.update({
+          where: { id: userId },
+          data: {
+            avatarUrl: `supabase://documents/avatars/${userId}/avatar-${userId}-deadbeef.png`,
+          },
+        });
+
+        const res = await request(app)
+          .delete('/api/auth/avatar')
+          .set('Authorization', `Bearer ${regRes.body.token}`);
+
+        expect(res.status).toBe(200);
+        expect(mockRemove).toHaveBeenCalledWith([
+          `avatars/${userId}/avatar-${userId}-deadbeef.png`,
+        ]);
+      } finally {
+        if (userId) {
+          await prisma.auditLog.deleteMany({ where: { userId } });
+          await prisma.emailVerificationToken.deleteMany({ where: { userId } });
+          await prisma.user.delete({ where: { id: userId } }).catch(() => {});
+        }
+      }
+    });
+
     it('does not remove a Supabase avatar outside the current user prefix', async () => {
       const email = `avatar-supabase-other-user-${Date.now()}@example.com`;
       const password = 'SecureP@ssword123!';

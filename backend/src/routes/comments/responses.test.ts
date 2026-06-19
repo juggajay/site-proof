@@ -1,4 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('../../lib/supabase.js', async () => {
+  const actual =
+    await vi.importActual<typeof import('../../lib/supabase.js')>('../../lib/supabase.js');
+  return {
+    ...actual,
+    isSupabaseConfigured: vi.fn(() => true),
+  };
+});
 
 import {
   buildCommentAttachmentsCreatedResponse,
@@ -80,6 +89,26 @@ describe('comment response helpers', () => {
     const attachments = [{ filename: 'photo.jpg', fileUrl: '/uploads/photo.jpg' }];
 
     expect(buildUploadedCommentAttachmentsResponse(attachments)).toEqual({ attachments });
+  });
+
+  it('serializes comment author Supabase avatars as signed backend URLs', () => {
+    const response = buildCommentMutationResponse({
+      id: 'comment-1',
+      content: 'Updated',
+      author: {
+        id: 'user-1',
+        email: 'user@example.com',
+        fullName: 'User One',
+        avatarUrl: 'supabase://documents/avatars/user-1/avatar-user-1.png',
+      },
+      attachments: [],
+    }) as {
+      comment: { author: { avatarUrl: string } };
+    };
+
+    expect(response.comment.author.avatarUrl).toContain('/api/auth/avatar/file/user-1?token=');
+    expect(response.comment.author.avatarUrl).not.toContain('supabase://');
+    expect(response.comment.author.avatarUrl).not.toContain('/storage/v1/object/public/');
   });
 
   it('preserves create and update comment envelopes', () => {
