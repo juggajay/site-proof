@@ -3941,6 +3941,42 @@ describe('NCR Access Hardening', () => {
     expect(linkedEvidence).toHaveLength(1);
   });
 
+  it('should normalize public Supabase document URLs before creating NCR evidence documents', async () => {
+    const previousSupabaseUrl = process.env.SUPABASE_URL;
+    process.env.SUPABASE_URL = 'https://fixture-project.supabase.co';
+
+    const filename = `supabase-public-ncr-evidence-${Date.now()}.jpg`;
+    const fileUrl = `https://fixture-project.supabase.co/storage/v1/object/public/documents/${projectId}/${filename}`;
+    const expectedFileUrl = `supabase://documents/${projectId}/${filename}`;
+    let createdDocumentId: string | undefined;
+
+    try {
+      const res = await request(app)
+        .post(`/api/ncrs/${ncrId}/evidence`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          evidenceType: 'photo',
+          filename,
+          fileUrl,
+          mimeType: 'image/jpeg',
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.evidence.document.fileUrl).toBe(expectedFileUrl);
+      createdDocumentId = res.body.evidence.documentId;
+    } finally {
+      if (createdDocumentId) {
+        await prisma.nCREvidence.deleteMany({ where: { ncrId, documentId: createdDocumentId } });
+        await prisma.document.deleteMany({ where: { id: createdDocumentId } });
+      }
+      if (previousSupabaseUrl === undefined) {
+        delete process.env.SUPABASE_URL;
+      } else {
+        process.env.SUPABASE_URL = previousSupabaseUrl;
+      }
+    }
+  });
+
   it('should reject inline data URLs for evidence documents', async () => {
     const res = await request(app)
       .post(`/api/ncrs/${ncrId}/evidence`)

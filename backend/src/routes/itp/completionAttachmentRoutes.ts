@@ -14,7 +14,10 @@ import {
   requireItpProjectRole,
   requireItpSubcontractorCompletionPermission,
 } from './helpers/access.js';
-import { isStoredDocumentReference } from '../../lib/uploadPaths.js';
+import {
+  isStoredDocumentReference,
+  normalizeStoredDocumentReference,
+} from '../../lib/uploadPaths.js';
 import {
   buildItpCompletionAttachmentDeletedResponse,
   buildItpCompletionAttachmentResponse,
@@ -248,6 +251,7 @@ completionAttachmentRoutes.post(
       if (!isStoredDocumentReference(fileUrl, documentProjectId)) {
         throw AppError.badRequest('fileUrl must reference an uploaded document file');
       }
+      const storedFileUrl = normalizeStoredDocumentReference(fileUrl, documentProjectId);
 
       // Determine mimeType from the stored file URL or filename
       let determinedMimeType: string | null = mimeType || null;
@@ -271,7 +275,7 @@ completionAttachmentRoutes.post(
           documentType: 'photo',
           category: 'itp_evidence',
           filename,
-          fileUrl,
+          fileUrl: storedFileUrl,
           mimeType: determinedMimeType,
           uploadedById: user.userId,
           caption: caption || `ITP Evidence: ${completion.checklistItem.description}`,

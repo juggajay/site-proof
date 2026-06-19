@@ -15,7 +15,10 @@ import {
   requireNcrEvidenceMutationAccess,
   requireNcrResponsibleOrProjectRole,
 } from './ncrAccess.js';
-import { isStoredDocumentReference } from '../../lib/uploadPaths.js';
+import {
+  isStoredDocumentReference,
+  normalizeStoredDocumentReference,
+} from '../../lib/uploadPaths.js';
 import {
   buildNcrEvidenceAddedResponse,
   buildNcrEvidenceAlreadyLinkedResponse,
@@ -143,6 +146,7 @@ async function resolveNcrEvidenceDocumentId(
   if (!isStoredDocumentReference(fileUrl, projectId)) {
     throw AppError.badRequest('fileUrl must reference an uploaded document file');
   }
+  const storedFileUrl = normalizeStoredDocumentReference(fileUrl, projectId);
 
   const document = await prisma.document.create({
     data: {
@@ -150,7 +154,7 @@ async function resolveNcrEvidenceDocumentId(
       documentType: evidenceType || 'ncr_evidence',
       category: 'ncr_evidence',
       filename,
-      fileUrl,
+      fileUrl: storedFileUrl,
       fileSize,
       mimeType,
       uploadedById: userId,

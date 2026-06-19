@@ -72,6 +72,23 @@ describe('claims workflow validation', () => {
   });
 
   it('normalizes certification document URLs and filenames without trusting external paths', () => {
+    const previousSupabaseUrl = process.env.SUPABASE_URL;
+    process.env.SUPABASE_URL = 'https://siteproof.supabase.co';
+
+    try {
+      expect(
+        normalizeCertificationDocumentUrl(
+          'https://siteproof.supabase.co/storage/v1/object/public/documents/project-a/cert.pdf',
+        ),
+      ).toBe('supabase://documents/project-a/cert.pdf');
+    } finally {
+      if (previousSupabaseUrl === undefined) {
+        delete process.env.SUPABASE_URL;
+      } else {
+        process.env.SUPABASE_URL = previousSupabaseUrl;
+      }
+    }
+
     expect(normalizeCertificationDocumentUrl('uploads/documents/cert.pdf')).toBe(
       'uploads/documents/cert.pdf',
     );
