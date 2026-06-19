@@ -18,7 +18,7 @@ describe('comment response helpers', () => {
           {
             id: 'attachment-1',
             filename: 'photo.jpg',
-            fileUrl: 'https://storage.example/object/public/documents/comments/project/photo.jpg',
+            fileUrl: 'supabase://documents/comments/project/photo.jpg',
           },
         ],
         replies: [

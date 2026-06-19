@@ -11,22 +11,15 @@ import path from 'path';
 // path. The real `isSupabaseConfigured()` returns false in tests
 // (vitest.config.ts blanks SUPABASE_URL), and the default mock keeps that
 // behaviour so all pre-existing tests continue to exercise the local-disk
-// branch unchanged. `getSupabaseStoragePath` is passed through from the
-// real module. `getSupabasePublicUrl` is replaced with a non-gated mirror
-// of the real implementation: the real one calls its own module-local
-// `isSupabaseConfigured` (which is bound to the actual closure, not the
-// mock above) and would throw after a successful mocked upload, so we
-// rebuild the URL from `process.env.SUPABASE_URL` at call time.
+// branch unchanged. Storage path/reference helpers are passed through from
+// the real module so private refs and legacy public URLs parse normally.
 vi.mock('../lib/supabase.js', async () => {
   const actual = await vi.importActual<typeof import('../lib/supabase.js')>('../lib/supabase.js');
   return {
     ...actual,
     isSupabaseConfigured: vi.fn(() => false),
     getSupabaseClient: vi.fn(),
-    getSupabasePublicUrl: vi.fn((bucket: string, storagePath: string) => {
-      const base = (process.env.SUPABASE_URL?.trim() || '').replace(/\/+$/, '');
-      return `${base}/storage/v1/object/public/${bucket}/${storagePath}`;
-    }),
+    getSupabaseStorageReference: vi.fn(actual.getSupabaseStorageReference),
   };
 });
 
@@ -40,6 +33,20 @@ const mockIsSupabaseConfigured = vi.mocked(supabaseLib.isSupabaseConfigured);
 const mockGetSupabaseClient = vi.mocked(supabaseLib.getSupabaseClient);
 
 const ORIGINAL_SUPABASE_URL = process.env.SUPABASE_URL;
+const FIXTURE_SUPABASE_URL = 'https://fixture-project.supabase.co';
+
+function mockSupabaseUpload(
+  upload = vi.fn().mockResolvedValue({ data: { path: 'unused' }, error: null }),
+) {
+  process.env.SUPABASE_URL = FIXTURE_SUPABASE_URL;
+  const from = vi.fn(() => ({ upload }));
+  mockIsSupabaseConfigured.mockReturnValue(true);
+  mockGetSupabaseClient.mockReturnValue({
+    storage: { from },
+  } as unknown as ReturnType<typeof supabaseLib.getSupabaseClient>);
+
+  return { from, upload };
+}
 
 const app = express();
 app.use(express.json());
@@ -227,6 +234,39 @@ describe('Comments API', () => {
       }
     });
 
+    it('should store Supabase uploads as private storage references', async () => {
+      const { from, upload } = mockSupabaseUpload();
+
+      const res = await request(app)
+        .post('/api/comments/attachments/upload')
+        .set('Authorization', `Bearer ${authToken}`)
+        .field('entityType', 'Lot')
+        .field('entityId', lotId)
+        .attach('files', Buffer.from('supabase comment attachment body'), {
+          filename: 'comment-upload-test-supabase.txt',
+          contentType: 'text/plain',
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.attachments).toHaveLength(1);
+      expect(res.body.attachments[0]).toMatchObject({
+        filename: 'comment-upload-test-supabase.txt',
+        mimeType: 'text/plain',
+      });
+      expect(res.body.attachments[0].fileUrl).toMatch(
+        new RegExp(`^supabase://documents/comments/${projectId}/`),
+      );
+      expect(res.body.attachments[0].fileUrl).not.toContain('/storage/v1/object/public/');
+
+      expect(from).toHaveBeenCalledWith('documents');
+      const [storagePath, body, uploadOptions] = upload.mock.calls[0];
+      expect(storagePath).toMatch(
+        new RegExp(`^comments/${projectId}/\\d+-[0-9a-f-]+-comment-upload-test-supabase\\.txt$`),
+      );
+      expect(body.toString()).toBe('supabase comment attachment body');
+      expect(uploadOptions).toEqual({ contentType: 'text/plain', upsert: false });
+    });
+
     it('should sanitize unsafe attachment filenames on upload', async () => {
       const res = await request(app)
         .post('/api/comments/attachments/upload')
@@ -401,6 +441,41 @@ describe('Comments API', () => {
         );
         expect(fs.existsSync(uploadedPath)).toBe(true);
       }
+    });
+
+    it('should persist private Supabase refs for direct multipart comment attachments', async () => {
+      mockSupabaseUpload();
+
+      const filename = `comment-upload-test-direct-supabase-${Date.now()}.txt`;
+      const res = await request(app)
+        .post('/api/comments')
+        .set('Authorization', `Bearer ${authToken}`)
+        .field('entityType', 'Lot')
+        .field('entityId', lotId)
+        .field('content', 'Multipart comment with private Supabase attachment')
+        .attach('files', Buffer.from('direct supabase comment attachment body'), {
+          filename,
+          contentType: 'text/plain',
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.comment.attachments).toHaveLength(1);
+      expect(res.body.comment.attachments[0].filename).toBe(filename);
+      expect(res.body.comment.attachments[0].fileUrl).toBeUndefined();
+      expect(res.body.comment.attachments[0].downloadUrl).toBe(
+        `/api/comments/attachments/${res.body.comment.attachments[0].id}/download`,
+      );
+
+      const persistedAttachment = await prisma.commentAttachment.findFirst({
+        where: {
+          commentId: res.body.comment.id,
+          filename,
+        },
+      });
+      expect(persistedAttachment?.fileUrl).toMatch(
+        new RegExp(`^supabase://documents/comments/${projectId}/`),
+      );
+      expect(persistedAttachment?.fileUrl).not.toContain('/storage/v1/object/public/');
     });
 
     it('should allow subcontractors to create comments only on assigned lots', async () => {
@@ -2216,56 +2291,69 @@ describe('Comments API', () => {
       expect(res.body.error.message).toContain('Attachment file');
     });
 
-    it('should proxy Supabase attachment downloads instead of redirecting to storage', async () => {
-      process.env.SUPABASE_URL = 'https://fixture-project.supabase.co';
-      mockIsSupabaseConfigured.mockReturnValue(true);
-      const storagePath = `comments/${projectId}/comment-download.txt`;
-      const fileUrl = `${process.env.SUPABASE_URL}/storage/v1/object/public/documents/${storagePath}`;
-      const createRes = await request(app)
-        .post('/api/comments')
-        .set('Authorization', `Bearer ${authToken}`)
-        .send({
-          entityType: 'Lot',
-          entityId: lotId,
-          content: 'Comment with Supabase attachment',
+    it.each([
+      {
+        label: 'legacy public URL',
+        fileUrlFor: (storagePath: string) =>
+          `https://fixture-project.supabase.co/storage/v1/object/public/documents/${storagePath}`,
+      },
+      {
+        label: 'private storage reference',
+        fileUrlFor: (storagePath: string) => `supabase://documents/${storagePath}`,
+      },
+    ])(
+      'should proxy Supabase attachment downloads from a $label instead of redirecting',
+      async ({ fileUrlFor }) => {
+        process.env.SUPABASE_URL = 'https://fixture-project.supabase.co';
+        mockIsSupabaseConfigured.mockReturnValue(true);
+        const storagePath = `comments/${projectId}/comment-download.txt`;
+        const fileUrl = fileUrlFor(storagePath);
+        const createRes = await request(app)
+          .post('/api/comments')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            entityType: 'Lot',
+            entityId: lotId,
+            content: 'Comment with Supabase attachment',
+          });
+
+        const attachment = await prisma.commentAttachment.create({
+          data: {
+            commentId: createRes.body.comment.id,
+            filename: 'comment-download.txt',
+            fileUrl,
+            fileSize: 13,
+            mimeType: 'text/plain',
+          },
         });
 
-      const attachment = await prisma.commentAttachment.create({
-        data: {
-          commentId: createRes.body.comment.id,
-          filename: 'comment-download.txt',
-          fileUrl,
-          fileSize: 13,
-          mimeType: 'text/plain',
-        },
-      });
+        const download = vi.fn().mockResolvedValue({
+          data: new Blob([Buffer.from('download body')], { type: 'text/plain' }),
+          error: null,
+        });
+        const from = vi.fn(() => ({ download }));
+        mockGetSupabaseClient.mockReturnValue({
+          storage: { from },
+        } as unknown as ReturnType<typeof supabaseLib.getSupabaseClient>);
 
-      const download = vi.fn().mockResolvedValue({
-        data: new Blob([Buffer.from('download body')], { type: 'text/plain' }),
-        error: null,
-      });
-      const from = vi.fn(() => ({ download }));
-      mockGetSupabaseClient.mockReturnValue({
-        storage: { from },
-      } as unknown as ReturnType<typeof supabaseLib.getSupabaseClient>);
+        const res = await request(app)
+          .get(`/api/comments/attachments/${attachment.id}/download`)
+          .set('Authorization', `Bearer ${authToken}`);
 
-      const res = await request(app)
-        .get(`/api/comments/attachments/${attachment.id}/download`)
-        .set('Authorization', `Bearer ${authToken}`);
-
-      expect(res.status).toBe(200);
-      expect(res.headers.location).toBeUndefined();
-      expect(res.headers['content-type']).toContain('text/plain');
-      expect(res.headers['content-disposition']).toBe(
-        'attachment; filename="comment-download.txt"',
-      );
-      expect(res.headers['cache-control']).toBe('private, no-store, max-age=0');
-      expect(res.headers['referrer-policy']).toBe('no-referrer');
-      expect(res.headers['x-content-type-options']).toBe('nosniff');
-      expect(res.text).toBe('download body');
-      expect(from).toHaveBeenCalledWith('documents');
-      expect(download).toHaveBeenCalledWith(storagePath);
-    });
+        expect(res.status).toBe(200);
+        expect(res.headers.location).toBeUndefined();
+        expect(res.headers['content-type']).toContain('text/plain');
+        expect(res.headers['content-disposition']).toBe(
+          'attachment; filename="comment-download.txt"',
+        );
+        expect(res.headers['cache-control']).toBe('private, no-store, max-age=0');
+        expect(res.headers['referrer-policy']).toBe('no-referrer');
+        expect(res.headers['x-content-type-options']).toBe('nosniff');
+        expect(res.text).toBe('download body');
+        expect(from).toHaveBeenCalledWith('documents');
+        expect(download).toHaveBeenCalledWith(storagePath);
+      },
+    );
 
     it('should not redirect legacy attachment records to Supabase-path URLs on untrusted hosts', async () => {
       const createRes = await request(app)

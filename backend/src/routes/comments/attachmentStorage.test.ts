@@ -4,15 +4,22 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../lib/supabase.js', () => ({
   DOCUMENTS_BUCKET: 'documents',
   getSupabaseClient: vi.fn(),
-  getSupabasePublicUrl: vi.fn(),
+  getSupabaseStorageReference: vi.fn(
+    (bucket: string, storagePath: string) => `supabase://${bucket}/${storagePath}`,
+  ),
   getSupabaseStoragePath: vi.fn(),
   isSupabaseConfigured: vi.fn(),
 }));
 
 import * as supabaseLib from '../../lib/supabase.js';
-import { getValidAttachments, sendCommentAttachmentFile } from './attachmentStorage.js';
+import {
+  getValidAttachments,
+  sendCommentAttachmentFile,
+  storeCommentAttachmentFiles,
+} from './attachmentStorage.js';
 
 const mockGetSupabaseClient = vi.mocked(supabaseLib.getSupabaseClient);
+const mockGetSupabaseStorageReference = vi.mocked(supabaseLib.getSupabaseStorageReference);
 const mockGetSupabaseStoragePath = vi.mocked(supabaseLib.getSupabaseStoragePath);
 const mockIsSupabaseConfigured = vi.mocked(supabaseLib.isSupabaseConfigured);
 
@@ -106,5 +113,49 @@ describe('sendCommentAttachmentFile', () => {
         mimeType: 'image/png',
       },
     ]);
+  });
+});
+
+describe('storeCommentAttachmentFiles', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('stores Supabase uploads as private storage references', async () => {
+    const upload = vi.fn().mockResolvedValue({ error: null });
+    const from = vi.fn(() => ({ upload }));
+
+    mockIsSupabaseConfigured.mockReturnValue(true);
+    mockGetSupabaseClient.mockReturnValue({
+      storage: { from },
+    } as unknown as ReturnType<typeof supabaseLib.getSupabaseClient>);
+
+    const attachments = await storeCommentAttachmentFiles(
+      [
+        {
+          originalname: 'evidence.png',
+          buffer: Buffer.from('comment evidence'),
+          mimetype: 'image/png',
+          size: 16,
+        } as Express.Multer.File,
+      ],
+      'project-1',
+    );
+
+    expect(from).toHaveBeenCalledWith('documents');
+    const [storagePath, body, uploadOptions] = upload.mock.calls[0];
+    expect(storagePath).toMatch(/^comments\/project-1\/\d+-[0-9a-f-]+-evidence\.png$/);
+    expect(body.toString()).toBe('comment evidence');
+    expect(uploadOptions).toEqual({ contentType: 'image/png', upsert: false });
+    expect(mockGetSupabaseStorageReference).toHaveBeenCalledWith('documents', storagePath);
+    expect(attachments).toEqual([
+      {
+        filename: 'evidence.png',
+        fileUrl: `supabase://documents/${storagePath}`,
+        fileSize: 16,
+        mimeType: 'image/png',
+      },
+    ]);
+    expect(attachments[0]?.fileUrl).not.toContain('/storage/v1/object/public/');
   });
 });
