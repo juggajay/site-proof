@@ -13,6 +13,8 @@ export const approvedDocketDetailFixture: DocketDetailPDFData = {
     totalLabourApproved: 40,
     totalPlantSubmitted: 1800,
     totalPlantApproved: 13,
+    totalLabourApprovedCost: 4000,
+    totalPlantApprovedCost: 1950,
     submittedAt: '2026-05-28T05:30:00.000Z',
     approvedAt: '2026-05-28T07:45:00.000Z',
     foremanNotes: 'Reduced labour by two hours after duplicate spotter entry was removed.',

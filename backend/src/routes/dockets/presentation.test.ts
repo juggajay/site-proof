@@ -376,7 +376,7 @@ describe('dockets presentation helpers (pure)', () => {
       expect(result.totalLabourApproved).toBe(0);
       expect(result.totalPlantSubmitted).toBe(0);
       expect(result.totalPlantApproved).toBe(0);
-      expect(result.totalLabourApprovedCost).toBe(0);
+      expect(result.totalLabourApprovedCost).toBeNull();
       expect(result.totalPlantApprovedCost).toBe(0);
       // Nullable optional fields pass through untouched.
       expect(result.notes).toBeNull();
@@ -539,7 +539,7 @@ describe('dockets presentation helpers (pure)', () => {
       expect(result.discrepancies).toBeNull(); // empty list -> null
     });
 
-    it('coerces docket totals with Number(...) || 0', () => {
+    it('coerces docket totals while preserving missing approved-cost totals as null', () => {
       const result = buildDocketDetailResponse({
         docket: {
           ...detailDocket,
@@ -560,7 +560,7 @@ describe('dockets presentation helpers (pure)', () => {
       expect(result.docket.totalLabourApproved).toBe(0);
       expect(result.docket.totalPlantSubmitted).toBe(0);
       expect(result.docket.totalPlantApproved).toBe(12.5);
-      expect(result.docket.totalLabourApprovedCost).toBe(0);
+      expect(result.docket.totalLabourApprovedCost).toBeNull();
       expect(result.docket.totalPlantApprovedCost).toBe(42.25);
     });
 

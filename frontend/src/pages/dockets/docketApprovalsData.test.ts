@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { buildDocketApprovalsPath, normalizeDockets, type Docket } from './docketApprovalsData';
+import {
+  buildDocketApprovalsPath,
+  getDocketApprovedTotalCost,
+  getDocketDisplayTotalCost,
+  getDocketSubmittedTotalCost,
+  hasDocketCostAdjustment,
+  normalizeDockets,
+  type Docket,
+} from './docketApprovalsData';
 
 const baseDocket: Docket = {
   id: 'docket-1',
@@ -11,10 +19,12 @@ const baseDocket: Docket = {
   notes: null,
   labourHours: 8,
   plantHours: 2,
-  totalLabourSubmitted: 8,
+  totalLabourSubmitted: 600,
   totalLabourApproved: 8,
-  totalPlantSubmitted: 2,
+  totalPlantSubmitted: 200,
   totalPlantApproved: 2,
+  totalLabourApprovedCost: null,
+  totalPlantApprovedCost: null,
   submittedAt: '2026-06-03T01:00:00.000Z',
   approvedAt: null,
   foremanNotes: null,
@@ -41,5 +51,45 @@ describe('docket approvals data helpers', () => {
     expect(buildDocketApprovalsPath('project 1', 'pending_approval')).toBe(
       '/api/dockets?projectId=project+1&status=pending_approval',
     );
+  });
+
+  it('uses approved dollar totals for approved dockets when cost totals are present', () => {
+    const docket: Docket = {
+      ...baseDocket,
+      status: 'approved',
+      totalLabourApprovedCost: 450,
+      totalPlantApprovedCost: 100,
+    };
+
+    expect(getDocketSubmittedTotalCost(docket)).toBe(800);
+    expect(getDocketApprovedTotalCost(docket)).toBe(550);
+    expect(getDocketDisplayTotalCost(docket)).toBe(550);
+    expect(hasDocketCostAdjustment(docket)).toBe(true);
+  });
+
+  it('does not mark approved dockets as adjusted when approved cost matches submitted cost', () => {
+    const docket: Docket = {
+      ...baseDocket,
+      status: 'approved',
+      totalLabourApprovedCost: 600,
+      totalPlantApprovedCost: 200,
+    };
+
+    expect(getDocketApprovedTotalCost(docket)).toBe(800);
+    expect(getDocketDisplayTotalCost(docket)).toBe(800);
+    expect(hasDocketCostAdjustment(docket)).toBe(false);
+  });
+
+  it('falls back to submitted dollars for legacy approved dockets without approved cost totals', () => {
+    const docket: Docket = {
+      ...baseDocket,
+      status: 'approved',
+      totalLabourApprovedCost: null,
+      totalPlantApprovedCost: undefined,
+    };
+
+    expect(getDocketApprovedTotalCost(docket)).toBeNull();
+    expect(getDocketDisplayTotalCost(docket)).toBe(800);
+    expect(hasDocketCostAdjustment(docket)).toBe(false);
   });
 });

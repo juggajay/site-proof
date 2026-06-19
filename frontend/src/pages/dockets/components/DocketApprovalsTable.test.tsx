@@ -15,10 +15,12 @@ function makeDocket(overrides: Partial<Docket> = {}): Docket {
     notes: null,
     labourHours: 8,
     plantHours: 4,
-    totalLabourSubmitted: 8,
+    totalLabourSubmitted: 600,
     totalLabourApproved: 8,
-    totalPlantSubmitted: 4,
+    totalPlantSubmitted: 200,
     totalPlantApproved: 4,
+    totalLabourApprovedCost: null,
+    totalPlantApprovedCost: null,
     submittedAt: '2026-06-04T08:00:00.000Z',
     approvedAt: null,
     foremanNotes: null,
@@ -115,6 +117,20 @@ describe('DocketApprovalsTable', () => {
 
     expect(screen.getByText('8h').className).not.toContain('line-through');
     expect(screen.getByText('4h').className).not.toContain('line-through');
+  });
+
+  it('shows approved dollar totals when approval reduced the submitted cost', () => {
+    const docket = makeDocket({
+      status: 'approved',
+      totalLabourSubmitted: 1200,
+      totalPlantSubmitted: 300,
+      totalLabourApprovedCost: 900,
+      totalPlantApprovedCost: 200,
+    });
+    renderTable({ filteredDockets: [docket], submittedDockets: [docket] });
+
+    expect(screen.getByText('$1,100.00')).toBeInTheDocument();
+    expect(screen.getByText('$1,500.00').className).toContain('line-through');
   });
 
   it('gates approve/query/reject on pending status and approver role', () => {

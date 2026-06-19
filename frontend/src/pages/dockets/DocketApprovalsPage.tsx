@@ -14,6 +14,10 @@ import { buildScopedCsvFilename, downloadCsv } from '@/lib/csv';
 import {
   type Docket,
   type ProjectResponse,
+  formatDocketCurrency,
+  getDocketApprovedTotalCost,
+  getDocketDisplayTotalCost,
+  getDocketSubmittedTotalCost,
   useDocketApprovalsQuery,
   useDocketProjectQuery,
 } from './docketApprovalsData';
@@ -125,6 +129,10 @@ export function DocketApprovalsPage() {
     return filteredDockets.reduce((sum, d) => sum + (d.plantHours || 0), 0);
   }, [filteredDockets]);
 
+  const totalDisplayedCost = useMemo(() => {
+    return filteredDockets.reduce((sum, d) => sum + getDocketDisplayTotalCost(d), 0);
+  }, [filteredDockets]);
+
   // Create a new docket
   const handleCreateDocket = async () => {
     if (creatingRef.current) return;
@@ -213,21 +221,30 @@ export function DocketApprovalsPage() {
       'Notes',
       'Labour Hours',
       'Plant Hours',
+      'Submitted Cost',
+      'Approved Cost',
+      'Displayed Cost',
       'Status',
       'Submitted At',
       'Approved At',
     ];
-    const rows = filteredDockets.map((docket) => [
-      docket.docketNumber,
-      docket.subcontractor,
-      docket.date,
-      docket.notes || '-',
-      docket.labourHours,
-      docket.plantHours,
-      statusLabels[docket.status] || docket.status,
-      docket.submittedAt ? new Date(docket.submittedAt).toLocaleDateString('en-AU') : '-',
-      docket.approvedAt ? new Date(docket.approvedAt).toLocaleDateString('en-AU') : '-',
-    ]);
+    const rows = filteredDockets.map((docket) => {
+      const approvedTotalCost = getDocketApprovedTotalCost(docket);
+      return [
+        docket.docketNumber,
+        docket.subcontractor,
+        docket.date,
+        docket.notes || '-',
+        docket.labourHours,
+        docket.plantHours,
+        getDocketSubmittedTotalCost(docket).toFixed(2),
+        approvedTotalCost === null ? '-' : approvedTotalCost.toFixed(2),
+        getDocketDisplayTotalCost(docket).toFixed(2),
+        statusLabels[docket.status] || docket.status,
+        docket.submittedAt ? new Date(docket.submittedAt).toLocaleDateString('en-AU') : '-',
+        docket.approvedAt ? new Date(docket.approvedAt).toLocaleDateString('en-AU') : '-',
+      ];
+    });
 
     downloadCsv(buildScopedCsvFilename('dockets', projectInfo?.name || projectId), [
       headers,
@@ -267,6 +284,8 @@ export function DocketApprovalsPage() {
           totalLabourApproved: docket.totalLabourApproved,
           totalPlantSubmitted: docket.totalPlantSubmitted,
           totalPlantApproved: docket.totalPlantApproved,
+          totalLabourApprovedCost: docket.totalLabourApprovedCost,
+          totalPlantApprovedCost: docket.totalPlantApprovedCost,
           submittedAt: docket.submittedAt,
           approvedAt: docket.approvedAt,
           foremanNotes: docket.foremanNotes,
@@ -390,7 +409,7 @@ export function DocketApprovalsPage() {
           {/* Operational Summary */}
           <div className="rounded-lg border p-4">
             <h2 className="text-lg font-semibold mb-4">Operational Summary</h2>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-4 gap-4">
               <div>
                 <span className="text-sm text-muted-foreground">Pending Approvals</span>
                 <p className="text-2xl font-bold">{pendingCount}</p>
@@ -402,6 +421,10 @@ export function DocketApprovalsPage() {
               <div>
                 <span className="text-sm text-muted-foreground">Total Plant Hours</span>
                 <p className="text-2xl font-bold">{totalPlantHours}h</p>
+              </div>
+              <div>
+                <span className="text-sm text-muted-foreground">Total Cost</span>
+                <p className="text-2xl font-bold">{formatDocketCurrency(totalDisplayedCost)}</p>
               </div>
             </div>
           </div>

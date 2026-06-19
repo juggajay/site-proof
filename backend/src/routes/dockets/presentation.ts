@@ -18,6 +18,15 @@ import type { ForemanDiarySummary } from './diaryComparison.js';
 // route code coerces with `Number(x) || 0`.
 type NumericLike = number | string | { toString(): string } | null | undefined;
 
+function numericValue(value: NumericLike): number {
+  return Number(value) || 0;
+}
+
+function optionalNumericValue(value: NumericLike): number | null {
+  if (value === null || value === undefined) return null;
+  return Number(value) || 0;
+}
+
 export type DocketLabourEntrySource = {
   id: string;
   employee: {
@@ -71,21 +80,21 @@ export function mapDocketLabourEntry(
       id: entry.employee.id,
       name: entry.employee.name,
       role: entry.employee.role,
-      hourlyRate: Number(entry.employee.hourlyRate) || 0,
+      hourlyRate: numericValue(entry.employee.hourlyRate),
     },
     startTime: entry.startTime,
     finishTime: entry.finishTime,
-    submittedHours: Number(entry.submittedHours) || 0,
-    approvedHours: Number(entry.approvedHours) || 0,
-    hourlyRate: Number(entry.hourlyRate) || 0,
-    submittedCost: Number(entry.submittedCost) || 0,
-    approvedCost: Number(entry.approvedCost) || 0,
+    submittedHours: numericValue(entry.submittedHours),
+    approvedHours: numericValue(entry.approvedHours),
+    hourlyRate: numericValue(entry.hourlyRate),
+    submittedCost: numericValue(entry.submittedCost),
+    approvedCost: numericValue(entry.approvedCost),
   };
 
   const lotAllocations = entry.lotAllocations.map((a) => ({
     lotId: a.lotId,
     lotNumber: a.lot.lotNumber,
-    hours: Number(a.hours) || 0,
+    hours: numericValue(a.hours),
   }));
 
   if (options.includeAdjustmentReason) {
@@ -106,14 +115,14 @@ export function mapDocketPlantEntry(
       type: entry.plant.type,
       description: entry.plant.description,
       idRego: entry.plant.idRego,
-      dryRate: Number(entry.plant.dryRate) || 0,
-      wetRate: Number(entry.plant.wetRate) || 0,
+      dryRate: numericValue(entry.plant.dryRate),
+      wetRate: numericValue(entry.plant.wetRate),
     },
-    hoursOperated: Number(entry.hoursOperated) || 0,
+    hoursOperated: numericValue(entry.hoursOperated),
     wetOrDry: entry.wetOrDry || 'dry',
-    hourlyRate: Number(entry.hourlyRate) || 0,
-    submittedCost: Number(entry.submittedCost) || 0,
-    approvedCost: Number(entry.approvedCost) || 0,
+    hourlyRate: numericValue(entry.hourlyRate),
+    submittedCost: numericValue(entry.submittedCost),
+    approvedCost: numericValue(entry.approvedCost),
   };
 
   if (options.includeAdjustmentReason) {
@@ -152,10 +161,10 @@ export function sumDocketPlantTotals(
 // =============================================================================
 // Docket list presentation: the pure per-row mapper for `GET /api/dockets`.
 // Extracted verbatim from the inline `dockets.map(...)` — same field names +
-// order, same `formatDocketNumber`/`formatDocketDate` formatting, same
-// `Number(x) || 0` coercion for the labour/plant hour reducers and the stored
-// submitted/approved totals, and the same pass-through of nullable
-// notes/foremanNotes/submittedAt/approvedAt.
+// order, same `formatDocketNumber`/`formatDocketDate` formatting, same numeric
+// coercion for the labour/plant hour reducers and the stored submitted/approved
+// hour/cost totals. Nullable approved-cost totals stay nullable so clients can
+// distinguish older approved dockets from real zero-dollar approvals.
 // =============================================================================
 
 export type DocketListItemSource = {
@@ -187,19 +196,19 @@ export function mapDocketListItem(docket: DocketListItemSource) {
     status: docket.status,
     notes: docket.notes,
     labourHours: docket.labourEntries.reduce(
-      (sum, entry) => sum + (Number(entry.submittedHours) || 0),
+      (sum, entry) => sum + numericValue(entry.submittedHours),
       0,
     ),
     plantHours: docket.plantEntries.reduce(
-      (sum, entry) => sum + (Number(entry.hoursOperated) || 0),
+      (sum, entry) => sum + numericValue(entry.hoursOperated),
       0,
     ),
-    totalLabourSubmitted: Number(docket.totalLabourSubmitted) || 0,
-    totalLabourApproved: Number(docket.totalLabourApproved) || 0,
-    totalPlantSubmitted: Number(docket.totalPlantSubmitted) || 0,
-    totalPlantApproved: Number(docket.totalPlantApproved) || 0,
-    totalLabourApprovedCost: Number(docket.totalLabourApprovedCost) || 0,
-    totalPlantApprovedCost: Number(docket.totalPlantApprovedCost) || 0,
+    totalLabourSubmitted: numericValue(docket.totalLabourSubmitted),
+    totalLabourApproved: numericValue(docket.totalLabourApproved),
+    totalPlantSubmitted: numericValue(docket.totalPlantSubmitted),
+    totalPlantApproved: numericValue(docket.totalPlantApproved),
+    totalLabourApprovedCost: optionalNumericValue(docket.totalLabourApprovedCost),
+    totalPlantApprovedCost: optionalNumericValue(docket.totalPlantApprovedCost),
     submittedAt: docket.submittedAt,
     approvedAt: docket.approvedAt,
     foremanNotes: docket.foremanNotes,
@@ -244,13 +253,12 @@ export function buildDocketEntryDeletedResponse(
 // =============================================================================
 // Docket detail presentation: assembles the full `GET /api/dockets/:id` response
 // body — the `docket` object (reusing the labour/plant entry mappers above),
-// plus the top-level `foremanDiary` and `discrepancies`. Extracted verbatim
-// from the inline `res.json({ ... })`: same field names + order, same
-// `formatDocketNumber`/`formatDocketDate` formatting, same `Number(x) || 0`
-// total coercion, same pass-through of nullable project/submittedBy/approvedBy,
-// and the same `discrepancies.length > 0 ? discrepancies : null` shaping. The
-// route still owns request parsing, the Prisma reads, the access check, and
-// finding the diary/project/users.
+// plus the top-level `foremanDiary` and `discrepancies`: same field names +
+// order, same `formatDocketNumber`/`formatDocketDate` formatting, same numeric
+// coercion for submitted/approved hour/cost totals. Nullable approved-cost
+// totals stay nullable so clients can fall back safely for older rows. The route
+// still owns request parsing, the Prisma reads, the access check, and finding
+// the diary/project/users.
 // =============================================================================
 
 export type DocketProjectSummary = { id: string; name: string };
@@ -307,12 +315,12 @@ export function buildDocketDetailResponse(input: {
       approvedAt: docket.approvedAt,
       approvedById: docket.approvedById,
       approvedBy,
-      totalLabourSubmitted: Number(docket.totalLabourSubmitted) || 0,
-      totalLabourApproved: Number(docket.totalLabourApproved) || 0,
-      totalPlantSubmitted: Number(docket.totalPlantSubmitted) || 0,
-      totalPlantApproved: Number(docket.totalPlantApproved) || 0,
-      totalLabourApprovedCost: Number(docket.totalLabourApprovedCost) || 0,
-      totalPlantApprovedCost: Number(docket.totalPlantApprovedCost) || 0,
+      totalLabourSubmitted: numericValue(docket.totalLabourSubmitted),
+      totalLabourApproved: numericValue(docket.totalLabourApproved),
+      totalPlantSubmitted: numericValue(docket.totalPlantSubmitted),
+      totalPlantApproved: numericValue(docket.totalPlantApproved),
+      totalLabourApprovedCost: optionalNumericValue(docket.totalLabourApprovedCost),
+      totalPlantApprovedCost: optionalNumericValue(docket.totalPlantApprovedCost),
       labourEntries: docket.labourEntries.map((entry) => mapDocketLabourEntry(entry)),
       plantEntries: docket.plantEntries.map((entry) => mapDocketPlantEntry(entry)),
     },

@@ -2,7 +2,13 @@ import { Link } from 'react-router-dom';
 import { MessageSquare, Printer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { statusColors, statusLabels } from '../docketActionData';
-import type { Docket } from '../docketApprovalsData';
+import {
+  formatDocketCurrency,
+  getDocketDisplayTotalCost,
+  getDocketSubmittedTotalCost,
+  hasDocketCostAdjustment,
+  type Docket,
+} from '../docketApprovalsData';
 
 // Extracted from DocketApprovalsPage: the desktop dockets table, including the
 // loading row, both empty states, and the per-row print/submit/approve/query/
@@ -51,6 +57,7 @@ export function DocketApprovalsTable({
             <th className="px-4 py-3 text-left text-sm font-medium">Notes</th>
             <th className="px-4 py-3 text-left text-sm font-medium">Labour Hrs</th>
             <th className="px-4 py-3 text-left text-sm font-medium">Plant Hrs</th>
+            <th className="px-4 py-3 text-left text-sm font-medium">Cost</th>
             <th className="px-4 py-3 text-left text-sm font-medium">Status</th>
             <th className="px-4 py-3 text-left text-sm font-medium">Actions</th>
           </tr>
@@ -58,7 +65,7 @@ export function DocketApprovalsTable({
         <tbody className="divide-y">
           {loading ? (
             <tr>
-              <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">
+              <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">
                 <div className="flex items-center justify-center">
                   <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
                   <span className="ml-2">Loading dockets...</span>
@@ -67,7 +74,7 @@ export function DocketApprovalsTable({
             </tr>
           ) : filteredDockets.length === 0 ? (
             <tr>
-              <td colSpan={8} className="px-4 py-8 text-center text-muted-foreground">
+              <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">
                 {submittedDockets.length === 0 ? (
                   <div className="mx-auto flex max-w-md flex-col items-center gap-3">
                     <div>
@@ -136,6 +143,20 @@ export function DocketApprovalsTable({
                     </span>
                   ) : (
                     <>{docket.plantHours}h</>
+                  )}
+                </td>
+                <td className="px-4 py-3 text-sm">
+                  {hasDocketCostAdjustment(docket) ? (
+                    <span>
+                      <span className="font-medium">
+                        {formatDocketCurrency(getDocketDisplayTotalCost(docket))}
+                      </span>
+                      <span className="text-muted-foreground line-through ml-1 text-xs">
+                        {formatDocketCurrency(getDocketSubmittedTotalCost(docket))}
+                      </span>
+                    </span>
+                  ) : (
+                    <>{formatDocketCurrency(getDocketDisplayTotalCost(docket))}</>
                   )}
                 </td>
                 <td className="px-4 py-3 text-sm">

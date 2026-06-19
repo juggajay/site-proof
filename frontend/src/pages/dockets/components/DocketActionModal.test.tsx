@@ -41,10 +41,12 @@ function makeDocket(overrides: Partial<Docket> = {}): Docket {
     notes: null,
     labourHours: 8,
     plantHours: 4,
-    totalLabourSubmitted: 8,
+    totalLabourSubmitted: 600,
     totalLabourApproved: 8,
-    totalPlantSubmitted: 4,
+    totalPlantSubmitted: 200,
     totalPlantApproved: 4,
+    totalLabourApprovedCost: null,
+    totalPlantApprovedCost: null,
     submittedAt: '2026-06-04T08:00:00.000Z',
     approvedAt: null,
     foremanNotes: null,
@@ -99,6 +101,22 @@ describe('DocketActionModal', () => {
     expect(screen.getByRole('heading', { name: 'Approve Docket' })).toBeInTheDocument();
     expect(screen.getByText('DKT-001')).toBeInTheDocument();
     expect(screen.getByText('Ryox Carpentry')).toBeInTheDocument();
+  });
+
+  it('shows submitted and approved aggregate cost totals', () => {
+    renderModal(
+      makeDocket({
+        status: 'approved',
+        totalLabourSubmitted: 1200,
+        totalPlantSubmitted: 300,
+        totalLabourApprovedCost: 900,
+        totalPlantApprovedCost: 200,
+      }),
+      { initialActionType: 'view' },
+    );
+
+    expect(screen.getByText('$1,500.00')).toBeInTheDocument();
+    expect(screen.getByText('$1,100.00')).toBeInTheDocument();
   });
 
   it('shows view-mode action buttons when initialActionType is view and docket is pending', () => {
