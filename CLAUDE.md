@@ -33,9 +33,9 @@ site-proofv3/
 │   │   ├── routes/        # REST API endpoints
 │   │   ├── middleware/    # Auth, rate limiting, error handling
 │   │   ├── lib/           # Utilities (email, roles, encryption)
-│   │   └── trpc/          # tRPC router (type-safe API)
+│   │   └── scripts/       # Script helpers and test coverage
 │   ├── prisma/           # Database schema
-│   └── test/             # Vitest unit tests
+│   └── src/**/*.test.ts  # Vitest unit tests colocated with code
 │
 └── docs/              # Project documentation
 ```
@@ -47,10 +47,10 @@ site-proofv3/
 | Frontend | React 18, Vite, TailwindCSS, shadcn/ui |
 | State | TanStack Query (server state) |
 | Forms | React Hook Form + Zod validation |
-| Backend | Express.js, tRPC v10 |
+| Backend | Express.js REST API |
 | Database | PostgreSQL via Prisma ORM, **hosted on Railway** (project `hearty-harmony`). Supabase is **not** the database. |
 | Auth | JWT, MFA support. Supabase Auth is **not** in use; the Supabase project is storage-only. |
-| Storage | Supabase Storage. Single `documents` bucket in project `vhlvutvzdliwxorfhxxv`. Backend-mediated access is required for document, comment, drawing, test-certificate, and photo files; stored Supabase URLs are object locators, not UI access URLs. See [docs/supabase-storage-setup.md](docs/supabase-storage-setup.md). |
+| Storage | Supabase Storage. Single `documents` bucket in project `vhlvutvzdliwxorfhxxv`. Backend-mediated access is required for document, comment, drawing, test-certificate, and photo files; stored `supabase://documents/...` refs and legacy Supabase URLs are object locators, not UI access URLs. See [docs/supabase-storage-setup.md](docs/supabase-storage-setup.md). |
 | Email | Resend |
 
 ## Key Patterns
@@ -126,6 +126,7 @@ throw error
 
 - Global `errorHandler` in `backend/src/middleware/errorHandler.ts`
 - Logs to `backend/logs/errors.log` with structured JSON
+- Production 5xx errors are captured by Sentry when `SENTRY_DSN` is configured
 - 500+ errors logged as `error`, 4xx as `warn`
 - Stack traces only in development
 
@@ -160,8 +161,11 @@ Core models (see `backend/prisma/schema.prisma`):
 ## Testing
 
 ```bash
-# Backend unit tests (~1,800 tests across 68 files)
+# Backend unit tests
 cd backend && npm test
+
+# Frontend unit tests
+cd frontend && npm run test:unit
 
 # Frontend E2E tests
 cd frontend && npm run test:e2e
@@ -170,6 +174,9 @@ cd frontend && npm run test:e2e
 cd backend && npm run type-check
 cd frontend && npm run type-check
 ```
+
+As of 2026-06-19, the repo has roughly 530 test/spec files and 5,800+
+`it`/`test` declarations. Re-measure before publishing exact counts.
 
 ### Code intelligence audit (fallow)
 
@@ -192,8 +199,12 @@ npm run fallow:audit    # audits only files changed vs origin/master
   dynamically by `backend/scripts/seeds/itp-templates/index.mjs` (filenames in
   a manifest array), so they are marked `dynamicallyLoaded` there — they are
   not dead code, and static analysis cannot see that without the config.
-- Agent rules when scripting fallow: always `--format json --quiet 2>/dev/null`
-  and append `|| true` (exit 1 means "issues found", not an error).
+- Agent rules when scripting fallow: prefer
+  `fallow audit --base origin/master --format json --quiet 2>/dev/null`, and
+  append `|| true` in shells where exit 1 would stop the run (exit 1 means
+  "issues found", not an infrastructure error). If you must pass flags through
+  npm, use the extra separator:
+  `npm run fallow:audit -- -- --format json --quiet`.
 
 ## User Roles
 
@@ -230,11 +241,13 @@ EMAIL_FROM="..."
 FRONTEND_URL=https://...                     # https in prod, not localhost
 BACKEND_URL=https://...                      # or API_URL; https in prod, not localhost
 TRUST_PROXY=1                                # required behind Railway/CDN; do not use true in prod
+SENTRY_DSN=...                               # required in production for backend error monitoring
 ```
 
 ### Frontend (.env)
 ```
 VITE_API_URL=http://localhost:3001
+VITE_SENTRY_DSN=...                          # required in production for frontend error monitoring
 # Leave VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY blank in Vercel production
 # unless the frontend needs direct browser Supabase access — uploads go
 # through the backend with the service role key.
@@ -250,7 +263,7 @@ VITE_API_URL=http://localhost:3001
 
 ### Production file storage (Supabase)
 - File uploads in production **require** `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in the backend env. Without them, `isSupabaseConfigured()` returns false and uploads fall back to local Railway disk, which is **ephemeral** — files vanish on the next redeploy.
-- Do not add new browser surfaces that render raw Supabase `fileUrl` values. Use `getDocumentAccessUrl`, `openDocumentAccessUrl`, `SecureDocumentImage`, or an authenticated backend download route. The stored `/storage/v1/object/public/documents/...` values are legacy object locators and should not be treated as durable user-facing links.
+- Do not add new browser surfaces that render raw Supabase `fileUrl` values. Use `getDocumentAccessUrl`, `openDocumentAccessUrl`, `SecureDocumentImage`, or an authenticated backend download route. New upload flows should store `supabase://documents/...` refs where supported. The stored `/storage/v1/object/public/documents/...` values are legacy object locators and should not be treated as durable user-facing links.
 - Never commit Supabase keys, the Railway database URL, or any production secret to git. Local credential scratch (e.g. `.gstack/dev-browser/new-supabase-credentials.txt`) lives under git-ignored directories — keep it that way.
 
 ## Common Tasks
@@ -263,7 +276,7 @@ VITE_API_URL=http://localhost:3001
 ### Add a new API endpoint
 1. Create/update route file in `backend/src/routes/`
 2. Register in `backend/src/index.ts`
-3. Add tests in `backend/test/`
+3. Add focused `*.test.ts` coverage next to the route or helper under `backend/src/`
 
 ### Add a database model
 1. Update `backend/prisma/schema.prisma`
@@ -322,41 +335,33 @@ Keep files under 500 lines. Large files should be split:
 
 ## Known Large Files (Refactoring Targets)
 
-Current large-file pressure is concentrated in the still-monolithic backend
-route files. Keep splitting them through small, behavior-preserving,
-characterized PRs (one domain per PR) rather than broad rewrites — this is the
-top priority of the 2026-06-01 engineering-health roadmap (Workstream 1). Use
-the folder-split pattern already proven in `routes/ncrs/`, `routes/itp/`,
-`routes/diary/`, and `routes/testResults/`.
+Large-file pressure has moved away from the old top-level backend route files:
+most of those routes have been split into focused folders. Re-measure before
+choosing a refactor target, and keep changes behavior-preserving with
+characterization coverage.
 
-Top remaining route-split targets (counts as of 2026-06-01, `master` @
-`7ddec84`; re-measure before picking one — they shift):
+Largest current files measured on 2026-06-19:
 
-- `backend/src/routes/holdpoints.ts` (~2,825 lines) — has public token-release
-  endpoints; preserve the signed/hashed-token logic and its position before
-  `requireAuth`.
-- `backend/src/routes/notifications.ts` (~2,807 lines) — keep the
-  `requireNonProductionDiagnostics()` guard on the diagnostics endpoints.
-- `backend/src/routes/lots.ts` (~2,802 lines) — extract Zod validators first.
-- `backend/src/routes/auth.ts` (~2,476 lines) — highest care: public auth,
-  rate limiters, MFA. Add characterization coverage first, and never widen the
-  public allow-list in `routeAuthCoverage.test.ts` to make a split pass.
-- `backend/src/routes/dockets.ts` (~2,364 lines).
+- `frontend/src/pages/LandingPage.tsx` (~902 lines)
+- `frontend/src/shell/subbie/screens/dockets/DocketScreen.tsx` (~846 lines)
+- `frontend/src/lib/offline/syncWorker.ts` (~701 lines)
+- `frontend/src/shell/subbie/screens/CompanyScreen.tsx` (~653 lines)
+- `frontend/src/pages/tests/TestResultsPage.tsx` (~639 lines)
+- `frontend/src/components/foreman/DiaryFinishFlow.tsx` (~636 lines)
+- `backend/src/routes/holdpoints/actionRoutes.ts` (~634 lines)
+- `backend/src/routes/projects/writeRoutes.ts` (~609 lines)
+- `frontend/src/pages/itp/ITPPage.tsx` (~594 lines)
+- `backend/src/routes/ncrs/ncrCore.ts` (~573 lines)
+- `backend/src/routes/dockets/review.ts` (~563 lines)
+- `frontend/src/shell/screens/lots/ItpRunScreen.tsx` (~561 lines)
+- `frontend/src/pages/holdpoints/HoldPointsPage.tsx` (~559 lines)
+- `backend/src/routes/itp/completions.ts` (~559 lines)
+- `backend/src/routes/claims/workflowRoutes.ts` (~558 lines)
 
-Also large (lib, not routes): `backend/src/lib/email.ts` (~1,640) and
-`backend/src/lib/notificationAutomation.ts` (~1,527).
-
-Recently reduced former targets:
-
-- `backend/src/routes/testResults.ts` was split into a `routes/testResults/`
-  folder (11 focused files); the main route is now ~1,500 lines.
-- `frontend/src/pages/lots/LotDetailPage.tsx` is down to ~1,463 lines after
-  extracting components and hooks (e.g. `useItpInstance`).
-- `frontend/src/lib/pdfGenerator.ts` is now a 24-line barrel over
-  `frontend/src/lib/pdf/*`, with characterization-test coverage.
-- `frontend/src/pages/lots/LotsPage.tsx` is ~570 lines.
-- `frontend/src/pages/diary/DailyDiaryPage.tsx` is ~260 lines after the diary
-  folder split.
+Current top-level backend route files are comparatively small
+(`oauth.ts`, `holdpoints.ts`, `auth.ts`, `dockets.ts`, `subcontractors.ts`, and
+`projects.ts` are all under ~500 lines). Prefer extracting from the files above
+only when a feature or bug fix already touches that area.
 
 ---
 
