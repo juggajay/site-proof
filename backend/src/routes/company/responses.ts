@@ -1,3 +1,5 @@
+import { buildCompanyLogoDisplayUrl } from './logoStorage.js';
+
 type CompanyRecord = {
   id: string;
   name: string;
@@ -43,9 +45,18 @@ type NewOwner = {
   fullName: string | null;
 };
 
-export function buildCompanyCreatedResponse(company: CompanyRecord, user: CompanyUserRecord) {
+function serializeCompanyLogo<TCompany extends CompanyRecord>(company: TCompany): TCompany {
   return {
-    company,
+    ...company,
+    logoUrl: buildCompanyLogoDisplayUrl(company.id, company.logoUrl),
+  };
+}
+
+export function buildCompanyCreatedResponse(company: CompanyRecord, user: CompanyUserRecord) {
+  const serializedCompany = serializeCompanyLogo(company);
+
+  return {
+    company: serializedCompany,
     user: {
       id: user.id,
       email: user.email,
@@ -54,7 +65,7 @@ export function buildCompanyCreatedResponse(company: CompanyRecord, user: Compan
       role: user.roleInCompany,
       roleInCompany: user.roleInCompany,
       companyId: user.companyId,
-      companyName: company.name,
+      companyName: serializedCompany.name,
       avatarUrl: user.avatarUrl,
       hasPassword: Boolean(user.passwordHash),
     },
@@ -64,7 +75,7 @@ export function buildCompanyCreatedResponse(company: CompanyRecord, user: Compan
 export function buildCompanyProfileResponse(company: CompanyRecord, limits: CompanyProfileLimits) {
   return {
     company: {
-      ...company,
+      ...serializeCompanyLogo(company),
       projectCount: limits.projectCount,
       projectLimit: limits.projectLimit,
       userCount: limits.userCount,
@@ -133,12 +144,13 @@ export function buildCompanyOwnershipTransferredResponse(newOwner: NewOwner, tra
 }
 
 export function buildCompanyLogoUploadedResponse(logoUrl: string, company: CompanyRecord) {
-  return { logoUrl, company };
+  const serializedCompany = serializeCompanyLogo(company);
+  return { logoUrl: serializedCompany.logoUrl ?? logoUrl, company: serializedCompany };
 }
 
 export function buildCompanyUpdatedResponse(company: CompanyRecord) {
   return {
     message: 'Company settings updated successfully',
-    company,
+    company: serializeCompanyLogo(company),
   };
 }

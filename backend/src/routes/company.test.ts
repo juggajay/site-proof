@@ -25,6 +25,7 @@ import { errorHandler } from '../middleware/errorHandler.js';
 import { AuditAction, parseAuditLogChanges } from '../lib/auditLog.js';
 import * as emailService from '../lib/email.js';
 import { registerTestUser } from '../test/routeTestHarness.js';
+import { createCompanyLogoAccessToken } from './company/logoStorage.js';
 
 const mockIsSupabaseConfigured = vi.mocked(supabaseLib.isSupabaseConfigured);
 const mockGetSupabaseClient = vi.mocked(supabaseLib.getSupabaseClient);
@@ -809,8 +810,10 @@ describe('Company API', () => {
         }
       });
 
-      it('accepts Supabase public URLs as logoUrl in PATCH /api/company', async () => {
-        // Sanity check that normalizeCompanyLogoUrl admits Supabase URLs.
+      it('accepts legacy Supabase public URLs and stores an internal logo reference', async () => {
+        process.env.SUPABASE_URL = 'https://fixture-project.supabase.co';
+        mockIsSupabaseConfigured.mockReturnValue(true);
+
         const supabaseLogoUrl = `https://fixture-project.supabase.co/storage/v1/object/public/documents/company-logos/${companyId}/company-logo-${companyId}-newfile.png`;
         const res = await request(app)
           .patch('/api/company')
@@ -818,7 +821,16 @@ describe('Company API', () => {
           .send({ logoUrl: supabaseLogoUrl });
 
         expect(res.status).toBe(200);
-        expect(res.body.company.logoUrl).toBe(supabaseLogoUrl);
+        expect(res.body.company.logoUrl).toContain(`/api/company/logo/file/${companyId}?token=`);
+        expect(res.body.company.logoUrl).not.toContain('/storage/v1/object/public/');
+
+        const persisted = await prisma.company.findUnique({
+          where: { id: companyId },
+          select: { logoUrl: true },
+        });
+        expect(persisted?.logoUrl).toBe(
+          `supabase://documents/company-logos/${companyId}/company-logo-${companyId}-newfile.png`,
+        );
       });
 
       it('rejects Supabase logo URLs outside the current company prefix in PATCH /api/company', async () => {
@@ -916,7 +928,7 @@ describe('Company API', () => {
           .send({ logoUrl: newLogoUrl });
 
         expect(res.status).toBe(200);
-        expect(res.body.company.logoUrl).toBe(newLogoUrl);
+        expect(res.body.company.logoUrl).toContain(`/api/company/logo/file/${companyId}?token=`);
 
         await new Promise((resolve) => setImmediate(resolve));
 
@@ -972,13 +984,15 @@ describe('Company API', () => {
         // Response must succeed and DB must be updated even though
         // best-effort cleanup blew up.
         expect(res.status).toBe(200);
-        expect(res.body.company.logoUrl).toBe(newLogoUrl);
+        expect(res.body.company.logoUrl).toContain(`/api/company/logo/file/${companyId}?token=`);
 
         const persisted = await prisma.company.findUnique({
           where: { id: companyId },
           select: { logoUrl: true },
         });
-        expect(persisted?.logoUrl).toBe(newLogoUrl);
+        expect(persisted?.logoUrl).toBe(
+          `supabase://documents/company-logos/${companyId}/company-logo-${companyId}-new-throw.png`,
+        );
       });
 
       it('PATCH replacing logoUrl with the same Supabase object plus a query string does not remove it', async () => {
@@ -1009,7 +1023,7 @@ describe('Company API', () => {
           .send({ logoUrl: newLogoUrl });
 
         expect(res.status).toBe(200);
-        expect(res.body.company.logoUrl).toBe(newLogoUrl);
+        expect(res.body.company.logoUrl).toContain(`/api/company/logo/file/${companyId}?token=`);
 
         // Give any awaited cleanup a tick to run before asserting.
         await new Promise((resolve) => setImmediate(resolve));
@@ -1020,7 +1034,85 @@ describe('Company API', () => {
           where: { id: companyId },
           select: { logoUrl: true },
         });
-        expect(persisted?.logoUrl).toBe(newLogoUrl);
+        expect(persisted?.logoUrl).toBe(`supabase://documents/${sharedSupabasePath}`);
+      });
+
+      it('PATCH with the current signed display URL treats the logo as unchanged', async () => {
+        process.env.SUPABASE_URL = 'https://fixture-project.supabase.co';
+        mockIsSupabaseConfigured.mockReturnValue(true);
+
+        const storedLogoRef = `supabase://documents/company-logos/${companyId}/company-logo-${companyId}-stored.png`;
+        await prisma.company.update({
+          where: { id: companyId },
+          data: { logoUrl: storedLogoRef },
+        });
+
+        const getRes = await request(app)
+          .get('/api/company')
+          .set('Authorization', `Bearer ${authToken}`);
+        expect(getRes.status).toBe(200);
+        const signedDisplayUrl = getRes.body.company.logoUrl as string;
+        expect(signedDisplayUrl).toContain(`/api/company/logo/file/${companyId}?token=`);
+
+        const res = await request(app)
+          .patch('/api/company')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            name: `Signed Round Trip ${Date.now()}`,
+            logoUrl: signedDisplayUrl,
+          });
+
+        expect(res.status).toBe(200);
+        expect(res.body.company.logoUrl).toContain(`/api/company/logo/file/${companyId}?token=`);
+
+        const persisted = await prisma.company.findUnique({
+          where: { id: companyId },
+          select: { logoUrl: true },
+        });
+        expect(persisted?.logoUrl).toBe(storedLogoRef);
+        expect(persisted?.logoUrl).not.toContain('/api/company/logo/file/');
+      });
+
+      it('rejects signed display URLs for another company in PATCH /api/company', async () => {
+        process.env.SUPABASE_URL = 'https://fixture-project.supabase.co';
+        mockIsSupabaseConfigured.mockReturnValue(true);
+
+        const res = await request(app)
+          .patch('/api/company')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            logoUrl: 'http://localhost:3001/api/company/logo/file/other-company?token=abc',
+          });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.message).toContain('uploaded before saving');
+      });
+
+      it('serves a signed Supabase-backed company logo file', async () => {
+        process.env.SUPABASE_URL = 'https://fixture-project.supabase.co';
+        const storagePath = `company-logos/${companyId}/company-logo-${companyId}-served.png`;
+        const logoBytes = new Uint8Array([1, 2, 3, 4]);
+        const mockDownload = vi.fn().mockResolvedValue({
+          data: new Blob([logoBytes], { type: 'image/png' }),
+          error: null,
+        });
+        mockIsSupabaseConfigured.mockReturnValue(true);
+        mockGetSupabaseClient.mockReturnValue({
+          storage: { from: () => ({ download: mockDownload }) },
+        } as unknown as ReturnType<typeof supabaseLib.getSupabaseClient>);
+
+        await prisma.company.update({
+          where: { id: companyId },
+          data: { logoUrl: `supabase://documents/${storagePath}` },
+        });
+
+        const token = createCompanyLogoAccessToken(companyId, storagePath);
+        const res = await request(app).get(`/api/company/logo/file/${companyId}`).query({ token });
+
+        expect(res.status).toBe(200);
+        expect(res.headers['content-type']).toContain('image/png');
+        expect(Buffer.from(res.body)).toEqual(Buffer.from(logoBytes));
+        expect(mockDownload).toHaveBeenCalledWith(storagePath);
       });
     });
   });

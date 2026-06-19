@@ -8,7 +8,7 @@ import { buildApiUrl } from '../lib/runtimeConfig.js';
 import { assertUploadedImageFile } from '../lib/imageValidation.js';
 import { logWarn } from '../lib/serverLogger.js';
 import { AuditAction, createAuditLog } from '../lib/auditLog.js';
-import { isSupabaseConfigured } from '../lib/supabase.js';
+import { DOCUMENTS_BUCKET, getSupabaseClient, isSupabaseConfigured } from '../lib/supabase.js';
 import {
   buildCompanyCreatedResponse,
   buildCompanyLogoUploadedResponse,
@@ -20,9 +20,14 @@ import {
   cleanupUploadedLogo,
   cleanupStoredCompanyLogoUpload,
   companyLogoUpload,
+  getCompanyLogoContentType,
+  getCompanyLogoDisplayUrlCompanyId,
+  getOwnedCompanyLogoStoragePath,
   removeStoredCompanyLogo,
   shouldRemovePreviousLogoOnPatch,
+  toCompanyLogoStorageValue,
   uploadCompanyLogoToSupabase,
+  validateCompanyLogoAccessToken,
 } from './company/logoStorage.js';
 import {
   COMPANY_ABN_MAX_LENGTH,
@@ -41,11 +46,118 @@ import { companyMemberRoutes } from './company/memberRoutes.js';
 
 export const companyRouter = Router();
 
+type CompanySettingsUpdateData = {
+  name?: string;
+  abn?: string | null;
+  address?: string | null;
+  logoUrl?: string | null;
+};
+
+type CompanyLogoUpdateResolution = {
+  previousLogoUrl: string | null;
+  shouldCleanupPreviousLogo: boolean;
+  logoUrl?: string | null;
+};
+
+// GET /api/company/logo/file/:companyId - Serve a signed Supabase-backed company logo URL.
+//
+// This endpoint is intentionally before route-wide auth: browser image tags do
+// not send the app's bearer token, so access is controlled by the short-lived
+// token that is tied to the company's currently stored logo object.
+companyRouter.get(
+  '/logo/file/:companyId',
+  asyncHandler(async (req, res) => {
+    const companyId = req.params.companyId;
+    if (!companyId) {
+      throw AppError.badRequest('companyId is required');
+    }
+
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+      select: { logoUrl: true },
+    });
+
+    const storagePath = getOwnedCompanyLogoStoragePath(company?.logoUrl, companyId);
+    if (!storagePath || !isSupabaseConfigured()) {
+      throw AppError.notFound('Company logo');
+    }
+
+    const token = typeof req.query.token === 'string' ? req.query.token : undefined;
+    if (!validateCompanyLogoAccessToken(token, companyId, storagePath)) {
+      throw AppError.unauthorized('Invalid or expired company logo URL');
+    }
+
+    const { data, error } = await getSupabaseClient()
+      .storage.from(DOCUMENTS_BUCKET)
+      .download(storagePath);
+
+    if (error || !data) {
+      logWarn('Supabase company logo download failed:', error);
+      throw AppError.notFound('Company logo');
+    }
+
+    const buffer = Buffer.from(await data.arrayBuffer());
+    res.setHeader('Cache-Control', 'private, max-age=300');
+    res.setHeader('Content-Type', getCompanyLogoContentType(storagePath));
+    res.setHeader('Content-Length', String(buffer.length));
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.send(buffer);
+  }),
+);
+
 // Apply authentication middleware to all routes
 companyRouter.use(requireAuth);
 
 function serializeTierLimit(limit: number): number | null {
   return Number.isFinite(limit) ? limit : null;
+}
+
+function resolveRequestedCompanyLogoUrl(
+  logoUrl: string | null,
+  companyId: string,
+  previousLogoUrl: string | null,
+): string | null | undefined {
+  const displayUrlCompanyId =
+    typeof logoUrl === 'string' ? getCompanyLogoDisplayUrlCompanyId(logoUrl) : null;
+  if (displayUrlCompanyId === null) {
+    return logoUrl;
+  }
+
+  if (
+    displayUrlCompanyId === companyId &&
+    getOwnedCompanyLogoStoragePath(previousLogoUrl, companyId)
+  ) {
+    return undefined;
+  }
+
+  throw AppError.badRequest('Company logo must be uploaded before saving');
+}
+
+async function resolveCompanyLogoUpdate(
+  companyId: string,
+  requestedLogoUrl: string | null | undefined,
+): Promise<CompanyLogoUpdateResolution> {
+  if (requestedLogoUrl === undefined) {
+    return { previousLogoUrl: null, shouldCleanupPreviousLogo: false };
+  }
+
+  const existing = await prisma.company.findUnique({
+    where: { id: companyId },
+    select: { logoUrl: true },
+  });
+  const previousLogoUrl = existing?.logoUrl ?? null;
+  const logoUrl = resolveRequestedCompanyLogoUrl(requestedLogoUrl, companyId, previousLogoUrl);
+
+  if (logoUrl === undefined) {
+    return { previousLogoUrl, shouldCleanupPreviousLogo: false };
+  }
+
+  assertCompanyLogoUrlOwnedByCompany(logoUrl, companyId);
+  return {
+    previousLogoUrl,
+    shouldCleanupPreviousLogo: shouldRemovePreviousLogoOnPatch(previousLogoUrl, logoUrl),
+    logoUrl: toCompanyLogoStorageValue(logoUrl, companyId),
+  };
 }
 
 // POST /api/company - Create the current user's first company
@@ -261,7 +373,7 @@ companyRouter.post(
     try {
       if (isSupabaseConfigured() && uploadedFile!.buffer) {
         const uploaded = await uploadCompanyLogoToSupabase(uploadedFile!, companyId);
-        logoUrl = uploaded.url;
+        logoUrl = uploaded.storageReference;
       } else {
         logoUrl = buildApiUrl(`/uploads/company-logos/${uploadedFile!.filename}`);
       }
@@ -322,18 +434,11 @@ companyRouter.patch(
     });
     const abn = normalizeCompanyString(req.body.abn, 'ABN', COMPANY_ABN_MAX_LENGTH);
     const address = normalizeCompanyString(req.body.address, 'Address', COMPANY_ADDRESS_MAX_LENGTH);
-    const logoUrl = normalizeCompanyLogoUrl(req.body.logoUrl);
+    const requestedLogoUrl = normalizeCompanyLogoUrl(req.body.logoUrl);
 
     const companyId = requireCompanyAdmin(user);
-    assertCompanyLogoUrlOwnedByCompany(logoUrl, companyId);
 
-    // Build update data
-    const updateData: {
-      name?: string;
-      abn?: string | null;
-      address?: string | null;
-      logoUrl?: string | null;
-    } = {};
+    const updateData: CompanySettingsUpdateData = {};
 
     if (name !== undefined) {
       if (name === null) {
@@ -343,24 +448,10 @@ companyRouter.patch(
     }
     if (abn !== undefined) updateData.abn = abn;
     if (address !== undefined) updateData.address = address;
-    if (logoUrl !== undefined) {
-      updateData.logoUrl = logoUrl;
-    }
 
-    // When logoUrl is being changed (replaced or cleared) we want to
-    // best-effort remove the previous storage object after the DB update
-    // succeeds. POST /api/company/logo already does this for the upload
-    // path; PATCH was the remaining gap. The DB row is the source of
-    // truth — Supabase cleanup never blocks or fails the response.
-    let previousLogoUrl: string | null = null;
-    let shouldCleanupPreviousLogo = false;
-    if (logoUrl !== undefined) {
-      const existing = await prisma.company.findUnique({
-        where: { id: companyId },
-        select: { logoUrl: true },
-      });
-      previousLogoUrl = existing?.logoUrl ?? null;
-      shouldCleanupPreviousLogo = shouldRemovePreviousLogoOnPatch(previousLogoUrl, logoUrl);
+    const logoUpdate = await resolveCompanyLogoUpdate(companyId, requestedLogoUrl);
+    if (logoUpdate.logoUrl !== undefined) {
+      updateData.logoUrl = logoUpdate.logoUrl;
     }
 
     const updatedCompany = await prisma.company.update({
@@ -378,9 +469,9 @@ companyRouter.patch(
       },
     });
 
-    if (shouldCleanupPreviousLogo && previousLogoUrl) {
+    if (logoUpdate.shouldCleanupPreviousLogo && logoUpdate.previousLogoUrl) {
       try {
-        await removeStoredCompanyLogo(previousLogoUrl, companyId);
+        await removeStoredCompanyLogo(logoUpdate.previousLogoUrl, companyId);
       } catch (error) {
         logWarn('Failed to delete previous company logo after PATCH:', error);
       }
