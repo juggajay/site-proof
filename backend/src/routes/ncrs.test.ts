@@ -3256,6 +3256,194 @@ describe('NCR Access Hardening', () => {
     }
   });
 
+  it('should let responsible subcontractors list and add NCR evidence', async () => {
+    const suffix = Date.now();
+    const subcontractorCompany = await prisma.subcontractorCompany.create({
+      data: {
+        projectId,
+        companyName: `NCR Evidence Responsible Sub ${suffix}`,
+        primaryContactName: 'NCR Evidence Responsible Contact',
+        primaryContactEmail: `ncr-evidence-responsible-${suffix}@example.com`,
+        status: 'approved',
+        portalAccess: { ncrs: true },
+      },
+    });
+    const subcontractor = await registerTestUser(
+      'ncr-evidence-responsible-sub',
+      'NCR Evidence Responsible Subcontractor',
+    );
+    const responsibleNcr = await prisma.nCR.create({
+      data: {
+        projectId,
+        ncrNumber: `NCR-EVID-RESP-${suffix}`,
+        description: 'Responsible subcontractor can attach evidence',
+        category: 'Workmanship',
+        severity: 'minor',
+        raisedById: userId,
+        responsibleSubcontractorId: subcontractorCompany.id,
+      },
+    });
+    const existingDocument = await prisma.document.create({
+      data: {
+        projectId,
+        documentType: 'ncr_evidence',
+        category: 'ncr_evidence',
+        filename: `responsible-sub-existing-evidence-${suffix}.jpg`,
+        fileUrl: `/uploads/documents/responsible-sub-existing-evidence-${suffix}.jpg`,
+        uploadedById: userId,
+      },
+    });
+    const existingEvidence = await prisma.nCREvidence.create({
+      data: {
+        ncrId: responsibleNcr.id,
+        documentId: existingDocument.id,
+        evidenceType: 'photo',
+      },
+    });
+    const newFilename = `responsible-sub-added-evidence-${suffix}.jpg`;
+
+    try {
+      await prisma.user.update({
+        where: { id: subcontractor.userId },
+        data: { companyId, roleInCompany: 'subcontractor' },
+      });
+      await prisma.subcontractorUser.create({
+        data: {
+          userId: subcontractor.userId,
+          subcontractorCompanyId: subcontractorCompany.id,
+          role: 'user',
+        },
+      });
+
+      const listRes = await request(app)
+        .get(`/api/ncrs/${responsibleNcr.id}/evidence`)
+        .set('Authorization', `Bearer ${subcontractor.token}`);
+      expect(listRes.status).toBe(200);
+      expect(listRes.body.evidence.map((evidence: { id: string }) => evidence.id)).toContain(
+        existingEvidence.id,
+      );
+
+      const addRes = await request(app)
+        .post(`/api/ncrs/${responsibleNcr.id}/evidence`)
+        .set('Authorization', `Bearer ${subcontractor.token}`)
+        .send({
+          evidenceType: 'photo',
+          filename: newFilename,
+          fileUrl: `/uploads/documents/${newFilename}`,
+          mimeType: 'image/jpeg',
+        });
+      expect(addRes.status).toBe(201);
+      expect(addRes.body.evidence.document.filename).toBe(newFilename);
+
+      const storedDocument = await prisma.document.findFirstOrThrow({
+        where: { projectId, filename: newFilename },
+        select: { uploadedById: true },
+      });
+      expect(storedDocument.uploadedById).toBe(subcontractor.userId);
+    } finally {
+      await prisma.nCREvidence.deleteMany({ where: { ncrId: responsibleNcr.id } });
+      await prisma.document.deleteMany({
+        where: {
+          projectId,
+          filename: {
+            in: [existingDocument.filename, newFilename],
+          },
+        },
+      });
+      await prisma.nCR.delete({ where: { id: responsibleNcr.id } }).catch(() => {});
+      await prisma.subcontractorUser.deleteMany({ where: { userId: subcontractor.userId } });
+      await prisma.subcontractorCompany
+        .delete({ where: { id: subcontractorCompany.id } })
+        .catch(() => {});
+      await cleanupTestUser(subcontractor.userId);
+    }
+  });
+
+  it('should reject unrelated subcontractors from NCR evidence routes', async () => {
+    const suffix = Date.now();
+    const responsibleCompany = await prisma.subcontractorCompany.create({
+      data: {
+        projectId,
+        companyName: `NCR Evidence Assigned Sub ${suffix}`,
+        primaryContactName: 'NCR Evidence Assigned Contact',
+        primaryContactEmail: `ncr-evidence-assigned-${suffix}@example.com`,
+        status: 'approved',
+        portalAccess: { ncrs: true },
+      },
+    });
+    const unrelatedCompany = await prisma.subcontractorCompany.create({
+      data: {
+        projectId,
+        companyName: `NCR Evidence Unrelated Sub ${suffix}`,
+        primaryContactName: 'NCR Evidence Unrelated Contact',
+        primaryContactEmail: `ncr-evidence-unrelated-${suffix}@example.com`,
+        status: 'approved',
+        portalAccess: { ncrs: true },
+      },
+    });
+    const unrelatedSubcontractor = await registerTestUser(
+      'ncr-evidence-unrelated-sub',
+      'NCR Evidence Unrelated Subcontractor',
+    );
+    const responsibleNcr = await prisma.nCR.create({
+      data: {
+        projectId,
+        ncrNumber: `NCR-EVID-DENY-${suffix}`,
+        description: 'Unrelated subcontractor cannot attach evidence',
+        category: 'Workmanship',
+        severity: 'minor',
+        raisedById: userId,
+        responsibleSubcontractorId: responsibleCompany.id,
+      },
+    });
+    const deniedFilename = `unrelated-sub-denied-evidence-${suffix}.jpg`;
+
+    try {
+      await prisma.user.update({
+        where: { id: unrelatedSubcontractor.userId },
+        data: { companyId, roleInCompany: 'subcontractor' },
+      });
+      await prisma.subcontractorUser.create({
+        data: {
+          userId: unrelatedSubcontractor.userId,
+          subcontractorCompanyId: unrelatedCompany.id,
+          role: 'user',
+        },
+      });
+
+      const listRes = await request(app)
+        .get(`/api/ncrs/${responsibleNcr.id}/evidence`)
+        .set('Authorization', `Bearer ${unrelatedSubcontractor.token}`);
+      expect(listRes.status).toBe(403);
+
+      const addRes = await request(app)
+        .post(`/api/ncrs/${responsibleNcr.id}/evidence`)
+        .set('Authorization', `Bearer ${unrelatedSubcontractor.token}`)
+        .send({
+          evidenceType: 'photo',
+          filename: deniedFilename,
+          fileUrl: `/uploads/documents/${deniedFilename}`,
+          mimeType: 'image/jpeg',
+        });
+      expect(addRes.status).toBe(403);
+
+      const deniedDocument = await prisma.document.findFirst({
+        where: { projectId, filename: deniedFilename },
+        select: { id: true },
+      });
+      expect(deniedDocument).toBeNull();
+    } finally {
+      await prisma.nCR.delete({ where: { id: responsibleNcr.id } }).catch(() => {});
+      await prisma.subcontractorUser.deleteMany({
+        where: { userId: unrelatedSubcontractor.userId },
+      });
+      await prisma.subcontractorCompany.deleteMany({
+        where: { id: { in: [responsibleCompany.id, unrelatedCompany.id] } },
+      });
+      await cleanupTestUser(unrelatedSubcontractor.userId);
+    }
+  });
+
   it('should not grant subcontractors NCR workflow access through project memberships', async () => {
     const suffix = Date.now();
     const subcontractorCompany = await prisma.subcontractorCompany.create({

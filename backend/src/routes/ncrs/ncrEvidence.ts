@@ -11,7 +11,7 @@ import { AuditAction, createAuditLog } from '../../lib/auditLog.js';
 import {
   NCR_EVIDENCE_MUTATION_ROLES,
   parseNcrRouteParam,
-  requireActiveProjectUser,
+  requireNcrReadAccess,
   requireNcrEvidenceMutationAccess,
   requireNcrResponsibleOrProjectRole,
 } from './ncrAccess.js';
@@ -283,13 +283,16 @@ ncrEvidenceRouter.get(
 
     const ncr = await prisma.nCR.findUnique({
       where: { id },
+      include: {
+        ncrLots: { select: { lotId: true } },
+      },
     });
 
     if (!ncr) {
       throw AppError.notFound('NCR');
     }
 
-    await requireActiveProjectUser(ncr.projectId, user);
+    await requireNcrReadAccess(ncr, user);
 
     const evidence = await prisma.nCREvidence.findMany({
       where: { ncrId: id },
