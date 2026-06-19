@@ -1,6 +1,7 @@
 import path from 'path';
 import fs from 'fs';
 import { AppError } from './AppError.js';
+import { DOCUMENTS_BUCKET, getSupabaseStoragePath } from './supabase.js';
 
 const UPLOADS_DIR = 'uploads';
 
@@ -74,4 +75,12 @@ export function isStoredDocumentUploadPath(fileUrl: string): boolean {
   } catch {
     return false;
   }
+}
+
+export function isStoredDocumentReference(fileUrl: string, projectId?: string): boolean {
+  const expectedPrefix = projectId ? `${projectId}/` : undefined;
+  return (
+    isStoredDocumentUploadPath(fileUrl) ||
+    getSupabaseStoragePath(fileUrl, { bucket: DOCUMENTS_BUCKET, expectedPrefix }) !== null
+  );
 }

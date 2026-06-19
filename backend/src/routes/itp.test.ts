@@ -2287,7 +2287,7 @@ describe('ITP Completion Attachments', () => {
     }
   });
 
-  it('should create new attachment records only from stored document upload paths', async () => {
+  it('should create new attachment records from stored document references', async () => {
     const filename = `stored-path-evidence-${Date.now()}.jpg`;
     let createdDocumentId: string | undefined;
 
@@ -2315,6 +2315,35 @@ describe('ITP Completion Attachments', () => {
     }
   });
 
+  it('should create new attachment records from Supabase document storage references', async () => {
+    const filename = `supabase-ref-evidence-${Date.now()}.jpg`;
+    const fileUrl = `supabase://documents/${projectId}/${filename}`;
+    let createdDocumentId: string | undefined;
+
+    try {
+      const res = await request(app)
+        .post(`/api/itp/completions/${completionId}/attachments`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          filename,
+          fileUrl,
+          mimeType: 'image/jpeg',
+          caption: 'Supabase ref evidence photo',
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.attachment.document.fileUrl).toBe(fileUrl);
+      createdDocumentId = res.body.attachment.documentId;
+    } finally {
+      if (createdDocumentId) {
+        await prisma.iTPCompletionAttachment.deleteMany({
+          where: { completionId, documentId: createdDocumentId },
+        });
+        await prisma.document.deleteMany({ where: { id: createdDocumentId } });
+      }
+    }
+  });
+
   it('should reject new attachment file URLs outside stored document uploads', async () => {
     const filename = `comment-upload-reference-${Date.now()}.jpg`;
 
@@ -2324,6 +2353,28 @@ describe('ITP Completion Attachments', () => {
       .send({
         filename,
         fileUrl: `/uploads/comments/${filename}`,
+        mimeType: 'image/jpeg',
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toContain('uploaded document file');
+
+    const createdDocument = await prisma.document.findFirst({
+      where: { projectId, filename },
+      select: { id: true },
+    });
+    expect(createdDocument).toBeNull();
+  });
+
+  it('should reject Supabase document references from a different project', async () => {
+    const filename = `cross-project-supabase-reference-${Date.now()}.jpg`;
+
+    const res = await request(app)
+      .post(`/api/itp/completions/${completionId}/attachments`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        filename,
+        fileUrl: `supabase://documents/${otherProjectId}/${filename}`,
         mimeType: 'image/jpeg',
       });
 

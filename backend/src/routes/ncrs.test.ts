@@ -4193,6 +4193,60 @@ describe('NCR Access Hardening', () => {
     expect(createdDocument).toBeNull();
   });
 
+  it('should reject evidence Supabase document references from a different project', async () => {
+    const filename = `cross-project-supabase-reference-${Date.now()}.jpg`;
+
+    const res = await request(app)
+      .post(`/api/ncrs/${ncrId}/evidence`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        evidenceType: 'photo',
+        filename,
+        fileUrl: `supabase://documents/${otherProjectId}/${filename}`,
+        mimeType: 'image/jpeg',
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toContain('uploaded document file');
+
+    const createdDocument = await prisma.document.findFirst({
+      where: { projectId, filename },
+      select: { id: true },
+    });
+    expect(createdDocument).toBeNull();
+  });
+
+  it('should accept evidence file URLs from Supabase document storage references', async () => {
+    const filename = `supabase-ref-evidence-${Date.now()}.jpg`;
+    const fileUrl = `supabase://documents/${projectId}/${filename}`;
+    let evidenceId: string | undefined;
+    let documentId: string | undefined;
+
+    try {
+      const res = await request(app)
+        .post(`/api/ncrs/${ncrId}/evidence`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          evidenceType: 'photo',
+          filename,
+          fileUrl,
+          mimeType: 'image/jpeg',
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.evidence.document.fileUrl).toBe(fileUrl);
+      evidenceId = res.body.evidence.id;
+      documentId = res.body.evidence.documentId;
+    } finally {
+      if (evidenceId) {
+        await prisma.nCREvidence.deleteMany({ where: { id: evidenceId } });
+      }
+      if (documentId) {
+        await prisma.document.deleteMany({ where: { id: documentId } });
+      }
+    }
+  });
+
   it('should not delete evidence from a different NCR', async () => {
     const res = await request(app)
       .delete(`/api/ncrs/${ncrId}/evidence/${otherNcrEvidenceId}`)

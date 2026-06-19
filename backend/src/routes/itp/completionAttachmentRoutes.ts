@@ -14,7 +14,7 @@ import {
   requireItpProjectRole,
   requireItpSubcontractorCompletionPermission,
 } from './helpers/access.js';
-import { isStoredDocumentUploadPath } from '../../lib/uploadPaths.js';
+import { isStoredDocumentReference } from '../../lib/uploadPaths.js';
 import {
   buildItpCompletionAttachmentDeletedResponse,
   buildItpCompletionAttachmentResponse,
@@ -245,7 +245,7 @@ completionAttachmentRoutes.post(
         throw AppError.badRequest('filename and fileUrl are required');
       }
 
-      if (!isStoredDocumentUploadPath(fileUrl)) {
+      if (!isStoredDocumentReference(fileUrl, documentProjectId)) {
         throw AppError.badRequest('fileUrl must reference an uploaded document file');
       }
 
