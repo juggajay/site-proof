@@ -1,4 +1,5 @@
 import { getPaginationMeta } from '../../lib/pagination.js';
+import { normalizeDocumentFileUrlForResponse } from '../documentResponses.js';
 
 type DrawingStats = {
   total: number;
@@ -9,6 +10,7 @@ type DrawingStats = {
 
 type CurrentDrawing = {
   id: string;
+  projectId: string;
   drawingNumber: string;
   title: string | null;
   revision: string | null;
@@ -21,6 +23,44 @@ type CurrentDrawing = {
   };
 };
 
+function normalizeDrawingFileUrl(fileUrl: string, projectId: unknown): string {
+  if (typeof projectId !== 'string') {
+    return fileUrl;
+  }
+
+  const normalized = normalizeDocumentFileUrlForResponse({
+    projectId,
+    documentType: 'drawing',
+    fileUrl,
+  });
+  return typeof normalized.fileUrl === 'string' ? normalized.fileUrl : fileUrl;
+}
+
+function normalizeDrawingDocumentForResponse(drawing: unknown): unknown {
+  if (!drawing || typeof drawing !== 'object' || Array.isArray(drawing)) {
+    return drawing;
+  }
+
+  const record = drawing as Record<string, unknown>;
+  const document = record.document;
+  if (!document || typeof document !== 'object' || Array.isArray(document)) {
+    return drawing;
+  }
+
+  const documentRecord = document as Record<string, unknown>;
+  if (typeof documentRecord.fileUrl !== 'string') {
+    return drawing;
+  }
+
+  return {
+    ...record,
+    document: {
+      ...documentRecord,
+      fileUrl: normalizeDrawingFileUrl(documentRecord.fileUrl, record.projectId),
+    },
+  };
+}
+
 export function buildDrawingListResponse(
   drawings: unknown[],
   stats: DrawingStats,
@@ -28,7 +68,7 @@ export function buildDrawingListResponse(
   limit: number,
 ) {
   return {
-    drawings,
+    drawings: drawings.map(normalizeDrawingDocumentForResponse),
     stats,
     pagination: getPaginationMeta(stats.total, page, limit),
   };
@@ -43,7 +83,7 @@ export function buildCurrentDrawingSetResponse(drawings: CurrentDrawing[], total
       title: drawing.title,
       revision: drawing.revision,
       status: drawing.status,
-      fileUrl: drawing.document.fileUrl,
+      fileUrl: normalizeDrawingFileUrl(drawing.document.fileUrl, drawing.projectId),
       filename: drawing.document.filename,
       fileSize: drawing.document.fileSize,
     })),
