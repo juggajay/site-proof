@@ -4,14 +4,21 @@ import {
   buildDocketDetailPath,
   buildDocketEditRoute,
   buildExistingDocketsPath,
+  getDocketDisplayLabourEntryCost,
+  getDocketDisplayLabourEntryHours,
   getDocketDisplayLabourCost,
+  getDocketDisplayPlantEntryCost,
   getDocketDisplayPlantCost,
   getDocketDisplayTotalCost,
   buildMyCompanyPath,
   findTodayDocket,
+  hasDocketLabourEntryAdjustment,
+  hasDocketPlantEntryCostAdjustment,
   normalizeAssignedLots,
   normalizeExistingDockets,
   type Docket,
+  type LabourEntry,
+  type PlantEntry,
 } from './docketEditData';
 
 const baseDocket: Docket = {
@@ -129,5 +136,100 @@ describe('docket edit data – display costs', () => {
     };
 
     expect(getDocketDisplayTotalCost(docket)).toBe(1500);
+  });
+});
+
+describe('docket edit data – display entry costs', () => {
+  const labourEntry: LabourEntry = {
+    id: 'labour-1',
+    employee: {
+      id: 'employee-1',
+      name: 'Ava Singh',
+      role: 'Leading hand',
+      hourlyRate: 100,
+    },
+    startTime: '07:00',
+    finishTime: '15:00',
+    submittedHours: 8,
+    hourlyRate: 100,
+    submittedCost: 800,
+    approvedHours: 6,
+    approvedCost: 600,
+    lotAllocations: [],
+  };
+
+  const plantEntry: PlantEntry = {
+    id: 'plant-entry-1',
+    plant: {
+      id: 'plant-1',
+      type: 'Excavator',
+      description: 'CAT 320',
+      dryRate: 150,
+      wetRate: 180,
+    },
+    hoursOperated: 4,
+    wetOrDry: 'dry',
+    hourlyRate: 150,
+    submittedCost: 600,
+    approvedCost: 450,
+  };
+
+  it('uses submitted entry values before approval', () => {
+    const docket = { ...baseDocket, status: 'pending_approval' };
+
+    expect(getDocketDisplayLabourEntryHours(docket, labourEntry)).toBe(8);
+    expect(getDocketDisplayLabourEntryCost(docket, labourEntry)).toBe(800);
+    expect(getDocketDisplayPlantEntryCost(docket, plantEntry)).toBe(600);
+    expect(hasDocketLabourEntryAdjustment(docket, labourEntry)).toBe(false);
+    expect(hasDocketPlantEntryCostAdjustment(docket, plantEntry)).toBe(false);
+  });
+
+  it('uses approved entry values after approval', () => {
+    const docket = { ...baseDocket, status: 'approved' };
+
+    expect(getDocketDisplayLabourEntryHours(docket, labourEntry)).toBe(6);
+    expect(getDocketDisplayLabourEntryCost(docket, labourEntry)).toBe(600);
+    expect(getDocketDisplayPlantEntryCost(docket, plantEntry)).toBe(450);
+    expect(hasDocketLabourEntryAdjustment(docket, labourEntry)).toBe(true);
+    expect(hasDocketPlantEntryCostAdjustment(docket, plantEntry)).toBe(true);
+  });
+
+  it('falls back to submitted entry values for older approved dockets without approved fields', () => {
+    const docket = { ...baseDocket, status: 'approved' };
+    const legacyLabourEntry = {
+      ...labourEntry,
+      approvedHours: null,
+      approvedCost: undefined,
+    };
+    const legacyPlantEntry = {
+      ...plantEntry,
+      approvedCost: null,
+    };
+
+    expect(getDocketDisplayLabourEntryHours(docket, legacyLabourEntry)).toBe(8);
+    expect(getDocketDisplayLabourEntryCost(docket, legacyLabourEntry)).toBe(800);
+    expect(getDocketDisplayPlantEntryCost(docket, legacyPlantEntry)).toBe(600);
+    expect(hasDocketLabourEntryAdjustment(docket, legacyLabourEntry)).toBe(false);
+    expect(hasDocketPlantEntryCostAdjustment(docket, legacyPlantEntry)).toBe(false);
+  });
+
+  it('treats explicit approved zeroes as valid values', () => {
+    const docket = { ...baseDocket, status: 'approved' };
+
+    expect(
+      getDocketDisplayLabourEntryHours(docket, {
+        ...labourEntry,
+        approvedHours: 0,
+        approvedCost: 0,
+      }),
+    ).toBe(0);
+    expect(
+      getDocketDisplayLabourEntryCost(docket, {
+        ...labourEntry,
+        approvedHours: 0,
+        approvedCost: 0,
+      }),
+    ).toBe(0);
+    expect(getDocketDisplayPlantEntryCost(docket, { ...plantEntry, approvedCost: 0 })).toBe(0);
   });
 });

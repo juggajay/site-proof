@@ -51,7 +51,7 @@ const FIELD_CARDS = [
   {
     micro: 'Patchy signal',
     h3: 'Key field workflows keep working offline.',
-    p: 'ITP completions, photos and core diary updates queue locally when coverage drops and sync when it returns — with conflict handling when two people touched the same lot.',
+    p: 'ITP completions, photos and core diary updates queue locally when coverage drops and sync when it returns. Lot edit conflicts can be resolved when two people touched the same lot.',
   },
   {
     micro: 'Zero friction',

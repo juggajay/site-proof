@@ -33,9 +33,14 @@ import { cn } from '@/lib/utils';
 import { ShellScreen } from '@/shell/components/ShellScreen';
 import {
   findTodayDocket,
+  getDocketDisplayLabourEntryCost,
+  getDocketDisplayLabourEntryHours,
   getDocketDisplayLabourCost,
+  getDocketDisplayPlantEntryCost,
   getDocketDisplayPlantCost,
   getDocketDisplayTotalCost,
+  hasDocketLabourEntryAdjustment,
+  hasDocketPlantEntryCostAdjustment,
   useAssignedLotsQuery,
   useDocketEditQuery,
   useExistingDocketsQuery,
@@ -669,44 +674,55 @@ export function DocketScreen() {
         <span className="t">CREW</span>
         <span className="n">{labourEntries.length} on site</span>
       </div>
-      {labourEntries.map((entry) => (
-        <div key={entry.id} className="shell-entry">
-          <div className="grow">
-            <div className="t">{entry.employee.name}</div>
-            <div className="d">
-              <span className="shell-mono">
-                {formatTimeRange(entry.startTime, entry.finishTime)}
-              </span>
-              {entry.lotAllocations[0]?.lotNumber && (
-                <span className="shell-lotchip">{entry.lotAllocations[0].lotNumber}</span>
+      {labourEntries.map((entry) => {
+        const displayHours = docket ? getDocketDisplayLabourEntryHours(docket, entry) : 0;
+        const displayCost = docket ? getDocketDisplayLabourEntryCost(docket, entry) : 0;
+        const adjusted = docket ? hasDocketLabourEntryAdjustment(docket, entry) : false;
+
+        return (
+          <div key={entry.id} className="shell-entry">
+            <div className="grow">
+              <div className="t">{entry.employee.name}</div>
+              <div className="d">
+                <span className="shell-mono">
+                  {formatTimeRange(entry.startTime, entry.finishTime)}
+                </span>
+                {entry.lotAllocations[0]?.lotNumber && (
+                  <span className="shell-lotchip">{entry.lotAllocations[0].lotNumber}</span>
+                )}
+              </div>
+            </div>
+            <div>
+              <span className="cost">{formatCurrency(displayCost)}</span>
+              <span className="hrs">{displayHours} h</span>
+              {adjusted && (
+                <span className="hrs line-through">
+                  was {entry.submittedHours} h / {formatCurrency(entry.submittedCost)}
+                </span>
               )}
             </div>
+            {canEdit && (
+              <button
+                type="button"
+                onClick={() => deleteLabourEntry(entry.id)}
+                aria-label={`Remove ${entry.employee.name}`}
+                className={cn(
+                  '-mr-1 flex h-9 items-center justify-center rounded-lg active:bg-secondary',
+                  armedDelete === `labour-${entry.id}`
+                    ? 'px-2 text-[12px] font-semibold text-destructive'
+                    : 'w-9 text-muted-foreground',
+                )}
+              >
+                {armedDelete === `labour-${entry.id}` ? (
+                  'Remove?'
+                ) : (
+                  <Trash2 size={17} aria-hidden="true" />
+                )}
+              </button>
+            )}
           </div>
-          <div>
-            <span className="cost">{formatCurrency(entry.submittedCost)}</span>
-            <span className="hrs">{entry.submittedHours} h</span>
-          </div>
-          {canEdit && (
-            <button
-              type="button"
-              onClick={() => deleteLabourEntry(entry.id)}
-              aria-label={`Remove ${entry.employee.name}`}
-              className={cn(
-                '-mr-1 flex h-9 items-center justify-center rounded-lg active:bg-secondary',
-                armedDelete === `labour-${entry.id}`
-                  ? 'px-2 text-[12px] font-semibold text-destructive'
-                  : 'w-9 text-muted-foreground',
-              )}
-            >
-              {armedDelete === `labour-${entry.id}` ? (
-                'Remove?'
-              ) : (
-                <Trash2 size={17} aria-hidden="true" />
-              )}
-            </button>
-          )}
-        </div>
-      ))}
+        );
+      })}
       {canEdit && (
         <button
           type="button"
@@ -726,43 +742,51 @@ export function DocketScreen() {
           {plantEntries.length} {plantEntries.length === 1 ? 'machine' : 'machines'}
         </span>
       </div>
-      {plantEntries.map((entry) => (
-        <div key={entry.id} className="shell-entry">
-          <div className="grow">
-            <div className="t">
-              {entry.plant.type}
-              {entry.plant.description ? ` — ${entry.plant.description}` : ''}
+      {plantEntries.map((entry) => {
+        const displayCost = docket ? getDocketDisplayPlantEntryCost(docket, entry) : 0;
+        const adjusted = docket ? hasDocketPlantEntryCostAdjustment(docket, entry) : false;
+
+        return (
+          <div key={entry.id} className="shell-entry">
+            <div className="grow">
+              <div className="t">
+                {entry.plant.type}
+                {entry.plant.description ? ` — ${entry.plant.description}` : ''}
+              </div>
+              <div className="d">
+                <span className="shell-mono">{entry.hoursOperated} h</span>
+                <span className="shell-lotchip">{entry.wetOrDry === 'wet' ? 'WET' : 'DRY'}</span>
+              </div>
             </div>
-            <div className="d">
-              <span className="shell-mono">{entry.hoursOperated} h</span>
-              <span className="shell-lotchip">{entry.wetOrDry === 'wet' ? 'WET' : 'DRY'}</span>
+            <div>
+              <span className="cost">{formatCurrency(displayCost)}</span>
+              <span className="hrs">@ ${entry.hourlyRate}/h</span>
+              {adjusted && (
+                <span className="hrs line-through">was {formatCurrency(entry.submittedCost)}</span>
+              )}
             </div>
+            {canEdit && (
+              <button
+                type="button"
+                onClick={() => deletePlantEntry(entry.id)}
+                aria-label={`Remove ${entry.plant.type}`}
+                className={cn(
+                  '-mr-1 flex h-9 items-center justify-center rounded-lg active:bg-secondary',
+                  armedDelete === `plant-${entry.id}`
+                    ? 'px-2 text-[12px] font-semibold text-destructive'
+                    : 'w-9 text-muted-foreground',
+                )}
+              >
+                {armedDelete === `plant-${entry.id}` ? (
+                  'Remove?'
+                ) : (
+                  <Trash2 size={17} aria-hidden="true" />
+                )}
+              </button>
+            )}
           </div>
-          <div>
-            <span className="cost">{formatCurrency(entry.submittedCost)}</span>
-            <span className="hrs">@ ${entry.hourlyRate}/h</span>
-          </div>
-          {canEdit && (
-            <button
-              type="button"
-              onClick={() => deletePlantEntry(entry.id)}
-              aria-label={`Remove ${entry.plant.type}`}
-              className={cn(
-                '-mr-1 flex h-9 items-center justify-center rounded-lg active:bg-secondary',
-                armedDelete === `plant-${entry.id}`
-                  ? 'px-2 text-[12px] font-semibold text-destructive'
-                  : 'w-9 text-muted-foreground',
-              )}
-            >
-              {armedDelete === `plant-${entry.id}` ? (
-                'Remove?'
-              ) : (
-                <Trash2 size={17} aria-hidden="true" />
-              )}
-            </button>
-          )}
-        </div>
-      ))}
+        );
+      })}
       {canEdit && (
         <button
           type="button"

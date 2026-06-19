@@ -6,7 +6,7 @@ import { defaultPackageOptions } from './types';
 import type { ClaimEvidencePackageData, ClaimPackageOptions } from './types';
 
 /**
- * Generate a PDF evidence package for a Progress Claim (SOPA compliant)
+ * Generate a PDF evidence package for a progress claim.
  */
 export async function generateClaimEvidencePackagePDF(
   data: ClaimEvidencePackageData,

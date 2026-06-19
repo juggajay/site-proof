@@ -43,6 +43,8 @@ export interface LabourEntry {
   submittedHours: number;
   hourlyRate: number;
   submittedCost: number;
+  approvedHours?: number | null;
+  approvedCost?: number | null;
   lotAllocations: Array<{
     lotId: string;
     lotNumber: string;
@@ -63,6 +65,7 @@ export interface PlantEntry {
   wetOrDry: 'dry' | 'wet';
   hourlyRate: number;
   submittedCost: number;
+  approvedCost?: number | null;
 }
 
 export interface Docket {
@@ -147,6 +150,10 @@ function hasApprovedCost(value: number | null | undefined): boolean {
   return value !== null && value !== undefined && Number.isFinite(Number(value));
 }
 
+function amountsDiffer(left: number | null | undefined, right: number | null | undefined): boolean {
+  return Math.abs(moneyValue(left) - moneyValue(right)) >= 0.005;
+}
+
 export function getDocketDisplayLabourCost(docket: DocketCostSummary): number {
   if (docket.status === 'approved' && hasApprovedCost(docket.totalLabourApprovedCost)) {
     return moneyValue(docket.totalLabourApprovedCost);
@@ -163,6 +170,55 @@ export function getDocketDisplayPlantCost(docket: DocketCostSummary): number {
 
 export function getDocketDisplayTotalCost(docket: DocketCostSummary): number {
   return getDocketDisplayLabourCost(docket) + getDocketDisplayPlantCost(docket);
+}
+
+export function getDocketDisplayLabourEntryHours(
+  docket: DocketCostSummary,
+  entry: LabourEntry,
+): number {
+  if (docket.status === 'approved' && hasApprovedCost(entry.approvedHours)) {
+    return moneyValue(entry.approvedHours);
+  }
+  return moneyValue(entry.submittedHours);
+}
+
+export function getDocketDisplayLabourEntryCost(
+  docket: DocketCostSummary,
+  entry: LabourEntry,
+): number {
+  if (docket.status === 'approved' && hasApprovedCost(entry.approvedCost)) {
+    return moneyValue(entry.approvedCost);
+  }
+  return moneyValue(entry.submittedCost);
+}
+
+export function getDocketDisplayPlantEntryCost(
+  docket: DocketCostSummary,
+  entry: PlantEntry,
+): number {
+  if (docket.status === 'approved' && hasApprovedCost(entry.approvedCost)) {
+    return moneyValue(entry.approvedCost);
+  }
+  return moneyValue(entry.submittedCost);
+}
+
+export function hasDocketLabourEntryAdjustment(
+  docket: DocketCostSummary,
+  entry: LabourEntry,
+): boolean {
+  if (docket.status !== 'approved') return false;
+  return (
+    amountsDiffer(getDocketDisplayLabourEntryHours(docket, entry), entry.submittedHours) ||
+    amountsDiffer(getDocketDisplayLabourEntryCost(docket, entry), entry.submittedCost)
+  );
+}
+
+export function hasDocketPlantEntryCostAdjustment(
+  docket: DocketCostSummary,
+  entry: PlantEntry,
+): boolean {
+  if (docket.status !== 'approved') return false;
+  return amountsDiffer(getDocketDisplayPlantEntryCost(docket, entry), entry.submittedCost);
 }
 
 // ===== Fetchers =====
