@@ -1,12 +1,6 @@
-import path from 'path';
 import { z } from 'zod';
 
 import { AppError } from '../../lib/AppError.js';
-import { DOCUMENTS_BUCKET, getSupabaseStoragePath } from '../../lib/supabase.js';
-import {
-  isStoredDocumentUploadPath,
-  normalizeStoredDocumentReference,
-} from '../../lib/uploadPaths.js';
 
 const CLAIM_DATE_INPUT_MAX_LENGTH = 64;
 const CLAIM_ID_MAX_LENGTH = 120;
@@ -15,8 +9,6 @@ const CLAIM_DISPUTE_NOTES_MAX_LENGTH = 5000;
 const CLAIM_VARIATION_NOTES_MAX_LENGTH = 2000;
 const CLAIM_PAYMENT_NOTES_MAX_LENGTH = 3000;
 export const MAX_CERTIFICATION_DOCUMENT_ID_LENGTH = 120;
-const MAX_CERTIFICATION_DOCUMENT_URL_LENGTH = 2048;
-const MAX_CERTIFICATION_DOCUMENT_FILENAME_LENGTH = 180;
 export const CLAIM_LOT_PERCENTAGE_REQUIRED_MESSAGE =
   'Each claimed lot must include percentageComplete';
 
@@ -104,26 +96,40 @@ export const updateClaimSchema = z.object({
   disputeNotes: optionalTrimmedClaimString('disputeNotes', CLAIM_DISPUTE_NOTES_MAX_LENGTH),
 });
 
-export const certifyClaimSchema = z.object({
-  certifiedAmount: z
-    .number()
-    .finite('Certified amount must be finite')
-    .nonnegative('Certified amount cannot be negative'),
-  certificationDate: optionalTrimmedClaimString('certificationDate', CLAIM_DATE_INPUT_MAX_LENGTH),
-  variationNotes: optionalTrimmedClaimString('variationNotes', CLAIM_VARIATION_NOTES_MAX_LENGTH),
-  certificationDocumentId: optionalTrimmedClaimString(
-    'certificationDocumentId',
-    MAX_CERTIFICATION_DOCUMENT_ID_LENGTH,
-  ),
-  certificationDocumentUrl: optionalTrimmedClaimString(
-    'certificationDocumentUrl',
-    MAX_CERTIFICATION_DOCUMENT_URL_LENGTH,
-  ),
-  certificationDocumentFilename: optionalTrimmedClaimString(
-    'certificationDocumentFilename',
-    MAX_CERTIFICATION_DOCUMENT_FILENAME_LENGTH,
-  ),
-});
+export const certifyClaimSchema = z
+  .object({
+    certifiedAmount: z
+      .number()
+      .finite('Certified amount must be finite')
+      .nonnegative('Certified amount cannot be negative'),
+    certificationDate: optionalTrimmedClaimString('certificationDate', CLAIM_DATE_INPUT_MAX_LENGTH),
+    variationNotes: optionalTrimmedClaimString('variationNotes', CLAIM_VARIATION_NOTES_MAX_LENGTH),
+    certificationDocumentId: optionalTrimmedClaimString(
+      'certificationDocumentId',
+      MAX_CERTIFICATION_DOCUMENT_ID_LENGTH,
+    ),
+    certificationDocumentUrl: z.unknown().optional(),
+    certificationDocumentFilename: z.unknown().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.certificationDocumentUrl !== undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['certificationDocumentUrl'],
+        message:
+          'certificationDocumentUrl is no longer supported; upload the document first and send certificationDocumentId',
+      });
+    }
+
+    if (data.certificationDocumentFilename !== undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['certificationDocumentFilename'],
+        message:
+          'certificationDocumentFilename is no longer supported; upload the document first and send certificationDocumentId',
+      });
+    }
+  });
 
 export const recordPaymentSchema = z.object({
   paidAmount: z
@@ -353,51 +359,4 @@ export function normalizeOptionalCertificationString(
   }
 
   return normalized;
-}
-
-export function normalizeCertificationDocumentUrl(value: string | undefined): string | undefined {
-  const normalized = normalizeOptionalCertificationString(
-    value,
-    'certificationDocumentUrl',
-    MAX_CERTIFICATION_DOCUMENT_URL_LENGTH,
-  );
-
-  if (!normalized) {
-    return undefined;
-  }
-
-  if (
-    !isStoredDocumentUploadPath(normalized) &&
-    !getSupabaseStoragePath(normalized, DOCUMENTS_BUCKET)
-  ) {
-    throw AppError.badRequest('certificationDocumentUrl must reference an uploaded document file');
-  }
-
-  return normalizeStoredDocumentReference(normalized);
-}
-
-export function sanitizeCertificationDocumentFilename(
-  filename: string | undefined,
-  claimNumber: number,
-): string {
-  const fallback = `certification-claim-${claimNumber}.pdf`;
-  const source =
-    normalizeOptionalCertificationString(
-      filename,
-      'certificationDocumentFilename',
-      MAX_CERTIFICATION_DOCUMENT_FILENAME_LENGTH,
-    ) || fallback;
-  const basename = path.basename(source.replace(/\\/g, '/'));
-  const sanitized = basename
-    .split('')
-    .map((char) => {
-      const code = char.charCodeAt(0);
-      return code < 32 || code === 127 || '<>:"/\\|?*'.includes(char) ? '_' : char;
-    })
-    .join('')
-    .replace(/^\.+/, '')
-    .trim()
-    .slice(0, MAX_CERTIFICATION_DOCUMENT_FILENAME_LENGTH);
-
-  return sanitized || fallback;
 }

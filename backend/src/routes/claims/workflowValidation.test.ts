@@ -5,13 +5,12 @@ import {
   assertCertifiedAmountWithinClaimTotal,
   assertClaimIncrementWithinRemaining,
   assertGenericClaimStatusTransition,
+  certifyClaimSchema,
   createClaimSchema,
   isLotFullyClaimed,
-  normalizeCertificationDocumentUrl,
   parseClaimDate,
   remainingClaimablePercentage,
   roundClaimAmountToCents,
-  sanitizeCertificationDocumentFilename,
   serializeDisputeNotesForStatusTransition,
   sumClaimedPercentages,
 } from './workflowValidation.js';
@@ -71,33 +70,21 @@ describe('claims workflow validation', () => {
     );
   });
 
-  it('normalizes certification document URLs and filenames without trusting external paths', () => {
-    const previousSupabaseUrl = process.env.SUPABASE_URL;
-    process.env.SUPABASE_URL = 'https://siteproof.supabase.co';
+  it('rejects legacy certification document URL payloads', () => {
+    const result = certifyClaimSchema.safeParse({
+      certifiedAmount: 900,
+      certificationDocumentUrl: '/uploads/documents/cert.pdf',
+      certificationDocumentFilename: 'cert.pdf',
+    });
 
-    try {
-      expect(
-        normalizeCertificationDocumentUrl(
-          'https://siteproof.supabase.co/storage/v1/object/public/documents/project-a/cert.pdf',
-        ),
-      ).toBe('supabase://documents/project-a/cert.pdf');
-    } finally {
-      if (previousSupabaseUrl === undefined) {
-        delete process.env.SUPABASE_URL;
-      } else {
-        process.env.SUPABASE_URL = previousSupabaseUrl;
-      }
-    }
-
-    expect(normalizeCertificationDocumentUrl('uploads/documents/cert.pdf')).toBe(
-      'uploads/documents/cert.pdf',
+    expect(result.success).toBe(false);
+    const messages = result.success ? [] : result.error.issues.map((issue) => issue.message);
+    expect(messages).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('certificationDocumentUrl is no longer supported'),
+        expect.stringContaining('certificationDocumentFilename is no longer supported'),
+      ]),
     );
-    expect(() => normalizeCertificationDocumentUrl('https://example.com/cert.pdf')).toThrow(
-      'certificationDocumentUrl must reference an uploaded document file',
-    );
-
-    expect(sanitizeCertificationDocumentFilename('../bad:<name>.pdf', 42)).toBe('bad__name_.pdf');
-    expect(sanitizeCertificationDocumentFilename('', 42)).toBe('certification-claim-42.pdf');
   });
 
   it('preserves certification metadata when serializing a certified claim dispute', () => {

@@ -16,11 +16,9 @@ import {
   MAX_CERTIFICATION_DOCUMENT_ID_LENGTH,
   assertCertifiedAmountWithinClaimTotal,
   certifyClaimSchema,
-  normalizeCertificationDocumentUrl,
   normalizeOptionalCertificationString,
   parseOptionalClaimDate,
   recordPaymentSchema,
-  sanitizeCertificationDocumentFilename,
 } from './workflowValidation.js';
 
 interface PaymentHistoryEntry {
@@ -93,10 +91,6 @@ export function createClaimPostEvidenceWorkflowRouter({
         'variationNotes',
         2000,
       );
-      const certificationDocumentUrl = normalizeCertificationDocumentUrl(
-        validation.data.certificationDocumentUrl,
-      );
-      const certificationDocumentFilename = validation.data.certificationDocumentFilename;
       const certifiedAt =
         parseOptionalClaimDate(certificationDate, 'certificationDate') ?? new Date();
 
@@ -132,29 +126,11 @@ export function createClaimPostEvidenceWorkflowRouter({
 
         const previousStatus = claim.status;
 
-        // Create certification document record if URL provided
-        let certDocId = await getProjectCertificationDocumentId(
+        const certDocId = await getProjectCertificationDocumentId(
           tx,
           projectId,
           validation.data.certificationDocumentId,
         );
-        if (certificationDocumentUrl && !certDocId) {
-          const certDoc = await tx.document.create({
-            data: {
-              projectId,
-              documentType: 'certificate',
-              category: 'certification',
-              filename: sanitizeCertificationDocumentFilename(
-                certificationDocumentFilename,
-                claim.claimNumber,
-              ),
-              fileUrl: certificationDocumentUrl,
-              uploadedById: userId,
-              caption: `Certification document for Claim #${claim.claimNumber}`,
-            },
-          });
-          certDocId = certDoc.id;
-        }
 
         const certificationMetadata =
           variationNotes || certDocId

@@ -105,6 +105,7 @@ describe('Progress Claims API', () => {
     await prisma.notification.deleteMany({ where: { projectId } });
     await prisma.claimedLot.deleteMany({ where: { claim: { projectId } } });
     await prisma.progressClaim.deleteMany({ where: { projectId } });
+    await prisma.document.deleteMany({ where: { projectId } });
     await prisma.lot.deleteMany({ where: { projectId } });
     await prisma.projectUser.deleteMany({ where: { projectId } });
     await prisma.project.delete({ where: { id: projectId } }).catch(() => {});
@@ -153,6 +154,20 @@ describe('Progress Claims API', () => {
     });
 
     return claim;
+  }
+
+  async function createCertificationDocument(filename: string, fileUrl?: string) {
+    return prisma.document.create({
+      data: {
+        projectId,
+        documentType: 'certificate',
+        category: 'certification',
+        filename,
+        fileUrl: fileUrl ?? `/uploads/documents/${filename}`,
+        uploadedById: userId,
+        caption: `Certification document ${filename}`,
+      },
+    });
   }
 
   async function createDraftWorkflowClaim(totalClaimedAmount = 1000) {
@@ -1570,7 +1585,9 @@ describe('Progress Claims API', () => {
 
     it('should reject certification above the claimed amount without creating documents', async () => {
       const claim = await createSubmittedCertificationClaim(1000);
-      const fileUrl = `/uploads/documents/over-certified-${claim.claimNumber}.pdf`;
+      const certificationDocument = await createCertificationDocument(
+        `over-certified-${claim.claimNumber}.pdf`,
+      );
       const documentCountBefore = await prisma.document.count({ where: { projectId } });
 
       const res = await request(app)
@@ -1578,8 +1595,7 @@ describe('Progress Claims API', () => {
         .set('Authorization', `Bearer ${authToken}`)
         .send({
           certifiedAmount: 1000.01,
-          certificationDocumentUrl: fileUrl,
-          certificationDocumentFilename: 'should-not-exist.pdf',
+          certificationDocumentId: certificationDocument.id,
         });
 
       expect(res.status).toBe(400);
@@ -1590,7 +1606,7 @@ describe('Progress Claims API', () => {
       expect(unchangedClaim?.certifiedAmount).toBeNull();
       expect(unchangedClaim?.certifiedAt).toBeNull();
       expect(await prisma.document.count({ where: { projectId } })).toBe(documentCountBefore);
-      expect(await prisma.document.count({ where: { projectId, fileUrl } })).toBe(0);
+      expect(await prisma.document.count({ where: { id: certificationDocument.id } })).toBe(1);
     });
 
     it('should reject oversized certification text without mutating the claim', async () => {
@@ -1603,20 +1619,6 @@ describe('Progress Claims API', () => {
         {
           field: 'certificationDocumentId',
           payload: { certifiedAmount: 900, certificationDocumentId: 'D'.repeat(121) },
-        },
-        {
-          field: 'certificationDocumentUrl',
-          payload: {
-            certifiedAmount: 900,
-            certificationDocumentUrl: `/uploads/documents/${'u'.repeat(2030)}.pdf`,
-          },
-        },
-        {
-          field: 'certificationDocumentFilename',
-          payload: {
-            certifiedAmount: 900,
-            certificationDocumentFilename: `${'f'.repeat(181)}.pdf`,
-          },
         },
       ];
       const documentCountBefore = await prisma.document.count({ where: { projectId } });
@@ -1638,33 +1640,37 @@ describe('Progress Claims API', () => {
       expect(await prisma.document.count({ where: { projectId } })).toBe(documentCountBefore);
     });
 
-    it('should reject certification document URLs that do not reference uploaded documents', async () => {
+    it('should reject legacy certification document URL payloads', async () => {
       const claim = await createSubmittedCertificationClaim();
-      const unsafeUrl = 'https://example.com/certification.pdf';
-      const beforeCount = await prisma.document.count({ where: { projectId, fileUrl: unsafeUrl } });
+      const legacyUrl = `/uploads/documents/certification-${claim.claimNumber}.pdf`;
+      const documentCountBefore = await prisma.document.count({ where: { projectId } });
 
       const res = await request(app)
         .post(`/api/projects/${projectId}/claims/${claim.id}/certify`)
         .set('Authorization', `Bearer ${authToken}`)
         .send({
           certifiedAmount: 900,
-          certificationDocumentUrl: unsafeUrl,
+          certificationDocumentUrl: legacyUrl,
+          certificationDocumentFilename: 'legacy-certification.pdf',
         });
 
       expect(res.status).toBe(400);
-      expect(res.body.error.message).toContain('uploaded document file');
-      expect(await prisma.document.count({ where: { projectId, fileUrl: unsafeUrl } })).toBe(
-        beforeCount,
+      expect(res.body.error.message).toContain('Validation failed');
+      expect(JSON.stringify(res.body.error.details)).toContain(
+        'certificationDocumentUrl is no longer supported',
       );
+      expect(JSON.stringify(res.body.error.details)).toContain(
+        'certificationDocumentFilename is no longer supported',
+      );
+      expect(await prisma.document.count({ where: { projectId } })).toBe(documentCountBefore);
       const unchangedClaim = await prisma.progressClaim.findUnique({ where: { id: claim.id } });
       expect(unchangedClaim?.status).toBe('submitted');
     });
 
-    it('should reject spoofed Supabase document URLs from untrusted origins', async () => {
+    it('should reject configured Supabase certification document URLs', async () => {
       process.env.SUPABASE_URL = 'https://siteproof.supabase.co';
       const claim = await createSubmittedCertificationClaim();
-      const spoofedUrl =
-        'https://example.com/storage/v1/object/public/documents/project/certification.pdf';
+      const publicUrl = `https://siteproof.supabase.co/storage/v1/object/public/documents/${projectId}/certification.pdf`;
 
       try {
         const res = await request(app)
@@ -1672,12 +1678,14 @@ describe('Progress Claims API', () => {
           .set('Authorization', `Bearer ${authToken}`)
           .send({
             certifiedAmount: 900,
-            certificationDocumentUrl: spoofedUrl,
+            certificationDocumentUrl: publicUrl,
           });
 
         expect(res.status).toBe(400);
-        expect(res.body.error.message).toContain('uploaded document file');
-        expect(await prisma.document.count({ where: { projectId, fileUrl: spoofedUrl } })).toBe(0);
+        expect(JSON.stringify(res.body.error.details)).toContain(
+          'certificationDocumentUrl is no longer supported',
+        );
+        expect(await prisma.document.count({ where: { projectId, fileUrl: publicUrl } })).toBe(0);
       } finally {
         restoreOptionalEnv('SUPABASE_URL', ORIGINAL_SUPABASE_URL);
       }
@@ -1723,29 +1731,32 @@ describe('Progress Claims API', () => {
       }
     });
 
-    it('should certify with a stored document URL and persist the generated document reference', async () => {
+    it('should certify with a project certification document id', async () => {
       const claim = await createSubmittedCertificationClaim();
       const fileUrl = `/uploads/documents/certification-${claim.claimNumber}.pdf`;
+      const certificationDocument = await createCertificationDocument(
+        `certification-${claim.claimNumber}.pdf`,
+        fileUrl,
+      );
 
       const res = await request(app)
         .post(`/api/projects/${projectId}/claims/${claim.id}/certify`)
         .set('Authorization', `Bearer ${authToken}`)
         .send({
           certifiedAmount: 950,
-          certificationDocumentUrl: fileUrl,
-          certificationDocumentFilename: '../../bad"name\r\n.pdf',
+          certificationDocumentId: certificationDocument.id,
         });
 
       expect(res.status).toBe(200);
       expect(res.body.claim.status).toBe('certified');
-      expect(res.body.claim.certificationDocumentId).toBeDefined();
+      expect(res.body.claim.certificationDocumentId).toBe(certificationDocument.id);
 
       const document = await prisma.document.findUnique({
         where: { id: res.body.claim.certificationDocumentId },
       });
       expect(document?.projectId).toBe(projectId);
       expect(document?.fileUrl).toBe(fileUrl);
-      expect(document?.filename).toBe('bad_name__.pdf');
+      expect(document?.filename).toBe(certificationDocument.filename);
 
       const updatedClaim = await prisma.progressClaim.findUnique({ where: { id: claim.id } });
       const certificationMetadata = JSON.parse(updatedClaim?.disputeNotes || '{}') as {
@@ -1760,7 +1771,9 @@ describe('Progress Claims API', () => {
 
     it('should only certify a submitted claim once under concurrent requests', async () => {
       const claim = await createSubmittedCertificationClaim(1000);
-      const fileUrl = `/uploads/documents/concurrent-certification-${claim.claimNumber}.pdf`;
+      const certificationDocument = await createCertificationDocument(
+        `concurrent-certification-${claim.claimNumber}.pdf`,
+      );
 
       await prisma.$executeRaw`
         CREATE OR REPLACE FUNCTION test_delay_claim_certification_update()
@@ -1788,16 +1801,14 @@ describe('Progress Claims API', () => {
             .set('Authorization', `Bearer ${authToken}`)
             .send({
               certifiedAmount: 900,
-              certificationDocumentUrl: fileUrl,
-              certificationDocumentFilename: 'concurrent-certification.pdf',
+              certificationDocumentId: certificationDocument.id,
             }),
           request(app)
             .post(`/api/projects/${projectId}/claims/${claim.id}/certify`)
             .set('Authorization', `Bearer ${authToken}`)
             .send({
               certifiedAmount: 900,
-              certificationDocumentUrl: fileUrl,
-              certificationDocumentFilename: 'concurrent-certification.pdf',
+              certificationDocumentId: certificationDocument.id,
             }),
         ]);
 
@@ -1807,7 +1818,9 @@ describe('Progress Claims API', () => {
         expect(updatedClaim?.status).toBe('certified');
         expect(Number(updatedClaim?.certifiedAmount)).toBe(900);
 
-        await expect(prisma.document.count({ where: { projectId, fileUrl } })).resolves.toBe(1);
+        await expect(
+          prisma.document.count({ where: { id: certificationDocument.id } }),
+        ).resolves.toBe(1);
         await expect(
           prisma.auditLog.count({
             where: {
@@ -1828,40 +1841,39 @@ describe('Progress Claims API', () => {
       }
     });
 
-    it('should certify with a configured Supabase document URL', async () => {
-      process.env.SUPABASE_URL = 'https://siteproof.supabase.co';
+    it('should certify with a Supabase-backed project document id', async () => {
       const claim = await createSubmittedCertificationClaim();
-      const fileUrl = `https://siteproof.supabase.co/storage/v1/object/public/documents/${projectId}/certification-${claim.claimNumber}.pdf`;
       const expectedStoredFileUrl = `supabase://documents/${projectId}/certification-${claim.claimNumber}.pdf`;
+      const certificationDocument = await createCertificationDocument(
+        'supabase-certification.pdf',
+        expectedStoredFileUrl,
+      );
 
-      try {
-        const res = await request(app)
-          .post(`/api/projects/${projectId}/claims/${claim.id}/certify`)
-          .set('Authorization', `Bearer ${authToken}`)
-          .send({
-            certifiedAmount: 975,
-            certificationDocumentUrl: fileUrl,
-            certificationDocumentFilename: 'supabase-certification.pdf',
-          });
-
-        expect(res.status).toBe(200);
-        expect(res.body.claim.status).toBe('certified');
-        expect(res.body.claim.certificationDocumentId).toBeDefined();
-
-        const document = await prisma.document.findUnique({
-          where: { id: res.body.claim.certificationDocumentId },
+      const res = await request(app)
+        .post(`/api/projects/${projectId}/claims/${claim.id}/certify`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          certifiedAmount: 975,
+          certificationDocumentId: certificationDocument.id,
         });
-        expect(document?.projectId).toBe(projectId);
-        expect(document?.fileUrl).toBe(expectedStoredFileUrl);
-        expect(document?.filename).toBe('supabase-certification.pdf');
-      } finally {
-        restoreOptionalEnv('SUPABASE_URL', ORIGINAL_SUPABASE_URL);
-      }
+
+      expect(res.status).toBe(200);
+      expect(res.body.claim.status).toBe('certified');
+      expect(res.body.claim.certificationDocumentId).toBe(certificationDocument.id);
+
+      const document = await prisma.document.findUnique({
+        where: { id: res.body.claim.certificationDocumentId },
+      });
+      expect(document?.projectId).toBe(projectId);
+      expect(document?.fileUrl).toBe(expectedStoredFileUrl);
+      expect(document?.filename).toBe('supabase-certification.pdf');
     });
 
     it('surfaces parsed certification metadata on the read-back routes after certifying', async () => {
       const claim = await createSubmittedCertificationClaim(1000);
-      const fileUrl = `/uploads/documents/readback-${claim.claimNumber}.pdf`;
+      const certificationDocument = await createCertificationDocument(
+        `readback-${claim.claimNumber}.pdf`,
+      );
 
       const certifyRes = await request(app)
         .post(`/api/projects/${projectId}/claims/${claim.id}/certify`)
@@ -1869,13 +1881,12 @@ describe('Progress Claims API', () => {
         .send({
           certifiedAmount: 900,
           variationNotes: 'Approved with a minor variation',
-          certificationDocumentUrl: fileUrl,
-          certificationDocumentFilename: 'readback-cert.pdf',
+          certificationDocumentId: certificationDocument.id,
         });
 
       expect(certifyRes.status).toBe(200);
       const certificationDocumentId = certifyRes.body.claim.certificationDocumentId as string;
-      expect(certificationDocumentId).toBeDefined();
+      expect(certificationDocumentId).toBe(certificationDocument.id);
 
       // Detail GET surfaces the parsed certification sub-object (who/notes/cert)
       // without exposing the raw disputeNotes JSON metadata.
@@ -1913,7 +1924,9 @@ describe('Progress Claims API', () => {
 
     it('keeps the certification document recoverable after a certified claim is disputed', async () => {
       const claim = await createSubmittedCertificationClaim(1000);
-      const fileUrl = `/uploads/documents/disputed-readback-${claim.claimNumber}.pdf`;
+      const certificationDocument = await createCertificationDocument(
+        `disputed-readback-${claim.claimNumber}.pdf`,
+      );
 
       const certifyRes = await request(app)
         .post(`/api/projects/${projectId}/claims/${claim.id}/certify`)
@@ -1921,13 +1934,12 @@ describe('Progress Claims API', () => {
         .send({
           certifiedAmount: 900,
           variationNotes: 'Approved before later dispute',
-          certificationDocumentUrl: fileUrl,
-          certificationDocumentFilename: 'disputed-readback-cert.pdf',
+          certificationDocumentId: certificationDocument.id,
         });
 
       expect(certifyRes.status).toBe(200);
       const certificationDocumentId = certifyRes.body.claim.certificationDocumentId as string;
-      expect(certificationDocumentId).toBeDefined();
+      expect(certificationDocumentId).toBe(certificationDocument.id);
 
       await request(app)
         .put(`/api/projects/${projectId}/claims/${claim.id}`)
