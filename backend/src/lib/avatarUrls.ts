@@ -1,11 +1,12 @@
-import crypto from 'crypto';
-
-import { buildBackendUrl } from './runtimeConfig.js';
+import {
+  buildSignedStorageFileUrl,
+  createSignedStorageAccessToken,
+  validateSignedStorageAccessToken,
+} from './signedStorageUrls.js';
 import { DOCUMENTS_BUCKET, getSupabaseStoragePath, isSupabaseConfigured } from './supabase.js';
 
 const AVATAR_STORAGE_PREFIX = 'avatars';
 const AVATAR_ACCESS_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
-const AVATAR_ACCESS_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-production';
 
 export function getAvatarStoragePrefix(userId: string): string {
   return `${AVATAR_STORAGE_PREFIX}/${userId}/`;
@@ -23,26 +24,12 @@ export function getOwnedAvatarStoragePath(
   });
 }
 
-function hashAvatarStoragePath(storagePath: string): string {
-  return crypto.createHash('sha256').update(storagePath).digest('hex');
-}
-
-function signAvatarAccessToken(userId: string, storagePath: string, expiresAtMs: number): string {
-  const pathHash = hashAvatarStoragePath(storagePath);
-  return crypto
-    .createHmac('sha256', AVATAR_ACCESS_SECRET)
-    .update(`${userId}.${pathHash}.${expiresAtMs}`)
-    .digest('hex');
-}
-
 export function createAvatarAccessToken(
   userId: string,
   storagePath: string,
   nowMs = Date.now(),
 ): string {
-  const expiresAtMs = nowMs + AVATAR_ACCESS_TOKEN_TTL_MS;
-  const signature = signAvatarAccessToken(userId, storagePath, expiresAtMs);
-  return `${expiresAtMs}.${signature}`;
+  return createSignedStorageAccessToken(userId, storagePath, AVATAR_ACCESS_TOKEN_TTL_MS, nowMs);
 }
 
 export function validateAvatarAccessToken(
@@ -51,25 +38,7 @@ export function validateAvatarAccessToken(
   storagePath: string,
   nowMs = Date.now(),
 ): boolean {
-  if (!token) return false;
-
-  const [expiresAtRaw, signature, ...extra] = token.split('.');
-  if (extra.length > 0 || !expiresAtRaw || !signature || !/^\d+$/.test(expiresAtRaw)) {
-    return false;
-  }
-
-  const expiresAtMs = Number(expiresAtRaw);
-  if (!Number.isSafeInteger(expiresAtMs) || expiresAtMs < nowMs) {
-    return false;
-  }
-
-  const expected = signAvatarAccessToken(userId, storagePath, expiresAtMs);
-  const actualBuffer = Buffer.from(signature, 'hex');
-  const expectedBuffer = Buffer.from(expected, 'hex');
-  return (
-    actualBuffer.length === expectedBuffer.length &&
-    crypto.timingSafeEqual(actualBuffer, expectedBuffer)
-  );
+  return validateSignedStorageAccessToken(token, userId, storagePath, nowMs);
 }
 
 export function buildAvatarDisplayUrl(
@@ -83,8 +52,12 @@ export function buildAvatarDisplayUrl(
     return avatarUrl;
   }
 
-  const query = new URLSearchParams({ token: createAvatarAccessToken(userId, storagePath) });
-  return buildBackendUrl(`/api/auth/avatar/file/${encodeURIComponent(userId)}?${query}`);
+  return buildSignedStorageFileUrl(
+    '/api/auth/avatar/file',
+    userId,
+    storagePath,
+    AVATAR_ACCESS_TOKEN_TTL_MS,
+  );
 }
 
 export function serializeUserAvatar<TUser extends { id: string; avatarUrl?: string | null }>(

@@ -4,12 +4,17 @@ import path from 'path';
 import multer from 'multer';
 import { AppError } from '../../lib/AppError.js';
 import { getSafeImageExtensionForMimeType } from '../../lib/imageValidation.js';
-import { buildApiUrl } from '../../lib/runtimeConfig.js';
+import { buildApiUrl, buildBackendUrl } from '../../lib/runtimeConfig.js';
 import { logError } from '../../lib/serverLogger.js';
+import {
+  buildSignedStorageFileUrl,
+  createSignedStorageAccessToken,
+  validateSignedStorageAccessToken,
+} from '../../lib/signedStorageUrls.js';
 import {
   DOCUMENTS_BUCKET,
   getSupabaseClient,
-  getSupabasePublicUrl,
+  getSupabaseStorageReference,
   getSupabaseStoragePath,
   isSupabaseConfigured,
 } from '../../lib/supabase.js';
@@ -17,7 +22,15 @@ import { ensureUploadSubdirectory, getUploadSubdirectoryPath } from '../../lib/u
 import { COMPANY_LOGO_PATH_PREFIX } from './validation.js';
 
 const COMPANY_LOGO_STORAGE_PREFIX = 'company-logos';
+const COMPANY_LOGO_ACCESS_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 const companyLogoUploadDir = getUploadSubdirectoryPath('company-logos');
+const COMPANY_LOGO_MIME_BY_EXTENSION = new Map([
+  ['.jpg', 'image/jpeg'],
+  ['.jpeg', 'image/jpeg'],
+  ['.png', 'image/png'],
+  ['.gif', 'image/gif'],
+  ['.webp', 'image/webp'],
+]);
 
 // Company logo uploads use Supabase Storage (memory-buffered) in production and
 // fall back to the local filesystem when Supabase is not configured. Path
@@ -75,14 +88,14 @@ export function buildCompanyLogoStorageFilename(
   return `company-logo-${companyId}-${crypto.randomUUID()}${ext}`;
 }
 
-function getCompanyLogoStoragePrefix(companyId: string): string {
+export function getCompanyLogoStoragePrefix(companyId: string): string {
   return `${COMPANY_LOGO_STORAGE_PREFIX}/${companyId}/`;
 }
 
 export async function uploadCompanyLogoToSupabase(
   file: Express.Multer.File,
   companyId: string,
-): Promise<{ url: string; storagePath: string }> {
+): Promise<{ storageReference: string; storagePath: string }> {
   const filename = buildCompanyLogoStorageFilename(companyId, file.mimetype);
   if (!filename) {
     throw AppError.badRequest('Invalid file type');
@@ -102,16 +115,96 @@ export async function uploadCompanyLogoToSupabase(
   }
 
   return {
-    url: getSupabasePublicUrl(DOCUMENTS_BUCKET, storagePath),
+    storageReference: getSupabaseStorageReference(DOCUMENTS_BUCKET, storagePath),
     storagePath,
   };
 }
 
-function getOwnedCompanyLogoStoragePath(fileUrl: string, companyId: string): string | null {
+export function getOwnedCompanyLogoStoragePath(
+  fileUrl: string | null | undefined,
+  companyId: string,
+): string | null {
+  if (!fileUrl) return null;
+
   return getSupabaseStoragePath(fileUrl, {
     bucket: DOCUMENTS_BUCKET,
     expectedPrefix: getCompanyLogoStoragePrefix(companyId),
   });
+}
+
+export function createCompanyLogoAccessToken(
+  companyId: string,
+  storagePath: string,
+  nowMs = Date.now(),
+): string {
+  return createSignedStorageAccessToken(
+    companyId,
+    storagePath,
+    COMPANY_LOGO_ACCESS_TOKEN_TTL_MS,
+    nowMs,
+  );
+}
+
+export function validateCompanyLogoAccessToken(
+  token: string | undefined,
+  companyId: string,
+  storagePath: string,
+  nowMs = Date.now(),
+): boolean {
+  return validateSignedStorageAccessToken(token, companyId, storagePath, nowMs);
+}
+
+export function buildCompanyLogoDisplayUrl(
+  companyId: string,
+  logoUrl: string | null | undefined,
+): string | null {
+  if (!logoUrl) return null;
+
+  const storagePath = getOwnedCompanyLogoStoragePath(logoUrl, companyId);
+  if (!storagePath || !isSupabaseConfigured()) {
+    return logoUrl;
+  }
+
+  return buildSignedStorageFileUrl(
+    '/api/company/logo/file',
+    companyId,
+    storagePath,
+    COMPANY_LOGO_ACCESS_TOKEN_TTL_MS,
+  );
+}
+
+export function getCompanyLogoDisplayUrlCompanyId(logoUrl: string): string | null {
+  let parsedLogoUrl: URL;
+  let parsedBackendUrl: URL;
+  try {
+    parsedLogoUrl = new URL(logoUrl);
+    parsedBackendUrl = new URL(buildBackendUrl('/'));
+  } catch {
+    return null;
+  }
+
+  const pathPrefix = '/api/company/logo/file/';
+  if (
+    parsedLogoUrl.origin !== parsedBackendUrl.origin ||
+    !parsedLogoUrl.pathname.startsWith(pathPrefix)
+  ) {
+    return null;
+  }
+
+  const encodedCompanyId = parsedLogoUrl.pathname.slice(pathPrefix.length);
+  if (!encodedCompanyId || encodedCompanyId.includes('/')) {
+    return null;
+  }
+
+  try {
+    return decodeURIComponent(encodedCompanyId);
+  } catch {
+    return null;
+  }
+}
+
+export function getCompanyLogoContentType(storagePath: string): string {
+  return COMPANY_LOGO_MIME_BY_EXTENSION.get(path.extname(storagePath).toLowerCase()) || 'image/png';
 }
 
 export function assertCompanyLogoUrlOwnedByCompany(
@@ -124,6 +217,18 @@ export function assertCompanyLogoUrlOwnedByCompany(
   if (anyDocumentsStoragePath !== null && !getOwnedCompanyLogoStoragePath(logoUrl, companyId)) {
     throw AppError.badRequest('Company logo URL must reference an uploaded company logo');
   }
+}
+
+export function toCompanyLogoStorageValue(
+  logoUrl: string | null,
+  companyId: string,
+): string | null {
+  if (!logoUrl || !isSupabaseConfigured()) return logoUrl;
+
+  const storagePath = getOwnedCompanyLogoStoragePath(logoUrl, companyId);
+  if (!storagePath) return logoUrl;
+
+  return getSupabaseStorageReference(DOCUMENTS_BUCKET, storagePath);
 }
 
 async function deleteCompanyLogoFromSupabase(fileUrl: string, companyId: string): Promise<void> {

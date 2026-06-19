@@ -310,6 +310,7 @@ describe('route authentication coverage', () => {
       path.join(routesDir, 'claims/postEvidenceWorkflowRoutes.ts'),
       'utf8',
     );
+    const companySource = await readFile(path.join(routesDir, 'company.ts'), 'utf8');
     const holdpointsSource = await readFile(path.join(routesDir, 'holdpoints.ts'), 'utf8');
     const mfaSource = await readFile(path.join(routesDir, 'mfa.ts'), 'utf8');
     const subcontractorsSource = await readFile(path.join(routesDir, 'subcontractors.ts'), 'utf8');
@@ -544,6 +545,15 @@ describe('route authentication coverage', () => {
     expect(profileRoutesSource).toContain('AuditAction.USER_PROFILE_UPDATED');
     expect(profileRoutesSource).toContain('AuditAction.USER_AVATAR_UPDATED');
     expect(profileRoutesSource).toContain('AuditAction.USER_AVATAR_REMOVED');
+    expect(publicRouteDescriptorsBeforeRouteWideAuth(companySource)).toEqual([
+      'GET /logo/file/:companyId',
+    ]);
+    expect(routeSourceForDescriptor(companySource, 'GET /logo/file/:companyId')).toContain(
+      'validateCompanyLogoAccessToken',
+    );
+    expect(companySource.indexOf("'/logo/file/:companyId'")).toBeLessThan(
+      companySource.indexOf('companyRouter.use(requireAuth)'),
+    );
     expect(routeSourceForDescriptor(sessionRoutesSource, 'POST /change-password')).toContain(
       'verifyToken(token)',
     );

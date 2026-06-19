@@ -119,9 +119,11 @@ describe('company response helpers', () => {
   });
 
   it('preserves logo upload and settings update responses', () => {
-    expect(buildCompanyLogoUploadedResponse('/uploads/logo.png', company)).toEqual({
+    const companyWithLogo = { ...company, logoUrl: '/uploads/logo.png' };
+
+    expect(buildCompanyLogoUploadedResponse('/uploads/logo.png', companyWithLogo)).toEqual({
       logoUrl: '/uploads/logo.png',
-      company,
+      company: companyWithLogo,
     });
 
     expect(buildCompanyUpdatedResponse(company)).toEqual({
