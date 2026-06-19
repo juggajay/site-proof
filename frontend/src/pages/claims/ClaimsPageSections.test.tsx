@@ -157,6 +157,37 @@ const READY_LOT_READINESS: ProjectClaimReadiness = {
   ],
 };
 
+describe('ClaimsTable payment schedule wording', () => {
+  it('labels the response deadline as payment schedule due, not certification due', () => {
+    render(
+      <ClaimsTable
+        claims={[
+          {
+            ...SEEDED_CLAIM,
+            status: 'submitted',
+            submittedAt: '2026-06-01T00:00:00.000Z',
+          },
+        ]}
+        loadingCompleteness={false}
+        showCompletenessModal={null}
+        generatingEvidence={null}
+        onCreateClaim={vi.fn()}
+        onSubmitClaim={vi.fn()}
+        onDisputeClaim={vi.fn()}
+        onCertifyClaim={vi.fn()}
+        onRecordPayment={vi.fn()}
+        onCompletenessCheck={vi.fn()}
+        onEvidencePackage={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByRole('columnheader', { name: 'Indicative Payment Schedule Due' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: 'Indicative Certification Due' })).toBeNull();
+  });
+});
+
 function renderClaimsPage(queryClient?: QueryClient) {
   return renderWithProviders(
     <Routes>

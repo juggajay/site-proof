@@ -41,7 +41,7 @@ export function addBusinessDays(startDate: Date, days: number, state?: string): 
 }
 
 /**
- * Calculate certification due date based on SOPA response timeframes.
+ * Calculate payment-schedule response due date based on SOPA response timeframes.
  * `state` is the project's jurisdiction (e.g. 'WA'). A missing/undefined state
  * defaults to NSW, but an *unrecognised* jurisdiction (e.g. 'NT', which has no
  * East-Coast payment-schedule mechanics) returns null rather than fabricating a
@@ -70,9 +70,9 @@ export function calculatePaymentDueDate(submittedAt: string, state: string = 'NS
   return addBusinessDays(submissionDate, timeframe.paymentTime, state).toISOString();
 }
 
-/** Get certification due status - only for submitted claims awaiting certification */
+/** Get payment-schedule response due status - only for submitted claims awaiting response */
 export function getCertificationDueStatus(claim: Claim): CertificationDueStatus | null {
-  // Only show certification due for submitted claims (not yet certified/paid)
+  // Only show payment-schedule due for submitted claims (not yet certified/paid)
   if (!claim.submittedAt || claim.status !== 'submitted') {
     return null;
   }
@@ -88,19 +88,19 @@ export function getCertificationDueStatus(claim: Claim): CertificationDueStatus 
 
   if (daysUntilDue < 0) {
     return {
-      text: `Certification overdue by ${Math.abs(daysUntilDue)} days`,
+      text: `Payment schedule overdue by ${Math.abs(daysUntilDue)} days`,
       className: 'text-destructive font-semibold',
       isOverdue: true,
     };
   } else if (daysUntilDue <= 3) {
     return {
-      text: `Certification due in ${daysUntilDue} days`,
+      text: `Payment schedule due in ${daysUntilDue} days`,
       className: 'text-warning',
       isOverdue: false,
     };
   } else {
     return {
-      text: `Cert due ${due.toLocaleDateString('en-AU')}`,
+      text: `Schedule due ${due.toLocaleDateString('en-AU')}`,
       className: 'text-muted-foreground',
       isOverdue: false,
     };

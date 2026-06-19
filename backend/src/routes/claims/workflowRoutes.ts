@@ -22,6 +22,7 @@ import {
   assertCertifiedAmountWithinClaimTotal,
   assertClaimIncrementWithinRemaining,
   assertGenericClaimStatusTransition,
+  assertReducedCertifiedAmountHasVariationNotes,
   createClaimSchema,
   getRequestedClaimLots,
   getRequestedClaimPercentage,
@@ -370,6 +371,11 @@ export function createClaimWorkflowRouter({
 
         if (status === 'certified' && certifiedAmount !== undefined) {
           assertCertifiedAmountWithinClaimTotal(certifiedAmount, claim.totalClaimedAmount);
+          assertReducedCertifiedAmountHasVariationNotes(
+            certifiedAmount,
+            claim.totalClaimedAmount,
+            disputeNotes,
+          );
         }
 
         if (status === 'paid' && paidAmount !== undefined) {
@@ -418,6 +424,13 @@ export function createClaimWorkflowRouter({
           if (status === 'certified' && certifiedAmount !== undefined) {
             updateData.certifiedAmount = certifiedAmount;
             updateData.certifiedAt = new Date();
+            if (disputeNotes?.trim()) {
+              updateData.disputeNotes = JSON.stringify({
+                variationNotes: disputeNotes.trim(),
+                certificationDocumentId: null,
+                certifiedBy: userId,
+              });
+            }
           }
           if (status === 'paid' && paidAmount !== undefined) {
             updateData.paidAmount = paidAmount;

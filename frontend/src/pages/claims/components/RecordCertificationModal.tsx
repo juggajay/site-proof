@@ -44,7 +44,12 @@ export const RecordCertificationModal = React.memo(function RecordCertificationM
     () => parseOptionalNonNegativeDecimalInput(certifiedAmount),
     [certifiedAmount],
   );
-  const variationNotesTooLong = variationNotes.trim().length > CLAIM_VARIATION_NOTES_MAX_LENGTH;
+  const trimmedVariationNotes = variationNotes.trim();
+  const variationNotesTooLong = trimmedVariationNotes.length > CLAIM_VARIATION_NOTES_MAX_LENGTH;
+  const hasReducedCertifiedAmount =
+    parsedCertifiedAmount !== null && claim.totalClaimedAmount - parsedCertifiedAmount > 0.000001;
+  const missingRequiredVariationNotes =
+    hasReducedCertifiedAmount && trimmedVariationNotes.length === 0;
   const hasAmountError =
     parsedCertifiedAmount === null ||
     parsedCertifiedAmount < 0 ||
@@ -55,6 +60,11 @@ export const RecordCertificationModal = React.memo(function RecordCertificationM
 
     if (hasAmountError || parsedCertifiedAmount === null) {
       setError(`Enter a certified amount from $0 to ${formatCurrency(claim.totalClaimedAmount)}.`);
+      return;
+    }
+
+    if (missingRequiredVariationNotes) {
+      setError('Add notes explaining why the certified amount is less than the claimed amount.');
       return;
     }
 
@@ -103,7 +113,7 @@ export const RecordCertificationModal = React.memo(function RecordCertificationM
       await onCertify(claim.id, {
         certifiedAmount: parsedCertifiedAmount,
         certificationDate: certificationDate || undefined,
-        variationNotes: variationNotes.trim() || undefined,
+        variationNotes: trimmedVariationNotes || undefined,
         certificationDocumentId,
       });
     } finally {
@@ -169,7 +179,10 @@ export const RecordCertificationModal = React.memo(function RecordCertificationM
           </div>
 
           <div>
-            <Label>Notes / variations from the certificate</Label>
+            <Label>
+              Notes / variations from the payment schedule
+              {hasReducedCertifiedAmount && <span className="text-destructive"> *</span>}
+            </Label>
             <Textarea
               value={variationNotes}
               aria-label="Variation Notes"
@@ -180,10 +193,17 @@ export const RecordCertificationModal = React.memo(function RecordCertificationM
               className="min-h-[96px] resize-none"
               maxLength={CLAIM_VARIATION_NOTES_MAX_LENGTH}
             />
-            <p className="mt-1 text-right text-xs text-muted-foreground">
-              {variationNotes.trim().length.toLocaleString()}/
-              {CLAIM_VARIATION_NOTES_MAX_LENGTH.toLocaleString()}
-            </p>
+            <div className="mt-1 flex items-start justify-between gap-3 text-xs text-muted-foreground">
+              <p>
+                {hasReducedCertifiedAmount
+                  ? 'Required when the certified amount is less than claimed.'
+                  : 'Optional unless the external schedule reduces the amount.'}
+              </p>
+              <p className="shrink-0 text-right">
+                {trimmedVariationNotes.length.toLocaleString()}/
+                {CLAIM_VARIATION_NOTES_MAX_LENGTH.toLocaleString()}
+              </p>
+            </div>
           </div>
 
           <div>
@@ -228,9 +248,11 @@ export const RecordCertificationModal = React.memo(function RecordCertificationM
         </Button>
         <Button
           onClick={handleCertify}
-          disabled={certifying || hasAmountError || variationNotesTooLong}
+          disabled={
+            certifying || hasAmountError || variationNotesTooLong || missingRequiredVariationNotes
+          }
         >
-          {certifying ? 'Recording...' : 'Record Certification'}
+          {certifying ? 'Recording...' : 'Record Payment Schedule'}
         </Button>
       </ModalFooter>
     </Modal>

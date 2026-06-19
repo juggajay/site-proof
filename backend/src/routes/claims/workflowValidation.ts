@@ -6,7 +6,7 @@ const CLAIM_DATE_INPUT_MAX_LENGTH = 64;
 const CLAIM_ID_MAX_LENGTH = 120;
 const CLAIM_PAYMENT_REFERENCE_MAX_LENGTH = 160;
 const CLAIM_DISPUTE_NOTES_MAX_LENGTH = 5000;
-const CLAIM_VARIATION_NOTES_MAX_LENGTH = 2000;
+export const CLAIM_VARIATION_NOTES_MAX_LENGTH = 2000;
 const CLAIM_PAYMENT_NOTES_MAX_LENGTH = 3000;
 export const MAX_CERTIFICATION_DOCUMENT_ID_LENGTH = 120;
 export const CLAIM_LOT_PERCENTAGE_REQUIRED_MESSAGE =
@@ -309,6 +309,19 @@ export function assertCertifiedAmountWithinClaimTotal(
   const claimedTotal = getClaimAmountValue(totalClaimedAmount);
   if (certifiedAmount - claimedTotal > CLAIM_AMOUNT_EPSILON) {
     throw AppError.badRequest('Certified amount cannot exceed the claimed amount');
+  }
+}
+
+export function assertReducedCertifiedAmountHasVariationNotes(
+  certifiedAmount: number,
+  totalClaimedAmount: unknown,
+  variationNotes: string | undefined,
+) {
+  const claimedTotal = getClaimAmountValue(totalClaimedAmount);
+  if (claimedTotal - certifiedAmount > CLAIM_AMOUNT_EPSILON && !variationNotes?.trim()) {
+    throw AppError.badRequest(
+      'Variation notes are required when the certified amount is less than the claimed amount',
+    );
   }
 }
 

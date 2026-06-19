@@ -183,8 +183,8 @@ describe('due-date status helpers thread the project state', () => {
   }
 
   function overdueDays(text: string | undefined): number {
-    // Payment uses "Overdue by N days"; certification uses
-    // "Certification overdue by N days".
+    // Payment uses "Overdue by N days"; payment-schedule response uses
+    // "Payment schedule overdue by N days".
     const match = text?.match(/overdue by (\d+) days/i);
     return match ? Number(match[1]) : NaN;
   }
@@ -209,6 +209,7 @@ describe('due-date status helpers thread the project state', () => {
     const nswCert = getCertificationDueStatus(makeClaim({ projectState: 'NSW' }));
     const waCert = getCertificationDueStatus(makeClaim({ projectState: 'WA' }));
     // NSW certifies in 10 business days, WA in 15 -> NSW more overdue.
+    expect(nswCert?.text).toMatch(/^Payment schedule overdue by \d+ days$/);
     expect(overdueDays(nswCert?.text)).toBeGreaterThan(overdueDays(waCert?.text));
   });
 });

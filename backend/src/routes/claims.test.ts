@@ -1231,6 +1231,26 @@ describe('Progress Claims API', () => {
       expect(unchangedClaim?.certifiedAt).toBeNull();
     });
 
+    it('should reject reduced generic certification without variation notes', async () => {
+      const claim = await createSubmittedCertificationClaim(1000);
+
+      const res = await request(app)
+        .put(`/api/projects/${projectId}/claims/${claim.id}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          status: 'certified',
+          certifiedAmount: 900,
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toContain('Variation notes are required');
+
+      const unchangedClaim = await prisma.progressClaim.findUnique({ where: { id: claim.id } });
+      expect(unchangedClaim?.status).toBe('submitted');
+      expect(unchangedClaim?.certifiedAmount).toBeNull();
+      expect(unchangedClaim?.disputeNotes).toBeNull();
+    });
+
     it('should certify a submitted claim', async () => {
       const res = await request(app)
         .put(`/api/projects/${projectId}/claims/${claimId}`)
@@ -1238,12 +1258,16 @@ describe('Progress Claims API', () => {
         .send({
           status: 'certified',
           certifiedAmount: 4800,
+          disputeNotes: 'Principal certified a reduced amount',
         });
 
       expect(res.status).toBe(200);
       expect(res.body.claim.status).toBe('certified');
       // Prisma returns Decimal as string
       expect(Number(res.body.claim.certifiedAmount)).toBe(4800);
+      expect(res.body.claim.certification.variationNotes).toBe(
+        'Principal certified a reduced amount',
+      );
     });
 
     it('should not re-stamp certified claims when generic update is retried', async () => {
@@ -1609,6 +1633,30 @@ describe('Progress Claims API', () => {
       expect(await prisma.document.count({ where: { id: certificationDocument.id } })).toBe(1);
     });
 
+    it('should reject reduced certification without variation notes', async () => {
+      const claim = await createSubmittedCertificationClaim(1000);
+      const certificationDocument = await createCertificationDocument(
+        `reduced-without-notes-${claim.claimNumber}.pdf`,
+      );
+
+      const res = await request(app)
+        .post(`/api/projects/${projectId}/claims/${claim.id}/certify`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          certifiedAmount: 900,
+          certificationDocumentId: certificationDocument.id,
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toContain('Variation notes are required');
+
+      const unchangedClaim = await prisma.progressClaim.findUnique({ where: { id: claim.id } });
+      expect(unchangedClaim?.status).toBe('submitted');
+      expect(unchangedClaim?.certifiedAmount).toBeNull();
+      expect(unchangedClaim?.disputeNotes).toBeNull();
+      expect(await prisma.document.count({ where: { id: certificationDocument.id } })).toBe(1);
+    });
+
     it('should reject oversized certification text without mutating the claim', async () => {
       const claim = await createSubmittedCertificationClaim();
       const cases = [
@@ -1719,7 +1767,7 @@ describe('Progress Claims API', () => {
           .post(`/api/projects/${projectId}/claims/${claim.id}/certify`)
           .set('Authorization', `Bearer ${authToken}`)
           .send({
-            certifiedAmount: 900,
+            certifiedAmount: 1000,
             certificationDocumentId: otherDocument.id,
           });
 
@@ -1743,7 +1791,7 @@ describe('Progress Claims API', () => {
         .post(`/api/projects/${projectId}/claims/${claim.id}/certify`)
         .set('Authorization', `Bearer ${authToken}`)
         .send({
-          certifiedAmount: 950,
+          certifiedAmount: 1000,
           certificationDocumentId: certificationDocument.id,
         });
 
@@ -1801,6 +1849,7 @@ describe('Progress Claims API', () => {
             .set('Authorization', `Bearer ${authToken}`)
             .send({
               certifiedAmount: 900,
+              variationNotes: 'Concurrent certification reduced by schedule',
               certificationDocumentId: certificationDocument.id,
             }),
           request(app)
@@ -1808,6 +1857,7 @@ describe('Progress Claims API', () => {
             .set('Authorization', `Bearer ${authToken}`)
             .send({
               certifiedAmount: 900,
+              variationNotes: 'Concurrent certification reduced by schedule',
               certificationDocumentId: certificationDocument.id,
             }),
         ]);
@@ -1853,7 +1903,7 @@ describe('Progress Claims API', () => {
         .post(`/api/projects/${projectId}/claims/${claim.id}/certify`)
         .set('Authorization', `Bearer ${authToken}`)
         .send({
-          certifiedAmount: 975,
+          certifiedAmount: 1000,
           certificationDocumentId: certificationDocument.id,
         });
 
