@@ -9,15 +9,18 @@ vi.mock('../../lib/supabase.js', async (importOriginal) => {
   return {
     ...actual,
     isSupabaseConfigured: vi.fn(() => false),
+    getSupabaseClient: vi.fn(),
   };
 });
 
+import * as supabaseLib from '../../lib/supabase.js';
 import { isSupabaseConfigured } from '../../lib/supabase.js';
 import {
   getOwnedCertificateStoragePath,
   isOwnedSupabaseCertificateUrl,
   sanitizeUploadFilename,
   shouldUploadCertificateToSupabase,
+  uploadCertificateToSupabase,
 } from './certificateStorage.js';
 
 // A non-secret, fake Supabase origin. The vitest config blanks SUPABASE_URL for
@@ -34,9 +37,12 @@ function setSupabaseConfigured(value: boolean): void {
   vi.mocked(isSupabaseConfigured).mockReturnValue(value);
 }
 
+const mockGetSupabaseClient = vi.mocked(supabaseLib.getSupabaseClient);
+
 beforeEach(() => {
   vi.stubEnv('SUPABASE_URL', TEST_SUPABASE_URL);
   setSupabaseConfigured(false);
+  mockGetSupabaseClient.mockReset();
 });
 
 afterEach(() => {
@@ -168,5 +174,35 @@ describe('shouldUploadCertificateToSupabase', () => {
   it('is false when Supabase is not configured even if the file has a buffer', () => {
     setSupabaseConfigured(false);
     expect(shouldUploadCertificateToSupabase(fileWithBuffer)).toBe(false);
+  });
+});
+
+describe('uploadCertificateToSupabase', () => {
+  it('returns a private storage reference for new Supabase certificate uploads', async () => {
+    const upload = vi.fn().mockResolvedValue({ data: { path: 'unused' }, error: null });
+    const from = vi.fn(() => ({ upload }));
+    const buffer = Buffer.from('certificate bytes');
+
+    mockGetSupabaseClient.mockReturnValue({
+      storage: { from },
+    } as unknown as ReturnType<typeof supabaseLib.getSupabaseClient>);
+
+    const result = await uploadCertificateToSupabase(
+      {
+        originalname: 'lab result.pdf',
+        mimetype: 'application/pdf',
+        buffer,
+      } as Express.Multer.File,
+      PROJECT_ID,
+    );
+
+    expect(result.storagePath).toMatch(new RegExp(`^certificates/${PROJECT_ID}/cert-.+\\.pdf$`));
+    const encodedStoragePath = result.storagePath.split('/').map(encodeURIComponent).join('/');
+    expect(result.url).toBe(`supabase://documents/${encodedStoragePath}`);
+    expect(from).toHaveBeenCalledWith('documents');
+    expect(upload).toHaveBeenCalledWith(result.storagePath, buffer, {
+      contentType: 'application/pdf',
+      upsert: false,
+    });
   });
 });

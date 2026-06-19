@@ -8,7 +8,7 @@ import { ensureUploadSubdirectory } from '../../lib/uploadPaths.js';
 import {
   DOCUMENTS_BUCKET,
   getSupabaseClient,
-  getSupabasePublicUrl,
+  getSupabaseStorageReference,
   getSupabaseStoragePath,
   isSupabaseConfigured,
 } from '../../lib/supabase.js';
@@ -89,7 +89,7 @@ export async function uploadCertificateToSupabase(
   }
 
   return {
-    url: getSupabasePublicUrl(DOCUMENTS_BUCKET, storagePath),
+    url: getSupabaseStorageReference(DOCUMENTS_BUCKET, storagePath),
     storagePath,
   };
 }
