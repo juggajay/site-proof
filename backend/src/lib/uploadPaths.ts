@@ -1,7 +1,11 @@
 import path from 'path';
 import fs from 'fs';
 import { AppError } from './AppError.js';
-import { DOCUMENTS_BUCKET, getSupabaseStoragePath } from './supabase.js';
+import {
+  DOCUMENTS_BUCKET,
+  getSupabaseStoragePath,
+  getSupabaseStorageReference,
+} from './supabase.js';
 
 const UPLOADS_DIR = 'uploads';
 
@@ -83,4 +87,18 @@ export function isStoredDocumentReference(fileUrl: string, projectId?: string): 
     isStoredDocumentUploadPath(fileUrl) ||
     getSupabaseStoragePath(fileUrl, { bucket: DOCUMENTS_BUCKET, expectedPrefix }) !== null
   );
+}
+
+export function normalizeStoredDocumentReference(fileUrl: string, projectId?: string): string {
+  const expectedPrefix = projectId ? `${projectId}/` : undefined;
+  const storagePath = getSupabaseStoragePath(fileUrl, {
+    bucket: DOCUMENTS_BUCKET,
+    expectedPrefix,
+  });
+
+  if (storagePath) {
+    return getSupabaseStorageReference(DOCUMENTS_BUCKET, storagePath);
+  }
+
+  return fileUrl;
 }

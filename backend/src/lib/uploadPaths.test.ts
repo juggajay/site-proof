@@ -7,6 +7,7 @@ import {
   ensureUploadSubdirectoryAsync,
   isStoredDocumentReference,
   isStoredDocumentUploadPath,
+  normalizeStoredDocumentReference,
   resolveUploadPath,
 } from './uploadPaths.js';
 
@@ -73,5 +74,34 @@ describe('uploadPaths', () => {
     expect(isStoredDocumentReference('supabase://comments/project-a/file.pdf')).toBe(false);
     expect(isStoredDocumentReference('supabase://documents/project-a/../file.pdf')).toBe(false);
     expect(isStoredDocumentReference('https://example.com/file.pdf')).toBe(false);
+  });
+
+  it('normalizes Supabase public document URLs to storage references', () => {
+    const previousSupabaseUrl = process.env.SUPABASE_URL;
+    process.env.SUPABASE_URL = 'https://siteproof.supabase.co';
+
+    try {
+      expect(
+        normalizeStoredDocumentReference(
+          'https://siteproof.supabase.co/storage/v1/object/public/documents/project-a/file name.pdf',
+          'project-a',
+        ),
+      ).toBe('supabase://documents/project-a/file%20name.pdf');
+      expect(normalizeStoredDocumentReference('/uploads/documents/file.pdf')).toBe(
+        '/uploads/documents/file.pdf',
+      );
+      expect(
+        normalizeStoredDocumentReference(
+          'https://siteproof.supabase.co/storage/v1/object/public/documents/project-b/file.pdf',
+          'project-a',
+        ),
+      ).toBe('https://siteproof.supabase.co/storage/v1/object/public/documents/project-b/file.pdf');
+    } finally {
+      if (previousSupabaseUrl === undefined) {
+        delete process.env.SUPABASE_URL;
+      } else {
+        process.env.SUPABASE_URL = previousSupabaseUrl;
+      }
+    }
   });
 });

@@ -3,7 +3,10 @@ import { z } from 'zod';
 
 import { AppError } from '../../lib/AppError.js';
 import { DOCUMENTS_BUCKET, getSupabaseStoragePath } from '../../lib/supabase.js';
-import { isStoredDocumentUploadPath } from '../../lib/uploadPaths.js';
+import {
+  isStoredDocumentUploadPath,
+  normalizeStoredDocumentReference,
+} from '../../lib/uploadPaths.js';
 
 const CLAIM_DATE_INPUT_MAX_LENGTH = 64;
 const CLAIM_ID_MAX_LENGTH = 120;
@@ -370,7 +373,7 @@ export function normalizeCertificationDocumentUrl(value: string | undefined): st
     throw AppError.badRequest('certificationDocumentUrl must reference an uploaded document file');
   }
 
-  return normalized;
+  return normalizeStoredDocumentReference(normalized);
 }
 
 export function sanitizeCertificationDocumentFilename(

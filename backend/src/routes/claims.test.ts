@@ -1832,6 +1832,7 @@ describe('Progress Claims API', () => {
       process.env.SUPABASE_URL = 'https://siteproof.supabase.co';
       const claim = await createSubmittedCertificationClaim();
       const fileUrl = `https://siteproof.supabase.co/storage/v1/object/public/documents/${projectId}/certification-${claim.claimNumber}.pdf`;
+      const expectedStoredFileUrl = `supabase://documents/${projectId}/certification-${claim.claimNumber}.pdf`;
 
       try {
         const res = await request(app)
@@ -1851,7 +1852,7 @@ describe('Progress Claims API', () => {
           where: { id: res.body.claim.certificationDocumentId },
         });
         expect(document?.projectId).toBe(projectId);
-        expect(document?.fileUrl).toBe(fileUrl);
+        expect(document?.fileUrl).toBe(expectedStoredFileUrl);
         expect(document?.filename).toBe('supabase-certification.pdf');
       } finally {
         restoreOptionalEnv('SUPABASE_URL', ORIGINAL_SUPABASE_URL);
