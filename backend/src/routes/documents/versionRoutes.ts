@@ -4,10 +4,7 @@ import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { isSupabaseConfigured } from '../../lib/supabase.js';
 import { assertUploadedFileMatchesDeclaredType } from '../../lib/imageValidation.js';
-import {
-  buildDocumentVersionsResponse,
-  normalizeDocumentFileUrlForResponse,
-} from '../documentResponses.js';
+import { buildDocumentResponse, buildDocumentVersionsResponse } from '../documentResponses.js';
 
 type AuthUser = NonNullable<Express.Request['user']>;
 
@@ -200,7 +197,7 @@ export function createDocumentVersionRouter({
         });
 
         documentCreated = true;
-        res.status(201).json(normalizeDocumentFileUrlForResponse(newDocument));
+        res.status(201).json(buildDocumentResponse(newDocument));
       } catch (error) {
         if (!documentCreated) {
           await cleanupStoredDocumentUpload(fileUrl, uploadedFile, originalDocument.projectId);

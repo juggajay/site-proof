@@ -53,6 +53,15 @@ export function normalizeDocumentFileUrlForResponse<T>(document: T): T {
   } as T;
 }
 
+export function buildDocumentResponse<T>(document: T): T {
+  if (!document || typeof document !== 'object' || Array.isArray(document)) {
+    return document;
+  }
+
+  const { fileUrl: _fileUrl, ...documentWithoutFileUrl } = document as DocumentResponseRecord;
+  return documentWithoutFileUrl as T;
+}
+
 export function buildDocumentsListResponse(
   documents: unknown[],
   total: number,
@@ -60,7 +69,7 @@ export function buildDocumentsListResponse(
   pagination: unknown,
 ) {
   return {
-    documents: documents.map(normalizeDocumentFileUrlForResponse),
+    documents: documents.map(buildDocumentResponse),
     total,
     categories,
     pagination,
@@ -71,7 +80,7 @@ export function buildDocumentVersionsResponse(documentId: string, versions: unkn
   return {
     documentId,
     totalVersions: versions.length,
-    versions: versions.map(normalizeDocumentFileUrlForResponse),
+    versions: versions.map(buildDocumentResponse),
   };
 }
 
@@ -155,7 +164,7 @@ export function buildSavedDocumentClassificationResponse<T extends object>(
   finalClassification: string,
 ) {
   return {
-    ...updatedDocument,
+    ...buildDocumentResponse(updatedDocument),
     classificationLabels: finalClassification.split(', ').filter(Boolean),
   };
 }
