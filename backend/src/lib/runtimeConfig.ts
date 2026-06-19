@@ -397,6 +397,9 @@ export function validateRuntimeConfig(): void {
   if (isExplicitlyEnabled(process.env.ALLOW_TEST_AUTH_ENDPOINTS)) {
     throw new Error('FATAL: ALLOW_TEST_AUTH_ENDPOINTS=true is not allowed in production');
   }
+  if (isExplicitlyEnabled(process.env.ALLOW_PLAINTEXT_SECRET_STORAGE)) {
+    throw new Error('FATAL: ALLOW_PLAINTEXT_SECRET_STORAGE=true is not allowed in production');
+  }
   assertProductionTrustProxyConfig();
   assertOptionalPositiveInteger('API_RATE_LIMIT_MAX');
   assertOptionalPositiveInteger('AUTH_RATE_LIMIT_MAX');
