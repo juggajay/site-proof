@@ -488,7 +488,29 @@ describe('diary dispatch', () => {
     expect(markDiarySyncedMock).toHaveBeenCalledWith('d-2');
   });
 
-  it('diary_submit: swallows a "Diary already submitted" error as success', async () => {
+  it('diary_submit: verified submitted server diary retry clears as synced', async () => {
+    getPendingSyncItemsMock.mockResolvedValue([diaryItem('diary_submit', { diaryId: 'd-2b' })]);
+    diariesGetMock.mockResolvedValue({
+      id: 'd-2b',
+      projectId: 'project-1',
+      date: '2026-06-18',
+      status: 'submitted',
+    });
+    syncOfflineDiarySnapshotMock.mockRejectedValue(new Error('Cannot modify submitted diary'));
+    authFetchMock.mockResolvedValue(okJson({ id: 'server-d-2b', status: 'submitted' }));
+
+    const { onSyncComplete } = await runSync();
+
+    expect(authFetchMock).toHaveBeenCalledWith('/api/diary/project-1/2026-06-18?missing=null');
+    expect(removeSyncQueueItemMock).toHaveBeenCalledWith(21);
+    expect(markDiarySyncedMock).toHaveBeenCalledWith('d-2b');
+    expect(markSyncItemTerminalErrorMock).not.toHaveBeenCalled();
+    expect(markSyncItemErrorMock).not.toHaveBeenCalled();
+    expect(markDiarySyncErrorMock).not.toHaveBeenCalled();
+    expect(onSyncComplete).toHaveBeenCalledWith({ syncedCount: 1, failedCount: 0 });
+  });
+
+  it('diary_submit: dead-letters "Diary already submitted" instead of marking synced', async () => {
     getPendingSyncItemsMock.mockResolvedValue([diaryItem('diary_submit', { diaryId: 'd-3' })]);
     diariesGetMock.mockResolvedValue({ id: 'd-3' });
     syncOfflineDiarySnapshotMock.mockResolvedValue('server-d-3');
@@ -497,15 +519,16 @@ describe('diary dispatch', () => {
 
     await runSync();
 
-    // The "already submitted" case is treated as success: no error mark, the
-    // item is removed and the diary marked synced.
+    // The "already submitted" case means the local offline submit did not win.
+    // Keep the queue item visible as failed instead of pretending it synced.
+    expect(markSyncItemTerminalErrorMock).toHaveBeenCalledWith(21, 'Diary already submitted');
     expect(markSyncItemErrorMock).not.toHaveBeenCalled();
-    expect(markDiarySyncErrorMock).not.toHaveBeenCalled();
-    expect(removeSyncQueueItemMock).toHaveBeenCalledWith(21);
-    expect(markDiarySyncedMock).toHaveBeenCalledWith('d-3');
+    expect(markDiarySyncErrorMock).toHaveBeenCalledWith('d-3');
+    expect(removeSyncQueueItemMock).not.toHaveBeenCalled();
+    expect(markDiarySyncedMock).not.toHaveBeenCalled();
   });
 
-  it('diary_submit: a different /submit error marks the item + diary error and skips removal', async () => {
+  it('diary_submit: submit validation errors are terminal and skip removal', async () => {
     getPendingSyncItemsMock.mockResolvedValue([diaryItem('diary_submit', { diaryId: 'd-4' })]);
     diariesGetMock.mockResolvedValue({ id: 'd-4' });
     syncOfflineDiarySnapshotMock.mockResolvedValue('server-d-4');
@@ -514,8 +537,25 @@ describe('diary dispatch', () => {
 
     await runSync();
 
-    expect(markSyncItemErrorMock).toHaveBeenCalledWith(21, 'missing weather');
+    expect(markSyncItemTerminalErrorMock).toHaveBeenCalledWith(21, 'missing weather');
+    expect(markSyncItemErrorMock).not.toHaveBeenCalled();
     expect(markDiarySyncErrorMock).toHaveBeenCalledWith('d-4');
+    expect(removeSyncQueueItemMock).not.toHaveBeenCalled();
+    expect(markDiarySyncedMock).not.toHaveBeenCalled();
+  });
+
+  it('diary_submit: retriable /submit errors use the normal retry path', async () => {
+    getPendingSyncItemsMock.mockResolvedValue([diaryItem('diary_submit', { diaryId: 'd-4b' })]);
+    diariesGetMock.mockResolvedValue({ id: 'd-4b' });
+    syncOfflineDiarySnapshotMock.mockResolvedValue('server-d-4b');
+    authFetchMock.mockResolvedValue(errorResponse(500, 'server unavailable'));
+    readResponseErrorMock.mockResolvedValue('server unavailable');
+
+    await runSync();
+
+    expect(markSyncItemErrorMock).toHaveBeenCalledWith(21, 'server unavailable');
+    expect(markSyncItemTerminalErrorMock).not.toHaveBeenCalled();
+    expect(markDiarySyncErrorMock).toHaveBeenCalledWith('d-4b');
     expect(removeSyncQueueItemMock).not.toHaveBeenCalled();
     expect(markDiarySyncedMock).not.toHaveBeenCalled();
   });
