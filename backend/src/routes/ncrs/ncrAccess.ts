@@ -19,6 +19,12 @@ type NcrReadAccessRecord = {
   ncrLots?: Array<{ lotId: string }>;
 };
 
+type NcrResponsibleAccessRecord = {
+  projectId: string;
+  responsibleUserId: string | null;
+  responsibleSubcontractorId?: string | null;
+};
+
 const COMPANY_PROJECT_ROLES = new Set(['owner', 'admin']);
 const SUBCONTRACTOR_ROLES = new Set(['subcontractor', 'subcontractor_admin']);
 const MAX_NCR_ROUTE_PARAM_LENGTH = 120;
@@ -130,11 +136,16 @@ export async function requireActiveProjectUser(
 }
 
 export async function requireNcrResponsibleOrProjectRole(
-  ncr: { projectId: string; responsibleUserId: string | null },
+  ncr: NcrResponsibleAccessRecord,
   user: AuthUser,
   message: string,
   roles = NCR_QUALITY_MANAGEMENT_ROLES,
 ) {
+  const subcontractorAccess = await getResponsibleSubcontractorAccess(ncr, user, message);
+  if (subcontractorAccess) {
+    return subcontractorAccess;
+  }
+
   const projectUser = await requireActiveProjectUser(ncr.projectId, user, message);
 
   if (roles.includes(projectUser.role) || ncr.responsibleUserId === user.userId) {
@@ -145,11 +156,21 @@ export async function requireNcrResponsibleOrProjectRole(
 }
 
 export async function requireNcrEvidenceMutationAccess(
-  ncr: { projectId: string; responsibleUserId: string | null },
+  ncr: NcrResponsibleAccessRecord,
   user: AuthUser,
   message: string,
   uploadedById?: string | null,
 ) {
+  const subcontractorAccess = await getResponsibleSubcontractorAccess(
+    ncr,
+    user,
+    message,
+    uploadedById,
+  );
+  if (subcontractorAccess) {
+    return subcontractorAccess;
+  }
+
   const projectUser = await requireActiveProjectUser(ncr.projectId, user, message);
 
   if (
@@ -158,6 +179,74 @@ export async function requireNcrEvidenceMutationAccess(
     uploadedById === user.userId
   ) {
     return projectUser;
+  }
+
+  throw AppError.forbidden(message);
+}
+
+async function getResponsibleSubcontractorAccess(
+  ncr: NcrResponsibleAccessRecord,
+  user: AuthUser,
+  message: string,
+  uploadedById?: string | null,
+): Promise<ProjectRoleAccess | null> {
+  const userDetails = await prisma.user.findUnique({
+    where: { id: user.userId },
+    select: { roleInCompany: true },
+  });
+
+  const isSubcontractor = SUBCONTRACTOR_ROLES.has(userDetails?.roleInCompany || '');
+  if (!isSubcontractor) {
+    return null;
+  }
+
+  await requireSubcontractorPortalModuleAccess({
+    userId: user.userId,
+    role: userDetails?.roleInCompany,
+    projectId: ncr.projectId,
+    module: 'ncrs',
+  });
+
+  const subcontractorUser = await prisma.subcontractorUser.findFirst({
+    where: {
+      userId: user.userId,
+      subcontractorCompany: activeSubcontractorCompanyWhere({ projectId: ncr.projectId }),
+    },
+    select: { id: true, role: true, subcontractorCompanyId: true },
+  });
+
+  if (
+    subcontractorUser &&
+    (ncr.responsibleUserId === user.userId ||
+      ncr.responsibleSubcontractorId === subcontractorUser.subcontractorCompanyId ||
+      uploadedById === user.userId)
+  ) {
+    return { id: `subcontractor-user:${subcontractorUser.id}`, role: userDetails!.roleInCompany };
+  }
+
+  throw AppError.forbidden(message);
+}
+
+export async function requireNcrReadAccess(
+  ncr: NcrReadAccessRecord,
+  user: AuthUser,
+  message = 'Access denied',
+): Promise<void> {
+  if (await canReadNcr(ncr, user)) {
+    return;
+  }
+
+  const userDetails = await prisma.user.findUnique({
+    where: { id: user.userId },
+    select: { roleInCompany: true },
+  });
+  if (SUBCONTRACTOR_ROLES.has(userDetails?.roleInCompany || '')) {
+    await requireSubcontractorPortalModuleAccess({
+      userId: user.userId,
+      role: userDetails?.roleInCompany,
+      projectId: ncr.projectId,
+      module: 'ncrs',
+    });
   }
 
   throw AppError.forbidden(message);

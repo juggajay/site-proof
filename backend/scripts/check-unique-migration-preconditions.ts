@@ -12,6 +12,8 @@ interface DuplicateCheck {
 }
 
 const duplicateChecks: DuplicateCheck[] = [
+  // Daily docket subcontractor/project/date duplicates are data-merged by
+  // 20260618154400_dedupe_daily_dockets before the unique index is created.
   {
     name: 'itp_completion_attachments completion/document duplicates',
     sql: Prisma.sql`
@@ -53,20 +55,6 @@ const duplicateChecks: DuplicateCheck[] = [
     `,
     remediation:
       'Delete duplicate ncr_evidence rows before applying a unique constraint on (ncr_id, document_id).',
-  },
-  {
-    name: 'daily_dockets subcontractor/project/date duplicates',
-    sql: Prisma.sql`
-      SELECT COUNT(*)::int AS count
-      FROM (
-        SELECT subcontractor_company_id, project_id, date
-        FROM daily_dockets
-        GROUP BY subcontractor_company_id, project_id, date
-        HAVING COUNT(*) > 1
-      ) duplicates
-    `,
-    remediation:
-      'Resolve duplicate daily_dockets rows before applying a unique constraint on (subcontractor_company_id, project_id, date).',
   },
 ];
 
