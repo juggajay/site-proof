@@ -7,6 +7,7 @@ import { requireAuth } from '../../middleware/authMiddleware.js';
 import { checkProjectAccess } from '../../lib/projectAccess.js';
 import { isSupabaseConfigured } from '../../lib/supabase.js';
 import { assertUploadedFileMatchesDeclaredType } from '../../lib/imageValidation.js';
+import { normalizeDocumentFileUrlForResponse } from '../documentResponses.js';
 import {
   attachDocumentToItpCompletion,
   resolveItpEvidenceAttachmentTarget,
@@ -316,7 +317,7 @@ export function createDocumentUploadRouter({
           await attachDocumentToItpCompletion(itpEvidenceTarget, document.id);
         }
 
-        res.status(201).json(document);
+        res.status(201).json(normalizeDocumentFileUrlForResponse(document));
       } catch (error) {
         if (!documentCreated) {
           await cleanupStoredDocumentUpload(fileUrl, uploadedFile, projectId);
