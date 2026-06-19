@@ -197,13 +197,13 @@ async function checkSupabaseStorage(): Promise<Omit<PreflightResult, 'name'>> {
     throw new Error(`Supabase Storage bucket "${DOCUMENTS_BUCKET}" was not found.`);
   }
 
-  if (getJsonProperty(documentsBucket, 'public') === false) {
+  if (getJsonProperty(documentsBucket, 'public') !== false) {
     throw new Error(
-      `Supabase Storage bucket "${DOCUMENTS_BUCKET}" must be public for stored URLs.`,
+      `Supabase Storage bucket "${DOCUMENTS_BUCKET}" must be private. Files must be served through authenticated backend access routes, not permanent public object URLs.`,
     );
   }
 
-  return pass(`Supabase Storage bucket "${DOCUMENTS_BUCKET}" is reachable.`);
+  return pass(`Supabase Storage bucket "${DOCUMENTS_BUCKET}" is reachable and private.`);
 }
 
 async function checkGoogleOAuth(): Promise<Omit<PreflightResult, 'name'>> {
