@@ -44,6 +44,49 @@ function startBucketListServer(bucketPublicValue: boolean): Promise<string> {
   });
 }
 
+function startResendServer(options: {
+  domainStatus?: string;
+  sendStatus?: number;
+  sendBody?: Record<string, unknown>;
+}): Promise<string> {
+  return new Promise((resolve) => {
+    testServer = http.createServer((req, res) => {
+      if (req.url === '/domains') {
+        res.setHeader('Content-Type', 'application/json');
+        res.end(
+          JSON.stringify({
+            data: [
+              {
+                name: 'siteproof.example',
+                status: options.domainStatus ?? 'verified',
+              },
+            ],
+          }),
+        );
+        return;
+      }
+
+      if (req.url === '/emails' && req.method === 'POST') {
+        res.statusCode = options.sendStatus ?? 200;
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify(options.sendBody ?? { id: 'email_preflight_123' }));
+        return;
+      }
+
+      res.statusCode = 404;
+      res.end('not found');
+    });
+
+    testServer.listen(0, '127.0.0.1', () => {
+      const address = testServer?.address();
+      if (!address || typeof address === 'string') {
+        throw new Error('Expected test server to listen on a TCP port');
+      }
+      resolve(`http://127.0.0.1:${address.port}`);
+    });
+  });
+}
+
 function getPreflightEnv(extraEnv: Record<string, string>) {
   return {
     ...process.env,
@@ -109,6 +152,45 @@ function runPreflightAsync(extraEnv: Record<string, string>) {
 }
 
 describe('production integration preflight', () => {
+  it('passes the Resend check only after the provider accepts a send probe', async () => {
+    const resendUrl = await startResendServer({});
+
+    const result = await runPreflightAsync({
+      EMAIL_ENABLED: 'true',
+      EMAIL_FROM: 'SiteProof <noreply@siteproof.example>',
+      RESEND_API_KEY: 're_valid_test_key',
+      RESEND_DOMAINS_ENDPOINT: `${resendUrl}/domains`,
+      RESEND_EMAILS_ENDPOINT: `${resendUrl}/emails`,
+    });
+
+    const output = `${result.stdout}\n${result.stderr}`;
+
+    expect(output).toContain('[pass] resend-email');
+    expect(output).toContain('a test email was accepted');
+  });
+
+  it('fails the Resend check when the provider rejects the send probe', async () => {
+    const resendUrl = await startResendServer({
+      sendStatus: 403,
+      sendBody: { message: 'The siteproof.example sender is not allowed' },
+    });
+
+    const result = await runPreflightAsync({
+      EMAIL_ENABLED: 'true',
+      EMAIL_FROM: 'SiteProof <noreply@siteproof.example>',
+      RESEND_API_KEY: 're_valid_test_key',
+      RESEND_DOMAINS_ENDPOINT: `${resendUrl}/domains`,
+      RESEND_EMAILS_ENDPOINT: `${resendUrl}/emails`,
+    });
+
+    const output = `${result.stdout}\n${result.stderr}`;
+
+    expect(result.status).toBe(1);
+    expect(output).toContain('[fail] resend-email');
+    expect(output).toContain('Resend send probe failed with HTTP 403');
+    expect(output).toContain('sender is not allowed');
+  });
+
   it('fails closed when durable Supabase storage is missing even if local storage is enabled', () => {
     const result = runPreflight({
       ALLOW_LOCAL_FILE_STORAGE: 'true',

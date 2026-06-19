@@ -9,9 +9,22 @@ interface PreflightResult {
   message: string;
 }
 
+interface ResendConfig {
+  apiKey: string;
+  emailFrom: string;
+  senderDomain: string;
+  domainsEndpoint: string;
+  emailsEndpoint: string;
+  preflightRecipient: string;
+}
+
+type FetchWithTimeout = (url: string, init: RequestInit, timeoutMs: number) => Promise<Response>;
+
 const PREFLIGHT_TIMEOUT_MS = Number(process.env.PREFLIGHT_TIMEOUT_MS || 10000);
 const DOCUMENTS_BUCKET = 'documents';
-const RESEND_DOMAINS_ENDPOINT = 'https://api.resend.com/domains';
+const DEFAULT_RESEND_DOMAINS_ENDPOINT = 'https://api.resend.com/domains';
+const DEFAULT_RESEND_EMAILS_ENDPOINT = 'https://api.resend.com/emails';
+const DEFAULT_RESEND_PREFLIGHT_RECIPIENT = 'delivered+siteproof-production-preflight@resend.dev';
 const GOOGLE_OPENID_CONFIGURATION_ENDPOINT =
   'https://accounts.google.com/.well-known/openid-configuration';
 
@@ -65,6 +78,22 @@ async function runNetworkRequest(
   }
 }
 
+async function runProviderCheck(
+  label: string,
+  url: string,
+  request: () => Promise<Response>,
+): Promise<Response> {
+  const response = await runNetworkRequest(label, url, request);
+
+  if (!response.ok) {
+    throw new Error(
+      `${label} failed with HTTP ${response.status}: ${await readResponseText(response)}`,
+    );
+  }
+
+  return response;
+}
+
 async function runCheck(
   name: string,
   check: () => Promise<Omit<PreflightResult, 'name'>>,
@@ -94,36 +123,41 @@ async function checkRuntimeConfig(): Promise<Omit<PreflightResult, 'name'>> {
   return pass('Production runtime configuration validates.');
 }
 
-async function checkResend(): Promise<Omit<PreflightResult, 'name'>> {
-  if (readEnv('EMAIL_ENABLED') === 'false') {
-    return skip('EMAIL_ENABLED=false; email delivery intentionally disabled.');
-  }
-
+function getResendConfig(): ResendConfig {
   const apiKey = readEnv('RESEND_API_KEY');
-  const senderDomain = extractEmailDomain(readEnv('EMAIL_FROM'));
+  const emailFrom = readEnv('EMAIL_FROM');
+  const senderDomain = extractEmailDomain(emailFrom);
+
   if (!apiKey || !senderDomain) {
     throw new Error('RESEND_API_KEY and EMAIL_FROM are required for email delivery preflight.');
   }
 
-  const { fetchWithTimeout } = await import('../src/lib/fetchWithTimeout.js');
-  const response = await runNetworkRequest('Resend domains check', RESEND_DOMAINS_ENDPOINT, () =>
+  return {
+    apiKey,
+    emailFrom,
+    senderDomain,
+    domainsEndpoint: readEnv('RESEND_DOMAINS_ENDPOINT') || DEFAULT_RESEND_DOMAINS_ENDPOINT,
+    emailsEndpoint: readEnv('RESEND_EMAILS_ENDPOINT') || DEFAULT_RESEND_EMAILS_ENDPOINT,
+    preflightRecipient: readEnv('RESEND_PREFLIGHT_RECIPIENT') || DEFAULT_RESEND_PREFLIGHT_RECIPIENT,
+  };
+}
+
+async function verifyResendSenderDomain(
+  config: ResendConfig,
+  fetchWithTimeout: FetchWithTimeout,
+): Promise<void> {
+  const response = await runProviderCheck('Resend domains check', config.domainsEndpoint, () =>
     fetchWithTimeout(
-      RESEND_DOMAINS_ENDPOINT,
+      config.domainsEndpoint,
       {
         headers: {
-          Authorization: `Bearer ${apiKey}`,
+          Authorization: `Bearer ${config.apiKey}`,
           Accept: 'application/json',
         },
       },
       PREFLIGHT_TIMEOUT_MS,
     ),
   );
-
-  if (!response.ok) {
-    throw new Error(
-      `Resend domains check failed with HTTP ${response.status}: ${await readResponseText(response)}`,
-    );
-  }
 
   const payload = (await response.json().catch(() => null)) as unknown;
   const data = getJsonProperty(payload, 'data');
@@ -133,11 +167,11 @@ async function checkResend(): Promise<Omit<PreflightResult, 'name'>> {
       name: String(getJsonProperty(domain, 'name') ?? '').toLowerCase(),
       status: String(getJsonProperty(domain, 'status') ?? '').toLowerCase(),
     }))
-    .find((domain) => domain.name && domainMatchesSender(senderDomain, domain.name));
+    .find((domain) => domain.name && domainMatchesSender(config.senderDomain, domain.name));
 
   if (!matchingDomain) {
     throw new Error(
-      `Resend API key is valid, but EMAIL_FROM domain ${senderDomain} is not listed.`,
+      `Resend API key is valid, but EMAIL_FROM domain ${config.senderDomain} is not listed.`,
     );
   }
 
@@ -146,8 +180,47 @@ async function checkResend(): Promise<Omit<PreflightResult, 'name'>> {
       `Resend domain ${matchingDomain.name} is present but not verified (status=${matchingDomain.status}).`,
     );
   }
+}
 
-  return pass(`Resend key is valid and sender domain ${senderDomain} is verified.`);
+async function sendResendPreflightEmail(
+  config: ResendConfig,
+  fetchWithTimeout: FetchWithTimeout,
+): Promise<void> {
+  await runProviderCheck('Resend send probe', config.emailsEndpoint, () =>
+    fetchWithTimeout(
+      config.emailsEndpoint,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${config.apiKey}`,
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: config.emailFrom,
+          to: [config.preflightRecipient],
+          subject: 'SiteProof production email preflight',
+          text: 'This automated message verifies that Resend accepts SiteProof production email sends.',
+        }),
+      },
+      PREFLIGHT_TIMEOUT_MS,
+    ),
+  );
+}
+
+async function checkResend(): Promise<Omit<PreflightResult, 'name'>> {
+  if (readEnv('EMAIL_ENABLED') === 'false') {
+    return skip('EMAIL_ENABLED=false; email delivery intentionally disabled.');
+  }
+
+  const { fetchWithTimeout } = await import('../src/lib/fetchWithTimeout.js');
+  const config = getResendConfig();
+  await verifyResendSenderDomain(config, fetchWithTimeout);
+  await sendResendPreflightEmail(config, fetchWithTimeout);
+
+  return pass(
+    `Resend key is valid, sender domain ${config.senderDomain} is verified, and a test email was accepted.`,
+  );
 }
 
 async function checkSupabaseStorage(): Promise<Omit<PreflightResult, 'name'>> {
@@ -165,7 +238,7 @@ async function checkSupabaseStorage(): Promise<Omit<PreflightResult, 'name'>> {
 
   const { fetchWithTimeout } = await import('../src/lib/fetchWithTimeout.js');
   const bucketsUrl = new URL('/storage/v1/bucket', supabaseUrl).toString();
-  const response = await runNetworkRequest('Supabase bucket list', bucketsUrl, () =>
+  const response = await runProviderCheck('Supabase bucket list', bucketsUrl, () =>
     fetchWithTimeout(
       bucketsUrl,
       {
@@ -178,12 +251,6 @@ async function checkSupabaseStorage(): Promise<Omit<PreflightResult, 'name'>> {
       PREFLIGHT_TIMEOUT_MS,
     ),
   );
-
-  if (!response.ok) {
-    throw new Error(
-      `Supabase bucket list failed with HTTP ${response.status}: ${await readResponseText(response)}`,
-    );
-  }
 
   const payload = (await response.json().catch(() => null)) as unknown;
   const buckets = Array.isArray(payload) ? payload : [];
@@ -226,7 +293,7 @@ async function checkGoogleOAuth(): Promise<Omit<PreflightResult, 'name'>> {
   const { fetchWithTimeout } = await import('../src/lib/fetchWithTimeout.js');
   const { getGoogleRedirectUri } = await import('../src/lib/runtimeConfig.js');
   const redirectUri = getGoogleRedirectUri();
-  const response = await runNetworkRequest(
+  const response = await runProviderCheck(
     'Google OpenID configuration',
     GOOGLE_OPENID_CONFIGURATION_ENDPOINT,
     () =>
@@ -236,12 +303,6 @@ async function checkGoogleOAuth(): Promise<Omit<PreflightResult, 'name'>> {
         PREFLIGHT_TIMEOUT_MS,
       ),
   );
-
-  if (!response.ok) {
-    throw new Error(
-      `Google OpenID configuration check failed with HTTP ${response.status}: ${await readResponseText(response)}`,
-    );
-  }
 
   const payload = (await response.json().catch(() => null)) as unknown;
   if (
