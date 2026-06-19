@@ -636,9 +636,9 @@ test.describe('Claims seeded commercial contract', () => {
     const claimRow = page.getByRole('row').filter({ hasText: 'Claim 7' });
     await expect(claimRow).toBeVisible();
     await expect(claimRow.getByText('Submitted')).toBeVisible();
-    await expect(claimRow.getByRole('button', { name: 'Record Certification' })).toBeVisible();
+    await expect(claimRow.getByRole('button', { name: 'Record Payment Schedule' })).toBeVisible();
 
-    await claimRow.getByRole('button', { name: 'Record Certification' }).click();
+    await claimRow.getByRole('button', { name: 'Record Payment Schedule' }).click();
 
     const certificationModal = page
       .getByRole('dialog')
@@ -651,7 +651,7 @@ test.describe('Claims seeded commercial contract', () => {
     await certificationModal.getByLabel('Certified Amount').fill('88000');
     await certificationModal.getByLabel('Certification Date').fill('2026-05-11');
     await certificationModal.getByLabel('Variation Notes').fill('Certified less retention.');
-    await certificationModal.getByRole('button', { name: 'Record Certification' }).click();
+    await certificationModal.getByRole('button', { name: 'Record Payment Schedule' }).click();
 
     await expect
       .poll(() => api.getCertificationRequests())

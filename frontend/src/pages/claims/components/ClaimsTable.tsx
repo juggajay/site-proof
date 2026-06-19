@@ -271,8 +271,8 @@ export const ClaimsTable = React.memo(function ClaimsTable({
                         <button
                           onClick={() => onCertifyClaim(claim.id)}
                           className="p-2 hover:bg-muted rounded-lg text-foreground"
-                          aria-label="Record Certification"
-                          title="Record Certification"
+                          aria-label="Record Payment Schedule"
+                          title="Record Payment Schedule"
                         >
                           <CheckCircle className="h-4 w-4" />
                         </button>
