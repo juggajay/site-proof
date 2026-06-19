@@ -2,7 +2,12 @@ import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import { authRouter } from './auth.js';
-import { auditLogRouter, MAX_AUDIT_LOG_USER_FILTER_RESULTS } from './auditLog.js';
+import {
+  auditLogRouter,
+  MAX_AUDIT_LOG_ACTION_FILTER_RESULTS,
+  MAX_AUDIT_LOG_ENTITY_TYPE_FILTER_RESULTS,
+  MAX_AUDIT_LOG_USER_FILTER_RESULTS,
+} from './auditLog.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { registerTestUser as registerSharedTestUser } from '../test/routeTestHarness.js';
@@ -800,6 +805,31 @@ describe('Audit Log API', () => {
       }
     });
 
+    it('should bound and order the action filter lookup', async () => {
+      const findManySpy = vi.spyOn(prisma.auditLog, 'findMany').mockResolvedValueOnce([
+        {
+          action: 'bounded.action',
+        },
+      ] as Awaited<ReturnType<typeof prisma.auditLog.findMany>>);
+
+      try {
+        const res = await request(app)
+          .get('/api/audit-logs/actions')
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.actions).toEqual(['bounded.action']);
+        expect(findManySpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            take: MAX_AUDIT_LOG_ACTION_FILTER_RESULTS,
+            orderBy: { action: 'asc' },
+          }),
+        );
+      } finally {
+        findManySpy.mockRestore();
+      }
+    });
+
     it('should return unique actions only', async () => {
       const res = await request(app)
         .get('/api/audit-logs/actions')
@@ -840,6 +870,31 @@ describe('Audit Log API', () => {
 
       for (let i = 0; i < entityTypes.length - 1; i++) {
         expect(entityTypes[i] <= entityTypes[i + 1]).toBe(true);
+      }
+    });
+
+    it('should bound and order the entity type filter lookup', async () => {
+      const findManySpy = vi.spyOn(prisma.auditLog, 'findMany').mockResolvedValueOnce([
+        {
+          entityType: 'BoundedEntity',
+        },
+      ] as Awaited<ReturnType<typeof prisma.auditLog.findMany>>);
+
+      try {
+        const res = await request(app)
+          .get('/api/audit-logs/entity-types')
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.entityTypes).toEqual(['BoundedEntity']);
+        expect(findManySpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            take: MAX_AUDIT_LOG_ENTITY_TYPE_FILTER_RESULTS,
+            orderBy: { entityType: 'asc' },
+          }),
+        );
+      } finally {
+        findManySpy.mockRestore();
       }
     });
 

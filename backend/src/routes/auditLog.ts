@@ -19,6 +19,8 @@ const COMPANY_AUDIT_ROLES = new Set(['owner', 'admin']);
 const AUDIT_SUBCONTRACTOR_ROLES = new Set(['subcontractor', 'subcontractor_admin']);
 const AUDIT_FILTER_MAX_LENGTH = 120;
 const AUDIT_SEARCH_MAX_LENGTH = 200;
+export const MAX_AUDIT_LOG_ACTION_FILTER_RESULTS = 500;
+export const MAX_AUDIT_LOG_ENTITY_TYPE_FILTER_RESULTS = 500;
 export const MAX_AUDIT_LOG_USER_FILTER_RESULTS = 500;
 const DATE_COMPONENT_QUERY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})(?:$|[T\s])/;
 
@@ -300,6 +302,7 @@ auditLogRouter.get(
       select: { action: true },
       distinct: ['action'],
       orderBy: { action: 'asc' },
+      take: MAX_AUDIT_LOG_ACTION_FILTER_RESULTS,
     });
 
     res.json(buildAuditActionsResponse(actions.map((a) => a.action).sort()));
@@ -316,6 +319,7 @@ auditLogRouter.get(
       select: { entityType: true },
       distinct: ['entityType'],
       orderBy: { entityType: 'asc' },
+      take: MAX_AUDIT_LOG_ENTITY_TYPE_FILTER_RESULTS,
     });
 
     res.json(buildAuditEntityTypesResponse(entityTypes.map((e) => e.entityType).sort()));
