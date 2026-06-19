@@ -28,19 +28,19 @@ beforeEach(() => {
 });
 
 describe('useCommercialAccess', () => {
-  it('uses the actual role when the displayed role has been overridden', () => {
+  it('uses the project-scoped role instead of the global actual role', () => {
     setAuth({ role: 'foreman', roleInCompany: 'foreman', dashboardRole: null }, 'admin');
 
     const { result } = renderHook(() => useCommercialAccess());
 
     expect(result.current).toMatchObject({
-      hasCommercialAccess: true,
-      canViewBudgets: true,
-      canViewRates: true,
-      canViewClaims: true,
-      canViewContractValues: true,
-      canViewSubcontractorRates: true,
-      canViewDocketAmounts: true,
+      hasCommercialAccess: false,
+      canViewBudgets: false,
+      canViewRates: false,
+      canViewClaims: false,
+      canViewContractValues: false,
+      canViewSubcontractorRates: false,
+      canViewDocketAmounts: false,
     });
   });
 
