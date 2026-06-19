@@ -17,7 +17,6 @@ import { ensureUploadSubdirectoryAsync, resolveUploadPath } from '../../lib/uplo
 const COMMENT_ATTACHMENT_MAX_SIZE = 10 * 1024 * 1024;
 export const COMMENT_ATTACHMENT_MAX_FILES = 5;
 const COMMENT_ATTACHMENT_FILENAME_MAX_LENGTH = 180;
-const COMMENT_ATTACHMENT_MIME_TYPE_MAX_LENGTH = 120;
 
 const allowedAttachmentTypes = [
   'image/jpeg',
@@ -77,10 +76,6 @@ export const commentAttachmentUpload = multer({
     cb(new Error('Invalid file type'));
   },
 });
-
-function getSingleString(value: unknown): string | null {
-  return typeof value === 'string' && value.trim() ? value.trim() : null;
-}
 
 async function uploadCommentAttachmentToSupabase(
   file: Express.Multer.File,
@@ -175,74 +170,12 @@ export async function removeStoredCommentAttachment(
   await deleteLocalCommentAttachmentFile(fileUrl);
 }
 
-function isSafeAttachmentUrl(fileUrl: string, projectId: string): boolean {
-  if (fileUrl.length > 2048) {
-    return false;
-  }
-
-  try {
-    if (
-      isSupabaseConfigured() &&
-      getOwnedCommentAttachmentStoragePath(fileUrl, projectId) !== null
-    ) {
-      return true;
-    }
-  } catch {
-    return false;
-  }
-
-  if (fileUrl.startsWith('/uploads/comments/')) {
-    try {
-      resolveUploadPath(fileUrl, 'comments');
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  return false;
-}
-
 function isExternalAttachmentUrl(fileUrl: string): boolean {
   return /^https?:\/\//i.test(fileUrl);
 }
 
 function getSafeAttachmentFilename(filename: string): string {
   return sanitizeFilename(filename);
-}
-
-function parseAttachmentFileSize(value: unknown): number | null {
-  if (value === undefined || value === null) {
-    return null;
-  }
-
-  if (
-    typeof value !== 'number' ||
-    !Number.isFinite(value) ||
-    !Number.isInteger(value) ||
-    value < 0 ||
-    value > COMMENT_ATTACHMENT_MAX_SIZE
-  ) {
-    throw AppError.badRequest(
-      `attachment fileSize must be a whole number between 0 and ${COMMENT_ATTACHMENT_MAX_SIZE}`,
-    );
-  }
-
-  return value;
-}
-
-function parseAttachmentMimeType(value: unknown): string | null {
-  if (value === undefined || value === null) {
-    return null;
-  }
-
-  if (typeof value !== 'string' || value.length > COMMENT_ATTACHMENT_MIME_TYPE_MAX_LENGTH) {
-    throw AppError.badRequest(
-      `attachment mimeType must be text no longer than ${COMMENT_ATTACHMENT_MIME_TYPE_MAX_LENGTH} characters`,
-    );
-  }
-
-  return getSafeAttachmentMimeType(value);
 }
 
 export function sendCommentAttachmentFile(
@@ -310,35 +243,6 @@ async function sendSupabaseCommentAttachmentFile(
   res.setHeader('Referrer-Policy', 'no-referrer');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.send(buffer);
-}
-
-export function getValidAttachments(attachments: unknown, projectId: string): AttachmentInput[] {
-  const validAttachments: AttachmentInput[] = [];
-
-  if (!Array.isArray(attachments)) {
-    return validAttachments;
-  }
-
-  for (const att of attachments) {
-    if (!att || typeof att !== 'object') continue;
-    const attachment = att as Record<string, unknown>;
-    const filename = getSingleString(attachment.filename);
-    const fileUrl = getSingleString(attachment.fileUrl);
-
-    if (filename && fileUrl && isSafeAttachmentUrl(fileUrl, projectId)) {
-      const fileSize = parseAttachmentFileSize(attachment.fileSize);
-      const mimeType = parseAttachmentMimeType(attachment.mimeType);
-
-      validAttachments.push({
-        filename: sanitizeFilename(filename),
-        fileUrl,
-        fileSize,
-        mimeType,
-      });
-    }
-  }
-
-  return validAttachments;
 }
 
 export async function cleanupStoredCommentAttachments(

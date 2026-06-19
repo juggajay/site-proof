@@ -1,10 +1,7 @@
 import { AppError } from '../../lib/AppError.js';
 import { assertUploadedFileMatchesDeclaredType } from '../../lib/imageValidation.js';
 import { logWarn } from '../../lib/serverLogger.js';
-import {
-  COMMENT_ATTACHMENT_MAX_FILES,
-  removeStoredCommentAttachment,
-} from './attachmentStorage.js';
+import { removeStoredCommentAttachment } from './attachmentStorage.js';
 
 export function requireCommentUserId(userId: string | null | undefined): string {
   if (!userId) {
@@ -21,23 +18,6 @@ export function requireCommentAuthor(
   if (authorId !== userId) {
     throw AppError.forbidden(message);
   }
-}
-
-export function assertCommentAttachmentLimit(attachments: unknown): void {
-  if (Array.isArray(attachments) && attachments.length > COMMENT_ATTACHMENT_MAX_FILES) {
-    throw AppError.badRequest(
-      `attachments cannot include more than ${COMMENT_ATTACHMENT_MAX_FILES} files`,
-    );
-  }
-}
-
-export function requireCommentAttachmentArray(attachments: unknown): unknown[] {
-  if (!attachments || !Array.isArray(attachments) || attachments.length === 0) {
-    throw AppError.badRequest('attachments array is required');
-  }
-
-  assertCommentAttachmentLimit(attachments);
-  return attachments;
 }
 
 export function validateUploadedCommentFiles(

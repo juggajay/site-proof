@@ -208,174 +208,30 @@ describe('Comments API', () => {
   });
 
   describe('POST /api/comments/attachments/upload', () => {
-    it('should upload attachment files and return normal file URLs', async () => {
-      const res = await request(app)
-        .post('/api/comments/attachments/upload')
-        .set('Authorization', `Bearer ${authToken}`)
-        .field('entityType', 'Lot')
-        .field('entityId', lotId)
-        .attach('files', Buffer.from('comment attachment body'), {
-          filename: 'comment-upload-test.txt',
-          contentType: 'text/plain',
-        });
-
-      expect(res.status).toBe(201);
-      expect(res.body.attachments).toHaveLength(1);
-      expect(res.body.attachments[0].filename).toBe('comment-upload-test.txt');
-      expect(res.body.attachments[0].fileUrl).not.toMatch(/^data:/);
-      expect(res.body.attachments[0].mimeType).toBe('text/plain');
-
-      if (res.body.attachments[0].fileUrl.startsWith('/uploads/')) {
-        const uploadedPath = path.join(
-          process.cwd(),
-          res.body.attachments[0].fileUrl.replace(/^\//, ''),
-        );
-        expect(fs.existsSync(uploadedPath)).toBe(true);
-      }
-    });
-
-    it('should store Supabase uploads as private storage references', async () => {
-      const { from, upload } = mockSupabaseUpload();
-
-      const res = await request(app)
-        .post('/api/comments/attachments/upload')
-        .set('Authorization', `Bearer ${authToken}`)
-        .field('entityType', 'Lot')
-        .field('entityId', lotId)
-        .attach('files', Buffer.from('supabase comment attachment body'), {
-          filename: 'comment-upload-test-supabase.txt',
-          contentType: 'text/plain',
-        });
-
-      expect(res.status).toBe(201);
-      expect(res.body.attachments).toHaveLength(1);
-      expect(res.body.attachments[0]).toMatchObject({
-        filename: 'comment-upload-test-supabase.txt',
-        mimeType: 'text/plain',
-      });
-      expect(res.body.attachments[0].fileUrl).toMatch(
-        new RegExp(`^supabase://documents/comments/${projectId}/`),
-      );
-      expect(res.body.attachments[0].fileUrl).not.toContain('/storage/v1/object/public/');
-
-      expect(from).toHaveBeenCalledWith('documents');
-      const [storagePath, body, uploadOptions] = upload.mock.calls[0];
-      expect(storagePath).toMatch(
-        new RegExp(`^comments/${projectId}/\\d+-[0-9a-f-]+-comment-upload-test-supabase\\.txt$`),
-      );
-      expect(body.toString()).toBe('supabase comment attachment body');
-      expect(uploadOptions).toEqual({ contentType: 'text/plain', upsert: false });
-    });
-
-    it('should sanitize unsafe attachment filenames on upload', async () => {
-      const res = await request(app)
-        .post('/api/comments/attachments/upload')
-        .set('Authorization', `Bearer ${authToken}`)
-        .field('entityType', 'Lot')
-        .field('entityId', lotId)
-        .attach('files', Buffer.from('unsafe attachment filename body'), {
-          filename: 'comment-upload-test-unsafe:<bad>.txt',
-          contentType: 'text/plain',
-        });
-
-      expect(res.status).toBe(201);
-      expect(res.body.attachments).toHaveLength(1);
-      expect(res.body.attachments[0].filename).toMatch(/^comment-upload-test-unsafe/);
-      expect(res.body.attachments[0].filename).not.toMatch(/[<>:"\\|?*]/);
-
-      const storedName = String(res.body.attachments[0].fileUrl).split('/').pop() || '';
-      expect(storedName).not.toMatch(/[<>:"\\|?*]/);
-    });
-
-    it('should allow subcontractors to upload attachments only for assigned lot comments', async () => {
-      const assignedRes = await request(app)
-        .post('/api/comments/attachments/upload')
-        .set('Authorization', `Bearer ${subcontractorToken}`)
-        .field('entityType', 'Lot')
-        .field('entityId', lotId)
-        .attach('files', Buffer.from('assigned lot attachment'), {
-          filename: 'comment-upload-test-sub-assigned.txt',
-          contentType: 'text/plain',
-        });
-
-      expect(assignedRes.status).toBe(201);
-      expect(assignedRes.body.attachments).toHaveLength(1);
-
-      const unassignedRes = await request(app)
-        .post('/api/comments/attachments/upload')
-        .set('Authorization', `Bearer ${subcontractorToken}`)
-        .field('entityType', 'Lot')
-        .field('entityId', unassignedLotId)
-        .attach('files', Buffer.from('unassigned lot attachment'), {
-          filename: 'comment-upload-test-sub-unassigned.txt',
-          contentType: 'text/plain',
-        });
-
-      expect(unassignedRes.status).toBe(403);
-    });
-
-    it('should reject upload attempts without entity access', async () => {
-      const otherCompany = await prisma.company.create({
-        data: { name: `No Access Comments Company ${Date.now()}` },
-      });
-      const otherProject = await prisma.project.create({
-        data: {
-          name: `No Access Comments Project ${Date.now()}`,
-          projectNumber: `NO-COM-${Date.now()}`,
-          companyId: otherCompany.id,
-          status: 'active',
-          state: 'NSW',
-          specificationSet: 'TfNSW',
-        },
-      });
-      const otherLot = await prisma.lot.create({
-        data: {
-          projectId: otherProject.id,
-          lotNumber: `NO-COM-LOT-${Date.now()}`,
-          status: 'not_started',
-          lotType: 'chainage',
-          activityType: 'Earthworks',
-        },
-      });
-
-      const res = await request(app)
-        .post('/api/comments/attachments/upload')
-        .set('Authorization', `Bearer ${authToken}`)
-        .field('entityType', 'Lot')
-        .field('entityId', otherLot.id)
-        .attach('files', Buffer.from('comment attachment body'), {
-          filename: 'comment-upload-test-no-access.txt',
-          contentType: 'text/plain',
-        });
-
-      expect(res.status).toBe(403);
-
-      await prisma.lot.delete({ where: { id: otherLot.id } });
-      await prisma.project.delete({ where: { id: otherProject.id } });
-      await prisma.company.delete({ where: { id: otherCompany.id } });
-    });
-
-    it('should reject uploads whose content does not match the declared file type', async () => {
-      const filename = `comment-upload-test-spoof-${Date.now()}.pdf`;
+    it('rejects standalone uploads so raw storage locators are never returned', async () => {
+      const filename = `comment-upload-test-deprecated-${Date.now()}.txt`;
       const commentsUploadDir = path.join(process.cwd(), 'uploads', 'comments');
+      const beforeFiles = new Set(
+        fs.existsSync(commentsUploadDir) ? fs.readdirSync(commentsUploadDir) : [],
+      );
 
       const res = await request(app)
         .post('/api/comments/attachments/upload')
         .set('Authorization', `Bearer ${authToken}`)
         .field('entityType', 'Lot')
         .field('entityId', lotId)
-        .attach('files', Buffer.from('not really a pdf'), {
+        .attach('files', Buffer.from('deprecated upload body'), {
           filename,
-          contentType: 'application/pdf',
+          contentType: 'text/plain',
         });
 
-      expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe('INVALID_FILE_TYPE');
+      expect(res.status).toBe(410);
+      expect(res.body.error.message).toContain('no longer supported');
 
-      const leakedFiles = fs
-        .readdirSync(commentsUploadDir)
-        .filter((file) => file.includes(filename));
-      expect(leakedFiles).toHaveLength(0);
+      const newFiles = (
+        fs.existsSync(commentsUploadDir) ? fs.readdirSync(commentsUploadDir) : []
+      ).filter((file) => file.includes(filename));
+      expect(newFiles.filter((file) => !beforeFiles.has(file))).toHaveLength(0);
     });
   });
 
@@ -608,7 +464,7 @@ describe('Comments API', () => {
       }
     });
 
-    it('should create a comment with attachments', async () => {
+    it('rejects client-supplied attachment locators on comment create', async () => {
       const res = await request(app)
         .post('/api/comments')
         .set('Authorization', `Bearer ${authToken}`)
@@ -632,12 +488,8 @@ describe('Comments API', () => {
           ],
         });
 
-      expect(res.status).toBe(201);
-      expect(res.body.comment).toBeDefined();
-      expect(res.body.comment.attachments).toBeDefined();
-      expect(res.body.comment.attachments.length).toBe(2);
-      expect(res.body.comment.attachments[0].filename).toBe('test-file.pdf');
-      expect(res.body.comment.attachments[1].filename).toBe('image.jpg');
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toContain('multipart files');
     });
 
     it('should create a reply to a comment', async () => {
@@ -808,7 +660,7 @@ describe('Comments API', () => {
       await prisma.lot.delete({ where: { id: otherLot.id } });
     });
 
-    it('should handle attachments with missing optional fields', async () => {
+    it('rejects client-supplied attachment locators even with minimal metadata', async () => {
       const res = await request(app)
         .post('/api/comments')
         .set('Authorization', `Bearer ${authToken}`)
@@ -825,12 +677,11 @@ describe('Comments API', () => {
           ],
         });
 
-      expect(res.status).toBe(201);
-      expect(res.body.comment.attachments.length).toBe(1);
-      expect(res.body.comment.attachments[0].filename).toBe('minimal.txt');
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toContain('multipart files');
     });
 
-    it('should filter out invalid attachments', async () => {
+    it('rejects mixed valid and invalid client-supplied attachment locators', async () => {
       const res = await request(app)
         .post('/api/comments')
         .set('Authorization', `Bearer ${authToken}`)
@@ -862,12 +713,11 @@ describe('Comments API', () => {
           ],
         });
 
-      expect(res.status).toBe(201);
-      expect(res.body.comment.attachments.length).toBe(1);
-      expect(res.body.comment.attachments[0].filename).toBe('valid.txt');
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toContain('multipart files');
     });
 
-    it('should reject non-finite attachment file sizes without creating the comment', async () => {
+    it('rejects client-supplied attachment metadata before creating the comment', async () => {
       const content = 'Comment with non-finite attachment size';
       const beforeCount = await prisma.comment.count({
         where: { entityType: 'Lot', entityId: lotId, content },
@@ -892,7 +742,7 @@ describe('Comments API', () => {
         .send(body);
 
       expect(res.status).toBe(400);
-      expect(res.body.error.message).toContain('fileSize');
+      expect(res.body.error.message).toContain('multipart files');
       await expect(
         prisma.comment.count({ where: { entityType: 'Lot', entityId: lotId, content } }),
       ).resolves.toBe(beforeCount);
@@ -916,7 +766,7 @@ describe('Comments API', () => {
         });
 
       expect(res.status).toBe(400);
-      expect(res.body.error.message).toContain('No valid attachments');
+      expect(res.body.error.message).toContain('multipart files');
     });
 
     it('should reject Supabase attachment URLs outside the target project prefix', async () => {
@@ -940,7 +790,7 @@ describe('Comments API', () => {
         });
 
       expect(res.status).toBe(400);
-      expect(res.body.error.message).toContain('No valid attachments');
+      expect(res.body.error.message).toContain('multipart files');
     });
 
     it('should reject local attachment URLs that escape the comments upload directory', async () => {
@@ -960,7 +810,7 @@ describe('Comments API', () => {
         });
 
       expect(res.status).toBe(400);
-      expect(res.body.error.message).toContain('No valid attachments');
+      expect(res.body.error.message).toContain('multipart files');
     });
   });
 
@@ -1536,37 +1386,27 @@ describe('Comments API', () => {
     });
 
     it('should remove uploaded attachment records and local files when deleting a comment', async () => {
-      const uploadRes = await request(app)
-        .post('/api/comments/attachments/upload')
-        .set('Authorization', `Bearer ${authToken}`)
-        .field('entityType', 'Lot')
-        .field('entityId', lotId)
-        .attach('files', Buffer.from('delete comment attachment body'), {
-          filename: 'comment-upload-test-delete-comment.txt',
-          contentType: 'text/plain',
-        });
-
-      expect(uploadRes.status).toBe(201);
-      const uploadedAttachment = uploadRes.body.attachments[0];
-      const uploadedPath = path.join(
-        process.cwd(),
-        String(uploadedAttachment.fileUrl).replace(/^\//, ''),
-      );
-      expect(fs.existsSync(uploadedPath)).toBe(true);
+      const filename = 'comment-upload-test-delete-comment.txt';
 
       const createRes = await request(app)
         .post('/api/comments')
         .set('Authorization', `Bearer ${authToken}`)
-        .send({
-          entityType: 'Lot',
-          entityId: lotId,
-          content: 'Delete this comment and its file',
-          attachments: uploadRes.body.attachments,
+        .field('entityType', 'Lot')
+        .field('entityId', lotId)
+        .field('content', 'Delete this comment and its file')
+        .attach('files', Buffer.from('delete comment attachment body'), {
+          filename,
+          contentType: 'text/plain',
         });
 
       expect(createRes.status).toBe(201);
       const uploadedCommentId = createRes.body.comment.id;
       const uploadedAttachmentId = createRes.body.comment.attachments[0].id;
+      const persistedAttachment = await prisma.commentAttachment.findFirstOrThrow({
+        where: { commentId: uploadedCommentId, filename },
+      });
+      const uploadedPath = path.join(process.cwd(), persistedAttachment.fileUrl.replace(/^\//, ''));
+      expect(fs.existsSync(uploadedPath)).toBe(true);
 
       const deleteRes = await request(app)
         .delete(`/api/comments/${uploadedCommentId}`)
@@ -1657,21 +1497,13 @@ describe('Comments API', () => {
       const res = await request(app)
         .post(`/api/comments/${attachCommentId}/attachments`)
         .set('Authorization', `Bearer ${authToken}`)
-        .send({
-          attachments: [
-            {
-              filename: 'attachment1.pdf',
-              fileUrl: '/uploads/comments/attachment1.pdf',
-              fileSize: 1024,
-              mimeType: 'application/pdf',
-            },
-            {
-              filename: 'attachment2.jpg',
-              fileUrl: '/uploads/comments/attachment2.jpg',
-              fileSize: 2048,
-              mimeType: 'image/jpeg',
-            },
-          ],
+        .attach('files', Buffer.from('attachment one'), {
+          filename: 'attachment1.txt',
+          contentType: 'text/plain',
+        })
+        .attach('files', Buffer.from('attachment two'), {
+          filename: 'attachment2.txt',
+          contentType: 'text/plain',
         });
 
       expect(res.status).toBe(201);
@@ -1756,17 +1588,17 @@ describe('Comments API', () => {
       await prisma.user.delete({ where: { id: otherUserId } }).catch(() => {});
     });
 
-    it('should require attachments array', async () => {
+    it('should require at least one uploaded file', async () => {
       const res = await request(app)
         .post(`/api/comments/${attachCommentId}/attachments`)
         .set('Authorization', `Bearer ${authToken}`)
         .send({});
 
       expect(res.status).toBe(400);
-      expect(res.body.error.message).toContain('attachments');
+      expect(res.body.error.message).toContain('At least one attachment file');
     });
 
-    it('should reject empty attachments array', async () => {
+    it('should reject empty attachment requests', async () => {
       const res = await request(app)
         .post(`/api/comments/${attachCommentId}/attachments`)
         .set('Authorization', `Bearer ${authToken}`)
@@ -1775,25 +1607,26 @@ describe('Comments API', () => {
         });
 
       expect(res.status).toBe(400);
-      expect(res.body.error.message).toContain('attachments');
+      expect(res.body.error.message).toContain('At least one attachment file');
     });
 
     it('should reject attachment batches over the per-comment limit', async () => {
-      const res = await request(app)
+      let upload = request(app)
         .post(`/api/comments/${attachCommentId}/attachments`)
-        .set('Authorization', `Bearer ${authToken}`)
-        .send({
-          attachments: Array.from({ length: 6 }, (_, index) => ({
-            filename: `too-many-${index}.txt`,
-            fileUrl: `/uploads/comments/too-many-${index}.txt`,
-          })),
+        .set('Authorization', `Bearer ${authToken}`);
+      for (let index = 0; index < 6; index += 1) {
+        upload = upload.attach('files', Buffer.from(`too many ${index}`), {
+          filename: `too-many-${index}.txt`,
+          contentType: 'text/plain',
         });
+      }
+      const res = await upload;
 
       expect(res.status).toBe(400);
-      expect(res.body.error.message).toContain('5');
+      expect(res.body.error.code).toBe('UPLOAD_ERROR');
     });
 
-    it('should reject attachments with missing required fields', async () => {
+    it('should reject client-supplied attachment locators', async () => {
       const res = await request(app)
         .post(`/api/comments/${attachCommentId}/attachments`)
         .set('Authorization', `Bearer ${authToken}`)
@@ -1811,21 +1644,16 @@ describe('Comments API', () => {
         });
 
       expect(res.status).toBe(400);
-      expect(res.body.error.message).toContain('No valid attachments');
+      expect(res.body.error.message).toContain('multipart files');
     });
 
-    it('should handle attachments with optional fields omitted', async () => {
+    it('should append multipart attachments with optional metadata supplied by storage', async () => {
       const res = await request(app)
         .post(`/api/comments/${attachCommentId}/attachments`)
         .set('Authorization', `Bearer ${authToken}`)
-        .send({
-          attachments: [
-            {
-              filename: 'minimal.txt',
-              fileUrl: '/uploads/comments/minimal.txt',
-              // fileSize and mimeType omitted
-            },
-          ],
+        .attach('files', Buffer.from('minimal attachment'), {
+          filename: 'minimal.txt',
+          contentType: 'text/plain',
         });
 
       expect(res.status).toBe(201);
@@ -1833,7 +1661,7 @@ describe('Comments API', () => {
       expect(res.body.attachments[res.body.attachments.length - 1].filename).toBe('minimal.txt');
     });
 
-    it('should reject invalid attachment metadata without adding attachments', async () => {
+    it('should reject client-supplied attachment metadata without adding attachments', async () => {
       const invalidMetadataCases = [
         {
           expectedMessage: 'fileSize',
@@ -1853,7 +1681,7 @@ describe('Comments API', () => {
         },
       ];
 
-      for (const { expectedMessage, payload } of invalidMetadataCases) {
+      for (const { payload } of invalidMetadataCases) {
         const beforeCount = await prisma.commentAttachment.count({
           where: { commentId: attachCommentId },
         });
@@ -1864,7 +1692,7 @@ describe('Comments API', () => {
           .send({ attachments: [payload] });
 
         expect(res.status).toBe(400);
-        expect(res.body.error.message).toContain(expectedMessage);
+        expect(res.body.error.message).toContain('multipart files');
         await expect(
           prisma.commentAttachment.count({ where: { commentId: attachCommentId } }),
         ).resolves.toBe(beforeCount);
@@ -1885,7 +1713,7 @@ describe('Comments API', () => {
         });
 
       expect(res.status).toBe(400);
-      expect(res.body.error.message).toContain('No valid attachments');
+      expect(res.body.error.message).toContain('multipart files');
     });
 
     it('should reject Supabase attachment URLs outside the comment project prefix', async () => {
@@ -1906,7 +1734,7 @@ describe('Comments API', () => {
         });
 
       expect(res.status).toBe(400);
-      expect(res.body.error.message).toContain('No valid attachments');
+      expect(res.body.error.message).toContain('multipart files');
     });
 
     it('should not allow adding attachments to deleted comments', async () => {
@@ -1951,18 +1779,12 @@ describe('Comments API', () => {
       const res = await request(app)
         .post('/api/comments')
         .set('Authorization', `Bearer ${authToken}`)
-        .send({
-          entityType: 'Lot',
-          entityId: lotId,
-          content: 'Comment with attachment to delete',
-          attachments: [
-            {
-              filename: 'to-delete.pdf',
-              fileUrl: '/uploads/comments/to-delete.pdf',
-              fileSize: 1024,
-              mimeType: 'application/pdf',
-            },
-          ],
+        .field('entityType', 'Lot')
+        .field('entityId', lotId)
+        .field('content', 'Comment with attachment to delete')
+        .attach('files', Buffer.from('delete attachment fixture'), {
+          filename: 'to-delete.txt',
+          contentType: 'text/plain',
         });
       deleteAttachCommentId = res.body.comment.id;
       attachmentId = res.body.comment.attachments[0].id;
@@ -1984,38 +1806,32 @@ describe('Comments API', () => {
     });
 
     it('should remove uploaded local files when deleting attachments', async () => {
-      const uploadRes = await request(app)
-        .post('/api/comments/attachments/upload')
+      const filename = `comment-upload-test-delete-local-${Date.now()}.txt`;
+
+      const createRes = await request(app)
+        .post('/api/comments')
         .set('Authorization', `Bearer ${authToken}`)
         .field('entityType', 'Lot')
         .field('entityId', lotId)
+        .field('content', 'Comment with uploaded attachment to delete')
         .attach('files', Buffer.from('delete uploaded attachment body'), {
-          filename: `comment-upload-test-delete-local-${Date.now()}.txt`,
+          filename,
           contentType: 'text/plain',
         });
 
-      expect(uploadRes.status).toBe(201);
-      const uploadedAttachment = uploadRes.body.attachments[0];
-      const localPath = uploadedAttachment.fileUrl.startsWith('/uploads/')
-        ? path.join(process.cwd(), uploadedAttachment.fileUrl.replace(/^\//, ''))
+      const uploadedCommentId = createRes.body.comment.id;
+      const uploadedAttachmentId = createRes.body.comment.attachments[0].id;
+      const persistedAttachment = await prisma.commentAttachment.findFirstOrThrow({
+        where: { commentId: uploadedCommentId, filename },
+      });
+      const localPath = persistedAttachment.fileUrl.startsWith('/uploads/')
+        ? path.join(process.cwd(), persistedAttachment.fileUrl.replace(/^\//, ''))
         : null;
 
       if (localPath) {
         expect(fs.existsSync(localPath)).toBe(true);
       }
 
-      const createRes = await request(app)
-        .post('/api/comments')
-        .set('Authorization', `Bearer ${authToken}`)
-        .send({
-          entityType: 'Lot',
-          entityId: lotId,
-          content: 'Comment with uploaded attachment to delete',
-          attachments: uploadRes.body.attachments,
-        });
-
-      const uploadedCommentId = createRes.body.comment.id;
-      const uploadedAttachmentId = createRes.body.comment.attachments[0].id;
       const deleteRes = await request(app)
         .delete(`/api/comments/${uploadedCommentId}/attachments/${uploadedAttachmentId}`)
         .set('Authorization', `Bearer ${authToken}`);
@@ -2075,13 +1891,9 @@ describe('Comments API', () => {
       const attachRes = await request(app)
         .post(`/api/comments/${deleteAttachCommentId}/attachments`)
         .set('Authorization', `Bearer ${authToken}`)
-        .send({
-          attachments: [
-            {
-              filename: 'protected.pdf',
-              fileUrl: '/uploads/comments/protected.pdf',
-            },
-          ],
+        .attach('files', Buffer.from('protected attachment'), {
+          filename: 'protected.txt',
+          contentType: 'text/plain',
         });
       const protectedAttachmentId =
         attachRes.body.attachments[attachRes.body.attachments.length - 1].id;
@@ -2105,16 +1917,12 @@ describe('Comments API', () => {
       const createRes = await request(app)
         .post('/api/comments')
         .set('Authorization', `Bearer ${authToken}`)
-        .send({
-          entityType: 'Lot',
-          entityId: lotId,
-          content: 'Comment to delete',
-          attachments: [
-            {
-              filename: 'temp.pdf',
-              fileUrl: '/uploads/comments/temp.pdf',
-            },
-          ],
+        .field('entityType', 'Lot')
+        .field('entityId', lotId)
+        .field('content', 'Comment to delete')
+        .attach('files', Buffer.from('temporary attachment'), {
+          filename: 'temp.txt',
+          contentType: 'text/plain',
         });
       const tempCommentId = createRes.body.comment.id;
       const tempAttachmentId = createRes.body.comment.attachments[0].id;
@@ -2135,24 +1943,15 @@ describe('Comments API', () => {
 
   describe('GET /api/comments/attachments/:attachmentId/download', () => {
     it('should download stored attachments for users with entity access', async () => {
-      const uploadRes = await request(app)
-        .post('/api/comments/attachments/upload')
-        .set('Authorization', `Bearer ${authToken}`)
-        .field('entityType', 'Lot')
-        .field('entityId', lotId)
-        .attach('files', Buffer.from('comment attachment download body'), {
-          filename: 'comment-upload-test-download.txt',
-          contentType: 'text/plain',
-        });
-
       const createRes = await request(app)
         .post('/api/comments')
         .set('Authorization', `Bearer ${authToken}`)
-        .send({
-          entityType: 'Lot',
-          entityId: lotId,
-          content: 'Comment with downloadable attachment',
-          attachments: uploadRes.body.attachments,
+        .field('entityType', 'Lot')
+        .field('entityId', lotId)
+        .field('content', 'Comment with downloadable attachment')
+        .attach('files', Buffer.from('comment attachment download body'), {
+          filename: 'comment-upload-test-download.txt',
+          contentType: 'text/plain',
         });
 
       const attachment = createRes.body.comment.attachments[0];
@@ -2743,10 +2542,11 @@ describe('Comments API', () => {
       } as unknown as ReturnType<typeof supabaseLib.getSupabaseClient>);
 
       const res = await request(app)
-        .post('/api/comments/attachments/upload')
+        .post('/api/comments')
         .set('Authorization', `Bearer ${authToken}`)
         .field('entityType', 'Lot')
         .field('entityId', lotId)
+        .field('content', 'Comment with rollback attachments')
         .attach('files', Buffer.from('rollback first ok'), {
           filename: 'supabase-rollback-first.txt',
           contentType: 'text/plain',

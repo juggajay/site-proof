@@ -11,7 +11,6 @@ import {
   buildCommentListResponse,
   buildCommentMutationResponse,
   buildCommentSuccessResponse,
-  buildUploadedCommentAttachmentsResponse,
 } from './comments/responses.js';
 import {
   getCanonicalCommentEntityType,
@@ -22,15 +21,13 @@ import {
   COMMENT_ATTACHMENT_MAX_FILES,
   cleanupStoredCommentAttachments,
   commentAttachmentUpload,
-  getValidAttachments,
   sendCommentAttachmentFile,
   storeCommentAttachmentFiles,
 } from './comments/attachmentStorage.js';
+import type { AttachmentInput } from './comments/attachmentStorage.js';
 import {
-  assertCommentAttachmentLimit,
   cleanupDeletedCommentAttachmentFile,
   cleanupDeletedCommentAttachmentFiles,
-  requireCommentAttachmentArray,
   requireCommentAuthor,
   requireCommentUserId,
   validateUploadedCommentFiles,
@@ -42,6 +39,44 @@ export const commentsRouter = Router();
 
 // Apply authentication middleware to all comment routes
 commentsRouter.use(requireAuth);
+
+function rejectClientSuppliedCommentAttachmentLocators(attachments: unknown): void {
+  if (Array.isArray(attachments) && attachments.length > 0) {
+    throw AppError.badRequest('Upload comment attachments as multipart files');
+  }
+}
+
+function requireUploadedCommentAttachmentFiles(req: AuthRequest): Express.Multer.File[] {
+  const files = req.files as Express.Multer.File[] | undefined;
+  if (!files || files.length === 0) {
+    throw AppError.badRequest('At least one attachment file is required');
+  }
+
+  validateUploadedCommentFiles(files);
+  return files;
+}
+
+async function appendStoredCommentAttachments(
+  commentId: string,
+  uploadedAttachments: AttachmentInput[],
+  projectId: string,
+) {
+  try {
+    return await prisma.commentAttachment.createMany({
+      data: uploadedAttachments.map((att) => ({
+        commentId,
+        ...att,
+      })),
+    });
+  } catch (error) {
+    await cleanupStoredCommentAttachments(
+      uploadedAttachments,
+      projectId,
+      'Failed to remove comment attachment after append rollback:',
+    );
+    throw error;
+  }
+}
 
 // GET /api/comments - Get comments for an entity
 commentsRouter.get(
@@ -98,30 +133,13 @@ commentsRouter.get(
 // POST /api/comments/attachments/upload - Upload files for comment attachments
 commentsRouter.post(
   '/attachments/upload',
-  commentAttachmentUpload.array('files', COMMENT_ATTACHMENT_MAX_FILES),
-  asyncHandler(async (req: AuthRequest, res) => {
-    const userId = req.user?.id;
-    const entityType = getSingleString(req.body.entityType);
-    const entityId = getSingleString(req.body.entityId);
-
-    requireCommentUserId(userId);
-
-    if (!entityType || !entityId) {
-      throw AppError.badRequest('entityType and entityId are required');
-    }
-
-    const projectId = await requireCommentEntityAccess(req.user!, entityType, entityId);
-    const files = req.files as Express.Multer.File[] | undefined;
-
-    if (!files || files.length === 0) {
-      throw AppError.badRequest('At least one attachment file is required');
-    }
-
-    validateUploadedCommentFiles(files);
-
-    const attachments = await storeCommentAttachmentFiles(files, projectId);
-
-    res.status(201).json(buildUploadedCommentAttachmentsResponse(attachments));
+  asyncHandler(async (req: AuthRequest, _res) => {
+    requireCommentUserId(req.user?.id);
+    throw new AppError(
+      410,
+      'Standalone comment attachment uploads are no longer supported. Upload files with the comment request instead.',
+      'GONE',
+    );
   }),
 );
 
@@ -193,22 +211,13 @@ commentsRouter.post(
       }
     }
 
-    // Validate attachments if provided
-    assertCommentAttachmentLimit(attachments);
+    rejectClientSuppliedCommentAttachmentLocators(attachments);
 
     const files = req.files as Express.Multer.File[] | undefined;
     validateUploadedCommentFiles(files);
 
     const uploadedAttachments =
       files && files.length > 0 ? await storeCommentAttachmentFiles(files, projectId) : [];
-    const validAttachments =
-      uploadedAttachments.length > 0
-        ? uploadedAttachments
-        : getValidAttachments(attachments, projectId);
-
-    if (Array.isArray(attachments) && attachments.length > 0 && validAttachments.length === 0) {
-      throw AppError.badRequest('No valid attachments provided');
-    }
 
     let comment;
     try {
@@ -220,7 +229,7 @@ commentsRouter.post(
           authorId: userId,
           parentId: parentId || null,
           attachments: {
-            create: validAttachments,
+            create: uploadedAttachments,
           },
         },
         include: {
@@ -353,6 +362,7 @@ commentsRouter.delete(
 // POST /api/comments/:id/attachments - Add attachments to a comment
 commentsRouter.post(
   '/:id/attachments',
+  commentAttachmentUpload.array('files', COMMENT_ATTACHMENT_MAX_FILES),
   asyncHandler(async (req: AuthRequest, res) => {
     const id = parseCommentRouteParam(req.params.id, 'id');
     const { attachments } = req.body;
@@ -380,22 +390,10 @@ commentsRouter.post(
       'You can only add attachments to your own comments',
     );
 
-    const validAttachments = getValidAttachments(
-      requireCommentAttachmentArray(attachments),
-      projectId,
-    );
-
-    if (validAttachments.length === 0) {
-      throw AppError.badRequest('No valid attachments provided');
-    }
-
-    // Create attachments
-    const created = await prisma.commentAttachment.createMany({
-      data: validAttachments.map((att) => ({
-        commentId: id,
-        ...att,
-      })),
-    });
+    rejectClientSuppliedCommentAttachmentLocators(attachments);
+    const files = requireUploadedCommentAttachmentFiles(req);
+    const uploadedAttachments = await storeCommentAttachmentFiles(files, projectId);
+    const created = await appendStoredCommentAttachments(id, uploadedAttachments, projectId);
 
     // Fetch the updated comment with attachments
     const updatedComment = await prisma.comment.findUnique({
