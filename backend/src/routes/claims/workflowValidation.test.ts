@@ -5,6 +5,7 @@ import {
   assertCertifiedAmountWithinClaimTotal,
   assertClaimIncrementWithinRemaining,
   assertGenericClaimStatusTransition,
+  assertReducedCertifiedAmountHasVariationNotes,
   certifyClaimSchema,
   createClaimSchema,
   isLotFullyClaimed,
@@ -67,6 +68,21 @@ describe('claims workflow validation', () => {
     expect(() => assertCertifiedAmountWithinClaimTotal(100, '100')).not.toThrow();
     expect(() => assertCertifiedAmountWithinClaimTotal(101, '100')).toThrow(
       'Certified amount cannot exceed the claimed amount',
+    );
+  });
+
+  it('requires variation notes when the certified amount is reduced', () => {
+    expect(() =>
+      assertReducedCertifiedAmountHasVariationNotes(100, '100', undefined),
+    ).not.toThrow();
+    expect(() =>
+      assertReducedCertifiedAmountHasVariationNotes(90, '100', 'Quantity adjusted by schedule'),
+    ).not.toThrow();
+    expect(() => assertReducedCertifiedAmountHasVariationNotes(90, '100', '')).toThrow(
+      'Variation notes are required when the certified amount is less than the claimed amount',
+    );
+    expect(() => assertReducedCertifiedAmountHasVariationNotes(90, '100', '   ')).toThrow(
+      'Variation notes are required when the certified amount is less than the claimed amount',
     );
   });
 

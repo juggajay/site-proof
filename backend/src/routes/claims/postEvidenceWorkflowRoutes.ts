@@ -13,8 +13,10 @@ import {
 } from './presentation.js';
 import {
   CLAIM_AMOUNT_EPSILON,
+  CLAIM_VARIATION_NOTES_MAX_LENGTH,
   MAX_CERTIFICATION_DOCUMENT_ID_LENGTH,
   assertCertifiedAmountWithinClaimTotal,
+  assertReducedCertifiedAmountHasVariationNotes,
   certifyClaimSchema,
   normalizeOptionalCertificationString,
   parseOptionalClaimDate,
@@ -89,7 +91,7 @@ export function createClaimPostEvidenceWorkflowRouter({
       const variationNotes = normalizeOptionalCertificationString(
         validation.data.variationNotes,
         'variationNotes',
-        2000,
+        CLAIM_VARIATION_NOTES_MAX_LENGTH,
       );
       const certifiedAt =
         parseOptionalClaimDate(certificationDate, 'certificationDate') ?? new Date();
@@ -123,6 +125,11 @@ export function createClaimPostEvidenceWorkflowRouter({
         }
 
         assertCertifiedAmountWithinClaimTotal(certifiedAmount, claim.totalClaimedAmount);
+        assertReducedCertifiedAmountHasVariationNotes(
+          certifiedAmount,
+          claim.totalClaimedAmount,
+          variationNotes,
+        );
 
         const previousStatus = claim.status;
 
