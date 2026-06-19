@@ -5,6 +5,7 @@ import { prisma } from './prisma.js';
 import { logInfo, logWarn } from './serverLogger.js';
 import { resolveDashboardRoleForUser, type DashboardRole } from './dashboardRole.js';
 import { buildAvatarDisplayUrl } from './avatarUrls.js';
+import { isBcryptPasswordHash, isLegacySha256PasswordHash } from './passwordHashPolicy.js';
 
 // JWT_SECRET is required - no fallback for security
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -197,13 +198,13 @@ export function hashPassword(password: string): string {
  */
 export function verifyPassword(password: string, hash: string): boolean {
   // Check if hash is bcrypt format (starts with $2a$, $2b$, or $2y$)
-  if (hash.startsWith('$2a$') || hash.startsWith('$2b$') || hash.startsWith('$2y$')) {
+  if (isBcryptPasswordHash(hash)) {
     return bcrypt.compareSync(password, hash);
   }
 
   // Legacy SHA256 hash support (for migration period)
   // SHA256 hashes are 64 character hex strings
-  if (hash.length === 64 && /^[a-f0-9]+$/i.test(hash)) {
+  if (isLegacySha256PasswordHash(hash)) {
     const sha256Hash = crypto
       .createHash('sha256')
       .update(password + EFFECTIVE_JWT_SECRET)
@@ -223,5 +224,5 @@ export function verifyPassword(password: string, hash: string): boolean {
  */
 export function needsPasswordRehash(hash: string): boolean {
   // SHA256 hashes need upgrading
-  return hash.length === 64 && /^[a-f0-9]+$/i.test(hash);
+  return isLegacySha256PasswordHash(hash);
 }

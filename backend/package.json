@@ -25,6 +25,8 @@
     "db:backup:list": "tsx scripts/backup.ts list",
     "db:migration-preconditions": "tsx scripts/check-unique-migration-preconditions.ts",
     "db:backfill-token-hashes": "tsx scripts/backfill-one-time-token-hashes.ts",
+    "auth:password-hash-report": "tsx scripts/migrate-passwords.ts",
+    "auth:password-hash-ready": "tsx scripts/migrate-passwords.ts --fail-on-non-bcrypt",
     "seed:itp": "node scripts/seeds/itp-templates/index.mjs",
     "smoke:production": "node scripts/smoke-production.mjs",
     "preflight:integrations": "tsx scripts/preflight-production-integrations.ts",
