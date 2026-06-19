@@ -149,12 +149,18 @@ function errorResponse(status: number, text: string): Response {
   return new Response(text, { status });
 }
 
-function expectDiarySubmitSynced(result: unknown, itemId: number, diaryId: string): void {
-  expect(result).toEqual({ status: 'synced' });
+function expectDiaryDeadLettered(
+  result: unknown,
+  itemId: number,
+  diaryId: string,
+  error: string,
+): void {
+  expect(result).toEqual({ status: 'handled' });
+  expect(markSyncItemTerminalErrorMock).toHaveBeenCalledWith(itemId, error);
+  expect(markDiarySyncErrorMock).toHaveBeenCalledWith(diaryId);
   expect(markSyncItemErrorMock).not.toHaveBeenCalled();
-  expect(markDiarySyncErrorMock).not.toHaveBeenCalled();
-  expect(removeSyncQueueItemMock).toHaveBeenCalledWith(itemId);
-  expect(markDiarySyncedMock).toHaveBeenCalledWith(diaryId);
+  expect(removeSyncQueueItemMock).not.toHaveBeenCalled();
+  expect(markDiarySyncedMock).not.toHaveBeenCalled();
 }
 
 // The photo_upload executor reads its in-memory base64 dataUrl via the global
@@ -382,7 +388,59 @@ describe('syncSingleItem — diary', () => {
     expect(markDiarySyncedMock).toHaveBeenCalledWith('d-2');
   });
 
-  it('diary_submit swallows "Diary already submitted" as success', async () => {
+  it('diary_submit treats a verified submitted server diary as an idempotent retry', async () => {
+    diariesGetMock.mockResolvedValue({
+      id: 'd-2b',
+      projectId: 'project-1',
+      date: '2026-06-18',
+      status: 'submitted',
+    });
+    syncOfflineDiarySnapshotMock.mockResolvedValue('server-d-2b');
+    authFetchMock
+      .mockResolvedValueOnce(errorResponse(400, 'Cannot modify submitted diary'))
+      .mockResolvedValueOnce(okJson({ id: 'server-d-2b', status: 'submitted' }));
+    readResponseErrorMock.mockResolvedValue('Cannot modify submitted diary');
+
+    const result = await syncSingleItem(
+      queueItem({ id: 25, type: 'diary_submit', data: { diaryId: 'd-2b' } }),
+    );
+
+    expect(result).toEqual({ status: 'synced' });
+    expect(authFetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/diary/project-1/2026-06-18?missing=null',
+    );
+    expect(removeSyncQueueItemMock).toHaveBeenCalledWith(25);
+    expect(markDiarySyncedMock).toHaveBeenCalledWith('d-2b');
+    expect(markSyncItemTerminalErrorMock).not.toHaveBeenCalled();
+    expect(markSyncItemErrorMock).not.toHaveBeenCalled();
+    expect(markDiarySyncErrorMock).not.toHaveBeenCalled();
+  });
+
+  it('diary_submit treats a verified submitted server diary after snapshot rejection as synced', async () => {
+    diariesGetMock.mockResolvedValue({
+      id: 'd-2c',
+      projectId: 'project-1',
+      date: '2026-06-19',
+      status: 'submitted',
+    });
+    syncOfflineDiarySnapshotMock.mockRejectedValue(new Error('Cannot modify submitted diary'));
+    authFetchMock.mockResolvedValueOnce(okJson({ id: 'server-d-2c', status: 'submitted' }));
+
+    const result = await syncSingleItem(
+      queueItem({ id: 26, type: 'diary_submit', data: { diaryId: 'd-2c' } }),
+    );
+
+    expect(result).toEqual({ status: 'synced' });
+    expect(authFetchMock).toHaveBeenCalledWith('/api/diary/project-1/2026-06-19?missing=null');
+    expect(removeSyncQueueItemMock).toHaveBeenCalledWith(26);
+    expect(markDiarySyncedMock).toHaveBeenCalledWith('d-2c');
+    expect(markSyncItemTerminalErrorMock).not.toHaveBeenCalled();
+    expect(markSyncItemErrorMock).not.toHaveBeenCalled();
+    expect(markDiarySyncErrorMock).not.toHaveBeenCalled();
+  });
+
+  it('diary_submit dead-letters "Diary already submitted" instead of marking synced', async () => {
     diariesGetMock.mockResolvedValue({ id: 'd-3' });
     syncOfflineDiarySnapshotMock.mockResolvedValue('server-d-3');
     authFetchMock.mockResolvedValue(errorResponse(409, 'Diary already submitted'));
@@ -392,10 +450,10 @@ describe('syncSingleItem — diary', () => {
       queueItem({ id: 21, type: 'diary_submit', data: { diaryId: 'd-3' } }),
     );
 
-    expectDiarySubmitSynced(result, 21, 'd-3');
+    expectDiaryDeadLettered(result, 21, 'd-3', 'Diary already submitted');
   });
 
-  it('diary_submit treats an already submitted server diary as synced after a lost response', async () => {
+  it('diary_submit dead-letters submitted-diary conflicts from /submit', async () => {
     diariesGetMock.mockResolvedValue({ id: 'd-3b' });
     syncOfflineDiarySnapshotMock.mockResolvedValue('server-d-3b');
     authFetchMock.mockResolvedValue(errorResponse(400, 'Cannot modify submitted diary'));
@@ -405,10 +463,30 @@ describe('syncSingleItem — diary', () => {
       queueItem({ id: 22, type: 'diary_submit', data: { diaryId: 'd-3b' } }),
     );
 
-    expectDiarySubmitSynced(result, 22, 'd-3b');
+    expectDiaryDeadLettered(result, 22, 'd-3b', 'Cannot modify submitted diary');
   });
 
-  it('diary_submit other error returns "handled" and error-marks item + diary', async () => {
+  it('diary_submit dead-letters submitted-diary conflicts when verification is not submitted', async () => {
+    diariesGetMock.mockResolvedValue({
+      id: 'd-3c',
+      projectId: 'project-1',
+      date: '2026-06-20',
+      status: 'submitted',
+    });
+    syncOfflineDiarySnapshotMock.mockResolvedValue('server-d-3c');
+    authFetchMock
+      .mockResolvedValueOnce(errorResponse(400, 'Cannot modify submitted diary'))
+      .mockResolvedValueOnce(okJson({ id: 'server-d-3c', status: 'draft' }));
+    readResponseErrorMock.mockResolvedValue('Cannot modify submitted diary');
+
+    const result = await syncSingleItem(
+      queueItem({ id: 27, type: 'diary_submit', data: { diaryId: 'd-3c' } }),
+    );
+
+    expectDiaryDeadLettered(result, 27, 'd-3c', 'Cannot modify submitted diary');
+  });
+
+  it('diary_submit validation errors are terminal and keep the item visible', async () => {
     diariesGetMock.mockResolvedValue({ id: 'd-4' });
     syncOfflineDiarySnapshotMock.mockResolvedValue('server-d-4');
     authFetchMock.mockResolvedValue(errorResponse(400, 'missing weather'));
@@ -419,8 +497,26 @@ describe('syncSingleItem — diary', () => {
     );
 
     expect(result).toEqual({ status: 'handled' });
-    expect(markSyncItemErrorMock).toHaveBeenCalledWith(21, 'missing weather');
+    expect(markSyncItemTerminalErrorMock).toHaveBeenCalledWith(21, 'missing weather');
     expect(markDiarySyncErrorMock).toHaveBeenCalledWith('d-4');
+    expect(markSyncItemErrorMock).not.toHaveBeenCalled();
+    expect(removeSyncQueueItemMock).not.toHaveBeenCalled();
+  });
+
+  it('diary_submit retriable submit errors stay on the normal retry path', async () => {
+    diariesGetMock.mockResolvedValue({ id: 'd-4b' });
+    syncOfflineDiarySnapshotMock.mockResolvedValue('server-d-4b');
+    authFetchMock.mockResolvedValue(errorResponse(500, 'server unavailable'));
+    readResponseErrorMock.mockResolvedValue('server unavailable');
+
+    const result = await syncSingleItem(
+      queueItem({ id: 23, type: 'diary_submit', data: { diaryId: 'd-4b' } }),
+    );
+
+    expect(result).toEqual({ status: 'handled' });
+    expect(markSyncItemErrorMock).toHaveBeenCalledWith(23, 'server unavailable');
+    expect(markDiarySyncErrorMock).toHaveBeenCalledWith('d-4b');
+    expect(markSyncItemTerminalErrorMock).not.toHaveBeenCalled();
     expect(removeSyncQueueItemMock).not.toHaveBeenCalled();
   });
 
@@ -447,6 +543,18 @@ describe('syncSingleItem — diary', () => {
     expect(result).toEqual({ status: 'handled' });
     expect(markSyncItemErrorMock).toHaveBeenCalledWith(21, 'activity post failed');
     expect(markDiarySyncErrorMock).toHaveBeenCalledWith('d-5');
+  });
+
+  it('dead-letters submitted-diary conflicts from snapshot writes', async () => {
+    diariesGetMock.mockResolvedValue({ id: 'd-6' });
+    syncOfflineDiarySnapshotMock.mockRejectedValue(new Error('Cannot modify submitted diary'));
+
+    const result = await syncSingleItem(
+      queueItem({ id: 24, type: 'diary_save', data: { diaryId: 'd-6' } }),
+    );
+
+    expectDiaryDeadLettered(result, 24, 'd-6', 'Cannot modify submitted diary');
+    expect(authFetchMock).not.toHaveBeenCalled();
   });
 });
 

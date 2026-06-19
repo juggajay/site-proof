@@ -44,6 +44,7 @@ import {
   markLotSynced,
   markLotSyncError,
   type ItpServerCompletionSnapshot,
+  type OfflineDailyDiary,
   type SyncQueueItem,
 } from '../offlineDb';
 import { readResponseError, syncOfflineDiarySnapshot, syncOfflineDocketDraft } from './syncClient';
@@ -120,11 +121,151 @@ function isTerminalItpSyncRejection(status: number): boolean {
   return status >= 400 && status < 500 && status !== 408 && status !== 429;
 }
 
-function isAlreadySubmittedDiarySyncError(errorText: string): boolean {
+function isKnownTerminalDiarySyncError(errorText: string): boolean {
   return (
     errorText.includes('Diary already submitted') ||
     errorText.includes('Cannot modify submitted diary')
   );
+}
+
+function isTerminalDiarySyncRejection(status: number, errorText: string): boolean {
+  return (
+    isKnownTerminalDiarySyncError(errorText) ||
+    (status >= 400 && status < 500 && status !== 408 && status !== 429)
+  );
+}
+
+async function markDiaryTerminalSyncError(
+  itemId: number,
+  diaryId: string,
+  errorText: string,
+): Promise<void> {
+  await markSyncItemTerminalError(itemId, errorText);
+  await markDiarySyncError(diaryId);
+}
+
+type ServerDiaryStatusSnapshot = {
+  id?: string | null;
+  status?: string | null;
+};
+
+async function verifySubmittedServerDiary(diary: OfflineDailyDiary): Promise<boolean> {
+  const response = await authFetch(
+    apiUrl(
+      `/api/diary/${encodeURIComponent(diary.projectId)}/${encodeURIComponent(
+        diary.date,
+      )}?missing=null`,
+    ),
+  );
+
+  if (!response.ok) {
+    return false;
+  }
+
+  const serverDiary = (await response.json()) as ServerDiaryStatusSnapshot | null;
+  return serverDiary?.status === 'submitted';
+}
+
+async function clearVerifiedDuplicateDiarySubmit(
+  itemId: number,
+  diaryId: string,
+  diary: OfflineDailyDiary,
+): Promise<boolean> {
+  if (diary.status !== 'submitted') {
+    return false;
+  }
+
+  if (!(await verifySubmittedServerDiary(diary))) {
+    return false;
+  }
+
+  await removeSyncQueueItem(itemId);
+  await markDiarySynced(diaryId);
+  return true;
+}
+
+async function resolveKnownDiarySyncConflict(
+  item: DiaryItem,
+  itemId: number,
+  diaryId: string,
+  diary: OfflineDailyDiary,
+  errorText: string,
+): Promise<SyncItemResult | undefined> {
+  if (!isKnownTerminalDiarySyncError(errorText)) {
+    return undefined;
+  }
+
+  if (
+    item.type === 'diary_submit' &&
+    (await clearVerifiedDuplicateDiarySubmit(itemId, diaryId, diary))
+  ) {
+    return SYNCED;
+  }
+
+  await markDiaryTerminalSyncError(itemId, diaryId, errorText);
+  return HANDLED;
+}
+
+type DiarySnapshotSyncResult =
+  | { kind: 'ready'; serverDiaryId: string }
+  | { kind: 'handled'; result: SyncItemResult };
+
+async function syncDiarySnapshotForQueue(
+  item: DiaryItem,
+  itemId: number,
+  diaryId: string,
+  diary: OfflineDailyDiary,
+): Promise<DiarySnapshotSyncResult> {
+  try {
+    return { kind: 'ready', serverDiaryId: await syncOfflineDiarySnapshot(diary) };
+  } catch (error) {
+    const errorText = error instanceof Error ? error.message : 'Unknown error';
+    const knownConflictResult = await resolveKnownDiarySyncConflict(
+      item,
+      itemId,
+      diaryId,
+      diary,
+      errorText,
+    );
+    if (knownConflictResult) {
+      return { kind: 'handled', result: knownConflictResult };
+    }
+
+    throw error;
+  }
+}
+
+async function syncDiarySubmitResponse(
+  item: DiaryItem,
+  itemId: number,
+  diaryId: string,
+  diary: OfflineDailyDiary,
+  response: Response,
+): Promise<SyncItemResult | undefined> {
+  if (response.ok) {
+    return undefined;
+  }
+
+  const errorText = await readResponseError(response);
+  const knownConflictResult = await resolveKnownDiarySyncConflict(
+    item,
+    itemId,
+    diaryId,
+    diary,
+    errorText,
+  );
+  if (knownConflictResult) {
+    return knownConflictResult;
+  }
+
+  if (isTerminalDiarySyncRejection(response.status, errorText)) {
+    await markDiaryTerminalSyncError(itemId, diaryId, errorText);
+  } else {
+    await markSyncItemError(itemId, errorText);
+    await markDiarySyncError(diaryId);
+  }
+
+  return HANDLED;
 }
 
 interface ItpInstanceSyncResponse {
@@ -221,24 +362,26 @@ async function syncDiary(item: DiaryItem, itemId: number): Promise<SyncItemResul
         return HANDLED;
       }
 
-      const serverDiaryId = await syncOfflineDiarySnapshot(diary);
+      const snapshotResult = await syncDiarySnapshotForQueue(item, itemId, diaryId, diary);
+      if (snapshotResult.kind === 'handled') {
+        return snapshotResult.result;
+      }
 
       if (item.type === 'diary_submit') {
-        const response = await authFetch(apiUrl(`/api/diary/${serverDiaryId}/submit`), {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
+        const response = await authFetch(
+          apiUrl(`/api/diary/${snapshotResult.serverDiaryId}/submit`),
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ acknowledgeWarnings: true }),
           },
-          body: JSON.stringify({ acknowledgeWarnings: true }),
-        });
+        );
 
-        if (!response.ok) {
-          const errorText = await readResponseError(response);
-          if (!isAlreadySubmittedDiarySyncError(errorText)) {
-            await markSyncItemError(itemId, errorText);
-            await markDiarySyncError(diaryId);
-            return HANDLED;
-          }
+        const submitResult = await syncDiarySubmitResponse(item, itemId, diaryId, diary, response);
+        if (submitResult) {
+          return submitResult;
         }
       }
 
