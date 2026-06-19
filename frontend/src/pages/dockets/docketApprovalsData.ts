@@ -65,6 +65,77 @@ export interface ProjectResponse {
 export const normalizeDockets = (data: DocketsResponse): Docket[] =>
   Array.isArray(data) ? data : data.dockets || [];
 
+function moneyValue(value: number | null | undefined): number {
+  return Number.isFinite(Number(value)) ? Number(value) : 0;
+}
+
+function hasMoneyValue(value: number | null | undefined): boolean {
+  return value !== null && value !== undefined && Number.isFinite(Number(value));
+}
+
+function centsDiffer(left: number, right: number): boolean {
+  return Math.abs(left - right) >= 0.005;
+}
+
+export function formatDocketCurrency(value: number): string {
+  return new Intl.NumberFormat('en-AU', {
+    style: 'currency',
+    currency: 'AUD',
+  }).format(value);
+}
+
+export function getDocketSubmittedLabourCost(docket: Docket): number {
+  return moneyValue(docket.totalLabourSubmitted);
+}
+
+export function getDocketSubmittedPlantCost(docket: Docket): number {
+  return moneyValue(docket.totalPlantSubmitted);
+}
+
+export function getDocketSubmittedTotalCost(docket: Docket): number {
+  return getDocketSubmittedLabourCost(docket) + getDocketSubmittedPlantCost(docket);
+}
+
+export function hasDocketApprovedLabourCost(docket: Docket): boolean {
+  return docket.status === 'approved' && hasMoneyValue(docket.totalLabourApprovedCost);
+}
+
+export function hasDocketApprovedPlantCost(docket: Docket): boolean {
+  return docket.status === 'approved' && hasMoneyValue(docket.totalPlantApprovedCost);
+}
+
+export function hasDocketApprovedCost(docket: Docket): boolean {
+  return hasDocketApprovedLabourCost(docket) || hasDocketApprovedPlantCost(docket);
+}
+
+export function getDocketDisplayLabourCost(docket: Docket): number {
+  if (hasDocketApprovedLabourCost(docket)) {
+    return moneyValue(docket.totalLabourApprovedCost);
+  }
+  return getDocketSubmittedLabourCost(docket);
+}
+
+export function getDocketDisplayPlantCost(docket: Docket): number {
+  if (hasDocketApprovedPlantCost(docket)) {
+    return moneyValue(docket.totalPlantApprovedCost);
+  }
+  return getDocketSubmittedPlantCost(docket);
+}
+
+export function getDocketApprovedTotalCost(docket: Docket): number | null {
+  if (!hasDocketApprovedCost(docket)) return null;
+  return getDocketDisplayLabourCost(docket) + getDocketDisplayPlantCost(docket);
+}
+
+export function getDocketDisplayTotalCost(docket: Docket): number {
+  return getDocketApprovedTotalCost(docket) ?? getDocketSubmittedTotalCost(docket);
+}
+
+export function hasDocketCostAdjustment(docket: Docket): boolean {
+  const approvedTotal = getDocketApprovedTotalCost(docket);
+  return approvedTotal !== null && centsDiffer(approvedTotal, getDocketSubmittedTotalCost(docket));
+}
+
 export function buildDocketApprovalsPath(projectId: string | undefined, statusFilter: string) {
   const queryParams = new URLSearchParams();
   if (projectId) queryParams.append('projectId', projectId);

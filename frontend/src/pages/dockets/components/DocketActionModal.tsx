@@ -8,7 +8,18 @@ import { apiFetch } from '@/lib/api';
 import { toast } from '@/components/ui/toaster';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { logError } from '@/lib/logger';
-import type { Docket } from '../docketApprovalsData';
+import {
+  formatDocketCurrency,
+  getDocketApprovedTotalCost,
+  getDocketDisplayLabourCost,
+  getDocketDisplayPlantCost,
+  getDocketSubmittedLabourCost,
+  getDocketSubmittedPlantCost,
+  getDocketSubmittedTotalCost,
+  hasDocketApprovedLabourCost,
+  hasDocketApprovedPlantCost,
+  type Docket,
+} from '../docketApprovalsData';
 import {
   type DocketActionResponse,
   type DocketActionType,
@@ -75,6 +86,16 @@ export function DocketActionModal({
         : actionType === 'query'
           ? 'Query Docket'
           : 'Docket Details';
+  const submittedLabourCost = getDocketSubmittedLabourCost(docket);
+  const submittedPlantCost = getDocketSubmittedPlantCost(docket);
+  const submittedTotalCost = getDocketSubmittedTotalCost(docket);
+  const approvedLabourCost = hasDocketApprovedLabourCost(docket)
+    ? getDocketDisplayLabourCost(docket)
+    : null;
+  const approvedPlantCost = hasDocketApprovedPlantCost(docket)
+    ? getDocketDisplayPlantCost(docket)
+    : null;
+  const approvedTotalCost = getDocketApprovedTotalCost(docket);
 
   // Handle approve or reject action
   const handleAction = async () => {
@@ -236,6 +257,34 @@ export function DocketActionModal({
               </span>
             )}
           </p>
+          <div className="mt-3 overflow-hidden rounded-md border bg-background text-sm">
+            <div className="grid grid-cols-3 bg-muted/50 px-3 py-2 text-xs font-medium uppercase text-muted-foreground">
+              <span>Cost</span>
+              <span className="text-right">Submitted</span>
+              <span className="text-right">Approved</span>
+            </div>
+            <div className="grid grid-cols-3 px-3 py-2">
+              <span>Labour</span>
+              <span className="text-right">{formatDocketCurrency(submittedLabourCost)}</span>
+              <span className="text-right">
+                {approvedLabourCost === null ? '-' : formatDocketCurrency(approvedLabourCost)}
+              </span>
+            </div>
+            <div className="grid grid-cols-3 border-t px-3 py-2">
+              <span>Plant</span>
+              <span className="text-right">{formatDocketCurrency(submittedPlantCost)}</span>
+              <span className="text-right">
+                {approvedPlantCost === null ? '-' : formatDocketCurrency(approvedPlantCost)}
+              </span>
+            </div>
+            <div className="grid grid-cols-3 border-t px-3 py-2 font-medium">
+              <span>Total</span>
+              <span className="text-right">{formatDocketCurrency(submittedTotalCost)}</span>
+              <span className="text-right">
+                {approvedTotalCost === null ? '-' : formatDocketCurrency(approvedTotalCost)}
+              </span>
+            </div>
+          </div>
           {docket.notes && (
             <p className="text-sm">
               <strong>Notes:</strong> {docket.notes}

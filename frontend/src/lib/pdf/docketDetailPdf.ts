@@ -68,6 +68,24 @@ export async function generateDocketDetailPDF(data: DocketDetailPDFData): Promis
   };
 
   const formatHours = (hours: number): string => `${hours} hrs`;
+  const moneyValue = (value: number | null | undefined): number =>
+    Number.isFinite(Number(value)) ? Number(value) : 0;
+  const hasMoneyValue = (value: number | null | undefined): boolean =>
+    value !== null && value !== undefined && Number.isFinite(Number(value));
+  const formatCurrency = (amount: number): string => {
+    const absolute = Math.abs(amount).toLocaleString('en-AU', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+    return `${amount < 0 ? '-' : ''}$${absolute}`;
+  };
+  const formatCurrencyDelta = (amount: number): string => {
+    if (amount === 0) return '$0.00';
+    return `${amount > 0 ? '+' : '-'}$${Math.abs(amount).toLocaleString('en-AU', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
+  };
 
   // ========== HEADER ==========
   // Status-based header color
@@ -205,6 +223,64 @@ export async function generateDocketDetailPDF(data: DocketDetailPDFData): Promis
     doc.text('-', margin + 150, yPos + 5);
   }
   yPos += 12;
+
+  // ========== COST SUMMARY ==========
+  drawSectionHeader('Cost Summary');
+
+  checkPageBreak(48);
+  doc.setFillColor(245, 245, 245);
+  doc.rect(margin, yPos, contentWidth, 7, 'F');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.text('Category', margin + 5, yPos + 5);
+  doc.text('Submitted', margin + 70, yPos + 5);
+  doc.text('Approved', margin + 110, yPos + 5);
+  doc.text('Variance', margin + 150, yPos + 5);
+  yPos += 9;
+
+  const drawCostRow = (
+    label: string,
+    submitted: number,
+    approved: number | null,
+    isTotal = false,
+  ): void => {
+    doc.setFont('helvetica', isTotal ? 'bold' : 'normal');
+    doc.setTextColor(0, 0, 0);
+    doc.text(label, margin + 5, yPos + 5);
+    doc.text(formatCurrency(submitted), margin + 70, yPos + 5);
+    doc.text(approved === null ? '-' : formatCurrency(approved), margin + 110, yPos + 5);
+
+    const variance = approved === null ? null : approved - submitted;
+    if (variance !== null && variance !== 0) {
+      doc.setTextColor(variance < 0 ? 239 : 34, variance < 0 ? 68 : 197, variance < 0 ? 68 : 94);
+      doc.text(formatCurrencyDelta(variance), margin + 150, yPos + 5);
+      doc.setTextColor(0, 0, 0);
+    } else {
+      doc.text('-', margin + 150, yPos + 5);
+    }
+    yPos += 7;
+  };
+
+  const submittedLabourCost = moneyValue(data.docket.totalLabourSubmitted);
+  const submittedPlantCost = moneyValue(data.docket.totalPlantSubmitted);
+  const submittedTotalCost = submittedLabourCost + submittedPlantCost;
+  const approvedLabourCost =
+    data.docket.status === 'approved' && hasMoneyValue(data.docket.totalLabourApprovedCost)
+      ? moneyValue(data.docket.totalLabourApprovedCost)
+      : null;
+  const approvedPlantCost =
+    data.docket.status === 'approved' && hasMoneyValue(data.docket.totalPlantApprovedCost)
+      ? moneyValue(data.docket.totalPlantApprovedCost)
+      : null;
+  const approvedTotalCost =
+    approvedLabourCost === null && approvedPlantCost === null
+      ? null
+      : (approvedLabourCost ?? submittedLabourCost) + (approvedPlantCost ?? submittedPlantCost);
+
+  drawCostRow('Labour Cost', submittedLabourCost, approvedLabourCost);
+  drawCostRow('Plant Cost', submittedPlantCost, approvedPlantCost);
+  drawCostRow('Total Cost', submittedTotalCost, approvedTotalCost, true);
+  yPos += 5;
 
   // ========== NOTES ==========
   if (data.docket.notes) {

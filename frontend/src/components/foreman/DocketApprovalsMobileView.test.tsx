@@ -40,4 +40,41 @@ describe('DocketApprovalsMobileView skeleton loading state', () => {
     // Empty state appears when there are no dockets and no error
     expect(screen.getByText('No subcontractor dockets yet')).toBeInTheDocument();
   });
+
+  it('shows approved dollar totals on approved docket cards', () => {
+    const docket: Props['filteredDockets'][number] = {
+      id: 'docket-1',
+      docketNumber: 'DKT-001',
+      subcontractor: 'Ryox Carpentry',
+      subcontractorId: 'sub-1',
+      date: '2026-06-04',
+      status: 'approved',
+      notes: null,
+      labourHours: 8,
+      plantHours: 4,
+      totalLabourSubmitted: 1200,
+      totalLabourApproved: 6,
+      totalPlantSubmitted: 300,
+      totalPlantApproved: 3,
+      totalLabourApprovedCost: 900,
+      totalPlantApprovedCost: 200,
+      submittedAt: '2026-06-04T08:00:00.000Z',
+      approvedAt: '2026-06-04T09:00:00.000Z',
+      foremanNotes: null,
+    };
+
+    renderWithProviders(
+      <DocketApprovalsMobileView
+        {...buildProps({
+          dockets: [docket],
+          filteredDockets: [docket],
+          totalLabourHours: 8,
+          totalPlantHours: 4,
+        })}
+      />,
+    );
+
+    expect(screen.getByText('$1,100.00')).toBeInTheDocument();
+    expect(screen.getByText('$1,500.00').className).toContain('line-through');
+  });
 });

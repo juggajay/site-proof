@@ -5,25 +5,13 @@ import { AlertCircle, Check, CheckSquare, MessageSquare, X } from 'lucide-react'
 import { SwipeableCard } from './SwipeableCard';
 import { DocketCardSkeleton } from '@/components/ui/Skeleton';
 import { usePullToRefresh, PullToRefreshIndicator } from '@/hooks/usePullToRefresh';
-
-interface Docket {
-  id: string;
-  docketNumber: string;
-  subcontractor: string;
-  subcontractorId: string;
-  date: string;
-  status: 'draft' | 'pending_approval' | 'approved' | 'rejected' | 'queried';
-  notes: string | null;
-  labourHours: number;
-  plantHours: number;
-  totalLabourSubmitted: number;
-  totalLabourApproved: number;
-  totalPlantSubmitted: number;
-  totalPlantApproved: number;
-  submittedAt: string | null;
-  approvedAt: string | null;
-  foremanNotes: string | null;
-}
+import {
+  formatDocketCurrency,
+  getDocketDisplayTotalCost,
+  getDocketSubmittedTotalCost,
+  hasDocketCostAdjustment,
+  type Docket,
+} from '@/pages/dockets/docketApprovalsData';
 
 interface DocketApprovalsMobileViewProps {
   dockets: Docket[];
@@ -128,7 +116,7 @@ function DocketCard({
       </div>
 
       {/* Primary fields grid */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         <div>
           <p className="text-xs text-muted-foreground uppercase tracking-wide">Date</p>
           <p className="font-medium text-sm">{formatDateAU(docket.date)}</p>
@@ -140,6 +128,17 @@ function DocketCard({
         <div>
           <p className="text-xs text-muted-foreground uppercase tracking-wide">Plant</p>
           <p className="font-medium text-sm">{docket.plantHours}h</p>
+        </div>
+        <div>
+          <p className="text-xs text-muted-foreground uppercase tracking-wide">Cost</p>
+          <p className="font-medium text-sm">
+            {formatDocketCurrency(getDocketDisplayTotalCost(docket))}
+          </p>
+          {hasDocketCostAdjustment(docket) && (
+            <p className="text-xs text-muted-foreground line-through">
+              {formatDocketCurrency(getDocketSubmittedTotalCost(docket))}
+            </p>
+          )}
         </div>
       </div>
 
