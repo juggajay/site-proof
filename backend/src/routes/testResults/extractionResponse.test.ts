@@ -48,7 +48,12 @@ describe('certificate extraction response helpers', () => {
 
     expect(extraction).toMatchObject({
       aiExtracted: true,
-      certificateDoc: baseExtractionSource.certificateDoc,
+      certificateDoc: {
+        id: 'doc-1',
+        filename: 'certificate.pdf',
+        mimeType: 'application/pdf',
+        uploadedAt: new Date('2026-06-01T01:02:03.000Z'),
+      },
       lowConfidenceFields: [],
       needsReview: false,
       thresholds: {
@@ -62,6 +67,7 @@ describe('certificate extraction response helpers', () => {
       confidence: 1,
       status: 'high',
     });
+    expect(extraction.certificateDoc).not.toHaveProperty('fileUrl');
   });
 
   it('buckets low and medium confidence fields without rewriting values', () => {

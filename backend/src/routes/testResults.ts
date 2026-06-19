@@ -152,7 +152,6 @@ testResultsRouter.get(
           select: {
             id: true,
             filename: true,
-            fileUrl: true,
             mimeType: true,
             uploadedAt: true,
           },
@@ -260,7 +259,6 @@ testResultsRouter.get(
           select: {
             id: true,
             filename: true,
-            fileUrl: true,
             mimeType: true,
             uploadedAt: true,
           },

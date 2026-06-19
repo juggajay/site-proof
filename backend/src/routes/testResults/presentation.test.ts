@@ -243,11 +243,11 @@ describe('buildVerificationViewData', () => {
     expect(pdf.document).toEqual({
       id: 'doc-1',
       filename: 'cert.pdf',
-      fileUrl: 'https://files/cert.pdf',
       mimeType: 'application/pdf',
       uploadedAt,
       isPdf: true,
     });
+    expect(pdf.document).not.toHaveProperty('fileUrl');
 
     const png = buildVerificationViewData(
       verificationViewSource({

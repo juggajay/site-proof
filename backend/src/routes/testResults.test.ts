@@ -73,6 +73,18 @@ function trackCertificateFile(fileUrl: string | undefined) {
   createdCertificatePaths.push(path.join(process.cwd(), fileUrl.replace(/^\/+/, '')));
 }
 
+async function trackCertificateDocumentFile(documentId: string | undefined) {
+  if (!documentId) {
+    return;
+  }
+
+  const document = await prisma.document.findUnique({
+    where: { id: documentId },
+    select: { fileUrl: true },
+  });
+  trackCertificateFile(document?.fileUrl);
+}
+
 function hasUnsafeFilenameChar(filename: string): boolean {
   return filename.split('').some((char) => char.charCodeAt(0) < 32 || '<>:"/\\|?*'.includes(char));
 }
@@ -452,7 +464,7 @@ describe('Test Results API', () => {
         });
 
       expect(res.status).toBe(201);
-      trackCertificateFile(res.body.testResult.certificateDoc?.fileUrl);
+      await trackCertificateDocumentFile(res.body.testResult.certificateDoc?.id);
 
       expect(res.body.extraction.extractedFields.testType.value).toBe('Compaction Test');
       expect(res.body.extraction.extractedFields.sampleLocation.value).toBe('CH 1234+50');
@@ -524,7 +536,7 @@ describe('Test Results API', () => {
         });
 
       expect(res.status).toBe(201);
-      trackCertificateFile(res.body.testResult.certificateDoc?.fileUrl);
+      await trackCertificateDocumentFile(res.body.testResult.certificateDoc?.id);
       expect(fetchMock).toHaveBeenCalledTimes(1);
 
       const requestBody = JSON.parse(String(fetchMock.mock.calls[0][1]?.body)) as {
@@ -608,7 +620,7 @@ describe('Test Results API', () => {
         });
 
       expect(res.status).toBe(201);
-      trackCertificateFile(res.body.testResult.certificateDoc?.fileUrl);
+      await trackCertificateDocumentFile(res.body.testResult.certificateDoc?.id);
 
       const savedTestResult = await prisma.testResult.findUniqueOrThrow({
         where: { id: res.body.testResult.id },
@@ -683,13 +695,19 @@ describe('Test Results API', () => {
         });
 
       expect(res.status).toBe(201);
-      trackCertificateFile(res.body.testResult.certificateDoc?.fileUrl);
+      await trackCertificateDocumentFile(res.body.testResult.certificateDoc?.id);
 
       const certificateDoc = res.body.testResult.certificateDoc;
       expect(certificateDoc.filename).toMatch(/\.pdf$/);
       expect(hasUnsafeFilenameChar(certificateDoc.filename)).toBe(false);
       expect(certificateDoc.filename).not.toContain('..');
-      expect(hasUnsafeFilenameChar(path.basename(certificateDoc.fileUrl))).toBe(false);
+      expect(certificateDoc).not.toHaveProperty('fileUrl');
+
+      const savedCertificateDoc = await prisma.document.findUniqueOrThrow({
+        where: { id: certificateDoc.id },
+        select: { fileUrl: true },
+      });
+      expect(hasUnsafeFilenameChar(path.basename(savedCertificateDoc.fileUrl))).toBe(false);
     });
   });
 
@@ -1694,10 +1712,10 @@ describe('Test Results API', () => {
         expect(view.document).toMatchObject({
           id: certificate.id,
           filename: certificate.filename,
-          fileUrl: certificate.fileUrl,
           mimeType: 'application/pdf',
           isPdf: true,
         });
+        expect(view.document).not.toHaveProperty('fileUrl');
         expect(view.extractedData).toMatchObject({
           testType: 'compaction',
           testRequestNumber: 'TR-VIEW-001',
@@ -2397,7 +2415,7 @@ describe('Test Results API', () => {
         expect(attachRes.body.testResult.id).toBe(testResult.id);
         expect(attachRes.body.testResult.certificateDoc).toBeTruthy();
         expect(attachRes.body.testResult.certificateDoc.filename).toBe('attach-existing.pdf');
-        trackCertificateFile(attachRes.body.testResult.certificateDoc?.fileUrl);
+        await trackCertificateDocumentFile(attachRes.body.testResult.certificateDoc?.id);
 
         const certificateDocId = attachRes.body.testResult.certificateDoc.id;
 
@@ -2458,7 +2476,7 @@ describe('Test Results API', () => {
           });
 
         expect(res.status).toBe(200);
-        trackCertificateFile(res.body.testResult.certificateDoc?.fileUrl);
+        await trackCertificateDocumentFile(res.body.testResult.certificateDoc?.id);
         const newDocId = res.body.testResult.certificateDoc.id;
         expect(newDocId).not.toBe(firstDoc.id);
 
