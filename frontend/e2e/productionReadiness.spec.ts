@@ -561,7 +561,7 @@ test.describe('production readiness guardrails', () => {
     expect(commentAttachmentStorage).toContain('getSafeAttachmentMimeType(attachment.mimeType)');
   });
 
-  test('document downloads only serve configured Supabase storage URLs', async () => {
+  test('document downloads only serve project-owned configured Supabase storage URLs', async () => {
     const documentsRoute = await readFile(
       new URL('../../backend/src/routes/documents.ts', import.meta.url),
       'utf8',
@@ -575,11 +575,10 @@ test.describe('production readiness guardrails', () => {
       'utf8',
     );
 
-    expect(documentFileHelpers).toContain('function isSafeExternalDocumentUrl');
     expect(documentFileHelpers).toContain(
-      'getSupabaseStoragePath(fileUrl, DOCUMENTS_BUCKET) !== null',
+      'getOwnedDocumentStoragePath(document.fileUrl, document.projectId, document.documentType)',
     );
-    expect(documentFileHelpers).toContain('if (isSafeExternalDocumentUrl(document.fileUrl))');
+    expect(documentFileHelpers).toContain('getOwnedDocumentStoragePath');
     expect(documentFileHelpers).toContain(
       'await sendSupabaseDocumentFile(document, res, contentType, contentDisposition)',
     );
