@@ -17,12 +17,12 @@ migrated there).
 - **Public URL host:** `https://vhlvutvzdliwxorfhxxv.supabase.co`
 - **Region:** Sydney (`ap-southeast-2`)
 - **Bucket:** `documents`
-- **Bucket visibility:** currently **public** in production, with the app
-  moving toward private-bucket operation. DB rows still store
-  `/storage/v1/object/public/documents/...` object locator URLs for
-  backwards-compatible path parsing, but browser-facing document, comment,
-  drawing, certificate, and photo access must go through backend access
-  routes rather than rendering those raw URLs directly.
+- **Bucket visibility:** must be **private** before paying customers. DB
+  rows may still contain legacy `/storage/v1/object/public/documents/...`
+  object locator URLs for backwards-compatible path parsing, but
+  browser-facing document, comment, drawing, certificate, avatar, logo, and
+  photo access must go through backend access routes rather than rendering
+  those raw URLs directly.
 
 Previous project ref `dwumiirtsuqxratjjvhb` was deprovisioned by Supabase
 after the free-tier 90-day deletion window. URLs referencing that host no
@@ -44,14 +44,21 @@ under `<projectId>`; per-user / per-company surfaces nest under
 | Avatars | `avatars/<userId>/avatar-<userId>-<uuid>.<ext>` | `backend/src/routes/auth.ts` |
 | Company logos | `company-logos/<companyId>/company-logo-<companyId>-<uuid>.<ext>` | `backend/src/routes/company.ts` |
 
-The stored locator URL for an object is:
+The preferred stored locator for new Supabase objects is:
+
+```
+supabase://documents/<prefix>/<scope-id>/<filename>
+```
+
+Legacy rows can still contain public-style object locators:
 
 ```
 https://vhlvutvzdliwxorfhxxv.supabase.co/storage/v1/object/public/documents/<prefix>/<scope-id>/<filename>
 ```
 
 where `<scope-id>` is the `projectId` for the first four surfaces, the
-`userId` for avatars, or the `companyId` for company logos.
+`userId` for avatars, or the `companyId` for company logos. These legacy
+URLs are treated as storage locators only, not browser links.
 
 ## Architecture
 
@@ -72,8 +79,9 @@ The backend holds the Supabase **service role key** and writes/reads on
 the server side. Frontend document/photo viewers request backend access
 URLs (`/api/documents/:id/signed-url`, `/api/documents/file/:id`, or
 domain-specific download routes) instead of rendering Supabase URLs
-directly. Avatars and company logos still store direct image URLs and
-need their own access endpoint before the bucket can be made fully private.
+directly. Avatars and company logos use signed backend image routes
+(`/api/auth/avatar/file/:userId` and `/api/company/logo/file/:companyId`)
+when their stored values point into the Supabase bucket.
 
 ## Verified durable flows
 
@@ -251,6 +259,8 @@ hit a real Supabase project.
   Railway backend env (Variables tab).
 - Confirm the `documents` bucket exists in the Supabase project and the
   service role key has storage access.
+- Confirm the `documents` bucket is private. `npm run preflight:production`
+  fails if the bucket is public.
 - Check Railway logs for the error returned by `@supabase/supabase-js`.
 
 ### File link returns 404 / 400 from a stored Supabase URL
