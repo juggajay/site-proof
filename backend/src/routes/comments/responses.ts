@@ -1,4 +1,5 @@
 import { getPaginationMeta } from '../../lib/pagination.js';
+import { serializeUserAvatar } from '../../lib/avatarUrls.js';
 
 type JsonRecord = Record<string, unknown>;
 
@@ -30,6 +31,15 @@ function stripCommentAttachmentFileUrls(comment: unknown): unknown {
   }
 
   const shapedComment: JsonRecord = { ...(comment as JsonRecord) };
+  if (
+    shapedComment.author &&
+    typeof shapedComment.author === 'object' &&
+    typeof (shapedComment.author as JsonRecord).id === 'string'
+  ) {
+    shapedComment.author = serializeUserAvatar(
+      shapedComment.author as { id: string; avatarUrl?: string | null },
+    );
+  }
 
   if (Array.isArray(shapedComment.attachments)) {
     shapedComment.attachments = shapedComment.attachments.map(stripCommentAttachmentFileUrl);

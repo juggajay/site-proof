@@ -1,4 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('../../lib/supabase.js', async () => {
+  const actual =
+    await vi.importActual<typeof import('../../lib/supabase.js')>('../../lib/supabase.js');
+  return {
+    ...actual,
+    isSupabaseConfigured: vi.fn(() => true),
+  };
+});
 
 import {
   buildGoogleOAuthLoginResponse,
@@ -63,6 +72,25 @@ describe('OAuth response helpers', () => {
       token: 'jwt-token',
       provider: 'google',
     });
+  });
+
+  it('serializes existing Supabase avatars as signed backend URLs', () => {
+    const response = buildGoogleOAuthLoginResponse(
+      {
+        id: 'user-1',
+        email: 'owner@example.com',
+        fullName: 'Owner One',
+        role: 'owner',
+        companyId: 'company-1',
+        companyName: 'SiteProof Civil',
+        avatarUrl: 'supabase://documents/avatars/user-1/avatar-user-1.png',
+      },
+      'jwt-token',
+    );
+
+    expect(response.user.avatarUrl).toContain('/api/auth/avatar/file/user-1?token=');
+    expect(response.user.avatarUrl).not.toContain('supabase://');
+    expect(response.user.avatarUrl).not.toContain('/storage/v1/object/public/');
   });
 
   it('preserves null company name in callback exchange response', () => {

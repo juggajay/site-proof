@@ -1,3 +1,5 @@
+import { buildAvatarDisplayUrl } from '../../lib/avatarUrls.js';
+
 type OAuthUser = {
   id: string;
   email: string;
@@ -27,7 +29,7 @@ export function buildGoogleOAuthLoginResponse(user: OAuthUser, token: string) {
       role: user.role,
       companyId: user.companyId,
       companyName: user.companyName,
-      avatarUrl: user.avatarUrl,
+      avatarUrl: buildAvatarDisplayUrl(user.id, user.avatarUrl),
     },
     token,
   };
@@ -46,7 +48,7 @@ export function buildOAuthExchangeResponse(
       role: user.roleInCompany,
       companyId: user.companyId,
       companyName: user.company?.name || null,
-      avatarUrl: user.avatarUrl,
+      avatarUrl: buildAvatarDisplayUrl(user.id, user.avatarUrl),
     },
     token,
     provider,

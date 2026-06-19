@@ -1,4 +1,5 @@
 import type { Prisma } from '@prisma/client';
+import { serializeUserAvatar } from '../../lib/avatarUrls.js';
 import { isSubcontractorRole, type AuthUser } from './access.js';
 
 /**
@@ -75,6 +76,8 @@ export function buildMentionableProjectFilter(
   };
 }
 
-export function buildMentionableUsersResponse<TUser>(users: TUser[]) {
-  return { users };
+export function buildMentionableUsersResponse<
+  TUser extends { id: string; avatarUrl?: string | null },
+>(users: TUser[]) {
+  return { users: users.map(serializeUserAvatar) };
 }
