@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  buildDocumentResponse,
   buildDocumentsListResponse,
+  buildSavedDocumentClassificationResponse,
   buildDocumentSignedUrlTokenResponse,
   buildDocumentVersionsResponse,
   buildInvalidDocumentSignedUrlTokenResponse,
@@ -110,7 +112,20 @@ describe('document response helpers', () => {
     ).toMatchObject({ fileUrl: 'supabase://documents/other-project/evidence.pdf' });
   });
 
-  it('normalizes document list and version response file URLs', () => {
+  it('omits stored file URLs from document API responses', () => {
+    expect(
+      buildDocumentResponse({
+        id: 'doc-1',
+        filename: 'photo.png',
+        fileUrl: 'supabase://documents/project-1/photo.png',
+      }),
+    ).toEqual({
+      id: 'doc-1',
+      filename: 'photo.png',
+    });
+  });
+
+  it('omits stored file URLs from document list and version responses', () => {
     process.env.SUPABASE_URL = 'https://siteproof-test.supabase.co';
     const document = {
       id: 'doc-1',
@@ -120,11 +135,30 @@ describe('document response helpers', () => {
         'https://siteproof-test.supabase.co/storage/v1/object/public/documents/project-1/photo.png',
     };
 
-    expect(buildDocumentsListResponse([document], 1, {}, null)).toMatchObject({
-      documents: [{ fileUrl: 'supabase://documents/project-1/photo.png' }],
+    const listResponse = buildDocumentsListResponse([document], 1, {}, null);
+    expect(listResponse.documents[0]).toMatchObject({ id: 'doc-1' });
+    expect(listResponse.documents[0]).not.toHaveProperty('fileUrl');
+
+    const versionResponse = buildDocumentVersionsResponse('doc-1', [document]);
+    expect(versionResponse.versions[0]).toMatchObject({ id: 'doc-1' });
+    expect(versionResponse.versions[0]).not.toHaveProperty('fileUrl');
+  });
+
+  it('omits stored file URLs from saved classification responses', () => {
+    const response = buildSavedDocumentClassificationResponse(
+      {
+        id: 'doc-1',
+        filename: 'photo.png',
+        fileUrl: 'supabase://documents/project-1/photo.png',
+      },
+      'quality, hold-point',
+    );
+
+    expect(response).toMatchObject({
+      id: 'doc-1',
+      filename: 'photo.png',
+      classificationLabels: ['quality', 'hold-point'],
     });
-    expect(buildDocumentVersionsResponse('doc-1', [document])).toMatchObject({
-      versions: [{ fileUrl: 'supabase://documents/project-1/photo.png' }],
-    });
+    expect(response).not.toHaveProperty('fileUrl');
   });
 });

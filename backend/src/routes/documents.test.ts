@@ -43,6 +43,18 @@ for (const dir of [uploadDir, certificateUploadDir, drawingUploadDir]) {
 }
 
 const validPdfBytes = Buffer.from('%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF');
+type DocumentUploadTestResponse = {
+  status: number;
+  body: { id?: string } & Record<string, unknown>;
+};
+
+function expectCreatedDocumentUploadResponse(res: DocumentUploadTestResponse) {
+  expect(res.status).toBe(201);
+  expect(res.body).not.toHaveProperty('fileUrl');
+  expect(res.body.id).toBeDefined();
+  return res.body.id!;
+}
+
 const ORIGINAL_ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const ORIGINAL_ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL;
 const ORIGINAL_ANTHROPIC_DOCUMENT_CLASS_MODEL = process.env.ANTHROPIC_DOCUMENT_CLASS_MODEL;
@@ -187,6 +199,7 @@ describe('Documents API', () => {
       expect(Array.isArray(res.body.documents)).toBe(true);
       expect(res.body.total).toBeGreaterThan(0);
       expect(res.body.categories).toBeDefined();
+      expect(res.body.documents[0]).not.toHaveProperty('fileUrl');
     });
 
     it('should filter by category', async () => {
@@ -894,6 +907,18 @@ describe('Documents API', () => {
   });
 
   describe('POST /api/documents/:documentId/save-classification', () => {
+    it('should save classifications without returning stored file URLs', async () => {
+      const res = await request(app)
+        .post(`/api/documents/${documentId}/save-classification`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ classifications: [{ label: 'Safety' }, { label: 'Testing' }] });
+
+      expect(res.status).toBe(200);
+      expect(res.body.id).toBe(documentId);
+      expect(res.body.classificationLabels).toEqual(['Safety', 'Testing']);
+      expect(res.body).not.toHaveProperty('fileUrl');
+    });
+
     it('should reject malformed multi-label classification payloads', async () => {
       const res = await request(app)
         .post(`/api/documents/${documentId}/save-classification`)
@@ -1004,6 +1029,7 @@ describe('Documents API', () => {
       // API returns document directly (not wrapped)
       expect(res.body.id).toBeDefined();
       expect(res.body.caption).toBe('Updated caption');
+      expect(res.body).not.toHaveProperty('fileUrl');
     });
 
     it('should return 404 for non-existent document', async () => {
@@ -1036,6 +1062,7 @@ describe('Documents API', () => {
       expect(res.status).toBe(200);
       expect(res.body.versions).toBeDefined();
       expect(Array.isArray(res.body.versions)).toBe(true);
+      expect(res.body.versions[0]).not.toHaveProperty('fileUrl');
     });
   });
 
@@ -1050,12 +1077,29 @@ describe('Documents API', () => {
         .field('lotId', lotId)
         .field('documentType', 'photo');
 
+    const getUploadedDocumentFileUrl = async (documentId: string) => {
+      const document = await prisma.document.findUniqueOrThrow({
+        where: { id: documentId },
+        select: { fileUrl: true },
+      });
+      return document.fileUrl;
+    };
+
     const getStoredDocumentPath = (fileUrl: string) => path.join(uploadDir, path.basename(fileUrl));
 
-    const cleanupUploadedDocument = async (documentId: string, fileUrl: string) => {
+    const expectUploadedLocalFileExists = async (documentId: string) => {
+      const fileUrl = await getUploadedDocumentFileUrl(documentId);
+      expect(fs.existsSync(getStoredDocumentPath(fileUrl))).toBe(true);
+      return fileUrl;
+    };
+
+    const cleanupUploadedDocument = async (documentId: string) => {
+      const fileUrl = await getUploadedDocumentFileUrl(documentId).catch(() => null);
       await prisma.document.deleteMany({ where: { id: documentId } });
-      const storedPath = getStoredDocumentPath(fileUrl);
-      if (fs.existsSync(storedPath)) fs.unlinkSync(storedPath);
+      if (fileUrl) {
+        const storedPath = getStoredDocumentPath(fileUrl);
+        if (fs.existsSync(storedPath)) fs.unlinkSync(storedPath);
+      }
     };
 
     it('stores uploads using safe filenames', async () => {
@@ -1072,17 +1116,14 @@ describe('Documents API', () => {
 
       expect(res.status).toBe(201);
       expect(hasUnsafeFilenameChar(res.body.filename)).toBe(false);
-      expect(res.body.fileUrl).toMatch(/^\/uploads\/documents\//);
-      expect(res.body.fileUrl).not.toContain('..');
+      expect(res.body).not.toHaveProperty('fileUrl');
 
       try {
-        const storedFilename = path.basename(res.body.fileUrl);
-        expect(fs.existsSync(path.join(uploadDir, storedFilename))).toBe(true);
+        const fileUrl = await expectUploadedLocalFileExists(res.body.id);
+        expect(fileUrl).toMatch(/^\/uploads\/documents\//);
+        expect(fileUrl).not.toContain('..');
       } finally {
-        const storedFilename = path.basename(res.body.fileUrl);
-        await prisma.document.deleteMany({ where: { id: res.body.id } });
-        const storedPath = path.join(uploadDir, storedFilename);
-        if (fs.existsSync(storedPath)) fs.unlinkSync(storedPath);
+        await cleanupUploadedDocument(res.body.id);
       }
     });
 
@@ -1141,17 +1182,13 @@ describe('Documents API', () => {
           contentType: 'text/html',
         });
 
-      expect(res.status).toBe(201);
+      const documentId = expectCreatedDocumentUploadResponse(res);
       expect(res.body.mimeType).toBe('message/rfc822');
 
       try {
-        const storedFilename = path.basename(res.body.fileUrl);
-        expect(fs.existsSync(path.join(uploadDir, storedFilename))).toBe(true);
+        await expectUploadedLocalFileExists(documentId);
       } finally {
-        const storedFilename = path.basename(res.body.fileUrl);
-        await prisma.document.deleteMany({ where: { id: res.body.id } });
-        const storedPath = path.join(uploadDir, storedFilename);
-        if (fs.existsSync(storedPath)) fs.unlinkSync(storedPath);
+        await cleanupUploadedDocument(documentId);
       }
     });
 
@@ -1166,14 +1203,14 @@ describe('Documents API', () => {
           contentType: 'image/png',
         });
 
-      expect(res.status).toBe(201);
+      const documentId = expectCreatedDocumentUploadResponse(res);
       expect(Number(res.body.gpsLatitude)).toBeCloseTo(-33.865143, 5);
       expect(Number(res.body.gpsLongitude)).toBeCloseTo(151.2099, 5);
 
       try {
-        expect(fs.existsSync(getStoredDocumentPath(res.body.fileUrl))).toBe(true);
+        await expectUploadedLocalFileExists(documentId);
       } finally {
-        await cleanupUploadedDocument(res.body.id, res.body.fileUrl);
+        await cleanupUploadedDocument(documentId);
       }
     });
 
@@ -1188,16 +1225,16 @@ describe('Documents API', () => {
           contentType: 'image/png',
         });
 
-      expect(res.status).toBe(201);
+      const documentId = expectCreatedDocumentUploadResponse(res);
       expect(res.body.captureTimestamp).toBe(capturedAt);
 
       try {
-        expect(fs.existsSync(getStoredDocumentPath(res.body.fileUrl))).toBe(true);
+        await expectUploadedLocalFileExists(documentId);
 
-        const doc = await prisma.document.findUniqueOrThrow({ where: { id: res.body.id } });
+        const doc = await prisma.document.findUniqueOrThrow({ where: { id: documentId } });
         expect(doc.captureTimestamp?.toISOString()).toBe(capturedAt);
       } finally {
-        await cleanupUploadedDocument(res.body.id, res.body.fileUrl);
+        await cleanupUploadedDocument(documentId);
       }
     });
 
@@ -1398,16 +1435,33 @@ describe('Documents API', () => {
       return req.attach('file', validPngBytes, { filename, contentType: 'image/png' });
     }
 
-    async function cleanupUploadedDocument(body: { id?: string; fileUrl?: string }) {
+    async function cleanupUploadedDocument(body: { id?: string }) {
+      let fileUrl: string | null = null;
       if (body.id) {
+        const document = await prisma.document.findUnique({
+          where: { id: body.id },
+          select: { fileUrl: true },
+        });
+        fileUrl = document?.fileUrl ?? null;
         await prisma.iTPCompletionAttachment.deleteMany({ where: { documentId: body.id } });
         await prisma.document.deleteMany({ where: { id: body.id } });
       }
-      if (body.fileUrl) {
-        const storedPath = path.join(uploadDir, path.basename(body.fileUrl));
+      if (fileUrl) {
+        const storedPath = path.join(uploadDir, path.basename(fileUrl));
         if (fs.existsSync(storedPath)) fs.unlinkSync(storedPath);
       }
     }
+
+    const expectSuccessfulUploadWithNoItpAttachment = async (res: {
+      status: number;
+      body: { id?: string } & Record<string, unknown>;
+    }) => {
+      const documentId = expectCreatedDocumentUploadResponse(res);
+      const attachments = await prisma.iTPCompletionAttachment.count({
+        where: { documentId },
+      });
+      expect(attachments).toBe(0);
+    };
 
     it('attaches the uploaded photo to the ITP completion when entityType is itp', async () => {
       const res = await uploadEvidence(
@@ -1424,9 +1478,9 @@ describe('Documents API', () => {
       );
 
       try {
-        expect(res.status).toBe(201);
+        const documentId = expectCreatedDocumentUploadResponse(res);
         const attachment = await prisma.iTPCompletionAttachment.findFirst({
-          where: { completionId, documentId: res.body.id },
+          where: { completionId, documentId },
         });
         expect(attachment).not.toBeNull();
       } finally {
@@ -1448,11 +1502,7 @@ describe('Documents API', () => {
       );
 
       try {
-        expect(res.status).toBe(201);
-        const attachments = await prisma.iTPCompletionAttachment.count({
-          where: { documentId: res.body.id },
-        });
-        expect(attachments).toBe(0);
+        await expectSuccessfulUploadWithNoItpAttachment(res);
       } finally {
         await cleanupUploadedDocument(res.body);
       }
@@ -1575,11 +1625,7 @@ describe('Documents API', () => {
       );
 
       try {
-        expect(res.status).toBe(201);
-        const attachments = await prisma.iTPCompletionAttachment.count({
-          where: { documentId: res.body.id },
-        });
-        expect(attachments).toBe(0);
+        await expectSuccessfulUploadWithNoItpAttachment(res);
       } finally {
         await cleanupUploadedDocument(res.body);
       }
@@ -1653,6 +1699,7 @@ describe('Documents API', () => {
       expect(res.status).toBe(201);
       expect(res.body.version).toBe(2);
       expect(hasUnsafeFilenameChar(res.body.filename)).toBe(false);
+      expect(res.body).not.toHaveProperty('fileUrl');
 
       const versions = await prisma.document.findMany({
         where: {

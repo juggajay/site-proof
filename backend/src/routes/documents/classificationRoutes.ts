@@ -7,6 +7,7 @@ import { fetchWithTimeout } from '../../lib/fetchWithTimeout.js';
 import { logWarn } from '../../lib/serverLogger.js';
 import {
   buildDocumentClassificationResponse,
+  buildDocumentResponse,
   buildSavedDocumentClassificationResponse,
 } from '../documentResponses.js';
 
@@ -403,7 +404,7 @@ Respond with ONLY the category lines, nothing else.`,
         },
       });
 
-      res.json(updatedDocument);
+      res.json(buildDocumentResponse(updatedDocument));
     }),
   );
 
