@@ -3,6 +3,7 @@ import request from 'supertest';
 import express from 'express';
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 
 // Mock Supabase helpers so individual logo tests can opt into the Supabase
 // branch by overriding the mock returns. By default `isSupabaseConfigured()`
@@ -40,6 +41,10 @@ app.use(errorHandler);
 
 const companyLogoUploadDir = path.join(process.cwd(), 'uploads', 'company-logos');
 const tinyPngBytes = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
+
+function hashOneTimeTokenForTest(token: string): string {
+  return `sha256:${crypto.createHash('sha256').update(token).digest('hex')}`;
+}
 
 function listCompanyLogoFiles(prefix: string) {
   if (!fs.existsSync(companyLogoUploadDir)) {
@@ -1386,7 +1391,7 @@ describe('Company API', () => {
       const existingToken = await prisma.passwordResetToken.create({
         data: {
           userId: existingUser.id,
-          token: `sha256:existing-company-invite-${Date.now()}`,
+          token: hashOneTimeTokenForTest(`existing-company-invite-${Date.now()}`),
           expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
         },
       });

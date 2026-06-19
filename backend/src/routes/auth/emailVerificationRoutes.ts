@@ -7,7 +7,6 @@ import { asyncHandler } from '../../lib/asyncHandler.js';
 import { sendVerificationEmail } from '../../lib/email.js';
 import { buildFrontendUrl } from '../../lib/runtimeConfig.js';
 import { verificationResendLimiter } from '../../middleware/rateLimiter.js';
-import { upgradeLegacyEmailVerificationTokenStorage } from './legacyTokenStorage.js';
 
 type EmailVerificationPrismaClient = Pick<
   PrismaClient,
@@ -69,13 +68,6 @@ export function createEmailVerificationRouter({
       if (!verificationToken) {
         throw AppError.badRequest('Invalid verification token');
       }
-
-      await upgradeLegacyEmailVerificationTokenStorage(
-        prisma,
-        verificationToken,
-        token,
-        hashOneTimeToken,
-      );
 
       // Check if token has been used
       if (verificationToken.usedAt) {
@@ -160,13 +152,6 @@ export function createEmailVerificationRouter({
       if (!verificationToken) {
         return res.json({ valid: false, message: 'Invalid verification token' });
       }
-
-      await upgradeLegacyEmailVerificationTokenStorage(
-        prisma,
-        verificationToken,
-        normalizedToken,
-        hashOneTimeToken,
-      );
 
       if (verificationToken.usedAt) {
         if (verificationToken.user.emailVerified) {

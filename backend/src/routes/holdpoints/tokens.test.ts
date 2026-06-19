@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  HOLD_POINT_LEGACY_PLAINTEXT_CREATED_BEFORE,
   HOLD_POINT_TOKEN_HASH_PREFIX,
   SECURE_LINK_EXPIRY_HOURS,
   hashHoldPointReleaseToken,
@@ -10,9 +9,9 @@ import {
 /**
  * Characterizes the hold-point release-token helpers extracted verbatim from
  * backend/src/routes/holdpoints.ts. These freeze the security-relevant
- * behaviour: the `sha256:` storage prefix, the exact SHA-256 hex digest, the
- * bounded legacy plaintext fallback for raw tokens, and the rule that an
- * already-prefixed hash is never accepted directly as a bearer token.
+ * behaviour: the `sha256:` storage prefix, the exact SHA-256 hex digest, and
+ * the rule that an already-prefixed hash is never accepted directly as a bearer
+ * token.
  *
  * No database is touched: tokens.ts imports the Prisma namespace for a type only
  * and never constructs a client. The expected hashes below are public SHA-256
@@ -28,9 +27,6 @@ describe('token constants', () => {
   it('keeps the 48-hour secure-link expiry and the sha256: hash prefix', () => {
     expect(SECURE_LINK_EXPIRY_HOURS).toBe(48);
     expect(HOLD_POINT_TOKEN_HASH_PREFIX).toBe('sha256:');
-    expect(HOLD_POINT_LEGACY_PLAINTEXT_CREATED_BEFORE.toISOString()).toBe(
-      '2026-06-21T14:00:00.000Z',
-    );
   });
 });
 
@@ -53,37 +49,19 @@ describe('hashHoldPointReleaseToken', () => {
 });
 
 describe('holdPointReleaseTokenLookup', () => {
-  it('always includes the hashed form of the presented raw token first', () => {
+  it('looks up only the hashed form of the presented raw token', () => {
     const raw = 'plain-release-token';
     const where = holdPointReleaseTokenLookup(raw);
-    const conditions = where.OR as { token: string }[];
 
-    expect(conditions[0]).toEqual({ token: hashHoldPointReleaseToken(raw) });
+    expect(where).toEqual({ token: hashHoldPointReleaseToken(raw) });
   });
 
-  it('adds an expiry and creation-time-bounded legacy plaintext fallback for a raw token', () => {
-    const raw = 'plain-release-token';
-    const where = holdPointReleaseTokenLookup(raw);
-    const conditions = where.OR as Array<Record<string, unknown>>;
-
-    expect(conditions).toHaveLength(2);
-    expect(conditions[0]).toEqual({ token: hashHoldPointReleaseToken(raw) });
-    expect(conditions[1]).toEqual({
-      token: raw,
-      createdAt: { lt: HOLD_POINT_LEGACY_PLAINTEXT_CREATED_BEFORE },
-      expiresAt: { gt: expect.any(Date) },
-    });
-  });
-
-  it('does NOT add a plaintext fallback when the raw token already starts with sha256:', () => {
+  it('re-hashes an already-prefixed value instead of accepting it as a bearer token', () => {
     const raw = `sha256:${SHA256_ABC}`; // looks like a stored hash
     const where = holdPointReleaseTokenLookup(raw);
-    const conditions = where.OR as { token: string }[];
 
-    // Only the re-hashed condition — a prefixed hash is never accepted as a bearer token.
-    expect(conditions).toHaveLength(1);
-    expect(conditions[0]).toEqual({ token: hashHoldPointReleaseToken(raw) });
+    expect(where).toEqual({ token: hashHoldPointReleaseToken(raw) });
     // The presented hash is itself re-hashed, so it is not used as a literal token match.
-    expect(conditions).not.toContainEqual({ token: raw });
+    expect(where).not.toEqual({ token: raw });
   });
 });

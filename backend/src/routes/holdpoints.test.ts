@@ -10,7 +10,6 @@ import { holdpointsRouter } from './holdpoints.js';
 import { clearEmailQueue, getQueuedEmails } from '../lib/email.js';
 import { registerTestUser as registerSharedTestUser } from '../test/routeTestHarness.js';
 import { buildTemplateSnapshot } from './itp/helpers/templateSnapshot.js';
-import { HOLD_POINT_LEGACY_PLAINTEXT_CREATED_BEFORE } from './holdpoints/tokens.js';
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
@@ -22,14 +21,6 @@ const TEST_PASSWORD = 'SecureP@ssword123!';
 
 function hashHoldPointReleaseTokenForTest(token: string): string {
   return `sha256:${crypto.createHash('sha256').update(token).digest('hex')}`;
-}
-
-function beforeLegacyPlaintextHoldPointTokenCutoff(): Date {
-  return new Date(HOLD_POINT_LEGACY_PLAINTEXT_CREATED_BEFORE.getTime() - 60_000);
-}
-
-function afterLegacyPlaintextHoldPointTokenCutoff(): Date {
-  return new Date(HOLD_POINT_LEGACY_PLAINTEXT_CREATED_BEFORE.getTime() + 60_000);
 }
 
 async function registerTestUser(fullName: string, roleInCompany: string, companyId: string | null) {
@@ -1919,63 +1910,20 @@ describe('Hold Point Token Release', () => {
     expect(res.body.tokenInfo).toBeDefined();
   });
 
-  it('should keep legacy plaintext public tokens valid until expiry and upgrade storage', async () => {
-    const legacyToken = `legacy-token-${Date.now()}`;
-    const legacyRecord = await prisma.holdPointReleaseToken.create({
-      data: {
-        holdPointId,
-        token: legacyToken,
-        recipientEmail: 'legacy-external@example.com',
-        recipientName: 'Legacy External Reviewer',
-        createdAt: beforeLegacyPlaintextHoldPointTokenCutoff(),
-        expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
-      },
-    });
+  it('should reject plaintext public token storage', async () => {
+    const plaintextToken = `plaintext-token-${Date.now()}`;
 
-    try {
-      const res = await request(app).get(`/api/holdpoints/public/${legacyToken}`);
-
-      expect(res.status).toBe(200);
-      expect(res.body.evidencePackage).toBeDefined();
-
-      const upgradedRecord = await prisma.holdPointReleaseToken.findUniqueOrThrow({
-        where: { id: legacyRecord.id },
-      });
-      expect(upgradedRecord.token).toBe(hashHoldPointReleaseTokenForTest(legacyToken));
-    } finally {
-      await prisma.holdPointReleaseToken.delete({ where: { id: legacyRecord.id } }).catch(() => {});
-    }
-  });
-
-  it('should reject post-cutoff plaintext public token rows', async () => {
-    const plaintextToken = `post-cutoff-token-${Date.now()}`;
-    const plaintextRecord = await prisma.holdPointReleaseToken.create({
-      data: {
-        holdPointId,
-        token: plaintextToken,
-        recipientEmail: 'post-cutoff-external@example.com',
-        recipientName: 'Post Cutoff External Reviewer',
-        createdAt: afterLegacyPlaintextHoldPointTokenCutoff(),
-        expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
-      },
-    });
-
-    try {
-      const res = await request(app).get(`/api/holdpoints/public/${plaintextToken}`);
-
-      expect(res.status).toBe(404);
-      expect(res.body.error.message).toContain('Invalid or expired link');
-
-      const storedRecord = await prisma.holdPointReleaseToken.findUniqueOrThrow({
-        where: { id: plaintextRecord.id },
-      });
-      expect(storedRecord.token).toBe(plaintextToken);
-      expect(storedRecord.usedAt).toBeNull();
-    } finally {
-      await prisma.holdPointReleaseToken
-        .delete({ where: { id: plaintextRecord.id } })
-        .catch(() => {});
-    }
+    await expect(
+      prisma.holdPointReleaseToken.create({
+        data: {
+          holdPointId,
+          token: plaintextToken,
+          recipientEmail: 'plaintext-external@example.com',
+          recipientName: 'Plaintext External Reviewer',
+          expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+        },
+      }),
+    ).rejects.toThrow();
   });
 
   it('should reject public release tokens for ineligible recipients on superintendent-only projects', async () => {

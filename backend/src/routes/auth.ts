@@ -100,9 +100,6 @@ const EMAIL_MAX_LENGTH = 254;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const ONE_TIME_TOKEN_HASH_PREFIX = 'sha256:';
 const ONE_TIME_TOKEN_MAX_LENGTH = 256;
-export const ONE_TIME_TOKEN_LEGACY_PLAINTEXT_CREATED_BEFORE = new Date(
-  '2026-06-22T00:00:00.000+10:00',
-);
 const PROFILE_FULL_NAME_MAX_LENGTH = 120;
 const TOTP_CODE_PATTERN = /^\d{6}$/;
 const MFA_BACKUP_CODE_PATTERN = /^[A-F0-9]{10}$/i;
@@ -174,17 +171,7 @@ type OneTimeTokenLookupWhere = Prisma.PasswordResetTokenWhereInput &
   Prisma.EmailVerificationTokenWhereInput;
 
 function oneTimeTokenLookup(rawToken: string): OneTimeTokenLookupWhere {
-  const conditions: OneTimeTokenLookupWhere[] = [{ token: hashOneTimeToken(rawToken) }];
-
-  if (!rawToken.startsWith(ONE_TIME_TOKEN_HASH_PREFIX)) {
-    conditions.push({
-      token: rawToken,
-      createdAt: { lt: ONE_TIME_TOKEN_LEGACY_PLAINTEXT_CREATED_BEFORE },
-      expiresAt: { gt: new Date() },
-    });
-  }
-
-  return { OR: conditions } as OneTimeTokenLookupWhere;
+  return { token: hashOneTimeToken(rawToken) } as OneTimeTokenLookupWhere;
 }
 
 function validatePassword(password: string): { valid: boolean; errors: string[] } {

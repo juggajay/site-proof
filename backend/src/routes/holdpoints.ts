@@ -12,7 +12,7 @@ import {
   publicReleaseSchema,
   parseHoldPointRouteParam,
 } from './holdpoints/validation.js';
-import { hashHoldPointReleaseToken, holdPointReleaseTokenLookup } from './holdpoints/tokens.js';
+import { holdPointReleaseTokenLookup } from './holdpoints/tokens.js';
 import { requireSuperintendentApprovalRecipients } from './holdpoints/superintendentRecipients.js';
 import {
   buildHoldPointEvidenceChecklist,
@@ -38,25 +38,6 @@ import {
 } from './holdpoints/itpSnapshot.js';
 
 const holdpointsRouter = Router();
-
-async function upgradeLegacyHoldPointReleaseTokenStorage(
-  tokenRecord: { id: string; token: string },
-  rawToken: string,
-): Promise<void> {
-  const hashedToken = hashHoldPointReleaseToken(rawToken);
-  if (tokenRecord.token === hashedToken) {
-    return;
-  }
-
-  try {
-    await prisma.holdPointReleaseToken.updateMany({
-      where: { id: tokenRecord.id, token: tokenRecord.token },
-      data: { token: hashedToken },
-    });
-  } catch (error) {
-    logError('[HP Secure Release] Failed to upgrade legacy plaintext token storage:', error);
-  }
-}
 
 // Authenticated read/detail/evidence routes (project list, lot/item detail,
 // evidence package + preview, working hours, notification-time calculation).
@@ -142,8 +123,6 @@ holdpointsRouter.get(
     if (!releaseToken) {
       throw AppError.notFound('Invalid or expired link');
     }
-
-    await upgradeLegacyHoldPointReleaseTokenStorage(releaseToken, token);
 
     // Check if token has expired
     if (new Date() > releaseToken.expiresAt) {
@@ -276,8 +255,6 @@ holdpointsRouter.post(
     if (!releaseToken) {
       throw AppError.notFound('Invalid or expired link');
     }
-
-    await upgradeLegacyHoldPointReleaseTokenStorage(releaseToken, token);
 
     // Check if token has expired
     if (new Date() > releaseToken.expiresAt) {

@@ -9,7 +9,8 @@ import { runScript } from './lib/run-script.js';
 const prisma = new PrismaClient();
 
 const HASH_PREFIX = 'sha256:';
-const HASHED_TOKEN_PATTERN = /^sha256:[a-f0-9]{64}$/i;
+const HASHED_TOKEN_PATTERN = /^sha256:[a-f0-9]{64}$/;
+const CASE_INSENSITIVE_HASHED_TOKEN_PATTERN = /^sha256:[a-f0-9]{64}$/i;
 
 type Mode = 'check' | 'apply';
 
@@ -48,8 +49,16 @@ function hashOneTimeToken(token: string): string {
   return `${HASH_PREFIX}${crypto.createHash('sha256').update(token).digest('hex')}`;
 }
 
-function isPlaintextTokenCandidate(token: string): boolean {
-  return !HASHED_TOKEN_PATTERN.test(token);
+function getTokenStorageReplacement(token: string): string | null {
+  if (HASHED_TOKEN_PATTERN.test(token)) {
+    return null;
+  }
+
+  if (CASE_INSENSITIVE_HASHED_TOKEN_PATTERN.test(token)) {
+    return token.toLowerCase();
+  }
+
+  return hashOneTimeToken(token);
 }
 
 function requireApplyConfirmation(): void {
@@ -64,15 +73,19 @@ async function backfillTokenTable<Row extends TokenRow>(
   mode: Mode,
 ): Promise<BackfillResult> {
   const rows = await table.loadRows();
-  const candidates = rows.filter((row) => isPlaintextTokenCandidate(row.token));
+  const candidates = rows
+    .map((row) => ({ row, replacementToken: getTokenStorageReplacement(row.token) }))
+    .filter(
+      (candidate): candidate is { row: Row; replacementToken: string } =>
+        candidate.replacementToken !== null,
+    );
   let collisions = 0;
   let updated = 0;
   let skipped = 0;
 
-  for (const row of candidates) {
+  for (const { row, replacementToken } of candidates) {
     table.recordCandidate?.(row);
-    const hashedToken = hashOneTimeToken(row.token);
-    const collision = await table.findCollision(row, hashedToken);
+    const collision = await table.findCollision(row, replacementToken);
 
     if (collision) {
       collisions += 1;
@@ -80,7 +93,7 @@ async function backfillTokenTable<Row extends TokenRow>(
     }
 
     if (mode === 'apply') {
-      const updatedCount = await table.updateRow(row, hashedToken);
+      const updatedCount = await table.updateRow(row, replacementToken);
       if (updatedCount === 1) {
         updated += 1;
       } else {
@@ -100,17 +113,13 @@ async function backfillTokenTable<Row extends TokenRow>(
   };
 }
 
-async function backfillPasswordResetTokens(mode: Mode, now: Date): Promise<BackfillResult> {
+async function backfillPasswordResetTokens(mode: Mode): Promise<BackfillResult> {
   const purposes = new Map<string, number>();
   const result = await backfillTokenTable(
     {
       name: 'password_reset_tokens',
       loadRows: () =>
         prisma.passwordResetToken.findMany({
-          where: {
-            usedAt: null,
-            expiresAt: { gt: now },
-          },
           select: {
             id: true,
             token: true,
@@ -141,7 +150,7 @@ async function backfillPasswordResetTokens(mode: Mode, now: Date): Promise<Backf
 
   if (purposes.size > 0) {
     console.log(
-      `[info] password_reset_tokens plaintext active candidates by purpose: ${Array.from(
+      `[info] password_reset_tokens non-compliant candidates by purpose: ${Array.from(
         purposes.entries(),
       )
         .map(([purpose, count]) => `${purpose}=${count}`)
@@ -152,16 +161,12 @@ async function backfillPasswordResetTokens(mode: Mode, now: Date): Promise<Backf
   return result;
 }
 
-async function backfillEmailVerificationTokens(mode: Mode, now: Date): Promise<BackfillResult> {
+async function backfillEmailVerificationTokens(mode: Mode): Promise<BackfillResult> {
   return backfillTokenTable(
     {
       name: 'email_verification_tokens',
       loadRows: () =>
         prisma.emailVerificationToken.findMany({
-          where: {
-            usedAt: null,
-            expiresAt: { gt: now },
-          },
           select: {
             id: true,
             token: true,
@@ -187,16 +192,12 @@ async function backfillEmailVerificationTokens(mode: Mode, now: Date): Promise<B
   );
 }
 
-async function backfillHoldPointReleaseTokens(mode: Mode, now: Date): Promise<BackfillResult> {
+async function backfillHoldPointReleaseTokens(mode: Mode): Promise<BackfillResult> {
   return backfillTokenTable(
     {
       name: 'hold_point_release_tokens',
       loadRows: () =>
         prisma.holdPointReleaseToken.findMany({
-          where: {
-            usedAt: null,
-            expiresAt: { gt: now },
-          },
           select: {
             id: true,
             token: true,
@@ -234,12 +235,11 @@ async function main(): Promise<void> {
     requireApplyConfirmation();
   }
 
-  const now = new Date();
   console.log(`One-time token hash backfill mode: ${mode}`);
   const results = [
-    await backfillPasswordResetTokens(mode, now),
-    await backfillEmailVerificationTokens(mode, now),
-    await backfillHoldPointReleaseTokens(mode, now),
+    await backfillPasswordResetTokens(mode),
+    await backfillEmailVerificationTokens(mode),
+    await backfillHoldPointReleaseTokens(mode),
   ];
 
   for (const result of results) {
