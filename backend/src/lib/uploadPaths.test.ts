@@ -5,6 +5,7 @@ import {
   getUploadsRoot,
   getUploadSubdirectoryPath,
   ensureUploadSubdirectoryAsync,
+  isStoredDocumentReference,
   isStoredDocumentUploadPath,
   resolveUploadPath,
 } from './uploadPaths.js';
@@ -58,5 +59,19 @@ describe('uploadPaths', () => {
       false,
     );
     expect(isStoredDocumentUploadPath('https://example.com/file.pdf')).toBe(false);
+  });
+
+  it('identifies stored document references from local uploads and Supabase documents', () => {
+    expect(isStoredDocumentReference('/uploads/documents/file.pdf')).toBe(true);
+    expect(isStoredDocumentReference('supabase://documents/project-a/file.pdf')).toBe(true);
+    expect(isStoredDocumentReference('supabase://documents/project-a/file.pdf', 'project-a')).toBe(
+      true,
+    );
+    expect(isStoredDocumentReference('supabase://documents/project-b/file.pdf', 'project-a')).toBe(
+      false,
+    );
+    expect(isStoredDocumentReference('supabase://comments/project-a/file.pdf')).toBe(false);
+    expect(isStoredDocumentReference('supabase://documents/project-a/../file.pdf')).toBe(false);
+    expect(isStoredDocumentReference('https://example.com/file.pdf')).toBe(false);
   });
 });

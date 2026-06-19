@@ -15,7 +15,7 @@ import {
   requireNcrEvidenceMutationAccess,
   requireNcrResponsibleOrProjectRole,
 } from './ncrAccess.js';
-import { isStoredDocumentUploadPath } from '../../lib/uploadPaths.js';
+import { isStoredDocumentReference } from '../../lib/uploadPaths.js';
 import {
   buildNcrEvidenceAddedResponse,
   buildNcrEvidenceAlreadyLinkedResponse,
@@ -140,7 +140,7 @@ async function resolveNcrEvidenceDocumentId(
     throw AppError.badRequest('Either documentId or filename and fileUrl are required');
   }
 
-  if (!isStoredDocumentUploadPath(fileUrl)) {
+  if (!isStoredDocumentReference(fileUrl, projectId)) {
     throw AppError.badRequest('fileUrl must reference an uploaded document file');
   }
 
