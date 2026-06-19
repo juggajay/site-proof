@@ -19,6 +19,7 @@ import crypto from 'crypto';
 // Secure link expiry time (48 hours)
 export const SECURE_LINK_EXPIRY_HOURS = 48;
 export const HOLD_POINT_TOKEN_HASH_PREFIX = 'sha256:';
+export const HOLD_POINT_LEGACY_PLAINTEXT_CREATED_BEFORE = new Date('2026-06-22T00:00:00.000+10:00');
 
 export function hashHoldPointReleaseToken(token: string): string {
   return `${HOLD_POINT_TOKEN_HASH_PREFIX}${crypto.createHash('sha256').update(token).digest('hex')}`;
@@ -34,7 +35,11 @@ export function holdPointReleaseTokenLookup(
   // Legacy plaintext release tokens remain valid until their normal expiry.
   // Prefixed hashes are never accepted directly as bearer tokens.
   if (!rawToken.startsWith(HOLD_POINT_TOKEN_HASH_PREFIX)) {
-    conditions.push({ token: rawToken });
+    conditions.push({
+      token: rawToken,
+      createdAt: { lt: HOLD_POINT_LEGACY_PLAINTEXT_CREATED_BEFORE },
+      expiresAt: { gt: new Date() },
+    });
   }
 
   return { OR: conditions };
