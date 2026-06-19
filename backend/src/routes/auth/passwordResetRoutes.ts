@@ -9,7 +9,6 @@ import { revokeActiveApiKeysForUser } from '../../lib/apiKeyRevocation.js';
 import { sendPasswordResetEmail } from '../../lib/email.js';
 import { buildFrontendUrl } from '../../lib/runtimeConfig.js';
 import { logWarn } from '../../lib/serverLogger.js';
-import { upgradeLegacyPasswordResetTokenStorage } from './legacyTokenStorage.js';
 
 const PASSWORD_RESET_TOKEN_PURPOSE = 'password_reset';
 
@@ -182,14 +181,6 @@ export function createPasswordResetRouter({
         throw AppError.badRequest(genericResetTokenValidationMessage);
       }
 
-      await upgradeLegacyPasswordResetTokenStorage(
-        prisma,
-        'Password Reset',
-        resetToken,
-        token,
-        hashOneTimeToken,
-      );
-
       // Check if token has been used
       if (resetToken.usedAt) {
         throw AppError.badRequest(genericResetTokenValidationMessage);
@@ -279,14 +270,6 @@ export function createPasswordResetRouter({
           genericResetTokenValidationMessage,
         );
       }
-
-      await upgradeLegacyPasswordResetTokenStorage(
-        prisma,
-        'Password Reset',
-        resetToken,
-        normalizedToken,
-        hashOneTimeToken,
-      );
 
       if (resetToken.usedAt) {
         return respondInvalidResetTokenValidation(

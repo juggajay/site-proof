@@ -30,11 +30,7 @@ vi.mock('../lib/supabase.js', async () => {
 });
 
 import * as supabaseLib from '../lib/supabase.js';
-import {
-  ONE_TIME_TOKEN_LEGACY_PLAINTEXT_CREATED_BEFORE,
-  authRouter,
-  getSafeDataExportFilename,
-} from './auth.js';
+import { authRouter, getSafeDataExportFilename } from './auth.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { encrypt } from '../lib/encryption.js';
@@ -65,14 +61,6 @@ const tinyPngBytes = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
 
 function hashAuthTokenForTest(token: string): string {
   return `sha256:${crypto.createHash('sha256').update(token).digest('hex')}`;
-}
-
-function beforeLegacyPlaintextOneTimeTokenCutoff(): Date {
-  return new Date(ONE_TIME_TOKEN_LEGACY_PLAINTEXT_CREATED_BEFORE.getTime() - 60_000);
-}
-
-function afterLegacyPlaintextOneTimeTokenCutoff(): Date {
-  return new Date(ONE_TIME_TOKEN_LEGACY_PLAINTEXT_CREATED_BEFORE.getTime() + 60_000);
 }
 
 function blockFirstTwoFindFirstCalls<TArgs extends unknown[], TResult>(delegate: {
@@ -728,16 +716,16 @@ describe('Email verification tokens', () => {
     }
   });
 
-  it('keeps pre-cutoff legacy plaintext verification tokens valid and upgrades storage', async () => {
-    const email = `verify-legacy-${Date.now()}@example.com`;
-    const rawToken = `verify_legacy_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+  it('rejects plaintext verification token storage', async () => {
+    const email = `verify-plaintext-token-${Date.now()}@example.com`;
+    const rawToken = `verify_plaintext_${Date.now()}_${Math.random().toString(16).slice(2)}`;
     let userId: string | undefined;
 
     try {
       const regRes = await request(app).post('/api/auth/register').send({
         email,
         password: 'SecureP@ssword123!',
-        fullName: 'Legacy Verification User',
+        fullName: 'Plaintext Verification User',
         tosAccepted: true,
       });
 
@@ -745,68 +733,15 @@ describe('Email verification tokens', () => {
       userId = regRes.body.user.id as string;
 
       await prisma.emailVerificationToken.deleteMany({ where: { userId } });
-      const legacyToken = await prisma.emailVerificationToken.create({
-        data: {
-          userId,
-          token: rawToken,
-          createdAt: beforeLegacyPlaintextOneTimeTokenCutoff(),
-          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-        },
-      });
-
-      const verifyRes = await request(app).post('/api/auth/verify-email').send({ token: rawToken });
-
-      expect(verifyRes.status).toBe(200);
-      expect(verifyRes.body.verified).toBe(true);
-
-      const upgradedToken = await prisma.emailVerificationToken.findUniqueOrThrow({
-        where: { id: legacyToken.id },
-      });
-      expect(upgradedToken.token).toBe(hashAuthTokenForTest(rawToken));
-    } finally {
-      if (userId) {
-        await prisma.emailVerificationToken.deleteMany({ where: { userId } });
-        await clearUserAuditLogs(userId);
-        await prisma.user.delete({ where: { id: userId } }).catch(() => {});
-      }
-    }
-  });
-
-  it('rejects post-cutoff legacy plaintext verification token rows', async () => {
-    const email = `verify-post-cutoff-${Date.now()}@example.com`;
-    const rawToken = `verify_post_cutoff_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-    let userId: string | undefined;
-
-    try {
-      const regRes = await request(app).post('/api/auth/register').send({
-        email,
-        password: 'SecureP@ssword123!',
-        fullName: 'Post Cutoff Verification User',
-        tosAccepted: true,
-      });
-
-      expect(regRes.status).toBe(201);
-      userId = regRes.body.user.id as string;
-
-      await prisma.emailVerificationToken.deleteMany({ where: { userId } });
-      await prisma.emailVerificationToken.create({
-        data: {
-          userId,
-          token: rawToken,
-          createdAt: afterLegacyPlaintextOneTimeTokenCutoff(),
-          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-        },
-      });
-
-      const statusRes = await request(app)
-        .get('/api/auth/verify-email-status')
-        .query({ token: rawToken });
-      expect(statusRes.status).toBe(200);
-      expect(statusRes.body).toEqual({ valid: false, message: 'Invalid verification token' });
-
-      const verifyRes = await request(app).post('/api/auth/verify-email').send({ token: rawToken });
-      expect(verifyRes.status).toBe(400);
-      expect(verifyRes.body.error.message).toContain('Invalid verification token');
+      await expect(
+        prisma.emailVerificationToken.create({
+          data: {
+            userId,
+            token: rawToken,
+            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+          },
+        }),
+      ).rejects.toThrow();
 
       const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
       expect(user.emailVerified).toBe(false);
@@ -1625,6 +1560,33 @@ describe('Password Reset Flow', () => {
 
     expect(res.status).toBe(400);
     expect(res.body.error.message).toContain('Invalid');
+  });
+
+  it('rejects plaintext password reset and magic-link token storage', async () => {
+    const user = await prisma.user.findUnique({ where: { email: resetEmail } });
+    expect(user).toBeDefined();
+
+    await expect(
+      prisma.passwordResetToken.create({
+        data: {
+          userId: user!.id,
+          token: `plaintext-reset-${Date.now()}`,
+          purpose: 'password_reset',
+          expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+        },
+      }),
+    ).rejects.toThrow();
+
+    await expect(
+      prisma.passwordResetToken.create({
+        data: {
+          userId: user!.id,
+          token: `magic_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+          purpose: 'magic_link',
+          expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+        },
+      }),
+    ).rejects.toThrow();
   });
 
   it('should reject magic-link tokens on password reset endpoints', async () => {

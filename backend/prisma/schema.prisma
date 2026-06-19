@@ -628,6 +628,7 @@ model HoldPointReleaseToken {
   holdPointId         String    @map("hold_point_id")
   recipientEmail      String    @map("recipient_email")
   recipientName       String?   @map("recipient_name")
+  /// Raw SQL CHECK constraint requires sha256:<64 lowercase hex>.
   token               String    @unique
   expiresAt           DateTime  @map("expires_at")
   usedAt              DateTime? @map("used_at")
@@ -1446,6 +1447,7 @@ model SyncQueue {
 model PasswordResetToken {
   id        String    @id @default(uuid())
   userId    String    @map("user_id")
+  /// Raw SQL CHECK constraint requires sha256:<64 lowercase hex>.
   token     String    @unique
   purpose   String    @default("password_reset")
   expiresAt DateTime  @map("expires_at")
@@ -1467,6 +1469,7 @@ model PasswordResetToken {
 model EmailVerificationToken {
   id        String    @id @default(uuid())
   userId    String    @map("user_id")
+  /// Raw SQL CHECK constraint requires sha256:<64 lowercase hex>.
   token     String    @unique
   expiresAt DateTime  @map("expires_at")
   usedAt    DateTime? @map("used_at")
