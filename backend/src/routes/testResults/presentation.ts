@@ -1,5 +1,9 @@
 import type { Prisma } from '@prisma/client';
 import { LOW_CONFIDENCE_THRESHOLD } from './certificateExtraction.js';
+import {
+  buildCertificateDocumentResponse,
+  type CertificateDocumentResponseSource,
+} from './certificateDocumentResponse.js';
 import { testTypeSpecifications } from './specifications.js';
 
 export { escapeHtml } from './presentationHtml.js';
@@ -62,13 +66,7 @@ export interface VerificationViewSource {
   } | null;
   enteredBy: { id: string; fullName: string | null; email: string } | null;
   verifiedBy: { id: string; fullName: string | null; email: string } | null;
-  certificateDoc: {
-    id: string;
-    filename: string;
-    fileUrl: string;
-    mimeType: string | null;
-    uploadedAt: Date;
-  } | null;
+  certificateDoc: CertificateDocumentResponseSource;
 }
 
 export function buildVerificationViewData(
@@ -100,11 +98,7 @@ export function buildVerificationViewData(
     // Left side: Document/Certificate info
     document: testResult.certificateDoc
       ? {
-          id: testResult.certificateDoc.id,
-          filename: testResult.certificateDoc.filename,
-          fileUrl: testResult.certificateDoc.fileUrl,
-          mimeType: testResult.certificateDoc.mimeType,
-          uploadedAt: testResult.certificateDoc.uploadedAt,
+          ...buildCertificateDocumentResponse(testResult.certificateDoc),
           isPdf: testResult.certificateDoc.mimeType === 'application/pdf',
         }
       : null,

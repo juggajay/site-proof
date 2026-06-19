@@ -143,9 +143,7 @@ describe('Test Results API Supabase certificate uploads', () => {
       });
 
     expect(res.status).toBe(201);
-    expect(res.body.testResult.certificateDoc.fileUrl).toContain(
-      `supabase://documents/certificates/${projectId}/cert-`,
-    );
+    expect(res.body.testResult.certificateDoc).not.toHaveProperty('fileUrl');
     expect(findNewFilesWithContent(beforeFiles, certificateBytes)).toHaveLength(0);
 
     expect(mockUpload).toHaveBeenCalledOnce();
@@ -166,7 +164,7 @@ describe('Test Results API Supabase certificate uploads', () => {
       include: { certificateDoc: true },
     });
 
-    expect(savedDocument.fileUrl).toBe(res.body.testResult.certificateDoc.fileUrl);
+    expect(savedDocument.fileUrl).toContain(`supabase://documents/certificates/${projectId}/cert-`);
     expect(savedDocument.filename).toBe('supabase-compaction-certificate.pdf');
     expect(savedDocument.fileSize).toBe(certificateBytes.length);
     expect(savedDocument.mimeType).toBe('application/pdf');

@@ -14,6 +14,7 @@ import {
   extractCertificateFields,
   getLowConfidenceFields,
 } from './certificateExtraction.js';
+import { buildCertificateDocumentResponse } from './certificateDocumentResponse.js';
 import { buildTestResultData, suggestLotsFromLocation } from './testResultMapping.js';
 import { MAX_UPLOAD_PROJECT_ID_LENGTH } from './validation.js';
 
@@ -29,7 +30,6 @@ type BatchUploadResult =
         certificateDoc: {
           id: string;
           filename: string;
-          fileUrl: string;
           mimeType: string | null;
         } | null;
       };
@@ -162,7 +162,6 @@ export async function processCertificateUpload({
             select: {
               id: true,
               filename: true,
-              fileUrl: true,
               mimeType: true,
             },
           },
@@ -190,7 +189,7 @@ export async function processCertificateUpload({
       testType: testResult.testType,
       status: testResult.status,
       aiExtracted: testResult.aiExtracted,
-      certificateDoc: testResult.certificateDoc,
+      certificateDoc: buildCertificateDocumentResponse(testResult.certificateDoc),
     },
     extraction: {
       success: true,
@@ -293,7 +292,6 @@ export async function processBatchCertificateUpload({
               select: {
                 id: true,
                 filename: true,
-                fileUrl: true,
                 mimeType: true,
               },
             },
@@ -312,7 +310,7 @@ export async function processBatchCertificateUpload({
           testType: testResult.testType,
           status: testResult.status,
           aiExtracted: testResult.aiExtracted,
-          certificateDoc: testResult.certificateDoc,
+          certificateDoc: buildCertificateDocumentResponse(testResult.certificateDoc),
         },
         extraction: {
           extractedFields: extractedData,

@@ -1,19 +1,15 @@
 import { LOW_CONFIDENCE_THRESHOLD } from './certificateExtraction.js';
-
-type CertificateDocumentSummary = {
-  id: string;
-  filename: string;
-  fileUrl: string;
-  mimeType: string | null;
-  uploadedAt: Date;
-} | null;
+import {
+  buildCertificateDocumentResponse,
+  type CertificateDocumentResponseSource,
+} from './certificateDocumentResponse.js';
 
 type ExtractionFieldValue = string | number | Date | { toString(): string } | null;
 
 type CertificateExtractionSource = {
   aiExtracted: boolean;
   aiConfidence: string | null;
-  certificateDoc: CertificateDocumentSummary;
+  certificateDoc: CertificateDocumentResponseSource;
   testType: ExtractionFieldValue;
   laboratoryName: ExtractionFieldValue;
   laboratoryReportNumber: ExtractionFieldValue;
@@ -82,7 +78,7 @@ export function buildCertificateExtractionResponse(testResult: CertificateExtrac
   return {
     extraction: {
       aiExtracted: true,
-      certificateDoc: testResult.certificateDoc,
+      certificateDoc: buildCertificateDocumentResponse(testResult.certificateDoc),
       fields: fieldStatus,
       lowConfidenceFields,
       needsReview: lowConfidenceFields.length > 0,

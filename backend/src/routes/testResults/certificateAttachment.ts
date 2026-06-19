@@ -11,6 +11,7 @@ import {
   shouldUploadCertificateToSupabase,
   uploadCertificateToSupabase,
 } from './certificateStorage.js';
+import { buildCertificateDocumentResponse } from './certificateDocumentResponse.js';
 
 // The route handler owns the access-control policy (which roles may attach a
 // certificate). It passes that check in as `authorize`, invoked at the exact
@@ -133,7 +134,6 @@ export async function processCertificateAttachment({
             select: {
               id: true,
               filename: true,
-              fileUrl: true,
               mimeType: true,
             },
           },
@@ -174,7 +174,7 @@ export async function processCertificateAttachment({
       id: testResult.id,
       testType: testResult.testType,
       status: testResult.status,
-      certificateDoc: testResult.certificateDoc,
+      certificateDoc: buildCertificateDocumentResponse(testResult.certificateDoc),
     },
   };
 }
