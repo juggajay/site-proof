@@ -1,10 +1,23 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import {
+  buildDocumentsListResponse,
   buildDocumentSignedUrlTokenResponse,
+  buildDocumentVersionsResponse,
   buildInvalidDocumentSignedUrlTokenResponse,
+  normalizeDocumentFileUrlForResponse,
 } from './documentResponses.js';
 
 describe('document response helpers', () => {
+  const originalSupabaseUrl = process.env.SUPABASE_URL;
+
+  afterEach(() => {
+    if (originalSupabaseUrl === undefined) {
+      delete process.env.SUPABASE_URL;
+    } else {
+      process.env.SUPABASE_URL = originalSupabaseUrl;
+    }
+  });
+
   it('builds an invalid signed URL token response', () => {
     expect(buildInvalidDocumentSignedUrlTokenResponse(false)).toEqual({
       valid: false,
@@ -35,6 +48,83 @@ describe('document response helpers', () => {
       expiresAt: '2026-06-01T01:02:03.000Z',
       createdAt: '2026-06-01T00:02:03.000Z',
       message: 'Token is valid',
+    });
+  });
+
+  it('normalizes owned legacy Supabase public document URLs to storage references', () => {
+    process.env.SUPABASE_URL = 'https://siteproof-test.supabase.co';
+
+    expect(
+      normalizeDocumentFileUrlForResponse({
+        id: 'doc-1',
+        projectId: 'project-1',
+        documentType: 'photo',
+        fileUrl:
+          'https://siteproof-test.supabase.co/storage/v1/object/public/documents/project-1/evidence photo.png',
+      }),
+    ).toMatchObject({
+      fileUrl: 'supabase://documents/project-1/evidence%20photo.png',
+    });
+  });
+
+  it('normalizes owned drawing and certificate legacy Supabase URLs', () => {
+    process.env.SUPABASE_URL = 'https://siteproof-test.supabase.co';
+
+    expect(
+      normalizeDocumentFileUrlForResponse({
+        id: 'drawing-doc',
+        projectId: 'project-1',
+        documentType: 'drawing',
+        fileUrl:
+          'https://siteproof-test.supabase.co/storage/v1/object/public/documents/drawings/project-1/site-plan.pdf',
+      }),
+    ).toMatchObject({
+      fileUrl: 'supabase://documents/drawings/project-1/site-plan.pdf',
+    });
+
+    expect(
+      normalizeDocumentFileUrlForResponse({
+        id: 'cert-doc',
+        projectId: 'project-1',
+        documentType: 'test_certificate',
+        fileUrl:
+          'https://siteproof-test.supabase.co/storage/v1/object/public/documents/certificates/project-1/test-cert.pdf',
+      }),
+    ).toMatchObject({
+      fileUrl: 'supabase://documents/certificates/project-1/test-cert.pdf',
+    });
+  });
+
+  it('normalizes foreign Supabase public URLs so responses do not expose public storage URLs', () => {
+    process.env.SUPABASE_URL = 'https://siteproof-test.supabase.co';
+    const foreignUrl =
+      'https://siteproof-test.supabase.co/storage/v1/object/public/documents/other-project/evidence.pdf';
+
+    expect(
+      normalizeDocumentFileUrlForResponse({
+        id: 'doc-1',
+        projectId: 'project-1',
+        documentType: 'photo',
+        fileUrl: foreignUrl,
+      }),
+    ).toMatchObject({ fileUrl: 'supabase://documents/other-project/evidence.pdf' });
+  });
+
+  it('normalizes document list and version response file URLs', () => {
+    process.env.SUPABASE_URL = 'https://siteproof-test.supabase.co';
+    const document = {
+      id: 'doc-1',
+      projectId: 'project-1',
+      documentType: 'photo',
+      fileUrl:
+        'https://siteproof-test.supabase.co/storage/v1/object/public/documents/project-1/photo.png',
+    };
+
+    expect(buildDocumentsListResponse([document], 1, {}, null)).toMatchObject({
+      documents: [{ fileUrl: 'supabase://documents/project-1/photo.png' }],
+    });
+    expect(buildDocumentVersionsResponse('doc-1', [document])).toMatchObject({
+      versions: [{ fileUrl: 'supabase://documents/project-1/photo.png' }],
     });
   });
 });

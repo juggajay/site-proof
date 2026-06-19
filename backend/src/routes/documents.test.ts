@@ -404,6 +404,25 @@ describe('Documents API', () => {
       expect(res.status).toBe(403);
     });
 
+    const signedDownload = async (
+      targetDocumentId: string,
+      body: Record<string, unknown> = {},
+      query: Record<string, string> = {},
+    ) => {
+      const createRes = await request(app)
+        .post(`/api/documents/${targetDocumentId}/signed-url`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send(body);
+
+      expect(createRes.status).toBe(200);
+
+      const params = new URLSearchParams({ token: createRes.body.token, ...query });
+      return {
+        createRes,
+        res: await request(app).get(`/api/documents/download/${targetDocumentId}?${params}`),
+      };
+    };
+
     it('should not redirect arbitrary external document URLs after signed token validation', async () => {
       const externalUrl = 'https://storage.example.com/project/test-photo.jpg';
       const externalDocument = await prisma.document.create({
@@ -421,13 +440,7 @@ describe('Documents API', () => {
       });
 
       try {
-        const createRes = await request(app)
-          .post(`/api/documents/${externalDocument.id}/signed-url`)
-          .set('Authorization', `Bearer ${authToken}`);
-
-        const res = await request(app).get(
-          `/api/documents/download/${externalDocument.id}?token=${createRes.body.token}`,
-        );
+        const { res } = await signedDownload(externalDocument.id);
 
         expect(res.status).toBe(404);
         expect(res.headers.location).toBeUndefined();
@@ -466,13 +479,7 @@ describe('Documents API', () => {
       } as unknown as ReturnType<typeof supabaseLib.getSupabaseClient>);
 
       try {
-        const createRes = await request(app)
-          .post(`/api/documents/${externalDocument.id}/signed-url`)
-          .set('Authorization', `Bearer ${authToken}`);
-
-        const res = await request(app).get(
-          `/api/documents/download/${externalDocument.id}?token=${createRes.body.token}`,
-        );
+        const { res } = await signedDownload(externalDocument.id);
 
         expect(res.status).toBe(200);
         expect(res.headers.location).toBeUndefined();
@@ -487,6 +494,44 @@ describe('Documents API', () => {
         expect(download).toHaveBeenCalledWith(storagePath);
       } finally {
         await prisma.document.deleteMany({ where: { id: externalDocument.id } });
+      }
+    });
+
+    it('should not proxy Supabase downloads outside the document project prefix', async () => {
+      process.env.SUPABASE_URL = 'https://siteproof-test.supabase.co';
+      mockIsSupabaseConfigured.mockReturnValue(true);
+      const foreignStoragePath = 'other-project/test-photo.jpg';
+      const foreignUrl = `${process.env.SUPABASE_URL}/storage/v1/object/public/documents/${foreignStoragePath}`;
+      const foreignDocument = await prisma.document.create({
+        data: {
+          projectId,
+          lotId,
+          documentType: 'photo',
+          category: 'Site Photos',
+          filename: 'foreign-supabase-test-photo.jpg',
+          fileUrl: foreignUrl,
+          fileSize: 1024,
+          mimeType: 'image/jpeg',
+          uploadedById: userId,
+        },
+      });
+
+      const download = vi.fn();
+      const from = vi.fn(() => ({ download }));
+      mockGetSupabaseClient.mockReturnValue({
+        storage: { from },
+      } as unknown as ReturnType<typeof supabaseLib.getSupabaseClient>);
+
+      try {
+        const { res } = await signedDownload(foreignDocument.id);
+
+        expect(res.status).toBe(404);
+        expect(res.headers.location).toBeUndefined();
+        expect(res.body.error.message).toContain('File');
+        expect(from).not.toHaveBeenCalled();
+        expect(download).not.toHaveBeenCalled();
+      } finally {
+        await prisma.document.deleteMany({ where: { id: foreignDocument.id } });
       }
     });
 

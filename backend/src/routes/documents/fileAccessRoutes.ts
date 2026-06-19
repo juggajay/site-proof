@@ -19,6 +19,8 @@ type DocumentDownloadRecord = {
   fileUrl: string;
   filename: string;
   mimeType: string | null;
+  projectId: string;
+  documentType?: string | null;
 };
 
 type CreateDocumentFileAccessRouterDependencies = {

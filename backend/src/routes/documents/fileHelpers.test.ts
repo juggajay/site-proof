@@ -60,6 +60,8 @@ describe('sendDocumentFile', () => {
         fileUrl,
         filename: 'evidence.pdf',
         mimeType: 'application/pdf',
+        projectId: 'project-1',
+        documentType: 'photo',
       },
       res,
       'attachment',
@@ -74,5 +76,31 @@ describe('sendDocumentFile', () => {
     );
     expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'application/pdf');
     expect(res.send.mock.calls[0][0].toString()).toBe('document bytes');
+  });
+
+  it('does not stream Supabase objects outside the document project scope', async () => {
+    const res = makeResponse();
+
+    mockGetSupabaseStoragePath.mockReturnValue(null);
+    mockIsSupabaseConfigured.mockReturnValue(true);
+
+    await expect(
+      sendDocumentFile(
+        {
+          fileUrl:
+            'https://siteproof-test.supabase.co/storage/v1/object/public/documents/other-project/evidence.pdf',
+          filename: 'evidence.pdf',
+          mimeType: 'application/pdf',
+          projectId: 'project-1',
+          documentType: 'photo',
+        },
+        res,
+        'attachment',
+      ),
+    ).rejects.toMatchObject({ statusCode: 404 });
+
+    expect(mockGetSupabaseClient).not.toHaveBeenCalled();
+    expect(res.redirect).not.toHaveBeenCalled();
+    expect(res.send).not.toHaveBeenCalled();
   });
 });

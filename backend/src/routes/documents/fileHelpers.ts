@@ -6,14 +6,13 @@ import path from 'path';
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../lib/AppError.js';
 import { logWarn } from '../../lib/serverLogger.js';
-import {
-  DOCUMENTS_BUCKET,
-  getSupabaseClient,
-  getSupabaseStoragePath,
-  isSupabaseConfigured,
-} from '../../lib/supabase.js';
+import { DOCUMENTS_BUCKET, getSupabaseClient, isSupabaseConfigured } from '../../lib/supabase.js';
 import { ensureUploadSubdirectory } from '../../lib/uploadPaths.js';
-import { isExternalFileUrl, resolveLocalDocumentFilePath } from './storage.js';
+import {
+  getOwnedDocumentStoragePath,
+  isExternalFileUrl,
+  resolveLocalDocumentFilePath,
+} from './storage.js';
 
 type SignedUrlValidation = {
   valid: boolean;
@@ -141,10 +140,6 @@ export function parseSignedUrlExpiryMinutes(value: unknown): number {
   return parsed;
 }
 
-function isSafeExternalDocumentUrl(fileUrl: string): boolean {
-  return getSupabaseStoragePath(fileUrl, DOCUMENTS_BUCKET) !== null;
-}
-
 function getSafeDownloadFilename(filename: string): string {
   const basename = path.basename(filename.replace(/\\/g, '/'));
   const sanitized = basename
@@ -261,12 +256,22 @@ export function createTempUploadPath(originalName: string): string {
 }
 
 async function sendSupabaseDocumentFile(
-  document: { fileUrl: string; filename: string; mimeType: string | null },
+  document: {
+    fileUrl: string;
+    filename: string;
+    mimeType: string | null;
+    projectId: string;
+    documentType?: string | null;
+  },
   res: Response,
   contentType: string,
   contentDisposition: 'inline' | 'attachment',
 ): Promise<void> {
-  const storagePath = getSupabaseStoragePath(document.fileUrl, DOCUMENTS_BUCKET);
+  const storagePath = getOwnedDocumentStoragePath(
+    document.fileUrl,
+    document.projectId,
+    document.documentType,
+  );
   if (!storagePath || !isSupabaseConfigured()) {
     throw AppError.notFound('File');
   }
@@ -291,7 +296,13 @@ async function sendSupabaseDocumentFile(
 }
 
 export async function sendDocumentFile(
-  document: { fileUrl: string; filename: string; mimeType: string | null },
+  document: {
+    fileUrl: string;
+    filename: string;
+    mimeType: string | null;
+    projectId: string;
+    documentType?: string | null;
+  },
   res: Response,
   disposition: 'inline' | 'attachment' = 'inline',
 ): Promise<void> {
@@ -304,7 +315,7 @@ export async function sendDocumentFile(
   const contentType = getSafeServedDocumentMimeType(document);
   const contentDisposition = getDocumentContentDisposition(disposition, contentType);
 
-  if (isSafeExternalDocumentUrl(document.fileUrl)) {
+  if (getOwnedDocumentStoragePath(document.fileUrl, document.projectId, document.documentType)) {
     await sendSupabaseDocumentFile(document, res, contentType, contentDisposition);
     return;
   }

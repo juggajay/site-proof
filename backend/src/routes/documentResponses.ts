@@ -1,4 +1,57 @@
+import {
+  DOCUMENTS_BUCKET,
+  getSupabaseStoragePath,
+  getSupabaseStorageReference,
+} from '../lib/supabase.js';
+
 type ClassificationSuggestion = { label: string; confidence: number };
+type DocumentResponseRecord = Record<string, unknown>;
+
+function getDocumentResponseStoragePrefixes(projectId: string, documentType?: unknown): string[] {
+  const prefixes = [`${projectId}/`];
+  if (documentType === 'drawing') {
+    prefixes.push(`drawings/${projectId}/`);
+  }
+  if (documentType === 'test_certificate') {
+    prefixes.push(`certificates/${projectId}/`);
+  }
+  return prefixes;
+}
+
+function getDocumentResponseStoragePath(document: DocumentResponseRecord): string | null {
+  const { fileUrl, projectId, documentType } = document;
+  if (typeof fileUrl !== 'string') {
+    return null;
+  }
+
+  if (typeof projectId === 'string') {
+    for (const expectedPrefix of getDocumentResponseStoragePrefixes(projectId, documentType)) {
+      const storagePath = getSupabaseStoragePath(fileUrl, {
+        bucket: DOCUMENTS_BUCKET,
+        expectedPrefix,
+      });
+      if (storagePath) return storagePath;
+    }
+  }
+
+  return getSupabaseStoragePath(fileUrl, DOCUMENTS_BUCKET);
+}
+
+export function normalizeDocumentFileUrlForResponse<T>(document: T): T {
+  if (!document || typeof document !== 'object' || Array.isArray(document)) {
+    return document;
+  }
+
+  const storagePath = getDocumentResponseStoragePath(document as DocumentResponseRecord);
+  if (!storagePath) {
+    return document;
+  }
+
+  return {
+    ...(document as DocumentResponseRecord),
+    fileUrl: getSupabaseStorageReference(DOCUMENTS_BUCKET, storagePath),
+  } as T;
+}
 
 export function buildDocumentsListResponse(
   documents: unknown[],
@@ -7,7 +60,7 @@ export function buildDocumentsListResponse(
   pagination: unknown,
 ) {
   return {
-    documents,
+    documents: documents.map(normalizeDocumentFileUrlForResponse),
     total,
     categories,
     pagination,
@@ -18,7 +71,7 @@ export function buildDocumentVersionsResponse(documentId: string, versions: unkn
   return {
     documentId,
     totalVersions: versions.length,
-    versions,
+    versions: versions.map(normalizeDocumentFileUrlForResponse),
   };
 }
 
