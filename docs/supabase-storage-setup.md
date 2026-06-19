@@ -17,7 +17,7 @@ migrated there).
 - **Public URL host:** `https://vhlvutvzdliwxorfhxxv.supabase.co`
 - **Region:** Sydney (`ap-southeast-2`)
 - **Bucket:** `documents`
-- **Bucket visibility:** must be **private** before paying customers. DB
+- **Bucket visibility:** **private** in production. DB
   rows may still contain legacy `/storage/v1/object/public/documents/...`
   object locator URLs for backwards-compatible path parsing, but
   browser-facing document, comment, drawing, certificate, avatar, logo, and
@@ -99,6 +99,11 @@ PDF fixtures:
 | Company logos | ✅ | ✅ | ✅ (POST `/api/company/logo`, or PATCH `/api/company` with a different `logoUrl`) | ✅ (PATCH `/api/company` with `logoUrl: ""` removes the previous Supabase object — PR #9) |
 
 Smoke evidence:
+- Private-bucket hardening — production bucket flipped to private and
+  verified on 2026-06-20. Production preflight passed the storage check,
+  and a live smoke uploaded a PDF, generated `/api/documents/:id/signed-url`,
+  downloaded it through `/api/documents/download/:id`, and deleted the
+  document successfully.
 - Documents / comments / drawings / certificates — PR #4 + PR #5 smokes
   (cert-DELETE leak found and fixed in PR #5; documented in PR #6).
 - Avatars / company logos — PR #7 production smoke on 2026-05-12.

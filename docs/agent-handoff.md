@@ -1,6 +1,6 @@
 # Agent Handoff
 
-Last updated: 2026-06-01
+Last updated: 2026-06-20
 
 This file is the tracked handoff for the current SiteProof workstream. It is
 intended for a fresh agent starting from `master`.
@@ -36,8 +36,9 @@ intended for a fresh agent starting from `master`.
 
 Status: closed.
 
-- Supabase Storage is the durable production file store for the public
-  `documents` bucket.
+- Supabase Storage is the durable production file store for the private
+  `documents` bucket. Browser access must go through backend access routes,
+  not raw Supabase object URLs.
 - The 2026-05-12 DB orphan cleanup deleted 24 backed-up orphan rows:
   11 `documents` rows and 13 `comment_attachments` rows.
 - Post-cleanup DB verification returned zero rows for all targeted orphan
