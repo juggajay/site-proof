@@ -6,7 +6,7 @@ import { logError, logWarn } from '../../lib/serverLogger.js';
 import {
   DOCUMENTS_BUCKET,
   getSupabaseClient,
-  getSupabasePublicUrl,
+  getSupabaseStorageReference,
   getSupabaseStoragePath,
   isSupabaseConfigured,
 } from '../../lib/supabase.js';
@@ -83,7 +83,7 @@ async function uploadDrawingToSupabase(
   }
 
   return {
-    url: getSupabasePublicUrl(DOCUMENTS_BUCKET, storagePath),
+    url: getSupabaseStorageReference(DOCUMENTS_BUCKET, storagePath),
     storagePath,
   };
 }

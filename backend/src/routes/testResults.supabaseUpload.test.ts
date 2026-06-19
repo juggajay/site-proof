@@ -9,12 +9,6 @@ import { errorHandler } from '../middleware/errorHandler.js';
 
 const mockUpload = vi.hoisted(() => vi.fn());
 const mockGetSupabaseClient = vi.hoisted(() => vi.fn());
-const mockGetSupabasePublicUrl = vi.hoisted(() =>
-  vi.fn(
-    (bucket: string, storagePath: string) =>
-      `https://fixture.supabase.co/storage/v1/object/public/${bucket}/${storagePath}`,
-  ),
-);
 
 vi.mock('../lib/supabase.js', async () => {
   const actual = await vi.importActual<typeof import('../lib/supabase.js')>('../lib/supabase.js');
@@ -22,7 +16,6 @@ vi.mock('../lib/supabase.js', async () => {
     ...actual,
     isSupabaseConfigured: vi.fn(() => true),
     getSupabaseClient: mockGetSupabaseClient,
-    getSupabasePublicUrl: mockGetSupabasePublicUrl,
   };
 });
 
@@ -120,7 +113,6 @@ describe('Test Results API Supabase certificate uploads', () => {
         }),
       },
     });
-    mockGetSupabasePublicUrl.mockClear();
   });
 
   afterAll(async () => {
@@ -152,7 +144,7 @@ describe('Test Results API Supabase certificate uploads', () => {
 
     expect(res.status).toBe(201);
     expect(res.body.testResult.certificateDoc.fileUrl).toContain(
-      `https://fixture.supabase.co/storage/v1/object/public/documents/certificates/${projectId}/cert-`,
+      `supabase://documents/certificates/${projectId}/cert-`,
     );
     expect(findNewFilesWithContent(beforeFiles, certificateBytes)).toHaveLength(0);
 
@@ -165,7 +157,6 @@ describe('Test Results API Supabase certificate uploads', () => {
       contentType: 'application/pdf',
       upsert: false,
     });
-    expect(mockGetSupabasePublicUrl).toHaveBeenCalledWith('documents', storagePath);
 
     const savedDocument = await prisma.document.findUniqueOrThrow({
       where: { id: res.body.testResult.certificateDoc.id },

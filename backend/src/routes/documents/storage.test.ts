@@ -12,7 +12,11 @@ vi.mock('../../lib/supabase.js', async () => {
 
 import * as supabaseLib from '../../lib/supabase.js';
 import { getSupabaseStorageReference } from '../../lib/supabase.js';
-import { getOwnedDocumentStoragePath, loadDocumentImageAsBase64 } from './storage.js';
+import {
+  getOwnedDocumentStoragePath,
+  loadDocumentImageAsBase64,
+  uploadToSupabase,
+} from './storage.js';
 
 const mockGetSupabaseClient = vi.mocked(supabaseLib.getSupabaseClient);
 const mockIsSupabaseConfigured = vi.mocked(supabaseLib.isSupabaseConfigured);
@@ -86,5 +90,38 @@ describe('document Supabase storage ownership', () => {
 
     expect(from).toHaveBeenCalledWith('documents');
     expect(download).toHaveBeenCalledWith('project-a/photo.png');
+  });
+
+  it('stores new Supabase document uploads as private storage references', async () => {
+    const upload = vi.fn().mockResolvedValue({ data: { path: 'unused' }, error: null });
+    const from = vi.fn(() => ({ upload }));
+    const buffer = Buffer.from('document bytes');
+
+    mockGetSupabaseClient.mockReturnValue({
+      storage: { from },
+    } as unknown as ReturnType<typeof supabaseLib.getSupabaseClient>);
+
+    const result = await uploadToSupabase(
+      {
+        originalname: 'Evidence Photo.png',
+        mimetype: 'image/png',
+        buffer,
+      } as Express.Multer.File,
+      'project-a',
+      {
+        buildStoredFilename: () => 'stored evidence.png',
+        getSafeStoredDocumentMimeType: () => 'image/png',
+      },
+    );
+
+    expect(result).toEqual({
+      storagePath: 'project-a/stored evidence.png',
+      url: 'supabase://documents/project-a/stored%20evidence.png',
+    });
+    expect(from).toHaveBeenCalledWith('documents');
+    expect(upload).toHaveBeenCalledWith('project-a/stored evidence.png', buffer, {
+      contentType: 'image/png',
+      upsert: false,
+    });
   });
 });
