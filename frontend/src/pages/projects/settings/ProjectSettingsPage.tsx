@@ -1,6 +1,7 @@
 import { useCallback, useEffect, lazy, Suspense, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
+import { canDeleteProjects } from '@/lib/roles';
 import { apiFetch } from '@/lib/api';
 import { Settings, Users, ClipboardList, Bell, MapPin, Puzzle } from 'lucide-react';
 import type {
@@ -227,6 +228,7 @@ export function ProjectSettingsPage() {
 
   const userRole = user?.roleInCompany || user?.role || '';
   const canViewContractValue = ['admin', 'owner', 'project_manager'].includes(userRole);
+  const canDeleteProject = canDeleteProjects(userRole);
   const tabParam = searchParams.get('tab');
   const activeTab: SettingsTab = isSettingsTab(tabParam) ? tabParam : 'general';
 
@@ -352,6 +354,7 @@ export function ProjectSettingsPage() {
                   projectId={projectId}
                   project={project}
                   onProjectUpdate={handleProjectUpdate}
+                  canDeleteProject={canDeleteProject}
                 />
               </>
             )}

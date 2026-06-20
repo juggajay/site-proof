@@ -2,9 +2,10 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useState, useMemo } from 'react';
 import { useCommercialAccess } from '@/hooks/useCommercialAccess';
 import { useSubcontractorAccess } from '@/hooks/useSubcontractorAccess';
-import { useViewerAccess } from '@/hooks/useViewerAccess';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { useAuth } from '@/lib/auth';
+import { canCreateLots, canDeleteLots } from '@/lib/roles';
+import { getProjectScopedRole } from '@/lib/subcontractorIdentity';
 import { BulkCreateLotsWizard } from '@/components/lots/BulkCreateLotsWizard';
 import { ImportLotsModal } from '@/components/lots/ImportLotsModal';
 import { ExportLotsModal } from '@/components/lots/ExportLotsModal';
@@ -38,9 +39,6 @@ import { useLotsActions } from './hooks/useLotsActions';
 import { LOT_STATUS_COLORS } from './lotsPageDisplay';
 import { parseColumnOrderPreference, parseColumnPreference } from './lotsPagePreferences';
 
-// Roles that can delete lots
-const LOT_DELETE_ROLES = ['owner', 'admin', 'project_manager'];
-
 const LOT_VIEW_MODE_STORAGE_KEY = 'siteproof_lot_view_mode';
 
 export function LotsPage() {
@@ -50,7 +48,6 @@ export function LotsPage() {
   const { user } = useAuth();
   const { canViewBudgets } = useCommercialAccess();
   const { isSubcontractor } = useSubcontractorAccess();
-  const { canCreate } = useViewerAccess();
   const isMobile = useIsMobile();
 
   // URL-based filter state
@@ -110,7 +107,9 @@ export function LotsPage() {
   });
 
   // Access checks
-  const canDelete = user?.role ? LOT_DELETE_ROLES.includes(user.role) : false;
+  const projectScopedRole = getProjectScopedRole(user);
+  const canCreate = canCreateLots(projectScopedRole);
+  const canDelete = canDeleteLots(projectScopedRole);
 
   // View mode state
   const [viewMode, setViewMode] = useState<'list' | 'card' | 'linear'>(() => {

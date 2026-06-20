@@ -37,6 +37,7 @@ import {
 } from '@/lib/subcontractorIdentity';
 import {
   ROLE_GROUPS,
+  canManageProjectSettings,
   hasRoleInGroup,
   isAdminRole,
   isSubcontractorRole,
@@ -76,6 +77,7 @@ interface NavigationItem {
   requiresCommercialAccess?: boolean;
   requiresAdmin?: boolean;
   requiresManagement?: boolean;
+  requiresProjectSettingsAccess?: boolean;
   allowedRoles?: readonly string[];
   excludeRoles?: readonly string[];
 }
@@ -110,7 +112,12 @@ const projectNavigation: NavigationItem[] = [
   { name: 'Documents', href: 'documents', icon: FileText },
   { name: 'Subcontractors', href: 'subcontractors', icon: Users, requiresManagement: true },
   { name: 'Reports', href: 'reports', icon: BarChart3 },
-  { name: 'Project Settings', href: 'settings', icon: Settings, requiresManagement: true },
+  {
+    name: 'Project Settings',
+    href: 'settings',
+    icon: Settings,
+    requiresProjectSettingsAccess: true,
+  },
 ];
 
 // Bottom nav - most important items for quick access
@@ -159,7 +166,8 @@ export function MobileNav() {
   const hasPortalIdentity = hasSubcontractorPortalIdentity(user);
   const hasCommercial = hasCommercialAccess(projectScopedRole);
   const hasAdmin = isAdminRole(userRole);
-  const hasManagement = hasRoleInGroup(userRole, ROLE_GROUPS.MANAGEMENT);
+  const hasManagement = hasRoleInGroup(projectScopedRole, ROLE_GROUPS.MANAGEMENT);
+  const hasProjectSettingsAccess = canManageProjectSettings(projectScopedRole);
   const isForeman = dashboardRole === 'foreman';
   const isSubcontractor = isSubcontractorRole(userRole) || hasPortalIdentity;
   const isViewer = isViewerRole(projectScopedRole);
@@ -178,6 +186,7 @@ export function MobileNav() {
     if (item.requiresCommercialAccess && !hasCommercial) return false;
     if (item.requiresAdmin && !hasAdmin) return false;
     if (item.requiresManagement && !hasManagement) return false;
+    if (item.requiresProjectSettingsAccess && !hasProjectSettingsAccess) return false;
     if (
       item.allowedRoles &&
       !item.allowedRoles.includes(userRole) &&

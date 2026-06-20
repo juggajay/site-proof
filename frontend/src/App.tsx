@@ -225,11 +225,11 @@ function App() {
                 <Route path="today" element={<TodayWorklist />} />
               </Route>
 
-              {/* Project Settings - Admin Only */}
+              {/* Project Settings - company/project admins only */}
               <Route
                 path="/projects/:projectId/settings"
                 element={
-                  <RoleProtectedRoute allowedRoles={ADMIN_ROLES}>
+                  <RoleProtectedRoute allowedRoles={ADMIN_ROLES} allowProjectScopedRole>
                     <ProjectSettingsPage />
                   </RoleProtectedRoute>
                 }
@@ -237,7 +237,7 @@ function App() {
               <Route
                 path="/projects/:projectId/users"
                 element={
-                  <RoleProtectedRoute allowedRoles={ADMIN_ROLES}>
+                  <RoleProtectedRoute allowedRoles={ADMIN_ROLES} allowProjectScopedRole>
                     <ProjectUsersPage />
                   </RoleProtectedRoute>
                 }
@@ -245,7 +245,7 @@ function App() {
               <Route
                 path="/projects/:projectId/areas"
                 element={
-                  <RoleProtectedRoute allowedRoles={ADMIN_ROLES}>
+                  <RoleProtectedRoute allowedRoles={ADMIN_ROLES} allowProjectScopedRole>
                     <ProjectAreasPage />
                   </RoleProtectedRoute>
                 }

@@ -144,6 +144,18 @@ describe('MobileNav menu trigger', () => {
 
     expect(screen.getByRole('link', { name: /progress claims/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /costs/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /subcontractors/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /project settings/i })).toBeInTheDocument();
+  });
+
+  it('hides project settings for site managers in the mobile drawer', () => {
+    setUser({ role: 'site_manager', roleInCompany: 'site_manager', companyId: 'c1' });
+
+    renderNav();
+    fireEvent.click(screen.getByRole('button', { name: /open menu/i }));
+
+    expect(screen.getByRole('link', { name: /subcontractors/i })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /project settings/i })).not.toBeInTheDocument();
   });
 
   it('publishes the bottom bar height so the offline sync pill clears it', () => {

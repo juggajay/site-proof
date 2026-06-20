@@ -19,9 +19,15 @@ interface DangerZoneProps {
   projectId: string;
   project: Project;
   onProjectUpdate: (project: Project) => void;
+  canDeleteProject: boolean;
 }
 
-export function DangerZone({ projectId, project, onProjectUpdate }: DangerZoneProps) {
+export function DangerZone({
+  projectId,
+  project,
+  onProjectUpdate,
+  canDeleteProject,
+}: DangerZoneProps) {
   const navigate = useNavigate();
 
   // Delete dialog state
@@ -243,23 +249,24 @@ export function DangerZone({ projectId, project, onProjectUpdate }: DangerZonePr
         </Button>
       </div>
 
-      {/* Danger Zone */}
-      <div className="rounded-lg border border-destructive/50 p-4 mt-4">
-        <div className="flex items-center gap-2 mb-2">
-          <AlertTriangle className="h-5 w-5 text-destructive" />
-          <h2 className="text-lg font-semibold text-destructive">Danger Zone</h2>
+      {canDeleteProject && (
+        <div className="rounded-lg border border-destructive/50 p-4 mt-4">
+          <div className="flex items-center gap-2 mb-2">
+            <AlertTriangle className="h-5 w-5 text-destructive" />
+            <h2 className="text-lg font-semibold text-destructive">Danger Zone</h2>
+          </div>
+          <p className="text-sm text-muted-foreground mb-4">
+            Permanent delete is only for empty setup projects. Archive projects that have lots,
+            dockets, NCRs, documents, or audit history.
+          </p>
+          <Button type="button" variant="destructive" onClick={handleDeleteClick}>
+            Delete Project
+          </Button>
         </div>
-        <p className="text-sm text-muted-foreground mb-4">
-          Permanent delete is only for empty setup projects. Archive projects that have lots,
-          dockets, NCRs, documents, or audit history.
-        </p>
-        <Button type="button" variant="destructive" onClick={handleDeleteClick}>
-          Delete Project
-        </Button>
-      </div>
+      )}
 
       {/* Delete Confirmation Dialog */}
-      {showDeleteDialog && (
+      {canDeleteProject && showDeleteDialog && (
         <Modal onClose={handleCancelDelete} alert>
           <AlertModalHeader>Delete Project</AlertModalHeader>
           <AlertModalDescription>
