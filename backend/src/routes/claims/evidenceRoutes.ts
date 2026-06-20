@@ -230,7 +230,7 @@ export function createClaimEvidenceRouter({
               status: test.status,
               sampleDate: test.sampleDate?.toISOString() || null,
               resultDate: test.resultDate?.toISOString() || null,
-              isVerified: test.verifiedById !== null,
+              isVerified: test.status === 'verified',
               verifiedBy: test.verifiedBy
                 ? {
                     name: test.verifiedBy.fullName || test.verifiedBy.email,

@@ -1921,7 +1921,7 @@ describe('Test Results API', () => {
       }
     });
 
-    it('should allow verifier corrections to verified test results', async () => {
+    it('should clear verification when a verifier corrects verified test result evidence', async () => {
       const testResult = await createEnteredTestResult();
       const verifiedAt = new Date('2026-02-03T04:05:06.000Z');
 
@@ -1939,19 +1939,30 @@ describe('Test Results API', () => {
         const res = await request(app)
           .patch(`/api/test-results/${testResult.id}`)
           .set('Authorization', `Bearer ${authToken}`)
-          .send({ resultUnit: 'kPa' });
+          .send({ resultUnit: 'kPa', passFail: 'fail' });
 
         expect(res.status).toBe(200);
-        expect(res.body.testResult.status).toBe('verified');
+        expect(res.body.testResult.status).toBe('entered');
 
         const updated = await prisma.testResult.findUniqueOrThrow({
           where: { id: testResult.id },
-          select: { status: true, verifiedAt: true, verifiedById: true, resultUnit: true },
+          select: {
+            status: true,
+            enteredAt: true,
+            enteredById: true,
+            verifiedAt: true,
+            verifiedById: true,
+            resultUnit: true,
+            passFail: true,
+          },
         });
-        expect(updated.status).toBe('verified');
-        expect(updated.verifiedAt?.toISOString()).toBe(verifiedAt.toISOString());
-        expect(updated.verifiedById).toBe(userId);
+        expect(updated.status).toBe('entered');
+        expect(updated.enteredAt).not.toBeNull();
+        expect(updated.enteredById).toBe(userId);
+        expect(updated.verifiedAt).toBeNull();
+        expect(updated.verifiedById).toBeNull();
         expect(updated.resultUnit).toBe('kPa');
+        expect(updated.passFail).toBe('fail');
       } finally {
         await prisma.testResult.deleteMany({ where: { id: testResult.id } });
       }
@@ -2495,6 +2506,73 @@ describe('Test Results API', () => {
       }
     });
 
+    it('blocks replacing the certificate on a verified test result', async () => {
+      const firstDoc = await prisma.document.create({
+        data: {
+          projectId,
+          documentType: 'test_certificate',
+          category: 'test_results',
+          filename: 'verified-first-cert.pdf',
+          fileUrl: '/uploads/certificates/verified-first-cert.pdf',
+          fileSize: 100,
+          mimeType: 'application/pdf',
+          uploadedById: userId,
+        },
+      });
+      const verifiedAt = new Date('2026-05-06T07:08:09.000Z');
+      const testResult = await prisma.testResult.create({
+        data: {
+          projectId,
+          lotId,
+          testType: `Verified Replace Cert Test ${Date.now()}`,
+          status: 'verified',
+          certificateDocId: firstDoc.id,
+          resultValue: 98.5,
+          passFail: 'pass',
+          enteredById: userId,
+          enteredAt: new Date(),
+          verifiedById: userId,
+          verifiedAt,
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .post(`/api/test-results/${testResult.id}/certificate`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .attach('certificate', PDF_BYTES, {
+            filename: 'verified-replacement-cert.pdf',
+            contentType: 'application/pdf',
+          });
+
+        expect(res.status).toBe(409);
+        expect(res.body.error.message).toContain('Verified test result certificates');
+
+        const unchanged = await prisma.testResult.findUniqueOrThrow({
+          where: { id: testResult.id },
+          select: { status: true, certificateDocId: true, verifiedAt: true, verifiedById: true },
+        });
+        expect(unchanged.status).toBe('verified');
+        expect(unchanged.certificateDocId).toBe(firstDoc.id);
+        expect(unchanged.verifiedAt?.toISOString()).toBe(verifiedAt.toISOString());
+        expect(unchanged.verifiedById).toBe(userId);
+        expect(await prisma.document.findUnique({ where: { id: firstDoc.id } })).not.toBeNull();
+        expect(
+          await prisma.document.findFirst({
+            where: { projectId, filename: 'verified-replacement-cert.pdf' },
+          }),
+        ).toBeNull();
+      } finally {
+        await prisma.testResult.deleteMany({ where: { id: testResult.id } });
+        await prisma.document.deleteMany({
+          where: {
+            projectId,
+            filename: { in: ['verified-first-cert.pdf', 'verified-replacement-cert.pdf'] },
+          },
+        });
+      }
+    });
+
     it('rejects a file whose content does not match the declared type without linking it', async () => {
       const testResult = await createEnteredTestResult();
       const beforeFiles = new Set(fs.readdirSync(certificatesDir));
@@ -2876,6 +2954,40 @@ describe('Test Results API', () => {
   });
 
   describe('DELETE /api/test-results/:id', () => {
+    it('blocks deleting verified test results', async () => {
+      const testResult = await createEnteredTestResult();
+      const verifiedAt = new Date('2026-07-08T09:10:11.000Z');
+
+      try {
+        await prisma.testResult.update({
+          where: { id: testResult.id },
+          data: {
+            status: 'verified',
+            verifiedAt,
+            verifiedById: userId,
+          },
+        });
+
+        const res = await request(app)
+          .delete(`/api/test-results/${testResult.id}`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(409);
+        expect(res.body.error.message).toContain('Verified test results cannot be deleted');
+
+        const unchanged = await prisma.testResult.findUniqueOrThrow({
+          where: { id: testResult.id },
+          select: { status: true, verifiedAt: true, verifiedById: true },
+        });
+        expect(unchanged.status).toBe('verified');
+        expect(unchanged.verifiedAt?.toISOString()).toBe(verifiedAt.toISOString());
+        expect(unchanged.verifiedById).toBe(userId);
+      } finally {
+        await prisma.auditLog.deleteMany({ where: { entityId: testResult.id } });
+        await prisma.testResult.deleteMany({ where: { id: testResult.id } });
+      }
+    });
+
     it('should delete a test result', async () => {
       // Create a new test result to delete
       const createRes = await request(app)
@@ -3144,6 +3256,53 @@ describe('Test Results API', () => {
       }
     });
 
+    it('blocks confirming extraction corrections against a verified test result', async () => {
+      const verifiedAt = new Date('2026-08-09T10:11:12.000Z');
+      const testResult = await prisma.testResult.create({
+        data: {
+          projectId,
+          lotId,
+          testType: `Verified Extraction ${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          status: 'verified',
+          aiExtracted: true,
+          resultValue: 98.0,
+          passFail: 'pass',
+          enteredById: userId,
+          enteredAt: new Date(),
+          verifiedById: userId,
+          verifiedAt,
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .patch(`/api/test-results/${testResult.id}/confirm-extraction`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ corrections: { resultValue: '80', passFail: 'fail' } });
+
+        expect(res.status).toBe(409);
+        expect(res.body.error.message).toContain('Verified test results cannot be confirmed');
+
+        const unchanged = await prisma.testResult.findUniqueOrThrow({
+          where: { id: testResult.id },
+          select: {
+            status: true,
+            resultValue: true,
+            passFail: true,
+            verifiedById: true,
+            verifiedAt: true,
+          },
+        });
+        expect(unchanged.status).toBe('verified');
+        expect(Number(unchanged.resultValue)).toBe(98);
+        expect(unchanged.passFail).toBe('pass');
+        expect(unchanged.verifiedById).toBe(userId);
+        expect(unchanged.verifiedAt?.toISOString()).toBe(verifiedAt.toISOString());
+      } finally {
+        await prisma.testResult.deleteMany({ where: { id: testResult.id } });
+      }
+    });
+
     it('confirms with no corrections payload and still moves status to entered', async () => {
       // Ticket T2: the seeded row already carries an AI-extracted result + pass/
       // fail, so confirming with no overriding corrections still satisfies the
@@ -3330,6 +3489,62 @@ describe('Test Results API', () => {
         expect(persisted.every((row) => row.enteredById === userId)).toBe(true);
       } finally {
         await prisma.testResult.deleteMany({ where: { id: { in: [first.id, second.id] } } });
+      }
+    });
+
+    it('records a verified test result as a per-item failure without mutating it', async () => {
+      const verifiedAt = new Date('2026-09-10T11:12:13.000Z');
+      const target = await prisma.testResult.create({
+        data: {
+          projectId,
+          lotId,
+          testType: `Verified Batch ${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          status: 'verified',
+          aiExtracted: true,
+          resultValue: 98.0,
+          passFail: 'pass',
+          enteredById: userId,
+          enteredAt: new Date(),
+          verifiedById: userId,
+          verifiedAt,
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .post('/api/test-results/batch-confirm')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            confirmations: [
+              { testResultId: target.id, corrections: { resultValue: '80', passFail: 'fail' } },
+            ],
+          });
+
+        expect(res.status).toBe(200);
+        expect(res.body.summary).toEqual({ total: 1, success: 0, failed: 1 });
+        expect(res.body.results[0]).toEqual({
+          success: false,
+          testResultId: target.id,
+          error: 'Failed to confirm',
+        });
+
+        const unchanged = await prisma.testResult.findUniqueOrThrow({
+          where: { id: target.id },
+          select: {
+            status: true,
+            resultValue: true,
+            passFail: true,
+            verifiedById: true,
+            verifiedAt: true,
+          },
+        });
+        expect(unchanged.status).toBe('verified');
+        expect(Number(unchanged.resultValue)).toBe(98);
+        expect(unchanged.passFail).toBe('pass');
+        expect(unchanged.verifiedById).toBe(userId);
+        expect(unchanged.verifiedAt?.toISOString()).toBe(verifiedAt.toISOString());
+      } finally {
+        await prisma.testResult.deleteMany({ where: { id: target.id } });
       }
     });
 

@@ -86,6 +86,13 @@ export async function confirmExtraction({
 
   await authorize(testResult.projectId);
 
+  if (testResult.status === 'verified') {
+    throw AppError.conflict(
+      'Verified test results cannot be confirmed again. Reopen or create a corrected test result before changing extracted evidence.',
+      { status: testResult.status },
+    );
+  }
+
   const updateData = buildConfirmationUpdateData(corrections, userId);
 
   // Ticket T2: confirming moves the row to 'entered' — require a real result.
@@ -184,6 +191,13 @@ export async function processBatchConfirm({ confirmations, userId, authorize }: 
           error: 'No permission',
         });
         continue;
+      }
+
+      if (testResult.status === 'verified') {
+        throw AppError.conflict(
+          'Verified test results cannot be confirmed again. Reopen or create a corrected test result before changing extracted evidence.',
+          { status: testResult.status },
+        );
       }
 
       const updateData = buildConfirmationUpdateData(corrections, userId);

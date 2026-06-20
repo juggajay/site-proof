@@ -24,6 +24,7 @@ type AuthorizeAttach = (projectId: string) => Promise<void>;
 // document so we can clean up the replaced object after the swap.
 export interface ExistingTestResultForAttachment {
   projectId: string;
+  status: string;
   certificateDocId: string | null;
   certificateDoc: { id: string; fileUrl: string } | null;
 }
@@ -77,6 +78,14 @@ export async function processCertificateAttachment({
     // Delete uploaded file if permission denied
     cleanupUploadedCertificateFile(file);
     throw error;
+  }
+
+  if (existing.status === 'verified') {
+    cleanupUploadedCertificateFile(file);
+    throw AppError.conflict(
+      'Verified test result certificates cannot be replaced. Reopen or create a corrected test result before changing evidence.',
+      { status: existing.status },
+    );
   }
 
   try {

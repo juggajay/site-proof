@@ -1,8 +1,10 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { MoreVertical, FileDown, Upload, FolderOpen } from 'lucide-react';
 import { getAuthToken } from '@/lib/auth';
 import { apiFetch, authFetch } from '@/lib/api';
+import { queryKeys } from '@/lib/queryKeys';
 import { getResponseErrorMessage } from './utils';
 import type { TestResult, Lot, FailedTestForNcr, NcrFormData, CreateTestFormData } from './types';
 import { TestFilters } from './components/TestFilters';
@@ -35,6 +37,7 @@ export function TestResultsPage() {
   const { projectId } = useParams();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  const queryClient = useQueryClient();
 
   // Core data state
   const [testResults, setTestResults] = useState<TestResult[]>([]);
@@ -121,15 +124,42 @@ export function TestResultsPage() {
     void fetchData();
   }, [fetchData]);
 
-  // Refresh helper
-  const refreshTestResults = useCallback(async () => {
-    if (!projectId) return;
+  const invalidateTestResultCaches = useCallback(
+    async (lotIds: Array<string | null | undefined> = []) => {
+      if (!projectId) return;
 
-    const testsData = await apiFetch<{ testResults: TestResult[] }>(
-      `/api/test-results?projectId=${encodeURIComponent(projectId)}`,
-    );
-    setTestResults(testsData.testResults || []);
-  }, [projectId]);
+      const affectedLotIds = Array.from(new Set(lotIds.filter(Boolean))) as string[];
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.testResults(projectId) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.lots(projectId) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.claimReadiness(projectId) }),
+        ...affectedLotIds.flatMap((lotId) => [
+          queryClient.invalidateQueries({ queryKey: queryKeys.lot(lotId) }),
+          queryClient.invalidateQueries({ queryKey: queryKeys.lotReadiness(lotId) }),
+        ]),
+      ]);
+    },
+    [projectId, queryClient],
+  );
+
+  const getTestLotId = useCallback(
+    (testId: string) => testResults.find((test) => test.id === testId)?.lotId,
+    [testResults],
+  );
+
+  // Refresh helper
+  const refreshTestResults = useCallback(
+    async (lotIds: Array<string | null | undefined> = []) => {
+      if (!projectId) return;
+
+      const testsData = await apiFetch<{ testResults: TestResult[] }>(
+        `/api/test-results?projectId=${encodeURIComponent(projectId)}`,
+      );
+      setTestResults(testsData.testResults || []);
+      await invalidateTestResultCaches(lotIds);
+    },
+    [projectId, invalidateTestResultCaches],
+  );
 
   // Filtered and sorted results
   const filterState = useMemo<TestResultFilterState>(
@@ -185,7 +215,7 @@ export function TestResultsPage() {
           method: 'POST',
           body: JSON.stringify({ status: newStatus }),
         });
-        await refreshTestResults();
+        await refreshTestResults([getTestLotId(testId)]);
       } catch (err) {
         toast({
           title: 'Failed to update test status',
@@ -197,7 +227,7 @@ export function TestResultsPage() {
         setUpdatingStatusId(null);
       }
     },
-    [refreshTestResults],
+    [getTestLotId, refreshTestResults],
   );
 
   // Ticket T2: open the Enter Results form for a test (replaces the old no-data
@@ -232,7 +262,7 @@ export function TestResultsPage() {
           body: JSON.stringify({ status: 'entered' }),
         });
 
-        await refreshTestResults();
+        await refreshTestResults([getTestLotId(testId)]);
         setEnterResultsTest(null);
       } finally {
         // On failure the error propagates to the modal (which stays open); the
@@ -240,7 +270,7 @@ export function TestResultsPage() {
         enteringResultsRef.current = null;
       }
     },
-    [refreshTestResults],
+    [getTestLotId, refreshTestResults],
   );
 
   // Reject handler
@@ -269,7 +299,7 @@ export function TestResultsPage() {
           method: 'POST',
           body: JSON.stringify({ reason: rejectionReason }),
         });
-        await refreshTestResults();
+        await refreshTestResults([getTestLotId(testId)]);
         setShowRejectModal(false);
         setRejectingTestId(null);
       } catch (err) {
@@ -283,7 +313,7 @@ export function TestResultsPage() {
         rejectingTestRef.current = null;
       }
     },
-    [refreshTestResults],
+    [getTestLotId, refreshTestResults],
   );
 
   // Feature B2: attach (or replace) a certificate on an EXISTING test result so a
@@ -313,7 +343,7 @@ export function TestResultsPage() {
           return;
         }
 
-        await refreshTestResults();
+        await refreshTestResults([getTestLotId(testId)]);
         toast({
           title: 'Certificate attached',
           description: 'You can now verify this test result.',
@@ -327,7 +357,7 @@ export function TestResultsPage() {
         });
       }
     },
-    [refreshTestResults],
+    [getTestLotId, refreshTestResults],
   );
 
   // Create test handler
@@ -353,7 +383,7 @@ export function TestResultsPage() {
           }),
         });
 
-        await refreshTestResults();
+        await refreshTestResults([sanitizedFormData.lotId]);
         setShowCreateModal(false);
 
         // Feature #210: If test failed, prompt to raise NCR
@@ -427,9 +457,13 @@ export function TestResultsPage() {
   }, []);
 
   // Test results updated callback (shared by upload modals)
-  const handleTestResultsUpdated = useCallback((results: TestResult[]) => {
-    setTestResults(results);
-  }, []);
+  const handleTestResultsUpdated = useCallback(
+    (results: TestResult[]) => {
+      setTestResults(results);
+      void invalidateTestResultCaches(results.map((result) => result.lotId));
+    },
+    [invalidateTestResultCaches],
+  );
 
   // Export CSV handler
   const handleExportCSV = useCallback(() => {
