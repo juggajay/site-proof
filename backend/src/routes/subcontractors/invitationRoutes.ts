@@ -3,6 +3,7 @@ import { Router, type Request } from 'express';
 import { AppError } from '../../lib/AppError.js';
 import { createAuditLog, AuditAction } from '../../lib/auditLog.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
+import { createEmailDeliveryFailureError } from '../../lib/emailDeliveryErrors.js';
 import { sendSubcontractorInvitationEmail } from '../../lib/email.js';
 import { prisma } from '../../lib/prisma.js';
 import { buildFrontendUrl } from '../../lib/runtimeConfig.js';
@@ -398,7 +399,12 @@ export function createSubcontractorInvitationRouters({
           globalSubcontractorId: globalId,
           createdGlobalSubcontractor,
         });
-        throw AppError.internal('Subcontractor invitation email could not be sent');
+        throw createEmailDeliveryFailureError(emailResult, {
+          quotaMessage:
+            'Subcontractor invitation email could not be sent because the email provider daily sending quota has been reached.',
+          unavailableMessage:
+            'Subcontractor invitation email could not be sent because email delivery is temporarily unavailable.',
+        });
       }
 
       res.status(201).json(buildSubcontractorInvitedResponse(subcontractor));

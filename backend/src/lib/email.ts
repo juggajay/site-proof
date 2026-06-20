@@ -57,10 +57,12 @@ interface EmailOptions {
   attachments?: EmailAttachment[];
 }
 
-interface EmailResult {
+export interface EmailResult {
   success: boolean;
   messageId?: string;
   error?: string;
+  errorCode?: string;
+  statusCode?: number;
   provider?: 'resend' | 'mock';
 }
 
@@ -91,6 +93,18 @@ function isValidResendApiKey(apiKey: string | undefined): apiKey is string {
     !apiKey.toLowerCase().includes('your_') &&
     !apiKey.toLowerCase().includes('your-'),
   );
+}
+
+function readProviderErrorString(error: unknown, key: string): string | undefined {
+  if (!error || typeof error !== 'object' || !(key in error)) return undefined;
+  const value = (error as Record<string, unknown>)[key];
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function readProviderErrorStatus(error: unknown): number | undefined {
+  if (!error || typeof error !== 'object' || !('statusCode' in error)) return undefined;
+  const value = (error as Record<string, unknown>).statusCode;
+  return typeof value === 'number' && Number.isInteger(value) ? value : undefined;
 }
 
 // Initialize Resend client if API key is provided and valid
@@ -170,6 +184,8 @@ export async function sendEmail(options: EmailOptions): Promise<EmailResult> {
         return {
           success: false,
           error: response.error.message,
+          errorCode: readProviderErrorString(response.error, 'name'),
+          statusCode: readProviderErrorStatus(response.error),
           provider: 'resend',
         };
       }
@@ -188,6 +204,8 @@ export async function sendEmail(options: EmailOptions): Promise<EmailResult> {
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error',
+        errorCode: readProviderErrorString(error, 'name') || readProviderErrorString(error, 'code'),
+        statusCode: readProviderErrorStatus(error),
         provider: 'resend',
       };
     }

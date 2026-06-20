@@ -70,7 +70,8 @@ describe('buildEmailServiceStatus', () => {
       resendConfigured: true,
       emailEnabled: true,
       status: 'ready',
-      message: 'Resend API is configured and emails will be delivered to real recipients.',
+      message:
+        'Resend API is configured. Live delivery still depends on provider quota and sender-domain status; run production preflight to verify sends.',
     });
   });
 

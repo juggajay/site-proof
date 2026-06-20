@@ -142,6 +142,9 @@ describe('Subcontractors API', () => {
         .mockResolvedValueOnce({
           success: false,
           error: 'simulated invite email failure',
+          errorCode: 'daily_quota_exceeded',
+          statusCode: 429,
+          provider: 'resend',
         });
 
       try {
@@ -156,10 +159,13 @@ describe('Subcontractors API', () => {
           });
 
         expect(sendInviteSpy).toHaveBeenCalledTimes(1);
-        expect(res.status).toBe(500);
-        expect(res.body.error.message).toContain(
-          'Subcontractor invitation email could not be sent',
-        );
+        expect(res.status).toBe(503);
+        expect(res.body.error.message).toContain('daily sending quota has been reached');
+        expect(res.body.error.code).toBe('EXTERNAL_SERVICE_ERROR');
+        expect(res.body.error.details).toEqual({
+          provider: 'resend',
+          reason: 'quota_exceeded',
+        });
 
         const lingeringInvite = await prisma.subcontractorCompany.findFirst({
           where: { projectId, primaryContactEmail: email },

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import { authRouter } from './auth.js';
@@ -7,6 +7,7 @@ import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { registerTestUser } from '../test/routeTestHarness.js';
 import { MAX_ALERT_LIST_RESULTS } from './notifications/alerts.js';
+import * as emailService from '../lib/email.js';
 
 const app = express();
 app.use(express.json());
@@ -733,16 +734,49 @@ describe('Notifications API', () => {
         .post('/api/notifications/send-test-email')
         .set('Authorization', `Bearer ${authToken}`);
 
-      // Accept either 200 (success) or 500 (quota exceeded)
-      expect([200, 500]).toContain(res.status);
+      // Accept either 200 (success) or 503 (provider quota/unavailable)
+      expect([200, 503]).toContain(res.status);
       if (res.status === 200) {
         expect(res.body.success).toBe(true);
         expect(res.body.message).toBeDefined();
         expect(res.body.provider).toBeDefined();
       } else {
-        // Email quota exceeded is acceptable in test environment
+        // Email provider quota/unavailability is acceptable in test environment
         expect(res.body.error).toBeDefined();
         expect(res.body.error.message).toBeDefined();
+      }
+    });
+
+    it('should return a clear unavailable error when the email provider quota is exhausted', async () => {
+      const sendEmailSpy = vi.spyOn(emailService, 'sendNotificationEmail').mockResolvedValueOnce({
+        success: false,
+        error: 'You have reached your daily email sending quota.',
+        errorCode: 'daily_quota_exceeded',
+        statusCode: 429,
+        provider: 'resend',
+      });
+
+      try {
+        await request(app)
+          .put('/api/notifications/email-preferences')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            preferences: { enabled: true },
+          });
+
+        const res = await request(app)
+          .post('/api/notifications/send-test-email')
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(503);
+        expect(res.body.error.message).toContain('daily sending quota has been reached');
+        expect(res.body.error.code).toBe('EXTERNAL_SERVICE_ERROR');
+        expect(res.body.error.details).toEqual({
+          provider: 'resend',
+          reason: 'quota_exceeded',
+        });
+      } finally {
+        sendEmailSpy.mockRestore();
       }
     });
 
