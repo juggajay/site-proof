@@ -104,6 +104,7 @@ export const createNcrSchema = z
       'Responsible subcontractor ID',
       NCR_ID_MAX_LENGTH,
     ),
+    linkedTestResultId: optionalTrimmedNcrString('Linked test result ID', NCR_ID_MAX_LENGTH),
     dueDate: optionalTrimmedNcrString('dueDate', NCR_DATE_INPUT_MAX_LENGTH),
     lotIds: z
       .array(requiredTrimmedNcrString('Lot ID', NCR_ID_MAX_LENGTH, 'Lot ID is required'))

@@ -263,6 +263,85 @@ describe('NCR API', () => {
       ncrId = res.body.ncr.id;
     });
 
+    it('should persist a traceable link when creating an NCR from a failed test result', async () => {
+      const failedTest = await prisma.testResult.create({
+        data: {
+          projectId,
+          lotId,
+          testType: 'Compaction',
+          resultValue: 88,
+          resultUnit: '%',
+          specificationMin: 95,
+          passFail: 'fail',
+          status: 'verified',
+          enteredById: userId,
+          enteredAt: new Date(),
+          verifiedById: userId,
+          verifiedAt: new Date(),
+        },
+      });
+
+      const res = await request(app)
+        .post('/api/ncrs')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          projectId,
+          description: 'Failed compaction result requires NCR',
+          category: 'Material',
+          severity: 'minor',
+          lotIds: [lotId],
+          linkedTestResultId: failedTest.id,
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.ncr.linkedTestResultId).toBe(failedTest.id);
+      expect(res.body.ncr.linkedTestResult).toMatchObject({
+        id: failedTest.id,
+        testType: 'Compaction',
+        passFail: 'fail',
+      });
+
+      const persisted = await prisma.nCR.findUniqueOrThrow({
+        where: { id: res.body.ncr.id },
+        select: { linkedTestResultId: true },
+      });
+      expect(persisted.linkedTestResultId).toBe(failedTest.id);
+    });
+
+    it('should reject linking a passing test result to an NCR', async () => {
+      const passingTest = await prisma.testResult.create({
+        data: {
+          projectId,
+          lotId,
+          testType: 'Compaction',
+          resultValue: 98,
+          resultUnit: '%',
+          specificationMin: 95,
+          passFail: 'pass',
+          status: 'verified',
+          enteredById: userId,
+          enteredAt: new Date(),
+          verifiedById: userId,
+          verifiedAt: new Date(),
+        },
+      });
+
+      const res = await request(app)
+        .post('/api/ncrs')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          projectId,
+          description: 'Passing tests should not raise traceable test NCRs',
+          category: 'Material',
+          severity: 'minor',
+          lotIds: [lotId],
+          linkedTestResultId: passingTest.id,
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toContain('Only failed test results');
+    });
+
     it('should create a major NCR with QM approval required', async () => {
       const res = await request(app)
         .post('/api/ncrs')

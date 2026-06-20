@@ -101,6 +101,40 @@ async function requireActiveResponsibleSubcontractor(
   }
 }
 
+async function requireFailedTestResultForNcr(
+  projectId: string,
+  linkedTestResultId?: string | null,
+  ncrLotIds: string[] = [],
+): Promise<string | null> {
+  if (!linkedTestResultId) {
+    return null;
+  }
+
+  const testResult = await prisma.testResult.findUnique({
+    where: { id: linkedTestResultId },
+    select: {
+      id: true,
+      projectId: true,
+      lotId: true,
+      passFail: true,
+    },
+  });
+
+  if (!testResult || testResult.projectId !== projectId) {
+    throw AppError.badRequest('Linked test result must belong to the NCR project');
+  }
+
+  if (testResult.passFail !== 'fail') {
+    throw AppError.badRequest('Only failed test results can be linked to an NCR');
+  }
+
+  if (testResult.lotId && ncrLotIds.length > 0 && !ncrLotIds.includes(testResult.lotId)) {
+    throw AppError.badRequest('Linked test result lot must be included in the NCR lots');
+  }
+
+  return testResult.id;
+}
+
 // Auto-enable the assigned subcontractor's NCR portal visibility on assignment.
 // The `ncrs` portal module is opt-in / off by default (an NCR is a
 // non-conformance against the subcontractor's own work), but assigning an NCR
@@ -205,6 +239,15 @@ ncrCoreRouter.get(
         raisedBy: { select: { fullName: true, email: true } },
         responsibleUser: { select: { fullName: true, email: true } },
         responsibleSubcontractor: { select: { id: true, companyName: true } },
+        linkedTestResult: {
+          select: {
+            id: true,
+            testType: true,
+            testRequestNumber: true,
+            passFail: true,
+            status: true,
+          },
+        },
         verifiedBy: { select: { fullName: true, email: true } },
         closedBy: { select: { fullName: true, email: true } },
         qmApprovedBy: { select: { fullName: true, email: true } },
@@ -252,6 +295,7 @@ ncrCoreRouter.post(
       severity,
       responsibleUserId,
       responsibleSubcontractorId,
+      linkedTestResultId,
       dueDate,
       lotIds,
     } = validation.data;
@@ -266,6 +310,11 @@ ncrCoreRouter.post(
     const ncrLotIds = await requireNcrLotsInProject(projectId, lotIds || []);
     await requireActiveResponsibleUser(projectId, responsibleUserId);
     await requireActiveResponsibleSubcontractor(projectId, responsibleSubcontractorId);
+    const linkedFailedTestResultId = await requireFailedTestResultForNcr(
+      projectId,
+      linkedTestResultId,
+      ncrLotIds,
+    );
     const parsedDueDate = parseOptionalNcrDueDate(dueDate);
 
     // Major NCRs require QM approval to close and client notification
@@ -280,6 +329,7 @@ ncrCoreRouter.post(
           specificationReference,
           category,
           severity: severity || 'minor',
+          linkedTestResultId: linkedFailedTestResultId,
           qmApprovalRequired: isMajor,
           clientNotificationRequired: isMajor, // Feature #213: Major NCRs require client notification
           raisedById: user.userId,
@@ -298,6 +348,15 @@ ncrCoreRouter.post(
           project: { select: { name: true } },
           raisedBy: { select: { fullName: true, email: true } },
           responsibleSubcontractor: { select: { id: true, companyName: true } },
+          linkedTestResult: {
+            select: {
+              id: true,
+              testType: true,
+              testRequestNumber: true,
+              passFail: true,
+              status: true,
+            },
+          },
           ncrLots: {
             include: {
               lot: { select: { lotNumber: true } },
@@ -329,6 +388,7 @@ ncrCoreRouter.post(
         severity: ncr.severity,
         category: ncr.category,
         lotIds: ncrLotIds,
+        ...(linkedFailedTestResultId ? { linkedTestResultId: linkedFailedTestResultId } : {}),
       },
       req,
     });

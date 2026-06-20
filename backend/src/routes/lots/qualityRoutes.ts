@@ -8,6 +8,7 @@ import { checkConformancePrerequisites } from '../../lib/conformancePrerequisite
 import { buildLotReadinessFromInputs } from '../../lib/evidenceReadiness.js';
 import { prisma } from '../../lib/prisma.js';
 import { getEffectiveProjectRole } from '../../lib/projectAccess.js';
+import { PENDING_TEST_RESULT_STATUSES } from '../../lib/testResultStatus.js';
 import {
   isSubcontractorUser,
   canViewLotBudget,
@@ -23,7 +24,6 @@ import { conformLotSchema, overrideStatusSchema } from './validation.js';
 
 export const lotQualityRouter = Router();
 
-const PENDING_TEST_STATUSES = ['pending', 'requested', 'submitted'];
 const LOT_PHOTO_DOCUMENT_FILTER: Prisma.DocumentWhereInput = {
   OR: [
     { documentType: { contains: 'photo', mode: 'insensitive' } },
@@ -118,7 +118,7 @@ lotQualityRouter.get(
       prisma.document.count({ where: { lotId: id } }),
       prisma.document.count({ where: { lotId: id, ...LOT_PHOTO_DOCUMENT_FILTER } }),
       prisma.testResult.count({
-        where: { lotId: id, status: { in: PENDING_TEST_STATUSES } },
+        where: { lotId: id, status: { in: [...PENDING_TEST_RESULT_STATUSES] } },
       }),
     ]);
 
