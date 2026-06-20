@@ -245,6 +245,15 @@ ncrListRouter.get(
           raisedBy: { select: { fullName: true, email: true } },
           responsibleUser: { select: { id: true, fullName: true, email: true } },
           responsibleSubcontractor: { select: { id: true, companyName: true } },
+          linkedTestResult: {
+            select: {
+              id: true,
+              testType: true,
+              testRequestNumber: true,
+              passFail: true,
+              status: true,
+            },
+          },
           ncrLots: {
             include: {
               lot: { select: { lotNumber: true, description: true } },

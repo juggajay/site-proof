@@ -13,7 +13,10 @@ import {
   getDaysSince,
   isAiExtractionReviewDraft,
 } from '../constants';
-import { generateTestResultCertificate } from '../testResultCertificate';
+import {
+  canGenerateTestResultCertificate,
+  generateTestResultCertificate,
+} from '../testResultCertificate';
 import { AttachCertificateButton } from './AttachCertificateButton';
 
 interface TestResultsTableProps {
@@ -218,14 +221,16 @@ export const TestResultsTable = React.memo(function TestResultsTable({
                     <td className="px-4 py-3 text-sm">
                       <div className="flex gap-2 items-center">
                         {/* Feature #668: Print Certificate button */}
-                        <button
-                          onClick={() => generateTestResultCertificate(test, projectId)}
-                          className="p-1.5 text-xs border rounded hover:bg-muted/50 transition-colors"
-                          title="Print Test Certificate"
-                          aria-label={`Print test certificate for ${test.testType}`}
-                        >
-                          {'\uD83D\uDDA8\uFE0F'}
-                        </button>
+                        {canGenerateTestResultCertificate(test) && (
+                          <button
+                            onClick={() => generateTestResultCertificate(test, projectId)}
+                            className="p-1.5 text-xs border rounded hover:bg-muted/50 transition-colors"
+                            title="Print Test Certificate"
+                            aria-label={`Print test certificate for ${test.testType}`}
+                          >
+                            {'\uD83D\uDDA8\uFE0F'}
+                          </button>
+                        )}
                         {nextStatusMap[test.status] &&
                           (isEnterResultsStep(test.status) ? (
                             // Ticket T2: record the result before entering.

@@ -686,6 +686,7 @@ model TestResult {
   enteredBy        User?             @relation("EnteredByUser", fields: [enteredById], references: [id], onDelete: SetNull)
   verifiedBy       User?             @relation("VerifiedByTestUser", fields: [verifiedById], references: [id], onDelete: SetNull)
   rejectedBy       User?             @relation("RejectedByTestUser", fields: [rejectedById], references: [id], onDelete: SetNull)
+  linkedNcrs       NCR[]             @relation("NcrLinkedFailedTestResult")
 
   @@index([projectId])
   @@index([projectId, status])
@@ -707,6 +708,7 @@ model NCR {
   category                   String
   severity                   String    @default("minor") // minor, major
   status                     String    @default("open")
+  linkedTestResultId         String?   @map("linked_test_result_id")
   qmApprovalRequired         Boolean   @default(false) @map("qm_approval_required")
   qmApprovedById             String?   @map("qm_approved_by")
   qmApprovedAt               DateTime? @map("qm_approved_at")
@@ -762,6 +764,7 @@ model NCR {
   raisedBy                 User?                 @relation("RaisedByUser", fields: [raisedById], references: [id], onDelete: SetNull)
   responsibleUser          User?                 @relation("ResponsibleUser", fields: [responsibleUserId], references: [id], onDelete: SetNull)
   responsibleSubcontractor SubcontractorCompany? @relation(fields: [responsibleSubcontractorId], references: [id], onDelete: SetNull)
+  linkedTestResult         TestResult?           @relation("NcrLinkedFailedTestResult", fields: [linkedTestResultId], references: [id], onDelete: SetNull)
   verifiedBy               User?                 @relation("VerifiedByUser", fields: [verifiedById], references: [id], onDelete: SetNull)
   closedBy                 User?                 @relation("ClosedByUser", fields: [closedById], references: [id], onDelete: SetNull)
   qmApprovedBy             User?                 @relation("QMApprovedByUser", fields: [qmApprovedById], references: [id], onDelete: SetNull)
@@ -774,6 +777,7 @@ model NCR {
   @@index([projectId, status])
   @@index([projectId, dueDate])
   @@index([projectId, category, status])
+  @@index([linkedTestResultId])
   @@map("ncrs")
 }
 

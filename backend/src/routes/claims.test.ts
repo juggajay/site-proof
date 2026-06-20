@@ -317,6 +317,41 @@ describe('Progress Claims API', () => {
         ]),
       );
     });
+
+    it('shows current workflow test results awaiting verification in claim readiness', async () => {
+      const lot = await createClaimableLot(`CLAIM-READY-TEST-${Date.now()}`, 2000);
+
+      await prisma.testResult.create({
+        data: {
+          projectId,
+          lotId: lot.id,
+          testType: 'Compaction',
+          resultValue: 98.5,
+          resultUnit: '%',
+          specificationMin: 95,
+          passFail: 'pass',
+          status: 'entered',
+          enteredById: userId,
+          enteredAt: new Date(),
+        },
+      });
+
+      const res = await request(app)
+        .get(`/api/projects/${projectId}/claim-readiness`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(200);
+      const readinessLot = res.body.lots.find((item: { lotId: string }) => item.lotId === lot.id);
+      expect(readinessLot.claim.warnings).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            code: 'pending_tests',
+            count: 1,
+            blocksAction: false,
+          }),
+        ]),
+      );
+    });
   });
 
   describe('GET /api/projects/:projectId/lots', () => {

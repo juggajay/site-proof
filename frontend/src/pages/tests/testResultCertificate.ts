@@ -20,6 +20,12 @@ type TestCertificateLot = NonNullable<TestResult['lot']> & {
   chainageEnd?: number | null;
 };
 
+export function canGenerateTestResultCertificate(
+  test: Pick<TestResult, 'status' | 'certificateDocId'>,
+): boolean {
+  return test.status === 'verified' && Boolean(test.certificateDocId);
+}
+
 // Feature #668: build and download the NATA-style test certificate PDF for a
 // single test result. Extracted verbatim from TestResultsTable so the desktop
 // table and the mobile card render identical certificates from one code path.
@@ -27,6 +33,15 @@ export async function generateTestResultCertificate(
   test: TestResult,
   projectId: string,
 ): Promise<void> {
+  if (!canGenerateTestResultCertificate(test)) {
+    toast({
+      title: 'Certificate not ready',
+      description: 'Attach a certificate and verify the test before printing.',
+      variant: 'warning',
+    });
+    return;
+  }
+
   try {
     // Fetch project info for the certificate
     let projectData: ProjectCertificateResponse | null = null;

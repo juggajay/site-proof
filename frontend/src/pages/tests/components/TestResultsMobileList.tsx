@@ -13,7 +13,10 @@ import {
   getDaysSince,
   isAiExtractionReviewDraft,
 } from '../constants';
-import { generateTestResultCertificate } from '../testResultCertificate';
+import {
+  canGenerateTestResultCertificate,
+  generateTestResultCertificate,
+} from '../testResultCertificate';
 import { AttachCertificateButton } from './AttachCertificateButton';
 
 interface TestResultsMobileListProps {
@@ -260,16 +263,18 @@ function TestResultMobileCard({
             </p>
           )}
 
-          <Button
-            variant="outline"
-            size="lg"
-            className="w-full"
-            onClick={() => generateTestResultCertificate(test, projectId)}
-            aria-label={`Print test certificate for ${test.testType}`}
-          >
-            <Printer className="h-4 w-4" />
-            Print Certificate
-          </Button>
+          {canGenerateTestResultCertificate(test) && (
+            <Button
+              variant="outline"
+              size="lg"
+              className="w-full"
+              onClick={() => generateTestResultCertificate(test, projectId)}
+              aria-label={`Print test certificate for ${test.testType}`}
+            >
+              <Printer className="h-4 w-4" />
+              Print Certificate
+            </Button>
+          )}
         </div>
       }
     />

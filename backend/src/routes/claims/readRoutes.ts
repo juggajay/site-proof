@@ -6,6 +6,7 @@ import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { buildLotReadinessFromInputs } from '../../lib/evidenceReadiness.js';
 import { checkConformancePrerequisites } from '../../lib/conformancePrerequisites.js';
+import { isPendingTestResultStatus } from '../../lib/testResultStatus.js';
 import { getCumulativeClaimedPercentByLot } from './cumulativeClaims.js';
 import {
   buildClaimCertificationView,
@@ -242,7 +243,7 @@ export function createClaimReadRouter({
               documents: lot.documents.length,
               photos: lot.documents.filter((document) => document.documentType === 'photo').length,
               pendingTests: lot.testResults.filter((testResult) =>
-                ['pending', 'submitted'].includes(testResult.status),
+                isPendingTestResultStatus(testResult.status),
               ).length,
             },
           });
