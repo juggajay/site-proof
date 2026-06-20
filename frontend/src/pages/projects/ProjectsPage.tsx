@@ -515,7 +515,7 @@ export function ProjectsPage() {
           </div>
           <p className="mx-auto mt-3 max-w-md text-xs text-muted-foreground">
             The example project comes pre-filled with lots, an ITP, hold points, an NCR, and test
-            results so you can look around with real content. Delete it whenever you like.
+            results so you can look around with real content. Archive it whenever you like.
           </p>
         </div>
       ) : !error && projects.length === 0 ? (
