@@ -703,3 +703,61 @@ Stage 10 should target role-specific access with separate visible sessions where
 possible: owner/admin/project manager/foreman/viewer/subcontractor/outsider
 navigation, direct-route access, project settings mutations, project team
 mutations, lot/ITP access, and subcontractor portal redirects.
+
+## Stage 10 - Role Access and Project Scope
+
+Scope:
+- Visible-browser role matrix on production using separate QA accounts for
+  owner, project-scoped project manager, project-scoped foreman,
+  project-scoped viewer, logged-out user, and cross-company outsider.
+- Direct-route checks for dashboard, project settings, project team, areas,
+  lots, ITP, claims, reports, and company settings.
+- Visible-control checks for project settings save/delete controls and lot
+  create/import/bulk-create controls.
+
+Findings:
+1. Project role UI gates needed to consistently use the project-scoped role.
+   Fixed in PR #1008 by centralizing role helpers and applying
+   `getProjectScopedRole(user)` to project nav, route, lot setup, and
+   danger-zone controls.
+2. Project-scoped viewers were denied the project dashboard because login did
+   not expose `viewer` memberships as a dashboard role. Fixed in PR #1009 by
+   carrying `viewer` and `site_engineer` memberships through backend auth and
+   frontend auth/redirect typing.
+
+Live re-test results:
+- Owner can access Project Settings, Project Team, Lots, Claims, and Company
+  Settings. Owner sees project settings save/delete controls and lot setup
+  controls.
+- Project-scoped PM can access Project Settings, Project Team, Lots, Claims,
+  and Reports. Company Settings is denied. Permanent project delete is hidden.
+- Project-scoped foreman can access dashboard, Lots, ITP, and Reports. Project
+  Settings, Project Team, Claims, and Company Settings are denied. Lot setup
+  controls are hidden.
+- Project-scoped viewer can access dashboard, Lots, and Reports. Project
+  Settings, Project Team, ITP, Claims, and Company Settings are denied. Lot
+  setup controls are hidden.
+- Logged-out direct project access redirects to login.
+- A cross-company owner cannot open the QA project and receives Access Denied.
+
+Run evidence:
+- Visible production run: `stage10-mqmjzrym`, headed Chromium via gstack
+  browse, 2 confirmed production findings, 2 merged fixes.
+- Report artifact:
+  `.gstack/qa-reports/stage10-mqmjzrym/qa-report.md` inside the QA worktree.
+- Verification:
+  - PR #1008 CI passed and merged.
+  - PR #1009 local type/lint/focused tests passed, PR CI passed, merged, master
+    CI passed including full Frontend E2E, Vercel Production and Railway
+    deployment statuses passed, and backend `/ready` returned HTTP 200.
+
+Notes for Review:
+- The first broad role matrix was discarded after stale auth made PM/foreman
+  appear to have owner controls. The corrected matrix explicitly checked stored
+  role and dashboard role before evaluating each route.
+- Subcontractor invitation could not be completed with Resend QA recipients.
+  Both a generated Resend plus-address and `delivered@resend.dev` returned HTTP
+  500 from `/api/subcontractors/invite`; generic test email also returned HTTP
+  500 for the QA account while email service status reported Resend configured.
+  This needs a focused email-delivery follow-up using Sentry/logs or a real
+  recipient before subcontractor portal invite QA is considered complete.
