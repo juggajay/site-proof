@@ -811,3 +811,70 @@ Notes for Review:
   invite click-through can be proven.
 - Full subcontractor portal onboarding remains unverified until a real email can
   be delivered or a safe QA-only invite-link capture mechanism exists.
+
+## Stage 12 - Test Results, Certificates, Verification, and Conformance Evidence
+
+Scope:
+- Visible-browser production owner registration, company creation, project
+  creation, and lot creation.
+- Test specifications, requested test creation, enter-result validation,
+  certificate attachment, verification, request-form metadata, verification view,
+  failed-test handling, linked NCR creation, lot conformance status, lot
+  readiness, claim readiness, project test-result listing, unauthenticated
+  denial, and desktop/mobile Test Results UI action gating.
+
+Findings:
+1. Claim readiness did not count current-workflow pending test statuses such as
+   `requested` and `entered`; lot readiness did. Fixed in PR #1013 by sharing
+   pending status logic across lot and claim readiness.
+2. NCRs raised from failed test results accepted `linkedTestResultId` in the
+   payload but did not persist/expose the link. Fixed in PR #1013 with a nullable
+   linked-test relation, validation, response inclusion, and tests.
+3. Test Results UI showed Print Certificate for requested/unfinished tests.
+   Fixed in PR #1013 by gating certificate PDF generation to verified tests with
+   a certificate document.
+4. Full E2E failed after #1013 because two stale browser assertions still
+   expected Print Certificate before the new gate allowed it. Fixed in PR #1014.
+
+Live re-test results:
+- Production browser/API probe passed all 25 Stage 12 checks after migration.
+- Lot readiness and claim readiness both reported the requested test as pending
+  with singular grammar: `1 test result is not verified yet.`
+- NCR creation from the verified failed test returned HTTP 201 and the response
+  linked test result matched the failed test.
+- Lot conformance after linked NCR reflected both blockers: no assigned ITP and
+  one open NCR.
+- Desktop Test Results UI showed Print Certificate only on the two verified
+  rows. The requested row showed Enter Results and Attach certificate, with no
+  Print Certificate action.
+- Mobile Test Results UI at `390x844` showed the same corrected gate.
+
+Run evidence:
+- Report artifact:
+  `.gstack/qa-reports/stage12-test-results-conformance-20260621/qa-report.md`
+  inside the QA worktree.
+- PR #1013 merged and deployed the product fixes.
+- PR #1014 merged the E2E assertion update.
+- Master CI run `27881752487` passed, including Backend, Frontend, and full
+  Frontend E2E.
+- Production migration run `27882111339` passed. This was required because #1013
+  added the nullable `ncrs.linked_test_result_id` column. Before the migration,
+  the live linked-NCR create path returned HTTP 500; after the migration it
+  returned HTTP 201.
+
+Notes for Review:
+- The deliberate negative tests still produce expected browser console resource
+  errors: HTTP 400 for entering an incomplete requested test, HTTP 400 for
+  verifying before certificate attachment, and HTTP 401 for unauthenticated
+  list access.
+- The QA lot intentionally remained non-conformable because no ITP was assigned
+  and an NCR remained open. A later cross-domain workflow stage should cover the
+  full path from ITP assignment through NCR closure and final lot conformance.
+
+## Next Stage Candidate
+
+Stage 13 should target documents, drawings, storage access, and evidence
+packages: document upload/download/delete, signed URL behavior, drawing revision
+uniqueness, test certificate document access, claim/hold-point evidence package
+links, subcontractor document visibility, and whether public storage URLs still
+create login-bypassing access risks.
