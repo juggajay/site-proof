@@ -40,6 +40,7 @@ function makeUploadedFile(overrides: Partial<Express.Multer.File> = {}): Express
 
 const existingTest: ExistingTestResultForAttachment = {
   projectId: 'p1',
+  status: 'entered',
   certificateDocId: null,
   certificateDoc: null,
 };
@@ -139,6 +140,28 @@ describe('processCertificateAttachment — early cleanup-on-error', () => {
       }),
     ).rejects.toThrow('Access denied');
 
+    expect(fs.existsSync(filePath)).toBe(false);
+  });
+
+  it('deletes the upload and returns 409 before replacing a verified certificate', async () => {
+    const filePath = createTempFile();
+    let captured: unknown;
+
+    try {
+      await processCertificateAttachment({
+        testResultId: 't1',
+        file: makeUploadedFile({ path: filePath }),
+        userId: 'u1',
+        loadTestResult: async () => ({ ...existingTest, status: 'verified' }),
+        authorize: async () => {},
+      });
+    } catch (error) {
+      captured = error;
+    }
+
+    expect(captured).toBeInstanceOf(AppError);
+    expect((captured as AppError).statusCode).toBe(409);
+    expect((captured as AppError).message).toContain('Verified test result certificates');
     expect(fs.existsSync(filePath)).toBe(false);
   });
 });

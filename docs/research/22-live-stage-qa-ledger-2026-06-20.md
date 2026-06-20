@@ -1009,10 +1009,82 @@ Run evidence:
   existing desktop/mobile or shell/subbie parallel UI paths touched by the fix.
 
 Notes for Review:
-- Post-merge production probe should be rerun with
-  `.gstack/tmp/stage14-lot-closeout-probe.js`. It now exercises test-required
-  ITP evidence, matching verified test results, NCR evidence upload/link,
-  NCR verification/close, lot conform, and claim readiness.
-- One backend audit follow-up remains for a later stage: verified test-result
-  corrections can still change/move verified evidence without clearing
-  verification. This stage focused on closeout gating and stale state paths.
+- Post-merge production probe was rerun after PR #1017 and exposed a follow-up
+  bug: `POST /api/lots` dropped `budgetAmount`, leaving the conformed lot
+  blocked in claim readiness with `missing_budget`.
+- PR #1018 fixed lot-create budget persistence for owner/admin/project-manager
+  roles, kept site managers unable to set commercial budget values at create
+  time, and normalized the audit log to a readable numeric budget value.
+- Master CI run `27885688779` passed after #1018, including Backend, Frontend,
+  and full Frontend E2E.
+- The production Stage 14 probe then passed with the stricter claim-readiness
+  assertion: the conformed lot appeared as claim state `ready`, blocker count
+  `0`, and budget amount `10000`.
+- Stage 15 picks up the backend audit follow-up found here: verified
+  test-result corrections can still change/move verified evidence without
+  clearing verification.
+
+## Stage 15 - Test Result Evidence Immutability
+
+Scope:
+- Focused backend/API audit and visible-browser production probe for verified
+  test-result corrections, lot reassignment, certificate replacement, extraction
+  confirmation, and deletion paths.
+- Frontend audit of desktop/mobile test-result actions and cache invalidation
+  after test-result mutations.
+
+Findings:
+1. `PATCH /api/test-results/:id` let verifier roles change verified test data,
+   including `lotId`, `resultValue`, and `passFail`, while leaving
+   `status = verified` and verifier stamps intact. Fixed in this stage by
+   reopening a verified result to `entered` and clearing `verifiedById` /
+   `verifiedAt` whenever a verifier correction changes the row.
+2. `POST /api/test-results/:id/certificate` could replace the certificate
+   document on a verified test result without re-verification. Fixed in this
+   stage by rejecting verified certificate replacement with HTTP 409 before any
+   storage or document mutation.
+3. `PATCH /api/test-results/:id/confirm-extraction` and
+   `POST /api/test-results/batch-confirm` could apply extracted-data
+   corrections to already verified rows. Fixed in this stage by rejecting
+   verified confirmation; batch confirmation reports the row as a per-item
+   failure without mutation.
+4. `DELETE /api/test-results/:id` could remove verified evidence after closeout.
+   Fixed in this stage by rejecting verified test-result deletion with HTTP 409.
+5. Claim evidence presentation treated `verifiedById !== null` as verified.
+   Fixed in this stage by using `status === verified`, making old stale verifier
+   fields non-authoritative.
+6. The test-results screen refreshed only its local list after mutations, leaving
+   lot/readiness/claim-readiness caches stale. Fixed in this stage by
+   invalidating project test results, lots, claim readiness, and affected lot
+   detail/readiness keys after test-result mutations.
+
+Live pre-fix probe results:
+- Owner registration, company/project/lots creation, test-result creation,
+  certificate attach, and verification all worked.
+- A verified passing test could be patched to failing and moved to a different
+  lot while remaining stored as `verified`.
+- A verified test certificate could be replaced and the row still remained
+  stored as `verified`.
+
+Run evidence:
+- Production repro probe:
+  `.gstack/tmp/stage15-test-result-corrections-probe.js` inside the QA worktree.
+- Local focused backend checks:
+  - `npm test -- src/routes/testResults/certificateAttachment.test.ts src/routes/testResults/extractionConfirmation.test.ts` passed, 19 tests.
+  - `npm run type-check` passed.
+  - `npm run lint` passed.
+- Local focused frontend checks:
+  - `npm run test:unit -- TestResultsPage.test.tsx` passed, 8 tests.
+  - `npm run type-check` passed.
+  - `npm run lint` passed with one existing warning in
+    `frontend/src/lib/theme.tsx`.
+- `git diff --check` passed.
+
+Notes for Review:
+- The DB-backed route regression tests were added to `testResults.test.ts`, but
+  the file could not run locally because this worktree has no safe
+  `DATABASE_URL`. CI must run the full route suite before merge.
+- After this PR lands, rerun the Stage 15 production probe. Expected fixed
+  behavior: verified PATCH reopens the row to `entered`, verified certificate
+  replacement is blocked with HTTP 409, and the active certificate remains the
+  original document.

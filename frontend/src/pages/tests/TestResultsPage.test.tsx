@@ -11,7 +11,9 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { TestResultsPage } from './TestResultsPage';
+import { queryKeys } from '@/lib/queryKeys';
 
 // ── useIsMobile control ──
 const useIsMobileMock = vi.hoisted(() => vi.fn(() => false));
@@ -84,7 +86,17 @@ vi.mock('./components/NcrModals', () => ({
 
 // ── Stub table / mobile list so they don't need DOM table environment ──
 vi.mock('./components/TestResultsTable', () => ({
-  TestResultsTable: () => <div data-testid="test-results-table" />,
+  TestResultsTable: ({
+    onUpdateStatus,
+  }: {
+    onUpdateStatus: (testId: string, newStatus: string) => Promise<void>;
+  }) => (
+    <div data-testid="test-results-table">
+      <button type="button" onClick={() => void onUpdateStatus('t1', 'verified')}>
+        Verify density
+      </button>
+    </div>
+  ),
 }));
 
 vi.mock('./components/TestResultsMobileList', () => ({
@@ -119,14 +131,18 @@ vi.mock('@/lib/auth', async (importOriginal) => {
 });
 
 const PROJECT_ID = 'proj-e2e-001';
+let queryClient: QueryClient;
+let invalidateSpy: ReturnType<typeof vi.spyOn>;
 
 function renderPage() {
   return render(
-    <MemoryRouter initialEntries={[`/projects/${PROJECT_ID}/tests`]}>
-      <Routes>
-        <Route path="/projects/:projectId/tests" element={<TestResultsPage />} />
-      </Routes>
-    </MemoryRouter>,
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={[`/projects/${PROJECT_ID}/tests`]}>
+        <Routes>
+          <Route path="/projects/:projectId/tests" element={<TestResultsPage />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 
@@ -136,6 +152,12 @@ async function waitForPageLoad() {
     expect(screen.getByRole('heading', { name: 'Test Results' })).toBeInTheDocument();
   });
 }
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  queryClient = new QueryClient();
+  invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries').mockResolvedValue(undefined);
+});
 
 describe('TestResultsPage header — desktop (unchanged)', () => {
   beforeEach(() => {
@@ -153,8 +175,8 @@ describe('TestResultsPage header — desktop (unchanged)', () => {
               resultUnit: '%',
               specificationMin: 95,
               specificationMax: 100,
-              lotId: null,
-              lot: null,
+              lotId: 'lot-1',
+              lot: { id: 'lot-1', lotNumber: 'L-001' },
               createdAt: new Date().toISOString(),
               updatedAt: new Date().toISOString(),
             },
@@ -178,6 +200,26 @@ describe('TestResultsPage header — desktop (unchanged)', () => {
 
     // No overflow button on desktop
     expect(screen.queryByTestId('tests-header-more-button')).not.toBeInTheDocument();
+  });
+
+  it('invalidates readiness and lot caches after a test-result status mutation', async () => {
+    const user = userEvent.setup();
+    renderPage();
+    await waitForPageLoad();
+
+    await user.click(screen.getByRole('button', { name: 'Verify density' }));
+
+    await waitFor(() => {
+      expect(apiFetchMock).toHaveBeenCalledWith('/api/test-results/t1/status', {
+        method: 'POST',
+        body: JSON.stringify({ status: 'verified' }),
+      });
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.testResults(PROJECT_ID) });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.lots(PROJECT_ID) });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.claimReadiness(PROJECT_ID) });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.lot('lot-1') });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.lotReadiness('lot-1') });
   });
 });
 

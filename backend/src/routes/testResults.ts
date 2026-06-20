@@ -227,6 +227,7 @@ testResultsRouter.post(
           where: { id: testId },
           select: {
             projectId: true,
+            status: true,
             certificateDocId: true,
             certificateDoc: { select: { id: true, fileUrl: true } },
           },

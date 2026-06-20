@@ -274,6 +274,14 @@ crudRoutes.patch(
       passFail,
     });
 
+    if (testResult.status === 'verified' && Object.keys(updateData).length > 0) {
+      updateData.status = 'entered';
+      updateData.enteredById = user.id;
+      updateData.enteredAt = new Date();
+      updateData.verifiedById = null;
+      updateData.verifiedAt = null;
+    }
+
     const updatedTestResult = await prisma.testResult.update({
       where: { id },
       data: updateData,
@@ -331,6 +339,13 @@ crudRoutes.delete(
       TEST_DELETERS,
       'You do not have permission to delete test results',
     );
+
+    if (testResult.status === 'verified') {
+      throw AppError.conflict(
+        'Verified test results cannot be deleted. Reopen or create a corrected test result instead.',
+        { status: testResult.status },
+      );
+    }
 
     // Audit log for test result deletion (before deleting the record)
     await createAuditLog({
