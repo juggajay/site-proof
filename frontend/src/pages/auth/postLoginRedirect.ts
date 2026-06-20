@@ -1,10 +1,10 @@
 import { getActiveShellHomePath } from '@/shell/shellFlag';
-import { hasSubcontractorPortalIdentity } from '@/lib/subcontractorIdentity';
+import { hasSubcontractorPortalIdentity, type DashboardRole } from '@/lib/subcontractorIdentity';
 
 export type RedirectUser = {
   role?: string;
   roleInCompany?: string;
-  dashboardRole?: 'project_manager' | 'quality_manager' | 'foreman' | null;
+  dashboardRole?: DashboardRole | null;
   companyId?: string | null;
   hasSubcontractorPortalAccess?: boolean;
 };

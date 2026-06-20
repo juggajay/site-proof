@@ -1,3 +1,5 @@
+import type { DashboardRole } from '../lib/dashboardRole.js';
+
 export {};
 
 declare global {
@@ -12,7 +14,7 @@ declare global {
         role: string;
         companyId: string | null;
         hasSubcontractorPortalAccess?: boolean;
-        dashboardRole?: 'project_manager' | 'quality_manager' | 'foreman' | null;
+        dashboardRole?: DashboardRole | null;
       };
       apiKey?: {
         id: string;
