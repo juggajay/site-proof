@@ -38,9 +38,32 @@ describe('project team response helpers', () => {
           status: 'active',
           invitedAt,
           acceptedAt,
+          joinedAt: acceptedAt,
         },
       ],
     });
+  });
+
+  it('falls back to invitedAt when a project user has not accepted yet', () => {
+    const invitedAt = new Date('2026-06-01T00:00:00.000Z');
+
+    expect(
+      buildProjectUsersResponse([
+        {
+          id: 'membership-1',
+          userId: 'user-1',
+          role: 'viewer',
+          status: 'pending',
+          invitedAt,
+          acceptedAt: null,
+          user: {
+            id: 'user-1',
+            email: 'viewer@example.com',
+            fullName: 'Viewer User',
+          },
+        },
+      ]).users[0].joinedAt,
+    ).toEqual(invitedAt);
   });
 
   it('builds the project user invited response', () => {
@@ -58,6 +81,9 @@ describe('project team response helpers', () => {
         email: 'user@example.com',
         fullName: 'Site User',
         role: 'foreman',
+        invitedAt: null,
+        acceptedAt: null,
+        joinedAt: null,
       },
     });
   });

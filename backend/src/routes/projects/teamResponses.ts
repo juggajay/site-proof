@@ -14,6 +14,8 @@ type ProjectUserListRecord = {
 
 type InvitedProjectUser = {
   id: string;
+  invitedAt?: Date | null;
+  acceptedAt?: Date | null;
 };
 
 type InvitedUser = {
@@ -44,6 +46,7 @@ export function buildProjectUsersResponse(projectUsers: ProjectUserListRecord[])
       status: pu.status,
       invitedAt: pu.invitedAt,
       acceptedAt: pu.acceptedAt,
+      joinedAt: pu.acceptedAt ?? pu.invitedAt,
     })),
   };
 }
@@ -61,6 +64,9 @@ export function buildProjectUserInvitedResponse(
       email: invitedUser.email,
       fullName: invitedUser.fullName,
       role,
+      invitedAt: newProjectUser.invitedAt ?? null,
+      acceptedAt: newProjectUser.acceptedAt ?? null,
+      joinedAt: newProjectUser.acceptedAt ?? newProjectUser.invitedAt ?? null,
     },
   };
 }
