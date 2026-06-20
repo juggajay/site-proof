@@ -24,6 +24,7 @@ import { buildNcrResponse, buildNcrUpdatedResponse } from './ncrCoreResponses.js
 import { createNcrSchema, parseOptionalNcrDueDate, updateNcrSchema } from './ncrCoreValidation.js';
 import { createNcrWithAllocatedNumber } from './ncrNumberAllocation.js';
 import { ncrListRouter } from './ncrListRoute.js';
+import { assertNcrLinkableLots } from './ncrLotStatus.js';
 
 export const ncrCoreRouter = Router();
 
@@ -49,12 +50,14 @@ async function requireNcrLotsInProject(projectId: string, lotIds: string[]): Pro
       projectId,
       id: { in: uniqueLotIds },
     },
-    select: { id: true },
+    select: { id: true, lotNumber: true, status: true },
   });
 
   if (matchingLots.length !== uniqueLotIds.length) {
     throw AppError.badRequest('All NCR lots must belong to the NCR project');
   }
+
+  assertNcrLinkableLots(matchingLots);
 
   return uniqueLotIds;
 }
@@ -368,7 +371,7 @@ ncrCoreRouter.post(
       // Update affected lots status in the same transaction as the NCR record.
       if (ncrLotIds.length) {
         await tx.lot.updateMany({
-          where: { id: { in: ncrLotIds }, projectId },
+          where: { id: { in: ncrLotIds }, projectId, status: { notIn: ['conformed', 'claimed'] } },
           data: { status: 'ncr_raised' },
         });
       }

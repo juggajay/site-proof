@@ -399,15 +399,20 @@ describe('useItpInstance — assignTemplate', () => {
 });
 
 describe('useItpInstance — completion mutations', () => {
-  it('toggleCompletion posts, merges optimistically, and writes through to the offline cache without queueing a sync entry', async () => {
+  it('toggleCompletion posts, merges, refreshes closeout state, and writes through to the offline cache without queueing', async () => {
+    const refetchReadiness = vi.fn();
+    const refetchConformStatus = vi.fn();
     let body: Record<string, unknown> | undefined;
     const merged = completionResponse({ id: 'completion-1', checklistItemId: 'item-1' });
-    const { result } = await mountMutationHook({
-      postCompletion: (b) => {
-        body = b;
-        return { completion: merged };
+    const { result } = await mountMutationHook(
+      {
+        postCompletion: (b) => {
+          body = b;
+          return { completion: merged };
+        },
       },
-    });
+      { refetchReadiness, refetchConformStatus },
+    );
 
     await act(async () => {
       await result.current.toggleCompletion('item-1', false, null);
@@ -421,6 +426,8 @@ describe('useItpInstance — completion mutations', () => {
       notes: null,
     });
     expect(result.current.itpInstance?.completions[0]).toEqual(merged);
+    expect(refetchReadiness).toHaveBeenCalledTimes(1);
+    expect(refetchConformStatus).toHaveBeenCalledTimes(1);
     expect(recordSyncedChecklistItem).toHaveBeenCalledWith(
       'lot-1',
       'item-1',
@@ -650,7 +657,9 @@ describe('useItpInstance — completion mutations', () => {
     expect(result.current.itpInstance?.completions[0]).toEqual(updated);
   });
 
-  it('markAsNA trims the reason, posts not_applicable, toasts, and returns true', async () => {
+  it('markAsNA trims the reason, posts not_applicable, refreshes closeout state, toasts, and returns true', async () => {
+    const refetchReadiness = vi.fn();
+    const refetchConformStatus = vi.fn();
     let body: Record<string, unknown> | undefined;
     const na = completionResponse({
       id: 'completion-1',
@@ -658,12 +667,15 @@ describe('useItpInstance — completion mutations', () => {
       isNotApplicable: true,
       isCompleted: false,
     });
-    const { result } = await mountMutationHook({
-      postCompletion: (b) => {
-        body = b;
-        return { completion: na };
+    const { result } = await mountMutationHook(
+      {
+        postCompletion: (b) => {
+          body = b;
+          return { completion: na };
+        },
       },
-    });
+      { refetchReadiness, refetchConformStatus },
+    );
 
     let returned: boolean | undefined;
     await act(async () => {
@@ -678,6 +690,8 @@ describe('useItpInstance — completion mutations', () => {
       notes: 'not in scope',
     });
     expect(result.current.itpInstance?.completions[0]).toEqual(na);
+    expect(refetchReadiness).toHaveBeenCalledTimes(1);
+    expect(refetchConformStatus).toHaveBeenCalledTimes(1);
     expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Item marked as N/A' }));
   });
 
@@ -746,19 +760,24 @@ describe('useItpInstance — completion mutations', () => {
     );
   });
 
-  it('mobileMarkNA posts not_applicable with the default note, toasts, and resolves true', async () => {
+  it('mobileMarkNA posts not_applicable with the default note, refreshes closeout state, toasts, and resolves true', async () => {
+    const refetchReadiness = vi.fn();
+    const refetchConformStatus = vi.fn();
     let body: Record<string, unknown> | undefined;
     const na = completionResponse({
       id: 'completion-1',
       checklistItemId: 'item-1',
       isNotApplicable: true,
     });
-    const { result } = await mountMutationHook({
-      postCompletion: (b) => {
-        body = b;
-        return { completion: na };
+    const { result } = await mountMutationHook(
+      {
+        postCompletion: (b) => {
+          body = b;
+          return { completion: na };
+        },
       },
-    });
+      { refetchReadiness, refetchConformStatus },
+    );
 
     let returned: boolean | undefined;
     await act(async () => {
@@ -767,15 +786,22 @@ describe('useItpInstance — completion mutations', () => {
 
     expect(returned).toBe(true);
     expect(body).toMatchObject({ status: 'not_applicable', notes: 'Marked as N/A' });
+    expect(refetchReadiness).toHaveBeenCalledTimes(1);
+    expect(refetchConformStatus).toHaveBeenCalledTimes(1);
     expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Item marked as N/A' }));
   });
 
   it('mobileMarkNA resolves false when the write fails, so the sheet can stay open', async () => {
-    const { result } = await mountMutationHook({
-      postCompletion: () => {
-        throw new Error('network down');
+    const refetchReadiness = vi.fn();
+    const refetchConformStatus = vi.fn();
+    const { result } = await mountMutationHook(
+      {
+        postCompletion: () => {
+          throw new Error('network down');
+        },
       },
-    });
+      { refetchReadiness, refetchConformStatus },
+    );
 
     let returned: boolean | undefined;
     await act(async () => {
@@ -783,10 +809,14 @@ describe('useItpInstance — completion mutations', () => {
     });
 
     expect(returned).toBe(false);
+    expect(refetchReadiness).not.toHaveBeenCalled();
+    expect(refetchConformStatus).not.toHaveBeenCalled();
     expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Error' }));
   });
 
-  it('mobileMarkFailed posts failed, refreshes only NCRs, and toasts without the NCR-created title', async () => {
+  it('mobileMarkFailed posts failed, refreshes closeout state and NCRs, and toasts without the NCR-created title', async () => {
+    const refetchReadiness = vi.fn();
+    const refetchConformStatus = vi.fn();
     const refreshLotAfterFailure = vi.fn(async () => {});
     const refreshNcrsAfterFailure = vi.fn(async () => {});
     let body: Record<string, unknown> | undefined;
@@ -802,7 +832,7 @@ describe('useItpInstance — completion mutations', () => {
           return { completion: failed, ncr: { ncrNumber: 'NCR-9' } };
         },
       },
-      { refreshLotAfterFailure, refreshNcrsAfterFailure },
+      { refetchReadiness, refetchConformStatus, refreshLotAfterFailure, refreshNcrsAfterFailure },
     );
 
     let returned: boolean | undefined;
@@ -818,6 +848,8 @@ describe('useItpInstance — completion mutations', () => {
       ncrCategory: 'workmanship',
       ncrSeverity: 'minor',
     });
+    expect(refetchReadiness).toHaveBeenCalledTimes(1);
+    expect(refetchConformStatus).toHaveBeenCalledTimes(1);
     expect(refreshNcrsAfterFailure).toHaveBeenCalledTimes(1);
     expect(refreshLotAfterFailure).not.toHaveBeenCalled();
     expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Item marked as Failed' }));

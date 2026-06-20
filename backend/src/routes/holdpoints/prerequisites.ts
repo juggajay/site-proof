@@ -56,6 +56,7 @@ export function buildHoldPointPrerequisites(
       // N/A is a first-class status (requires a reason, renders as done) so it
       // satisfies a preceding item even though it is not literally 'completed'.
       isNotApplicable: completion?.status === 'not_applicable',
+      verificationStatus: completion?.verificationStatus,
       isVerified: completion?.verificationStatus === 'verified',
       completedAt: completion?.completedAt,
     };
@@ -64,13 +65,20 @@ export function buildHoldPointPrerequisites(
 
 type HoldPointPrerequisite = ReturnType<typeof buildHoldPointPrerequisites>[number];
 
+function isVerificationSatisfied(verificationStatus: string | null | undefined): boolean {
+  return verificationStatus !== 'pending_verification' && verificationStatus !== 'rejected';
+}
+
 // Prerequisites that are not satisfied. A preceding item is satisfied when it is
-// completed OR marked N/A; a missing completion or a 'failed' status counts as
-// incomplete and still blocks the hold-point release request.
+// completed OR marked N/A, and the completion is not waiting on verification.
+// A missing completion, a failed status, pending verification, or rejected
+// verification still blocks the hold-point release request.
 export function getIncompletePrerequisites(
   prerequisites: HoldPointPrerequisite[],
 ): HoldPointPrerequisite[] {
-  return prerequisites.filter((p) => !p.isCompleted && !p.isNotApplicable);
+  return prerequisites.filter(
+    (p) => (!p.isCompleted && !p.isNotApplicable) || !isVerificationSatisfied(p.verificationStatus),
+  );
 }
 
 // Trim prerequisites to the error-details shape returned by /request-release,

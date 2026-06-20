@@ -92,7 +92,7 @@ const createCompletionSchema = z.object({
       `NCR category must be ${ITP_COMPLETION_SHORT_TEXT_MAX_LENGTH} characters or less`,
     )
     .optional(),
-  ncrSeverity: z.enum(['minor', 'major', 'critical']).optional(),
+  ncrSeverity: z.enum(['minor', 'major']).optional(),
   // Witness point details
   witnessPresent: z.boolean().optional(),
   witnessName: z

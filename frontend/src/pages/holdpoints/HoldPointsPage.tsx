@@ -134,7 +134,14 @@ export function HoldPointsPage() {
   // (the register-level alert) instead of rejecting here.
   const refreshHoldPoints = useCallback(async () => {
     if (!projectId) return;
-    await queryClient.invalidateQueries({ queryKey: queryKeys.holdPoints(projectId) });
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.holdPoints(projectId) }),
+      queryClient.invalidateQueries({ queryKey: ['lot'] }),
+      queryClient.invalidateQueries({ queryKey: ['lot-readiness'] }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.lots(projectId) }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.claimReadiness(projectId) }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.foremanBadges(projectId) }),
+    ]);
   }, [projectId, queryClient]);
 
   const handleRetryLoad = useCallback(() => {

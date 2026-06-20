@@ -945,3 +945,74 @@ Stage 14 should target cross-domain closeout from lot to claim: assign an ITP,
 complete standard/witness/hold-point items, release the hold point, attach and
 verify test results, raise and close an NCR from a failed result, confirm lot
 conformance, then confirm claim readiness and evidence package behavior.
+
+## Stage 14 - Cross-Domain Lot Closeout
+
+Scope:
+- Visible-browser production owner setup, project/lot creation, ITP assignment,
+  standard item completion, hold-point release request and release, test-result
+  certificate verification, NCR lifecycle, lot conformance, and claim-readiness
+  handoff.
+- Static/code audit with focused backend and frontend subagents covering lot
+  closeout state, ITP completion, hold-point prerequisites, NCR status effects,
+  test evidence matching, and frontend cache refreshes.
+
+Findings:
+1. Lot conformance treated `pending_verification` ITP completions as finished.
+   Fixed in this stage by requiring `verificationStatus === verified` for
+   completed checklist items before lot conformance can pass.
+2. Hold-point release requests ignored pending/rejected verification on
+   prerequisite ITP items. Fixed in this stage by carrying verification status
+   into hold-point prerequisite checks.
+3. Conformed or claimed lots could be downgraded by a later linked NCR create or
+   close path. Fixed in this stage by rejecting new NCR links to terminal lots
+   and only clearing `ncr_raised` lots back to `in_progress` on NCR closure.
+4. Any verified passing test could satisfy any ITP item that required test
+   evidence. Fixed in this stage by matching verified passing tests to each
+   required ITP item by direct checklist-item link or normalized test type.
+5. Failed ITP completion accepted `critical` NCR severity while the normal NCR
+   workflow only supports `minor` and `major`. Fixed in this stage by aligning
+   the ITP failure schema to the NCR workflow.
+6. Test-results UI exposed Verify before a certificate was attached. Fixed in
+   this stage by sharing a certificate-gated action helper across desktop and
+   mobile test lists.
+7. Lot closeout/readiness views could stay stale after ITP, hold-point, or NCR
+   mutations. Fixed in this stage by invalidating lot, readiness,
+   claim-readiness, and mobile badge readers after those closeout mutations.
+8. NCR close/concession actions were visible to roles that the backend rejects,
+   and concession was offered before verification. Fixed in this stage by
+   sharing a role helper and limiting both actions to verification status.
+
+Live pre-fix probe results:
+- Owner registration, company/project/lot setup, ITP assignment, standard ITP
+  completion, hold-point release request/read/release, test-result certificate
+  attach/verify, and open-NCR conformance blocker all worked.
+- Premature hold-point completion was correctly blocked before release.
+- The authenticated hold-point release correctly updated the matching ITP
+  completion to completed/verified.
+- The first probe stopped at NCR submit-for-verification because the probe had
+  not uploaded NCR evidence first. The probe has been updated to upload and link
+  evidence before the submit step.
+
+Run evidence:
+- Report artifact:
+  `.gstack/qa-reports/stage14-lot-closeout-20260621/qa-report.md` inside the QA
+  worktree.
+- Local focused backend regressions:
+  - `npm test -- src/lib/conformancePrerequisites.test.ts src/lib/evidenceReadiness.test.ts src/routes/holdpoints/prerequisites.test.ts src/routes/ncrs/ncrLotStatus.test.ts` passed, 54 tests.
+- Local focused frontend regressions:
+  - `npm run test:unit -- src/pages/tests/constants.test.ts src/pages/lots/hooks/useItpInstance.test.ts src/pages/ncr/components/NCRTable.sort.test.tsx src/shell/screens/lots/test/useShellItpRun.test.ts` passed, 36 tests.
+- Backend type-check, frontend type-check, backend format check, frontend format
+  check, backend lint, frontend lint, and `git diff --check` passed.
+- Fallow changed-code audit was refactored from a complexity failure to an
+  advisory warning only. Remaining warnings are duplication in test setup and
+  existing desktop/mobile or shell/subbie parallel UI paths touched by the fix.
+
+Notes for Review:
+- Post-merge production probe should be rerun with
+  `.gstack/tmp/stage14-lot-closeout-probe.js`. It now exercises test-required
+  ITP evidence, matching verified test results, NCR evidence upload/link,
+  NCR verification/close, lot conform, and claim readiness.
+- One backend audit follow-up remains for a later stage: verified test-result
+  corrections can still change/move verified evidence without clearing
+  verification. This stage focused on closeout gating and stale state paths.

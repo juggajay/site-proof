@@ -1,5 +1,8 @@
 import { prisma } from './prisma.js';
-import { getChecklistItemsForInstance } from '../routes/itp/helpers/templateSnapshot.js';
+import {
+  getChecklistItemsForInstance,
+  type ChecklistItem,
+} from '../routes/itp/helpers/templateSnapshot.js';
 
 // A checklist item counts as finished for conformance when its completion
 // status is 'completed' OR 'not_applicable'. Owner decision (2026-06-11):
@@ -30,6 +33,7 @@ interface ChecklistCompletenessItem {
 interface ChecklistCompletenessCompletion {
   checklistItemId: string;
   status: string;
+  verificationStatus?: string | null;
 }
 
 export interface ChecklistCompleteness {
@@ -52,7 +56,14 @@ export function buildItpChecklistCompleteness(
   completions: ChecklistCompletenessCompletion[],
 ): ChecklistCompleteness {
   const finishedItemIds = new Set(
-    completions.filter((c) => isItpCompletionFinished(c.status)).map((c) => c.checklistItemId),
+    completions
+      .filter(
+        (c) =>
+          isItpCompletionFinished(c.status) &&
+          c.verificationStatus !== 'pending_verification' &&
+          c.verificationStatus !== 'rejected',
+      )
+      .map((c) => c.checklistItemId),
   );
 
   const incompleteItems = checklistItems
@@ -92,7 +103,13 @@ interface ConformancePrerequisites {
   itpIncompleteItems: { id: string; description: string; pointType: string }[];
   testRequired: boolean;
   hasPassingTest: boolean;
-  testResults: { id: string; testType: string; passFail: string; status: string }[];
+  testResults: {
+    id: string;
+    itpChecklistItemId: string | null;
+    testType: string;
+    passFail: string;
+    status: string;
+  }[];
   noOpenNcrs: boolean;
   openNcrs: { id: string; ncrNumber: string; description: string; status: string }[];
   // N/A hold-point bypass guard: hold-point sign-off items marked N/A only
@@ -115,6 +132,125 @@ interface ConformanceCheckResult {
   blockingReasons?: string[];
 }
 
+type NormalizedChecklistItem = ChecklistItem & {
+  id: string;
+  description: string;
+  pointType: string;
+};
+
+interface ItpInstanceForConformance {
+  templateSnapshot?: string | null;
+  template?: { checklistItems?: ChecklistItem[] | null } | null;
+  completions: ChecklistCompletenessCompletion[];
+}
+
+function getNormalizedChecklistItems(
+  itpInstance: ItpInstanceForConformance,
+): NormalizedChecklistItem[] {
+  return getChecklistItemsForInstance(itpInstance).map((item) => ({
+    ...item,
+    description: item.description ?? 'ITP item',
+    pointType: item.pointType ?? 'standard',
+  }));
+}
+
+async function applyItpPrerequisites(
+  lotId: string,
+  itpInstance: ItpInstanceForConformance,
+  prerequisites: ConformancePrerequisites,
+): Promise<NormalizedChecklistItem[]> {
+  prerequisites.itpAssigned = true;
+  const checklistItems = getNormalizedChecklistItems(itpInstance);
+
+  const completeness = buildItpChecklistCompleteness(checklistItems, itpInstance.completions);
+
+  prerequisites.itpTotalCount = completeness.totalCount;
+  prerequisites.itpCompletedCount = completeness.completedCount;
+  prerequisites.itpCompleted = completeness.completed;
+  prerequisites.itpIncompleteItems = completeness.incompleteItems;
+  prerequisites.testRequired = itpRequiresTest(checklistItems);
+
+  await applyNaHoldPointBypassGuard(lotId, checklistItems, itpInstance.completions, prerequisites);
+
+  return checklistItems;
+}
+
+async function applyNaHoldPointBypassGuard(
+  lotId: string,
+  checklistItems: NormalizedChecklistItem[],
+  completions: ChecklistCompletenessCompletion[],
+  prerequisites: ConformancePrerequisites,
+): Promise<void> {
+  const naCompletionItemIds = new Set(
+    completions.filter((c) => c.status === 'not_applicable').map((c) => c.checklistItemId),
+  );
+
+  const naHoldPointSignoffItems = checklistItems.filter((item) => {
+    if (!naCompletionItemIds.has(item.id)) return false;
+    const isHoldPointSignoffItem =
+      item.pointType === 'hold_point' ||
+      (item.responsibleParty === 'superintendent' && item.pointType !== 'witness');
+    return isHoldPointSignoffItem;
+  });
+
+  if (naHoldPointSignoffItems.length === 0) {
+    return;
+  }
+
+  const releasedHoldPoints = await prisma.holdPoint.findMany({
+    where: {
+      lotId,
+      itpChecklistItemId: { in: naHoldPointSignoffItems.map((item) => item.id) },
+      status: 'released',
+    },
+    select: { itpChecklistItemId: true },
+  });
+
+  const releasedItemIds = new Set(releasedHoldPoints.map((hp) => hp.itpChecklistItemId));
+  const unreleasedNaCount = naHoldPointSignoffItems.filter(
+    (item) => !releasedItemIds.has(item.id),
+  ).length;
+
+  prerequisites.naHoldPointBlockerCount = unreleasedNaCount;
+  prerequisites.noNaHoldPointBypass = unreleasedNaCount === 0;
+}
+
+function normalizeTestType(value: string | null | undefined): string {
+  return (value || '').trim().toLowerCase();
+}
+
+function isRequiredTestItem(item: {
+  id: string;
+  evidenceRequired?: string | null;
+  testType?: string | null;
+}): boolean {
+  return item.evidenceRequired === 'test' || Boolean(item.testType);
+}
+
+function hasVerifiedPassingTestForItem(
+  item: { id: string; testType?: string | null },
+  testResults: {
+    itpChecklistItemId?: string | null;
+    testType: string;
+    passFail: string;
+    status: string;
+  }[],
+): boolean {
+  const requiredTestType = normalizeTestType(item.testType);
+
+  return testResults.some((testResult) => {
+    if (testResult.passFail !== 'pass' || testResult.status !== 'verified') {
+      return false;
+    }
+
+    if (testResult.itpChecklistItemId === item.id) {
+      return true;
+    }
+
+    return Boolean(requiredTestType) && normalizeTestType(testResult.testType) === requiredTestType;
+  });
+}
+
 export async function checkConformancePrerequisites(
   lotId: string,
 ): Promise<ConformanceCheckResult> {
@@ -134,6 +270,7 @@ export async function checkConformancePrerequisites(
       testResults: {
         select: {
           id: true,
+          itpChecklistItemId: true,
           testType: true,
           passFail: true,
           status: true,
@@ -178,84 +315,27 @@ export async function checkConformancePrerequisites(
     noNaHoldPointBypass: true,
   };
 
-  // Check ITP completion. 'completed' and 'not_applicable' items both count as
-  // finished (see buildItpChecklistCompleteness / isItpCompletionFinished above).
-  // 'failed', 'pending', 'in_progress', and missing completions still block.
+  let checklistItems: NormalizedChecklistItem[] = [];
   if (lot.itpInstance) {
-    prerequisites.itpAssigned = true;
-    const checklistItems = getChecklistItemsForInstance(lot.itpInstance).map((item) => ({
-      ...item,
-      description: item.description ?? 'ITP item',
-      pointType: item.pointType ?? 'standard',
-    }));
-
-    const completeness = buildItpChecklistCompleteness(checklistItems, lot.itpInstance.completions);
-
-    prerequisites.itpTotalCount = completeness.totalCount;
-    prerequisites.itpCompletedCount = completeness.completedCount;
-    prerequisites.itpCompleted = completeness.completed;
-    prerequisites.itpIncompleteItems = completeness.incompleteItems;
-
-    // A passing verified test is only required when the ITP actually has a test
-    // point. Lots whose ITP has no test points must not be forced to invent one.
-    prerequisites.testRequired = itpRequiresTest(checklistItems);
-
-    // N/A hold-point bypass guard (owner decision, 2026-06-11):
-    // An N/A'd hold-point sign-off item (pointType 'hold_point', or
-    // responsibleParty 'superintendent' with pointType !== 'witness') only
-    // satisfies conformance when its HoldPoint record is released. Find any
-    // such items and check their hold-point release status.
-    //
-    // Mirror the isHoldPointSignoffItem definition from
-    // routes/itp/completions.ts:209-212 so the two definitions stay in sync.
-    const naCompletionItemIds = new Set(
-      lot.itpInstance.completions
-        .filter((c) => c.status === 'not_applicable')
-        .map((c) => c.checklistItemId),
-    );
-
-    const naHoldPointSignoffItems = checklistItems.filter((item) => {
-      if (!naCompletionItemIds.has(item.id)) return false;
-      const isHoldPointSignoffItem =
-        item.pointType === 'hold_point' ||
-        (item.responsibleParty === 'superintendent' && item.pointType !== 'witness');
-      return isHoldPointSignoffItem;
-    });
-
-    if (naHoldPointSignoffItems.length > 0) {
-      // For each N/A'd hold-point sign-off item, check whether a released
-      // HoldPoint exists for this lot + checklist item combination.
-      const releasedHoldPoints = await prisma.holdPoint.findMany({
-        where: {
-          lotId: lot.id,
-          itpChecklistItemId: { in: naHoldPointSignoffItems.map((item) => item.id) },
-          status: 'released',
-        },
-        select: { itpChecklistItemId: true },
-      });
-
-      const releasedItemIds = new Set(releasedHoldPoints.map((hp) => hp.itpChecklistItemId));
-      const unreleasedNaCount = naHoldPointSignoffItems.filter(
-        (item) => !releasedItemIds.has(item.id),
-      ).length;
-
-      prerequisites.naHoldPointBlockerCount = unreleasedNaCount;
-      prerequisites.noNaHoldPointBypass = unreleasedNaCount === 0;
-    }
+    checklistItems = await applyItpPrerequisites(lot.id, lot.itpInstance, prerequisites);
   }
 
   // Check test results - need at least one passing and verified test
   prerequisites.testResults = lot.testResults.map((t) => ({
     id: t.id,
+    itpChecklistItemId: t.itpChecklistItemId,
     testType: t.testType,
     passFail: t.passFail,
     status: t.status,
   }));
 
-  // A lot needs at least one passing test that is verified
-  prerequisites.hasPassingTest = lot.testResults.some(
-    (t) => t.passFail === 'pass' && t.status === 'verified',
-  );
+  // Every test-required ITP item needs matching passing verified evidence. A
+  // direct checklist-item link is strongest; legacy/manual tests can still
+  // satisfy the gate when their test type exactly matches the item's test type.
+  const requiredTestItems = checklistItems.filter(isRequiredTestItem);
+  prerequisites.hasPassingTest =
+    requiredTestItems.length > 0 &&
+    requiredTestItems.every((item) => hasVerifiedPassingTestForItem(item, lot.testResults));
 
   // Check for open NCRs (any NCR that isn't closed). The Prisma query already
   // filters closed NCR links so large historical NCR lists do not get hydrated.
@@ -286,7 +366,7 @@ export async function checkConformancePrerequisites(
     );
   }
   if (prerequisites.testRequired && !prerequisites.hasPassingTest) {
-    blockingReasons.push('ITP requires a test, but no passing verified test result was recorded');
+    blockingReasons.push('ITP requires a matching passing verified test result');
   }
   if (!prerequisites.noOpenNcrs) {
     blockingReasons.push(`${prerequisites.openNcrs.length} open NCR(s) must be closed`);

@@ -29,6 +29,7 @@ import {
   submitForVerificationSchema,
 } from './ncrWorkflowValidation.js';
 import { claimNcrVerificationSubmission } from './ncrVerificationSubmission.js';
+import { getLotStatusAfterNcrClosure } from './ncrLotStatus.js';
 
 export const ncrClosureWorkflowRouter = Router();
 
@@ -199,7 +200,7 @@ ncrClosureWorkflowRouter.post(
     const ncr = await prisma.nCR.findUnique({
       where: { id },
       include: {
-        ncrLots: { select: { lotId: true } },
+        ncrLots: { select: { lotId: true, lot: { select: { status: true } } } },
       },
     });
 
@@ -280,11 +281,15 @@ ncrClosureWorkflowRouter.post(
         });
 
         if (otherOpenNcrs === 0) {
-          // No other open NCRs, revert lot status
-          await prisma.lot.update({
-            where: { id: lotId },
-            data: { status: 'in_progress' },
-          });
+          const currentLot = ncr.ncrLots.find((nl) => nl.lotId === lotId)?.lot;
+          const nextStatus = currentLot ? getLotStatusAfterNcrClosure(currentLot.status) : null;
+          if (nextStatus) {
+            // No other open NCRs, clear the NCR-raised state without reopening terminal lots.
+            await prisma.lot.update({
+              where: { id: lotId },
+              data: { status: nextStatus },
+            });
+          }
         }
       }
     }

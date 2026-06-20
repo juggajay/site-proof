@@ -1,10 +1,12 @@
 import { useRef, useState, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api';
 import { toast } from '@/components/ui/toaster';
 import { extractErrorMessage, extractErrorDetails } from '@/lib/errorHandling';
 import { downloadCsv } from '@/lib/csv';
 import { formatDateKey } from '@/lib/localDate';
 import { formatStatusLabel } from '@/lib/statusLabels';
+import { queryKeys } from '@/lib/queryKeys';
 import type { NCR } from '../types';
 
 const optionalTrimmed = (value?: string) => {
@@ -72,6 +74,7 @@ export function useNCRActions({
   setError,
   closeModal,
 }: UseNCRActionsOptions): UseNCRActionsReturn {
+  const queryClient = useQueryClient();
   const [actionLoading, setActionLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [copiedNcrId, setCopiedNcrId] = useState<string | null>(null);
@@ -81,6 +84,23 @@ export function useNCRActions({
     setSuccessMessage(msg);
     setTimeout(() => setSuccessMessage(null), 3000);
   };
+
+  const refreshCloseoutReaders = useCallback(async () => {
+    const invalidations = [
+      queryClient.invalidateQueries({ queryKey: ['lot'] }),
+      queryClient.invalidateQueries({ queryKey: ['lot-readiness'] }),
+    ];
+
+    if (projectId) {
+      invalidations.push(
+        queryClient.invalidateQueries({ queryKey: queryKeys.lots(projectId) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.claimReadiness(projectId) }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.foremanBadges(projectId) }),
+      );
+    }
+
+    await Promise.all(invalidations);
+  }, [projectId, queryClient]);
 
   const handleCopyNcrLink = useCallback(
     async (ncrId: string, ncrNumber: string) => {
@@ -139,6 +159,7 @@ export function useNCRActions({
         closeModal();
         showSuccess('NCR created successfully');
         await fetchNcrs();
+        await refreshCloseoutReaders();
       } catch (err) {
         setError(extractErrorMessage(err, 'Failed to create NCR'));
       } finally {
@@ -146,7 +167,7 @@ export function useNCRActions({
         setActionLoading(false);
       }
     },
-    [projectId, fetchNcrs, setError, closeModal],
+    [projectId, fetchNcrs, refreshCloseoutReaders, setError, closeModal],
   );
 
   const handleAssignNcr = useCallback(
@@ -202,6 +223,7 @@ export function useNCRActions({
         closeModal();
         showSuccess('NCR response submitted - status changed to Investigating');
         await fetchNcrs();
+        await refreshCloseoutReaders();
       } catch (err) {
         setError(extractErrorMessage(err, 'Failed to submit response'));
       } finally {
@@ -209,7 +231,7 @@ export function useNCRActions({
         setActionLoading(false);
       }
     },
-    [fetchNcrs, setError, closeModal],
+    [fetchNcrs, refreshCloseoutReaders, setError, closeModal],
   );
 
   const handleRequestQmApproval = useCallback(
@@ -224,6 +246,7 @@ export function useNCRActions({
         );
         showSuccess(data.message || 'QM approval granted');
         await fetchNcrs();
+        await refreshCloseoutReaders();
       } catch (err) {
         setError(extractErrorMessage(err, 'Failed to approve NCR'));
       } finally {
@@ -231,7 +254,7 @@ export function useNCRActions({
         setActionLoading(false);
       }
     },
-    [fetchNcrs, setError],
+    [fetchNcrs, refreshCloseoutReaders, setError],
   );
 
   const handleCloseNcr = useCallback(
@@ -253,6 +276,7 @@ export function useNCRActions({
         closeModal();
         showSuccess(responseData.message || 'NCR closed successfully');
         await fetchNcrs();
+        await refreshCloseoutReaders();
       } catch (err) {
         const details = extractErrorDetails(err);
         if (details?.requiresQmApproval) {
@@ -267,7 +291,7 @@ export function useNCRActions({
         setActionLoading(false);
       }
     },
-    [fetchNcrs, setError, closeModal],
+    [fetchNcrs, refreshCloseoutReaders, setError, closeModal],
   );
 
   const handleCloseWithConcession = useCallback(
@@ -297,6 +321,7 @@ export function useNCRActions({
         closeModal();
         showSuccess('NCR closed with concession successfully');
         await fetchNcrs();
+        await refreshCloseoutReaders();
       } catch (err) {
         const details = extractErrorDetails(err);
         if (details?.requiresQmApproval) {
@@ -309,7 +334,7 @@ export function useNCRActions({
         setActionLoading(false);
       }
     },
-    [fetchNcrs, setError, closeModal],
+    [fetchNcrs, refreshCloseoutReaders, setError, closeModal],
   );
 
   const handleExportCSV = useCallback(

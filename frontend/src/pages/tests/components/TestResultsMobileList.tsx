@@ -8,6 +8,7 @@ import {
   testStatusLabels,
   nextStatusMap,
   nextStatusButtonLabels,
+  canAdvanceTestStatus,
   isEnterResultsStep,
   isTestOverdue,
   getDaysSince,
@@ -145,6 +146,7 @@ function TestResultMobileCard({
       ? `${test.resultValue}${test.resultUnit ? ` ${test.resultUnit}` : ''}`
       : '—';
   const nextStatus = nextStatusMap[test.status];
+  const canAdvance = canAdvanceTestStatus(test);
 
   return (
     <MobileDataCard
@@ -218,6 +220,7 @@ function TestResultMobileCard({
       actions={
         <div className="flex w-full flex-col gap-2">
           {nextStatus &&
+            canAdvance &&
             (isEnterResultsStep(test.status) ? (
               // Ticket T2: record the result before entering.
               <Button size="lg" className="w-full" onClick={() => onOpenEnterResults(test)}>
