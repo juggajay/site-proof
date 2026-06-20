@@ -6,6 +6,9 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
 import { apiFetch, ApiError } from '@/lib/api';
 import { extractErrorMessage, isForbidden } from '@/lib/errorHandling';
+import { useAuth } from '@/lib/auth';
+import { canManageProjectSettings } from '@/lib/roles';
+import { getProjectScopedRole } from '@/lib/subcontractorIdentity';
 import {
   MapPin,
   Calendar,
@@ -36,9 +39,11 @@ import {
 
 export function ProjectDashboard() {
   const { projectId } = useParams();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
   const encodedProjectId = projectId ? encodeURIComponent(projectId) : '';
+  const canOpenProjectSettings = canManageProjectSettings(getProjectScopedRole(user));
 
   const {
     data,
@@ -175,13 +180,15 @@ export function ProjectDashboard() {
             <RefreshCw className={cn('h-4 w-4', refreshing && 'animate-spin')} />
             Refresh
           </Button>
-          <Link
-            to={`${projectRouteBase}/settings`}
-            className="flex items-center gap-2 px-3 py-2 text-sm border rounded-md hover:bg-muted"
-          >
-            <Settings className="h-4 w-4" />
-            Settings
-          </Link>
+          {canOpenProjectSettings && (
+            <Link
+              to={`${projectRouteBase}/settings`}
+              className="flex items-center gap-2 px-3 py-2 text-sm border rounded-md hover:bg-muted"
+            >
+              <Settings className="h-4 w-4" />
+              Settings
+            </Link>
+          )}
         </div>
       </div>
 

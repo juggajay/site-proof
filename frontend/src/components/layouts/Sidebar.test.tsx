@@ -119,5 +119,24 @@ describe('Sidebar project navigation', () => {
 
     expect(screen.getByRole('link', { name: /Progress Claims/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Costs/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Subcontractors/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Project Settings/i })).toBeInTheDocument();
+  });
+
+  it('hides project settings for site managers because settings are project-admin only', () => {
+    useAuthMock.mockReturnValue({
+      user: {
+        id: 'site-manager-1',
+        email: 'site-manager@example.com',
+        role: 'site_manager',
+        roleInCompany: 'site_manager',
+        companyId: 'company-1',
+      },
+    } as unknown as ReturnType<typeof useAuth>);
+
+    renderProjectSidebar();
+
+    expect(screen.getByRole('link', { name: /Subcontractors/i })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Project Settings/i })).not.toBeInTheDocument();
   });
 });

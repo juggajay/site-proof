@@ -118,6 +118,20 @@ export const ROLE_GROUPS = {
   // Can manage site operations and subcontractors
   MANAGEMENT: [ROLES.OWNER, ROLES.ADMIN, ROLES.PROJECT_MANAGER, ROLES.SITE_MANAGER] as const,
 
+  // Can manage project settings, project team membership, and project areas.
+  PROJECT_SETTINGS_MANAGERS: [ROLES.OWNER, ROLES.ADMIN, ROLES.PROJECT_MANAGER] as const,
+
+  // Can permanently delete empty setup projects. Mirrors the backend project
+  // delete gate, which is deliberately narrower than project settings access.
+  PROJECT_DELETERS: [ROLES.OWNER, ROLES.ADMIN] as const,
+
+  // Can create/import/clone/bulk-configure lots. Foreman is deliberately
+  // excluded: foreman is a field-execution role, not a lot setup role.
+  LOT_CREATORS: [ROLES.OWNER, ROLES.ADMIN, ROLES.PROJECT_MANAGER, ROLES.SITE_MANAGER] as const,
+
+  // Can delete lots.
+  LOT_DELETERS: [ROLES.OWNER, ROLES.ADMIN, ROLES.PROJECT_MANAGER] as const,
+
   // Can perform quality actions (conformance, ITP verification)
   QUALITY: [ROLES.OWNER, ROLES.ADMIN, ROLES.PROJECT_MANAGER, ROLES.QUALITY_MANAGER] as const,
 
@@ -193,6 +207,22 @@ export function isViewerRole(role: string | undefined | null): boolean {
  */
 export function hasQualityAccess(role: string | undefined | null): boolean {
   return hasRoleInGroup(role, ROLE_GROUPS.QUALITY);
+}
+
+export function canManageProjectSettings(role: string | undefined | null): boolean {
+  return hasRoleInGroup(role, ROLE_GROUPS.PROJECT_SETTINGS_MANAGERS);
+}
+
+export function canDeleteProjects(role: string | undefined | null): boolean {
+  return hasRoleInGroup(role, ROLE_GROUPS.PROJECT_DELETERS);
+}
+
+export function canCreateLots(role: string | undefined | null): boolean {
+  return hasRoleInGroup(role, ROLE_GROUPS.LOT_CREATORS);
+}
+
+export function canDeleteLots(role: string | undefined | null): boolean {
+  return hasRoleInGroup(role, ROLE_GROUPS.LOT_DELETERS);
 }
 
 /**
