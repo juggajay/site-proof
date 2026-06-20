@@ -14,6 +14,7 @@ import {
   isForemanDashboardUser,
 } from '@/lib/subcontractorIdentity';
 import { MainLayout } from './MainLayout';
+import { shouldAutoShowGeneralOnboardingForPath } from './protectedAppShellOnboarding';
 
 const SUBCONTRACTOR_ROLES = ['subcontractor', 'subcontractor_admin'];
 
@@ -54,7 +55,10 @@ function KeyboardShortcutsProvider({ children }: { children: ReactNode }) {
   // mobile-first foreman dashboard, while the tour walks desktop chrome
   // (sidebar navigation, Cmd+K, keyboard shortcuts). They can still start it
   // from the header user menu.
-  const autoShowGeneralOnboarding = showGeneralOnboarding && !isForemanDashboardUser(user);
+  const autoShowGeneralOnboarding =
+    showGeneralOnboarding &&
+    !isForemanDashboardUser(user) &&
+    shouldAutoShowGeneralOnboardingForPath(location.pathname);
 
   return (
     <>
