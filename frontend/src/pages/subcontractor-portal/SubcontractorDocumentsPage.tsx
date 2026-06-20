@@ -16,7 +16,7 @@ interface Document {
   id: string;
   filename: string;
   fileUrl: string;
-  category: string;
+  category: string | null;
   description?: string;
   uploadedAt: string;
   uploadedBy?: { fullName: string };
@@ -38,8 +38,12 @@ function formatFileSize(bytes?: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function getCategoryIcon(category: string) {
-  switch (category.toLowerCase()) {
+function getDocumentCategory(category: string | null | undefined): string {
+  return category?.trim() || 'Other';
+}
+
+function getCategoryIcon(category: string | null | undefined) {
+  switch (getDocumentCategory(category).toLowerCase()) {
     case 'drawing':
     case 'drawings':
       return <FileText className="h-4 w-4 text-muted-foreground" />;
@@ -87,7 +91,7 @@ export function SubcontractorDocumentsPage() {
   // Group by category
   const groupedDocs = documents.reduce(
     (acc, doc) => {
-      const cat = doc.category || 'Other';
+      const cat = getDocumentCategory(doc.category);
       if (!acc[cat]) acc[cat] = [];
       acc[cat].push(doc);
       return acc;
