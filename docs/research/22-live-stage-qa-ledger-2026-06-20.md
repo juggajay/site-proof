@@ -761,3 +761,53 @@ Notes for Review:
   500 for the QA account while email service status reported Resend configured.
   This needs a focused email-delivery follow-up using Sentry/logs or a real
   recipient before subcontractor portal invite QA is considered complete.
+
+## Stage 11 - Email Delivery and Subcontractor Invite Flow
+
+Scope:
+- Visible-browser disposable owner registration, company creation, and project
+  creation on production.
+- Production email service status.
+- Test notification email path.
+- Subcontractor invite email path.
+
+Finding:
+- Production Resend delivery was quota-blocked. Before the fix, the app masked
+  this as generic HTTP 500 responses from both `/api/notifications/send-test-email`
+  and `/api/subcontractors/invite`, while `/api/notifications/email-service-status`
+  still implied real delivery was ready.
+
+Fix:
+- PR #1011 merged to master and deployed. It preserves provider error metadata,
+  returns operational HTTP 503 `EXTERNAL_SERVICE_ERROR` responses for quota/rate
+  delivery failures, and changes email-service-status copy so it does not claim
+  delivery is guaranteed by configuration alone.
+
+Live re-test results:
+- Disposable owner registration, company creation, and project creation all
+  returned HTTP 201 in the visible browser session.
+- Email service status returned HTTP 200, provider `resend`, status `ready`, and
+  now warns that live delivery still depends on provider quota and sender-domain
+  status.
+- Test notification email returned HTTP 503 with code `EXTERNAL_SERVICE_ERROR`
+  and details reason `quota_exceeded`.
+- Subcontractor invite returned HTTP 503 with code `EXTERNAL_SERVICE_ERROR` and
+  details reason `quota_exceeded`.
+
+Run evidence:
+- Report artifact:
+  `.gstack/qa-reports/stage11-email-subbie-flow-20260621/qa-report.md` inside
+  the QA worktree.
+- Verification:
+  - Local focused helper tests passed.
+  - Backend type-check and lint passed.
+  - PR #1011 CI passed.
+  - Master CI after merge passed, including Backend, Frontend, and full
+    Frontend E2E.
+
+Notes for Review:
+- The remaining blocker is operational, not product-code behavior: Resend quota
+  must reset or be upgraded before real outgoing emails and full subcontractor
+  invite click-through can be proven.
+- Full subcontractor portal onboarding remains unverified until a real email can
+  be delivered or a safe QA-only invite-link capture mechanism exists.
