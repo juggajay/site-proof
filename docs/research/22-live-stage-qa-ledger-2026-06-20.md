@@ -1079,12 +1079,16 @@ Run evidence:
   - `npm run lint` passed with one existing warning in
     `frontend/src/lib/theme.tsx`.
 - `git diff --check` passed.
+- PR #1019 merged as `93c07d62`; master CI run `27886644448` passed,
+  including Backend, Frontend, and full Frontend E2E.
+- Post-merge production probe passed:
+  - verified result correction returned `status = entered` and persisted as no
+    longer verified;
+  - verified certificate replacement returned HTTP 409;
+  - the active certificate document remained the original document after the
+    blocked replacement.
 
 Notes for Review:
 - The DB-backed route regression tests were added to `testResults.test.ts`, but
   the file could not run locally because this worktree has no safe
-  `DATABASE_URL`. CI must run the full route suite before merge.
-- After this PR lands, rerun the Stage 15 production probe. Expected fixed
-  behavior: verified PATCH reopens the row to `entered`, verified certificate
-  replacement is blocked with HTTP 409, and the active certificate remains the
-  original document.
+  `DATABASE_URL`. They passed in CI as part of PR #1019 and the master run.
