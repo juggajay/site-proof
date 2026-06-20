@@ -35,6 +35,7 @@ function buildTestResults(
       specificationMax: 100,
       passFail: 'pass',
       status: primaryStatus,
+      certificateDocId: 'e2e-density-certificate-doc',
       lotId: 'e2e-test-lot',
       lot: {
         id: 'e2e-test-lot',
@@ -398,7 +399,7 @@ test.describe('Test results seeded quality evidence contract', () => {
     await expect(densityRow.getByText('AI')).toBeVisible();
     await expect(
       densityRow.getByRole('button', { name: 'Print test certificate for Density Ratio' }),
-    ).toBeVisible();
+    ).toHaveCount(0);
     await expect(densityRow.getByRole('button', { name: 'Verify' })).toBeVisible();
     await expect(densityRow.getByRole('button', { name: 'Reject' })).toBeVisible();
 
@@ -421,6 +422,9 @@ test.describe('Test results seeded quality evidence contract', () => {
     expect(api.getVerifyRequest()).toMatchObject({ status: 'verified' });
     await expect(densityRow.getByText('Verified')).toBeVisible();
     await expect(densityRow.getByText('Complete')).toBeVisible();
+    await expect(
+      densityRow.getByRole('button', { name: 'Print test certificate for Density Ratio' }),
+    ).toBeVisible();
 
     await cbrRow.getByRole('button', { name: 'Reject' }).click();
 
@@ -598,7 +602,7 @@ test.describe('Test results mobile card layout', () => {
     await expect(densityCard.getByRole('button', { name: 'LOT-TEST-001' })).toBeVisible();
     await expect(
       densityCard.getByRole('button', { name: 'Print test certificate for Density Ratio' }),
-    ).toBeVisible();
+    ).toHaveCount(0);
     await expect(densityCard.getByRole('button', { name: 'Reject' })).toBeVisible();
 
     // The next-status workflow action is a full-width primary button on the card.
@@ -615,5 +619,8 @@ test.describe('Test results mobile card layout', () => {
     expect(api.getVerifyRequest()).toMatchObject({ status: 'verified' });
     await expect(densityCard.getByText('Verified')).toBeVisible();
     await expect(densityCard.getByText('Complete')).toBeVisible();
+    await expect(
+      densityCard.getByRole('button', { name: 'Print test certificate for Density Ratio' }),
+    ).toBeVisible();
   });
 });
