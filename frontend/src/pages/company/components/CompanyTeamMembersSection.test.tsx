@@ -1,6 +1,9 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { ReactElement } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiFetch } from '@/lib/api';
+import { queryKeys } from '@/lib/queryKeys';
 import { CompanyTeamMembersSection } from './CompanyTeamMembersSection';
 
 vi.mock('@/lib/api', async (importOriginal) => {
@@ -9,6 +12,20 @@ vi.mock('@/lib/api', async (importOriginal) => {
 });
 
 const apiFetchMock = vi.mocked(apiFetch);
+
+function renderWithQueryClient(ui: ReactElement) {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  });
+  const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
+
+  render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+
+  return { queryClient, invalidateSpy };
+}
 
 describe('CompanyTeamMembersSection', () => {
   beforeEach(() => {
@@ -37,7 +54,7 @@ describe('CompanyTeamMembersSection', () => {
       ],
     });
 
-    render(<CompanyTeamMembersSection currentUserId="owner-1" />);
+    renderWithQueryClient(<CompanyTeamMembersSection currentUserId="owner-1" />);
 
     await screen.findByText('Owner User');
     expect(screen.getByText('(you)')).toBeInTheDocument();
@@ -50,7 +67,7 @@ describe('CompanyTeamMembersSection', () => {
   it('shows an actionable empty state', async () => {
     apiFetchMock.mockResolvedValueOnce({ members: [] });
 
-    render(<CompanyTeamMembersSection />);
+    renderWithQueryClient(<CompanyTeamMembersSection />);
 
     await screen.findByText('No team members yet');
     expect(screen.getAllByRole('button', { name: 'Invite Member' })).toHaveLength(2);
@@ -73,7 +90,7 @@ describe('CompanyTeamMembersSection', () => {
       },
     });
 
-    render(<CompanyTeamMembersSection />);
+    const { invalidateSpy } = renderWithQueryClient(<CompanyTeamMembersSection />);
 
     await screen.findByText('No team members yet');
     fireEvent.click(screen.getAllByRole('button', { name: 'Invite Member' })[0]);
@@ -107,5 +124,6 @@ describe('CompanyTeamMembersSection', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('New Foreman')).toBeInTheDocument();
     expect(screen.getByText('Pending')).toBeInTheDocument();
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.companySettings });
   });
 });

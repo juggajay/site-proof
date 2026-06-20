@@ -12,6 +12,7 @@ import { CookieConsentBanner } from '@/components/CookieConsentBanner';
 import { PageSkeleton } from '@/components/ui/Skeleton';
 import {
   ADMIN_ROLES,
+  COMPANY_ADMIN_ROLES,
   COMMERCIAL_ROLES,
   INTERNAL_ROLES,
   MANAGEMENT_ROLES,
@@ -411,7 +412,7 @@ function App() {
               <Route
                 path="/company-settings"
                 element={
-                  <RoleProtectedRoute allowedRoles={ADMIN_ROLES}>
+                  <RoleProtectedRoute allowedRoles={COMPANY_ADMIN_ROLES}>
                     <CompanySettingsPage />
                   </RoleProtectedRoute>
                 }
