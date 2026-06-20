@@ -8,8 +8,8 @@
  * They contain no database, email, env, or access calls — the route still owns
  * auth, prisma.user.findUnique, getEmailPreferences, isResendConfigured,
  * process.env reads, the sendNotificationEmail call, and the AppError throws.
- * Behaviour (every string, fallback, and branch) is unchanged from the inline
- * implementation.
+ * Behaviour stays route-compatible while keeping wording honest about what a
+ * configuration-only check can prove.
  */
 
 /**
@@ -88,7 +88,7 @@ export function buildEmailServiceStatus(params: {
           ? 'development'
           : 'disabled',
     message: resendConfigured
-      ? 'Resend API is configured and emails will be delivered to real recipients.'
+      ? 'Resend API is configured. Live delivery still depends on provider quota and sender-domain status; run production preflight to verify sends.'
       : productionMisconfigured
         ? 'Email delivery is not configured. Set a valid RESEND_API_KEY before using production email workflows.'
         : mockEmailEnabled

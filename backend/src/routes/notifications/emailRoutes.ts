@@ -18,6 +18,7 @@ import { Router } from 'express';
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
+import { createEmailDeliveryFailureError } from '../../lib/emailDeliveryErrors.js';
 import {
   sendNotificationEmail,
   sendDailyDigestEmail,
@@ -117,7 +118,11 @@ notificationEmailRouter.post(
     if (result.success) {
       res.json(buildTestEmailSuccessResponse(result, user.email));
     } else {
-      throw AppError.internal('Failed to send test email');
+      throw createEmailDeliveryFailureError(result, {
+        quotaMessage:
+          'Email delivery is temporarily unavailable because the email provider daily sending quota has been reached.',
+        unavailableMessage: 'Email delivery is temporarily unavailable. Please try again later.',
+      });
     }
   }),
 );
