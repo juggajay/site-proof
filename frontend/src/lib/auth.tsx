@@ -34,7 +34,13 @@ interface User {
   phone?: string;
   role?: string;
   roleInCompany?: string;
-  dashboardRole?: 'project_manager' | 'quality_manager' | 'foreman' | null;
+  dashboardRole?:
+    | 'project_manager'
+    | 'quality_manager'
+    | 'foreman'
+    | 'site_engineer'
+    | 'viewer'
+    | null;
   companyId?: string | null;
   companyName?: string | null;
   hasSubcontractorPortalAccess?: boolean;

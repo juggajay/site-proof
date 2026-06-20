@@ -74,4 +74,21 @@ describe('subcontractor identity helpers', () => {
       }),
     ).toBe('subcontractor');
   });
+
+  it('carries project-scoped read and field roles through route checks', () => {
+    expect(
+      getProjectScopedRole({
+        role: 'member',
+        roleInCompany: 'member',
+        dashboardRole: 'viewer',
+      }),
+    ).toBe('viewer');
+    expect(
+      getProjectScopedRole({
+        role: 'member',
+        roleInCompany: 'member',
+        dashboardRole: 'site_engineer',
+      }),
+    ).toBe('site_engineer');
+  });
 });

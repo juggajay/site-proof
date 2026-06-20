@@ -1,6 +1,11 @@
 import { prisma } from './prisma.js';
 
-export type DashboardRole = 'project_manager' | 'quality_manager' | 'foreman';
+export type DashboardRole =
+  | 'project_manager'
+  | 'quality_manager'
+  | 'foreman'
+  | 'site_engineer'
+  | 'viewer';
 
 const COMPANY_ROLE_TO_DASHBOARD_ROLE: Partial<Record<string, DashboardRole>> = {
   project_manager: 'project_manager',
@@ -14,6 +19,8 @@ const PROJECT_ROLE_PRIORITY: Array<{ role: string; dashboardRole: DashboardRole 
   { role: 'quality_manager', dashboardRole: 'quality_manager' },
   { role: 'site_manager', dashboardRole: 'foreman' },
   { role: 'foreman', dashboardRole: 'foreman' },
+  { role: 'site_engineer', dashboardRole: 'site_engineer' },
+  { role: 'viewer', dashboardRole: 'viewer' },
 ];
 
 const PROJECT_MEMBERSHIP_DASHBOARD_FALLBACK_ROLES = new Set(['member', 'viewer', 'site_engineer']);

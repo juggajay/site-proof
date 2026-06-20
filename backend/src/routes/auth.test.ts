@@ -1074,6 +1074,26 @@ describe('POST /api/auth/login', () => {
       expect(meRes.status).toBe(200);
       expect(meRes.body.user.role).toBe('member');
       expect(meRes.body.user.dashboardRole).toBe('quality_manager');
+
+      await prisma.projectUser.updateMany({
+        where: { projectId: project.id, userId },
+        data: { role: 'viewer' },
+      });
+
+      const viewerLoginRes = await request(app).post('/api/auth/login').send({ email, password });
+      expect(viewerLoginRes.status).toBe(200);
+      expect(viewerLoginRes.body.user.role).toBe('member');
+      expect(viewerLoginRes.body.user.dashboardRole).toBe('viewer');
+
+      await prisma.projectUser.updateMany({
+        where: { projectId: project.id, userId },
+        data: { role: 'site_engineer' },
+      });
+
+      const engineerLoginRes = await request(app).post('/api/auth/login').send({ email, password });
+      expect(engineerLoginRes.status).toBe(200);
+      expect(engineerLoginRes.body.user.role).toBe('member');
+      expect(engineerLoginRes.body.user.dashboardRole).toBe('site_engineer');
     } finally {
       await prisma.projectUser.deleteMany({ where: { userId } });
       await prisma.emailVerificationToken.deleteMany({ where: { userId } });

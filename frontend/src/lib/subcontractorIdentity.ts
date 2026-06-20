@@ -1,6 +1,11 @@
 import { isSubcontractorRole } from './roles';
 
-export type DashboardRole = 'project_manager' | 'quality_manager' | 'foreman';
+export type DashboardRole =
+  | 'project_manager'
+  | 'quality_manager'
+  | 'foreman'
+  | 'site_engineer'
+  | 'viewer';
 
 type RoleUser =
   | {
