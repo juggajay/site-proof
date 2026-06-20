@@ -37,6 +37,7 @@ import {
   syncPrimaryLotSubcontractorAssignment,
 } from './assignmentHelpers.js';
 import { LOT_CREATORS } from './roles.js';
+import { LOT_BUDGET_EDITORS } from './updateFields.js';
 import { prepareClonedLot } from './cloneHelpers.js';
 import {
   buildLotClonedResponse,
@@ -71,6 +72,7 @@ lotCreateRouter.post(
       areaZone,
       structureId,
       structureElement,
+      budgetAmount,
       canCompleteITP,
       itpRequiresVerification,
     } = validation.data;
@@ -89,12 +91,13 @@ lotCreateRouter.post(
       });
     }
 
-    await requireProjectRole(
+    const userProjectRole = await requireProjectRole(
       projectId,
       user,
       LOT_CREATORS,
       'You do not have permission to create lots in this project.',
     );
+    const canSetBudgetAmount = LOT_BUDGET_EDITORS.includes(userProjectRole);
 
     let templateSnapshot: TemplateSnapshot | null = null;
     if (itpTemplateId) {
@@ -134,6 +137,7 @@ lotCreateRouter.post(
           areaZone: areaZone || null,
           structureId: structureId || null, // Feature #854
           structureElement: structureElement || null, // Feature #854
+          ...(canSetBudgetAmount && budgetAmount !== undefined ? { budgetAmount } : {}),
         },
         select: {
           id: true,
@@ -143,6 +147,7 @@ lotCreateRouter.post(
           lotType: true,
           status: true,
           assignedSubcontractorId: true,
+          budgetAmount: true,
           createdAt: true,
         },
       });
@@ -184,6 +189,7 @@ lotCreateRouter.post(
         lotType: lot.lotType,
         status: lot.status,
         assignedSubcontractorId: lot.assignedSubcontractorId,
+        budgetAmount: lot.budgetAmount === null ? null : Number(lot.budgetAmount),
       },
       req,
     });
