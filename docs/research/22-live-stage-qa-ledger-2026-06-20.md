@@ -6,10 +6,13 @@ keep going until the app has been exercised end to end.
 
 ## Current External Blocker
 
-- Email-dependent flows are parked because production Resend is returning
-  `daily_quota_exceeded`.
-- Parked flows: invite emails, magic login links, password reset emails, hold
-  point superintendent emails, notification test emails, and any browser QA that
+- Earlier email-dependent flows were parked because production Resend was
+  returning `daily_quota_exceeded`.
+- Stage 3 did submit a hold-point request to Jay's nominated superintendent
+  email and the API returned success, so at least that send path is accepting
+  mail again. Inbox-read verification was not performed in Stage 3.
+- Still parked until a dedicated email pass: invite emails, magic login links,
+  password reset emails, notification test emails, and any browser QA that
   requires reading an inbox.
 - Disposable inbox APIs are not allowed for this QA work. AVG flagged
   `1secmail.com` from an old Codex process, so future email QA must use Jay's
@@ -86,12 +89,72 @@ Notes for Review:
   but should be watched during mobile QA because it can partially cover bottom
   navigation until accepted/dismissed.
 
+## Stage 3 - Owner Quality Workflow: Lots, ITP, Hold Points, NCR, Evidence
+
+Status: passed, no product fixes required in this stage.
+
+Scope covered:
+- Backend `/health` and `/ready`.
+- Password registration and login for a new owner and an unrelated owner.
+- Company creation and project creation.
+- Project ITP template creation with contractor and superintendent checklist
+  groups.
+- Lot creation with ITP template assignment and automatic ITP instance creation.
+- Hold point prerequisite guard: request-release is blocked before preceding
+  checklist items are complete.
+- ITP completion guard: a hold-point item cannot be completed directly before
+  the hold-point release flow records release attribution.
+- Hold-point request-release to Jay's nominated external superintendent email.
+- Hold-point detail and evidence-package preview.
+- Manual hold-point release with releaser name, organisation, method, date/time,
+  and notes.
+- Verification that the released hold point is reflected back into the ITP
+  completion as `completed` and `verified`, with release organisation present.
+- Standard ITP pass flow after hold-point release.
+- Failed ITP item flow creating an NCR.
+- NCR list filtering by project/lot.
+- Document upload scoped to the lot.
+- NCR evidence attachment, duplicate evidence idempotency, and evidence listing.
+- API guards proving the unrelated owner cannot read the lot ITP, project hold
+  points, NCR, or NCR evidence.
+- Browser verification for desktop lot detail ITP tab, project lots list, hold
+  points page, and NCR list.
+
+Exploration support:
+- Two read-only subagents mapped Stage 3 backend routes, access invariants,
+  frontend routes, selectors, likely failure points, and follow-up tests. They
+  made no edits and did not touch production.
+
+Run evidence:
+- First completed run: `stage3-20260620T094727-5606b`, 47 checks, 1 browser
+  locator failure, 0 product issues. The page was valid; the harness looked for
+  a hold-point item inside a collapsed responsible-party group.
+- Second completed run: `stage3-20260620T094856-9328c`, 47 checks, 1 browser
+  locator failure, 0 product issues. Screenshot confirmed the superintendent
+  group was collapsed intentionally.
+- Final run: `stage3-20260620T095010-36813`, 47 checks, 0 failures, 0 issues,
+  4 screenshots.
+
+Notes for Review:
+- The hold-point email path returned `200` during Stage 3, but the inbox was not
+  inspected in this pass.
+- The lot detail ITP checklist groups items by responsible party. Completed
+  contractor items were visible immediately; superintendent hold-point content
+  required expanding the `superintendent` group. The harness now accounts for
+  that behavior.
+- The failed ITP item stayed visibly linked to `NCR-0001` on the lot detail ITP
+  tab, and the NCR page showed the same failure description.
+- No browser console errors or unexpected network failures were recorded in the
+  final run.
+
 ## Next Stage Candidate
 
-Stage 3 should move into project quality workflows that do not require email:
-lots, ITP templates/instances, ITP item pass/fail, hold-point request/record
-release without external superintendent email, NCR create/evidence/closure, and
-document/evidence attachment behavior.
+Stage 4 should target role-specific workflows and mobile shells:
+foreman `/m/lots/:lotId/itp`, `/m/issues`, `/m/docs`; subcontractor `/p/itps`,
+`/p/lots/:lotId/itp`, `/p/ncrs`, `/p/docs`; classic subcontractor portal
+fallbacks; and permission boundaries for completion controls, hold-point
+visibility, NCR access, and document evidence.
 
-Email-specific hold-point superintendent release should be rerun after Resend
-quota is available again.
+A separate email-focused pass should follow when Jay can confirm inbox receipt:
+invites, magic login, password reset, hold-point public token release, and
+notification emails.
