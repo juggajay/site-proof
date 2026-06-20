@@ -18,6 +18,7 @@ import {
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { logError } from '@/lib/logger';
 import { extractErrorMessage } from '@/lib/errorHandling';
+import { formatProjectUserJoinedDate } from './projectUserDateFormatting';
 
 interface ProjectUser {
   id: string;
@@ -26,7 +27,9 @@ interface ProjectUser {
   fullName: string | null;
   role: string;
   status: string;
-  joinedAt: string;
+  joinedAt?: string | null;
+  invitedAt?: string | null;
+  acceptedAt?: string | null;
 }
 
 const ROLES = [
@@ -332,7 +335,7 @@ export function ProjectUsersPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-sm text-muted-foreground">
-                    {new Date(user.joinedAt).toLocaleDateString('en-AU')}
+                    {formatProjectUserJoinedDate(user)}
                   </td>
                   <td className="px-4 py-3">
                     {user.userId !== currentUser?.id && (
