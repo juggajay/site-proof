@@ -122,7 +122,7 @@ export function DashboardSetupChecklist({
         </Button>
         <p className="mt-2 text-xs text-muted-foreground">
           We&rsquo;ll add a clearly-labelled example project with lots, an ITP, hold points, an NCR,
-          and test results so you can look around with real content. Delete it whenever you like.
+          and test results so you can look around with real content. Archive it whenever you like.
         </p>
       </div>
     </section>
