@@ -657,10 +657,49 @@ Notes for Review:
   may be acceptable for MVP, but it is a product/admin gap to review before
   larger teams onboard.
 
+## Stage 9 - Project Setup, Settings, Areas, and Modules
+
+Scope:
+- Visible-browser owner onboarding into a sacrificial company.
+- Projects empty state, sample project creation, project create modal, project
+  limit behavior, General Settings, Modules, Notifications, standalone Areas,
+  and standalone Project Team.
+
+Findings:
+1. Hold-point minimum notice setting was persisted under the Project Settings UI
+   key but request-release enforcement read a different backend key. Fixed in
+   PR #1003 by reading `hpMinimumNoticeDays`, falling back to the legacy backend
+   key, then defaulting to 1.
+2. Standalone Project Team displayed `Invalid Date` in the Joined column. Fixed
+   in PR #1004 by returning `joinedAt` from the API and adding a defensive UI
+   formatter. Live re-test showed a real joined date.
+3. Sample-project copy said "Delete it whenever you like" even though seeded
+   sample projects contain retained records and should be archived. Fixed in PR
+   #1005.
+
+Run evidence:
+- Visible production run: `stage9-mqmfz0tg`, headed Chromium via gstack browse,
+  3 confirmed production findings, 3 merged fixes, 0 unexpected browser/API
+  errors after excluding deliberate negative-test 400/403 responses.
+- Report artifact:
+  `.gstack/qa-reports/stage9-mqmfz0tg/qa-report.md` inside the QA worktree.
+- Verification:
+  - PR #1003: Backend CI and PR smoke passed.
+  - PR #1004: Backend CI, Frontend CI, and PR smoke passed.
+  - PR #1005: Frontend CI and PR smoke passed.
+
+Notes for Review:
+- The New Project button still opens at the plan limit and rejects only after
+  submit. The message is clear, so this is polish rather than a blocker.
+- Project Areas lets equal start/end chainage reach the backend, then shows a
+  clear inline error. Client-side blocking would save a round trip but is not a
+  correctness issue.
+- Disabled modules hide navigation only; backend route access is not disabled
+  by project module settings. This matches current UI wording.
+
 ## Next Stage Candidate
 
-Stage 9 should target project configuration and operational setup: project
-settings tabs, areas, modules, numbering prefixes, notification preferences,
-hold-point recipients/minimum notice settings, sample project creation, project
-limits, project update/delete guards, and role-specific access across owner,
-project manager, foreman, viewer, subcontractor, and outsider.
+Stage 10 should target role-specific access with separate visible sessions where
+possible: owner/admin/project manager/foreman/viewer/subcontractor/outsider
+navigation, direct-route access, project settings mutations, project team
+mutations, lot/ITP access, and subcontractor portal redirects.
