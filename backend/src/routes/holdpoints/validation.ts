@@ -13,6 +13,7 @@ import { AppError } from '../../lib/AppError.js';
 export interface HPProjectSettings {
   hpRecipients?: Array<{ email: string }>;
   hpApprovalRequirement?: string;
+  hpMinimumNoticeDays?: number;
   holdPointMinimumNoticeDays?: number;
 }
 
@@ -75,6 +76,10 @@ export function parseHPProjectSettings(rawSettings: string | null | undefined): 
   } catch (_error) {
     return {};
   }
+}
+
+export function getHoldPointMinimumNoticeDays(settings: HPProjectSettings): number {
+  return settings.hpMinimumNoticeDays ?? settings.holdPointMinimumNoticeDays ?? 1;
 }
 
 export function requiresSuperintendentApproval(settings: HPProjectSettings): boolean {

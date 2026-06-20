@@ -14,6 +14,7 @@ import {
   parseNotificationEmailList,
   parseHPDefaultRecipients,
   parseHPProjectSettings,
+  getHoldPointMinimumNoticeDays,
   requestReleaseSchema,
 } from './validation.js';
 import { parseScheduledDateInput } from './dateParsing.js';
@@ -217,7 +218,7 @@ holdPointRequestReleaseRouter.post(
     const projectSettings = parseHPProjectSettings(lot.project.settings);
 
     // Default minimum notice period is 1 working day
-    const minimumNoticeDays = projectSettings.holdPointMinimumNoticeDays ?? 1;
+    const minimumNoticeDays = getHoldPointMinimumNoticeDays(projectSettings);
 
     if (scheduledDateValue && minimumNoticeDays > 0 && !noticePeriodOverride) {
       const today = new Date();
