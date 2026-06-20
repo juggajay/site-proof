@@ -8,6 +8,7 @@ import {
   testStatusLabels,
   nextStatusMap,
   nextStatusButtonLabels,
+  canAdvanceTestStatus,
   isEnterResultsStep,
   isTestOverdue,
   getDaysSince,
@@ -231,7 +232,7 @@ export const TestResultsTable = React.memo(function TestResultsTable({
                             {'\uD83D\uDDA8\uFE0F'}
                           </button>
                         )}
-                        {nextStatusMap[test.status] &&
+                        {canAdvanceTestStatus(test) &&
                           (isEnterResultsStep(test.status) ? (
                             // Ticket T2: record the result before entering.
                             <button

@@ -74,6 +74,7 @@ describe('buildHoldPointPrerequisites', () => {
         isHoldPoint: false,
         isCompleted: true,
         isNotApplicable: false,
+        verificationStatus: 'verified',
         isVerified: true,
         completedAt: COMPLETED_AT,
       },
@@ -84,6 +85,7 @@ describe('buildHoldPointPrerequisites', () => {
         isHoldPoint: false,
         isCompleted: false,
         isNotApplicable: false,
+        verificationStatus: 'none',
         isVerified: false,
         completedAt: null,
       },
@@ -94,6 +96,7 @@ describe('buildHoldPointPrerequisites', () => {
         isHoldPoint: true, // pointType === 'hold_point'
         isCompleted: false,
         isNotApplicable: false,
+        verificationStatus: undefined,
         isVerified: false,
         completedAt: undefined, // no completion record
       },
@@ -171,6 +174,35 @@ describe('getIncompletePrerequisites', () => {
     expect(getIncompletePrerequisites(prerequisites)).toEqual([]); // N/A i2 does not block
   });
 
+  it('blocks preceding items that are completed but still pending verification', () => {
+    const preceding = getPrecedingChecklistItems(items, 4);
+    const completions: PrerequisiteCompletion[] = [
+      {
+        checklistItemId: 'i1',
+        status: 'completed',
+        verificationStatus: 'pending_verification',
+        completedAt: COMPLETED_AT,
+      },
+      {
+        checklistItemId: 'i2',
+        status: 'not_applicable',
+        verificationStatus: 'none',
+        completedAt: COMPLETED_AT,
+      },
+      {
+        checklistItemId: 'i3',
+        status: 'completed',
+        verificationStatus: 'verified',
+        completedAt: COMPLETED_AT,
+      },
+    ];
+
+    const prerequisites = buildHoldPointPrerequisites(preceding, completions);
+    const incomplete = getIncompletePrerequisites(prerequisites);
+
+    expect(incomplete.map((p) => p.id)).toEqual(['i1']);
+  });
+
   it('still blocks on a failed preceding item', () => {
     const preceding = getPrecedingChecklistItems(items, 4);
     const completions: PrerequisiteCompletion[] = [
@@ -218,6 +250,7 @@ describe('buildIncompletePrerequisiteDetails', () => {
     for (const detail of details) {
       expect(detail).not.toHaveProperty('isCompleted');
       expect(detail).not.toHaveProperty('isVerified');
+      expect(detail).not.toHaveProperty('verificationStatus');
       expect(detail).not.toHaveProperty('completedAt');
     }
   });

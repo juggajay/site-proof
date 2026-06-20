@@ -53,7 +53,7 @@ describe('evidence readiness helpers', () => {
           canConform: false,
           blockingReasons: [
             'ITP checklist incomplete (1/3 items completed)',
-            'ITP requires a test, but no passing verified test result was recorded',
+            'ITP requires a matching passing verified test result',
           ],
           prerequisites: {
             itpAssigned: true,

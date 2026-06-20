@@ -4,6 +4,7 @@ import { Link2, Check, Printer } from 'lucide-react';
 import { toast } from '@/components/ui/toaster';
 import type { NCRDetailData } from '@/lib/pdfGenerator';
 import { getStatusBadgeColor } from '../constants';
+import { canManageNcrClosure } from '../ncrClosureAccess';
 import type { NcrSortDirection, NcrSortField } from '../ncrRegisterSort';
 import type { NCR, UserRole } from '../types';
 import { logError } from '@/lib/logger';
@@ -52,6 +53,8 @@ function NCRTableInner({
   onClose,
   onConcession,
 }: NCRTableProps) {
+  const canCloseNcr = canManageNcrClosure(userRole);
+
   const handlePrintPdf = async (ncr: NCR) => {
     const pdfData: NCRDetailData = {
       ncr: {
@@ -390,7 +393,7 @@ function NCRTableInner({
                       )}
 
                     {/* Close Button */}
-                    {ncr.status === 'verification' && (
+                    {ncr.status === 'verification' && canCloseNcr && (
                       <button
                         onClick={() => onClose(ncr)}
                         disabled={actionLoading || (ncr.severity === 'major' && !ncr.qmApprovedAt)}
@@ -410,7 +413,7 @@ function NCRTableInner({
                     )}
 
                     {/* Close with Concession Button */}
-                    {(ncr.status === 'verification' || ncr.status === 'rectification') && (
+                    {ncr.status === 'verification' && canCloseNcr && (
                       <button
                         onClick={() => onConcession(ncr)}
                         disabled={actionLoading || (ncr.severity === 'major' && !ncr.qmApprovedAt)}

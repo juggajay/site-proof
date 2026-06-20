@@ -25,10 +25,12 @@
  * its own honest hold-point state, so it composes the shared primitives directly.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { apiFetch, ApiError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { logError } from '@/lib/logger';
 import { toast } from '@/components/ui/toaster';
+import { queryKeys } from '@/lib/queryKeys';
 import { cacheITPChecklist, getCachedITPChecklist, getPendingSyncCount } from '@/lib/offlineDb';
 import type { ITPCompletion, ITPInstance } from '@/pages/lots/types';
 import { mergeCompletionIntoInstance } from '@/pages/lots/lib/itpCompletionState';
@@ -67,6 +69,7 @@ export function useShellItpRun(
   lotId: string | undefined,
 ): ShellItpRun {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [instance, setInstance] = useState<ITPInstance | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -75,15 +78,26 @@ export function useShellItpRun(
   const [updatingItemId, setUpdatingItemId] = useState<string | null>(null);
   const updatingRef = useRef<string | null>(null);
 
-  // N/A + FAIL reuse the exact mobile actions; the shell owns no page NCR state,
-  // so the post-failure refresh is a no-op (the NCR is created server-side and
-  // the run simply advances).
+  const refreshShellCloseoutReaders = useCallback(() => {
+    if (!projectId) return;
+    void Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.foremanBadges(projectId) }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.lots(projectId) }),
+      queryClient.invalidateQueries({ queryKey: ['lot'] }),
+      queryClient.invalidateQueries({ queryKey: ['lot-readiness'] }),
+    ]);
+  }, [projectId, queryClient]);
+
+  // N/A + FAIL reuse the exact mobile actions; refresh shell badges/lots after
+  // either action because the due-count and lot hub CTA depend on ITP state.
   const noopRefresh = useCallback(async () => {}, []);
   const { mobileMarkNA, mobileMarkFailed } = useItpMobileActions({
     itpInstance: instance,
     setItpInstance: setInstance,
     updatingCompletionRef: updatingRef,
     setUpdatingCompletion: setUpdatingItemId,
+    refetchReadiness: refreshShellCloseoutReaders,
+    refetchConformStatus: refreshShellCloseoutReaders,
     refreshNcrsAfterFailure: noopRefresh,
   });
 
@@ -163,6 +177,7 @@ export function useShellItpRun(
           existingNotes: notes,
         });
         setInstance((prev) => mergeCompletionIntoInstance(prev, result.completion));
+        refreshShellCloseoutReaders();
         if (result.status === 'queued') {
           setPendingCount(await getPendingSyncCount());
           toast({
@@ -184,7 +199,7 @@ export function useShellItpRun(
         setUpdatingItemId(null);
       }
     },
-    [instance, lotId],
+    [instance, lotId, refreshShellCloseoutReaders],
   );
 
   const markNA = useCallback(

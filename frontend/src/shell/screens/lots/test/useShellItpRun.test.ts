@@ -6,6 +6,9 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { createElement } from 'react';
+import type { ReactNode } from 'react';
 import type { ITPInstance } from '@/pages/lots/types';
 
 vi.mock('@/lib/api', async (importOriginal) => {
@@ -64,10 +67,20 @@ const instance: ITPInstance = {
 
 afterEach(() => vi.clearAllMocks());
 
+function renderShellHook() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  });
+  const wrapper = ({ children }: { children: ReactNode }) =>
+    createElement(QueryClientProvider, { client: queryClient }, children);
+
+  return renderHook(() => useShellItpRun('proj-1', 'lot-1'), { wrapper });
+}
+
 describe('useShellItpRun', () => {
   it('loads the ITP instance from the API', async () => {
     mockApiFetch.mockResolvedValueOnce({ instance });
-    const { result } = renderHook(() => useShellItpRun('proj-1', 'lot-1'));
+    const { result } = renderShellHook();
     await waitFor(() => expect(result.current.instance?.id).toBe('inst-1'));
   });
 
@@ -89,7 +102,7 @@ describe('useShellItpRun', () => {
       },
     });
 
-    const { result } = renderHook(() => useShellItpRun('proj-1', 'lot-1'));
+    const { result } = renderShellHook();
     await waitFor(() => expect(result.current.instance).not.toBeNull());
 
     let ok = false;
@@ -111,7 +124,7 @@ describe('useShellItpRun', () => {
 
   it('markNA / markFailed delegate to the existing mobile actions', async () => {
     mockApiFetch.mockResolvedValueOnce({ instance });
-    const { result } = renderHook(() => useShellItpRun('proj-1', 'lot-1'));
+    const { result } = renderShellHook();
     await waitFor(() => expect(result.current.instance).not.toBeNull());
 
     await act(async () => {

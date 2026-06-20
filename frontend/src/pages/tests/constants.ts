@@ -56,6 +56,12 @@ export const ENTER_RESULTS_STATUSES = new Set(['requested', 'at_lab', 'results_r
 
 export const isEnterResultsStep = (status: string): boolean => ENTER_RESULTS_STATUSES.has(status);
 
+export const canAdvanceTestStatus = (test: Pick<TestResult, 'status' | 'certificateDocId'>) => {
+  const nextStatus = nextStatusMap[test.status];
+  if (!nextStatus) return false;
+  return nextStatus !== 'verified' || Boolean(test.certificateDocId);
+};
+
 // Ticket T2: client-side mirror of the backend RESULT_REQUIRED gate so the Enter
 // Results form blocks submit (and the toast matches) before the request is sent.
 export const hasRecordedResult = (test: {

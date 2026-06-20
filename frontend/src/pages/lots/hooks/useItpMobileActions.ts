@@ -10,6 +10,8 @@ interface UseItpMobileActionsParams {
   setItpInstance: Dispatch<SetStateAction<ITPInstance | null>>;
   updatingCompletionRef: MutableRefObject<string | null>;
   setUpdatingCompletion: Dispatch<SetStateAction<string | null>>;
+  refetchReadiness: () => void;
+  refetchConformStatus: () => void;
   refreshNcrsAfterFailure: () => Promise<void>;
 }
 
@@ -18,6 +20,8 @@ export function useItpMobileActions({
   setItpInstance,
   updatingCompletionRef,
   setUpdatingCompletion,
+  refetchReadiness,
+  refetchConformStatus,
   refreshNcrsAfterFailure,
 }: UseItpMobileActionsParams) {
   // Returns true on success so the mobile sheet can close; false when the write
@@ -40,6 +44,8 @@ export function useItpMobileActions({
       });
 
       setItpInstance((prev) => mergeCompletionIntoInstance(prev, data.completion));
+      refetchReadiness();
+      refetchConformStatus();
       toast({
         title: 'Item marked as N/A',
         description: 'The checklist item has been marked as not applicable.',
@@ -78,6 +84,8 @@ export function useItpMobileActions({
       );
 
       setItpInstance((prev) => mergeCompletionIntoInstance(prev, data.completion));
+      refetchReadiness();
+      refetchConformStatus();
 
       // Refresh page-owned NCR state.
       await refreshNcrsAfterFailure();

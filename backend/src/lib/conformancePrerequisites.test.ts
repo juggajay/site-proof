@@ -124,6 +124,20 @@ describe('buildItpChecklistCompleteness', () => {
     ]);
   });
 
+  it('blocks completed items that are still pending verification', () => {
+    const result = buildItpChecklistCompleteness(items, [
+      { checklistItemId: 'i1', status: 'completed', verificationStatus: 'verified' },
+      { checklistItemId: 'i2', status: 'completed', verificationStatus: 'pending_verification' },
+      { checklistItemId: 'i3', status: 'completed', verificationStatus: 'none' },
+    ]);
+
+    expect(result.completed).toBe(false);
+    expect(result.completedCount).toBe(2);
+    expect(result.incompleteItems).toEqual([
+      { id: 'i2', description: 'Second', pointType: 'witness_point' },
+    ]);
+  });
+
   it('is not complete for an empty checklist (matches existing semantics)', () => {
     const result = buildItpChecklistCompleteness([], []);
 
@@ -221,8 +235,17 @@ function makeLot(opts: {
   status?: string;
   checklistItems: ChecklistItemFixture[];
   templateSnapshot?: string | null;
-  completionStatuses: Record<string, string>;
-  testResults?: { id: string; testType: string; passFail: string; status: string }[];
+  completionStatuses: Record<
+    string,
+    string | { status: string; verificationStatus?: string | null }
+  >;
+  testResults?: {
+    id: string;
+    testType: string;
+    passFail: string;
+    status: string;
+    itpChecklistItemId?: string | null;
+  }[];
   ncrs?: { id: string; ncrNumber: string; description: string; status: string }[];
 }) {
   return {
@@ -240,7 +263,8 @@ function makeLot(opts: {
       },
       completions: Object.entries(opts.completionStatuses).map(([checklistItemId, status]) => ({
         checklistItemId,
-        status,
+        status: typeof status === 'string' ? status : status.status,
+        verificationStatus: typeof status === 'string' ? 'none' : status.verificationStatus,
       })),
     },
     testResults: opts.testResults ?? [],
@@ -297,6 +321,13 @@ const PASSING_VERIFIED_TEST = {
   status: 'verified',
 };
 
+const WRONG_TYPE_PASSING_VERIFIED_TEST = {
+  id: 'test-2',
+  testType: 'Slump',
+  passFail: 'pass',
+  status: 'verified',
+};
+
 describe('checkConformancePrerequisites — gate wiring (mocked Prisma)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -322,6 +353,7 @@ describe('checkConformancePrerequisites — gate wiring (mocked Prisma)', () => 
           testResults: {
             select: {
               id: true,
+              itpChecklistItemId: true,
               testType: true,
               passFail: true,
               status: true,
@@ -406,8 +438,48 @@ describe('checkConformancePrerequisites — gate wiring (mocked Prisma)', () => 
     expect(result.prerequisites?.hasPassingTest).toBe(false);
     expect(result.canConform).toBe(false);
     expect(result.blockingReasons).toContain(
-      'ITP requires a test, but no passing verified test result was recorded',
+      'ITP requires a matching passing verified test result',
     );
+  });
+
+  it('blocks a test-point lot when the only verified passing test is the wrong test type', async () => {
+    mocks.lotFindUnique.mockResolvedValue(
+      makeLot({
+        checklistItems: [NON_TEST_ITEM, TEST_ITEM],
+        completionStatuses: { i1: 'completed', i2: 'completed' },
+        testResults: [WRONG_TYPE_PASSING_VERIFIED_TEST],
+      }),
+    );
+
+    const result = await checkConformancePrerequisites('lot-1');
+
+    expect(result.prerequisites?.testRequired).toBe(true);
+    expect(result.prerequisites?.hasPassingTest).toBe(false);
+    expect(result.canConform).toBe(false);
+    expect(result.blockingReasons).toContain(
+      'ITP requires a matching passing verified test result',
+    );
+  });
+
+  it('accepts a verified passing test linked directly to the required ITP checklist item', async () => {
+    mocks.lotFindUnique.mockResolvedValue(
+      makeLot({
+        checklistItems: [NON_TEST_ITEM, TEST_ITEM],
+        completionStatuses: { i1: 'completed', i2: 'completed' },
+        testResults: [
+          {
+            ...WRONG_TYPE_PASSING_VERIFIED_TEST,
+            itpChecklistItemId: 'i2',
+          },
+        ],
+      }),
+    );
+
+    const result = await checkConformancePrerequisites('lot-1');
+
+    expect(result.prerequisites?.hasPassingTest).toBe(true);
+    expect(result.canConform).toBe(true);
+    expect(result.blockingReasons).toEqual([]);
   });
 
   it('conforms a test-point lot once a passing verified test is recorded (regression)', async () => {
@@ -425,6 +497,24 @@ describe('checkConformancePrerequisites — gate wiring (mocked Prisma)', () => 
     expect(result.prerequisites?.hasPassingTest).toBe(true);
     expect(result.canConform).toBe(true);
     expect(result.blockingReasons).toEqual([]);
+  });
+
+  it('blocks conformance when a completed item is still pending verification', async () => {
+    mocks.lotFindUnique.mockResolvedValue(
+      makeLot({
+        checklistItems: [NON_TEST_ITEM],
+        completionStatuses: {
+          i1: { status: 'completed', verificationStatus: 'pending_verification' },
+        },
+        testResults: [],
+      }),
+    );
+
+    const result = await checkConformancePrerequisites('lot-1');
+
+    expect(result.prerequisites?.itpCompleted).toBe(false);
+    expect(result.canConform).toBe(false);
+    expect(result.blockingReasons).toContain('ITP checklist incomplete (0/1 items completed)');
   });
 
   // ---- N/A behaviour (owner decision 2026-06-11) ----

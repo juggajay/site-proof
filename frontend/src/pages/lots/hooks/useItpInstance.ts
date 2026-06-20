@@ -209,6 +209,8 @@ export function useItpInstance({
     setItpInstance,
     updatingCompletionRef,
     setUpdatingCompletion,
+    refetchReadiness,
+    refetchConformStatus,
     refreshNcrsAfterFailure,
   });
 
@@ -275,6 +277,8 @@ export function useItpInstance({
       });
 
       setItpInstance((prev) => mergeCompletionIntoInstance(prev, result.completion));
+      refetchReadiness();
+      refetchConformStatus();
 
       if (result.status === 'queued') {
         // Update offline pending count, then surface the honest offline toast.
@@ -350,6 +354,8 @@ export function useItpInstance({
 
       // Update the completions in state
       setItpInstance((prev) => mergeCompletionIntoInstance(prev, data.completion));
+      refetchReadiness();
+      refetchConformStatus();
       toast({
         title: 'Item marked as N/A',
         description: 'The checklist item has been marked as not applicable.',
