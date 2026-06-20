@@ -118,6 +118,10 @@ const createLotSchema = z
     areaZone: optionalNullableTextSchema('areaZone', MAX_SHORT_TEXT_LENGTH),
     structureId: optionalNullableTextSchema('structureId', MAX_SHORT_TEXT_LENGTH),
     structureElement: optionalNullableTextSchema('structureElement', MAX_SHORT_TEXT_LENGTH),
+    budgetAmount: finiteNumberSchema('budgetAmount')
+      .nonnegative('budgetAmount cannot be negative')
+      .optional()
+      .nullable(),
     canCompleteITP: z.boolean().optional(),
     itpRequiresVerification: z.boolean().optional(),
   })

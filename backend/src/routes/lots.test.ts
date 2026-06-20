@@ -130,12 +130,20 @@ describe('Lots API', () => {
           lotNumber: 'LOT-001',
           description: 'Test lot description',
           activityType: 'Earthworks',
+          budgetAmount: 12345,
         });
 
       expect(res.status).toBe(201);
       expect(res.body.lot).toBeDefined();
       expect(res.body.lot.lotNumber).toBe('LOT-001');
+      expect(Number(res.body.lot.budgetAmount)).toBe(12345);
       lotId = res.body.lot.id;
+
+      const persistedLot = await prisma.lot.findUnique({
+        where: { id: lotId },
+        select: { budgetAmount: true },
+      });
+      expect(Number(persistedLot?.budgetAmount)).toBe(12345);
 
       const auditLog = await prisma.auditLog.findFirst({
         where: {
@@ -152,6 +160,7 @@ describe('Lots API', () => {
         lotNumber: 'LOT-001',
         activityType: 'Earthworks',
         status: 'not_started',
+        budgetAmount: 12345,
       });
     });
 
@@ -182,6 +191,59 @@ describe('Lots API', () => {
           where: { projectId, userId },
           data: { role: 'admin' },
         });
+      }
+    });
+
+    it('does not let site managers set commercial budget values while creating lots', async () => {
+      const siteManagerEmail = `lots-create-site-manager-${Date.now()}@example.com`;
+      const siteManagerRes = await request(app).post('/api/auth/register').send({
+        email: siteManagerEmail,
+        password: 'SecureP@ssword123!',
+        fullName: 'Lots Create Site Manager',
+        tosAccepted: true,
+      });
+      const siteManagerToken = siteManagerRes.body.token;
+      const siteManagerUserId = siteManagerRes.body.user.id;
+      const lotNumber = `LOT-SITE-MGR-BUDGET-${Date.now()}`;
+
+      await prisma.user.update({
+        where: { id: siteManagerUserId },
+        data: { companyId, roleInCompany: 'viewer' },
+      });
+      await prisma.projectUser.create({
+        data: {
+          projectId,
+          userId: siteManagerUserId,
+          role: 'site_manager',
+          status: 'active',
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .post('/api/lots')
+          .set('Authorization', `Bearer ${siteManagerToken}`)
+          .send({
+            projectId,
+            lotNumber,
+            description: 'Site manager create should ignore budget',
+            activityType: 'Earthworks',
+            budgetAmount: 54321,
+          });
+
+        expect(res.status).toBe(201);
+        expect(res.body.lot.budgetAmount).toBeNull();
+
+        const persistedLot = await prisma.lot.findUnique({
+          where: { id: res.body.lot.id },
+          select: { budgetAmount: true },
+        });
+        expect(persistedLot?.budgetAmount).toBeNull();
+      } finally {
+        await prisma.lot.deleteMany({ where: { projectId, lotNumber } });
+        await prisma.projectUser.deleteMany({ where: { projectId, userId: siteManagerUserId } });
+        await prisma.emailVerificationToken.deleteMany({ where: { userId: siteManagerUserId } });
+        await prisma.user.delete({ where: { id: siteManagerUserId } }).catch(() => {});
       }
     });
 
