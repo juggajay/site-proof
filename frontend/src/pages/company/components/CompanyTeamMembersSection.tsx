@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Loader2, Mail, RefreshCw, UserPlus, Users } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 import { extractErrorMessage } from '@/lib/errorHandling';
+import { queryKeys } from '@/lib/queryKeys';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -35,6 +37,7 @@ function getMemberStatus(member: CompanyMember): 'active' | 'pending' {
 }
 
 export function CompanyTeamMembersSection({ currentUserId }: CompanyTeamMembersSectionProps) {
+  const queryClient = useQueryClient();
   const [members, setMembers] = useState<CompanyMember[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(true);
   const [membersError, setMembersError] = useState('');
@@ -115,6 +118,7 @@ export function CompanyTeamMembersSection({ currentUserId }: CompanyTeamMembersS
           : `${email} is already active in your company.`,
       );
       setInviteForm(defaultInviteForm);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.companySettings });
     } catch (error) {
       setInviteError(extractErrorMessage(error, 'Failed to invite company member'));
     } finally {

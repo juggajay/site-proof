@@ -246,12 +246,421 @@ Notes for Review:
   limiter. The current user experience is not catastrophic, but this is worth a
   separate auth-rate-limit tuning pass before large customer rollouts.
 
+## Stage 5a - Commercial Dockets
+
+Status: passed, no product fixes required in this slice.
+
+Scope covered:
+- Backend `/health` and `/ready`.
+- Password registration/login for owner, subcontractor, and unrelated outsider
+  accounts.
+- Owner company/project setup.
+- Subcontractor invitation, acceptance, and portal module enablement.
+- Subcontractor-assigned lot plus same-project unassigned lot.
+- Approved and pending employee roster records.
+- Approved and pending plant records.
+- Empty docket submit guard: blocked before any labour/plant entries.
+- Labour-without-lot-allocation submit guard.
+- Same-project unassigned lot allocation guard.
+- Pending employee and pending plant blocked from docket entries.
+- Submitted docket approval access guards:
+  - subbie cannot approve its own docket.
+  - unrelated outsider cannot approve the docket.
+- Adjusted approval guard: reduced hours require a nonblank adjustment reason.
+- Reduced approval success:
+  - submitted labour hours remain visible at entry level.
+  - submitted labour cost remains `400`.
+  - approved labour hours persist as `6.5`.
+  - approved labour cost persists as `325`.
+  - submitted plant hours remain visible at entry level.
+  - submitted plant cost remains `450`.
+  - approved plant hours persist as `2`.
+  - approved plant cost persists as `300`.
+- Subbie detail API reads the approved cost totals, preventing the old
+  submitted-vs-approved dollar mismatch.
+- Approved docket list preserves reduced hours and approved dollar totals.
+- Approved docket rejects further entry edits.
+- Query flow:
+  - owner queries a pending docket.
+  - subbie sees the query notes.
+  - subbie responds and resubmits.
+  - response is stored in docket notes.
+- Reject flow:
+  - owner rejects a pending docket with reason.
+  - subbie docket history shows the rejection state and reason preview.
+- Subbie can list its own dockets.
+- Unrelated outsider cannot list project dockets or read the approved docket.
+- Visible browser verification for:
+  - owner desktop `/projects/:projectId/dockets`.
+  - owner desktop pending docket actions.
+  - mobile approver view of project dockets.
+  - subbie portal dashboard.
+  - subbie docket history.
+  - subbie approved docket labour tab.
+  - subbie approved docket plant tab.
+  - subbie resubmitted queried docket.
+  - unrelated outsider deep link to project dockets, blocked before leakage by
+    the company-setup gate.
+
+Exploration support:
+- Two read-only subagents mapped dockets and claims route/API/browser
+  expectations. They made no edits and did not touch production.
+
+Run evidence:
+- First run: `stage5a-20260620T105101-ee0f4`, stopped on a harness expectation.
+  The harness treated `totalLabourSubmitted`/`totalPlantSubmitted` as hours.
+  Current code intentionally uses those legacy-named fields as submitted dollar
+  totals; entry rows expose the submitted hours.
+- Second run: `stage5a-20260620T105324-026b9`, 127 checks, 8 browser assertion
+  failures. Screenshot review showed assertion problems, not product failures:
+  status labels matched broad absent-action strings, plant cost was on the Plant
+  tab, query response text is stored in notes but not shown after resubmission,
+  and the outsider was blocked by onboarding rather than the access-denied page.
+- Final visible production rerun: `stage5a-20260620T105711-08001`, 135 checks,
+  0 failures, 0 issues, 9 screenshots.
+
+Notes for Review:
+- The dockets flow is in better shape than the earlier audit suggested. The
+  reduced approved dollar totals are now persisted and rendered back to the
+  subbie on approved docket detail.
+- `totalLabourSubmitted` and `totalPlantSubmitted` are legacy-named submitted
+  cost fields. This is confusing for future developers, but current UI helpers
+  intentionally treat them as money and use entry rows / `labourHours` /
+  `plantHours` for hours.
+- Product polish opportunity: the subbie approved docket detail shows adjusted
+  hours/costs and struck-through submitted values, but it does not show the
+  adjustment reason. Since the backend stores the reason, showing it on the
+  approved detail would make the commercial audit trail clearer.
+- The visible QA browser still shows the email-verification banner on generated
+  test users. This is expected until the email-focused pass verifies account
+  verification delivery.
+
+## Stage 5b - Commercial Claims and Payments
+
+Status: passed, no product fixes required in this slice.
+
+Scope covered:
+- Backend `/health` and `/ready`.
+- Password registration/login for owner, subcontractor, and unrelated outsider
+  accounts.
+- Owner company/project setup with WA jurisdiction to exercise project-state
+  claim due-date data.
+- Subcontractor invitation, acceptance, and portal module enablement.
+- Lot setup for claim edge cases:
+  - conformed budgeted main lot.
+  - conformed no-rate lot.
+  - budgeted but not-conformed lot.
+  - conformed budgeted lot claimed at 100%.
+- Claim readiness:
+  - budgeted conformed lot appears with 100% remaining claimable percentage.
+  - commercial budget value is visible to owner.
+  - conformed/no-rate lot remains blocked by missing budget.
+- Claim creation guards:
+  - legacy `lotIds` payload is rejected because `percentageComplete` is now
+    mandatory per selected lot.
+  - no-rate lot is rejected with `RATE_REQUIRED`.
+  - not-conformed lot is rejected.
+  - subcontractor claim creation is rejected.
+- Commercial access guards:
+  - subcontractor cannot list claims.
+  - subcontractor cannot read claim readiness.
+  - subcontractor cannot fetch claim evidence packages.
+  - subcontractor cannot run claim completeness checks.
+  - unrelated outsider cannot list or read project claims.
+- Cumulative claiming:
+  - main lot claimed at 50%, producing `$5,000` from a `$10,000` budget.
+  - full lot claimed at 100%, producing `$3,000` from a `$3,000` budget.
+  - 100% claimed lot flips to `claimed`.
+  - later attempt to claim another 60% on the already-50%-claimed main lot is
+    rejected with `OVER_CLAIM`.
+- Evidence surfaces:
+  - claim evidence package returns the claim, lot, generated summary, and total
+    claimed amount.
+  - claim completeness check returns the readiness summary keys used by the UI.
+- Workflow transitions:
+  - payment before certification is rejected.
+  - draft claim can be submitted.
+  - submitted claim can be disputed with notes.
+  - reduced certification without variation notes is rejected.
+  - disputed claim can be certified at `$4,500` with variation notes.
+  - certification detail read-back includes certified amount, variation notes,
+    and certifier display name.
+  - partial payment of `$2,000` moves the claim to `partially_paid` with
+    `$2,500` outstanding.
+  - final payment of `$2,500` moves the claim to `paid`, outstanding `$0`.
+  - both payment history entries remain in the response.
+  - fully paid claim rejects further generic updates and extra payment attempts.
+- Claims list read-back:
+  - total claimed remains `$5,000`.
+  - certified amount is `$4,500`.
+  - paid amount is `$4,500`.
+  - project state is `WA` for due-date calculation.
+- Visible browser verification for:
+  - owner desktop `/projects/:projectId/claims`.
+  - owner desktop New Claim modal.
+  - owner mobile claims page.
+  - subcontractor portal dashboard with no commercial claims/costs leakage.
+  - subcontractor direct deep link to project claims, blocked by Access Denied.
+  - unrelated outsider deep link to project claims, blocked before leakage by
+    the company-setup gate.
+
+Run evidence:
+- First run: `stage5b-20260620T110916-9e98d`, stopped on a setup assumption.
+  The harness sent `budgetAmount` in the create-lot payload, but the real create
+  endpoint does not persist budget; owner budget edit is a separate PATCH flow.
+- Second run: `stage5b-20260620T111022-35eef`, 126 checks, 2 harness failures.
+  Screenshot review showed the owner mobile H1 wrapped over two lines and did
+  not match the exact `"Progress Claims"` text assertion, while the page itself
+  was correct.
+- Final visible production rerun: `stage5b-20260620T111258-f455c`, 127 checks,
+  0 failures, 0 issues, 6 screenshots.
+
+Notes for Review:
+- Claims/payment workflow passed the money and access-boundary checks that
+  matter most for paying customers: partial claim math, cumulative percentage
+  guards, reduced certification notes, partial/final payment history, and
+  subcontractor/outsider denial.
+- The current lot create API silently strips `budgetAmount`; budgets are set by
+  `PATCH /api/lots/:id`. That is valid today, but it is an easy place for future
+  QA harnesses or integrations to assume the wrong thing.
+- Desktop claim list rendered certification audit detail directly under the
+  paid status: certifier name plus variation notes. This is good evidence for
+  the commercial audit trail.
+- Generated test users still show the email-verification banner in visible
+  screenshots. This remains expected until the separate email-focused pass.
+
 ## Next Stage Candidate
 
-Stage 5 should target commercial workflows end to end: dockets, docket
-adjustment reasons, subcontractor docket visibility, claims/payment-claim
-evidence packages, claim approvals/rejections, and commercial access guards.
+Stage 6 should target documents/photos/reports/export surfaces end to end:
+document upload and categorisation, project documents, subcontractor shared
+documents, drawing/document access guards, claim CSV/evidence-package downloads,
+report pages, storage URL handling, and public/private leakage checks.
 
 A separate email-focused pass should follow when Jay can confirm inbox receipt:
 invites, magic login, password reset, hold-point public token release, and
 notification emails.
+
+## Stage 6 - Documents, Drawings, Photos Shell, and Reports
+
+Status: passed, no blocking product fixes required in this slice.
+
+Scope covered:
+- Backend `/health` and `/ready`.
+- Password registration/login for owner, foreman, subcontractor, and unrelated
+  outsider accounts.
+- Owner company/project setup, company-member foreman invite, and project-team
+  foreman assignment.
+- Subcontractor invitation, acceptance, and documents-only portal module
+  enablement.
+- Lot setup for document access edges:
+  - assigned lot linked to the subcontractor.
+  - unassigned lot not linked to the subcontractor.
+- Document uploads:
+  - owner project-level photo with category, tags, GPS, and captured timestamp.
+  - owner assigned-lot photo.
+  - owner unassigned-lot photo.
+  - owner `itp_evidence` category photo.
+  - subcontractor assigned-lot photo.
+- Document write/access guards:
+  - subcontractor project-level upload rejected.
+  - subcontractor unassigned-lot upload rejected.
+  - subcontractor `itp_evidence` upload rejected while ITP portal module is off.
+  - unrelated outsider document list/download rejected.
+  - subcontractor cannot list `itp_evidence` without the ITP module.
+  - subcontractor can see project-level shared documents, assigned-lot documents,
+    and their own assigned-lot uploads.
+  - subcontractor cannot see unassigned-lot or hidden ITP evidence documents.
+  - list rows omit raw `fileUrl`.
+- Document lifecycle:
+  - owner patches document metadata.
+  - subcontractor cannot mutate owner-uploaded document.
+  - subcontractor can patch their own assigned-lot document.
+  - authenticated file streaming works for owner and scoped subcontractor.
+  - deleted document later returns not found.
+  - owner uploads a new document version and version listing includes it.
+  - manual multi-label classification persists.
+- Public/signed document access:
+  - owner creates an inline signed URL.
+  - public signed-token validation succeeds.
+  - public signed URL streams the PNG.
+  - invalid token validation returns invalid.
+  - missing token download is blocked.
+  - subcontractor cannot create a signed URL for an unassigned document.
+- Drawings:
+  - owner uploads a PDF drawing.
+  - duplicate drawing number/revision is rejected.
+  - owner drawing register includes the uploaded drawing.
+  - subcontractor and outsider drawing lists are rejected.
+  - owner patches drawing status/title.
+  - owner supersedes revision A with revision B.
+  - current drawing set includes the superseding revision and excludes the
+    superseded revision.
+  - owner deletes a temporary drawing.
+- Reports:
+  - owner can fetch summary, lot-status, NCR, test, diary, and claims reports.
+  - invalid test report date range is rejected.
+  - subcontractor and outsider report access is rejected.
+  - scheduled reports are blocked for the new basic-tier company.
+- Visible browser verification for:
+  - owner desktop documents page.
+  - owner desktop drawing register.
+  - owner desktop reports page.
+  - real foreman mobile `/m/photos` shell.
+  - subcontractor mobile documents shell.
+  - subcontractor direct drawing/report deep links, both blocked.
+  - unrelated outsider deep link to project documents, blocked by setup gate.
+
+Run evidence:
+- First run: `stage6-20260620T112816-ec98a`, stopped on a harness assumption.
+  The drawing supersede endpoint correctly returns the new drawing with
+  `supersededById: null`; the script expected the field to be omitted.
+- Second run: `stage6-20260620T112858-f1186`, 127 checks, 4 failures, all
+  harness/coverage issues:
+  - desktop documents screenshot clearly showed `Safety`; the locator chose a
+    hidden/earlier duplicate text match.
+  - `/m/photos` was being tested with an owner account even though it is a
+    foreman shell route.
+- Third run: `stage6-20260620T113448-194c4`, stopped on a harness comparison.
+  The backend normalised the generated foreman email to lowercase.
+- Final visible production rerun: `stage6-20260620T113512-e8996`, 131 checks,
+  0 failures, 0 issues, 8 screenshots.
+
+Notes for Review:
+- The document security boundaries passed the important leak checks: no raw
+  `fileUrl` in list rows, scoped signed URL creation, invalid/missing public
+  token handling, subcontractor module gating, and outsider denial.
+- The drawings workflow passed revision lifecycle checks: duplicate guard,
+  supersede, current-set exclusion of old revision, and subcontractor denial.
+- The reports endpoints are owner/internal surfaces; subcontractor/outsider
+  denial held.
+- The real foreman mobile photos shell loaded with the expected unfiled count and
+  photo grid once the harness used an actual foreman/project-team member.
+- Visual polish opportunity: the subbie mobile documents shell can feel cramped
+  with very long filenames in narrow viewports. The card truncates, but the
+  screenshot showed the content pushed hard against the viewport edge. Worth
+  revisiting when the new subbie shell polish pass runs.
+
+## Stage 7 - Auth, Email-Link Surfaces, Notifications, and MFA
+
+Status: passed for safe browser/API coverage, no blocking product fixes required
+in this slice.
+
+Scope covered in a visible browser:
+- Login page, password login, magic-link request UI, forgot-password request UI.
+- Register page and unverified-account login path.
+- Email verification page with no token and with an invalid token.
+- Reset password page with an invalid token.
+- Magic-link consume page with an invalid token, including URL token stripping.
+- Onboarding company setup for a fresh account.
+- Settings page after onboarding, including Email Notifications and MFA/security
+  sections.
+- Notifications page.
+- Public invalid hold-point release link.
+- Public invalid subcontractor invitation link.
+
+Supporting API checks:
+- Generic resend-verification, forgot-password, and magic-link request responses
+  for known and unknown emails.
+- Invalid and missing verification/reset/magic-token handling.
+- Email preferences load/update, invalid timing normalization, disabled
+  test-email rejection, re-enable, and test-email send to a sacrificial QA
+  account.
+- Email service status.
+- Production diagnostic queue endpoints are blocked.
+- Notifications list and unread count.
+- MFA status, setup, TOTP verify, wrong-password disable rejection, and
+  correct-password disable.
+
+Run evidence:
+- Visible production run: `stage7-mqmakp8w`, 47 checks, 0 confirmed failures,
+  0 product findings, 16 screenshots, 0 unexpected browser/API errors after
+  excluding deliberate negative-test 400/401/403/404/429 responses.
+- Report artifact:
+  `.gstack/qa-reports/stage7-mqmakp8w/qa-report.md` inside the QA worktree.
+
+Notes for Review:
+- Before company setup, `/settings` redirects to `/onboarding`; after company
+  setup it is reachable. This is valid gating.
+- Self-serve registration signs users in before email verification and shows an
+  in-app verification nudge. Confirm this is the desired paid-user policy.
+- MFA setup/verify/disable passed on a sacrificial account. MFA login challenge
+  checks hit the production auth rate limit after the broad auth-negative test
+  sweep, so those should be rerun as a focused check after cooldown rather than
+  repeatedly hammering `/api/auth/login`.
+- Real inbox receipt and click-through for verification, magic link, password
+  reset, invite, and hold-point emails were not proven in this run. API/UI
+  request paths were verified, and public invalid-link handling was verified.
+
+## Next Stage Candidate
+
+Stage 8 should target company administration and team/project membership:
+company settings, company member invites, role changes, project team invites,
+seat limits, company leave/delete edge cases, audit-log visibility, settings
+exports, and the access split between owner/admin/project manager/foreman/site
+engineer/subcontractor.
+
+## Stage 8 - Company Admin, Project Team, Audit, and Settings
+
+Status: two confirmed frontend findings, both fixed in this branch. Live
+production will continue showing them until this branch is merged and deployed.
+
+Scope covered in a visible browser:
+- Owner Company Settings load, team table, usage/billing/transfer sections.
+- Invite Company Member modal and pending-member row.
+- Owner project team page.
+- Owner project settings page.
+- Owner audit-log page.
+- Owner settings export/danger-control page.
+- Project-manager Company Settings access check.
+
+Supporting API checks:
+- Company members list.
+- Project creation.
+- Project team list, unknown-user invite guard, existing company-member invite,
+  duplicate guard, role update, self-role-change guard, remove member, and
+  missing-remove guard.
+- Owner cannot leave company.
+- Audit-log list and audit-log users endpoints.
+- Active non-admin member role boundaries:
+  - can read assigned project users.
+  - cannot mutate project team.
+  - cannot read company members.
+  - cannot read global audit logs.
+- Data export returns JSON metadata for the current user without saving content.
+- Owner account deletion is blocked.
+- Disposable non-owner can leave company and loses company-member admin access.
+
+Findings fixed:
+1. Company Settings user-usage counters stayed stale after inviting a member.
+   The team row appeared immediately, but `User Usage` stayed on the old count
+   until a page refresh. Fix: `CompanyTeamMembersSection` now invalidates
+   `queryKeys.companySettings` after a successful invite.
+2. Project managers could open editable Company Settings even though backend
+   company mutations are owner/admin-only. Fix: added `COMPANY_ADMIN_ROLES =
+   ['owner', 'admin']` and used it for `/company-settings` only, while keeping
+   `project_manager` in the broader project-admin role group.
+
+Run evidence:
+- Visible production run: `stage8-mqmawyrr`, 38 checks, 2 confirmed production
+  findings, 2 branch fixes, 8 screenshots, 0 unexpected browser/API errors after
+  excluding deliberate negative-test 400/401/403/404 responses.
+- Report artifact:
+  `.gstack/qa-reports/stage8-mqmawyrr/qa-report.md` inside the QA worktree.
+- Verification:
+  - `npm run test:unit -- src/pages/company/components/CompanyTeamMembersSection.test.tsx src/appRouteRoles.test.ts`
+    passed.
+  - `npm run type-check` passed.
+
+Notes for Review:
+- Company member removal by an admin is not implemented. The only company-member
+  removal path in this surface is a non-owner leaving their own company. This
+  may be acceptable for MVP, but it is a product/admin gap to review before
+  larger teams onboard.
+
+## Next Stage Candidate
+
+Stage 9 should target project configuration and operational setup: project
+settings tabs, areas, modules, numbering prefixes, notification preferences,
+hold-point recipients/minimum notice settings, sample project creation, project
+limits, project update/delete guards, and role-specific access across owner,
+project manager, foreman, viewer, subcontractor, and outsider.
