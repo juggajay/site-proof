@@ -19,6 +19,20 @@ type DocumentAccessRecord = {
   category?: string | null;
 };
 
+const GENERIC_DELETE_BLOCKED_DOCUMENT_MESSAGES: Record<string, string> = {
+  test_certificate:
+    'Test result certificates must be replaced or removed from the test result workflow.',
+  drawing: 'Drawing files must be deleted from the drawing register.',
+};
+
+function getGenericDeleteBlockedMessage(documentType: string | null | undefined): string | null {
+  if (!documentType) {
+    return null;
+  }
+
+  return GENERIC_DELETE_BLOCKED_DOCUMENT_MESSAGES[documentType] ?? null;
+}
+
 type CreateDocumentDeleteRouterDependencies = {
   prisma: PrismaClient;
   parseDocumentRouteParam: (value: unknown, fieldName: string) => string;
@@ -78,6 +92,13 @@ export function createDocumentDeleteRouter({
         throw AppError.forbidden('Access denied');
       }
       await requireDocumentMutationAccess(req.user!, document);
+
+      const blockedMessage = getGenericDeleteBlockedMessage(document.documentType);
+      if (blockedMessage) {
+        throw AppError.conflict(blockedMessage, {
+          documentType: document.documentType,
+        });
+      }
 
       // Audit log for document deletion
       await createAuditLog({

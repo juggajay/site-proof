@@ -871,10 +871,77 @@ Notes for Review:
   and an NCR remained open. A later cross-domain workflow stage should cover the
   full path from ITP assignment through NCR closure and final lot conformance.
 
+## Stage 13 - Documents, Drawings, Storage Access, and Evidence Payloads
+
+Scope:
+- Visible-browser production owner setup, project/lot creation, document upload
+  surfaces, document list/access denial, signed URL behavior, drawing revision
+  handling, test-certificate document access, public hold-point evidence payloads,
+  and generic document deletion safety.
+- Static/code audit with two focused subagents covering backend storage routes
+  and frontend document/drawing surfaces.
+
+Findings:
+1. Public hold-point release evidence packages exposed raw storage locators in
+   checklist attachments and photo entries. Fixed in this stage by sanitizing
+   public responses only; authenticated evidence-package responses are unchanged.
+2. Generic `DELETE /api/documents/:documentId` could delete test-result
+   certificate documents and could attempt to delete drawing-register documents.
+   Fixed in this stage by rejecting `test_certificate` and `drawing` document
+   types from the generic delete path with HTTP 409, leaving those files under
+   their owning workflows.
+3. Production subcontractor invite creation returned HTTP 503
+   `EXTERNAL_SERVICE_ERROR`, blocking live subcontractor document-visibility
+   checks. This is the same operational email-delivery class seen in Stage 11.
+4. Signed download URLs remain valid until expiry after permission changes. This
+   should be documented as the intended short-lived-link policy or tightened
+   later if stricter revocation is required.
+5. Project-wide documents are visible to subcontractors with Documents portal
+   access. This needs product-policy confirmation.
+6. Follow-up hardening remains for drawing revision concurrency/blank revisions,
+   project-scoped drawing manager controls, mobile lot-documents empty-state
+   semantics, and the claim submit modal's "download package" wording.
+
+Live test results:
+- Production backend `/ready` responded healthy.
+- Owner registration, company creation, project creation, and lot creation
+  succeeded.
+- Project-wide, assigned-lot, unassigned-lot, and test-result document uploads
+  succeeded and upload responses did not expose raw file URLs.
+- Unauthenticated document listing and direct file-route access were denied.
+- Owner signed URL creation worked; invalid tokens were denied; excessive
+  expiry was rejected; an outsider could not create a signed URL.
+- Drawing duplicate number/revision upload was rejected. Superseding created
+  revision B, and the current drawing set excluded superseded revision A.
+- Current drawing and test certificate access used the signed-download path.
+- Subcontractor visibility checks stopped at invite creation because production
+  email delivery returned 503.
+
+Run evidence:
+- Report artifact:
+  `.gstack/qa-reports/stage13-documents-storage-20260621/qa-report.md` inside
+  the QA worktree.
+- Local focused regressions:
+  - `npm test -- src/routes/documents/deleteRoutes.test.ts` passed, 2 tests.
+  - `npm test -- src/routes/holdpoints/evidencePackage.test.ts` passed, 16 tests.
+  - Combined focused run passed, 18 tests.
+- Backend type-check passed.
+- Backend lint passed.
+- Fallow changed-code audit passed: no introduced dead code, complexity, or
+  duplication.
+
+Notes for Review:
+- The DB-backed document route regression cases were added to
+  `documents.test.ts`, but the suite could not be run locally because this
+  worktree has no safe local `DATABASE_URL`. The safety setup correctly refused
+  to use production.
+- After this PR lands, rerun the owner-side production probe to verify the
+  deployed public evidence payload no longer includes storage locators and that
+  generic deletion rejects domain-managed documents.
+
 ## Next Stage Candidate
 
-Stage 13 should target documents, drawings, storage access, and evidence
-packages: document upload/download/delete, signed URL behavior, drawing revision
-uniqueness, test certificate document access, claim/hold-point evidence package
-links, subcontractor document visibility, and whether public storage URLs still
-create login-bypassing access risks.
+Stage 14 should target cross-domain closeout from lot to claim: assign an ITP,
+complete standard/witness/hold-point items, release the hold point, attach and
+verify test results, raise and close an NCR from a failed result, confirm lot
+conformance, then confirm claim readiness and evidence package behavior.

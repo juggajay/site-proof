@@ -2549,6 +2549,72 @@ describe('Documents API', () => {
   describe('DELETE /api/documents/:documentId', () => {
     let deleteDocId: string;
 
+    async function createLocalDomainDocument({
+      directory,
+      uploadSubdirectory,
+      documentType,
+      category,
+      filename,
+    }: {
+      directory: string;
+      uploadSubdirectory: string;
+      documentType: string;
+      category: string;
+      filename: string;
+    }) {
+      const storedPath = writeTestUpload(directory, filename);
+      const document = await prisma.document.create({
+        data: {
+          projectId,
+          documentType,
+          category,
+          filename,
+          fileUrl: `/uploads/${uploadSubdirectory}/${filename}`,
+          fileSize: validPdfBytes.length,
+          mimeType: 'application/pdf',
+          uploadedById: userId,
+        },
+      });
+
+      return { document, storedPath };
+    }
+
+    async function cleanupDomainDocumentFixture({
+      documentId,
+      drawingId,
+      testResultId,
+      storedPath,
+    }: {
+      documentId: string | null;
+      drawingId?: string | null;
+      testResultId?: string | null;
+      storedPath: string;
+    }) {
+      if (testResultId) {
+        await prisma.testResult.deleteMany({ where: { id: testResultId } });
+      }
+      if (drawingId) {
+        await prisma.drawing.deleteMany({ where: { id: drawingId } });
+      }
+      if (documentId) {
+        await prisma.document.deleteMany({ where: { id: documentId } });
+      }
+      if (fs.existsSync(storedPath)) fs.unlinkSync(storedPath);
+    }
+
+    async function expectGenericDocumentDeleteRejected(
+      documentId: string,
+      expectedMessage: string,
+    ) {
+      const res = await request(app)
+        .delete(`/api/documents/${documentId}`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(409);
+      expect(res.body.error).toMatchObject({ code: 'CONFLICT' });
+      expect(String(res.body.error.message)).toContain(expectedMessage);
+    }
+
     beforeAll(async () => {
       // Create document to delete
       const doc = await prisma.document.create({
@@ -2583,59 +2649,97 @@ describe('Documents API', () => {
       expect(res.status).toBe(404);
     });
 
-    it('should delete certificate and drawing backed local files', async () => {
-      const cases = [
-        {
-          dir: certificateUploadDir,
-          subdirectory: 'certificates',
-          documentType: 'test_certificate',
-          category: 'Test Results',
-          filename: `delete-certificate-${Date.now()}.pdf`,
-        },
-        {
-          dir: drawingUploadDir,
-          subdirectory: 'drawings',
-          documentType: 'drawing',
-          category: 'Drawings',
-          filename: `delete-drawing-${Date.now()}.pdf`,
-        },
-      ];
-      const remainingDocumentIds: string[] = [];
-      const createdPaths: string[] = [];
+    it('rejects generic deletion of test result certificate documents', async () => {
+      const filename = `delete-certificate-${Date.now()}.pdf`;
+      const storedPath = path.join(certificateUploadDir, filename);
+      let documentIdToCleanup: string | null = null;
+      let testResultIdToCleanup: string | null = null;
 
       try {
-        for (const item of cases) {
-          const storedPath = writeTestUpload(item.dir, item.filename);
-          createdPaths.push(storedPath);
+        const { document: certificateDocument } = await createLocalDomainDocument({
+          directory: certificateUploadDir,
+          uploadSubdirectory: 'certificates',
+          documentType: 'test_certificate',
+          category: 'Test Results',
+          filename,
+        });
+        documentIdToCleanup = certificateDocument.id;
 
-          const localDocument = await prisma.document.create({
-            data: {
-              projectId,
-              documentType: item.documentType,
-              category: item.category,
-              filename: item.filename,
-              fileUrl: `/uploads/${item.subdirectory}/${item.filename}`,
-              fileSize: validPdfBytes.length,
-              mimeType: 'application/pdf',
-              uploadedById: userId,
-            },
-          });
-          remainingDocumentIds.push(localDocument.id);
+        const testResult = await prisma.testResult.create({
+          data: {
+            projectId,
+            testType: 'Compaction',
+            passFail: 'pass',
+            certificateDocId: certificateDocument.id,
+          },
+        });
+        testResultIdToCleanup = testResult.id;
 
-          const res = await request(app)
-            .delete(`/api/documents/${localDocument.id}`)
-            .set('Authorization', `Bearer ${authToken}`);
-
-          expect(res.status).toBe(204);
-          expect(fs.existsSync(storedPath)).toBe(false);
-          expect(await prisma.document.findUnique({ where: { id: localDocument.id } })).toBeNull();
-          remainingDocumentIds.splice(remainingDocumentIds.indexOf(localDocument.id), 1);
-        }
+        await expectGenericDocumentDeleteRejected(certificateDocument.id, 'test result workflow');
+        expect(
+          await prisma.document.findUnique({ where: { id: certificateDocument.id } }),
+        ).not.toBeNull();
+        expect(
+          await prisma.testResult.findUnique({
+            where: { id: testResult.id },
+            select: { certificateDocId: true },
+          }),
+        ).toEqual({ certificateDocId: certificateDocument.id });
+        expect(fs.existsSync(storedPath)).toBe(true);
       } finally {
-        await prisma.document.deleteMany({ where: { id: { in: remainingDocumentIds } } });
-        for (const filePath of createdPaths) {
-          if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-        }
+        await cleanupDomainDocumentFixture({
+          documentId: documentIdToCleanup,
+          testResultId: testResultIdToCleanup,
+          storedPath,
+        });
+      }
+    });
+
+    it('rejects generic deletion of drawing register documents', async () => {
+      const filename = `delete-drawing-${Date.now()}.pdf`;
+      const storedPath = path.join(drawingUploadDir, filename);
+      let documentIdToCleanup: string | null = null;
+      let drawingIdToCleanup: string | null = null;
+
+      try {
+        const { document: drawingDocument } = await createLocalDomainDocument({
+          directory: drawingUploadDir,
+          uploadSubdirectory: 'drawings',
+          documentType: 'drawing',
+          category: 'Drawings',
+          filename,
+        });
+        documentIdToCleanup = drawingDocument.id;
+
+        const drawing = await prisma.drawing.create({
+          data: {
+            projectId,
+            drawingNumber: `QA-${Date.now()}`,
+            title: 'Deletion guard drawing',
+            revision: 'A',
+            status: 'current',
+            documentId: drawingDocument.id,
+          },
+        });
+        drawingIdToCleanup = drawing.id;
+
+        await expectGenericDocumentDeleteRejected(drawingDocument.id, 'drawing register');
+        expect(
+          await prisma.document.findUnique({ where: { id: drawingDocument.id } }),
+        ).not.toBeNull();
+        expect(
+          await prisma.drawing.findUnique({
+            where: { id: drawing.id },
+            select: { documentId: true },
+          }),
+        ).toEqual({ documentId: drawingDocument.id });
+        expect(fs.existsSync(storedPath)).toBe(true);
+      } finally {
+        await cleanupDomainDocumentFixture({
+          documentId: documentIdToCleanup,
+          drawingId: drawingIdToCleanup,
+          storedPath,
+        });
       }
     });
 

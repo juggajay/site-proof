@@ -222,6 +222,7 @@ export function mapHoldPointEvidencePhotos(
 type EvidenceChecklistEntry = ReturnType<typeof buildHoldPointEvidenceChecklist>[number];
 type EvidenceTestResultEntry = ReturnType<typeof mapHoldPointEvidenceTestResults>[number];
 type EvidencePhotoEntry = ReturnType<typeof mapHoldPointEvidencePhotos>[number];
+type JsonRecord = Record<string, unknown>;
 
 export function buildHoldPointEvidenceSummary(
   checklist: EvidenceChecklistEntry[],
@@ -272,12 +273,55 @@ export function buildHoldPointEvidencePackageResponse<TEvidencePackage>(
   return { evidencePackage };
 }
 
+function stripFileUrl<TValue>(value: TValue): TValue {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return value;
+  }
+
+  const rest = { ...(value as JsonRecord) };
+  delete rest.fileUrl;
+  return rest as TValue;
+}
+
+function sanitizePublicChecklistEntry<TValue>(entry: TValue): TValue {
+  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+    return entry;
+  }
+
+  const record = entry as JsonRecord;
+  return {
+    ...record,
+    attachments: Array.isArray(record.attachments)
+      ? record.attachments.map((attachment) => stripFileUrl(attachment))
+      : record.attachments,
+  } as TValue;
+}
+
+function sanitizePublicEvidencePackage<TEvidencePackage>(
+  evidencePackage: TEvidencePackage,
+): TEvidencePackage {
+  if (!evidencePackage || typeof evidencePackage !== 'object' || Array.isArray(evidencePackage)) {
+    return evidencePackage;
+  }
+
+  const record = evidencePackage as JsonRecord;
+  return {
+    ...record,
+    checklist: Array.isArray(record.checklist)
+      ? record.checklist.map((entry) => sanitizePublicChecklistEntry(entry))
+      : record.checklist,
+    photos: Array.isArray(record.photos)
+      ? record.photos.map((photo) => stripFileUrl(photo))
+      : record.photos,
+  } as TEvidencePackage;
+}
+
 export function buildPublicHoldPointEvidencePackageResponse<TEvidencePackage, TTokenInfo>(
   evidencePackage: TEvidencePackage,
   tokenInfo: TTokenInfo,
 ) {
   return {
-    evidencePackage,
+    evidencePackage: sanitizePublicEvidencePackage(evidencePackage),
     tokenInfo,
     isPublicAccess: true,
   };
