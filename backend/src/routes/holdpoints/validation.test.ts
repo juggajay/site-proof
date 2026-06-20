@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { AppError } from '../../lib/AppError.js';
 import {
+  getHoldPointMinimumNoticeDays,
   MAX_ID_LENGTH,
   MAX_RELEASE_TOKEN_LENGTH,
   parseHoldPointRouteParam,
@@ -66,6 +67,20 @@ describe('parseHoldPointRouteParam (pure, DB-free)', () => {
     // The token bound is intentionally larger than the default id bound, so the
     // long (valid) token above only passes because the custom maxLength is used.
     expect(longToken.length).toBeGreaterThan(MAX_ID_LENGTH);
+  });
+});
+
+describe('getHoldPointMinimumNoticeDays (pure, DB-free)', () => {
+  it('uses the project-settings UI key before the legacy backend key', () => {
+    expect(getHoldPointMinimumNoticeDays({ hpMinimumNoticeDays: 5 })).toBe(5);
+    expect(getHoldPointMinimumNoticeDays({ holdPointMinimumNoticeDays: 3 })).toBe(3);
+    expect(
+      getHoldPointMinimumNoticeDays({
+        hpMinimumNoticeDays: 2,
+        holdPointMinimumNoticeDays: 5,
+      }),
+    ).toBe(2);
+    expect(getHoldPointMinimumNoticeDays({})).toBe(1);
   });
 });
 

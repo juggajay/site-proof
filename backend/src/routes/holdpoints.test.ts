@@ -479,6 +479,58 @@ describe('Hold Points API', () => {
         await cleanupRequestReleaseLot(lot.id);
       }
     });
+
+    it('honours minimum notice days saved by project settings UI', async () => {
+      clearEmailQueue();
+      const lot = await createRequestReleaseLot('ui-minimum-notice');
+      const originalProject = await prisma.project.findUniqueOrThrow({
+        where: { id: projectId },
+        select: { settings: true, workingDays: true },
+      });
+      const scheduledDate = new Date();
+      scheduledDate.setDate(scheduledDate.getDate() + 1);
+      scheduledDate.setHours(9, 0, 0, 0);
+
+      await prisma.project.update({
+        where: { id: projectId },
+        data: {
+          settings: JSON.stringify({ hpMinimumNoticeDays: 5 }),
+          workingDays: '0,1,2,3,4,5,6',
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .post('/api/holdpoints/request-release')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            lotId: lot.id,
+            itpChecklistItemId: checklistItemId,
+            scheduledDate: scheduledDate.toISOString(),
+            notificationSentTo: 'notice-reviewer@example.com',
+          });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe('NOTICE_PERIOD_WARNING');
+        expect(res.body.error.details.minimumNoticeDays).toBe(5);
+        expect(res.body.error.message).toContain('minimum 5 working days notice');
+        await expect(
+          prisma.holdPoint.count({
+            where: { lotId: lot.id, itpChecklistItemId: checklistItemId },
+          }),
+        ).resolves.toBe(0);
+        expect(getQueuedEmails()).toHaveLength(0);
+      } finally {
+        await prisma.project.update({
+          where: { id: projectId },
+          data: {
+            settings: originalProject.settings,
+            workingDays: originalProject.workingDays,
+          },
+        });
+        await cleanupRequestReleaseLot(lot.id);
+      }
+    });
   });
 
   describe('POST /api/holdpoints/:id/release', () => {
