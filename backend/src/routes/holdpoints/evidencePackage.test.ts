@@ -169,6 +169,69 @@ describe('hold point evidence-package response helpers', () => {
       isPublicAccess: true,
     });
   });
+
+  it('strips raw storage locators from public checklist attachments and photos', () => {
+    const evidencePackage = {
+      holdPoint: { id: 'hp-3' },
+      checklist: [
+        {
+          sequenceNumber: 1,
+          attachments: [
+            {
+              id: 'att-1',
+              filename: 'release-photo.jpg',
+              fileUrl: 'supabase://documents/project-id/release-photo.jpg',
+              caption: 'release evidence',
+            },
+          ],
+        },
+      ],
+      photos: [
+        {
+          id: 'photo-1',
+          filename: 'release-photo.jpg',
+          fileUrl: 'https://storage.example.com/public/release-photo.jpg',
+          caption: 'release evidence',
+          uploadedAt: UPLOADED_AT,
+        },
+      ],
+    };
+    const tokenInfo = { recipientEmail: 'qa@example.com', canRelease: true };
+
+    expect(buildPublicHoldPointEvidencePackageResponse(evidencePackage, tokenInfo)).toEqual({
+      evidencePackage: {
+        holdPoint: { id: 'hp-3' },
+        checklist: [
+          {
+            sequenceNumber: 1,
+            attachments: [
+              {
+                id: 'att-1',
+                filename: 'release-photo.jpg',
+                caption: 'release evidence',
+              },
+            ],
+          },
+        ],
+        photos: [
+          {
+            id: 'photo-1',
+            filename: 'release-photo.jpg',
+            caption: 'release evidence',
+            uploadedAt: UPLOADED_AT,
+          },
+        ],
+      },
+      tokenInfo,
+      isPublicAccess: true,
+    });
+    expect(evidencePackage.checklist[0].attachments[0].fileUrl).toBe(
+      'supabase://documents/project-id/release-photo.jpg',
+    );
+    expect(evidencePackage.photos[0].fileUrl).toBe(
+      'https://storage.example.com/public/release-photo.jpg',
+    );
+  });
 });
 
 describe('mapHoldPointEvidenceTestResults', () => {
