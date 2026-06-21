@@ -418,7 +418,7 @@ export function HomeScreen() {
           description="Lots assigned to your crew"
           chip={assignedLots.length > 0 ? `${assignedLots.length} lots` : undefined}
           chipOk={assignedLots.length > 0}
-          onPress={() => navigate('/p/work')}
+          onPress={() => navigate(`/p/work${currentProjectQuery}`)}
           ariaLabel={`My Work${assignedLots.length > 0 ? ` — ${assignedLots.length} lots` : ''}`}
         />
       )}
@@ -429,7 +429,7 @@ export function HomeScreen() {
           icon={ClipboardCheck}
           title="Inspections"
           description="ITP checks on your lots"
-          onPress={() => navigate('/p/itps')}
+          onPress={() => navigate(`/p/itps${currentProjectQuery}`)}
           ariaLabel="Inspections"
         />
       )}
@@ -440,7 +440,7 @@ export function HomeScreen() {
           icon={FlaskConical}
           title="Holds & Tests"
           description="Hold points, test results"
-          onPress={() => navigate('/p/quality')}
+          onPress={() => navigate(`/p/quality${currentProjectQuery}`)}
           ariaLabel="Holds and Tests"
         />
       )}
@@ -451,7 +451,7 @@ export function HomeScreen() {
           icon={Flag}
           title="NCRs"
           description="Non-conformances on your lots"
-          onPress={() => navigate('/p/ncrs')}
+          onPress={() => navigate(`/p/ncrs${currentProjectQuery}`)}
           ariaLabel="NCRs"
         />
       )}
@@ -462,7 +462,7 @@ export function HomeScreen() {
           icon={FileText}
           title="Documents"
           description="Specs & drawings shared with you"
-          onPress={() => navigate('/p/docs')}
+          onPress={() => navigate(`/p/docs${currentProjectQuery}`)}
           ariaLabel="Documents"
         />
       )}
@@ -472,7 +472,7 @@ export function HomeScreen() {
         icon={Building2}
         title="My Company"
         description="Crew, plant & rates"
-        onPress={() => navigate('/p/company')}
+        onPress={() => navigate(myCompanyLink)}
         ariaLabel="My Company"
       />
     </ShellScreen>

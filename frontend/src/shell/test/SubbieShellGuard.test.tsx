@@ -9,7 +9,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { SubbieShellGuard } from '../SubbieShellGuard';
 
 vi.mock('../shellFlag', async (importOriginal) => {
@@ -23,10 +23,20 @@ vi.mock('../shellFlag', async (importOriginal) => {
 import { useSubbieShellActive } from '../shellFlag';
 const mockUseSubbieShellActive = useSubbieShellActive as ReturnType<typeof vi.fn>;
 
-function renderWithRouter(active: boolean) {
+function ShellHomeProbe() {
+  const location = useLocation();
+  return (
+    <div data-testid="subbie-shell-home">
+      Subbie Shell Home
+      <span data-testid="shell-location">{`${location.pathname}${location.search}`}</span>
+    </div>
+  );
+}
+
+function renderWithRouter(active: boolean, initialEntry = '/subcontractor-portal') {
   mockUseSubbieShellActive.mockReturnValue(active);
   return render(
-    <MemoryRouter initialEntries={['/subcontractor-portal']}>
+    <MemoryRouter initialEntries={[initialEntry]}>
       <Routes>
         <Route
           path="/subcontractor-portal"
@@ -36,7 +46,7 @@ function renderWithRouter(active: boolean) {
             </SubbieShellGuard>
           }
         />
-        <Route path="/p" element={<div data-testid="subbie-shell-home">Subbie Shell Home</div>} />
+        <Route path="/p" element={<ShellHomeProbe />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -51,6 +61,11 @@ describe('SubbieShellGuard', () => {
     renderWithRouter(true);
     expect(screen.getByTestId('subbie-shell-home')).toBeInTheDocument();
     expect(screen.queryByTestId('classic-dashboard')).not.toBeInTheDocument();
+  });
+
+  it('preserves the selected project query when redirecting into the shell', () => {
+    renderWithRouter(true, '/subcontractor-portal?projectId=project-2');
+    expect(screen.getByTestId('shell-location')).toHaveTextContent('/p?projectId=project-2');
   });
 
   it('renders the classic dashboard when the subbie shell is inactive (?shell=off / desktop)', () => {

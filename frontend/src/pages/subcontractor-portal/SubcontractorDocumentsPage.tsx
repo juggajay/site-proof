@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, FolderOpen, AlertCircle, FileText, ExternalLink } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
@@ -59,11 +59,20 @@ function getCategoryIcon(category: string | null | undefined) {
 
 export function SubcontractorDocumentsPage() {
   const { user } = useAuth();
-  const { data: company, isLoading: companyLoading } = useQuery({
-    queryKey: queryKeys.portalCompanies(user?.id),
+  const [searchParams] = useSearchParams();
+  const requestedProjectId = searchParams.get('projectId');
+  const {
+    data: company,
+    isLoading: companyLoading,
+    error: companyError,
+  } = useQuery({
+    queryKey: [...queryKeys.portalCompanies(user?.id), requestedProjectId ?? 'default'],
     queryFn: async () => {
+      const query = requestedProjectId
+        ? `?projectId=${encodeURIComponent(requestedProjectId)}`
+        : '';
       const res = await apiFetch<{ company: SubcontractorCompany }>(
-        '/api/subcontractors/my-company',
+        `/api/subcontractors/my-company${query}`,
       );
       return res.company;
     },
@@ -86,7 +95,12 @@ export function SubcontractorDocumentsPage() {
     enabled: !!user?.id && !!company?.projectId && canViewDocuments,
   });
 
-  const loading = companyLoading || (canViewDocuments && docsLoading);
+  const loading = companyLoading || (!companyError && canViewDocuments && docsLoading);
+  const portalBackLink = company?.projectId
+    ? `/subcontractor-portal?projectId=${encodeURIComponent(company.projectId)}`
+    : requestedProjectId
+      ? `/subcontractor-portal?projectId=${encodeURIComponent(requestedProjectId)}`
+      : '/subcontractor-portal';
 
   // Group by category
   const groupedDocs = documents.reduce(
@@ -114,19 +128,18 @@ export function SubcontractorDocumentsPage() {
     );
   }
 
-  if (!canViewDocuments) {
-    return <PortalAccessDenied moduleName="Documents" />;
-  }
-
-  if (error) {
+  if (companyError || error) {
     return (
       <div className="container max-w-2xl mx-auto p-4">
-        <div className="flex items-start gap-3 p-4 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive">
+        <div
+          role="alert"
+          className="flex items-start gap-3 p-4 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive"
+        >
           <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
-          <p>{extractErrorMessage(error, 'Failed to load documents')}</p>
+          <p>{extractErrorMessage(companyError ?? error, 'Failed to load documents')}</p>
         </div>
         <Link
-          to="/subcontractor-portal"
+          to={portalBackLink}
           className="inline-flex items-center gap-2 mt-4 px-4 py-2 border border-border rounded-lg hover:bg-muted/50 transition-colors text-foreground"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -136,14 +149,15 @@ export function SubcontractorDocumentsPage() {
     );
   }
 
+  if (!canViewDocuments) {
+    return <PortalAccessDenied moduleName="Documents" backTo={portalBackLink} />;
+  }
+
   return (
     <div className="container max-w-2xl mx-auto p-4 pb-20 md:pb-4 space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Link
-          to="/subcontractor-portal"
-          className="p-2 rounded-lg hover:bg-muted transition-colors"
-        >
+        <Link to={portalBackLink} className="p-2 rounded-lg hover:bg-muted transition-colors">
           <ArrowLeft className="h-5 w-5 text-muted-foreground" />
         </Link>
         <div>

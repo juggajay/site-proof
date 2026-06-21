@@ -548,7 +548,11 @@ export function SubcontractorDashboard() {
         </div>
       </div>
 
-      <PortalQuickLinks company={company} myCompanyLink={myCompanyLink} />
+      <PortalQuickLinks
+        company={company}
+        currentProjectQuery={currentProjectQuery}
+        myCompanyLink={myCompanyLink}
+      />
     </div>
   );
 }

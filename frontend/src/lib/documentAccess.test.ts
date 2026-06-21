@@ -120,7 +120,16 @@ describe('document access URLs', () => {
       signedUrl: '/api/documents/download/document-1?token=fixture',
       expiresAt: new Date(Date.now() + 60_000).toISOString(),
     });
-    const openSpy = vi.spyOn(window, 'open').mockReturnValueOnce(null).mockReturnValueOnce(null);
+    const fallbackWindow = {
+      closed: false,
+      close: vi.fn(),
+      location: { href: 'about:blank' },
+      opener: window,
+    } as unknown as Window;
+    const openSpy = vi
+      .spyOn(window, 'open')
+      .mockReturnValueOnce(null)
+      .mockReturnValueOnce(fallbackWindow);
 
     await openDocumentAccessUrl('document-1');
 
@@ -130,6 +139,19 @@ describe('document access URLs', () => {
       '/api/documents/download/document-1?token=fixture',
       '_blank',
       'noopener,noreferrer',
+    );
+    expect(fallbackWindow.opener).toBeNull();
+  });
+
+  it('rejects when the browser blocks both document window attempts', async () => {
+    apiFetchMock.mockResolvedValue({
+      signedUrl: '/api/documents/download/document-1?token=fixture',
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    });
+    vi.spyOn(window, 'open').mockReturnValue(null);
+
+    await expect(openDocumentAccessUrl('document-1')).rejects.toThrow(
+      'Your browser blocked the document window',
     );
   });
 });

@@ -240,6 +240,7 @@ router.use(
     parseDocumentContentDisposition,
     getOptionalQueryString,
     validateSignedUrlToken,
+    canReadDocument,
     sendDocumentFile,
     buildInvalidDocumentSignedUrlTokenResponse,
     buildDocumentSignedUrlTokenResponse,

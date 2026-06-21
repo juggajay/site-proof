@@ -124,7 +124,13 @@ export async function openDocumentAccessUrl(
       return;
     }
 
-    window.open(url, '_blank', 'noopener,noreferrer');
+    const fallbackWindow = window.open(url, '_blank', 'noopener,noreferrer');
+    if (!fallbackWindow) {
+      throw new Error(
+        'Your browser blocked the document window. Please allow pop-ups and try again.',
+      );
+    }
+    fallbackWindow.opener = null;
   } catch (error) {
     if (openedWindow && !openedWindow.closed) {
       openedWindow.close();

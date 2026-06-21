@@ -19,7 +19,7 @@
  */
 
 import type { ReactNode } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useSubbieShellActive } from './shellFlag';
 
 interface SubbieShellGuardProps {
@@ -28,9 +28,10 @@ interface SubbieShellGuardProps {
 
 export function SubbieShellGuard({ children }: SubbieShellGuardProps) {
   const shellActive = useSubbieShellActive();
+  const location = useLocation();
 
   if (shellActive) {
-    return <Navigate to="/p" replace />;
+    return <Navigate to={`/p${location.search}`} replace />;
   }
 
   return <>{children}</>;

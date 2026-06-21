@@ -85,12 +85,18 @@ describe('subbie shell DocsScreen', () => {
     _ctx = makeCtx({ documents: false });
     renderScreen();
     expect(apiFetchMock).not.toHaveBeenCalled();
-    // PortalAccessDenied renders the module name.
-    expect(screen.getByText(/Documents/)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Documents' })).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Documents portal access is not enabled for your company.',
+    );
+    expect(screen.getByRole('link', { name: /back to home/i })).toHaveAttribute('href', '/p');
   });
 
   it('queries the exact subcontractorView URL', () => {
     renderScreen();
+    expect(
+      screen.getByText('Shared with Hargraves Earthmoving — Demo — view only'),
+    ).toBeInTheDocument();
     expect(apiFetchMock).toHaveBeenCalledWith('/api/documents/proj-1?subcontractorView=true');
   });
 
