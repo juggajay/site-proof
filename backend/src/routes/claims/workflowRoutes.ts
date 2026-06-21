@@ -29,6 +29,7 @@ import {
   isLotFullyClaimed,
   parseClaimDate,
   roundClaimAmountToCents,
+  serializeCertificationMetadataForStatusTransition,
   serializeDisputeNotesForStatusTransition,
   updateClaimSchema,
 } from './workflowValidation.js';
@@ -332,12 +333,16 @@ export function createClaimWorkflowRouter({
       }
       const { status, certifiedAmount, paidAmount, paymentReference, disputeNotes } =
         validation.data;
+      const roundedCertifiedAmount =
+        certifiedAmount === undefined ? undefined : roundClaimAmountToCents(certifiedAmount);
+      const roundedPaidAmount =
+        paidAmount === undefined ? undefined : roundClaimAmountToCents(paidAmount);
 
-      if (status === 'certified' && certifiedAmount === undefined) {
+      if (status === 'certified' && roundedCertifiedAmount === undefined) {
         throw AppError.badRequest('Certified amount is required when certifying a claim');
       }
 
-      if (status === 'paid' && paidAmount === undefined) {
+      if (status === 'paid' && roundedPaidAmount === undefined) {
         throw AppError.badRequest('Paid amount is required when marking a claim as paid');
       }
 
@@ -369,24 +374,26 @@ export function createClaimWorkflowRouter({
 
         assertGenericClaimStatusTransition(claim.status, status);
 
-        if (status === 'certified' && certifiedAmount !== undefined) {
-          assertCertifiedAmountWithinClaimTotal(certifiedAmount, claim.totalClaimedAmount);
+        if (status === 'certified' && roundedCertifiedAmount !== undefined) {
+          assertCertifiedAmountWithinClaimTotal(roundedCertifiedAmount, claim.totalClaimedAmount);
           assertReducedCertifiedAmountHasVariationNotes(
-            certifiedAmount,
+            roundedCertifiedAmount,
             claim.totalClaimedAmount,
             disputeNotes,
           );
         }
 
-        if (status === 'paid' && paidAmount !== undefined) {
-          const certifiedTotal = claim.certifiedAmount ? Number(claim.certifiedAmount) : 0;
+        if (status === 'paid' && roundedPaidAmount !== undefined) {
+          const certifiedTotal = roundClaimAmountToCents(
+            claim.certifiedAmount ? Number(claim.certifiedAmount) : 0,
+          );
           if (claim.status !== 'certified' || certifiedTotal <= 0) {
             throw AppError.badRequest(
               'Can only mark certified claims with a certified amount as paid',
             );
           }
 
-          if (Math.abs(paidAmount - certifiedTotal) > CLAIM_AMOUNT_EPSILON) {
+          if (Math.abs(roundedPaidAmount - certifiedTotal) > CLAIM_AMOUNT_EPSILON) {
             throw AppError.badRequest(
               'Paid amount must equal the certified amount when marking a claim as paid',
             );
@@ -394,6 +401,7 @@ export function createClaimWorkflowRouter({
         }
 
         if (
+          (status === 'submitted' && claim.status === 'submitted' && claim.submittedAt) ||
           (status === 'certified' && claim.status === 'certified' && claim.certifiedAt) ||
           (status === 'disputed' && claim.status === 'disputed' && claim.disputedAt)
         ) {
@@ -421,19 +429,19 @@ export function createClaimWorkflowRouter({
           if (status === 'submitted') {
             updateData.submittedAt = new Date();
           }
-          if (status === 'certified' && certifiedAmount !== undefined) {
-            updateData.certifiedAmount = certifiedAmount;
+          if (status === 'certified' && roundedCertifiedAmount !== undefined) {
+            updateData.certifiedAmount = roundedCertifiedAmount;
             updateData.certifiedAt = new Date();
-            if (disputeNotes?.trim()) {
-              updateData.disputeNotes = JSON.stringify({
-                variationNotes: disputeNotes.trim(),
-                certificationDocumentId: null,
-                certifiedBy: userId,
-              });
-            }
+            updateData.disputedAt = null;
+            updateData.disputeNotes = serializeCertificationMetadataForStatusTransition({
+              existingDisputeNotes: claim.disputeNotes,
+              variationNotes: disputeNotes,
+              certificationDocumentId: null,
+              certifiedBy: userId,
+            });
           }
-          if (status === 'paid' && paidAmount !== undefined) {
-            updateData.paidAmount = paidAmount;
+          if (status === 'paid' && roundedPaidAmount !== undefined) {
+            updateData.paidAmount = roundedPaidAmount;
             updateData.paidAt = new Date();
             updateData.paymentReference = paymentReference || null;
           }
@@ -481,7 +489,7 @@ export function createClaimWorkflowRouter({
       if (
         status === 'certified' &&
         previousStatus !== 'certified' &&
-        certifiedAmount !== undefined
+        roundedCertifiedAmount !== undefined
       ) {
         try {
           // Get the user who certified the claim
@@ -514,7 +522,7 @@ export function createClaimWorkflowRouter({
           const formattedAmount = new Intl.NumberFormat('en-AU', {
             style: 'currency',
             currency: 'AUD',
-          }).format(certifiedAmount);
+          }).format(roundedCertifiedAmount);
 
           // Create notifications for project managers
           const notificationsToCreate = pmUsers.map((pm) => ({
@@ -552,7 +560,7 @@ export function createClaimWorkflowRouter({
       }
 
       // Feature #932 - Notify relevant users when a claim is paid
-      if (status === 'paid' && previousStatus !== 'paid' && paidAmount !== undefined) {
+      if (status === 'paid' && previousStatus !== 'paid' && roundedPaidAmount !== undefined) {
         try {
           // Get all project managers on this project
           const projectManagers = await prisma.projectUser.findMany({
@@ -577,7 +585,7 @@ export function createClaimWorkflowRouter({
           const formattedAmount = new Intl.NumberFormat('en-AU', {
             style: 'currency',
             currency: 'AUD',
-          }).format(paidAmount);
+          }).format(roundedPaidAmount);
 
           // Create notifications for project managers
           const notificationsToCreate = pmUsers.map((pm) => ({
@@ -622,7 +630,12 @@ export function createClaimWorkflowRouter({
           entityType: 'progress_claim',
           entityId: claimId,
           action: AuditAction.CLAIM_STATUS_CHANGED,
-          changes: { previousStatus, newStatus: status, certifiedAmount, paidAmount },
+          changes: {
+            previousStatus,
+            newStatus: status,
+            certifiedAmount: roundedCertifiedAmount,
+            paidAmount: roundedPaidAmount,
+          },
           req,
         });
       }

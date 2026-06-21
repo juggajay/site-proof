@@ -524,6 +524,33 @@ describe('Progress Claims API', () => {
       }
     });
 
+    it('should reject zero-percent claim increments without creating claim rows', async () => {
+      const lot = await createClaimableLot('ZERO-PERCENT-LOT');
+
+      try {
+        const res = await request(app)
+          .post(`/api/projects/${projectId}/claims`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            periodStart: '2025-02-01',
+            periodEnd: '2025-02-28',
+            lots: [{ lotId: lot.id, percentageComplete: 0 }],
+          });
+
+        expect(res.status).toBe(400);
+        expect(JSON.stringify(res.body.error.details)).toContain(
+          'Percentage complete must be greater than zero',
+        );
+
+        const unchangedLot = await prisma.lot.findUnique({ where: { id: lot.id } });
+        expect(unchangedLot?.status).toBe('conformed');
+        expect(unchangedLot?.claimedInId).toBeNull();
+        await expect(prisma.claimedLot.count({ where: { lotId: lot.id } })).resolves.toBe(0);
+      } finally {
+        await prisma.lot.delete({ where: { id: lot.id } }).catch(() => {});
+      }
+    });
+
     it('should reject claim without period dates', async () => {
       const res = await request(app)
         .post(`/api/projects/${projectId}/claims`)
@@ -986,6 +1013,68 @@ describe('Progress Claims API', () => {
       });
     });
 
+    it('does not let a stale draft delete remove a claim that another request submitted', async () => {
+      const claim = await createDraftWorkflowClaim(1300);
+
+      await prisma.$executeRaw`
+        CREATE OR REPLACE FUNCTION test_delay_claim_release_update()
+        RETURNS trigger AS $$
+        BEGIN
+          IF OLD.claimed_in_id IS NOT NULL AND NEW.claimed_in_id IS NULL THEN
+            PERFORM pg_sleep(0.2);
+          END IF;
+          RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+      `;
+      await prisma.$executeRaw`
+        DROP TRIGGER IF EXISTS test_delay_claim_release_update_trigger ON lots
+      `;
+      await prisma.$executeRaw`
+        CREATE TRIGGER test_delay_claim_release_update_trigger
+        BEFORE UPDATE ON lots
+        FOR EACH ROW
+        EXECUTE FUNCTION test_delay_claim_release_update();
+      `;
+
+      try {
+        const deletePromise = request(app)
+          .delete(`/api/projects/${projectId}/claims/${claim.id}`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        await new Promise((resolve) => setTimeout(resolve, 50));
+
+        const submitPromise = request(app)
+          .put(`/api/projects/${projectId}/claims/${claim.id}`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ status: 'submitted' });
+
+        const [deleteRes, submitRes] = await Promise.all([deletePromise, submitPromise]);
+
+        const successCount = [deleteRes.status, submitRes.status].filter(
+          (status) => status === 200,
+        ).length;
+        expect(successCount).toBe(1);
+
+        const storedClaim = await prisma.progressClaim.findUnique({ where: { id: claim.id } });
+        if (submitRes.status === 200) {
+          expect(deleteRes.status).not.toBe(200);
+          expect(storedClaim?.status).toBe('submitted');
+          expect(storedClaim?.submittedAt).not.toBeNull();
+        }
+        if (deleteRes.status === 200) {
+          expect(submitRes.status).not.toBe(200);
+          expect(storedClaim).toBeNull();
+        }
+        expect(storedClaim?.status).not.toBe('draft');
+      } finally {
+        await prisma.$executeRaw`
+          DROP TRIGGER IF EXISTS test_delay_claim_release_update_trigger ON lots
+        `;
+        await prisma.$executeRaw`DROP FUNCTION IF EXISTS test_delay_claim_release_update()`;
+      }
+    });
+
     it('reports remaining percentage in claim readiness for a partially claimed lot', async () => {
       const lot = await createCumulativeLot(100000);
       expect((await claimLot(lot.id, 25)).status).toBe(201);
@@ -1184,6 +1273,51 @@ describe('Progress Claims API', () => {
       expect(res.body.claim.submittedAt).toBeDefined();
     });
 
+    it('should not re-stamp submitted claims when generic update is retried', async () => {
+      const claim = await createDraftWorkflowClaim();
+      const originalSubmittedAt = new Date('2025-05-01T00:00:00.000Z');
+
+      await prisma.progressClaim.update({
+        where: { id: claim.id },
+        data: {
+          status: 'submitted',
+          submittedAt: originalSubmittedAt,
+        },
+      });
+
+      const auditCountBefore = await prisma.auditLog.count({
+        where: {
+          projectId,
+          entityType: 'progress_claim',
+          entityId: claim.id,
+          action: AuditAction.CLAIM_STATUS_CHANGED,
+        },
+      });
+
+      const res = await request(app)
+        .put(`/api/projects/${projectId}/claims/${claim.id}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          status: 'submitted',
+        });
+
+      expect(res.status).toBe(200);
+
+      const unchangedClaim = await prisma.progressClaim.findUnique({ where: { id: claim.id } });
+      expect(unchangedClaim?.status).toBe('submitted');
+      expect(unchangedClaim?.submittedAt?.toISOString()).toBe(originalSubmittedAt.toISOString());
+      await expect(
+        prisma.auditLog.count({
+          where: {
+            projectId,
+            entityType: 'progress_claim',
+            entityId: claim.id,
+            action: AuditAction.CLAIM_STATUS_CHANGED,
+          },
+        }),
+      ).resolves.toBe(auditCountBefore);
+    });
+
     it('should reject certifying or disputing draft claims through the generic update route', async () => {
       const claim = await createDraftWorkflowClaim();
 
@@ -1284,6 +1418,26 @@ describe('Progress Claims API', () => {
       expect(unchangedClaim?.status).toBe('submitted');
       expect(unchangedClaim?.certifiedAmount).toBeNull();
       expect(unchangedClaim?.disputeNotes).toBeNull();
+    });
+
+    it('should round generic certification amounts to cents before validation and storage', async () => {
+      const claim = await createSubmittedCertificationClaim(1000);
+
+      const res = await request(app)
+        .put(`/api/projects/${projectId}/claims/${claim.id}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          status: 'certified',
+          certifiedAmount: 999.999,
+        });
+
+      expect(res.status).toBe(200);
+      expect(Number(res.body.claim.certifiedAmount)).toBe(1000);
+      expect(res.body.claim.certification.certifiedByName).toBeNull();
+
+      const updatedClaim = await prisma.progressClaim.findUnique({ where: { id: claim.id } });
+      expect(updatedClaim?.status).toBe('certified');
+      expect(Number(updatedClaim?.certifiedAmount)).toBe(1000);
     });
 
     it('should certify a submitted claim', async () => {
@@ -1435,6 +1589,26 @@ describe('Progress Claims API', () => {
       expect(unchangedClaim?.status).toBe('submitted');
       expect(unchangedClaim?.paidAmount).toBeNull();
       expect(unchangedClaim?.paymentReference).toBeNull();
+      expect(unchangedClaim?.disputeNotes).toBeNull();
+      expect(unchangedClaim?.disputedAt).toBeNull();
+    });
+
+    it('should reject blank dispute notes without mutating the claim', async () => {
+      const claim = await createSubmittedCertificationClaim();
+
+      const res = await request(app)
+        .put(`/api/projects/${projectId}/claims/${claim.id}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          status: 'disputed',
+          disputeNotes: '   ',
+        });
+
+      expect(res.status).toBe(400);
+      expect(JSON.stringify(res.body.error.details)).toContain('Dispute notes are required');
+
+      const unchangedClaim = await prisma.progressClaim.findUnique({ where: { id: claim.id } });
+      expect(unchangedClaim?.status).toBe('submitted');
       expect(unchangedClaim?.disputeNotes).toBeNull();
       expect(unchangedClaim?.disputedAt).toBeNull();
     });
@@ -1852,6 +2026,65 @@ describe('Progress Claims API', () => {
       expect(certificationMetadata.certifiedBy).toBe(userId);
     });
 
+    it('should round dedicated certification amounts to cents before validation and storage', async () => {
+      const claim = await createSubmittedCertificationClaim(1000);
+
+      const res = await request(app)
+        .post(`/api/projects/${projectId}/claims/${claim.id}/certify`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          certifiedAmount: 999.999,
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.claim.status).toBe('certified');
+      expect(res.body.claim.certifiedAmount).toBe(1000);
+
+      const updatedClaim = await prisma.progressClaim.findUnique({ where: { id: claim.id } });
+      expect(updatedClaim?.status).toBe('certified');
+      expect(Number(updatedClaim?.certifiedAmount)).toBe(1000);
+    });
+
+    it('clears active dispute fields when a disputed claim is certified', async () => {
+      const claim = await createSubmittedCertificationClaim(1000);
+
+      await request(app)
+        .put(`/api/projects/${projectId}/claims/${claim.id}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          status: 'disputed',
+          disputeNotes: 'Quantity support missing',
+        })
+        .expect(200);
+
+      const res = await request(app)
+        .post(`/api/projects/${projectId}/claims/${claim.id}/certify`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          certifiedAmount: 1000,
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.claim.status).toBe('certified');
+
+      const detailRes = await request(app)
+        .get(`/api/projects/${projectId}/claims/${claim.id}`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(detailRes.status).toBe(200);
+      expect(detailRes.body.claim.status).toBe('certified');
+      expect(detailRes.body.claim.disputeNotes).toBeNull();
+      expect(detailRes.body.claim.disputedAt).toBeNull();
+      expect(detailRes.body.claim.certification.certifiedByName).toBeTruthy();
+
+      const updatedClaim = await prisma.progressClaim.findUnique({ where: { id: claim.id } });
+      expect(updatedClaim?.disputedAt).toBeNull();
+      const certificationMetadata = JSON.parse(updatedClaim?.disputeNotes || '{}') as {
+        resolvedDisputeNotes?: string;
+      };
+      expect(certificationMetadata.resolvedDisputeNotes).toBe('Quantity support missing');
+    });
+
     it('should only certify a submitted claim once under concurrent requests', async () => {
       const claim = await createSubmittedCertificationClaim(1000);
       const certificationDocument = await createCertificationDocument(
@@ -2205,6 +2438,43 @@ describe('Progress Claims API', () => {
       expect(storedNotes.paymentHistory?.[0].reference).toBe('PAY-PART-001');
       expect(storedNotes.paymentHistory?.[1].reference).toBe('PAY-FINAL-001');
       expect(storedNotes.lastPaymentNotes).toBe('Final payment');
+    });
+
+    it('rounds partial payment amounts and outstanding totals to cents', async () => {
+      const claim = await createSubmittedCertificationClaim(1000);
+      await prisma.progressClaim.update({
+        where: { id: claim.id },
+        data: {
+          status: 'certified',
+          certifiedAmount: 1000,
+          certifiedAt: new Date(),
+        },
+      });
+
+      const res = await request(app)
+        .post(`/api/projects/${projectId}/claims/${claim.id}/payment`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          paidAmount: 333.333,
+          paymentReference: 'PAY-ROUNDING',
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.claim.status).toBe('partially_paid');
+      expect(res.body.claim.paidAmount).toBe(333.33);
+      expect(res.body.payment.amount).toBe(333.33);
+      expect(res.body.outstanding).toBe(666.67);
+      expect(res.body.paymentHistory[0].amount).toBe(333.33);
+
+      const updatedClaim = await prisma.progressClaim.findUnique({ where: { id: claim.id } });
+      expect(Number(updatedClaim?.paidAmount)).toBe(333.33);
+      const storedNotes = JSON.parse(updatedClaim?.disputeNotes || '{}') as {
+        paymentHistory?: Array<{ amount: number; reference: string }>;
+      };
+      expect(storedNotes.paymentHistory?.[0]).toMatchObject({
+        amount: 333.33,
+        reference: 'PAY-ROUNDING',
+      });
     });
 
     it('should reject payments above the outstanding certified amount without mutating', async () => {

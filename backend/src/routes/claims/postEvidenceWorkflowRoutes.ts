@@ -21,6 +21,8 @@ import {
   normalizeOptionalCertificationString,
   parseOptionalClaimDate,
   recordPaymentSchema,
+  roundClaimAmountToCents,
+  serializeCertificationMetadataForStatusTransition,
 } from './workflowValidation.js';
 
 interface PaymentHistoryEntry {
@@ -88,6 +90,7 @@ export function createClaimPostEvidenceWorkflowRouter({
         throw AppError.fromZodError(validation.error);
       }
       const { certifiedAmount, certificationDate } = validation.data;
+      const roundedCertifiedAmount = roundClaimAmountToCents(certifiedAmount);
       const variationNotes = normalizeOptionalCertificationString(
         validation.data.variationNotes,
         'variationNotes',
@@ -124,9 +127,9 @@ export function createClaimPostEvidenceWorkflowRouter({
           );
         }
 
-        assertCertifiedAmountWithinClaimTotal(certifiedAmount, claim.totalClaimedAmount);
+        assertCertifiedAmountWithinClaimTotal(roundedCertifiedAmount, claim.totalClaimedAmount);
         assertReducedCertifiedAmountHasVariationNotes(
-          certifiedAmount,
+          roundedCertifiedAmount,
           claim.totalClaimedAmount,
           variationNotes,
         );
@@ -139,22 +142,21 @@ export function createClaimPostEvidenceWorkflowRouter({
           validation.data.certificationDocumentId,
         );
 
-        const certificationMetadata =
-          variationNotes || certDocId
-            ? JSON.stringify({
-                variationNotes: variationNotes || null,
-                certificationDocumentId: certDocId || null,
-                certifiedBy: userId,
-              })
-            : claim.disputeNotes;
+        const certificationMetadata = serializeCertificationMetadataForStatusTransition({
+          existingDisputeNotes: claim.disputeNotes,
+          variationNotes,
+          certificationDocumentId: certDocId || null,
+          certifiedBy: userId,
+        });
 
         // Update the claim with certification details
         const updatedClaim = await tx.progressClaim.update({
           where: { id: claimId },
           data: {
             status: 'certified',
-            certifiedAmount: certifiedAmount,
+            certifiedAmount: roundedCertifiedAmount,
             certifiedAt,
+            disputedAt: null,
             // Store variation notes and document reference in disputeNotes field as JSON.
             disputeNotes: certificationMetadata,
           },
@@ -201,7 +203,7 @@ export function createClaimPostEvidenceWorkflowRouter({
         const formattedAmount = new Intl.NumberFormat('en-AU', {
           style: 'currency',
           currency: 'AUD',
-        }).format(certifiedAmount);
+        }).format(roundedCertifiedAmount);
 
         // Create in-app notifications
         if (pmUsers.length > 0) {
@@ -248,7 +250,7 @@ export function createClaimPostEvidenceWorkflowRouter({
         entityType: 'progress_claim',
         entityId: claimId,
         action: AuditAction.CLAIM_CERTIFIED,
-        changes: { previousStatus, certifiedAmount, variationNotes },
+        changes: { previousStatus, certifiedAmount: roundedCertifiedAmount, variationNotes },
         req,
       });
 
@@ -272,6 +274,7 @@ export function createClaimPostEvidenceWorkflowRouter({
         throw AppError.fromZodError(validation.error);
       }
       const { paidAmount, paymentDate, paymentReference, paymentNotes } = validation.data;
+      const roundedPaidAmount = roundClaimAmountToCents(paidAmount);
       const paidAt = parseOptionalClaimDate(paymentDate, 'paymentDate') ?? new Date();
       const paymentDateForHistory = paymentDate || paidAt.toISOString().split('T')[0];
       const recordedAt = new Date().toISOString();
@@ -303,18 +306,24 @@ export function createClaimPostEvidenceWorkflowRouter({
         }
 
         const previousStatus = claim.status;
-        const certifiedAmount = claim.certifiedAmount ? Number(claim.certifiedAmount) : 0;
-        const previousPaidAmount = claim.paidAmount ? Number(claim.paidAmount) : 0;
-        const outstandingBeforePayment = certifiedAmount - previousPaidAmount;
-        if (paidAmount - outstandingBeforePayment > CLAIM_AMOUNT_EPSILON) {
+        const certifiedAmount = roundClaimAmountToCents(
+          claim.certifiedAmount ? Number(claim.certifiedAmount) : 0,
+        );
+        const previousPaidAmount = roundClaimAmountToCents(
+          claim.paidAmount ? Number(claim.paidAmount) : 0,
+        );
+        const outstandingBeforePayment = roundClaimAmountToCents(
+          certifiedAmount - previousPaidAmount,
+        );
+        if (roundedPaidAmount - outstandingBeforePayment > CLAIM_AMOUNT_EPSILON) {
           throw AppError.badRequest(
             'Payment amount cannot exceed the outstanding certified amount',
           );
         }
 
-        const totalPaid = previousPaidAmount + paidAmount;
-        const outstanding = certifiedAmount - totalPaid;
-        const newStatus = outstanding <= 0 ? 'paid' : 'partially_paid';
+        const totalPaid = roundClaimAmountToCents(previousPaidAmount + roundedPaidAmount);
+        const outstanding = roundClaimAmountToCents(certifiedAmount - totalPaid);
+        const newStatus = outstanding <= CLAIM_AMOUNT_EPSILON ? 'paid' : 'partially_paid';
 
         // Build notes with payment history using disputeNotes field
         let existingDisputeNotes: Record<string, unknown> = {};
@@ -334,7 +343,7 @@ export function createClaimPostEvidenceWorkflowRouter({
         }
 
         paymentHistory.push({
-          amount: paidAmount,
+          amount: roundedPaidAmount,
           date: paymentDateForHistory,
           reference: paymentReference || null,
           notes: paymentNotes || null,
@@ -409,7 +418,7 @@ export function createClaimPostEvidenceWorkflowRouter({
         const formattedPaidAmount = new Intl.NumberFormat('en-AU', {
           style: 'currency',
           currency: 'AUD',
-        }).format(paidAmount);
+        }).format(roundedPaidAmount);
 
         const formattedOutstanding = new Intl.NumberFormat('en-AU', {
           style: 'currency',
@@ -458,7 +467,7 @@ export function createClaimPostEvidenceWorkflowRouter({
       const response = buildClaimPaymentRecordedResponse(
         updatedClaim,
         {
-          amount: paidAmount,
+          amount: roundedPaidAmount,
           date: paymentDateForHistory,
           reference: paymentReference,
           notes: paymentNotes,
@@ -478,7 +487,7 @@ export function createClaimPostEvidenceWorkflowRouter({
         changes: {
           previousStatus,
           newStatus,
-          paidAmount,
+          paidAmount: roundedPaidAmount,
           paymentReference,
           totalPaid,
           outstanding,
@@ -499,41 +508,50 @@ export function createClaimPostEvidenceWorkflowRouter({
       const userId = req.user!.userId;
       await requireCommercialProjectAccess(req.user!, projectId);
 
-      const claim = await prisma.progressClaim.findFirst({
-        where: { id: claimId, projectId },
-        include: {
-          _count: { select: { claimedLots: true } },
-        },
-      });
+      const deleteResult = await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`
+          SELECT id
+          FROM progress_claims
+          WHERE id = ${claimId} AND project_id = ${projectId}
+          FOR UPDATE
+        `;
 
-      if (!claim) {
-        throw AppError.notFound('Claim');
-      }
+        const claim = await tx.progressClaim.findFirst({
+          where: { id: claimId, projectId },
+          include: {
+            _count: { select: { claimedLots: true } },
+          },
+        });
 
-      if (claim.status !== 'draft') {
-        throw AppError.badRequest('Can only delete draft claims');
-      }
+        if (!claim) {
+          throw AppError.notFound('Claim');
+        }
 
-      // Release this claim's increments. Deleting the claim cascades its
-      // ClaimedLot rows, so cumulative claimed percentages recover on their
-      // own. Lots this claim had taken to 100% (status `claimed`, linked via
-      // claimedInId) must be returned to `conformed` so they can be claimed
-      // again.
-      const [releasedClaimedLots, clearedStaleLotLinks] = await prisma.$transaction([
-        prisma.lot.updateMany({
+        if (claim.status !== 'draft') {
+          throw AppError.badRequest('Can only delete draft claims');
+        }
+
+        // Release this claim's increments. Deleting the claim cascades its
+        // ClaimedLot rows, so cumulative claimed percentages recover on their
+        // own. Lots this claim had taken to 100% (status `claimed`, linked via
+        // claimedInId) must be returned to `conformed` so they can be claimed
+        // again.
+        const releasedClaimedLots = await tx.lot.updateMany({
           where: { claimedInId: claimId, projectId, status: 'claimed' },
           data: { claimedInId: null, status: 'conformed' },
-        }),
-        // Defensive: clear any stale link left without the claimed status.
-        prisma.lot.updateMany({
+        });
+        const clearedStaleLotLinks = await tx.lot.updateMany({
           where: { claimedInId: claimId, projectId },
           data: { claimedInId: null },
-        }),
-        // Delete the claim (cascades to claimedLots)
-        prisma.progressClaim.delete({
+        });
+        await tx.progressClaim.delete({
           where: { id: claimId },
-        }),
-      ]);
+        });
+
+        return { claim, releasedClaimedLots, clearedStaleLotLinks };
+      });
+
+      const { claim, releasedClaimedLots, clearedStaleLotLinks } = deleteResult;
 
       await createAuditLog({
         projectId,

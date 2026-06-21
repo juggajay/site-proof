@@ -13,7 +13,12 @@ import {
   Plus,
 } from 'lucide-react';
 import type { Claim } from '../types';
-import { formatCurrency, getCertificationDueStatus, getPaymentDueStatus } from '../utils';
+import {
+  calculatePaymentDueDate,
+  formatCurrency,
+  getCertificationDueStatus,
+  getPaymentDueStatus,
+} from '../utils';
 import { downloadCsv } from '@/lib/csv';
 import { openDocumentAccessUrl } from '@/lib/documentAccess';
 import { logError } from '@/lib/logger';
@@ -118,6 +123,12 @@ function CertificationReadBack({ claim }: { claim: Claim }) {
 }
 
 function downloadClaimCsv(claim: Claim) {
+  const paymentDue =
+    claim.paymentDueDate ??
+    (claim.submittedAt
+      ? calculatePaymentDueDate(claim.submittedAt, claim.projectState ?? undefined)
+      : null);
+
   downloadCsv(`claim-${claim.claimNumber}.csv`, [
     [
       'Claim #',
@@ -141,7 +152,7 @@ function downloadClaimCsv(claim: Claim) {
       claim.certifiedAmount ?? '-',
       claim.paidAmount ?? '-',
       claim.submittedAt ? new Date(claim.submittedAt).toLocaleDateString('en-AU') : '-',
-      claim.paymentDueDate ? new Date(claim.paymentDueDate).toLocaleDateString('en-AU') : '-',
+      paymentDue ? new Date(paymentDue).toLocaleDateString('en-AU') : '-',
     ],
   ]);
 }

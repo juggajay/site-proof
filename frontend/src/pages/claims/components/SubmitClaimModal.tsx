@@ -42,11 +42,11 @@ export const SubmitClaimModal = React.memo(function SubmitClaimModal({
     <Modal onClose={onClose} className="max-w-md">
       <ModalHeader>Submit Claim</ModalHeader>
       <ModalDescription>
-        Download the claim package and mark this progress claim as submitted.
+        Download a claim summary CSV and mark this progress claim as submitted.
       </ModalDescription>
       <ModalBody>
         <p className="text-muted-foreground mb-6">
-          Download the claim package, then submit it through your client channel.
+          Download the register export, then submit the claim through your client channel.
         </p>
 
         <div className="space-y-3">
@@ -61,8 +61,10 @@ export const SubmitClaimModal = React.memo(function SubmitClaimModal({
                 <Download className="h-5 w-5 text-foreground" />
               </div>
               <div>
-                <div className="font-medium">{option.label}</div>
-                <div className="text-sm text-muted-foreground">{option.description}</div>
+                <div className="font-medium">Download summary CSV</div>
+                <div className="text-sm text-muted-foreground">
+                  Download the register export and mark the claim submitted.
+                </div>
               </div>
             </button>
           ))}

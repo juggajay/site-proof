@@ -53,7 +53,7 @@ export const createClaimSchema = z
               invalid_type_error: 'Percentage complete must be a number',
             })
             .finite('Percentage complete must be finite')
-            .min(0, 'Percentage complete cannot be negative')
+            .positive('Percentage complete must be greater than zero')
             .max(100, 'Percentage complete cannot exceed 100'),
         }),
       )
@@ -77,24 +77,34 @@ export const createClaimSchema = z
     }
   });
 
-export const updateClaimSchema = z.object({
-  status: z.enum(['draft', 'submitted', 'certified', 'disputed', 'paid']).optional(),
-  certifiedAmount: z
-    .number()
-    .finite('Certified amount must be finite')
-    .nonnegative('Certified amount cannot be negative')
-    .optional(),
-  paidAmount: z
-    .number()
-    .finite('Paid amount must be finite')
-    .nonnegative('Paid amount cannot be negative')
-    .optional(),
-  paymentReference: optionalTrimmedClaimString(
-    'paymentReference',
-    CLAIM_PAYMENT_REFERENCE_MAX_LENGTH,
-  ),
-  disputeNotes: optionalTrimmedClaimString('disputeNotes', CLAIM_DISPUTE_NOTES_MAX_LENGTH),
-});
+export const updateClaimSchema = z
+  .object({
+    status: z.enum(['draft', 'submitted', 'certified', 'disputed', 'paid']).optional(),
+    certifiedAmount: z
+      .number()
+      .finite('Certified amount must be finite')
+      .nonnegative('Certified amount cannot be negative')
+      .optional(),
+    paidAmount: z
+      .number()
+      .finite('Paid amount must be finite')
+      .nonnegative('Paid amount cannot be negative')
+      .optional(),
+    paymentReference: optionalTrimmedClaimString(
+      'paymentReference',
+      CLAIM_PAYMENT_REFERENCE_MAX_LENGTH,
+    ),
+    disputeNotes: optionalTrimmedClaimString('disputeNotes', CLAIM_DISPUTE_NOTES_MAX_LENGTH),
+  })
+  .superRefine((data, ctx) => {
+    if (data.status === 'disputed' && !data.disputeNotes?.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['disputeNotes'],
+        message: 'Dispute notes are required when marking a claim as disputed',
+      });
+    }
+  });
 
 export const certifyClaimSchema = z
   .object({
@@ -276,6 +286,25 @@ function hasCertificationMetadata(record: Record<string, unknown>): boolean {
   );
 }
 
+function getActiveDisputeNotes(existingDisputeNotes: string | null | undefined): string | null {
+  if (!existingDisputeNotes) {
+    return null;
+  }
+
+  const existingNotes = parseClaimNotesRecord(existingDisputeNotes);
+  if (!existingNotes) {
+    return existingDisputeNotes.trim() || null;
+  }
+
+  if ('disputeNotes' in existingNotes) {
+    return typeof existingNotes.disputeNotes === 'string'
+      ? existingNotes.disputeNotes.trim() || null
+      : null;
+  }
+
+  return hasCertificationMetadata(existingNotes) ? null : existingDisputeNotes.trim() || null;
+}
+
 export function serializeDisputeNotesForStatusTransition(
   existingDisputeNotes: string | null | undefined,
   disputeNotes: string | null | undefined,
@@ -291,6 +320,36 @@ export function serializeDisputeNotesForStatusTransition(
     ...existingNotes,
     disputeNotes: nextDisputeNotes,
   });
+}
+
+export function serializeCertificationMetadataForStatusTransition({
+  existingDisputeNotes,
+  variationNotes,
+  certificationDocumentId,
+  certifiedBy,
+}: {
+  existingDisputeNotes: string | null | undefined;
+  variationNotes?: string | null;
+  certificationDocumentId?: string | null;
+  certifiedBy: string;
+}): string {
+  const existingNotes = parseClaimNotesRecord(existingDisputeNotes) ?? {};
+  const activeDisputeNotes = getActiveDisputeNotes(existingDisputeNotes);
+  const metadata: Record<string, unknown> = {
+    ...existingNotes,
+    variationNotes: variationNotes?.trim() || null,
+    certificationDocumentId: certificationDocumentId || null,
+    certifiedBy,
+  };
+
+  delete metadata.disputeNotes;
+  if (activeDisputeNotes) {
+    metadata.resolvedDisputeNotes = activeDisputeNotes;
+  } else {
+    delete metadata.resolvedDisputeNotes;
+  }
+
+  return JSON.stringify(metadata);
 }
 
 function getClaimAmountValue(value: unknown): number {
