@@ -71,6 +71,7 @@ export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalP
   const frequency = watch('frequency');
   const recipients = watch('recipients');
   const hasReachedScheduleLimit = schedules.length >= maxSchedules;
+  const canCreateSchedule = !loading && !loadError && !hasReachedScheduleLimit;
 
   const fetchSchedules = useCallback(async () => {
     setLoading(true);
@@ -240,12 +241,12 @@ export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalP
           <div className="mb-6">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-medium">Scheduled Reports</h3>
-              {!showForm && (
+              {!showForm && !loadError && (
                 <Button
                   type="button"
                   size="sm"
                   onClick={() => setShowForm(true)}
-                  disabled={hasReachedScheduleLimit}
+                  disabled={!canCreateSchedule}
                   title={
                     hasReachedScheduleLimit
                       ? `Maximum ${maxSchedules} scheduled reports`
@@ -276,7 +277,7 @@ export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalP
                       schedule.isActive ? 'bg-card' : 'bg-muted/50'
                     }`}
                   >
-                    <div className="flex items-start justify-between">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div>
                         <div className="flex items-center gap-2 mb-1">
                           <span className="font-medium">
@@ -305,7 +306,7 @@ export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalP
                           Next: {formatNextRun(schedule.nextRunAt)}
                         </p>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex flex-wrap gap-2 sm:flex-nowrap">
                         <Button
                           variant="outline"
                           size="sm"
@@ -333,7 +334,7 @@ export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalP
             <form onSubmit={rhfHandleSubmit(handleCreateSchedule)} className="border-t pt-6">
               <h3 className="font-medium mb-4">Create New Schedule</h3>
 
-              <div className="grid grid-cols-2 gap-4 mb-4">
+              <div className="grid grid-cols-1 gap-4 mb-4 sm:grid-cols-2">
                 {/* Report Type */}
                 <div>
                   <Label htmlFor="schedule-report-type" className="mb-1">

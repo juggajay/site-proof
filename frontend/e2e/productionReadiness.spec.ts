@@ -1209,7 +1209,10 @@ test.describe('production readiness guardrails', () => {
     expect(backendPackage).toContain('reports:send-due');
     expect(scheduleModalHelpers).toContain('export const DEFAULT_MAX_SCHEDULED_REPORTS = 25');
     expect(scheduleModal).toContain('DEFAULT_MAX_SCHEDULED_REPORTS');
-    expect(scheduleModal).toContain('disabled={hasReachedScheduleLimit}');
+    expect(scheduleModal).toContain(
+      'const canCreateSchedule = !loading && !loadError && !hasReachedScheduleLimit',
+    );
+    expect(scheduleModal).toContain('disabled={!canCreateSchedule}');
     expect(scheduleModal).toContain('A project can have up to ${maxSchedules} scheduled reports');
   });
 

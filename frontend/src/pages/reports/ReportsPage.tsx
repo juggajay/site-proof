@@ -6,6 +6,9 @@ import { ScheduleReportModal } from '../../components/reports/ScheduleReportModa
 import { ContextHelp, HELP_CONTENT } from '@/components/ContextHelp';
 import type { LotStatusReport, NCRReport, TestReport, DiaryReport, ClaimsReport } from './types';
 import { ADVANCED_ANALYTICS_TIERS } from './types';
+import { useAuth } from '@/lib/auth';
+import { ROLE_GROUPS, hasRoleInGroup } from '@/lib/roles';
+import { getProjectScopedRole } from '@/lib/subcontractorIdentity';
 import { logError } from '@/lib/logger';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { useDateFormat } from '@/lib/dateFormat';
@@ -59,6 +62,7 @@ export function ReportsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { dateFormat } = useDateFormat();
   const { timezone } = useTimezone();
+  const { user } = useAuth();
   const activeTab = searchParams.get('tab') || 'lot-status';
   const reportRequestRef = useRef(0);
 
@@ -91,21 +95,28 @@ export function ReportsPage() {
     () => ADVANCED_ANALYTICS_TIERS.includes(subscriptionTier),
     [subscriptionTier],
   );
+  const projectScopedRole = useMemo(() => getProjectScopedRole(user), [user]);
+  const canViewClaimsReport = useMemo(
+    () => hasRoleInGroup(projectScopedRole, ROLE_GROUPS.COMMERCIAL),
+    [projectScopedRole],
+  );
+  const canManageScheduledReports = canViewClaimsReport;
   const printGeneratedAt = useMemo(
     () => formatReportDateTime(new Date(), dateFormat, timezone),
     [dateFormat, timezone],
   );
 
   const tabs = useMemo(
-    () => [
-      { id: 'lot-status', label: 'Lot Status' },
-      { id: 'ncr', label: 'NCR Report' },
-      { id: 'test', label: 'Test Results' },
-      { id: 'diary', label: 'Diary Report' },
-      { id: 'claims', label: 'Claims' },
-      { id: 'advanced', label: 'Advanced Analytics', premium: true },
-    ],
-    [],
+    () =>
+      [
+        { id: 'lot-status', label: 'Lot Status' },
+        { id: 'ncr', label: 'NCR Report' },
+        { id: 'test', label: 'Test Results' },
+        { id: 'diary', label: 'Diary Report' },
+        canViewClaimsReport ? { id: 'claims', label: 'Claims' } : null,
+        { id: 'advanced', label: 'Advanced Analytics', premium: true },
+      ].filter((tab): tab is { id: string; label: string; premium?: boolean } => Boolean(tab)),
+    [canViewClaimsReport],
   );
 
   // Fetch subscription tier for feature gating
@@ -154,6 +165,11 @@ export function ReportsPage() {
         return;
       }
 
+      if (reportType === 'claims' && !canViewClaimsReport) {
+        setError('Commercial report access required');
+        return;
+      }
+
       const requestId = reportRequestRef.current + 1;
       reportRequestRef.current = requestId;
       setLoading(true);
@@ -185,6 +201,9 @@ export function ReportsPage() {
             break;
           case 'claims':
             endpoint = 'claims';
+            if (extraParams?.startDate) queryParams.set('startDate', extraParams.startDate);
+            if (extraParams?.endDate) queryParams.set('endDate', extraParams.endDate);
+            if (extraParams?.status) queryParams.set('status', extraParams.status);
             break;
         }
 
@@ -218,14 +237,19 @@ export function ReportsPage() {
         }
       }
     },
-    [projectId],
+    [projectId, canViewClaimsReport],
   );
 
   useEffect(() => {
+    if (activeTab === 'claims' && !canViewClaimsReport) {
+      setActiveTab('lot-status');
+      return;
+    }
+
     if (projectId && isReportDataTab(activeTab)) {
       fetchReport(activeTab);
     }
-  }, [projectId, activeTab, fetchReport]);
+  }, [projectId, activeTab, fetchReport, canViewClaimsReport, setActiveTab]);
 
   const handleRefreshReport = useCallback(() => {
     if (isReportDataTab(activeTab)) {
@@ -236,13 +260,17 @@ export function ReportsPage() {
   }, [fetchReport, activeTab, projectId]);
 
   const handleOpenScheduleModal = useCallback(() => {
+    if (!canManageScheduledReports) {
+      return;
+    }
+
     if (!hasAdvancedAnalytics) {
       setActiveTab('advanced');
       return;
     }
 
     setShowScheduleModal(true);
-  }, [hasAdvancedAnalytics, setActiveTab]);
+  }, [canManageScheduledReports, hasAdvancedAnalytics, setActiveTab]);
 
   const handleCloseScheduleModal = useCallback(() => {
     setShowScheduleModal(false);
@@ -272,6 +300,17 @@ export function ReportsPage() {
     [fetchReport],
   );
 
+  const handleClaimsReportGenerate = useCallback(
+    (startDate: string, endDate: string, statuses: string[]) => {
+      const extraParams: Record<string, string> = {};
+      if (startDate) extraParams.startDate = startDate;
+      if (endDate) extraParams.endDate = endDate;
+      if (statuses.length > 0) extraParams.status = statuses.join(',');
+      fetchReport('claims', extraParams);
+    },
+    [fetchReport],
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -281,21 +320,29 @@ export function ReportsPage() {
           </h1>
           <ContextHelp title={HELP_CONTENT.reports.title} content={HELP_CONTENT.reports.content} />
         </div>
-        <div className="grid grid-cols-2 gap-2 sm:flex sm:gap-3">
-          <button
-            type="button"
-            aria-label="Schedule Reports"
-            onClick={handleOpenScheduleModal}
-            className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm font-medium sm:px-4 ${
-              hasAdvancedAnalytics
-                ? 'border-primary text-primary hover:bg-primary/5'
-                : 'border-brand text-brand hover:bg-brand/10'
-            }`}
-          >
-            {hasAdvancedAnalytics ? <Mail className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
-            <span className="hidden sm:inline">Schedule Reports</span>
-            <span className="sm:hidden">Schedule</span>
-          </button>
+        <div
+          className={
+            canManageScheduledReports
+              ? 'grid grid-cols-2 gap-2 sm:flex sm:gap-3'
+              : 'flex gap-2 sm:gap-3'
+          }
+        >
+          {canManageScheduledReports && (
+            <button
+              type="button"
+              aria-label="Schedule Reports"
+              onClick={handleOpenScheduleModal}
+              className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm font-medium sm:px-4 ${
+                hasAdvancedAnalytics
+                  ? 'border-primary text-primary hover:bg-primary/5'
+                  : 'border-brand text-brand hover:bg-brand/10'
+              }`}
+            >
+              {hasAdvancedAnalytics ? <Mail className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
+              <span className="hidden sm:inline">Schedule Reports</span>
+              <span className="sm:hidden">Schedule</span>
+            </button>
+          )}
           <button
             type="button"
             aria-label="Refresh Report"
@@ -311,8 +358,12 @@ export function ReportsPage() {
       </div>
 
       {/* Tab Navigation */}
-      <div className="border-b border-border">
-        <nav className="-mb-px flex space-x-8" aria-label="Reports" role="tablist">
+      <div className="overflow-x-auto border-b border-border">
+        <nav
+          className="-mb-px flex min-w-max space-x-6 sm:space-x-8"
+          aria-label="Reports"
+          role="tablist"
+        >
           {tabs.map((tab) => (
             <button
               key={tab.id}
@@ -423,7 +474,13 @@ export function ReportsPage() {
               />
             )}
 
-            {activeTab === 'claims' && claimsReport && <ClaimsReportTab report={claimsReport} />}
+            {activeTab === 'claims' && canViewClaimsReport && (
+              <ClaimsReportTab
+                report={claimsReport}
+                loading={loading}
+                onGenerateReport={handleClaimsReportGenerate}
+              />
+            )}
 
             {activeTab === 'advanced' && (
               <AdvancedAnalyticsTab

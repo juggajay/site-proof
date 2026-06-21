@@ -12,6 +12,18 @@ vi.mock('@/lib/api', () => ({
   apiUrl: (path: string) => path,
 }));
 
+vi.mock('@/lib/auth', () => ({
+  useAuth: () => ({
+    user: {
+      id: 'user-1',
+      email: 'admin@example.com',
+      role: 'admin',
+      roleInCompany: 'admin',
+      dashboardRole: null,
+    },
+  }),
+}));
+
 const apiFetchMock = vi.mocked(apiFetch);
 
 function deferred<T>() {
