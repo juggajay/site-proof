@@ -18,9 +18,56 @@ keep going until the app has been exercised end to end.
   `1secmail.com` from an old Codex process, so future email QA must use Jay's
   nominated inbox, a trusted mailbox, or Resend's safe test recipient.
 
+## Stage 30 - Live Browser Navigation and Auth Session Hydration QA
+
+Status: fix branch in progress; local backend verification passed. Carry this
+entry through PR, CI, merge, and production retest before marking complete.
+
+Scope:
+
+- Visible-browser production owner navigation through project and company
+  surfaces after Stage 29 landed.
+- Auth/session stability during rapid normal navigation across lots, ITPs,
+  hold-points, tests, NCRs, diary, dockets, claims, costs, documents, drawings,
+  subcontractors, reports, settings, users, and areas.
+
+Confirmed issue fixed locally:
+
+- Production `GET /api/auth/me` could return `429` after ordinary page
+  navigation because `server.ts` applied the strict auth-attempt limiter to
+  every `/api/auth/*` route. `/api/auth/me` is a read-only session hydration
+  endpoint and should not consume the login/register/reset abuse bucket.
+- `authRateLimiter` now bypasses only authenticated `GET /me` hydration while
+  leaving login and other auth-write endpoints on the existing strict limiter
+  and lockout path.
+
+Verification:
+
+- Red regression reproduced the current failure with
+  `AUTH_RATE_LIMIT_MAX=2`: four `GET /me` middleware calls returned `429`
+  before the fix.
+- Targeted backend regression now passes:
+  `npx vitest run src/middleware/rateLimiter.test.ts`.
+- backend `type-check` passed.
+- backend `lint` passed.
+- backend `format:check` passed.
+- `git diff --check` passed.
+
+Retest required after merge:
+
+- Re-run the live browser project-surface sweep and confirm normal navigation no
+  longer produces `/api/auth/me` `429` responses or false auth/access failures.
+
+Artifacts:
+
+- No bearer tokens, session cookies, generated passwords, production secrets,
+  recipient emails, or browser-session data were committed or copied into this
+  ledger.
+
 ## Stage 29 - Mobile Subbie Documents and Project Context QA
 
-Status: local fixes complete; PR/CI/merge pending.
+Status: landed in PR #1063; post-merge master CI, full post-merge E2E, and
+production health checks passed.
 
 Scope:
 

@@ -1,5 +1,5 @@
-import type { Request } from 'express';
-import { afterEach, describe, expect, it } from 'vitest';
+import type { NextFunction, Request, Response } from 'express';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getClientIp } from './rateLimiter.js';
 
 const ORIGINAL_ENV = { ...process.env };
@@ -22,6 +22,7 @@ function mockRequest({
 
 afterEach(() => {
   process.env = { ...ORIGINAL_ENV };
+  vi.resetModules();
 });
 
 describe('getClientIp', () => {
@@ -59,5 +60,81 @@ describe('getClientIp', () => {
 
     expect(getClientIp(mockRequest({ remoteAddress: '10.0.0.9' }))).toBe('10.0.0.9');
     expect(getClientIp(mockRequest({}))).toBe('unknown');
+  });
+});
+
+function mockRateLimitRequest({
+  method,
+  path,
+  ip,
+}: {
+  method: string;
+  path: string;
+  ip: string;
+}): Request {
+  return {
+    method,
+    path,
+    originalUrl: `/api/auth${path}`,
+    baseUrl: '/api/auth',
+    headers: {},
+    ip,
+    socket: { remoteAddress: ip },
+  } as unknown as Request;
+}
+
+function mockResponse(): Response {
+  return {
+    setHeader: vi.fn(),
+  } as unknown as Response;
+}
+
+async function runMiddleware(
+  middleware: (req: Request, res: Response, next: NextFunction) => void,
+  req: Request,
+): Promise<unknown> {
+  return new Promise((resolve) => {
+    middleware(req, mockResponse(), (error?: unknown) => resolve(error));
+  });
+}
+
+describe('authRateLimiter', () => {
+  async function loadProductionMemoryAuthRateLimiter() {
+    vi.resetModules();
+    process.env.NODE_ENV = 'production';
+    process.env.RATE_LIMIT_STORE = 'memory';
+    process.env.AUTH_RATE_LIMIT_MAX = '2';
+    return import('./rateLimiter.js');
+  }
+
+  it('does not count GET /me session hydration against strict auth attempts', async () => {
+    const { authRateLimiter } = await loadProductionMemoryAuthRateLimiter();
+    const req = mockRateLimitRequest({
+      method: 'GET',
+      path: '/me',
+      ip: '198.51.100.44',
+    });
+
+    for (let i = 0; i < 4; i++) {
+      await expect(runMiddleware(authRateLimiter, req)).resolves.toBeUndefined();
+    }
+  });
+
+  it('still rate limits login attempts', async () => {
+    const { authRateLimiter } = await loadProductionMemoryAuthRateLimiter();
+    const req = mockRateLimitRequest({
+      method: 'POST',
+      path: '/login',
+      ip: '198.51.100.45',
+    });
+
+    await expect(runMiddleware(authRateLimiter, req)).resolves.toBeUndefined();
+    await expect(runMiddleware(authRateLimiter, req)).resolves.toBeUndefined();
+
+    const error = await runMiddleware(authRateLimiter, req);
+    expect(error).toMatchObject({
+      statusCode: 429,
+      code: 'RATE_LIMITED',
+    });
   });
 });
