@@ -16,7 +16,7 @@ import {
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { logError } from '@/lib/logger';
 import { extractErrorMessage } from '@/lib/errorHandling';
-import { parseOptionalNonNegativeDecimalInput } from '@/lib/numericInput';
+import { validateProjectAreaForm } from './projectAreaForm';
 
 interface ProjectArea {
   id: string;
@@ -119,34 +119,16 @@ export function ProjectAreasPage() {
   const handleSave = async () => {
     if (!projectId || savingRef.current) return;
 
-    if (!formName.trim()) {
-      toast({
-        title: 'Error',
-        description: 'Area name is required',
-        variant: 'error',
-      });
-      return;
-    }
+    const validation = validateProjectAreaForm({
+      name: formName,
+      chainageStart: formChainageStart,
+      chainageEnd: formChainageEnd,
+    });
 
-    const chainageStart = parseOptionalNonNegativeDecimalInput(formChainageStart);
-    const chainageEnd = parseOptionalNonNegativeDecimalInput(formChainageEnd);
-
-    if (
-      (formChainageStart.trim() && chainageStart === null) ||
-      (formChainageEnd.trim() && chainageEnd === null)
-    ) {
+    if (!validation.ok) {
       toast({
-        title: 'Invalid chainage',
-        description: 'Enter non-negative decimal numbers for chainage start and end.',
-        variant: 'error',
-      });
-      return;
-    }
-
-    if (chainageStart !== null && chainageEnd !== null && chainageStart > chainageEnd) {
-      toast({
-        title: 'Invalid chainage range',
-        description: 'Chainage start must be less than or equal to chainage end.',
+        title: validation.title,
+        description: validation.description,
         variant: 'error',
       });
       return;
@@ -157,9 +139,9 @@ export function ProjectAreasPage() {
 
     try {
       const body = {
-        name: formName.trim(),
-        chainageStart,
-        chainageEnd,
+        name: validation.name,
+        chainageStart: validation.chainageStart,
+        chainageEnd: validation.chainageEnd,
         colour: formColour,
       };
 
@@ -343,7 +325,7 @@ export function ProjectAreasPage() {
         >
           <ModalHeader>{editingArea ? 'Edit Area' : 'Add Area'}</ModalHeader>
           <ModalDescription>
-            Define a named project area with optional chainage bounds and map colour.
+            Define a named project area with required chainage bounds and map colour.
           </ModalDescription>
           <ModalBody>
             <div className="space-y-4">
@@ -363,12 +345,14 @@ export function ProjectAreasPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="project-area-chainage-start" className="mb-1">
-                    Chainage Start (m)
+                    Chainage Start (m) *
                   </Label>
                   <Input
                     id="project-area-chainage-start"
                     type="number"
                     step="0.001"
+                    min="0"
+                    required
                     value={formChainageStart}
                     onChange={(e) => setFormChainageStart(e.target.value)}
                     placeholder="0"
@@ -376,18 +360,23 @@ export function ProjectAreasPage() {
                 </div>
                 <div>
                   <Label htmlFor="project-area-chainage-end" className="mb-1">
-                    Chainage End (m)
+                    Chainage End (m) *
                   </Label>
                   <Input
                     id="project-area-chainage-end"
                     type="number"
                     step="0.001"
+                    min="0"
+                    required
                     value={formChainageEnd}
                     onChange={(e) => setFormChainageEnd(e.target.value)}
                     placeholder="1000"
                   />
                 </div>
               </div>
+              <p className="-mt-2 text-xs text-muted-foreground">
+                Start and end are required. End must be greater than start.
+              </p>
 
               <div>
                 <Label className="mb-1">
