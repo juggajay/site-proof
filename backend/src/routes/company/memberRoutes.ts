@@ -509,6 +509,12 @@ companyMemberRoutes.post(
       throw AppError.notFound('User in your company');
     }
 
+    if (!newOwner.passwordHash) {
+      throw AppError.badRequest(
+        'New owner must have accepted their invitation before ownership can be transferred',
+      );
+    }
+
     // Transfer ownership: update both users in a transaction
     await prisma.$transaction([
       // Set new owner

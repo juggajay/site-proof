@@ -1926,6 +1926,61 @@ describe('Company API', () => {
       await prisma.user.delete({ where: { id: otherRes.body.user.id } });
     });
 
+    it('should reject transfer to a pending invited member', async () => {
+      const suffix = Date.now();
+      const pendingTransferCompany = await prisma.company.create({
+        data: { name: `Pending Transfer Company ${suffix}` },
+      });
+      const owner = await registerTestUser(app, {
+        emailPrefix: `pending-transfer-owner-${suffix}`,
+        fullName: 'Pending Transfer Current Owner',
+        companyId: pendingTransferCompany.id,
+        roleInCompany: 'owner',
+      });
+      const pendingMember = await prisma.user.create({
+        data: {
+          email: `pending-transfer-target-${suffix}@example.com`,
+          fullName: 'Pending Transfer Owner',
+          companyId: pendingTransferCompany.id,
+          roleInCompany: 'admin',
+          passwordHash: null,
+          emailVerified: true,
+          emailVerifiedAt: new Date(),
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .post('/api/company/transfer-ownership')
+          .set('Authorization', `Bearer ${owner.token}`)
+          .send({ newOwnerId: pendingMember.id });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.message).toContain('accepted their invitation');
+
+        const [currentOwner, pending] = await Promise.all([
+          prisma.user.findUniqueOrThrow({ where: { id: owner.userId } }),
+          prisma.user.findUniqueOrThrow({ where: { id: pendingMember.id } }),
+        ]);
+        expect(currentOwner.roleInCompany).toBe('owner');
+        expect(pending.roleInCompany).toBe('admin');
+      } finally {
+        await prisma.emailVerificationToken.deleteMany({
+          where: { userId: { in: [owner.userId, pendingMember.id] } },
+        });
+        await prisma.auditLog.deleteMany({
+          where: {
+            OR: [
+              { entityId: pendingTransferCompany.id },
+              { userId: { in: [owner.userId, pendingMember.id] } },
+            ],
+          },
+        });
+        await prisma.user.deleteMany({ where: { id: { in: [owner.userId, pendingMember.id] } } });
+        await prisma.company.delete({ where: { id: pendingTransferCompany.id } }).catch(() => {});
+      }
+    });
+
     it('should reject non-owner users', async () => {
       // Create admin user
       const adminEmail = `admin-transfer-${Date.now()}@example.com`;
