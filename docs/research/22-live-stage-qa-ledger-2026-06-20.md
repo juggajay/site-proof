@@ -1092,3 +1092,78 @@ Notes for Review:
 - The DB-backed route regression tests were added to `testResults.test.ts`, but
   the file could not run locally because this worktree has no safe
   `DATABASE_URL`. They passed in CI as part of PR #1019 and the master run.
+
+## Stage 16 - Claims Lifecycle Edge Cases
+
+Scope:
+- Focused owner-side claims lifecycle audit covering claim creation, partial
+  claim increments, draft deletion, submit retry, dispute, certification, payment
+  rounding, evidence package wording, and claims table cache/export behavior.
+- Production browser/API probe using a fresh throwaway owner, company, project,
+  lots, and claims against the live Railway backend.
+
+Findings:
+1. Zero-percent claim increments could create a no-value claim. Fixed by
+   rejecting non-positive claim percentages before claim creation.
+2. Claims could be marked disputed with a blank dispute reason. Fixed by
+   requiring non-empty dispute notes whenever status moves to `disputed`.
+3. Certification and payment amounts accepted sub-cent float values and stored
+   float artifacts. Fixed by rounding certified, paid, payment-history, audit,
+   and notification amounts to cents.
+4. Retrying a generic submitted-status update could re-stamp `submittedAt` and
+   add duplicate status-change audit entries. Fixed by making submitted-status
+   retries idempotent.
+5. Certifying a previously disputed claim left active dispute fields visible.
+   Fixed by clearing active dispute fields while preserving the old dispute text
+   as resolved certification metadata.
+6. Draft claim deletion checked status before the transaction/row lock, leaving
+   a stale-delete race against simultaneous submission. Fixed by moving the
+   status check inside the locked transaction.
+7. Claims UI mutations did not refresh all relevant claims/readiness/lots caches.
+   Fixed by invalidating the claims, claim-readiness, lot, and dashboard readers
+   after claims mutations.
+8. The submit modal still referred to a claim package even though the current
+   action exports the summary CSV/register. Fixed by updating the copy and E2E
+   selectors.
+
+Run evidence:
+- PR #1021 merged as `fd0dee80` with the main claims lifecycle fixes.
+- PR #1022 merged as `3fe9b944` to align the remaining claims E2E selector with
+  the updated submit-modal copy.
+- PR #1023 merged as `25c91eb0` to fix the claims test fixture's stale manual
+  claim-number counter after master Backend CI exposed a collision.
+- Local focused backend checks before #1021:
+  - `npm test -- src/routes/claims/workflowValidation.test.ts` passed.
+  - `npm run type-check` passed.
+  - `npm run lint` passed.
+- Local focused frontend checks before #1021:
+  - `npm run test:unit -- src/pages/claims` passed, 95 tests.
+  - `npm run type-check` passed.
+  - `npm run lint` passed with the existing `frontend/src/lib/theme.tsx`
+    fast-refresh warning.
+  - `npx playwright test --grep @pr-smoke` passed after the submit-copy selector
+    was updated.
+- Follow-up local checks for #1023:
+  - `npm run type-check`, `npm run lint`, `npm run format:check`,
+    `npm run build`, and `git diff --check` passed in `backend/`.
+  - DB-backed local `claims.test.ts` could not run because this worktree has no
+    safe local `DATABASE_URL`; the CI Backend job supplied the PostgreSQL-backed
+    verification.
+- Final master CI run `27889159832` passed after #1023, including Backend,
+  Frontend, and full post-merge Frontend E2E.
+- Post-merge production probe passed on 2026-06-21:
+  - zero-percent claim increment returned HTTP 400;
+  - blank dispute reason returned HTTP 400;
+  - certification amount `999.999` stored/read back as `1000`;
+  - partial payment amount `333.333` stored/read back as `333.33`, including
+    payment history, with outstanding amount `666.67`;
+  - the probe completed with `findings: []`.
+
+Notes for Review:
+- The production probe script lives at
+  `.gstack/tmp/stage16-claims-lifecycle-probe.js` inside the QA worktree. It
+  creates throwaway production data and does not use external temp-email
+  services.
+- The final #1023 change is test-only; it protects CI from direct Prisma fixture
+  claim-number collisions after route-created claims advance the same project's
+  claim sequence.
