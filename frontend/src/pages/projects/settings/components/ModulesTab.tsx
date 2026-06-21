@@ -13,24 +13,28 @@ const MODULE_CONFIG = [
   {
     key: 'costTracking' as const,
     label: 'Cost Tracking',
-    description: 'Track project costs and budget',
+    description: 'Show Costs in project navigation',
   },
   {
     key: 'progressClaims' as const,
     label: 'Progress Claims',
-    description: 'Manage progress claims and payments',
+    description: 'Show Progress Claims in project navigation',
   },
   {
     key: 'subcontractors' as const,
     label: 'Subcontractors',
-    description: 'Manage subcontractor information',
+    description: 'Show Subcontractors in project navigation',
   },
   {
     key: 'dockets' as const,
     label: 'Docket Approvals',
-    description: 'Approve and track delivery dockets',
+    description: 'Show Docket Approvals in project navigation',
   },
-  { key: 'dailyDiary' as const, label: 'Daily Diary', description: 'Record daily site activities' },
+  {
+    key: 'dailyDiary' as const,
+    label: 'Daily Diary',
+    description: 'Show Daily Diary in project navigation',
+  },
 ] as const;
 
 export function ModulesTab({ projectId, initialEnabledModules }: ModulesTabProps) {
@@ -76,10 +80,11 @@ export function ModulesTab({ projectId, initialEnabledModules }: ModulesTabProps
   return (
     <div className="space-y-6">
       <div className="rounded-lg border p-4">
-        <h2 className="text-lg font-semibold mb-2">Project Modules</h2>
+        <h2 className="text-lg font-semibold mb-2">Project Module Shortcuts</h2>
         <p className="text-sm text-muted-foreground mb-4">
-          Enable or disable modules for this project. Disabled modules will be hidden from the
-          navigation.
+          Choose which project module links appear in the sidebar and mobile navigation. This is a
+          navigation shortcut setting only; it does not delete data, disable records, or block
+          direct route/API access.
         </p>
         {saveError && (
           <div

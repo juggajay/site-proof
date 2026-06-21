@@ -46,7 +46,7 @@ export const workflowSteps: DocumentationStep[] = [
   {
     title: 'Set up the company and project',
     description:
-      'Create your company, add a project, then confirm users, areas, modules, and specification set before field work starts.',
+      'Create your company, add a project, then confirm users, areas, navigation shortcuts, and specification set before field work starts.',
   },
   {
     title: 'Break work into lots',
@@ -81,7 +81,7 @@ export const documentationSections: DocumentationSection[] = [
       {
         title: 'Create or open a project',
         description:
-          'Use Projects to create the workspace, set the project number, client details, status, and enabled modules.',
+          'Use Projects to create the workspace, set the project number, client details, status, and navigation module shortcuts.',
       },
       {
         title: 'Create lots from the Lots register',
@@ -286,7 +286,7 @@ export const documentationSections: DocumentationSection[] = [
       {
         title: 'Set company and project controls',
         description:
-          'Owners and admins manage company profile, project users, areas, modules, specification sets, and commercial access.',
+          'Owners and admins manage company profile, project users, areas, navigation module shortcuts, specification sets, and commercial access.',
       },
       {
         title: 'Review audit activity',
