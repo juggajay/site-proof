@@ -40,8 +40,8 @@ const apiFetchMock = vi.mocked(apiFetch) as unknown as MockInstance<
 >;
 const lazyTabLoad = { timeout: 5000 };
 
-function buildDiary(): DailyDiary {
-  const timestamp = '2026-06-10T00:00:00.000Z';
+function buildDiary(date = '2026-06-10'): DailyDiary {
+  const timestamp = `${date}T00:00:00.000Z`;
   return {
     id: 'diary-1',
     projectId: 'project-1',
@@ -96,12 +96,12 @@ function mockApi({
   });
 }
 
-function renderPage() {
+function renderPage(initialEntry = '/projects/project-1/diary') {
   return renderWithProviders(
     <Routes>
       <Route path="/projects/:projectId/diary" element={<DailyDiaryPage />} />
     </Routes>,
-    { initialEntries: ['/projects/project-1/diary'] },
+    { initialEntries: [initialEntry] },
   );
 }
 
@@ -142,6 +142,16 @@ describe('DailyDiaryPage mobile fetch failure', () => {
 describe('DailyDiaryPage desktop entry tabs before the diary exists', () => {
   beforeEach(() => {
     viewport.isMobile = false;
+  });
+
+  it('loads the diary date from the URL query on first render', async () => {
+    mockApi({ diaryForDate: () => buildDiary('2026-06-09') });
+    renderPage('/projects/project-1/diary?date=2026-06-09');
+
+    await waitFor(() =>
+      expect(apiFetchMock).toHaveBeenCalledWith('/api/diary/project-1/2026-06-09?missing=null'),
+    );
+    expect(screen.getByLabelText('Select Date:')).toHaveValue('2026-06-09');
   });
 
   it('shows the guided empty state instead of a blank panel, and Go to Weather switches tabs', async () => {
