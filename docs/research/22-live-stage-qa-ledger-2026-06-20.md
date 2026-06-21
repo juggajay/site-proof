@@ -2213,3 +2213,110 @@ Artifacts:
 - No bearer tokens, session cookies, production secrets, email payloads,
   schedule IDs tied to credentials, or recipient-specific delivery evidence were
   committed or copied into this ledger.
+
+## Stage 26 - Reports UI Role, Claims Filter, and Schedule Modal QA
+
+Status: completed. One frontend/UI code fix was merged from this stage.
+
+Scope:
+
+- Reports page frontend role/tier gating for Claims and scheduled-report
+  controls.
+- Schedule modal load-error behaviour and small mobile layout risks.
+- Claims report UI controls against the backend's existing date/status filters.
+- Reports help copy compared with the actions currently exposed in the UI.
+
+Subagent coverage:
+
+- Fixture/auth mapper confirmed a fresh production-safe registration can only
+  create a `basic` company, so eligible-tier schedule modal QA needs either an
+  existing eligible company or mocked/stubbed browser coverage.
+- Frontend reports mapper found the likely mismatches: viewer-accessible
+  schedule controls, `+ New Schedule` after schedule-load errors, overbroad
+  export help copy, missing Claims filters, and mobile overflow risks.
+- Existing coverage mapper confirmed backend scheduled-report access tests are
+  strong, while frontend coverage was mostly admin happy path and needed viewer
+  and basic-tier regressions.
+
+Confirmed issues fixed:
+
+- Eligible-tier report viewers could see the `Schedule Reports` control even
+  though backend schedule routes allow only owner/admin/project-manager roles.
+  Fixed in #1058 by deriving the project-scoped role in `ReportsPage` and only
+  showing schedule management to commercial roles.
+- Report viewers could also reach the commercial Claims report tab, which the
+  backend denies to non-commercial roles. Fixed in #1058 by hiding Claims for
+  non-commercial report viewers and redirecting stale `?tab=claims` deep links
+  back to Lot Status.
+- The schedule modal exposed `+ New Schedule` after a schedule-list load error.
+  Fixed in #1058 by making creation fail closed until schedules load
+  successfully.
+- Claims report date/status filters existed in the backend but not in the UI.
+  Fixed in #1058 by adding period-end date range and status controls wired to
+  `startDate`, `endDate`, and `status`.
+- Reports help copy promised PDF or CSV export, while the mapped UI exposes
+  print/save-PDF rather than a CSV export action. Fixed in #1058 by narrowing
+  the help copy.
+- Mobile layout risks in Reports tabs and the schedule modal were reduced by
+  making tab navigation horizontally scrollable and stacking schedule form/list
+  controls on small screens.
+
+Related merged work:
+
+- #1058 - Fix reports schedule access and claim filters, merged as `08bb7432`.
+
+Verification:
+
+- #1058 local checks passed:
+  - frontend `type-check`
+  - frontend targeted unit tests:
+    `npm run test:unit -- src/pages/reports/ReportsPage.test.tsx src/components/reports/scheduleReportModalHelpers.test.ts`
+  - frontend reports E2E:
+    `npx playwright test e2e/reports.spec.ts --project=chromium`
+  - frontend production-readiness guard:
+    `npx playwright test e2e/productionReadiness.spec.ts --project=chromium -g "scheduled reports are capped per project across API and UI"`
+  - frontend `format:check`
+  - frontend `lint`, passing with the existing unrelated
+    `src/lib/theme.tsx` fast-refresh warning
+  - `git diff --check`
+  - changed-file `fallow audit --base origin/master --format json --quiet`,
+    verdict `warn` for inherited E2E helper complexity/duplication in
+    `reports.spec.ts`, with no dead-code findings
+- PR #1058 initially failed the Frontend job because the static
+  production-readiness guard still expected the old
+  `disabled={hasReachedScheduleLimit}` literal. The guard was updated to assert
+  the stronger `canCreateSchedule` gate and the PR checks then passed.
+- Master CI run `27909145462` passed after merge, including Backend, Frontend,
+  and full post-merge Frontend E2E.
+- After merge, production health checks returned HTTP 200 for:
+  - `https://site-proof-production.up.railway.app/ready`
+  - `https://site-proof.vercel.app`
+
+Not live-exercised in this stage:
+
+- A real production eligible-tier viewer account. Fresh production-safe
+  onboarding creates `basic` companies only, so the viewer/professional path was
+  covered with E2E mocks rather than by mutating production subscription data.
+- Real scheduled-report creation/delivery. This stage intentionally avoided
+  creating active production schedules or sending external report emails.
+- Visible Chrome automation. The existing Chrome automation session was blocked
+  by an extension UI overlay, so the browser verification used isolated
+  Playwright/Chromium E2E instead.
+
+Remaining findings for a later pass:
+
+- `GET /api/reports/schedules` still requires schedule-management access even
+  though it is read-only. #1058 makes the UI match current backend policy, but
+  the product decision remains whether read-only schedule visibility should be
+  allowed.
+- Timezone semantics for scheduled report `timeOfDay` are still server-local
+  and were not changed in this UI pass.
+- Duplicate-email recovery if an email provider send succeeds but the post-send
+  DB update fails remains an architectural reliability follow-up.
+- Dead-letter handling for permanently invalid stored schedules remains open.
+
+Artifacts:
+
+- No bearer tokens, session cookies, generated passwords, production secrets,
+  recipient emails, schedule IDs tied to credentials, or browser-session data
+  were committed or copied into this ledger.
