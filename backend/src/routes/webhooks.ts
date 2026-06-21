@@ -33,13 +33,15 @@ import {
   deliverWebhook,
   generateSignature,
   getWebhookConfig,
+  getWebhookConfigMetadata,
   sanitizeWebhookUrlForLog,
   toPublicWebhookConfig,
   toWebhookConfig,
+  toWebhookConfigMetadata,
   triggerWebhooks,
   verifySignature,
 } from './webhooks/delivery.js';
-import type { WebhookConfig } from './webhooks/delivery.js';
+import type { WebhookConfigMetadata } from './webhooks/delivery.js';
 
 const router = Router();
 const WEBHOOK_MANAGER_ROLES = ['owner', 'admin'];
@@ -59,7 +61,9 @@ function encryptWebhookSecret(secret: string): string {
   return encrypt(secret);
 }
 
-function getWebhookAuditSnapshot(config: Pick<WebhookConfig, 'url' | 'events' | 'enabled'>) {
+function getWebhookAuditSnapshot(
+  config: Pick<WebhookConfigMetadata, 'url' | 'events' | 'enabled'>,
+) {
   return {
     url: sanitizeWebhookUrlForLog(config.url),
     events: config.events,
@@ -68,8 +72,8 @@ function getWebhookAuditSnapshot(config: Pick<WebhookConfig, 'url' | 'events' | 
 }
 
 function buildWebhookUpdateAuditChanges(
-  before: WebhookConfig,
-  after: WebhookConfig,
+  before: WebhookConfigMetadata,
+  after: WebhookConfigMetadata,
 ): Record<string, unknown> {
   const changes: Record<string, unknown> = {};
 
@@ -191,7 +195,7 @@ router.get(
 
     res.json(
       buildWebhookConfigsResponse(
-        configs.map((config) => toPublicWebhookConfig(toWebhookConfig(config))),
+        configs.map((config) => toPublicWebhookConfig(toWebhookConfigMetadata(config))),
       ),
     );
   }),
@@ -243,7 +247,7 @@ router.get(
     const user = req.user!;
     requireWebhookManager(user);
 
-    const config = await getWebhookConfig(id);
+    const config = await getWebhookConfigMetadata(id);
     if (!config) {
       throw AppError.notFound('Webhook not found');
     }
@@ -265,7 +269,7 @@ router.patch(
     requireWebhookManager(user);
     const { url, events, enabled } = req.body;
 
-    const config = await getWebhookConfig(id);
+    const config = await getWebhookConfigMetadata(id);
     if (!config) {
       throw AppError.notFound('Webhook not found');
     }
@@ -292,7 +296,7 @@ router.patch(
       data.enabled = enabled;
     }
 
-    const updatedConfig = toWebhookConfig(
+    const updatedConfig = toWebhookConfigMetadata(
       await prisma.webhookConfig.update({
         where: { id },
         data,
@@ -322,7 +326,7 @@ router.delete(
     const user = req.user!;
     requireWebhookManager(user);
 
-    const config = await getWebhookConfig(id);
+    const config = await getWebhookConfigMetadata(id);
     if (!config) {
       throw AppError.notFound('Webhook not found');
     }
@@ -397,7 +401,7 @@ router.get(
     const user = req.user!;
     requireWebhookManager(user);
 
-    const config = await getWebhookConfig(id);
+    const config = await getWebhookConfigMetadata(id);
     if (!config) {
       throw AppError.notFound('Webhook not found');
     }
