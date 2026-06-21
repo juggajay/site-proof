@@ -1524,3 +1524,130 @@ Artifacts:
   `.gstack/tmp/stage19-admin-settings-probe.js` inside the QA worktree.
 - MFA production verification script:
   `.gstack/tmp/stage19-mfa-production-verify.js` inside the QA worktree.
+
+## Stage 20 - Platform Edge, Public Auth Links, Portal Shells, and Webhooks
+
+Scope:
+
+- Ran production-safe checks over platform edge endpoints and supporting
+  surfaces: support/contact, consent records, metrics access, webhooks, API
+  keys, push notification configuration, account export, public auth-link
+  screens, owner utility pages, foreman mobile dockets, and subcontractor portal
+  shell routes.
+- Used the visible gstack-controlled browser for the user-facing checks.
+- Created only throwaway Stage 20 test data. No customer data or external
+  temporary-email services were used.
+
+Status: passed after one QA-found production fix.
+
+API run evidence:
+
+- Backend `/ready` returned HTTP 200.
+- `/api/metrics` denied unauthenticated and foreman access, and allowed owner
+  access.
+- `/api/support/contact` and client-error reporting rejected invalid request
+  bodies before any email send.
+- Consent endpoints denied unauthenticated access and allowed current, single,
+  bulk, history, withdraw-all, and post-withdraw current reads for the logged-in
+  throwaway user.
+- Webhook management denied unauthenticated and foreman access. It rejected
+  private hosts, credentialed URLs, invalid event arrays, and production test
+  receiver use.
+- API key checks confirmed owner read-only key creation, read-only denial on
+  admin-scoped webhooks, key revocation, and revoked-key rejection.
+- Push notification status showed VAPID is not configured in production. Public
+  key lookup returned the expected unavailable status, test send rejected a
+  missing subscription, and malformed subscription writes were rejected.
+- Account export returned an attachment response and the checked payload did not
+  expose raw secrets, token hashes, API-key hashes, or webhook secrets.
+- Public auth-link endpoint matrix passed 16 production checks:
+  magic-link request validation, no-enumeration success for unknown email,
+  existing throwaway-account magic-link request path, invalid magic-token
+  rejection, forgot-password validation/no-enumeration, reset-token validation,
+  magic-token rejection on reset, email verification invalid-token handling,
+  resend-verification no-enumeration, and production disablement of the test auth
+  helper.
+- Webhook lifecycle CRUD passed on a temporary config pointed at
+  `https://example.com/siteproof-stage20-webhook`: list, create, masked get,
+  patch disable/events, delivery-history read, regenerate secret, masked
+  list-after-regenerate, delete cleanup, and final absence check.
+
+Visible browser evidence:
+
+- Public mobile pages loaded without console errors:
+  `/landing`, `/privacy-policy`, and `/terms-of-service`.
+- Owner utility pages loaded without `Access Denied` or console errors:
+  `/support`, `/docs`, `/profile`, and `/notifications`.
+- The support form kept submit disabled until required fields were present; no
+  live support request was sent in this pass.
+- Invalid public auth links rendered recoverable user states:
+  `/auth/magic-link?token=...` showed `Magic Link Error` and stripped the token
+  from the URL; `/reset-password?token=...` showed `Invalid Reset Link`; and
+  `/verify-email?token=...` showed `Verification Failed`.
+- The visible login magic-link request flow switched modes, posted once to
+  `/api/auth/magic-link/request`, returned HTTP 200 for a non-existent
+  `.invalid` address, and showed `Magic link sent` with no console errors.
+- The visible forgot-password flow posted once to `/api/auth/forgot-password`,
+  returned HTTP 200 for a non-existent `.invalid` address, and showed the sent
+  state with no console errors.
+- Foreman `/m/dockets?projectId=:id` originally rendered the Dockets screen but
+  made an avoidable bare `GET /api/dockets` call before the project ID resolved,
+  causing a handled production HTTP 400 and browser console resource error.
+- After #1038 deployed and the visible browser cache/service worker was cleared,
+  the same foreman dockets route made only
+  `GET /api/dockets?projectId=:id -> 200`, rendered the Dockets screen, and
+  produced no console errors.
+- A throwaway subcontractor portal identity was created through the production
+  invitation/acceptance flow. Routes `/p`, `/p/docket`, `/p/dockets`, `/p/work`,
+  `/p/quality`, `/p/itps`, `/p/docs`, `/p/ncrs`, and `/p/company` loaded without
+  `Access Denied`, console errors, or 4xx/5xx API responses.
+- Toggling the throwaway subcontractor's documents module off caused
+  `/p/docs?projectId=:id` to show a gated/denied module state without console
+  errors or failed API responses; the module was restored afterward.
+
+Related merged work:
+
+- #1038 - Fix foreman dockets shell project query gate, merged as `6336f335`.
+
+Verification:
+
+- #1038 local focused checks passed:
+  - `npm run test:unit -- src/shell/screens/dockets/test/useDocketsShellData.test.tsx src/shell/screens/dockets/test/DocketsListScreen.test.tsx`
+  - frontend `format:check`
+  - frontend `type-check`
+  - frontend `lint -- --quiet`
+  - `git diff --check`
+  - frontend production build with a non-secret dummy `VITE_SENTRY_DSN`
+  - changed-file `fallow audit --base origin/master --format json --quiet`
+- PR #1038 CI passed: Frontend, Frontend PR E2E smoke, Detect changes, and
+  Vercel ignored-build. Backend was correctly skipped for the frontend-only
+  change.
+- Master CI run `27897965287` passed after #1038, including Backend, Frontend,
+  and full post-merge Frontend E2E.
+- Production verification after #1038 confirmed the live foreman dockets route no
+  longer emits the bare `/api/dockets` request.
+
+Artifacts:
+
+- Production platform-edge probe script:
+  `.gstack/tmp/stage20-platform-edge-probe.js`.
+- Throwaway subcontractor setup script:
+  `.gstack/tmp/stage20-subbie-setup.js`.
+- Sensitive throwaway browser/session handoff files remain under ignored
+  `.gstack/tmp/` paths and are not committed.
+
+Observations for Review:
+
+- Push notifications remain disabled in production because VAPID is not
+  configured. The app handles this state cleanly; decide whether push is a launch
+  requirement or a later enhancement.
+- Full happy-path public auth-link verification still needs a mailbox-controlled
+  test because the app correctly stores only hashed one-time tokens. This pass
+  verified request/send paths, invalid-token UI, no-enumeration behavior, and
+  production test-helper disablement, but did not click a delivered email link.
+- Webhook CRUD and masking were verified live. Webhook delivery was not fired to
+  a third-party receiver in this pass.
+- Local Node fetch needed `NODE_TLS_REJECT_UNAUTHORIZED=0` for production API
+  probes because this Windows/AVG Node trust store did not trust the leaf chain.
+  PowerShell and the visible browser trusted production normally, so this appears
+  to be a local test-runner certificate-store issue rather than an app issue.
