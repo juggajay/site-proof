@@ -16,6 +16,105 @@ keep going until the app has been exercised end to end.
   `1secmail.com` from an old Codex process, so future email QA must use Jay's
   nominated inbox, a trusted mailbox, or Resend's safe test recipient.
 
+## Stage 32 - Paid Account and Admin Lifecycle QA
+
+Status: landed in PR #1068; PR CI, post-merge master CI, full post-merge E2E,
+and production health checks passed.
+
+Scope:
+
+- Subscription-tier interpretation and paid-tier limits for projects, users,
+  scheduled reports, and background scheduled-report delivery.
+- Company member invitation capacity and admin lifecycle behavior around seat
+  limits.
+- Sample-project creation capacity behavior.
+- Account deletion copy and retained project-record expectations.
+- Profile-avatar storage cleanup during account deletion.
+- Company owner leave flow messaging.
+- Project settings notification defaults.
+- Scheduled-report permission and preference behavior.
+
+Subagent coverage:
+
+- Paid-tier reviewer confirmed raw `Company.subscriptionTier` reads could
+  silently downgrade paid accounts when the stored value was cased or padded
+  differently from the expected lowercase values.
+- The same reviewer confirmed sample-project creation had its own count/check
+  path instead of the locked project-capacity helper, and scheduled-report
+  creation had a count-then-create race against its per-project cap.
+- Admin lifecycle reviewer confirmed account deletion left stored avatars
+  behind and the UI overpromised deletion of all associated project evidence,
+  even though the backend intentionally anonymizes or preserves retained
+  project records.
+- Settings reviewer confirmed the frontend project notification default for
+  daily diary reminders disagreed with the backend default, so saving unrelated
+  toggles could disable diary reminders.
+
+Confirmed issues fixed locally:
+
+- Added central subscription-tier normalization and shared tier-limit helpers,
+  then applied them to company profile usage, project creation limits, company
+  member invite limits, scheduled-report route gates, and scheduled-report
+  background delivery eligibility.
+- Sample-project creation now uses the same locked project-capacity assertion
+  inside its transaction before creating the sample project.
+- Scheduled-report creation now locks the project row and checks the existing
+  schedule count in the same transaction before insert, preventing concurrent
+  cap bypasses.
+- Shared avatar-storage deletion logic was extracted and reused by account
+  deletion, so owned Supabase/local avatar files are best-effort removed when a
+  user deletes their account.
+- Account deletion API/UI wording now reflects the actual behavior: account
+  access, credentials, memberships, and settings are deleted while retained
+  project compliance records may remain with attribution anonymized.
+- Company owner leave-flow copy no longer points users toward a nonexistent
+  company deletion route.
+- Frontend project notification defaults now keep daily diary reminders enabled
+  unless the user explicitly turns them off.
+
+Verification:
+
+- Local backend `format:check`, `type-check`, and `lint` passed.
+- Local frontend `format:check`, `type-check`, and `lint` passed; frontend
+  lint still reports the existing `theme.tsx` fast-refresh warning.
+- Local backend non-DB regression slice passed:
+  `npm run test -- src/lib/tierLimits.test.ts src/routes/projects/projectCreationLimit.test.ts src/routes/reports/scheduleRoutes.test.ts src/routes/auth/accountDeletionRoutes.test.ts src/lib/routeAuthCoverage.test.ts`.
+- Local frontend regression slice passed:
+  `npm run test:unit -- src/pages/settings/components/SettingsSections.test.tsx src/pages/settings/components/AccountDangerModals.test.tsx src/pages/projects/settings/types.test.ts`.
+- Local DB-backed scheduled-report tests were not run in the worktree because
+  no `DATABASE_URL` was configured there; CI ran the backend suite against its
+  disposable PostgreSQL service and passed.
+- PR #1068 checks passed before merge: Backend, Frontend, Frontend PR E2E
+  smoke, Detect changes, Vercel ignored-build status, and Vercel Preview
+  Comments.
+- Master CI run `27917465000` passed after merge, including Backend, Frontend,
+  and full post-merge Frontend E2E.
+- Production health checks returned HTTP 200 for:
+  - `https://site-proof-production.up.railway.app/ready`
+  - `https://site-proof.vercel.app`
+
+Not fixed in this stage / carry forward:
+
+- Seat-limit recovery still needs an admin path to remove users or cancel
+  stale/pending invites; otherwise a company at its seat cap can remain locked
+  out of inviting replacements.
+- Scheduled-report delivery currently ignores a user's general
+  `scheduledReports` email preference when that user is an explicit schedule
+  recipient. This needs a product decision because scheduled reports may be
+  deliberate business subscriptions rather than notification noise.
+- Reports schedule UI should use the project-scoped current role instead of the
+  auth snapshot role so mixed-role users do not see controls that the backend
+  will reject with 403.
+- Audit retention min/max policy, webhook ownership after creator offboarding,
+  storage cleanup retry behavior, and whether archived/sample projects should
+  count toward paid project limits remain policy/hardening items.
+
+Artifacts:
+
+- No bearer tokens, session cookies, generated passwords, production secrets,
+  recipient emails, invite IDs, or browser-session data were committed or copied
+  into this ledger.
+
 ## Stage 31 - Email, Auth-Link, and Invite Acceptance QA
 
 Status: landed in PR #1066; PR CI, post-merge master CI, full post-merge E2E,
