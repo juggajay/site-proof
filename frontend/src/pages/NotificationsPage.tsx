@@ -24,6 +24,8 @@ interface Notification {
 
 type NotificationFilter = 'all' | 'unread' | 'mention' | 'alert';
 
+const NOTIFICATIONS_PAGE_LIMIT = 100;
+
 function getSafeInternalPath(linkUrl: string | null): string | null {
   const trimmed = linkUrl?.trim();
   if (!trimmed || !trimmed.startsWith('/') || trimmed.startsWith('//') || trimmed.includes('\\')) {
@@ -50,6 +52,9 @@ function formatRelativeTime(timestamp: string): string {
   }
 
   const diffMs = Date.now() - date.getTime();
+  if (diffMs < 0) {
+    return 'Scheduled';
+  }
   const diffMins = Math.floor(diffMs / 60000);
   const diffHours = Math.floor(diffMs / 3600000);
   const diffDays = Math.floor(diffMs / 86400000);
@@ -82,7 +87,9 @@ export function NotificationsPage() {
   const { data, isLoading, error } = useQuery({
     queryKey: queryKeys.notifications,
     queryFn: () =>
-      apiFetch<{ notifications: Notification[]; unreadCount: number }>('/api/notifications'),
+      apiFetch<{ notifications: Notification[]; unreadCount: number }>(
+        `/api/notifications?limit=${NOTIFICATIONS_PAGE_LIMIT}`,
+      ),
     refetchInterval: 60000,
   });
 

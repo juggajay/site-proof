@@ -1,4 +1,5 @@
 import { Activity } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { formatDateTime } from '@/lib/utils';
 
 export interface DashboardRecentActivity {
@@ -21,6 +22,14 @@ function formatActivityTimestamp(timestamp: string): string {
   return formatDateTime(date);
 }
 
+function getSafeActivityLink(link: string | undefined): string | null {
+  const trimmed = link?.trim();
+  if (!trimmed || !trimmed.startsWith('/') || trimmed.startsWith('//') || trimmed.includes('\\')) {
+    return null;
+  }
+  return trimmed;
+}
+
 export function RecentActivityWidget({ activities }: RecentActivityWidgetProps) {
   return (
     <div className="bg-card rounded-lg border">
@@ -32,14 +41,27 @@ export function RecentActivityWidget({ activities }: RecentActivityWidgetProps) 
         {activities.length === 0 ? (
           <div className="p-4 text-center text-sm text-muted-foreground">No recent activity</div>
         ) : (
-          activities.map((activity) => (
-            <div key={activity.id} className="flex items-start justify-between gap-3 px-4 py-3">
-              <p className="text-sm leading-relaxed text-foreground">{activity.description}</p>
-              <p className="mt-0.5 flex-shrink-0 whitespace-nowrap font-mono text-xs tabular-nums text-muted-foreground">
-                {formatActivityTimestamp(activity.timestamp)}
-              </p>
-            </div>
-          ))
+          activities.map((activity) => {
+            const activityLink = getSafeActivityLink(activity.link);
+
+            return (
+              <div key={activity.id} className="flex items-start justify-between gap-3 px-4 py-3">
+                {activityLink ? (
+                  <Link
+                    to={activityLink}
+                    className="text-sm leading-relaxed text-foreground hover:text-primary hover:underline"
+                  >
+                    {activity.description}
+                  </Link>
+                ) : (
+                  <p className="text-sm leading-relaxed text-foreground">{activity.description}</p>
+                )}
+                <p className="mt-0.5 flex-shrink-0 whitespace-nowrap font-mono text-xs tabular-nums text-muted-foreground">
+                  {formatActivityTimestamp(activity.timestamp)}
+                </p>
+              </div>
+            );
+          })
         )}
       </div>
     </div>

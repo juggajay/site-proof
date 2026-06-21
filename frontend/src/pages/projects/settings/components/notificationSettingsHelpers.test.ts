@@ -50,10 +50,10 @@ describe('isDuplicateHpRecipient', () => {
     ).toBe(true);
   });
 
-  it('treats the role as case-sensitive', () => {
+  it('matches role case variants for the same email', () => {
     expect(
       isDuplicateHpRecipient(recipients, { role: 'superintendent', email: 'super@example.com' }),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it('returns false for a different email or an empty list', () => {

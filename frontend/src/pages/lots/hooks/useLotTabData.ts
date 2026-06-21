@@ -109,13 +109,18 @@ export function useLotTabData({ projectId, lotId, currentTab }: UseLotTabDataPar
   }, [projectId, lotId, currentTab]);
 
   const refreshActivityHistory = useCallback(async () => {
-    if (!lotId) return;
+    if (!lotId) {
+      setActivityLogs([]);
+      return;
+    }
 
     setLoadingHistory(true);
     try {
+      setActivityLogs([]);
       const data = await apiFetch<{ logs: ActivityLog[] }>(buildLotHistoryPath(lotId));
       setActivityLogs(normalizeActivityLogs(data));
     } catch (err) {
+      setActivityLogs([]);
       logError('Failed to fetch activity history:', err);
     } finally {
       setLoadingHistory(false);
