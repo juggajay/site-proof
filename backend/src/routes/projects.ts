@@ -12,6 +12,7 @@ import { createProjectReadRouter } from './projects/readRoutes.js';
 import { createProjectTeamRouter } from './projects/teamRoutes.js';
 import { createProjectWriteRouter } from './projects/writeRoutes.js';
 import { createSampleProjectRouter } from './projects/sampleProjectRoute.js';
+import { parseOptionalProjectSettings } from './projects/projectSettingsValidation.js';
 
 export const projectsRouter = Router();
 
@@ -49,7 +50,6 @@ const PROJECT_TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 const PROJECT_WORKING_DAYS_PATTERN = /^[0-6](,[0-6])*$/;
 const DECIMAL_NUMBER_PATTERN = /^(?:\d+(?:\.\d+)?|\.\d+)$/;
 const INTEGER_NUMBER_PATTERN = /^\d+$/;
-const PROJECT_SETTINGS_MAX_LENGTH = 20000;
 const PROJECT_STATUSES = new Set(['active', 'archived', 'completed', 'on_hold']);
 
 function isCompanyAdmin(user: AuthenticatedUser): boolean {
@@ -284,20 +284,6 @@ function parseOptionalWorkingDays(value: unknown): string | null | undefined {
   }
 
   return parsed;
-}
-
-function parseOptionalProjectSettings(value: unknown): Record<string, unknown> | undefined {
-  if (value === undefined) return undefined;
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw AppError.badRequest('Settings must be an object');
-  }
-
-  const serialized = JSON.stringify(value);
-  if (serialized.length > PROJECT_SETTINGS_MAX_LENGTH) {
-    throw AppError.badRequest('Settings payload is too large');
-  }
-
-  return value as Record<string, unknown>;
 }
 
 function parseOptionalProjectColour(value: unknown): string | null | undefined {
