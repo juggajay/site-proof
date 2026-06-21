@@ -112,6 +112,9 @@ export function formatRelativeTime(timestamp: string): string {
     return 'Unknown time';
   }
   const diffMs = now.getTime() - date.getTime();
+  if (diffMs < 0) {
+    return 'Scheduled';
+  }
   const diffMins = Math.floor(diffMs / (1000 * 60));
   const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));

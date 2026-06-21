@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/lib/api', async (importOriginal) => {
@@ -117,6 +117,21 @@ describe('useLotTabData', () => {
 
     await waitFor(() => expect(result.current.activityLogs).toEqual([historyFixture]));
     expect(result.current.loadingHistory).toBe(false);
+  });
+
+  it('clears stale activity history when refresh fails', async () => {
+    mockLotTabEndpoints();
+
+    const { result } = renderTabData('history');
+
+    await waitFor(() => expect(result.current.activityLogs).toEqual([historyFixture]));
+
+    apiFetchMock.mockRejectedValueOnce(new Error('history failed'));
+    await act(async () => {
+      await result.current.refreshActivityHistory();
+    });
+
+    await waitFor(() => expect(result.current.activityLogs).toEqual([]));
   });
 
   it('does not fetch when project or lot id is missing', () => {

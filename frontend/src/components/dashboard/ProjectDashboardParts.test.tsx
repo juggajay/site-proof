@@ -65,6 +65,7 @@ describe('ProjectDashboardParts helpers', () => {
     expect(formatRelativeTime('2026-06-05T09:40:00.000Z')).toBe('20m ago');
     expect(formatRelativeTime('2026-06-05T07:00:00.000Z')).toBe('3h ago');
     expect(formatRelativeTime('2026-06-02T10:00:00.000Z')).toBe('3d ago');
+    expect(formatRelativeTime('2026-06-05T10:01:00.000Z')).toBe('Scheduled');
     expect(formatRelativeTime('not-a-date')).toBe('Unknown time');
   });
 

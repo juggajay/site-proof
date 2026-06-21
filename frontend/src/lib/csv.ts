@@ -3,7 +3,7 @@ import { formatDateKey } from './localDate';
 
 export type CsvCell = string | number | boolean | null | undefined;
 
-const CSV_FORMULA_PREFIX_PATTERN = /^[\t\r ]*[=+\-@]/;
+const CSV_FORMULA_PREFIX_PATTERN = /^[\t\r\n ]*[=+\-@]/;
 const INVALID_FILENAME_CHARS = new Set(['<', '>', ':', '"', '/', '\\', '|', '?', '*']);
 
 function sanitizeFilenameChar(char: string): string {

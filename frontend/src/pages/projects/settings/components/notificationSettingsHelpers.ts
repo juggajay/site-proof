@@ -51,15 +51,11 @@ export function normalizeHpRecipient(recipient: HpRecipient): HpRecipient {
   };
 }
 
-/**
- * Duplicate when the role matches exactly (case-sensitive) and the stored
- * email matches lowercased. The candidate is expected to be normalized via
- * normalizeHpRecipient first — deliberately the same check the tab has always
- * used.
- */
 export function isDuplicateHpRecipient(recipients: HpRecipient[], candidate: HpRecipient): boolean {
+  const candidateRole = candidate.role.trim().toLowerCase();
   return recipients.some(
     (recipient) =>
-      recipient.role === candidate.role && recipient.email.toLowerCase() === candidate.email,
+      recipient.role.trim().toLowerCase() === candidateRole &&
+      recipient.email.trim().toLowerCase() === candidate.email.trim().toLowerCase(),
   );
 }
