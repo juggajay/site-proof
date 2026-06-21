@@ -599,6 +599,80 @@ describe('Projects API', () => {
       }
     });
 
+    it('should enforce the basic project limit under concurrent creates', async () => {
+      const suffix = Date.now();
+      const limitCompany = await prisma.company.create({
+        data: {
+          name: `Concurrent Basic Project Limit Company ${suffix}`,
+          subscriptionTier: 'basic',
+        },
+      });
+      const adminEmail = `concurrent-project-limit-admin-${suffix}@example.com`;
+      const adminRes = await request(app).post('/api/auth/register').send({
+        email: adminEmail,
+        password: 'SecureP@ssword123!',
+        fullName: 'Concurrent Project Limit Admin',
+        tosAccepted: true,
+      });
+      const adminToken = adminRes.body.token;
+      const adminId = adminRes.body.user.id;
+
+      await prisma.user.update({
+        where: { id: adminId },
+        data: { companyId: limitCompany.id, roleInCompany: 'admin' },
+      });
+
+      await Promise.all(
+        Array.from({ length: 2 }, (_, index) =>
+          prisma.project.create({
+            data: {
+              name: `Concurrent Limit Existing Project ${index}`,
+              projectNumber: `CONCURRENT-LIMIT-${suffix}-${index}`,
+              companyId: limitCompany.id,
+              status: 'active',
+              state: 'NSW',
+              specificationSet: 'TfNSW',
+            },
+          }),
+        ),
+      );
+
+      try {
+        const responses = await Promise.all(
+          Array.from({ length: 8 }, (_, index) =>
+            request(app)
+              .post('/api/projects')
+              .set('Authorization', `Bearer ${adminToken}`)
+              .send({
+                name: `Concurrent Limit Candidate ${index}`,
+                projectNumber: `CONCURRENT-LIMIT-CANDIDATE-${suffix}-${index}`,
+              }),
+          ),
+        );
+
+        const successCount = responses.filter((res) => res.status === 201).length;
+        const rejectedCount = responses.filter((res) => res.status === 403).length;
+
+        expect(successCount).toBe(1);
+        expect(rejectedCount).toBe(7);
+        await expect(prisma.project.count({ where: { companyId: limitCompany.id } })).resolves.toBe(
+          3,
+        );
+      } finally {
+        const projects = await prisma.project.findMany({
+          where: { companyId: limitCompany.id },
+          select: { id: true },
+        });
+        await prisma.projectUser.deleteMany({
+          where: { projectId: { in: projects.map((project) => project.id) } },
+        });
+        await prisma.project.deleteMany({ where: { companyId: limitCompany.id } });
+        await prisma.emailVerificationToken.deleteMany({ where: { userId: adminId } });
+        await prisma.user.delete({ where: { id: adminId } }).catch(() => {});
+        await prisma.company.delete({ where: { id: limitCompany.id } }).catch(() => {});
+      }
+    });
+
     it('should allow unlimited tier companies to exceed the basic project cap', async () => {
       const suffix = Date.now();
       const unlimitedCompany = await prisma.company.create({
