@@ -376,6 +376,28 @@ describe('Audit Log API', () => {
       });
     });
 
+    it('should filter by entityType case-insensitively', async () => {
+      const lowercaseLotLog = await prisma.auditLog.create({
+        data: {
+          action: 'lot.case_created',
+          entityType: 'lot',
+          entityId: 'case-test-lot-id',
+          userId,
+          projectId,
+          changes: JSON.stringify({ lotNumber: 'CASE-001' }),
+        },
+      });
+      auditLogIds.push(lowercaseLotLog.id);
+
+      const res = await request(app)
+        .get('/api/audit-logs')
+        .set('Authorization', `Bearer ${authToken}`)
+        .query({ entityType: 'Lot', search: 'case-test-lot-id' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.logs.map((log: any) => log.id)).toContain(lowercaseLotLog.id);
+    });
+
     it('should filter by action (contains)', async () => {
       const res = await request(app)
         .get('/api/audit-logs')
