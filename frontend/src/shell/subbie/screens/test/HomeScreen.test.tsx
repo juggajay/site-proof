@@ -16,7 +16,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { SubbieShellData } from '../../subbieShellData';
 import {
@@ -111,10 +111,16 @@ function renderHome() {
           <Route path="/p" element={<HomeScreen />} />
           <Route path="/p/docket" element={<div>docket editor</div>} />
           <Route path="/p/ncrs" element={<div>ncrs screen</div>} />
+          <Route path="/p/docs" element={<LocationProbe />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
   );
+}
+
+function LocationProbe() {
+  const location = useLocation();
+  return <div data-testid="location">{`${location.pathname}${location.search}`}</div>;
 }
 
 describe('subbie shell HomeScreen', () => {
@@ -196,6 +202,13 @@ describe('subbie shell HomeScreen', () => {
     _ctx = makeCtx({ isModuleEnabled: (m) => portalAccess[m] });
     renderHome();
     expect(screen.queryByRole('button', { name: 'Documents' })).toBeNull();
+  });
+
+  it('Documents tile preserves the selected project query', () => {
+    _ctx = makeCtx({ projectId: 'project-2', projectName: 'Second Project' });
+    renderHome();
+    fireEvent.click(screen.getByRole('button', { name: 'Documents' }));
+    expect(screen.getByTestId('location')).toHaveTextContent('/p/docs?projectId=project-2');
   });
 
   it('bottom bar "Add today\'s hours" navigates to /p/docket', () => {

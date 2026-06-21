@@ -1,7 +1,13 @@
 import { Link } from 'react-router-dom';
 import { AlertCircle, ArrowLeft } from 'lucide-react';
 
-export function PortalAccessDenied({ moduleName }: { moduleName: string }) {
+export function PortalAccessDenied({
+  moduleName,
+  backTo = '/subcontractor-portal',
+}: {
+  moduleName: string;
+  backTo?: string;
+}) {
   return (
     <div className="container max-w-2xl mx-auto p-4">
       <div
@@ -12,7 +18,7 @@ export function PortalAccessDenied({ moduleName }: { moduleName: string }) {
         <p>{moduleName} portal access is not enabled for your company.</p>
       </div>
       <Link
-        to="/subcontractor-portal"
+        to={backTo}
         className="inline-flex items-center gap-2 mt-4 px-4 py-2 border border-border rounded-lg hover:bg-muted/50 transition-colors text-foreground"
       >
         <ArrowLeft className="h-4 w-4" />

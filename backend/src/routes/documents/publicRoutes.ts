@@ -16,8 +16,14 @@ type DocumentDownloadRecord = {
   filename: string;
   mimeType: string | null;
   projectId: string;
+  lotId: string | null;
+  uploadedById: string | null;
   documentType?: string | null;
+  category?: string | null;
 };
+
+type SignedUrlUser = NonNullable<Express.Request['user']>;
+type CanReadDocument = (user: SignedUrlUser, document: DocumentDownloadRecord) => Promise<boolean>;
 
 type CreateDocumentPublicRouterDependencies = {
   prisma: PrismaClient;
@@ -30,6 +36,7 @@ type CreateDocumentPublicRouterDependencies = {
     maxLength: number,
   ) => string | undefined;
   validateSignedUrlToken: (token: string, documentId: string) => Promise<SignedUrlValidation>;
+  canReadDocument: CanReadDocument;
   sendDocumentFile: (
     document: DocumentDownloadRecord,
     res: Response,
@@ -43,6 +50,54 @@ type CreateDocumentPublicRouterDependencies = {
   }) => unknown;
 };
 
+async function getSignedUrlUser(prisma: PrismaClient, userId: string): Promise<SignedUrlUser> {
+  const tokenUser = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      email: true,
+      fullName: true,
+      roleInCompany: true,
+      companyId: true,
+    },
+  });
+
+  if (!tokenUser?.roleInCompany) {
+    throw AppError.forbidden('Access denied');
+  }
+
+  return {
+    id: tokenUser.id,
+    userId: tokenUser.id,
+    email: tokenUser.email,
+    fullName: tokenUser.fullName,
+    roleInCompany: tokenUser.roleInCompany,
+    role: tokenUser.roleInCompany,
+    companyId: tokenUser.companyId,
+  };
+}
+
+async function assertSignedUrlUserCanReadDocument({
+  prisma,
+  canReadDocument,
+  userId,
+  document,
+}: {
+  prisma: PrismaClient;
+  canReadDocument: CanReadDocument;
+  userId: string | undefined;
+  document: DocumentDownloadRecord;
+}): Promise<void> {
+  if (!userId) {
+    throw AppError.forbidden('The signed URL token is invalid or does not match this document.');
+  }
+
+  const tokenUser = await getSignedUrlUser(prisma, userId);
+  if (!(await canReadDocument(tokenUser, document))) {
+    throw AppError.forbidden('Access denied');
+  }
+}
+
 export function createDocumentPublicRouter({
   prisma,
   maxDocumentIdLength,
@@ -50,6 +105,7 @@ export function createDocumentPublicRouter({
   parseDocumentContentDisposition,
   getOptionalQueryString,
   validateSignedUrlToken,
+  canReadDocument,
   sendDocumentFile,
   buildInvalidDocumentSignedUrlTokenResponse,
   buildDocumentSignedUrlTokenResponse,
@@ -94,6 +150,13 @@ export function createDocumentPublicRouter({
       if (!document) {
         throw AppError.notFound('Document');
       }
+
+      await assertSignedUrlUserCanReadDocument({
+        prisma,
+        canReadDocument,
+        userId: validation.userId,
+        document,
+      });
 
       await sendDocumentFile(document, res, disposition);
     }),

@@ -24,7 +24,11 @@ const company: Company = {
 function renderQuickLinks(currentCompany: Company | undefined = company) {
   return render(
     <MemoryRouter>
-      <PortalQuickLinks company={currentCompany} myCompanyLink="/my-company?projectId=project-1" />
+      <PortalQuickLinks
+        company={currentCompany}
+        currentProjectQuery="?projectId=project-1"
+        myCompanyLink="/my-company?projectId=project-1"
+      />
     </MemoryRouter>,
   );
 }
@@ -60,7 +64,7 @@ describe('PortalQuickLinks', () => {
     );
     expect(screen.getByRole('link', { name: /Documents/i })).toHaveAttribute(
       'href',
-      '/subcontractor-portal/documents',
+      '/subcontractor-portal/documents?projectId=project-1',
     );
     expect(screen.queryByRole('link', { name: /NCRs/i })).not.toBeInTheDocument();
   });

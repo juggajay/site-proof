@@ -13,9 +13,8 @@
  * come from the lot register (`documentCount`) — the register has no
  * photo-vs-drawing split, so the Photos tile is honest about "documents on this
  * lot" and routes to the shell Photos surface. The Drawings tile routes to the
- * shell Drawings & Docs register (/m/docs): drawings are project-wide in the data
- * model (no lot link), so the register IS the drawings that apply to this lot — we
- * deliberately don't ?lotId-scope it to an empty set.
+ * shell Drawings & Docs register (/m/docs) with lotId context so linked docs and
+ * test certificates narrow to this lot, while project-wide drawings still appear.
  */
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -77,7 +76,15 @@ export function LotHubScreen() {
   const run = useShellItpRun(projectId ?? undefined, lotId);
   const summary = useMemo(() => itpHubSummary(run.instance, due), [run.instance, due]);
 
-  const withProject = (path: string) => (projectId ? `${path}?projectId=${projectId}` : path);
+  const withProject = (path: string, params: Record<string, string | undefined> = {}) => {
+    const query = new URLSearchParams();
+    if (projectId) query.set('projectId', projectId);
+    Object.entries(params).forEach(([key, value]) => {
+      if (value) query.set(key, value);
+    });
+    const queryString = query.toString();
+    return queryString ? `${path}?${queryString}` : path;
+  };
 
   const lotNumber = lot?.lotNumber ?? 'Lot';
   const status = lot?.status ?? '';
@@ -158,7 +165,7 @@ export function LotHubScreen() {
         icon={Ruler}
         title="Drawings"
         description="Current revisions for this lot"
-        onPress={() => navigate(withProject('/m/docs'))}
+        onPress={() => navigate(withProject('/m/docs', { lotId }))}
         ariaLabel="Drawings for this lot"
       />
 

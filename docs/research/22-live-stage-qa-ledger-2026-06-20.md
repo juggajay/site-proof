@@ -18,9 +18,100 @@ keep going until the app has been exercised end to end.
   `1secmail.com` from an old Codex process, so future email QA must use Jay's
   nominated inbox, a trusted mailbox, or Resend's safe test recipient.
 
-## Stage 28 - Documents, Drawings, Storage Access, and Evidence Links QA
+## Stage 29 - Mobile Subbie Documents and Project Context QA
 
 Status: local fixes complete; PR/CI/merge pending.
+
+Scope:
+
+- Mobile subcontractor shell document access from
+  `/subcontractor-portal?projectId=...` through the `/p` shell redirect and
+  `/p/docs`.
+- Classic subcontractor documents route with explicit `?shell=off` / direct
+  route compatibility.
+- Backend signed document download token revalidation after current access
+  changes.
+- Adjacent mobile document navigation from the foreman lot hub into
+  Drawings & Docs.
+
+Subagent coverage:
+
+- Classic subcontractor documents reviewer found that dashboard project
+  selection was dropped when entering Documents, access-denied project loads
+  rendered as a false empty state, and the module-disabled Back link returned to
+  the default project.
+- Backend documents reviewer confirmed Stage 28 raw-locator stripping held, and
+  found that signed document download tokens were not revalidated against the
+  token owner's current access before serving the file.
+- Mobile shell reviewer found that blocked popup opens could silently succeed,
+  `/p/docs` used the classic access-denied component, and the lot hub Drawings
+  tile did not pass `lotId`.
+
+Confirmed issues fixed locally:
+
+- `SubbieShellGuard` now preserves the selected project query when redirecting
+  `/subcontractor-portal?projectId=...` into `/p?projectId=...`.
+- Subbie shell hub buttons now preserve `projectId` for Work, Inspections,
+  Holds & Tests, NCRs, Documents, and My Company.
+- Classic subcontractor dashboard Documents quick link now preserves
+  `projectId`; the Documents page reads that selected project and carries it
+  back to the portal.
+- Classic subcontractor Documents now shows a real error when
+  `/api/subcontractors/my-company?projectId=...` is denied or unavailable,
+  instead of showing "No documents available".
+- Classic and shell Documents access-denied states preserve the current shell or
+  selected-project context.
+- Document open now rejects when both popup attempts are blocked, so callers can
+  show the existing failure toast instead of silently doing nothing.
+- Subbie shell Documents now shows the selected project in the header and keeps
+  the user in the shell-native denied state.
+- Foreman lot hub Drawings now navigates to
+  `/m/docs?projectId=...&lotId=...`, matching the docs screen's lot-filter
+  contract.
+- Public signed document downloads now re-fetch the token owner and re-run
+  `canReadDocument` before serving, so a revoked subcontractor Documents module
+  or project/lot access change invalidates old tokens before expiry.
+
+Verification:
+
+- frontend focused unit tests passed:
+  `npm run test:unit -- src/lib/documentAccess.test.ts src/pages/subcontractor-portal/SubcontractorDocumentsPage.test.tsx src/pages/subcontractor-portal/SubcontractorDashboardSections.test.tsx src/shell/subbie/screens/test/DocsScreen.test.tsx src/shell/subbie/screens/test/HomeScreen.test.tsx src/shell/test/SubbieShellGuard.test.tsx src/shell/screens/docs/test/DocsListScreen.test.tsx src/shell/screens/docs/test/docsShellState.test.ts src/shell/screens/lots/test/LotHubScreen.test.tsx`
+- Headed browser E2E passed:
+  `npx playwright test e2e/subcontractor-documents.spec.ts --project=chromium --headed`
+- backend `type-check` passed.
+- frontend `type-check` passed.
+- backend `lint` passed.
+- frontend `lint` passed with the existing unrelated
+  `src/lib/theme.tsx` fast-refresh warning.
+- backend `format:check` passed.
+- frontend `format:check` passed.
+- `npm run fallow:audit` still exits nonzero because touched legacy files
+  already exceed complexity/duplication thresholds. New E2E and public-route
+  handler complexity were reduced during this stage; remaining reported items
+  are inherited large/duplicated functions such as `SubcontractorDashboard`,
+  subbie `HomeScreen`, `LotHubScreen`, and broad backend route test setup.
+
+Not live-exercised in this stage:
+
+- `backend/src/routes/documents.test.ts` could not be run locally because this
+  worktree has no disposable local test database. The main checkout `.env` was
+  checked by safe metadata only and was not a safe local test DB, so it was not
+  loaded. CI must run the DB-backed signed-token revocation regression.
+- The drawing-access product-policy question remains intentionally unresolved:
+  subcontractors still cannot read drawing-backed documents through generic
+  document routes. If drawings should be explicitly shareable to subbies, that
+  needs a separate product/access design.
+
+Artifacts:
+
+- No bearer tokens, session cookies, generated passwords, production secrets,
+  storage credentials, or browser-session data were committed or copied into
+  this ledger.
+
+## Stage 28 - Documents, Drawings, Storage Access, and Evidence Links QA
+
+Status: landed in PR #1062; post-merge master CI and production health checks
+passed.
 
 Scope:
 

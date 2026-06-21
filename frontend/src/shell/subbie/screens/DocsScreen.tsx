@@ -23,7 +23,7 @@ import { openDocumentAccessUrl } from '@/lib/documentAccess';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { toast } from '@/components/ui/toaster';
 import { logError } from '@/lib/logger';
-import { PortalAccessDenied } from '@/pages/subcontractor-portal/portalAccess';
+import { ShellAccessDenied } from './ShellAccessDenied';
 import { useSubbieShellContext } from '../subbieShellContext';
 
 interface DocItem {
@@ -92,7 +92,7 @@ function DocCard({ doc }: { doc: DocItem }) {
 
 export function DocsScreen() {
   const { user } = useAuth();
-  const { projectId, companyName, isModuleEnabled } = useSubbieShellContext();
+  const { projectId, companyName, projectName, isModuleEnabled } = useSubbieShellContext();
   const canViewDocuments = isModuleEnabled('documents');
 
   const {
@@ -111,7 +111,7 @@ export function DocsScreen() {
   });
 
   if (!canViewDocuments) {
-    return <PortalAccessDenied moduleName="Documents" />;
+    return <ShellAccessDenied title="Documents" moduleName="Documents" />;
   }
 
   // Group by category, alphabetised (classic behaviour).
@@ -124,7 +124,9 @@ export function DocsScreen() {
 
   const sub = (
     <span className="text-muted-foreground">
-      {companyName ? `Shared with ${companyName} — view only` : 'View only'}
+      {[companyName ? `Shared with ${companyName}` : null, projectName, 'view only']
+        .filter(Boolean)
+        .join(' — ')}
     </span>
   );
 

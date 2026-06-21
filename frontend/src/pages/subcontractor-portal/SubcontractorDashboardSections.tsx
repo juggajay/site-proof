@@ -13,10 +13,15 @@ import type { Company } from './SubcontractorDashboard';
 
 interface PortalQuickLinksProps {
   company?: Company;
+  currentProjectQuery?: string;
   myCompanyLink: string;
 }
 
-export function PortalQuickLinks({ company, myCompanyLink }: PortalQuickLinksProps) {
+export function PortalQuickLinks({
+  company,
+  currentProjectQuery = '',
+  myCompanyLink,
+}: PortalQuickLinksProps) {
   return (
     <div className="grid grid-cols-2 gap-3">
       <Link
@@ -101,7 +106,7 @@ export function PortalQuickLinks({ company, myCompanyLink }: PortalQuickLinksPro
       )}
       {isPortalModuleEnabled(company, 'documents') && (
         <Link
-          to="/subcontractor-portal/documents"
+          to={`/subcontractor-portal/documents${currentProjectQuery}`}
           className="border border-border rounded-lg bg-card hover:border-primary transition-colors cursor-pointer"
         >
           <div className="p-4 flex items-center gap-3">

@@ -2145,6 +2145,21 @@ describe('Documents API', () => {
 
         expect(assignedSignedUrlRes.status).toBe(200);
 
+        await prisma.subcontractorCompany.update({
+          where: { id: subcontractorCompany.id },
+          data: { portalAccess: { documents: false } },
+        });
+
+        const revokedDownloadRes = await request(app).get(
+          `/api/documents/download/${documentId}?token=${assignedSignedUrlRes.body.token}`,
+        );
+        expect(revokedDownloadRes.status).toBe(403);
+
+        await prisma.subcontractorCompany.update({
+          where: { id: subcontractorCompany.id },
+          data: { portalAccess: { documents: true } },
+        });
+
         const unassignedSignedUrlRes = await request(app)
           .post(`/api/documents/${unassignedLotDocument.id}/signed-url`)
           .set('Authorization', `Bearer ${subToken}`);
