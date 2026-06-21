@@ -101,15 +101,17 @@ describe('dockets notification builders (pure)', () => {
       expect(inApp.type).toBe('docket_rejected');
     });
 
-    it('uses "No reason provided." in the email when reason is null', () => {
+    it('requires callers to provide the reason in both notification channels', () => {
       const { inApp, email } = buildDocketRejectedNotifications({
         ...base,
         rejectorName: 'Bob',
-        reason: null,
+        reason: 'No matching diary entry',
       });
-      expect(inApp.message).toBe('Your docket DKT-ABC123 (2026-01-15) has been rejected by Bob.');
+      expect(inApp.message).toBe(
+        'Your docket DKT-ABC123 (2026-01-15) has been rejected by Bob. Reason: No matching diary entry',
+      );
       expect(email.message).toBe(
-        'Your docket DKT-ABC123 (2026-01-15) has been rejected by Bob.\n\nProject: Test Project\nStatus: Rejected\nNo reason provided.\n\nPlease review and resubmit if necessary.',
+        'Your docket DKT-ABC123 (2026-01-15) has been rejected by Bob.\n\nProject: Test Project\nStatus: Rejected\nReason: No matching diary entry\n\nPlease review and resubmit if necessary.',
       );
     });
   });

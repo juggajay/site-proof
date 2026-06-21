@@ -402,6 +402,7 @@ describe('subbie shell DocketScreen', () => {
         totalPlantSubmitted: 450,
         totalLabourApprovedCost: 444,
         totalPlantApprovedCost: 300,
+        adjustmentReason: 'Reduced to verified site hours',
       }),
       existingDockets: [],
     });
@@ -414,6 +415,8 @@ describe('subbie shell DocketScreen', () => {
     expect(screen.getAllByText('$300').length).toBeGreaterThan(0);
     expect(screen.getByText('was 8 h / $592')).toBeInTheDocument();
     expect(screen.getByText('was $450')).toBeInTheDocument();
+    expect(screen.getByText(/Approved with adjustment/i)).toBeInTheDocument();
+    expect(screen.getByText('Reduced to verified site hours')).toBeInTheDocument();
 
     const grandLabel = screen.getByText("Today's total");
     const grandRow = grandLabel.closest('.grand')!;

@@ -104,7 +104,7 @@ export type DocketRejectedNotificationContext = {
   docketNumber: string;
   docketDate: string;
   rejectorName: string;
-  reason: string | null | undefined;
+  reason: string;
 };
 
 export function buildDocketRejectedNotifications(ctx: DocketRejectedNotificationContext): {
@@ -123,7 +123,7 @@ export function buildDocketRejectedNotifications(ctx: DocketRejectedNotification
     },
     email: {
       title: 'Docket Rejected',
-      message: `Your docket ${docketNumber} (${docketDate}) has been rejected by ${rejectorName}.\n\nProject: ${projectName}\nStatus: Rejected\n${reason ? `Reason: ${reason}` : 'No reason provided.'}\n\nPlease review and resubmit if necessary.`,
+      message: `Your docket ${docketNumber} (${docketDate}) has been rejected by ${rejectorName}.\n\nProject: ${projectName}\nStatus: Rejected\nReason: ${reason}\n\nPlease review and resubmit if necessary.`,
       projectName,
       linkUrl,
     },

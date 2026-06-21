@@ -96,6 +96,25 @@ describe('DocketEditPagePanels', () => {
     expect(screen.getByText(/rejection reason/i)).toBeInTheDocument();
     expect(screen.getByText('Missing docket photo')).toBeInTheDocument();
     expect(screen.queryByText(/no lots have been assigned/i)).not.toBeInTheDocument();
+
+    rerender(
+      <DocketEditNotices
+        docket={{
+          ...baseDocket,
+          status: 'approved',
+          adjustmentReason: 'Reduced to verified site hours',
+        }}
+        queryResponse=""
+        respondingToQuery={false}
+        assignedLotCount={1}
+        lotsModuleDisabled={false}
+        onQueryResponseChange={onQueryResponseChange}
+        onRespondToQuery={onRespondToQuery}
+      />,
+    );
+
+    expect(screen.getByText(/approved with adjustment/i)).toBeInTheDocument();
+    expect(screen.getByText('Reduced to verified site hours')).toBeInTheDocument();
   });
 
   it('shows the lots-module-disabled notice instead of the no-lots notice when the lots module is off', () => {

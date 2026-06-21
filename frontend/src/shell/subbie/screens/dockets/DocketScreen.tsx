@@ -650,6 +650,16 @@ export function DocketScreen() {
         </div>
       )}
 
+      {docket?.status === 'approved' && docket.adjustmentReason?.trim() && (
+        <div className="shell-notice shell-notice-warn">
+          <AlertTriangle size={19} aria-hidden="true" className="mt-px shrink-0 text-warning" />
+          <div className="min-w-0">
+            <b className="block">Approved with adjustment:</b>
+            <span className="block">{docket.adjustmentReason.trim()}</span>
+          </div>
+        </div>
+      )}
+
       {/* Lots-module-off / no-lots notices (classic copy) */}
       {canEdit &&
         (lotsModuleDisabled ? (

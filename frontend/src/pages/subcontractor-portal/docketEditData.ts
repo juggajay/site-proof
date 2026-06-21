@@ -79,6 +79,7 @@ export interface Docket {
   totalPlantSubmitted: number;
   totalLabourApprovedCost?: number | null;
   totalPlantApprovedCost?: number | null;
+  adjustmentReason?: string | null;
   labourEntries: LabourEntry[];
   plantEntries: PlantEntry[];
 }

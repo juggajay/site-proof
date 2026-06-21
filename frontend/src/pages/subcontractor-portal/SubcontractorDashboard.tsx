@@ -32,6 +32,7 @@ import {
   LOTS_MODULE_DISABLED_DOCKET_MESSAGE,
 } from './subcontractorDashboardHelpers';
 import {
+  buildDocketEditRoute,
   getDocketDisplayLabourCost,
   getDocketDisplayPlantCost,
   getDocketDisplayTotalCost,
@@ -258,7 +259,11 @@ export function SubcontractorDashboard() {
     recentDockets,
     notifications,
     myCompanyLink,
-  });
+  }).map((item) =>
+    item.link.startsWith('/subcontractor-portal/docket/')
+      ? { ...item, link: `${item.link}${currentProjectQuery}` }
+      : item,
+  );
 
   if (loading) {
     return (
@@ -372,7 +377,7 @@ export function SubcontractorDashboard() {
                 </p>
               </div>
               <Link
-                to={`/subcontractor-portal/docket/${todaysDocket.id}`}
+                to={buildDocketEditRoute(todaysDocket.id, company?.projectId)}
                 className="flex items-center justify-center gap-2 w-full py-2.5 px-4 bg-primary hover:bg-primary/90 text-primary-foreground font-medium rounded-lg transition-colors"
               >
                 {todaysDocket.status === 'draft' ? 'Continue Docket' : 'View Docket'}
@@ -507,7 +512,7 @@ export function SubcontractorDashboard() {
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-foreground">Recent Dockets</h2>
             <Link
-              to="/subcontractor-portal/dockets"
+              to={`/subcontractor-portal/dockets${currentProjectQuery}`}
               className="flex items-center gap-1 text-sm text-muted-foreground hover:text-primary transition-colors"
             >
               View All
@@ -521,7 +526,7 @@ export function SubcontractorDashboard() {
               {recentDockets.slice(0, 3).map((docket) => (
                 <Link
                   key={docket.id}
-                  to={`/subcontractor-portal/docket/${docket.id}`}
+                  to={buildDocketEditRoute(docket.id, company?.projectId)}
                   className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors"
                 >
                   <div className="flex items-center gap-3">

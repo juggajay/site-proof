@@ -1495,6 +1495,71 @@ describe('Dockets API', () => {
       }
     });
 
+    it('should accept unchanged adjusted-hour payloads without requiring an adjustment reason', async () => {
+      const costedDocket = await createCostedPendingDocket(1_339_200_000);
+      const { docket } = costedDocket;
+
+      try {
+        const res = await request(app)
+          .post(`/api/dockets/${docket.id}/approve`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            foremanNotes: 'Approve unchanged default modal values',
+            adjustedLabourHours: 8,
+            adjustedPlantHours: 3,
+            adjustmentReason: null,
+          });
+
+        expect(res.status).toBe(200);
+
+        const stored = await prisma.dailyDocket.findUniqueOrThrow({
+          where: { id: docket.id },
+          select: {
+            status: true,
+            adjustmentReason: true,
+            totalLabourApproved: true,
+            totalPlantApproved: true,
+          },
+        });
+        expect(stored.status).toBe('approved');
+        expect(stored.adjustmentReason).toBeNull();
+        expect(Number(stored.totalLabourApproved)).toBe(8);
+        expect(Number(stored.totalPlantApproved)).toBe(3);
+      } finally {
+        await deleteCostedPendingDocket(costedDocket);
+      }
+    });
+
+    it('should require an adjustment reason when adjusted approval hours differ from submitted totals', async () => {
+      const costedDocket = await createCostedPendingDocket(1_360_800_000);
+      const { docket } = costedDocket;
+
+      try {
+        const res = await request(app)
+          .post(`/api/dockets/${docket.id}/approve`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            adjustedLabourHours: 7,
+            adjustedPlantHours: 3,
+            adjustmentReason: null,
+          });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.message).toBe(
+          'Adjustment reason is required when approving adjusted hours',
+        );
+
+        const stored = await prisma.dailyDocket.findUniqueOrThrow({
+          where: { id: docket.id },
+          select: { status: true, approvedAt: true },
+        });
+        expect(stored.status).toBe('pending_approval');
+        expect(stored.approvedAt).toBeNull();
+      } finally {
+        await deleteCostedPendingDocket(costedDocket);
+      }
+    });
+
     it('should calculate approved entry costs from adjusted approval hours', async () => {
       const costedDocket = await createCostedPendingDocket(1_382_400_000);
       const { docket, labour, plantEntry } = costedDocket;
@@ -1654,7 +1719,7 @@ describe('Dockets API', () => {
       }
     });
 
-    it('should auto-populate the diary with labour and plant when approving a docket', async () => {
+    it('should auto-populate the diary with approved labour and plant hours when approving a docket', async () => {
       const date = new Date(Date.now() + 1_123_200_000);
       const docket = await prisma.dailyDocket.create({
         data: {
@@ -1704,7 +1769,10 @@ describe('Dockets API', () => {
           .post(`/api/dockets/${docket.id}/approve`)
           .set('Authorization', `Bearer ${authToken}`)
           .send({
-            foremanNotes: 'Approve and populate diary',
+            foremanNotes: 'Approve adjusted hours and populate diary',
+            adjustedLabourHours: 7,
+            adjustedPlantHours: 2.5,
+            adjustmentReason: 'Diary check reduced approved time',
           });
 
         expect(res.status).toBe(200);
@@ -1723,7 +1791,7 @@ describe('Dockets API', () => {
           docketId: docket.id,
           lotId: assignedLotId,
         });
-        expect(Number(personnel[0].hours)).toBe(8);
+        expect(Number(personnel[0].hours)).toBe(7);
 
         const plantRows = await prisma.diaryPlant.findMany({ where: { diaryId } });
         expect(plantRows).toHaveLength(1);
@@ -1732,7 +1800,7 @@ describe('Dockets API', () => {
           docketId: docket.id,
           lotId: assignedLotId,
         });
-        expect(Number(plantRows[0].hoursOperated)).toBe(3);
+        expect(Number(plantRows[0].hoursOperated)).toBe(2.5);
       } finally {
         if (diaryId) {
           await prisma.diaryPersonnel.deleteMany({ where: { diaryId } });
@@ -1906,7 +1974,7 @@ describe('Dockets API', () => {
       });
     });
 
-    it('should reject docket when optional rejection reason is null', async () => {
+    it('should reject the API request when rejection reason is null or blank', async () => {
       const nullableRejectDocket = await prisma.dailyDocket.create({
         data: {
           projectId,
@@ -1917,18 +1985,29 @@ describe('Dockets API', () => {
         },
       });
 
-      const res = await request(app)
-        .post(`/api/dockets/${nullableRejectDocket.id}/reject`)
-        .set('Authorization', `Bearer ${authToken}`)
-        .send({ reason: null });
+      try {
+        const nullReason = await request(app)
+          .post(`/api/dockets/${nullableRejectDocket.id}/reject`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ reason: null });
 
-      expect(res.status).toBe(200);
-      expect(res.body.docket.status).toBe('rejected');
+        expect(nullReason.status).toBe(400);
 
-      const stored = await prisma.dailyDocket.findUnique({
-        where: { id: nullableRejectDocket.id },
-      });
-      expect(stored?.foremanNotes).toBeNull();
+        const blankReason = await request(app)
+          .post(`/api/dockets/${nullableRejectDocket.id}/reject`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ reason: '   ' });
+
+        expect(blankReason.status).toBe(400);
+
+        const stored = await prisma.dailyDocket.findUnique({
+          where: { id: nullableRejectDocket.id },
+        });
+        expect(stored?.status).toBe('pending_approval');
+        expect(stored?.foremanNotes).toBeNull();
+      } finally {
+        await prisma.dailyDocket.delete({ where: { id: nullableRejectDocket.id } }).catch(() => {});
+      }
     });
 
     afterAll(async () => {

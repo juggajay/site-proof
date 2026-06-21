@@ -67,6 +67,8 @@ export function DocketActionModal({
 
   const detailQuery = useDocketDetailEntriesQuery(docket.id);
   const detailLoading = detailQuery.isLoading;
+  const approvedAdjustmentReason =
+    detailQuery.data?.adjustmentReason?.trim() || docket.adjustmentReason?.trim() || null;
   const labourEntries = detailQuery.data?.labourEntries ?? [];
   const plantEntries = detailQuery.data?.plantEntries ?? [];
 
@@ -240,7 +242,7 @@ export function DocketActionModal({
           </p>
           <p className="text-sm">
             <strong>Labour Hours:</strong> {docket.labourHours}h
-            {docket.totalLabourApproved > 0 &&
+            {hasDocketApprovedLabourCost(docket) &&
               docket.totalLabourApproved !== docket.labourHours && (
                 <span className="text-muted-foreground">
                   {' '}
@@ -250,12 +252,13 @@ export function DocketActionModal({
           </p>
           <p className="text-sm">
             <strong>Plant Hours:</strong> {docket.plantHours}h
-            {docket.totalPlantApproved > 0 && docket.totalPlantApproved !== docket.plantHours && (
-              <span className="text-muted-foreground">
-                {' '}
-                (approved: {docket.totalPlantApproved}h)
-              </span>
-            )}
+            {hasDocketApprovedPlantCost(docket) &&
+              docket.totalPlantApproved !== docket.plantHours && (
+                <span className="text-muted-foreground">
+                  {' '}
+                  (approved: {docket.totalPlantApproved}h)
+                </span>
+              )}
           </p>
           <div className="mt-3 overflow-hidden rounded-md border bg-background text-sm">
             <div className="grid grid-cols-3 bg-muted/50 px-3 py-2 text-xs font-medium uppercase text-muted-foreground">
@@ -295,6 +298,11 @@ export function DocketActionModal({
               <strong>Foreman Notes:</strong> {docket.foremanNotes}
             </p>
           )}
+          {docket.status === 'approved' && approvedAdjustmentReason && (
+            <p className="text-sm">
+              <strong>Adjustment Reason:</strong> {approvedAdjustmentReason}
+            </p>
+          )}
           {docket.submittedAt && (
             <p className="text-xs text-muted-foreground mt-2">
               Submitted: {new Date(docket.submittedAt).toLocaleString('en-AU')}
@@ -331,7 +339,7 @@ export function DocketActionModal({
                           <td className="px-3 py-2">{entry.employee.name}</td>
                           <td className="px-3 py-2 text-muted-foreground">{entry.employee.role}</td>
                           <td className="px-3 py-2 text-right">
-                            {entry.approvedHours > 0 &&
+                            {hasDocketApprovedLabourCost(docket) &&
                             entry.approvedHours !== entry.submittedHours ? (
                               <span>
                                 <span className="font-medium">{entry.approvedHours}h</span>
@@ -344,7 +352,7 @@ export function DocketActionModal({
                             )}
                           </td>
                           <td className="px-3 py-2 text-right">
-                            {entry.approvedCost > 0 &&
+                            {hasDocketApprovedLabourCost(docket) &&
                             entry.approvedCost !== entry.submittedCost ? (
                               <span>
                                 <span className="font-medium">
@@ -391,7 +399,7 @@ export function DocketActionModal({
                           </td>
                           <td className="px-3 py-2 text-right">{entry.hoursOperated}h</td>
                           <td className="px-3 py-2 text-right">
-                            {entry.approvedCost > 0 &&
+                            {hasDocketApprovedPlantCost(docket) &&
                             entry.approvedCost !== entry.submittedCost ? (
                               <span>
                                 <span className="font-medium">

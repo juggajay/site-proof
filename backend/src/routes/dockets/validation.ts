@@ -63,6 +63,16 @@ export const optionalTimeSchema = z
   .max(5, 'Time must be in HH:mm format')
   .regex(TIME_PATTERN, 'Time must be in HH:mm format')
   .optional();
+export const requiredTimeSchema = (fieldName: string) =>
+  z
+    .string({
+      required_error: `${fieldName} is required`,
+      invalid_type_error: `${fieldName} is required`,
+    })
+    .trim()
+    .min(1, `${fieldName} is required`)
+    .max(5, 'Time must be in HH:mm format')
+    .regex(TIME_PATTERN, 'Time must be in HH:mm format');
 export const optionalDateStringSchema = z
   .string()
   .trim()
@@ -92,27 +102,22 @@ export const updateDocketSchema = z.object({
     .optional(),
 });
 
-export const approveDocketSchema = z
-  .object({
-    foremanNotes: optionalNullableTextSchema('Foreman notes', MAX_DOCKET_REASON_LENGTH),
-    adjustmentReason: optionalNullableTextSchema('Adjustment reason', MAX_DOCKET_REASON_LENGTH),
-    adjustedLabourHours: finiteNonNegativeNumber('Adjusted labour total').optional(),
-    adjustedPlantHours: finiteNonNegativeNumber('Adjusted plant total').optional(),
-  })
-  .superRefine((value, ctx) => {
-    const hasAdjustedHours =
-      value.adjustedLabourHours !== undefined || value.adjustedPlantHours !== undefined;
-    if (hasAdjustedHours && !value.adjustmentReason?.trim()) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['adjustmentReason'],
-        message: 'Adjustment reason is required when approving adjusted hours',
-      });
-    }
-  });
+export const approveDocketSchema = z.object({
+  foremanNotes: optionalNullableTextSchema('Foreman notes', MAX_DOCKET_REASON_LENGTH),
+  adjustmentReason: optionalNullableTextSchema('Adjustment reason', MAX_DOCKET_REASON_LENGTH),
+  adjustedLabourHours: finiteNonNegativeNumber('Adjusted labour total').optional(),
+  adjustedPlantHours: finiteNonNegativeNumber('Adjusted plant total').optional(),
+});
 
 export const rejectDocketSchema = z.object({
-  reason: optionalNullableTextSchema('Reason', MAX_DOCKET_REASON_LENGTH),
+  reason: z
+    .string({
+      required_error: 'Rejection reason is required',
+      invalid_type_error: 'Rejection reason is required',
+    })
+    .trim()
+    .min(1, 'Rejection reason is required')
+    .max(MAX_DOCKET_REASON_LENGTH, `Reason must be ${MAX_DOCKET_REASON_LENGTH} characters or less`),
 });
 
 export const queryDocketSchema = z.object({
@@ -144,8 +149,8 @@ export const lotAllocationSchema = z.object({
 
 export const addLabourEntrySchema = z.object({
   employeeId: requiredDocketIdSchema('employeeId'),
-  startTime: optionalTimeSchema,
-  finishTime: optionalTimeSchema,
+  startTime: requiredTimeSchema('Start time'),
+  finishTime: requiredTimeSchema('Finish time'),
   lotAllocations: z
     .array(lotAllocationSchema)
     .max(

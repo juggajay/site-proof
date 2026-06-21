@@ -169,6 +169,15 @@ export function DocketEditNotices({
         </div>
       )}
 
+      {docket?.status === 'approved' && docket.adjustmentReason?.trim() && (
+        <div className="flex items-start gap-3 p-4 mb-4 bg-warning/10 border border-warning/30 rounded-lg">
+          <AlertCircle className="h-5 w-5 text-warning shrink-0 mt-0.5" />
+          <div className="text-warning">
+            <strong>Approved with adjustment:</strong> {docket.adjustmentReason.trim()}
+          </div>
+        </div>
+      )}
+
       {lotsModuleDisabled ? (
         <div className="flex items-start gap-3 p-4 mb-4 bg-primary/5 border border-primary/30 rounded-lg">
           <AlertCircle className="h-5 w-5 text-primary shrink-0 mt-0.5" />

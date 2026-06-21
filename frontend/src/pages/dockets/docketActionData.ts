@@ -119,7 +119,7 @@ export interface DocketQueryPayload {
 }
 
 export interface DocketRejectPayload {
-  reason: string | null;
+  reason: string;
 }
 
 export type DocketActionPayload = DocketApprovePayload | DocketQueryPayload | DocketRejectPayload;
@@ -148,7 +148,7 @@ export function buildDocketActionPayload(
     return { questions: actionNotes.trim() };
   }
 
-  return { reason: actionNotes.trim() || null };
+  return { reason: actionNotes.trim() };
 }
 
 export function getDocketApprovalDiarySyncWarning(
@@ -169,6 +169,7 @@ export function getDocketApprovalDiarySyncWarning(
 // entries fall back to the "No entries found" message).
 
 export interface DocketDetailEntries {
+  adjustmentReason: string | null;
   labourEntries: LabourEntry[];
   plantEntries: PlantEntry[];
 }
@@ -177,6 +178,7 @@ async function fetchDocketDetailEntries(docketId: string): Promise<DocketDetailE
   try {
     const data = await apiFetch<DocketDetailResponse>(buildDocketDetailPath(docketId));
     return {
+      adjustmentReason: data.docket?.adjustmentReason ?? null,
       labourEntries: data.docket?.labourEntries || [],
       plantEntries: data.docket?.plantEntries || [],
     };

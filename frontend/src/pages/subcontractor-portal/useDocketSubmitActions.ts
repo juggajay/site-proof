@@ -1,6 +1,9 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import type { NavigateFunction } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
+import { queryKeys } from '@/lib/queryKeys';
 import { toast } from '@/components/ui/toaster';
 import { handleApiError } from '@/lib/errorHandling';
 import type { Docket } from './docketEditData';
@@ -36,8 +39,27 @@ export function useDocketSubmitActions({
   onSubmitted,
   onResponded,
 }: UseDocketSubmitActionsParams) {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [submitting, setSubmitting] = useState(false);
   const [respondingToQuery, setRespondingToQuery] = useState(false);
+  const portalDocketsPrefix = useMemo(
+    () => ['portal-dockets', user?.id ?? 'anonymous'] as const,
+    [user?.id],
+  );
+
+  const invalidateDocketCaches = useCallback(
+    async (targetDocket: Docket) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: portalDocketsPrefix }),
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.portalDocket(user?.id, targetDocket.id),
+        }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.portalDashboard(user?.id) }),
+      ]);
+    },
+    [portalDocketsPrefix, queryClient, user?.id],
+  );
 
   const submitDocket = useCallback(async () => {
     if (!docket) return;
@@ -63,6 +85,7 @@ export function useDocketSubmitActions({
         description: 'Your docket has been sent for approval',
         variant: 'success',
       });
+      await invalidateDocketCaches(docket);
 
       if (onSubmitted) {
         onSubmitted();
@@ -74,7 +97,7 @@ export function useDocketSubmitActions({
     } finally {
       setSubmitting(false);
     }
-  }, [docket, navigate, redirectTo, onSubmitted, saveDocketNotes]);
+  }, [docket, invalidateDocketCaches, navigate, redirectTo, onSubmitted, saveDocketNotes]);
 
   const respondToQuery = useCallback(async () => {
     if (!docket || !queryResponse.trim()) return;
@@ -92,6 +115,7 @@ export function useDocketSubmitActions({
         description: 'Your docket has been resubmitted for approval',
         variant: 'success',
       });
+      await invalidateDocketCaches(docket);
 
       if (onResponded) {
         onResponded();
@@ -103,7 +127,15 @@ export function useDocketSubmitActions({
     } finally {
       setRespondingToQuery(false);
     }
-  }, [docket, navigate, redirectTo, onResponded, queryResponse, saveDocketNotes]);
+  }, [
+    docket,
+    invalidateDocketCaches,
+    navigate,
+    redirectTo,
+    onResponded,
+    queryResponse,
+    saveDocketNotes,
+  ]);
 
   return {
     submitting,

@@ -163,7 +163,7 @@ describe('buildDocketActionPayload', () => {
     ).toEqual({ questions: 'please clarify' });
   });
 
-  it('shapes the reject payload, nulling empty reasons', () => {
+  it('shapes the reject payload with a trimmed reason', () => {
     expect(
       buildDocketActionPayload('reject', {
         actionNotes: '  not acceptable ',
@@ -172,7 +172,7 @@ describe('buildDocketActionPayload', () => {
     ).toEqual({ reason: 'not acceptable' });
     expect(
       buildDocketActionPayload('reject', { actionNotes: '   ', adjustmentReason: '' }),
-    ).toEqual({ reason: null });
+    ).toEqual({ reason: '' });
   });
 });
 
