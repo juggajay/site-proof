@@ -1,6 +1,7 @@
-import { useState, lazy, Suspense } from 'react';
-import { useParams } from 'react-router-dom';
+import { useCallback, useEffect, useState, lazy, Suspense } from 'react';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { useIsMobile } from '@/hooks/useMediaQuery';
+import { dateKeyToUtcDayNumber, formatDateKey } from '@/lib/localDate';
 import { DiaryMobileView } from '@/components/foreman/DiaryMobileView';
 import { DiaryFinishFlow } from '@/components/foreman/DiaryFinishFlow';
 import type { TimelineEntry } from '@/components/foreman/DiaryTimelineEntry';
@@ -32,15 +33,59 @@ const DelaysTab = lazy(() =>
   import('./components/DelaysTab').then((m) => ({ default: m.DelaysTab })),
 );
 
+function getValidDiaryDateParam(value: string | null): string | null {
+  if (!value) return null;
+  const candidate = value.trim();
+  const candidateDay = dateKeyToUtcDayNumber(candidate);
+  const todayDay = dateKeyToUtcDayNumber(formatDateKey());
+  if (candidateDay === null || todayDay === null || candidateDay > todayDay) {
+    return null;
+  }
+  return candidate;
+}
+
 export function DailyDiaryPage() {
   const { projectId } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const isMobile = useIsMobile();
   const [activeTab, setActiveTab] = useState<DiaryTab>('weather');
   const [entryPendingDelete, setEntryPendingDelete] = useState<TimelineEntry | null>(null);
   const [showFinishFlow, setShowFinishFlow] = useState(false);
+  const initialSelectedDate = getValidDiaryDateParam(searchParams.get('date')) || formatDateKey();
 
   // Data hook (state, fetching, effects)
-  const data = useDiaryData({ projectId, isMobile });
+  const data = useDiaryData({ projectId, isMobile, initialDate: initialSelectedDate });
+  const { selectedDate, setSelectedDate } = data;
+
+  useEffect(() => {
+    const rawDate = searchParams.get('date');
+    const urlDate = getValidDiaryDateParam(rawDate);
+    if (rawDate && !urlDate) {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete('date');
+      setSearchParams(nextParams, { replace: true });
+      return;
+    }
+    if (urlDate && urlDate !== selectedDate) {
+      setSelectedDate(urlDate);
+    }
+  }, [searchParams, setSearchParams, selectedDate, setSelectedDate]);
+
+  const handleDateChange = useCallback(
+    (date: string) => {
+      const nextDate = getValidDiaryDateParam(date) || formatDateKey();
+      setSelectedDate(nextDate);
+
+      const nextParams = new URLSearchParams(searchParams);
+      if (nextDate === formatDateKey()) {
+        nextParams.delete('date');
+      } else {
+        nextParams.set('date', nextDate);
+      }
+      setSearchParams(nextParams, { replace: true });
+    },
+    [setSelectedDate, searchParams, setSearchParams],
+  );
 
   // Mobile handlers hook
   const mobile = useDiaryMobileHandlers({
@@ -227,7 +272,7 @@ export function DailyDiaryPage() {
       <DiaryDateSelector
         projectId={projectId!}
         selectedDate={data.selectedDate}
-        onDateChange={data.setSelectedDate}
+        onDateChange={handleDateChange}
         diaries={data.diaries}
         diary={data.diary}
       />

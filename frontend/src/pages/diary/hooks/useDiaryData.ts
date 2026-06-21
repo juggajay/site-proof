@@ -20,6 +20,7 @@ interface DiaryListResponse {
 interface UseDiaryDataParams {
   projectId: string | undefined;
   isMobile: boolean;
+  initialDate?: string;
 }
 
 interface WeatherResponse {
@@ -37,8 +38,8 @@ interface WeatherResponse {
 
 const WEATHER_UNAVAILABLE_MESSAGE = 'Weather auto-population unavailable. Enter weather manually.';
 
-export function useDiaryData({ projectId, isMobile }: UseDiaryDataParams) {
-  const [selectedDate, setSelectedDate] = useState<string>(() => formatDateKey());
+export function useDiaryData({ projectId, isMobile, initialDate }: UseDiaryDataParams) {
+  const [selectedDate, setSelectedDate] = useState<string>(() => initialDate || formatDateKey());
   const [diary, setDiary] = useState<DailyDiary | null>(null);
   const [diaries, setDiaries] = useState<DailyDiary[]>([]);
   const [lots, setLots] = useState<Lot[]>([]);
