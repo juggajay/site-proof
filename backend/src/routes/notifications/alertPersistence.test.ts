@@ -74,7 +74,14 @@ describe('ESCALATION_CONFIG', () => {
       stale_hold_point: {
         firstEscalationAfterHours: 4,
         secondEscalationAfterHours: 8,
-        escalationRoles: ['superintendent', 'project_manager', 'admin'],
+        escalationRoles: [
+          'project_manager',
+          'quality_manager',
+          'site_manager',
+          'site_engineer',
+          'superintendent',
+          'admin',
+        ],
       },
       pending_approval: {
         firstEscalationAfterHours: 8,

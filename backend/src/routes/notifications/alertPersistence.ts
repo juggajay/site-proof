@@ -1,4 +1,5 @@
 import { prisma } from '../../lib/prisma.js';
+import { ALERT_ESCALATION_CONFIG } from '../../lib/notificationAlertConfig.js';
 import { toAlert, type Alert } from './alertMappers.js';
 
 /**
@@ -16,29 +17,8 @@ import { toAlert, type Alert } from './alertMappers.js';
  * here and by the notifications route suite in CI.
  */
 
-// Escalation configuration (in hours)
-export const ESCALATION_CONFIG = {
-  overdue_ncr: {
-    firstEscalationAfterHours: 24, // Escalate after 24 hours
-    secondEscalationAfterHours: 48, // Second escalation after 48 hours
-    escalationRoles: ['project_manager', 'quality_manager', 'admin'],
-  },
-  stale_hold_point: {
-    firstEscalationAfterHours: 4, // Escalate after 4 hours (critical workflow)
-    secondEscalationAfterHours: 8, // Second escalation after 8 hours
-    escalationRoles: ['superintendent', 'project_manager', 'admin'],
-  },
-  pending_approval: {
-    firstEscalationAfterHours: 8, // Escalate after 8 hours
-    secondEscalationAfterHours: 24, // Second escalation after 24 hours
-    escalationRoles: ['project_manager', 'admin'],
-  },
-  overdue_test: {
-    firstEscalationAfterHours: 48, // Escalate after 48 hours
-    secondEscalationAfterHours: 96, // Second escalation after 96 hours
-    escalationRoles: ['quality_manager', 'project_manager'],
-  },
-};
+// Escalation configuration (in hours).
+export const ESCALATION_CONFIG = ALERT_ESCALATION_CONFIG;
 
 export async function createAlertRecord(alert: Alert): Promise<Alert> {
   const record = await prisma.notificationAlert.create({

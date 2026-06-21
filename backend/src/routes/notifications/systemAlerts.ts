@@ -10,6 +10,7 @@ import type { Prisma } from '@prisma/client';
 
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
+import { STALE_HOLD_POINT_ALERT_ROLES } from '../../lib/notificationAlertConfig.js';
 import { prisma } from '../../lib/prisma.js';
 import { getAccessibleActiveProjectIds, getManageableActiveProjectIds } from './access.js';
 import { generateAlertId, toAlert, type Alert, type AlertSeverity } from './alertMappers.js';
@@ -183,11 +184,11 @@ notificationSystemAlertsRouter.post(
 
           await createAlertRecord(alert);
 
-          // Notify project managers and superintendents
+          // Notify project/quality/site leads, while preserving legacy superintendent recipients.
           const pmUsers = await prisma.projectUser.findMany({
             where: {
               projectId: project.id,
-              role: { in: ['project_manager', 'superintendent', 'quality_manager'] },
+              role: { in: STALE_HOLD_POINT_ALERT_ROLES },
               status: 'active',
             },
             select: { userId: true },
