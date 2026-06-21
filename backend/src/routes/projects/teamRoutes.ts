@@ -40,6 +40,10 @@ type ProjectTeamRouterDependencies = {
   parseProjectTeamRole: (value: unknown) => string;
 };
 
+function isProjectUserUniqueConstraintError(error: unknown): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
+}
+
 export function createProjectTeamRouter({
   assertCanReduceProjectAdmin,
   getProjectAccessContext,
@@ -125,15 +129,22 @@ export function createProjectTeamRouter({
       }
 
       // Create project user
-      const newProjectUser = await prisma.projectUser.create({
-        data: {
-          projectId,
-          userId: invitedUser.id,
-          role,
-          status: 'active',
-          acceptedAt: new Date(), // Auto-accept for now
-        },
-      });
+      const newProjectUser = await prisma.projectUser
+        .create({
+          data: {
+            projectId,
+            userId: invitedUser.id,
+            role,
+            status: 'active',
+            acceptedAt: new Date(), // Auto-accept for now
+          },
+        })
+        .catch((error: unknown) => {
+          if (isProjectUserUniqueConstraintError(error)) {
+            throw AppError.badRequest('User is already a member of this project');
+          }
+          throw error;
+        });
 
       // Audit log
       await createAuditLog({
