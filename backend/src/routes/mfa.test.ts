@@ -19,8 +19,8 @@ vi.mock('otplib', async () => {
     ...actual,
     generateSecret: vi.fn(async () => 'TESTSECRET1234567890'),
     verify: vi.fn(async ({ token }: { token: string }) => {
-      // Return true for specific test codes, false otherwise
-      return token === '123456' || token === '654321';
+      // otplib v13 returns an object, not a boolean.
+      return { valid: token === '123456' || token === '654321' };
     }),
     generateURI: vi.fn(async ({ secret, issuer, label }: any) => {
       return `otpauth://totp/${issuer}:${label}?secret=${secret}&issuer=${issuer}`;
