@@ -162,6 +162,27 @@ describe('DashboardPage first-run zero state', () => {
     expect(screen.queryByText(/once your team adds you/)).not.toBeInTheDocument();
   });
 
+  it('does not offer company settings from KPI tiles to non-company-admin roles', async () => {
+    authState.user = {
+      id: 'u6',
+      email: 'site@example.com',
+      role: 'site_manager',
+      roleInCompany: 'site_manager',
+      companyId: 'c1',
+      name: 'Sam Site',
+    };
+    mockDashboardApi({
+      stats: { ...ZERO_STATS, totalProjects: 2, activeProjects: 1, totalLots: 8 },
+      projects: [{ id: 'p1', status: 'active' }],
+    });
+
+    renderWithProviders(<DashboardPage />);
+
+    expect(await screen.findByText('Project Access')).toBeInTheDocument();
+    expect(screen.getByText('view assigned projects')).toBeInTheDocument();
+    expect(screen.queryByText('Team Members')).not.toBeInTheDocument();
+  });
+
   it('never flashes the setup state while stats are still loading', async () => {
     authState.user = {
       id: 'u5',

@@ -19,6 +19,7 @@ describe('DashboardKpiTiles', () => {
         totalProjects={12}
         activeProjects={9}
         totalLots={34}
+        canManageCompanySettings={true}
         onNavigate={vi.fn()}
       />,
     );
@@ -36,6 +37,7 @@ describe('DashboardKpiTiles', () => {
         totalProjects={1}
         activeProjects={2}
         totalLots={3}
+        canManageCompanySettings={true}
         onNavigate={onNavigate}
       />,
     );
@@ -49,5 +51,25 @@ describe('DashboardKpiTiles', () => {
     expect(onNavigate).toHaveBeenNthCalledWith(2, '/projects?status=active');
     expect(onNavigate).toHaveBeenNthCalledWith(3, '/projects');
     expect(onNavigate).toHaveBeenNthCalledWith(4, '/company-settings');
+  });
+
+  it('keeps non-company-admin users away from company settings', () => {
+    const onNavigate = vi.fn();
+    render(
+      <DashboardKpiTiles
+        totalProjects={1}
+        activeProjects={1}
+        totalLots={1}
+        canManageCompanySettings={false}
+        onNavigate={onNavigate}
+      />,
+    );
+
+    expect(screen.queryByText('Team Members')).not.toBeInTheDocument();
+    expect(getTile('Project Access')).toHaveTextContent('view assigned projects');
+
+    fireEvent.click(getTile('Project Access'));
+
+    expect(onNavigate).toHaveBeenCalledWith('/projects');
   });
 });

@@ -227,7 +227,9 @@ function DefaultDashboard({ user }: { user: DashboardUser }) {
   // checklist's "done" ticks because it refreshes independently of stats.
   const knownProjectCount = projectsData?.projects.length ?? 0;
   const showFirstRunSetup = hasStatsData && stats.totalProjects === 0;
-  const canCreateProjects = hasRoleInGroup(getCompanyRole(user), ROLE_GROUPS.ADMIN);
+  const companyRole = getCompanyRole(user);
+  const canCreateProjects = hasRoleInGroup(companyRole, ROLE_GROUPS.ADMIN);
+  const canManageCompanySettings = companyRole === 'owner' || companyRole === 'admin';
   const statsErrorMessage = statsError
     ? extractErrorMessage(statsError, 'Failed to load dashboard data')
     : null;
@@ -458,6 +460,7 @@ function DefaultDashboard({ user }: { user: DashboardUser }) {
               totalProjects={stats.totalProjects}
               activeProjects={stats.activeProjects}
               totalLots={stats.totalLots}
+              canManageCompanySettings={canManageCompanySettings}
               onNavigate={navigate}
             />
           )}

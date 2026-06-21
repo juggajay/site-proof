@@ -2,6 +2,7 @@ interface DashboardKpiTilesProps {
   totalProjects: number;
   activeProjects: number;
   totalLots: number;
+  canManageCompanySettings: boolean;
   onNavigate: (to: string) => void;
 }
 
@@ -17,8 +18,25 @@ export function DashboardKpiTiles({
   totalProjects,
   activeProjects,
   totalLots,
+  canManageCompanySettings,
   onNavigate,
 }: DashboardKpiTilesProps) {
+  const accessTile: KpiTile = canManageCompanySettings
+    ? {
+        label: 'Team Members',
+        value: '—',
+        sub: 'company settings',
+        to: '/company-settings',
+        title: 'Manage company settings',
+      }
+    : {
+        label: 'Project Access',
+        value: '—',
+        sub: 'view assigned projects',
+        to: '/projects',
+        title: 'View assigned projects',
+      };
+
   const tiles: KpiTile[] = [
     {
       label: 'Total Projects',
@@ -39,13 +57,7 @@ export function DashboardKpiTiles({
       to: '/projects',
       title: 'View all lots in projects',
     },
-    {
-      label: 'Team Members',
-      value: '—',
-      sub: 'company settings',
-      to: '/company-settings',
-      title: 'Manage company settings',
-    },
+    accessTile,
   ];
 
   // Hairline dividers between cells. At 2-col: vertical divider on odd cells,
