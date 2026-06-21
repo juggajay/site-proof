@@ -23,6 +23,7 @@ import {
   generateMfaBackupCodes,
   verifyAndConsumeMfaBackupCode,
 } from '../lib/mfaBackupCodes.js';
+import { isOtpVerifyResultValid } from '../lib/otpVerifyResult.js';
 import { AuditAction, createAuditLog } from '../lib/auditLog.js';
 import {
   buildMfaDisabledResponse,
@@ -203,10 +204,12 @@ mfaRouter.post(
     const decryptedSecret = decrypt(user.two_factor_secret);
 
     // Verify the code using otplib v13 functional API
-    const isValid = await verifyOtp({
-      token: code,
-      secret: decryptedSecret,
-    });
+    const isValid = isOtpVerifyResultValid(
+      await verifyOtp({
+        token: code,
+        secret: decryptedSecret,
+      }),
+    );
 
     if (!isValid) {
       throw AppError.badRequest('Invalid verification code. Please try again.');
@@ -282,11 +285,12 @@ mfaRouter.post(
     ) {
       // Decrypt the secret before verifying
       const decryptedSecret = decrypt(user.two_factor_secret);
-      const verifyResult = await verifyOtp({
-        token: normalizedCode,
-        secret: decryptedSecret,
-      });
-      verified = typeof verifyResult === 'boolean' ? verifyResult : verifyResult.valid;
+      verified = isOtpVerifyResultValid(
+        await verifyOtp({
+          token: normalizedCode,
+          secret: decryptedSecret,
+        }),
+      );
       if (verified) {
         verificationMethod = 'totp';
       }
@@ -377,10 +381,12 @@ mfaRouter.post(
     const decryptedSecret = decrypt(user.two_factor_secret);
 
     // Verify the code using otplib v13 functional API
-    const isValid = await verifyOtp({
-      token: normalizedCode,
-      secret: decryptedSecret,
-    });
+    const isValid = isOtpVerifyResultValid(
+      await verifyOtp({
+        token: normalizedCode,
+        secret: decryptedSecret,
+      }),
+    );
 
     if (!isValid) {
       await recordFailedAuthAttempt(clientIp, normalizedUserId);

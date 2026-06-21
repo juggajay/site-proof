@@ -25,6 +25,7 @@ import {
 import { AuditAction, createAuditLog } from '../lib/auditLog.js';
 import { hasActiveSubcontractorPortalIdentity } from '../lib/projectAccess.js';
 import { resolveDashboardRoleForUser } from '../lib/dashboardRole.js';
+import { isOtpVerifyResultValid } from '../lib/otpVerifyResult.js';
 import { createRegistrationRouter } from './auth/registrationRoutes.js';
 import { createSessionPasswordRouter, createSessionRouter } from './auth/sessionRoutes.js';
 import { createPasswordResetRouter } from './auth/passwordResetRoutes.js';
@@ -313,11 +314,12 @@ authRouter.post(
         if (TOTP_CODE_PATTERN.test(normalizedMfaCode)) {
           const { verify: verifyOtp } = await import('otplib');
           const mfaSecret = decrypt(user.two_factor_secret);
-          const verifyResult = await verifyOtp({
-            token: normalizedMfaCode,
-            secret: mfaSecret,
-          });
-          isValid = typeof verifyResult === 'boolean' ? verifyResult : verifyResult.valid;
+          isValid = isOtpVerifyResultValid(
+            await verifyOtp({
+              token: normalizedMfaCode,
+              secret: mfaSecret,
+            }),
+          );
         }
 
         const backupCodeValid =
