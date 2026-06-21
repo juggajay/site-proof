@@ -2107,3 +2107,109 @@ Artifacts:
 - No bearer tokens, session cookies, generated passwords, attachment download
   URLs, or notification IDs tied to credentials were committed or copied into
   this ledger.
+
+## Stage 25 - Reports and Scheduled Reports Backend QA
+
+Status: completed. One backend code fix was merged from this stage.
+
+Scope:
+
+- Backend report/export and scheduled-report route mapping.
+- Frontend Reports-page control mapping and role/tier expectations.
+- Scheduled-report worker delivery flow and failure-mode review.
+- Code fixes for confirmed backend report/scheduled-report defects.
+
+Subagent coverage:
+
+- Backend reports mapper reviewed report endpoints, role gates, validation, and
+  high-risk backend bug candidates.
+- Frontend reports mapper reviewed route access, tab controls, schedule modal
+  behaviour, export copy, and browser-QA targets.
+- Scheduled-report worker mapper reviewed delivery entrypoints, timing,
+  recipient handling, and retry/duplicate-send risks.
+- A final diff-review agent checked the Stage 25 code changes and found two
+  pre-PR issues: schedule claim eligibility needed an atomic recheck, and diary
+  summaries should not load every filtered diary row. Both were fixed before
+  merge.
+
+Confirmed issues fixed:
+
+- Scheduled reports could be created on archived/read-only projects because
+  `POST /api/reports/schedules` did not request writable project access. Fixed
+  in #1056 by applying the archived-project write gate to create, matching the
+  existing update/delete behaviour.
+- Existing due scheduled reports could keep sending after a project was archived
+  or a company was below the scheduled-report tier. Fixed in #1056 by filtering
+  worker selection to active projects on eligible tiers and repeating that same
+  eligibility check during the atomic schedule claim.
+- Diary report summary counts were page-scoped while `totalDiaries` was
+  full-filter scoped. Fixed in #1056 by computing status, weather, personnel,
+  plant, activity, and delay summaries from the full filtered set while keeping
+  detail rows paginated.
+- The first diary-summary fix loaded all filtered diary rows and selected child
+  records, which was correct but risky for large projects. Before merge, #1056
+  replaced that with aggregate/groupBy summary queries.
+
+Related merged work:
+
+- #1056 - Fix report schedule edge cases, merged as `5df87a4e`.
+
+Verification:
+
+- #1056 local checks passed:
+  - backend `format:check`
+  - backend `lint`
+  - backend `type-check`
+  - backend `build`
+  - `git diff --check`
+  - changed-file `fallow audit --base origin/master --format json --quiet`,
+    verdict `pass` with no introduced findings
+- Local DB-backed `scheduledReports.test.ts` and `reports.test.ts` could not be
+  run because this machine has no safe local Postgres target. CI supplied the
+  PostgreSQL-backed verification.
+- PR #1056 CI run `27907940112` passed, including Backend and Frontend PR E2E
+  smoke. Frontend and full E2E were correctly skipped on the PR because this was
+  a backend-only change.
+- Master CI run `27908076304` passed after merge, including Backend, Frontend,
+  and full post-merge Frontend E2E.
+- After merge, production health checks returned HTTP 200 for:
+  - `https://site-proof-production.up.railway.app/ready`
+  - `https://site-proof.vercel.app`
+
+Not live-exercised in this stage:
+
+- Real scheduled-report email delivery to external recipients. The worker path
+  is covered by DB-backed CI tests with queued email assertions, but no
+  production email was intentionally sent during this pass.
+- Browser walkthroughs for every Reports tab after #1056. This stage focused on
+  backend correctness and worker safety; the frontend mapper produced a browser
+  QA checklist for a later UI pass.
+- Timezone semantics for scheduled report `timeOfDay`. Current scheduling still
+  uses server-local time; project/company timezone support remains a separate
+  product decision.
+- Duplicate-email recovery if the provider send succeeds and the post-send DB
+  update fails. That remains an architectural reliability follow-up.
+- Dead-letter handling for permanently invalid stored schedules. Invalid stored
+  schedules currently retry rather than being parked after a retry cap.
+
+Remaining findings for a later pass:
+
+- The schedule modal should be browser-tested as a project-scoped viewer on an
+  eligible-tier company. Backend denies mutation, but the UI should ideally hide
+  write controls instead of letting a viewer reach a denied action.
+- Reports help copy says PDF or CSV export, while the mapped UI only exposes
+  `Print / Save PDF` for Test Results. Either add the missing export controls or
+  narrow the copy.
+- Claims report UI has no visible date/status filters even though the backend
+  supports claim filters. This is a usability/commercial-reporting follow-up.
+- `GET /api/reports/schedules` currently requires writable project access even
+  though it is read-only. That may be acceptable product policy, but it should
+  be explicitly decided.
+- Manual scheduled-report processing still cannot target a single schedule ID,
+  which makes production-safe one-off delivery testing awkward.
+
+Artifacts:
+
+- No bearer tokens, session cookies, production secrets, email payloads,
+  schedule IDs tied to credentials, or recipient-specific delivery evidence were
+  committed or copied into this ledger.
