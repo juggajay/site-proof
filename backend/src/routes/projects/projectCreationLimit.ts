@@ -1,5 +1,5 @@
 import { AppError } from '../../lib/AppError.js';
-import { TIER_PROJECT_LIMITS } from '../../lib/tierLimits.js';
+import { getProjectLimitForTier, normalizeSubscriptionTier } from '../../lib/tierLimits.js';
 
 export type ProjectCreationLimitClient = {
   $queryRaw: (query: TemplateStringsArray, ...values: unknown[]) => Promise<unknown>;
@@ -34,8 +34,8 @@ export async function assertCompanyProjectCapacity(
     throw AppError.notFound('Company');
   }
 
-  const tier = company.subscriptionTier || 'basic';
-  const limit = TIER_PROJECT_LIMITS[tier] || TIER_PROJECT_LIMITS.basic;
+  const tier = normalizeSubscriptionTier(company.subscriptionTier);
+  const limit = getProjectLimitForTier(company.subscriptionTier);
 
   if (limit === Infinity) {
     return;

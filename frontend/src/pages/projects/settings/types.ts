@@ -153,7 +153,7 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: ProjectNotificationPreferences = 
   holdPointReleases: true,
   ncrAssignments: true,
   testResults: true,
-  dailyDiaryReminders: false,
+  dailyDiaryReminders: true,
 };
 
 export const DEFAULT_WITNESS_POINT_NOTIFICATIONS: WitnessPointNotificationSettings = {

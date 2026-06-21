@@ -1,6 +1,7 @@
 import { prisma } from './prisma.js';
 import { sendScheduledReportEmail } from './email.js';
 import { logError, logInfo } from './serverLogger.js';
+import { normalizeSubscriptionTier } from './tierLimits.js';
 import {
   calculateNextScheduledReportRunAt,
   isScheduledReportFrequency,
@@ -27,6 +28,7 @@ const DEFAULT_LOCK_MS = 15 * 60 * 1000;
 const DEFAULT_RETRY_DELAY_MS = 15 * 60 * 1000;
 const DEFAULT_WORKER_INTERVAL_MS = 60 * 1000;
 const SCHEDULED_REPORT_DELIVERY_TIERS = ['professional', 'enterprise', 'unlimited'] as const;
+const SCHEDULED_REPORT_DELIVERY_TIER_SET = new Set<string>(SCHEDULED_REPORT_DELIVERY_TIERS);
 const MAX_SCHEDULED_REPORT_DELIVERY_FAILURES = 3;
 const MAX_FAILURE_REASON_LENGTH = 500;
 
@@ -73,9 +75,6 @@ async function claimScheduledReport(
       OR: [{ nextRunAt: { lte: now } }, { nextRunAt: null }],
       project: {
         status: 'active',
-        company: {
-          subscriptionTier: { in: [...SCHEDULED_REPORT_DELIVERY_TIERS] },
-        },
       },
     },
     data: {
@@ -84,6 +83,10 @@ async function claimScheduledReport(
   });
 
   return claim.count === 1;
+}
+
+function canDeliverScheduledReportForTier(tier: string | null | undefined): boolean {
+  return SCHEDULED_REPORT_DELIVERY_TIER_SET.has(normalizeSubscriptionTier(tier));
 }
 
 function truncateFailureReason(reason: string): string {
@@ -127,6 +130,17 @@ async function processScheduledReport(
   options: Required<Pick<ProcessDueScheduledReportsOptions, 'lockMs' | 'retryDelayMs'>>,
 ): Promise<ScheduledReportDeliveryResult> {
   const recipients = parseRecipients(schedule.recipients);
+  if (!canDeliverScheduledReportForTier(schedule.project.company?.subscriptionTier)) {
+    return {
+      scheduleId: schedule.id,
+      projectId: schedule.projectId,
+      reportType: schedule.reportType,
+      recipients: recipients.length,
+      status: 'skipped',
+      error: 'Scheduled reports require a Professional or Enterprise subscription',
+    };
+  }
+
   const claimed = await claimScheduledReport(schedule.id, now, options.lockMs);
   if (!claimed) {
     return {
@@ -229,14 +243,11 @@ export async function processDueScheduledReports(
       OR: [{ nextRunAt: { lte: now } }, { nextRunAt: null }],
       project: {
         status: 'active',
-        company: {
-          subscriptionTier: { in: [...SCHEDULED_REPORT_DELIVERY_TIERS] },
-        },
       },
     },
     include: {
       project: {
-        select: { name: true },
+        select: { name: true, company: { select: { subscriptionTier: true } } },
       },
     },
     orderBy: [{ nextRunAt: 'asc' }, { createdAt: 'asc' }],

@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
 import { AppError } from '../lib/AppError.js';
 import { assertProjectAllowsWrite, getEffectiveProjectRole } from '../lib/projectAccess.js';
+import { normalizeSubscriptionTier } from '../lib/tierLimits.js';
 import { createClaimReportRouter } from './reports/claimRoutes.js';
 import { createDiaryReportRouter } from './reports/diaryRoutes.js';
 import { createLotStatusReportRouter } from './reports/lotStatusRoutes.js';
@@ -84,7 +85,7 @@ async function requireScheduledReportAccess(
       },
     },
   });
-  const tier = project?.company.subscriptionTier || 'basic';
+  const tier = normalizeSubscriptionTier(project?.company.subscriptionTier);
 
   if (!SCHEDULED_REPORT_TIERS.has(tier)) {
     throw AppError.forbidden('Scheduled reports require a Professional or Enterprise subscription');

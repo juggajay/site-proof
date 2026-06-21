@@ -1896,6 +1896,27 @@ describe('Reports API - Scheduled Reports', () => {
       }
     });
 
+    it('should normalize paid tier values before allowing schedule management', async () => {
+      await prisma.company.update({
+        where: { id: companyId },
+        data: { subscriptionTier: ' Professional ' },
+      });
+
+      try {
+        const listRes = await request(app)
+          .get('/api/reports/schedules')
+          .set('Authorization', `Bearer ${authToken}`)
+          .query({ projectId });
+
+        expect(listRes.status).toBe(200);
+      } finally {
+        await prisma.company.update({
+          where: { id: companyId },
+          data: { subscriptionTier: 'professional' },
+        });
+      }
+    });
+
     it('should enforce the per-project scheduled report cap', async () => {
       const existingCount = await prisma.scheduledReport.count({ where: { projectId } });
       const fixtures = await Promise.all(

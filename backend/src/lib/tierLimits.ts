@@ -16,3 +16,26 @@ export const TIER_USER_LIMITS: Record<string, number> = {
   enterprise: 100,
   unlimited: Infinity,
 };
+
+export type SubscriptionTier = keyof typeof TIER_PROJECT_LIMITS;
+
+const DEFAULT_SUBSCRIPTION_TIER: SubscriptionTier = 'basic';
+const SUBSCRIPTION_TIERS = new Set<SubscriptionTier>(
+  Object.keys(TIER_PROJECT_LIMITS) as SubscriptionTier[],
+);
+
+export function normalizeSubscriptionTier(value: string | null | undefined): SubscriptionTier {
+  const normalized = value?.trim().toLowerCase();
+  if (normalized && SUBSCRIPTION_TIERS.has(normalized as SubscriptionTier)) {
+    return normalized as SubscriptionTier;
+  }
+  return DEFAULT_SUBSCRIPTION_TIER;
+}
+
+export function getProjectLimitForTier(value: string | null | undefined): number {
+  return TIER_PROJECT_LIMITS[normalizeSubscriptionTier(value)];
+}
+
+export function getUserLimitForTier(value: string | null | undefined): number {
+  return TIER_USER_LIMITS[normalizeSubscriptionTier(value)];
+}

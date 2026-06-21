@@ -10,7 +10,7 @@ import { logError } from '../../lib/serverLogger.js';
 import { AuditAction, createAuditLog } from '../../lib/auditLog.js';
 import { sendCompanyMemberInvitationEmail } from '../../lib/email.js';
 import { createEmailDeliveryFailureError } from '../../lib/emailDeliveryErrors.js';
-import { TIER_USER_LIMITS } from '../../lib/tierLimits.js';
+import { getUserLimitForTier, normalizeSubscriptionTier } from '../../lib/tierLimits.js';
 import {
   buildCompanyLeftResponse,
   buildCompanyMemberInvitedResponse,
@@ -104,11 +104,9 @@ companyMemberRoutes.post(
       throw AppError.badRequest('You are not a member of any company');
     }
 
-    // Don't allow owners to leave (they must transfer ownership or delete company)
+    // Don't allow owners to leave until someone else owns the company.
     if (user.roleInCompany === 'owner') {
-      throw AppError.forbidden(
-        'Company owners cannot leave. Please transfer ownership first or delete the company.',
-      );
+      throw AppError.forbidden('Company owners cannot leave. Please transfer ownership first.');
     }
 
     const companyId = user.companyId;
@@ -322,8 +320,8 @@ companyMemberRoutes.post(
 
       const consumesSeat = !existingUser || existingUser.companyId !== companyId;
       if (consumesSeat) {
-        const tier = company.subscriptionTier || 'basic';
-        const userLimit = TIER_USER_LIMITS[tier] ?? TIER_USER_LIMITS.basic;
+        const tier = normalizeSubscriptionTier(company.subscriptionTier);
+        const userLimit = getUserLimitForTier(company.subscriptionTier);
 
         if (Number.isFinite(userLimit)) {
           const userCount = await tx.user.count({ where: { companyId } });

@@ -35,6 +35,12 @@ const scheduledReportTimeOfDaySchema = z
 type ScheduledReportFrequency = z.infer<typeof scheduledReportFrequencySchema>;
 type ScheduledReportType = z.infer<typeof scheduledReportTypeSchema>;
 type AuthUser = NonNullable<Express.Request['user']>;
+type ScheduledReportCapacityClient = {
+  $queryRaw: (query: TemplateStringsArray, ...values: unknown[]) => Promise<unknown>;
+  scheduledReport: {
+    count: (args: { where: { projectId: string } }) => Promise<number>;
+  };
+};
 
 type ScheduledReportRouterDependencies = {
   parseRequiredString: (value: unknown, fieldName: string, maxLength?: number) => string;
@@ -192,6 +198,25 @@ function parseScheduleIsActive(value: unknown): boolean {
   return value;
 }
 
+export async function assertScheduledReportCapacity(
+  client: ScheduledReportCapacityClient,
+  projectId: string,
+): Promise<void> {
+  await client.$queryRaw`
+    SELECT id
+    FROM projects
+    WHERE id = ${projectId}
+    FOR UPDATE
+  `;
+
+  const existingScheduleCount = await client.scheduledReport.count({ where: { projectId } });
+  if (existingScheduleCount >= MAX_SCHEDULED_REPORTS_PER_PROJECT) {
+    throw AppError.badRequest(
+      `Projects cannot have more than ${MAX_SCHEDULED_REPORTS_PER_PROJECT} scheduled reports`,
+    );
+  }
+}
+
 export function createScheduledReportRouter({
   parseRequiredString,
   requireScheduledReportAccess,
@@ -240,13 +265,6 @@ export function createScheduledReportRouter({
         dayOfMonth,
         timeOfDay,
       });
-      const existingScheduleCount = await prisma.scheduledReport.count({ where: { projectId } });
-      if (existingScheduleCount >= MAX_SCHEDULED_REPORTS_PER_PROJECT) {
-        throw AppError.badRequest(
-          `Projects cannot have more than ${MAX_SCHEDULED_REPORTS_PER_PROJECT} scheduled reports`,
-        );
-      }
-
       // Calculate next run time
       const nextRunAt = calculateNextScheduledReportRunAt(
         normalizedFrequency,
@@ -255,19 +273,23 @@ export function createScheduledReportRouter({
         scheduleTiming.timeOfDay,
       );
 
-      const schedule = await prisma.scheduledReport.create({
-        data: {
-          projectId,
-          reportType: normalizedReportType,
-          frequency: normalizedFrequency,
-          dayOfWeek: scheduleTiming.dayOfWeek,
-          dayOfMonth: scheduleTiming.dayOfMonth,
-          timeOfDay: scheduleTiming.timeOfDay,
-          recipients: normalizedRecipients,
-          nextRunAt,
-          createdById: userId,
-          isActive: true,
-        },
+      const schedule = await prisma.$transaction(async (tx) => {
+        await assertScheduledReportCapacity(tx, projectId);
+
+        return tx.scheduledReport.create({
+          data: {
+            projectId,
+            reportType: normalizedReportType,
+            frequency: normalizedFrequency,
+            dayOfWeek: scheduleTiming.dayOfWeek,
+            dayOfMonth: scheduleTiming.dayOfMonth,
+            timeOfDay: scheduleTiming.timeOfDay,
+            recipients: normalizedRecipients,
+            nextRunAt,
+            createdById: userId,
+            isActive: true,
+          },
+        });
       });
 
       res.status(201).json(buildScheduledReportResponse(schedule));

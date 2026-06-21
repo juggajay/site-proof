@@ -69,22 +69,26 @@ export function AccountDangerModals({
             </div>
           </AlertModalHeader>
           <AlertModalDescription>
-            Confirm your account email before permanently deleting your SiteProof account and
-            associated data.
+            Confirm your account email before permanently deleting your SiteProof account.
           </AlertModalDescription>
           <ModalBody>
             <div className="space-y-4">
               <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
                 <p className="text-sm text-destructive">
-                  <strong>Warning:</strong> This will permanently delete your account and all
-                  associated data including:
+                  <strong>Warning:</strong> This will permanently delete your account access and
+                  personal account data including:
                 </p>
                 <ul className="text-sm text-destructive/90 mt-2 list-disc list-inside space-y-1">
                   <li>Your profile and settings</li>
+                  <li>Your credentials, sessions, and security tokens</li>
                   <li>All project memberships</li>
-                  <li>ITP completions you've made</li>
-                  <li>Other user-created content</li>
+                  <li>Your avatar and notification preferences</li>
                 </ul>
+                <p className="text-sm text-destructive/90 mt-3">
+                  Project records retained for compliance, including inspections, documents,
+                  comments, and audit history, may stay in the project with your attribution
+                  anonymised where records must be kept.
+                </p>
               </div>
 
               <div>

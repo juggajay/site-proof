@@ -58,4 +58,26 @@ describe('assertCompanyProjectCapacity', () => {
     expect(calls).toEqual(['lock', 'company']);
     expect(client.project.count).not.toHaveBeenCalled();
   });
+
+  it('normalizes cased and padded paid tiers before applying the project cap', async () => {
+    const { calls, client } = createProjectLimitClient({
+      subscriptionTier: ' Professional ',
+      projectCount: 9,
+    });
+
+    await assertCompanyProjectCapacity(client, 'company-1');
+
+    expect(calls).toEqual(['lock', 'company', 'count']);
+  });
+
+  it('normalizes cased and padded tiers in project cap errors', async () => {
+    const { client } = createProjectLimitClient({
+      subscriptionTier: ' Professional ',
+      projectCount: 10,
+    });
+
+    await expect(assertCompanyProjectCapacity(client, 'company-1')).rejects.toThrow(
+      'professional subscription allows up to 10 projects',
+    );
+  });
 });

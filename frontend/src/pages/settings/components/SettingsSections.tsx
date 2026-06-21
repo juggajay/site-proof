@@ -293,8 +293,9 @@ export function PrivacyDataSection({
           Delete Account
         </h3>
         <p className="text-sm text-muted-foreground mb-4">
-          Permanently delete your account and all associated data. This action cannot be undone.
-          Before deleting, we recommend exporting your data above.
+          Permanently delete your account, credentials, memberships, and personal settings. Project
+          records that must be retained for compliance may be kept with your attribution removed.
+          This action cannot be undone. Before deleting, we recommend exporting your data above.
         </p>
 
         <Button variant="destructive" onClick={onDeleteAccountClick}>

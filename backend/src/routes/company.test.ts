@@ -1658,6 +1658,55 @@ describe('Company API', () => {
       );
     });
 
+    it('normalizes paid tier values before enforcing the subscription seat limit', async () => {
+      const professionalCompany = await prisma.company.create({
+        data: {
+          name: `Seat Professional Company ${Date.now()}`,
+          subscriptionTier: ' Professional ',
+        },
+      });
+      invitedCompanyIds.push(professionalCompany.id);
+
+      const ownerRes = await request(app)
+        .post('/api/auth/register')
+        .send({
+          email: `seat-professional-owner-${Date.now()}@example.com`,
+          password: 'SecureP@ssword123!',
+          fullName: 'Seat Professional Owner',
+          tosAccepted: true,
+        });
+      invitedUserIds.push(ownerRes.body.user.id);
+
+      await prisma.user.update({
+        where: { id: ownerRes.body.user.id },
+        data: { companyId: professionalCompany.id, roleInCompany: 'owner' },
+      });
+
+      for (let index = 0; index < 4; index += 1) {
+        const member = await prisma.user.create({
+          data: {
+            email: `seat-professional-member-${Date.now()}-${index}@example.com`,
+            fullName: `Seat Professional Member ${index}`,
+            companyId: professionalCompany.id,
+            roleInCompany: 'foreman',
+            emailVerified: true,
+            emailVerifiedAt: new Date(),
+          },
+        });
+        invitedUserIds.push(member.id);
+      }
+
+      const invitedEmail = `seat-professional-invite-${Date.now()}@example.com`;
+      const res = await request(app)
+        .post('/api/company/members/invite')
+        .set('Authorization', `Bearer ${ownerRes.body.token}`)
+        .send({ email: invitedEmail, roleInCompany: 'site_engineer' });
+
+      expect(res.status).toBe(201);
+      expect(res.body.member.email).toBe(invitedEmail);
+      invitedUserIds.push(res.body.member.id);
+    });
+
     it('allows updating an existing company member at the subscription seat limit', async () => {
       const limitedCompany = await prisma.company.create({
         data: {
@@ -2572,6 +2621,34 @@ describe('Company API', () => {
         data: { companyId },
       });
       await prisma.company.delete({ where: { id: enterpriseCompany.id } });
+    });
+
+    it('should normalize cased and padded paid tier values before returning limits', async () => {
+      const professionalCompany = await prisma.company.create({
+        data: {
+          name: `Professional Tier ${Date.now()}`,
+          subscriptionTier: ' Professional ',
+        },
+      });
+
+      await prisma.user.update({
+        where: { id: userId },
+        data: { companyId: professionalCompany.id },
+      });
+
+      const res = await request(app)
+        .get('/api/company')
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.company.projectLimit).toBe(10);
+      expect(res.body.company.userLimit).toBe(25);
+
+      await prisma.user.update({
+        where: { id: userId },
+        data: { companyId },
+      });
+      await prisma.company.delete({ where: { id: professionalCompany.id } });
     });
 
     it('should return infinity for unlimited tier', async () => {

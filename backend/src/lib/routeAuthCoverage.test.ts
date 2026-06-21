@@ -625,7 +625,9 @@ describe('route authentication coverage', () => {
     ).toContain('tx.user.delete');
     expect(
       routeSourceForDescriptor(accountDeletionRoutesSource, 'DELETE /delete-account'),
-    ).toContain('Your account and associated data have been permanently deleted.');
+    ).toContain(
+      'Your account has been permanently deleted. Project records that must be retained have been anonymised.',
+    );
     expect(serverSource).toContain("app.use('/api/auth', authRateLimiter, authRouter)");
 
     expect(routeCalls(oauthSource).map((route) => route.descriptor)).toEqual([
