@@ -22,6 +22,7 @@ export interface Project {
   workingDays?: string[] | null;
   specificationSet?: string | null;
   settings?: string | Record<string, unknown> | null;
+  currentUserRole?: string | null;
 }
 
 export interface TeamMember {

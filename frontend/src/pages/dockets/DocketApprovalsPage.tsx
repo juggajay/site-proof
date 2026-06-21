@@ -14,6 +14,7 @@ import { buildScopedCsvFilename, downloadCsv } from '@/lib/csv';
 import {
   type Docket,
   type ProjectResponse,
+  canApproveDocketsForProjectRole,
   formatDocketCurrency,
   getDocketApprovedTotalCost,
   getDocketDisplayTotalCost,
@@ -30,6 +31,7 @@ import {
 import { DocketActionModal } from './components/DocketActionModal';
 import { CreateDocketModal } from './components/CreateDocketModal';
 import { DocketApprovalsTable } from './components/DocketApprovalsTable';
+import { getProjectScopedRole } from '@/lib/subcontractorIdentity';
 
 const EMPTY_DOCKETS: Docket[] = [];
 
@@ -77,15 +79,14 @@ export function DocketApprovalsPage() {
     await refetchDocketsQuery();
   }, [refetchDocketsQuery]);
 
-  // Role checks - use roleInCompany which is the field returned from the backend
-  const userRole = user?.roleInCompany || user?.role;
+  // Prefer the role returned for this project. dashboardRole is intentionally
+  // coarse across all memberships and can overstate access on another project.
+  const userRole = projectInfo?.currentUserRole ?? getProjectScopedRole(user);
   const isSubcontractor = userRole === 'subcontractor' || userRole === 'subcontractor_admin';
   const projectLabel = projectInfo?.name || projectId || 'this project';
   const subcontractorSetupHref = projectId ? `/projects/${projectId}/subcontractors` : '/projects';
 
-  const canApprove = ['owner', 'admin', 'project_manager', 'site_manager', 'foreman'].includes(
-    userRole || '',
-  );
+  const canApprove = Boolean(projectInfo) && canApproveDocketsForProjectRole(userRole);
 
   // Sync filter changes to URL query params
   const handleFilterChange = (newFilter: string) => {

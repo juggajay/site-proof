@@ -143,6 +143,8 @@ describe('project-scoped commercial routes', () => {
   it.each([
     ['/projects/project-1/claims', 'Claims route reached'],
     ['/projects/project-1/costs', 'Costs route reached'],
+    ['/projects/project-1/lots/lot-1/edit', 'Lot edit'],
+    ['/projects/project-1/subcontractors', 'Subcontractors'],
   ])('allows project-scoped project managers to open %s', async (path, expectedText) => {
     renderAppAt(path);
 

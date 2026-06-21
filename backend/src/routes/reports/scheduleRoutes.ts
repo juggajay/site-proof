@@ -306,6 +306,15 @@ export function createScheduledReportRouter({
         updateData.isActive = parseScheduleIsActive(isActive);
       }
 
+      const shouldResetFailureState =
+        reportType !== undefined ||
+        frequency !== undefined ||
+        dayOfWeek !== undefined ||
+        dayOfMonth !== undefined ||
+        timeOfDay !== undefined ||
+        recipients !== undefined ||
+        isActive === true;
+
       if (
         frequency !== undefined ||
         dayOfWeek !== undefined ||
@@ -332,6 +341,26 @@ export function createScheduledReportRouter({
           scheduleTiming.dayOfWeek,
           scheduleTiming.dayOfMonth,
           scheduleTiming.timeOfDay,
+        );
+      }
+
+      if (shouldResetFailureState) {
+        updateData.failureCount = 0;
+        updateData.lastFailureAt = null;
+        updateData.lastFailureReason = null;
+      }
+
+      if (
+        isActive === true &&
+        updateData.nextRunAt === undefined &&
+        (!existing.nextRunAt || existing.nextRunAt <= new Date())
+      ) {
+        const normalizedFrequency = parseScheduledReportFrequency(existing.frequency);
+        updateData.nextRunAt = calculateNextScheduledReportRunAt(
+          normalizedFrequency,
+          existing.dayOfWeek,
+          existing.dayOfMonth,
+          existing.timeOfDay,
         );
       }
 

@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Locator, type Page } from '@playwright/test';
 import { E2E_ADMIN_USER, E2E_PROJECT_ID, mockAuthenticatedUserState } from './helpers';
 
 type ScheduledReport = {
@@ -12,6 +12,9 @@ type ScheduledReport = {
   isActive: boolean;
   nextRunAt: string | null;
   lastSentAt: string | null;
+  failureCount?: number;
+  lastFailureAt?: string | null;
+  lastFailureReason?: string | null;
 };
 
 type ReportsApiOptions = {
@@ -20,9 +23,24 @@ type ReportsApiOptions = {
   createScheduleDelayMs?: number;
   companyTier?: string;
   user?: typeof E2E_ADMIN_USER;
+  includeFailurePausedSchedule?: boolean;
 };
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function openScheduleDialog(page: Page) {
+  await page.getByRole('button', { name: 'Schedule Reports' }).click();
+  const scheduleDialog = page.getByRole('dialog').filter({ hasText: 'Schedule Email Reports' });
+  await expect(scheduleDialog).toBeVisible();
+  return scheduleDialog;
+}
+
+async function startDiarySchedule(scheduleDialog: Locator, frequency: 'daily' | 'monthly') {
+  await expect(scheduleDialog.getByText('Lot Status Report')).toBeVisible();
+  await scheduleDialog.getByRole('button', { name: '+ New Schedule' }).click();
+  await scheduleDialog.getByLabel('Report Type').selectOption('diary');
+  await scheduleDialog.getByLabel('Frequency').selectOption(frequency);
+}
 
 function lotStatusReport() {
   return {
@@ -330,6 +348,23 @@ async function mockReportsApi(page: Page, options: ReportsApiOptions = {}) {
       lastSentAt: null,
     },
   ];
+  if (options.includeFailurePausedSchedule) {
+    schedules.push({
+      id: 'e2e-schedule-failed',
+      reportType: 'ncr',
+      frequency: 'daily',
+      dayOfWeek: null,
+      dayOfMonth: null,
+      timeOfDay: '07:00',
+      recipients: 'bad-recipient@example.com',
+      isActive: false,
+      nextRunAt: null,
+      lastSentAt: null,
+      failureCount: 3,
+      lastFailureAt: '2026-05-10T07:00:00.000Z',
+      lastFailureReason: 'Scheduled report recipients must contain valid email addresses',
+    });
+  }
 
   await page.route('**/api/**', async (route) => {
     const url = new URL(route.request().url());
@@ -565,16 +600,15 @@ test.describe('Reports seeded analytics contract', () => {
         '/api/reports/claims?projectId=e2e-project&startDate=2026-04-01&endDate=2026-05-31&status=paid',
       );
 
-    await page.getByRole('button', { name: 'Schedule Reports' }).click();
-    const scheduleDialog = page.getByRole('dialog').filter({ hasText: 'Schedule Email Reports' });
+    const scheduleDialog = await openScheduleDialog(page);
     await expect(
       scheduleDialog.getByText('Create and manage automatic report emails for this project.'),
     ).toBeVisible();
     await expect(scheduleDialog.getByText('Lot Status Report')).toBeVisible();
     await expect(scheduleDialog.getByText('Weekly on Monday at 09:00')).toBeVisible();
 
-    await scheduleDialog.getByRole('button', { name: '+ New Schedule' }).click();
-    await scheduleDialog.getByLabel('Report Type').selectOption('diary');
+    await startDiarySchedule(scheduleDialog, 'monthly');
+    await expect(scheduleDialog.getByLabel('Day of Month').locator('option')).toHaveCount(31);
     await scheduleDialog.getByLabel('Frequency').selectOption('daily');
     await scheduleDialog.getByLabel('Time').fill('06:30');
     await scheduleDialog
@@ -684,6 +718,7 @@ test.describe('Reports seeded analytics contract', () => {
     const api = await mockReportsApi(page, { companyTier: 'basic' });
 
     await page.goto(`/projects/${E2E_PROJECT_ID}/reports`);
+    await expect(page.getByText('Total Lots: 2')).toBeVisible();
 
     await page.getByRole('button', { name: 'Schedule Reports' }).click();
 
@@ -721,9 +756,9 @@ test.describe('Reports seeded analytics contract', () => {
     const api = await mockReportsApi(page, { failSchedulesUntil: 1 });
 
     await page.goto(`/projects/${E2E_PROJECT_ID}/reports`);
+    await expect(page.getByText('Total Lots: 2')).toBeVisible();
 
-    await page.getByRole('button', { name: 'Schedule Reports' }).click();
-    const scheduleDialog = page.getByRole('dialog').filter({ hasText: 'Schedule Email Reports' });
+    const scheduleDialog = await openScheduleDialog(page);
     await expect(scheduleDialog.getByRole('alert')).toContainText('Schedule service unavailable');
     await expect(scheduleDialog.getByText('No scheduled reports yet')).toHaveCount(0);
     await expect(scheduleDialog.getByRole('button', { name: '+ New Schedule' })).toHaveCount(0);
@@ -737,18 +772,31 @@ test.describe('Reports seeded analytics contract', () => {
     await expect(scheduleDialog.getByRole('button', { name: '+ New Schedule' })).toBeVisible();
   });
 
+  test('shows when the worker paused a repeatedly failing scheduled report', async ({ page }) => {
+    await mockReportsApi(page, { includeFailurePausedSchedule: true });
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/reports`);
+    await expect(page.getByText('Total Lots: 2')).toBeVisible();
+
+    const scheduleDialog = await openScheduleDialog(page);
+    await expect(scheduleDialog.getByText('NCR Report')).toBeVisible();
+    await expect(scheduleDialog.getByText('Paused after failures')).toBeVisible();
+    await expect(
+      scheduleDialog.getByText(
+        'Paused after 3 failed delivery attempts. Last error: Scheduled report recipients must contain valid email addresses',
+      ),
+    ).toBeVisible();
+    await expect(scheduleDialog.getByText('Next: Not scheduled')).toBeVisible();
+  });
+
   test('ignores duplicate schedule creation while the request is in flight', async ({ page }) => {
     const api = await mockReportsApi(page, { createScheduleDelayMs: 250 });
 
     await page.goto(`/projects/${E2E_PROJECT_ID}/reports`);
 
-    await page.getByRole('button', { name: 'Schedule Reports' }).click();
-    const scheduleDialog = page.getByRole('dialog').filter({ hasText: 'Schedule Email Reports' });
-    await expect(scheduleDialog.getByText('Lot Status Report')).toBeVisible();
+    const scheduleDialog = await openScheduleDialog(page);
 
-    await scheduleDialog.getByRole('button', { name: '+ New Schedule' }).click();
-    await scheduleDialog.getByLabel('Report Type').selectOption('diary');
-    await scheduleDialog.getByLabel('Frequency').selectOption('daily');
+    await startDiarySchedule(scheduleDialog, 'daily');
     await scheduleDialog.getByLabel('Time').fill('06:30');
     await scheduleDialog
       .getByLabel('Recipients (comma-separated emails)')

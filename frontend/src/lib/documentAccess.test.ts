@@ -8,10 +8,11 @@ vi.mock('./api', () => ({
   apiUrl: apiUrlMock,
 }));
 
-import { getDocumentAccessUrl } from './documentAccess';
+import { clearDocumentAccessCache, getDocumentAccessUrl } from './documentAccess';
 
 describe('document access URLs', () => {
   beforeEach(() => {
+    clearDocumentAccessCache();
     apiFetchMock.mockReset();
     apiUrlMock.mockClear();
   });
@@ -33,5 +34,26 @@ describe('document access URLs', () => {
       body: JSON.stringify({ expiresInMinutes: 15, disposition: 'attachment' }),
     });
     expect(apiUrlMock).not.toHaveBeenCalled();
+  });
+
+  it('clears cached signed URLs for auth identity changes', async () => {
+    apiFetchMock
+      .mockResolvedValueOnce({
+        signedUrl: '/api/documents/download/document-1?token=first',
+        expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      })
+      .mockResolvedValueOnce({
+        signedUrl: '/api/documents/download/document-1?token=second',
+        expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      });
+
+    await expect(getDocumentAccessUrl('document-1')).resolves.toContain('token=first');
+    await expect(getDocumentAccessUrl('document-1')).resolves.toContain('token=first');
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+
+    clearDocumentAccessCache();
+
+    await expect(getDocumentAccessUrl('document-1')).resolves.toContain('token=second');
+    expect(apiFetchMock).toHaveBeenCalledTimes(2);
   });
 });

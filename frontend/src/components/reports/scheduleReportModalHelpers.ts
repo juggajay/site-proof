@@ -64,6 +64,35 @@ export interface ScheduledReport {
   isActive: boolean;
   nextRunAt: string | null;
   lastSentAt: string | null;
+  failureCount?: number;
+  lastFailureAt?: string | null;
+  lastFailureReason?: string | null;
+}
+
+export function getScheduleStatusLabel(schedule: ScheduledReport): string {
+  const failureCount = schedule.failureCount ?? 0;
+  if (failureCount > 0 && !schedule.isActive) return 'Paused after failures';
+  if (failureCount > 0) return 'Retrying';
+  return schedule.isActive ? 'Active' : 'Paused';
+}
+
+export function getScheduleStatusClassName(schedule: ScheduledReport): string {
+  const failureCount = schedule.failureCount ?? 0;
+  if (failureCount > 0) return 'bg-warning/10 text-warning';
+  return schedule.isActive ? 'bg-foreground/10 text-foreground' : 'bg-muted text-muted-foreground';
+}
+
+export function getScheduleFailureMessage(schedule: ScheduledReport): string | null {
+  const failureCount = schedule.failureCount ?? 0;
+  const reason = schedule.lastFailureReason?.trim();
+  if (failureCount === 0 || !reason) return null;
+
+  const attemptLabel = `${failureCount} failed delivery attempt${failureCount === 1 ? '' : 's'}`;
+  if (!schedule.isActive) {
+    return `Paused after ${attemptLabel}. Last error: ${reason}`;
+  }
+
+  return `Last delivery failed after ${attemptLabel}; the next retry is scheduled. Error: ${reason}`;
 }
 
 export function formatNextRun(dateStr: string | null): string {

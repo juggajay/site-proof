@@ -1,24 +1,23 @@
 import { apiFetch, apiUrl } from './api';
+import {
+  getCachedDocumentAccessUrl,
+  getDocumentAccessCacheKey,
+  setCachedDocumentAccessUrl,
+} from './documentAccessCache';
+import type { DocumentAccessDisposition, DocumentAccessUrl } from './documentAccessCache';
+export { clearDocumentAccessCache, invalidateDocumentAccessUrl } from './documentAccessCache';
+export type { DocumentAccessDisposition, DocumentAccessUrl } from './documentAccessCache';
 
 type SignedUrlResponse = {
   signedUrl: string;
   expiresAt: string;
 };
 
-export type DocumentAccessDisposition = 'inline' | 'attachment';
-
 export type DocumentAccessOptions = {
   expiresInMinutes?: number;
   disposition?: DocumentAccessDisposition;
 };
 
-export type DocumentAccessUrl = {
-  url: string;
-  expiresAt: number;
-  refreshAt: number;
-};
-
-const signedUrlCache = new Map<string, DocumentAccessUrl>();
 export const DOCUMENT_ACCESS_EXPIRY_SKEW_MS = 30_000;
 const MIN_DOCUMENT_ACCESS_REFRESH_MS = 1_000;
 
@@ -60,15 +59,6 @@ function normalizeDocumentAccessOptions(
   };
 }
 
-function getCacheKey(documentId: string, disposition: DocumentAccessDisposition): string {
-  return `${documentId}:${disposition}`;
-}
-
-export function invalidateDocumentAccessUrl(documentId: string): void {
-  signedUrlCache.delete(getCacheKey(documentId, 'attachment'));
-  signedUrlCache.delete(getCacheKey(documentId, 'inline'));
-}
-
 export async function getDocumentAccess(
   documentId: string,
   fileUrl?: string | null,
@@ -84,8 +74,8 @@ export async function getDocumentAccess(
     };
   }
 
-  const cacheKey = getCacheKey(documentId, disposition);
-  const cached = signedUrlCache.get(cacheKey);
+  const cacheKey = getDocumentAccessCacheKey(documentId, disposition);
+  const cached = getCachedDocumentAccessUrl(cacheKey);
   if (cached && cached.refreshAt > Date.now()) {
     return cached;
   }
@@ -105,7 +95,7 @@ export async function getDocumentAccess(
     refreshAt: getRefreshAt(expiresAt),
   };
 
-  signedUrlCache.set(cacheKey, access);
+  setCachedDocumentAccessUrl(cacheKey, access);
   return access;
 }
 

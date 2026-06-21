@@ -2,6 +2,7 @@ import { useCallback, useEffect, lazy, Suspense, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { canDeleteProjects } from '@/lib/roles';
+import { getProjectScopedRole } from '@/lib/subcontractorIdentity';
 import { apiFetch } from '@/lib/api';
 import { Settings, Users, ClipboardList, Bell, MapPin, Puzzle } from 'lucide-react';
 import type {
@@ -187,6 +188,8 @@ const TABS = [
   { id: 'modules' as SettingsTab, label: 'Modules', icon: Puzzle },
 ];
 
+const PROJECT_SETTINGS_ROLES = ['owner', 'admin', 'project_manager'];
+
 function isSettingsTab(value: string | null): value is SettingsTab {
   return TABS.some((tab) => tab.id === value);
 }
@@ -227,7 +230,9 @@ export function ProjectSettingsPage() {
   const [hpMinimumNoticeDays, setHpMinimumNoticeDays] = useState(1);
 
   const userRole = user?.roleInCompany || user?.role || '';
-  const canViewContractValue = ['admin', 'owner', 'project_manager'].includes(userRole);
+  const projectScopedRole = project?.currentUserRole ?? getProjectScopedRole(user);
+  const canManageCurrentProjectSettings = PROJECT_SETTINGS_ROLES.includes(projectScopedRole);
+  const canViewContractValue = PROJECT_SETTINGS_ROLES.includes(projectScopedRole);
   const canDeleteProject = canDeleteProjects(userRole);
   const tabParam = searchParams.get('tab');
   const activeTab: SettingsTab = isSettingsTab(tabParam) ? tabParam : 'general';
@@ -288,6 +293,20 @@ export function ProjectSettingsPage() {
     return (
       <div className="flex h-full items-center justify-center p-6">
         <div className="h-12 w-12 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      </div>
+    );
+  }
+
+  if (project && !canManageCurrentProjectSettings) {
+    return (
+      <div className="p-6">
+        <h1 className="text-2xl font-bold mb-2">Project Settings</h1>
+        <div
+          role="alert"
+          className="rounded-md border border-destructive/20 bg-destructive/10 p-4 text-sm text-destructive"
+        >
+          You don't have permission to manage settings for this project.
+        </div>
       </div>
     );
   }

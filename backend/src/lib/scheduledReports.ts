@@ -27,8 +27,10 @@ const DEFAULT_LOCK_MS = 15 * 60 * 1000;
 const DEFAULT_RETRY_DELAY_MS = 15 * 60 * 1000;
 const DEFAULT_WORKER_INTERVAL_MS = 60 * 1000;
 const SCHEDULED_REPORT_DELIVERY_TIERS = ['professional', 'enterprise', 'unlimited'] as const;
+const MAX_SCHEDULED_REPORT_DELIVERY_FAILURES = 3;
+const MAX_FAILURE_REASON_LENGTH = 500;
 
-export type ScheduledReportDeliveryStatus = 'sent' | 'failed' | 'skipped';
+export type ScheduledReportDeliveryStatus = 'sent' | 'failed' | 'disabled' | 'skipped';
 
 export type ScheduledReportDeliveryResult = {
   scheduleId: string;
@@ -37,6 +39,7 @@ export type ScheduledReportDeliveryResult = {
   recipients: number;
   status: ScheduledReportDeliveryStatus;
   nextRunAt?: string;
+  failureCount?: number;
   error?: string;
 };
 
@@ -44,6 +47,7 @@ export type ProcessDueScheduledReportsResult = {
   processed: number;
   sent: number;
   failed: number;
+  disabled: number;
   skipped: number;
   results: ScheduledReportDeliveryResult[];
 };
@@ -82,17 +86,39 @@ async function claimScheduledReport(
   return claim.count === 1;
 }
 
-async function retryScheduledReport(
+function truncateFailureReason(reason: string): string {
+  return reason.length <= MAX_FAILURE_REASON_LENGTH
+    ? reason
+    : `${reason.slice(0, MAX_FAILURE_REASON_LENGTH - 3)}...`;
+}
+
+async function recordScheduledReportFailure(
+  schedule: ScheduledReportForDelivery,
+  errorMessage: string,
   scheduleId: string,
   now: Date,
   retryDelayMs: number,
-): Promise<Date> {
+): Promise<{ status: 'failed' | 'disabled'; failureCount: number; nextRunAt: Date | null }> {
+  const failureCount = Math.max(0, schedule.failureCount ?? 0) + 1;
+  const shouldDisable = failureCount >= MAX_SCHEDULED_REPORT_DELIVERY_FAILURES;
   const retryAt = new Date(now.getTime() + retryDelayMs);
+
   await prisma.scheduledReport.update({
     where: { id: scheduleId },
-    data: { nextRunAt: retryAt },
+    data: {
+      failureCount,
+      lastFailureAt: now,
+      lastFailureReason: truncateFailureReason(errorMessage),
+      isActive: shouldDisable ? false : undefined,
+      nextRunAt: shouldDisable ? null : retryAt,
+    },
   });
-  return retryAt;
+
+  return {
+    status: shouldDisable ? 'disabled' : 'failed',
+    failureCount,
+    nextRunAt: shouldDisable ? null : retryAt,
+  };
 }
 
 async function processScheduledReport(
@@ -146,6 +172,9 @@ async function processScheduledReport(
     await prisma.scheduledReport.update({
       where: { id: schedule.id },
       data: {
+        failureCount: 0,
+        lastFailureAt: null,
+        lastFailureReason: null,
         lastSentAt: now,
         nextRunAt,
       },
@@ -160,15 +189,24 @@ async function processScheduledReport(
       nextRunAt: nextRunAt.toISOString(),
     };
   } catch (error) {
-    const retryAt = await retryScheduledReport(schedule.id, now, options.retryDelayMs);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown scheduled report error';
+    const failure = await recordScheduledReportFailure(
+      schedule,
+      errorMessage,
+      schedule.id,
+      now,
+      options.retryDelayMs,
+    );
+
     return {
       scheduleId: schedule.id,
       projectId: schedule.projectId,
       reportType: schedule.reportType,
       recipients: recipients.length,
-      status: 'failed',
-      nextRunAt: retryAt.toISOString(),
-      error: error instanceof Error ? error.message : 'Unknown scheduled report error',
+      status: failure.status,
+      failureCount: failure.failureCount,
+      nextRunAt: failure.nextRunAt?.toISOString(),
+      error: errorMessage,
     };
   }
 }
@@ -177,7 +215,7 @@ export async function processDueScheduledReports(
   options: ProcessDueScheduledReportsOptions = {},
 ): Promise<ProcessDueScheduledReportsResult> {
   if (options.scheduleIds && options.scheduleIds.length === 0) {
-    return { processed: 0, sent: 0, failed: 0, skipped: 0, results: [] };
+    return { processed: 0, sent: 0, failed: 0, disabled: 0, skipped: 0, results: [] };
   }
 
   const now = options.now ?? new Date();
@@ -211,13 +249,15 @@ export async function processDueScheduledReports(
   }
 
   const sent = results.filter((result) => result.status === 'sent').length;
-  const failed = results.filter((result) => result.status === 'failed').length;
+  const disabled = results.filter((result) => result.status === 'disabled').length;
+  const failed = results.filter((result) => result.status === 'failed').length + disabled;
   const skipped = results.filter((result) => result.status === 'skipped').length;
 
   return {
     processed: results.length,
     sent,
     failed,
+    disabled,
     skipped,
     results,
   };
@@ -263,10 +303,13 @@ export function startScheduledReportWorker(): { stop: () => void } | null {
           processed: result.processed,
           sent: result.sent,
           failed: result.failed,
+          disabled: result.disabled,
           skipped: result.skipped,
         });
       }
-      for (const failedResult of result.results.filter((item) => item.status === 'failed')) {
+      for (const failedResult of result.results.filter(
+        (item) => item.status === 'failed' || item.status === 'disabled',
+      )) {
         logError('[Scheduled Reports] Delivery failed', failedResult);
       }
     } catch (error) {

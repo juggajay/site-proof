@@ -73,7 +73,7 @@ export function ReportsPage() {
   const [claimsReport, setClaimsReport] = useState<ClaimsReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [subscriptionTier, setSubscriptionTier] = useState<string>('basic');
+  const [subscriptionTier, setSubscriptionTier] = useState<string | null>(null);
   // Feature #702: Company logo on reports
   const [companyLogo, setCompanyLogo] = useState<string | null>(null);
   const [companyName, setCompanyName] = useState<string>('');
@@ -91,8 +91,10 @@ export function ReportsPage() {
     [setSearchParams],
   );
 
+  const subscriptionTierLabel = subscriptionTier ?? 'basic';
+  const subscriptionTierLoaded = subscriptionTier !== null;
   const hasAdvancedAnalytics = useMemo(
-    () => ADVANCED_ANALYTICS_TIERS.includes(subscriptionTier),
+    () => subscriptionTier !== null && ADVANCED_ANALYTICS_TIERS.includes(subscriptionTier),
     [subscriptionTier],
   );
   const projectScopedRole = useMemo(() => getProjectScopedRole(user), [user]);
@@ -134,6 +136,7 @@ export function ReportsPage() {
         }
       } catch (err) {
         logError('Failed to fetch subscription tier:', err);
+        setSubscriptionTier('basic');
       }
     };
 
@@ -264,13 +267,17 @@ export function ReportsPage() {
       return;
     }
 
+    if (!subscriptionTierLoaded) {
+      return;
+    }
+
     if (!hasAdvancedAnalytics) {
       setActiveTab('advanced');
       return;
     }
 
     setShowScheduleModal(true);
-  }, [canManageScheduledReports, hasAdvancedAnalytics, setActiveTab]);
+  }, [canManageScheduledReports, hasAdvancedAnalytics, setActiveTab, subscriptionTierLoaded]);
 
   const handleCloseScheduleModal = useCallback(() => {
     setShowScheduleModal(false);
@@ -331,12 +338,13 @@ export function ReportsPage() {
             <button
               type="button"
               aria-label="Schedule Reports"
+              disabled={!subscriptionTierLoaded}
               onClick={handleOpenScheduleModal}
               className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm font-medium sm:px-4 ${
                 hasAdvancedAnalytics
                   ? 'border-primary text-primary hover:bg-primary/5'
                   : 'border-brand text-brand hover:bg-brand/10'
-              }`}
+              } disabled:cursor-not-allowed disabled:opacity-50`}
             >
               {hasAdvancedAnalytics ? <Mail className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
               <span className="hidden sm:inline">Schedule Reports</span>
@@ -485,7 +493,7 @@ export function ReportsPage() {
             {activeTab === 'advanced' && (
               <AdvancedAnalyticsTab
                 hasAdvancedAnalytics={hasAdvancedAnalytics}
-                subscriptionTier={subscriptionTier}
+                subscriptionTier={subscriptionTierLabel}
               />
             )}
           </div>

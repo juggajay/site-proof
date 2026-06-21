@@ -16,6 +16,7 @@ export type ScheduledReportForDelivery = {
   dayOfMonth: number | null;
   timeOfDay: string;
   recipients: string;
+  failureCount: number;
   project: {
     name: string;
   };

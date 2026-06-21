@@ -14,6 +14,15 @@ app.use('/api/auth', authRouter);
 app.use('/api/reports', reportsRouter);
 app.use(errorHandler);
 
+function reactivateSchedule(authToken: string, id: string) {
+  return request(app)
+    .put(`/api/reports/schedules/${id}`)
+    .set('Authorization', `Bearer ${authToken}`)
+    .send({
+      isActive: true,
+    });
+}
+
 describe('Reports API - Project Access', () => {
   let authToken: string;
   let outsiderToken: string;
@@ -1985,6 +1994,63 @@ describe('Reports API - Scheduled Reports', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.schedule.isActive).toBe(false);
+    });
+
+    it('should clear delivery failure state when reactivating a paused schedule', async () => {
+      const failedSchedule = await prisma.scheduledReport.create({
+        data: {
+          projectId,
+          reportType: 'lot-status',
+          frequency: 'daily',
+          timeOfDay: '09:00',
+          recipients: 'recovered@example.com',
+          nextRunAt: null,
+          createdById: userId,
+          isActive: false,
+          failureCount: 3,
+          lastFailureAt: new Date('2026-06-01T09:00:00.000Z'),
+          lastFailureReason: 'Scheduled report recipients must contain valid email addresses',
+        },
+      });
+
+      try {
+        const res = await reactivateSchedule(authToken, failedSchedule.id);
+
+        expect(res.status).toBe(200);
+        expect(res.body.schedule.isActive).toBe(true);
+        expect(res.body.schedule.failureCount).toBe(0);
+        expect(res.body.schedule.lastFailureAt).toBeNull();
+        expect(res.body.schedule.lastFailureReason).toBeNull();
+        expect(res.body.schedule.nextRunAt).toBeTruthy();
+      } finally {
+        await prisma.scheduledReport.delete({ where: { id: failedSchedule.id } }).catch(() => {});
+      }
+    });
+
+    it('should reschedule an overdue paused report when reactivated', async () => {
+      const staleNextRunAt = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const pausedSchedule = await prisma.scheduledReport.create({
+        data: {
+          projectId,
+          reportType: 'lot-status',
+          frequency: 'daily',
+          timeOfDay: '09:00',
+          recipients: 'reactivated@example.com',
+          nextRunAt: staleNextRunAt,
+          createdById: userId,
+          isActive: false,
+        },
+      });
+
+      try {
+        const res = await reactivateSchedule(authToken, pausedSchedule.id);
+
+        expect(res.status).toBe(200);
+        expect(res.body.schedule.isActive).toBe(true);
+        expect(new Date(res.body.schedule.nextRunAt).getTime()).toBeGreaterThan(Date.now());
+      } finally {
+        await prisma.scheduledReport.delete({ where: { id: pausedSchedule.id } }).catch(() => {});
+      }
     });
 
     it('should return 404 for non-existent schedule', async () => {

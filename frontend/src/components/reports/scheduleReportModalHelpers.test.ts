@@ -8,6 +8,9 @@ import {
   formatNextRun,
   getFrequencyLabel,
   getRecipientValidationError,
+  getScheduleFailureMessage,
+  getScheduleStatusClassName,
+  getScheduleStatusLabel,
   normalizeRecipientList,
   parseRecipientList,
   scheduleFormSchema,
@@ -122,6 +125,45 @@ describe('schedule report modal helpers', () => {
       }),
     ).toBe('Monthly on day 12 at 07:15');
     expect(getFrequencyLabel({ ...baseSchedule, frequency: 'custom' })).toBe('custom');
+  });
+
+  it('labels retrying and failure-paused schedules distinctly', () => {
+    const baseSchedule: ScheduledReport = {
+      id: 'schedule-1',
+      reportType: 'lot-status',
+      frequency: 'daily',
+      dayOfWeek: null,
+      dayOfMonth: null,
+      timeOfDay: '09:00',
+      recipients: 'owner@example.com',
+      isActive: true,
+      nextRunAt: '2026-06-06T12:00:00.000Z',
+      lastSentAt: null,
+    };
+
+    expect(getScheduleStatusLabel(baseSchedule)).toBe('Active');
+    expect(getScheduleStatusClassName(baseSchedule)).toContain('bg-foreground');
+    expect(getScheduleFailureMessage(baseSchedule)).toBeNull();
+
+    const retryingSchedule = {
+      ...baseSchedule,
+      failureCount: 1,
+      lastFailureReason: 'Provider rejected recipient',
+    };
+    expect(getScheduleStatusLabel(retryingSchedule)).toBe('Retrying');
+    expect(getScheduleStatusClassName(retryingSchedule)).toContain('bg-warning');
+    expect(getScheduleFailureMessage(retryingSchedule)).toContain('next retry is scheduled');
+
+    const pausedSchedule = {
+      ...retryingSchedule,
+      isActive: false,
+      nextRunAt: null,
+      failureCount: 3,
+    };
+    expect(getScheduleStatusLabel(pausedSchedule)).toBe('Paused after failures');
+    expect(getScheduleFailureMessage(pausedSchedule)).toBe(
+      'Paused after 3 failed delivery attempts. Last error: Provider rejected recipient',
+    );
   });
 
   it('formats next-run dates without scheduling null values', () => {
