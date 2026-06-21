@@ -258,7 +258,7 @@ Available Reports:
 • Advanced Analytics - Deeper trend analysis (plan-dependent)
 
 Tips:
-• Export reports to PDF or CSV
+• Print reports or save them as PDFs
 • Schedule regular report generation
 • Share reports with stakeholders`,
   },

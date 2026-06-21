@@ -18,6 +18,8 @@ type ReportsApiOptions = {
   failLotStatusUntil?: number;
   failSchedulesUntil?: number;
   createScheduleDelayMs?: number;
+  companyTier?: string;
+  user?: typeof E2E_ADMIN_USER;
 };
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -339,7 +341,7 @@ async function mockReportsApi(page: Page, options: ReportsApiOptions = {}) {
       });
 
     if (url.pathname === '/api/auth/me') {
-      await json({ user: E2E_ADMIN_USER });
+      await json({ user: options.user ?? E2E_ADMIN_USER });
       return;
     }
 
@@ -351,7 +353,7 @@ async function mockReportsApi(page: Page, options: ReportsApiOptions = {}) {
     if (url.pathname === '/api/company') {
       await json({
         company: {
-          subscriptionTier: 'professional',
+          subscriptionTier: options.companyTier ?? 'professional',
           name: 'E2E Contractor',
           logoUrl: null,
         },
@@ -485,7 +487,7 @@ async function mockReportsApi(page: Page, options: ReportsApiOptions = {}) {
     await json({ message: `Unhandled E2E API route: ${url.pathname}` }, 404);
   });
 
-  await mockAuthenticatedUserState(page);
+  await mockAuthenticatedUserState(page, options.user ?? E2E_ADMIN_USER);
 
   return {
     getReportRequests: () => reportRequests,
@@ -552,6 +554,16 @@ test.describe('Reports seeded analytics contract', () => {
     await expect
       .poll(() => api.getReportRequests())
       .toContain('/api/reports/claims?projectId=e2e-project');
+
+    await page.getByLabel('Claim report start date').fill('2026-04-01');
+    await page.getByLabel('Claim report end date').fill('2026-05-31');
+    await page.getByLabel('Status').selectOption('paid');
+    await page.getByRole('button', { name: 'Generate Report' }).click();
+    await expect
+      .poll(() => api.getReportRequests())
+      .toContain(
+        '/api/reports/claims?projectId=e2e-project&startDate=2026-04-01&endDate=2026-05-31&status=paid',
+      );
 
     await page.getByRole('button', { name: 'Schedule Reports' }).click();
     const scheduleDialog = page.getByRole('dialog').filter({ hasText: 'Schedule Email Reports' });
@@ -642,6 +654,47 @@ test.describe('Reports seeded analytics contract', () => {
     expect(Math.abs(scheduleBox!.y - refreshBox!.y)).toBeLessThanOrEqual(2);
   });
 
+  test('does not expose commercial claims or schedule controls to reports viewers', async ({
+    page,
+  }) => {
+    const viewerUser = {
+      ...E2E_ADMIN_USER,
+      id: 'e2e-viewer-user',
+      email: 'viewer@example.com',
+      fullName: 'E2E Viewer',
+      role: 'viewer',
+      roleInCompany: 'viewer',
+      dashboardRole: 'viewer' as const,
+    };
+    const api = await mockReportsApi(page, { user: viewerUser, companyTier: 'professional' });
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/reports`);
+
+    await expect(page.getByRole('heading', { name: 'Reports & Analytics' })).toBeVisible();
+    await expect(page.getByText('Total Lots: 2')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Schedule Reports' })).toHaveCount(0);
+    await expect(page.getByRole('tab', { name: 'Claims' })).toHaveCount(0);
+    expect(api.getScheduleLoadCount()).toBe(0);
+    expect(api.getReportRequests()).not.toContain('/api/reports/claims?projectId=e2e-project');
+  });
+
+  test('routes basic-tier schedule attempts to upgrade state without loading schedules', async ({
+    page,
+  }) => {
+    const api = await mockReportsApi(page, { companyTier: 'basic' });
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/reports`);
+
+    await page.getByRole('button', { name: 'Schedule Reports' }).click();
+
+    await expect(page.getByRole('tab', { name: 'Advanced Analytics' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    await expect(page.getByText('Upgrade to Professional')).toBeVisible();
+    expect(api.getScheduleLoadCount()).toBe(0);
+  });
+
   test('shows a retryable report load error without stale synthetic report content', async ({
     page,
   }) => {
@@ -673,6 +726,7 @@ test.describe('Reports seeded analytics contract', () => {
     const scheduleDialog = page.getByRole('dialog').filter({ hasText: 'Schedule Email Reports' });
     await expect(scheduleDialog.getByRole('alert')).toContainText('Schedule service unavailable');
     await expect(scheduleDialog.getByText('No scheduled reports yet')).toHaveCount(0);
+    await expect(scheduleDialog.getByRole('button', { name: '+ New Schedule' })).toHaveCount(0);
 
     await scheduleDialog.getByRole('button', { name: 'Try again' }).click();
 
@@ -680,6 +734,7 @@ test.describe('Reports seeded analytics contract', () => {
     await expect(scheduleDialog.getByRole('alert')).toHaveCount(0);
     await expect(scheduleDialog.getByText('Lot Status Report')).toBeVisible();
     await expect(scheduleDialog.getByText('Weekly on Monday at 09:00')).toBeVisible();
+    await expect(scheduleDialog.getByRole('button', { name: '+ New Schedule' })).toBeVisible();
   });
 
   test('ignores duplicate schedule creation while the request is in flight', async ({ page }) => {
