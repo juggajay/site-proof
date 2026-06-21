@@ -16,6 +16,117 @@ keep going until the app has been exercised end to end.
   `1secmail.com` from an old Codex process, so future email QA must use Jay's
   nominated inbox, a trusted mailbox, or Resend's safe test recipient.
 
+## Stage 33 - Company Seat-Limit Recovery QA
+
+Status: landed in PR #1070; PR CI, post-merge master CI, full post-merge E2E,
+and production health checks passed.
+
+Scope:
+
+- Paid-company recovery when the company is already at its user seat limit.
+- Admin ability to remove inactive active users or cancel stale pending invites
+  so seats can be reused without upgrading.
+- Backend authorization and audit behavior for member removal.
+- UI visibility and copy for member-removal and invite-cancel actions.
+
+Subagent coverage:
+
+- Frontend/UI reviewer confirmed the company settings team table only listed
+  active and invited members. There was no remove/cancel action, and the usage
+  warning only pushed upgrade as the recovery path.
+- Backend reviewer confirmed there was no company-member removal/cancel
+  endpoint. It also called out the need to block self-removal, owner removal,
+  and removal of the only active project admin/PM before detaching a user from
+  company projects.
+- One backend reviewer note that invite seat limits were not enforced was stale
+  against current master after Stage 32. The Stage 33 fix continued from the
+  current master behavior where invitation cap enforcement already exists.
+
+Confirmed issues fixed locally:
+
+- Added `DELETE /api/company/members/:memberId` for browser-session company
+  owners/admins.
+- Active members are removed from all company projects and detached from the
+  company while keeping their account.
+- Pending no-password/no-OAuth company invite placeholders are cancelled,
+  pending setup credentials are invalidated, email-verification tokens are
+  cleared, and the placeholder user row is deleted so the seat is freed.
+- Passwordless OAuth users are treated as active accounts, not pending setup
+  invites, so removal detaches them instead of deleting their user account.
+- Removal blocks self-removal, company owners, cross-company targets, and users
+  who are the only active admin/PM on a company project.
+- Company-member invite responses now treat OAuth-backed passwordless users as
+  active and do not send them setup emails.
+- Company settings now has a team-table action column with `Remove` for active
+  removable users and `Cancel` for pending invites.
+- The user-limit warning now points admins toward removing inactive members or
+  cancelling pending invitations before upgrading.
+- Audit metadata for cancelled setup invites was renamed away from `Token`
+  wording so the operational count is visible while the existing secret
+  redaction policy remains strict for actual tokens.
+
+Related merged work:
+
+- #1070 - Fix company seat recovery controls, merged as `ebcd584f`.
+
+Verification:
+
+- Local backend checks passed:
+  - `npm run test -- src/routes/company/responses.test.ts src/lib/routeAuthCoverage.test.ts`
+  - `npm run type-check`
+  - `npm run lint`
+  - `npm run format:check`
+- Local frontend checks passed:
+  - `npm run test:unit -- src/pages/company/components/CompanyTeamMembersSection.test.tsx src/pages/company/components/CompanyUsageSection.test.tsx`
+  - `npm run type-check`
+  - `npm run lint`, passing with the existing unrelated
+    `src/lib/theme.tsx` fast-refresh warning
+  - `npm run format:check`
+- `git diff --check` passed before the first Stage 33 commit.
+- Local DB-backed `backend/src/routes/company.test.ts` could not be run because
+  the Stage 33 worktree had no local `DATABASE_URL` and Docker Desktop/daemon
+  was not running for a disposable PostgreSQL container.
+- PR #1070 initially failed Backend because the new audit assertion expected
+  `cancelledSetupTokenCount: 1`, but audit redaction correctly treated the word
+  `Token` as sensitive and stored `[REDACTED]`. The field was renamed to
+  `cancelledSetupInviteCount`, local backend checks were rerun, and the fix was
+  pushed.
+- PR #1070 checks then passed: Backend, Frontend, Frontend PR E2E smoke, Detect
+  changes, Vercel ignored-build status, and Vercel Preview Comments.
+- Master CI run `27918868564` passed after merge, including Backend, Frontend,
+  and full post-merge Frontend E2E.
+- After merge, production health checks returned HTTP 200 for:
+  - `https://site-proof-production.up.railway.app/ready`
+  - `https://site-proof.vercel.app`
+
+Not live-exercised in this stage:
+
+- Destructive production member removal/cancellation. The behavior was covered
+  by backend route tests, frontend unit tests, PR CI, and full master CI rather
+  than by deleting or detaching real production users.
+- Real browser interaction in Jay's visible Chrome session. This stage used code
+  review, subagent mapping, route/unit coverage, and CI because the visible
+  Chrome flow was not needed for the destructive admin lifecycle fix.
+
+Remaining findings for a later pass:
+
+- Scheduled-report delivery still ignores a user's general `scheduledReports`
+  email preference when that user is an explicit schedule recipient. This needs
+  a product decision because scheduled reports may be deliberate business
+  subscriptions rather than notification noise.
+- Reports schedule UI should continue moving toward project-scoped current-role
+  checks everywhere to avoid mixed-role users seeing controls the backend will
+  reject.
+- Audit retention min/max policy, webhook ownership after creator offboarding,
+  storage cleanup retry behavior, and whether archived/sample projects should
+  count toward paid project limits remain policy/hardening items.
+
+Artifacts:
+
+- No bearer tokens, session cookies, generated passwords, production secrets,
+  recipient emails, invite IDs, or browser-session data were committed or copied
+  into this ledger.
+
 ## Stage 32 - Paid Account and Admin Lifecycle QA
 
 Status: landed in PR #1068; PR CI, post-merge master CI, full post-merge E2E,
