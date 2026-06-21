@@ -539,37 +539,39 @@ export function DocketActionModal({
           </>
         )}
 
-        <div>
-          <div className="flex items-center justify-between mb-1">
-            <label htmlFor="docket-action-notes" className="block text-sm font-medium">
-              {actionType === 'approve'
-                ? 'Approval Notes'
-                : actionType === 'query'
-                  ? 'Query Details'
-                  : 'Rejection Reason'}
-              {(actionType === 'reject' || actionType === 'query') && ' *'}
-            </label>
-            {/* Feature #289: Voice-to-text for approval/rejection notes */}
-            <VoiceInputButton
-              onTranscript={(text) => setActionNotes((prev) => (prev ? prev + ' ' + text : text))}
-              appendMode={true}
+        {actionType !== 'view' && (
+          <div>
+            <div className="mb-1 flex items-center justify-between">
+              <label htmlFor="docket-action-notes" className="block text-sm font-medium">
+                {actionType === 'approve'
+                  ? 'Approval Notes'
+                  : actionType === 'query'
+                    ? 'Query Details'
+                    : 'Rejection Reason'}
+                {(actionType === 'reject' || actionType === 'query') && ' *'}
+              </label>
+              {/* Feature #289: Voice-to-text for approval/rejection notes */}
+              <VoiceInputButton
+                onTranscript={(text) => setActionNotes((prev) => (prev ? prev + ' ' + text : text))}
+                appendMode={true}
+              />
+            </div>
+            <textarea
+              id="docket-action-notes"
+              value={actionNotes}
+              onChange={(e) => setActionNotes(e.target.value)}
+              className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              rows={3}
+              placeholder={
+                actionType === 'approve'
+                  ? 'Add any notes (optional)...'
+                  : actionType === 'query'
+                    ? 'Ask what needs to be clarified before approval...'
+                    : 'Please provide a reason for rejection...'
+              }
             />
           </div>
-          <textarea
-            id="docket-action-notes"
-            value={actionNotes}
-            onChange={(e) => setActionNotes(e.target.value)}
-            className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-            rows={3}
-            placeholder={
-              actionType === 'approve'
-                ? 'Add any notes (optional)...'
-                : actionType === 'query'
-                  ? 'Ask what needs to be clarified before approval...'
-                  : 'Please provide a reason for rejection...'
-            }
-          />
-        </div>
+        )}
       </div>
     </ResponsiveSheet>
   );
