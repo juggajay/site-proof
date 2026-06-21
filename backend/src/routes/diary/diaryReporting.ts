@@ -65,6 +65,30 @@ function buildDiaryDateFilter(query: Request['query']) {
   return dateFilter;
 }
 
+const DELAY_TYPE_FILTER_ALIASES: Record<string, string[]> = {
+  weather: ['weather'],
+  'material shortage': ['material shortage', 'material delay', 'material'],
+  'equipment breakdown': ['equipment breakdown', 'plant breakdown', 'equipment', 'breakdown'],
+  'labour shortage': ['labour shortage', 'labor shortage'],
+  'client instruction': ['client instruction'],
+  'design issue': ['design issue', 'design change'],
+  'site access': ['site access', 'access'],
+  other: ['other'],
+};
+
+function normalizeDelayTypeFilterValue(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]+/g, ' ');
+}
+
+function delayTypeMatchesFilter(delayType: string, filter: string) {
+  const normalizedFilter = normalizeDelayTypeFilterValue(filter);
+  const aliases = DELAY_TYPE_FILTER_ALIASES[normalizedFilter] ?? [normalizedFilter];
+  return aliases.includes(normalizeDelayTypeFilterValue(delayType));
+}
+
 function sendWeatherUnavailable(
   res: Response,
   date: string,
@@ -243,7 +267,7 @@ router.get(
 
     // Filter by delay type if provided
     if (delayType) {
-      delays = delays.filter((d) => d.delayType === delayType);
+      delays = delays.filter((d) => delayTypeMatchesFilter(d.delayType, delayType));
     }
 
     res.json(buildDiaryDelaysResponse(delays));
@@ -291,7 +315,7 @@ router.get(
 
     // Filter by delay type if provided
     if (delayType) {
-      delays = delays.filter((d) => d.delayType === delayType);
+      delays = delays.filter((d) => delayTypeMatchesFilter(d.delayType, delayType));
     }
 
     // Sort by date descending
