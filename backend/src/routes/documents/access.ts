@@ -41,9 +41,18 @@ const DOCUMENT_CATEGORY_PORTAL_MODULES: Record<
   itp_evidence: 'itps',
   test_results: 'testResults',
 };
+const GENERIC_DOCUMENT_MUTATION_BLOCKED_MESSAGES: Record<string, string> = {
+  test_certificate:
+    'Test result certificates must be replaced or removed from the test result workflow.',
+  drawing: 'Drawing files must be managed from the drawing register.',
+};
 
 function isDocumentSubcontractorUser(user: AuthUser): boolean {
   return user.roleInCompany === 'subcontractor' || user.roleInCompany === 'subcontractor_admin';
+}
+
+function isDrawingBackedDocument(documentType?: string | null): boolean {
+  return documentType === 'drawing';
 }
 
 function getDocumentPortalModule(category?: string | null): SubcontractorPortalAccessKey {
@@ -167,6 +176,7 @@ export async function applyDocumentReadScope(
   };
 
   appendDocumentWhereClause(where, scopedAccess);
+  appendDocumentWhereClause(where, { NOT: { documentType: 'drawing' } });
 }
 
 export async function applyDocumentPortalCategoryScope(
@@ -216,6 +226,10 @@ export async function canReadDocument(
 
   if (!isDocumentSubcontractorUser(user)) {
     return true;
+  }
+
+  if (isDrawingBackedDocument(document.documentType)) {
+    return false;
   }
 
   if (!(await hasSubcontractorDocumentPortalAccess(user, document.projectId, document.category))) {
@@ -360,6 +374,15 @@ export async function requireDocumentMutationAccess(
 
   if (targetLotId !== undefined) {
     await requireLotInProject(document.projectId, targetLotId);
+  }
+
+  const blockedMessage = document.documentType
+    ? GENERIC_DOCUMENT_MUTATION_BLOCKED_MESSAGES[document.documentType]
+    : null;
+  if (blockedMessage) {
+    throw AppError.conflict(blockedMessage, {
+      documentType: document.documentType,
+    });
   }
 
   if (!isDocumentSubcontractorUser(user)) {

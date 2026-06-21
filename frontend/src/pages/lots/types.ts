@@ -91,7 +91,7 @@ export interface ITPChecklistItem {
 export interface ITPAttachmentDocument {
   id: string;
   filename: string;
-  fileUrl: string;
+  fileUrl?: string | null;
   caption: string | null;
   uploadedAt: string;
   uploadedBy: { id: string; fullName: string; email: string } | null;
@@ -153,7 +153,7 @@ export interface ITPInstance {
 export interface PhotoDocument {
   id: string;
   filename: string;
-  fileUrl: string;
+  fileUrl?: string | null;
   caption: string | null;
   uploadedAt: string;
   uploadedBy: { fullName: string | null } | null;
@@ -164,7 +164,7 @@ export interface PhotoDocument {
 export interface LotDocument {
   id: string;
   filename: string;
-  fileUrl: string;
+  fileUrl?: string | null;
   caption: string | null;
   uploadedAt: string;
 }

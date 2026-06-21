@@ -101,7 +101,11 @@ function filterDocuments(documents: SeededDocument[], url: URL) {
 
 async function mockSeededDocumentsApi(
   page: Page,
-  options: { failDocumentLoadsUntil?: number; shortSignedUrlExpiry?: boolean } = {},
+  options: {
+    failDocumentLoadsUntil?: number;
+    shortSignedUrlExpiry?: boolean;
+    signedUrlDelayMs?: number;
+  } = {},
 ) {
   let pdfFavourite = false;
   let includeUploaded = false;
@@ -196,6 +200,9 @@ async function mockSeededDocumentsApi(
           ...(signedUrlRequests.get(documentId) ?? []),
           route.request().postDataJSON(),
         ]);
+      }
+      if (options.signedUrlDelayMs) {
+        await new Promise((resolve) => setTimeout(resolve, options.signedUrlDelayMs));
       }
       await json({
         signedUrl: documentId === E2E_PHOTO_DOC_ID ? transparentPixel : '/signed/e2e-document',
@@ -385,6 +392,30 @@ test.describe('Documents seeded evidence contract', () => {
     await expect(page.getByText('e2e-proof-photo.jpg')).toBeVisible();
     await expect(page.getByText('e2e-drawing.pdf')).toBeVisible();
     expect(api.getDocumentLoadCount()).toBeGreaterThanOrEqual(3);
+  });
+
+  test('opens a real download tab before a delayed signed URL response completes', async ({
+    page,
+  }) => {
+    const api = await mockSeededDocumentsApi(page, { signedUrlDelayMs: 500 });
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/documents`);
+
+    const pdfItem = page
+      .locator('.flex.items-center.gap-4.p-4')
+      .filter({ hasText: 'e2e-drawing.pdf' });
+    await expect(pdfItem).toBeVisible();
+
+    const popupPromise = page.waitForEvent('popup');
+    await pdfItem.getByRole('button', { name: 'Download e2e-drawing.pdf' }).click();
+    const popup = await popupPromise;
+
+    await expect.poll(() => popup.url()).toContain('/signed/e2e-document');
+    expect(api.getSignedUrlRequests(E2E_PDF_DOC_ID)).toContainEqual(
+      expect.objectContaining({ disposition: 'attachment' }),
+    );
+
+    await popup.close();
   });
 
   test('refreshes expiring signed thumbnail URLs while the register remains open', async ({

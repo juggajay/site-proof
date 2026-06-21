@@ -1051,6 +1051,39 @@ describe('Documents API', () => {
 
       expect(res.status).toBe(400);
     });
+
+    it.each([
+      ['drawing', 'Drawings', 'drawing register'],
+      ['test_certificate', 'test_results', 'test result workflow'],
+    ])(
+      'rejects generic metadata updates for %s backing documents',
+      async (documentType, category, expectedMessage) => {
+        const domainDocument = await prisma.document.create({
+          data: {
+            projectId,
+            documentType,
+            category,
+            filename: `metadata-${documentType}-${Date.now()}.pdf`,
+            fileUrl: `/uploads/documents/metadata-${documentType}-${Date.now()}.pdf`,
+            fileSize: validPdfBytes.length,
+            mimeType: 'application/pdf',
+            uploadedById: userId,
+          },
+        });
+
+        try {
+          const res = await request(app)
+            .patch(`/api/documents/${domainDocument.id}`)
+            .set('Authorization', `Bearer ${authToken}`)
+            .send({ caption: 'Generic metadata update should fail' });
+
+          expect(res.status).toBe(409);
+          expect(String(res.body.error.message)).toContain(expectedMessage);
+        } finally {
+          await prisma.document.deleteMany({ where: { id: domainDocument.id } });
+        }
+      },
+    );
   });
 
   describe('GET /api/documents/:documentId/versions', () => {
@@ -1488,6 +1521,50 @@ describe('Documents API', () => {
       }
     });
 
+    it('cleans up the document and stored file if ITP attachment creation fails', async () => {
+      const originalCreate = prisma.iTPCompletionAttachment.create;
+      const createMock = vi.fn().mockRejectedValue(new Error('attachment insert failed'));
+      const filename = `itp-evidence-attach-fail-${Date.now()}.png`;
+      const beforeFiles = new Set(fs.readdirSync(uploadDir));
+
+      try {
+        Object.defineProperty(prisma.iTPCompletionAttachment, 'create', {
+          value: createMock,
+          configurable: true,
+        });
+
+        const res = await uploadEvidence(
+          {
+            projectId,
+            lotId,
+            documentType: 'photo',
+            category: 'itp_evidence',
+            entityType: 'itp',
+            entityId: completionId,
+            caption: 'Attachment create should fail',
+          },
+          filename,
+        );
+
+        expect(res.status).toBe(500);
+        expect(createMock).toHaveBeenCalledTimes(1);
+        await expect(prisma.document.findFirst({ where: { filename } })).resolves.toBeNull();
+        await expect(
+          prisma.iTPCompletionAttachment.count({ where: { completionId } }),
+        ).resolves.toBe(0);
+        expect(
+          fs
+            .readdirSync(uploadDir)
+            .filter((file) => !beforeFiles.has(file) && file.includes(filename)),
+        ).toHaveLength(0);
+      } finally {
+        Object.defineProperty(prisma.iTPCompletionAttachment, 'create', {
+          value: originalCreate,
+          configurable: true,
+        });
+      }
+    });
+
     it('is orphan-safe for an unknown completion id (document created, no attachment, no 4xx)', async () => {
       const res = await uploadEvidence(
         {
@@ -1762,6 +1839,50 @@ describe('Documents API', () => {
         }
       }
     });
+
+    it.each([
+      ['drawing', 'Drawings', 'drawing register'],
+      ['test_certificate', 'test_results', 'test result workflow'],
+    ])(
+      'rejects generic version uploads for %s backing documents',
+      async (documentType, category, expectedMessage) => {
+        const sourceDocument = await prisma.document.create({
+          data: {
+            projectId,
+            lotId,
+            documentType,
+            category,
+            filename: `version-block-${documentType}-${Date.now()}.pdf`,
+            fileUrl: `/uploads/documents/version-block-${documentType}-${Date.now()}.pdf`,
+            fileSize: validPdfBytes.length,
+            mimeType: 'application/pdf',
+            uploadedById: userId,
+          },
+        });
+        const filename = `blocked-version-${documentType}-${Date.now()}.pdf`;
+        const beforeFiles = new Set(fs.readdirSync(uploadDir));
+
+        try {
+          const res = await request(app)
+            .post(`/api/documents/${sourceDocument.id}/version`)
+            .set('Authorization', `Bearer ${authToken}`)
+            .attach('file', validPdfBytes, {
+              filename,
+              contentType: 'application/pdf',
+            });
+
+          expect(res.status).toBe(409);
+          expect(String(res.body.error.message)).toContain(expectedMessage);
+          expect(
+            fs
+              .readdirSync(uploadDir)
+              .filter((file) => !beforeFiles.has(file) && file.includes(filename)),
+          ).toHaveLength(0);
+        } finally {
+          await prisma.document.deleteMany({ where: { id: sourceDocument.id } });
+        }
+      },
+    );
   });
 
   describe('Document Categories', () => {
@@ -1943,6 +2064,26 @@ describe('Documents API', () => {
           uploadedById: userId,
         },
       });
+      const drawingDocument = await prisma.document.create({
+        data: {
+          projectId,
+          documentType: 'drawing',
+          category: 'Drawings',
+          filename: 'subcontractor-hidden-drawing.pdf',
+          fileUrl: '/uploads/drawings/subcontractor-hidden-drawing.pdf',
+          uploadedById: userId,
+        },
+      });
+      const drawing = await prisma.drawing.create({
+        data: {
+          projectId,
+          drawingNumber: `DOC-SUB-DRAWING-${Date.now()}`,
+          title: 'Subcontractor hidden drawing',
+          revision: 'A',
+          status: 'current',
+          documentId: drawingDocument.id,
+        },
+      });
       const unassignedLotDocument = await prisma.document.create({
         data: {
           projectId,
@@ -1988,6 +2129,15 @@ describe('Documents API', () => {
         expect(returnedDocumentIds).toContain(documentId);
         expect(returnedDocumentIds).toContain(projectWideDocument.id);
         expect(returnedDocumentIds).not.toContain(unassignedLotDocument.id);
+        expect(returnedDocumentIds).not.toContain(drawingDocument.id);
+
+        const drawingListRes = await request(app)
+          .get(`/api/documents/${projectId}?documentType=drawing`)
+          .set('Authorization', `Bearer ${subToken}`);
+        expect(drawingListRes.status).toBe(200);
+        expect(
+          drawingListRes.body.documents.map((document: { id: string }) => document.id),
+        ).not.toContain(drawingDocument.id);
 
         const assignedSignedUrlRes = await request(app)
           .post(`/api/documents/${documentId}/signed-url`)
@@ -2000,6 +2150,18 @@ describe('Documents API', () => {
           .set('Authorization', `Bearer ${subToken}`);
 
         expect(unassignedSignedUrlRes.status).toBe(403);
+
+        const drawingSignedUrlRes = await request(app)
+          .post(`/api/documents/${drawingDocument.id}/signed-url`)
+          .set('Authorization', `Bearer ${subToken}`);
+
+        expect(drawingSignedUrlRes.status).toBe(403);
+
+        const drawingFileRes = await request(app)
+          .get(`/api/documents/file/${drawingDocument.id}`)
+          .set('Authorization', `Bearer ${subToken}`);
+
+        expect(drawingFileRes.status).toBe(403);
 
         const internalPatchRes = await request(app)
           .patch(`/api/documents/${documentId}`)
@@ -2067,10 +2229,13 @@ describe('Documents API', () => {
           await prisma.document.deleteMany({ where: { id: uploadedAssignedDocumentId } });
         }
         await prisma.documentSignedUrlToken.deleteMany({
-          where: { documentId: { in: [documentId, unassignedLotDocument.id] } },
+          where: { documentId: { in: [documentId, unassignedLotDocument.id, drawingDocument.id] } },
         });
+        await prisma.drawing.deleteMany({ where: { id: drawing.id } });
         await prisma.document.deleteMany({
-          where: { id: { in: [projectWideDocument.id, unassignedLotDocument.id] } },
+          where: {
+            id: { in: [projectWideDocument.id, unassignedLotDocument.id, drawingDocument.id] },
+          },
         });
         await prisma.lotSubcontractorAssignment.deleteMany({
           where: { subcontractorCompanyId: subcontractorCompany.id },

@@ -8,13 +8,18 @@ vi.mock('./api', () => ({
   apiUrl: apiUrlMock,
 }));
 
-import { clearDocumentAccessCache, getDocumentAccessUrl } from './documentAccess';
+import {
+  clearDocumentAccessCache,
+  getDocumentAccessUrl,
+  openDocumentAccessUrl,
+} from './documentAccess';
 
 describe('document access URLs', () => {
   beforeEach(() => {
     clearDocumentAccessCache();
     apiFetchMock.mockReset();
     apiUrlMock.mockClear();
+    vi.restoreAllMocks();
   });
 
   it('uses a backend signed URL instead of opening a Supabase storage reference directly', async () => {
@@ -55,5 +60,76 @@ describe('document access URLs', () => {
 
     await expect(getDocumentAccessUrl('document-1')).resolves.toContain('token=second');
     expect(apiFetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('pre-opens a blank tab before awaiting the signed URL, then navigates it', async () => {
+    let resolveSignedUrl: ((value: { signedUrl: string; expiresAt: string }) => void) | undefined;
+    const signedUrlPromise = new Promise<{ signedUrl: string; expiresAt: string }>((resolve) => {
+      resolveSignedUrl = resolve;
+    });
+    apiFetchMock.mockReturnValue(signedUrlPromise);
+
+    const popup = {
+      closed: false,
+      close: vi.fn(),
+      location: { href: 'about:blank' },
+      opener: window,
+    } as unknown as Window;
+    const openSpy = vi.spyOn(window, 'open').mockReturnValue(popup);
+
+    const openPromise = openDocumentAccessUrl('document-1');
+
+    expect(openSpy).toHaveBeenCalledWith('about:blank', '_blank');
+    expect(apiFetchMock).toHaveBeenCalledWith('/api/documents/document-1/signed-url', {
+      method: 'POST',
+      body: JSON.stringify({ expiresInMinutes: 15, disposition: 'attachment' }),
+    });
+    expect((popup.location as Location).href).toBe('about:blank');
+
+    resolveSignedUrl?.({
+      signedUrl: '/api/documents/download/document-1?token=fixture',
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    });
+    await openPromise;
+
+    expect((popup.location as Location).href).toBe(
+      '/api/documents/download/document-1?token=fixture',
+    );
+    expect(popup.opener).toBeNull();
+    expect(openSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes the pre-opened tab and rethrows when signed URL minting fails', async () => {
+    const error = new Error('signed URL unavailable');
+    apiFetchMock.mockRejectedValue(error);
+    const popup = {
+      closed: false,
+      close: vi.fn(),
+      location: { href: 'about:blank' },
+      opener: window,
+    } as unknown as Window;
+    vi.spyOn(window, 'open').mockReturnValue(popup);
+
+    await expect(openDocumentAccessUrl('document-1')).rejects.toThrow(error);
+
+    expect(popup.close).toHaveBeenCalled();
+  });
+
+  it('falls back to opening the signed URL directly when the blank tab is blocked', async () => {
+    apiFetchMock.mockResolvedValue({
+      signedUrl: '/api/documents/download/document-1?token=fixture',
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    });
+    const openSpy = vi.spyOn(window, 'open').mockReturnValueOnce(null).mockReturnValueOnce(null);
+
+    await openDocumentAccessUrl('document-1');
+
+    expect(openSpy).toHaveBeenNthCalledWith(1, 'about:blank', '_blank');
+    expect(openSpy).toHaveBeenNthCalledWith(
+      2,
+      '/api/documents/download/document-1?token=fixture',
+      '_blank',
+      'noopener,noreferrer',
+    );
   });
 });

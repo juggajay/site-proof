@@ -44,7 +44,22 @@ const validJpegBytes = Buffer.from([
 const validDwgBytes = Buffer.from('AC1027\0\0sample dwg payload');
 const createdDrawingUploadPaths: string[] = [];
 
-function trackDrawingUpload(fileUrl: string | undefined) {
+async function getStoredDrawingFileUrl(
+  documentId: string | undefined,
+): Promise<string | undefined> {
+  if (!documentId) {
+    return undefined;
+  }
+
+  const document = await prisma.document.findUnique({
+    where: { id: documentId },
+    select: { fileUrl: true },
+  });
+  return document?.fileUrl;
+}
+
+async function trackDrawingUpload(document: { id?: string; fileUrl?: string } | undefined) {
+  const fileUrl = document?.fileUrl ?? (await getStoredDrawingFileUrl(document?.id));
   if (!fileUrl) {
     return;
   }
@@ -350,7 +365,7 @@ describe('Drawings API', () => {
       const drawing = res.body.drawings[0];
       expect(drawing.document).toBeDefined();
       expect(drawing.document.filename).toBeDefined();
-      expect(drawing.document.fileUrl).toBeDefined();
+      expect(drawing.document).not.toHaveProperty('fileUrl');
     });
   });
 
@@ -456,7 +471,8 @@ describe('Drawings API', () => {
       expect(res.body.id).toBeDefined();
       expect(res.body.drawingNumber).toBe('DRW-002');
       expect(res.body.document).toBeDefined();
-      trackDrawingUpload(res.body.document?.fileUrl);
+      expect(res.body.document).not.toHaveProperty('fileUrl');
+      await trackDrawingUpload(res.body.document);
 
       // Cleanup
       await prisma.drawing.delete({ where: { id: res.body.id } });
@@ -577,7 +593,8 @@ describe('Drawings API', () => {
 
       expect(res.status).toBe(201);
       expect(res.body.status).toBe('preliminary');
-      trackDrawingUpload(res.body.document?.fileUrl);
+      expect(res.body.document).not.toHaveProperty('fileUrl');
+      await trackDrawingUpload(res.body.document);
 
       // Cleanup
       await prisma.drawing.delete({ where: { id: res.body.id } });
@@ -595,7 +612,8 @@ describe('Drawings API', () => {
 
       expect(res.status).toBe(201);
       expect(res.body.issueDate).toBeDefined();
-      trackDrawingUpload(res.body.document?.fileUrl);
+      expect(res.body.document).not.toHaveProperty('fileUrl');
+      await trackDrawingUpload(res.body.document);
 
       // Cleanup
       await prisma.drawing.delete({ where: { id: res.body.id } });
@@ -612,7 +630,8 @@ describe('Drawings API', () => {
 
       expect(res.status).toBe(201);
       expect(res.body.document.mimeType).toContain('image');
-      trackDrawingUpload(res.body.document?.fileUrl);
+      expect(res.body.document).not.toHaveProperty('fileUrl');
+      await trackDrawingUpload(res.body.document);
 
       // Cleanup
       await prisma.drawing.delete({ where: { id: res.body.id } });
@@ -634,7 +653,8 @@ describe('Drawings API', () => {
 
       expect(res.status).toBe(201);
       expect(res.body.document.mimeType).toBe('application/dwg');
-      trackDrawingUpload(res.body.document?.fileUrl);
+      expect(res.body.document).not.toHaveProperty('fileUrl');
+      await trackDrawingUpload(res.body.document);
 
       await prisma.drawing.delete({ where: { id: res.body.id } });
       await prisma.document.delete({ where: { id: res.body.documentId } });
@@ -652,9 +672,11 @@ describe('Drawings API', () => {
         });
 
       expect(res.status).toBe(201);
-      trackDrawingUpload(res.body.document?.fileUrl);
+      expect(res.body.document).not.toHaveProperty('fileUrl');
+      await trackDrawingUpload(res.body.document);
 
-      const storedPathName = path.basename(res.body.document.fileUrl);
+      const storedFileUrl = await getStoredDrawingFileUrl(res.body.document?.id);
+      const storedPathName = path.basename(storedFileUrl ?? '');
       expect(hasUnsafeFilenameChar(res.body.document.filename)).toBe(false);
       expect(hasUnsafeFilenameChar(storedPathName)).toBe(false);
       expect(res.body.document.filename).toMatch(/\.pdf$/);
@@ -1176,7 +1198,8 @@ describe('Drawings API', () => {
       expect(res.body.drawingNumber).toBe('DRW-SUPER');
       expect(res.body.revision).toBe('B');
       expect(res.body.document).toBeDefined();
-      trackDrawingUpload(res.body.document?.fileUrl);
+      expect(res.body.document).not.toHaveProperty('fileUrl');
+      await trackDrawingUpload(res.body.document);
 
       // Check that old drawing was updated
       const oldDrawing = await prisma.drawing.findUnique({
@@ -1200,9 +1223,14 @@ describe('Drawings API', () => {
         });
 
       expect(res.status).toBe(201);
-      trackDrawingUpload(res.body.document?.fileUrl);
+      expect(res.body.document).not.toHaveProperty('fileUrl');
+      await trackDrawingUpload(res.body.document);
       expect(hasUnsafeFilenameChar(res.body.document.filename)).toBe(false);
-      expect(hasUnsafeFilenameChar(path.basename(res.body.document.fileUrl))).toBe(false);
+      expect(
+        hasUnsafeFilenameChar(
+          path.basename((await getStoredDrawingFileUrl(res.body.document?.id)) ?? ''),
+        ),
+      ).toBe(false);
 
       const oldDrawing = await prisma.drawing.findUnique({
         where: { id: supersedeDrawingId },
@@ -1290,7 +1318,8 @@ describe('Drawings API', () => {
 
       expect(res.status).toBe(201);
       expect(res.body.title).toBe('Drawing to Supersede');
-      trackDrawingUpload(res.body.document?.fileUrl);
+      expect(res.body.document).not.toHaveProperty('fileUrl');
+      await trackDrawingUpload(res.body.document);
 
       // Cleanup
       await prisma.drawing.delete({ where: { id: res.body.id } });
@@ -1307,7 +1336,8 @@ describe('Drawings API', () => {
       expect(res.status).toBe(201);
       // Status may be 'for_construction' or 'FOR_CONSTRUCTION' depending on schema
       expect(res.body.status?.toLowerCase()).toBe('for_construction');
-      trackDrawingUpload(res.body.document?.fileUrl);
+      expect(res.body.document).not.toHaveProperty('fileUrl');
+      await trackDrawingUpload(res.body.document);
 
       // Cleanup
       await prisma.drawing.delete({ where: { id: res.body.id } });
@@ -1413,7 +1443,7 @@ describe('Drawings API', () => {
       const drawing = res.body.drawings[0];
       expect(drawing.documentId).toBeDefined();
       expect(drawing.drawingNumber).toBeDefined();
-      expect(drawing.fileUrl).toBeDefined();
+      expect(drawing).not.toHaveProperty('fileUrl');
       expect(drawing.filename).toBeDefined();
       expect(drawing.fileSize).toBeDefined();
     });

@@ -10,7 +10,7 @@
  * NEW PRESENTATION over EXISTING LOGIC. Reuses the SAME TanStack query the classic
  * SubcontractorDocumentsPage uses (queryKeys.portalDocuments, cache shared):
  *   GET /api/documents/:projectId?subcontractorView=true
- * and delegates open to `openDocumentAccessUrl(doc.id, doc.fileUrl)` from
+ * and delegates open to `openDocumentAccessUrl(doc.id)` from
  * lib/documentAccess (imported, never duplicated).
  */
 import { ChevronRight, FileText, FolderOpen } from 'lucide-react';
@@ -29,7 +29,7 @@ import { useSubbieShellContext } from '../subbieShellContext';
 interface DocItem {
   id: string;
   filename: string;
-  fileUrl: string;
+  fileUrl?: string | null;
   category: string;
   description?: string;
   uploadedAt: string;

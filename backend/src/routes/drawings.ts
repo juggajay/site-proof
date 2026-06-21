@@ -17,6 +17,7 @@ import {
 import { drawingReadRoutes } from './drawings/readRoutes.js';
 import { requireDrawingWriteAccess } from './drawings/access.js';
 import { sanitizeUploadFilename } from './drawings/filenames.js';
+import { buildDrawingResponse } from './drawings/responses.js';
 import {
   cleanupStoredDrawingUpload,
   cleanupUploadedFile,
@@ -162,7 +163,7 @@ router.post(
       throw error;
     }
 
-    res.status(201).json(drawing);
+    res.status(201).json(buildDrawingResponse(drawing));
   }),
 );
 
@@ -237,7 +238,7 @@ router.patch(
       },
     });
 
-    res.json(updatedDrawing);
+    res.json(buildDrawingResponse(updatedDrawing));
   }),
 );
 
@@ -407,7 +408,7 @@ router.post(
       throw error;
     }
 
-    res.status(201).json(newDrawing);
+    res.status(201).json(buildDrawingResponse(newDrawing));
   }),
 );
 

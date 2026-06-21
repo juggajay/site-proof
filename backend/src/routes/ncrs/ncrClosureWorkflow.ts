@@ -592,7 +592,7 @@ ncrClosureWorkflowRouter.post(
       include: {
         ncrEvidence: {
           include: {
-            document: { select: { filename: true, fileUrl: true } },
+            document: { select: { id: true, filename: true, fileUrl: true } },
           },
         },
       },

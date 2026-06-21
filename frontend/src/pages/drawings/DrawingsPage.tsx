@@ -67,7 +67,7 @@ interface CurrentSetResponse {
     drawingNumber: string;
     revision: string | null;
     filename: string;
-    fileUrl: string;
+    fileUrl?: string | null;
   }>;
 }
 

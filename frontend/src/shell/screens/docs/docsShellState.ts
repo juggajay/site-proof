@@ -43,7 +43,7 @@ export interface DrawingRegisterRow {
   status: string;
   document: {
     id: string;
-    fileUrl: string;
+    fileUrl?: string | null;
   };
   supersededBy: { id: string; drawingNumber: string; revision: string } | null;
   /** Optional lot link — absent in the current data model; honoured if present. */
@@ -70,8 +70,8 @@ export interface DocItem {
   lotId: string | null;
   /** Document id used to mint a signed URL when opening the file. */
   documentId: string;
-  /** Stored/public file URL — fallback when there is no document id. */
-  fileUrl: string;
+  /** Legacy stored/public file URL fallback. New API responses may omit it. */
+  fileUrl?: string | null;
 }
 
 // ── Projection ────────────────────────────────────────────────────────────────

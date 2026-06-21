@@ -32,6 +32,40 @@ describe('ncrCoreResponses', () => {
     expect(buildNcrResponse(ncr)).toEqual({ ncr });
   });
 
+  it('strips raw document file URLs from nested NCR evidence without mutating input', () => {
+    const ncr = {
+      id: 'ncr-1',
+      ncrEvidence: [
+        {
+          id: 'evidence-1',
+          document: {
+            id: 'document-1',
+            filename: 'rectification.jpg',
+            fileUrl: 'supabase://documents/project/rectification.jpg',
+          },
+        },
+      ],
+    };
+
+    expect(buildNcrResponse(ncr)).toEqual({
+      ncr: {
+        id: 'ncr-1',
+        ncrEvidence: [
+          {
+            id: 'evidence-1',
+            document: {
+              id: 'document-1',
+              filename: 'rectification.jpg',
+            },
+          },
+        ],
+      },
+    });
+    expect(ncr.ncrEvidence[0].document.fileUrl).toBe(
+      'supabase://documents/project/rectification.jpg',
+    );
+  });
+
   it('builds the update envelope with the existing success message', () => {
     const ncr = { id: 'ncr-1', status: 'closed' };
 

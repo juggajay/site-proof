@@ -29,7 +29,7 @@ interface DisplayPhoto {
 interface LotPhotoDocument {
   id: string;
   filename: string;
-  fileUrl: string;
+  fileUrl?: string | null;
   caption: string | null;
   uploadedAt: string;
   uploadedBy: { id: string; fullName: string | null; email: string } | null;

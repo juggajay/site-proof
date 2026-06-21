@@ -32,18 +32,41 @@ describe('ncrWorkflowResponses', () => {
   });
 
   it('builds client notification and verification submission responses', () => {
-    const ncr = { id: 'ncr-1', ncrEvidence: [{ id: 'evidence-1' }] };
+    const ncr = {
+      id: 'ncr-1',
+      ncrEvidence: [
+        {
+          id: 'evidence-1',
+          document: {
+            filename: 'fix.jpg',
+            fileUrl: 'https://storage.example.com/public/fix.jpg',
+          },
+        },
+      ],
+    };
     const notificationPackage = { recipient: 'client@example.test' };
+    const sanitizedNcr = {
+      id: 'ncr-1',
+      ncrEvidence: [
+        {
+          id: 'evidence-1',
+          document: {
+            filename: 'fix.jpg',
+          },
+        },
+      ],
+    };
 
     expect(buildNcrClientNotificationResponse(ncr, notificationPackage, 'NCR-001')).toEqual({
-      ncr,
+      ncr: sanitizedNcr,
       notificationPackage,
       message: 'Client notification sent for NCR-001',
     });
     expect(buildNcrSubmittedForVerificationResponse(ncr)).toEqual({
-      ncr,
+      ncr: sanitizedNcr,
       message: 'NCR submitted for verification successfully',
       evidenceCount: 1,
     });
+    expect(ncr.ncrEvidence[0].document.fileUrl).toBe('https://storage.example.com/public/fix.jpg');
   });
 });
