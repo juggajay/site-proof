@@ -98,7 +98,8 @@ export function CompanyUsageSection({ company }: CompanyUsageSectionProps) {
           company?.userCount !== undefined &&
           company.userCount >= company.userLimit && (
             <p className="text-sm text-destructive mt-2">
-              You've reached your user limit. Upgrade your plan to add more team members.
+              You've reached your user limit. Remove inactive team members, cancel pending
+              invitations, or upgrade your plan to add more people.
             </p>
           )}
       </div>

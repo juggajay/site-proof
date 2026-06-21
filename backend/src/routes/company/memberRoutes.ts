@@ -14,6 +14,7 @@ import { getUserLimitForTier, normalizeSubscriptionTier } from '../../lib/tierLi
 import {
   buildCompanyLeftResponse,
   buildCompanyMemberInvitedResponse,
+  buildCompanyMemberRemovedResponse,
   buildCompanyMembersResponse,
   buildCompanyOwnershipTransferredResponse,
 } from './responses.js';
@@ -183,6 +184,7 @@ companyMemberRoutes.get(
         fullName: true,
         roleInCompany: true,
         passwordHash: true,
+        oauthProvider: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -263,6 +265,7 @@ companyMemberRoutes.post(
           companyId: true,
           roleInCompany: true,
           passwordHash: true,
+          oauthProvider: true,
           emailVerified: true,
           emailVerifiedAt: true,
           createdAt: true,
@@ -349,6 +352,7 @@ companyMemberRoutes.post(
               fullName: true,
               roleInCompany: true,
               passwordHash: true,
+              oauthProvider: true,
               createdAt: true,
               updatedAt: true,
             },
@@ -368,12 +372,13 @@ companyMemberRoutes.post(
               fullName: true,
               roleInCompany: true,
               passwordHash: true,
+              oauthProvider: true,
               createdAt: true,
               updatedAt: true,
             },
           });
 
-      const setupRequired = !member.passwordHash;
+      const setupRequired = !member.passwordHash && !member.oauthProvider;
       if (setupRequired) {
         await tx.passwordResetToken.updateMany({
           where: {
@@ -470,6 +475,143 @@ companyMemberRoutes.post(
         expiresAt: setupRequired ? setupExpiresAt : null,
       }),
     );
+  }),
+);
+
+// DELETE /api/company/members/:memberId - Remove a member or cancel a pending invite
+companyMemberRoutes.delete(
+  '/members/:memberId',
+  asyncHandler(async (req, res) => {
+    const user = req.user!;
+    requireBrowserSession(req, 'Company member removal');
+    const companyId = requireCompanyAdmin(user);
+    const memberId = normalizeCompanyString(req.params.memberId, 'Member ID', 128, {
+      required: true,
+    });
+
+    if (!memberId) {
+      throw AppError.badRequest('Member ID is required');
+    }
+
+    if (memberId === user.userId) {
+      throw AppError.badRequest('Use leave company to remove your own company membership');
+    }
+
+    const removedAt = new Date();
+    let removedProjectMembershipCount = 0;
+    let cancelledSetupInviteCount = 0;
+    let removalStatus: 'removed' | 'cancelled' = 'removed';
+    let targetEmail = '';
+    let previousRole = '';
+
+    await prisma.$transaction(async (tx) => {
+      const currentUser = await tx.user.findUnique({
+        where: { id: user.userId },
+        select: { companyId: true, roleInCompany: true },
+      });
+
+      if (currentUser?.companyId !== companyId) {
+        throw AppError.forbidden('Invalid company session');
+      }
+
+      if (!['owner', 'admin'].includes(currentUser.roleInCompany || '')) {
+        throw AppError.forbidden('Only company owners and admins can remove company members');
+      }
+
+      await tx.$queryRaw`
+        SELECT id
+        FROM companies
+        WHERE id = ${companyId}
+        FOR UPDATE
+      `;
+
+      const targetMember = await tx.user.findFirst({
+        where: { id: memberId, companyId },
+        select: {
+          id: true,
+          email: true,
+          roleInCompany: true,
+          passwordHash: true,
+          oauthProvider: true,
+        },
+      });
+
+      if (!targetMember) {
+        throw AppError.notFound('Company member');
+      }
+
+      if (targetMember.roleInCompany === 'owner') {
+        throw AppError.badRequest('Company owners must transfer ownership before being removed');
+      }
+
+      previousRole = targetMember.roleInCompany;
+      targetEmail = targetMember.email;
+
+      await assertCanRemoveUserFromProjectAdminRoles(memberId, {
+        companyId,
+        actionDescription: 'remove company member',
+        subjectDescription: 'they are',
+        client: tx,
+      });
+
+      const companyProjects = await tx.project.findMany({
+        where: { companyId },
+        select: { id: true },
+      });
+      const projectIds = companyProjects.map((project) => project.id);
+
+      const removedProjectMemberships = await tx.projectUser.deleteMany({
+        where: {
+          userId: memberId,
+          projectId: { in: projectIds },
+        },
+      });
+      removedProjectMembershipCount = removedProjectMemberships.count;
+
+      const cancelledSetupTokens = await tx.passwordResetToken.updateMany({
+        where: {
+          userId: memberId,
+          usedAt: null,
+          expiresAt: { gt: removedAt },
+        },
+        data: { usedAt: removedAt },
+      });
+      cancelledSetupInviteCount = cancelledSetupTokens.count;
+
+      if (!targetMember.passwordHash && !targetMember.oauthProvider) {
+        removalStatus = 'cancelled';
+        await tx.emailVerificationToken.deleteMany({ where: { userId: memberId } });
+        await tx.user.delete({ where: { id: memberId } });
+        return;
+      }
+
+      await tx.user.update({
+        where: { id: memberId },
+        data: {
+          companyId: null,
+          roleInCompany: 'member',
+        },
+      });
+    });
+
+    await createAuditLog({
+      userId: user.userId,
+      entityType: 'user',
+      entityId: memberId,
+      action: AuditAction.USER_REMOVED,
+      changes: {
+        removedUserId: memberId,
+        removedUserEmail: targetEmail,
+        companyId,
+        previousRole,
+        status: removalStatus,
+        removedProjectMembershipCount,
+        cancelledSetupInviteCount,
+      },
+      req,
+    });
+
+    res.json(buildCompanyMemberRemovedResponse({ memberId, status: removalStatus, removedAt }));
   }),
 );
 
