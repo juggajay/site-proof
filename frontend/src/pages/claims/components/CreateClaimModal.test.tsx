@@ -100,6 +100,21 @@ describe('CreateClaimModal claim period validation', () => {
 });
 
 describe('CreateClaimModal create flow', () => {
+  it('requires selected lot claim increments to be greater than zero', async () => {
+    apiFetchMock.mockResolvedValue(READY_LOT_READINESS);
+
+    renderModal();
+
+    expect(await screen.findByText('LOT-001')).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('Select LOT-001'));
+    fireEvent.change(screen.getByLabelText('% to claim this time:'), {
+      target: { value: '0' },
+    });
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Claim percentage must be greater than 0.');
+    expect(screen.getByRole('button', { name: 'Create Claim' })).toBeDisabled();
+  });
+
   it('notifies the parent after a successful create so it can invalidate the claims cache', async () => {
     const onClaimCreated = vi.fn();
     const onClose = vi.fn();

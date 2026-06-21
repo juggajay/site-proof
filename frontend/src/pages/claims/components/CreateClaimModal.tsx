@@ -64,6 +64,17 @@ function mapReadinessLot(lot: ClaimReadinessLot): ClaimableLot {
   };
 }
 
+function getSelectedLotClaimIncrementError(
+  value: string,
+  remainingPercentage: number,
+): string | null {
+  const incrementError = getClaimIncrementError(value, remainingPercentage);
+  if (incrementError) return incrementError;
+
+  const parsed = parseClaimPercentageInput(value);
+  return parsed !== null && parsed <= 0 ? 'Claim percentage must be greater than 0.' : null;
+}
+
 export const CreateClaimModal = React.memo(function CreateClaimModal({
   projectId,
   onClose,
@@ -150,11 +161,11 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
     }
     if (
       selectedLots.some((lot) =>
-        Boolean(getClaimIncrementError(lot.percentComplete, lot.remainingPercentage)),
+        Boolean(getSelectedLotClaimIncrementError(lot.percentComplete, lot.remainingPercentage)),
       )
     ) {
       setCreateError(
-        'One or more lots are claiming more than the percentage that is still available.',
+        'Each selected lot must claim more than 0% and no more than the remaining percentage.',
       );
       return;
     }
@@ -196,7 +207,7 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
     (l) => (parseClaimPercentageInput(l.percentComplete) ?? 0) < 100,
   );
   const hasPercentageErrors = selectedLots.some((lot) =>
-    Boolean(getClaimIncrementError(lot.percentComplete, lot.remainingPercentage)),
+    Boolean(getSelectedLotClaimIncrementError(lot.percentComplete, lot.remainingPercentage)),
   );
   const periodError = getClaimPeriodError(newClaim.periodStart, newClaim.periodEnd);
 
@@ -349,14 +360,18 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
                           </label>
                           <Input
                             type="number"
-                            min={0}
+                            min={0.01}
                             max={lot.remainingPercentage}
                             step="0.01"
                             required
+                            aria-label="% to claim this time:"
                             value={lot.percentComplete}
                             onChange={(e) => updateLotPercentage(lot.id, e.target.value)}
                             className={`w-20 h-8 text-sm text-center ${
-                              getClaimIncrementError(lot.percentComplete, lot.remainingPercentage)
+                              getSelectedLotClaimIncrementError(
+                                lot.percentComplete,
+                                lot.remainingPercentage,
+                              )
                                 ? 'border-destructive'
                                 : ''
                             }`}
@@ -365,13 +380,19 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
                           <span className="ml-auto font-semibold text-primary">
                             {formatCurrency(calculateLotClaimAmount(lot))}
                           </span>
-                          {getClaimIncrementError(lot.percentComplete, lot.remainingPercentage) && (
+                          {getSelectedLotClaimIncrementError(
+                            lot.percentComplete,
+                            lot.remainingPercentage,
+                          ) && (
                             <span
                               className="text-sm text-destructive"
                               role="alert"
                               aria-live="assertive"
                             >
-                              {getClaimIncrementError(lot.percentComplete, lot.remainingPercentage)}
+                              {getSelectedLotClaimIncrementError(
+                                lot.percentComplete,
+                                lot.remainingPercentage,
+                              )}
                             </span>
                           )}
                         </div>

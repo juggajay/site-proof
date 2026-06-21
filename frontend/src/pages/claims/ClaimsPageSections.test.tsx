@@ -1,12 +1,14 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { QueryClient } from '@tanstack/react-query';
-import { renderWithProviders } from '@/test/renderWithProviders';
+import { createTestQueryClient, renderWithProviders } from '@/test/renderWithProviders';
 import type { ProjectClaimReadiness } from '@/types/evidenceReadiness';
+import { queryKeys } from '@/lib/queryKeys';
 
 const apiFetchMock = vi.hoisted(() => vi.fn());
+const downloadCsvMock = vi.hoisted(() => vi.fn());
 
 // Keep the real ApiError/extractErrorMessage behaviour but drive apiFetch
 // directly: the ClaimsPage tests below exercise the TanStack Query wiring
@@ -16,6 +18,10 @@ vi.mock('@/lib/api', async (importOriginal) => {
   return { ...actual, apiFetch: apiFetchMock };
 });
 
+vi.mock('@/lib/csv', () => ({
+  downloadCsv: downloadCsvMock,
+}));
+
 import {
   ClaimsAccessDeniedState,
   ClaimsLoadErrorAlert,
@@ -24,7 +30,9 @@ import {
 } from './ClaimsPageSections';
 import { ClaimsPage } from './ClaimsPage';
 import { ClaimsTable } from './components/ClaimsTable';
+import { SubmitClaimModal } from './components/SubmitClaimModal';
 import type { Claim } from './types';
+import { calculatePaymentDueDate } from './utils';
 
 describe('ClaimsPageHeader', () => {
   it('hides CSV export when there are no claims', () => {
@@ -188,6 +196,61 @@ describe('ClaimsTable payment schedule wording', () => {
   });
 });
 
+describe('ClaimsTable row CSV export', () => {
+  beforeEach(() => {
+    downloadCsvMock.mockReset();
+  });
+
+  it('falls back to calculated project-state payment due date when the claim omits one', async () => {
+    const submittedAt = '2026-06-01T00:00:00.000Z';
+    const expectedDueDate = new Date(
+      calculatePaymentDueDate(submittedAt, 'WA') ?? '',
+    ).toLocaleDateString('en-AU');
+
+    render(
+      <ClaimsTable
+        claims={[
+          {
+            ...SEEDED_CLAIM,
+            status: 'submitted',
+            submittedAt,
+            projectState: 'WA',
+            paymentDueDate: null,
+          },
+        ]}
+        loadingCompleteness={false}
+        showCompletenessModal={null}
+        generatingEvidence={null}
+        onCreateClaim={vi.fn()}
+        onSubmitClaim={vi.fn()}
+        onDisputeClaim={vi.fn()}
+        onCertifyClaim={vi.fn()}
+        onRecordPayment={vi.fn()}
+        onCompletenessCheck={vi.fn()}
+        onEvidencePackage={vi.fn()}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Download CSV' }));
+
+    expect(downloadCsvMock).toHaveBeenCalledWith(
+      'claim-7.csv',
+      expect.arrayContaining([expect.arrayContaining([expectedDueDate])]),
+    );
+  });
+});
+
+describe('SubmitClaimModal copy', () => {
+  it('describes the CSV register export without implying an evidence package is included', () => {
+    render(<SubmitClaimModal claim={SEEDED_CLAIM} onClose={vi.fn()} onSubmitted={vi.fn()} />);
+
+    expect(screen.getByText(/claim summary CSV/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/register export/i).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/claim package/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/evidence package/i)).not.toBeInTheDocument();
+  });
+});
+
 function renderClaimsPage(queryClient?: QueryClient) {
   return renderWithProviders(
     <Routes>
@@ -208,6 +271,7 @@ function countRegisterLoads() {
 describe('ClaimsPage TanStack Query register', () => {
   beforeEach(() => {
     apiFetchMock.mockReset();
+    downloadCsvMock.mockReset();
   });
 
   it('renders revisits instantly from cache without refetching inside staleTime', async () => {
@@ -255,5 +319,84 @@ describe('ClaimsPage TanStack Query register', () => {
     // and shows the new claim without a manual reload.
     expect(await screen.findByText('Claim 7')).toBeInTheDocument();
     expect(countRegisterLoads()).toBe(2);
+  });
+
+  it('invalidates claims, claim readiness, and lots after lifecycle mutations', async () => {
+    const queryClient = createTestQueryClient();
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
+    apiFetchMock.mockImplementation((path: string, options?: RequestInit) => {
+      if (path === '/api/projects/p1/claims/claim-1' && options?.method === 'PUT') {
+        return Promise.resolve({ claim: { ...SEEDED_CLAIM, status: 'submitted' } });
+      }
+      if (path === '/api/projects/p1/claims') {
+        return Promise.resolve({ claims: [SEEDED_CLAIM] });
+      }
+      return Promise.reject(new Error(`Unexpected apiFetch path: ${path}`));
+    });
+
+    renderClaimsPage(queryClient);
+    expect(await screen.findByText('Claim 7')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Submit Claim' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Download/ }));
+
+    await waitFor(() =>
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.claims('p1') }),
+    );
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.claimReadiness('p1') });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.lots('p1') });
+  });
+
+  it('shows certification notes and certificate link from the optimistic cache immediately', async () => {
+    const submittedClaim: Claim = {
+      ...SEEDED_CLAIM,
+      status: 'submitted',
+      submittedAt: '2026-06-01T00:00:00.000Z',
+    };
+    let claimsLoads = 0;
+    apiFetchMock.mockImplementation((path: string, options?: RequestInit) => {
+      if (path === '/api/projects/p1/claims/claim-1/certify' && options?.method === 'POST') {
+        return Promise.resolve({
+          claim: {
+            id: 'claim-1',
+            status: 'certified',
+            certifiedAmount: 90000,
+            certifiedAt: '2026-06-10T00:00:00.000Z',
+            variationNotes: 'Reduced after principal assessment',
+            certificationDocumentId: 'doc-1',
+          },
+        });
+      }
+      if (path === '/api/projects/p1/claims') {
+        claimsLoads += 1;
+        if (claimsLoads > 1) {
+          return new Promise(() => {});
+        }
+        return Promise.resolve({ claims: [submittedClaim] });
+      }
+      return Promise.reject(new Error(`Unexpected apiFetch path: ${path}`));
+    });
+
+    renderClaimsPage();
+    expect(await screen.findByText('Claim 7')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Record Payment Schedule' }));
+    const modal = await screen.findByRole('dialog');
+    fireEvent.change(within(modal).getByLabelText('Certified Amount'), {
+      target: { value: '90000' },
+    });
+    fireEvent.change(within(modal).getByLabelText('Variation Notes'), {
+      target: { value: 'Reduced after principal assessment' },
+    });
+    fireEvent.click(within(modal).getByRole('button', { name: 'Record Payment Schedule' }));
+
+    await waitFor(() =>
+      expect(apiFetchMock).toHaveBeenCalledWith(
+        '/api/projects/p1/claims/claim-1/certify',
+        expect.objectContaining({ method: 'POST' }),
+      ),
+    );
+    expect(await screen.findByText('Reduced after principal assessment')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'View certificate' })).toBeInTheDocument();
   });
 });

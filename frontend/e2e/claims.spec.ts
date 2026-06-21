@@ -365,12 +365,12 @@ test.describe('Claims seeded commercial contract', () => {
     await expect(submitModal.getByRole('heading', { name: 'Submit Claim' })).toBeVisible();
     await expect(
       submitModal.getByText(
-        'Download the claim package, then submit it through your client channel.',
+        'Download the register export, then submit the claim through your client channel.',
       ),
     ).toBeVisible();
 
     const submitDownloadPromise = page.waitForEvent('download');
-    await submitModal.getByText('Download package').click();
+    await submitModal.getByText('Download summary CSV').click();
     const submitDownload = await submitDownloadPromise;
     expect(submitDownload.suggestedFilename()).toBe('claim-7.csv');
     await submitDownload.delete();

@@ -11,6 +11,7 @@ import type { ClaimEvidencePackageData, ClaimPackageOptions } from '@/lib/pdfGen
 
 import type {
   Claim,
+  ClaimCertification,
   ClaimCertificationFormData,
   ClaimPaymentFormData,
   CompletenessData,
@@ -96,9 +97,11 @@ export function ClaimsPage() {
 
   // Every claim mutation ends with an invalidation so the register always
   // reconciles with server truth, even after the optimistic cache write.
-  const invalidateClaims = useCallback(() => {
+  const invalidateClaimAdjacentProjectCaches = useCallback(() => {
     if (!projectId) return;
     void queryClient.invalidateQueries({ queryKey: queryKeys.claims(projectId) });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.claimReadiness(projectId) });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.lots(projectId) });
   }, [projectId, queryClient]);
 
   const updateClaimInCache = useCallback(
@@ -183,8 +186,8 @@ export function ClaimsPage() {
   }, [monthlyBreakdownData]);
 
   const handleClaimCreated = useCallback(() => {
-    invalidateClaims();
-  }, [invalidateClaims]);
+    invalidateClaimAdjacentProjectCaches();
+  }, [invalidateClaimAdjacentProjectCaches]);
 
   const handleSubmitClaim = useCallback(
     async (claimId: string, _method: SubmitMethod) => {
@@ -202,7 +205,7 @@ export function ClaimsPage() {
         );
         const submittedAt = new Date().toISOString();
         updateClaimInCache(claimId, (c) => ({ ...c, status: 'submitted' as const, submittedAt }));
-        invalidateClaims();
+        invalidateClaimAdjacentProjectCaches();
 
         downloadCsv(`claim-${claim.claimNumber}.csv`, [
           ['Claim Number', claim.claimNumber],
@@ -231,7 +234,7 @@ export function ClaimsPage() {
         submittingClaimsRef.current.delete(claimId);
       }
     },
-    [claims, projectId, updateClaimInCache, invalidateClaims],
+    [claims, projectId, updateClaimInCache, invalidateClaimAdjacentProjectCaches],
   );
 
   const handleDisputeClaim = useCallback(
@@ -260,7 +263,7 @@ export function ClaimsPage() {
           disputeNotes,
           disputedAt: formatDateKey(),
         }));
-        invalidateClaims();
+        invalidateClaimAdjacentProjectCaches();
         toast({
           title: 'Claim disputed',
           description: 'The claim has been marked as disputed.',
@@ -281,7 +284,7 @@ export function ClaimsPage() {
         disputingClaimsRef.current.delete(claimId);
       }
     },
-    [projectId, updateClaimInCache, invalidateClaims],
+    [projectId, updateClaimInCache, invalidateClaimAdjacentProjectCaches],
   );
 
   const handleCertifyClaim = useCallback(
@@ -290,7 +293,14 @@ export function ClaimsPage() {
 
       certifyingClaimsRef.current.add(claimId);
       try {
-        const data = await apiFetch<{ claim: Partial<Claim>; message?: string }>(
+        const data = await apiFetch<{
+          claim: Partial<Claim> & {
+            certifiedByName?: string | null;
+            variationNotes?: string | null;
+            certificationDocumentId?: string | null;
+          };
+          message?: string;
+        }>(
           `/api/projects/${encodeURIComponent(projectId)}/claims/${encodeURIComponent(claimId)}/certify`,
           {
             method: 'POST',
@@ -298,12 +308,28 @@ export function ClaimsPage() {
           },
         );
 
-        updateClaimInCache(claimId, (c) => ({
-          ...c,
-          ...data.claim,
-          status: 'certified',
-        }));
-        invalidateClaims();
+        updateClaimInCache(claimId, (c) => {
+          const {
+            certifiedByName,
+            variationNotes,
+            certificationDocumentId,
+            certification: responseCertification,
+            ...claimPatch
+          } = data.claim;
+          const certificationReadBack: ClaimCertification = {
+            certifiedByName: responseCertification?.certifiedByName ?? certifiedByName ?? null,
+            variationNotes: responseCertification?.variationNotes ?? variationNotes ?? null,
+            certificationDocumentId:
+              responseCertification?.certificationDocumentId ?? certificationDocumentId ?? null,
+          };
+          return {
+            ...c,
+            ...claimPatch,
+            status: 'certified',
+            certification: certificationReadBack,
+          };
+        });
+        invalidateClaimAdjacentProjectCaches();
         toast({
           title: 'Claim certified',
           description: data.message || 'The claim has been certified.',
@@ -321,7 +347,7 @@ export function ClaimsPage() {
         certifyingClaimsRef.current.delete(claimId);
       }
     },
-    [projectId, updateClaimInCache, invalidateClaims],
+    [projectId, updateClaimInCache, invalidateClaimAdjacentProjectCaches],
   );
 
   const handleRecordPayment = useCallback(
@@ -339,7 +365,7 @@ export function ClaimsPage() {
         );
 
         updateClaimInCache(claimId, (c) => ({ ...c, ...data.claim }));
-        invalidateClaims();
+        invalidateClaimAdjacentProjectCaches();
         toast({
           title: 'Payment recorded',
           description: data.message || 'The payment has been recorded against this claim.',
@@ -357,7 +383,7 @@ export function ClaimsPage() {
         recordingPaymentsRef.current.delete(claimId);
       }
     },
-    [projectId, updateClaimInCache, invalidateClaims],
+    [projectId, updateClaimInCache, invalidateClaimAdjacentProjectCaches],
   );
 
   const handleCompletenessCheck = useCallback(
