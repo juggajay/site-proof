@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import { projectsRouter } from './projects.js';
@@ -1865,6 +1865,12 @@ describe('Project Team Management', () => {
     await prisma.company.delete({ where: { id: companyId } }).catch(() => {});
   });
 
+  const postProjectTeamInvite = (email: string, role = 'viewer') =>
+    request(app)
+      .post(`/api/projects/${projectId}/users`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({ email, role });
+
   it('should get project team members', async () => {
     const res = await request(app)
       .get(`/api/projects/${projectId}/users`)
@@ -1908,15 +1914,61 @@ describe('Project Team Management', () => {
   });
 
   it('should add user to project team by email', async () => {
-    const res = await request(app)
-      .post(`/api/projects/${projectId}/users`)
-      .set('Authorization', `Bearer ${authToken}`)
-      .send({
-        email: secondUserEmail, // API expects email, not userId
-        role: 'viewer',
-      });
+    const res = await postProjectTeamInvite(secondUserEmail);
 
     expect(res.status).toBe(201);
+  });
+
+  it('should reject duplicate project team invites', async () => {
+    const res = await postProjectTeamInvite(secondUserEmail);
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toContain('already a member of this project');
+  });
+
+  it('should normalize duplicate invite races to the duplicate-member response', async () => {
+    const suffix = Date.now();
+    const raceEmail = `team-race-member-${suffix}@example.com`;
+    const raceRes = await request(app).post('/api/auth/register').send({
+      email: raceEmail,
+      password: 'SecureP@ssword123!',
+      fullName: 'Team Race Member',
+      tosAccepted: true,
+    });
+    const raceUserId = raceRes.body.user.id;
+
+    await prisma.user.update({
+      where: { id: raceUserId },
+      data: { companyId, roleInCompany: 'viewer' },
+    });
+    await prisma.projectUser.create({
+      data: { projectId, userId: raceUserId, role: 'viewer', status: 'active' },
+    });
+
+    const originalFindFirst = prisma.projectUser.findFirst.bind(prisma.projectUser);
+    const findFirstSpy = vi.spyOn(prisma.projectUser, 'findFirst').mockImplementation((args) => {
+      const where = args?.where as Record<string, unknown> | undefined;
+      if (
+        where?.projectId === projectId &&
+        where?.userId === raceUserId &&
+        where?.status === undefined
+      ) {
+        return Promise.resolve(null) as unknown as ReturnType<typeof prisma.projectUser.findFirst>;
+      }
+      return originalFindFirst(args);
+    });
+
+    try {
+      const res = await postProjectTeamInvite(raceEmail);
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toContain('already a member of this project');
+    } finally {
+      findFirstSpy.mockRestore();
+      await prisma.projectUser.deleteMany({ where: { projectId, userId: raceUserId } });
+      await prisma.emailVerificationToken.deleteMany({ where: { userId: raceUserId } });
+      await prisma.user.delete({ where: { id: raceUserId } }).catch(() => {});
+    }
   });
 
   it('should allow adding an existing company user when the company is at its user limit', async () => {
