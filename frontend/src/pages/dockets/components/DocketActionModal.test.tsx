@@ -120,6 +120,23 @@ describe('DocketActionModal', () => {
     expect(screen.getByText('$1,100.00')).toBeInTheDocument();
   });
 
+  it('does not show action notes controls in approved view mode', () => {
+    renderModal(
+      makeDocket({
+        status: 'approved',
+        totalLabourApprovedCost: 500,
+        totalPlantApprovedCost: 100,
+      }),
+      { initialActionType: 'view' },
+    );
+
+    expect(screen.getByRole('heading', { name: 'Docket Details' })).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Approval Notes/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Query Details/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Rejection Reason/)).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Close' }).length).toBeGreaterThan(0);
+  });
+
   it('shows approved zero-hour/cost adjustments instead of falling back to submitted values', () => {
     const docket = makeDocket({
       status: 'approved',
