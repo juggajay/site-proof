@@ -174,10 +174,15 @@ async function fetchDocketProjectInfo(
   }
 }
 
-export function useDocketApprovalsQuery(projectId: string | undefined, statusFilter: string) {
+export function useDocketApprovalsQuery(
+  projectId: string | undefined,
+  statusFilter: string,
+  options: { enabled?: boolean } = {},
+) {
   return useQuery({
     queryKey: queryKeys.dockets(projectId ?? 'all-projects', statusFilter),
     queryFn: () => fetchDocketApprovals(projectId, statusFilter),
+    enabled: options.enabled ?? true,
     refetchInterval: projectId ? 30000 : false,
     refetchIntervalInBackground: false,
   });
