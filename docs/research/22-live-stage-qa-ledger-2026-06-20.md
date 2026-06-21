@@ -20,8 +20,9 @@ keep going until the app has been exercised end to end.
 
 ## Stage 30 - Live Browser Navigation and Auth Session Hydration QA
 
-Status: fix branch in progress; local backend verification passed. Carry this
-entry through PR, CI, merge, and production retest before marking complete.
+Status: landed in PR #1064; post-merge master CI, full post-merge E2E,
+production health checks, direct production auth stress check, and visible
+browser retest passed.
 
 Scope:
 
@@ -52,11 +53,21 @@ Verification:
 - backend `lint` passed.
 - backend `format:check` passed.
 - `git diff --check` passed.
-
-Retest required after merge:
-
-- Re-run the live browser project-surface sweep and confirm normal navigation no
-  longer produces `/api/auth/me` `429` responses or false auth/access failures.
+- PR #1064 checks passed before merge: Backend, Frontend PR E2E smoke, Detect
+  changes, and Vercel's ignored-build status.
+- Master CI run `27915013093` passed after merge, including Backend, Frontend,
+  and full post-merge Frontend E2E.
+- Production health checks returned HTTP 200 for:
+  - `https://site-proof-production.up.railway.app/ready`
+  - `https://site-proof.vercel.app`
+- Direct production auth stress check created a throwaway browser-session user
+  via the safe Resend test-recipient pattern and called authenticated
+  `/api/auth/me` 14 times; all 14 returned HTTP 200 and none returned 429.
+- Visible headed Chromium production retest seeded a sample owner project and
+  loaded 17 owner project surfaces. All 17 routes loaded without access-denied
+  states, page-level errors, API errors, console errors, or page exceptions.
+  `/api/auth/me` returned HTTP 200 on all 17 browser calls and never returned
+  429.
 
 Artifacts:
 
