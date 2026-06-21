@@ -1370,6 +1370,28 @@ describe('Projects API', () => {
       expect(encodedLotStartingNumber.status).toBe(400);
     });
 
+    it('should reject malformed nested project settings', async () => {
+      const patchSettings = (settings: Record<string, unknown>) =>
+        request(app)
+          .patch(`/api/projects/${projectId}`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ settings });
+
+      const invalidNotice = await patchSettings({ hpMinimumNoticeDays: -1 });
+      expect(invalidNotice.status).toBe(400);
+      expect(invalidNotice.body.error.message).toContain('notice days');
+
+      const invalidModule = await patchSettings({ enabledModules: { dockets: 'nope' } });
+      expect(invalidModule.status).toBe(400);
+      expect(invalidModule.body.error.message).toContain('enabledModules.dockets');
+
+      const invalidRecipient = await patchSettings({
+        hpRecipients: [{ role: 'Superintendent', email: 'not-email' }],
+      });
+      expect(invalidRecipient.status).toBe(400);
+      expect(invalidRecipient.body.error.message).toContain('valid email address');
+    });
+
     it('should validate partial chainage updates against existing project bounds', async () => {
       await prisma.project.update({
         where: { id: projectId },
