@@ -309,11 +309,11 @@ export function IssueDetailScreen() {
         ) : (
           <div className="-mx-1 mt-2 flex gap-2 overflow-x-auto px-1 pb-1">
             {photos.map((item) =>
-              item.document?.fileUrl ? (
+              item.document?.id ? (
                 <SecureDocumentImage
                   key={item.id}
                   documentId={item.document.id}
-                  fileUrl={item.document.fileUrl}
+                  fileUrl={item.document.fileUrl ?? null}
                   alt={item.document.caption || item.document.filename || 'NCR evidence photo'}
                   loading="lazy"
                   className="h-[88px] w-[88px] flex-shrink-0 rounded-xl border border-border object-cover"

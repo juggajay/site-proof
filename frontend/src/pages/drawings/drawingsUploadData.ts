@@ -18,7 +18,7 @@ export interface Drawing {
   document: {
     id: string;
     filename: string;
-    fileUrl: string;
+    fileUrl?: string | null;
     fileSize: number | null;
     mimeType: string | null;
     uploadedAt: string;

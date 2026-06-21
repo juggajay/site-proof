@@ -1453,7 +1453,7 @@ describe('ITP Completion Attachments', () => {
 
     expect(res.status).toBe(201);
     expect(res.body.attachment.documentId).toBe(documentId);
-    expect(res.body.attachment.document.fileUrl).toBe('/uploads/documents/stored-evidence.jpg');
+    expect(res.body.attachment.document.fileUrl).toBeUndefined();
 
     const repeated = await request(app)
       .post(`/api/itp/completions/${completionId}/attachments`)
@@ -1468,6 +1468,7 @@ describe('ITP Completion Attachments', () => {
     expect(attachments).toHaveLength(1);
 
     const updatedDocument = await prisma.document.findUniqueOrThrow({ where: { id: documentId } });
+    expect(updatedDocument.fileUrl).toBe('/uploads/documents/stored-evidence.jpg');
     expect(updatedDocument.caption).toBe('Stored evidence photo');
     expect(Number(updatedDocument.gpsLatitude)).toBeCloseTo(-33.865143, 5);
     expect(Number(updatedDocument.gpsLongitude)).toBeCloseTo(151.2099, 5);
@@ -2303,8 +2304,14 @@ describe('ITP Completion Attachments', () => {
         });
 
       expect(res.status).toBe(201);
-      expect(res.body.attachment.document.fileUrl).toBe(`/uploads/documents/${filename}`);
+      expect(res.body.attachment.document.fileUrl).toBeUndefined();
       createdDocumentId = res.body.attachment.documentId;
+
+      const storedDocument = await prisma.document.findUniqueOrThrow({
+        where: { id: createdDocumentId },
+        select: { fileUrl: true },
+      });
+      expect(storedDocument.fileUrl).toBe(`/uploads/documents/${filename}`);
     } finally {
       if (createdDocumentId) {
         await prisma.iTPCompletionAttachment.deleteMany({
@@ -2332,8 +2339,14 @@ describe('ITP Completion Attachments', () => {
         });
 
       expect(res.status).toBe(201);
-      expect(res.body.attachment.document.fileUrl).toBe(fileUrl);
+      expect(res.body.attachment.document.fileUrl).toBeUndefined();
       createdDocumentId = res.body.attachment.documentId;
+
+      const storedDocument = await prisma.document.findUniqueOrThrow({
+        where: { id: createdDocumentId },
+        select: { fileUrl: true },
+      });
+      expect(storedDocument.fileUrl).toBe(fileUrl);
     } finally {
       if (createdDocumentId) {
         await prisma.iTPCompletionAttachment.deleteMany({
@@ -2365,8 +2378,14 @@ describe('ITP Completion Attachments', () => {
         });
 
       expect(res.status).toBe(201);
-      expect(res.body.attachment.document.fileUrl).toBe(expectedFileUrl);
+      expect(res.body.attachment.document.fileUrl).toBeUndefined();
       createdDocumentId = res.body.attachment.documentId;
+
+      const storedDocument = await prisma.document.findUniqueOrThrow({
+        where: { id: createdDocumentId },
+        select: { fileUrl: true },
+      });
+      expect(storedDocument.fileUrl).toBe(expectedFileUrl);
     } finally {
       if (createdDocumentId) {
         await prisma.iTPCompletionAttachment.deleteMany({

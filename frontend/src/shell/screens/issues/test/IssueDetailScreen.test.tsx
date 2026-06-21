@@ -146,6 +146,16 @@ describe('IssueDetailScreen', () => {
     expect(img).toHaveAttribute('data-file-url', 'https://storage/pour3.jpg');
   });
 
+  it('renders sanitized evidence photos using document id when raw fileUrl is omitted', () => {
+    _photos = [photo({ document: { id: 'd2', filename: 'sanitized.jpg', caption: null } })];
+    _data = makeData(makeNcr({}));
+    renderScreen();
+    const img = screen.getByAltText('sanitized.jpg') as HTMLImageElement;
+    expect(img).toBeInTheDocument();
+    expect(img).toHaveAttribute('src', '/secure-doc/d2');
+    expect(img).not.toHaveAttribute('data-file-url');
+  });
+
   it('shows an Add photo affordance (foreman adds evidence)', () => {
     _data = makeData(makeNcr({}));
     renderScreen();

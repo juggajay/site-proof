@@ -270,7 +270,7 @@ export function mapHoldPointEvidenceItpTemplate(template: EvidenceItpTemplateInp
 export function buildHoldPointEvidencePackageResponse<TEvidencePackage>(
   evidencePackage: TEvidencePackage,
 ) {
-  return { evidencePackage };
+  return { evidencePackage: sanitizeEvidencePackageFileUrls(evidencePackage) };
 }
 
 function stripFileUrl<TValue>(value: TValue): TValue {
@@ -283,7 +283,7 @@ function stripFileUrl<TValue>(value: TValue): TValue {
   return rest as TValue;
 }
 
-function sanitizePublicChecklistEntry<TValue>(entry: TValue): TValue {
+function sanitizeChecklistEntry<TValue>(entry: TValue): TValue {
   if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
     return entry;
   }
@@ -297,7 +297,7 @@ function sanitizePublicChecklistEntry<TValue>(entry: TValue): TValue {
   } as TValue;
 }
 
-function sanitizePublicEvidencePackage<TEvidencePackage>(
+function sanitizeEvidencePackageFileUrls<TEvidencePackage>(
   evidencePackage: TEvidencePackage,
 ): TEvidencePackage {
   if (!evidencePackage || typeof evidencePackage !== 'object' || Array.isArray(evidencePackage)) {
@@ -308,7 +308,7 @@ function sanitizePublicEvidencePackage<TEvidencePackage>(
   return {
     ...record,
     checklist: Array.isArray(record.checklist)
-      ? record.checklist.map((entry) => sanitizePublicChecklistEntry(entry))
+      ? record.checklist.map((entry) => sanitizeChecklistEntry(entry))
       : record.checklist,
     photos: Array.isArray(record.photos)
       ? record.photos.map((photo) => stripFileUrl(photo))
@@ -321,7 +321,7 @@ export function buildPublicHoldPointEvidencePackageResponse<TEvidencePackage, TT
   tokenInfo: TTokenInfo,
 ) {
   return {
-    evidencePackage: sanitizePublicEvidencePackage(evidencePackage),
+    evidencePackage: sanitizeEvidencePackageFileUrls(evidencePackage),
     tokenInfo,
     isPublicAccess: true,
   };

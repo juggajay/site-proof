@@ -4229,8 +4229,14 @@ describe('NCR Access Hardening', () => {
         });
 
       expect(res.status).toBe(201);
-      expect(res.body.evidence.document.fileUrl).toBe(expectedFileUrl);
+      expect(res.body.evidence.document.fileUrl).toBeUndefined();
       createdDocumentId = res.body.evidence.documentId;
+
+      const storedDocument = await prisma.document.findUniqueOrThrow({
+        where: { id: createdDocumentId },
+        select: { fileUrl: true },
+      });
+      expect(storedDocument.fileUrl).toBe(expectedFileUrl);
     } finally {
       if (createdDocumentId) {
         await prisma.nCREvidence.deleteMany({ where: { ncrId, documentId: createdDocumentId } });
@@ -4390,7 +4396,13 @@ describe('NCR Access Hardening', () => {
       });
 
     expect(res.status).toBe(201);
-    expect(res.body.evidence.document.fileUrl).toBe(fileUrl);
+    expect(res.body.evidence.document.fileUrl).toBeUndefined();
+
+    const storedDocument = await prisma.document.findUniqueOrThrow({
+      where: { id: res.body.evidence.documentId },
+      select: { fileUrl: true },
+    });
+    expect(storedDocument.fileUrl).toBe(fileUrl);
   });
 
   it('should write audit logs when adding and removing NCR evidence', async () => {
@@ -4537,9 +4549,15 @@ describe('NCR Access Hardening', () => {
         });
 
       expect(res.status).toBe(201);
-      expect(res.body.evidence.document.fileUrl).toBe(fileUrl);
+      expect(res.body.evidence.document.fileUrl).toBeUndefined();
       evidenceId = res.body.evidence.id;
       documentId = res.body.evidence.documentId;
+
+      const storedDocument = await prisma.document.findUniqueOrThrow({
+        where: { id: documentId },
+        select: { fileUrl: true },
+      });
+      expect(storedDocument.fileUrl).toBe(fileUrl);
     } finally {
       if (evidenceId) {
         await prisma.nCREvidence.deleteMany({ where: { id: evidenceId } });

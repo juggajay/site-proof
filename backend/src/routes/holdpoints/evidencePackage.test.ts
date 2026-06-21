@@ -153,10 +153,66 @@ describe('buildHoldPointEvidenceChecklist', () => {
 });
 
 describe('hold point evidence-package response helpers', () => {
-  it('wraps authenticated and preview evidence packages under the existing key', () => {
-    const evidencePackage = { holdPoint: { id: 'hp-1' }, generatedAt: '2026-06-01T00:00:00Z' };
+  it('wraps authenticated and preview evidence packages and strips raw storage locators', () => {
+    const evidencePackage = {
+      holdPoint: { id: 'hp-1' },
+      generatedAt: '2026-06-01T00:00:00Z',
+      checklist: [
+        {
+          sequenceNumber: 1,
+          attachments: [
+            {
+              id: 'att-1',
+              filename: 'release-photo.jpg',
+              fileUrl: 'supabase://documents/project-id/release-photo.jpg',
+              caption: 'release evidence',
+            },
+          ],
+        },
+      ],
+      photos: [
+        {
+          id: 'photo-1',
+          filename: 'release-photo.jpg',
+          fileUrl: 'https://storage.example.com/public/release-photo.jpg',
+          caption: 'release evidence',
+          uploadedAt: UPLOADED_AT,
+        },
+      ],
+    };
 
-    expect(buildHoldPointEvidencePackageResponse(evidencePackage)).toEqual({ evidencePackage });
+    expect(buildHoldPointEvidencePackageResponse(evidencePackage)).toEqual({
+      evidencePackage: {
+        holdPoint: { id: 'hp-1' },
+        generatedAt: '2026-06-01T00:00:00Z',
+        checklist: [
+          {
+            sequenceNumber: 1,
+            attachments: [
+              {
+                id: 'att-1',
+                filename: 'release-photo.jpg',
+                caption: 'release evidence',
+              },
+            ],
+          },
+        ],
+        photos: [
+          {
+            id: 'photo-1',
+            filename: 'release-photo.jpg',
+            caption: 'release evidence',
+            uploadedAt: UPLOADED_AT,
+          },
+        ],
+      },
+    });
+    expect(evidencePackage.checklist[0].attachments[0].fileUrl).toBe(
+      'supabase://documents/project-id/release-photo.jpg',
+    );
+    expect(evidencePackage.photos[0].fileUrl).toBe(
+      'https://storage.example.com/public/release-photo.jpg',
+    );
   });
 
   it('wraps public evidence packages with token info and the public marker', () => {

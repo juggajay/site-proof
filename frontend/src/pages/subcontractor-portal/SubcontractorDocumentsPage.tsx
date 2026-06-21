@@ -15,7 +15,7 @@ import { isPortalModuleEnabled, type PortalAccess } from './portalAccessModel';
 interface Document {
   id: string;
   filename: string;
-  fileUrl: string;
+  fileUrl?: string | null;
   category: string | null;
   description?: string;
   uploadedAt: string;

@@ -1,5 +1,4 @@
 import { getPaginationMeta } from '../../lib/pagination.js';
-import { normalizeDocumentFileUrlForResponse } from '../documentResponses.js';
 
 type DrawingStats = {
   total: number;
@@ -17,26 +16,12 @@ type CurrentDrawing = {
   status: string;
   document: {
     id: string;
-    fileUrl: string;
     filename: string;
     fileSize: number | null;
   };
 };
 
-function normalizeDrawingFileUrl(fileUrl: string, projectId: unknown): string {
-  if (typeof projectId !== 'string') {
-    return fileUrl;
-  }
-
-  const normalized = normalizeDocumentFileUrlForResponse({
-    projectId,
-    documentType: 'drawing',
-    fileUrl,
-  });
-  return typeof normalized.fileUrl === 'string' ? normalized.fileUrl : fileUrl;
-}
-
-function normalizeDrawingDocumentForResponse(drawing: unknown): unknown {
+function stripDrawingDocumentFileUrl(drawing: unknown): unknown {
   if (!drawing || typeof drawing !== 'object' || Array.isArray(drawing)) {
     return drawing;
   }
@@ -48,17 +33,16 @@ function normalizeDrawingDocumentForResponse(drawing: unknown): unknown {
   }
 
   const documentRecord = document as Record<string, unknown>;
-  if (typeof documentRecord.fileUrl !== 'string') {
-    return drawing;
-  }
+  const { fileUrl: _fileUrl, ...documentWithoutFileUrl } = documentRecord;
 
   return {
     ...record,
-    document: {
-      ...documentRecord,
-      fileUrl: normalizeDrawingFileUrl(documentRecord.fileUrl, record.projectId),
-    },
+    document: documentWithoutFileUrl,
   };
+}
+
+export function buildDrawingResponse<TDrawing>(drawing: TDrawing): TDrawing {
+  return stripDrawingDocumentFileUrl(drawing) as TDrawing;
 }
 
 export function buildDrawingListResponse(
@@ -68,7 +52,7 @@ export function buildDrawingListResponse(
   limit: number,
 ) {
   return {
-    drawings: drawings.map(normalizeDrawingDocumentForResponse),
+    drawings: drawings.map(buildDrawingResponse),
     stats,
     pagination: getPaginationMeta(stats.total, page, limit),
   };
@@ -83,7 +67,6 @@ export function buildCurrentDrawingSetResponse(drawings: CurrentDrawing[], total
       title: drawing.title,
       revision: drawing.revision,
       status: drawing.status,
-      fileUrl: normalizeDrawingFileUrl(drawing.document.fileUrl, drawing.projectId),
       filename: drawing.document.filename,
       fileSize: drawing.document.fileSize,
     })),

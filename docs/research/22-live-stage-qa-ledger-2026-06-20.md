@@ -18,6 +18,115 @@ keep going until the app has been exercised end to end.
   `1secmail.com` from an old Codex process, so future email QA must use Jay's
   nominated inbox, a trusted mailbox, or Resend's safe test recipient.
 
+## Stage 28 - Documents, Drawings, Storage Access, and Evidence Links QA
+
+Status: local fixes complete; PR/CI/merge pending.
+
+Scope:
+
+- Desktop documents and drawings browser flows, including upload/list/filter,
+  preview, signed-url open/download, current-set download, load failures, and
+  duplicate action guards.
+- Backend document/drawing storage access routes, generic document mutation
+  routes, and domain-specific drawing/NCR/ITP/hold-point evidence serializers.
+- Mobile/subcontractor document opening compatibility after raw file locators
+  are removed from API responses.
+- Storage lifecycle cleanup for ITP evidence uploads.
+
+Subagent coverage:
+
+- Backend storage/access reviewer found that drawing backing documents could be
+  read through generic document file/signed-url routes, that generic document
+  version/metadata routes could mutate drawing and test-certificate backing
+  records, and that ITP evidence upload could orphan a file/document if the
+  post-create attachment link failed.
+- Frontend documents/drawings reviewer found that `openDocumentAccessUrl`
+  awaited signed-url minting before opening a tab, so real popup blockers could
+  silently block document/drawing/subcontractor opens. It also found the
+  documents/drawings E2E tests masked that risk by stubbing `window.open`.
+- Cross-domain evidence reviewer found raw nested `document.fileUrl` locators in
+  NCR evidence, ITP completion attachments, authenticated hold-point evidence
+  packages, and drawing APIs.
+
+Confirmed issues fixed locally:
+
+- Document/drawing open now pre-opens a blank tab synchronously during the user
+  gesture, nulls `opener`, then navigates it after the signed URL is minted.
+  A headed Playwright regression covers a delayed signed-url response without
+  stubbing `window.open`.
+- Subcontractor generic document access now excludes drawing-backed documents,
+  so drawing register files cannot be reached through
+  `/api/documents/file/:id`, `/api/documents/:id/signed-url`, or document-list
+  filtering.
+- Generic document metadata/version routes now reject drawing and
+  test-certificate backing documents with domain-specific conflict messages,
+  matching the existing delete-route protection.
+- ITP evidence upload now deletes the created document row, attachment rows, and
+  stored file if the attachment link fails after document creation.
+- NCR evidence add/list/detail/workflow responses now strip nested
+  `document.fileUrl` while preserving document IDs/filenames for signed-url
+  access.
+- ITP completion attachment/create/list/pending-verification/instance responses
+  now strip nested attachment document locators.
+- Authenticated and preview hold-point evidence-package responses now strip raw
+  checklist attachment/photo locators, matching the public superintendent
+  package sanitizer.
+- Drawing list/current-set/create/update/supersede responses now omit raw
+  drawing document locators; frontend drawing/doc/subcontractor types now treat
+  legacy `fileUrl` as optional and rely on document IDs for signed access.
+
+Verification:
+
+- frontend focused unit tests passed:
+  `npm run test:unit -- src/lib/documentAccess.test.ts src/shell/screens/issues/test/IssueDetailScreen.test.tsx src/shell/screens/docs/test/docsShellState.test.ts src/shell/screens/docs/test/DocsListScreen.test.tsx src/shell/subbie/screens/test/DocsScreen.test.tsx`
+- Headed browser E2E passed:
+  `npx playwright test e2e/documents.spec.ts e2e/drawings.spec.ts --project=chromium --headed`
+- backend pure helper tests passed:
+  `npm test -- src/routes/ncrs/ncrEvidenceResponses.test.ts src/routes/ncrs/ncrCoreResponses.test.ts src/routes/ncrs/ncrWorkflowResponses.test.ts src/routes/holdpoints/evidencePackage.test.ts src/routes/itp/completionResponses.test.ts src/routes/drawings/responses.test.ts`
+- backend `type-check` passed.
+- frontend `type-check` passed.
+- backend `lint` passed.
+- frontend `lint` passed with the existing unrelated
+  `src/lib/theme.tsx` fast-refresh warning.
+- backend `format:check` passed.
+- frontend `format:check` passed.
+- `git diff --check` passed.
+- `fallow audit --base origin/master --format json --quiet` returned `warn`:
+  no introduced dead code and no introduced complexity; introduced duplication
+  was limited to explicit domain guards and regression-test fixture/setup
+  repetition.
+
+Not live-exercised in this stage:
+
+- DB-backed backend route tests `documents.test.ts` and `drawings.test.ts` could
+  not be run locally because this worktree had no disposable local test
+  database. Loading the main checkout `.env` correctly hit the safety guard and
+  refused to run against the Railway database. These route regressions must run
+  in CI against its disposable database.
+- A real production subcontractor drawing-denial browser run was not performed;
+  production mutation was intentionally avoided in this storage/access pass.
+
+Remaining findings for a later pass:
+
+- `Download Current Set` still loops per drawing and relies on multiple
+  signed-url downloads. A backend ZIP endpoint would give a cleaner,
+  browser-reliable current-set download and better success/failure reporting.
+- Add mobile viewport E2E for documents/drawings after the storage-access PR
+  lands, especially document rows, drawing stats, and viewer/header controls.
+- Add browser coverage for classic subcontractor documents and subbie-shell
+  `/p/docs` opening a signed document without `fileUrl`.
+- Decide whether drawing lifecycle actions need fuller audit-log coverage
+  beyond existing delete/storage cleanup behaviour.
+- Signed-url `disposition` is still query-string controlled rather than
+  token-bound. Current impact is low, but a future hardening pass could bind
+  disposition into the token policy.
+
+Artifacts:
+
+- No bearer tokens, session cookies, generated passwords, production secrets,
+  storage credentials, or browser-session data were committed or copied into
+  this ledger.
+
 ## Stage 1 - Production Integration Gates
 
 Status: partial pass, one external blocker remains.

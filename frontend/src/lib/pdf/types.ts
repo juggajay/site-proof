@@ -204,7 +204,7 @@ export interface HPEvidencePackageData {
     attachments: {
       id: string;
       filename: string;
-      fileUrl: string | null;
+      fileUrl?: string | null;
       caption: string | null;
     }[];
   }[];
@@ -224,7 +224,7 @@ export interface HPEvidencePackageData {
   photos: {
     id: string;
     filename: string;
-    fileUrl: string | null;
+    fileUrl?: string | null;
     caption: string | null;
     uploadedAt: string | null;
   }[];

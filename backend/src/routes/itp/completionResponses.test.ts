@@ -37,6 +37,37 @@ describe('completionResponses', () => {
     expect(buildItpCompletionResponse(completion)).toEqual({ completion });
   });
 
+  it('strips raw attachment document file URLs from completion envelopes', () => {
+    const completion = {
+      id: 'completion-1',
+      attachments: [
+        {
+          id: 'attachment-1',
+          document: {
+            id: 'document-1',
+            filename: 'photo.jpg',
+            fileUrl: 'supabase://documents/project/photo.jpg',
+          },
+        },
+      ],
+    };
+
+    expect(buildItpCompletionResponse(completion)).toEqual({
+      completion: {
+        id: 'completion-1',
+        attachments: [
+          {
+            id: 'attachment-1',
+            document: { id: 'document-1', filename: 'photo.jpg' },
+          },
+        ],
+      },
+    });
+    expect(completion.attachments[0].document.fileUrl).toBe(
+      'supabase://documents/project/photo.jpg',
+    );
+  });
+
   it('builds the completion status response with derived completion flags', () => {
     const completion = { id: 'completion-1', status: 'not_applicable' };
 
@@ -50,31 +81,70 @@ describe('completionResponses', () => {
   });
 
   it('builds the pending verification response with derived count', () => {
-    const pendingVerifications = [{ id: 'completion-1' }, { id: 'completion-2' }];
+    const pendingVerifications = [
+      {
+        id: 'completion-1',
+        attachments: [
+          {
+            id: 'attachment-1',
+            document: {
+              id: 'document-1',
+              filename: 'pending.jpg',
+              fileUrl: 'https://storage.example.com/public/pending.jpg',
+            },
+          },
+        ],
+      },
+      { id: 'completion-2' },
+    ];
 
     expect(buildPendingItpVerificationsResponse(pendingVerifications)).toEqual({
-      pendingVerifications,
+      pendingVerifications: [
+        {
+          id: 'completion-1',
+          attachments: [
+            {
+              id: 'attachment-1',
+              document: { id: 'document-1', filename: 'pending.jpg' },
+            },
+          ],
+        },
+        { id: 'completion-2' },
+      ],
       count: 2,
     });
   });
 
   it('maps a single completion attachment response', () => {
-    const document = { id: 'document-1', filename: 'photo.jpg' };
+    const document = {
+      id: 'document-1',
+      filename: 'photo.jpg',
+      fileUrl: 'supabase://documents/project/photo.jpg',
+    };
     const attachment = { id: 'attachment-1', documentId: 'document-1', document };
 
     expect(buildItpCompletionAttachmentResponse(attachment)).toEqual({
       attachment: {
         id: 'attachment-1',
         documentId: 'document-1',
-        document,
+        document: { id: 'document-1', filename: 'photo.jpg' },
       },
     });
+    expect(document.fileUrl).toBe('supabase://documents/project/photo.jpg');
   });
 
   it('maps the completion attachment list response', () => {
     const attachments = [
-      { id: 'attachment-1', documentId: 'document-1', document: { id: 'document-1' } },
-      { id: 'attachment-2', documentId: 'document-2', document: { id: 'document-2' } },
+      {
+        id: 'attachment-1',
+        documentId: 'document-1',
+        document: { id: 'document-1', fileUrl: 'supabase://documents/project/one.jpg' },
+      },
+      {
+        id: 'attachment-2',
+        documentId: 'document-2',
+        document: { id: 'document-2', fileUrl: 'supabase://documents/project/two.jpg' },
+      },
     ];
 
     expect(buildItpCompletionAttachmentsResponse(attachments)).toEqual({

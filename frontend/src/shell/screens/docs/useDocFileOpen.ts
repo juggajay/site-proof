@@ -1,10 +1,9 @@
 /**
  * useDocFileOpen — open a drawing FILE full-screen, reusing the EXISTING idiom.
  *
- * Viewer decision (PR-7 rule 1): there is no DocumentViewerModal in the codebase;
- * the strongest existing path for opening a drawing file is the signed-URL idiom
- * the desktop Drawing Register already uses — `openDocumentAccessUrl(documentId,
- * fileUrl)` (lib/documentAccess). It mints a short-lived signed URL via
+ * The strongest existing path for opening a drawing file is the signed-URL idiom
+ * the desktop Drawing Register already uses — `openDocumentAccessUrl(documentId)`.
+ * It mints a short-lived signed URL via
  * POST /api/documents/:id/signed-url and opens it in a new tab, where the phone's
  * native PDF/image viewer gives full-screen view + pinch-zoom/pan for free. We
  * reuse it verbatim — fastest path to "current revision, open it" (research 13),
@@ -23,13 +22,13 @@ export interface DocFileOpener {
   /** True while a signed URL is being minted for an open request. */
   opening: boolean;
   /** Open the drawing file full-screen via the existing signed-URL idiom. */
-  openDoc: (documentId: string, fileUrl: string) => Promise<void>;
+  openDoc: (documentId: string, fileUrl?: string | null) => Promise<void>;
 }
 
 export function useDocFileOpen(): DocFileOpener {
   const [opening, setOpening] = useState(false);
 
-  const openDoc = useCallback(async (documentId: string, fileUrl: string) => {
+  const openDoc = useCallback(async (documentId: string, fileUrl?: string | null) => {
     setOpening(true);
     try {
       await openDocumentAccessUrl(documentId, fileUrl);

@@ -257,7 +257,7 @@ export function createDocumentUploadRouter({
 
       let fileUrl: string | null = null;
       let photoMetadata: PhotoMetadata = {};
-      let documentCreated = false;
+      let createdDocumentId: string | null = null;
 
       try {
         // Upload to Supabase Storage if configured, otherwise use local filesystem
@@ -306,7 +306,7 @@ export function createDocumentUploadRouter({
           },
         });
 
-        documentCreated = true;
+        createdDocumentId = document.id;
 
         // Attach ITP evidence to its completion — the same association row the
         // direct attach endpoint creates, so a queued-and-synced photo ends up
@@ -319,9 +319,13 @@ export function createDocumentUploadRouter({
 
         res.status(201).json(buildDocumentResponse(document));
       } catch (error) {
-        if (!documentCreated) {
-          await cleanupStoredDocumentUpload(fileUrl, uploadedFile, projectId);
+        if (createdDocumentId) {
+          await prisma.iTPCompletionAttachment.deleteMany({
+            where: { documentId: createdDocumentId },
+          });
+          await prisma.document.deleteMany({ where: { id: createdDocumentId } });
         }
+        await cleanupStoredDocumentUpload(fileUrl, uploadedFile, projectId);
         throw error;
       }
     }),

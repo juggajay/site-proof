@@ -112,6 +112,23 @@ export async function openDocumentAccessUrl(
   documentId: string,
   fileUrl?: string | null,
 ): Promise<void> {
-  const url = await getDocumentAccessUrl(documentId, fileUrl, { disposition: 'attachment' });
-  window.open(url, '_blank', 'noopener,noreferrer');
+  const openedWindow = window.open('about:blank', '_blank');
+  if (openedWindow) {
+    openedWindow.opener = null;
+  }
+
+  try {
+    const url = await getDocumentAccessUrl(documentId, fileUrl, { disposition: 'attachment' });
+    if (openedWindow && !openedWindow.closed) {
+      openedWindow.location.href = url;
+      return;
+    }
+
+    window.open(url, '_blank', 'noopener,noreferrer');
+  } catch (error) {
+    if (openedWindow && !openedWindow.closed) {
+      openedWindow.close();
+    }
+    throw error;
+  }
 }

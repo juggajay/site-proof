@@ -1,16 +1,32 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-import { buildCurrentDrawingSetResponse, buildDrawingListResponse } from './responses.js';
+import {
+  buildCurrentDrawingSetResponse,
+  buildDrawingListResponse,
+  buildDrawingResponse,
+} from './responses.js';
 
 describe('drawing response helpers', () => {
-  const originalSupabaseUrl = process.env.SUPABASE_URL;
+  it('strips raw document file URLs from a single drawing response without mutating input', () => {
+    const drawing = {
+      id: 'drawing-1',
+      projectId: 'project-1',
+      document: {
+        id: 'document-1',
+        filename: 'site-plan.pdf',
+        fileUrl: 'supabase://documents/drawings/project-1/site-plan.pdf',
+      },
+    };
 
-  afterEach(() => {
-    if (originalSupabaseUrl === undefined) {
-      delete process.env.SUPABASE_URL;
-    } else {
-      process.env.SUPABASE_URL = originalSupabaseUrl;
-    }
+    expect(buildDrawingResponse(drawing)).toEqual({
+      id: 'drawing-1',
+      projectId: 'project-1',
+      document: {
+        id: 'document-1',
+        filename: 'site-plan.pdf',
+      },
+    });
+    expect(drawing.document.fileUrl).toBe('supabase://documents/drawings/project-1/site-plan.pdf');
   });
 
   it('preserves drawing list stats and pagination envelope', () => {
@@ -31,37 +47,35 @@ describe('drawing response helpers', () => {
     });
   });
 
-  it('normalizes legacy Supabase public URLs in drawing list documents', () => {
-    process.env.SUPABASE_URL = 'https://siteproof-test.supabase.co';
+  it('strips raw document file URLs from drawing list documents', () => {
     const stats = { total: 1, preliminary: 0, forConstruction: 1, asBuilt: 0 };
+    const drawings = [
+      {
+        id: 'drawing-1',
+        projectId: 'project-1',
+        document: {
+          id: 'document-1',
+          fileUrl:
+            'https://siteproof-test.supabase.co/storage/v1/object/public/documents/drawings/project-1/site plan.pdf',
+          filename: 'site plan.pdf',
+        },
+      },
+    ];
 
-    expect(
-      buildDrawingListResponse(
-        [
-          {
-            id: 'drawing-1',
-            projectId: 'project-1',
-            document: {
-              id: 'document-1',
-              fileUrl:
-                'https://siteproof-test.supabase.co/storage/v1/object/public/documents/drawings/project-1/site plan.pdf',
-              filename: 'site plan.pdf',
-            },
-          },
-        ],
-        stats,
-        1,
-        25,
-      ),
-    ).toMatchObject({
+    expect(buildDrawingListResponse(drawings, stats, 1, 25)).toMatchObject({
       drawings: [
         {
           document: {
-            fileUrl: 'supabase://documents/drawings/project-1/site%20plan.pdf',
+            id: 'document-1',
+            filename: 'site plan.pdf',
           },
         },
       ],
     });
+    expect(buildDrawingListResponse(drawings, stats, 1, 25).drawings[0]).not.toMatchObject({
+      document: { fileUrl: expect.anything() },
+    });
+    expect(drawings[0].document.fileUrl).toContain('/storage/v1/object/public/');
   });
 
   it('preserves current drawing set download metadata and total size', () => {
@@ -77,7 +91,6 @@ describe('drawing response helpers', () => {
             status: 'for_construction',
             document: {
               id: 'document-1',
-              fileUrl: '/uploads/drawings/c-001.pdf',
               filename: 'c-001.pdf',
               fileSize: 120,
             },
@@ -91,7 +104,6 @@ describe('drawing response helpers', () => {
             status: 'preliminary',
             document: {
               id: 'document-2',
-              fileUrl: '/uploads/drawings/c-002.pdf',
               filename: 'c-002.pdf',
               fileSize: null,
             },
@@ -108,7 +120,6 @@ describe('drawing response helpers', () => {
           title: 'Drainage plan',
           revision: 'A',
           status: 'for_construction',
-          fileUrl: '/uploads/drawings/c-001.pdf',
           filename: 'c-001.pdf',
           fileSize: 120,
         },
@@ -119,7 +130,6 @@ describe('drawing response helpers', () => {
           title: null,
           revision: null,
           status: 'preliminary',
-          fileUrl: '/uploads/drawings/c-002.pdf',
           filename: 'c-002.pdf',
           fileSize: null,
         },
@@ -129,38 +139,36 @@ describe('drawing response helpers', () => {
     });
   });
 
-  it('normalizes legacy Supabase public URLs in current drawing set responses', () => {
-    process.env.SUPABASE_URL = 'https://siteproof-test.supabase.co';
+  it('strips raw file URLs from current drawing set responses', () => {
+    const fileUrl =
+      'https://siteproof-test.supabase.co/storage/v1/object/public/documents/drawings/project-1/c-001.pdf';
+    const drawings = [
+      {
+        id: 'drawing-1',
+        projectId: 'project-1',
+        drawingNumber: 'C-001',
+        title: 'Drainage plan',
+        revision: 'A',
+        status: 'for_construction',
+        document: {
+          id: 'document-1',
+          fileUrl,
+          filename: 'c-001.pdf',
+          fileSize: 120,
+        },
+      },
+    ] as unknown as Parameters<typeof buildCurrentDrawingSetResponse>[0];
 
-    expect(
-      buildCurrentDrawingSetResponse(
-        [
-          {
-            id: 'drawing-1',
-            projectId: 'project-1',
-            drawingNumber: 'C-001',
-            title: 'Drainage plan',
-            revision: 'A',
-            status: 'for_construction',
-            document: {
-              id: 'document-1',
-              fileUrl:
-                'https://siteproof-test.supabase.co/storage/v1/object/public/documents/drawings/project-1/c-001.pdf',
-              filename: 'c-001.pdf',
-              fileSize: 120,
-            },
-          },
-        ],
-        1,
-      ),
-    ).toMatchObject({
+    expect(buildCurrentDrawingSetResponse(drawings, 1)).toMatchObject({
       drawings: [
         {
           documentId: 'document-1',
-          fileUrl: 'supabase://documents/drawings/project-1/c-001.pdf',
+          filename: 'c-001.pdf',
         },
       ],
       totalSize: 120,
     });
+    expect(buildCurrentDrawingSetResponse(drawings, 1).drawings[0]).not.toHaveProperty('fileUrl');
+    expect(fileUrl).toContain('/storage/v1/object/public/');
   });
 });

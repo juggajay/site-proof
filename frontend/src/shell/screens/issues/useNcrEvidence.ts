@@ -3,7 +3,7 @@
  *
  * READ: GET /api/ncrs/:id/evidence — the same endpoint the desktop evidence view
  * uses; returns { evidence, grouped, count } where each item carries its linked
- * document ({ id, filename, fileUrl, … }). We render the `photos` group as the
+ * document ({ id, filename, … }). We render the `photos` group as the
  * detail screen's photo strip.
  *
  * ADD: the existing two-step pipeline, VERBATIM from RectifyNCRModal —
@@ -27,7 +27,7 @@ import { queryKeys } from '@/lib/queryKeys';
 export interface NcrEvidenceDocument {
   id: string;
   filename: string;
-  fileUrl: string;
+  fileUrl?: string | null;
   mimeType?: string | null;
   caption?: string | null;
 }
