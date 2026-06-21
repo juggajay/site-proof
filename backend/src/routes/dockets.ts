@@ -6,7 +6,7 @@ import { parsePagination, getPaginationMeta, getPrismaSkipTake } from '../lib/pa
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
 import { createAuditLog, AuditAction } from '../lib/auditLog.js';
-import { activeSubcontractorCompanyWhere } from '../lib/projectAccess.js';
+import { activeSubcontractorCompanyWhere, assertProjectAllowsWrite } from '../lib/projectAccess.js';
 import {
   isDocketEntryEditable,
   isSubcontractorUser,
@@ -155,6 +155,8 @@ docketsRouter.post(
     if (!subcontractorUser) {
       throw AppError.forbidden('Only subcontractors can create dockets');
     }
+
+    await assertProjectAllowsWrite(projectId);
 
     const docketDate = parseDocketDate(date);
     const docket = await prisma.$transaction(async (tx) => {

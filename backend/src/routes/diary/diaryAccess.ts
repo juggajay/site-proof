@@ -2,7 +2,10 @@ import type { Request } from 'express';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../lib/AppError.js';
-import { getEffectiveProjectRole, isSubcontractorPortalRole } from '../../lib/projectAccess.js';
+import {
+  requireEffectiveProjectRole,
+  requireInternalProjectAccess,
+} from '../../lib/projectAccess.js';
 
 type AuthUser = NonNullable<Request['user']>;
 type DiaryMutationClient = typeof prisma | Prisma.TransactionClient;
@@ -31,17 +34,7 @@ export async function requireDiaryReadAccess(
   projectId: string,
   message = 'Access denied to this project',
 ) {
-  if (isSubcontractorPortalRole(user.roleInCompany)) {
-    throw AppError.forbidden(message);
-  }
-
-  const role = await getEffectiveProjectRole(user, projectId, {
-    excludeSubcontractorProjectMemberships: true,
-    throwIfProjectMissing: true,
-  });
-  if (!role || isSubcontractorPortalRole(role)) {
-    throw AppError.forbidden(message);
-  }
+  await requireInternalProjectAccess(user, projectId, message);
 }
 
 export async function requireDiaryWriteAccess(
@@ -50,14 +43,11 @@ export async function requireDiaryWriteAccess(
   message = 'You do not have permission to modify diaries for this project',
   client: DiaryMutationClient = prisma,
 ) {
-  const role = await getEffectiveProjectRole(user, projectId, {
+  await requireEffectiveProjectRole(user, projectId, DIARY_WRITE_ROLES, message, {
     client,
     excludeSubcontractorProjectMemberships: true,
-    throwIfProjectMissing: true,
+    requireWritable: true,
   });
-  if (!role || !DIARY_WRITE_ROLES.has(role)) {
-    throw AppError.forbidden(message);
-  }
 }
 
 export async function requireDraftDiaryWriteAccess(

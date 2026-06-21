@@ -189,6 +189,37 @@ describe('Dockets API', () => {
       docketId = res.body.docket.id;
     });
 
+    it('should reject docket creation when the project is archived', async () => {
+      const initialDocketCount = await prisma.dailyDocket.count({ where: { projectId } });
+
+      await prisma.project.update({
+        where: { id: projectId },
+        data: { status: 'archived' },
+      });
+
+      try {
+        const res = await request(app)
+          .post('/api/dockets')
+          .set('Authorization', `Bearer ${subcontractorToken}`)
+          .send({
+            projectId,
+            date: '2031-06-21',
+            notes: 'Should not be created on archived project',
+          });
+
+        expect(res.status).toBe(409);
+        expect(res.body.error.message).toContain('Archived projects are read-only');
+        await expect(prisma.dailyDocket.count({ where: { projectId } })).resolves.toBe(
+          initialDocketCount,
+        );
+      } finally {
+        await prisma.project.update({
+          where: { id: projectId },
+          data: { status: 'active' },
+        });
+      }
+    });
+
     it('returns legacy create-hour fields separately from submitted totals', async () => {
       const date = '2031-05-21';
       let createdDocketId: string | undefined;

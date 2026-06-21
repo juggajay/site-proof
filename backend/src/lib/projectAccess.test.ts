@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { prisma } from './prisma.js';
 import {
+  assertProjectStatusAllowsWrite,
+  ARCHIVED_PROJECT_READ_ONLY_MESSAGE,
   checkProjectAccess,
   getEffectiveProjectRole,
   hasPortalModuleEnabled,
@@ -10,6 +12,15 @@ import {
 } from './projectAccess.js';
 
 describe('checkProjectAccess', () => {
+  it('rejects write attempts against archived projects', () => {
+    expect(() => assertProjectStatusAllowsWrite({ status: 'active' })).not.toThrow();
+    expect(() => assertProjectStatusAllowsWrite({ status: 'on_hold' })).not.toThrow();
+
+    expect(() => assertProjectStatusAllowsWrite({ status: 'archived' })).toThrow(
+      ARCHIVED_PROJECT_READ_ONLY_MESSAGE,
+    );
+  });
+
   it('resolves company admin and active project membership roles', async () => {
     const suffix = Date.now();
     const company = await prisma.company.create({

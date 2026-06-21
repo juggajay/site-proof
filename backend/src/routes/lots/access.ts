@@ -6,6 +6,7 @@ import {
   activeSubcontractorCompanyWhere,
   getEffectiveProjectRole,
   isSubcontractorPortalRole,
+  requireProjectRoleExcludingSubcontractors as requireProjectRole,
   requireSubcontractorPortalModuleAccess,
   type SubcontractorPortalAccessKey,
 } from '../../lib/projectAccess.js';
@@ -35,24 +36,6 @@ async function requireSubcontractorLotPortalModules(
       module,
     });
   }
-}
-
-async function requireProjectRole(
-  projectId: string,
-  user: AuthenticatedUser,
-  allowedRoles: string[],
-  message: string,
-): Promise<string> {
-  const role = await getEffectiveProjectRole(user, projectId, {
-    excludeSubcontractorProjectMemberships: true,
-    throwIfProjectMissing: true,
-  });
-
-  if (!role || !allowedRoles.includes(role)) {
-    throw AppError.forbidden(message);
-  }
-
-  return role;
 }
 
 async function getProjectSubcontractorCompanyId(

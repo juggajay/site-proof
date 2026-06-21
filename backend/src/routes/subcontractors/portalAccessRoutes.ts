@@ -20,6 +20,7 @@ export interface SubcontractorPortalAccessRouterDependencies {
     projectId: string,
     user: AuthenticatedUser,
     manage?: boolean,
+    options?: { requireWritable?: boolean },
   ): Promise<unknown>;
 }
 
@@ -79,7 +80,9 @@ export function createSubcontractorPortalAccessRouter({
         throw AppError.notFound('Subcontractor company');
       }
 
-      await requireSubcontractorProjectAccess(subcontractor.projectId, user, true);
+      await requireSubcontractorProjectAccess(subcontractor.projectId, user, true, {
+        requireWritable: true,
+      });
 
       // Merge with defaults to ensure all keys exist
       const mergedAccess = {

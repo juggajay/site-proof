@@ -4,6 +4,7 @@ import { AppError } from '../../lib/AppError.js';
 import { prisma } from '../../lib/prisma.js';
 import {
   activeSubcontractorCompanyWhere,
+  assertProjectAllowsWrite,
   checkProjectAccess,
   hasSubcontractorPortalModuleAccess,
   requireSubcontractorPortalModuleAccess,
@@ -295,6 +296,8 @@ async function requireProjectWriteAccess(user: AuthUser, projectId: string): Pro
   if (!effectiveRole || !DOCUMENT_WRITE_ROLES.includes(effectiveRole)) {
     throw AppError.forbidden('Document write access required');
   }
+
+  await assertProjectAllowsWrite(projectId);
 }
 
 async function requireLotInProject(projectId: string, lotId?: string | null): Promise<void> {

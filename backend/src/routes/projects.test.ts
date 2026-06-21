@@ -7,6 +7,7 @@ import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { AuditAction, parseAuditLogChanges } from '../lib/auditLog.js';
 import { registerTestUser, TEST_USER_PASSWORD } from '../test/routeTestHarness.js';
+import { ARCHIVED_PROJECT_READ_ONLY_MESSAGE } from '../lib/projectAccess.js';
 
 const app = express();
 app.use(express.json());
@@ -1381,6 +1382,36 @@ describe('Projects API', () => {
         });
 
       expect(res.status).toBe(400);
+    });
+
+    it('should reject archived project settings edits but allow status-only reactivation', async () => {
+      await prisma.project.update({
+        where: { id: projectId },
+        data: { status: 'archived' },
+      });
+
+      try {
+        const editRes = await request(app)
+          .patch(`/api/projects/${projectId}`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ name: 'Archived Project Edit' });
+
+        expect(editRes.status).toBe(409);
+        expect(editRes.body.error.message).toBe(ARCHIVED_PROJECT_READ_ONLY_MESSAGE);
+
+        const reactivateRes = await request(app)
+          .patch(`/api/projects/${projectId}`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ status: 'active' });
+
+        expect(reactivateRes.status).toBe(200);
+        expect(reactivateRes.body.project.status).toBe('active');
+      } finally {
+        await prisma.project.update({
+          where: { id: projectId },
+          data: { status: 'active' },
+        });
+      }
     });
 
     it('should validate chainage range', async () => {

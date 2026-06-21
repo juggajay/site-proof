@@ -96,6 +96,7 @@ lotCreateRouter.post(
       user,
       LOT_CREATORS,
       'You do not have permission to create lots in this project.',
+      { requireWritable: true },
     );
     const canSetBudgetAmount = LOT_BUDGET_EDITORS.includes(userProjectRole);
 
@@ -216,6 +217,7 @@ lotCreateRouter.post(
       user,
       LOT_CREATORS,
       'You do not have permission to create lots in this project.',
+      { requireWritable: true },
     );
 
     // Create all lots in a transaction
@@ -312,6 +314,7 @@ lotCreateRouter.post(
       user,
       LOT_CREATORS,
       'You do not have permission to create lots in this project.',
+      { requireWritable: true },
     );
 
     // Compute the cloned lot number + final chainage (suggestion, increment,

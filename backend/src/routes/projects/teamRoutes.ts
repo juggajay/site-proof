@@ -6,6 +6,7 @@ import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
 import { sendNotificationIfEnabled } from '../notifications.js';
+import { assertProjectAllowsWrite } from '../../lib/projectAccess.js';
 import {
   buildProjectUserInvitedResponse,
   buildProjectUserRemovedResponse,
@@ -101,6 +102,7 @@ export function createProjectTeamRouter({
       if (!access.isProjectAdmin) {
         throw AppError.forbidden('Only admins can invite users');
       }
+      await assertProjectAllowsWrite(projectId);
 
       // Project team assignment links an existing company member to a project;
       // it does not create a new company seat.
@@ -216,6 +218,7 @@ export function createProjectTeamRouter({
       if (!access.isProjectAdmin) {
         throw AppError.forbidden('Only admins can change user roles');
       }
+      await assertProjectAllowsWrite(projectId);
 
       if (targetUserId === currentUser.id) {
         throw AppError.badRequest('You cannot change your own project role');
@@ -332,6 +335,7 @@ export function createProjectTeamRouter({
       if (!access.isProjectAdmin) {
         throw AppError.forbidden('Only admins can remove users');
       }
+      await assertProjectAllowsWrite(projectId);
 
       // Can't remove yourself
       if (targetUserId === currentUser.id) {

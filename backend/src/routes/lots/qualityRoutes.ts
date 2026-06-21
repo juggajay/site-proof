@@ -219,6 +219,7 @@ lotQualityRouter.post(
       user,
       LOT_CONFORMERS,
       'You do not have permission to conform lots. Required roles: Quality Manager, Project Manager, Admin, or Owner.',
+      { requireWritable: true },
     );
 
     if (force && !LOT_FORCE_CONFORMERS.includes(role)) {
@@ -314,6 +315,7 @@ lotQualityRouter.post(
       user,
       STATUS_OVERRIDERS,
       'You do not have permission to override lot status. Required roles: Quality Manager, Project Manager, Admin, or Owner.',
+      { requireWritable: true },
     );
 
     const previousStatus = lot.status;

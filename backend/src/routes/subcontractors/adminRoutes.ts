@@ -18,6 +18,7 @@ export interface SubcontractorAdminRouterDependencies {
     projectId: string,
     user: AuthenticatedUser,
     manage?: boolean,
+    options?: { requireWritable?: boolean },
   ): Promise<unknown>;
 }
 
@@ -54,7 +55,9 @@ export function createSubcontractorAdminRouter({
         throw AppError.notFound('Subcontractor company');
       }
 
-      await requireSubcontractorProjectAccess(subcontractor.projectId, user, true);
+      await requireSubcontractorProjectAccess(subcontractor.projectId, user, true, {
+        requireWritable: true,
+      });
 
       // Update the status
       const updatedSubcontractor = await prisma.subcontractorCompany.update({
@@ -117,7 +120,9 @@ export function createSubcontractorAdminRouter({
         throw AppError.notFound('Subcontractor company');
       }
 
-      await requireSubcontractorProjectAccess(subcontractor.projectId, user, true);
+      await requireSubcontractorProjectAccess(subcontractor.projectId, user, true, {
+        requireWritable: true,
+      });
 
       if (subcontractor.status !== 'removed') {
         throw AppError.conflict(

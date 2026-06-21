@@ -63,6 +63,7 @@ lotBulkMutationRouter.post(
         user,
         LOT_CREATORS,
         'You do not have permission to update lots',
+        { requireWritable: true },
       );
     }
 
@@ -120,6 +121,7 @@ lotBulkMutationRouter.post(
         user,
         ['owner', 'admin', 'project_manager', 'site_manager'],
         'You do not have permission to assign lots',
+        { requireWritable: true },
       );
     }
 
@@ -207,6 +209,7 @@ lotBulkMutationRouter.post(
       user,
       ['owner', 'admin', 'project_manager', 'site_manager'],
       'You do not have permission to assign lots',
+      { requireWritable: true },
     );
 
     if (subcontractorId) {

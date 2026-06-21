@@ -38,7 +38,11 @@ type AuthUser = NonNullable<Express.Request['user']>;
 
 type ScheduledReportRouterDependencies = {
   parseRequiredString: (value: unknown, fieldName: string, maxLength?: number) => string;
-  requireScheduledReportAccess: (user: AuthUser | undefined, projectId: string) => Promise<void>;
+  requireScheduledReportAccess: (
+    user: AuthUser | undefined,
+    projectId: string,
+    options?: { requireWritable?: boolean },
+  ) => Promise<void>;
 };
 
 function parseScheduleRouteId(
@@ -202,7 +206,7 @@ export function createScheduledReportRouter({
     asyncHandler(async (req, res) => {
       const projectId = parseRequiredString(req.query.projectId, 'projectId');
 
-      await requireScheduledReportAccess(req.user, projectId);
+      await requireScheduledReportAccess(req.user, projectId, { requireWritable: true });
 
       const schedules = await prisma.scheduledReport.findMany({
         where: { projectId },
@@ -286,7 +290,7 @@ export function createScheduledReportRouter({
       if (!existing) {
         throw AppError.notFound('Scheduled report');
       }
-      await requireScheduledReportAccess(req.user, existing.projectId);
+      await requireScheduledReportAccess(req.user, existing.projectId, { requireWritable: true });
 
       const updateData: Prisma.ScheduledReportUpdateInput = {};
 
@@ -354,7 +358,7 @@ export function createScheduledReportRouter({
       if (!existing) {
         throw AppError.notFound('Scheduled report');
       }
-      await requireScheduledReportAccess(req.user, existing.projectId);
+      await requireScheduledReportAccess(req.user, existing.projectId, { requireWritable: true });
 
       await prisma.scheduledReport.delete({
         where: { id },

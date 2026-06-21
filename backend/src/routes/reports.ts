@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
 import { AppError } from '../lib/AppError.js';
-import { getEffectiveProjectRole } from '../lib/projectAccess.js';
+import { assertProjectAllowsWrite, getEffectiveProjectRole } from '../lib/projectAccess.js';
 import { createClaimReportRouter } from './reports/claimRoutes.js';
 import { createDiaryReportRouter } from './reports/diaryRoutes.js';
 import { createLotStatusReportRouter } from './reports/lotStatusRoutes.js';
@@ -68,6 +68,7 @@ async function requireClaimsReportAccess(
 async function requireScheduledReportAccess(
   user: AuthUser | undefined,
   projectId: string,
+  options: { requireWritable?: boolean } = {},
 ): Promise<void> {
   const effectiveRole = await requireReportProjectAccess(user, projectId);
 
@@ -87,6 +88,10 @@ async function requireScheduledReportAccess(
 
   if (!SCHEDULED_REPORT_TIERS.has(tier)) {
     throw AppError.forbidden('Scheduled reports require a Professional or Enterprise subscription');
+  }
+
+  if (options.requireWritable) {
+    await assertProjectAllowsWrite(projectId);
   }
 }
 

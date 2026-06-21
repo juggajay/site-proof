@@ -6,6 +6,7 @@ import { AuditAction, createAuditLog } from '../../lib/auditLog.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { sendEmail } from '../../lib/email.js';
+import { assertProjectAllowsWrite } from '../../lib/projectAccess.js';
 import { prisma } from '../../lib/prisma.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
 import {
@@ -129,6 +130,7 @@ ncrClosureWorkflowRouter.post(
       'Only a Quality Manager or company owner can approve major NCR closures',
       NCR_QM_APPROVAL_ROLES,
     );
+    await assertProjectAllowsWrite(ncr.projectId);
 
     if (!ncr.qmApprovalRequired) {
       throw AppError.badRequest('This NCR does not require QM approval');
@@ -214,6 +216,7 @@ ncrClosureWorkflowRouter.post(
       'Only Quality Managers, Project Managers, or Admins can close NCRs',
       NCR_QUALITY_MANAGEMENT_ROLES,
     );
+    await assertProjectAllowsWrite(ncr.projectId);
 
     // Closing is the final verification decision; rectification must be submitted first.
     if (ncr.status !== 'verification') {
@@ -368,6 +371,7 @@ ncrClosureWorkflowRouter.post(
       'Only Project Managers, Quality Managers, or Admins can notify client',
       ['quality_manager', 'admin', 'project_manager', 'owner'],
     );
+    await assertProjectAllowsWrite(ncr.projectId);
 
     // Get user details for notification
     const notifiedByUser = await prisma.user.findUnique({
@@ -488,6 +492,7 @@ ncrClosureWorkflowRouter.post(
       'admin',
       'project_manager',
     ]);
+    await assertProjectAllowsWrite(ncr.projectId);
 
     const reopenUpdate = await prisma.nCR.updateMany({
       where: { id, status: { in: ['closed', 'closed_concession'] } },

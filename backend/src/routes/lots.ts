@@ -67,6 +67,7 @@ lotsRouter.patch(
       user,
       LOT_EDITORS,
       'You do not have permission to edit lots',
+      { requireWritable: true },
     );
 
     // Feature #871: Concurrent edit detection (optimistic locking)

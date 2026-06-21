@@ -90,6 +90,33 @@ type EffectiveProjectRoleUser = {
 };
 
 type EffectiveProjectRoleClient = Pick<typeof prisma, 'project' | 'projectUser'>;
+type ProjectStatusWriteClient = Pick<typeof prisma, 'project'>;
+type ProjectRoleCollection = ReadonlySet<string> | readonly string[];
+
+export const ARCHIVED_PROJECT_READ_ONLY_MESSAGE =
+  'Archived projects are read-only. Reactivate the project before making changes.';
+
+export function assertProjectStatusAllowsWrite(project: { status?: string | null }): void {
+  if (project.status === 'archived') {
+    throw AppError.conflict(ARCHIVED_PROJECT_READ_ONLY_MESSAGE);
+  }
+}
+
+export async function assertProjectAllowsWrite(
+  projectId: string,
+  client: ProjectStatusWriteClient = prisma,
+): Promise<void> {
+  const project = await client.project.findUnique({
+    where: { id: projectId },
+    select: { status: true },
+  });
+
+  if (!project) {
+    throw AppError.notFound('Project');
+  }
+
+  assertProjectStatusAllowsWrite(project);
+}
 
 export async function getEffectiveProjectRole(
   user: EffectiveProjectRoleUser,
@@ -140,6 +167,80 @@ export async function getEffectiveProjectRole(
   }
 
   return projectUser?.role ?? null;
+}
+
+function isProjectRoleArray(roles: ProjectRoleCollection): roles is readonly string[] {
+  return Array.isArray(roles);
+}
+
+function projectRoleCollectionIncludes(roles: ProjectRoleCollection, role: string): boolean {
+  return isProjectRoleArray(roles) ? roles.includes(role) : roles.has(role);
+}
+
+export async function requireEffectiveProjectRole(
+  user: EffectiveProjectRoleUser,
+  projectId: string,
+  allowedRoles: ProjectRoleCollection,
+  message: string,
+  {
+    client = prisma,
+    excludeSubcontractorProjectMemberships = false,
+    requireWritable = false,
+  }: {
+    client?: EffectiveProjectRoleClient;
+    excludeSubcontractorProjectMemberships?: boolean;
+    requireWritable?: boolean;
+  } = {},
+): Promise<string> {
+  const role = await getEffectiveProjectRole(user, projectId, {
+    client,
+    excludeSubcontractorProjectMemberships,
+    throwIfProjectMissing: true,
+  });
+
+  if (!role || !projectRoleCollectionIncludes(allowedRoles, role)) {
+    throw AppError.forbidden(message);
+  }
+
+  if (requireWritable) {
+    await assertProjectAllowsWrite(projectId, client);
+  }
+
+  return role;
+}
+
+export async function requireInternalProjectAccess(
+  user: EffectiveProjectRoleUser,
+  projectId: string,
+  message = 'You do not have access to this project',
+): Promise<string> {
+  if (isSubcontractorPortalRole(user.roleInCompany)) {
+    throw AppError.forbidden(message);
+  }
+
+  const role = await getEffectiveProjectRole(user, projectId, {
+    excludeSubcontractorProjectMemberships: true,
+    throwIfProjectMissing: true,
+  });
+
+  if (!role || isSubcontractorPortalRole(role)) {
+    throw AppError.forbidden(message);
+  }
+
+  return role;
+}
+
+export async function requireProjectRoleExcludingSubcontractors(
+  projectId: string,
+  user: EffectiveProjectRoleUser,
+  allowedRoles: ProjectRoleCollection,
+  message: string,
+  options: { requireWritable?: boolean } = {},
+): Promise<string> {
+  return requireEffectiveProjectRole(user, projectId, allowedRoles, message, {
+    excludeSubcontractorProjectMemberships: true,
+    requireWritable: options.requireWritable,
+  });
 }
 
 export async function hasActiveSubcontractorPortalIdentity(userId: string): Promise<boolean> {

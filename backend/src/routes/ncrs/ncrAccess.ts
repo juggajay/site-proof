@@ -3,6 +3,7 @@ import { type AuthUser } from '../../lib/auth.js';
 import { AppError } from '../../lib/AppError.js';
 import {
   activeSubcontractorCompanyWhere,
+  assertProjectAllowsWrite,
   hasSubcontractorPortalModuleAccess,
   requireSubcontractorPortalModuleAccess,
 } from '../../lib/projectAccess.js';
@@ -149,6 +150,7 @@ export async function requireNcrResponsibleOrProjectRole(
   const projectUser = await requireActiveProjectUser(ncr.projectId, user, message);
 
   if (roles.includes(projectUser.role) || ncr.responsibleUserId === user.userId) {
+    await assertProjectAllowsWrite(ncr.projectId);
     return projectUser;
   }
 
@@ -178,6 +180,7 @@ export async function requireNcrEvidenceMutationAccess(
     ncr.responsibleUserId === user.userId ||
     uploadedById === user.userId
   ) {
+    await assertProjectAllowsWrite(ncr.projectId);
     return projectUser;
   }
 
@@ -221,6 +224,7 @@ async function getResponsibleSubcontractorAccess(
       ncr.responsibleSubcontractorId === subcontractorUser.subcontractorCompanyId ||
       uploadedById === user.userId)
   ) {
+    await assertProjectAllowsWrite(ncr.projectId);
     return { id: `subcontractor-user:${subcontractorUser.id}`, role: userDetails!.roleInCompany };
   }
 
