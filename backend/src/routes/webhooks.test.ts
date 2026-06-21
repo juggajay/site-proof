@@ -1292,6 +1292,65 @@ describe('Webhooks API', () => {
       });
     });
 
+    describe('webhook management with stale encrypted secrets', () => {
+      it('does not decrypt the stored secret for masked management operations', async () => {
+        process.env.ENCRYPTION_KEY = TEST_ENCRYPTION_KEY;
+        const createRes = await request(app)
+          .post('/api/webhooks')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            url: 'https://example.com/webhook',
+            events: ['lot.updated'],
+          });
+        expect(createRes.status).toBe(201);
+        webhookId = createRes.body.id;
+
+        process.env.ENCRYPTION_KEY = 'b'.repeat(64);
+
+        const listRes = await request(app)
+          .get('/api/webhooks')
+          .set('Authorization', `Bearer ${authToken}`);
+        expect(listRes.status).toBe(200);
+        expect(
+          listRes.body.webhooks.find((webhook: any) => webhook.id === webhookId),
+        ).toMatchObject({
+          id: webhookId,
+          secret: '****',
+        });
+
+        const getRes = await request(app)
+          .get(`/api/webhooks/${webhookId}`)
+          .set('Authorization', `Bearer ${authToken}`);
+        expect(getRes.status).toBe(200);
+        expect(getRes.body).toMatchObject({
+          id: webhookId,
+          secret: '****',
+        });
+
+        const patchRes = await request(app)
+          .patch(`/api/webhooks/${webhookId}`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ enabled: false });
+        expect(patchRes.status).toBe(200);
+        expect(patchRes.body).toMatchObject({
+          id: webhookId,
+          enabled: false,
+          secret: '****',
+        });
+
+        const deliveriesRes = await request(app)
+          .get(`/api/webhooks/${webhookId}/deliveries`)
+          .set('Authorization', `Bearer ${authToken}`);
+        expect(deliveriesRes.status).toBe(200);
+        expect(deliveriesRes.body.deliveries).toEqual([]);
+
+        const deleteRes = await request(app)
+          .delete(`/api/webhooks/${webhookId}`)
+          .set('Authorization', `Bearer ${authToken}`);
+        expect(deleteRes.status).toBe(204);
+      });
+    });
+
     describe('POST /api/webhooks/:id/test', () => {
       beforeEach(async () => {
         // Clear test receiver logs

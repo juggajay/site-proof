@@ -31,6 +31,8 @@ export interface WebhookConfig {
   createdById: string | null;
 }
 
+export type WebhookConfigMetadata = Omit<WebhookConfig, 'secret'>;
+
 interface WebhookDelivery {
   id: string;
   webhookId: string;
@@ -117,12 +119,11 @@ function decryptWebhookSecret(storedSecret: string): string {
   return decrypt(storedSecret);
 }
 
-export function toWebhookConfig(record: WebhookConfigRecord): WebhookConfig {
+export function toWebhookConfigMetadata(record: WebhookConfigRecord): WebhookConfigMetadata {
   return {
     id: record.id,
     companyId: record.companyId,
     url: record.url,
-    secret: decryptWebhookSecret(record.secret),
     events: parseStoredEvents(record.events),
     enabled: record.enabled,
     createdAt: record.createdAt,
@@ -131,16 +132,31 @@ export function toWebhookConfig(record: WebhookConfigRecord): WebhookConfig {
   };
 }
 
-export function toPublicWebhookConfig(config: WebhookConfig, includeSecret = false) {
+export function toWebhookConfig(record: WebhookConfigRecord): WebhookConfig {
+  return {
+    ...toWebhookConfigMetadata(record),
+    secret: decryptWebhookSecret(record.secret),
+  };
+}
+
+export function toPublicWebhookConfig(
+  config: WebhookConfig | WebhookConfigMetadata,
+  includeSecret = false,
+) {
   return {
     ...config,
-    secret: includeSecret ? config.secret : '****',
+    secret: includeSecret && 'secret' in config ? config.secret : '****',
   };
 }
 
 export async function getWebhookConfig(id: string): Promise<WebhookConfig | null> {
   const record = await prisma.webhookConfig.findUnique({ where: { id } });
   return record ? toWebhookConfig(record) : null;
+}
+
+export async function getWebhookConfigMetadata(id: string): Promise<WebhookConfigMetadata | null> {
+  const record = await prisma.webhookConfig.findUnique({ where: { id } });
+  return record ? toWebhookConfigMetadata(record) : null;
 }
 
 async function pruneOldDeliveries(webhookId: string): Promise<void> {
