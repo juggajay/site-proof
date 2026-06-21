@@ -9,6 +9,7 @@ import { assertCanRemoveUserFromProjectAdminRoles } from '../../lib/projectAdmin
 import { logError } from '../../lib/serverLogger.js';
 import { AuditAction, createAuditLog } from '../../lib/auditLog.js';
 import { sendCompanyMemberInvitationEmail } from '../../lib/email.js';
+import { createEmailDeliveryFailureError } from '../../lib/emailDeliveryErrors.js';
 import { TIER_USER_LIMITS } from '../../lib/tierLimits.js';
 import {
   buildCompanyLeftResponse,
@@ -30,6 +31,10 @@ import {
 
 const COMPANY_MEMBER_INVITATION_EXPIRES_DAYS = 7;
 const ONE_TIME_TOKEN_HASH_PREFIX = 'sha256:';
+const COMPANY_MEMBER_INVITATION_EMAIL_FAILURE_COPY = {
+  quotaMessage: 'Company invitation email quota exceeded. Please try again later.',
+  unavailableMessage: 'Company invitation email could not be sent',
+};
 
 export const companyMemberRoutes = Router();
 
@@ -421,7 +426,14 @@ companyMemberRoutes.post(
           previousMemberState,
           previousActiveSetupTokenIds,
         });
-        throw AppError.internal('Company invitation email could not be sent');
+        throw createEmailDeliveryFailureError(
+          {
+            success: false,
+            error:
+              emailError instanceof Error ? emailError.message : 'Company invitation send failed',
+          },
+          COMPANY_MEMBER_INVITATION_EMAIL_FAILURE_COPY,
+        );
       }
 
       if (!emailResult.success) {
@@ -433,7 +445,10 @@ companyMemberRoutes.post(
           previousMemberState,
           previousActiveSetupTokenIds,
         });
-        throw AppError.internal('Company invitation email could not be sent');
+        throw createEmailDeliveryFailureError(
+          emailResult,
+          COMPANY_MEMBER_INVITATION_EMAIL_FAILURE_COPY,
+        );
       }
     }
 

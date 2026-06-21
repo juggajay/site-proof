@@ -8,7 +8,7 @@ import { asyncHandler } from '../../lib/asyncHandler.js';
 import { revokeActiveApiKeysForUser } from '../../lib/apiKeyRevocation.js';
 import { sendPasswordResetEmail } from '../../lib/email.js';
 import { buildFrontendUrl } from '../../lib/runtimeConfig.js';
-import { logWarn } from '../../lib/serverLogger.js';
+import { logError, logWarn } from '../../lib/serverLogger.js';
 
 const PASSWORD_RESET_TOKEN_PURPOSE = 'password_reset';
 
@@ -110,7 +110,7 @@ export function createPasswordResetRouter({
         });
 
         // Create new token
-        await prisma.passwordResetToken.create({
+        const resetToken = await prisma.passwordResetToken.create({
           data: {
             userId: user.id,
             token: hashOneTimeToken(token),
@@ -122,11 +122,35 @@ export function createPasswordResetRouter({
         const resetUrl = buildFrontendUrl(`/reset-password?token=${token}`);
 
         // Send password reset email
-        await sendPasswordResetEmail({
-          to: user.email,
-          resetUrl,
-          expiresInMinutes: 60,
-        });
+        try {
+          const emailResult = await sendPasswordResetEmail({
+            to: user.email,
+            resetUrl,
+            expiresInMinutes: 60,
+          });
+
+          if (!emailResult.success) {
+            logError('[Password Reset] Failed to send email:', emailResult.error);
+            await prisma.passwordResetToken.updateMany({
+              where: { id: resetToken.id, usedAt: null },
+              data: { usedAt: new Date() },
+            });
+
+            return res.json({
+              message: 'If an account exists with this email, a password reset link has been sent.',
+            });
+          }
+        } catch (emailError) {
+          logError('[Password Reset] Failed to send email:', emailError);
+          await prisma.passwordResetToken.updateMany({
+            where: { id: resetToken.id, usedAt: null },
+            data: { usedAt: new Date() },
+          });
+
+          return res.json({
+            message: 'If an account exists with this email, a password reset link has been sent.',
+          });
+        }
 
         await auditUserAuthEvent(req, user.id, AuditAction.PASSWORD_RESET_REQUESTED, {
           method: 'email',

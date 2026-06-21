@@ -37,6 +37,7 @@ import { encrypt } from '../lib/encryption.js';
 import { needsPasswordRehash, verifyPassword, verifyToken } from '../lib/auth.js';
 import { AuditAction, parseAuditLogChanges } from '../lib/auditLog.js';
 import { deleteMfaBackupCodes, enableMfaAndReplaceBackupCodes } from '../lib/mfaBackupCodes.js';
+import * as emailService from '../lib/email.js';
 import {
   authRateLimiter,
   clearFailedAuthAttempts,
@@ -791,6 +792,58 @@ describe('Email verification tokens', () => {
     } finally {
       if (userId) {
         await prisma.emailVerificationToken.deleteMany({ where: { userId } });
+        await prisma.user.delete({ where: { id: userId } }).catch(() => {});
+      }
+    }
+  });
+
+  it('does not leave an active verification token when resend delivery fails', async () => {
+    const email = `failed-resend-${Date.now()}@example.com`;
+    let userId: string | undefined;
+
+    try {
+      const regRes = await request(app).post('/api/auth/register').send({
+        email,
+        password: 'SecureP@ssword123!',
+        fullName: 'Failed Resend User',
+        tosAccepted: true,
+      });
+
+      expect(regRes.status).toBe(201);
+      userId = regRes.body.user.id as string;
+      await prisma.emailVerificationToken.deleteMany({ where: { userId } });
+
+      const sendSpy = vi.spyOn(emailService, 'sendVerificationEmail').mockResolvedValueOnce({
+        success: false,
+        error: 'Verification email provider unavailable',
+        statusCode: 503,
+        provider: 'resend',
+      });
+
+      try {
+        const resendRes = await request(app).post('/api/auth/resend-verification').send({ email });
+
+        expect(resendRes.status).toBe(200);
+        expect(resendRes.body).toEqual({
+          message: 'If an account exists with this email, a new verification link has been sent.',
+        });
+        expect(sendSpy).toHaveBeenCalledTimes(1);
+        await expect(
+          prisma.emailVerificationToken.count({
+            where: {
+              userId,
+              usedAt: null,
+              expiresAt: { gt: new Date() },
+            },
+          }),
+        ).resolves.toBe(0);
+      } finally {
+        sendSpy.mockRestore();
+      }
+    } finally {
+      if (userId) {
+        await prisma.emailVerificationToken.deleteMany({ where: { userId } });
+        await clearUserAuditLogs(userId);
         await prisma.user.delete({ where: { id: userId } }).catch(() => {});
       }
     }
@@ -1572,6 +1625,56 @@ describe('Password Reset Flow', () => {
     expect(res.body.message).toContain('If an account exists');
   });
 
+  it('does not leave an active reset token when reset email delivery fails', async () => {
+    const user = await prisma.user.findUnique({ where: { email: resetEmail } });
+    expect(user).toBeDefined();
+    await prisma.passwordResetToken.deleteMany({
+      where: { userId: user!.id, purpose: 'password_reset' },
+    });
+    await clearUserAuditLogs(user!.id);
+
+    const sendSpy = vi.spyOn(emailService, 'sendPasswordResetEmail').mockResolvedValueOnce({
+      success: false,
+      error: 'Daily email sending quota exceeded',
+      errorCode: 'daily_quota_exceeded',
+      statusCode: 429,
+      provider: 'resend',
+    });
+
+    try {
+      const res = await request(app).post('/api/auth/forgot-password').send({ email: resetEmail });
+
+      expect(res.status).toBe(200);
+      expect(res.body.message).toContain('If an account exists');
+      expect(sendSpy).toHaveBeenCalledTimes(1);
+      await expect(
+        prisma.passwordResetToken.count({
+          where: {
+            userId: user!.id,
+            purpose: 'password_reset',
+            usedAt: null,
+            expiresAt: { gt: new Date() },
+          },
+        }),
+      ).resolves.toBe(0);
+      await expect(
+        prisma.auditLog.count({
+          where: {
+            entityType: 'user',
+            entityId: user!.id,
+            action: AuditAction.PASSWORD_RESET_REQUESTED,
+          },
+        }),
+      ).resolves.toBe(0);
+    } finally {
+      sendSpy.mockRestore();
+      await prisma.passwordResetToken.deleteMany({
+        where: { userId: user!.id, purpose: 'password_reset' },
+      });
+      await clearUserAuditLogs(user!.id);
+    }
+  });
+
   it('should reject reset with invalid token', async () => {
     const res = await request(app).post('/api/auth/reset-password').send({
       token: 'invalid-token',
@@ -2089,6 +2192,121 @@ describe('Magic Link Authentication', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.message).toContain('If an account exists');
+  });
+
+  it('does not create or send magic links for MFA-enabled accounts', async () => {
+    const user = await prisma.user.findUnique({ where: { email: magicEmail } });
+    expect(user).toBeDefined();
+
+    const sendSpy = vi
+      .spyOn(emailService, 'sendMagicLinkEmail')
+      .mockResolvedValueOnce({ success: true });
+
+    await prisma.user.update({
+      where: { id: user!.id },
+      data: {
+        twoFactorEnabled: true,
+        twoFactorSecret: encrypt('TESTSECRET1234567890'),
+      },
+    });
+    await prisma.passwordResetToken.deleteMany({
+      where: { userId: user!.id, purpose: 'magic_link' },
+    });
+    await clearUserAuditLogs(user!.id);
+
+    try {
+      const res = await request(app)
+        .post('/api/auth/magic-link/request')
+        .send({ email: magicEmail });
+
+      expect(res.status).toBe(200);
+      expect(res.body.message).toContain('If an account exists');
+      expect(sendSpy).not.toHaveBeenCalled();
+      await expect(
+        prisma.passwordResetToken.count({
+          where: {
+            userId: user!.id,
+            purpose: 'magic_link',
+            usedAt: null,
+            expiresAt: { gt: new Date() },
+          },
+        }),
+      ).resolves.toBe(0);
+      await expect(
+        prisma.auditLog.count({
+          where: {
+            entityType: 'user',
+            entityId: user!.id,
+            action: AuditAction.MAGIC_LINK_REQUESTED,
+          },
+        }),
+      ).resolves.toBe(0);
+    } finally {
+      sendSpy.mockRestore();
+      await prisma.passwordResetToken.deleteMany({
+        where: { userId: user!.id, purpose: 'magic_link' },
+      });
+      await prisma.user.update({
+        where: { id: user!.id },
+        data: {
+          twoFactorEnabled: false,
+          twoFactorSecret: null,
+        },
+      });
+      await clearUserAuditLogs(user!.id);
+    }
+  });
+
+  it('does not leave an active magic link token when email delivery fails', async () => {
+    const user = await prisma.user.findUnique({ where: { email: magicEmail } });
+    expect(user).toBeDefined();
+
+    await prisma.passwordResetToken.deleteMany({
+      where: { userId: user!.id, purpose: 'magic_link' },
+    });
+    await clearUserAuditLogs(user!.id);
+
+    const sendSpy = vi.spyOn(emailService, 'sendMagicLinkEmail').mockResolvedValueOnce({
+      success: false,
+      error: 'Magic link email provider unavailable',
+      statusCode: 503,
+      provider: 'resend',
+    });
+
+    try {
+      const res = await request(app)
+        .post('/api/auth/magic-link/request')
+        .send({ email: magicEmail });
+
+      expect(res.status).toBe(200);
+      expect(res.body.message).toContain('If an account exists');
+      expect(sendSpy).toHaveBeenCalledTimes(1);
+      await expect(
+        prisma.passwordResetToken.count({
+          where: {
+            userId: user!.id,
+            purpose: 'magic_link',
+            usedAt: null,
+            expiresAt: { gt: new Date() },
+          },
+        }),
+      ).resolves.toBe(0);
+      await expect(
+        prisma.auditLog.count({
+          where: {
+            entityType: 'user',
+            entityId: user!.id,
+            action: AuditAction.MAGIC_LINK_REQUESTED,
+          },
+        }),
+      ).resolves.toBe(0);
+    } finally {
+      sendSpy.mockRestore();
+      await prisma.passwordResetToken.deleteMany({
+        where: { userId: user!.id, purpose: 'magic_link' },
+      });
+      await clearUserAuditLogs(user!.id);
+    }
   });
 
   it('should reject invalid magic link token', async () => {

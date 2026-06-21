@@ -9,6 +9,7 @@ import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { buildFrontendUrl } from '../../lib/runtimeConfig.js';
 import { AuditAction } from '../../lib/auditLog.js';
+import { logError } from '../../lib/serverLogger.js';
 
 const MAGIC_LINK_EXPIRY_MINUTES = 15;
 const MAGIC_LINK_TOKEN_PURPOSE = 'magic_link';
@@ -61,11 +62,28 @@ export function createMagicLinkRouter({
           id: true,
           email: true,
           fullName: true,
+          twoFactorEnabled: true,
         },
       });
 
       // Always return success to prevent email enumeration
       if (!user) {
+        return res.json({
+          message: 'If an account exists with this email, a login link has been sent.',
+        });
+      }
+
+      if (user.twoFactorEnabled) {
+        await prisma.passwordResetToken.updateMany({
+          where: {
+            userId: user.id,
+            purpose: MAGIC_LINK_TOKEN_PURPOSE,
+            usedAt: null,
+            expiresAt: { gt: new Date() },
+          },
+          data: { usedAt: new Date() },
+        });
+
         return res.json({
           message: 'If an account exists with this email, a login link has been sent.',
         });
@@ -87,7 +105,7 @@ export function createMagicLinkRouter({
       });
 
       // Create new magic link token
-      await prisma.passwordResetToken.create({
+      const magicLinkToken = await prisma.passwordResetToken.create({
         data: {
           userId: user.id,
           token: hashOneTimeToken(`magic_${token}`), // Prefix remains in the emailed token only.
@@ -99,12 +117,36 @@ export function createMagicLinkRouter({
       const magicLinkUrl = buildFrontendUrl(`/auth/magic-link?token=magic_${token}`);
 
       // Send magic link email
-      await sendMagicLinkEmail({
-        to: user.email,
-        userName: user.fullName || undefined,
-        magicLinkUrl,
-        expiresInMinutes: MAGIC_LINK_EXPIRY_MINUTES,
-      });
+      try {
+        const emailResult = await sendMagicLinkEmail({
+          to: user.email,
+          userName: user.fullName || undefined,
+          magicLinkUrl,
+          expiresInMinutes: MAGIC_LINK_EXPIRY_MINUTES,
+        });
+
+        if (!emailResult.success) {
+          logError('[Magic Link] Failed to send email:', emailResult.error);
+          await prisma.passwordResetToken.updateMany({
+            where: { id: magicLinkToken.id, usedAt: null },
+            data: { usedAt: new Date() },
+          });
+
+          return res.json({
+            message: 'If an account exists with this email, a login link has been sent.',
+          });
+        }
+      } catch (emailError) {
+        logError('[Magic Link] Failed to send email:', emailError);
+        await prisma.passwordResetToken.updateMany({
+          where: { id: magicLinkToken.id, usedAt: null },
+          data: { usedAt: new Date() },
+        });
+
+        return res.json({
+          message: 'If an account exists with this email, a login link has been sent.',
+        });
+      }
 
       await auditUserAuthEvent(req, user.id, AuditAction.MAGIC_LINK_REQUESTED, {
         method: 'magic_link',

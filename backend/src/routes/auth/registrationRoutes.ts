@@ -283,6 +283,13 @@ export function createRegistrationRouter({
 
       const passwordHash = hashPassword(normalizedPassword);
       const { user, subcontractor } = await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw<Array<{ id: string }>>`
+          SELECT id
+          FROM subcontractor_companies
+          WHERE id = ${normalizedInvitationId}
+          FOR UPDATE
+        `;
+
         const invitedSubcontractor = await tx.subcontractorCompany.findUnique({
           where: { id: normalizedInvitationId },
           include: {
