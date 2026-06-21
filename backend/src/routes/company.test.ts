@@ -2065,7 +2065,7 @@ describe('Company API', () => {
         removedUserEmail: pendingEmail,
         previousRole: 'foreman',
         status: 'cancelled',
-        cancelledSetupTokenCount: 1,
+        cancelledSetupInviteCount: 1,
       });
     });
 

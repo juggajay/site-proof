@@ -499,7 +499,7 @@ companyMemberRoutes.delete(
 
     const removedAt = new Date();
     let removedProjectMembershipCount = 0;
-    let cancelledSetupTokenCount = 0;
+    let cancelledSetupInviteCount = 0;
     let removalStatus: 'removed' | 'cancelled' = 'removed';
     let targetEmail = '';
     let previousRole = '';
@@ -576,7 +576,7 @@ companyMemberRoutes.delete(
         },
         data: { usedAt: removedAt },
       });
-      cancelledSetupTokenCount = cancelledSetupTokens.count;
+      cancelledSetupInviteCount = cancelledSetupTokens.count;
 
       if (!targetMember.passwordHash && !targetMember.oauthProvider) {
         removalStatus = 'cancelled';
@@ -606,7 +606,7 @@ companyMemberRoutes.delete(
         previousRole,
         status: removalStatus,
         removedProjectMembershipCount,
-        cancelledSetupTokenCount,
+        cancelledSetupInviteCount,
       },
       req,
     });
