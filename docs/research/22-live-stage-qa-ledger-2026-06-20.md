@@ -2876,6 +2876,110 @@ Artifacts:
   recipient emails, schedule IDs tied to credentials, or browser-session data
   were committed or copied into this ledger.
 
+## Stage 34 - Scheduled Report Recipient Gating and Offboarding QA
+
+Status: completed for scheduled-report delivery. One code PR was merged from
+this stage. Webhook audit findings remain queued for a separate follow-up.
+
+Scope:
+
+- Scheduled-report worker behaviour when recipient emails belong to known app
+  users whose access or email preferences changed after the schedule was saved.
+- Offboarding and project-access removal effects on raw scheduled-report
+  recipient email strings.
+- Webhook delivery plumbing and lifecycle audit as the next operations surface.
+
+Subagent coverage:
+
+- Hume reviewed scheduled-report delivery. It confirmed that the worker sent to
+  raw recipient email strings without checking current project/company access,
+  `enabled`, `scheduledReports`, or `scheduledReportsTiming` preferences.
+- Hume also confirmed that offboarding or project-access removal did not affect
+  existing raw schedule recipients, because recipients are stored as email
+  strings rather than normalized user references.
+- Parfit reviewed webhooks. It confirmed webhook CRUD/test paths exist, but
+  production business events do not call `triggerWebhooks()`. It also flagged
+  that management paths can decrypt secrets even for operations that should not
+  need the secret, so a corrupt secret could block cleanup.
+
+Confirmed issues fixed:
+
+- Known app-user scheduled-report recipients are now re-checked at delivery
+  time before any email is sent.
+- Known recipients without current report access are suppressed. This includes
+  removed/non-active project memberships and subcontractor company roles.
+- Same-company owners/admins remain eligible even without an explicit
+  `ProjectUser` membership, matching the report access model used elsewhere.
+- Known recipients with global email disabled or scheduled reports disabled are
+  suppressed.
+- Known recipients set to scheduled-report digest timing with daily digest
+  enabled now receive a `NotificationDigestItem` instead of an immediate PDF
+  email.
+- Unknown external recipient emails are still honoured as deliberate external
+  recipients.
+- If every known recipient is suppressed, the schedule now advances to its next
+  run and clears failure metadata instead of retrying forever on a permanent
+  access/preference condition.
+
+Related merged work:
+
+- #1072 - Fix scheduled report recipient gating, merged as `271db897`.
+
+Verification:
+
+- #1072 local checks passed:
+  - backend `npm run type-check`
+  - backend `npm run lint`
+  - backend `npm run format:check`
+  - `git diff --check`
+  - changed-file `fallow audit --base origin/master --format json --quiet`,
+    verdict `pass`; no introduced dead code, complexity, or duplication. The
+    only dead-code issue was the inherited `frontend/package.json`
+    `pdfjs-dist` unused dependency finding.
+- Local targeted `npm run test -- src/lib/scheduledReports.test.ts` was
+  attempted, but DB-backed cases could not run because the isolated worktree had
+  no local `DATABASE_URL`. The two pure date-calculation tests passed before
+  Prisma rejected DB setup. The DB-backed scheduled-report suite ran in GitHub
+  CI against disposable CI Postgres.
+- PR #1072 checks passed before merge: Backend, Frontend PR E2E smoke, Detect
+  changes, and Vercel's ignored-build status. The full Frontend job was skipped
+  on the PR because only backend files changed.
+- Master CI run `27920133451` passed after merge, including Backend, Frontend,
+  and full post-merge Frontend E2E.
+- After merge, production health checks returned HTTP 200 for:
+  - `https://site-proof-production.up.railway.app/ready`
+  - `https://site-proof.vercel.app`
+
+Not live-exercised in this stage:
+
+- Real production scheduled-report delivery was not triggered. This stage
+  avoided creating active production schedules or sending report PDFs to real
+  recipients.
+- Real offboarding against an existing production schedule was not performed.
+  The scenario is covered by DB-backed CI tests and delivery-time access checks.
+- Digest delivery email sending was not run end to end; this stage verified
+  digest item queueing in the scheduled-report delivery path.
+
+Remaining findings for a later pass:
+
+- Normalize scheduled-report recipients long-term if product wants durable
+  first-class internal recipients, external recipients, and richer admin
+  visibility. The current fix is a delivery-time safety gate over existing raw
+  email storage.
+- Webhooks are still not wired to real business events. `triggerWebhooks()`
+  exists but needs deliberate event integration for the intended event set.
+- Webhook management should avoid decrypting secrets for list/delete operations
+  that do not need the secret, so corrupt ciphertext or key rotation does not
+  block cleanup.
+- Decide what should happen to webhook ownership/configuration when the creator
+  is offboarded from the company.
+
+Artifacts:
+
+- No bearer tokens, session cookies, generated passwords, production secrets,
+  recipient emails, schedule IDs tied to credentials, webhook URLs, webhook
+  secrets, or browser-session data were committed or copied into this ledger.
+
 ## Stage 27 - Operational Access, Scheduled Reports, and Session Cache QA
 
 Status: completed. One code PR was merged from this stage.
