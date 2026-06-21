@@ -1230,3 +1230,108 @@ Notes for Review:
 - The visible QA browser initially held the old frontend bundle through the
   service worker and showed the app update banner. The QA browser was refreshed
   to the new bundle before final verification.
+
+## Stage 18 - Daily Diary Lifecycle and Reporting
+
+Scope:
+- Re-ran the daily diary lifecycle against production with fresh throwaway
+  owner, foreman, viewer, and outsider users.
+- Covered backend/API behavior for diary creation, draft updates, all diary item
+  families, submit validation, submitted-record locking, addendums, delay
+  register export, diary reporting, and project access control.
+- Covered visible browser behavior for the foreman mobile diary shell, desktop
+  diary deep links, delay register filtering/export, diary report filters, PDF
+  generation, and submitted-diary addendums.
+
+Status: passed after four QA-found fixes.
+
+API run evidence:
+- Run: `stage18-1782013003377-6wtqv2`.
+- Result: 63 checks, 0 findings.
+- Covered owner/company/project setup, foreman and viewer project membership,
+  missing-diary null reads for the shell, invalid date and temperature guards,
+  previous personnel/plant carry-forward without source IDs, create/update/delete
+  paths for personnel, plant, activities, delays, deliveries, events, and
+  visitors, cross-project lot rejection, complete-diary validation, sparse-diary
+  warning acknowledgement, successful submit, submitted-diary mutation guards,
+  blank addendum rejection, submitted-diary addendum creation and readback,
+  diary detail/timeline/list reads, delay register filtering and CSV export,
+  recent plant and activity suggestions, diary report section summaries, invalid
+  report-section rejection, viewer read-only access, and outsider denial.
+
+Visible browser evidence:
+- Foreman mobile diary shell showed the expected path/work/review screens for
+  the live Stage 18 diary.
+- After #1029, the submitted mobile review page no longer showed the
+  slide-to-submit control and instead showed the locked submitted state.
+- After #1030, desktop direct navigation to
+  `/projects/:projectId/diary?date=2026-06-19` preserved the requested date,
+  populated the date input with `2026-06-19`, and requested
+  `/api/diary/:projectId/2026-06-19?missing=null`.
+- After #1031, the delay register Weather filter returned the stored `Weather`
+  delay and the UI showed 1 delay / 2.0 hours. The CSV export button requested
+  `/api/diary/project/:projectId/delays/export?delayType=weather` with HTTP 200
+  and no console errors.
+- After #1032, the diary report Today preset stayed mounted through loading.
+  A follow-up Weather-only generate requested
+  `sections=weather&startDate=2026-06-21&endDate=2026-06-21`, kept both date
+  inputs at `2026-06-21`, and showed 1 total diary / 1 submitted / 0 drafts /
+  1 section.
+- The submitted desktop diary kept original weather fields disabled, accepted a
+  new addendum through `POST /api/diary/:id/addendum` with HTTP 201, and rendered
+  the addendum in the Addendums section.
+- The Daily Diary `Print` action lazy-loaded the PDF generator and jsPDF assets
+  without console errors.
+- No console errors were observed on the verified Stage 18 production browser
+  pages after the fixes were deployed.
+
+Related merged work:
+- #1029 - Hide diary submit controls after submission, merged as `27222784`.
+- #1030 - Respect diary date query parameter, merged as `d0aa1b14`.
+- #1031 - Fix delay register filters for mixed diary labels, merged as
+  `7851a618`.
+- #1032 - Preserve report filters while loading, merged as `4cde91ae`.
+
+Verification:
+- #1029 local focused check:
+  `npm run test:unit -- ReviewScreen.test.tsx` passed.
+- #1030 local focused checks:
+  `npm run test:unit -- DailyDiaryPage.test.tsx ReviewScreen.test.tsx`,
+  frontend `type-check`, `lint -- --quiet`, `format:check`, `git diff --check`,
+  and changed-file `fallow:audit` passed.
+- #1031 local focused checks:
+  backend `format:check`, `type-check`, `lint`, `git diff --check`, and
+  changed-file `fallow:audit` passed. The local DB-backed `diary.test.ts` run
+  was blocked by the intentionally absent local `DATABASE_URL`; the CI Backend
+  job supplied PostgreSQL-backed verification.
+- #1032 local focused checks:
+  `npm run test:unit -- ReportsPage.test.tsx`, frontend `format:check`,
+  `type-check`, `lint -- --quiet`, `git diff --check`, and changed-file
+  `fallow:audit` passed. The only lint warning was the existing fast-refresh
+  warning in `frontend/src/lib/theme.tsx`.
+- PR #1032 CI passed: Frontend, Frontend PR E2E smoke, Detect changes, and
+  Vercel ignored-build.
+- Master CI run `27894493541` passed after #1032, including Backend, Frontend,
+  and full post-merge Frontend E2E.
+- Production health after #1032: Railway backend `/ready` returned HTTP 200 and
+  the production frontend returned HTTP 200.
+
+Artifacts:
+- Production probe script:
+  `.gstack/tmp/stage18-diary-lifecycle-probe.js` inside the QA worktree.
+- Screenshots:
+  - `.gstack/qa-reports/stage18-diary-lifecycle-20260621/screenshots/foreman-mobile-diary-path.png`
+  - `.gstack/qa-reports/stage18-diary-lifecycle-20260621/screenshots/foreman-mobile-work.png`
+  - `.gstack/qa-reports/stage18-diary-lifecycle-20260621/screenshots/foreman-mobile-review.png`
+  - `.gstack/qa-reports/stage18-diary-lifecycle-20260621/screenshots/foreman-mobile-review-after.png`
+  - `.gstack/qa-reports/stage18-diary-lifecycle-20260621/screenshots/foreman-mobile-review-after-mobile.png`
+  - `.gstack/qa-reports/stage18-diary-lifecycle-20260621/screenshots/desktop-diary-date-query-after.png`
+  - `.gstack/qa-reports/stage18-diary-lifecycle-20260621/screenshots/delay-register-weather-filter-after.png`
+  - `.gstack/qa-reports/stage18-diary-lifecycle-20260621/screenshots/diary-report-preserve-filters-after.png`
+  - `.gstack/qa-reports/stage18-diary-lifecycle-20260621/screenshots/desktop-diary-submitted-addendum-after.png`
+
+Notes for Review:
+- The Stage 18 browser used a visible production session and was refreshed after
+  service-worker cache clearing before post-deploy verification.
+- The production probe creates throwaway Stage 18 data and does not use external
+  temporary-email services.
