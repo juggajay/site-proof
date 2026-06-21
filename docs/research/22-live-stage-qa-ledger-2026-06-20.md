@@ -2320,3 +2320,123 @@ Artifacts:
 - No bearer tokens, session cookies, generated passwords, production secrets,
   recipient emails, schedule IDs tied to credentials, or browser-session data
   were committed or copied into this ledger.
+
+## Stage 27 - Operational Access, Scheduled Reports, and Session Cache QA
+
+Status: completed. One code PR was merged from this stage.
+
+Scope:
+
+- Operational/access QA follow-ups around project-scoped roles, lot editing,
+  dockets, project settings, and report scheduling.
+- Scheduled-report worker failure behaviour and UI visibility for delivery
+  failures.
+- Signed document URL cache invalidation across auth/session transitions.
+- Reports schedule modal behaviour under async company-tier loading.
+
+Subagent coverage:
+
+- A read-only sidecar agent reviewed the Stage 27 diff and called out a
+  document-access/auth circular dependency, coarse `dashboardRole` leakage into
+  project-specific commercial surfaces, and scheduled-report failure semantics.
+  The circular dependency was removed by splitting cache state into
+  `documentAccessCache.ts`; the current-project role issues were fixed where the
+  project API can provide the real role.
+- The sidecar also flagged the broader sidebar/route limitation where login
+  `dashboardRole` still cannot always distinguish `site_manager` from
+  `foreman`. That was not widened globally in this stage; project-detail
+  surfaces now use the live project role where available.
+
+Confirmed issues fixed:
+
+- Invalid stored scheduled reports could retry indefinitely without durable
+  operator-visible failure state. Fixed in #1060 by adding
+  `failureCount`, `lastFailureAt`, and `lastFailureReason`, retrying transient
+  failures, and auto-pausing a schedule after three failed delivery attempts.
+- Reactivating a paused/failed scheduled report now clears failure metadata and
+  recalculates an overdue or missing `nextRunAt`, avoiding immediate surprise
+  delivery on reactivation.
+- The schedule modal now displays retrying/paused failure states and the last
+  delivery error, and monthly schedules expose all day-of-month choices from
+  1-31.
+- Signed document URLs cached for one user/session could survive sign-in,
+  sign-up, OAuth/magic-token, sign-out, refresh-expiry, or session-expired
+  transitions. Fixed by centralising the document-access cache and clearing it
+  on auth boundary changes.
+- Project list/detail responses no longer expose `contractValue` based on a
+  user's broader company role when their current project role is non-commercial.
+  `/api/projects/:id` now returns `currentUserRole`; dockets and project
+  settings use that role when deciding whether the current project can approve
+  dockets or view/manage commercial settings.
+- Lot edit access is now separated from subcontractor assignment access: quality
+  and site-engineering roles can edit lot details without automatically getting
+  subcontractor assignment controls.
+- A fast click on `Schedule Reports` before `/api/company` returned could route
+  an eligible paid user to the upgrade/Advanced Analytics tab because the page
+  defaulted the tier to `basic`. Fixed by treating the tier as unknown until
+  loaded and disabling the schedule action during that short window.
+
+Related merged work:
+
+- #1060 - Fix stage 27 operational access QA issues, merged as `201f50ba`.
+
+Verification:
+
+- #1060 local checks passed:
+  - backend `type-check`
+  - backend `lint`
+  - backend `format:check`
+  - backend Prisma schema validation with a dummy local `DATABASE_URL`
+  - frontend `type-check`
+  - frontend `lint`, passing with the existing unrelated
+    `src/lib/theme.tsx` fast-refresh warning
+  - frontend `format:check`
+  - frontend targeted unit tests:
+    `npm run test:unit -- src/App.projectScopedCommercialRoutes.test.tsx src/pages/lots/components/LotHeader.test.tsx src/components/reports/scheduleReportModalHelpers.test.ts src/lib/documentAccess.test.ts src/lib/auth.test.tsx src/pages/dockets/docketApprovalsData.test.ts`
+  - headed reports E2E:
+    `npx playwright test e2e/reports.spec.ts --project=chromium --headed`
+  - `git diff --check`
+  - changed-file `fallow audit --base origin/master --format json --quiet`,
+    verdict `warn`; no introduced dead code, cycles, or complexity. Remaining
+    introduced warnings were the established repeated E2E auth-state fixture
+    pattern involving `frontend/e2e/reports.spec.ts`.
+- PR #1060 checks passed before merge: Backend, Frontend, Frontend PR E2E smoke,
+  Detect changes, and Vercel's ignored-build status.
+- Master CI run `27911290154` passed after merge, including Backend, Frontend,
+  and full post-merge Frontend E2E.
+- After merge, production health checks returned HTTP 200 for:
+  - `https://site-proof-production.up.railway.app/ready`
+  - `https://site-proof.vercel.app`
+
+Not live-exercised in this stage:
+
+- Local backend DB-backed tests were not run from the worktree because there was
+  no safe disposable local Postgres URL. The same changed backend suites ran in
+  CI against disposable CI databases.
+- Real production scheduled-report delivery was not triggered. The stage avoided
+  creating active production schedules or sending external report emails.
+- Real live multi-user browser QA for each role was not repeated after these
+  fixes; the role/access regressions were covered with unit, route, and E2E
+  fixtures.
+
+Remaining findings for a later pass:
+
+- Consider extracting the repeated Playwright auth-state setup into a shared E2E
+  helper. Fallow still warns on that existing fixture pattern when any E2E file
+  adds another instance.
+- `GET /api/reports/schedules` still requires schedule-management access even
+  though it is read-only. The UI matches current backend policy, but the product
+  decision remains whether read-only schedule visibility should be allowed.
+- Timezone semantics for scheduled report `timeOfDay` are still server-local and
+  were not changed in this stage.
+- Duplicate-email recovery if an email provider send succeeds but the post-send
+  DB update fails remains an architectural reliability follow-up.
+- Login-time `dashboardRole` still cannot fully express every project-specific
+  role distinction for global navigation. Project-detail surfaces now prefer
+  live `currentUserRole`, but broader route/sidebar cleanup remains separate.
+
+Artifacts:
+
+- No bearer tokens, session cookies, generated passwords, production secrets,
+  recipient emails, schedule IDs tied to credentials, or browser-session data
+  were committed or copied into this ledger.
