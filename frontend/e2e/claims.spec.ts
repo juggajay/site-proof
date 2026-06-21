@@ -447,7 +447,7 @@ test.describe('Claims seeded commercial contract', () => {
     const submitModal = page.getByRole('dialog').filter({ hasText: 'Submit Claim' });
     await expect(submitModal.getByRole('heading', { name: 'Submit Claim' })).toBeVisible();
 
-    const submitButton = submitModal.getByText('Download package');
+    const submitButton = submitModal.getByText('Download summary CSV');
     await submitButton.evaluate((button: HTMLElement) => {
       button.click();
       button.click();
