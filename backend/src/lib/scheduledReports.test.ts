@@ -21,6 +21,25 @@ type FailingScheduleOptions = Omit<DueScheduleOverrides, 'includeProjectName'> &
   failureCount?: number;
 };
 
+type RecipientUserOptions = {
+  companyId: string;
+  projectId: string;
+  roleInCompany?: string;
+  projectRole?: string;
+  projectUserStatus?: string;
+  createProjectMembership?: boolean;
+  preferences?: {
+    enabled?: boolean;
+    scheduledReports?: boolean;
+    scheduledReportsTiming?: string;
+    dailyDigest?: boolean;
+  };
+};
+
+type RecipientScheduleFixtureOptions = Omit<RecipientUserOptions, 'companyId' | 'projectId'> & {
+  recipients?: (email: string) => string;
+};
+
 const SCHEDULE_FAILURE_NOW = new Date(2026, 4, 10, 9, 30, 0, 0);
 const SCHEDULE_RETRY_DELAY_MS = 5 * 60 * 1000;
 
@@ -91,7 +110,11 @@ async function createDueSchedule(
       data,
       include: {
         project: {
-          select: { name: true },
+          select: {
+            name: true,
+            companyId: true,
+            company: { select: { subscriptionTier: true } },
+          },
         },
       },
     });
@@ -140,6 +163,122 @@ async function getScheduledReport(scheduleId: string) {
   return prisma.scheduledReport.findUnique({
     where: { id: scheduleId },
   });
+}
+
+async function createRecipientUser({
+  companyId,
+  projectId,
+  roleInCompany = 'member',
+  projectRole = 'project_manager',
+  projectUserStatus = 'active',
+  createProjectMembership = true,
+  preferences,
+}: RecipientUserOptions) {
+  const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const user = await prisma.user.create({
+    data: {
+      email: `scheduled-recipient-${suffix}@example.com`,
+      fullName: `Scheduled Recipient ${suffix}`,
+      companyId,
+      roleInCompany,
+      emailVerified: true,
+      emailVerifiedAt: new Date(),
+    },
+  });
+
+  if (createProjectMembership) {
+    await prisma.projectUser.create({
+      data: {
+        projectId,
+        userId: user.id,
+        role: projectRole,
+        status: projectUserStatus,
+        acceptedAt: projectUserStatus === 'active' ? new Date() : null,
+      },
+    });
+  }
+
+  if (preferences) {
+    await prisma.notificationEmailPreference.create({
+      data: {
+        userId: user.id,
+        ...preferences,
+      },
+    });
+  }
+
+  return user;
+}
+
+async function createRecipientScheduleFixture({
+  recipients,
+  ...userOptions
+}: RecipientScheduleFixtureOptions) {
+  const { company, project } = await createScheduledReportProject();
+  const now = new Date(2026, 4, 10, 9, 30, 0, 0);
+  const dueAt = new Date(now.getTime() - 60_000);
+  const user = await createRecipientUser({
+    companyId: company.id,
+    projectId: project.id,
+    ...userOptions,
+  });
+  const schedule = await createDueSchedule(project.id, dueAt, {
+    recipients: recipients ? recipients(user.email) : user.email,
+  });
+
+  return { company, project, now, dueAt, user, schedule };
+}
+
+async function cleanupRecipientScheduleFixture({
+  company,
+  project,
+  user,
+}: Awaited<ReturnType<typeof createRecipientScheduleFixture>>) {
+  await prisma.user.deleteMany({ where: { id: user.id } });
+  await cleanupProject(project.id, company.id);
+}
+
+function expectSingleSentResult(
+  result: Awaited<ReturnType<typeof processDueScheduledReports>>,
+  recipients = 1,
+) {
+  expect(result.processed).toBe(1);
+  expect(result.sent).toBe(1);
+  expect(result.failed).toBe(0);
+  expect(result.skipped).toBe(0);
+  expect(result.results[0]).toMatchObject({ status: 'sent', recipients });
+}
+
+function expectQueuedEmailRecipients(recipients: string[]) {
+  const queuedEmails = getQueuedEmails();
+  expect(queuedEmails).toHaveLength(1);
+  expect(queuedEmails[0]!.to).toEqual(recipients);
+  return queuedEmails[0]!;
+}
+
+function expectSingleSkippedNoEmail(
+  result: Awaited<ReturnType<typeof processDueScheduledReports>>,
+) {
+  expect(result.processed).toBe(1);
+  expect(result.sent).toBe(0);
+  expect(result.skipped).toBe(1);
+  expect(result.failed).toBe(0);
+  expect(result.results[0]).toMatchObject({
+    status: 'skipped',
+    error: 'No eligible scheduled report recipients',
+  });
+  expect(getQueuedEmails()).toHaveLength(0);
+}
+
+async function expectScheduleAdvanced(scheduleId: string, now: Date, sent: boolean) {
+  const updatedSchedule = await getScheduledReport(scheduleId);
+  if (sent) {
+    expect(updatedSchedule?.lastSentAt?.toISOString()).toBe(now.toISOString());
+  } else {
+    expect(updatedSchedule?.lastSentAt).toBeNull();
+  }
+  expect(updatedSchedule?.nextRunAt?.getTime()).toBeGreaterThan(now.getTime());
+  return updatedSchedule;
 }
 
 function expectFailedDeliveryResult(
@@ -209,8 +348,11 @@ async function expectDueScheduleSuppressed(projectOptions: ScheduledReportProjec
   }
 }
 
-afterEach(() => {
+afterEach(async () => {
   clearEmailQueue();
+  if (process.env.DATABASE_URL) {
+    await prisma.notificationDigestItem.deleteMany({ where: { type: 'scheduledReports' } });
+  }
 });
 
 describe('calculateNextScheduledReportRunAt', () => {
@@ -289,13 +431,14 @@ describe('processDueScheduledReports', () => {
       expect(result.sent).toBe(1);
       expect(result.failed).toBe(0);
 
-      const queuedEmails = getQueuedEmails();
-      expect(queuedEmails).toHaveLength(1);
-      expect(queuedEmails[0]!.to).toEqual(['recipient@example.com', 'second@example.com']);
-      expect(queuedEmails[0]!.subject).toContain('Scheduled Report');
-      expect(queuedEmails[0]!.text).toContain('View report online:');
-      expect(queuedEmails[0]!.attachments).toHaveLength(1);
-      const attachment = queuedEmails[0]!.attachments![0]!;
+      const queuedEmail = expectQueuedEmailRecipients([
+        'recipient@example.com',
+        'second@example.com',
+      ]);
+      expect(queuedEmail.subject).toContain('Scheduled Report');
+      expect(queuedEmail.text).toContain('View report online:');
+      expect(queuedEmail.attachments).toHaveLength(1);
+      const attachment = queuedEmail.attachments![0]!;
       expect(attachment.filename).toContain('Lot_Status_Report');
       expect(attachment.contentType).toBe('application/pdf');
       expect(Buffer.isBuffer(attachment.content)).toBe(true);
@@ -311,6 +454,110 @@ describe('processDueScheduledReports', () => {
       expect(secondRun.processed).toBe(0);
     } finally {
       await cleanupProject(project.id, company.id);
+    }
+  });
+
+  it('suppresses opted-out app recipients while preserving external recipients', async () => {
+    const fixture = await createRecipientScheduleFixture({
+      preferences: { scheduledReports: false },
+      recipients: (email) => `${email},external-recipient@example.com`,
+    });
+    const { now, schedule, user } = fixture;
+
+    try {
+      const result = await processDueScheduledReports({ now, scheduleIds: [schedule.id] });
+      expectSingleSentResult(result);
+
+      expectQueuedEmailRecipients(['external-recipient@example.com']);
+
+      const digestItems = await prisma.notificationDigestItem.findMany({
+        where: { userId: user.id },
+      });
+      expect(digestItems).toHaveLength(0);
+
+      await expectScheduleAdvanced(schedule.id, now, true);
+    } finally {
+      await cleanupRecipientScheduleFixture(fixture);
+    }
+  });
+
+  it('advances the schedule without email when the only known recipient has email disabled', async () => {
+    const fixture = await createRecipientScheduleFixture({
+      preferences: { enabled: false },
+    });
+    const { now, schedule } = fixture;
+
+    try {
+      const result = await processDueScheduledReports({ now, scheduleIds: [schedule.id] });
+      expectSingleSkippedNoEmail(result);
+
+      const updatedSchedule = await expectScheduleAdvanced(schedule.id, now, false);
+      expect(updatedSchedule?.failureCount).toBe(0);
+      expect(updatedSchedule?.lastFailureAt).toBeNull();
+      expect(updatedSchedule?.lastFailureReason).toBeNull();
+    } finally {
+      await cleanupRecipientScheduleFixture(fixture);
+    }
+  });
+
+  it('queues digest items instead of immediate email for digest-timed recipients', async () => {
+    const fixture = await createRecipientScheduleFixture({
+      preferences: { scheduledReportsTiming: 'digest', dailyDigest: true },
+    });
+    const { now, project, schedule, user } = fixture;
+
+    try {
+      const result = await processDueScheduledReports({ now, scheduleIds: [schedule.id] });
+      expectSingleSentResult(result);
+      expect(getQueuedEmails()).toHaveLength(0);
+
+      const digestItems = await prisma.notificationDigestItem.findMany({
+        where: { userId: user.id, type: 'scheduledReports' },
+      });
+      expect(digestItems).toHaveLength(1);
+      expect(digestItems[0]).toMatchObject({
+        title: `Scheduled report ready: Lot Status Report - ${project.name}`,
+        projectName: project.name,
+      });
+      expect(digestItems[0]!.linkUrl).toContain(
+        `/projects/${encodeURIComponent(project.id)}/reports`,
+      );
+
+      await expectScheduleAdvanced(schedule.id, now, true);
+    } finally {
+      await cleanupRecipientScheduleFixture(fixture);
+    }
+  });
+
+  it('does not send to known recipients who no longer have active project access', async () => {
+    const fixture = await createRecipientScheduleFixture({
+      projectUserStatus: 'removed',
+    });
+    const { now, schedule } = fixture;
+
+    try {
+      const result = await processDueScheduledReports({ now, scheduleIds: [schedule.id] });
+      expectSingleSkippedNoEmail(result);
+      await expectScheduleAdvanced(schedule.id, now, false);
+    } finally {
+      await cleanupRecipientScheduleFixture(fixture);
+    }
+  });
+
+  it('sends to same-company admins even without explicit project membership', async () => {
+    const fixture = await createRecipientScheduleFixture({
+      roleInCompany: 'admin',
+      createProjectMembership: false,
+    });
+    const { now, schedule, user } = fixture;
+
+    try {
+      const result = await processDueScheduledReports({ now, scheduleIds: [schedule.id] });
+      expectSingleSentResult(result);
+
+      expectQueuedEmailRecipients([user.email]);
+    } finally {
+      await cleanupRecipientScheduleFixture(fixture);
     }
   });
 
