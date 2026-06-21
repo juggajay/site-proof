@@ -26,6 +26,7 @@ const DEFAULT_PROCESS_LIMIT = 50;
 const DEFAULT_LOCK_MS = 15 * 60 * 1000;
 const DEFAULT_RETRY_DELAY_MS = 15 * 60 * 1000;
 const DEFAULT_WORKER_INTERVAL_MS = 60 * 1000;
+const SCHEDULED_REPORT_DELIVERY_TIERS = ['professional', 'enterprise', 'unlimited'] as const;
 
 export type ScheduledReportDeliveryStatus = 'sent' | 'failed' | 'skipped';
 
@@ -66,6 +67,12 @@ async function claimScheduledReport(
       id: scheduleId,
       isActive: true,
       OR: [{ nextRunAt: { lte: now } }, { nextRunAt: null }],
+      project: {
+        status: 'active',
+        company: {
+          subscriptionTier: { in: [...SCHEDULED_REPORT_DELIVERY_TIERS] },
+        },
+      },
     },
     data: {
       nextRunAt: lockUntil,
@@ -182,6 +189,12 @@ export async function processDueScheduledReports(
       isActive: true,
       ...(options.scheduleIds ? { id: { in: options.scheduleIds } } : {}),
       OR: [{ nextRunAt: { lte: now } }, { nextRunAt: null }],
+      project: {
+        status: 'active',
+        company: {
+          subscriptionTier: { in: [...SCHEDULED_REPORT_DELIVERY_TIERS] },
+        },
+      },
     },
     include: {
       project: {

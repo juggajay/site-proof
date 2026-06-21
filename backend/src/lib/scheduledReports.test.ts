@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { clearEmailQueue, getQueuedEmails } from './email.js';
 import { prisma } from './prisma.js';
 import {
@@ -6,12 +6,26 @@ import {
   processDueScheduledReports,
 } from './scheduledReports.js';
 
-async function createScheduledReportProject() {
+type ScheduledReportProjectOptions = {
+  subscriptionTier?: string;
+  projectStatus?: string;
+};
+
+type DueScheduleOverrides = {
+  frequency?: string;
+  recipients?: string;
+  includeProjectName?: boolean;
+};
+
+async function createScheduledReportProject({
+  subscriptionTier = 'professional',
+  projectStatus = 'active',
+}: ScheduledReportProjectOptions = {}) {
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const company = await prisma.company.create({
     data: {
       name: `Scheduled Processor Company ${suffix}`,
-      subscriptionTier: 'professional',
+      subscriptionTier,
     },
   });
   const project = await prisma.project.create({
@@ -19,7 +33,7 @@ async function createScheduledReportProject() {
       name: `Scheduled Processor Project ${suffix}`,
       projectNumber: `SCHPROC-${suffix}`,
       companyId: company.id,
-      status: 'active',
+      status: projectStatus,
       state: 'NSW',
       specificationSet: 'TfNSW',
     },
@@ -33,6 +47,76 @@ async function cleanupProject(projectId: string, companyId: string) {
   await prisma.lot.deleteMany({ where: { projectId } });
   await prisma.project.delete({ where: { id: projectId } }).catch(() => {});
   await prisma.company.delete({ where: { id: companyId } }).catch(() => {});
+}
+
+function buildDueScheduleData(
+  projectId: string,
+  dueAt: Date,
+  { frequency = 'daily', recipients = 'recipient@example.com' }: DueScheduleOverrides = {},
+) {
+  return {
+    projectId,
+    reportType: 'lot-status',
+    frequency,
+    timeOfDay: '09:00',
+    recipients,
+    nextRunAt: dueAt,
+    isActive: true,
+  };
+}
+
+async function expectScheduleNotSent(scheduleId: string, dueAt: Date) {
+  const unchangedSchedule = await prisma.scheduledReport.findUnique({
+    where: { id: scheduleId },
+  });
+  expect(unchangedSchedule?.lastSentAt).toBeNull();
+  expect(unchangedSchedule?.nextRunAt?.toISOString()).toBe(dueAt.toISOString());
+}
+
+async function createDueSchedule(
+  projectId: string,
+  dueAt: Date,
+  { includeProjectName = false, ...overrides }: DueScheduleOverrides = {},
+) {
+  const data = buildDueScheduleData(projectId, dueAt, overrides);
+  if (includeProjectName) {
+    return prisma.scheduledReport.create({
+      data,
+      include: {
+        project: {
+          select: { name: true },
+        },
+      },
+    });
+  }
+
+  return prisma.scheduledReport.create({ data });
+}
+
+async function createDueScheduleFixture(
+  projectOptions: ScheduledReportProjectOptions = {},
+  scheduleOptions: DueScheduleOverrides = {},
+) {
+  const { company, project } = await createScheduledReportProject(projectOptions);
+  const now = new Date(2026, 4, 10, 9, 30, 0, 0);
+  const dueAt = new Date(now.getTime() - 60_000);
+  const schedule = await createDueSchedule(project.id, dueAt, scheduleOptions);
+
+  return { company, project, now, dueAt, schedule };
+}
+
+async function expectDueScheduleSuppressed(projectOptions: ScheduledReportProjectOptions) {
+  const { company, project, now, dueAt, schedule } = await createDueScheduleFixture(projectOptions);
+  try {
+    const result = await processDueScheduledReports({ now, scheduleIds: [schedule.id] });
+
+    expect(result).toMatchObject({ processed: 0, sent: 0 });
+    expect(getQueuedEmails()).toEqual([]);
+
+    await expectScheduleNotSent(schedule.id, dueAt);
+  } finally {
+    await cleanupProject(project.id, company.id);
+  }
 }
 
 afterEach(() => {
@@ -136,6 +220,44 @@ describe('processDueScheduledReports', () => {
       const secondRun = await processDueScheduledReports({ now, scheduleIds: [schedule.id] });
       expect(secondRun.processed).toBe(0);
     } finally {
+      await cleanupProject(project.id, company.id);
+    }
+  });
+
+  it('does not send due schedules for basic-tier companies', async () => {
+    await expectDueScheduleSuppressed({ subscriptionTier: 'basic' });
+  });
+
+  it('does not send due schedules for archived projects', async () => {
+    await expectDueScheduleSuppressed({ projectStatus: 'archived' });
+  });
+
+  it('does not send if a schedule becomes ineligible after due-schedule selection', async () => {
+    const { company, project, now, dueAt, schedule } = await createDueScheduleFixture(
+      {},
+      { includeProjectName: true },
+    );
+
+    const findManySpy = vi
+      .spyOn(prisma.scheduledReport, 'findMany')
+      .mockResolvedValueOnce([schedule]);
+
+    try {
+      await prisma.project.update({
+        where: { id: project.id },
+        data: { status: 'archived' },
+      });
+
+      const result = await processDueScheduledReports({ now, scheduleIds: [schedule.id] });
+
+      expect(result.processed).toBe(1);
+      expect(result.skipped).toBe(1);
+      expect(result.sent).toBe(0);
+      expect(getQueuedEmails()).toHaveLength(0);
+
+      await expectScheduleNotSent(schedule.id, dueAt);
+    } finally {
+      findManySpy.mockRestore();
       await cleanupProject(project.id, company.id);
     }
   });
