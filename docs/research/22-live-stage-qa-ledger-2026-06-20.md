@@ -1777,3 +1777,157 @@ Artifacts:
   and are not committed.
 - No response bodies containing signed URLs, bearer tokens, credentials, or
   public-release tokens were committed or copied into this ledger.
+
+## Stage 22 - Comments, Attachments, Notifications, Activity, and Audit Logs
+
+Status: completed on production. Two code fixes were merged from this stage.
+
+Scope:
+
+- Comment create/list/edit/delete and attachment download lifecycle.
+- Mention notifications, notification list/mutation ownership, and mention-user
+  search boundaries.
+- Audit-log role gates, metadata redaction, and visible audit UI access.
+- Project dashboard recent activity, notification page behaviour, lot activity
+  history refresh, and hold-point default notification recipients.
+- System alert routing for stale hold points.
+
+Read-only mapping:
+
+- Three read-only subagents mapped the backend comments, notification, alert,
+  audit, and activity routes plus the matching frontend surfaces before live
+  testing.
+- The highest-risk checks selected from that map were attachment URL leakage,
+  author-only comment mutation, subcontractor lot-scoped comment visibility,
+  mention-notification ownership, notification pagination/filter behaviour,
+  audit-log role gates, stale activity data after failed refresh, future
+  timestamp labels, and stale hold-point alert recipient roles.
+
+Production API evidence:
+
+- Comment attachment lifecycle passed on a sacrificial assigned lot:
+  owner-created comment with attachment returned an attachment ID and
+  `downloadUrl`, did not expose `fileUrl`, and did not leak raw storage locators
+  in create/list responses.
+- Comment list access was correct: owner and assigned subcontractor could see
+  the lot comment, while an outsider received HTTP 403.
+- Attachment download access was correct: unauthenticated request returned HTTP
+  401, owner and assigned subcontractor received HTTP 200, and outsider received
+  HTTP 403. The download response used `image/png` and `X-Content-Type-Options:
+  nosniff`.
+- Author-only mutation was enforced: a foreman who did not author the comment
+  received HTTP 403 for edit, delete, and add-attachment attempts.
+- Attachment cleanup worked: adding a second attachment returned HTTP 201 with
+  no raw locator leakage; deleting it returned HTTP 200; download after
+  attachment deletion returned HTTP 404.
+- Mention notification ownership worked: the mentioned viewer received a
+  notification with an internal app link; the owner could not mark the viewer's
+  notification read, while the viewer could mark it read and delete it.
+- Comment deletion cleaned up attachment access: after deleting the comment, the
+  original attachment download returned HTTP 404 and the comment no longer
+  appeared in list results.
+- Notifications API matrix passed for owner: list, unread count, invalid
+  `unreadOnly`, zero limit, invalid offset, and backend max-limit cap behaviour.
+- Mention-user search matrix passed: owner search returned users without secret
+  fields, outsider search returned HTTP 403, and overlong search returned HTTP
+  400.
+- Audit-log API matrix passed: owner/admin/project manager received HTTP 200;
+  foreman/viewer/subcontractor/outsider received HTTP 403. Invalid page, limit,
+  date, and reversed date filters returned HTTP 400. Actions, entity types, and
+  users helper endpoints returned HTTP 200 for allowed access and did not expose
+  secret-like fields in the inspected payload.
+
+Visible browser evidence:
+
+- Owner pages loaded in headed Chromium with no access denial, no page-level
+  error state, no console errors, and no 4xx/5xx network responses:
+  `/notifications`, `/settings`, and `/audit-log`.
+- The owner settings page exposed notification preference controls.
+- Viewer `/audit-log` showed a clean access-denied state with no console or
+  network errors.
+
+Confirmed issues fixed:
+
+- CSV export formula escaping did not treat newline-prefixed formulas as formula
+  starts. Fixed in #1041 by hardening `frontend/src/lib/csv.ts` and adding unit
+  coverage for newline/whitespace formula prefixes.
+- `/notifications` fetched the backend default page size only, so the in-page
+  filters could silently filter only the first 20 notifications. Fixed in #1041
+  by fetching the backend max page size used by that screen.
+- Future notification/dashboard timestamps rendered as `Just now`. Fixed in
+  #1041 by labelling future timestamps as `Scheduled`.
+- Lot activity history could keep stale entries after a failed refresh. Fixed in
+  #1041 by clearing lot history before fetch and on fetch failure.
+- Dashboard recent activity carried safe internal links but rendered them as
+  inert text. Fixed in #1041 by making only safe internal paths clickable.
+- Hold-point default-recipient duplicate detection was case-sensitive for roles.
+  Fixed in #1041 by comparing trimmed lower-case role/email pairs.
+- Stale hold-point system alerts only targeted legacy `superintendent`,
+  project-manager, and quality roles in some paths. Current project settings
+  create canonical site roles, so site managers/site engineers could miss stale
+  hold-point alerts. Fixed in #1042 by sharing one escalation config across
+  manual routes and scheduled automation, adding canonical site roles while
+  keeping legacy `superintendent` compatibility.
+
+Related merged work:
+
+- #1041 - Fix Stage 22 notification and CSV hardening, merged as
+  `28a4eb1f`.
+- #1042 - Fix stale hold point alert recipient roles, merged as `dc0942df`.
+
+Verification:
+
+- #1041 local checks passed:
+  - `npm run test:unit -- src/lib/csv.test.ts src/pages/lots/hooks/useLotTabData.test.ts src/components/dashboard/ProjectDashboardParts.test.tsx src/components/dashboard/RecentActivityWidget.test.tsx src/pages/projects/settings/components/notificationSettingsHelpers.test.ts`
+  - frontend `format:check`
+  - frontend `type-check`
+  - frontend `lint -- --quiet` with the existing `theme.tsx` fast-refresh
+    warning only
+  - `git diff --check`
+  - frontend production build with a non-secret dummy `VITE_SENTRY_DSN`
+  - changed-file `fallow audit --base origin/master --format json --quiet`,
+    advisory `warn` only for inherited complexity and test mock duplication
+- PR #1041 CI passed: Frontend, Frontend PR E2E smoke, Detect changes, and
+  Vercel ignored-build. Backend was correctly skipped for the frontend-only PR.
+- Master CI run `27900380039` passed after #1041, including Backend, Frontend,
+  and full post-merge Frontend E2E.
+- #1042 local checks passed:
+  - `npm test -- src/lib/notificationAutomation/systemAutomation.test.ts src/lib/notificationAutomation/alertEscalations.test.ts src/routes/notifications/alertPersistence.test.ts`
+  - backend `format:check`
+  - backend `lint -- --quiet`
+  - backend `type-check`
+  - backend `build`
+  - `git diff --check`
+  - changed-file `fallow audit --base origin/master --format json --quiet`,
+    verdict `pass`
+- PR #1042 CI passed: Backend, Frontend PR E2E smoke, Detect changes, and
+  Vercel ignored-build. Frontend was correctly skipped for the backend-only PR.
+- Master CI run `27900955155` passed after #1042, including Backend, Frontend,
+  and full post-merge Frontend E2E.
+
+Not live-exercised in this stage:
+
+- Real email delivery for mention notifications. This stage verified in-app
+  mention notification creation/mutation ownership, not outbound mailbox
+  delivery.
+- Push notification delivery, because production VAPID push configuration is
+  still intentionally absent.
+- Browser-driven comment creation/editing through every frontend comment widget.
+  The backend lifecycle was exercised live with production-safe API calls; the
+  visible browser pass covered the high-level notification/settings/audit pages.
+
+Findings:
+
+- No exploitable comment attachment, notification ownership, or audit-log access
+  issue was confirmed in Stage 22.
+- The main issues were correctness/polish items that could mislead users:
+  stale notification filtering, stale lot activity history, misleading future
+  timestamps, inert activity links, case-sensitive duplicate HP recipients, and
+  stale hold-point alerts missing current canonical site roles.
+
+Artifacts:
+
+- Sensitive throwaway session files remain under ignored `.gstack/tmp/` paths
+  and are not committed.
+- No comment attachment download URLs, notification IDs tied to credentials,
+  bearer tokens, or session cookies were committed or copied into this ledger.
