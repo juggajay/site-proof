@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Loader2, Mail, RefreshCw, UserPlus, Users } from 'lucide-react';
+import { Loader2, Mail, RefreshCw, Trash2, UserPlus, Users } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { queryKeys } from '@/lib/queryKeys';
@@ -17,6 +17,11 @@ import {
 
 interface CompanyMembersResponse {
   members: CompanyMember[];
+}
+
+interface CompanyMemberRemoveResponse {
+  memberId: string;
+  status: 'removed' | 'cancelled';
 }
 
 interface CompanyTeamMembersSectionProps {
@@ -46,7 +51,12 @@ export function CompanyTeamMembersSection({ currentUserId }: CompanyTeamMembersS
   const [inviteError, setInviteError] = useState('');
   const [inviteSuccess, setInviteSuccess] = useState('');
   const [inviting, setInviting] = useState(false);
+  const [removeTarget, setRemoveTarget] = useState<CompanyMember | null>(null);
+  const [removeError, setRemoveError] = useState('');
+  const [removeSuccess, setRemoveSuccess] = useState('');
+  const [removing, setRemoving] = useState(false);
   const invitingRef = useRef(false);
+  const removingRef = useRef(false);
 
   const loadMembers = useCallback(async () => {
     setLoadingMembers(true);
@@ -79,6 +89,18 @@ export function CompanyTeamMembersSection({ currentUserId }: CompanyTeamMembersS
     setShowInviteModal(false);
     setInviteError('');
     setInviteSuccess('');
+  };
+
+  const openRemoveModal = (member: CompanyMember) => {
+    setRemoveTarget(member);
+    setRemoveError('');
+    setRemoveSuccess('');
+  };
+
+  const closeRemoveModal = () => {
+    if (removingRef.current) return;
+    setRemoveTarget(null);
+    setRemoveError('');
   };
 
   const handleInvite = async () => {
@@ -127,6 +149,45 @@ export function CompanyTeamMembersSection({ currentUserId }: CompanyTeamMembersS
     }
   };
 
+  const handleRemoveMember = async () => {
+    if (!removeTarget || removingRef.current) return;
+
+    const target = removeTarget;
+    const status = getMemberStatus(target);
+    removingRef.current = true;
+    setRemoving(true);
+    setRemoveError('');
+    setRemoveSuccess('');
+
+    try {
+      const data = await apiFetch<CompanyMemberRemoveResponse>(
+        `/api/company/members/${encodeURIComponent(target.id)}`,
+        {
+          method: 'DELETE',
+        },
+      );
+
+      setMembers((current) => current.filter((member) => member.id !== data.memberId));
+      setRemoveSuccess(
+        data.status === 'cancelled'
+          ? `Invitation cancelled for ${target.email}.`
+          : `${target.fullName || target.email} was removed from the company.`,
+      );
+      setRemoveTarget(null);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.companySettings });
+    } catch (error) {
+      setRemoveError(
+        extractErrorMessage(
+          error,
+          status === 'pending' ? 'Failed to cancel invitation' : 'Failed to remove member',
+        ),
+      );
+    } finally {
+      removingRef.current = false;
+      setRemoving(false);
+    }
+  };
+
   return (
     <div className="rounded-lg border bg-card p-6 space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -156,6 +217,11 @@ export function CompanyTeamMembersSection({ currentUserId }: CompanyTeamMembersS
           {membersError}
         </div>
       )}
+      {removeSuccess && (
+        <div role="status" className="rounded-md bg-success/10 p-3 text-sm text-success">
+          {removeSuccess}
+        </div>
+      )}
 
       {loadingMembers ? (
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -176,19 +242,21 @@ export function CompanyTeamMembersSection({ currentUserId }: CompanyTeamMembersS
         </div>
       ) : (
         <div className="overflow-hidden rounded-lg border">
-          <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(120px,0.7fr)_minmax(96px,0.5fr)] bg-muted/50 px-4 py-2 text-xs font-medium uppercase text-muted-foreground">
+          <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(120px,0.7fr)_minmax(96px,0.5fr)_minmax(96px,0.4fr)] bg-muted/50 px-4 py-2 text-xs font-medium uppercase text-muted-foreground">
             <span>Member</span>
             <span>Role</span>
             <span>Status</span>
+            <span className="text-right">Action</span>
           </div>
           <div className="divide-y">
             {members.map((member) => {
               const status = getMemberStatus(member);
               const isCurrentUser = member.id === currentUserId;
+              const canRemove = !isCurrentUser && member.roleInCompany !== 'owner';
               return (
                 <div
                   key={member.id}
-                  className="grid grid-cols-[minmax(0,1.4fr)_minmax(120px,0.7fr)_minmax(96px,0.5fr)] items-center gap-3 px-4 py-3 text-sm"
+                  className="grid grid-cols-[minmax(0,1.4fr)_minmax(120px,0.7fr)_minmax(96px,0.5fr)_minmax(96px,0.4fr)] items-center gap-3 px-4 py-3 text-sm"
                 >
                   <div className="min-w-0">
                     <div className="truncate font-medium">
@@ -212,6 +280,24 @@ export function CompanyTeamMembersSection({ currentUserId }: CompanyTeamMembersS
                     >
                       {status === 'active' ? 'Active' : 'Pending'}
                     </span>
+                  </div>
+                  <div className="flex justify-end">
+                    {canRemove ? (
+                      <Button
+                        type="button"
+                        variant={status === 'pending' ? 'outline' : 'destructive'}
+                        size="sm"
+                        onClick={() => openRemoveModal(member)}
+                        title={status === 'pending' ? 'Cancel invitation' : 'Remove member'}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        {status === 'pending' ? 'Cancel' : 'Remove'}
+                      </Button>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">
+                        {isCurrentUser ? 'You' : 'Owner'}
+                      </span>
+                    )}
                   </div>
                 </div>
               );
@@ -301,6 +387,50 @@ export function CompanyTeamMembersSection({ currentUserId }: CompanyTeamMembersS
               disabled={inviting || !inviteForm.email.trim()}
             >
               {inviting ? 'Sending...' : 'Send Invite'}
+            </Button>
+          </ModalFooter>
+        </Modal>
+      )}
+
+      {removeTarget && (
+        <Modal onClose={closeRemoveModal} className="max-w-md">
+          <ModalHeader>
+            {getMemberStatus(removeTarget) === 'pending'
+              ? 'Cancel Company Invitation'
+              : 'Remove Company Member'}
+          </ModalHeader>
+          <ModalBody>
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                {getMemberStatus(removeTarget) === 'pending'
+                  ? `Cancel the pending invitation for ${removeTarget.email}? They will no longer count toward your user limit.`
+                  : `Remove ${removeTarget.fullName || removeTarget.email} from this company and all company projects?`}
+              </p>
+              {removeError && (
+                <div
+                  role="alert"
+                  className="rounded-md bg-destructive/10 p-3 text-sm text-destructive"
+                >
+                  {removeError}
+                </div>
+              )}
+            </div>
+          </ModalBody>
+          <ModalFooter>
+            <Button type="button" variant="outline" onClick={closeRemoveModal} disabled={removing}>
+              Close
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => void handleRemoveMember()}
+              disabled={removing}
+            >
+              {removing
+                ? 'Working...'
+                : getMemberStatus(removeTarget) === 'pending'
+                  ? 'Cancel Invitation'
+                  : 'Remove Member'}
             </Button>
           </ModalFooter>
         </Modal>

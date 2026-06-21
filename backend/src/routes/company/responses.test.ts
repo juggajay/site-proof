@@ -5,6 +5,7 @@ import {
   buildCompanyLeftResponse,
   buildCompanyLogoUploadedResponse,
   buildCompanyMembersResponse,
+  buildCompanyMemberRemovedResponse,
   buildCompanyOwnershipTransferredResponse,
   buildCompanyProfileResponse,
   buildCompanyUpdatedResponse,
@@ -101,6 +102,32 @@ describe('company response helpers', () => {
     });
   });
 
+  it('treats OAuth-backed passwordless company members as active', () => {
+    expect(
+      buildCompanyMembersResponse([
+        {
+          id: 'user-2',
+          email: 'oauth@example.com',
+          fullName: 'OAuth Member',
+          roleInCompany: 'site_engineer',
+          passwordHash: null,
+          oauthProvider: 'google',
+        },
+      ]),
+    ).toEqual({
+      members: [
+        {
+          id: 'user-2',
+          email: 'oauth@example.com',
+          fullName: 'OAuth Member',
+          roleInCompany: 'site_engineer',
+          hasPassword: false,
+          status: 'active',
+        },
+      ],
+    });
+  });
+
   it('preserves ownership transfer response', () => {
     expect(
       buildCompanyOwnershipTransferredResponse(
@@ -115,6 +142,34 @@ describe('company response helpers', () => {
         fullName: 'New Owner',
       },
       transferredAt: '2026-06-01T03:04:05.000Z',
+    });
+  });
+
+  it('distinguishes removed members from cancelled pending invitations', () => {
+    expect(
+      buildCompanyMemberRemovedResponse({
+        memberId: 'user-2',
+        status: 'removed',
+        removedAt: new Date('2026-06-01T04:05:06.000Z'),
+      }),
+    ).toEqual({
+      message: 'Company member removed successfully',
+      memberId: 'user-2',
+      status: 'removed',
+      removedAt: '2026-06-01T04:05:06.000Z',
+    });
+
+    expect(
+      buildCompanyMemberRemovedResponse({
+        memberId: 'user-3',
+        status: 'cancelled',
+        removedAt: new Date('2026-06-01T05:06:07.000Z'),
+      }),
+    ).toEqual({
+      message: 'Company invitation cancelled successfully',
+      memberId: 'user-3',
+      status: 'cancelled',
+      removedAt: '2026-06-01T05:06:07.000Z',
     });
   });
 

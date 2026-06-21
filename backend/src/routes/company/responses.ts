@@ -35,6 +35,7 @@ type CompanyMember = {
   fullName: string | null;
   roleInCompany: string;
   passwordHash?: string | null;
+  oauthProvider?: string | null;
   createdAt?: Date;
   updatedAt?: Date;
 };
@@ -99,7 +100,7 @@ export function buildCompanyMembersResponse(members: CompanyMember[]) {
       fullName: member.fullName,
       roleInCompany: member.roleInCompany,
       hasPassword: Boolean(member.passwordHash),
-      status: member.passwordHash ? 'active' : 'pending',
+      status: member.passwordHash || member.oauthProvider ? 'active' : 'pending',
       ...(member.createdAt ? { createdAt: member.createdAt.toISOString() } : {}),
       ...(member.updatedAt ? { updatedAt: member.updatedAt.toISOString() } : {}),
     })),
@@ -111,23 +112,40 @@ export function buildCompanyMemberInvitedResponse(
   invitation: { expiresAt: Date | null },
 ) {
   return {
-    message: member.passwordHash
-      ? 'Company member updated successfully'
-      : 'Company invitation sent successfully',
+    message:
+      member.passwordHash || member.oauthProvider
+        ? 'Company member updated successfully'
+        : 'Company invitation sent successfully',
     member: {
       id: member.id,
       email: member.email,
       fullName: member.fullName,
       roleInCompany: member.roleInCompany,
       hasPassword: Boolean(member.passwordHash),
-      status: member.passwordHash ? 'active' : 'pending',
+      status: member.passwordHash || member.oauthProvider ? 'active' : 'pending',
       ...(member.createdAt ? { createdAt: member.createdAt.toISOString() } : {}),
       ...(member.updatedAt ? { updatedAt: member.updatedAt.toISOString() } : {}),
     },
     invitation: {
-      setupRequired: !member.passwordHash,
+      setupRequired: !member.passwordHash && !member.oauthProvider,
       expiresAt: invitation.expiresAt?.toISOString() ?? null,
     },
+  };
+}
+
+export function buildCompanyMemberRemovedResponse(params: {
+  memberId: string;
+  status: 'removed' | 'cancelled';
+  removedAt: Date;
+}) {
+  return {
+    message:
+      params.status === 'cancelled'
+        ? 'Company invitation cancelled successfully'
+        : 'Company member removed successfully',
+    memberId: params.memberId,
+    status: params.status,
+    removedAt: params.removedAt.toISOString(),
   };
 }
 

@@ -126,4 +126,86 @@ describe('CompanyTeamMembersSection', () => {
     expect(screen.getByText('Pending')).toBeInTheDocument();
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.companySettings });
   });
+
+  it('cancels a pending invitation and removes it from the table', async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      members: [
+        {
+          id: 'pending-1',
+          email: 'pending@example.com',
+          fullName: 'Pending Foreman',
+          roleInCompany: 'foreman',
+          hasPassword: false,
+          status: 'pending',
+        },
+      ],
+    });
+    apiFetchMock.mockResolvedValueOnce({
+      memberId: 'pending-1',
+      status: 'cancelled',
+    });
+
+    const { invalidateSpy } = renderWithQueryClient(<CompanyTeamMembersSection />);
+
+    await screen.findByText('Pending Foreman');
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.getByText('Cancel Company Invitation')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel Invitation' }));
+
+    await waitFor(() => {
+      expect(apiFetchMock).toHaveBeenCalledWith('/api/company/members/pending-1', {
+        method: 'DELETE',
+      });
+    });
+
+    expect(await screen.findByText('Invitation cancelled for pending@example.com.')).toBeVisible();
+    expect(screen.queryByText('Pending Foreman')).not.toBeInTheDocument();
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.companySettings });
+  });
+
+  it('removes an active member and leaves protected rows without remove buttons', async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      members: [
+        {
+          id: 'owner-1',
+          email: 'owner@example.com',
+          fullName: 'Owner User',
+          roleInCompany: 'owner',
+          hasPassword: true,
+          status: 'active',
+        },
+        {
+          id: 'member-1',
+          email: 'member@example.com',
+          fullName: 'Active Member',
+          roleInCompany: 'site_engineer',
+          hasPassword: true,
+          status: 'active',
+        },
+      ],
+    });
+    apiFetchMock.mockResolvedValueOnce({
+      memberId: 'member-1',
+      status: 'removed',
+    });
+
+    renderWithQueryClient(<CompanyTeamMembersSection currentUserId="owner-1" />);
+
+    await screen.findByText('Owner User');
+    expect(screen.getByText('You')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+    expect(screen.getByText('Remove Company Member')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Member' }));
+
+    await waitFor(() => {
+      expect(apiFetchMock).toHaveBeenCalledWith('/api/company/members/member-1', {
+        method: 'DELETE',
+      });
+    });
+
+    expect(await screen.findByText('Active Member was removed from the company.')).toBeVisible();
+    expect(screen.queryByText('Active Member')).not.toBeInTheDocument();
+  });
 });

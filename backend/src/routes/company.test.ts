@@ -1768,6 +1768,60 @@ describe('Company API', () => {
       await expect(prisma.user.count({ where: { companyId: limitedCompany.id } })).resolves.toBe(5);
     });
 
+    it('attaches an existing OAuth user without sending a setup invitation', async () => {
+      const email = `company-invite-oauth-${Date.now()}@example.com`;
+      const existingUser = await prisma.user.create({
+        data: {
+          email,
+          fullName: 'Existing OAuth Member',
+          companyId: null,
+          roleInCompany: 'member',
+          emailVerified: true,
+          emailVerifiedAt: new Date(),
+          oauthProvider: 'google',
+          oauthProviderId: `company-invite-oauth-${Date.now()}`,
+        },
+      });
+      invitedUserIds.push(existingUser.id);
+      const sendInviteSpy = vi.spyOn(emailService, 'sendCompanyMemberInvitationEmail');
+
+      try {
+        const res = await request(app)
+          .post('/api/company/members/invite')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            email,
+            fullName: 'Existing OAuth Member',
+            roleInCompany: 'site_engineer',
+          });
+
+        expect(res.status).toBe(201);
+        expect(sendInviteSpy).not.toHaveBeenCalled();
+        expect(res.body).toMatchObject({
+          message: 'Company member updated successfully',
+          member: {
+            id: existingUser.id,
+            email,
+            roleInCompany: 'site_engineer',
+            hasPassword: false,
+            status: 'active',
+          },
+          invitation: {
+            setupRequired: false,
+            expiresAt: null,
+          },
+        });
+
+        const updatedUser = await prisma.user.findUnique({
+          where: { id: existingUser.id },
+          select: { companyId: true, roleInCompany: true },
+        });
+        expect(updatedUser).toMatchObject({ companyId, roleInCompany: 'site_engineer' });
+      } finally {
+        sendInviteSpy.mockRestore();
+      }
+    });
+
     it('serializes concurrent member invites against the subscription seat limit', async () => {
       const limitedCompany = await prisma.company.create({
         data: {
@@ -1859,6 +1913,261 @@ describe('Company API', () => {
           DROP FUNCTION IF EXISTS test_delay_company_member_invite_insert()
         `;
       }
+    });
+  });
+
+  describe('DELETE /api/company/members/:memberId', () => {
+    const removalUserIds: string[] = [];
+    const removalCompanyIds: string[] = [];
+    const removalProjectIds: string[] = [];
+
+    afterEach(async () => {
+      await prisma.auditLog.deleteMany({
+        where: {
+          OR: [{ entityId: { in: removalUserIds } }, { entityId: { in: removalCompanyIds } }],
+        },
+      });
+      await prisma.projectUser.deleteMany({
+        where: {
+          OR: [{ userId: { in: removalUserIds } }, { projectId: { in: removalProjectIds } }],
+        },
+      });
+      await prisma.project.deleteMany({ where: { id: { in: removalProjectIds } } });
+      await prisma.passwordResetToken.deleteMany({ where: { userId: { in: removalUserIds } } });
+      await prisma.emailVerificationToken.deleteMany({
+        where: { userId: { in: removalUserIds } },
+      });
+      await prisma.user.deleteMany({ where: { id: { in: removalUserIds } } });
+      await prisma.company.deleteMany({ where: { id: { in: removalCompanyIds } } });
+
+      removalUserIds.length = 0;
+      removalCompanyIds.length = 0;
+      removalProjectIds.length = 0;
+    });
+
+    it('removes an active company member and their project memberships', async () => {
+      const member = await registerTestUser(app, {
+        emailPrefix: 'company-remove-active',
+        fullName: 'Company Remove Active',
+        companyId,
+        roleInCompany: 'site_engineer',
+      });
+      removalUserIds.push(member.userId);
+
+      const project = await prisma.project.create({
+        data: {
+          name: `Company Remove Project ${Date.now()}`,
+          projectNumber: `COMP-REMOVE-${Date.now()}`,
+          companyId,
+          status: 'active',
+          state: 'NSW',
+          specificationSet: 'TfNSW',
+        },
+      });
+      removalProjectIds.push(project.id);
+
+      await prisma.projectUser.create({
+        data: {
+          projectId: project.id,
+          userId: member.userId,
+          role: 'site_engineer',
+          status: 'active',
+        },
+      });
+
+      const res = await request(app)
+        .delete(`/api/company/members/${member.userId}`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({
+        message: 'Company member removed successfully',
+        memberId: member.userId,
+        status: 'removed',
+      });
+      expect(res.body.removedAt).toBeDefined();
+
+      const removedUser = await prisma.user.findUnique({
+        where: { id: member.userId },
+        select: { companyId: true, roleInCompany: true },
+      });
+      expect(removedUser).toMatchObject({ companyId: null, roleInCompany: 'member' });
+      await expect(
+        prisma.projectUser.count({ where: { projectId: project.id, userId: member.userId } }),
+      ).resolves.toBe(0);
+
+      const auditLog = await prisma.auditLog.findFirst({
+        where: {
+          entityType: 'user',
+          entityId: member.userId,
+          action: AuditAction.USER_REMOVED,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      expect(auditLog).not.toBeNull();
+      const changes = parseAuditLogChanges(auditLog?.changes ?? null) as Record<string, unknown>;
+      expect(changes).toMatchObject({
+        removedUserId: member.userId,
+        removedUserEmail: member.email,
+        companyId,
+        previousRole: 'site_engineer',
+        status: 'removed',
+        removedProjectMembershipCount: 1,
+      });
+    });
+
+    it('cancels a pending company invitation and frees the seat', async () => {
+      const pendingEmail = `company-remove-pending-${Date.now()}@example.com`;
+      const pendingUser = await prisma.user.create({
+        data: {
+          email: pendingEmail,
+          fullName: 'Company Remove Pending',
+          companyId,
+          roleInCompany: 'foreman',
+          emailVerified: true,
+          emailVerifiedAt: new Date(),
+        },
+      });
+      removalUserIds.push(pendingUser.id);
+      await prisma.passwordResetToken.create({
+        data: {
+          userId: pendingUser.id,
+          token: hashOneTimeTokenForTest(`company-remove-pending-${Date.now()}`),
+          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        },
+      });
+
+      const userCountBefore = await prisma.user.count({ where: { companyId } });
+      const res = await request(app)
+        .delete(`/api/company/members/${pendingUser.id}`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({
+        message: 'Company invitation cancelled successfully',
+        memberId: pendingUser.id,
+        status: 'cancelled',
+      });
+      await expect(prisma.user.findUnique({ where: { id: pendingUser.id } })).resolves.toBeNull();
+      await expect(prisma.user.count({ where: { companyId } })).resolves.toBe(userCountBefore - 1);
+
+      const auditLog = await prisma.auditLog.findFirst({
+        where: {
+          entityType: 'user',
+          entityId: pendingUser.id,
+          action: AuditAction.USER_REMOVED,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      const changes = parseAuditLogChanges(auditLog?.changes ?? null) as Record<string, unknown>;
+      expect(changes).toMatchObject({
+        removedUserId: pendingUser.id,
+        removedUserEmail: pendingEmail,
+        previousRole: 'foreman',
+        status: 'cancelled',
+        cancelledSetupTokenCount: 1,
+      });
+    });
+
+    it('detaches passwordless OAuth members instead of deleting the account', async () => {
+      const oauthEmail = `company-remove-oauth-${Date.now()}@example.com`;
+      const oauthUser = await prisma.user.create({
+        data: {
+          email: oauthEmail,
+          fullName: 'Company Remove OAuth',
+          companyId,
+          roleInCompany: 'site_engineer',
+          emailVerified: true,
+          emailVerifiedAt: new Date(),
+          oauthProvider: 'google',
+          oauthProviderId: `company-remove-oauth-${Date.now()}`,
+        },
+      });
+      removalUserIds.push(oauthUser.id);
+
+      const res = await request(app)
+        .delete(`/api/company/members/${oauthUser.id}`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({
+        message: 'Company member removed successfully',
+        memberId: oauthUser.id,
+        status: 'removed',
+      });
+
+      const removedUser = await prisma.user.findUnique({
+        where: { id: oauthUser.id },
+        select: { companyId: true, roleInCompany: true, oauthProvider: true },
+      });
+      expect(removedUser).toMatchObject({
+        companyId: null,
+        roleInCompany: 'member',
+        oauthProvider: 'google',
+      });
+    });
+
+    it('rejects removing your own company membership through member admin removal', async () => {
+      const res = await request(app)
+        .delete(`/api/company/members/${userId}`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toContain('leave company');
+    });
+
+    it('rejects removal when the member is the only active project admin', async () => {
+      const soleCompany = await prisma.company.create({
+        data: { name: `Remove Sole Admin Company ${Date.now()}` },
+      });
+      removalCompanyIds.push(soleCompany.id);
+
+      const owner = await registerTestUser(app, {
+        emailPrefix: 'remove-sole-owner',
+        fullName: 'Remove Sole Owner',
+        companyId: soleCompany.id,
+        roleInCompany: 'owner',
+      });
+      const admin = await registerTestUser(app, {
+        emailPrefix: 'remove-sole-admin',
+        fullName: 'Remove Sole Admin',
+        companyId: soleCompany.id,
+        roleInCompany: 'admin',
+      });
+      removalUserIds.push(owner.userId, admin.userId);
+
+      const project = await prisma.project.create({
+        data: {
+          name: `Remove Sole Admin Project ${Date.now()}`,
+          projectNumber: `REMOVE-SOLE-${Date.now()}`,
+          companyId: soleCompany.id,
+          status: 'active',
+          state: 'NSW',
+          specificationSet: 'TfNSW',
+        },
+      });
+      removalProjectIds.push(project.id);
+      await prisma.projectUser.create({
+        data: {
+          projectId: project.id,
+          userId: admin.userId,
+          role: 'admin',
+          status: 'active',
+        },
+      });
+
+      const res = await request(app)
+        .delete(`/api/company/members/${admin.userId}`)
+        .set('Authorization', `Bearer ${owner.token}`);
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toContain('only active project admin or project manager');
+      await expect(
+        prisma.user.findUnique({
+          where: { id: admin.userId },
+          select: { companyId: true, roleInCompany: true },
+        }),
+      ).resolves.toMatchObject({ companyId: soleCompany.id, roleInCompany: 'admin' });
     });
   });
 
