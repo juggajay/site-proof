@@ -248,7 +248,8 @@ Notes for Review:
 
 ## Stage 5a - Commercial Dockets
 
-Status: passed, no product fixes required in this slice.
+Status: passed. Follow-up Stage 17 production recheck also passed after
+follow-up docket fixes #1025, #1026, and #1027.
 
 Scope covered:
 - Backend `/health` and `/ready`.
@@ -327,10 +328,9 @@ Notes for Review:
   cost fields. This is confusing for future developers, but current UI helpers
   intentionally treat them as money and use entry rows / `labourHours` /
   `plantHours` for hours.
-- Product polish opportunity: the subbie approved docket detail shows adjusted
-  hours/costs and struck-through submitted values, but it does not show the
-  adjustment reason. Since the backend stores the reason, showing it on the
-  approved detail would make the commercial audit trail clearer.
+- Resolved in follow-up production QA: the subbie approved docket detail now
+  shows the adjustment reason, and the owner read-only docket modal no longer
+  shows action notes controls on already-actioned dockets.
 - The visible QA browser still shows the email-verification banner on generated
   test users. This is expected until the email-focused pass verifies account
   verification delivery.
@@ -1167,3 +1167,66 @@ Notes for Review:
 - The final #1023 change is test-only; it protects CI from direct Prisma fixture
   claim-number collisions after route-created claims advance the same project's
   claim sequence.
+
+## Stage 17 - Dockets Lifecycle Production Recheck
+
+Scope:
+- Re-ran the commercial dockets lifecycle against production after the Stage 5a
+  fixes and the later docket lifecycle hardening.
+- Used fresh throwaway owner, subcontractor, and unrelated outsider accounts.
+- Exercised both API-level state transitions and visible browser verification
+  for the owner and subcontractor surfaces.
+
+Status: passed after one QA-found UI polish fix.
+
+API run evidence:
+- Run: `stage17-308bb7b653dc`.
+- Result: 40 checks, 0 failures.
+- Covered owner registration, company creation, project creation,
+  subcontractor invite acceptance, scoped `my-company`, valid portal access
+  keys, invalid `dockets` portal key rejection, roster setup, assigned lot
+  setup, empty docket submit guard, missing start-time guard, labour cost
+  calculation, plant cost calculation, adjusted approval, query/response,
+  rejection, owner/subbie list/detail reads, diary auto-sync, and unrelated
+  outsider denial.
+
+Visible browser evidence:
+- Subcontractor docket history showed rejected, queried/approved,
+  adjusted/approved, and draft dockets.
+- Subcontractor approved docket detail showed submitted and approved labour,
+  submitted and approved plant, summary totals, and the adjustment reason.
+- Owner project dockets list showed approved submitted-vs-approved values,
+  rejected/query states, and the operational summary.
+- Owner approved docket read-only modal showed docket details and no longer
+  rendered `Rejection Reason`, `Approval Notes`, `Query Details`, or voice input
+  controls.
+- No console errors were observed on the verified owner or subcontractor pages.
+
+Related merged work:
+- #1025 - Fix docket lifecycle approval edge cases, merged as `1703433e`.
+- #1026 - Fix docket reachability E2E project links, merged as `3ff38353`.
+- #1027 - Hide docket action notes in view mode, merged as `5867b76f`.
+
+Verification:
+- PR #1027 local focused check:
+  `npm run test:unit -- DocketActionModal.test.tsx` passed, 15 tests.
+- PR #1027 local frontend `format:check`, `lint -- --quiet`, `git diff --check`,
+  and changed-file `fallow:audit` passed. The only lint warning was the existing
+  fast-refresh warning in `frontend/src/lib/theme.tsx`.
+- PR #1027 CI passed: Frontend, PR E2E smoke, Detect changes, and Vercel
+  ignored-build.
+- Master CI run `27891667191` passed after #1027, including Backend, Frontend,
+  and full Frontend E2E.
+- Production health after deploy: frontend returned HTTP 200 and backend
+  `/ready` returned HTTP 200. The production frontend served asset
+  `assets/index-BbNtblpr.js` during the final verification.
+
+Notes for Review:
+- Query response resubmits the docket to `pending_approval` by design. This is
+  covered by `backend/src/routes/dockets/review.ts` and the route tests.
+- `dockets` is intentionally not a subcontractor portal access key. The valid
+  keys remain `lots`, `itps`, `holdPoints`, `testResults`, `ncrs`, and
+  `documents`.
+- The visible QA browser initially held the old frontend bundle through the
+  service worker and showed the app update banner. The QA browser was refreshed
+  to the new bundle before final verification.
