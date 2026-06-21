@@ -1,38 +1,7 @@
 import type { PrismaClient } from '@prisma/client';
+import { ALERT_ESCALATION_CONFIG, type AlertType } from '../notificationAlertConfig.js';
 import { buildProjectEntityLink, parsePositiveInteger } from './helpers.js';
 import type { NotificationTypeWithTiming } from './preferences.js';
-
-type AlertType = 'overdue_ncr' | 'stale_hold_point' | 'pending_approval' | 'overdue_test';
-
-const ESCALATION_CONFIG: Record<
-  AlertType,
-  {
-    firstEscalationAfterHours: number;
-    secondEscalationAfterHours: number;
-    escalationRoles: string[];
-  }
-> = {
-  overdue_ncr: {
-    firstEscalationAfterHours: 24,
-    secondEscalationAfterHours: 48,
-    escalationRoles: ['project_manager', 'quality_manager', 'admin'],
-  },
-  stale_hold_point: {
-    firstEscalationAfterHours: 4,
-    secondEscalationAfterHours: 8,
-    escalationRoles: ['superintendent', 'project_manager', 'admin'],
-  },
-  pending_approval: {
-    firstEscalationAfterHours: 8,
-    secondEscalationAfterHours: 24,
-    escalationRoles: ['project_manager', 'admin'],
-  },
-  overdue_test: {
-    firstEscalationAfterHours: 48,
-    secondEscalationAfterHours: 96,
-    escalationRoles: ['quality_manager', 'project_manager'],
-  },
-};
 
 type AlertEscalationPrisma = Pick<PrismaClient, 'notificationAlert'>;
 
@@ -106,7 +75,7 @@ function emptyAlertEscalationResult(): AlertEscalationAutomationResult {
 }
 
 function isAlertType(value: string): value is AlertType {
-  return Object.prototype.hasOwnProperty.call(ESCALATION_CONFIG, value);
+  return Object.prototype.hasOwnProperty.call(ALERT_ESCALATION_CONFIG, value);
 }
 
 export async function processAlertEscalations(
@@ -139,7 +108,7 @@ export async function processAlertEscalations(
       continue;
     }
 
-    const config = ESCALATION_CONFIG[alert.type];
+    const config = ALERT_ESCALATION_CONFIG[alert.type];
     const hoursSinceCreation = (now.getTime() - alert.createdAt.getTime()) / deps.hourMs;
     let newLevel: number | null = null;
     if (alert.escalationLevel === 0 && hoursSinceCreation >= config.firstEscalationAfterHours) {

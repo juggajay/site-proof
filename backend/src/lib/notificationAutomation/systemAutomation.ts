@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
+import { STALE_HOLD_POINT_ALERT_ROLES } from '../notificationAlertConfig.js';
 import { buildProjectEntityLink, formatDateKey, getPreviousWorkingDay } from './helpers.js';
 
-const HOLD_POINT_ALERT_ROLES = ['project_manager', 'superintendent', 'quality_manager'];
 const SYSTEM_DIARY_ALERT_ROLES = ['site_engineer', 'foreman', 'project_manager'];
 const ALERT_OWNER_ROLE_PRIORITY = [
   'project_manager',
@@ -273,7 +273,7 @@ export async function processSystemAlerts(
         createdAt: now,
       });
 
-      const users = await deps.findProjectUsersByRoles(project.id, HOLD_POINT_ALERT_ROLES);
+      const users = await deps.findProjectUsersByRoles(project.id, STALE_HOLD_POINT_ALERT_ROLES);
       if (users.length > 0) {
         await deps.prisma.notification.createMany({
           data: users.map((user) => ({
