@@ -2968,9 +2968,8 @@ Remaining findings for a later pass:
   email storage.
 - Webhooks are still not wired to real business events. `triggerWebhooks()`
   exists but needs deliberate event integration for the intended event set.
-- Webhook management should avoid decrypting secrets for list/delete operations
-  that do not need the secret, so corrupt ciphertext or key rotation does not
-  block cleanup.
+- Webhook management recovery when stored secrets cannot be decrypted was fixed
+  in Stage 35 / #1074.
 - Decide what should happen to webhook ownership/configuration when the creator
   is offboarded from the company.
 
@@ -2979,6 +2978,80 @@ Artifacts:
 - No bearer tokens, session cookies, generated passwords, production secrets,
   recipient emails, schedule IDs tied to credentials, webhook URLs, webhook
   secrets, or browser-session data were committed or copied into this ledger.
+
+## Stage 35 - Webhook Secret-Management Recovery QA
+
+Status: completed for webhook management recovery. One code PR was merged from
+this stage. Business-event webhook integration remains queued separately.
+
+Scope:
+
+- Webhook management and recovery when a stored webhook secret was encrypted
+  with an old key or otherwise cannot be decrypted.
+- Distinguish endpoints that genuinely need the webhook signing secret from
+  endpoints that only return masked metadata and should remain usable for
+  cleanup/recovery.
+
+Confirmed issue fixed:
+
+- Webhook list/get/update/delete/delivery-history paths no longer decrypt the
+  stored secret when returning masked webhook metadata.
+- A key rotation or stale/corrupt webhook secret no longer blocks an admin from
+  listing the webhook, seeing its masked metadata, disabling it, viewing its
+  delivery history, or deleting it.
+- Webhook test delivery and actual delivery still use the decrypting path,
+  because they need the plaintext secret to sign outgoing payloads.
+
+Related merged work:
+
+- #1074 - Fix webhook management with stale encrypted secrets, merged as
+  `91412984`.
+
+Verification:
+
+- #1074 local checks passed:
+  - backend `npm run db:generate` with the local Windows TLS workaround
+  - backend `npm run type-check`
+  - backend `npm run lint`
+  - backend `npm run format:check`
+  - backend pure helper test
+    `npm run test -- src/routes/webhooks/delivery.test.ts`
+  - `git diff --check`
+  - changed-file `fallow audit --base origin/master --format json --quiet`,
+    verdict `pass`; no introduced dead code, complexity, or duplication.
+- Local DB-backed `npm run test -- src/routes/webhooks.test.ts` was attempted,
+  but the isolated worktree had no local `DATABASE_URL`; Prisma stopped at test
+  setup. The new DB-backed regression ran in GitHub CI.
+- PR #1074 checks passed before merge: Backend, Frontend PR E2E smoke, Detect
+  changes, and Vercel's ignored-build status. The full Frontend job was skipped
+  on the PR because only backend files changed.
+- Master CI run `27921035009` passed after merge, including Backend, Frontend,
+  and full post-merge Frontend E2E.
+- After merge, production health checks returned HTTP 200 for:
+  - `https://site-proof-production.up.railway.app/ready`
+  - `https://site-proof.vercel.app`
+
+Not live-exercised in this stage:
+
+- No real production webhooks were created, tested, disabled, or deleted.
+- Key rotation was not performed in production. The stale-secret condition is
+  covered with an encrypted-secret/key-change regression test in CI.
+
+Remaining findings for a later pass:
+
+- Webhooks are still not wired to real business events. `triggerWebhooks()`
+  exists but needs deliberate event integration for the intended event set.
+- Delivery-time handling should skip/log an individual webhook whose stored
+  secret cannot be decrypted, so one stale webhook cannot block other enabled
+  webhooks when business events are wired.
+- Decide what should happen to webhook ownership/configuration when the creator
+  is offboarded from the company.
+
+Artifacts:
+
+- No bearer tokens, session cookies, generated passwords, production secrets,
+  webhook URLs, webhook secrets, or browser-session data were committed or
+  copied into this ledger.
 
 ## Stage 27 - Operational Access, Scheduled Reports, and Session Cache QA
 
