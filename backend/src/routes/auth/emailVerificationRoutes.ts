@@ -6,6 +6,7 @@ import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { sendVerificationEmail } from '../../lib/email.js';
 import { buildFrontendUrl } from '../../lib/runtimeConfig.js';
+import { logError } from '../../lib/serverLogger.js';
 import { verificationResendLimiter } from '../../middleware/rateLimiter.js';
 
 type EmailVerificationPrismaClient = Pick<
@@ -236,7 +237,7 @@ export function createEmailVerificationRouter({
       // Token expires in 24 hours
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-      await prisma.emailVerificationToken.create({
+      const emailVerificationToken = await prisma.emailVerificationToken.create({
         data: {
           userId: user.id,
           token: hashOneTimeToken(verificationToken),
@@ -247,12 +248,36 @@ export function createEmailVerificationRouter({
       const verifyUrl = buildFrontendUrl(`/verify-email?token=${verificationToken}`);
 
       // Send verification email
-      await sendVerificationEmail({
-        to: user.email,
-        userName: user.fullName || undefined,
-        verificationUrl: verifyUrl,
-        expiresInHours: 24,
-      });
+      try {
+        const emailResult = await sendVerificationEmail({
+          to: user.email,
+          userName: user.fullName || undefined,
+          verificationUrl: verifyUrl,
+          expiresInHours: 24,
+        });
+
+        if (!emailResult.success) {
+          logError('[Email Verification] Failed to resend email:', emailResult.error);
+          await prisma.emailVerificationToken.updateMany({
+            where: { id: emailVerificationToken.id, usedAt: null },
+            data: { usedAt: new Date() },
+          });
+
+          return res.json({
+            message: GENERIC_RESEND_VERIFICATION_MESSAGE,
+          });
+        }
+      } catch (emailError) {
+        logError('[Email Verification] Failed to resend email:', emailError);
+        await prisma.emailVerificationToken.updateMany({
+          where: { id: emailVerificationToken.id, usedAt: null },
+          data: { usedAt: new Date() },
+        });
+
+        return res.json({
+          message: GENERIC_RESEND_VERIFICATION_MESSAGE,
+        });
+      }
 
       res.json({
         message: GENERIC_RESEND_VERIFICATION_MESSAGE,

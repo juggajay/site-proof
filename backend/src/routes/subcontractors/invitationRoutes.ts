@@ -488,6 +488,34 @@ export function createSubcontractorInvitationRouters({
       }
 
       await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw<Array<{ id: string }>>`
+          SELECT id
+          FROM subcontractor_companies
+          WHERE id = ${id}
+          FOR UPDATE
+        `;
+
+        const lockedSubcontractor = await tx.subcontractorCompany.findUnique({
+          where: { id },
+          select: {
+            id: true,
+            status: true,
+            invitationExpiresAt: true,
+          },
+        });
+
+        if (!lockedSubcontractor) {
+          throw AppError.notFound('Invitation');
+        }
+
+        if (blockedSubcontractorStatuses.has(lockedSubcontractor.status)) {
+          throw AppError.notFound('Invitation');
+        }
+
+        if (isSubcontractorInvitationExpired(lockedSubcontractor)) {
+          throw AppError.notFound('Invitation');
+        }
+
         const currentUser = await tx.user.findUnique({
           where: { id: user.id },
           select: { companyId: true, roleInCompany: true },
@@ -520,11 +548,11 @@ export function createSubcontractorInvitationRouters({
           throw AppError.badRequest('This invitation has already been accepted by another user');
         }
 
-        assertInvitationAcceptable(subcontractor.status);
+        assertInvitationAcceptable(lockedSubcontractor.status);
 
-        if (subcontractor.status === 'pending_approval') {
+        if (lockedSubcontractor.status === 'pending_approval') {
           const statusUpdate = await tx.subcontractorCompany.updateMany({
-            where: { id: subcontractor.id, status: 'pending_approval' },
+            where: { id: lockedSubcontractor.id, status: 'pending_approval' },
             data: { status: 'approved' },
           });
 
@@ -536,7 +564,7 @@ export function createSubcontractorInvitationRouters({
         await tx.subcontractorUser.create({
           data: {
             userId: user.id,
-            subcontractorCompanyId: subcontractor.id,
+            subcontractorCompanyId: lockedSubcontractor.id,
             role: 'admin', // First user is admin
           },
         });

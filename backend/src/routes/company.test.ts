@@ -1293,7 +1293,8 @@ describe('Company API', () => {
           });
 
         expect(sendInviteSpy).toHaveBeenCalledTimes(1);
-        expect(res.status).toBe(500);
+        expect(res.status).toBe(503);
+        expect(res.body.error.code).toBe('EXTERNAL_SERVICE_ERROR');
         expect(res.body.error.message).toContain('Company invitation email could not be sent');
         return res;
       } finally {

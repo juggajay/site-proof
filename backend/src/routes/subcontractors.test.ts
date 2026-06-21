@@ -1679,6 +1679,163 @@ describe('Subcontractors API', () => {
       }
     });
 
+    it('allows only one concurrent user to claim an already-approved invitation', async () => {
+      const approvedSub = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `Approved Race Invite ${Date.now()}`,
+          primaryContactName: 'Approved Race Invite User',
+          status: 'approved',
+        },
+      });
+      const firstUser = await registerTestUser('approved-race-a', 'Approved Race User A');
+      const secondUser = await registerTestUser('approved-race-b', 'Approved Race User B');
+
+      await prisma.$executeRaw`
+        CREATE OR REPLACE FUNCTION test_delay_subcontractor_invite_accept_insert()
+        RETURNS trigger AS $$
+        BEGIN
+          PERFORM pg_sleep(0.2);
+          RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+      `;
+      await prisma.$executeRaw`
+        DROP TRIGGER IF EXISTS test_delay_subcontractor_invite_accept_insert_trigger
+        ON subcontractor_users
+      `;
+      await prisma.$executeRaw`
+        CREATE TRIGGER test_delay_subcontractor_invite_accept_insert_trigger
+        BEFORE INSERT ON subcontractor_users
+        FOR EACH ROW
+        EXECUTE FUNCTION test_delay_subcontractor_invite_accept_insert();
+      `;
+
+      try {
+        const responses = await Promise.all([
+          request(app)
+            .post(`/api/subcontractors/invitation/${approvedSub.id}/accept`)
+            .set('Authorization', `Bearer ${firstUser.token}`),
+          request(app)
+            .post(`/api/subcontractors/invitation/${approvedSub.id}/accept`)
+            .set('Authorization', `Bearer ${secondUser.token}`),
+        ]);
+
+        expect(responses.map((res) => res.status).sort((a, b) => a - b)).toEqual([200, 400]);
+        expect(
+          responses.some((res) =>
+            String(res.body.error?.message ?? '').includes('already been accepted'),
+          ),
+        ).toBe(true);
+
+        const links = await prisma.subcontractorUser.findMany({
+          where: { subcontractorCompanyId: approvedSub.id },
+          select: { userId: true },
+        });
+        expect(links).toHaveLength(1);
+        expect([firstUser.userId, secondUser.userId]).toContain(links[0]?.userId);
+      } finally {
+        await prisma.$executeRaw`
+          DROP TRIGGER IF EXISTS test_delay_subcontractor_invite_accept_insert_trigger
+          ON subcontractor_users
+        `;
+        await prisma.$executeRaw`
+          DROP FUNCTION IF EXISTS test_delay_subcontractor_invite_accept_insert()
+        `;
+        await prisma.subcontractorUser.deleteMany({
+          where: { subcontractorCompanyId: approvedSub.id },
+        });
+        await cleanupTestUser(firstUser.userId);
+        await cleanupTestUser(secondUser.userId);
+        await prisma.subcontractorCompany.delete({ where: { id: approvedSub.id } }).catch(() => {});
+      }
+    });
+
+    it('allows only one concurrent new account to claim an approved invitation', async () => {
+      const publicEmail = `approved-public-race-${Date.now()}@example.com`;
+      const approvedSub = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `Approved Public Race Invite ${Date.now()}`,
+          primaryContactName: 'Approved Public Race Invite User',
+          primaryContactEmail: publicEmail,
+          status: 'approved',
+        },
+      });
+
+      await prisma.$executeRaw`
+        CREATE OR REPLACE FUNCTION test_delay_public_subcontractor_invite_accept_user_insert()
+        RETURNS trigger AS $$
+        BEGIN
+          PERFORM pg_sleep(0.2);
+          RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+      `;
+      await prisma.$executeRaw`
+        DROP TRIGGER IF EXISTS test_delay_public_subcontractor_invite_accept_user_insert_trigger
+        ON users
+      `;
+      await prisma.$executeRaw`
+        CREATE TRIGGER test_delay_public_subcontractor_invite_accept_user_insert_trigger
+        BEFORE INSERT ON users
+        FOR EACH ROW
+        EXECUTE FUNCTION test_delay_public_subcontractor_invite_accept_user_insert();
+      `;
+
+      try {
+        const responses = await Promise.all([
+          request(app).post('/api/auth/register-and-accept-invitation').send({
+            email: publicEmail,
+            password: 'SecureP@ssword123!',
+            fullName: 'Approved Public Race User',
+            invitationId: approvedSub.id,
+            tosAccepted: true,
+          }),
+          request(app).post('/api/auth/register-and-accept-invitation').send({
+            email: publicEmail,
+            password: 'SecureP@ssword123!',
+            fullName: 'Approved Public Race User',
+            invitationId: approvedSub.id,
+            tosAccepted: true,
+          }),
+        ]);
+
+        expect(responses.map((res) => res.status).sort((a, b) => a - b)).toEqual([201, 400]);
+
+        const users = await prisma.user.findMany({
+          where: { email: publicEmail },
+          select: { id: true },
+        });
+        expect(users).toHaveLength(1);
+
+        const links = await prisma.subcontractorUser.findMany({
+          where: { subcontractorCompanyId: approvedSub.id },
+          select: { userId: true },
+        });
+        expect(links).toEqual([{ userId: users[0]!.id }]);
+      } finally {
+        await prisma.$executeRaw`
+          DROP TRIGGER IF EXISTS test_delay_public_subcontractor_invite_accept_user_insert_trigger
+          ON users
+        `;
+        await prisma.$executeRaw`
+          DROP FUNCTION IF EXISTS test_delay_public_subcontractor_invite_accept_user_insert()
+        `;
+        await prisma.subcontractorUser.deleteMany({
+          where: { subcontractorCompanyId: approvedSub.id },
+        });
+        const users = await prisma.user.findMany({
+          where: { email: publicEmail },
+          select: { id: true },
+        });
+        for (const publicUser of users) {
+          await cleanupTestUser(publicUser.id);
+        }
+        await prisma.subcontractorCompany.delete({ where: { id: approvedSub.id } }).catch(() => {});
+      }
+    });
+
     it('should reject already-approved invitations that are linked to another portal user', async () => {
       const linkedEmail = `approved-linked-invite-${Date.now()}@example.com`;
       const linkedSub = await prisma.subcontractorCompany.create({
