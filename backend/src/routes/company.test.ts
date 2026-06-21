@@ -1436,6 +1436,54 @@ describe('Company API', () => {
       expect(lingeringAuditLog).toBeNull();
     });
 
+    it('preserves earlier invitation audit evidence when a re-invite email fails', async () => {
+      const email = `company-invite-preserve-audit-${Date.now()}@example.com`;
+      const existingUser = await prisma.user.create({
+        data: {
+          email,
+          fullName: 'Previously Invited Member',
+          companyId: null,
+          roleInCompany: 'member',
+          emailVerified: false,
+          emailVerifiedAt: null,
+        },
+      });
+      invitedUserIds.push(existingUser.id);
+
+      const previousInviteAudit = await prisma.auditLog.create({
+        data: {
+          userId,
+          entityType: 'user',
+          entityId: existingUser.id,
+          action: AuditAction.USER_INVITED,
+          changes: JSON.stringify({
+            invitedUserId: existingUser.id,
+            invitedUserEmail: email,
+            roleInCompany: 'foreman',
+            companyId,
+            status: 'pending',
+          }),
+        },
+      });
+
+      await expectFailedCompanyMemberInvite({
+        email,
+        fullName: 'Updated Pending Member',
+        emailError: 'simulated re-invite email failure',
+      });
+
+      const inviteAudits = await prisma.auditLog.findMany({
+        where: {
+          entityType: 'user',
+          entityId: existingUser.id,
+          action: AuditAction.USER_INVITED,
+        },
+        orderBy: { createdAt: 'asc' },
+      });
+
+      expect(inviteAudits.map((audit) => audit.id)).toEqual([previousInviteAudit.id]);
+    });
+
     it('includes pending members in the company member list', async () => {
       const email = `company-invite-list-${Date.now()}@example.com`;
       const inviteRes = await request(app)

@@ -60,14 +60,6 @@ async function cleanupFailedCompanyMemberInvitation(params: {
       where: { userId: params.memberId, token: setupTokenHash, usedAt: null },
     });
 
-    await tx.auditLog.deleteMany({
-      where: {
-        entityType: 'user',
-        entityId: params.memberId,
-        action: AuditAction.USER_INVITED,
-      },
-    });
-
     if (params.createdUser) {
       await tx.emailVerificationToken.deleteMany({ where: { userId: params.memberId } });
       await tx.projectUser.deleteMany({ where: { userId: params.memberId } });
@@ -408,21 +400,6 @@ companyMemberRoutes.post(
       };
     });
 
-    await createAuditLog({
-      userId: user.userId,
-      entityType: 'user',
-      entityId: member.id,
-      action: AuditAction.USER_INVITED,
-      changes: {
-        invitedUserId: member.id,
-        invitedUserEmail: member.email,
-        roleInCompany,
-        companyId,
-        status: setupRequired ? 'pending' : 'active',
-      },
-      req,
-    });
-
     if (setupRequired) {
       const setupUrl = buildFrontendUrl(`/reset-password?token=${setupToken}`);
       let emailResult;
@@ -459,6 +436,21 @@ companyMemberRoutes.post(
         throw AppError.internal('Company invitation email could not be sent');
       }
     }
+
+    await createAuditLog({
+      userId: user.userId,
+      entityType: 'user',
+      entityId: member.id,
+      action: AuditAction.USER_INVITED,
+      changes: {
+        invitedUserId: member.id,
+        invitedUserEmail: member.email,
+        roleInCompany,
+        companyId,
+        status: setupRequired ? 'pending' : 'active',
+      },
+      req,
+    });
 
     res.status(201).json(
       buildCompanyMemberInvitedResponse(member, {
