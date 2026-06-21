@@ -4,6 +4,7 @@ import express from 'express';
 import { authRouter } from './auth.js';
 import { reportsRouter } from './reports.js';
 import { prisma } from '../lib/prisma.js';
+import { ARCHIVED_PROJECT_READ_ONLY_MESSAGE } from '../lib/projectAccess.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { registerTestUser } from '../test/routeTestHarness.js';
 
@@ -1209,6 +1210,34 @@ describe('Reports API - Diary Report', () => {
     expect(res.body.pagination.page).toBe(1);
     expect(res.body.pagination.limit).toBe(10);
   });
+
+  it('should calculate diary summaries across all filtered diaries, not only the current page', async () => {
+    const secondDiary = await prisma.dailyDiary.create({
+      data: {
+        projectId,
+        date: new Date(Date.now() - 24 * 60 * 60 * 1000),
+        status: 'draft',
+        weatherConditions: 'Rain',
+      },
+    });
+
+    try {
+      const res = await request(app)
+        .get('/api/reports/diary')
+        .set('Authorization', `Bearer ${authToken}`)
+        .query({ projectId, sections: 'weather', page: 1, limit: 1 });
+
+      expect(res.status).toBe(200);
+      expect(res.body.totalDiaries).toBe(2);
+      expect(res.body.diaries).toHaveLength(1);
+      expect(res.body.submittedCount).toBe(1);
+      expect(res.body.draftCount).toBe(1);
+      expect(res.body.summary.weather.Fine).toBe(1);
+      expect(res.body.summary.weather.Rain).toBe(1);
+    } finally {
+      await prisma.dailyDiary.delete({ where: { id: secondDiary.id } }).catch(() => {});
+    }
+  });
 });
 
 describe('Reports API - Summary Report', () => {
@@ -1660,6 +1689,31 @@ describe('Reports API - Scheduled Reports', () => {
       expect(res.body.schedule.frequency).toBe('weekly');
       expect(res.body.schedule.isActive).toBe(true);
       scheduleId = res.body.schedule.id;
+    });
+
+    it('should reject scheduled report creation for archived projects', async () => {
+      const existingCount = await prisma.scheduledReport.count({ where: { projectId } });
+      await prisma.project.update({ where: { id: projectId }, data: { status: 'archived' } });
+
+      try {
+        const res = await request(app)
+          .post('/api/reports/schedules')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            projectId,
+            reportType: 'lot-status',
+            frequency: 'daily',
+            recipients: 'archived-project@example.com',
+          });
+
+        expect(res.status).toBe(409);
+        expect(res.body.error.message).toBe(ARCHIVED_PROJECT_READ_ONLY_MESSAGE);
+        await expect(prisma.scheduledReport.count({ where: { projectId } })).resolves.toBe(
+          existingCount,
+        );
+      } finally {
+        await prisma.project.update({ where: { id: projectId }, data: { status: 'active' } });
+      }
     });
 
     it('should normalize and deduplicate recipient lists', async () => {

@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../lib/AppError.js';
@@ -37,6 +38,194 @@ type DiaryReportRouterDependencies = {
   ) => void;
   requireReportProjectAccess: (user: AuthUser | undefined, projectId: string) => Promise<string>;
 };
+
+type CompanyHoursSummary = {
+  totalPersonnel?: number;
+  totalPlant?: number;
+  totalHours: number;
+  byCompany: Record<string, { count: number; hours: number }>;
+};
+
+type ActivitiesSummary = {
+  totalActivities: number;
+  byLot: Record<string, number>;
+};
+
+type DelaysSummary = {
+  totalDelays: number;
+  totalHours: number;
+  byType: Record<string, { count: number; hours: number }>;
+};
+
+function decimalToNumber(
+  value: { toString(): string } | number | string | null | undefined,
+): number {
+  if (value === null || value === undefined) {
+    return 0;
+  }
+
+  const numeric = Number(value.toString());
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+
+async function buildDiaryStatusCounts(whereClause: Prisma.DailyDiaryWhereInput) {
+  const groups = await prisma.dailyDiary.groupBy({
+    by: ['status'],
+    where: whereClause,
+    _count: true,
+  });
+
+  const counts = new Map(groups.map((group) => [group.status, group._count]));
+  return {
+    submittedCount: counts.get('submitted') ?? 0,
+    draftCount: counts.get('draft') ?? 0,
+  };
+}
+
+async function buildWeatherSummary(
+  whereClause: Prisma.DailyDiaryWhereInput,
+): Promise<Record<string, number>> {
+  const groups = await prisma.dailyDiary.groupBy({
+    by: ['weatherConditions'],
+    where: whereClause,
+    _count: true,
+  });
+
+  return groups.reduce((acc: Record<string, number>, group) => {
+    const condition = group.weatherConditions || 'Not recorded';
+    acc[condition] = (acc[condition] || 0) + group._count;
+    return acc;
+  }, {});
+}
+
+async function buildPersonnelSummary(
+  diaryWhere: Prisma.DailyDiaryWhereInput,
+): Promise<CompanyHoursSummary> {
+  const where: Prisma.DiaryPersonnelWhereInput = { diary: { is: diaryWhere } };
+  const [total, byCompany] = await Promise.all([
+    prisma.diaryPersonnel.aggregate({
+      where,
+      _count: true,
+      _sum: { hours: true },
+    }),
+    prisma.diaryPersonnel.groupBy({
+      by: ['company'],
+      where,
+      _count: true,
+      _sum: { hours: true },
+    }),
+  ]);
+
+  return {
+    totalPersonnel: total._count,
+    totalHours: decimalToNumber(total._sum.hours),
+    byCompany: byCompany.reduce((acc: Record<string, { count: number; hours: number }>, group) => {
+      const company = group.company || 'Unspecified';
+      acc[company] = {
+        count: group._count,
+        hours: decimalToNumber(group._sum.hours),
+      };
+      return acc;
+    }, {}),
+  };
+}
+
+async function buildPlantSummary(
+  diaryWhere: Prisma.DailyDiaryWhereInput,
+): Promise<CompanyHoursSummary> {
+  const where: Prisma.DiaryPlantWhereInput = { diary: { is: diaryWhere } };
+  const [total, byCompany] = await Promise.all([
+    prisma.diaryPlant.aggregate({
+      where,
+      _count: true,
+      _sum: { hoursOperated: true },
+    }),
+    prisma.diaryPlant.groupBy({
+      by: ['company'],
+      where,
+      _count: true,
+      _sum: { hoursOperated: true },
+    }),
+  ]);
+
+  return {
+    totalPlant: total._count,
+    totalHours: decimalToNumber(total._sum.hoursOperated),
+    byCompany: byCompany.reduce((acc: Record<string, { count: number; hours: number }>, group) => {
+      const company = group.company || 'Unspecified';
+      acc[company] = {
+        count: group._count,
+        hours: decimalToNumber(group._sum.hoursOperated),
+      };
+      return acc;
+    }, {}),
+  };
+}
+
+async function buildActivitiesSummary(
+  diaryWhere: Prisma.DailyDiaryWhereInput,
+): Promise<ActivitiesSummary> {
+  const where: Prisma.DiaryActivityWhereInput = { diary: { is: diaryWhere } };
+  const [totalActivities, byLot] = await Promise.all([
+    prisma.diaryActivity.count({ where }),
+    prisma.diaryActivity.groupBy({
+      by: ['lotId'],
+      where,
+      _count: true,
+    }),
+  ]);
+
+  const lotIds = byLot
+    .map((group) => group.lotId)
+    .filter((lotId): lotId is string => Boolean(lotId));
+  const lots =
+    lotIds.length > 0
+      ? await prisma.lot.findMany({
+          where: { id: { in: lotIds } },
+          select: { id: true, lotNumber: true },
+        })
+      : [];
+  const lotNumberById = new Map(lots.map((lot) => [lot.id, lot.lotNumber]));
+
+  return {
+    totalActivities,
+    byLot: byLot.reduce((acc: Record<string, number>, group) => {
+      const lotNumber = group.lotId ? lotNumberById.get(group.lotId) || 'No Lot' : 'No Lot';
+      acc[lotNumber] = (acc[lotNumber] || 0) + group._count;
+      return acc;
+    }, {}),
+  };
+}
+
+async function buildDelaysSummary(diaryWhere: Prisma.DailyDiaryWhereInput): Promise<DelaysSummary> {
+  const where: Prisma.DiaryDelayWhereInput = { diary: { is: diaryWhere } };
+  const [total, byType] = await Promise.all([
+    prisma.diaryDelay.aggregate({
+      where,
+      _count: true,
+      _sum: { durationHours: true },
+    }),
+    prisma.diaryDelay.groupBy({
+      by: ['delayType'],
+      where,
+      _count: true,
+      _sum: { durationHours: true },
+    }),
+  ]);
+
+  return {
+    totalDelays: total._count,
+    totalHours: decimalToNumber(total._sum.durationHours),
+    byType: byType.reduce((acc: Record<string, { count: number; hours: number }>, group) => {
+      const delayType = group.delayType || 'Other';
+      acc[delayType] = {
+        count: group._count,
+        hours: decimalToNumber(group._sum.durationHours),
+      };
+      return acc;
+    }, {}),
+  };
+}
 
 function parseDiaryReportSections(
   value: unknown,
@@ -102,136 +291,43 @@ export function createDiaryReportRouter({
       }
 
       // Build where clause
-      const whereClause = {
+      const whereClause: Prisma.DailyDiaryWhereInput = {
         projectId,
         ...(Object.keys(dateFilter).length > 0 ? { date: dateFilter } : {}),
       };
 
-      // Get total count for pagination
-      const total = await prisma.dailyDiary.count({ where: whereClause });
-
-      // Get paginated diaries with selected sections
-      const diaries = await prisma.dailyDiary.findMany({
-        where: whereClause,
-        include: {
-          personnel: selectedSections.includes('personnel'),
-          plant: selectedSections.includes('plant'),
-          activities: selectedSections.includes('activities')
-            ? { include: { lot: { select: { id: true, lotNumber: true } } } }
-            : undefined,
-          delays: selectedSections.includes('delays'),
-          submittedBy: {
-            select: { id: true, fullName: true, email: true },
-          },
+      const diaryInclude: Prisma.DailyDiaryInclude = {
+        personnel: selectedSections.includes('personnel'),
+        plant: selectedSections.includes('plant'),
+        activities: selectedSections.includes('activities')
+          ? { include: { lot: { select: { id: true, lotNumber: true } } } }
+          : undefined,
+        delays: selectedSections.includes('delays'),
+        submittedBy: {
+          select: { id: true, fullName: true, email: true },
         },
-        orderBy: { date: 'desc' },
-        skip,
-        take: limitNum,
-      });
-
-      // Calculate summary statistics (from paginated results)
-      const submittedCount = diaries.filter((d) => d.status === 'submitted').length;
-      const draftCount = diaries.filter((d) => d.status === 'draft').length;
-
-      // Weather summary (if section selected)
-      let weatherSummary: Record<string, number> = {};
-      if (selectedSections.includes('weather')) {
-        weatherSummary = diaries.reduce((acc: Record<string, number>, diary) => {
-          const condition = diary.weatherConditions || 'Not recorded';
-          acc[condition] = (acc[condition] || 0) + 1;
-          return acc;
-        }, {});
-      }
-
-      // Personnel summary (if section selected)
-      const personnelSummary = {
-        totalPersonnel: 0,
-        totalHours: 0,
-        byCompany: {} as Record<string, { count: number; hours: number }>,
       };
-      if (selectedSections.includes('personnel')) {
-        for (const diary of diaries) {
-          if (diary.personnel) {
-            for (const person of diary.personnel) {
-              personnelSummary.totalPersonnel++;
-              const hours = person.hours ? parseFloat(person.hours.toString()) : 0;
-              personnelSummary.totalHours += hours;
 
-              const company = person.company || 'Unspecified';
-              if (!personnelSummary.byCompany[company]) {
-                personnelSummary.byCompany[company] = { count: 0, hours: 0 };
-              }
-              personnelSummary.byCompany[company].count++;
-              personnelSummary.byCompany[company].hours += hours;
-            }
-          }
-        }
-      }
+      const [total, diaries, statusCounts] = await Promise.all([
+        prisma.dailyDiary.count({ where: whereClause }),
+        prisma.dailyDiary.findMany({
+          where: whereClause,
+          include: diaryInclude,
+          orderBy: { date: 'desc' },
+          skip,
+          take: limitNum,
+        }),
+        buildDiaryStatusCounts(whereClause),
+      ]);
 
-      // Plant summary (if section selected)
-      const plantSummary = {
-        totalPlant: 0,
-        totalHours: 0,
-        byCompany: {} as Record<string, { count: number; hours: number }>,
-      };
-      if (selectedSections.includes('plant')) {
-        for (const diary of diaries) {
-          if (diary.plant) {
-            for (const item of diary.plant) {
-              plantSummary.totalPlant++;
-              const hours = item.hoursOperated ? parseFloat(item.hoursOperated.toString()) : 0;
-              plantSummary.totalHours += hours;
-
-              const company = item.company || 'Unspecified';
-              if (!plantSummary.byCompany[company]) {
-                plantSummary.byCompany[company] = { count: 0, hours: 0 };
-              }
-              plantSummary.byCompany[company].count++;
-              plantSummary.byCompany[company].hours += hours;
-            }
-          }
-        }
-      }
-
-      // Activities summary (if section selected)
-      const activitiesSummary = { totalActivities: 0, byLot: {} as Record<string, number> };
-      if (selectedSections.includes('activities')) {
-        for (const diary of diaries) {
-          if (diary.activities) {
-            for (const activity of diary.activities) {
-              activitiesSummary.totalActivities++;
-              const lotNumber =
-                (activity as { lot?: { lotNumber: string } }).lot?.lotNumber || 'No Lot';
-              activitiesSummary.byLot[lotNumber] = (activitiesSummary.byLot[lotNumber] || 0) + 1;
-            }
-          }
-        }
-      }
-
-      // Delays summary (if section selected)
-      const delaysSummary = {
-        totalDelays: 0,
-        totalHours: 0,
-        byType: {} as Record<string, { count: number; hours: number }>,
-      };
-      if (selectedSections.includes('delays')) {
-        for (const diary of diaries) {
-          if (diary.delays) {
-            for (const delay of diary.delays) {
-              delaysSummary.totalDelays++;
-              const hours = delay.durationHours ? parseFloat(delay.durationHours.toString()) : 0;
-              delaysSummary.totalHours += hours;
-
-              const delayType = delay.delayType || 'Other';
-              if (!delaysSummary.byType[delayType]) {
-                delaysSummary.byType[delayType] = { count: 0, hours: 0 };
-              }
-              delaysSummary.byType[delayType].count++;
-              delaysSummary.byType[delayType].hours += hours;
-            }
-          }
-        }
-      }
+      const [weatherSummary, personnelSummary, plantSummary, activitiesSummary, delaysSummary] =
+        await Promise.all([
+          selectedSections.includes('weather') ? buildWeatherSummary(whereClause) : undefined,
+          selectedSections.includes('personnel') ? buildPersonnelSummary(whereClause) : undefined,
+          selectedSections.includes('plant') ? buildPlantSummary(whereClause) : undefined,
+          selectedSections.includes('activities') ? buildActivitiesSummary(whereClause) : undefined,
+          selectedSections.includes('delays') ? buildDelaysSummary(whereClause) : undefined,
+        ]);
 
       const report = {
         generatedAt: new Date().toISOString(),
@@ -242,8 +338,8 @@ export function createDiaryReportRouter({
         },
         selectedSections,
         totalDiaries: total,
-        submittedCount,
-        draftCount,
+        submittedCount: statusCounts.submittedCount,
+        draftCount: statusCounts.draftCount,
         diaries: diaries.map((diary) => ({
           id: diary.id,
           date: diary.date,

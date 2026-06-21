@@ -229,7 +229,7 @@ export function createScheduledReportRouter({
       if (reportType === undefined || frequency === undefined || recipients === undefined) {
         throw AppError.badRequest('projectId, reportType, frequency, and recipients are required');
       }
-      await requireScheduledReportAccess(req.user, projectId);
+      await requireScheduledReportAccess(req.user, projectId, { requireWritable: true });
 
       const normalizedReportType = parseScheduledReportType(reportType);
       const normalizedFrequency = parseScheduledReportFrequency(frequency);
