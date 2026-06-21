@@ -1651,3 +1651,129 @@ Observations for Review:
   probes because this Windows/AVG Node trust store did not trust the leaf chain.
   PowerShell and the visible browser trusted production normally, so this appears
   to be a local test-runner certificate-store issue rather than an app issue.
+
+## Stage 21 - Documents, Drawings, Reports, and File Access
+
+Status: completed on production. No code fix was required in this stage.
+
+Scope:
+
+- Backend document download, signed URL generation, signed URL validation,
+  deletion, and expiry.
+- Project document, drawing, report, claim, cost, audit-log, and subcontractor
+  document browser surfaces.
+- Report role boundaries and report input validation.
+- Drawing file-locator response behavior.
+- Privacy export and audit-log secret redaction checks.
+- CSV formula-injection hardening for shared frontend CSV exports.
+
+Read-only mapping:
+
+- Three read-only subagents mapped the backend and frontend file-access surfaces
+  before live testing. They covered document signed URLs, project documents,
+  drawings, reports, claims PDFs, NCR evidence, ITP/lot evidence, hold-point
+  evidence packages, subcontractor documents, foreman file surfaces, comment
+  attachments, and CSV/PDF export surfaces.
+- The highest-risk checks selected from that map were stale signed URLs,
+  deleted-file link behavior, raw storage URL leakage, subcontractor document
+  scope, report role boundaries, privacy/audit export redaction, and public
+  hold-point evidence leakage.
+
+Production API evidence:
+
+- A sacrificial document upload did not expose `fileUrl` in owner document list
+  responses.
+- Owner signed URL generation succeeded, public validation returned valid, and
+  public download returned HTTP 200 with `Cache-Control: private, no-store,
+  max-age=0`, `Pragma: no-cache`, `Referrer-Policy: no-referrer`, and
+  `X-Content-Type-Options: nosniff`.
+- The same signed token failed validation when paired with the wrong document.
+- An outsider was denied signed URL generation with HTTP 403.
+- A subcontractor with the documents portal module enabled could generate a
+  signed URL for an allowed document; after the module was disabled, new signed
+  URL generation was denied with HTTP 403.
+- The pre-existing bearer signed URL still downloaded until expiry after module
+  revocation. This is expected bearer-link behavior under the current design,
+  but it should remain a documented product/security decision. If immediate
+  revocation is required later, signed tokens need explicit revocation on portal
+  access changes or public download must re-check current access.
+- Restoring the subcontractor documents module succeeded, and the sacrificial
+  document cleanup returned HTTP 204.
+- A second sacrificial document confirmed delete/expiry behavior: after document
+  deletion, public validation returned invalid and public download returned
+  denied; a 1-minute token validated before expiry and invalidated after expiry.
+- Report API matrix passed: lot status, NCR, test, diary, summary, and claims
+  report endpoints returned HTTP 200 for the owner; invalid pagination, invalid
+  date range, invalid diary sections, and invalid claim status returned HTTP
+  400; subcontractor and outsider report access returned HTTP 403; foreman
+  claims-report access returned HTTP 403.
+- Scheduled reports were not created because the current subscription tier
+  correctly returned HTTP 403 for scheduled-report access.
+- Document list checks returned HTTP 200 for owner/subcontractor and HTTP 403
+  for an outsider. Normal document list responses exposed no `fileUrl`, signed
+  URL, raw storage URL, or token URL fields.
+- Drawing list/current-set checks returned HTTP 200 for owner and HTTP 403 for a
+  subcontractor. The project initially had no drawings.
+- A sacrificial drawing upload returned HTTP 201, produced only a `supabase://`
+  storage reference instead of a public HTTP storage URL, appeared normalized in
+  list/current-set responses, and cleanup delete returned HTTP 204.
+- Privacy export returned HTTP 200 and did not expose password hashes, reset
+  tokens, verification tokens, bearer tokens, signed URL token hashes, API key
+  hashes, push secrets, or environment secrets. The initial broad text probe
+  matched harmless key names only.
+- Audit log returned HTTP 200 and did not expose sensitive key/value paths in
+  the inspected page. File-locator fields found in audit metadata were not raw
+  HTTP storage URLs or signed URLs.
+
+Visible browser evidence:
+
+- Owner pages loaded in a headed Chromium browser with expected headings, no
+  `Access Denied`, no page-level error state, no console errors, and no 4xx/5xx
+  network responses:
+  - `/projects/:projectId/documents` - `Documents & Photos`
+  - `/projects/:projectId/drawings` - `Drawing Register`
+  - `/projects/:projectId/reports` - `Reports & Analytics`
+  - `/projects/:projectId/claims` - `Progress Claims`
+  - `/projects/:projectId/costs` - `Project Costs`
+  - `/audit-log` - `Audit Log`
+- Subcontractor document pages loaded in a headed mobile browser with expected
+  heading, no access denial, no error state, no console errors, no 4xx/5xx
+  network responses, and no upload/add-document controls:
+  - `/subcontractor-portal/documents`
+  - `/p/docs`
+
+Code-level hardening evidence:
+
+- Shared frontend CSV downloads go through `frontend/src/lib/csv.ts`.
+  `escapeCsvCell` prefixes formula-looking cells that begin with `=`, `+`, `-`,
+  or `@`, and `downloadCsv` applies that escaping to all shared CSV exports.
+- Drawing response mapping normalizes document locators to storage references
+  rather than exposing raw public object URLs.
+
+Not live-exercised in this stage:
+
+- Public hold-point evidence package leakage with a valid public token. The
+  current Stage 21 QA project had zero hold points, so there was no safe live
+  token to inspect. Existing unit coverage characterizes public evidence package
+  redaction, but this should be live-tested during a later hold-point/ITP stage
+  by creating a sacrificial hold point and requesting release to a controlled
+  mailbox.
+- Comment attachment download drift after comment deletion or assignment/module
+  change. This belongs with a later comments/activity sweep.
+- Offline evidence retry/orphan behavior. This belongs with a later offline
+  sync sweep.
+
+Findings:
+
+- No exploitable file-access issue was confirmed in Stage 21.
+- No Stage 21 code change was required.
+- The main product decision to keep visible is signed URL revocation semantics:
+  a valid signed document URL is a bearer link until it expires, even if the
+  user's portal module access is removed after minting.
+
+Artifacts:
+
+- Sensitive throwaway session files remain under ignored `.gstack/tmp/` paths
+  and are not committed.
+- No response bodies containing signed URLs, bearer tokens, credentials, or
+  public-release tokens were committed or copied into this ledger.
