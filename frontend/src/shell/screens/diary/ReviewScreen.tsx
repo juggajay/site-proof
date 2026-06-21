@@ -19,7 +19,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, useMotionValue, useTransform, useReducedMotion } from 'framer-motion';
-import { ArrowRight, AlertTriangle, Loader2, ChevronRight } from 'lucide-react';
+import { ArrowRight, AlertTriangle, Loader2, ChevronRight, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ShellScreen } from '../../components/ShellScreen';
 import { useDiaryShellData } from './useDiaryShellData';
@@ -154,6 +154,7 @@ export function ReviewScreen() {
 
   const [submitting, setSubmitting] = useState(false);
   const [submitWarnings] = useState<string[]>([]);
+  const isSubmitted = diary?.status === 'submitted';
 
   const backPath = projectId ? `/m/diary?projectId=${projectId}` : '/m/diary';
 
@@ -187,7 +188,7 @@ export function ReviewScreen() {
   const workDesc = workDescription(diary);
 
   const doSubmit = useCallback(async () => {
-    if (!diary || submitting) return;
+    if (!diary || submitting || diary.status === 'submitted') return;
     setSubmitting(true);
     try {
       await apiFetch(`/api/diary/${encodeURIComponent(diary.id)}/submit`, {
@@ -219,7 +220,9 @@ export function ReviewScreen() {
 
   const sub = (
     <span className="text-muted-foreground">
-      Step 4 of 4 — the last thing between you and the ute
+      {isSubmitted
+        ? 'Submitted - diary locked for this day'
+        : 'Step 4 of 4 - the last thing between you and the ute'}
     </span>
   );
 
@@ -252,61 +255,84 @@ export function ReviewScreen() {
       {/* Spacer */}
       <div className="flex-1" />
 
-      {/* Instruction copy */}
-      <p className="text-center text-[13px] text-muted-foreground">
-        Slide to lock the diary and send it to the office
-      </p>
-
-      {/* Warnings */}
-      {submitWarnings.length > 0 && (
-        <div role="alert" className="rounded-xl border border-warning/40 bg-warning/10 px-4 py-3">
-          <div className="flex items-start gap-2 text-warning">
-            <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" />
+      {isSubmitted ? (
+        <div
+          role="status"
+          className="rounded-2xl border border-success/30 bg-success/10 px-4 py-4 text-success"
+        >
+          <div className="flex items-start gap-3">
+            <CheckCircle2 size={20} className="mt-0.5 flex-shrink-0" aria-hidden="true" />
             <div>
-              <p className="text-sm font-semibold">Review before submitting</p>
-              <ul className="mt-1 list-disc space-y-1 pl-5 text-sm">
-                {submitWarnings.map((w) => (
-                  <li key={w}>{w}</li>
-                ))}
-              </ul>
+              <p className="font-condensed text-[18px] font-bold">Diary submitted</p>
+              <p className="mt-1 text-[13px] leading-5 text-success/90">
+                This diary is locked for the day. Add an addendum from the diary page if more detail
+                is needed.
+              </p>
             </div>
           </div>
         </div>
-      )}
-
-      {/* Slide or fallback button */}
-      {!hasWork ? (
-        <div className="rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-[13px] text-warning font-semibold">
-          Log at least one work entry before submitting.
-        </div>
-      ) : prefersReduced ? (
-        /* Reduced-motion: plain button */
-        <button
-          type="button"
-          onClick={doSubmit}
-          disabled={submitting}
-          className={cn(
-            'flex w-full min-h-[58px] items-center justify-center gap-2 rounded-2xl',
-            'bg-foreground text-[hsl(40_33%_98%)]',
-            'font-condensed text-[18px] font-bold touch-manipulation',
-            'transition-transform duration-150 active:scale-[.98]',
-            submitting && 'opacity-50',
-          )}
-          style={{ fontFamily: "'IBM Plex Sans Condensed', 'IBM Plex Sans', sans-serif" }}
-          aria-label="Submit diary"
-        >
-          {submitting ? (
-            <>
-              <Loader2 size={20} className="animate-spin" aria-hidden="true" /> Submitting…
-            </>
-          ) : (
-            <>
-              Submit diary <ChevronRight size={20} aria-hidden="true" />
-            </>
-          )}
-        </button>
       ) : (
-        <SlideToSubmit submitting={submitting} onCommit={doSubmit} />
+        <>
+          {/* Instruction copy */}
+          <p className="text-center text-[13px] text-muted-foreground">
+            Slide to lock the diary and send it to the office
+          </p>
+
+          {/* Warnings */}
+          {submitWarnings.length > 0 && (
+            <div
+              role="alert"
+              className="rounded-xl border border-warning/40 bg-warning/10 px-4 py-3"
+            >
+              <div className="flex items-start gap-2 text-warning">
+                <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-semibold">Review before submitting</p>
+                  <ul className="mt-1 list-disc space-y-1 pl-5 text-sm">
+                    {submitWarnings.map((w) => (
+                      <li key={w}>{w}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Slide or fallback button */}
+          {!hasWork ? (
+            <div className="rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-[13px] text-warning font-semibold">
+              Log at least one work entry before submitting.
+            </div>
+          ) : prefersReduced ? (
+            /* Reduced-motion: plain button */
+            <button
+              type="button"
+              onClick={doSubmit}
+              disabled={submitting}
+              className={cn(
+                'flex w-full min-h-[58px] items-center justify-center gap-2 rounded-2xl',
+                'bg-foreground text-[hsl(40_33%_98%)]',
+                'font-condensed text-[18px] font-bold touch-manipulation',
+                'transition-transform duration-150 active:scale-[.98]',
+                submitting && 'opacity-50',
+              )}
+              style={{ fontFamily: "'IBM Plex Sans Condensed', 'IBM Plex Sans', sans-serif" }}
+              aria-label="Submit diary"
+            >
+              {submitting ? (
+                <>
+                  <Loader2 size={20} className="animate-spin" aria-hidden="true" /> Submitting…
+                </>
+              ) : (
+                <>
+                  Submit diary <ChevronRight size={20} aria-hidden="true" />
+                </>
+              )}
+            </button>
+          ) : (
+            <SlideToSubmit submitting={submitting} onCommit={doSubmit} />
+          )}
+        </>
       )}
     </ShellScreen>
   );
