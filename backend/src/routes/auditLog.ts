@@ -173,6 +173,13 @@ function containsInsensitive(value: string): Prisma.StringFilter {
   };
 }
 
+function equalsInsensitive(value: string): Prisma.StringFilter {
+  return {
+    equals: value,
+    mode: 'insensitive',
+  };
+}
+
 // GET /api/audit-logs - List audit logs with filtering
 auditLogRouter.get(
   '/',
@@ -206,7 +213,7 @@ auditLogRouter.get(
     }
 
     if (entityTypeFilter) {
-      filters.entityType = entityTypeFilter;
+      filters.entityType = equalsInsensitive(entityTypeFilter);
     }
 
     if (actionFilter) {
