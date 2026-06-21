@@ -1,13 +1,13 @@
 import { Router, type Request } from 'express';
 import { prisma } from '../../lib/prisma.js';
 import { createAuditLog, AuditAction } from '../../lib/auditLog.js';
-import { TIER_PROJECT_LIMITS } from '../../lib/tierLimits.js';
 import { Prisma } from '@prisma/client';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
 import { buildProjectDeletedResponse, buildProjectDetailResponse } from './listDetailResponses.js';
 import { buildProjectCreatedResponse } from './costResponses.js';
+import { assertCompanyProjectCapacity } from './projectCreationLimit.js';
 
 type AuthenticatedUser = NonNullable<Request['user']>;
 
@@ -258,61 +258,46 @@ export function createProjectWriteRouter({
       }
 
       const companyId = user.companyId;
-      const company = await prisma.company.findUnique({
-        where: { id: companyId },
-        select: { subscriptionTier: true },
-      });
-
-      if (company) {
-        const tier = company.subscriptionTier || 'basic';
-        const limit = TIER_PROJECT_LIMITS[tier] || TIER_PROJECT_LIMITS.basic;
-
-        // Count existing projects for this company
-        const projectCount = await prisma.project.count({
-          where: { companyId },
-        });
-
-        if (projectCount >= limit) {
-          throw AppError.forbidden(
-            `Your ${tier} subscription allows up to ${limit} projects. Please upgrade to create more projects.`,
-          );
-        }
-      }
 
       // Generate project number if not provided
       const generatedProjectNumber =
         projectNumber || `PRJ-${Date.now().toString(36).toUpperCase()}`;
 
-      const project = await prisma.project.create({
-        data: {
-          name,
-          projectNumber: generatedProjectNumber,
-          clientName,
-          startDate,
-          targetCompletion,
-          contractValue: contractValue ?? null,
-          companyId: companyId,
-          state: state || 'NSW',
-          specificationSet: specificationSet || 'MRTS',
-        },
-        select: {
-          id: true,
-          name: true,
-          projectNumber: true,
-          status: true,
-          createdAt: true,
-        },
-      });
+      const project = await prisma.$transaction(async (tx) => {
+        await assertCompanyProjectCapacity(tx, companyId);
 
-      // Add the creating user to the project
-      await prisma.projectUser.create({
-        data: {
-          projectId: project.id,
-          userId: user.id,
-          role: 'admin',
-          status: 'active',
-          acceptedAt: new Date(),
-        },
+        const createdProject = await tx.project.create({
+          data: {
+            name,
+            projectNumber: generatedProjectNumber,
+            clientName,
+            startDate,
+            targetCompletion,
+            contractValue: contractValue ?? null,
+            companyId,
+            state: state || 'NSW',
+            specificationSet: specificationSet || 'MRTS',
+          },
+          select: {
+            id: true,
+            name: true,
+            projectNumber: true,
+            status: true,
+            createdAt: true,
+          },
+        });
+
+        await tx.projectUser.create({
+          data: {
+            projectId: createdProject.id,
+            userId: user.id,
+            role: 'admin',
+            status: 'active',
+            acceptedAt: new Date(),
+          },
+        });
+
+        return createdProject;
       });
 
       await createAuditLog({
