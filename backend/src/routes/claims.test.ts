@@ -34,7 +34,6 @@ describe('Progress Claims API', () => {
   let lotId1: string;
   let lotId2: string;
   let claimId: string;
-  let manualClaimNumber = 200;
 
   beforeAll(async () => {
     // Create test company
@@ -114,8 +113,20 @@ describe('Progress Claims API', () => {
     await prisma.company.delete({ where: { id: companyId } }).catch(() => {});
   });
 
+  async function nextManualClaimNumber() {
+    // Manual fixture claims share this project with route-created claims, so
+    // allocate from the current database state instead of a stale local counter.
+    const lastClaim = await prisma.progressClaim.findFirst({
+      where: { projectId },
+      orderBy: { claimNumber: 'desc' },
+      select: { claimNumber: true },
+    });
+
+    return (lastClaim?.claimNumber ?? 0) + 1;
+  }
+
   async function createSubmittedCertificationClaim(totalClaimedAmount = 1000) {
-    const claimNumber = manualClaimNumber++;
+    const claimNumber = await nextManualClaimNumber();
     const lot = await prisma.lot.create({
       data: {
         projectId,
@@ -171,7 +182,7 @@ describe('Progress Claims API', () => {
   }
 
   async function createDraftWorkflowClaim(totalClaimedAmount = 1000) {
-    const claimNumber = manualClaimNumber++;
+    const claimNumber = await nextManualClaimNumber();
     const lot = await prisma.lot.create({
       data: {
         projectId,
