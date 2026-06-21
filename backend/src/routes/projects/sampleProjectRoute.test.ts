@@ -113,6 +113,50 @@ describe('POST /api/projects/sample', () => {
     expect(res.body.error.message).toContain('organization');
   });
 
+  it('enforces the same project cap as normal project creation', async () => {
+    const limitedCompany = await prisma.company.create({
+      data: {
+        name: `Sample Project Cap Company ${Date.now()}`,
+        subscriptionTier: 'basic',
+      },
+    });
+    const limitedAdmin = await registerTestUser(app, {
+      emailPrefix: 'sample-project-cap-admin',
+      fullName: 'Sample Project Cap Admin',
+      companyId: limitedCompany.id,
+      roleInCompany: 'admin',
+    });
+
+    try {
+      await Promise.all(
+        Array.from({ length: 3 }, (_, index) =>
+          prisma.project.create({
+            data: {
+              companyId: limitedCompany.id,
+              name: `Existing Project ${index}`,
+              projectNumber: `EXISTING-${Date.now()}-${index}`,
+              status: 'active',
+              state: 'NSW',
+              specificationSet: 'TfNSW',
+            },
+          }),
+        ),
+      );
+
+      const res = await request(app)
+        .post('/api/projects/sample')
+        .set('Authorization', `Bearer ${limitedAdmin.token}`);
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.message).toContain('basic subscription allows up to 3 projects');
+    } finally {
+      await prisma.project.deleteMany({ where: { companyId: limitedCompany.id } });
+      await prisma.emailVerificationToken.deleteMany({ where: { userId: limitedAdmin.userId } });
+      await prisma.user.delete({ where: { id: limitedAdmin.userId } }).catch(() => {});
+      await prisma.company.delete({ where: { id: limitedCompany.id } }).catch(() => {});
+    }
+  });
+
   it('creates the example project with seeded quality records', async () => {
     const res = await request(app)
       .post('/api/projects/sample')

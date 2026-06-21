@@ -19,6 +19,9 @@ export type ScheduledReportForDelivery = {
   failureCount: number;
   project: {
     name: string;
+    company?: {
+      subscriptionTier: string | null;
+    };
   };
 };
 

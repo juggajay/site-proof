@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
-import { TIER_PROJECT_LIMITS, TIER_USER_LIMITS } from '../lib/tierLimits.js';
+import { getProjectLimitForTier, getUserLimitForTier } from '../lib/tierLimits.js';
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
 import { buildApiUrl } from '../lib/runtimeConfig.js';
@@ -320,9 +320,8 @@ companyRouter.get(
       where: { companyId: user.companyId },
     });
 
-    const tier = company.subscriptionTier || 'basic';
-    const projectLimit = TIER_PROJECT_LIMITS[tier] || TIER_PROJECT_LIMITS.basic;
-    const userLimit = TIER_USER_LIMITS[tier] || TIER_USER_LIMITS.basic;
+    const projectLimit = getProjectLimitForTier(company.subscriptionTier);
+    const userLimit = getUserLimitForTier(company.subscriptionTier);
 
     res.json(
       buildCompanyProfileResponse(company, {

@@ -200,7 +200,7 @@ async function expectDueScheduleSuppressed(projectOptions: ScheduledReportProjec
   try {
     const result = await processDueScheduledReports({ now, scheduleIds: [schedule.id] });
 
-    expect(result).toMatchObject({ processed: 0, sent: 0 });
+    expect(result.sent).toBe(0);
     expect(getQueuedEmails()).toEqual([]);
 
     await expectScheduleNotSent(schedule.id, dueAt);
@@ -315,7 +315,39 @@ describe('processDueScheduledReports', () => {
   });
 
   it('does not send due schedules for basic-tier companies', async () => {
-    await expectDueScheduleSuppressed({ subscriptionTier: 'basic' });
+    const { company, project, now, dueAt, schedule } = await createDueScheduleFixture({
+      subscriptionTier: 'basic',
+    });
+    try {
+      const result = await processDueScheduledReports({ now, scheduleIds: [schedule.id] });
+
+      expect(result.processed).toBe(1);
+      expect(result.skipped).toBe(1);
+      expect(result.sent).toBe(0);
+      expect(result.results[0]?.error).toContain('Professional or Enterprise');
+      expect(getQueuedEmails()).toEqual([]);
+
+      await expectScheduleNotSent(schedule.id, dueAt);
+    } finally {
+      await cleanupProject(project.id, company.id);
+    }
+  });
+
+  it('normalizes paid tier values before delivering due schedules', async () => {
+    const { company, project, now, schedule } = await createDueScheduleFixture({
+      subscriptionTier: ' Professional ',
+    });
+
+    try {
+      const result = await processDueScheduledReports({ now, scheduleIds: [schedule.id] });
+
+      expect(result.processed).toBe(1);
+      expect(result.sent).toBe(1);
+      expect(result.failed).toBe(0);
+      expect(getQueuedEmails()).toHaveLength(1);
+    } finally {
+      await cleanupProject(project.id, company.id);
+    }
   });
 
   it('does not send due schedules for archived projects', async () => {

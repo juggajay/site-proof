@@ -6,6 +6,8 @@ import { AuditAction } from '../../lib/auditLog.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { assertCanRemoveUserFromProjectAdminRoles } from '../../lib/projectAdminInvariant.js';
+import { removeStoredAvatar } from '../../lib/avatarStorage.js';
+import { logWarn } from '../../lib/serverLogger.js';
 
 type NormalizePasswordInput = (value: unknown, fieldName?: string) => string;
 
@@ -52,6 +54,7 @@ export function createAccountDeletionRouter({
         select: {
           id: true,
           email: true,
+          avatarUrl: true,
           passwordHash: true,
           companyId: true,
           roleInCompany: true,
@@ -145,9 +148,18 @@ export function createAccountDeletionRouter({
         });
       });
 
+      if (user.avatarUrl) {
+        try {
+          await removeStoredAvatar(user.avatarUrl, user.id);
+        } catch (error) {
+          logWarn('Failed to delete avatar file after account deletion:', error);
+        }
+      }
+
       res.json({
         success: true,
-        message: 'Your account and associated data have been permanently deleted.',
+        message:
+          'Your account has been permanently deleted. Project records that must be retained have been anonymised.',
       });
     }),
   );

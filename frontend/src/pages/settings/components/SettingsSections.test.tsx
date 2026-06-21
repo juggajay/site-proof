@@ -71,6 +71,7 @@ describe('PrivacyDataSection', () => {
     expect(onExportData).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('status')).toHaveTextContent('Data exported successfully');
     expect(screen.getByRole('alert')).toHaveTextContent('Export failed');
+    expect(screen.getByText(/Project records that must be retained/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete My Account' }));
     expect(onDeleteAccountClick).toHaveBeenCalledTimes(1);

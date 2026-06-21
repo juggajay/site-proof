@@ -1,7 +1,6 @@
 import { Router, type Request, type RequestHandler } from 'express';
 import type { PrismaClient } from '@prisma/client';
 import multer from 'multer';
-import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 
@@ -26,7 +25,12 @@ import {
   getSupabaseStorageReference,
   isSupabaseConfigured,
 } from '../../lib/supabase.js';
-import { ensureUploadSubdirectory, getUploadSubdirectoryPath } from '../../lib/uploadPaths.js';
+import { ensureUploadSubdirectory } from '../../lib/uploadPaths.js';
+import {
+  deleteAvatarFromSupabase,
+  getAvatarContentType,
+  removeStoredAvatar,
+} from '../../lib/avatarStorage.js';
 
 type ProfilePrismaClient = Pick<PrismaClient, 'user'>;
 
@@ -49,17 +53,8 @@ type CreateProfileRouterDependencies = {
   profileFullNameMaxLength: number;
 };
 
-const avatarUploadDir = getUploadSubdirectoryPath('avatars');
-const AVATAR_PATH_PREFIX = '/uploads/avatars/';
 const PROFILE_PHONE_MAX_LENGTH = 40;
 const PROFILE_PHONE_PATTERN = /^[0-9+().\-\s]*$/;
-const AVATAR_MIME_BY_EXTENSION = new Map([
-  ['.jpg', 'image/jpeg'],
-  ['.jpeg', 'image/jpeg'],
-  ['.png', 'image/png'],
-  ['.gif', 'image/gif'],
-  ['.webp', 'image/webp'],
-]);
 
 // Avatar uploads use Supabase Storage (memory-buffered) in production and fall
 // back to the local filesystem when Supabase is not configured. Path inside
@@ -140,17 +135,6 @@ async function uploadAvatarToSupabase(
   };
 }
 
-async function deleteAvatarFromSupabase(fileUrl: string, userId: string): Promise<void> {
-  const storagePath = getOwnedAvatarStoragePath(fileUrl, userId);
-  if (!storagePath) return;
-
-  const { error } = await getSupabaseClient().storage.from(DOCUMENTS_BUCKET).remove([storagePath]);
-
-  if (error) {
-    logError('Supabase avatar delete failed:', error);
-  }
-}
-
 async function cleanupStoredAvatarUpload(
   fileUrl: string | null,
   file: Express.Multer.File,
@@ -161,67 +145,6 @@ async function cleanupStoredAvatarUpload(
     return;
   }
   cleanupUploadedAvatar(file);
-}
-
-async function removeStoredAvatar(
-  avatarUrl: string | null | undefined,
-  userId: string,
-): Promise<void> {
-  if (!avatarUrl) return;
-  if (isSupabaseConfigured() && getOwnedAvatarStoragePath(avatarUrl, userId) !== null) {
-    await deleteAvatarFromSupabase(avatarUrl, userId);
-    return;
-  }
-  deleteLocalAvatarFile(avatarUrl, userId);
-}
-
-function deleteLocalAvatarFile(avatarUrl: string | null | undefined, userId: string): void {
-  if (!avatarUrl) return;
-
-  let pathname: string;
-  try {
-    const baseUrl = buildApiUrl('/');
-    const parsedUrl = new URL(avatarUrl, baseUrl);
-    const isRelativeUploadUrl = avatarUrl.startsWith(AVATAR_PATH_PREFIX);
-    if (!isRelativeUploadUrl && parsedUrl.origin !== new URL(baseUrl).origin) {
-      return;
-    }
-
-    pathname = parsedUrl.pathname;
-  } catch {
-    return;
-  }
-
-  if (!pathname.startsWith(AVATAR_PATH_PREFIX)) {
-    return;
-  }
-
-  const encodedFilename = pathname.split('/').pop();
-  if (!encodedFilename) return;
-
-  let filename: string;
-  try {
-    filename = decodeURIComponent(encodedFilename);
-  } catch {
-    return;
-  }
-
-  if (filename !== path.basename(filename) || filename.includes('/') || filename.includes('\\')) {
-    return;
-  }
-  if (!filename.startsWith(`avatar-${userId}-`)) {
-    return;
-  }
-
-  const uploadDir = path.resolve(avatarUploadDir);
-  const avatarPath = path.resolve(uploadDir, filename);
-  if (avatarPath.startsWith(`${uploadDir}${path.sep}`) && fs.existsSync(avatarPath)) {
-    fs.unlinkSync(avatarPath);
-  }
-}
-
-function getAvatarContentType(storagePath: string): string {
-  return AVATAR_MIME_BY_EXTENSION.get(path.extname(storagePath).toLowerCase()) || 'image/jpeg';
 }
 
 export function createProfileRouter({

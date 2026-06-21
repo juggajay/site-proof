@@ -4,9 +4,9 @@ import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { createAuditLog, AuditAction } from '../../lib/auditLog.js';
-import { TIER_PROJECT_LIMITS } from '../../lib/tierLimits.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
 import { buildProjectCreatedResponse } from './costResponses.js';
+import { assertCompanyProjectCapacity } from './projectCreationLimit.js';
 import {
   SAMPLE_CHECKLIST_ITEMS,
   SAMPLE_HOLD_POINT_ITEM_INDEX,
@@ -66,6 +66,8 @@ async function ensureProjectMembership(projectId: string, userId: string) {
 
 async function seedSampleProject(user: AuthenticatedUser, companyId: string) {
   return prisma.$transaction(async (tx) => {
+    await assertCompanyProjectCapacity(tx, companyId);
+
     const project = await tx.project.create({
       data: {
         companyId,
@@ -283,25 +285,6 @@ export function createSampleProjectRouter({
         await ensureProjectMembership(existing.id, user.id);
         res.json({ ...buildProjectCreatedResponse(existing), alreadyExisted: true });
         return;
-      }
-
-      // Same tier ceiling as POST /api/projects — the example project is a
-      // real project and counts toward the plan limit.
-      const company = await prisma.company.findUnique({
-        where: { id: companyId },
-        select: { subscriptionTier: true },
-      });
-
-      if (company) {
-        const tier = company.subscriptionTier || 'basic';
-        const limit = TIER_PROJECT_LIMITS[tier] || TIER_PROJECT_LIMITS.basic;
-        const projectCount = await prisma.project.count({ where: { companyId } });
-
-        if (projectCount >= limit) {
-          throw AppError.forbidden(
-            `Your ${tier} subscription allows up to ${limit} projects. Please upgrade to create more projects.`,
-          );
-        }
       }
 
       let project;
