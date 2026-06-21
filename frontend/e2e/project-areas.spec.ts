@@ -255,9 +255,7 @@ test.describe('Project areas seeded admin contract', () => {
     await addDialog.getByLabel('Chainage End (m)').fill('100');
     await addDialog.getByRole('button', { name: 'Add Area' }).click();
 
-    await expect(
-      page.getByText('Chainage start must be less than or equal to chainage end.'),
-    ).toBeVisible();
+    await expect(page.getByText('Chainage end must be greater than chainage start.')).toBeVisible();
     expect(api.getCreateRequest()).toBeNull();
   });
 
