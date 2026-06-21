@@ -1931,3 +1931,85 @@ Artifacts:
   and are not committed.
 - No comment attachment download URLs, notification IDs tied to credentials,
   bearer tokens, or session cookies were committed or copied into this ledger.
+
+## Stage 23 - Project Admin Guardrails and Copy Accuracy
+
+Status: completed. Four code fixes were merged from this stage.
+
+Scope:
+
+- Archived project write protection for high-risk project-scoped mutations.
+- Dashboard company/team shortcut behaviour for non-admin company roles.
+- Project settings module copy accuracy.
+- Company member invite failure rollback and audit-log retention.
+
+Confirmed issues fixed:
+
+- Archived projects still allowed some write endpoints after a project entered a
+  read-only state. Fixed in #1049 by enforcing archived-project read-only checks
+  on the affected backend write routes and adding regression coverage.
+- The dashboard `Team Members` KPI could send non-admin company users to a
+  company-settings route they cannot access. Fixed in #1050 by making the KPI
+  role-aware: owners/admins keep the company settings destination, while other
+  company roles get the project-access destination.
+- Project Settings > Modules copy implied that toggles controlled backend
+  feature/data access. Fixed in #1051 by clarifying that current module toggles
+  are navigation/shortcut controls, and by updating matching documentation.
+- Failed company-member invite email delivery could delete historical
+  `USER_INVITED` audit rows for that user during rollback. Fixed in #1052 by
+  preserving prior audit evidence and recording the new invite audit only after
+  invite/setup email delivery succeeds.
+
+Related merged work:
+
+- #1049 - Enforce archived project read-only writes, merged as `5b7fbc70`.
+- #1050 - Fix dashboard team KPI access dead end, merged as `34ffa680`.
+- #1051 - Clarify project module shortcut settings, merged as `ce0c418c`.
+- #1052 - Preserve company invite audit history on email failure, merged as
+  `fe2a807e`.
+
+Verification:
+
+- #1049 PR CI passed, and master CI run `27903863371` passed after merge,
+  including Backend, Frontend, and full post-merge Frontend E2E.
+- #1050 PR CI passed, and master CI run `27904478315` passed after merge,
+  including Backend, Frontend, and full post-merge Frontend E2E.
+- #1051 PR CI passed, and master CI run `27905051177` passed after merge,
+  including Backend, Frontend, and full post-merge Frontend E2E.
+- #1052 local checks passed:
+  - backend `db:generate`
+  - backend `type-check`
+  - backend `lint -- --quiet`
+  - backend `format:check`
+  - backend `build`
+  - `git diff --check`
+  - changed-file `fallow audit --base origin/master --format json --quiet`,
+    verdict `pass` with inherited findings only
+- #1052 focused `company.test.ts` could not be run in the local checkout
+  because no safe local `DATABASE_URL` is configured; a disposable Docker
+  Postgres attempt was blocked because Docker Desktop's Linux engine was not
+  running. PR #1052 Backend CI supplied the PostgreSQL-backed verification and
+  passed.
+- Master CI run `27905699826` passed after #1052, including Backend, Frontend,
+  and full post-merge Frontend E2E.
+
+Not live-exercised in this stage:
+
+- End-to-end browser walkthroughs for every archived-project mutation surface.
+  This stage was code-and-test focused, with CI regression coverage carrying the
+  write-protection and invite-rollback behaviours.
+- Real outbound invite email delivery. #1052 verifies rollback/audit ordering
+  around simulated email failure; deliverability belongs in a separate email
+  pass.
+
+Findings:
+
+- No new exploitable access-control issue was confirmed during this stage.
+- The main risks were product trust and supportability issues: writes after
+  archive, dead-end navigation for non-admin users, copy overstating module
+  enforcement, and audit history loss during failed re-invites.
+
+Artifacts:
+
+- No credentials, invite tokens, session cookies, or email setup links were
+  committed or copied into this ledger.
