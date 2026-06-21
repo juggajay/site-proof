@@ -2013,3 +2013,97 @@ Artifacts:
 
 - No credentials, invite tokens, session cookies, or email setup links were
   committed or copied into this ledger.
+
+## Stage 24 - Lot Comments and Activity History Browser QA
+
+Status: completed. One production bug was fixed and merged from this stage.
+
+Scope:
+
+- Browser-driven lot comment lifecycle on a production-safe throwaway lot.
+- Comment attachment upload/download rendering and access.
+- Author-only comment edit/delete controls across owner/project-manager users.
+- Mention notification creation for a project member.
+- Lot History tab behaviour for current lot audit records.
+
+Production API and visible-browser evidence:
+
+- Owner comment creation passed in headed Chromium: empty composer disabled the
+  submit button, markdown content and a project-member mention posted with HTTP
+  201, and rendered safely in the lot Comments tab.
+- Comment attachment upload passed: the selected file rendered in the draft,
+  the multipart comment posted with HTTP 201, the attachment rendered with
+  filename and size, and an authenticated download returned HTTP 200.
+- Nested reply create/delete passed through the browser: reply composer
+  enabled only after content, reply posted with HTTP 201, and owner deletion
+  removed the reply after confirmation.
+- Owner edit passed through normal browser input: the edited comment saved with
+  HTTP 200 and showed the edited badge.
+- Project-manager member access was correct: the member could view the owner
+  comments and attachment, could not see owner edit/delete controls, could post
+  their own comment, and received the mention notification.
+- Cross-company outsider API checks returned HTTP 403 for lot comments.
+- Unsupported comment entity type returned HTTP 400.
+- Legacy standalone comment attachment upload endpoint returned HTTP 410.
+- Client-supplied attachment locator payloads were rejected with HTTP 400.
+
+Confirmed issue fixed:
+
+- Lot History showed `No Activity History` for newly created lots even though a
+  `lot_created` audit record existed. Root cause: the lot page queried
+  `entityType=Lot`, while current lot creation writes `entityType: 'lot'`, and
+  the audit-log API filter was case-sensitive. Fixed in #1054 by keeping the
+  filter exact but making it case-insensitive, with regression coverage for an
+  uppercase `Lot` query returning lowercase `lot` records.
+
+Related merged work:
+
+- #1054 - Fix audit log entity type filtering, merged as `1e5e7383`.
+
+Verification:
+
+- Before the fix, production API evidence matched the browser empty state:
+  `entityType=Lot` returned zero records, while `entityType=lot` and search-only
+  returned the existing `lot:lot_created` record for the same lot.
+- #1054 local checks passed:
+  - backend `type-check`
+  - backend `lint`
+  - backend `format:check`
+  - `git diff --check`
+  - changed-file `fallow audit --base origin/master --format json --quiet`,
+    verdict `pass` with no introduced findings
+- Local DB-backed `auditLog.test.ts` could not run because this machine has no
+  disposable local Postgres running and the repo safety guard correctly refused
+  to use the Railway database.
+- PR #1054 CI passed, including Backend with the PostgreSQL-backed regression
+  test and Frontend PR E2E smoke.
+- After #1054 merged, production `/ready` returned HTTP 200 and the same
+  uppercase `Lot` production API query returned the existing
+  `lot:lot_created` audit record.
+- The visible browser History tab then showed the `lot_created` Activity
+  History row instead of the empty state.
+
+Not live-exercised in this stage:
+
+- Email delivery for mentions. This stage verified in-app mention notification
+  creation and ownership, not outbound mailbox delivery.
+- Every non-lot comment surface. Code mapping found the reusable comment UI is
+  currently on the Lot page; adjacent document/evidence upload surfaces remain
+  separate domains.
+- Full audit-log admin export flow. This stage only touched the lot-scoped
+  History read path and role/access checks relevant to lot activity visibility.
+
+Findings:
+
+- No exploitable comment attachment or comment mutation access issue was
+  confirmed.
+- The main confirmed defect was a trust/polish issue: valid lot activity existed
+  but the UI incorrectly told users no history had been recorded.
+
+Artifacts:
+
+- Ignored screenshots and scratch files remain under `.gstack/qa-reports/` and
+  `.gstack/tmp/` in the Stage 24 worktree.
+- No bearer tokens, session cookies, generated passwords, attachment download
+  URLs, or notification IDs tied to credentials were committed or copied into
+  this ledger.
