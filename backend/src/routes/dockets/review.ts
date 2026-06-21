@@ -41,6 +41,10 @@ import type { Prisma } from '@prisma/client';
 
 export const docketReviewRouter = Router();
 
+function docketHoursDiffer(left: number | undefined, right: number): boolean {
+  return left !== undefined && Math.abs(left - right) >= 0.000001;
+}
+
 async function applyDocketStatusTransition(
   tx: Prisma.TransactionClient,
   id: string,
@@ -105,17 +109,26 @@ docketReviewRouter.post(
       throw AppError.badRequest('Only pending dockets can be approved');
     }
 
+    const submittedLabourHours = docket.labourEntries.reduce(
+      (sum, entry) => sum + (Number(entry.submittedHours) || 0),
+      0,
+    );
+    const submittedPlantHours = docket.plantEntries.reduce(
+      (sum, entry) => sum + (Number(entry.hoursOperated) || 0),
+      0,
+    );
+    const hoursAdjusted =
+      docketHoursDiffer(adjustedLabourHours, submittedLabourHours) ||
+      docketHoursDiffer(adjustedPlantHours, submittedPlantHours);
+    if (hoursAdjusted && !adjustmentReason?.trim()) {
+      throw AppError.badRequest('Adjustment reason is required when approving adjusted hours');
+    }
+
     const { labourApproved, plantApproved } = resolveDocketApprovedTotals({
       adjustedLabourHours,
       adjustedPlantHours,
-      submittedLabourHours: docket.labourEntries.reduce(
-        (sum, entry) => sum + (Number(entry.submittedHours) || 0),
-        0,
-      ),
-      submittedPlantHours: docket.plantEntries.reduce(
-        (sum, entry) => sum + (Number(entry.hoursOperated) || 0),
-        0,
-      ),
+      submittedLabourHours,
+      submittedPlantHours,
     });
     const approvalEntryUpdates = buildDocketApprovalEntryUpdates({
       labourEntries: docket.labourEntries,
@@ -254,6 +267,14 @@ docketReviewRouter.post(
         });
 
         if (fullDocket) {
+          const approvedPlantTotal = Number(fullDocket.totalPlantApproved) || 0;
+          const submittedPlantTotal = fullDocket.plantEntries.reduce(
+            (sum, entry) => sum + (Number(entry.hoursOperated) || 0),
+            0,
+          );
+          const plantHoursScale =
+            submittedPlantTotal > 0 ? approvedPlantTotal / submittedPlantTotal : 0;
+
           // Write personnel records from labour entries (single batched insert)
           if (fullDocket.labourEntries.length > 0) {
             await tx.diaryPersonnel.createMany({
@@ -262,7 +283,10 @@ docketReviewRouter.post(
                 name: entry.employee.name,
                 role: entry.employee.role || undefined,
                 company: fullDocket.subcontractorCompany.companyName,
-                hours: entry.approvedHours || entry.submittedHours || undefined,
+                hours:
+                  entry.approvedHours !== null && entry.approvedHours !== undefined
+                    ? entry.approvedHours
+                    : entry.submittedHours || undefined,
                 startTime: entry.startTime || undefined,
                 finishTime: entry.finishTime || undefined,
                 source: 'docket',
@@ -280,7 +304,10 @@ docketReviewRouter.post(
                 description: entry.plant.description || entry.plant.type,
                 idRego: entry.plant.idRego || undefined,
                 company: fullDocket.subcontractorCompany.companyName,
-                hoursOperated: entry.hoursOperated || undefined,
+                hoursOperated:
+                  submittedPlantTotal > 0
+                    ? (Number(entry.hoursOperated) || 0) * plantHoursScale
+                    : entry.hoursOperated || undefined,
                 source: 'docket',
                 docketId: docket.id,
                 lotId: entry.lotAllocations[0]?.lotId || undefined,

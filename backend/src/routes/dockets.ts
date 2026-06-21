@@ -34,6 +34,7 @@ import {
   mapDocketListItem,
 } from './dockets/presentation.js';
 import { assertDocketSubmittable } from './dockets/submissionGuards.js';
+import { lockDocketForEntryMutation } from './dockets/entryTotals.js';
 import { buildDocketSubmittedNotifications } from './dockets/notifications.js';
 import { buildDocketDiaryComparison } from './dockets/diaryComparison.js';
 import { buildDocketSubmittedResponse } from './dockets/submissionResponse.js';
@@ -352,18 +353,24 @@ docketsRouter.patch(
 
     await requireDocketSubcontractorAccess(user, docket);
 
-    if (!isDocketEntryEditable(docket.status)) {
-      throw AppError.badRequest('Can only update draft, queried, or rejected dockets');
-    }
+    const updatedDocket = await prisma.$transaction(async (tx) => {
+      const lockedDocket = await lockDocketForEntryMutation(tx, id);
+      if (!lockedDocket) {
+        throw AppError.notFound('Docket');
+      }
+      if (!isDocketEntryEditable(lockedDocket.status)) {
+        throw AppError.badRequest('Can only update draft, queried, or rejected dockets');
+      }
 
-    const updatedDocket = await prisma.dailyDocket.update({
-      where: { id },
-      data: { notes },
-      include: {
-        subcontractorCompany: {
-          select: { id: true, companyName: true },
+      return tx.dailyDocket.update({
+        where: { id },
+        data: { notes },
+        include: {
+          subcontractorCompany: {
+            select: { id: true, companyName: true },
+          },
         },
-      },
+      });
     });
 
     res.json(buildDocketUpdatedResponse(updatedDocket));
@@ -377,38 +384,63 @@ docketsRouter.post(
     const id = parseDocketRouteParam(req.params.id, 'id');
     const user = req.user!;
 
-    const docket = await prisma.dailyDocket.findUnique({
+    const accessDocket = await prisma.dailyDocket.findUnique({
       where: { id },
-      include: {
-        subcontractorCompany: {
-          select: { companyName: true },
-        },
-        project: {
-          select: { id: true, name: true },
-        },
-        labourEntries: {
-          include: {
-            lotAllocations: true,
-          },
-        },
-        plantEntries: true,
+      select: {
+        projectId: true,
+        subcontractorCompanyId: true,
       },
     });
 
-    if (!docket) {
+    if (!accessDocket) {
       throw AppError.notFound('Docket');
     }
-    await requireDocketSubcontractorAccess(user, docket);
+    await requireDocketSubcontractorAccess(user, accessDocket);
 
-    assertDocketSubmittable(docket);
+    const { docket, updatedDocket } = await prisma.$transaction(async (tx) => {
+      await lockDocketForEntryMutation(tx, id);
 
-    const updatedDocket = await prisma.dailyDocket.update({
-      where: { id },
-      data: {
-        status: 'pending_approval',
-        submittedById: user.id,
-        submittedAt: new Date(),
-      },
+      const docketForSubmit = await tx.dailyDocket.findUnique({
+        where: { id },
+        include: {
+          subcontractorCompany: {
+            select: { companyName: true },
+          },
+          project: {
+            select: { id: true, name: true },
+          },
+          labourEntries: {
+            include: {
+              lotAllocations: true,
+            },
+          },
+          plantEntries: true,
+        },
+      });
+
+      if (!docketForSubmit) {
+        throw AppError.notFound('Docket');
+      }
+
+      assertDocketSubmittable(docketForSubmit);
+
+      const transition = await tx.dailyDocket.updateMany({
+        where: { id, status: docketForSubmit.status },
+        data: {
+          status: 'pending_approval',
+          submittedById: user.id,
+          submittedAt: new Date(),
+        },
+      });
+
+      if (transition.count !== 1) {
+        throw AppError.badRequest('Only draft or rejected dockets can be submitted');
+      }
+
+      return {
+        docket: docketForSubmit,
+        updatedDocket: await tx.dailyDocket.findUniqueOrThrow({ where: { id } }),
+      };
     });
 
     await createAuditLog({

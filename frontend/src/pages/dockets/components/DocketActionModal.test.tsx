@@ -66,7 +66,8 @@ function renderModal(
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   // Pre-populate the cache so the detail query resolves immediately without
   // triggering a real fetch.
-  queryClient.setQueryData(['docket', 'detail', docket.id], {
+  queryClient.setQueryData(['docket-detail', docket.id], {
+    adjustmentReason: docket.adjustmentReason ?? null,
     labourEntries: [],
     plantEntries: [],
   });
@@ -117,6 +118,55 @@ describe('DocketActionModal', () => {
 
     expect(screen.getByText('$1,500.00')).toBeInTheDocument();
     expect(screen.getByText('$1,100.00')).toBeInTheDocument();
+  });
+
+  it('shows approved zero-hour/cost adjustments instead of falling back to submitted values', () => {
+    const docket = makeDocket({
+      status: 'approved',
+      labourHours: 8,
+      plantHours: 4,
+      totalLabourSubmitted: 600,
+      totalPlantSubmitted: 200,
+      totalLabourApproved: 0,
+      totalPlantApproved: 0,
+      totalLabourApprovedCost: 0,
+      totalPlantApprovedCost: 0,
+      adjustmentReason: 'No supporting records supplied',
+    });
+    const { queryClient } = renderModal(docket, { initialActionType: 'view' });
+    queryClient.setQueryData(['docket-detail', docket.id], {
+      adjustmentReason: 'No supporting records supplied',
+      labourEntries: [
+        {
+          id: 'labour-1',
+          employee: { name: 'Tommy Vella', role: 'Pipe Layer' },
+          startTime: '07:00',
+          finishTime: '15:00',
+          submittedHours: 8,
+          approvedHours: 0,
+          hourlyRate: 75,
+          submittedCost: 600,
+          approvedCost: 0,
+        },
+      ],
+      plantEntries: [
+        {
+          id: 'plant-1',
+          plant: { type: 'Excavator', description: 'CAT 320' },
+          hoursOperated: 4,
+          wetOrDry: 'dry',
+          hourlyRate: 50,
+          submittedCost: 200,
+          approvedCost: 0,
+        },
+      ],
+    });
+
+    expect(screen.getByText('Adjustment Reason:')).toBeInTheDocument();
+    expect(screen.getByText('No supporting records supplied')).toBeInTheDocument();
+    expect(screen.getAllByText(/\(approved:\s*0h\)/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('$0.00').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('$600.00').length).toBeGreaterThan(0);
   });
 
   it('shows view-mode action buttons when initialActionType is view and docket is pending', () => {

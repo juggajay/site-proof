@@ -19,6 +19,7 @@ export interface Docket {
   totalPlantApproved: number;
   totalLabourApprovedCost?: number | null;
   totalPlantApprovedCost?: number | null;
+  adjustmentReason?: string | null;
   submittedAt: string | null;
   approvedAt: string | null;
   foremanNotes: string | null;
@@ -50,6 +51,7 @@ export type DocketsResponse = Docket[] | { dockets?: Docket[] };
 
 export interface DocketDetailResponse {
   docket?: {
+    adjustmentReason?: string | null;
     labourEntries?: LabourEntry[];
     plantEntries?: PlantEntry[];
   };

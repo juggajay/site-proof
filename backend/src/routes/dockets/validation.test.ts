@@ -95,15 +95,12 @@ describe('dockets validation helpers', () => {
       expect(result.success).toBe(true);
     });
 
-    it('rejects adjusted hours without an adjustment reason', () => {
+    it('allows adjusted-hour fields without a reason so the route can compare to submitted totals', () => {
       const result = approveDocketSchema.safeParse({
         adjustmentReason: null,
         adjustedLabourHours: 0,
       });
-      expect(result.success).toBe(false);
-      expect(firstMessage(result)).toBe(
-        'Adjustment reason is required when approving adjusted hours',
-      );
+      expect(result.success).toBe(true);
     });
 
     it('rejects negative adjusted labour totals', () => {
@@ -114,9 +111,17 @@ describe('dockets validation helpers', () => {
   });
 
   describe('rejectDocketSchema', () => {
-    it('accepts empty and null reason', () => {
-      expect(rejectDocketSchema.safeParse({}).success).toBe(true);
-      expect(rejectDocketSchema.safeParse({ reason: null }).success).toBe(true);
+    it('requires a non-empty rejection reason', () => {
+      expect(firstMessage(rejectDocketSchema.safeParse({}))).toBe('Rejection reason is required');
+      expect(firstMessage(rejectDocketSchema.safeParse({ reason: null }))).toBe(
+        'Rejection reason is required',
+      );
+      expect(firstMessage(rejectDocketSchema.safeParse({ reason: '   ' }))).toBe(
+        'Rejection reason is required',
+      );
+      expect(rejectDocketSchema.safeParse({ reason: 'Hours do not match diary' }).success).toBe(
+        true,
+      );
     });
   });
 
@@ -206,10 +211,21 @@ describe('dockets validation helpers', () => {
     it('rejects a lot allocation of zero hours', () => {
       const result = addLabourEntrySchema.safeParse({
         employeeId: 'e1',
+        startTime: '07:00',
+        finishTime: '15:00',
         lotAllocations: [{ lotId: 'lot-1', hours: 0 }],
       });
       expect(result.success).toBe(false);
       expect(firstMessage(result)).toBe('Lot allocation hours must be greater than 0');
+    });
+
+    it('requires start and finish times on new labour entries', () => {
+      expect(firstMessage(addLabourEntrySchema.safeParse({ employeeId: 'e1' }))).toBe(
+        'Start time is required',
+      );
+      expect(
+        firstMessage(addLabourEntrySchema.safeParse({ employeeId: 'e1', startTime: '07:00' })),
+      ).toBe('Finish time is required');
     });
   });
 

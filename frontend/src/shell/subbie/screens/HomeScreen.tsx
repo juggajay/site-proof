@@ -353,7 +353,10 @@ export function HomeScreen() {
 
   const hero = computeHero(todaysDocket);
   const docketPath =
-    hero.kind === 'none' ? '/p/docket' : `/p/docket/${(hero as { docketId: string }).docketId}`;
+    hero.kind === 'none'
+      ? `/p/docket${currentProjectQuery}`
+      : `/p/docket/${(hero as { docketId: string }).docketId}${currentProjectQuery}`;
+  const docketsPath = `/p/dockets${currentProjectQuery}`;
 
   const projectLabel = companyName
     ? `${companyName}${projectName ? ` — ${projectName}` : ''}`
@@ -381,7 +384,7 @@ export function HomeScreen() {
             type="button"
             className="shell-cambar-btn"
             aria-label="Add today's hours"
-            onClick={() => navigate('/p/docket')}
+            onClick={() => navigate(docketPath)}
           >
             <Clock size={22} aria-hidden="true" />
             Add today's hours
@@ -403,7 +406,7 @@ export function HomeScreen() {
         title="My Dockets"
         description="Drafts, approvals & payment trail"
         chip={queriedCount > 0 ? `${queriedCount} queried` : undefined}
-        onPress={() => navigate('/p/dockets')}
+        onPress={() => navigate(docketsPath)}
         ariaLabel={`My Dockets${queriedCount > 0 ? ` — ${queriedCount} queried` : ''}`}
       />
 
