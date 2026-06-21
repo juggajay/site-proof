@@ -23,6 +23,7 @@ keep going until the app has been exercised end to end.
 Status: partial pass, one external blocker remains.
 
 Evidence:
+
 - Production preflight now verifies Resend domain setup and performs a safe send
   probe.
 - Supabase `documents` bucket was changed from public to private in production.
@@ -31,9 +32,11 @@ Evidence:
 - Production preflight now passes Supabase private-bucket check.
 
 Remaining issue:
+
 - Resend send probe fails while the account is over the daily quota.
 
 Related merged work:
+
 - #995 - Resend production preflight send probe.
 - #996 - Document private Supabase bucket configuration.
 
@@ -42,6 +45,7 @@ Related merged work:
 Status: passed after one QA-found UI fix.
 
 Scope covered:
+
 - Backend `/health` and `/ready`.
 - Password registration and login for a new owner.
 - Company creation and project creation.
@@ -56,6 +60,7 @@ Scope covered:
   and visual access-denied state.
 
 Initial live run:
+
 - Run: `stage2-20260620T085909-cdf3d`.
 - Result: 30 passed, 0 failed, 0 unexpected network failures.
 - Visual finding: the product tour auto-opened over an access-denied project
@@ -63,12 +68,14 @@ Initial live run:
   denial unclear.
 
 Fix:
+
 - #997 - Suppress first-run onboarding tour auto-show on deep links.
 - Behavior: first-run tour auto-opens only on neutral landing routes
   `/dashboard`, `/projects`, and `/portfolio`; explicit "Take the tour" replay
   remains available elsewhere.
 
 Verification:
+
 - Local focused unit: `npm run test:unit -- src/components/layouts/ProtectedAppShell.test.tsx`.
 - Local focused lint/prettier on touched files passed.
 - PR #997 CI passed: frontend, PR smoke, Vercel preview.
@@ -81,6 +88,7 @@ Verification:
   with no tour modal overlay.
 
 Notes for Review:
+
 - The three browser console errors in the Stage 2 runs were the expected 403s
   from the deliberate outsider access-denial test.
 - The verification banner appears on test accounts because email verification
@@ -94,6 +102,7 @@ Notes for Review:
 Status: passed, no product fixes required in this stage.
 
 Scope covered:
+
 - Backend `/health` and `/ready`.
 - Password registration and login for a new owner and an unrelated owner.
 - Company creation and project creation.
@@ -121,11 +130,13 @@ Scope covered:
   points page, and NCR list.
 
 Exploration support:
+
 - Two read-only subagents mapped Stage 3 backend routes, access invariants,
   frontend routes, selectors, likely failure points, and follow-up tests. They
   made no edits and did not touch production.
 
 Run evidence:
+
 - First completed run: `stage3-20260620T094727-5606b`, 47 checks, 1 browser
   locator failure, 0 product issues. The page was valid; the harness looked for
   a hold-point item inside a collapsed responsible-party group.
@@ -136,6 +147,7 @@ Run evidence:
   4 screenshots.
 
 Notes for Review:
+
 - The hold-point email path returned `200` during Stage 3, but the inbox was not
   inspected in this pass.
 - The lot detail ITP checklist groups items by responsible party. Completed
@@ -152,6 +164,7 @@ Notes for Review:
 Status: passed after one QA-found frontend crash fix.
 
 Scope covered:
+
 - Backend `/health` and `/ready`.
 - Password registration/login for owner, foreman, subcontractor, and unrelated
   outsider accounts.
@@ -190,11 +203,13 @@ Scope covered:
   - classic subbie `/subcontractor-portal/documents?shell=off`
 
 Exploration support:
+
 - Two read-only subagents mapped Stage 4 backend route setup, drawing-register
   seeding, frontend shell expectations, and auth rate-limit behavior. They made
   no edits and did not touch production.
 
 Initial run evidence:
+
 - First run: `stage4-20260620T100203-722b2`, 76 checks, 6 failures, 3 issues.
 - The failures were triaged into harness problems and auth rate-limit noise:
   - `/m/docs` only reads drawing-register rows, but the harness had uploaded a
@@ -210,6 +225,7 @@ Initial run evidence:
   before browser verification.
 
 Product issue found:
+
 - Visible rerun `stage4-20260620T100908-c6ffe` found a real crash in the
   classic subcontractor Documents page:
   `Cannot read properties of null (reading 'toLowerCase')`.
@@ -218,12 +234,14 @@ Product issue found:
   icon helper, which called `.toLowerCase()`.
 
 Fix:
+
 - #1000 - Fix subcontractor documents with uncategorised files.
 - Behavior: null/blank categories normalize to `Other` before grouping and icon
   selection, so uncategorised shared documents render instead of tripping the
   app error boundary.
 
 Verification:
+
 - Local focused unit: `npm run test:unit -- SubcontractorDocumentsPage.test.tsx`.
 - Local frontend type-check: `npm run type-check`.
 - Local focused ESLint on touched files passed.
@@ -236,6 +254,7 @@ Verification:
   0 failures, 0 issues, 9 screenshots.
 
 Notes for Review:
+
 - Stage 4 intentionally used a visible browser window after Jay asked to watch
   the QA navigation rather than relying only on headless screenshots.
 - The earlier `/api/auth/me` 429s were harness-created. The frontend verifies a
@@ -252,6 +271,7 @@ Status: passed. Follow-up Stage 17 production recheck also passed after
 follow-up docket fixes #1025, #1026, and #1027.
 
 Scope covered:
+
 - Backend `/health` and `/ready`.
 - Password registration/login for owner, subcontractor, and unrelated outsider
   accounts.
@@ -304,10 +324,12 @@ Scope covered:
     the company-setup gate.
 
 Exploration support:
+
 - Two read-only subagents mapped dockets and claims route/API/browser
   expectations. They made no edits and did not touch production.
 
 Run evidence:
+
 - First run: `stage5a-20260620T105101-ee0f4`, stopped on a harness expectation.
   The harness treated `totalLabourSubmitted`/`totalPlantSubmitted` as hours.
   Current code intentionally uses those legacy-named fields as submitted dollar
@@ -321,6 +343,7 @@ Run evidence:
   0 failures, 0 issues, 9 screenshots.
 
 Notes for Review:
+
 - The dockets flow is in better shape than the earlier audit suggested. The
   reduced approved dollar totals are now persisted and rendered back to the
   subbie on approved docket detail.
@@ -340,6 +363,7 @@ Notes for Review:
 Status: passed, no product fixes required in this slice.
 
 Scope covered:
+
 - Backend `/health` and `/ready`.
 - Password registration/login for owner, subcontractor, and unrelated outsider
   accounts.
@@ -405,6 +429,7 @@ Scope covered:
     the company-setup gate.
 
 Run evidence:
+
 - First run: `stage5b-20260620T110916-9e98d`, stopped on a setup assumption.
   The harness sent `budgetAmount` in the create-lot payload, but the real create
   endpoint does not persist budget; owner budget edit is a separate PATCH flow.
@@ -416,6 +441,7 @@ Run evidence:
   0 failures, 0 issues, 6 screenshots.
 
 Notes for Review:
+
 - Claims/payment workflow passed the money and access-boundary checks that
   matter most for paying customers: partial claim math, cumulative percentage
   guards, reduced certification notes, partial/final payment history, and
@@ -445,6 +471,7 @@ notification emails.
 Status: passed, no blocking product fixes required in this slice.
 
 Scope covered:
+
 - Backend `/health` and `/ready`.
 - Password registration/login for owner, foreman, subcontractor, and unrelated
   outsider accounts.
@@ -511,6 +538,7 @@ Scope covered:
   - unrelated outsider deep link to project documents, blocked by setup gate.
 
 Run evidence:
+
 - First run: `stage6-20260620T112816-ec98a`, stopped on a harness assumption.
   The drawing supersede endpoint correctly returns the new drawing with
   `supersededById: null`; the script expected the field to be omitted.
@@ -526,6 +554,7 @@ Run evidence:
   0 failures, 0 issues, 8 screenshots.
 
 Notes for Review:
+
 - The document security boundaries passed the important leak checks: no raw
   `fileUrl` in list rows, scoped signed URL creation, invalid/missing public
   token handling, subcontractor module gating, and outsider denial.
@@ -546,6 +575,7 @@ Status: passed for safe browser/API coverage, no blocking product fixes required
 in this slice.
 
 Scope covered in a visible browser:
+
 - Login page, password login, magic-link request UI, forgot-password request UI.
 - Register page and unverified-account login path.
 - Email verification page with no token and with an invalid token.
@@ -559,6 +589,7 @@ Scope covered in a visible browser:
 - Public invalid subcontractor invitation link.
 
 Supporting API checks:
+
 - Generic resend-verification, forgot-password, and magic-link request responses
   for known and unknown emails.
 - Invalid and missing verification/reset/magic-token handling.
@@ -572,6 +603,7 @@ Supporting API checks:
   correct-password disable.
 
 Run evidence:
+
 - Visible production run: `stage7-mqmakp8w`, 47 checks, 0 confirmed failures,
   0 product findings, 16 screenshots, 0 unexpected browser/API errors after
   excluding deliberate negative-test 400/401/403/404/429 responses.
@@ -579,6 +611,7 @@ Run evidence:
   `.gstack/qa-reports/stage7-mqmakp8w/qa-report.md` inside the QA worktree.
 
 Notes for Review:
+
 - Before company setup, `/settings` redirects to `/onboarding`; after company
   setup it is reachable. This is valid gating.
 - Self-serve registration signs users in before email verification and shows an
@@ -605,6 +638,7 @@ Status: two confirmed frontend findings, both fixed in this branch. Live
 production will continue showing them until this branch is merged and deployed.
 
 Scope covered in a visible browser:
+
 - Owner Company Settings load, team table, usage/billing/transfer sections.
 - Invite Company Member modal and pending-member row.
 - Owner project team page.
@@ -614,6 +648,7 @@ Scope covered in a visible browser:
 - Project-manager Company Settings access check.
 
 Supporting API checks:
+
 - Company members list.
 - Project creation.
 - Project team list, unknown-user invite guard, existing company-member invite,
@@ -631,16 +666,18 @@ Supporting API checks:
 - Disposable non-owner can leave company and loses company-member admin access.
 
 Findings fixed:
+
 1. Company Settings user-usage counters stayed stale after inviting a member.
    The team row appeared immediately, but `User Usage` stayed on the old count
    until a page refresh. Fix: `CompanyTeamMembersSection` now invalidates
    `queryKeys.companySettings` after a successful invite.
 2. Project managers could open editable Company Settings even though backend
    company mutations are owner/admin-only. Fix: added `COMPANY_ADMIN_ROLES =
-   ['owner', 'admin']` and used it for `/company-settings` only, while keeping
+['owner', 'admin']` and used it for `/company-settings` only, while keeping
    `project_manager` in the broader project-admin role group.
 
 Run evidence:
+
 - Visible production run: `stage8-mqmawyrr`, 38 checks, 2 confirmed production
   findings, 2 branch fixes, 8 screenshots, 0 unexpected browser/API errors after
   excluding deliberate negative-test 400/401/403/404 responses.
@@ -652,6 +689,7 @@ Run evidence:
   - `npm run type-check` passed.
 
 Notes for Review:
+
 - Company member removal by an admin is not implemented. The only company-member
   removal path in this surface is a non-owner leaving their own company. This
   may be acceptable for MVP, but it is a product/admin gap to review before
@@ -660,12 +698,14 @@ Notes for Review:
 ## Stage 9 - Project Setup, Settings, Areas, and Modules
 
 Scope:
+
 - Visible-browser owner onboarding into a sacrificial company.
 - Projects empty state, sample project creation, project create modal, project
   limit behavior, General Settings, Modules, Notifications, standalone Areas,
   and standalone Project Team.
 
 Findings:
+
 1. Hold-point minimum notice setting was persisted under the Project Settings UI
    key but request-release enforcement read a different backend key. Fixed in
    PR #1003 by reading `hpMinimumNoticeDays`, falling back to the legacy backend
@@ -678,6 +718,7 @@ Findings:
    #1005.
 
 Run evidence:
+
 - Visible production run: `stage9-mqmfz0tg`, headed Chromium via gstack browse,
   3 confirmed production findings, 3 merged fixes, 0 unexpected browser/API
   errors after excluding deliberate negative-test 400/403 responses.
@@ -689,6 +730,7 @@ Run evidence:
   - PR #1005: Frontend CI and PR smoke passed.
 
 Notes for Review:
+
 - The New Project button still opens at the plan limit and rejects only after
   submit. The message is clear, so this is polish rather than a blocker.
 - Project Areas lets equal start/end chainage reach the backend, then shows a
@@ -707,6 +749,7 @@ mutations, lot/ITP access, and subcontractor portal redirects.
 ## Stage 10 - Role Access and Project Scope
 
 Scope:
+
 - Visible-browser role matrix on production using separate QA accounts for
   owner, project-scoped project manager, project-scoped foreman,
   project-scoped viewer, logged-out user, and cross-company outsider.
@@ -716,6 +759,7 @@ Scope:
   create/import/bulk-create controls.
 
 Findings:
+
 1. Project role UI gates needed to consistently use the project-scoped role.
    Fixed in PR #1008 by centralizing role helpers and applying
    `getProjectScopedRole(user)` to project nav, route, lot setup, and
@@ -726,6 +770,7 @@ Findings:
    frontend auth/redirect typing.
 
 Live re-test results:
+
 - Owner can access Project Settings, Project Team, Lots, Claims, and Company
   Settings. Owner sees project settings save/delete controls and lot setup
   controls.
@@ -741,6 +786,7 @@ Live re-test results:
 - A cross-company owner cannot open the QA project and receives Access Denied.
 
 Run evidence:
+
 - Visible production run: `stage10-mqmjzrym`, headed Chromium via gstack
   browse, 2 confirmed production findings, 2 merged fixes.
 - Report artifact:
@@ -752,6 +798,7 @@ Run evidence:
     deployment statuses passed, and backend `/ready` returned HTTP 200.
 
 Notes for Review:
+
 - The first broad role matrix was discarded after stale auth made PM/foreman
   appear to have owner controls. The corrected matrix explicitly checked stored
   role and dashboard role before evaluating each route.
@@ -765,6 +812,7 @@ Notes for Review:
 ## Stage 11 - Email Delivery and Subcontractor Invite Flow
 
 Scope:
+
 - Visible-browser disposable owner registration, company creation, and project
   creation on production.
 - Production email service status.
@@ -772,18 +820,21 @@ Scope:
 - Subcontractor invite email path.
 
 Finding:
+
 - Production Resend delivery was quota-blocked. Before the fix, the app masked
   this as generic HTTP 500 responses from both `/api/notifications/send-test-email`
   and `/api/subcontractors/invite`, while `/api/notifications/email-service-status`
   still implied real delivery was ready.
 
 Fix:
+
 - PR #1011 merged to master and deployed. It preserves provider error metadata,
   returns operational HTTP 503 `EXTERNAL_SERVICE_ERROR` responses for quota/rate
   delivery failures, and changes email-service-status copy so it does not claim
   delivery is guaranteed by configuration alone.
 
 Live re-test results:
+
 - Disposable owner registration, company creation, and project creation all
   returned HTTP 201 in the visible browser session.
 - Email service status returned HTTP 200, provider `resend`, status `ready`, and
@@ -795,6 +846,7 @@ Live re-test results:
   details reason `quota_exceeded`.
 
 Run evidence:
+
 - Report artifact:
   `.gstack/qa-reports/stage11-email-subbie-flow-20260621/qa-report.md` inside
   the QA worktree.
@@ -806,6 +858,7 @@ Run evidence:
     Frontend E2E.
 
 Notes for Review:
+
 - The remaining blocker is operational, not product-code behavior: Resend quota
   must reset or be upgraded before real outgoing emails and full subcontractor
   invite click-through can be proven.
@@ -815,6 +868,7 @@ Notes for Review:
 ## Stage 12 - Test Results, Certificates, Verification, and Conformance Evidence
 
 Scope:
+
 - Visible-browser production owner registration, company creation, project
   creation, and lot creation.
 - Test specifications, requested test creation, enter-result validation,
@@ -824,6 +878,7 @@ Scope:
   denial, and desktop/mobile Test Results UI action gating.
 
 Findings:
+
 1. Claim readiness did not count current-workflow pending test statuses such as
    `requested` and `entered`; lot readiness did. Fixed in PR #1013 by sharing
    pending status logic across lot and claim readiness.
@@ -837,6 +892,7 @@ Findings:
    expected Print Certificate before the new gate allowed it. Fixed in PR #1014.
 
 Live re-test results:
+
 - Production browser/API probe passed all 25 Stage 12 checks after migration.
 - Lot readiness and claim readiness both reported the requested test as pending
   with singular grammar: `1 test result is not verified yet.`
@@ -850,6 +906,7 @@ Live re-test results:
 - Mobile Test Results UI at `390x844` showed the same corrected gate.
 
 Run evidence:
+
 - Report artifact:
   `.gstack/qa-reports/stage12-test-results-conformance-20260621/qa-report.md`
   inside the QA worktree.
@@ -863,6 +920,7 @@ Run evidence:
   returned HTTP 201.
 
 Notes for Review:
+
 - The deliberate negative tests still produce expected browser console resource
   errors: HTTP 400 for entering an incomplete requested test, HTTP 400 for
   verifying before certificate attachment, and HTTP 401 for unauthenticated
@@ -874,6 +932,7 @@ Notes for Review:
 ## Stage 13 - Documents, Drawings, Storage Access, and Evidence Payloads
 
 Scope:
+
 - Visible-browser production owner setup, project/lot creation, document upload
   surfaces, document list/access denial, signed URL behavior, drawing revision
   handling, test-certificate document access, public hold-point evidence payloads,
@@ -882,6 +941,7 @@ Scope:
   and frontend document/drawing surfaces.
 
 Findings:
+
 1. Public hold-point release evidence packages exposed raw storage locators in
    checklist attachments and photo entries. Fixed in this stage by sanitizing
    public responses only; authenticated evidence-package responses are unchanged.
@@ -903,6 +963,7 @@ Findings:
    semantics, and the claim submit modal's "download package" wording.
 
 Live test results:
+
 - Production backend `/ready` responded healthy.
 - Owner registration, company creation, project creation, and lot creation
   succeeded.
@@ -918,6 +979,7 @@ Live test results:
   email delivery returned 503.
 
 Run evidence:
+
 - Report artifact:
   `.gstack/qa-reports/stage13-documents-storage-20260621/qa-report.md` inside
   the QA worktree.
@@ -931,6 +993,7 @@ Run evidence:
   duplication.
 
 Notes for Review:
+
 - The DB-backed document route regression cases were added to
   `documents.test.ts`, but the suite could not be run locally because this
   worktree has no safe local `DATABASE_URL`. The safety setup correctly refused
@@ -949,6 +1012,7 @@ conformance, then confirm claim readiness and evidence package behavior.
 ## Stage 14 - Cross-Domain Lot Closeout
 
 Scope:
+
 - Visible-browser production owner setup, project/lot creation, ITP assignment,
   standard item completion, hold-point release request and release, test-result
   certificate verification, NCR lifecycle, lot conformance, and claim-readiness
@@ -958,6 +1022,7 @@ Scope:
   test evidence matching, and frontend cache refreshes.
 
 Findings:
+
 1. Lot conformance treated `pending_verification` ITP completions as finished.
    Fixed in this stage by requiring `verificationStatus === verified` for
    completed checklist items before lot conformance can pass.
@@ -984,6 +1049,7 @@ Findings:
    sharing a role helper and limiting both actions to verification status.
 
 Live pre-fix probe results:
+
 - Owner registration, company/project/lot setup, ITP assignment, standard ITP
   completion, hold-point release request/read/release, test-result certificate
   attach/verify, and open-NCR conformance blocker all worked.
@@ -995,6 +1061,7 @@ Live pre-fix probe results:
   evidence before the submit step.
 
 Run evidence:
+
 - Report artifact:
   `.gstack/qa-reports/stage14-lot-closeout-20260621/qa-report.md` inside the QA
   worktree.
@@ -1009,6 +1076,7 @@ Run evidence:
   existing desktop/mobile or shell/subbie parallel UI paths touched by the fix.
 
 Notes for Review:
+
 - Post-merge production probe was rerun after PR #1017 and exposed a follow-up
   bug: `POST /api/lots` dropped `budgetAmount`, leaving the conformed lot
   blocked in claim readiness with `missing_budget`.
@@ -1027,6 +1095,7 @@ Notes for Review:
 ## Stage 15 - Test Result Evidence Immutability
 
 Scope:
+
 - Focused backend/API audit and visible-browser production probe for verified
   test-result corrections, lot reassignment, certificate replacement, extraction
   confirmation, and deletion paths.
@@ -1034,6 +1103,7 @@ Scope:
   after test-result mutations.
 
 Findings:
+
 1. `PATCH /api/test-results/:id` let verifier roles change verified test data,
    including `lotId`, `resultValue`, and `passFail`, while leaving
    `status = verified` and verifier stamps intact. Fixed in this stage by
@@ -1059,6 +1129,7 @@ Findings:
    detail/readiness keys after test-result mutations.
 
 Live pre-fix probe results:
+
 - Owner registration, company/project/lots creation, test-result creation,
   certificate attach, and verification all worked.
 - A verified passing test could be patched to failing and moved to a different
@@ -1067,6 +1138,7 @@ Live pre-fix probe results:
   stored as `verified`.
 
 Run evidence:
+
 - Production repro probe:
   `.gstack/tmp/stage15-test-result-corrections-probe.js` inside the QA worktree.
 - Local focused backend checks:
@@ -1089,6 +1161,7 @@ Run evidence:
     blocked replacement.
 
 Notes for Review:
+
 - The DB-backed route regression tests were added to `testResults.test.ts`, but
   the file could not run locally because this worktree has no safe
   `DATABASE_URL`. They passed in CI as part of PR #1019 and the master run.
@@ -1096,6 +1169,7 @@ Notes for Review:
 ## Stage 16 - Claims Lifecycle Edge Cases
 
 Scope:
+
 - Focused owner-side claims lifecycle audit covering claim creation, partial
   claim increments, draft deletion, submit retry, dispute, certification, payment
   rounding, evidence package wording, and claims table cache/export behavior.
@@ -1103,6 +1177,7 @@ Scope:
   lots, and claims against the live Railway backend.
 
 Findings:
+
 1. Zero-percent claim increments could create a no-value claim. Fixed by
    rejecting non-positive claim percentages before claim creation.
 2. Claims could be marked disputed with a blank dispute reason. Fixed by
@@ -1127,6 +1202,7 @@ Findings:
    selectors.
 
 Run evidence:
+
 - PR #1021 merged as `fd0dee80` with the main claims lifecycle fixes.
 - PR #1022 merged as `3fe9b944` to align the remaining claims E2E selector with
   the updated submit-modal copy.
@@ -1160,6 +1236,7 @@ Run evidence:
   - the probe completed with `findings: []`.
 
 Notes for Review:
+
 - The production probe script lives at
   `.gstack/tmp/stage16-claims-lifecycle-probe.js` inside the QA worktree. It
   creates throwaway production data and does not use external temp-email
@@ -1171,6 +1248,7 @@ Notes for Review:
 ## Stage 17 - Dockets Lifecycle Production Recheck
 
 Scope:
+
 - Re-ran the commercial dockets lifecycle against production after the Stage 5a
   fixes and the later docket lifecycle hardening.
 - Used fresh throwaway owner, subcontractor, and unrelated outsider accounts.
@@ -1180,6 +1258,7 @@ Scope:
 Status: passed after one QA-found UI polish fix.
 
 API run evidence:
+
 - Run: `stage17-308bb7b653dc`.
 - Result: 40 checks, 0 failures.
 - Covered owner registration, company creation, project creation,
@@ -1191,6 +1270,7 @@ API run evidence:
   outsider denial.
 
 Visible browser evidence:
+
 - Subcontractor docket history showed rejected, queried/approved,
   adjusted/approved, and draft dockets.
 - Subcontractor approved docket detail showed submitted and approved labour,
@@ -1203,11 +1283,13 @@ Visible browser evidence:
 - No console errors were observed on the verified owner or subcontractor pages.
 
 Related merged work:
+
 - #1025 - Fix docket lifecycle approval edge cases, merged as `1703433e`.
 - #1026 - Fix docket reachability E2E project links, merged as `3ff38353`.
 - #1027 - Hide docket action notes in view mode, merged as `5867b76f`.
 
 Verification:
+
 - PR #1027 local focused check:
   `npm run test:unit -- DocketActionModal.test.tsx` passed, 15 tests.
 - PR #1027 local frontend `format:check`, `lint -- --quiet`, `git diff --check`,
@@ -1222,6 +1304,7 @@ Verification:
   `assets/index-BbNtblpr.js` during the final verification.
 
 Notes for Review:
+
 - Query response resubmits the docket to `pending_approval` by design. This is
   covered by `backend/src/routes/dockets/review.ts` and the route tests.
 - `dockets` is intentionally not a subcontractor portal access key. The valid
@@ -1234,6 +1317,7 @@ Notes for Review:
 ## Stage 18 - Daily Diary Lifecycle and Reporting
 
 Scope:
+
 - Re-ran the daily diary lifecycle against production with fresh throwaway
   owner, foreman, viewer, and outsider users.
 - Covered backend/API behavior for diary creation, draft updates, all diary item
@@ -1246,6 +1330,7 @@ Scope:
 Status: passed after four QA-found fixes.
 
 API run evidence:
+
 - Run: `stage18-1782013003377-6wtqv2`.
 - Result: 63 checks, 0 findings.
 - Covered owner/company/project setup, foreman and viewer project membership,
@@ -1260,6 +1345,7 @@ API run evidence:
   report-section rejection, viewer read-only access, and outsider denial.
 
 Visible browser evidence:
+
 - Foreman mobile diary shell showed the expected path/work/review screens for
   the live Stage 18 diary.
 - After #1029, the submitted mobile review page no longer showed the
@@ -1286,6 +1372,7 @@ Visible browser evidence:
   pages after the fixes were deployed.
 
 Related merged work:
+
 - #1029 - Hide diary submit controls after submission, merged as `27222784`.
 - #1030 - Respect diary date query parameter, merged as `d0aa1b14`.
 - #1031 - Fix delay register filters for mixed diary labels, merged as
@@ -1293,6 +1380,7 @@ Related merged work:
 - #1032 - Preserve report filters while loading, merged as `4cde91ae`.
 
 Verification:
+
 - #1029 local focused check:
   `npm run test:unit -- ReviewScreen.test.tsx` passed.
 - #1030 local focused checks:
@@ -1317,6 +1405,7 @@ Verification:
   the production frontend returned HTTP 200.
 
 Artifacts:
+
 - Production probe script:
   `.gstack/tmp/stage18-diary-lifecycle-probe.js` inside the QA worktree.
 - Screenshots:
@@ -1331,7 +1420,107 @@ Artifacts:
   - `.gstack/qa-reports/stage18-diary-lifecycle-20260621/screenshots/desktop-diary-submitted-addendum-after.png`
 
 Notes for Review:
+
 - The Stage 18 browser used a visible production session and was refreshed after
   service-worker cache clearing before post-deploy verification.
 - The production probe creates throwaway Stage 18 data and does not use external
   temporary-email services.
+
+## Stage 19 - Account, Company, Project Settings, Notifications, and Audit Logs
+
+Scope:
+
+- Ran a production API and browser sweep over account settings, MFA,
+  notification preferences, company settings, company limits, project settings,
+  project team/areas/modules/notifications, audit logs, API keys, export/delete
+  account guards, and role-gated settings surfaces.
+- Used throwaway Stage 19 users only. No production customer data was used.
+- Rechecked visible owner/admin and foreman browser behavior after fixes were
+  merged.
+
+Status: passed after two QA-found fixes and one test-only CI follow-up.
+
+API run evidence:
+
+- Production API probe completed with no remaining failing assertions after the
+  MFA fix.
+- Covered company member and user limits, project creation limits, project team
+  and settings updates, project area create validation, notification email
+  preferences and alert reads, audit log reads/filters, MFA setup/disable flows,
+  password/export/delete-account guards, logout behavior, and API-key behavior.
+- Confirmed MFA setup now rejects an invalid six-digit code with HTTP 400 and
+  leaves MFA disabled; a valid current TOTP code enables MFA.
+
+Visible browser evidence:
+
+- Owner/admin settings pages loaded without console errors:
+  `/settings`, `/company-settings`, `/audit-log`,
+  `/projects/:projectId/settings?tab=general`,
+  `/projects/:projectId/settings?tab=notifications`,
+  `/projects/:projectId/settings?tab=modules`, and
+  `/projects/:projectId/areas`.
+- Project Areas production modal now says chainage bounds are required, marks
+  both chainage inputs as required, and shows helper text that the end must be
+  greater than the start.
+- Name-only Project Area submission now shows the local required-chainage error,
+  keeps the modal open, sends no project-area create request, and logs no
+  console errors.
+- Foreman direct-route checks rendered `Access Denied` for `/company-settings`,
+  `/audit-log`, `/projects/:projectId/areas`, and
+  `/projects/:projectId/settings?tab=general`; `/settings` remained available
+  as an account-level page.
+
+Related merged work:
+
+- #1034 - Fix MFA verification result handling, merged as `d9d67efb`.
+- #1035 - Fix project area chainage validation, merged as `d39d2233`.
+- #1036 - Update project area E2E validation text, merged as `238ef2e5`.
+
+Verification:
+
+- #1034 local checks:
+  - `npm run test -- src/lib/otpVerifyResult.test.ts` passed.
+  - Backend `format:check`, `type-check`, `lint -- --quiet`, `build`, and
+    `git diff --check` passed.
+  - Local DB-backed `mfa.test.ts` was blocked by intentionally absent local
+    `DATABASE_URL`; GitHub Backend CI supplied DB-backed verification.
+- #1034 post-merge production verification:
+  - backend `/ready` returned HTTP 200;
+  - invalid MFA setup code returned HTTP 400 and did not enable MFA;
+  - valid current TOTP code returned HTTP 200 and enabled MFA.
+- #1035 local checks:
+  - `npm run test:unit -- src/pages/projects/settings/projectAreaForm.test.ts src/pages/projects/settings/ProjectAreasPage.test.tsx`
+    passed.
+  - Frontend `format:check`, `type-check`, `lint -- --quiet`, and
+    `git diff --check` passed.
+  - Frontend build passed with a non-secret dummy `VITE_SENTRY_DSN`.
+  - Changed-file `fallow audit --base origin/master --format json --quiet`
+    passed.
+- #1035 PR CI passed: Frontend, Frontend PR E2E smoke, Detect changes, and
+  Vercel ignored-build.
+- The first #1035 post-merge master run exposed one stale full-E2E assertion in
+  `frontend/e2e/project-areas.spec.ts`; the app behavior was correct, but the
+  test still expected the old `less than or equal` validation text.
+- #1036 local check:
+  `npm run test:e2e -- e2e/project-areas.spec.ts` passed, 4 tests.
+- Final master CI run `27896744994` passed after #1036, including Backend,
+  Frontend, and full post-merge Frontend E2E.
+
+Observations for Review:
+
+- Push notifications are visibly disabled in production because VAPID is not
+  configured. The UI communicates this state; decide whether push should be
+  configured before launch or left as a later enhancement.
+- Write-scoped API keys can update company and project settings. Read-scoped
+  API keys cannot write, and MFA setup rejects API-key sessions. Treat this as a
+  product/security policy decision: either keep API-key settings automation or
+  explicitly block API keys from sensitive settings writes.
+- The custom `www.siteproof.com.au/login` route returned 404 during this stage;
+  the verified production app URL remains `https://site-proof.vercel.app`.
+
+Artifacts:
+
+- Production API probe script:
+  `.gstack/tmp/stage19-admin-settings-probe.js` inside the QA worktree.
+- MFA production verification script:
+  `.gstack/tmp/stage19-mfa-production-verify.js` inside the QA worktree.
