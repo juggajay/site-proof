@@ -1231,6 +1231,46 @@ describe('Projects API', () => {
       expect(res.body.project.name).toBe('Updated Project Name');
     });
 
+    it('should audit project settings updates', async () => {
+      await prisma.auditLog.deleteMany({
+        where: {
+          projectId,
+          entityType: 'project',
+          entityId: projectId,
+          action: AuditAction.PROJECT_UPDATED,
+        },
+      });
+
+      const res = await request(app)
+        .patch(`/api/projects/${projectId}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          name: 'Audited Project Name',
+          settings: {
+            enabledModules: { dockets: false },
+            hpMinimumNoticeDays: 2,
+          },
+        });
+
+      expect(res.status).toBe(200);
+
+      const auditLog = await prisma.auditLog.findFirst({
+        where: {
+          projectId,
+          userId,
+          entityType: 'project',
+          entityId: projectId,
+          action: AuditAction.PROJECT_UPDATED,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      expect(auditLog).toBeTruthy();
+      const changes = parseAuditLogChanges(auditLog!.changes) as Record<string, unknown>;
+      expect(changes.changedFields).toEqual(expect.arrayContaining(['name', 'settings']));
+      expect(changes.settingsKeys).toEqual(['enabledModules', 'hpMinimumNoticeDays']);
+    });
+
     it('should update the specification standard and return it', async () => {
       const res = await request(app)
         .patch(`/api/projects/${projectId}`)

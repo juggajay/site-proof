@@ -76,6 +76,10 @@ function retainedProjectRecordTotal(counts: RetainedProjectCounts): number {
   return RETAINED_PROJECT_RELATIONS.reduce((total, relation) => total + counts[relation], 0);
 }
 
+function sortedRecordKeys(value: Record<string, unknown> | undefined): string[] {
+  return value ? Object.keys(value).sort() : [];
+}
+
 function parseCommentCount(value: number | bigint | null | undefined): number {
   if (typeof value === 'bigint') {
     return Number(value);
@@ -423,6 +427,7 @@ export function createProjectWriteRouter({
           workingHoursStart: true,
           workingHoursEnd: true,
           settings: true,
+          status: true,
         },
       });
 
@@ -520,6 +525,24 @@ export function createProjectWriteRouter({
           updatedAt: true,
         },
       });
+
+      const changedFields = Object.keys(updateData);
+      if (changedFields.length > 0) {
+        await createAuditLog({
+          projectId: id,
+          userId: user.id,
+          entityType: 'project',
+          entityId: id,
+          action: AuditAction.PROJECT_UPDATED,
+          changes: {
+            changedFields,
+            settingsKeys: sortedRecordKeys(settings),
+            previousStatus: status !== undefined ? project.status : undefined,
+            newStatus: status !== undefined ? status : undefined,
+          },
+          req,
+        });
+      }
 
       // Map projectNumber to code for frontend consistency
       res.json(buildProjectDetailResponse(updatedProject));
