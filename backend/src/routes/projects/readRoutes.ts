@@ -18,6 +18,90 @@ type ProjectReadRouterDependencies = {
 
 const PROJECT_COMMERCIAL_ROLES = ['owner', 'admin', 'project_manager'];
 
+function canViewProjectContractValue(role: string | null | undefined): boolean {
+  return Boolean(role && PROJECT_COMMERCIAL_ROLES.includes(role));
+}
+
+async function getSubcontractorProjectAccess(
+  userId: string,
+  projectId: string,
+  isBlockedSubcontractorStatus: (status: string | null | undefined) => boolean,
+) {
+  const subcontractorProjectLinks = await prisma.subcontractorUser.findMany({
+    where: {
+      userId,
+      subcontractorCompany: { projectId },
+    },
+    select: {
+      subcontractorCompany: {
+        select: { status: true },
+      },
+    },
+  });
+
+  const hasSubcontractorAccess = subcontractorProjectLinks.some(
+    (link) => !isBlockedSubcontractorStatus(link.subcontractorCompany.status),
+  );
+
+  return {
+    hasSubcontractorAccess,
+    subcontractorSuspended: subcontractorProjectLinks.length > 0 && !hasSubcontractorAccess,
+  };
+}
+
+function getProjectDetailRole({
+  hasCompanyAdminAccess,
+  hasSubcontractorAccess,
+  isSubcontractor,
+  projectUserRole,
+  userRoleInCompany,
+}: {
+  hasCompanyAdminAccess: boolean;
+  hasSubcontractorAccess: boolean;
+  isSubcontractor: boolean;
+  projectUserRole?: string | null;
+  userRoleInCompany?: string | null;
+}) {
+  if (hasCompanyAdminAccess) {
+    return userRoleInCompany ?? null;
+  }
+
+  if (projectUserRole) {
+    return projectUserRole;
+  }
+
+  if (isSubcontractor && hasSubcontractorAccess) {
+    return userRoleInCompany ?? null;
+  }
+
+  return null;
+}
+
+function maskProjectDetailForCurrentUser<
+  T extends {
+    contractValue: unknown;
+    settings: unknown;
+    workingHoursStart: unknown;
+    workingHoursEnd: unknown;
+    workingDays: unknown;
+  },
+>(project: T, { isSubcontractor, role }: { isSubcontractor: boolean; role: string | null }) {
+  const visibleProject = { ...project };
+
+  if (!canViewProjectContractValue(role)) {
+    visibleProject.contractValue = null as T['contractValue'];
+  }
+
+  if (isSubcontractor) {
+    visibleProject.settings = null as T['settings'];
+    visibleProject.workingHoursStart = null as T['workingHoursStart'];
+    visibleProject.workingHoursEnd = null as T['workingHoursEnd'];
+    visibleProject.workingDays = null as T['workingDays'];
+  }
+
+  return visibleProject;
+}
+
 export function createProjectReadRouter({
   isBlockedSubcontractorStatus,
   isCompanyAdmin,
@@ -40,7 +124,7 @@ export function createProjectReadRouter({
         ? []
         : await prisma.projectUser.findMany({
             where: { userId: user.id, status: 'active' },
-            select: { projectId: true },
+            select: { projectId: true, role: true },
           });
       const projectIds = projectUsers.map((pu) => pu.projectId);
 
@@ -87,12 +171,25 @@ export function createProjectReadRouter({
           startDate: true,
           targetCompletion: true,
           contractValue: true,
+          companyId: true,
           createdAt: true,
         },
         orderBy: { createdAt: 'desc' },
       });
 
-      res.json(buildProjectListResponse(projects, isSubcontractor));
+      const projectRoleById = new Map(projectUsers.map((pu) => [pu.projectId, pu.role]));
+      const sanitizedProjects = projects.map(({ companyId: projectCompanyId, ...project }) => {
+        const effectiveRole =
+          hasCompanyAdminRole && user.companyId && projectCompanyId === user.companyId
+            ? user.roleInCompany
+            : projectRoleById.get(project.id);
+
+        return canViewProjectContractValue(effectiveRole)
+          ? project
+          : { ...project, contractValue: null };
+      });
+
+      res.json(buildProjectListResponse(sanitizedProjects, isSubcontractor));
     }),
   );
 
@@ -115,28 +212,9 @@ export function createProjectReadRouter({
             },
           });
 
-      // Check subcontractor access
-      let hasSubcontractorAccess = false;
-      let subcontractorSuspended = false;
-
-      if (isSubcontractor) {
-        const subcontractorProjectLinks = await prisma.subcontractorUser.findMany({
-          where: {
-            userId: user.id,
-            subcontractorCompany: { projectId: id },
-          },
-          select: {
-            subcontractorCompany: {
-              select: { status: true },
-            },
-          },
-        });
-
-        hasSubcontractorAccess = subcontractorProjectLinks.some(
-          (link) => !isBlockedSubcontractorStatus(link.subcontractorCompany.status),
-        );
-        subcontractorSuspended = subcontractorProjectLinks.length > 0 && !hasSubcontractorAccess;
-      }
+      const { hasSubcontractorAccess, subcontractorSuspended } = isSubcontractor
+        ? await getSubcontractorProjectAccess(user.id, id, isBlockedSubcontractorStatus)
+        : { hasSubcontractorAccess: false, subcontractorSuspended: false };
 
       // Also allow company admins/owners to access company projects
       const project = await prisma.project.findUnique({
@@ -175,6 +253,7 @@ export function createProjectReadRouter({
       // Check if user has access via ProjectUser, subcontractor, or is company admin/owner
       const isCompanyAdmin = user.roleInCompany === 'admin' || user.roleInCompany === 'owner';
       const isCompanyProject = project.companyId === user.companyId;
+      const hasCompanyAdminAccess = isCompanyAdmin && isCompanyProject;
 
       // Provide specific error message for suspended subcontractors
       if (isSubcontractor && subcontractorSuspended) {
@@ -183,20 +262,23 @@ export function createProjectReadRouter({
         );
       }
 
-      if (!projectUser && !hasSubcontractorAccess && !(isCompanyAdmin && isCompanyProject)) {
+      if (!projectUser && !hasSubcontractorAccess && !hasCompanyAdminAccess) {
         throw AppError.forbidden('Access denied to this project');
       }
 
-      // Hide contract value from subcontractors (commercial isolation)
-      if (isSubcontractor) {
-        project.contractValue = null;
-        project.settings = null;
-        project.workingHoursStart = null;
-        project.workingHoursEnd = null;
-        project.workingDays = null;
-      }
+      const effectiveRole = getProjectDetailRole({
+        hasCompanyAdminAccess,
+        hasSubcontractorAccess,
+        isSubcontractor,
+        projectUserRole: projectUser?.role,
+        userRoleInCompany: user.roleInCompany,
+      });
+      const visibleProject = maskProjectDetailForCurrentUser(project, {
+        isSubcontractor,
+        role: effectiveRole,
+      });
 
-      res.json(buildProjectDetailResponse(project));
+      res.json(buildProjectDetailResponse({ ...visibleProject, currentUserRole: effectiveRole }));
     }),
   );
 

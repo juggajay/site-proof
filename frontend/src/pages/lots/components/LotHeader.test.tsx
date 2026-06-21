@@ -94,6 +94,13 @@ describe('LotHeader lot-configuration permissions (desktop)', () => {
     expect(screen.getByRole('button', { name: 'Edit Lot' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Assign Subcontractor/i })).toBeInTheDocument();
   });
+
+  it('can show Assign Subcontractor without showing Edit Lot', () => {
+    renderHeader({ canManageLot: true, canEditLot: false });
+
+    expect(screen.queryByRole('button', { name: 'Edit Lot' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Assign Subcontractor/i })).toBeInTheDocument();
+  });
 });
 
 describe('LotHeader desktop layout snapshot', () => {
@@ -227,6 +234,17 @@ describe('LotHeader mobile overflow menu', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Edit Lot' }));
     expect(onEdit).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps Assign Subcontractor in the sheet when mobile edit access is absent', () => {
+    mockIsMobile = true;
+    renderHeader({ canManageLot: true, canEditLot: false });
+
+    expect(screen.queryByRole('button', { name: 'Edit Lot' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+
+    expect(screen.getByText('Assign Subcontractor')).toBeInTheDocument();
   });
 
   it('hides Edit Lot primary button when canManageLot=false on mobile', () => {

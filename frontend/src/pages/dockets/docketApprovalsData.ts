@@ -61,7 +61,14 @@ export interface ProjectResponse {
   project?: {
     name?: string | null;
     projectNumber?: string | null;
+    currentUserRole?: string | null;
   };
+}
+
+const DOCKET_APPROVER_ROLES = ['owner', 'admin', 'project_manager', 'site_manager', 'foreman'];
+
+export function canApproveDocketsForProjectRole(role: string | null | undefined): boolean {
+  return Boolean(role && DOCKET_APPROVER_ROLES.includes(role));
 }
 
 export const normalizeDockets = (data: DocketsResponse): Docket[] =>

@@ -840,6 +840,93 @@ describe('Projects API', () => {
       expect(res.status).toBe(200);
       expect(res.body.project).toBeDefined();
       expect(res.body.project.id).toBe(projectId);
+      expect(res.body.project.currentUserRole).toBe('admin');
+    });
+
+    it('uses the current project role when exposing commercial project fields', async () => {
+      const suffix = Date.now();
+      const crossProject = await prisma.project.create({
+        data: {
+          companyId,
+          name: `Cross Role Commercial Project ${suffix}`,
+          projectNumber: `CROSS-COM-${suffix}`,
+          status: 'active',
+          state: 'NSW',
+          specificationSet: 'TfNSW',
+          contractValue: '98765.43',
+        },
+      });
+      const scopedUser = await registerTestUser(app, {
+        emailPrefix: 'projects-cross-role',
+        fullName: 'Projects Cross Role User',
+        companyId,
+        roleInCompany: 'member',
+      });
+
+      await prisma.project.update({
+        where: { id: projectId },
+        data: { contractValue: '123456.78' },
+      });
+      await prisma.projectUser.createMany({
+        data: [
+          {
+            projectId,
+            userId: scopedUser.userId,
+            role: 'viewer',
+            status: 'active',
+            acceptedAt: new Date(),
+          },
+          {
+            projectId: crossProject.id,
+            userId: scopedUser.userId,
+            role: 'project_manager',
+            status: 'active',
+            acceptedAt: new Date(),
+          },
+        ],
+      });
+
+      try {
+        const listRes = await request(app)
+          .get('/api/projects')
+          .set('Authorization', `Bearer ${scopedUser.token}`);
+
+        expect(listRes.status).toBe(200);
+        const listedProjects = listRes.body.projects as Array<{
+          id: string;
+          contractValue: unknown;
+        }>;
+        expect(
+          listedProjects.find((project) => project.id === projectId)?.contractValue,
+        ).toBeNull();
+        expect(
+          listedProjects.find((project) => project.id === crossProject.id)?.contractValue,
+        ).toBeTruthy();
+
+        const viewerProjectRes = await request(app)
+          .get(`/api/projects/${projectId}`)
+          .set('Authorization', `Bearer ${scopedUser.token}`);
+
+        expect(viewerProjectRes.status).toBe(200);
+        expect(viewerProjectRes.body.project.currentUserRole).toBe('viewer');
+        expect(viewerProjectRes.body.project.contractValue).toBeNull();
+
+        const managerProjectRes = await request(app)
+          .get(`/api/projects/${crossProject.id}`)
+          .set('Authorization', `Bearer ${scopedUser.token}`);
+
+        expect(managerProjectRes.status).toBe(200);
+        expect(managerProjectRes.body.project.currentUserRole).toBe('project_manager');
+        expect(managerProjectRes.body.project.contractValue).toBeTruthy();
+      } finally {
+        await prisma.projectUser.deleteMany({ where: { userId: scopedUser.userId } });
+        await prisma.emailVerificationToken.deleteMany({ where: { userId: scopedUser.userId } });
+        await prisma.user.delete({ where: { id: scopedUser.userId } }).catch(() => {});
+        await prisma.project.delete({ where: { id: crossProject.id } }).catch(() => {});
+        await prisma.project
+          .update({ where: { id: projectId }, data: { contractValue: null } })
+          .catch(() => {});
+      }
     });
 
     it('sanitizes subcontractor project payloads and hides suspended project links', async () => {

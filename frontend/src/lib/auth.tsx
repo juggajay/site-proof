@@ -10,6 +10,7 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import { apiUrl } from './config';
 import { MfaRequiredError } from './authErrors';
+import { clearDocumentAccessCache } from './documentAccessCache';
 import { fetchWithTimeout } from './fetchWithTimeout';
 import { logError } from './logger';
 import {
@@ -298,6 +299,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return actualUser;
   }, [actualUser]);
 
+  const clearClientAuthState = useCallback(() => {
+    clearDocumentAccessCache();
+    clearAuthFromAllStorages();
+    queryClient.clear();
+  }, [queryClient]);
+
   useEffect(() => {
     // Check for stored auth on mount and verify token is valid
     const verifySession = async () => {
@@ -314,8 +321,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setActualUser(result.user);
           } else if (result.status === 'unauthorized' || result.status === 'invalid') {
             // Token is invalid or expired
-            clearAuthFromAllStorages();
-            queryClient.clear();
+            clearClientAuthState();
             setSessionExpired(true);
           } else {
             await prepareOfflineDataForUser(storedAuth.auth.user.id);
@@ -331,7 +337,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     verifySession();
-  }, [queryClient]);
+  }, [clearClientAuthState]);
 
   const signIn = async (
     email: string,
@@ -364,8 +370,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Clear any existing auth from both storages first
     await prepareOfflineDataForUser(data.user.id);
-    queryClient.clear();
-    clearAuthFromAllStorages();
+    clearClientAuthState();
     persistSignedInSession(rememberMe ? 'local' : 'session', {
       user: data.user,
       token: data.token,
@@ -401,8 +406,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // token, e.g. an older API shape). Fall back to the manual sign-in
       // screen rather than reporting the registration itself as failed.
       if (data.verificationRequired) {
-        clearAuthFromAllStorages();
-        queryClient.clear();
+        clearClientAuthState();
         setActualUser(null);
         setSessionExpired(false);
         return null;
@@ -414,8 +418,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // non-blocking server-side — so sign the brand-new user straight in
     // instead of bouncing them to the login form to retype their password.
     await prepareOfflineDataForUser(data.user.id);
-    queryClient.clear();
-    clearAuthFromAllStorages();
+    clearClientAuthState();
     persistSignedInSession('local', {
       user: data.user,
       token: data.token,
@@ -437,8 +440,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    clearAuthFromAllStorages();
-    queryClient.clear();
+    clearClientAuthState();
     // Automatic sign-outs (e.g. inactivity timeout) keep offline work so a
     // foreman who steps away doesn't lose unsynced photos/edits. Manual
     // sign-outs (and account-ending flows) still wipe via the default path.
@@ -449,11 +451,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const handleSessionExpired = useCallback(() => {
-    clearAuthFromAllStorages();
-    queryClient.clear();
+    clearClientAuthState();
     setActualUser(null);
     setSessionExpired(true);
-  }, [queryClient]);
+  }, [clearClientAuthState]);
 
   useEffect(() => {
     window.addEventListener(AUTH_SESSION_EXPIRED_EVENT, handleSessionExpired);
@@ -475,8 +476,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
         setActualUser(result.user);
       } else if (result.status === 'unauthorized' || result.status === 'invalid') {
-        clearAuthFromAllStorages();
-        queryClient.clear();
+        clearClientAuthState();
         setActualUser(null);
         setSessionExpired(true);
       }
@@ -494,8 +494,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (result.status === 'ok') {
         // Clear any existing auth from both storages
         await prepareOfflineDataForUser(result.user.id);
-        queryClient.clear();
-        clearAuthFromAllStorages();
+        clearClientAuthState();
         persistSignedInSession('local', {
           user: result.user,
           token: token,
@@ -508,8 +507,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error('Invalid token');
       }
     } catch (error) {
-      clearAuthFromAllStorages();
-      queryClient.clear();
+      clearClientAuthState();
       throw error;
     }
   };

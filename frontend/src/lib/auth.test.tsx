@@ -26,6 +26,7 @@ const {
 }));
 
 const fetchWithTimeout = vi.hoisted(() => vi.fn());
+const clearDocumentAccessCache = vi.hoisted(() => vi.fn());
 
 vi.mock('./offlineDb', () => ({
   clearAllOfflineData,
@@ -44,6 +45,10 @@ vi.mock('./authStorage', () => ({
 
 vi.mock('./fetchWithTimeout', () => ({
   fetchWithTimeout,
+}));
+
+vi.mock('./documentAccessCache', () => ({
+  clearDocumentAccessCache,
 }));
 
 import { AuthProvider, useAuth, type SignOutOptions } from './auth';
@@ -110,6 +115,7 @@ describe('signOut offline-data handling', () => {
       }),
     );
     expect(clearAuthFromAllStorages).toHaveBeenCalled();
+    expect(clearDocumentAccessCache).toHaveBeenCalled();
   });
 
   it('wipes offline data on a manual (default) sign-out', async () => {
@@ -120,6 +126,7 @@ describe('signOut offline-data handling', () => {
     });
 
     expect(clearAuthFromAllStorages).toHaveBeenCalled();
+    expect(clearDocumentAccessCache).toHaveBeenCalled();
     expect(clearAllOfflineData).toHaveBeenCalledTimes(1);
     expect(clearOfflineOwnerId).toHaveBeenCalledTimes(1);
   });
@@ -133,6 +140,7 @@ describe('signOut offline-data handling', () => {
 
     // Session still ends...
     expect(clearAuthFromAllStorages).toHaveBeenCalled();
+    expect(clearDocumentAccessCache).toHaveBeenCalled();
     // ...but offline work and its owner marker survive so the same user can
     // resume after re-login (and a different user still triggers the wipe).
     expect(clearAllOfflineData).not.toHaveBeenCalled();

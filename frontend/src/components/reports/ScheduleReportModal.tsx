@@ -26,6 +26,9 @@ import {
   formatNextRun,
   getFrequencyLabel,
   normalizeRecipientList,
+  getScheduleFailureMessage,
+  getScheduleStatusClassName,
+  getScheduleStatusLabel,
   scheduleFormSchema,
   type ScheduledReport,
   type ScheduleFormData,
@@ -270,61 +273,69 @@ export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalP
               </div>
             ) : (
               <div className="space-y-3">
-                {schedules.map((schedule) => (
-                  <div
-                    key={schedule.id}
-                    className={`p-4 border rounded-lg ${
-                      schedule.isActive ? 'bg-card' : 'bg-muted/50'
-                    }`}
-                  >
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                      <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-medium">
-                            {REPORT_TYPES.find((t) => t.value === schedule.reportType)?.label ||
-                              schedule.reportType}
-                          </span>
-                          <span
-                            className={`px-2 py-0.5 text-xs rounded-full ${
-                              schedule.isActive
-                                ? 'bg-foreground/10 text-foreground'
-                                : 'bg-muted text-muted-foreground'
-                            }`}
-                          >
-                            {schedule.isActive ? 'Active' : 'Paused'}
-                          </span>
+                {schedules.map((schedule) => {
+                  const failureMessage = getScheduleFailureMessage(schedule);
+
+                  return (
+                    <div
+                      key={schedule.id}
+                      className={`p-4 border rounded-lg ${
+                        schedule.isActive ? 'bg-card' : 'bg-muted/50'
+                      }`}
+                    >
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2 mb-1">
+                            <span className="font-medium">
+                              {REPORT_TYPES.find((t) => t.value === schedule.reportType)?.label ||
+                                schedule.reportType}
+                            </span>
+                            <span
+                              className={`px-2 py-0.5 text-xs rounded-full ${getScheduleStatusClassName(
+                                schedule,
+                              )}`}
+                            >
+                              {getScheduleStatusLabel(schedule)}
+                            </span>
+                          </div>
+                          <p className="text-sm text-muted-foreground mb-1">
+                            <Clock className="h-3.5 w-3.5 inline mr-1" />
+                            {getFrequencyLabel(schedule)}
+                          </p>
+                          <p className="text-sm text-muted-foreground mb-1">
+                            <Mail className="h-3.5 w-3.5 inline mr-1" />
+                            {schedule.recipients.split(',').length} recipient(s)
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Next: {formatNextRun(schedule.nextRunAt)}
+                          </p>
+                          {failureMessage && (
+                            <p className="mt-2 flex items-start gap-2 text-xs text-warning">
+                              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                              <span>{failureMessage}</span>
+                            </p>
+                          )}
                         </div>
-                        <p className="text-sm text-muted-foreground mb-1">
-                          <Clock className="h-3.5 w-3.5 inline mr-1" />
-                          {getFrequencyLabel(schedule)}
-                        </p>
-                        <p className="text-sm text-muted-foreground mb-1">
-                          <Mail className="h-3.5 w-3.5 inline mr-1" />
-                          {schedule.recipients.split(',').length} recipient(s)
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Next: {formatNextRun(schedule.nextRunAt)}
-                        </p>
-                      </div>
-                      <div className="flex flex-wrap gap-2 sm:flex-nowrap">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleToggleActive(schedule)}
-                        >
-                          {schedule.isActive ? 'Pause' : 'Activate'}
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => setSchedulePendingDelete(schedule)}
-                        >
-                          Delete
-                        </Button>
+                        <div className="flex flex-wrap gap-2 sm:flex-nowrap">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleToggleActive(schedule)}
+                          >
+                            {schedule.isActive ? 'Pause' : 'Activate'}
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => setSchedulePendingDelete(schedule)}
+                          >
+                            Delete
+                          </Button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -410,7 +421,7 @@ export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalP
                       id="schedule-day-of-month"
                       {...register('dayOfMonth', { valueAsNumber: true })}
                     >
-                      {Array.from({ length: 28 }, (_, i) => i + 1).map((day) => (
+                      {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
                         <option key={day} value={day}>
                           {day}
                         </option>

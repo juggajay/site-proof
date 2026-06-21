@@ -14,11 +14,12 @@ export interface LotHeaderProps {
   projectId: string;
   lotId: string;
   // Permissions
-  // canManageLot gates lot setup/configuration actions (Edit Lot, Assign
-  // Subcontractor) — it mirrors the MANAGEMENT_ROLES route guard, so a foreman
-  // (field execution only) never sees a button that leads to Access Denied.
+  // canManageLot gates subcontractor assignment. canEditLot gates the edit
+  // route separately because the backend intentionally lets site managers
+  // assign subcontractors but not edit lot detail fields.
   canConformLots: boolean;
   canManageLot: boolean;
+  canEditLot?: boolean;
   isEditable: boolean;
   // State
   linkCopied: boolean;
@@ -65,6 +66,7 @@ export function LotHeader({
   lotId,
   canConformLots,
   canManageLot,
+  canEditLot = canManageLot,
   isEditable,
   linkCopied,
   assignments,
@@ -90,9 +92,9 @@ export function LotHeader({
   );
 
   if (isMobile) {
-    // Determine primary action: Edit Lot when the user can manage, else null
+    // Determine primary action: Edit Lot when the user can edit, else null
     // (Copy Link is always in the overflow sheet on mobile to keep it uncluttered).
-    const hasPrimary = canManageLot && isEditable;
+    const hasPrimary = canEditLot && isEditable;
 
     // Build overflow actions list (respects same permission gating as desktop).
     // Copy Link and Print always appear; management actions are gated.
@@ -292,7 +294,7 @@ export function LotHeader({
             <Printer className="h-4 w-4" />
             <span>Print</span>
           </button>
-          {canManageLot && isEditable && (
+          {canEditLot && isEditable && (
             <button
               onClick={onEdit}
               className="rounded-lg border border-border px-4 py-2 text-sm text-foreground hover:bg-muted/50 transition-colors"

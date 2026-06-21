@@ -15,6 +15,7 @@ import {
   COMPANY_ADMIN_ROLES,
   COMMERCIAL_ROLES,
   INTERNAL_ROLES,
+  LOT_EDITOR_ROLES,
   MANAGEMENT_ROLES,
   PROJECT_WORKSPACE_ROLES,
   REPORT_ROLES,
@@ -271,7 +272,7 @@ function App() {
               <Route
                 path="/projects/:projectId/lots/:lotId/edit"
                 element={
-                  <RoleProtectedRoute allowedRoles={MANAGEMENT_ROLES}>
+                  <RoleProtectedRoute allowedRoles={LOT_EDITOR_ROLES} allowProjectScopedRole>
                     <LotEditPage />
                   </RoleProtectedRoute>
                 }
@@ -389,7 +390,7 @@ function App() {
               <Route
                 path="/projects/:projectId/subcontractors"
                 element={
-                  <RoleProtectedRoute allowedRoles={MANAGEMENT_ROLES}>
+                  <RoleProtectedRoute allowedRoles={MANAGEMENT_ROLES} allowProjectScopedRole>
                     <SubcontractorsPage />
                   </RoleProtectedRoute>
                 }

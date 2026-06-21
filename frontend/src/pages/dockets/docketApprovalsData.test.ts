@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildDocketApprovalsPath,
+  canApproveDocketsForProjectRole,
   getDocketApprovedTotalCost,
   getDocketDisplayTotalCost,
   getDocketSubmittedTotalCost,
@@ -51,6 +52,13 @@ describe('docket approvals data helpers', () => {
     expect(buildDocketApprovalsPath('project 1', 'pending_approval')).toBe(
       '/api/dockets?projectId=project+1&status=pending_approval',
     );
+  });
+
+  it('uses the current project role for docket approval permission checks', () => {
+    expect(canApproveDocketsForProjectRole('project_manager')).toBe(true);
+    expect(canApproveDocketsForProjectRole('site_manager')).toBe(true);
+    expect(canApproveDocketsForProjectRole('viewer')).toBe(false);
+    expect(canApproveDocketsForProjectRole(null)).toBe(false);
   });
 
   it('uses approved dollar totals for approved dockets when cost totals are present', () => {

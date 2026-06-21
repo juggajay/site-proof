@@ -17,6 +17,13 @@ type DueScheduleOverrides = {
   includeProjectName?: boolean;
 };
 
+type FailingScheduleOptions = Omit<DueScheduleOverrides, 'includeProjectName'> & {
+  failureCount?: number;
+};
+
+const SCHEDULE_FAILURE_NOW = new Date(2026, 4, 10, 9, 30, 0, 0);
+const SCHEDULE_RETRY_DELAY_MS = 5 * 60 * 1000;
+
 async function createScheduledReportProject({
   subscriptionTier = 'professional',
   projectStatus = 'active',
@@ -103,6 +110,89 @@ async function createDueScheduleFixture(
   const schedule = await createDueSchedule(project.id, dueAt, scheduleOptions);
 
   return { company, project, now, dueAt, schedule };
+}
+
+async function createFailingDueSchedule(
+  projectId: string,
+  { failureCount, ...scheduleOptions }: FailingScheduleOptions = {},
+) {
+  return prisma.scheduledReport.create({
+    data: {
+      ...buildDueScheduleData(
+        projectId,
+        new Date(SCHEDULE_FAILURE_NOW.getTime() - 60_000),
+        scheduleOptions,
+      ),
+      ...(failureCount === undefined ? {} : { failureCount }),
+    },
+  });
+}
+
+function processFailingSchedule(scheduleId: string) {
+  return processDueScheduledReports({
+    now: SCHEDULE_FAILURE_NOW,
+    scheduleIds: [scheduleId],
+    retryDelayMs: SCHEDULE_RETRY_DELAY_MS,
+  });
+}
+
+async function getScheduledReport(scheduleId: string) {
+  return prisma.scheduledReport.findUnique({
+    where: { id: scheduleId },
+  });
+}
+
+function expectFailedDeliveryResult(
+  result: Awaited<ReturnType<typeof processDueScheduledReports>>,
+  {
+    disabled,
+    error,
+    failureCount,
+    nextRunAtIsUndefined = false,
+  }: {
+    disabled?: number;
+    error: string;
+    failureCount?: number;
+    nextRunAtIsUndefined?: boolean;
+  },
+) {
+  expect(result.processed).toBe(1);
+  expect(result.sent).toBe(0);
+  expect(result.failed).toBe(1);
+  if (disabled !== undefined) {
+    expect(result.disabled).toBe(disabled);
+  }
+  expect(result.results[0]!.error).toContain(error);
+  if (failureCount !== undefined) {
+    expect(result.results[0]!.failureCount).toBe(failureCount);
+  }
+  if (nextRunAtIsUndefined) {
+    expect(result.results[0]!.nextRunAt).toBeUndefined();
+  }
+  expect(getQueuedEmails()).toHaveLength(0);
+}
+
+async function expectRetriedScheduleState(scheduleId: string, error?: string) {
+  const updatedSchedule = await getScheduledReport(scheduleId);
+  expect(updatedSchedule?.lastSentAt).toBeNull();
+  expect(updatedSchedule?.nextRunAt?.toISOString()).toBe(
+    new Date(SCHEDULE_FAILURE_NOW.getTime() + SCHEDULE_RETRY_DELAY_MS).toISOString(),
+  );
+  if (error) {
+    expect(updatedSchedule?.isActive).toBe(true);
+    expect(updatedSchedule?.failureCount).toBe(1);
+    expect(updatedSchedule?.lastFailureAt?.toISOString()).toBe(SCHEDULE_FAILURE_NOW.toISOString());
+    expect(updatedSchedule?.lastFailureReason).toContain(error);
+  }
+}
+
+async function expectDisabledScheduleState(scheduleId: string, error: string) {
+  const updatedSchedule = await getScheduledReport(scheduleId);
+  expect(updatedSchedule?.isActive).toBe(false);
+  expect(updatedSchedule?.failureCount).toBe(3);
+  expect(updatedSchedule?.lastFailureAt?.toISOString()).toBe(SCHEDULE_FAILURE_NOW.toISOString());
+  expect(updatedSchedule?.lastFailureReason).toContain(error);
+  expect(updatedSchedule?.nextRunAt).toBeNull();
 }
 
 async function expectDueScheduleSuppressed(projectOptions: ScheduledReportProjectOptions) {
@@ -264,41 +354,14 @@ describe('processDueScheduledReports', () => {
 
   it('retries invalid due schedules without sending email', async () => {
     const { company, project } = await createScheduledReportProject();
-    const now = new Date(2026, 4, 10, 9, 30, 0, 0);
-    const retryDelayMs = 5 * 60 * 1000;
 
-    const schedule = await prisma.scheduledReport.create({
-      data: {
-        projectId: project.id,
-        reportType: 'lot-status',
-        frequency: 'fortnightly',
-        timeOfDay: '09:00',
-        recipients: 'recipient@example.com',
-        nextRunAt: new Date(now.getTime() - 60_000),
-        isActive: true,
-      },
-    });
+    const schedule = await createFailingDueSchedule(project.id, { frequency: 'fortnightly' });
 
     try {
-      const result = await processDueScheduledReports({
-        now,
-        scheduleIds: [schedule.id],
-        retryDelayMs,
-      });
+      const result = await processFailingSchedule(schedule.id);
 
-      expect(result.processed).toBe(1);
-      expect(result.sent).toBe(0);
-      expect(result.failed).toBe(1);
-      expect(result.results[0]!.error).toContain('frequency');
-      expect(getQueuedEmails()).toHaveLength(0);
-
-      const updatedSchedule = await prisma.scheduledReport.findUnique({
-        where: { id: schedule.id },
-      });
-      expect(updatedSchedule?.lastSentAt).toBeNull();
-      expect(updatedSchedule?.nextRunAt?.toISOString()).toBe(
-        new Date(now.getTime() + retryDelayMs).toISOString(),
-      );
+      expectFailedDeliveryResult(result, { error: 'frequency' });
+      await expectRetriedScheduleState(schedule.id);
     } finally {
       await cleanupProject(project.id, company.id);
     }
@@ -306,41 +369,47 @@ describe('processDueScheduledReports', () => {
 
   it('retries schedules with invalid stored recipients without sending email', async () => {
     const { company, project } = await createScheduledReportProject();
-    const now = new Date(2026, 4, 10, 9, 30, 0, 0);
-    const retryDelayMs = 5 * 60 * 1000;
 
-    const schedule = await prisma.scheduledReport.create({
-      data: {
-        projectId: project.id,
-        reportType: 'lot-status',
-        frequency: 'daily',
-        timeOfDay: '09:00',
-        recipients: 'recipient@example.com,not-an-email',
-        nextRunAt: new Date(now.getTime() - 60_000),
-        isActive: true,
-      },
+    const schedule = await createFailingDueSchedule(project.id, {
+      recipients: 'recipient@example.com,not-an-email',
     });
 
     try {
-      const result = await processDueScheduledReports({
-        now,
-        scheduleIds: [schedule.id],
-        retryDelayMs,
-      });
+      const result = await processFailingSchedule(schedule.id);
 
-      expect(result.processed).toBe(1);
-      expect(result.sent).toBe(0);
-      expect(result.failed).toBe(1);
-      expect(result.results[0]!.error).toContain('valid email addresses');
-      expect(getQueuedEmails()).toHaveLength(0);
-
-      const updatedSchedule = await prisma.scheduledReport.findUnique({
-        where: { id: schedule.id },
+      expectFailedDeliveryResult(result, {
+        disabled: 0,
+        error: 'valid email addresses',
+        failureCount: 1,
       });
-      expect(updatedSchedule?.lastSentAt).toBeNull();
-      expect(updatedSchedule?.nextRunAt?.toISOString()).toBe(
-        new Date(now.getTime() + retryDelayMs).toISOString(),
-      );
+      await expectRetriedScheduleState(schedule.id, 'valid email addresses');
+    } finally {
+      await cleanupProject(project.id, company.id);
+    }
+  });
+
+  it('disables repeatedly failing schedules instead of retrying forever', async () => {
+    const { company, project } = await createScheduledReportProject();
+
+    const schedule = await createFailingDueSchedule(project.id, {
+      recipients: 'not-an-email',
+      failureCount: 2,
+    });
+
+    try {
+      const result = await processFailingSchedule(schedule.id);
+
+      expectFailedDeliveryResult(result, {
+        disabled: 1,
+        error: 'valid email addresses',
+        failureCount: 3,
+        nextRunAtIsUndefined: true,
+      });
+      expect(result.results[0]).toMatchObject({
+        status: 'disabled',
+        failureCount: 3,
+      });
+      await expectDisabledScheduleState(schedule.id, 'valid email addresses');
     } finally {
       await cleanupProject(project.id, company.id);
     }

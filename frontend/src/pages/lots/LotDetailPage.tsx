@@ -301,9 +301,16 @@ export function LotDetailPage() {
   const canVerifyTestResults = qualityAccess?.canVerifyTestResults || false;
   const canAssignITPTemplate = qualityAccess?.canManageITPTemplates || false;
 
-  // Permission check for managing lot (assign subcontractors)
-  const canManageLot = ['owner', 'admin', 'project_manager', 'site_manager'].includes(
-    qualityAccess?.role || '',
+  const effectiveRole = qualityAccess?.role || '';
+  const canEditLot = [
+    'owner',
+    'admin',
+    'project_manager',
+    'quality_manager',
+    'site_engineer',
+  ].includes(effectiveRole);
+  const canManageAssignments = ['owner', 'admin', 'project_manager', 'site_manager'].includes(
+    effectiveRole,
   );
 
   // Foreman is a field-execution role: render lot detail field-first (no
@@ -338,7 +345,7 @@ export function LotDetailPage() {
     lotId,
     lot,
     isSubcontractor,
-    canManageAssignments: canManageLot,
+    canManageAssignments,
     setLot,
   });
 
@@ -374,7 +381,8 @@ export function LotDetailPage() {
         projectId={projectId!}
         lotId={lotId!}
         canConformLots={canConformLots}
-        canManageLot={canManageLot}
+        canManageLot={canManageAssignments}
+        canEditLot={canEditLot}
         isEditable={isEditable}
         linkCopied={linkCopied}
         assignments={assignments}
