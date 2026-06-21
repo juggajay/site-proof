@@ -1,7 +1,7 @@
 import { Router } from 'express';
 
 import { AppError } from '../lib/AppError.js';
-import { getEffectiveProjectRole } from '../lib/projectAccess.js';
+import { assertProjectAllowsWrite, getEffectiveProjectRole } from '../lib/projectAccess.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
 import { createClaimEvidenceRouter } from './claims/evidenceRoutes.js';
 import { createClaimPostEvidenceWorkflowRouter } from './claims/postEvidenceWorkflowRoutes.js';
@@ -32,7 +32,11 @@ function parseClaimRouteParam(value: unknown, field: string): string {
   return trimmed;
 }
 
-async function requireCommercialProjectAccess(user: AuthUser, projectId: string): Promise<void> {
+async function requireCommercialProjectAccess(
+  user: AuthUser,
+  projectId: string,
+  options: { requireWritable?: boolean } = {},
+): Promise<void> {
   if (SUBCONTRACTOR_CLAIM_ROLES.has(user.roleInCompany)) {
     throw AppError.forbidden('Commercial access required');
   }
@@ -40,6 +44,10 @@ async function requireCommercialProjectAccess(user: AuthUser, projectId: string)
   const effectiveRole = await getEffectiveProjectRole(user, projectId);
   if (!effectiveRole || !CLAIM_COMMERCIAL_ROLES.includes(effectiveRole)) {
     throw AppError.forbidden('Commercial access required');
+  }
+
+  if (options.requireWritable) {
+    await assertProjectAllowsWrite(projectId);
   }
 }
 

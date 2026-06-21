@@ -2,6 +2,7 @@ import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../lib/AppError.js';
 import {
   activeSubcontractorCompanyWhere,
+  assertProjectAllowsWrite,
   checkProjectAccess,
   getEffectiveProjectRole,
   isCompanyAdminRole,
@@ -136,6 +137,8 @@ export async function requireDocketApproverAccess(
   if (!role || !DOCKET_APPROVERS.includes(role)) {
     throw AppError.forbidden('You do not have permission to perform this action.');
   }
+
+  await assertProjectAllowsWrite(projectId);
 }
 
 export async function requireDocketReadAccess(user: AuthUser, docket: DocketAccess): Promise<void> {
@@ -165,6 +168,8 @@ export async function requireDocketSubcontractorAccess(
   ) {
     throw AppError.forbidden('Only the linked subcontractor can modify this docket');
   }
+
+  await assertProjectAllowsWrite(docket.projectId);
 }
 
 export async function requireLotAllocationsInProject(

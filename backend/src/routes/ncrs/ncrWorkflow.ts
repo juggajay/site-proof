@@ -5,6 +5,7 @@ import { type AuthUser } from '../../lib/auth.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
+import { assertProjectAllowsWrite } from '../../lib/projectAccess.js';
 import {
   NCR_QUALITY_MANAGEMENT_ROLES,
   parseNcrRouteParam,
@@ -137,6 +138,7 @@ ncrWorkflowRouter.post(
       'Only project quality roles can review NCR responses',
       NCR_QUALITY_MANAGEMENT_ROLES,
     );
+    await assertProjectAllowsWrite(ncr.projectId);
 
     if (isAcceptedRetry) {
       const acceptedNcr = await prisma.nCR.findUniqueOrThrow({
@@ -411,6 +413,7 @@ ncrWorkflowRouter.post(
       'Only project quality roles can reject rectification',
       NCR_QUALITY_MANAGEMENT_ROLES,
     );
+    await assertProjectAllowsWrite(ncr.projectId);
 
     // Get reviewer info for notifications
     const reviewer = await prisma.user.findUnique({

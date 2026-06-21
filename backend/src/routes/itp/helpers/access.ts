@@ -2,6 +2,7 @@ import { prisma } from '../../../lib/prisma.js';
 import { AppError } from '../../../lib/AppError.js';
 import {
   activeSubcontractorCompanyWhere,
+  assertProjectAllowsWrite,
   checkProjectAccess,
   requireSubcontractorPortalModuleAccess,
 } from '../../../lib/projectAccess.js';
@@ -179,6 +180,8 @@ export async function requireItpProjectRole(
     throw AppError.forbidden(message);
   }
 
+  await assertProjectAllowsWrite(projectId);
+
   return effectiveRole;
 }
 
@@ -226,6 +229,8 @@ export async function requireItpSubcontractorCompletionPermission(
   if (!assignment) {
     throw AppError.forbidden(message);
   }
+
+  await assertProjectAllowsWrite(projectId);
 
   return assignment;
 }

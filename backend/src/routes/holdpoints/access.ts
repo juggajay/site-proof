@@ -6,8 +6,12 @@ import {
   checkProjectAccess,
   getEffectiveProjectRole,
   isSubcontractorPortalRole,
+  requireInternalProjectAccess,
+  requireProjectRoleExcludingSubcontractors as requireProjectRole,
   requireSubcontractorPortalModuleAccess,
 } from '../../lib/projectAccess.js';
+
+export { requireProjectRole };
 
 // =============================================================================
 // Hold point access-control helpers: subcontractor detection, project/lot/hold
@@ -59,17 +63,7 @@ export async function requireInternalProjectReadAccess(
   user: AuthenticatedUser,
   message = 'You do not have access to this project',
 ) {
-  if (isSubcontractorUser(user)) {
-    throw AppError.forbidden(message);
-  }
-
-  const role = await getEffectiveProjectRole(user, projectId, {
-    excludeSubcontractorProjectMemberships: true,
-    throwIfProjectMissing: true,
-  });
-  if (!role || isSubcontractorPortalRole(role)) {
-    throw AppError.forbidden(message);
-  }
+  await requireInternalProjectAccess(user, projectId, message);
 }
 
 export async function canRequestHoldPointRelease(
@@ -150,21 +144,4 @@ export async function requireHoldPointReadAccess(
   message = 'You do not have access to this hold point',
 ) {
   await requireLotReadAccess(holdPoint.lot, user, message);
-}
-
-export async function requireProjectRole(
-  projectId: string,
-  user: AuthenticatedUser,
-  allowedRoles: string[],
-  message: string,
-): Promise<string> {
-  const role = await getEffectiveProjectRole(user, projectId, {
-    excludeSubcontractorProjectMemberships: true,
-    throwIfProjectMissing: true,
-  });
-  if (!role || !allowedRoles.includes(role)) {
-    throw AppError.forbidden(message);
-  }
-
-  return role;
 }

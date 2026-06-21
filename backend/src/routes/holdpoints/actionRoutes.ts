@@ -277,6 +277,7 @@ async function requireHoldPointReleaseAccess(
     user,
     HP_RELEASE_ROLES,
     'You do not have permission to release hold points',
+    { requireWritable: true },
   );
 
   if (getHoldPointApprovalRequirement(holdPoint.lot.project.settings) === 'superintendent') {
@@ -607,6 +608,7 @@ holdPointActionRouter.post(
       req.user!,
       HP_REQUEST_ROLES,
       'You do not have permission to chase hold points',
+      { requireWritable: true },
     );
 
     if (existingHP.status === 'released') {

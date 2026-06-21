@@ -71,6 +71,7 @@ lotDeleteRouter.delete(
       user,
       LOT_DELETERS,
       'You do not have permission to delete lots',
+      { requireWritable: true },
     );
 
     // Block deletion when the lot is conformed/claimed, has unreleased hold
@@ -150,6 +151,7 @@ lotDeleteRouter.post(
         user,
         LOT_DELETERS,
         'You do not have permission to delete lots',
+        { requireWritable: true },
       );
     }
 

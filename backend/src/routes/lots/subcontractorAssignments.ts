@@ -173,6 +173,7 @@ lotSubcontractorAssignmentsRouter.post(
       user,
       ['owner', 'admin', 'project_manager', 'site_manager'],
       'You do not have permission to assign subcontractors',
+      { requireWritable: true },
     );
 
     // Verify subcontractor exists and belongs to this project
@@ -299,6 +300,7 @@ lotSubcontractorAssignmentsRouter.patch(
       user,
       ['owner', 'admin', 'project_manager', 'site_manager'],
       'You do not have permission to manage subcontractor assignments',
+      { requireWritable: true },
     );
 
     // Verify assignment exists and belongs to this lot
@@ -377,6 +379,7 @@ lotSubcontractorAssignmentsRouter.delete(
       user,
       ['owner', 'admin', 'project_manager', 'site_manager'],
       'You do not have permission to manage subcontractor assignments',
+      { requireWritable: true },
     );
 
     // Verify assignment exists and belongs to this lot

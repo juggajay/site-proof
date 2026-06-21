@@ -4,6 +4,7 @@ import { requireAuth, AuthRequest } from '../middleware/authMiddleware.js';
 import { createMentionNotifications } from './notifications.js';
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
+import { assertProjectAllowsWrite } from '../lib/projectAccess.js';
 import { logError } from '../lib/serverLogger.js';
 import { getPrismaSkipTake, parsePagination } from '../lib/pagination.js';
 import {
@@ -190,6 +191,7 @@ commentsRouter.post(
     const trimmedContent = requireContent(req.body.content);
     const canonicalEntityType = getCanonicalCommentEntityType(entityType);
     const projectId = await requireCommentEntityAccess(req.user!, entityType, entityId);
+    await assertProjectAllowsWrite(projectId);
 
     // Validate parent exists if parentId provided
     if (parentId) {
@@ -287,7 +289,12 @@ commentsRouter.put(
       throw AppError.notFound('Comment');
     }
 
-    await requireCommentEntityAccess(req.user!, existing.entityType, existing.entityId);
+    const projectId = await requireCommentEntityAccess(
+      req.user!,
+      existing.entityType,
+      existing.entityId,
+    );
+    await assertProjectAllowsWrite(projectId);
 
     // Only author can edit
     requireCommentAuthor(existing.authorId, userId, 'You can only edit your own comments');
@@ -329,6 +336,7 @@ commentsRouter.delete(
       existing.entityType,
       existing.entityId,
     );
+    await assertProjectAllowsWrite(projectId);
 
     // Only author can delete
     requireCommentAuthor(existing.authorId, userId, 'You can only delete your own comments');
@@ -382,6 +390,7 @@ commentsRouter.post(
       comment.entityType,
       comment.entityId,
     );
+    await assertProjectAllowsWrite(projectId);
 
     // Only author can add attachments
     requireCommentAuthor(
@@ -435,6 +444,7 @@ commentsRouter.delete(
       comment.entityType,
       comment.entityId,
     );
+    await assertProjectAllowsWrite(projectId);
 
     // Only author can delete attachments
     requireCommentAuthor(

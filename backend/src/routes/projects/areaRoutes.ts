@@ -3,6 +3,7 @@ import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
+import { assertProjectAllowsWrite } from '../../lib/projectAccess.js';
 import {
   buildProjectAreaDeletedResponse,
   buildProjectAreaResponse,
@@ -79,6 +80,7 @@ export function createProjectAreaRouter({
       if (!access.isProjectAdmin) {
         throw AppError.forbidden('Only admins can create areas');
       }
+      await assertProjectAllowsWrite(projectId);
 
       // Feature #906: Require chainage range for areas
       if (chainageStart == null || chainageEnd == null) {
@@ -129,6 +131,7 @@ export function createProjectAreaRouter({
       if (!access.isProjectAdmin) {
         throw AppError.forbidden('Only admins can update areas');
       }
+      await assertProjectAllowsWrite(projectId);
 
       // Check area exists and belongs to project
       const existingArea = await prisma.projectArea.findFirst({
@@ -199,6 +202,7 @@ export function createProjectAreaRouter({
       if (!access.isProjectAdmin) {
         throw AppError.forbidden('Only admins can delete areas');
       }
+      await assertProjectAllowsWrite(projectId);
 
       // Check area exists and belongs to project
       const existingArea = await prisma.projectArea.findFirst({

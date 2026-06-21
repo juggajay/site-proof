@@ -4,7 +4,7 @@ import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
-import { activeSubcontractorCompanyWhere } from '../lib/projectAccess.js';
+import { activeSubcontractorCompanyWhere, assertProjectAllowsWrite } from '../lib/projectAccess.js';
 import {
   buildSubcontractorsForProjectResponse,
   calculateApprovedDocketTotalCost,
@@ -281,6 +281,7 @@ async function requireSubcontractorProjectAccess(
   projectId: string,
   user: AuthenticatedUser,
   manage = false,
+  options: { requireWritable?: boolean } = {},
 ) {
   const shouldUseProjectTeamAccess = !isSubcontractorPortalRole(user);
   const [project, projectUser] = await Promise.all([
@@ -313,6 +314,10 @@ async function requireSubcontractorProjectAccess(
     if (!canManage) {
       throw AppError.forbidden('Only project managers or higher can manage subcontractors');
     }
+  }
+
+  if (options.requireWritable) {
+    await assertProjectAllowsWrite(projectId);
   }
 
   return { project, projectUser };

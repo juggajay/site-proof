@@ -164,6 +164,38 @@ describe('Lots API', () => {
       });
     });
 
+    it('should reject lot creation when the project is archived', async () => {
+      const lotNumber = `LOT-ARCHIVED-${Date.now()}`;
+      const initialLotCount = await prisma.lot.count({ where: { projectId } });
+
+      await prisma.project.update({
+        where: { id: projectId },
+        data: { status: 'archived' },
+      });
+
+      try {
+        const res = await request(app)
+          .post('/api/lots')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            projectId,
+            lotNumber,
+            description: 'Should not be created on archived project',
+            activityType: 'Earthworks',
+          });
+
+        expect(res.status).toBe(409);
+        expect(res.body.error.message).toContain('Archived projects are read-only');
+        await expect(prisma.lot.count({ where: { projectId } })).resolves.toBe(initialLotCount);
+        await expect(prisma.lot.count({ where: { projectId, lotNumber } })).resolves.toBe(0);
+      } finally {
+        await prisma.project.update({
+          where: { id: projectId },
+          data: { status: 'active' },
+        });
+      }
+    });
+
     it('should keep company admin lot creation rights when project membership is lower', async () => {
       await prisma.projectUser.updateMany({
         where: { projectId, userId },

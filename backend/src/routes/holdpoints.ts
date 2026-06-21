@@ -6,6 +6,7 @@ import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
 import { buildFrontendUrl } from '../lib/runtimeConfig.js';
 import { logError } from '../lib/serverLogger.js';
+import { assertProjectAllowsWrite } from '../lib/projectAccess.js';
 import {
   MAX_RELEASE_TOKEN_LENGTH,
   parseHPProjectSettings,
@@ -286,6 +287,7 @@ holdpointsRouter.post(
     const projectSettings = parseHPProjectSettings(releaseToken.holdPoint.lot.project.settings);
     const tokenRecipientName = releaseToken.recipientName?.trim();
     const effectiveReleasedByName = tokenRecipientName || releasedByName;
+    await assertProjectAllowsWrite(releaseToken.holdPoint.lot.projectId);
     await requireSuperintendentApprovalRecipients(
       releaseToken.holdPoint.lot.projectId,
       projectSettings,

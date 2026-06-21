@@ -43,6 +43,7 @@ export interface SubcontractorInvitationRouterDependencies {
     projectId: string,
     user: AuthenticatedUser,
     manage?: boolean,
+    options?: { requireWritable?: boolean },
   ): Promise<unknown>;
 }
 
@@ -230,7 +231,7 @@ export function createSubcontractorInvitationRouters({
         throw AppError.notFound('Project');
       }
 
-      await requireSubcontractorProjectAccess(projectId, user, true);
+      await requireSubcontractorProjectAccess(projectId, user, true, { requireWritable: true });
 
       // Determine the company details to use
       let finalCompanyName: string;
@@ -418,7 +419,7 @@ export function createSubcontractorInvitationRouters({
       const user = req.user!;
       const projectId = normalizeIdParam(req.params.projectId, 'Project ID');
 
-      await requireSubcontractorProjectAccess(projectId, user);
+      await requireSubcontractorProjectAccess(projectId, user, false, { requireWritable: true });
 
       // Get all subcontractor companies associated with this project
       const subcontractors = await prisma.subcontractorCompany.findMany({

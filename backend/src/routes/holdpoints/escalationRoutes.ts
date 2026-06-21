@@ -61,6 +61,7 @@ holdPointEscalationRouter.post(
       req.user!,
       HP_ESCALATION_ROLES,
       'You do not have permission to escalate hold points',
+      { requireWritable: true },
     );
 
     if (existingHP.status === 'released') {
@@ -154,6 +155,7 @@ holdPointEscalationRouter.post(
       req.user!,
       HP_ESCALATION_ROLES,
       'You do not have permission to resolve hold point escalations',
+      { requireWritable: true },
     );
 
     const holdPoint = await prisma.holdPoint.update({

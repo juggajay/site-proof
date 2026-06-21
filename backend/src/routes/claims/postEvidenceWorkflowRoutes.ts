@@ -38,7 +38,11 @@ type AuthUser = NonNullable<Express.Request['user']>;
 
 interface ClaimWorkflowRouterDependencies {
   parseClaimRouteParam: (value: unknown, field: string) => string;
-  requireCommercialProjectAccess: (user: AuthUser, projectId: string) => Promise<void>;
+  requireCommercialProjectAccess: (
+    user: AuthUser,
+    projectId: string,
+    options?: { requireWritable?: boolean },
+  ) => Promise<void>;
 }
 
 async function getProjectCertificationDocumentId(
@@ -82,7 +86,7 @@ export function createClaimPostEvidenceWorkflowRouter({
       const projectId = parseClaimRouteParam(req.params.projectId, 'projectId');
       const claimId = parseClaimRouteParam(req.params.claimId, 'claimId');
       const userId = req.user!.userId;
-      await requireCommercialProjectAccess(req.user!, projectId);
+      await requireCommercialProjectAccess(req.user!, projectId, { requireWritable: true });
 
       // Validate request body
       const validation = certifyClaimSchema.safeParse(req.body);
@@ -266,7 +270,7 @@ export function createClaimPostEvidenceWorkflowRouter({
       const projectId = parseClaimRouteParam(req.params.projectId, 'projectId');
       const claimId = parseClaimRouteParam(req.params.claimId, 'claimId');
       const userId = req.user!.userId;
-      await requireCommercialProjectAccess(req.user!, projectId);
+      await requireCommercialProjectAccess(req.user!, projectId, { requireWritable: true });
 
       // Validate request body
       const validation = recordPaymentSchema.safeParse(req.body);
@@ -506,7 +510,7 @@ export function createClaimPostEvidenceWorkflowRouter({
       const projectId = parseClaimRouteParam(req.params.projectId, 'projectId');
       const claimId = parseClaimRouteParam(req.params.claimId, 'claimId');
       const userId = req.user!.userId;
-      await requireCommercialProjectAccess(req.user!, projectId);
+      await requireCommercialProjectAccess(req.user!, projectId, { requireWritable: true });
 
       const deleteResult = await prisma.$transaction(async (tx) => {
         await tx.$queryRaw`

@@ -27,6 +27,7 @@ export interface SubcontractorRosterAdminRouterDependencies {
     projectId: string,
     user: AuthenticatedUser,
     manage?: boolean,
+    options?: { requireWritable?: boolean },
   ): Promise<unknown>;
   personNameMaxLength: number;
   roleMaxLength: number;
@@ -70,7 +71,9 @@ export function createSubcontractorRosterAdminRouter({
         throw AppError.notFound('Subcontractor');
       }
 
-      await requireSubcontractorProjectAccess(subcontractor.projectId, user, true);
+      await requireSubcontractorProjectAccess(subcontractor.projectId, user, true, {
+        requireWritable: true,
+      });
 
       const employee = await prisma.employeeRoster.create({
         data: {
@@ -120,7 +123,9 @@ export function createSubcontractorRosterAdminRouter({
         throw AppError.notFound('Subcontractor');
       }
 
-      await requireSubcontractorProjectAccess(subcontractor.projectId, user, true);
+      await requireSubcontractorProjectAccess(subcontractor.projectId, user, true, {
+        requireWritable: true,
+      });
 
       // Verify employee belongs to this subcontractor
       const employee = await prisma.employeeRoster.findFirst({
@@ -284,7 +289,9 @@ export function createSubcontractorRosterAdminRouter({
         throw AppError.notFound('Subcontractor');
       }
 
-      await requireSubcontractorProjectAccess(subcontractor.projectId, user, true);
+      await requireSubcontractorProjectAccess(subcontractor.projectId, user, true, {
+        requireWritable: true,
+      });
 
       const plant = await prisma.plantRegister.create({
         data: {
@@ -339,7 +346,9 @@ export function createSubcontractorRosterAdminRouter({
         throw AppError.notFound('Subcontractor');
       }
 
-      await requireSubcontractorProjectAccess(subcontractor.projectId, user, true);
+      await requireSubcontractorProjectAccess(subcontractor.projectId, user, true, {
+        requireWritable: true,
+      });
 
       // Verify plant belongs to this subcontractor
       const plant = await prisma.plantRegister.findFirst({

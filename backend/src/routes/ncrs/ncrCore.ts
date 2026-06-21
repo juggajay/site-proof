@@ -17,6 +17,7 @@ import { logError } from '../../lib/serverLogger.js';
 import { isProjectNotificationEnabled } from '../../lib/projectNotificationPreferences.js';
 import {
   activeSubcontractorCompanyWhere,
+  assertProjectAllowsWrite,
   ensureSubcontractorNcrPortalAccess,
   hasPortalModuleEnabled,
 } from '../../lib/projectAccess.js';
@@ -309,6 +310,7 @@ ncrCoreRouter.post(
       'You do not have permission to create NCRs for this project',
       NCR_CREATE_ROLES,
     );
+    await assertProjectAllowsWrite(projectId);
 
     const ncrLotIds = await requireNcrLotsInProject(projectId, lotIds || []);
     await requireActiveResponsibleUser(projectId, responsibleUserId);
@@ -538,6 +540,7 @@ ncrCoreRouter.patch(
       'Only Project Managers, Quality Managers, Site Managers, or Admins can update NCR assignments',
       ['quality_manager', 'admin', 'owner', 'project_manager', 'site_manager'],
     );
+    await assertProjectAllowsWrite(ncr.projectId);
 
     // Build update data
     const updateData: Prisma.NCRUncheckedUpdateInput = {};

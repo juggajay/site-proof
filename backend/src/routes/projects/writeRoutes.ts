@@ -8,6 +8,7 @@ import { requireAuth } from '../../middleware/authMiddleware.js';
 import { buildProjectDeletedResponse, buildProjectDetailResponse } from './listDetailResponses.js';
 import { buildProjectCreatedResponse } from './costResponses.js';
 import { assertCompanyProjectCapacity } from './projectCreationLimit.js';
+import { ARCHIVED_PROJECT_READ_ONLY_MESSAGE } from '../../lib/projectAccess.js';
 
 type AuthenticatedUser = NonNullable<Request['user']>;
 
@@ -424,6 +425,15 @@ export function createProjectWriteRouter({
 
       if (!isProjectAdmin && !(companyAdmin && isCompanyProject)) {
         throw AppError.forbidden('Access denied. Only project admins can update settings.');
+      }
+
+      const requestKeys =
+        req.body && typeof req.body === 'object' && !Array.isArray(req.body)
+          ? Object.keys(req.body)
+          : [];
+      const isStatusOnlyUpdate = requestKeys.length === 1 && requestKeys[0] === 'status';
+      if (project.status === 'archived' && !isStatusOnlyUpdate) {
+        throw AppError.conflict(ARCHIVED_PROJECT_READ_ONLY_MESSAGE);
       }
 
       const effectiveChainageStart =

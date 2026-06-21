@@ -3,6 +3,7 @@ import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../lib/AppError.js';
 import {
   activeSubcontractorCompanyWhere,
+  assertProjectAllowsWrite,
   checkProjectAccess,
   getEffectiveProjectRole,
   isCompanyAdminRole,
@@ -187,6 +188,8 @@ export async function requireTestProjectRole(
   if (!role || !allowedRoles.includes(role)) {
     throw AppError.forbidden(message);
   }
+
+  await assertProjectAllowsWrite(projectId);
 
   return role;
 }

@@ -169,6 +169,7 @@ holdPointRequestReleaseRouter.post(
       req.user!,
       HP_REQUEST_ROLES,
       'You do not have permission to request hold point release',
+      { requireWritable: true },
     );
 
     const checklistItems = getHoldPointChecklistItemsForInstance(lot.itpInstance);
