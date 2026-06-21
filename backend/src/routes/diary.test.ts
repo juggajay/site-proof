@@ -703,6 +703,74 @@ describe('Daily Diary API', () => {
       expect(res.body.delayType).toBe('Weather');
     });
 
+    it('should match delay report filters across legacy and mobile delay type labels', async () => {
+      const reportDate = '2026-01-15';
+      const reportDiary = await prisma.dailyDiary.create({
+        data: {
+          projectId,
+          date: new Date(`${reportDate}T00:00:00.000Z`),
+          delays: {
+            create: [
+              {
+                delayType: 'Weather',
+                durationHours: 1,
+                description: 'Desktop weather delay',
+              },
+              {
+                delayType: 'weather',
+                durationHours: 2,
+                description: 'Mobile weather delay',
+              },
+              {
+                delayType: 'Material Delay',
+                durationHours: 3,
+                description: 'Desktop material delay',
+              },
+            ],
+          },
+        },
+      });
+
+      try {
+        const weatherRes = await request(app)
+          .get(
+            `/api/diary/project/${projectId}/delays?delayType=weather&startDate=${reportDate}&endDate=${reportDate}`,
+          )
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(weatherRes.status).toBe(200);
+        expect(weatherRes.body.delays).toHaveLength(2);
+        expect(weatherRes.body.summary.totalHours).toBe(3);
+        expect(
+          weatherRes.body.delays.map((delay: { delayType: string }) => delay.delayType).sort(),
+        ).toEqual(['Weather', 'weather']);
+
+        const materialRes = await request(app)
+          .get(
+            `/api/diary/project/${projectId}/delays?delayType=material_shortage&startDate=${reportDate}&endDate=${reportDate}`,
+          )
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(materialRes.status).toBe(200);
+        expect(materialRes.body.delays).toHaveLength(1);
+        expect(materialRes.body.delays[0].delayType).toBe('Material Delay');
+
+        const exportRes = await request(app)
+          .get(
+            `/api/diary/project/${projectId}/delays/export?delayType=weather&startDate=${reportDate}&endDate=${reportDate}`,
+          )
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(exportRes.status).toBe(200);
+        expect(exportRes.text).toContain('Desktop weather delay');
+        expect(exportRes.text).toContain('Mobile weather delay');
+        expect(exportRes.text).not.toContain('Desktop material delay');
+      } finally {
+        await prisma.diaryDelay.deleteMany({ where: { diaryId: reportDiary.id } });
+        await prisma.dailyDiary.delete({ where: { id: reportDiary.id } });
+      }
+    });
+
     it('should reject malformed delay report filters', async () => {
       const invalidDateRes = await request(app)
         .get(`/api/diary/project/${projectId}/delays?startDate=2026-02-30`)
