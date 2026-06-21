@@ -431,6 +431,11 @@ export async function clearFailedAuthAttempts(
 }
 
 async function handleAuthRateLimit(req: Request, res: Response, next: NextFunction) {
+  if (req.method === 'GET' && req.path === '/me') {
+    next();
+    return;
+  }
+
   const clientIp = getClientIp(req);
   const lockout = await isLockedOut(clientIp);
   if (lockout.locked) {
