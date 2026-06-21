@@ -6,17 +6,104 @@ keep going until the app has been exercised end to end.
 
 ## Current External Blocker
 
-- Earlier email-dependent flows were parked because production Resend was
-  returning `daily_quota_exceeded`.
-- Stage 3 did submit a hold-point request to Jay's nominated superintendent
-  email and the API returned success, so at least that send path is accepting
-  mail again. Inbox-read verification was not performed in Stage 3.
-- Still parked until a dedicated email pass: invite emails, magic login links,
-  password reset emails, notification test emails, and any browser QA that
-  requires reading an inbox.
+- No active external blocker for the staged QA work.
+- Earlier email-dependent flows were parked because production Resend had
+  returned `daily_quota_exceeded`; Stage 31 rechecked auth-link request paths
+  with Resend safe recipients and production accepted the sends.
+- Inbox-read verification was not performed. Future flows that require opening
+  delivered links still need Jay's nominated inbox or another trusted mailbox.
 - Disposable inbox APIs are not allowed for this QA work. AVG flagged
   `1secmail.com` from an old Codex process, so future email QA must use Jay's
   nominated inbox, a trusted mailbox, or Resend's safe test recipient.
+
+## Stage 31 - Email, Auth-Link, and Invite Acceptance QA
+
+Status: landed in PR #1066; PR CI, post-merge master CI, full post-merge E2E,
+production health checks, and a production auth-link request smoke passed.
+
+Scope:
+
+- Magic-login request and verify flows.
+- Forgot-password request and reset-token public pages.
+- Email verification resend and public verification-token page.
+- Company-member setup invite delivery behavior.
+- Subcontractor invitation delivery and public/logged-in acceptance paths.
+- Project team invite/notification behavior was inspected; it remains a
+  wording/status polish item rather than a release-blocking email-link bug.
+
+Subagent coverage:
+
+- Auth email-link reviewer confirmed that MFA-enabled users could be sent an
+  unusable magic-login link and that the auth email helpers could report
+  `{ success: false }` without the request routes cleaning up live one-time
+  tokens.
+- Subcontractor/project invite reviewer confirmed that already-approved
+  subcontractor invitations could be race-claimed by two different users because
+  the acceptance transaction did not lock/re-read the invite row.
+- The same reviewer confirmed company-member invite rollback was correct when
+  delivery failed, but the route surfaced a generic 500 instead of the existing
+  503 email-provider failure shape.
+
+Confirmed issues fixed locally:
+
+- Magic-link requests now select `twoFactorEnabled`; MFA-enabled accounts keep
+  the enumeration-safe 200 response, do not create/send a new magic link, and
+  any active magic-link tokens for that user are invalidated.
+- Magic-link, forgot-password, and verification-resend routes now consume the
+  just-created one-time token and skip success audit logging when the email
+  helper returns `{ success: false }` or throws. The browser response stays
+  generic so email-existence enumeration is not introduced.
+- Company-member invite delivery failures now reuse
+  `createEmailDeliveryFailureError`, returning a 503
+  `EXTERNAL_SERVICE_ERROR` while preserving the existing rollback behavior.
+- Logged-in subcontractor invitation acceptance now locks the
+  `subcontractor_companies` row with `FOR UPDATE`, revalidates status/expiry
+  under the lock, then checks existing portal links before creating the first
+  admin link.
+- Public `register-and-accept-invitation` now takes the same row lock before
+  creating the new user/link, so concurrent public claims serialize before any
+  user insert or subcontractor link insert.
+
+Verification:
+
+- Local backend `type-check` passed.
+- Local backend `lint` passed.
+- Backend precommit passed: lint and `format:check`.
+- Local non-DB test slice passed:
+  `npx vitest run src/lib/emailDeliveryErrors.test.ts src/test/databaseSafety.test.ts`.
+- Local DB-backed route tests could not run because this worktree had no
+  disposable local Postgres. Loading the main checkout backend `.env` was
+  correctly refused by the test database safety guard because it points at a
+  non-local Railway host.
+- Fallow advisory audit returned `warn`: no introduced dead code; reported
+  items were inherited route complexity plus expected new duplication in broad
+  regression tests.
+- PR #1066 checks passed before merge: Backend, Frontend PR E2E smoke, Detect
+  changes, Vercel ignored-build status, and Vercel Preview Comments.
+- Master CI run `27916408219` passed after merge, including Backend, Frontend,
+  and full post-merge Frontend E2E.
+- Production health checks returned HTTP 200 for:
+  - `https://site-proof-production.up.railway.app/ready`
+  - `https://site-proof.vercel.app`
+- Production auth-link smoke with a Resend safe recipient passed:
+  registration returned HTTP 201; magic-link request, forgot-password request,
+  and verification resend each returned HTTP 200.
+
+Not live-exercised in this stage:
+
+- Inbox-read verification was not performed, so this stage did not click a real
+  delivered magic/reset/verification link from an inbox.
+- Email-provider failure branches were verified by mocked CI route regressions,
+  not by forcing production Resend to fail.
+- Subcontractor invite race fixes were verified by concurrent CI route
+  regressions using temporary PostgreSQL delay triggers, not by racing live
+  production users.
+
+Artifacts:
+
+- No bearer tokens, session cookies, generated passwords, production secrets,
+  recipient emails, invite IDs, or browser-session data were committed or copied
+  into this ledger.
 
 ## Stage 30 - Live Browser Navigation and Auth Session Hydration QA
 
