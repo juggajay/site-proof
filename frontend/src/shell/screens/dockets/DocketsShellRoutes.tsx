@@ -25,8 +25,8 @@ import { useDocketsShellData } from './useDocketsShellData';
 import { DocketsShellContext } from './docketsShellContext';
 
 function DocketsShellProvider({ children }: { children: React.ReactNode }) {
-  const { projectId } = useEffectiveProjectId();
-  const data = useDocketsShellData(projectId);
+  const { projectId, isResolving, hasNoProject } = useEffectiveProjectId();
+  const data = useDocketsShellData(projectId, { isResolvingProject: isResolving, hasNoProject });
   const value = useMemo(() => data, [data]);
   return <DocketsShellContext.Provider value={value}>{children}</DocketsShellContext.Provider>;
 }

@@ -37,18 +37,34 @@ export interface DocketsShellData {
   refetch: () => Promise<void>;
 }
 
-export function useDocketsShellData(projectId: string | null): DocketsShellData {
+interface DocketsShellOptions {
+  isResolvingProject?: boolean;
+  hasNoProject?: boolean;
+}
+
+export function useDocketsShellData(
+  projectId: string | null,
+  options: DocketsShellOptions = {},
+): DocketsShellData {
+  const hasProject = Boolean(projectId);
+
   // status='all' — fetch everything once; chips filter client-side (parity with
   // DocketApprovalsPage's submittedDockets → filteredDockets derivation).
-  const docketsQuery = useDocketApprovalsQuery(projectId ?? undefined, 'all');
+  const docketsQuery = useDocketApprovalsQuery(projectId ?? undefined, 'all', {
+    enabled: hasProject,
+  });
   const projectQuery = useDocketProjectQuery(projectId ?? undefined);
 
   const dockets = docketsQuery.data ?? EMPTY_DOCKETS;
-  const loading = docketsQuery.isLoading && !docketsQuery.data;
-  const loadError =
-    docketsQuery.error && !docketsQuery.data
-      ? extractErrorMessage(docketsQuery.error, 'Failed to fetch dockets')
-      : null;
+  const loading =
+    Boolean(options.isResolvingProject) || (docketsQuery.isLoading && !docketsQuery.data);
+  const loadError = options.hasNoProject
+    ? 'No active project is assigned to this account.'
+    : !hasProject
+      ? null
+      : docketsQuery.error && !docketsQuery.data
+        ? extractErrorMessage(docketsQuery.error, 'Failed to fetch dockets')
+        : null;
 
   const pendingCount = useMemo(() => pendingDocketCount(dockets), [dockets]);
 
