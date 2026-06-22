@@ -16,6 +16,137 @@ keep going until the app has been exercised end to end.
   `1secmail.com` from an old Codex process, so future email QA must use Jay's
   nominated inbox, a trusted mailbox, or Resend's safe test recipient.
 
+## Stage 40 - Subcontractor Mobile Shell and Project Scope QA
+
+Status: landed in PR #1084; PR CI, post-merge master CI, full post-merge E2E,
+Vercel deployment, Railway deployment, and production health checks passed.
+
+Scope:
+
+- Direct subcontractor mobile shell routes under `/p/*`, including desktop
+  fallback behavior and mobile shell activation behavior.
+- Classic subcontractor portal project-scope carry-through from dashboard
+  quick links into dockets, ITPs, hold points, test results, NCRs, documents,
+  and assigned work.
+- Hostile project id encoding across subcontractor mobile and classic portal
+  API calls.
+- Subcontractor docket edit behavior while offline.
+- ITP subcontractor completion access for users linked to more than one
+  subcontractor company on the same project.
+- ITP pending-verification notifications for assigned subcontractor company
+  attribution.
+
+Subagent coverage:
+
+- Frontend subcontractor-shell reviewer found direct `/p/*` routes bypassed
+  the same mobile-shell guard used for `/subcontractor-portal`, so desktop
+  users and `?shell=off` could still land inside the mobile shell. It also
+  found raw project ids interpolated into several query strings and no
+  Playwright coverage for direct `/p` route behavior.
+- Backend/API reviewer found classic subcontractor dashboard quick links
+  dropped `projectId` for several target pages, and those target pages did not
+  always pass the requested project id into their bootstrap company endpoint.
+  It also found ITP completion notification attribution used a loose
+  `subcontractorUser.findFirst`, which could pick the wrong company for
+  multi-company subcontractor users.
+- Subagents were read-only. No files were edited by them.
+
+Confirmed issues fixed locally:
+
+- Added a direct `/p/*` route guard so inactive shell contexts redirect back to
+  the equivalent classic subcontractor portal route while preserving query
+  parameters.
+- Mobile `/p/*` routes now stay in the shell only when the shell is active,
+  including mobile viewport coverage for direct `/p/work`.
+- Project ids and route ids are encoded across the touched subcontractor mobile
+  screens and classic portal API paths, avoiding query-string breakage for ids
+  containing characters like `&`, spaces, or `/`.
+- Classic dashboard quick links now preserve the current project scope for
+  Dockets, ITPs, Hold Points, Test Results, and NCRs, matching Documents.
+- Classic subcontractor ITP, hold-point, test-result, and NCR pages now include
+  the requested `projectId` in their subcontractor-company bootstrap query.
+- Mobile docket edit now states that dockets require a connection, hides
+  write controls while offline, and disables submit/respond actions rather
+  than implying offline docket edits are queued.
+- ITP subcontractor access now considers all active subcontractor-company links
+  for the user on the project, fixing the rare valid-access denial when the
+  first linked company was not the company assigned to the lot.
+- ITP pending-verification notifications now use the assigned subcontractor
+  company name instead of a loose user/company lookup.
+
+Related merged work:
+
+- #1084 - Fix subcontractor mobile shell routing and project scope, merged as
+  `b05e636e`.
+
+Verification:
+
+- Visible headed browser coverage passed:
+  - `npx playwright test e2e/subbie-mobile-shell.spec.ts --headed --project=chromium`
+- Local frontend checks passed:
+  - `npm run type-check`
+  - focused `npm run test:unit` slice across the shell guard, subcontractor
+    dashboard links, docket edit data, subcontractor mobile screens, docket
+    list, and docket edit screen
+  - changed-file `npx eslint`
+  - changed-file `npx prettier --check`
+- Local backend checks passed:
+  - `npm run type-check`
+  - changed-file `npx eslint`
+  - changed-file `npx prettier --check`
+- Local backend DB-backed ITP route test was not run from the worktree because
+  the available `.env` pointed at Railway production, not a disposable test
+  database. The same regression ran in PR Backend CI against disposable
+  Postgres.
+- The repo precommit hook passed during commit, including backend lint,
+  backend format check, frontend lint, and frontend format check.
+- PR #1084 checks passed before merge: Detect changes, Backend, Frontend,
+  Frontend PR E2E smoke, Vercel ignored-build status, and Vercel Preview
+  Comments.
+- Master CI run `27929459440` passed after merge, including Backend,
+  Frontend, and full post-merge Frontend E2E.
+- Vercel reported a successful production deployment for
+  `b05e636e500be97e4807bc1c19dc54166fa87549`.
+- Railway reported a successful production deployment for
+  `b05e636e500be97e4807bc1c19dc54166fa87549`.
+- After merge, production health checks returned HTTP 200 for:
+  - `https://site-proof-production.up.railway.app/health`
+  - `https://site-proof-production.up.railway.app/ready`
+  - `https://site-proof.vercel.app`
+
+Not live-exercised in this stage:
+
+- No production subcontractor account was used to mutate live project data.
+  This stage used mocked browser E2E, unit coverage, backend CI with
+  disposable Postgres, post-merge CI, and production health checks.
+- The visible browser evidence used headed Playwright. The gstack/Chrome
+  visible-browser connector was attempted but reported a non-headed/launched
+  mode and could not be used as the primary evidence source.
+- Direct `/p/*` browser E2E covered `/p/work` as the representative direct
+  route. Other direct routes are covered by the route guard unit tests and
+  screen-level unit tests, not by separate headed browser cases.
+
+Remaining findings for a later pass:
+
+- `GET /api/ncrs` remains brittle when called without `projectId` by a
+  multi-project subcontractor. The browser pages touched here now send a
+  project scope, but the API fallback should still be reviewed in a backend
+  NCR stage.
+- Some route-local subcontractor identity checks still classify by broad role
+  rather than the canonical company membership invariant. This did not block
+  Stage 40 but should be audited with the remaining subcontractor API routes.
+- The next subcontractor stage should run a fuller live browser pass through
+  create/edit/submit/respond docket actions, ITP item completion, NCR evidence,
+  documents, and mobile shell navigation using real seeded test accounts.
+- The foreman `/m/*` mobile shell still needs its own staged browser pass once
+  the parallel foreman UI workstream is ready.
+
+Artifacts:
+
+- No bearer tokens, session cookies, generated passwords, production secrets,
+  external-superintendent emails, report recipient emails, project/customer
+  data, or browser-session data were committed or copied into this ledger.
+
 ## Stage 39 - Hold-Point Secure Release QA
 
 Status: landed in PR #1082; PR CI, post-merge master CI, full post-merge E2E,
