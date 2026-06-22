@@ -90,6 +90,7 @@ describe('buildHoldPointEvidenceChecklist', () => {
 
     expect(result).toHaveLength(2); // i3 (seq 3) is excluded
     expect(result[0]).toEqual({
+      itpChecklistItemId: 'i1',
       sequenceNumber: 1,
       description: 'Item 1',
       pointType: 'standard',
@@ -112,6 +113,7 @@ describe('buildHoldPointEvidenceChecklist', () => {
 
     expect(result).toHaveLength(2);
     expect(result[1]).toEqual({
+      itpChecklistItemId: 'i2',
       sequenceNumber: 2,
       description: 'Hold Point',
       pointType: 'hold_point',

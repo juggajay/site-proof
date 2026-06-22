@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { sendHPReleaseConfirmationEmail } from '../lib/email.js';
+import { sendNotificationIfEnabled } from './notifications.js';
 import { createAuditLog, AuditAction } from '../lib/auditLog.js';
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
@@ -28,10 +29,20 @@ import {
   mapHoldPointEvidenceTestResults,
 } from './holdpoints/evidencePackage.js';
 import { buildPublicHoldPointReleasedResponse } from './holdpoints/actionResponses.js';
+import {
+  buildHoldPointReleaseEmailNotification,
+  buildHoldPointReleaseNotifications,
+} from './holdpoints/releaseNotifications.js';
+import {
+  buildHoldPointReleaseConfirmationEmail,
+  selectHoldPointReleaseContractors,
+  selectHoldPointReleaseSuperintendents,
+} from './holdpoints/releaseConfirmationEmails.js';
 import { holdPointReadRouter } from './holdpoints/readRoutes.js';
 import { holdPointRequestReleaseRouter } from './holdpoints/requestReleaseRoutes.js';
 import { holdPointActionRouter } from './holdpoints/actionRoutes.js';
 import { updateLotStatusFromITP } from './itp/helpers/lotProgression.js';
+import { isProjectNotificationEnabled } from '../lib/projectNotificationPreferences.js';
 import {
   getHoldPointChecklistItemsForInstance,
   getHoldPointItpTemplateForInstance,
@@ -194,6 +205,7 @@ holdpointsRouter.get(
       holdPoint: {
         id: holdPoint.id,
         description: holdPoint.description,
+        itpChecklistItemId: holdPoint.itpChecklistItemId,
         status: holdPoint.status,
         notificationSentAt: holdPoint.notificationSentAt,
         scheduledDate: holdPoint.scheduledDate,
@@ -422,85 +434,92 @@ holdpointsRouter.post(
       },
     });
 
-    const notificationsToCreate = projectUsers.map((pu) => ({
-      userId: pu.userId,
-      projectId: releaseToken.holdPoint.lot.projectId,
-      type: 'hold_point_release',
-      title: 'Hold Point Released (via Secure Link)',
-      message: `Hold point "${holdPoint.description}" on lot ${holdPoint.lot.lotNumber} has been released by ${effectiveReleasedByName} via secure link.`,
-      linkUrl: `/projects/${releaseToken.holdPoint.lot.projectId}/hold-points`,
-    }));
-
-    if (notificationsToCreate.length > 0) {
-      try {
-        await prisma.notification.createMany({
-          data: notificationsToCreate,
-        });
-      } catch (notificationError) {
-        logError('[HP Secure Release] Failed to create in-app notifications:', notificationError);
-        // The release already committed above; don't fail the request if the
-        // post-commit notification insert throws.
-      }
-    }
-
-    // Send confirmation emails
-    try {
-      const lotUrl = buildFrontendUrl(
-        `/projects/${releaseToken.holdPoint.lot.projectId}/lots/${releaseToken.holdPoint.lot.id}`,
-      );
-      const releasedAt = new Date().toLocaleString('en-AU', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
+    if (
+      isProjectNotificationEnabled(releaseToken.holdPoint.lot.project.settings, 'holdPointReleases')
+    ) {
+      const notificationsToCreate = buildHoldPointReleaseNotifications(projectUsers, {
+        projectId: releaseToken.holdPoint.lot.projectId,
+        holdPointDescription: holdPoint.description,
+        lotNumber: holdPoint.lot.lotNumber,
+        releasedByName: effectiveReleasedByName,
       });
 
-      // Send to contractors (site_engineer, foreman roles)
-      const contractorRoles = ['site_engineer', 'foreman', 'engineer'];
-      const contractors = projectUsers.filter((pu) => contractorRoles.includes(pu.role));
-
-      for (const contractor of contractors) {
-        await sendHPReleaseConfirmationEmail({
-          to: contractor.user.email,
-          recipientName: contractor.user.fullName || 'Site Team',
-          recipientRole: 'contractor',
-          projectName: releaseToken.holdPoint.lot.project.name,
-          lotNumber: holdPoint.lot.lotNumber,
-          holdPointDescription: holdPoint.description || 'Hold Point',
-          releasedByName: effectiveReleasedByName,
-          releasedByOrg: releasedByOrg || undefined,
-          releaseMethod: 'secure_link',
-          releaseNotes: releaseNotes || undefined,
-          releasedAt,
-          lotUrl,
-        });
+      if (notificationsToCreate.length > 0) {
+        try {
+          await prisma.notification.createMany({
+            data: notificationsToCreate,
+          });
+        } catch (notificationError) {
+          logError('[HP Secure Release] Failed to create in-app notifications:', notificationError);
+          // The release already committed above; don't fail the request if the
+          // post-commit notification insert throws.
+        }
       }
 
-      // Send to superintendents
-      const superintendentRoles = ['superintendent', 'project_manager'];
-      const superintendents = projectUsers.filter((pu) => superintendentRoles.includes(pu.role));
+      const releaseEmailNotification = buildHoldPointReleaseEmailNotification({
+        projectId: releaseToken.holdPoint.lot.projectId,
+        holdPointDescription: holdPoint.description,
+        lotNumber: holdPoint.lot.lotNumber,
+        releasedByName: effectiveReleasedByName,
+        projectName: releaseToken.holdPoint.lot.project.name,
+        releaseMethod: 'secure_link',
+        releaseNotes,
+      });
 
-      for (const superintendent of superintendents) {
-        await sendHPReleaseConfirmationEmail({
-          to: superintendent.user.email,
-          recipientName: superintendent.user.fullName || 'Superintendent',
-          recipientRole: 'superintendent',
+      for (const pu of projectUsers) {
+        try {
+          await sendNotificationIfEnabled(pu.userId, 'holdPointRelease', releaseEmailNotification);
+        } catch (emailError) {
+          logError(`[HP Secure Release] Failed to send email to user ${pu.userId}:`, emailError);
+        }
+      }
+
+      // Send confirmation emails
+      try {
+        const lotUrl = buildFrontendUrl(
+          `/projects/${releaseToken.holdPoint.lot.projectId}/lots/${releaseToken.holdPoint.lot.id}`,
+        );
+        const releasedAt = new Date().toLocaleString('en-AU', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+        const confirmationContext = {
           projectName: releaseToken.holdPoint.lot.project.name,
           lotNumber: holdPoint.lot.lotNumber,
-          holdPointDescription: holdPoint.description || 'Hold Point',
+          holdPointDescription: holdPoint.description,
           releasedByName: effectiveReleasedByName,
-          releasedByOrg: releasedByOrg || undefined,
+          releasedByOrg,
           releaseMethod: 'secure_link',
-          releaseNotes: releaseNotes || undefined,
+          releaseNotes,
           releasedAt,
           lotUrl,
-        });
+        };
+
+        const contractors = selectHoldPointReleaseContractors(projectUsers);
+        for (const contractor of contractors) {
+          await sendHPReleaseConfirmationEmail(
+            buildHoldPointReleaseConfirmationEmail(contractor, 'contractor', confirmationContext),
+          );
+        }
+
+        const superintendents = selectHoldPointReleaseSuperintendents(projectUsers);
+        for (const superintendent of superintendents) {
+          await sendHPReleaseConfirmationEmail(
+            buildHoldPointReleaseConfirmationEmail(
+              superintendent,
+              'superintendent',
+              confirmationContext,
+            ),
+          );
+        }
+      } catch (emailError) {
+        logError('[HP Secure Release] Failed to send confirmation emails:', emailError);
+        // Don't fail the main request
       }
-    } catch (emailError) {
-      logError('[HP Secure Release] Failed to send confirmation emails:', emailError);
-      // Don't fail the main request
     }
 
     // Audit log for public HP release (no userId - public endpoint)
