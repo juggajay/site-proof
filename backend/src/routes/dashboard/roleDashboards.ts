@@ -195,7 +195,7 @@ dashboardRoleDashboardsRouter.get(
         type: 'Hold Point',
         description: hp.description || 'Hold Point',
         lotNumber: hp.lot.lotNumber,
-        link: `/projects/${hp.lot.projectId}/lots/${hp.lot.id}/holdpoints?hp=${hp.id}`,
+        link: `/projects/${hp.lot.projectId}/hold-points?hp=${hp.id}`,
       })),
       ...itpsDueToday.map((item) => ({
         id: item.id,
@@ -384,7 +384,9 @@ dashboardRoleDashboardsRouter.get(
       id: pv.id,
       description: pv.checklistItem.description,
       lotNumber: pv.itpInstance.lot?.lotNumber || 'Unknown',
-      link: `/projects/${projectId}/lots/${pv.itpInstance.lot?.id}/itp`,
+      link: pv.itpInstance.lot?.id
+        ? `/projects/${projectId}/lots/${pv.itpInstance.lot.id}?tab=itp`
+        : `/projects/${projectId}/itp`,
     }));
 
     const totalHPs = releasedHPs + pendingHPs;

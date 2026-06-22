@@ -19,6 +19,7 @@ import { queryKeys } from '@/lib/queryKeys';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useAuth } from '@/lib/auth';
 import { apiFetch } from '@/lib/api';
+import { extractErrorMessage } from '@/lib/errorHandling';
 import { cn } from '@/lib/utils';
 import { isPortalModuleEnabled } from './portalAccessModel';
 import {
@@ -165,7 +166,12 @@ export function SubcontractorDashboard() {
   const requestedSubcontractorCompanyId = searchParams.get('subcontractorCompanyId');
   const [refreshing, setRefreshing] = useState(false);
 
-  const { data: company, isLoading: companyLoading } = useQuery({
+  const {
+    data: company,
+    isLoading: companyLoading,
+    error: companyError,
+    refetch: refetchCompany,
+  } = useQuery({
     queryKey: [
       ...queryKeys.portalCompanies(user?.id),
       ...portalCompanyQueryKeyParts({
@@ -183,6 +189,9 @@ export function SubcontractorDashboard() {
     },
     enabled: !!user?.id,
   });
+  const companyErrorMessage = companyError
+    ? extractErrorMessage(companyError, 'Could not load subcontractor portal access')
+    : null;
 
   const { data: docketsData } = useQuery({
     queryKey: queryKeys.portalDockets(user?.id, company?.projectId, company?.id),
@@ -306,6 +315,31 @@ export function SubcontractorDashboard() {
         <Skeleton className="h-32 w-full rounded-lg" />
         {/* Lots skeleton */}
         <Skeleton className="h-40 w-full rounded-lg" />
+      </div>
+    );
+  }
+
+  if (companyErrorMessage && !company) {
+    return (
+      <div className="container max-w-2xl mx-auto p-4 pb-20 md:pb-4">
+        <div
+          role="alert"
+          className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-destructive"
+        >
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex gap-2">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <div>
+                <p className="font-medium">Subcontractor portal could not be loaded.</p>
+                <p className="mt-1 text-sm">{companyErrorMessage}</p>
+              </div>
+            </div>
+            <Button type="button" variant="outline" size="sm" onClick={() => void refetchCompany()}>
+              <RefreshCw className="h-4 w-4" />
+              Try again
+            </Button>
+          </div>
+        </div>
       </div>
     );
   }

@@ -1612,6 +1612,65 @@ describe('Foreman Dashboard API', () => {
       expect(Array.isArray(res.body.inspectionsDueToday.items)).toBe(true);
     });
 
+    it('should link due hold point inspections to the mounted hold-points route', async () => {
+      const lot = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `FM-HP-${Date.now()}`,
+          lotType: 'general',
+          activityType: 'earthworks',
+          status: 'in_progress',
+        },
+      });
+      const template = await prisma.iTPTemplate.create({
+        data: {
+          projectId,
+          name: `Foreman dashboard HP template ${Date.now()}`,
+          activityType: 'earthworks',
+        },
+      });
+      const checklistItem = await prisma.iTPChecklistItem.create({
+        data: {
+          templateId: template.id,
+          sequenceNumber: 1,
+          description: 'Foreman dashboard hold point',
+          pointType: 'hold_point',
+        },
+      });
+      const holdPoint = await prisma.holdPoint.create({
+        data: {
+          lotId: lot.id,
+          itpChecklistItemId: checklistItem.id,
+          pointType: 'hold_point',
+          description: 'Foreman dashboard due hold point',
+          status: 'scheduled',
+          scheduledDate: new Date(),
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .get('/api/dashboard/foreman')
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(200);
+        const item = res.body.inspectionsDueToday.items.find(
+          (inspection: { id: string }) => inspection.id === holdPoint.id,
+        );
+        expect(item).toEqual(
+          expect.objectContaining({
+            type: 'Hold Point',
+            link: `/projects/${projectId}/hold-points?hp=${holdPoint.id}`,
+          }),
+        );
+      } finally {
+        await prisma.holdPoint.delete({ where: { id: holdPoint.id } }).catch(() => {});
+        await prisma.lot.delete({ where: { id: lot.id } }).catch(() => {});
+        await prisma.iTPChecklistItem.delete({ where: { id: checklistItem.id } }).catch(() => {});
+        await prisma.iTPTemplate.delete({ where: { id: template.id } }).catch(() => {});
+      }
+    });
+
     it('should include weather structure', async () => {
       const res = await request(app)
         .get('/api/dashboard/foreman')
@@ -1787,6 +1846,73 @@ describe('Quality Manager Dashboard API', () => {
       expect(res.body.itpTrends).toHaveProperty('trend');
       expect(res.body.itpTrends).toHaveProperty('completionRate');
       expect(['up', 'down', 'stable']).toContain(res.body.itpTrends.trend);
+    });
+
+    it('should link pending ITP verifications to the mounted lot ITP tab', async () => {
+      const lot = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `QM-ITP-${Date.now()}`,
+          lotType: 'general',
+          activityType: 'earthworks',
+          status: 'in_progress',
+        },
+      });
+      const template = await prisma.iTPTemplate.create({
+        data: {
+          projectId,
+          name: `QM dashboard ITP template ${Date.now()}`,
+          activityType: 'earthworks',
+        },
+      });
+      const checklistItem = await prisma.iTPChecklistItem.create({
+        data: {
+          templateId: template.id,
+          sequenceNumber: 1,
+          description: 'QM dashboard pending verification item',
+          pointType: 'witness_point',
+        },
+      });
+      const instance = await prisma.iTPInstance.create({
+        data: {
+          lotId: lot.id,
+          templateId: template.id,
+          status: 'in_progress',
+        },
+      });
+      const completion = await prisma.iTPCompletion.create({
+        data: {
+          itpInstanceId: instance.id,
+          checklistItemId: checklistItem.id,
+          status: 'pass',
+          completedById: userId,
+          completedAt: new Date(),
+          verificationStatus: 'pending_verification',
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .get('/api/dashboard/quality-manager')
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(200);
+        const item = res.body.pendingVerifications.items.find(
+          (verification: { id: string }) => verification.id === completion.id,
+        );
+        expect(item).toEqual(
+          expect.objectContaining({
+            description: checklistItem.description,
+            link: `/projects/${projectId}/lots/${lot.id}?tab=itp`,
+          }),
+        );
+      } finally {
+        await prisma.iTPCompletion.delete({ where: { id: completion.id } }).catch(() => {});
+        await prisma.iTPInstance.delete({ where: { id: instance.id } }).catch(() => {});
+        await prisma.lot.delete({ where: { id: lot.id } }).catch(() => {});
+        await prisma.iTPChecklistItem.delete({ where: { id: checklistItem.id } }).catch(() => {});
+        await prisma.iTPTemplate.delete({ where: { id: template.id } }).catch(() => {});
+      }
     });
 
     it('should include audit readiness score', async () => {
