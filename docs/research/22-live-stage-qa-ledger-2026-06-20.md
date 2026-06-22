@@ -16,6 +16,111 @@ keep going until the app has been exercised end to end.
   `1secmail.com` from an old Codex process, so future email QA must use Jay's
   nominated inbox, a trusted mailbox, or Resend's safe test recipient.
 
+## Stage 43 - Route-Local Subcontractor Guard Hardening
+
+Status: landed in PR #1090; PR CI, post-merge master CI, full post-merge E2E,
+Vercel deployment status, Railway health, and production health checks passed.
+
+Scope:
+
+- Follow-up from Stage 42's queued role-local predicate findings.
+- Comments, documents, hold-point, ITP completion helper, and ITP template
+  access helpers that still had route-local subcontractor classification.
+- Confirmed that most stale company-linked subcontractor-role grant paths were
+  already neutralized by shared project/module guards, then hardened local
+  helpers so they match the canonical standalone portal identity rule.
+
+Subagent coverage:
+
+- A shared-helper sidecar audited `hasSubcontractorPortalModuleAccess`,
+  `requireSubcontractorPortalModuleAccess`, and their direct callers. It found
+  no current production caller that grants access to a company-linked stale
+  `subcontractor` or `subcontractor_admin` user through old
+  `SubcontractorUser` links.
+- A comments/documents sidecar confirmed the Stage 43 local changes
+  neutralized the stale grant shape on those surfaces. It also noted a
+  separate future concern: comments/documents use a single `findFirst`
+  subcontractor-company link, which could deny valid access if multiple active
+  subcontractor links per user/project are intentionally supported.
+- A hold-point/ITP sidecar found one live deny risk: ITP template access still
+  classified subcontractors by role only, so a company-linked user with stale
+  `roleInCompany='subcontractor'` could be denied template reads/imports even
+  with a valid active `ProjectUser` membership.
+
+Confirmed issues fixed:
+
+- Comments access now uses `isStandaloneSubcontractorPortalIdentity()` instead
+  of a local subcontractor role list.
+- Documents access now uses the same canonical standalone portal identity rule
+  before applying subcontractor document scopes or portal module checks.
+- Hold-point access now uses the canonical standalone portal identity rule, and
+  its unit coverage explicitly rejects company-linked subcontractor roles.
+- ITP completion helper access now uses the standalone portal identity rule
+  instead of a role-only set.
+- ITP template access now treats company-linked stale subcontractor-role users
+  as internal/project-member users, so valid `ProjectUser` membership can read
+  templates. It still blocks manage actions unless the project role is a
+  template-manager role.
+- Shared project-access coverage now asserts both `hasSubcontractorPortalModuleAccess`
+  and `requireSubcontractorPortalModuleAccess` reject company-linked stale
+  subcontractor-role users.
+
+Related merged work:
+
+- #1090 - Harden route-local subcontractor guards, merged as `256f96af`.
+
+Verification:
+
+- #1090 local checks passed:
+  - backend focused tests:
+    `npm run test -- --run src/routes/holdpoints/access.test.ts src/routes/itp/helpers/access.test.ts src/routes/itp/templateAccess.test.ts`
+    (`3` files, `14` tests)
+  - backend `npm run type-check`
+  - focused backend ESLint on the changed route/test files
+  - focused backend Prettier checks on the changed route/test files
+  - `git diff --check`
+  - precommit: full backend lint plus backend format check
+- Local Prisma client generation initially failed because this Windows machine
+  rejected Prisma's engine certificate chain. It was rerun locally with
+  `NODE_TLS_REJECT_UNAUTHORIZED=0` only for generation. GitHub CI generated
+  Prisma normally and remains the authoritative backend gate.
+- DB-backed route suites were not run against a local database because no safe
+  local disposable `DATABASE_URL` was configured. The changed DB-backed
+  project-access assertions ran in GitHub CI against disposable CI Postgres.
+- Final PR #1090 checks passed before merge: Backend, Frontend PR E2E smoke,
+  Detect changes, Vercel's ignored-build status, and Vercel Preview Comments.
+- Master CI run `27935648926` passed after merge, including Backend, Frontend,
+  and full post-merge Frontend E2E.
+- After merge, production health checks returned HTTP 200 for:
+  - `https://site-proof.vercel.app`
+  - `https://site-proof-production.up.railway.app/health`
+  - `https://site-proof-production.up.railway.app/ready`
+
+Not live-exercised in this stage:
+
+- No production browser sessions were mutated during this backend
+  route-guard-focused stage.
+- No real production project, ITP template, document, comment, or hold-point
+  records were created or edited.
+
+Remaining findings for a later pass:
+
+- Decide whether multiple active `SubcontractorUser` links per user/project are
+  a supported product case. If yes, comments/documents should use `findMany`
+  and scope by all linked subcontractor company IDs instead of one `findFirst`.
+- Add route-level stale-identity fixtures for comments/documents/hold-points if
+  we want defense-in-depth coverage at every HTTP boundary, not just shared and
+  helper-level coverage.
+- Consider reducing the API footgun in
+  `hasSubcontractorPortalModuleAccess()` by deriving portal-role status only
+  from the DB-fetched user rather than accepting a caller-supplied role.
+
+Artifacts:
+
+- No bearer tokens, session cookies, generated passwords, production secrets,
+  recipient emails, database URLs, or browser-session data were committed or
+  copied into this ledger.
+
 ## Stage 42 - Project Reads and Notification Stale-Identity QA
 
 Status: landed in PR #1088; PR CI, post-merge master CI, full post-merge E2E,
