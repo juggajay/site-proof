@@ -20,6 +20,12 @@ export interface NCR {
   responsibleSubcontractorId?: string | null;
   dueDate?: string;
   createdAt: string;
+  // Responsible-party response, submitted via POST /respond. Surfaced read-only
+  // in the QM review step so the reviewer can assess what they are approving.
+  rootCauseCategory?: string | null;
+  rootCauseDescription?: string | null;
+  proposedCorrectiveAction?: string | null;
+  responseSubmittedAt?: string | null;
   project: { id?: string; name: string; projectNumber: string };
   ncrLots: Array<{ lot: { lotNumber: string; description: string } }>;
   clientNotificationRequired?: boolean;

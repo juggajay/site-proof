@@ -84,15 +84,42 @@ function QMReviewModalInner({ isOpen, ncr, onClose, onSuccess }: QMReviewModalPr
           <p className="text-sm text-muted-foreground mt-1">{ncr.description}</p>
         </div>
 
-        {/* Show submitted response details */}
+        {/* Show the submitted response details so the QM reviews the actual
+            root cause and corrective action, not a boilerplate placeholder. */}
         <div className="mb-4">
           <p className="text-sm font-medium text-foreground mb-2">Submitted Response:</p>
-          <div className="bg-muted/50 border border-border rounded-lg p-3 text-sm">
-            <p className="text-muted-foreground">
-              The responsible party has submitted a response. Review the root cause analysis and
-              proposed corrective action.
-            </p>
-          </div>
+          {ncr.rootCauseCategory || ncr.rootCauseDescription || ncr.proposedCorrectiveAction ? (
+            <div className="bg-muted/50 border border-border rounded-lg p-3 text-sm space-y-3">
+              {ncr.rootCauseCategory && (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">Root cause category</p>
+                  <p className="text-foreground whitespace-pre-wrap">{ncr.rootCauseCategory}</p>
+                </div>
+              )}
+              {ncr.rootCauseDescription && (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">Root cause analysis</p>
+                  <p className="text-foreground whitespace-pre-wrap">{ncr.rootCauseDescription}</p>
+                </div>
+              )}
+              {ncr.proposedCorrectiveAction && (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Proposed corrective action
+                  </p>
+                  <p className="text-foreground whitespace-pre-wrap">
+                    {ncr.proposedCorrectiveAction}
+                  </p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="bg-muted/50 border border-border rounded-lg p-3 text-sm">
+              <p className="text-muted-foreground">
+                No response details were captured for this NCR.
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="mb-4">
