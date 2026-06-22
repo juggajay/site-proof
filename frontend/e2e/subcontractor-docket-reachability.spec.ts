@@ -153,7 +153,7 @@ test.describe('Subcontractor docket reachability', () => {
     await expect(startLink).toBeVisible();
     await expect(startLink).toHaveAttribute(
       'href',
-      '/subcontractor-portal/docket/new?projectId=e2e-project',
+      '/subcontractor-portal/docket/new?projectId=e2e-project&subcontractorCompanyId=e2e-subbie-company',
     );
     await expect(page.getByRole('link', { name: "Continue today's docket" })).toBeHidden();
   });
@@ -175,7 +175,7 @@ test.describe('Subcontractor docket reachability', () => {
     await expect(continueLink).toBeVisible();
     await expect(continueLink).toHaveAttribute(
       'href',
-      '/subcontractor-portal/docket/e2e-today-docket?projectId=e2e-project',
+      '/subcontractor-portal/docket/e2e-today-docket?projectId=e2e-project&subcontractorCompanyId=e2e-subbie-company',
     );
     await expect(page.getByRole('link', { name: "Start today's docket" })).toBeHidden();
   });
