@@ -3909,6 +3909,107 @@ Artifacts:
   recipient emails, schedule IDs tied to credentials, or browser-session data
   were committed or copied into this ledger.
 
+## Stage 48 - Public Email, Invite, Auth Token, and Hold-Point Evidence QA
+
+Status: in progress. Code changes are prepared on `qa/stage48-public-email`;
+PR/CI/merge still pending.
+
+Scope:
+
+- Public subcontractor invitation accept/login/registration flows.
+- Registration, email verification, reset-password, and post-login redirects.
+- Public superintendent hold-point release links and evidence visibility.
+- Request-release email delivery failure behavior after token persistence.
+- Read-only behavior for already-used public hold-point release links.
+
+Subagent coverage:
+
+- Invite-flow sidecar reviewed public subcontractor invitation states, existing
+  account redirects, new-account registration, and audit coverage.
+- Auth sidecar reviewed registration delivery failure handling, reset/verify
+  token URL hygiene, StrictMode duplicate submits, and production-only bypass
+  risks.
+- Hold-point sidecar reviewed public superintendent secure-link access,
+  evidence package scope, already-released tokens, and post-release status
+  progression failure handling.
+
+Confirmed issues fixed in this branch:
+
+- Existing-account subcontractor invitation login could lose the intended
+  `/subcontractor-portal/accept-invite?...` redirect because the post-login
+  redirect allowlist rejected portal paths before the user had portal identity.
+- Registration could create an account and tell the user to check email even
+  when the verification email provider returned failure or threw. Failed sends
+  now retire the just-created verification token and return an explicit
+  `verificationEmailSent: false` response.
+- `VERIFICATION_BYPASS_EMAIL_DOMAINS` was usable in production if configured.
+  Production runtime validation now refuses to boot with that bypass configured.
+- Reset-password and verify-email pages left one-time tokens in the address bar
+  and could double-submit under React StrictMode. They now scrub the token from
+  browser history before validation and guard duplicate effects.
+- New-account subcontractor invitation acceptance did not record
+  `SUBCONTRACTOR_INVITATION_ACCEPTED`; it now writes the invitation audit log.
+- Public superintendent evidence packages listed attachment/photo filenames but
+  did not provide usable evidence links. Token-scoped document download links
+  are now exposed without leaking raw storage URLs, and backend download access
+  is limited to documents included in that specific evidence package.
+- Already-used public hold-point release links returned `410 TOKEN_USED` even
+  though the frontend had a read-only released evidence state. Used links now
+  render the released evidence package with `canRelease: false`.
+- Hold-point release requests could persist public release tokens, send some
+  emails, then fail the whole request if a later email failed. Email delivery is
+  now settled after commit, audited with sent/failed counts, and partial
+  delivery returns a warning instead of hiding successful emails.
+- Public superintendent release no longer fails the HTTP response/audit if lot
+  status progression throws after the release transaction commits; that follow-up
+  error is logged for operators.
+
+Verification so far:
+
+- Local backend:
+  - `npm run type-check`
+  - `npm run lint`
+  - `npm test -- src/lib/runtimeConfig.test.ts` (28 tests)
+- Local frontend:
+  - `npm run type-check`
+  - `npm run lint` (passes with the existing unrelated
+    `src/lib/theme.tsx` fast-refresh warning)
+  - `npm run test:unit -- src/pages/auth/postLoginRedirect.test.ts src/pages/auth/ResetPasswordPage.test.tsx src/pages/auth/VerifyEmailPage.test.tsx` (13 tests)
+  - `npm run test:e2e -- e2e/holdpoints.spec.ts -g "Public hold point secure release page"` (Playwright ran the holdpoints spec, 13 tests passed)
+- Repo checks:
+  - `git diff --check`
+  - changed-file `fallow audit --base origin/master --format json --quiet`,
+    verdict `warn`; no introduced dead code or complexity. Remaining warnings
+    are repeated test fixture/setup patterns and small helper similarity.
+
+Not live-exercised locally:
+
+- DB-backed backend route tests for auth, subcontractors, hold points, and
+  request-release were not run locally because this machine has no safe
+  disposable Postgres test URL configured, and the main `.env` database did not
+  pass the repo's local/test safety guard. These suites are expected to run in
+  GitHub CI against the disposable CI database.
+- Real external superintendent email delivery was not sent during this local
+  branch verification.
+
+Remaining findings for a later pass:
+
+- Public subcontractor invitations still use the subcontractor company id as the
+  invite identifier instead of a separately rotatable hashed invite token. That
+  is a larger schema/product hardening follow-up.
+- Public invite metadata still depends on whether `primaryContactEmail` is
+  present; production can show less prefilled/read-only email UX than the E2E
+  mock path.
+- Logged-in invite "Wrong account?" paths still route to plain `/login`; if a
+  valid session exists, `LoginPage` may redirect away before a true account
+  switch.
+
+Artifacts:
+
+- No bearer tokens, session cookies, generated passwords, production secrets,
+  recipient emails, invite ids, or browser-session data were committed or copied
+  into this ledger.
+
 ## Stage 34 - Scheduled Report Recipient Gating and Offboarding QA
 
 Status: completed for scheduled-report delivery. One code PR was merged from

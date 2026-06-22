@@ -150,6 +150,7 @@ export function buildHoldPointEvidenceChecklist(
       attachments:
         completion?.attachments?.map((a) => ({
           id: a.id,
+          documentId: a.document.id,
           filename: a.document.filename,
           fileUrl: a.document.fileUrl,
           caption: a.document.caption,
@@ -265,6 +266,58 @@ export function mapHoldPointEvidenceItpTemplate(template: EvidenceItpTemplateInp
     id: template.id,
     name: template.name,
     activityType: template.activityType,
+  };
+}
+
+type BuildHoldPointEvidencePackageParams<THoldPoint extends Record<string, unknown>> = {
+  holdPoint: THoldPoint;
+  lot: EvidenceLotInput & {
+    project: EvidenceProjectInput;
+    testResults: EvidenceTestResultInput[];
+  };
+  itpTemplate: EvidenceItpTemplateInput;
+  checklistItems: EvidenceChecklistItemInput[];
+  completions: EvidenceCompletionInput[];
+  holdPointSequenceNumber: number;
+  extraFields?: Record<string, unknown>;
+};
+
+export function buildHoldPointEvidencePackage<THoldPoint extends Record<string, unknown>>({
+  holdPoint,
+  lot,
+  itpTemplate,
+  checklistItems,
+  completions,
+  holdPointSequenceNumber,
+  extraFields,
+}: BuildHoldPointEvidencePackageParams<THoldPoint>) {
+  const includedChecklistItemIds = buildHoldPointEvidenceChecklistItemIdSet(
+    checklistItems,
+    holdPointSequenceNumber,
+  );
+  const checklist = buildHoldPointEvidenceChecklist(
+    checklistItems,
+    completions,
+    holdPointSequenceNumber,
+  );
+  const scope = { includedChecklistItemIds };
+  const testResults = mapHoldPointEvidenceTestResults(lot.testResults, scope);
+  const photos = mapHoldPointEvidencePhotos(
+    buildHoldPointEvidencePhotoDocuments(completions),
+    scope,
+  );
+
+  return {
+    holdPoint,
+    lot: mapHoldPointEvidenceLot(lot),
+    project: mapHoldPointEvidenceProject(lot.project),
+    itpTemplate: mapHoldPointEvidenceItpTemplate(itpTemplate),
+    checklist,
+    testResults,
+    photos,
+    summary: buildHoldPointEvidenceSummary(checklist, testResults, photos),
+    ...extraFields,
+    generatedAt: new Date().toISOString(),
   };
 }
 

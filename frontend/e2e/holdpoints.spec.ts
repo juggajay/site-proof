@@ -367,7 +367,14 @@ function buildPublicReleasePackage({
           verifiedAt: released ? '2026-03-02T01:00:00.000Z' : null,
           verifiedBy: released ? 'Already Released Superintendent' : null,
           notes: 'Ready for superintendent release',
-          attachments: [],
+          attachments: [
+            {
+              id: 'e2e-public-attachment',
+              documentId: 'e2e-public-document',
+              filename: 'formwork-check.pdf',
+              caption: 'Formwork checklist',
+            },
+          ],
         },
       ],
       testResults: [
@@ -400,7 +407,7 @@ function buildPublicReleasePackage({
         totalTestResults: 1,
         passingTests: 1,
         totalPhotos: 1,
-        totalAttachments: 0,
+        totalAttachments: 1,
       },
       generatedAt: '2026-03-02T01:00:00.000Z',
     },
@@ -765,7 +772,16 @@ test.describe('Public hold point secure release page', () => {
     await expect(page.getByRole('heading', { name: 'Test Results' })).toBeVisible();
     await expect(page.getByText('Concrete slump')).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Photos And Attachments' })).toBeVisible();
+    await expect(page.getByText('formwork-check.pdf')).toBeVisible();
     await expect(page.getByText('reinforcement-before-pour.jpg')).toBeVisible();
+    await expect(
+      page.locator(
+        'a[href*="/api/holdpoints/public/e2e-public-token/documents/e2e-public-document"]',
+      ),
+    ).toBeVisible();
+    await expect(
+      page.locator('a[href*="/api/holdpoints/public/e2e-public-token/documents/e2e-public-photo"]'),
+    ).toBeVisible();
     await expect(page.locator('body')).not.toContainText('/storage/v1/object/public/');
 
     const releasedBy = page.getByLabel('Released By');

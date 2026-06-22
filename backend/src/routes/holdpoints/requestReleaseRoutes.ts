@@ -447,7 +447,21 @@ holdPointRequestReleaseRouter.post(
     // Send only after token persistence commits. Email delivery is an external
     // side effect, so it cannot be rolled back safely; committing first ensures
     // any accepted email contains a release link that remains valid.
-    await Promise.all(releaseTokenEntries.map(sendReleaseRequestEmail));
+    const emailDeliveryResults = await Promise.allSettled(
+      releaseTokenEntries.map(sendReleaseRequestEmail),
+    );
+    const failedDeliveryCount = emailDeliveryResults.filter(
+      (result) => result.status === 'rejected',
+    ).length;
+    const sentDeliveryCount = emailDeliveryResults.length - failedDeliveryCount;
+
+    if (failedDeliveryCount > 0) {
+      logError('[HP Release Request] Some superintendent emails failed after token commit:', {
+        holdPointId: holdPoint.id,
+        sentDeliveryCount,
+        failedDeliveryCount,
+      });
+    }
 
     // Audit log for HP release request
     await createAuditLog({
@@ -463,10 +477,31 @@ holdPointRequestReleaseRouter.post(
         scheduledTime,
         notificationSentTo: normalizedNotificationSentTo,
         noticePeriodOverride,
+        emailDelivery: {
+          sent: sentDeliveryCount,
+          failed: failedDeliveryCount,
+        },
       },
       req,
     });
 
-    res.json(buildHoldPointReleaseRequestedResponse(holdPoint));
+    if (sentDeliveryCount === 0) {
+      throw new AppError(
+        502,
+        'Failed to send hold point release request email',
+        'EXTERNAL_SERVICE_ERROR',
+      );
+    }
+
+    res.json({
+      ...buildHoldPointReleaseRequestedResponse(holdPoint),
+      ...(failedDeliveryCount > 0 && {
+        emailDelivery: {
+          sent: sentDeliveryCount,
+          failed: failedDeliveryCount,
+          warning: 'Some release request emails could not be sent.',
+        },
+      }),
+    });
   }),
 );

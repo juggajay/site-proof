@@ -87,6 +87,10 @@ export function getDefaultPostLoginRedirect(user: RedirectUser): string {
 }
 
 function isAllowedPostLoginRedirect(redirect: string, user: RedirectUser): boolean {
+  if (redirect.startsWith('/subcontractor-portal/accept-invite')) {
+    return true;
+  }
+
   if (redirect === '/subcontractor-portal' || redirect.startsWith('/subcontractor-portal/')) {
     return hasSubcontractorPortalIdentity(user);
   }

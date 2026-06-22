@@ -400,6 +400,11 @@ export function validateRuntimeConfig(): void {
   if (isExplicitlyEnabled(process.env.ALLOW_PLAINTEXT_SECRET_STORAGE)) {
     throw new Error('FATAL: ALLOW_PLAINTEXT_SECRET_STORAGE=true is not allowed in production');
   }
+  if (process.env.VERIFICATION_BYPASS_EMAIL_DOMAINS?.trim()) {
+    throw new Error(
+      'FATAL: VERIFICATION_BYPASS_EMAIL_DOMAINS is not allowed in production because it bypasses email verification',
+    );
+  }
   assertProductionTrustProxyConfig();
   assertOptionalPositiveInteger('API_RATE_LIMIT_MAX');
   assertOptionalPositiveInteger('AUTH_RATE_LIMIT_MAX');

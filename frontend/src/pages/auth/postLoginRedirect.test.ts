@@ -107,6 +107,22 @@ describe('post-login shell redirects', () => {
     expect(getPostLoginRedirect(searchParams, null, subbieUser)).toBe('/p/dockets');
   });
 
+  it('preserves subcontractor invite redirects before the user has portal access', () => {
+    const invitedUser: RedirectUser = {
+      role: 'member',
+      roleInCompany: 'member',
+      companyId: null,
+      hasSubcontractorPortalAccess: false,
+    };
+    const searchParams = new URLSearchParams({
+      redirect: '/subcontractor-portal/accept-invite?id=invite-1',
+    });
+
+    expect(getPostLoginRedirect(searchParams, null, invitedUser)).toBe(
+      '/subcontractor-portal/accept-invite?id=invite-1',
+    );
+  });
+
   it('ignores unsafe external redirect parameters', () => {
     const searchParams = new URLSearchParams({ redirect: '//evil.example.com' });
 

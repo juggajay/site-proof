@@ -1664,12 +1664,37 @@ describe('Subcontractors API', () => {
           });
 
         expect(registerRes.status).toBe(201);
+        const newAccountUserId = registerRes.body.user.id as string;
+
+        const acceptedAuditLog = await prisma.auditLog.findFirst({
+          where: {
+            projectId,
+            userId: newAccountUserId,
+            entityType: 'subcontractor',
+            entityId: approvedNewAccountSub.id,
+            action: AuditAction.SUBCONTRACTOR_INVITATION_ACCEPTED,
+          },
+          orderBy: { createdAt: 'desc' },
+        });
+        expect(acceptedAuditLog).toBeTruthy();
+        const acceptedChanges = parseAuditLogChanges(acceptedAuditLog!.changes) as Record<
+          string,
+          unknown
+        >;
+        expect(acceptedChanges).toMatchObject({
+          companyName: approvedNewAccountSub.companyName,
+          acceptedEmail: approvedNewAccountEmail,
+          createdAccount: true,
+        });
 
         const links = await prisma.subcontractorUser.findMany({
           where: { subcontractorCompanyId: { in: [approvedSub.id, approvedNewAccountSub.id] } },
         });
         expect(links).toHaveLength(2);
       } finally {
+        await prisma.auditLog.deleteMany({
+          where: { entityId: { in: [approvedSub.id, approvedNewAccountSub.id] } },
+        });
         await cleanupTestUser(existingUserId);
         await prisma.user.deleteMany({ where: { email: approvedNewAccountEmail } });
         await prisma.subcontractorCompany.delete({ where: { id: approvedSub.id } }).catch(() => {});
