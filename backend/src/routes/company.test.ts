@@ -2445,7 +2445,7 @@ describe('Company API', () => {
       }
     });
 
-    it('should reject a stale owner token after ownership has already transferred', async () => {
+    it('should reject a stale owner session after ownership has already transferred', async () => {
       const suffix = Date.now();
       const staleTransferCompany = await prisma.company.create({
         data: { name: `Stale Transfer Company ${suffix}` },
@@ -2483,8 +2483,8 @@ describe('Company API', () => {
           .set('Authorization', `Bearer ${owner.token}`)
           .send({ newOwnerId: secondTarget.userId });
 
-        expect(staleRes.status).toBe(409);
-        expect(staleRes.body.error.message).toContain('already changed');
+        expect(staleRes.status).toBe(403);
+        expect(staleRes.body.error.message).toContain('Only the company owner');
 
         const companyMembers = await prisma.user.findMany({
           where: { companyId: staleTransferCompany.id },
