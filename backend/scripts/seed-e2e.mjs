@@ -1,55 +1,62 @@
-import 'dotenv/config'
-import { URL } from 'node:url'
-import { PrismaClient } from '@prisma/client'
-import bcrypt from 'bcryptjs'
+import 'dotenv/config';
+import { URL } from 'node:url';
+import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcryptjs';
 
 // Guard: this script wipes/overwrites known test accounts (test@example.com,
 // subcontractor@example.com) with a hardcoded password. It must never run
 // against staging or production. Refuse unless we're in an explicit test
 // environment OR the operator has pasted the DATABASE_URL into a confirmation
 // variable as a deliberate acknowledgement.
-const NODE_ENV = process.env.NODE_ENV ?? ''
-const DATABASE_URL = process.env.DATABASE_URL ?? ''
-const SEED_E2E_CONFIRM_DESTROY = process.env.SEED_E2E_CONFIRM_DESTROY ?? ''
+const NODE_ENV = process.env.NODE_ENV ?? '';
+const DATABASE_URL = process.env.DATABASE_URL ?? '';
+const SEED_E2E_CONFIRM_DESTROY = process.env.SEED_E2E_CONFIRM_DESTROY ?? '';
 
-const isTestEnv = NODE_ENV === 'test' || NODE_ENV === 'e2e'
+const isTestEnv = NODE_ENV === 'test' || NODE_ENV === 'e2e';
 const dbHostnameLooksLocal = (() => {
-  if (!DATABASE_URL) return false
+  if (!DATABASE_URL) return false;
   try {
-    const { hostname } = new URL(DATABASE_URL)
-    return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1'
+    const { hostname } = new URL(DATABASE_URL);
+    return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
   } catch {
-    return false
+    return false;
   }
-})()
+})();
 const hasExplicitConfirmation =
-  SEED_E2E_CONFIRM_DESTROY !== '' && SEED_E2E_CONFIRM_DESTROY === DATABASE_URL
+  SEED_E2E_CONFIRM_DESTROY !== '' && SEED_E2E_CONFIRM_DESTROY === DATABASE_URL;
 
 if (!isTestEnv && !dbHostnameLooksLocal && !hasExplicitConfirmation) {
-  console.error('seed-e2e refused to run.')
-  console.error('This script seeds known credentials (test@example.com / subcontractor@example.com)')
-  console.error('with a hardcoded password and is only safe against disposable test databases.')
-  console.error('')
-  console.error('Pass any one of:')
-  console.error('  - NODE_ENV=test or NODE_ENV=e2e')
-  console.error('  - DATABASE_URL pointing at localhost / 127.0.0.1 / ::1')
-  console.error('  - SEED_E2E_CONFIRM_DESTROY set to the exact DATABASE_URL value (explicit override)')
-  process.exit(1)
+  console.error('seed-e2e refused to run.');
+  console.error(
+    'This script seeds known credentials (test@example.com / subcontractor@example.com)',
+  );
+  console.error('with a hardcoded password and is only safe against disposable test databases.');
+  console.error('');
+  console.error('Pass any one of:');
+  console.error('  - NODE_ENV=test or NODE_ENV=e2e');
+  console.error('  - DATABASE_URL pointing at localhost / 127.0.0.1 / ::1');
+  console.error(
+    '  - SEED_E2E_CONFIRM_DESTROY set to the exact DATABASE_URL value (explicit override)',
+  );
+  process.exit(1);
 }
 
-const prisma = new PrismaClient()
+const prisma = new PrismaClient();
 
-const password = 'testpassword123'
-const passwordHash = bcrypt.hashSync(password, 12)
+const password = 'testpassword123';
+const passwordHash = bcrypt.hashSync(password, 12);
 
 const ids = {
   company: 'e2e-company',
   adminUser: 'e2e-admin-user',
+  foremanUser: 'e2e-foreman-user',
   subcontractorUser: 'e2e-subcontractor-user',
   project: 'e2e-project',
   projectUser: 'e2e-project-user',
+  foremanProjectUser: 'e2e-foreman-project-user',
   subcontractorCompany: 'e2e-subcontractor-company',
   subcontractorMember: 'e2e-subcontractor-member',
+  lotSubcontractorAssignment: 'e2e-lot-subcontractor-assignment',
   lot: 'e2e-lot',
   itpTemplate: 'e2e-itp-template',
   itpChecklistItem: 'e2e-itp-checklist-item',
@@ -57,19 +64,19 @@ const ids = {
   holdPoint: 'e2e-hold-point',
   diary: 'e2e-diary',
   docket: 'e2e-docket',
-}
+};
 
 async function upsertItpCompletion(itpInstanceId, checklistItemId) {
   const existing = await prisma.iTPCompletion.findFirst({
     where: { itpInstanceId, checklistItemId },
     select: { id: true },
-  })
+  });
 
   if (existing) {
     return prisma.iTPCompletion.update({
       where: { id: existing.id },
       data: { status: 'pending', verificationStatus: 'none' },
-    })
+    });
   }
 
   return prisma.iTPCompletion.create({
@@ -79,11 +86,11 @@ async function upsertItpCompletion(itpInstanceId, checklistItemId) {
       status: 'pending',
       verificationStatus: 'none',
     },
-  })
+  });
 }
 
 async function main() {
-  const now = new Date()
+  const now = new Date();
 
   const company = await prisma.company.upsert({
     where: { id: ids.company },
@@ -96,7 +103,7 @@ async function main() {
       name: 'E2E Civil Pty Ltd',
       subscriptionTier: 'enterprise',
     },
-  })
+  });
 
   const adminUser = await prisma.user.upsert({
     where: { email: 'test@example.com' },
@@ -122,7 +129,7 @@ async function main() {
       tosAcceptedAt: now,
       tosVersion: 'e2e',
     },
-  })
+  });
 
   const project = await prisma.project.upsert({
     where: { id: ids.project },
@@ -143,7 +150,7 @@ async function main() {
       state: 'NSW',
       specificationSet: 'TfNSW',
     },
-  })
+  });
 
   await prisma.projectUser.upsert({
     where: { id: ids.projectUser },
@@ -162,7 +169,52 @@ async function main() {
       status: 'active',
       acceptedAt: now,
     },
-  })
+  });
+
+  const foremanUser = await prisma.user.upsert({
+    where: { email: 'foreman@example.com' },
+    update: {
+      passwordHash,
+      fullName: 'E2E Foreman',
+      companyId: company.id,
+      roleInCompany: 'foreman',
+      emailVerified: true,
+      emailVerifiedAt: now,
+      tosAcceptedAt: now,
+      tosVersion: 'e2e',
+    },
+    create: {
+      id: ids.foremanUser,
+      email: 'foreman@example.com',
+      passwordHash,
+      fullName: 'E2E Foreman',
+      companyId: company.id,
+      roleInCompany: 'foreman',
+      emailVerified: true,
+      emailVerifiedAt: now,
+      tosAcceptedAt: now,
+      tosVersion: 'e2e',
+    },
+  });
+
+  await prisma.projectUser.upsert({
+    where: { id: ids.foremanProjectUser },
+    update: {
+      projectId: project.id,
+      userId: foremanUser.id,
+      role: 'foreman',
+      status: 'active',
+      acceptedAt: now,
+    },
+    create: {
+      id: ids.foremanProjectUser,
+      projectId: project.id,
+      userId: foremanUser.id,
+      role: 'foreman',
+      status: 'active',
+      acceptedAt: now,
+    },
+  });
 
   const subcontractorCompany = await prisma.subcontractorCompany.upsert({
     where: { id: ids.subcontractorCompany },
@@ -181,7 +233,7 @@ async function main() {
       approvedById: adminUser.id,
       approvedAt: now,
     },
-  })
+  });
 
   const subcontractorUser = await prisma.user.upsert({
     where: { email: 'subcontractor@example.com' },
@@ -205,7 +257,7 @@ async function main() {
       tosAcceptedAt: now,
       tosVersion: 'e2e',
     },
-  })
+  });
 
   await prisma.subcontractorUser.upsert({
     where: { id: ids.subcontractorMember },
@@ -220,7 +272,7 @@ async function main() {
       userId: subcontractorUser.id,
       role: 'admin',
     },
-  })
+  });
 
   const template = await prisma.iTPTemplate.upsert({
     where: { id: ids.itpTemplate },
@@ -239,7 +291,7 @@ async function main() {
       stateSpec: 'TfNSW',
       isActive: true,
     },
-  })
+  });
 
   const checklistItem = await prisma.iTPChecklistItem.upsert({
     where: { id: ids.itpChecklistItem },
@@ -262,7 +314,7 @@ async function main() {
       responsibleParty: 'contractor',
       evidenceRequired: 'photo',
     },
-  })
+  });
 
   const lot = await prisma.lot.upsert({
     where: { id: ids.lot },
@@ -287,7 +339,33 @@ async function main() {
       itpTemplateId: template.id,
       assignedSubcontractorId: subcontractorCompany.id,
     },
-  })
+  });
+
+  await prisma.lotSubcontractorAssignment.upsert({
+    where: {
+      lotId_subcontractorCompanyId: {
+        lotId: lot.id,
+        subcontractorCompanyId: subcontractorCompany.id,
+      },
+    },
+    update: {
+      projectId: project.id,
+      canCompleteITP: true,
+      itpRequiresVerification: true,
+      assignedById: adminUser.id,
+      status: 'active',
+    },
+    create: {
+      id: ids.lotSubcontractorAssignment,
+      lotId: lot.id,
+      subcontractorCompanyId: subcontractorCompany.id,
+      projectId: project.id,
+      canCompleteITP: true,
+      itpRequiresVerification: true,
+      assignedById: adminUser.id,
+      status: 'active',
+    },
+  });
 
   const instance = await prisma.iTPInstance.upsert({
     where: { id: ids.itpInstance },
@@ -302,9 +380,9 @@ async function main() {
       templateId: template.id,
       status: 'in_progress',
     },
-  })
+  });
 
-  await upsertItpCompletion(instance.id, checklistItem.id)
+  await upsertItpCompletion(instance.id, checklistItem.id);
 
   await prisma.holdPoint.upsert({
     where: { id: ids.holdPoint },
@@ -323,7 +401,7 @@ async function main() {
       description: 'E2E hold point',
       status: 'pending',
     },
-  })
+  });
 
   await prisma.dailyDiary.upsert({
     where: { id: ids.diary },
@@ -342,7 +420,7 @@ async function main() {
       weatherConditions: 'Fine',
       generalNotes: 'E2E seeded diary',
     },
-  })
+  });
 
   await prisma.dailyDocket.upsert({
     where: { id: ids.docket },
@@ -365,16 +443,18 @@ async function main() {
       submittedAt: now,
       notes: 'E2E seeded docket',
     },
-  })
+  });
 
-  console.log('Seeded E2E users: test@example.com and subcontractor@example.com')
+  console.log(
+    'Seeded E2E users: test@example.com, foreman@example.com, and subcontractor@example.com',
+  );
 }
 
 main()
   .catch((error) => {
-    console.error('Failed to seed E2E data:', error)
-    process.exit(1)
+    console.error('Failed to seed E2E data:', error);
+    process.exit(1);
   })
   .finally(async () => {
-    await prisma.$disconnect()
-  })
+    await prisma.$disconnect();
+  });
