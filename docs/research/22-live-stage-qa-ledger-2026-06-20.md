@@ -18,8 +18,9 @@ keep going until the app has been exercised end to end.
 
 ## Stage 46 - Same-Project Subcontractor Company Scope Residue
 
-Status: fixed locally in branch `qa/stage46-subbie-scope-residue`; PR/CI/merge
-pending.
+Status: landed in PR #1096, with E2E expectation follow-up PR #1097. PR CI,
+post-merge master CI, full post-merge E2E, Vercel deployment status, Railway
+deployment status, and public production health checks passed.
 
 Scope:
 
@@ -60,8 +61,28 @@ Verification:
 - Backend `npm run type-check` passed.
 - Frontend `npm run type-check` passed.
 - `git diff --check` passed.
-- DB-backed route tests still need CI because the local shell does not have
-  `DATABASE_URL` configured.
+- PR #1096 CI passed Backend, Frontend, Frontend PR E2E smoke, and Vercel
+  ignored-build-step checks. The first post-merge master full E2E run exposed
+  stale subcontractor company-scope E2E expectations, not a product-code
+  failure.
+- PR #1097 updated those E2E expectations for company-scoped links/selectors.
+  Local verification passed:
+  `npm run test:e2e -- e2e/subcontractor-docket-reachability.spec.ts e2e/subcontractor-documents.spec.ts e2e/subcontractor-portal-rbac.spec.ts`
+  - 15 Playwright tests passed.
+  - `npm run lint`, `npm run type-check`, `npm run format:check`, and
+    `git diff --check` passed.
+- Post-merge master CI run `27947868240` passed Detect changes, Backend,
+  Frontend, and full Frontend E2E.
+- GitHub deployment statuses for merge commit
+  `ab36e2a4c940f126e08aa7e9bf2953ad4cec0aaf` passed:
+  - Vercel deployment completed.
+  - Railway `hearty-harmony - site-proof` deployment succeeded.
+- Public production checks after #1097:
+  - `https://site-proof.vercel.app/` returned HTTP 200.
+  - `https://site-proof-production.up.railway.app/health` returned HTTP 200
+    with `status: ok`.
+  - `https://site-proof-production.up.railway.app/ready` returned HTTP 200
+    with `status: ready`.
 
 ## Stage 45 - Multi-Company Subcontractor Portal Access Sweep
 
