@@ -3,6 +3,7 @@ import { AppError } from '../../lib/AppError.js';
 import {
   getEffectiveProjectRole,
   hasSubcontractorPortalModuleAccess,
+  isStandaloneSubcontractorPortalIdentity,
 } from '../../lib/projectAccess.js';
 import { getSubcontractorAlertPortalTarget } from './links.js';
 
@@ -90,6 +91,10 @@ export async function canReceiveProjectAlert(
   }
 
   if (isSubcontractorRole(targetUser.roleInCompany)) {
+    if (!isStandaloneSubcontractorPortalIdentity(targetUser)) {
+      return false;
+    }
+
     const portalTarget = getSubcontractorAlertPortalTarget(entityType);
     if (!portalTarget) {
       return false;
