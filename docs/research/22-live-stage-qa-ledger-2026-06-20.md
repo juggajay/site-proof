@@ -16,6 +16,109 @@ keep going until the app has been exercised end to end.
   `1secmail.com` from an old Codex process, so future email QA must use Jay's
   nominated inbox, a trusted mailbox, or Resend's safe test recipient.
 
+## Stage 42 - Project Reads and Notification Stale-Identity QA
+
+Status: landed in PR #1088; PR CI, post-merge master CI, full post-merge E2E,
+Vercel deployment status, Railway health, and production health checks passed.
+
+Scope:
+
+- Lower-risk route-local subcontractor identity cleanup carried forward from
+  Stage 41.
+- Project list/detail read paths that used role-only subcontractor checks and
+  then trusted `SubcontractorUser` links.
+- Notification alert assignment paths that could route docket-related project
+  alerts through old subcontractor links.
+- Confirmed API surfaces: project list/detail and notification alert creation.
+
+Subagent coverage:
+
+- A project-read sidecar confirmed that stale company-linked users with
+  `roleInCompany='subcontractor'` could still list/read projects through old
+  `SubcontractorUser -> SubcontractorCompany` links unless project reads used
+  the canonical standalone subcontractor portal identity.
+- A notification sidecar found that `canReceiveProjectAlert()` treated any
+  subcontractor role as portal eligible and then special-cased docket alerts,
+  so stale company-linked subcontractor-role users could be assigned project
+  alerts through old links.
+- A second sidecar flagged similar role-only predicates around comments,
+  documents, hold-points, and ITP. Documents and hold-points appear reduced by
+  existing module/project guards, and one ITP code-path note did not match the
+  clean Stage 42 worktree. Those surfaces remain queued for targeted follow-up
+  rather than changed on this pass.
+
+Confirmed issues fixed:
+
+- `GET /api/projects` now only follows `SubcontractorUser` links for canonical
+  standalone subcontractor portal identities. Company-linked stale
+  subcontractor-role users remain blocked from the internal project-team
+  fallback, but no longer receive portal project list entries through old
+  subcontractor links.
+- `GET /api/projects/:id` now uses the standalone portal identity before
+  trusting subcontractor project links, before returning suspended
+  subcontractor messaging, and before masking project detail responses as
+  subcontractor-visible.
+- Notification alert assignment now rejects company-linked stale
+  subcontractor-role users before evaluating subcontractor portal targets,
+  module access, or docket-specific alert receivability.
+- Regression tests now cover stale subcontractor-role project list/detail
+  denial and stale subcontractor-role docket alert assignment denial.
+
+Related merged work:
+
+- #1088 - Fix stale subcontractor route access, merged as `a3a4c92b`.
+
+Verification:
+
+- #1088 local checks passed:
+  - backend `npm run type-check`
+  - focused backend ESLint on the changed route/test files
+  - focused backend Prettier checks on the changed route/test files
+  - `git diff --check`
+  - precommit: full backend lint plus backend format check
+- Local DB-backed route tests were attempted in the isolated worktree, but no
+  safe local disposable `DATABASE_URL` was configured. The changed DB-backed
+  route suites ran in GitHub CI against disposable CI Postgres.
+- The first #1088 CI run found a regression-test fixture bug: the test used
+  `overdue_docket`, which is not an allowed notification alert type, so the
+  route correctly returned 400 before reaching the intended access guard. The
+  fixture was corrected to a valid alert type while keeping
+  `entityType: 'docket'`, then force-pushed and reverified.
+- Final PR #1088 checks passed before merge: Backend, Frontend PR E2E smoke,
+  Detect changes, Vercel's ignored-build status, and Vercel Preview Comments.
+- Master CI run `27933797846` passed after merge, including Backend, Frontend,
+  and full post-merge Frontend E2E.
+- After merge, production health checks returned HTTP 200 for:
+  - `https://site-proof.vercel.app`
+  - `https://site-proof-production.up.railway.app/health`
+  - `https://site-proof-production.up.railway.app/ready`
+
+Not live-exercised in this stage:
+
+- No production browser sessions were mutated during this backend API-scope
+  stage.
+- No real production project records or notifications were created or edited.
+- The remaining role-local predicates in comments, documents, hold-points, and
+  ITP were not changed here because this pass fixed only confirmed live grant
+  paths.
+
+Remaining findings for a later pass:
+
+- Continue centralising subcontractor portal identity checks so route-local
+  helpers cannot classify portal users by role only.
+- Re-audit comments, documents, hold-point, and ITP route-local helpers against
+  clean master before changing them. Confirm whether existing project/module
+  guards fully neutralise stale company-linked subcontractor-role identities.
+- Add a focused ITP completion access pass if the clean code still has any
+  local `SubcontractorUser.findFirst` trust boundary outside the shared
+  completion-permission helper.
+
+Artifacts:
+
+- No bearer tokens, session cookies, generated passwords, production secrets,
+  recipient emails, database URLs, or browser-session data were committed or
+  copied into this ledger.
+
 ## Stage 41 - Subcontractor Portal Identity and API Scope QA
 
 Status: landed in PR #1086; PR CI, post-merge master CI, full post-merge E2E,
