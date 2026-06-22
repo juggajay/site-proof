@@ -3129,6 +3129,110 @@ Artifacts:
   webhook URLs, webhook secrets, or browser-session data were committed or
   copied into this ledger.
 
+## Stage 37 - Lot Lifecycle Business Webhook Wiring QA
+
+Status: completed for lot lifecycle webhook events. One code PR was merged from
+this stage. Broader business-event webhook coverage remains queued separately.
+
+Scope:
+
+- Real business-event calls to `triggerWebhooks()` for lot lifecycle mutation
+  routes.
+- Lot create, bulk create, clone, normal update, bulk status update, bulk
+  assignment, single assignment, conform/force-conform, manual status override,
+  single delete, and bulk delete flows.
+- Conservative webhook payloads containing IDs, lot number, status, actor ID,
+  action labels, changed fields, previous status, and assignment/source IDs
+  where relevant.
+- Fire-and-forget delivery so a webhook configuration or delivery failure does
+  not make a successful lot mutation fail for the user.
+
+Subagent coverage:
+
+- A read-only sidecar agent audited webhook integration points, confirmed
+  `triggerWebhooks()` had no real business mutation callers before this stage,
+  and identified `lot.created`, `lot.updated`, and `lot.deleted` as existing
+  tested/example event names. It also mapped later candidate domains for
+  hold-points, ITPs, NCRs, dockets, diary, test results, claims, documents, and
+  subcontractors.
+
+Confirmed issues fixed:
+
+- Lot lifecycle mutations now emit configured outbound webhooks through a
+  shared lot webhook emitter.
+- The emitter resolves the owning project company before triggering company
+  webhooks, logs trigger failures, and does not block the HTTP mutation
+  response.
+- `lot.created` now fires for single create, bulk create, and clone.
+- `lot.updated` now fires for normal metadata/status update, bulk status update,
+  bulk subcontractor assignment, single assignment, conform/force-conform, and
+  manual status override.
+- `lot.deleted` now fires for single and bulk delete.
+- A DB-backed route regression covers create/update/delete and verifies the
+  recorded delivery history with outbound fetch mocked.
+
+Related merged work:
+
+- #1078 - Fix lot lifecycle webhook events, merged as `331f5d0d`.
+
+Verification:
+
+- #1078 local checks passed:
+  - backend `npm ci --no-audit --no-fund`
+  - backend `npm run db:generate` with the local Windows TLS workaround
+  - backend `npm run type-check`
+  - backend `npm run lint`
+  - backend `npm run format:check`
+  - backend pure helper test
+    `npm run test -- src/routes/webhooks/delivery.test.ts`
+  - repo precommit hook during commit/amend, which reran backend lint and
+    format checks
+  - `git diff --check`
+- Local DB-backed `npm run test -- src/routes/lots.test.ts` was attempted, but
+  the isolated worktree had no local `DATABASE_URL`; Prisma stopped at test
+  setup. The new DB-backed lot webhook regression ran in GitHub CI.
+- The first #1078 CI run found a test-fixture bug: the mocked `fetch` reused the
+  same `Response` object for multiple deliveries, so the second body read failed
+  after status 200. The fixture was fixed to return a fresh `Response` per call,
+  force-pushed, and reverified.
+- Final PR #1078 checks passed before merge: Backend, Frontend PR E2E smoke,
+  Detect changes, and Vercel's ignored-build status. The full Frontend job was
+  skipped on the PR because only backend files changed.
+- Master CI run `27923374375` passed after merge, including Backend, Frontend,
+  and full post-merge Frontend E2E.
+- After merge, production health checks returned HTTP 200 for:
+  - `https://site-proof-production.up.railway.app/ready`
+  - `https://site-proof.vercel.app`
+
+Not live-exercised in this stage:
+
+- No real production webhooks were created, tested, disabled, or deleted.
+- No external production webhook receiver was called from a real production lot
+  mutation.
+- Only lot lifecycle events were wired. Other business domains are still not
+  emitting outbound webhooks.
+- No user-facing webhook event picker or public event taxonomy documentation was
+  added in this stage.
+
+Remaining findings for a later pass:
+
+- Expand real business-event webhook wiring beyond lots, starting with
+  hold-points, ITPs, NCRs, dockets, diary, test results, claims, documents, and
+  subcontractors.
+- Add a canonical event taxonomy/docs surface before exposing broader event
+  selection in the UI.
+- Decide what should happen to webhook ownership/configuration when the creator
+  is offboarded from the company.
+- `PATCH /api/lots/:id` now emits `lot.updated`, but still does not write an
+  `AuditAction.LOT_UPDATED` audit entry. Decide whether normal lot metadata
+  updates should also be added to the audit ledger.
+
+Artifacts:
+
+- No bearer tokens, session cookies, generated passwords, production secrets,
+  webhook URLs, webhook secrets, or browser-session data were committed or
+  copied into this ledger.
+
 ## Stage 27 - Operational Access, Scheduled Reports, and Session Cache QA
 
 Status: completed. One code PR was merged from this stage.
