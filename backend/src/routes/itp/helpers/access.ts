@@ -115,7 +115,7 @@ export async function getAssignedItpSubcontractorLotIds(
     return null;
   }
 
-  const subcontractorUser = await prisma.subcontractorUser.findFirst({
+  const subcontractorUsers = await prisma.subcontractorUser.findMany({
     where: {
       userId: user.userId,
       subcontractorCompany: activeSubcontractorCompanyWhere({ projectId }),
@@ -123,7 +123,8 @@ export async function getAssignedItpSubcontractorLotIds(
     select: { subcontractorCompanyId: true },
   });
 
-  if (!subcontractorUser) {
+  const subcontractorCompanyIds = subcontractorUsers.map((link) => link.subcontractorCompanyId);
+  if (subcontractorCompanyIds.length === 0) {
     return [];
   }
 
@@ -131,7 +132,7 @@ export async function getAssignedItpSubcontractorLotIds(
     prisma.lotSubcontractorAssignment.findMany({
       where: {
         projectId,
-        subcontractorCompanyId: subcontractorUser.subcontractorCompanyId,
+        subcontractorCompanyId: { in: subcontractorCompanyIds },
         status: 'active',
       },
       select: { lotId: true },
@@ -139,7 +140,7 @@ export async function getAssignedItpSubcontractorLotIds(
     prisma.lot.findMany({
       where: {
         projectId,
-        assignedSubcontractorId: subcontractorUser.subcontractorCompanyId,
+        assignedSubcontractorId: { in: subcontractorCompanyIds },
       },
       select: { id: true },
     }),
