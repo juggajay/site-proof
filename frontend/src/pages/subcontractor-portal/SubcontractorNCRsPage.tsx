@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, AlertTriangle, AlertCircle, CheckCircle2, Clock, XCircle } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
@@ -104,11 +104,16 @@ function getSeverityBadge(severity: string) {
 
 export function SubcontractorNCRsPage() {
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
+  const requestedProjectId = searchParams.get('projectId');
   const { data: company, isLoading: companyLoading } = useQuery({
-    queryKey: queryKeys.portalCompanies(user?.id),
+    queryKey: [...queryKeys.portalCompanies(user?.id), requestedProjectId ?? 'default'],
     queryFn: async () => {
+      const query = requestedProjectId
+        ? `?projectId=${encodeURIComponent(requestedProjectId)}`
+        : '';
       const res = await apiFetch<{ company: SubcontractorCompany }>(
-        '/api/subcontractors/my-company',
+        `/api/subcontractors/my-company${query}`,
       );
       return res.company;
     },
@@ -124,7 +129,7 @@ export function SubcontractorNCRsPage() {
     queryKey: queryKeys.portalNCRs(user?.id, company?.projectId),
     queryFn: async () => {
       const res = await apiFetch<{ ncrs: NCR[] }>(
-        `/api/ncrs?projectId=${company!.projectId}&subcontractorView=true`,
+        `/api/ncrs?projectId=${encodeURIComponent(company!.projectId)}&subcontractorView=true`,
       );
       return res.ncrs || [];
     },

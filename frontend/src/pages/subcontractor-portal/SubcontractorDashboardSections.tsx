@@ -37,7 +37,7 @@ export function PortalQuickLinks({
         </div>
       </Link>
       <Link
-        to="/subcontractor-portal/dockets"
+        to={`/subcontractor-portal/dockets${currentProjectQuery}`}
         className="border border-border rounded-lg bg-card hover:border-primary transition-colors cursor-pointer"
       >
         <div className="p-4 flex items-center gap-3">
@@ -50,7 +50,7 @@ export function PortalQuickLinks({
       </Link>
       {isPortalModuleEnabled(company, 'itps') && (
         <Link
-          to="/subcontractor-portal/itps"
+          to={`/subcontractor-portal/itps${currentProjectQuery}`}
           className="border border-border rounded-lg bg-card hover:border-primary transition-colors cursor-pointer"
         >
           <div className="p-4 flex items-center gap-3">
@@ -64,7 +64,7 @@ export function PortalQuickLinks({
       )}
       {isPortalModuleEnabled(company, 'holdPoints') && (
         <Link
-          to="/subcontractor-portal/holdpoints"
+          to={`/subcontractor-portal/holdpoints${currentProjectQuery}`}
           className="border border-border rounded-lg bg-card hover:border-primary transition-colors cursor-pointer"
         >
           <div className="p-4 flex items-center gap-3">
@@ -78,7 +78,7 @@ export function PortalQuickLinks({
       )}
       {isPortalModuleEnabled(company, 'testResults') && (
         <Link
-          to="/subcontractor-portal/tests"
+          to={`/subcontractor-portal/tests${currentProjectQuery}`}
           className="border border-border rounded-lg bg-card hover:border-primary transition-colors cursor-pointer"
         >
           <div className="p-4 flex items-center gap-3">
@@ -92,7 +92,7 @@ export function PortalQuickLinks({
       )}
       {isPortalModuleEnabled(company, 'ncrs') && (
         <Link
-          to="/subcontractor-portal/ncrs"
+          to={`/subcontractor-portal/ncrs${currentProjectQuery}`}
           className="border border-border rounded-lg bg-card hover:border-primary transition-colors cursor-pointer"
         >
           <div className="p-4 flex items-center gap-3">

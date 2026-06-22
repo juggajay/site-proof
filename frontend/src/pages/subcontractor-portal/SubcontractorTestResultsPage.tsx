@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, FlaskConical, AlertCircle, CheckCircle2, XCircle, Clock } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
@@ -90,11 +90,16 @@ function getResultBadge(result: string) {
 
 export function SubcontractorTestResultsPage() {
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
+  const requestedProjectId = searchParams.get('projectId');
   const { data: company, isLoading: companyLoading } = useQuery({
-    queryKey: queryKeys.portalCompanies(user?.id),
+    queryKey: [...queryKeys.portalCompanies(user?.id), requestedProjectId ?? 'default'],
     queryFn: async () => {
+      const query = requestedProjectId
+        ? `?projectId=${encodeURIComponent(requestedProjectId)}`
+        : '';
       const res = await apiFetch<{ company: SubcontractorCompany }>(
-        '/api/subcontractors/my-company',
+        `/api/subcontractors/my-company${query}`,
       );
       return res.company;
     },
@@ -110,7 +115,9 @@ export function SubcontractorTestResultsPage() {
     queryKey: queryKeys.portalTestResults(user?.id, company?.projectId),
     queryFn: async () => {
       const res = await apiFetch<{ testResults?: ApiTestResult[] }>(
-        `/api/test-results?projectId=${company!.projectId}&subcontractorView=true`,
+        `/api/test-results?projectId=${encodeURIComponent(
+          company!.projectId,
+        )}&subcontractorView=true`,
       );
       return (res.testResults || []).map(normalizeTestResult);
     },

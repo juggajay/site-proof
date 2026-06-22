@@ -15,7 +15,7 @@
  *   - bottom bar navigation target (/p/docket)
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { SubbieShellData } from '../../subbieShellData';
@@ -209,6 +209,19 @@ describe('subbie shell HomeScreen', () => {
     renderHome();
     fireEvent.click(screen.getByRole('button', { name: 'Documents' }));
     expect(screen.getByTestId('location')).toHaveTextContent('/p/docs?projectId=project-2');
+  });
+
+  it('encodes projectId before building dashboard query URLs', async () => {
+    _ctx = makeCtx({ projectId: 'proj-1&portalModule=itps' });
+    renderHome();
+    await waitFor(() =>
+      expect(apiFetchMock).toHaveBeenCalledWith(
+        '/api/dockets?projectId=proj-1%26portalModule%3Ditps',
+      ),
+    );
+    expect(apiFetchMock).toHaveBeenCalledWith(
+      '/api/lots?projectId=proj-1%26portalModule%3Ditps&portalModule=lots',
+    );
   });
 
   it('bottom bar "Add today\'s hours" navigates to /p/docket', () => {

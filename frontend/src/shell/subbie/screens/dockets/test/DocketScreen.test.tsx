@@ -24,8 +24,9 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { calculateHours } from '@/pages/subcontractor-portal/docketEditHelpers';
 
+const useOfflineStatusMock = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/useOfflineStatus', () => ({
-  useOfflineStatus: () => ({ isOnline: true, pendingSyncCount: 0, isSyncing: false }),
+  useOfflineStatus: () => useOfflineStatusMock(),
 }));
 vi.mock('@/lib/auth', () => ({
   useAuth: () => ({ user: { id: 'u1', fullName: 'Mick Hargraves', role: 'subcontractor' } }),
@@ -141,6 +142,12 @@ function makeDocket(over: Record<string, unknown> = {}) {
 describe('subbie shell DocketScreen', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useOfflineStatusMock.mockReturnValue({
+      isOnline: true,
+      pendingSyncCount: 0,
+      failedSyncCount: 0,
+      isSyncing: false,
+    });
   });
 
   it('does NOT POST a docket before the first entry is added, then rewrites URL after', async () => {
@@ -428,6 +435,44 @@ describe('subbie shell DocketScreen', () => {
     renderDocket('/p/docket/dk-1');
     const submit = await screen.findByRole('button', { name: 'Submit for approval' });
     expect(submit).toBeDisabled();
+  });
+
+  it('offline editable dockets show online-required copy and block writes', async () => {
+    useOfflineStatusMock.mockReturnValue({
+      isOnline: false,
+      pendingSyncCount: 0,
+      failedSyncCount: 0,
+      isSyncing: false,
+    });
+    setApi({
+      docket: makeDocket({
+        notes: 'offline-visible note',
+        labourEntries: [
+          {
+            id: 'le-1',
+            employee: { id: 'e', name: 'Tommy', role: 'Pipe Layer', hourlyRate: 74 },
+            startTime: '07:00',
+            finishTime: '15:00',
+            submittedHours: 8,
+            hourlyRate: 74,
+            submittedCost: 592,
+            lotAllocations: [{ lotId: 'lot-1', lotNumber: 'LOT-014', hours: 8 }],
+          },
+        ],
+        totalLabourSubmitted: 592,
+      }),
+      existingDockets: [],
+    });
+
+    renderDocket('/p/docket/dk-1');
+
+    expect(await screen.findByText(/Dockets need a connection/i)).toBeInTheDocument();
+    expect(screen.getByText(/Offline — reconnect to edit this docket/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add crew hours' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add plant hours' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Remove Tommy/ })).not.toBeInTheDocument();
+    expect(screen.getByText('offline-visible note')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Submit for approval' })).toBeDisabled();
   });
 
   it('queried docket shows the foreman query + answer box, and respond POSTs {response}', async () => {

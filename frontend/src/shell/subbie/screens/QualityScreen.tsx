@@ -228,12 +228,13 @@ export function QualityScreen() {
   const holdsEnabled = isModuleEnabled('holdPoints');
   const testsEnabled = isModuleEnabled('testResults');
   const eitherEnabled = holdsEnabled || testsEnabled;
+  const encodedProjectId = projectId ? encodeURIComponent(projectId) : '';
 
   const holdPointsQuery = useQuery({
     queryKey: queryKeys.portalHoldPoints(user?.id, projectId),
     queryFn: async () => {
       const res = await apiFetch<{ holdPoints: ApiHoldPoint[] }>(
-        `/api/holdpoints/project/${projectId}?subcontractorView=true`,
+        `/api/holdpoints/project/${encodedProjectId}?subcontractorView=true`,
       );
       return (res.holdPoints || []).map(normalizeHoldPoint);
     },
@@ -244,7 +245,7 @@ export function QualityScreen() {
     queryKey: queryKeys.portalTestResults(user?.id, projectId),
     queryFn: async () => {
       const res = await apiFetch<{ testResults?: ApiTestResult[] }>(
-        `/api/test-results?projectId=${projectId}&subcontractorView=true`,
+        `/api/test-results?projectId=${encodedProjectId}&subcontractorView=true`,
       );
       return (res.testResults || []).map(normalizeTestResult);
     },

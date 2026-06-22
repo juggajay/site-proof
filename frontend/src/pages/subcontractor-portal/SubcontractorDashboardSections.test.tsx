@@ -2,6 +2,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { PortalQuickLinks } from './SubcontractorDashboardSections';
+import { DEFAULT_PORTAL_ACCESS } from './portalAccessModel';
 import type { Company } from './SubcontractorDashboard';
 
 const company: Company = {
@@ -43,7 +44,7 @@ describe('PortalQuickLinks', () => {
     );
     expect(screen.getByRole('link', { name: /All Dockets/i })).toHaveAttribute(
       'href',
-      '/subcontractor-portal/dockets',
+      '/subcontractor-portal/dockets?projectId=project-1',
     );
   });
 
@@ -52,20 +53,32 @@ describe('PortalQuickLinks', () => {
 
     expect(screen.getByRole('link', { name: /ITPs/i })).toHaveAttribute(
       'href',
-      '/subcontractor-portal/itps',
+      '/subcontractor-portal/itps?projectId=project-1',
     );
     expect(screen.getByRole('link', { name: /Hold Points/i })).toHaveAttribute(
       'href',
-      '/subcontractor-portal/holdpoints',
+      '/subcontractor-portal/holdpoints?projectId=project-1',
     );
     expect(screen.getByRole('link', { name: /Test Results/i })).toHaveAttribute(
       'href',
-      '/subcontractor-portal/tests',
+      '/subcontractor-portal/tests?projectId=project-1',
     );
     expect(screen.getByRole('link', { name: /Documents/i })).toHaveAttribute(
       'href',
       '/subcontractor-portal/documents?projectId=project-1',
     );
     expect(screen.queryByRole('link', { name: /NCRs/i })).not.toBeInTheDocument();
+  });
+
+  it('preserves project context for NCRs when the NCR module is enabled', () => {
+    renderQuickLinks({
+      ...company,
+      portalAccess: { ...DEFAULT_PORTAL_ACCESS, ...company.portalAccess, ncrs: true },
+    });
+
+    expect(screen.getByRole('link', { name: /NCRs/i })).toHaveAttribute(
+      'href',
+      '/subcontractor-portal/ncrs?projectId=project-1',
+    );
   });
 });

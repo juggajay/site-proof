@@ -101,9 +101,8 @@ export interface Company {
 }
 
 // ===== Path builders =====
-// Kept byte-identical to the original inline fetches: my-company encodes the
-// requested project id, while the lots/dockets list endpoints interpolate the
-// (cuid) project id directly, exactly as before.
+// Query values are always encoded before interpolation. Project ids are server
+// controlled in normal use, but deep links can still carry arbitrary values.
 
 export function buildMyCompanyPath(requestedProjectId: string | null): string {
   const companyQuery = requestedProjectId
@@ -113,7 +112,7 @@ export function buildMyCompanyPath(requestedProjectId: string | null): string {
 }
 
 export function buildAssignedLotsPath(projectId: string): string {
-  return `/api/lots?projectId=${projectId}`;
+  return `/api/lots?projectId=${encodeURIComponent(projectId)}`;
 }
 
 export function buildDocketDetailPath(docketId: string): string {
@@ -121,7 +120,7 @@ export function buildDocketDetailPath(docketId: string): string {
 }
 
 export function buildExistingDocketsPath(projectId: string): string {
-  return `/api/dockets?projectId=${projectId}`;
+  return `/api/dockets?projectId=${encodeURIComponent(projectId)}`;
 }
 
 export function buildDocketEditRoute(docketId: string, projectId?: string | null): string {

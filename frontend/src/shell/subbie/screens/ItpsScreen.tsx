@@ -153,6 +153,7 @@ export function ItpsScreen() {
   const { projectId, projectName, isModuleEnabled } = useSubbieShellContext();
 
   const itpsEnabled = isModuleEnabled('itps');
+  const encodedProjectId = projectId ? encodeURIComponent(projectId) : '';
 
   const {
     data: lots = [],
@@ -162,7 +163,7 @@ export function ItpsScreen() {
     queryKey: queryKeys.portalITPs(user?.id, projectId),
     queryFn: async () => {
       const res = await apiFetch<{ lots: Lot[] }>(
-        `/api/lots?projectId=${projectId}&includeITP=true&portalModule=itps`,
+        `/api/lots?projectId=${encodedProjectId}&includeITP=true&portalModule=itps`,
       );
       return (res.lots ?? []).filter((lot) => (lot.itpInstances?.length ?? 0) > 0);
     },
@@ -188,7 +189,9 @@ export function ItpsScreen() {
   }
 
   const onPressLot = (lotId: string) =>
-    navigate(`/p/lots/${lotId}/itp${projectId ? `?projectId=${projectId}` : ''}`);
+    navigate(
+      `/p/lots/${encodeURIComponent(lotId)}/itp${projectId ? `?projectId=${encodedProjectId}` : ''}`,
+    );
 
   if (isLoading) {
     return (

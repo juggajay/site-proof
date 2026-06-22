@@ -115,7 +115,7 @@ export function DocketsListPage() {
     queryKey: queryKeys.portalDockets(user?.id, company?.projectId),
     queryFn: async () => {
       const res = await apiFetch<{ dockets: Docket[] }>(
-        `/api/dockets?projectId=${company!.projectId}`,
+        `/api/dockets?projectId=${encodeURIComponent(company!.projectId)}`,
       );
       return res.dockets || [];
     },

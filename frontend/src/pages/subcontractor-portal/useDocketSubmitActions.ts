@@ -76,7 +76,7 @@ export function useDocketSubmitActions({
     setSubmitting(true);
     try {
       await saveDocketNotes(docket);
-      await apiFetch(`/api/dockets/${docket.id}/submit`, {
+      await apiFetch(`/api/dockets/${encodeURIComponent(docket.id)}/submit`, {
         method: 'POST',
       });
 
@@ -105,7 +105,7 @@ export function useDocketSubmitActions({
     setRespondingToQuery(true);
     try {
       await saveDocketNotes(docket);
-      await apiFetch(`/api/dockets/${docket.id}/respond`, {
+      await apiFetch(`/api/dockets/${encodeURIComponent(docket.id)}/respond`, {
         method: 'POST',
         body: JSON.stringify({ response: queryResponse.trim() }),
       });

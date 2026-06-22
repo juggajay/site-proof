@@ -114,6 +114,17 @@ describe('subbie shell QualityScreen', () => {
     );
   });
 
+  it('encodes projectId in both quality endpoints', () => {
+    _ctx = { ...makeCtx(), projectId: 'proj-1&subcontractorView=false' };
+    renderScreen();
+    expect(apiFetchMock).toHaveBeenCalledWith(
+      '/api/holdpoints/project/proj-1%26subcontractorView%3Dfalse?subcontractorView=true',
+    );
+    expect(apiFetchMock).toHaveBeenCalledWith(
+      '/api/test-results?projectId=proj-1%26subcontractorView%3Dfalse&subcontractorView=true',
+    );
+  });
+
   it('renders a WAITING badge for a notified hold point', async () => {
     setApi({
       holdPoints: [

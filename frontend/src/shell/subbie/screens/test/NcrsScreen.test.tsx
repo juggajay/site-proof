@@ -86,6 +86,14 @@ describe('subbie shell NcrsScreen', () => {
     expect(apiFetchMock).toHaveBeenCalledWith('/api/ncrs?projectId=proj-1&subcontractorView=true');
   });
 
+  it('encodes projectId before building the NCR URL', () => {
+    _ctx = { ...makeCtx({ ncrs: true }), projectId: 'proj-1&subcontractorView=false' };
+    renderScreen();
+    expect(apiFetchMock).toHaveBeenCalledWith(
+      '/api/ncrs?projectId=proj-1%26subcontractorView%3Dfalse&subcontractorView=true',
+    );
+  });
+
   it('groups by Open / In Progress / Closed and shows severity + lot', async () => {
     _ctx = makeCtx({ ncrs: true });
     setApi({

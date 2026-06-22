@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
   ClipboardList,
@@ -77,11 +77,16 @@ function getITPStatusBadge(status: string, percentage?: number) {
 
 export function SubcontractorITPsPage() {
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
+  const requestedProjectId = searchParams.get('projectId');
   const { data: company, isLoading: companyLoading } = useQuery({
-    queryKey: queryKeys.portalCompanies(user?.id),
+    queryKey: [...queryKeys.portalCompanies(user?.id), requestedProjectId ?? 'default'],
     queryFn: async () => {
+      const query = requestedProjectId
+        ? `?projectId=${encodeURIComponent(requestedProjectId)}`
+        : '';
       const res = await apiFetch<{ company: SubcontractorCompany }>(
-        '/api/subcontractors/my-company',
+        `/api/subcontractors/my-company${query}`,
       );
       return res.company;
     },
@@ -97,7 +102,9 @@ export function SubcontractorITPsPage() {
     queryKey: queryKeys.portalITPs(user?.id, company?.projectId),
     queryFn: async () => {
       const res = await apiFetch<{ lots: Lot[] }>(
-        `/api/lots?projectId=${company!.projectId}&includeITP=true&portalModule=itps`,
+        `/api/lots?projectId=${encodeURIComponent(
+          company!.projectId,
+        )}&includeITP=true&portalModule=itps`,
       );
       return (res.lots || []).filter((lot: Lot) => {
         return lot.itpInstances && lot.itpInstances.length > 0;

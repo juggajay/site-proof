@@ -29,6 +29,7 @@ import { extractErrorMessage, handleApiError, isForbidden } from '@/lib/errorHan
 import { logError } from '@/lib/logger';
 import { formatDateKey } from '@/lib/localDate';
 import { useAuth } from '@/lib/auth';
+import { useOfflineStatus } from '@/lib/useOfflineStatus';
 import { cn } from '@/lib/utils';
 import { ShellScreen } from '@/shell/components/ShellScreen';
 import {
@@ -89,6 +90,7 @@ export function DocketScreen() {
   const { docketId } = useParams();
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
+  const { isOnline } = useOfflineStatus();
   const userId = user?.id;
   const requestedProjectId = searchParams.get('projectId');
   const isNewDocket = !docketId || docketId === 'new';
@@ -172,7 +174,7 @@ export function DocketScreen() {
       const projectQuery = company?.projectId
         ? `?projectId=${encodeURIComponent(company.projectId)}`
         : '';
-      navigate(`/p/docket/${todayDocket.id}${projectQuery}`, { replace: true });
+      navigate(`/p/docket/${encodeURIComponent(todayDocket.id)}${projectQuery}`, { replace: true });
     }
   }, [todayDocket, company?.projectId, navigate]);
 
@@ -215,7 +217,7 @@ export function DocketScreen() {
       const projectQuery = company?.projectId
         ? `?projectId=${encodeURIComponent(company.projectId)}`
         : '';
-      navigate(`/p/docket/${newDocket.id}${projectQuery}`, { replace: true });
+      navigate(`/p/docket/${encodeURIComponent(newDocket.id)}${projectQuery}`, { replace: true });
       return newDocket;
     } catch (err) {
       logError('Error creating docket:', err);
@@ -227,24 +229,27 @@ export function DocketScreen() {
   const saveDocketNotes = useCallback(
     async (targetDocket?: Docket | null) => {
       const currentDocket = targetDocket || docket;
-      if (!currentDocket || !isEditableDocketStatus(currentDocket.status)) {
+      if (!isOnline || !currentDocket || !isEditableDocketStatus(currentDocket.status)) {
         return currentDocket;
       }
       const currentNotes = currentDocket.notes || '';
       if (currentNotes === notes) {
         return currentDocket;
       }
-      const data = await apiFetch<{ docket: Docket }>(`/api/dockets/${currentDocket.id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ notes }),
-      });
+      const data = await apiFetch<{ docket: Docket }>(
+        `/api/dockets/${encodeURIComponent(currentDocket.id)}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ notes }),
+        },
+      );
       const updatedNotes = data.docket.notes || '';
       setDocket((prev) =>
         prev?.id === currentDocket.id ? { ...prev, notes: updatedNotes } : prev,
       );
       return { ...currentDocket, notes: updatedNotes };
     },
-    [docket, notes],
+    [docket, isOnline, notes],
   );
 
   const handleNotesBlur = () => {
@@ -269,7 +274,7 @@ export function DocketScreen() {
       const currentDocket = await ensureDocket();
       const hours = calculateHours(startTime, finishTime);
       const data = await apiFetch<{ labourEntry: LabourEntry; runningTotal: { cost: number } }>(
-        `/api/dockets/${currentDocket.id}/labour`,
+        `/api/dockets/${encodeURIComponent(currentDocket.id)}/labour`,
         {
           method: 'POST',
           body: JSON.stringify({
@@ -322,7 +327,7 @@ export function DocketScreen() {
     try {
       const currentDocket = await ensureDocket();
       const data = await apiFetch<{ plantEntry: PlantEntry; runningTotal: { cost: number } }>(
-        `/api/dockets/${currentDocket.id}/plant`,
+        `/api/dockets/${encodeURIComponent(currentDocket.id)}/plant`,
         {
           method: 'POST',
           body: JSON.stringify({
@@ -379,7 +384,10 @@ export function DocketScreen() {
     if (!docket) return;
     if (!confirmArmed(`labour-${entryId}`)) return;
     try {
-      await apiFetch(`/api/dockets/${docket.id}/labour/${entryId}`, { method: 'DELETE' });
+      await apiFetch(
+        `/api/dockets/${encodeURIComponent(docket.id)}/labour/${encodeURIComponent(entryId)}`,
+        { method: 'DELETE' },
+      );
       setDocket((prev) => {
         if (!prev) return prev;
         const removed = prev.labourEntries.find((e) => e.id === entryId);
@@ -399,7 +407,10 @@ export function DocketScreen() {
     if (!docket) return;
     if (!confirmArmed(`plant-${entryId}`)) return;
     try {
-      await apiFetch(`/api/dockets/${docket.id}/plant/${entryId}`, { method: 'DELETE' });
+      await apiFetch(
+        `/api/dockets/${encodeURIComponent(docket.id)}/plant/${encodeURIComponent(entryId)}`,
+        { method: 'DELETE' },
+      );
       setDocket((prev) => {
         if (!prev) return prev;
         const removed = prev.plantEntries.find((e) => e.id === entryId);
@@ -443,8 +454,10 @@ export function DocketScreen() {
   const plantEntries = docket?.plantEntries ?? [];
 
   const canEdit = isEditableDocketStatus(docket?.status);
+  const canWrite = canEdit && isOnline;
   const canSubmit = Boolean(
     docket &&
+    isOnline &&
     (docket.status === 'draft' || docket.status === 'rejected') &&
     (labourEntries.length > 0 || plantEntries.length > 0),
   );
@@ -536,7 +549,11 @@ export function DocketScreen() {
     <span className="flex items-center gap-2">
       <span className="shell-mono">{headerDateLabel}</span>
       {canEdit ? (
-        <span>Saved automatically — submit at knock-off</span>
+        <span>
+          {isOnline
+            ? 'Saved automatically — submit at knock-off'
+            : 'Offline — reconnect to edit this docket'}
+        </span>
       ) : (
         <span>
           {labourEntries.length + plantEntries.length} entries · {formatCurrency(totalCost)}
@@ -554,9 +571,9 @@ export function DocketScreen() {
           type="button"
           className={cn(
             'shell-primary-btn',
-            (!queryResponse.trim() || respondingToQuery) && 'opacity-50',
+            (!isOnline || !queryResponse.trim() || respondingToQuery) && 'opacity-50',
           )}
-          disabled={!queryResponse.trim() || respondingToQuery}
+          disabled={!isOnline || !queryResponse.trim() || respondingToQuery}
           onClick={respondToQuery}
           aria-label="Send answer and resubmit"
         >
@@ -660,6 +677,15 @@ export function DocketScreen() {
         </div>
       )}
 
+      {canEdit && !isOnline && (
+        <div className="shell-notice shell-notice-warn" role="status">
+          <AlertTriangle size={19} aria-hidden="true" className="mt-px shrink-0 text-warning" />
+          <span>
+            Dockets need a connection. Reconnect before adding hours, editing notes, or submitting.
+          </span>
+        </div>
+      )}
+
       {/* Lots-module-off / no-lots notices (classic copy) */}
       {canEdit &&
         (lotsModuleDisabled ? (
@@ -711,7 +737,7 @@ export function DocketScreen() {
                 </span>
               )}
             </div>
-            {canEdit && (
+            {canWrite && (
               <button
                 type="button"
                 onClick={() => deleteLabourEntry(entry.id)}
@@ -733,7 +759,7 @@ export function DocketScreen() {
           </div>
         );
       })}
-      {canEdit && (
+      {canWrite && (
         <button
           type="button"
           className="shell-addline"
@@ -775,7 +801,7 @@ export function DocketScreen() {
                 <span className="hrs line-through">was {formatCurrency(entry.submittedCost)}</span>
               )}
             </div>
-            {canEdit && (
+            {canWrite && (
               <button
                 type="button"
                 onClick={() => deletePlantEntry(entry.id)}
@@ -797,7 +823,7 @@ export function DocketScreen() {
           </div>
         );
       })}
-      {canEdit && (
+      {canWrite && (
         <button
           type="button"
           className="shell-addline"
@@ -819,7 +845,8 @@ export function DocketScreen() {
             className="shell-notes"
             value={queryResponse}
             onChange={(e) => setQueryResponse(e.target.value)}
-            placeholder="Reply to the foreman…"
+            disabled={!isOnline}
+            placeholder={isOnline ? 'Reply to the foreman…' : 'Reconnect to reply…'}
             aria-label="Your answer to the foreman"
           />
         </>
@@ -828,7 +855,7 @@ export function DocketScreen() {
           <div className="shell-sect" style={{ marginTop: 6 }}>
             <span className="t">NOTES</span>
           </div>
-          {canEdit ? (
+          {canWrite ? (
             <textarea
               className="shell-notes"
               value={notes}

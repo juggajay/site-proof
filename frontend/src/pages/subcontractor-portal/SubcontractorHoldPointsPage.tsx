@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Hand, AlertCircle, CheckCircle2, Clock, AlertTriangle } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryKeys';
@@ -85,11 +85,16 @@ function getStatusBadge(status: string) {
 
 export function SubcontractorHoldPointsPage() {
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
+  const requestedProjectId = searchParams.get('projectId');
   const { data: company, isLoading: companyLoading } = useQuery({
-    queryKey: queryKeys.portalCompanies(user?.id),
+    queryKey: [...queryKeys.portalCompanies(user?.id), requestedProjectId ?? 'default'],
     queryFn: async () => {
+      const query = requestedProjectId
+        ? `?projectId=${encodeURIComponent(requestedProjectId)}`
+        : '';
       const res = await apiFetch<{ company: SubcontractorCompany }>(
-        '/api/subcontractors/my-company',
+        `/api/subcontractors/my-company${query}`,
       );
       return res.company;
     },
@@ -105,7 +110,7 @@ export function SubcontractorHoldPointsPage() {
     queryKey: queryKeys.portalHoldPoints(user?.id, company?.projectId),
     queryFn: async () => {
       const res = await apiFetch<{ holdPoints: ApiHoldPoint[] }>(
-        `/api/holdpoints/project/${company!.projectId}?subcontractorView=true`,
+        `/api/holdpoints/project/${encodeURIComponent(company!.projectId)}?subcontractorView=true`,
       );
       return (res.holdPoints || []).map(normalizeHoldPoint);
     },
