@@ -43,13 +43,7 @@ export function useItpMobileActions({
   ): Promise<boolean> => {
     if (!lotId) return false;
 
-    await updateChecklistItemOffline(
-      lotId,
-      checklistItemId,
-      offlineStatus,
-      notes,
-      'You (Offline)',
-    );
+    await updateChecklistItemOffline(lotId, checklistItemId, offlineStatus, notes, 'You (Offline)');
 
     const optimistic: ITPCompletion = {
       id: `offline-${checklistItemId}-${Date.now()}`,
