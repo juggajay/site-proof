@@ -9,6 +9,7 @@ import webhooksRouter, {
   deliverWebhook,
   generateSignature,
   sanitizeWebhookUrlForLog,
+  triggerWebhooks,
   verifySignature,
 } from './webhooks.js';
 import { prisma } from '../lib/prisma.js';
@@ -1422,6 +1423,45 @@ describe('Webhooks API', () => {
     });
 
     describe('webhook delivery hardening', () => {
+      it('should skip stale encrypted secrets without blocking other matching webhooks', async () => {
+        process.env.ENCRYPTION_KEY = TEST_ENCRYPTION_KEY;
+        const staleRes = await request(app)
+          .post('/api/webhooks')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            url: 'https://stale.example.com/webhook',
+            events: ['lot.updated'],
+          });
+        expect(staleRes.status).toBe(201);
+
+        process.env.ENCRYPTION_KEY = 'b'.repeat(64);
+        const currentRes = await request(app)
+          .post('/api/webhooks')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            url: 'https://current.example.com/webhook',
+            events: ['lot.updated'],
+          });
+        expect(currentRes.status).toBe(201);
+
+        const fetchMock = vi
+          .spyOn(globalThis, 'fetch')
+          .mockResolvedValue(new Response('accepted', { status: 200 }));
+        const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+        await triggerWebhooks(companyId, 'lot.updated', { lotId: 'lot-1' });
+        for (let attempt = 0; attempt < 10 && fetchMock.mock.calls.length === 0; attempt += 1) {
+          await new Promise((resolve) => setImmediate(resolve));
+        }
+
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(fetchMock.mock.calls[0]?.[0]).toBe('https://current.example.com/webhook');
+
+        const logs = consoleSpy.mock.calls.flat().map(String).join('\n');
+        expect(logs).toContain('Failed to decrypt secret');
+        expect(logs).toContain('https://stale.example.com/webhook');
+      });
+
       it('should redact webhook URL query values in delivery error logs', async () => {
         const config = await createDeliveryConfig(
           'https://example.com/webhook?token=secret-token&tenant=siteproof',
