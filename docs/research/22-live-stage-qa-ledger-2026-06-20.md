@@ -16,6 +16,110 @@ keep going until the app has been exercised end to end.
   `1secmail.com` from an old Codex process, so future email QA must use Jay's
   nominated inbox, a trusted mailbox, or Resend's safe test recipient.
 
+## Stage 38 - Reports Project-Scoped Commercial Access QA
+
+Status: landed in PR #1080; PR CI, post-merge master CI, full post-merge E2E,
+and production health checks passed.
+
+Scope:
+
+- Reports and Analytics page behavior for Lot Status, ITP Summary, NCR Summary,
+  Claims, and Schedule Reports.
+- Mixed-role users where the logged-in account has a broad dashboard role but
+  only viewer access on the currently selected project.
+- Claims tab and scheduled-report control visibility before and after project
+  detail role resolution.
+- Automatic report loading, transient report-load failures, retry behavior, and
+  duplicate automatic request suppression.
+
+Subagent coverage:
+
+- A hold-point release reviewer mapped the next high-value QA target as the
+  internal and public hold-point release lifecycle, including
+  `/projects/:projectId/hold-points`, `/hp-release/:token`,
+  `POST /api/holdpoints/request-release`, `POST /api/holdpoints/:id/release`,
+  `POST /api/holdpoints/:id/chase`, and public token release endpoints.
+- A shell-surface reviewer mapped remaining browser coverage gaps across
+  `/p/*` subcontractor mobile routes, `/m/*` foreman mobile routes, public
+  hold-point release links, webhook surfaces, and API-key surfaces.
+- Subagents were read-only. No files were edited by them.
+
+Confirmed issues fixed locally:
+
+- `ReportsPage` exposed commercial Claims and Schedule Reports controls from a
+  coarse authenticated/dashboard role before it knew the user's role on the
+  currently selected project.
+- A mixed-role user who was only `viewer` on the active project could briefly
+  see commercial report controls and load Claims report data in the mocked E2E
+  path.
+- Reports now wait for the project detail response and use
+  `project.currentUserRole` before exposing commercial controls.
+- Users without commercial access on the selected project are redirected away
+  from the Claims tab after the project-scoped role is resolved.
+- Automatic report loads are now guarded against duplicate same-project/same-tab
+  requests while explicit Refresh still retries after a transient failure.
+
+Related merged work:
+
+- #1080 - Fix reports project-role gating, merged as `1c5ccda0`.
+
+Verification:
+
+- Browser-backed local repro failed before the fix with Claims and Schedule
+  Reports visible for `mixed-role@example.com` while the mocked project role was
+  `viewer`.
+- Local headed Playwright targeted check passed:
+  - `npx playwright test e2e/reports.spec.ts -g "uses the current project role" --project=chromium --headed`
+- Local retry regression check passed:
+  - `npx playwright test e2e/reports.spec.ts -g "retryable report load error" --project=chromium`
+- Local full reports E2E file passed:
+  - `npx playwright test e2e/reports.spec.ts --project=chromium`
+- Local frontend checks passed:
+  - `npm run test:unit -- src/pages/reports/ReportsPage.test.tsx`
+  - `npm run type-check`
+  - `npm run lint`, passing with the existing unrelated
+    `src/lib/theme.tsx` fast-refresh warning
+  - `npm run format:check`
+- `git diff --check` passed.
+- `fallow audit --base origin/master --format json --quiet` returned a warning
+  for repeated E2E route-mock structure in `reports.spec.ts`; no dead code or
+  introduced complexity was reported.
+- PR #1080 checks passed: Detect changes, Backend skipped as frontend-only,
+  Frontend, Frontend PR E2E smoke, Vercel ignored-build status, and Vercel
+  Preview Comments.
+- Master CI run `27924886026` passed after merge, including Backend, Frontend,
+  and full post-merge Frontend E2E.
+- After merge, production health checks returned HTTP 200 for:
+  - `https://site-proof-production.up.railway.app/ready`
+  - `https://site-proof.vercel.app`
+
+Not live-exercised in this stage:
+
+- Real production scheduled-report creation or delivery. This stage focused on
+  role-gated report access and report-load behavior through mocked browser E2E,
+  unit tests, PR CI, and post-merge master CI.
+- Jay's visible Chrome browser session. The in-app browser runtime was
+  unavailable, and the connected Chrome tab reported automation was blocked by
+  another extension UI overlay, so the browser evidence used headed Playwright.
+
+Remaining findings for a later pass:
+
+- Next browser stage should target the hold-point release lifecycle end to end,
+  including internal request/release/chase, the public external-superintendent
+  token flow, evidence links, release attribution, ITP completion pickup, lot
+  conformance progression, and related notifications/webhooks.
+- The `/p/*` subcontractor mobile shell and `/m/*` foreman mobile shell still
+  need broader production browser passes now that the other agent has been
+  building those surfaces.
+- Webhook/API-key product surfaces need either visible UI coverage or an
+  explicit product decision that they remain API/admin-only for launch.
+
+Artifacts:
+
+- No bearer tokens, session cookies, generated passwords, production secrets,
+  external-superintendent emails, report recipient emails, or browser-session
+  data were committed or copied into this ledger.
+
 ## Stage 33 - Company Seat-Limit Recovery QA
 
 Status: landed in PR #1070; PR CI, post-merge master CI, full post-merge E2E,
