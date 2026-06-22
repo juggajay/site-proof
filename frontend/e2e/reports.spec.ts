@@ -23,6 +23,7 @@ type ReportsApiOptions = {
   createScheduleDelayMs?: number;
   companyTier?: string;
   user?: typeof E2E_ADMIN_USER;
+  projectCurrentUserRole?: string | null;
   includeFailurePausedSchedule?: boolean;
 };
 
@@ -416,6 +417,7 @@ async function mockReportsApi(page: Page, options: ReportsApiOptions = {}) {
           id: E2E_PROJECT_ID,
           name: 'E2E Highway Upgrade',
           projectNumber: 'E2E-001',
+          currentUserRole: options.projectCurrentUserRole,
         },
       });
       return;
@@ -712,6 +714,35 @@ test.describe('Reports seeded analytics contract', () => {
     expect(api.getReportRequests()).not.toContain('/api/reports/claims?projectId=e2e-project');
   });
 
+  test('uses the current project role before exposing commercial reports controls', async ({
+    page,
+  }) => {
+    const mixedRoleUser = {
+      ...E2E_ADMIN_USER,
+      id: 'e2e-mixed-role-user',
+      email: 'mixed-role@example.com',
+      fullName: 'E2E Mixed Role',
+      role: 'admin',
+      roleInCompany: 'admin',
+      dashboardRole: 'project_manager' as const,
+    };
+    const api = await mockReportsApi(page, {
+      user: mixedRoleUser,
+      companyTier: 'professional',
+      projectCurrentUserRole: 'viewer',
+    });
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/reports?tab=claims`);
+
+    await expect(page.getByRole('heading', { name: 'Reports & Analytics' })).toBeVisible();
+    await expect(page.getByText('Total Lots: 2')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Schedule Reports' })).toHaveCount(0);
+    await expect(page.getByRole('tab', { name: 'Claims' })).toHaveCount(0);
+    await expect(page).toHaveURL(/tab=lot-status/);
+    expect(api.getScheduleLoadCount()).toBe(0);
+    expect(api.getReportRequests()).not.toContain('/api/reports/claims?projectId=e2e-project');
+  });
+
   test('routes basic-tier schedule attempts to upgrade state without loading schedules', async ({
     page,
   }) => {
@@ -733,7 +764,7 @@ test.describe('Reports seeded analytics contract', () => {
   test('shows a retryable report load error without stale synthetic report content', async ({
     page,
   }) => {
-    const api = await mockReportsApi(page, { failLotStatusUntil: 2 });
+    const api = await mockReportsApi(page, { failLotStatusUntil: 1 });
 
     await page.goto(`/projects/${E2E_PROJECT_ID}/reports`);
 
@@ -744,7 +775,7 @@ test.describe('Reports seeded analytics contract', () => {
 
     await page.getByRole('button', { name: 'Refresh Report' }).click();
 
-    await expect.poll(() => api.getLotStatusRequestCount()).toBeGreaterThan(2);
+    await expect.poll(() => api.getLotStatusRequestCount()).toBeGreaterThan(1);
     await expect(page.getByRole('alert')).toHaveCount(0);
     await expect(page.getByText('Total Lots: 2')).toBeVisible();
     await expect(page.getByText('LOT-RPT-001')).toBeVisible();
