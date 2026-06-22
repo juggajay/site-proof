@@ -25,6 +25,7 @@ import { cn } from '@/lib/utils';
 import { useOfflineStatus } from '@/lib/useOfflineStatus';
 import { useLotsShellData } from '../lots/useLotsShellData';
 import { ShellScreen } from '../../components/ShellScreen';
+import { withProjectQuery } from '../../shellPaths';
 import { usePhotosShellContext } from './photosShellContext';
 import { useShellPhotoParam } from './useShellPhotoParam';
 import { usePhotoRefile } from './usePhotoRefile';
@@ -47,7 +48,7 @@ export function PhotoDetailScreen() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [lotSearch, setLotSearch] = useState('');
 
-  const backPath = projectId ? `/m/photos?projectId=${projectId}` : '/m/photos';
+  const backPath = withProjectQuery('/m/photos', projectId);
 
   const filteredLots = useMemo(() => {
     const q = lotSearch.trim().toLowerCase();

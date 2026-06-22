@@ -26,6 +26,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Camera, Check, AlertTriangle, Lock, ChevronLeft } from 'lucide-react';
 import { ShellScreen } from '../../components/ShellScreen';
+import { withProjectQuery } from '../../shellPaths';
 import { useLotsShellContext } from './lotsShellContext';
 import { useShellItpRun } from './useShellItpRun';
 import { useShellLotParam } from './useShellLotParam';
@@ -270,9 +271,7 @@ export function ItpRunScreen() {
             <button
               type="button"
               className="shell-primary-btn"
-              onClick={() =>
-                navigate(`/m/lots/${lotId}${projectId ? `?projectId=${projectId}` : ''}`)
-              }
+              onClick={() => navigate(withProjectQuery(`/m/lots/${lotId}`, projectId))}
             >
               Back to lot
             </button>

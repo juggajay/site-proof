@@ -22,6 +22,7 @@ import { motion, useMotionValue, useTransform, useReducedMotion } from 'framer-m
 import { ArrowRight, AlertTriangle, Loader2, ChevronRight, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ShellScreen } from '../../components/ShellScreen';
+import { withProjectQuery } from '../../shellPaths';
 import { useDiaryShellData } from './useDiaryShellData';
 import { useEffectiveProjectId } from '@/hooks/useEffectiveProjectId';
 import { apiFetch, isRetriableNetworkFailure } from '@/lib/api';
@@ -156,7 +157,7 @@ export function ReviewScreen() {
   const [submitWarnings] = useState<string[]>([]);
   const isSubmitted = diary?.status === 'submitted';
 
-  const backPath = projectId ? `/m/diary?projectId=${projectId}` : '/m/diary';
+  const backPath = withProjectQuery('/m/diary', projectId);
 
   // Weather description for summary card
   const weatherDesc = diary?.weatherConditions
@@ -196,16 +197,12 @@ export function ReviewScreen() {
         body: submitWarnings.length > 0 ? JSON.stringify({ acknowledgeWarnings: true }) : undefined,
       });
       triggerHaptic('success');
-      const donePath = projectId ? `/m/diary/done?projectId=${projectId}` : '/m/diary/done';
-      navigate(donePath, { replace: true });
+      navigate(withProjectQuery('/m/diary/done', projectId), { replace: true });
     } catch (err) {
       if (isRetriableNetworkFailure(err)) {
         // Offline — queue and show the offline ceremony
         triggerHaptic('light');
-        const donePath = projectId
-          ? `/m/diary/done?projectId=${projectId}&queued=1`
-          : '/m/diary/done?queued=1';
-        navigate(donePath, { replace: true });
+        navigate(withProjectQuery('/m/diary/done', projectId, { queued: 1 }), { replace: true });
         return;
       }
       logError('Diary submit error:', err);

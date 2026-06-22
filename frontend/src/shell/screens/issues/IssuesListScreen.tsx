@@ -21,6 +21,7 @@ import { cn } from '@/lib/utils';
 import { useEffectiveProjectId } from '@/hooks/useEffectiveProjectId';
 import { CaptureModal } from '@/components/foreman/CaptureModal';
 import { ShellScreen } from '../../components/ShellScreen';
+import { withProjectQuery } from '../../shellPaths';
 import { useIssuesShellContext } from './issuesShellContext';
 import {
   ISSUE_FILTERS,
@@ -107,8 +108,7 @@ export function IssuesListScreen() {
 
   const visible = useMemo(() => sortIssuesForShell(filterIssues(ncrs, filter)), [ncrs, filter]);
 
-  const issueHref = (ncrId: string) =>
-    projectId ? `/m/issues/${ncrId}?projectId=${projectId}` : `/m/issues/${ncrId}`;
+  const issueHref = (ncrId: string) => withProjectQuery(`/m/issues/${ncrId}`, projectId);
 
   const sub = (
     <span className="flex items-center gap-2">

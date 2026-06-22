@@ -117,7 +117,9 @@ export function TodayWorklist() {
   } = useQuery({
     queryKey: queryKeys.foremanWorklist(projectId!),
     queryFn: () =>
-      apiFetch<TodayWorklistData>(`/api/dashboard/projects/${projectId}/foreman/today`),
+      apiFetch<TodayWorklistData>(
+        `/api/dashboard/projects/${encodeURIComponent(projectId!)}/foreman/today`,
+      ),
     enabled: !!projectId,
   });
 
@@ -134,7 +136,7 @@ export function TodayWorklist() {
   };
 
   const handleStartDiary = () => {
-    navigate(`/projects/${projectId}/diary`);
+    navigate(`/projects/${encodeURIComponent(projectId!)}/diary`);
   };
 
   const handleCapturePhoto = () => {

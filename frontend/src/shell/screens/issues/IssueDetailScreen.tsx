@@ -23,6 +23,7 @@ import { useOfflineStatus } from '@/lib/useOfflineStatus';
 import { cn } from '@/lib/utils';
 import { ROOT_CAUSE_CATEGORIES } from '@/pages/ncr/constants';
 import { ShellScreen } from '../../components/ShellScreen';
+import { withProjectQuery } from '../../shellPaths';
 import { useIssuesShellContext } from './issuesShellContext';
 import { useShellNcrParam } from './useShellNcrParam';
 import { useNcrEvidence } from './useNcrEvidence';
@@ -75,7 +76,7 @@ export function IssueDetailScreen() {
   const [rootCauseDescription, setRootCauseDescription] = useState('');
   const [proposedCorrectiveAction, setProposedCorrectiveAction] = useState('');
 
-  const backPath = projectId ? `/m/issues?projectId=${projectId}` : '/m/issues';
+  const backPath = withProjectQuery('/m/issues', projectId);
 
   // ── Loading / not-found guards ─────────────────────────────────────────────
   if (loading && !ncr) {

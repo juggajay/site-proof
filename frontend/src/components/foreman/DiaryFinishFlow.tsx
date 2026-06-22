@@ -311,7 +311,9 @@ export function DiaryFinishFlow({ isOpen, onClose, onSubmit, date }: DiaryFinish
 
     setError(null);
     try {
-      const data = await apiFetch<ApiDiary>(`/api/diary/${projectId}/${diaryDate}`);
+      const data = await apiFetch<ApiDiary>(
+        `/api/diary/${encodeURIComponent(projectId)}/${encodeURIComponent(diaryDate)}`,
+      );
       setDiary(normalizeDiaryDraft(data));
       setSubmitWarnings([]);
     } catch (err) {
@@ -387,7 +389,9 @@ export function DiaryFinishFlow({ isOpen, onClose, onSubmit, date }: DiaryFinish
   };
 
   const handleEditSection = (section: string) => {
-    navigate(`/projects/${projectId}/diary?section=${section}`);
+    navigate(
+      `/projects/${encodeURIComponent(projectId!)}/diary?section=${encodeURIComponent(section)}`,
+    );
     setSubmitWarnings([]);
     onClose();
   };
@@ -558,7 +562,7 @@ export function DiaryFinishFlow({ isOpen, onClose, onSubmit, date }: DiaryFinish
               <p className="text-muted-foreground mb-4">No diary entry for this date</p>
               <button
                 onClick={() => {
-                  navigate(`/projects/${projectId}/diary`);
+                  navigate(`/projects/${encodeURIComponent(projectId!)}/diary`);
                   onClose();
                 }}
                 className="px-6 py-3 bg-primary text-primary-foreground rounded-lg font-medium touch-manipulation min-h-[48px]"

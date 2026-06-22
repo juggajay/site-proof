@@ -12,6 +12,7 @@ import { useNavigate } from 'react-router-dom';
 import { Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ShellScreen } from '../../components/ShellScreen';
+import { withProjectQuery } from '../../shellPaths';
 import { useDiaryShellData } from './useDiaryShellData';
 import { useEffectiveProjectId } from '@/hooks/useEffectiveProjectId';
 import {
@@ -66,7 +67,7 @@ export function DelayFormScreen() {
   });
   const hoursError = getOptionalDiaryHoursError(durationHours);
 
-  const backPath = projectId ? `/m/diary/work?projectId=${projectId}` : '/m/diary/work';
+  const backPath = withProjectQuery('/m/diary/work', projectId);
 
   const handleDiscardDraft = () => {
     setDelayType('');

@@ -13,6 +13,7 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ShellScreen } from '../../components/ShellScreen';
+import { withProjectQuery } from '../../shellPaths';
 import { useLotsShellContext } from './lotsShellContext';
 import {
   deriveLotShellMeta,
@@ -113,8 +114,7 @@ export function LotsListScreen() {
     </span>
   );
 
-  const lotHref = (lotId: string) =>
-    projectId ? `/m/lots/${lotId}?projectId=${projectId}` : `/m/lots/${lotId}`;
+  const lotHref = (lotId: string) => withProjectQuery(`/m/lots/${lotId}`, projectId);
 
   if (loading) {
     return (

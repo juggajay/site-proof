@@ -18,6 +18,7 @@ import { useNavigate } from 'react-router-dom';
 import { Check, ChevronRight, Lock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ShellScreen } from '../../components/ShellScreen';
+import { withProjectQuery } from '../../shellPaths';
 import { deriveDiaryStepState, crewDescription, workDescription } from './diaryStepState';
 import { useDiaryShellData } from './useDiaryShellData';
 import { useEffectiveProjectId } from '@/hooks/useEffectiveProjectId';
@@ -110,8 +111,7 @@ export function PathScreen() {
   const stepNum = stepState.allDone ? 4 : stepState.currentStep + 1;
 
   const navTo = (sub: string) => {
-    const base = projectId ? `/m/diary/${sub}?projectId=${projectId}` : `/m/diary/${sub}`;
-    navigate(base);
+    navigate(withProjectQuery(`/m/diary/${sub}`, projectId));
   };
 
   // Today date string for sub-line

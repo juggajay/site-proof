@@ -16,6 +16,71 @@ keep going until the app has been exercised end to end.
   `1secmail.com` from an old Codex process, so future email QA must use Jay's
   nominated inbox, a trusted mailbox, or Resend's safe test recipient.
 
+## Stage 47 - Foreman Mobile Shell Project Scope QA
+
+Status: local code fix and verification complete. PR/CI/merge pending.
+
+Scope:
+
+- Browser-level QA for the new foreman `/m/*` mobile shell using a mobile
+  viewport and an intentionally awkward project id containing `/`, spaces, and
+  `&`.
+- Covered home, lots, lot hub, ITP runner, hold-point gate display, diary path,
+  dockets query flow, NCR response flow, photos unfiled/refile flow, and
+  drawings signed-URL open flow.
+- Rechecked old foreman mobile navigation/worklist paths for the same project
+  id encoding class.
+
+Confirmed issues fixed:
+
+- `useEffectiveProjectId` ignored `?projectId=...` on `/m/*` routes and fell
+  back to the foreman's active project. On a shared device or multi-project
+  foreman account this could make the URL show one project while the shell
+  loaded another.
+- Several foreman shell links and API calls manually interpolated `projectId`
+  into query strings or path segments. This could corrupt project scope when a
+  project id contained URL-reserved characters, and made the URL/query behavior
+  inconsistent across shell surfaces.
+- The older foreman mobile bottom navigation, today worklist, dashboard cards,
+  and diary finish flow had the same raw path-segment interpolation pattern for
+  project ids.
+
+Implementation notes:
+
+- Added `frontend/src/shell/shellPaths.ts` with a small `withProjectQuery`
+  helper for shell links and API query strings.
+- Updated foreman shell screens to preserve the selected project via encoded
+  query params across home, diary, lots, dockets, issues, photos, and docs.
+- Encoded project ids in foreman/today API path segments and legacy foreman
+  mobile route construction.
+- Added `frontend/e2e/foreman-mobile-shell.spec.ts` to exercise the mobile shell
+  in a real browser with route/API assertions.
+
+Verification:
+
+- `npm run test:unit -- src/hooks/useEffectiveProjectId.test.ts` passed
+  (9 tests).
+- `npx playwright test e2e/foreman-mobile-shell.spec.ts --reporter=line`
+  passed.
+- `npm run type-check` passed.
+- `npm run lint` passed with one existing unrelated warning in
+  `src/lib/theme.tsx`.
+- `npm run test:coverage` passed: 291 files, 2524 tests.
+
+Not live-exercised in this stage:
+
+- Production role choreography with real persisted users was not repeated in
+  this local PR stage.
+- Real external hold-point email click-through remains queued for a later
+  inbox-backed stage.
+- Offline photo/diary retry and orphan cleanup were not deep-tested here.
+
+Next stage candidate:
+
+- Public/email-backed flows: magic login, invites, public hold-point release
+  from a delivered email, scheduled report delivery, and external evidence
+  links using Jay's trusted mailbox rather than disposable inbox APIs.
+
 ## Stage 46 - Same-Project Subcontractor Company Scope Residue
 
 Status: landed in PR #1096, with E2E expectation follow-up PR #1097. PR CI,

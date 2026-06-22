@@ -14,6 +14,7 @@ import { useState } from 'react';
 import { Plus, Users, Wrench, Loader2, Copy } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ShellScreen } from '../../components/ShellScreen';
+import { withProjectQuery } from '../../shellPaths';
 import { useDiaryShellData } from './useDiaryShellData';
 import { useEffectiveProjectId } from '@/hooks/useEffectiveProjectId';
 import { AddManualLabourPlantSheet } from '@/components/foreman/sheets/AddManualLabourPlantSheet';
@@ -32,7 +33,7 @@ export function CrewScreen() {
   const draftKey =
     projectId && !editingEntry ? sheetDraftKey(projectId, todayKey, 'manual') : undefined;
 
-  const backPath = projectId ? `/m/diary?projectId=${projectId}` : '/m/diary';
+  const backPath = withProjectQuery('/m/diary', projectId);
 
   const personnel = timeline.filter((e) => e.type === 'personnel');
   const plant = timeline.filter((e) => e.type === 'plant');

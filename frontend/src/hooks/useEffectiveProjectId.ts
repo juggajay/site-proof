@@ -1,4 +1,4 @@
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
@@ -34,6 +34,9 @@ export interface EffectiveProjectIdResult {
  */
 export function useEffectiveProjectId(): EffectiveProjectIdResult {
   const { projectId: urlProjectId } = useParams();
+  const [searchParams] = useSearchParams();
+  const queryProjectId = searchParams.get('projectId');
+  const explicitProjectId = urlProjectId ?? queryProjectId;
   const { user } = useAuth();
   const isForeman = isForemanDashboardUser(user);
 
@@ -41,15 +44,15 @@ export function useEffectiveProjectId(): EffectiveProjectIdResult {
   // the URL. `/api/dashboard/foreman` returns the foreman's current project
   // regardless of route; the 'default' key matches ForemanMobileDashboard's
   // project-less render so the two observers share one request.
-  const shouldResolveFallback = !urlProjectId && isForeman;
+  const shouldResolveFallback = !explicitProjectId && isForeman;
   const { data, isLoading } = useQuery({
     queryKey: queryKeys.foremanDashboard('default'),
     queryFn: () => apiFetch<ForemanDashboardProjectResponse>('/api/dashboard/foreman'),
     enabled: shouldResolveFallback,
   });
 
-  if (urlProjectId) {
-    return { projectId: urlProjectId, isResolving: false, hasNoProject: false };
+  if (explicitProjectId) {
+    return { projectId: explicitProjectId, isResolving: false, hasNoProject: false };
   }
 
   if (!shouldResolveFallback) {
