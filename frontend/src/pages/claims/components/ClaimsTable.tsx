@@ -22,6 +22,7 @@ import {
 import { downloadCsv } from '@/lib/csv';
 import { openDocumentAccessUrl } from '@/lib/documentAccess';
 import { logError } from '@/lib/logger';
+import { toast } from '@/components/ui/toaster';
 
 interface ClaimsTableProps {
   claims: Claim[];
@@ -111,6 +112,11 @@ function CertificationReadBack({ claim }: { claim: Claim }) {
           onClick={() => {
             void openDocumentAccessUrl(certificationDocumentId).catch((error) => {
               logError('Failed to open certification document', error);
+              toast({
+                title: 'Certificate unavailable',
+                description: 'The certificate link could not be opened. Please try again.',
+                variant: 'error',
+              });
             });
           }}
           className="text-primary underline hover:no-underline"

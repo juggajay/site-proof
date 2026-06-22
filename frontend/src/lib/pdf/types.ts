@@ -264,6 +264,14 @@ export interface ClaimNcr {
   status: string;
 }
 
+export interface ClaimEvidenceDocument {
+  id: string;
+  filename: string;
+  documentType: string;
+  caption: string | null;
+  uploadedAt: string | null;
+}
+
 export interface ClaimEvidencePackageData {
   claim: {
     id: string;
@@ -302,11 +310,11 @@ export interface ClaimEvidencePackageData {
       templateName: string;
       checklistItems: unknown[];
       completions: ClaimItpCompletion[];
-      holdPoints: ClaimHoldPoint[];
     } | null;
+    holdPoints: ClaimHoldPoint[];
     testResults: ClaimTestResult[];
     ncrs: ClaimNcr[];
-    documents: unknown[];
+    documents: ClaimEvidenceDocument[];
     summary: {
       testResultCount: number;
       passedTestCount: number;

@@ -2689,6 +2689,20 @@ describe('Progress Claims API', () => {
         },
       });
 
+      await prisma.document.create({
+        data: {
+          projectId,
+          lotId: evidenceLot.id,
+          documentType: 'photo',
+          category: 'field_evidence',
+          filename: 'evidence-lot-proof-photo.jpg',
+          fileUrl: '/uploads/documents/evidence-lot-proof-photo.jpg',
+          uploadedById: userId,
+          uploadedAt: new Date('2025-02-20T10:00:00.000Z'),
+          caption: 'Evidence lot proof photo',
+        },
+      });
+
       const claim = await prisma.progressClaim.create({
         data: {
           projectId,
@@ -2725,6 +2739,16 @@ describe('Progress Claims API', () => {
       expect(res.body.project).toBeDefined();
       expect(res.body.lots).toBeDefined();
       expect(Array.isArray(res.body.lots)).toBe(true);
+      expect(res.body.summary.totalPhotos).toBe(1);
+      expect(res.body.lots[0].summary.photoCount).toBe(1);
+      expect(res.body.lots[0].documents).toEqual([
+        expect.objectContaining({
+          filename: 'evidence-lot-proof-photo.jpg',
+          documentType: 'photo',
+          caption: 'Evidence lot proof photo',
+          uploadedAt: '2025-02-20T10:00:00.000Z',
+        }),
+      ]);
     });
 
     it('preserves a zero claimed percentage in the evidence package', async () => {

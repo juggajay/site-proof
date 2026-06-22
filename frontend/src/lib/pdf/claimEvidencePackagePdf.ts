@@ -47,6 +47,16 @@ export async function generateClaimEvidencePackagePDF(
     }).format(amount);
   };
 
+  const getLotDocuments = (lot: ClaimEvidencePackageData['lots'][number]) =>
+    Array.isArray(lot.documents)
+      ? lot.documents.filter(
+          (document) =>
+            document &&
+            typeof document.filename === 'string' &&
+            document.filename.trim().length > 0,
+        )
+      : [];
+
   // ========== COVER PAGE ==========
   doc.setFontSize(24);
   doc.setFont('helvetica', 'bold');
@@ -214,8 +224,16 @@ export async function generateClaimEvidencePackagePDF(
     yPos += 15;
   }
 
-  // ========== INDIVIDUAL LOT DETAILS ==========
-  if (options.includeLotDetails) {
+  // ========== LOT-LEVEL SECTIONS ==========
+  const includeLotLevelSections =
+    options.includeLotDetails ||
+    options.includeITPChecklists ||
+    options.includeTestResults ||
+    options.includeNCRs ||
+    options.includeHoldPoints ||
+    options.includePhotos;
+
+  if (includeLotLevelSections) {
     (data.lots ?? []).forEach((lot, lotIdx) => {
       // Each lot starts on a new page (or at least has enough space)
       if (lotIdx > 0 || yPos > pageHeight - 100) {
@@ -234,21 +252,23 @@ export async function generateClaimEvidencePackagePDF(
 
       doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');
-      if (lot.description) {
-        doc.text(lot.description.slice(0, 80), margin, yPos);
-        yPos += 5;
-      }
-      if (lot.activityType) {
-        doc.text(`Activity: ${lot.activityType}`, margin, yPos);
-        yPos += 5;
-      }
-      if (lot.chainageStart !== null && lot.chainageEnd !== null) {
-        doc.text(`Chainage: ${lot.chainageStart} - ${lot.chainageEnd}`, margin, yPos);
-        yPos += 5;
-      }
-      if (lot.layer) {
-        doc.text(`Layer: ${lot.layer}`, margin, yPos);
-        yPos += 5;
+      if (options.includeLotDetails) {
+        if (lot.description) {
+          doc.text(lot.description.slice(0, 80), margin, yPos);
+          yPos += 5;
+        }
+        if (lot.activityType) {
+          doc.text(`Activity: ${lot.activityType}`, margin, yPos);
+          yPos += 5;
+        }
+        if (lot.chainageStart !== null && lot.chainageEnd !== null) {
+          doc.text(`Chainage: ${lot.chainageStart} - ${lot.chainageEnd}`, margin, yPos);
+          yPos += 5;
+        }
+        if (lot.layer) {
+          doc.text(`Layer: ${lot.layer}`, margin, yPos);
+          yPos += 5;
+        }
       }
 
       // Status badge
@@ -280,18 +300,24 @@ export async function generateClaimEvidencePackagePDF(
         );
         yPos += 4;
 
-        // Hold points (conditional)
-        if (options.includeHoldPoints) {
-          const releasedHP = (lot.itp.holdPoints ?? []).filter(
-            (hp) => hp.status === 'released',
-          ).length;
-          const totalHP = (lot.itp.holdPoints ?? []).length;
-          if (totalHP > 0) {
-            doc.text(`Hold Points: ${releasedHP}/${totalHP} released`, margin, yPos);
-            yPos += 4;
-          }
-        }
         yPos += 4;
+      }
+
+      // Hold points (conditional)
+      if (options.includeHoldPoints) {
+        const releasedHP = (lot.holdPoints ?? []).filter((hp) => hp.status === 'released').length;
+        const totalHP = (lot.holdPoints ?? []).length;
+        if (totalHP > 0) {
+          checkPageBreak(10);
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(10);
+          doc.text('Hold Points', margin, yPos);
+          yPos += 5;
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(9);
+          doc.text(`Hold Points: ${releasedHP}/${totalHP} released`, margin, yPos);
+          yPos += 8;
+        }
       }
 
       // Test Results Summary (conditional)
@@ -382,13 +408,70 @@ export async function generateClaimEvidencePackagePDF(
       if (options.includePhotos && lot.summary.photoCount > 0) {
         checkPageBreak(10);
         doc.setFontSize(9);
-        doc.text(`Photos: ${lot.summary.photoCount} attached to lot`, margin, yPos);
+        doc.text(`Photos recorded: ${lot.summary.photoCount}`, margin, yPos);
         yPos += 8;
       }
 
       drawLine();
       yPos += 5;
     });
+  }
+
+  if (options.includePhotos) {
+    const lotsWithDocuments = (data.lots ?? [])
+      .map((lot) => ({ lot, documents: getLotDocuments(lot) }))
+      .filter(({ documents }) => documents.length > 0);
+
+    if (lotsWithDocuments.length > 0) {
+      doc.addPage();
+      yPos = margin;
+
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(0, 0, 0);
+      doc.text('EVIDENCE MANIFEST', margin, yPos);
+      yPos += 8;
+
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.text(
+        'Document evidence recorded against claimed lots. Use SiteProof document IDs to retrieve controlled originals.',
+        margin,
+        yPos,
+      );
+      yPos += 10;
+
+      lotsWithDocuments.forEach(({ lot, documents }) => {
+        checkPageBreak(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(10);
+        doc.text(`LOT ${lot.lotNumber}`, margin, yPos);
+        yPos += 6;
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        documents.forEach((document) => {
+          checkPageBreak(12);
+          doc.text(document.filename.slice(0, 90), margin + 3, yPos);
+          yPos += 4;
+
+          const details = [document.documentType || 'document', document.caption]
+            .filter((value): value is string => Boolean(value))
+            .join(' | ');
+          doc.text(details.slice(0, 110), margin + 6, yPos);
+          yPos += 4;
+
+          if (document.uploadedAt) {
+            const uploadedDate = new Date(document.uploadedAt).toLocaleDateString('en-AU');
+            doc.text(`Uploaded: ${uploadedDate} | Document ID: ${document.id}`, margin + 6, yPos);
+            yPos += 4;
+          }
+
+          yPos += 2;
+        });
+        yPos += 4;
+      });
+    }
   }
 
   // ========== FINAL PAGE - DECLARATION ==========
@@ -423,12 +506,16 @@ export async function generateClaimEvidencePackagePDF(
     );
     yPos += 5;
     doc.text(
-      'knowledge. All lots included have been completed in accordance with the contract',
+      'knowledge. It describes the work claimed in this package and the evidence available',
       margin,
       yPos,
     );
     yPos += 5;
-    doc.text('requirements and applicable standards.', margin, yPos);
+    doc.text(
+      'at generation time. Lot status and percentage complete are shown in the lot sections.',
+      margin,
+      yPos,
+    );
     yPos += 20;
 
     // Signature lines
