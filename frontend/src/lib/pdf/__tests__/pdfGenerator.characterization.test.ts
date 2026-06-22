@@ -375,7 +375,7 @@ describe('pdfGenerator characterization', () => {
         'Total: 3 | Passed: 3 | Failed: 0',
         'Conformance',
         'By: Jordan Surveyor',
-        'Photos: 6 attached to lot',
+        'Photos recorded: 6',
         'LOT: DR-014',
         'Stormwater drainage line and pits',
         'Activity: Drainage',
@@ -386,7 +386,16 @@ describe('pdfGenerator characterization', () => {
         'Total: 2 | Passed: 1 | Failed: 1',
         'Non-Conformance Reports',
         'Total: 1 | Open: 1 | Closed: 0',
-        'Photos: 3 attached to lot',
+        'Photos recorded: 3',
+        'EVIDENCE MANIFEST',
+        'LOT EW-001',
+        'EW-001-proof-photo.jpg',
+        'photo | Conformed subgrade proof photo',
+        'EW-001-compaction-certificate.pdf',
+        'test_result | Compaction certificate',
+        'LOT DR-014',
+        'DR-014-pit-photo.jpg',
+        'photo',
       ]),
     );
 
@@ -403,13 +412,49 @@ describe('pdfGenerator characterization', () => {
         'DECLARATION',
         'This evidence package contains the supporting documentation for Progress Claim',
         '#7 in the amount of $248,500.',
+        'knowledge. It describes the work claimed in this package and the evidence available',
+        'at generation time. Lot status and percentage complete are shown in the lot sections.',
         'Signature',
         'Name',
         'Date',
         'SiteProof - Civil Execution and Conformance Platform',
       ]),
     );
+    expect(textContent).not.toContain('All lots included have been completed');
     expect(textContent).not.toContain('SiteProof v2');
+  });
+
+  it('renders selected claim evidence sections when detailed lot metadata is excluded', async () => {
+    await generateClaimEvidencePackagePDF(submittedClaimEvidencePackageFixture, {
+      includeLotSummary: false,
+      includeLotDetails: false,
+      includeITPChecklists: false,
+      includeTestResults: true,
+      includeNCRs: true,
+      includeHoldPoints: true,
+      includePhotos: false,
+      includeDeclaration: false,
+    });
+
+    const text = renderedText(latestPdf());
+    const textContent = text.join('\n');
+
+    expect(text).toEqual(
+      expect.arrayContaining([
+        'LOT: EW-001',
+        'Status: conformed | Claim Amount: $185,000',
+        'Hold Points',
+        'Hold Points: 2/2 released',
+        'Test Results',
+        'Total: 3 | Passed: 3 | Failed: 0',
+        'LOT: DR-014',
+        'Hold Points: 1/2 released',
+        'Non-Conformance Reports',
+      ]),
+    );
+    expect(textContent).toContain('NCR-0021 (minor): open');
+    expect(textContent).not.toContain('Bulk earthworks to subgrade level');
+    expect(textContent).not.toContain('Chainage: 100 - 350');
   });
 
   it('preserves released hold point evidence package sections, checklist, tests, photos, and filename', async () => {

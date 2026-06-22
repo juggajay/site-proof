@@ -50,15 +50,30 @@ export const submittedClaimEvidencePackageFixture: ClaimEvidencePackageData = {
           { isCompleted: true },
           { isCompleted: true },
         ],
-        holdPoints: [{ status: 'released' }, { status: 'released' }],
       },
+      holdPoints: [{ status: 'released' }, { status: 'released' }],
       testResults: [
         { testType: 'Compaction', resultValue: 98, resultUnit: '%', passFail: 'pass' },
         { testType: 'Moisture', resultValue: 12, resultUnit: '%', passFail: 'pass' },
         { testType: 'CBR', resultValue: 45, resultUnit: '%', passFail: 'pass' },
       ],
       ncrs: [],
-      documents: [],
+      documents: [
+        {
+          id: 'doc-photo-1',
+          filename: 'EW-001-proof-photo.jpg',
+          documentType: 'photo',
+          caption: 'Conformed subgrade proof photo',
+          uploadedAt: '2026-05-20T04:30:00.000Z',
+        },
+        {
+          id: 'doc-cert-1',
+          filename: 'EW-001-compaction-certificate.pdf',
+          documentType: 'test_result',
+          caption: 'Compaction certificate',
+          uploadedAt: '2026-05-20T04:45:00.000Z',
+        },
+      ],
       summary: {
         testResultCount: 3,
         passedTestCount: 3,
@@ -91,14 +106,22 @@ export const submittedClaimEvidencePackageFixture: ClaimEvidencePackageData = {
           { isCompleted: true },
           { isCompleted: false },
         ],
-        holdPoints: [{ status: 'released' }, { status: 'pending' }],
       },
+      holdPoints: [{ status: 'released' }, { status: 'pending' }],
       testResults: [
         { testType: 'Concrete Slump', resultValue: 80, resultUnit: 'mm', passFail: 'pass' },
         { testType: 'Pipe Joint', resultValue: null, resultUnit: null, passFail: 'fail' },
       ],
       ncrs: [{ ncrNumber: 'NCR-0021', severity: 'minor', status: 'open' }],
-      documents: [],
+      documents: [
+        {
+          id: 'doc-photo-2',
+          filename: 'DR-014-pit-photo.jpg',
+          documentType: 'photo',
+          caption: null,
+          uploadedAt: '2026-05-21T04:30:00.000Z',
+        },
+      ],
       summary: {
         testResultCount: 2,
         passedTestCount: 1,
@@ -152,7 +175,8 @@ const emptyLot = {
   // lot.itp.completions.filter(...) only when itp existed, but the undefined
   // collections below crash regardless of itp.
   itp: undefined,
-  // testResults / ncrs / documents intentionally undefined (absent)
+  // holdPoints / testResults / ncrs / documents intentionally undefined (absent)
+  holdPoints: undefined,
   testResults: undefined,
   ncrs: undefined,
   documents: undefined,
@@ -168,7 +192,7 @@ const emptyLot = {
 
 /**
  * Second empty lot whose `itp` IS present but whose nested arrays
- * (completions, checklistItems, holdPoints) are undefined — exercises the
+ * (completions, checklistItems) are undefined — exercises the
  * exact crash sites from the ticket: claimEvidencePackagePdf.ts:269/280.
  */
 const itpPresentButArraysUndefinedLot = {
@@ -179,7 +203,6 @@ const itpPresentButArraysUndefinedLot = {
     templateName: 'Bare ITP',
     checklistItems: undefined,
     completions: undefined,
-    holdPoints: undefined,
   },
 };
 

@@ -57,6 +57,7 @@ export function ClaimsPage() {
 
   // Async operation state
   const [generatingEvidence, setGeneratingEvidence] = useState<string | null>(null);
+  const [evidencePackageError, setEvidencePackageError] = useState<string | null>(null);
   const [loadingCompleteness, setLoadingCompleteness] = useState(false);
   const [completenessData, setCompletenessData] = useState<CompletenessData | null>(null);
   const submittingClaimsRef = useRef(new Set<string>());
@@ -196,30 +197,39 @@ export function ClaimsPage() {
 
       submittingClaimsRef.current.add(claimId);
       try {
-        await apiFetch(
-          `/api/projects/${encodeURIComponent(projectId)}/claims/${encodeURIComponent(claimId)}`,
-          {
-            method: 'PUT',
-            body: JSON.stringify({ status: 'submitted' }),
-          },
-        );
-        const submittedAt = new Date().toISOString();
+        const data = await apiFetch<{
+          claim: Partial<Claim> & { status?: Claim['status']; submittedAt?: string | null };
+        }>(`/api/projects/${encodeURIComponent(projectId)}/claims/${encodeURIComponent(claimId)}`, {
+          method: 'PUT',
+          body: JSON.stringify({ status: 'submitted' }),
+        });
+        const submittedAt = data.claim.submittedAt ?? new Date().toISOString();
         updateClaimInCache(claimId, (c) => ({ ...c, status: 'submitted' as const, submittedAt }));
         invalidateClaimAdjacentProjectCaches();
-
-        downloadCsv(`claim-${claim.claimNumber}.csv`, [
-          ['Claim Number', claim.claimNumber],
-          ['Period', `${claim.periodStart} to ${claim.periodEnd}`],
-          ['Total Amount', `$${claim.totalClaimedAmount.toLocaleString('en-AU')}`],
-          ['Lots', claim.lotCount],
-          ['Status', 'Submitted'],
-        ]);
-        toast({
-          title: 'Claim submitted',
-          description: `Claim ${claim.claimNumber} was downloaded and marked as submitted.`,
-          variant: 'success',
-        });
         setShowSubmitModal(null);
+
+        try {
+          downloadCsv(`claim-${claim.claimNumber}.csv`, [
+            ['Claim Number', claim.claimNumber],
+            ['Period', `${claim.periodStart} to ${claim.periodEnd}`],
+            ['Total Amount', `$${claim.totalClaimedAmount.toLocaleString('en-AU')}`],
+            ['Lots', claim.lotCount],
+            ['Status', 'Submitted'],
+          ]);
+          toast({
+            title: 'Claim submitted',
+            description: `Claim ${claim.claimNumber} was downloaded and marked as submitted.`,
+            variant: 'success',
+          });
+        } catch (downloadError) {
+          logError('Error downloading submitted claim summary:', downloadError);
+          toast({
+            title: 'Claim submitted',
+            description:
+              'The claim was marked as submitted, but the summary CSV could not be downloaded.',
+            variant: 'warning',
+          });
+        }
       } catch (error) {
         logError('Error submitting claim:', error);
         toast({
@@ -423,7 +433,7 @@ export function ClaimsPage() {
       if (!projectId || evidenceRef.current === claimId) return;
 
       evidenceRef.current = claimId;
-      setShowPackageModal(null);
+      setEvidencePackageError(null);
       setGeneratingEvidence(claimId);
       const startTime = Date.now();
       try {
@@ -438,14 +448,17 @@ export function ClaimsPage() {
           description: `Generated in ${(totalTime / 1000).toFixed(1)} seconds for ${data.summary.totalLots} lots.`,
           variant: 'success',
         });
+        setShowPackageModal(null);
       } catch (error) {
         logError('Error generating evidence package', error);
+        const errorMessage = extractErrorMessage(
+          error,
+          'Failed to generate evidence package. Please try again.',
+        );
+        setEvidencePackageError(errorMessage);
         toast({
           title: 'Evidence package failed',
-          description: extractErrorMessage(
-            error,
-            'Failed to generate evidence package. Please try again.',
-          ),
+          description: errorMessage,
           variant: 'error',
         });
       } finally {
@@ -504,7 +517,10 @@ export function ClaimsPage() {
         onCertifyClaim={setShowCertificationModal}
         onRecordPayment={setShowPaymentModal}
         onCompletenessCheck={handleCompletenessCheck}
-        onEvidencePackage={setShowPackageModal}
+        onEvidencePackage={(claimId) => {
+          setEvidencePackageError(null);
+          setShowPackageModal(claimId);
+        }}
       />
 
       {showCreateModal && projectId && (
@@ -546,7 +562,12 @@ export function ClaimsPage() {
       {showPackageModal && (
         <EvidencePackageModal
           claimId={showPackageModal}
-          onClose={() => setShowPackageModal(null)}
+          isGenerating={generatingEvidence === showPackageModal}
+          error={evidencePackageError}
+          onClose={() => {
+            setEvidencePackageError(null);
+            setShowPackageModal(null);
+          }}
           onGenerate={handleGenerateEvidencePackage}
         />
       )}

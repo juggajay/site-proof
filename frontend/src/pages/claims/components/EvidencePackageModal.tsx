@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Package } from 'lucide-react';
+import { Loader2, Package } from 'lucide-react';
 import type { ClaimPackageOptions } from '@/lib/pdfGenerator';
 import { DEFAULT_PACKAGE_OPTIONS } from '../constants';
 import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Modal';
@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 
 interface EvidencePackageModalProps {
   claimId: string;
+  isGenerating?: boolean;
+  error?: string | null;
   onClose: () => void;
   onGenerate: (claimId: string, options: ClaimPackageOptions) => void;
 }
@@ -61,6 +63,8 @@ const ALL_FALSE: ClaimPackageOptions = {
 
 export const EvidencePackageModal = React.memo(function EvidencePackageModal({
   claimId,
+  isGenerating = false,
+  error = null,
   onClose,
   onGenerate,
 }: EvidencePackageModalProps) {
@@ -75,6 +79,15 @@ export const EvidencePackageModal = React.memo(function EvidencePackageModal({
             Select which sections to include in the evidence package PDF:
           </p>
 
+          {error && (
+            <div
+              role="alert"
+              className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
+            >
+              {error}
+            </div>
+          )}
+
           <div className="space-y-3">
             {PACKAGE_SECTIONS.map(({ key, label, description }) => (
               <label
@@ -84,6 +97,7 @@ export const EvidencePackageModal = React.memo(function EvidencePackageModal({
                 <input
                   type="checkbox"
                   checked={options[key]}
+                  disabled={isGenerating}
                   onChange={(e) => setOptions((prev) => ({ ...prev, [key]: e.target.checked }))}
                   className="h-4 w-4 rounded border-border accent-primary"
                 />
@@ -97,15 +111,17 @@ export const EvidencePackageModal = React.memo(function EvidencePackageModal({
 
           <div className="flex gap-2 pt-2">
             <button
+              disabled={isGenerating}
               onClick={() => setOptions({ ...ALL_TRUE })}
-              className="text-sm text-primary hover:underline"
+              className="text-sm text-primary hover:underline disabled:pointer-events-none disabled:opacity-50"
             >
               Select All
             </button>
             <span className="text-muted-foreground">|</span>
             <button
+              disabled={isGenerating}
               onClick={() => setOptions({ ...ALL_FALSE })}
-              className="text-sm text-primary hover:underline"
+              className="text-sm text-primary hover:underline disabled:pointer-events-none disabled:opacity-50"
             >
               Clear All
             </button>
@@ -113,12 +129,20 @@ export const EvidencePackageModal = React.memo(function EvidencePackageModal({
         </div>
       </ModalBody>
       <ModalFooter>
-        <Button variant="outline" onClick={onClose}>
+        <Button variant="outline" onClick={onClose} disabled={isGenerating}>
           Cancel
         </Button>
-        <Button variant="success" onClick={() => onGenerate(claimId, options)}>
-          <Package className="h-4 w-4" />
-          Generate Package
+        <Button
+          variant="success"
+          onClick={() => onGenerate(claimId, options)}
+          disabled={isGenerating}
+        >
+          {isGenerating ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Package className="h-4 w-4" />
+          )}
+          {isGenerating ? 'Generating...' : 'Generate Package'}
         </Button>
       </ModalFooter>
     </Modal>

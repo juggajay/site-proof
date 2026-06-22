@@ -9,6 +9,8 @@ import { queryKeys } from '@/lib/queryKeys';
 
 const apiFetchMock = vi.hoisted(() => vi.fn());
 const downloadCsvMock = vi.hoisted(() => vi.fn());
+const openDocumentAccessUrlMock = vi.hoisted(() => vi.fn());
+const toastMock = vi.hoisted(() => vi.fn());
 
 // Keep the real ApiError/extractErrorMessage behaviour but drive apiFetch
 // directly: the ClaimsPage tests below exercise the TanStack Query wiring
@@ -22,6 +24,14 @@ vi.mock('@/lib/csv', () => ({
   downloadCsv: downloadCsvMock,
 }));
 
+vi.mock('@/lib/documentAccess', () => ({
+  openDocumentAccessUrl: openDocumentAccessUrlMock,
+}));
+
+vi.mock('@/components/ui/toaster', () => ({
+  toast: toastMock,
+}));
+
 import {
   ClaimsAccessDeniedState,
   ClaimsLoadErrorAlert,
@@ -33,6 +43,11 @@ import { ClaimsTable } from './components/ClaimsTable';
 import { SubmitClaimModal } from './components/SubmitClaimModal';
 import type { Claim } from './types';
 import { calculatePaymentDueDate } from './utils';
+
+beforeEach(() => {
+  openDocumentAccessUrlMock.mockReset();
+  toastMock.mockReset();
+});
 
 describe('ClaimsPageHeader', () => {
   it('hides CSV export when there are no claims', () => {
@@ -347,6 +362,59 @@ describe('ClaimsPage TanStack Query register', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.lots('p1') });
   });
 
+  it('uses the server submittedAt when optimistically updating a submitted claim', async () => {
+    const queryClient = createTestQueryClient();
+    const serverSubmittedAt = '2026-06-07T03:30:00.000Z';
+    let claimsResponse: Claim[] = [SEEDED_CLAIM];
+    apiFetchMock.mockImplementation((path: string, options?: RequestInit) => {
+      if (path === '/api/projects/p1/claims/claim-1' && options?.method === 'PUT') {
+        claimsResponse = [{ ...SEEDED_CLAIM, status: 'submitted', submittedAt: serverSubmittedAt }];
+        return Promise.resolve({
+          claim: { ...SEEDED_CLAIM, status: 'submitted', submittedAt: serverSubmittedAt },
+        });
+      }
+      if (path === '/api/projects/p1/claims') {
+        return Promise.resolve({ claims: claimsResponse });
+      }
+      return Promise.reject(new Error(`Unexpected apiFetch path: ${path}`));
+    });
+
+    renderClaimsPage(queryClient);
+    expect(await screen.findByText('Claim 7')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Submit Claim' }));
+    fireEvent.click(await screen.findByRole('button', { name: /Download/ }));
+
+    await waitFor(() => {
+      const cachedClaims = queryClient.getQueryData<Claim[]>(queryKeys.claims('p1'));
+      expect(cachedClaims?.[0]?.submittedAt).toBe(serverSubmittedAt);
+    });
+  });
+
+  it('keeps the evidence package modal open with an inline error when generation fails', async () => {
+    apiFetchMock.mockImplementation((path: string) => {
+      if (path === '/api/projects/p1/claims') {
+        return Promise.resolve({ claims: [SEEDED_CLAIM] });
+      }
+      if (path === '/api/projects/p1/claims/claim-1/evidence-package') {
+        return Promise.reject(new Error('Evidence service unavailable'));
+      }
+      return Promise.reject(new Error(`Unexpected apiFetch path: ${path}`));
+    });
+
+    renderClaimsPage();
+    expect(await screen.findByText('Claim 7')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Generate Evidence Package' }));
+    const modal = await screen.findByRole('dialog');
+    fireEvent.click(within(modal).getByRole('button', { name: 'Generate Package' }));
+
+    expect(await within(modal).findByRole('alert')).toHaveTextContent(
+      'Evidence service unavailable',
+    );
+    expect(within(modal).getByRole('button', { name: 'Generate Package' })).toBeEnabled();
+  });
+
   it('shows certification notes and certificate link from the optimistic cache immediately', async () => {
     const submittedClaim: Claim = {
       ...SEEDED_CLAIM,
@@ -398,5 +466,46 @@ describe('ClaimsPage TanStack Query register', () => {
     );
     expect(await screen.findByText('Reduced after principal assessment')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'View certificate' })).toBeInTheDocument();
+  });
+
+  it('shows a visible error when a certification document link cannot open', async () => {
+    openDocumentAccessUrlMock.mockRejectedValue(new Error('signed URL failed'));
+
+    render(
+      <ClaimsTable
+        claims={[
+          {
+            ...SEEDED_CLAIM,
+            status: 'certified',
+            certification: {
+              certifiedByName: 'Principal Rep',
+              variationNotes: null,
+              certificationDocumentId: 'doc-1',
+            },
+          },
+        ]}
+        loadingCompleteness={false}
+        showCompletenessModal={null}
+        generatingEvidence={null}
+        onCreateClaim={vi.fn()}
+        onSubmitClaim={vi.fn()}
+        onDisputeClaim={vi.fn()}
+        onCertifyClaim={vi.fn()}
+        onRecordPayment={vi.fn()}
+        onCompletenessCheck={vi.fn()}
+        onEvidencePackage={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'View certificate' }));
+
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Certificate unavailable',
+          variant: 'error',
+        }),
+      ),
+    );
   });
 });
