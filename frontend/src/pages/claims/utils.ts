@@ -5,7 +5,7 @@
 
 import type { Claim, CertificationDueStatus, PaymentDueStatus, ConformedLot } from './types';
 import { SOPA_TIMEFRAMES } from './constants';
-import { isSopaNonWorkingDay } from './sopaBusinessDays';
+import { isSopaNonWorkingDay, SOPA_HOLIDAY_COVERAGE_THROUGH_YEAR } from './sopaBusinessDays';
 import { downloadCsv } from '@/lib/csv';
 import { formatDateKey } from '@/lib/localDate';
 import { parseOptionalNonNegativeDecimalInput } from '@/lib/numericInput';
@@ -41,6 +41,19 @@ export function addBusinessDays(startDate: Date, days: number, state?: string): 
 }
 
 /**
+ * Staleness guard: the per-state SOPA holiday tables only cover up to and
+ * including SOPA_HOLIDAY_COVERAGE_THROUGH_YEAR. If a computed due date lands in a
+ * later year, that year's public holidays are not modelled, so the business-day
+ * count would be wrong (too few non-working days → a confidently-too-early date).
+ * In that case callers should show no due date rather than a wrong one. Because
+ * the due date is the latest date in the counted span, checking its year alone
+ * detects any span that reached an uncovered year.
+ */
+function isBeyondSopaHolidayCoverage(dueDate: Date): boolean {
+  return dueDate.getFullYear() > SOPA_HOLIDAY_COVERAGE_THROUGH_YEAR;
+}
+
+/**
  * Calculate payment-schedule response due date based on SOPA response timeframes.
  * `state` is the project's jurisdiction (e.g. 'WA'). A missing/undefined state
  * defaults to NSW, but an *unrecognised* jurisdiction (e.g. 'NT', which has no
@@ -54,7 +67,9 @@ export function calculateCertificationDueDate(
   const timeframe = SOPA_TIMEFRAMES[state];
   if (!timeframe) return null;
   const submissionDate = new Date(submittedAt);
-  return addBusinessDays(submissionDate, timeframe.responseTime, state).toISOString();
+  const dueDate = addBusinessDays(submissionDate, timeframe.responseTime, state);
+  if (isBeyondSopaHolidayCoverage(dueDate)) return null;
+  return dueDate.toISOString();
 }
 
 /**
@@ -67,7 +82,9 @@ export function calculatePaymentDueDate(submittedAt: string, state: string = 'NS
   const timeframe = SOPA_TIMEFRAMES[state];
   if (!timeframe) return null;
   const submissionDate = new Date(submittedAt);
-  return addBusinessDays(submissionDate, timeframe.paymentTime, state).toISOString();
+  const dueDate = addBusinessDays(submissionDate, timeframe.paymentTime, state);
+  if (isBeyondSopaHolidayCoverage(dueDate)) return null;
+  return dueDate.toISOString();
 }
 
 /** Get payment-schedule response due status - only for submitted claims awaiting response */

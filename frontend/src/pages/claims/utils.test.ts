@@ -159,6 +159,31 @@ describe('SOPA due dates by project state', () => {
   });
 });
 
+describe('SOPA due-date staleness guard (H27)', () => {
+  it('returns null when the computed due date falls beyond the holiday-table coverage year', () => {
+    // The per-state holiday tables only cover 2026–2027. A 2028 submission lands
+    // in a year whose public holidays are not modelled, so any computed date
+    // would be confidently wrong (too early). Callers must show no due date.
+    const beyondCoverage = '2028-03-01T00:00:00.000Z';
+    expect(calculateCertificationDueDate(beyondCoverage, 'NSW')).toBeNull();
+    expect(calculatePaymentDueDate(beyondCoverage, 'NSW')).toBeNull();
+  });
+
+  it('returns null when a late-2027 submission pushes the due date into the uncovered next year', () => {
+    // Realistic boundary: a mid-December 2027 claim whose 20-business-day WA
+    // payment window crosses into January 2028, where the holiday table is empty.
+    const lateInCoverage = '2027-12-15T00:00:00.000Z';
+    expect(calculatePaymentDueDate(lateInCoverage, 'WA')).toBeNull();
+  });
+
+  it('still computes due dates that stay within the covered years', () => {
+    // The upper edge of coverage that stays inside 2027 must keep working.
+    const within = '2027-06-01T00:00:00.000Z';
+    expect(calculateCertificationDueDate(within, 'NSW')).not.toBeNull();
+    expect(calculatePaymentDueDate(within, 'NSW')).not.toBeNull();
+  });
+});
+
 describe('due-date status helpers thread the project state', () => {
   // Submitted long enough ago that BOTH NSW and WA payment windows have closed,
   // so the comparison is deterministic regardless of the current date: NSW pays
