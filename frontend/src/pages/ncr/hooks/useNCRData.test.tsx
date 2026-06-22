@@ -125,6 +125,23 @@ describe('useNCRData', () => {
     expect(result.current.ncrs).toHaveLength(1);
   });
 
+  it('keeps the empty register reference stable while a load failure is shown', async () => {
+    apiFetchMock.mockImplementation(async (path: string) => {
+      if (path.startsWith('/api/ncrs/check-role/')) return ROLE;
+      throw new Error('NCR register unavailable');
+    });
+
+    const { result } = renderNCRData('project-1');
+    await waitFor(() => expect(result.current.error).toBe('NCR register unavailable'));
+    const failedRegister = result.current.ncrs;
+
+    act(() => {
+      result.current.setError('Manual banner update');
+    });
+
+    expect(result.current.ncrs).toBe(failedRegister);
+  });
+
   it('skips the role check when no project is selected', async () => {
     const { result } = renderNCRData(undefined);
     await waitFor(() => expect(result.current.loading).toBe(false));

@@ -275,6 +275,22 @@ test.describe('Subcontractor portal RBAC', () => {
     await expect(page.getByRole('button', { name: /create lot/i })).toHaveCount(0);
   });
 
+  test('shows a real portal access error for an unauthorized project scope', async ({ page }) => {
+    await mockSubcontractorPortalApi(page, subcontractorPortalUser);
+
+    await page.goto(`/subcontractor-portal?projectId=${E2E_UNRELATED_PROJECT_ID}`);
+
+    const alert = page.getByRole('alert');
+    await expect(alert).toContainText('Subcontractor portal could not be loaded.', {
+      timeout: 15000,
+    });
+    await expect(alert).toContainText(
+      'You do not have subcontractor portal access to this project',
+    );
+    await expect(page.getByText('Your Company')).toHaveCount(0);
+    await expect(page.getByRole('link', { name: /Start Today's Docket/i })).toHaveCount(0);
+  });
+
   test('redirects linked portal identities away from the projects index', async ({ page }) => {
     await mockSubcontractorPortalApi(page, linkedPortalMemberUser);
 

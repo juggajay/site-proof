@@ -13,6 +13,7 @@ import type { NCR, UserRole } from '../types';
  * current without a background interval.
  */
 const NCR_REGISTER_STALE_TIME_MS = 30_000;
+const EMPTY_NCR_REGISTER: NCR[] = [];
 
 interface UseNCRDataOptions {
   projectId: string | undefined;
@@ -63,7 +64,7 @@ export function useNCRData({ projectId, token }: UseNCRDataOptions): UseNCRDataR
   }, [queryClient, projectId]);
 
   return {
-    ncrs: ncrsQuery.data ?? [],
+    ncrs: ncrsQuery.data ?? EMPTY_NCR_REGISTER,
     loading: ncrsQuery.isLoading,
     error,
     setError,

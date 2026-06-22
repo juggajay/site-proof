@@ -270,8 +270,15 @@ async function mockQualityManagerDashboardApi(page: Page, options: { failUntil?:
         },
         openNCRs: [],
         pendingVerifications: {
-          count: 0,
-          items: [],
+          count: 1,
+          items: [
+            {
+              id: 'pending-verification-1',
+              description: 'Verify compaction test',
+              lotNumber: 'LOT-QM-010',
+              link: `/projects/${E2E_PROJECT_ID}/lots/e2e-lot?tab=itp`,
+            },
+          ],
         },
         holdPointMetrics: {
           totalReleased: 8,
@@ -667,6 +674,9 @@ test.describe('Dashboard seeded account contract', () => {
     await expect(page.getByRole('heading', { name: 'Quality Dashboard' })).toBeVisible();
     await expect(page.getByText('Lot Conformance').locator('..')).toContainText('90.0%');
     await expect(page.getByText('Two lots missing signed test certificates')).toBeVisible();
+    await page.getByRole('button', { name: /Verify compaction test/i }).click();
+    await expect(page).toHaveURL(new RegExp(`/projects/${E2E_PROJECT_ID}/lots/e2e-lot\\?tab=itp$`));
+    await page.goto('/dashboard');
     await expect(page.getByRole('link', { name: 'NCR Register' })).toHaveAttribute(
       'href',
       `/projects/${E2E_PROJECT_ID}/ncr`,
