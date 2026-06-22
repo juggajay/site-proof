@@ -217,6 +217,23 @@ function pathProject(pathname: string, prefix: string, suffix = ''): string | nu
   return decodeURIComponent(pathname.slice(prefix.length, end));
 }
 
+function pathProjectDate(
+  pathname: string,
+  prefix: string,
+  dateMarker: string,
+): { projectId: string; date: string } | null {
+  if (!pathname.startsWith(prefix)) return null;
+  const rest = pathname.slice(prefix.length);
+  const markerIndex = rest.lastIndexOf(dateMarker);
+  if (markerIndex < 0) return null;
+
+  const project = rest.slice(0, markerIndex);
+  const date = rest.slice(markerIndex + dateMarker.length);
+  if (!project || !date || date.includes('/')) return null;
+
+  return { projectId: decodeURIComponent(project), date: decodeURIComponent(date) };
+}
+
 async function mockForemanShellApi(page: Page) {
   const fallbackProjectCalls: string[] = [];
   const todayPathnames: string[] = [];
@@ -357,8 +374,9 @@ async function mockForemanShellApi(page: Page) {
       return;
     }
 
-    if (path === `/api/diary/${encodeURIComponent(PROJECT_ID)}/${DATE_KEY}`) {
-      await fulfillJson(route, diary);
+    const diaryByDate = pathProjectDate(path, '/api/diary/', '/');
+    if (diaryByDate?.projectId === PROJECT_ID) {
+      await fulfillJson(route, { ...diary, date: diaryByDate.date });
       return;
     }
 
@@ -367,9 +385,8 @@ async function mockForemanShellApi(page: Page) {
       return;
     }
 
-    if (
-      path === `/api/diary/project/${encodeURIComponent(PROJECT_ID)}/docket-summary/${DATE_KEY}`
-    ) {
+    const docketSummaryByDate = pathProjectDate(path, '/api/diary/project/', '/docket-summary/');
+    if (docketSummaryByDate?.projectId === PROJECT_ID) {
       await fulfillJson(route, {
         labourHours: 8,
         plantHours: 6,
@@ -379,7 +396,8 @@ async function mockForemanShellApi(page: Page) {
       return;
     }
 
-    if (path === `/api/diary/${encodeURIComponent(PROJECT_ID)}/weather/${DATE_KEY}`) {
+    const weatherByDate = pathProjectDate(path, '/api/diary/', '/weather/');
+    if (weatherByDate?.projectId === PROJECT_ID) {
       await fulfillJson(route, {
         weatherConditions: 'Fine',
         temperatureMin: 12,
