@@ -101,7 +101,7 @@ describe('Notifications API', () => {
 
     await prisma.user.update({
       where: { id: subcontractorUserId },
-      data: { companyId, roleInCompany: 'subcontractor_admin' },
+      data: { companyId: null, roleInCompany: 'subcontractor_admin' },
     });
 
     await prisma.subcontractorUser.create({

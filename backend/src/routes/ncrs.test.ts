@@ -849,7 +849,7 @@ describe('NCR API', () => {
       const subUser = await registerTestUser('ncr-sub-user', 'NCR Subcontractor User');
       await prisma.user.update({
         where: { id: subUser.userId },
-        data: { companyId, roleInCompany: 'subcontractor' },
+        data: { companyId: null, roleInCompany: 'subcontractor' },
       });
 
       const otherLot = await prisma.lot.create({
@@ -934,7 +934,7 @@ describe('NCR API', () => {
       );
       await prisma.user.update({
         where: { id: subUser.userId },
-        data: { companyId, roleInCompany: 'subcontractor' },
+        data: { companyId: null, roleInCompany: 'subcontractor' },
       });
       const responsibleNcr = await prisma.nCR.create({
         data: {
@@ -973,6 +973,207 @@ describe('NCR API', () => {
           .delete({ where: { id: subcontractorCompany.id } })
           .catch(() => {});
         await cleanupTestUser(subUser.userId);
+      }
+    });
+
+    it('should list NCRs for every linked project when a subcontractor omits projectId', async () => {
+      const suffix = Date.now();
+      const secondProject = await prisma.project.create({
+        data: {
+          name: `NCR Multi Project ${suffix}`,
+          projectNumber: `NCR-MULTI-${suffix}`,
+          companyId,
+          status: 'active',
+          state: 'NSW',
+          specificationSet: 'TfNSW',
+        },
+      });
+      const secondProjectLot = await prisma.lot.create({
+        data: {
+          projectId: secondProject.id,
+          lotNumber: `NCR-MULTI-LOT-${suffix}`,
+          status: 'in_progress',
+          lotType: 'chainage',
+          activityType: 'Earthworks',
+        },
+      });
+      const firstCompany = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `NCR Multi First Sub ${suffix}`,
+          primaryContactName: 'First Sub Contact',
+          primaryContactEmail: `ncr-multi-first-${suffix}@example.com`,
+          status: 'approved',
+          portalAccess: { ncrs: true },
+        },
+      });
+      const secondCompany = await prisma.subcontractorCompany.create({
+        data: {
+          projectId: secondProject.id,
+          companyName: `NCR Multi Second Sub ${suffix}`,
+          primaryContactName: 'Second Sub Contact',
+          primaryContactEmail: `ncr-multi-second-${suffix}@example.com`,
+          status: 'approved',
+          portalAccess: { ncrs: true },
+        },
+      });
+      const subUser = await registerTestUser(
+        'ncr-multi-project-sub-user',
+        'NCR Multi Project Subcontractor User',
+      );
+      await prisma.user.update({
+        where: { id: subUser.userId },
+        data: { companyId: null, roleInCompany: 'subcontractor' },
+      });
+      const firstProjectNcr = await prisma.nCR.create({
+        data: {
+          projectId,
+          ncrNumber: `NCR-MULTI-A-${suffix}`,
+          description: 'NCR on the first linked project',
+          category: 'Workmanship',
+          severity: 'minor',
+          raisedById: userId,
+          ncrLots: { create: { lotId } },
+        },
+      });
+      const secondProjectNcr = await prisma.nCR.create({
+        data: {
+          projectId: secondProject.id,
+          ncrNumber: `NCR-MULTI-B-${suffix}`,
+          description: 'NCR on the second linked project',
+          category: 'Workmanship',
+          severity: 'minor',
+          raisedById: userId,
+          ncrLots: { create: { lotId: secondProjectLot.id } },
+        },
+      });
+
+      try {
+        await prisma.subcontractorUser.createMany({
+          data: [
+            {
+              userId: subUser.userId,
+              subcontractorCompanyId: firstCompany.id,
+              role: 'user',
+            },
+            {
+              userId: subUser.userId,
+              subcontractorCompanyId: secondCompany.id,
+              role: 'user',
+            },
+          ],
+        });
+        await prisma.lotSubcontractorAssignment.createMany({
+          data: [
+            {
+              projectId,
+              lotId,
+              subcontractorCompanyId: firstCompany.id,
+              canCompleteITP: true,
+            },
+            {
+              projectId: secondProject.id,
+              lotId: secondProjectLot.id,
+              subcontractorCompanyId: secondCompany.id,
+              canCompleteITP: true,
+            },
+          ],
+        });
+
+        const res = await request(app)
+          .get('/api/ncrs')
+          .set('Authorization', `Bearer ${subUser.token}`);
+
+        expect(res.status).toBe(200);
+        const returnedIds = res.body.ncrs.map((ncr: { id: string }) => ncr.id);
+        expect(returnedIds).toContain(firstProjectNcr.id);
+        expect(returnedIds).toContain(secondProjectNcr.id);
+      } finally {
+        await prisma.nCRLot.deleteMany({
+          where: { ncrId: { in: [firstProjectNcr.id, secondProjectNcr.id] } },
+        });
+        await prisma.nCR.deleteMany({
+          where: { id: { in: [firstProjectNcr.id, secondProjectNcr.id] } },
+        });
+        await prisma.lotSubcontractorAssignment.deleteMany({
+          where: { subcontractorCompanyId: { in: [firstCompany.id, secondCompany.id] } },
+        });
+        await prisma.subcontractorUser.deleteMany({ where: { userId: subUser.userId } });
+        await prisma.subcontractorCompany.deleteMany({
+          where: { id: { in: [firstCompany.id, secondCompany.id] } },
+        });
+        await prisma.lot.delete({ where: { id: secondProjectLot.id } }).catch(() => {});
+        await prisma.project.delete({ where: { id: secondProject.id } }).catch(() => {});
+        await cleanupTestUser(subUser.userId);
+      }
+    });
+
+    it('should reject company-linked users with stale subcontractor roles and old links', async () => {
+      const suffix = Date.now();
+      const subcontractorCompany = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `NCR Stale Role Sub ${suffix}`,
+          primaryContactName: 'Stale Role Contact',
+          primaryContactEmail: `ncr-stale-role-${suffix}@example.com`,
+          status: 'approved',
+          portalAccess: { ncrs: true },
+        },
+      });
+      const staleUser = await registerTestUser(
+        'ncr-stale-company-linked-sub-user',
+        'NCR Stale Company Linked User',
+      );
+      await prisma.user.update({
+        where: { id: staleUser.userId },
+        data: { companyId, roleInCompany: 'subcontractor' },
+      });
+      const responsibleNcr = await prisma.nCR.create({
+        data: {
+          projectId,
+          ncrNumber: `NCR-STALE-${suffix}`,
+          description: 'NCR assigned to a stale company-linked subcontractor role',
+          category: 'Workmanship',
+          severity: 'minor',
+          raisedById: userId,
+          responsibleSubcontractorId: subcontractorCompany.id,
+        },
+      });
+
+      try {
+        await prisma.subcontractorUser.create({
+          data: {
+            userId: staleUser.userId,
+            subcontractorCompanyId: subcontractorCompany.id,
+            role: 'user',
+          },
+        });
+        await prisma.projectUser.create({
+          data: {
+            projectId,
+            userId: staleUser.userId,
+            role: 'project_manager',
+            status: 'active',
+          },
+        });
+
+        const listRes = await request(app)
+          .get(`/api/ncrs?projectId=${projectId}`)
+          .set('Authorization', `Bearer ${staleUser.token}`);
+        expect(listRes.status).toBe(403);
+
+        const detailRes = await request(app)
+          .get(`/api/ncrs/${responsibleNcr.id}`)
+          .set('Authorization', `Bearer ${staleUser.token}`);
+        expect(detailRes.status).toBe(403);
+      } finally {
+        await prisma.projectUser.deleteMany({ where: { projectId, userId: staleUser.userId } });
+        await prisma.nCR.delete({ where: { id: responsibleNcr.id } }).catch(() => {});
+        await prisma.subcontractorUser.deleteMany({ where: { userId: staleUser.userId } });
+        await prisma.subcontractorCompany
+          .delete({ where: { id: subcontractorCompany.id } })
+          .catch(() => {});
+        await cleanupTestUser(staleUser.userId);
       }
     });
 
@@ -1086,7 +1287,7 @@ describe('NCR API', () => {
       try {
         await prisma.user.update({
           where: { id: subUser.userId },
-          data: { companyId, roleInCompany: 'subcontractor' },
+          data: { companyId: null, roleInCompany: 'subcontractor' },
         });
         await prisma.subcontractorUser.create({
           data: {
@@ -3119,7 +3320,7 @@ describe('NCR Access Hardening', () => {
     );
     await prisma.user.update({
       where: { id: subcontractor.userId },
-      data: { companyId, roleInCompany: 'subcontractor' },
+      data: { companyId: null, roleInCompany: 'subcontractor' },
     });
     await prisma.subcontractorUser.create({
       data: {
@@ -3384,7 +3585,7 @@ describe('NCR Access Hardening', () => {
     try {
       await prisma.user.update({
         where: { id: subcontractor.userId },
-        data: { companyId, roleInCompany: 'subcontractor' },
+        data: { companyId: null, roleInCompany: 'subcontractor' },
       });
       await prisma.subcontractorUser.create({
         data: {
@@ -3480,7 +3681,7 @@ describe('NCR Access Hardening', () => {
     try {
       await prisma.user.update({
         where: { id: unrelatedSubcontractor.userId },
-        data: { companyId, roleInCompany: 'subcontractor' },
+        data: { companyId: null, roleInCompany: 'subcontractor' },
       });
       await prisma.subcontractorUser.create({
         data: {
@@ -3542,7 +3743,7 @@ describe('NCR Access Hardening', () => {
     const blockedDescription = `Project role subcontractor NCR ${suffix}`;
     await prisma.user.update({
       where: { id: subcontractor.userId },
-      data: { companyId, roleInCompany: 'subcontractor' },
+      data: { companyId: null, roleInCompany: 'subcontractor' },
     });
     await prisma.subcontractorUser.create({
       data: {
@@ -3710,7 +3911,7 @@ describe('NCR Access Hardening', () => {
       const subUser = await registerTestUser('n1-create-sub-user', 'N1 Create Sub User');
       await prisma.user.update({
         where: { id: subUser.userId },
-        data: { companyId, roleInCompany: 'subcontractor' },
+        data: { companyId: null, roleInCompany: 'subcontractor' },
       });
       await prisma.subcontractorUser.create({
         data: {
@@ -3793,7 +3994,7 @@ describe('NCR Access Hardening', () => {
       const subUser = await registerTestUser('n1-no-portal-sub-user', 'N1 No-Portal Sub User');
       await prisma.user.update({
         where: { id: subUser.userId },
-        data: { companyId, roleInCompany: 'subcontractor' },
+        data: { companyId: null, roleInCompany: 'subcontractor' },
       });
       await prisma.subcontractorUser.create({
         data: {

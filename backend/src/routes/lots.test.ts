@@ -1132,6 +1132,7 @@ describe('Lots API', () => {
         });
       const subcontractorToken = subcontractorRes.body.token;
       const subcontractorUserId = subcontractorRes.body.user.id;
+      let staleSubcontractorUserId: string | undefined;
 
       await prisma.user.update({
         where: { id: subcontractorUserId },
@@ -1189,6 +1190,43 @@ describe('Lots API', () => {
         expect(mineRes.status).toBe(200);
         expect(mineRes.body.subcontractorCompanyId).toBe(subcontractorCompany.id);
         expect(mineRes.body.canCompleteITP).toBe(true);
+
+        const staleSubcontractorRes = await request(app)
+          .post('/api/auth/register')
+          .send({
+            email: `lots-detail-stale-sub-user-${Date.now()}@example.com`,
+            password: 'SecureP@ssword123!',
+            fullName: 'Lots Detail Stale Subcontractor User',
+            tosAccepted: true,
+          });
+        const staleSubcontractorToken = staleSubcontractorRes.body.token;
+        const createdStaleSubcontractorUserId = staleSubcontractorRes.body.user.id as string;
+        staleSubcontractorUserId = createdStaleSubcontractorUserId;
+        await prisma.user.update({
+          where: { id: createdStaleSubcontractorUserId },
+          data: { companyId, roleInCompany: 'subcontractor' },
+        });
+        await prisma.subcontractorUser.create({
+          data: {
+            userId: createdStaleSubcontractorUserId,
+            subcontractorCompanyId: subcontractorCompany.id,
+            role: 'user',
+          },
+        });
+        await prisma.projectUser.create({
+          data: {
+            projectId,
+            userId: createdStaleSubcontractorUserId,
+            role: 'project_manager',
+            status: 'active',
+          },
+        });
+
+        const staleMineRes = await request(app)
+          .get(`/api/lots/${targetLotId}/subcontractors/mine`)
+          .set('Authorization', `Bearer ${staleSubcontractorToken}`);
+
+        expect(staleMineRes.status).toBe(403);
 
         const conformStatusRes = await request(app)
           .get(`/api/lots/${targetLotId}/conform-status`)
@@ -1254,6 +1292,15 @@ describe('Lots API', () => {
           where: { subcontractorCompanyId: subcontractorCompany.id },
         });
         await prisma.projectUser.deleteMany({ where: { projectId, userId: subcontractorUserId } });
+        if (staleSubcontractorUserId) {
+          await prisma.projectUser.deleteMany({
+            where: { projectId, userId: staleSubcontractorUserId },
+          });
+          await prisma.emailVerificationToken.deleteMany({
+            where: { userId: staleSubcontractorUserId },
+          });
+          await prisma.user.delete({ where: { id: staleSubcontractorUserId } }).catch(() => {});
+        }
         await prisma.lot.delete({ where: { id: targetLot.id } }).catch(() => {});
         await prisma.lot.delete({ where: { id: unassignedLot.id } }).catch(() => {});
         await prisma.subcontractorCompany

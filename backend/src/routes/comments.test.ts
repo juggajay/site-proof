@@ -151,7 +151,7 @@ describe('Comments API', () => {
     const subcontractorUser = await registerTestUser(app, {
       emailPrefix: 'comments-sub-user',
       fullName: 'Comments Subcontractor User',
-      companyId,
+      companyId: null,
       roleInCompany: 'subcontractor',
     });
     subcontractorToken = subcontractorUser.token;

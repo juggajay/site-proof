@@ -16,13 +16,25 @@ const baseUser: AuthUser = {
   companyId: 'c1',
 };
 
-const userWithRole = (roleInCompany: string): AuthUser => ({ ...baseUser, roleInCompany });
+const userWithRole = (
+  roleInCompany: string,
+  companyId: string | null = baseUser.companyId,
+): AuthUser => ({
+  ...baseUser,
+  roleInCompany,
+  companyId,
+});
 
 describe('dockets access helpers (pure)', () => {
   describe('isSubcontractorUser', () => {
     it('returns true for subcontractor portal roles', () => {
-      expect(isSubcontractorUser(userWithRole('subcontractor'))).toBe(true);
-      expect(isSubcontractorUser(userWithRole('subcontractor_admin'))).toBe(true);
+      expect(isSubcontractorUser(userWithRole('subcontractor', null))).toBe(true);
+      expect(isSubcontractorUser(userWithRole('subcontractor_admin', null))).toBe(true);
+    });
+
+    it('returns false for stale company-linked subcontractor portal roles', () => {
+      expect(isSubcontractorUser(userWithRole('subcontractor', 'c1'))).toBe(false);
+      expect(isSubcontractorUser(userWithRole('subcontractor_admin', 'c1'))).toBe(false);
     });
 
     it('returns false for company/staff roles and empty role', () => {

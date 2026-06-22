@@ -9,6 +9,8 @@ import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import {
   activeSubcontractorCompanyWhere,
+  isStandaloneSubcontractorPortalIdentity,
+  isSubcontractorPortalRole,
   requireSubcontractorPortalModuleAccess,
 } from '../../lib/projectAccess.js';
 import { buildNcrListResponse } from './ncrCoreResponses.js';
@@ -41,22 +43,28 @@ ncrListRouter.get(
       where: { id: user.userId },
       select: { roleInCompany: true, companyId: true },
     });
+    const isSubcontractorRole = isSubcontractorPortalRole(userDetails?.roleInCompany);
+    const isStandaloneSubcontractor = userDetails
+      ? isStandaloneSubcontractorPortalIdentity(userDetails)
+      : false;
 
     // Get projects the user has access to
     const [projectAccess, companyProjectAccess, subcontractorProjectAccess] = await Promise.all([
-      prisma.projectUser.findMany({
-        where: { userId: user.userId, status: 'active' },
-        select: { projectId: true, role: true },
-      }),
+      isSubcontractorRole
+        ? Promise.resolve([])
+        : prisma.projectUser.findMany({
+            where: { userId: user.userId, status: 'active' },
+            select: { projectId: true, role: true },
+          }),
       userDetails?.companyId &&
+      !isSubcontractorRole &&
       (userDetails.roleInCompany === 'owner' || userDetails.roleInCompany === 'admin')
         ? prisma.project.findMany({
             where: { companyId: userDetails.companyId },
             select: { id: true },
           })
         : Promise.resolve([]),
-      userDetails?.roleInCompany === 'subcontractor' ||
-      userDetails?.roleInCompany === 'subcontractor_admin'
+      isStandaloneSubcontractor
         ? prisma.subcontractorUser.findMany({
             where: {
               userId: user.userId,
@@ -79,22 +87,23 @@ ncrListRouter.get(
     const where: Prisma.NCRWhereInput = {
       projectId: { in: accessibleProjectIds },
     };
+    let scopedSubcontractorProjectIds = accessibleProjectIds;
 
     if (requestedProjectId) {
       if (!accessibleProjectIds.includes(requestedProjectId)) {
         throw AppError.forbidden('Access denied to this project');
       }
-      await requireSubcontractorPortalModuleAccess({
-        userId: user.userId,
-        role: userDetails?.roleInCompany,
-        projectId: requestedProjectId,
-        module: 'ncrs',
-      });
+      if (isStandaloneSubcontractor) {
+        await requireSubcontractorPortalModuleAccess({
+          userId: user.userId,
+          role: userDetails?.roleInCompany,
+          projectId: requestedProjectId,
+          module: 'ncrs',
+        });
+      }
       where.projectId = requestedProjectId;
-    } else if (
-      userDetails?.roleInCompany === 'subcontractor' ||
-      userDetails?.roleInCompany === 'subcontractor_admin'
-    ) {
+      scopedSubcontractorProjectIds = [requestedProjectId];
+    } else if (isStandaloneSubcontractor && userDetails) {
       const allowedProjectIds: string[] = [];
       for (const accessibleProjectId of accessibleProjectIds) {
         try {
@@ -112,6 +121,7 @@ ncrListRouter.get(
         }
       }
       where.projectId = { in: allowedProjectIds };
+      scopedSubcontractorProjectIds = allowedProjectIds;
     }
 
     if (status) {
@@ -132,30 +142,30 @@ ncrListRouter.get(
     }
 
     // Subcontractors can see NCRs linked to lots assigned to their company OR assigned to them as responsible party
-    if (
-      userDetails?.roleInCompany === 'subcontractor' ||
-      userDetails?.roleInCompany === 'subcontractor_admin'
-    ) {
-      // Find the user's subcontractor company
-      const subcontractorUser = await prisma.subcontractorUser.findFirst({
+    if (isStandaloneSubcontractor) {
+      // Find all of the user's subcontractor companies in the current project scope.
+      const subcontractorUsers = await prisma.subcontractorUser.findMany({
         where: {
           userId: user.userId,
-          subcontractorCompany: activeSubcontractorCompanyWhere(
-            requestedProjectId ? { projectId: requestedProjectId } : {},
-          ),
+          subcontractorCompany: activeSubcontractorCompanyWhere({
+            projectId: { in: scopedSubcontractorProjectIds },
+          }),
         },
-        include: { subcontractorCompany: true },
+        select: { subcontractorCompanyId: true },
       });
+      const subCompanyIds = [
+        ...new Set(
+          subcontractorUsers.map((subcontractorUser) => subcontractorUser.subcontractorCompanyId),
+        ),
+      ];
 
-      if (subcontractorUser) {
-        const subCompanyId = subcontractorUser.subcontractorCompanyId;
-
+      if (subCompanyIds.length > 0) {
         // Get lots assigned via LotSubcontractorAssignment (new model)
         const lotAssignments = await prisma.lotSubcontractorAssignment.findMany({
           where: {
-            subcontractorCompanyId: subCompanyId,
+            subcontractorCompanyId: { in: subCompanyIds },
             status: 'active',
-            ...(requestedProjectId ? { projectId: requestedProjectId } : {}),
+            projectId: { in: scopedSubcontractorProjectIds },
           },
           select: { lotId: true },
         });
@@ -164,8 +174,8 @@ ncrListRouter.get(
         // Get lots assigned via legacy field
         const legacyLots = await prisma.lot.findMany({
           where: {
-            assignedSubcontractorId: subCompanyId,
-            ...(requestedProjectId ? { projectId: requestedProjectId } : {}),
+            assignedSubcontractorId: { in: subCompanyIds },
+            projectId: { in: scopedSubcontractorProjectIds },
           },
           select: { id: true },
         });
@@ -178,7 +188,7 @@ ncrListRouter.get(
         // OR NCRs linked to their assigned lots
         where.OR = [
           { responsibleUserId: user.userId }, // NCRs assigned to this user
-          { responsibleSubcontractorId: subCompanyId },
+          { responsibleSubcontractorId: { in: subCompanyIds } },
           ...(allAssignedLotIds.length > 0
             ? [
                 {
@@ -196,7 +206,7 @@ ncrListRouter.get(
         if (allAssignedLotIds.length === 0) {
           where.OR = [
             { responsibleUserId: user.userId },
-            { responsibleSubcontractorId: subCompanyId },
+            { responsibleSubcontractorId: { in: subCompanyIds } },
           ];
         }
       } else {

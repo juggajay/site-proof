@@ -547,7 +547,7 @@ describe('Subcontractors API', () => {
 
       await prisma.user.update({
         where: { id: portalUser.userId },
-        data: { companyId, roleInCompany: 'subcontractor' },
+        data: { companyId: null, roleInCompany: 'subcontractor' },
       });
       await prisma.subcontractorUser.create({
         data: {
@@ -2398,6 +2398,51 @@ describe('Subcontractors API', () => {
           where: { id: portalSubId },
           data: { status: 'approved' },
         });
+      }
+    });
+
+    it('should not allow company-linked stale subcontractor roles to read portal access via old links', async () => {
+      const staleEmail = `portal-stale-sub-${Date.now()}@example.com`;
+      const staleRes = await request(app).post('/api/auth/register').send({
+        email: staleEmail,
+        password: 'SecureP@ssword123!',
+        fullName: 'Portal Stale Subcontractor',
+        tosAccepted: true,
+      });
+      const staleToken = staleRes.body.token;
+      const staleUserId = staleRes.body.user.id;
+
+      try {
+        await prisma.user.update({
+          where: { id: staleUserId },
+          data: { companyId, roleInCompany: 'subcontractor' },
+        });
+        await prisma.subcontractorUser.create({
+          data: {
+            userId: staleUserId,
+            subcontractorCompanyId: portalSubId,
+            role: 'user',
+          },
+        });
+        await prisma.projectUser.create({
+          data: {
+            projectId,
+            userId: staleUserId,
+            role: 'project_manager',
+            status: 'active',
+          },
+        });
+
+        const portalAccessRes = await request(app)
+          .get(`/api/subcontractors/${portalSubId}/portal-access`)
+          .set('Authorization', `Bearer ${staleToken}`);
+
+        expect(portalAccessRes.status).toBe(403);
+      } finally {
+        await prisma.projectUser.deleteMany({ where: { projectId, userId: staleUserId } });
+        await prisma.subcontractorUser.deleteMany({ where: { userId: staleUserId } });
+        await prisma.emailVerificationToken.deleteMany({ where: { userId: staleUserId } });
+        await prisma.user.delete({ where: { id: staleUserId } }).catch(() => {});
       }
     });
 

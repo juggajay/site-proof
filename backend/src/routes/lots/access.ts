@@ -5,7 +5,7 @@ import { ROLE_GROUPS, hasRoleInGroup } from '../../lib/roles.js';
 import {
   activeSubcontractorCompanyWhere,
   getEffectiveProjectRole,
-  isSubcontractorPortalRole,
+  isStandaloneSubcontractorPortalIdentity,
   requireProjectRoleExcludingSubcontractors as requireProjectRole,
   requireSubcontractorPortalModuleAccess,
   type SubcontractorPortalAccessKey,
@@ -14,7 +14,7 @@ import {
 export type AuthenticatedUser = NonNullable<Request['user']>;
 
 function isSubcontractorUser(user: AuthenticatedUser): boolean {
-  return isSubcontractorPortalRole(user.roleInCompany);
+  return isStandaloneSubcontractorPortalIdentity(user);
 }
 
 function canViewLotBudget(role: string | null): boolean {
