@@ -117,6 +117,7 @@ export async function requireSubcontractorDocumentPortalAccess(
 async function getProjectSubcontractorCompanies(
   userId: string,
   projectId: string,
+  requestedSubcontractorCompanyId?: string | null,
 ): Promise<SubcontractorDocumentCompany[]> {
   const subcontractorUsers = await prisma.subcontractorUser.findMany({
     where: {
@@ -130,7 +131,10 @@ async function getProjectSubcontractorCompanies(
     },
   });
 
-  return subcontractorUsers.map((link) => link.subcontractorCompany);
+  const companies = subcontractorUsers.map((link) => link.subcontractorCompany);
+  return requestedSubcontractorCompanyId
+    ? companies.filter((company) => company.id === requestedSubcontractorCompanyId)
+    : companies;
 }
 
 async function getAssignedDocumentLotIds(
@@ -200,12 +204,17 @@ export async function applyDocumentReadScope(
   user: AuthUser,
   projectId: string,
   where: Prisma.DocumentWhereInput,
+  requestedSubcontractorCompanyId?: string | null,
 ): Promise<void> {
   if (!isDocumentSubcontractorUser(user)) {
     return;
   }
 
-  const subcontractorCompanies = await getProjectSubcontractorCompanies(user.id, projectId);
+  const subcontractorCompanies = await getProjectSubcontractorCompanies(
+    user.id,
+    projectId,
+    requestedSubcontractorCompanyId,
+  );
   if (subcontractorCompanies.length === 0) {
     where.id = '__no_subcontractor_document_access__';
     return;
@@ -256,16 +265,23 @@ export async function applyDocumentPortalCategoryScope(
   user: AuthUser,
   projectId: string,
   where: Prisma.DocumentWhereInput,
+  requestedSubcontractorCompanyId?: string | null,
 ): Promise<void> {
   if (!isDocumentSubcontractorUser(user)) {
     return;
   }
 
-  const [canReadGeneralDocuments, canReadItpEvidence, canReadTestResults] = await Promise.all([
-    hasSubcontractorDocumentPortalAccess(user, projectId, null),
-    hasSubcontractorDocumentPortalAccess(user, projectId, 'itp_evidence'),
-    hasSubcontractorDocumentPortalAccess(user, projectId, 'test_results'),
-  ]);
+  const subcontractorCompanies = await getProjectSubcontractorCompanies(
+    user.id,
+    projectId,
+    requestedSubcontractorCompanyId,
+  );
+  const canReadGeneralDocuments =
+    getDocumentModuleCompanyIds(subcontractorCompanies, null).length > 0;
+  const canReadItpEvidence =
+    getDocumentModuleCompanyIds(subcontractorCompanies, 'itp_evidence').length > 0;
+  const canReadTestResults =
+    getDocumentModuleCompanyIds(subcontractorCompanies, 'test_results').length > 0;
 
   const categoryAccess: Prisma.DocumentWhereInput[] = [];
   if (canReadGeneralDocuments) {

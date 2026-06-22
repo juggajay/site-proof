@@ -20,6 +20,7 @@ import { useIsMobile } from '@/hooks/useMediaQuery';
 import { formatDateKey } from '@/lib/localDate';
 import { formatStatusLabel } from '@/lib/statusLabels';
 import { buildDocketEditRoute, getDocketDisplayTotalCost } from './docketEditData';
+import { buildPortalCompanyQuery, portalCompanyQueryKeyParts } from './portalCompanyScope';
 
 interface Docket {
   id: string;
@@ -95,16 +96,23 @@ export function DocketsListPage() {
   const isMobile = useIsMobile();
   const [searchParams] = useSearchParams();
   const requestedProjectId = searchParams.get('projectId');
+  const requestedSubcontractorCompanyId = searchParams.get('subcontractorCompanyId');
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
   const { data: company } = useQuery({
-    queryKey: [...queryKeys.portalCompanies(user?.id), requestedProjectId ?? 'default'],
+    queryKey: [
+      ...queryKeys.portalCompanies(user?.id),
+      ...portalCompanyQueryKeyParts({
+        projectId: requestedProjectId,
+        subcontractorCompanyId: requestedSubcontractorCompanyId,
+      }),
+    ],
     queryFn: async () => {
-      const projectQuery = requestedProjectId
-        ? `?projectId=${encodeURIComponent(requestedProjectId)}`
-        : '';
-      const res = await apiFetch<{ company: { projectId: string } }>(
-        `/api/subcontractors/my-company${projectQuery}`,
+      const res = await apiFetch<{ company: { id: string; projectId: string } }>(
+        `/api/subcontractors/my-company${buildPortalCompanyQuery({
+          projectId: requestedProjectId,
+          subcontractorCompanyId: requestedSubcontractorCompanyId,
+        })}`,
       );
       return res.company;
     },
@@ -112,10 +120,13 @@ export function DocketsListPage() {
   });
 
   const { data: dockets = [], isLoading: loading } = useQuery({
-    queryKey: queryKeys.portalDockets(user?.id, company?.projectId),
+    queryKey: queryKeys.portalDockets(user?.id, company?.projectId, company?.id),
     queryFn: async () => {
       const res = await apiFetch<{ dockets: Docket[] }>(
-        `/api/dockets?projectId=${encodeURIComponent(company!.projectId)}`,
+        `/api/dockets${buildPortalCompanyQuery({
+          projectId: company!.projectId,
+          subcontractorCompanyId: company!.id,
+        })}`,
       );
       return res.dockets || [];
     },
@@ -128,6 +139,11 @@ export function DocketsListPage() {
   const today = formatDateKey();
   const todaysDocket = dockets.find((d) => d.date === today) ?? null;
   const projectIdForLinks = company?.projectId ?? requestedProjectId;
+  const subcontractorCompanyIdForLinks = company?.id ?? requestedSubcontractorCompanyId;
+  const portalBackLink = `/subcontractor-portal${buildPortalCompanyQuery({
+    projectId: projectIdForLinks,
+    subcontractorCompanyId: subcontractorCompanyIdForLinks,
+  })}`;
 
   // Filter dockets
   const filteredDockets =
@@ -178,10 +194,7 @@ export function DocketsListPage() {
     <div className="container max-w-2xl mx-auto p-4 pb-20 md:pb-4 space-y-4">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Link
-          to="/subcontractor-portal"
-          className="p-2 rounded-lg hover:bg-muted transition-colors"
-        >
+        <Link to={portalBackLink} className="p-2 rounded-lg hover:bg-muted transition-colors">
           <ArrowLeft className="h-5 w-5 text-muted-foreground" />
         </Link>
         <div>
@@ -196,8 +209,12 @@ export function DocketsListPage() {
       <Link
         to={
           todaysDocket
-            ? buildDocketEditRoute(todaysDocket.id, projectIdForLinks)
-            : buildDocketEditRoute('new', projectIdForLinks)
+            ? buildDocketEditRoute(
+                todaysDocket.id,
+                projectIdForLinks,
+                subcontractorCompanyIdForLinks,
+              )
+            : buildDocketEditRoute('new', projectIdForLinks, subcontractorCompanyIdForLinks)
         }
         className="flex items-center justify-center gap-2 w-full rounded-lg bg-primary px-4 py-3 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors touch-manipulation"
       >
@@ -298,7 +315,14 @@ export function DocketsListPage() {
               </h3>
               <div className="space-y-2">
                 {group.dockets.map((docket) => (
-                  <Link key={docket.id} to={buildDocketEditRoute(docket.id, projectIdForLinks)}>
+                  <Link
+                    key={docket.id}
+                    to={buildDocketEditRoute(
+                      docket.id,
+                      projectIdForLinks,
+                      subcontractorCompanyIdForLinks,
+                    )}
+                  >
                     <div className="border border-border rounded-lg bg-card hover:border-primary transition-colors">
                       <div className="p-4">
                         <div className="flex items-center justify-between">

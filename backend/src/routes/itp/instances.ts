@@ -102,6 +102,18 @@ function parseOptionalBooleanQuery(value: unknown, field: string): boolean | und
   throw AppError.badRequest(`${field} must be true or false`);
 }
 
+function parseOptionalStringQuery(value: unknown, field: string): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value !== 'string') {
+    throw AppError.badRequest(`${field} query parameter must be a single value`);
+  }
+
+  return parseInstanceRouteParam(value, field);
+}
+
 // Assign ITP template to lot (create ITP instance)
 instancesRouter.post(
   '/instances',
@@ -230,6 +242,10 @@ instancesRouter.get(
     const user = req.user as AuthUser;
     const subcontractorView =
       parseOptionalBooleanQuery(req.query.subcontractorView, 'subcontractorView') ?? false;
+    const requestedSubcontractorCompanyId = parseOptionalStringQuery(
+      req.query.subcontractorCompanyId,
+      'subcontractorCompanyId',
+    );
 
     const lotId = parseInstanceRouteParam(req.params.lotId, 'lotId');
 
@@ -242,7 +258,13 @@ instancesRouter.get(
       throw AppError.notFound('Lot');
     }
 
-    await requireItpLotAccess(user, lot.projectId, lotId);
+    await requireItpLotAccess(
+      user,
+      lot.projectId,
+      lotId,
+      'Access denied',
+      requestedSubcontractorCompanyId,
+    );
     await requireSubcontractorPortalModuleAccess({
       userId: user.userId,
       role: user.role,

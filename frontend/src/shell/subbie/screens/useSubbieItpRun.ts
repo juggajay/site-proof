@@ -33,6 +33,10 @@ import type { ITPCompletion, ITPInstance } from '@/pages/lots/types';
 import { getItpPhotoValidationError } from '@/pages/lots/lib/itpEvidence';
 import { useItpCompletionActions } from '@/pages/lots/hooks/useItpCompletionActions';
 import { uploadItpEvidencePhotoWithOfflineFallback } from '@/pages/lots/hooks/useLotPhotoUpload';
+import {
+  buildPortalCompanyQuery,
+  type PortalCompanyScope,
+} from '@/pages/subcontractor-portal/portalCompanyScope';
 
 interface SubbieLot {
   id: string;
@@ -65,7 +69,10 @@ export interface SubbieItpRun {
   refetch: () => Promise<void>;
 }
 
-export function useSubbieItpRun(lotId: string | undefined): SubbieItpRun {
+export function useSubbieItpRun(
+  lotId: string | undefined,
+  scope: PortalCompanyScope = {},
+): SubbieItpRun {
   const { user } = useAuth();
   const [lot, setLot] = useState<SubbieLot | null>(null);
   const [instance, setInstance] = useState<ITPInstance | null>(null);
@@ -73,6 +80,10 @@ export function useSubbieItpRun(lotId: string | undefined): SubbieItpRun {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [canComplete, setCanComplete] = useState(false);
   const [updatingItemId, setUpdatingItemId] = useState<string | null>(null);
+  const scopeQuery = buildPortalCompanyQuery({
+    projectId: scope.projectId,
+    subcontractorCompanyId: scope.subcontractorCompanyId,
+  });
 
   // Classic SubcontractorLotITPPage fetch: lot (with assignments) + instance
   // (subcontractor view). Identical URLs + query params.
@@ -81,7 +92,7 @@ export function useSubbieItpRun(lotId: string | undefined): SubbieItpRun {
     try {
       const encodedLotId = encodeURIComponent(lotId);
       const lotData = await apiFetch<{ lot: SubbieLot }>(
-        `/api/lots/${encodedLotId}?portalModule=itps`,
+        `/api/lots/${encodedLotId}?portalModule=itps${scopeQuery ? `&${scopeQuery.slice(1)}` : ''}`,
       );
       setLot(lotData.lot);
 
@@ -91,7 +102,7 @@ export function useSubbieItpRun(lotId: string | undefined): SubbieItpRun {
 
       try {
         const itpData = await apiFetch<{ instance: ITPInstance | null }>(
-          `/api/itp/instances/lot/${encodedLotId}?subcontractorView=true`,
+          `/api/itp/instances/lot/${encodedLotId}?subcontractorView=true${scopeQuery ? `&${scopeQuery.slice(1)}` : ''}`,
         );
         setInstance(itpData.instance);
       } catch {
@@ -103,7 +114,7 @@ export function useSubbieItpRun(lotId: string | undefined): SubbieItpRun {
     } finally {
       setLoading(false);
     }
-  }, [lotId]);
+  }, [lotId, scopeQuery]);
 
   useEffect(() => {
     void fetchData();

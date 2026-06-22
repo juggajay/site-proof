@@ -38,12 +38,21 @@ describe('docket edit data – path builders', () => {
   });
 
   it('encodes the requested project id in the my-company path', () => {
-    expect(buildMyCompanyPath('proj 1')).toBe('/api/subcontractors/my-company?projectId=proj%201');
+    expect(buildMyCompanyPath('proj 1')).toBe('/api/subcontractors/my-company?projectId=proj+1');
+  });
+
+  it('includes selected subcontractor company id in the my-company path', () => {
+    expect(buildMyCompanyPath('proj 1', 'sub 2')).toBe(
+      '/api/subcontractors/my-company?projectId=proj+1&subcontractorCompanyId=sub+2',
+    );
   });
 
   it('encodes the project id in the assigned-lots path', () => {
     expect(buildAssignedLotsPath('proj 1&subcontractorView=false')).toBe(
-      '/api/lots?projectId=proj%201%26subcontractorView%3Dfalse',
+      '/api/lots?projectId=proj+1%26subcontractorView%3Dfalse',
+    );
+    expect(buildAssignedLotsPath('proj 1', 'sub 2')).toBe(
+      '/api/lots?projectId=proj+1&subcontractorCompanyId=sub+2',
     );
   });
 
@@ -53,7 +62,10 @@ describe('docket edit data – path builders', () => {
 
   it('encodes the project id in the existing-dockets path', () => {
     expect(buildExistingDocketsPath('proj 1&subcontractorView=false')).toBe(
-      '/api/dockets?projectId=proj%201%26subcontractorView%3Dfalse',
+      '/api/dockets?projectId=proj+1%26subcontractorView%3Dfalse',
+    );
+    expect(buildExistingDocketsPath('proj 1', 'sub 2')).toBe(
+      '/api/dockets?projectId=proj+1&subcontractorCompanyId=sub+2',
     );
   });
 });
@@ -66,7 +78,10 @@ describe('docket edit data – route builder', () => {
 
   it('appends an encoded project query when a project id is supplied', () => {
     expect(buildDocketEditRoute('docket-1', 'proj 1')).toBe(
-      '/subcontractor-portal/docket/docket-1?projectId=proj%201',
+      '/subcontractor-portal/docket/docket-1?projectId=proj+1',
+    );
+    expect(buildDocketEditRoute('docket-1', 'proj 1', 'sub 2')).toBe(
+      '/subcontractor-portal/docket/docket-1?projectId=proj+1&subcontractorCompanyId=sub+2',
     );
   });
 });

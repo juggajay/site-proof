@@ -9,6 +9,7 @@ import { extractErrorMessage } from '@/lib/errorHandling';
 import { formatStatusLabel } from '@/lib/statusLabels';
 import { PortalAccessDenied } from './portalAccess';
 import { isPortalModuleEnabled, type PortalAccess } from './portalAccessModel';
+import { buildPortalCompanyQuery, buildPortalCompanyScopedPath } from './portalCompanyScope';
 
 interface NCR {
   id: string;
@@ -106,14 +107,19 @@ export function SubcontractorNCRsPage() {
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const requestedProjectId = searchParams.get('projectId');
+  const requestedSubcontractorCompanyId = searchParams.get('subcontractorCompanyId');
   const { data: company, isLoading: companyLoading } = useQuery({
-    queryKey: [...queryKeys.portalCompanies(user?.id), requestedProjectId ?? 'default'],
+    queryKey: [
+      ...queryKeys.portalCompanies(user?.id),
+      requestedProjectId ?? 'default',
+      requestedSubcontractorCompanyId ?? 'default-company',
+    ],
     queryFn: async () => {
-      const query = requestedProjectId
-        ? `?projectId=${encodeURIComponent(requestedProjectId)}`
-        : '';
       const res = await apiFetch<{ company: SubcontractorCompany }>(
-        `/api/subcontractors/my-company${query}`,
+        `/api/subcontractors/my-company${buildPortalCompanyQuery({
+          projectId: requestedProjectId,
+          subcontractorCompanyId: requestedSubcontractorCompanyId,
+        })}`,
       );
       return res.company;
     },
@@ -126,10 +132,13 @@ export function SubcontractorNCRsPage() {
     isLoading: ncrsLoading,
     error,
   } = useQuery({
-    queryKey: queryKeys.portalNCRs(user?.id, company?.projectId),
+    queryKey: queryKeys.portalNCRs(user?.id, company?.projectId, company?.id),
     queryFn: async () => {
       const res = await apiFetch<{ ncrs: NCR[] }>(
-        `/api/ncrs?projectId=${encodeURIComponent(company!.projectId)}&subcontractorView=true`,
+        `/api/ncrs${buildPortalCompanyQuery({
+          projectId: company!.projectId,
+          subcontractorCompanyId: company!.id,
+        })}&subcontractorView=true`,
       );
       return res.ncrs || [];
     },
@@ -137,6 +146,10 @@ export function SubcontractorNCRsPage() {
   });
 
   const loading = companyLoading || (canViewNCRs && ncrsLoading);
+  const portalPath = buildPortalCompanyScopedPath('/subcontractor-portal', {
+    projectId: company?.projectId ?? requestedProjectId,
+    subcontractorCompanyId: company?.id ?? requestedSubcontractorCompanyId,
+  });
 
   const open = ncrs.filter((n) => isOpenStatus(n.status));
   const inProgress = ncrs.filter((n) => !isOpenStatus(n.status) && !isClosedStatus(n.status));
@@ -156,7 +169,7 @@ export function SubcontractorNCRsPage() {
   }
 
   if (!canViewNCRs) {
-    return <PortalAccessDenied moduleName="NCRs" />;
+    return <PortalAccessDenied moduleName="NCRs" backTo={portalPath} />;
   }
 
   if (error) {
@@ -167,7 +180,7 @@ export function SubcontractorNCRsPage() {
           <p>{extractErrorMessage(error, 'Failed to load NCRs')}</p>
         </div>
         <Link
-          to="/subcontractor-portal"
+          to={portalPath}
           className="inline-flex items-center gap-2 mt-4 px-4 py-2 border border-border rounded-lg hover:bg-muted/50 transition-colors text-foreground"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -181,10 +194,7 @@ export function SubcontractorNCRsPage() {
     <div className="container max-w-2xl mx-auto p-4 pb-20 md:pb-4 space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Link
-          to="/subcontractor-portal"
-          className="p-2 rounded-lg hover:bg-muted transition-colors"
-        >
+        <Link to={portalPath} className="p-2 rounded-lg hover:bg-muted transition-colors">
           <ArrowLeft className="h-5 w-5 text-muted-foreground" />
         </Link>
         <div>

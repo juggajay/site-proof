@@ -2,6 +2,11 @@ import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api';
 import { logError } from '@/lib/logger';
 import { queryKeys } from '@/lib/queryKeys';
+import {
+  buildPortalCompanyQuery,
+  portalCompanyQueryKeyParts,
+  type PortalCompanyScope,
+} from '@/pages/subcontractor-portal/portalCompanyScope';
 
 // ===== Data contract =====
 // Response shape for the "My Company" bootstrap read. Mirrors the full object
@@ -39,6 +44,8 @@ export interface CompanyData {
   primaryContactPhone: string;
   status: string;
   availableProjects?: Array<{
+    id: string;
+    subcontractorCompanyId?: string;
     projectId: string;
     projectName: string;
     companyName: string;
@@ -56,8 +63,14 @@ export interface MyCompanyResponse {
 // Byte-identical to the original inline fetch: the requested project id is
 // URL-encoded into the query string, and an absent project id yields no query.
 
-export function buildMyCompanyPath(requestedProjectId: string | null | undefined): string {
-  const query = requestedProjectId ? `?projectId=${encodeURIComponent(requestedProjectId)}` : '';
+export function buildMyCompanyPath(
+  requestedProjectId: string | null | undefined,
+  requestedSubcontractorCompanyId?: string | null,
+): string {
+  const query = buildPortalCompanyQuery({
+    projectId: requestedProjectId,
+    subcontractorCompanyId: requestedSubcontractorCompanyId,
+  });
   return `/api/subcontractors/my-company${query}`;
 }
 
@@ -74,9 +87,12 @@ export function normalizeMyCompanyResponse(data: MyCompanyResponse): CompanyData
 
 async function fetchMyCompany(
   requestedProjectId: string | null | undefined,
+  requestedSubcontractorCompanyId?: string | null,
 ): Promise<CompanyData | null> {
   try {
-    const data = await apiFetch<MyCompanyResponse>(buildMyCompanyPath(requestedProjectId));
+    const data = await apiFetch<MyCompanyResponse>(
+      buildMyCompanyPath(requestedProjectId, requestedSubcontractorCompanyId),
+    );
     return normalizeMyCompanyResponse(data);
   } catch (error) {
     logError('Error fetching company data:', error);
@@ -93,10 +109,15 @@ async function fetchMyCompany(
 export function useMyCompanyQuery(
   userId: string | null | undefined,
   requestedProjectId: string | null | undefined,
+  requestedSubcontractorCompanyId?: string | null,
 ) {
+  const scope: PortalCompanyScope = {
+    projectId: requestedProjectId,
+    subcontractorCompanyId: requestedSubcontractorCompanyId,
+  };
   return useQuery({
-    queryKey: queryKeys.myCompany(userId, requestedProjectId),
-    queryFn: () => fetchMyCompany(requestedProjectId),
+    queryKey: queryKeys.myCompany(userId, ...portalCompanyQueryKeyParts(scope)),
+    queryFn: () => fetchMyCompany(requestedProjectId, requestedSubcontractorCompanyId),
     enabled: Boolean(userId),
     retry: false,
   });

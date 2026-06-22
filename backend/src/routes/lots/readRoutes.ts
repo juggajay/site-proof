@@ -69,6 +69,11 @@ lotReadRouter.get(
     const unclaimed = getOptionalQueryString(req.query, 'unclaimed');
     const includeITP = getOptionalQueryString(req.query, 'includeITP');
     const portalModule = getOptionalLotPortalModule(req.query);
+    const requestedSubcontractorCompanyId = getOptionalBoundedQueryString(
+      req.query,
+      'subcontractorCompanyId',
+      MAX_ID_LENGTH,
+    );
     const sortBy = getOptionalQueryString(req.query, 'sortBy');
     const sortOrderParam = getOptionalQueryString(req.query, 'sortOrder');
     const search = getOptionalBoundedQueryString(req.query, 'search', MAX_SEARCH_LENGTH);
@@ -134,6 +139,7 @@ lotReadRouter.get(
         user.id,
         projectId,
         portalModule === 'itps' || includeITP === 'true' ? ['lots', 'itps'] : ['lots'],
+        requestedSubcontractorCompanyId,
       );
 
       if (subcontractorCompanyIds.length > 0) {
@@ -244,6 +250,11 @@ lotReadRouter.get(
     const id = parseLotRouteParam(req.params.id, 'id');
     const user = req.user!;
     const portalModule = getOptionalLotPortalModule(req.query);
+    const requestedSubcontractorCompanyId = getOptionalBoundedQueryString(
+      req.query,
+      'subcontractorCompanyId',
+      MAX_ID_LENGTH,
+    );
 
     const lot = await prisma.lot.findUnique({
       where: { id },
@@ -329,10 +340,12 @@ lotReadRouter.get(
         });
     const canViewBudgetAmount = canViewLotBudget(effectiveProjectRole);
     const subcontractorCompanyIds = isSubcontractor
-      ? await getProjectSubcontractorCompanyIds(user.id, lot.projectId, [
-          'lots',
-          ...(portalModule === 'itps' ? (['itps'] as const) : []),
-        ])
+      ? await getProjectSubcontractorCompanyIds(
+          user.id,
+          lot.projectId,
+          ['lots', ...(portalModule === 'itps' ? (['itps'] as const) : [])],
+          requestedSubcontractorCompanyId,
+        )
       : null;
 
     const lotResponse = shapeLotDetailResponse(lot, {

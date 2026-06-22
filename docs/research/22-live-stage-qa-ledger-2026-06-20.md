@@ -16,6 +16,53 @@ keep going until the app has been exercised end to end.
   `1secmail.com` from an old Codex process, so future email QA must use Jay's
   nominated inbox, a trusted mailbox, or Resend's safe test recipient.
 
+## Stage 46 - Same-Project Subcontractor Company Scope Residue
+
+Status: fixed locally in branch `qa/stage46-subbie-scope-residue`; PR/CI/merge
+pending.
+
+Scope:
+
+- Follow-up on Stage 45's multi-company subcontractor access work.
+- Focused on the same-project case where one subcontractor login can belong to
+  two subcontractor companies on the same project.
+- Covered classic subcontractor portal pages and the new subbie mobile shell:
+  dashboard, my-company, dockets, assigned work, ITPs, hold points, NCRs, test
+  results, documents, and ITP run/detail navigation.
+
+Confirmed issues fixed:
+
+- Backend `my-company` now rejects ambiguous same-project reads/mutations unless
+  the requested `subcontractorCompanyId` is supplied.
+- Subcontractor resource responses now expose `subcontractorCompanyId` for
+  project/company switchers, while retaining the existing `id` field.
+- Docket list filtering now accepts and enforces `subcontractorCompanyId`, so
+  "today's docket" and docket history do not blend two linked companies on the
+  same project.
+- Lot list/detail and ITP instance read helpers now honor a requested
+  subcontractor company id when evaluating assigned lots and completion access.
+- Hold point, test result, NCR, and document read scopes now narrow to the
+  selected subcontractor company when supplied.
+- Classic subbie portal and subbie shell navigation now preserve both
+  `projectId` and `subcontractorCompanyId` across dashboards, back links,
+  detail links, docket links, and ITP run links.
+- React Query keys for subbie portal resources now include the company id so
+  cached data from one same-project company is not reused for the other.
+
+Verification:
+
+- Frontend targeted tests passed:
+  `npx vitest run src/pages/subcontractors/myCompanyData.test.ts src/pages/subcontractors/MyCompanySections.test.tsx src/pages/subcontractor-portal/docketEditData.test.ts src/pages/subcontractor-portal/SubcontractorDocumentsPage.test.tsx src/pages/subcontractor-portal/components/DocketEditPagePanels.test.tsx src/shell/subbie/screens/dockets/test/DocketsListScreen.test.tsx src/shell/subbie/screens/test/HomeScreen.test.tsx src/shell/subbie/screens/test/CompanyScreen.test.tsx src/shell/subbie/screens/dockets/test/DocketScreen.test.tsx src/shell/subbie/screens/test/WorkScreen.test.tsx src/shell/subbie/screens/test/ItpsScreen.test.tsx src/shell/subbie/screens/test/NcrsScreen.test.tsx src/shell/subbie/screens/test/QualityScreen.test.tsx src/shell/subbie/screens/test/DocsScreen.test.tsx src/shell/subbie/screens/test/SubbieItpRunScreen.test.tsx`
+  - 15 files passed, 127 tests passed.
+- Backend non-DB unit tests passed:
+  `npx vitest run src/routes/subcontractors/portalResourceResponses.test.ts src/routes/lots/listPresentation.test.ts src/routes/lots/detailPresentation.test.ts src/routes/documents/access.test.ts src/routes/holdpoints/listPresentation.test.ts src/routes/holdpoints/detailResponse.test.ts src/routes/itp/instances/responses.test.ts src/routes/ncrs/ncrCoreResponses.test.ts`
+  - 7 files passed, 42 tests passed.
+- Backend `npm run type-check` passed.
+- Frontend `npm run type-check` passed.
+- `git diff --check` passed.
+- DB-backed route tests still need CI because the local shell does not have
+  `DATABASE_URL` configured.
+
 ## Stage 45 - Multi-Company Subcontractor Portal Access Sweep
 
 Status: landed in PR #1094; PR CI, post-merge master CI, full post-merge E2E,

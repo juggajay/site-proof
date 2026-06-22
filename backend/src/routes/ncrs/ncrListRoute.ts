@@ -31,6 +31,10 @@ ncrListRouter.get(
   asyncHandler(async (req: Request, res: Response) => {
     const user = req.user as AuthUser;
     const requestedProjectId = getOptionalQueryString(req.query, 'projectId');
+    const requestedSubcontractorCompanyId = getOptionalQueryString(
+      req.query,
+      'subcontractorCompanyId',
+    );
     const status = parseNcrStatusFilter(getOptionalQueryString(req.query, 'status'));
     const severity = parseNcrSeverityFilter(getOptionalQueryString(req.query, 'severity'));
     const lotId = getOptionalQueryString(req.query, 'lotId');
@@ -145,7 +149,7 @@ ncrListRouter.get(
     // Subcontractors can see NCRs linked to lots assigned to their company OR assigned to them as responsible party
     if (isStandaloneSubcontractor) {
       // Find all of the user's subcontractor companies in the current project scope.
-      const subCompanyIds = [
+      const accessibleSubCompanyIds = [
         ...new Set(
           (
             await Promise.all(
@@ -160,6 +164,11 @@ ncrListRouter.get(
           ).flat(),
         ),
       ];
+      const subCompanyIds = requestedSubcontractorCompanyId
+        ? accessibleSubCompanyIds.includes(requestedSubcontractorCompanyId)
+          ? [requestedSubcontractorCompanyId]
+          : []
+        : accessibleSubCompanyIds;
 
       if (subCompanyIds.length > 0) {
         // Get lots assigned via LotSubcontractorAssignment (new model)

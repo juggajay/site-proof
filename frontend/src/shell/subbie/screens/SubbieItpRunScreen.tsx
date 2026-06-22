@@ -43,6 +43,7 @@ import {
 import { dotStateFor, snapFrac } from '@/shell/screens/lots/itpTrackPhysics';
 import { useItpContentDrag } from '@/shell/screens/lots/useItpContentDrag';
 import type { ITPChecklistItem } from '@/pages/lots/types';
+import { buildPortalCompanyQuery } from '@/pages/subcontractor-portal/portalCompanyScope';
 import { useSubbieShellContext } from '../subbieShellContext';
 import { useSubbieItpRun } from './useSubbieItpRun';
 
@@ -79,9 +80,9 @@ const FLASH_MS = 650;
 export function SubbieItpRunScreen() {
   const navigate = useNavigate();
   const { lotId } = useParams<{ lotId: string }>();
-  const { projectId } = useSubbieShellContext();
-  const run = useSubbieItpRun(lotId);
-  const encodedProjectId = projectId ? encodeURIComponent(projectId) : '';
+  const { projectId, subcontractorCompanyId } = useSubbieShellContext();
+  const run = useSubbieItpRun(lotId, { projectId, subcontractorCompanyId });
+  const projectQuery = buildPortalCompanyQuery({ projectId, subcontractorCompanyId });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -116,7 +117,7 @@ export function SubbieItpRunScreen() {
     [],
   );
 
-  const lotHref = `/p/itps${projectId ? `?projectId=${encodedProjectId}` : ''}`;
+  const lotHref = `/p/itps${projectQuery}`;
 
   const progress = runProgress(orderedItems, completions, currentIndex);
   const currentItem = currentIndex >= 0 ? orderedItems[currentIndex] : undefined;

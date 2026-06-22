@@ -38,6 +38,14 @@ import {
   getDocketDisplayTotalCost,
 } from './docketEditData';
 import { PortalQuickLinks } from './SubcontractorDashboardSections';
+import {
+  applyPortalCompanyOptionToParams,
+  buildPortalCompanyQuery,
+  findPortalCompanyOptionByValue,
+  getPortalCompanyOptionLabel,
+  getPortalCompanyOptionValue,
+  portalCompanyQueryKeyParts,
+} from './portalCompanyScope';
 
 interface PortalAccess {
   lots: boolean;
@@ -50,6 +58,7 @@ interface PortalAccess {
 
 interface PortalProjectOption {
   id: string;
+  subcontractorCompanyId?: string;
   companyName: string;
   projectId: string;
   projectName: string;
@@ -153,14 +162,22 @@ export function SubcontractorDashboard() {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedProjectId = searchParams.get('projectId');
+  const requestedSubcontractorCompanyId = searchParams.get('subcontractorCompanyId');
   const [refreshing, setRefreshing] = useState(false);
 
   const { data: company, isLoading: companyLoading } = useQuery({
-    queryKey: [...queryKeys.portalCompanies(user?.id), requestedProjectId ?? 'default'],
+    queryKey: [
+      ...queryKeys.portalCompanies(user?.id),
+      ...portalCompanyQueryKeyParts({
+        projectId: requestedProjectId,
+        subcontractorCompanyId: requestedSubcontractorCompanyId,
+      }),
+    ],
     queryFn: async () => {
-      const query = requestedProjectId
-        ? `?projectId=${encodeURIComponent(requestedProjectId)}`
-        : '';
+      const query = buildPortalCompanyQuery({
+        projectId: requestedProjectId,
+        subcontractorCompanyId: requestedSubcontractorCompanyId,
+      });
       const res = await apiFetch<{ company: Company }>(`/api/subcontractors/my-company${query}`);
       return res.company;
     },
@@ -168,10 +185,13 @@ export function SubcontractorDashboard() {
   });
 
   const { data: docketsData } = useQuery({
-    queryKey: queryKeys.portalDockets(user?.id, company?.projectId),
+    queryKey: queryKeys.portalDockets(user?.id, company?.projectId, company?.id),
     queryFn: async () => {
       const res = await apiFetch<{ dockets: Docket[] }>(
-        `/api/dockets?projectId=${encodeURIComponent(company!.projectId)}`,
+        `/api/dockets${buildPortalCompanyQuery({
+          projectId: company!.projectId,
+          subcontractorCompanyId: company!.id,
+        })}`,
       );
       return res.dockets || [];
     },
@@ -184,10 +204,13 @@ export function SubcontractorDashboard() {
   const canViewAssignedLots = isPortalModuleEnabled(company, 'lots');
 
   const { data: assignedLots = [] } = useQuery({
-    queryKey: queryKeys.portalAssignedWork(user?.id, company?.projectId),
+    queryKey: queryKeys.portalAssignedWork(user?.id, company?.projectId, company?.id),
     queryFn: async () => {
       const res = await apiFetch<{ lots: Lot[] }>(
-        `/api/lots?projectId=${encodeURIComponent(company!.projectId)}&portalModule=lots`,
+        `/api/lots${buildPortalCompanyQuery({
+          projectId: company!.projectId,
+          subcontractorCompanyId: company!.id,
+        })}&portalModule=lots`,
       );
       return res.lots.slice(0, 5);
     },
@@ -206,9 +229,12 @@ export function SubcontractorDashboard() {
   const notifications = notifData?.notifications || [];
   const projectOptions = company?.availableProjects || [];
   const showProjectSwitcher = projectOptions.length > 1;
-  const currentProjectQuery = company?.projectId
-    ? `?projectId=${encodeURIComponent(company.projectId)}`
-    : '';
+  const currentProjectQuery = company
+    ? buildPortalCompanyQuery({ projectId: company.projectId, subcontractorCompanyId: company.id })
+    : buildPortalCompanyQuery({
+        projectId: requestedProjectId,
+        subcontractorCompanyId: requestedSubcontractorCompanyId,
+      });
   const myCompanyLink = `/my-company${currentProjectQuery}`;
   const newDocketLink = `/subcontractor-portal/docket/new${currentProjectQuery}`;
 
@@ -235,20 +261,21 @@ export function SubcontractorDashboard() {
 
   const loading = companyLoading;
 
-  const handleProjectChange = (projectId: string) => {
-    const nextParams = new URLSearchParams(searchParams);
-    nextParams.set('projectId', projectId);
-    setSearchParams(nextParams);
+  const handleProjectChange = (value: string) => {
+    const option = findPortalCompanyOptionByValue(projectOptions, value);
+    if (option) {
+      setSearchParams(applyPortalCompanyOptionToParams(searchParams, option));
+    }
   };
 
   const handleRefresh = async () => {
     setRefreshing(true);
     await queryClient.invalidateQueries({ queryKey: queryKeys.portalCompanies(user?.id) });
     await queryClient.invalidateQueries({
-      queryKey: queryKeys.portalDockets(user?.id, company?.projectId),
+      queryKey: queryKeys.portalDockets(user?.id, company?.projectId, company?.id),
     });
     await queryClient.invalidateQueries({
-      queryKey: queryKeys.portalAssignedWork(user?.id, company?.projectId),
+      queryKey: queryKeys.portalAssignedWork(user?.id, company?.projectId, company?.id),
     });
     await queryClient.invalidateQueries({ queryKey: queryKeys.portalDashboard(user?.id) });
     setRefreshing(false);
@@ -318,17 +345,20 @@ export function SubcontractorDashboard() {
             htmlFor="portal-project-switcher"
             className="mb-2 block text-sm font-medium text-foreground"
           >
-            Project
+            Project / company
           </label>
           <select
             id="portal-project-switcher"
-            value={company?.projectId || ''}
+            value={company?.id || company?.projectId || ''}
             onChange={(event) => handleProjectChange(event.target.value)}
             className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground"
           >
             {projectOptions.map((option) => (
-              <option key={option.projectId} value={option.projectId}>
-                {option.projectName}
+              <option
+                key={`${option.projectId}:${getPortalCompanyOptionValue(option)}`}
+                value={getPortalCompanyOptionValue(option)}
+              >
+                {getPortalCompanyOptionLabel(option, projectOptions)}
               </option>
             ))}
           </select>
@@ -377,7 +407,7 @@ export function SubcontractorDashboard() {
                 </p>
               </div>
               <Link
-                to={buildDocketEditRoute(todaysDocket.id, company?.projectId)}
+                to={buildDocketEditRoute(todaysDocket.id, company?.projectId, company?.id)}
                 className="flex items-center justify-center gap-2 w-full py-2.5 px-4 bg-primary hover:bg-primary/90 text-primary-foreground font-medium rounded-lg transition-colors"
               >
                 {todaysDocket.status === 'draft' ? 'Continue Docket' : 'View Docket'}
@@ -490,7 +520,7 @@ export function SubcontractorDashboard() {
                   </div>
                 ))}
                 <Link
-                  to="/subcontractor-portal/work"
+                  to={`/subcontractor-portal/work${currentProjectQuery}`}
                   className="flex items-center justify-center gap-2 w-full py-2 text-sm text-muted-foreground hover:text-primary transition-colors mt-2"
                 >
                   View All Work
@@ -526,7 +556,7 @@ export function SubcontractorDashboard() {
               {recentDockets.slice(0, 3).map((docket) => (
                 <Link
                   key={docket.id}
-                  to={buildDocketEditRoute(docket.id, company?.projectId)}
+                  to={buildDocketEditRoute(docket.id, company?.projectId, company?.id)}
                   className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors"
                 >
                   <div className="flex items-center gap-3">

@@ -21,6 +21,7 @@ import { useAuth } from '@/lib/auth';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { formatStatusLabel } from '@/lib/statusLabels';
 import { cn } from '@/lib/utils';
+import { buildPortalCompanyQuery } from '@/pages/subcontractor-portal/portalCompanyScope';
 import { useSubbieShellContext } from '../subbieShellContext';
 
 interface NCR {
@@ -116,19 +117,20 @@ function SectionLabel({ children, count }: { children: React.ReactNode; count: n
 
 export function NcrsScreen() {
   const { user } = useAuth();
-  const { projectId, isModuleEnabled } = useSubbieShellContext();
+  const { projectId, subcontractorCompanyId, isModuleEnabled } = useSubbieShellContext();
   const canViewNCRs = isModuleEnabled('ncrs');
-  const encodedProjectId = projectId ? encodeURIComponent(projectId) : '';
+  const projectQuery = buildPortalCompanyQuery({ projectId, subcontractorCompanyId });
+  const parentPath = `/p${projectQuery}`;
 
   const {
     data: ncrs = [],
     isLoading,
     error,
   } = useQuery({
-    queryKey: queryKeys.portalNCRs(user?.id, projectId),
+    queryKey: queryKeys.portalNCRs(user?.id, projectId, subcontractorCompanyId),
     queryFn: async () => {
       const res = await apiFetch<{ ncrs: NCR[] }>(
-        `/api/ncrs?projectId=${encodedProjectId}&subcontractorView=true`,
+        `/api/ncrs${projectQuery}${projectQuery ? '&' : '?'}subcontractorView=true`,
       );
       return res.ncrs || [];
     },
@@ -141,7 +143,7 @@ export function NcrsScreen() {
 
   if (!canViewNCRs) {
     return (
-      <ShellScreen variant="inner" title="NCRs" parent="/p" sub={sub}>
+      <ShellScreen variant="inner" title="NCRs" parent={parentPath} sub={sub}>
         <div className="flex flex-col items-center gap-3 py-16 text-center">
           <ShieldOff size={28} className="text-muted-foreground/50" aria-hidden="true" />
           <p className="max-w-[280px] text-[14px] leading-relaxed text-muted-foreground">
@@ -158,7 +160,7 @@ export function NcrsScreen() {
 
   if (isLoading) {
     return (
-      <ShellScreen variant="inner" title="NCRs" parent="/p" sub={sub}>
+      <ShellScreen variant="inner" title="NCRs" parent={parentPath} sub={sub}>
         {[1, 2].map((i) => (
           <div key={i} className="h-[112px] animate-pulse rounded-2xl bg-muted" />
         ))}
@@ -167,7 +169,7 @@ export function NcrsScreen() {
   }
 
   return (
-    <ShellScreen variant="inner" title="NCRs" parent="/p" sub={sub}>
+    <ShellScreen variant="inner" title="NCRs" parent={parentPath} sub={sub}>
       {error ? (
         <div className="rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-[13px] font-semibold text-destructive">
           {extractErrorMessage(error, 'Failed to load NCRs')}

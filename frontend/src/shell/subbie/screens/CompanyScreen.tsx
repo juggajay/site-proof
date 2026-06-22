@@ -30,6 +30,7 @@ import { useAuth } from '@/lib/auth';
 import { logError } from '@/lib/logger';
 import { queryKeys } from '@/lib/queryKeys';
 import { cn } from '@/lib/utils';
+import { buildPortalCompanyQuery } from '@/pages/subcontractor-portal/portalCompanyScope';
 import { parseRateInput } from '@/pages/subcontractors/rateValidation';
 import { useMyCompanyQuery, type Employee, type Plant } from '@/pages/subcontractors/myCompanyData';
 import { formatCompanyRate } from '@/pages/subcontractors/myCompanyDisplayHelpers';
@@ -244,10 +245,10 @@ function SectionLabel({ children, count }: { children: React.ReactNode; count: s
 export function CompanyScreen() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const { projectId } = useSubbieShellContext();
+  const { projectId, subcontractorCompanyId } = useSubbieShellContext();
 
   // Same query key as classic MyCompanyPage — cache is shared, full roster shape.
-  const companyQuery = useMyCompanyQuery(user?.id, projectId);
+  const companyQuery = useMyCompanyQuery(user?.id, projectId, subcontractorCompanyId);
   const company = companyQuery.data ?? null;
 
   // Write gate — byte-identical to MyCompanyPage.tsx:44.
@@ -294,9 +295,9 @@ export function CompanyScreen() {
 
   const refetchCompany = useCallback(async () => {
     await queryClient.invalidateQueries({
-      queryKey: queryKeys.myCompany(user?.id, projectId),
+      queryKey: queryKeys.myCompany(user?.id, projectId, subcontractorCompanyId),
     });
-  }, [queryClient, user?.id, projectId]);
+  }, [queryClient, user?.id, projectId, subcontractorCompanyId]);
 
   const closeSheet = () => {
     setSheet(null);
@@ -427,10 +428,14 @@ export function CompanyScreen() {
   ) : (
     <span className="text-muted-foreground">Crew, plant &amp; rates</span>
   );
+  const parentPath = `/p${buildPortalCompanyQuery({
+    projectId: company?.projectId ?? projectId,
+    subcontractorCompanyId: company?.id ?? subcontractorCompanyId,
+  })}`;
 
   if (companyQuery.isLoading) {
     return (
-      <ShellScreen variant="inner" title="My Company" parent="/p" sub={sub}>
+      <ShellScreen variant="inner" title="My Company" parent={parentPath} sub={sub}>
         {[1, 2, 3].map((i) => (
           <div key={i} className="h-[56px] animate-pulse rounded-2xl bg-muted" />
         ))}
@@ -440,7 +445,7 @@ export function CompanyScreen() {
 
   if (!company) {
     return (
-      <ShellScreen variant="inner" title="My Company" parent="/p" sub={sub}>
+      <ShellScreen variant="inner" title="My Company" parent={parentPath} sub={sub}>
         <div className="rounded-2xl border border-border bg-card p-4">
           <p className="text-[14px] text-muted-foreground">
             You are not associated with a subcontractor company. Please contact your administrator.
@@ -459,7 +464,7 @@ export function CompanyScreen() {
   const pendingCount = pendingEmployees + pendingPlant;
 
   return (
-    <ShellScreen variant="inner" title="My Company" parent="/p" sub={sub}>
+    <ShellScreen variant="inner" title="My Company" parent={parentPath} sub={sub}>
       {showPendingNotice && (
         <div className="shell-notice shell-notice-warn">
           <div>

@@ -647,6 +647,19 @@ describe('Dockets API', () => {
         const returnedIds = (res.body.dockets as Array<{ id: string }>).map((docket) => docket.id);
         expect(returnedIds).toContain(ownDocket.id);
         expect(returnedIds).toContain(otherDocket.id);
+
+        const scopedRes = await request(app)
+          .get(
+            `/api/dockets?projectId=${projectId}&subcontractorCompanyId=${otherSubcontractorCompany.id}&limit=100`,
+          )
+          .set('Authorization', `Bearer ${subcontractorToken}`);
+
+        expect(scopedRes.status).toBe(200);
+        const scopedIds = (scopedRes.body.dockets as Array<{ id: string }>).map(
+          (docket) => docket.id,
+        );
+        expect(scopedIds).toContain(otherDocket.id);
+        expect(scopedIds).not.toContain(ownDocket.id);
       } finally {
         await prisma.dailyDocket.delete({ where: { id: otherDocket.id } }).catch(() => {});
         await prisma.dailyDocket.delete({ where: { id: ownDocket.id } }).catch(() => {});

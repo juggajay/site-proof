@@ -11,6 +11,7 @@ import { toast } from '@/components/ui/toaster';
 import { logError } from '@/lib/logger';
 import { PortalAccessDenied } from './portalAccess';
 import { isPortalModuleEnabled, type PortalAccess } from './portalAccessModel';
+import { buildPortalCompanyQuery, buildPortalCompanyScopedPath } from './portalCompanyScope';
 
 interface Document {
   id: string;
@@ -61,18 +62,23 @@ export function SubcontractorDocumentsPage() {
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const requestedProjectId = searchParams.get('projectId');
+  const requestedSubcontractorCompanyId = searchParams.get('subcontractorCompanyId');
   const {
     data: company,
     isLoading: companyLoading,
     error: companyError,
   } = useQuery({
-    queryKey: [...queryKeys.portalCompanies(user?.id), requestedProjectId ?? 'default'],
+    queryKey: [
+      ...queryKeys.portalCompanies(user?.id),
+      requestedProjectId ?? 'default',
+      requestedSubcontractorCompanyId ?? 'default-company',
+    ],
     queryFn: async () => {
-      const query = requestedProjectId
-        ? `?projectId=${encodeURIComponent(requestedProjectId)}`
-        : '';
       const res = await apiFetch<{ company: SubcontractorCompany }>(
-        `/api/subcontractors/my-company${query}`,
+        `/api/subcontractors/my-company${buildPortalCompanyQuery({
+          projectId: requestedProjectId,
+          subcontractorCompanyId: requestedSubcontractorCompanyId,
+        })}`,
       );
       return res.company;
     },
@@ -85,10 +91,12 @@ export function SubcontractorDocumentsPage() {
     isLoading: docsLoading,
     error,
   } = useQuery({
-    queryKey: queryKeys.portalDocuments(user?.id, company?.projectId),
+    queryKey: queryKeys.portalDocuments(user?.id, company?.projectId, company?.id),
     queryFn: async () => {
       const res = await apiFetch<{ documents: Document[] }>(
-        `/api/documents/${encodeURIComponent(company!.projectId)}?subcontractorView=true`,
+        `/api/documents/${encodeURIComponent(
+          company!.projectId,
+        )}?subcontractorView=true&subcontractorCompanyId=${encodeURIComponent(company!.id)}`,
       );
       return res.documents || [];
     },
@@ -96,11 +104,10 @@ export function SubcontractorDocumentsPage() {
   });
 
   const loading = companyLoading || (!companyError && canViewDocuments && docsLoading);
-  const portalBackLink = company?.projectId
-    ? `/subcontractor-portal?projectId=${encodeURIComponent(company.projectId)}`
-    : requestedProjectId
-      ? `/subcontractor-portal?projectId=${encodeURIComponent(requestedProjectId)}`
-      : '/subcontractor-portal';
+  const portalBackLink = buildPortalCompanyScopedPath('/subcontractor-portal', {
+    projectId: company?.projectId ?? requestedProjectId,
+    subcontractorCompanyId: company?.id ?? requestedSubcontractorCompanyId,
+  });
 
   // Group by category
   const groupedDocs = documents.reduce(

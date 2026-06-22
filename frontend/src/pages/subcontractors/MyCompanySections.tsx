@@ -2,6 +2,12 @@ import { Plus, Users, Truck, Trash2 } from 'lucide-react';
 import type { CompanyData, Employee, Plant } from './myCompanyData';
 import { StatusBadge } from './myCompanyDisplay';
 import { formatCompanyRate } from './myCompanyDisplayHelpers';
+import {
+  applyPortalCompanyOptionToParams,
+  findPortalCompanyOptionByValue,
+  getPortalCompanyOptionLabel,
+  getPortalCompanyOptionValue,
+} from '@/pages/subcontractor-portal/portalCompanyScope';
 
 export function MyCompanyProjectSwitcher({
   companyData,
@@ -18,21 +24,25 @@ export function MyCompanyProjectSwitcher({
   return (
     <div className="rounded-lg border bg-card p-4">
       <label htmlFor="my-company-project" className="block text-sm font-medium mb-2">
-        Project
+        Project / company
       </label>
       <select
         id="my-company-project"
-        value={companyData.projectId}
+        value={companyData.id || companyData.projectId}
         onChange={(event) => {
-          const nextParams = new URLSearchParams(searchParams);
-          nextParams.set('projectId', event.target.value);
-          onSearchParamsChange(nextParams);
+          const option = findPortalCompanyOptionByValue(availableProjects, event.target.value);
+          if (option) {
+            onSearchParamsChange(applyPortalCompanyOptionToParams(searchParams, option));
+          }
         }}
         className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
       >
         {availableProjects.map((project) => (
-          <option key={project.projectId} value={project.projectId}>
-            {project.projectName || project.companyName}
+          <option
+            key={`${project.projectId}:${getPortalCompanyOptionValue(project)}`}
+            value={getPortalCompanyOptionValue(project)}
+          >
+            {getPortalCompanyOptionLabel(project, availableProjects)}
           </option>
         ))}
       </select>

@@ -21,15 +21,19 @@ const companyData: CompanyData = {
   status: 'approved',
   availableProjects: [
     {
+      id: 'subbie-company-1',
+      subcontractorCompanyId: 'subbie-company-1',
       projectId: 'project-1',
       projectName: 'Eastern Bypass',
-      companyName: 'Head Contractor A',
+      companyName: 'Civil Subbie Co',
       status: 'approved',
     },
     {
+      id: 'subbie-company-2',
+      subcontractorCompanyId: 'subbie-company-2',
       projectId: 'project-2',
       projectName: 'Western Drainage',
-      companyName: 'Head Contractor B',
+      companyName: 'Civil Subbie West',
       status: 'approved',
     },
   ],
@@ -67,10 +71,58 @@ describe('MyCompanyProjectSwitcher', () => {
       />,
     );
 
-    fireEvent.change(screen.getByLabelText('Project'), { target: { value: 'project-2' } });
+    fireEvent.change(screen.getByLabelText('Project / company'), {
+      target: { value: 'subbie-company-2' },
+    });
 
     expect(onSearchParamsChange).toHaveBeenCalledTimes(1);
     expect(onSearchParamsChange.mock.calls[0][0].get('projectId')).toBe('project-2');
+    expect(onSearchParamsChange.mock.calls[0][0].get('subcontractorCompanyId')).toBe(
+      'subbie-company-2',
+    );
+  });
+
+  it('distinguishes multiple subcontractor companies on the same project', () => {
+    const onSearchParamsChange = vi.fn();
+    const sameProjectData: CompanyData = {
+      ...companyData,
+      availableProjects: [
+        companyData.availableProjects![0],
+        {
+          id: 'subbie-company-3',
+          subcontractorCompanyId: 'subbie-company-3',
+          projectId: 'project-1',
+          projectName: 'Eastern Bypass',
+          companyName: 'Civil Subbie Joint Venture',
+          status: 'approved',
+        },
+      ],
+    };
+    render(
+      <MyCompanyProjectSwitcher
+        companyData={sameProjectData}
+        searchParams={
+          new URLSearchParams('projectId=project-1&subcontractorCompanyId=subbie-company-1')
+        }
+        onSearchParamsChange={onSearchParamsChange}
+      />,
+    );
+
+    expect(
+      screen.getByRole('option', { name: 'Eastern Bypass - Civil Subbie Co' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('option', { name: 'Eastern Bypass - Civil Subbie Joint Venture' }),
+    ).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Project / company'), {
+      target: { value: 'subbie-company-3' },
+    });
+
+    expect(onSearchParamsChange.mock.calls[0][0].get('projectId')).toBe('project-1');
+    expect(onSearchParamsChange.mock.calls[0][0].get('subcontractorCompanyId')).toBe(
+      'subbie-company-3',
+    );
   });
 
   it('does not render when only one project is available', () => {
@@ -82,7 +134,7 @@ describe('MyCompanyProjectSwitcher', () => {
       />,
     );
 
-    expect(screen.queryByLabelText('Project')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Project / company')).not.toBeInTheDocument();
   });
 });
 

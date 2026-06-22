@@ -85,6 +85,7 @@ describe('portalResourceResponses', () => {
         availableProjects: [
           {
             id: 'subbie-1',
+            subcontractorCompanyId: 'subbie-1',
             companyName: 'Civil Subbie Pty Ltd',
             projectId: 'project-1',
             projectName: 'M1 Upgrade',
@@ -93,6 +94,7 @@ describe('portalResourceResponses', () => {
           },
           {
             id: 'subbie-2',
+            subcontractorCompanyId: 'subbie-2',
             companyName: 'Civil Subbie Other Project',
             projectId: 'project-2',
             projectName: 'Pacific Highway',

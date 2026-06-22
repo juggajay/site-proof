@@ -50,9 +50,10 @@ async function getProjectSubcontractorCompanyIds(
   userId: string,
   projectId: string,
   modules: SubcontractorPortalAccessKey[] = ['lots'],
+  requestedSubcontractorCompanyId?: string | null,
 ): Promise<string[]> {
   const links = await getActiveSubcontractorPortalCompanyLinksForProject({ userId, projectId });
-  return [
+  const accessibleIds = [
     ...new Set(
       links
         .filter((link) =>
@@ -63,6 +64,16 @@ async function getProjectSubcontractorCompanyIds(
         .map((link) => link.subcontractorCompanyId),
     ),
   ];
+
+  if (!requestedSubcontractorCompanyId) {
+    return accessibleIds;
+  }
+
+  if (!accessibleIds.includes(requestedSubcontractorCompanyId)) {
+    throw AppError.forbidden('Access denied');
+  }
+
+  return [requestedSubcontractorCompanyId];
 }
 
 async function hasAssignedSubcontractorLotAccess(

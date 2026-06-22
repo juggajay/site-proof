@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/auth';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { PortalAccessDenied } from './portalAccess';
 import { isPortalModuleEnabled, type PortalAccess } from './portalAccessModel';
+import { buildPortalCompanyQuery, buildPortalCompanyScopedPath } from './portalCompanyScope';
 
 interface HoldPoint {
   id: string;
@@ -87,14 +88,19 @@ export function SubcontractorHoldPointsPage() {
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const requestedProjectId = searchParams.get('projectId');
+  const requestedSubcontractorCompanyId = searchParams.get('subcontractorCompanyId');
   const { data: company, isLoading: companyLoading } = useQuery({
-    queryKey: [...queryKeys.portalCompanies(user?.id), requestedProjectId ?? 'default'],
+    queryKey: [
+      ...queryKeys.portalCompanies(user?.id),
+      requestedProjectId ?? 'default',
+      requestedSubcontractorCompanyId ?? 'default-company',
+    ],
     queryFn: async () => {
-      const query = requestedProjectId
-        ? `?projectId=${encodeURIComponent(requestedProjectId)}`
-        : '';
       const res = await apiFetch<{ company: SubcontractorCompany }>(
-        `/api/subcontractors/my-company${query}`,
+        `/api/subcontractors/my-company${buildPortalCompanyQuery({
+          projectId: requestedProjectId,
+          subcontractorCompanyId: requestedSubcontractorCompanyId,
+        })}`,
       );
       return res.company;
     },
@@ -107,10 +113,12 @@ export function SubcontractorHoldPointsPage() {
     isLoading: hpLoading,
     error,
   } = useQuery({
-    queryKey: queryKeys.portalHoldPoints(user?.id, company?.projectId),
+    queryKey: queryKeys.portalHoldPoints(user?.id, company?.projectId, company?.id),
     queryFn: async () => {
       const res = await apiFetch<{ holdPoints: ApiHoldPoint[] }>(
-        `/api/holdpoints/project/${encodeURIComponent(company!.projectId)}?subcontractorView=true`,
+        `/api/holdpoints/project/${encodeURIComponent(
+          company!.projectId,
+        )}?subcontractorView=true&subcontractorCompanyId=${encodeURIComponent(company!.id)}`,
       );
       return (res.holdPoints || []).map(normalizeHoldPoint);
     },
@@ -118,6 +126,10 @@ export function SubcontractorHoldPointsPage() {
   });
 
   const loading = companyLoading || (canViewHoldPoints && hpLoading);
+  const portalPath = buildPortalCompanyScopedPath('/subcontractor-portal', {
+    projectId: company?.projectId ?? requestedProjectId,
+    subcontractorCompanyId: company?.id ?? requestedSubcontractorCompanyId,
+  });
 
   const pending = holdPoints.filter((hp) => hp.status === 'pending' || hp.status === 'notified');
   const released = holdPoints.filter((hp) => hp.status === 'released');
@@ -137,7 +149,7 @@ export function SubcontractorHoldPointsPage() {
   }
 
   if (!canViewHoldPoints) {
-    return <PortalAccessDenied moduleName="Hold points" />;
+    return <PortalAccessDenied moduleName="Hold points" backTo={portalPath} />;
   }
 
   if (error) {
@@ -148,7 +160,7 @@ export function SubcontractorHoldPointsPage() {
           <p>{extractErrorMessage(error, 'Failed to load hold points')}</p>
         </div>
         <Link
-          to="/subcontractor-portal"
+          to={portalPath}
           className="inline-flex items-center gap-2 mt-4 px-4 py-2 border border-border rounded-lg hover:bg-muted/50 transition-colors text-foreground"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -162,10 +174,7 @@ export function SubcontractorHoldPointsPage() {
     <div className="container max-w-2xl mx-auto p-4 pb-20 md:pb-4 space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Link
-          to="/subcontractor-portal"
-          className="p-2 rounded-lg hover:bg-muted transition-colors"
-        >
+        <Link to={portalPath} className="p-2 rounded-lg hover:bg-muted transition-colors">
           <ArrowLeft className="h-5 w-5 text-muted-foreground" />
         </Link>
         <div>

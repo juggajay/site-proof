@@ -131,6 +131,11 @@ listRoutes.get(
       MAX_UPLOAD_PROJECT_ID_LENGTH,
     );
     const lotId = normalizeOptionalQueryString(req.query.lotId, 'lotId', MAX_TEST_ID_LENGTH);
+    const requestedSubcontractorCompanyId = normalizeOptionalQueryString(
+      req.query.subcontractorCompanyId,
+      'subcontractorCompanyId',
+      MAX_TEST_ID_LENGTH,
+    );
     const search = normalizeOptionalQueryString(req.query.search, 'search', MAX_SEARCH_LENGTH);
 
     if (!projectId) {
@@ -153,7 +158,11 @@ listRoutes.get(
       whereClause.lotId = lotId;
     }
 
-    const assignedLotIds = await getAssignedSubcontractorLotIds(projectId, user);
+    const assignedLotIds = await getAssignedSubcontractorLotIds(
+      projectId,
+      user,
+      requestedSubcontractorCompanyId,
+    );
     if (assignedLotIds !== null) {
       // Subcontractors can only see test results on their assigned lots.
       if (assignedLotIds.length === 0) {

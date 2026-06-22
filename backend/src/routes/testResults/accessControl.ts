@@ -111,16 +111,22 @@ export async function requireTestResultsPortalAccess(projectId: string, user: Au
 export async function getAssignedSubcontractorLotIds(
   projectId: string,
   user: AuthenticatedUser,
+  requestedSubcontractorCompanyId?: string | null,
 ): Promise<string[] | null> {
   if (!isSubcontractorUser(user)) {
     return null;
   }
 
-  const subcontractorCompanyIds = await getActiveSubcontractorPortalCompanyIdsForProject({
+  const accessibleSubcontractorCompanyIds = await getActiveSubcontractorPortalCompanyIdsForProject({
     userId: user.id,
     projectId,
     module: 'testResults',
   });
+  const subcontractorCompanyIds = requestedSubcontractorCompanyId
+    ? accessibleSubcontractorCompanyIds.includes(requestedSubcontractorCompanyId)
+      ? [requestedSubcontractorCompanyId]
+      : []
+    : accessibleSubcontractorCompanyIds;
 
   if (subcontractorCompanyIds.length === 0) {
     return [];

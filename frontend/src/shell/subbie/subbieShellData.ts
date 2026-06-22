@@ -24,12 +24,17 @@ import { queryKeys } from '@/lib/queryKeys';
 import { useAuth } from '@/lib/auth';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import {
+  buildPortalCompanyQuery,
+  portalCompanyQueryKeyParts,
+} from '@/pages/subcontractor-portal/portalCompanyScope';
+import {
   isPortalModuleEnabled,
   type PortalAccess,
 } from '@/pages/subcontractor-portal/portalAccessModel';
 
 export interface SubbiePortalProjectOption {
   id: string;
+  subcontractorCompanyId?: string;
   companyName: string;
   projectId: string;
   projectName: string;
@@ -52,6 +57,7 @@ export interface SubbieCompany {
 export interface SubbieShellData {
   /** The selected project id (search param, else first available). null until loaded. */
   projectId: string | null;
+  subcontractorCompanyId?: string | null;
   company: SubbieCompany | null;
   companyName: string | null;
   projectName: string | null;
@@ -66,14 +72,22 @@ export function useSubbieShellData(): SubbieShellData {
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const requestedProjectId = searchParams.get('projectId');
+  const requestedSubcontractorCompanyId = searchParams.get('subcontractorCompanyId');
 
   const companyQuery = useQuery({
     // Same key shape as SubcontractorDashboard so the cache is shared.
-    queryKey: [...queryKeys.portalCompanies(user?.id), requestedProjectId ?? 'default'],
+    queryKey: [
+      ...queryKeys.portalCompanies(user?.id),
+      ...portalCompanyQueryKeyParts({
+        projectId: requestedProjectId,
+        subcontractorCompanyId: requestedSubcontractorCompanyId,
+      }),
+    ],
     queryFn: async () => {
-      const query = requestedProjectId
-        ? `?projectId=${encodeURIComponent(requestedProjectId)}`
-        : '';
+      const query = buildPortalCompanyQuery({
+        projectId: requestedProjectId,
+        subcontractorCompanyId: requestedSubcontractorCompanyId,
+      });
       const res = await apiFetch<{ company: SubbieCompany }>(
         `/api/subcontractors/my-company${query}`,
       );
@@ -90,6 +104,8 @@ export function useSubbieShellData(): SubbieShellData {
   // projectId is passed), else the first available option.
   const projectId =
     requestedProjectId ?? company?.projectId ?? availableProjects[0]?.projectId ?? null;
+  const subcontractorCompanyId =
+    requestedSubcontractorCompanyId ?? company?.id ?? availableProjects[0]?.id ?? null;
 
   const loading = companyQuery.isLoading && !companyQuery.data;
   const loadError =
@@ -104,6 +120,7 @@ export function useSubbieShellData(): SubbieShellData {
 
   return {
     projectId,
+    subcontractorCompanyId,
     company,
     companyName: company?.companyName ?? null,
     projectName: company?.projectName ?? null,

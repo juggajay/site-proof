@@ -110,6 +110,16 @@ export function createSubcontractorMyCompanyRouter({
           )
         : projectScopedSubcontractorUsers[0];
 
+      if (
+        requestedProjectId &&
+        !requestedSubcontractorCompanyId &&
+        projectScopedSubcontractorUsers.length > 1
+      ) {
+        throw AppError.badRequest(
+          'subcontractorCompanyId is required when your account is linked to multiple subcontractors for this project',
+        );
+      }
+
       if (!subcontractorUser || !subcontractorUser.subcontractorCompany) {
         throw AppError.forbidden(
           requestedProjectId

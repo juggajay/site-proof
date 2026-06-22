@@ -21,6 +21,7 @@ export function MyCompanyPage() {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedProjectId = searchParams.get('projectId');
+  const requestedSubcontractorCompanyId = searchParams.get('subcontractorCompanyId');
   const [showAddEmployeeModal, setShowAddEmployeeModal] = useState(false);
   const [showAddPlantModal, setShowAddPlantModal] = useState(false);
   const [employeeForm, setEmployeeForm] = useState({
@@ -43,7 +44,11 @@ export function MyCompanyPage() {
   // Note: user.role is used (from auth context) not roleInCompany
   const canManageRoster = user?.role === 'subcontractor_admin';
 
-  const companyQuery = useMyCompanyQuery(user?.id, requestedProjectId);
+  const companyQuery = useMyCompanyQuery(
+    user?.id,
+    requestedProjectId,
+    requestedSubcontractorCompanyId,
+  );
   const companyData = companyQuery.data ?? null;
   const loading = companyQuery.isLoading;
   const loadError =
@@ -55,9 +60,9 @@ export function MyCompanyPage() {
   // the roster/plant in sync without the page re-entering its full-screen loader.
   const refetchCompanyData = useCallback(async () => {
     await queryClient.invalidateQueries({
-      queryKey: queryKeys.myCompany(user?.id, requestedProjectId),
+      queryKey: queryKeys.myCompany(user?.id, requestedProjectId, requestedSubcontractorCompanyId),
     });
-  }, [queryClient, user?.id, requestedProjectId]);
+  }, [queryClient, user?.id, requestedProjectId, requestedSubcontractorCompanyId]);
 
   const addEmployee = async () => {
     const name = employeeForm.name.trim();

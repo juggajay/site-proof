@@ -8,7 +8,7 @@
  */
 import { ShellScreen } from '@/shell/components/ShellScreen';
 import { AlertCircle } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 
 export function ShellAccessDenied({
   title,
@@ -19,8 +19,11 @@ export function ShellAccessDenied({
   /** Human module name used in the notice copy (e.g. "Assigned work"). */
   moduleName: string;
 }) {
+  const location = useLocation();
+  const parentPath = `/p${location.search}`;
+
   return (
-    <ShellScreen variant="inner" title={title} parent="/p">
+    <ShellScreen variant="inner" title={title} parent={parentPath}>
       <div
         role="alert"
         className="flex items-start gap-3 rounded-2xl border border-warning/30 bg-warning/10 px-4 py-3 text-warning"
@@ -31,7 +34,7 @@ export function ShellAccessDenied({
         </p>
       </div>
       <Link
-        to="/p"
+        to={parentPath}
         className="shell-card mt-1 inline-flex w-auto items-center justify-center px-5 py-3 text-[15px] font-semibold text-foreground"
       >
         Back to home
