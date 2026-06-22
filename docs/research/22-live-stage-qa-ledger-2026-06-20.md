@@ -3041,9 +3041,85 @@ Remaining findings for a later pass:
 
 - Webhooks are still not wired to real business events. `triggerWebhooks()`
   exists but needs deliberate event integration for the intended event set.
-- Delivery-time handling should skip/log an individual webhook whose stored
-  secret cannot be decrypted, so one stale webhook cannot block other enabled
-  webhooks when business events are wired.
+- Delivery-time stale-secret isolation was fixed in Stage 36 / #1076:
+  `triggerWebhooks()` now skips/logs only the webhook whose secret cannot be
+  decrypted, so one stale webhook cannot block other enabled webhooks when
+  business events are wired.
+- Decide what should happen to webhook ownership/configuration when the creator
+  is offboarded from the company.
+
+Artifacts:
+
+- No bearer tokens, session cookies, generated passwords, production secrets,
+  webhook URLs, webhook secrets, or browser-session data were committed or
+  copied into this ledger.
+
+## Stage 36 - Webhook Trigger Stale-Secret Isolation QA
+
+Status: completed for webhook trigger isolation. One code PR was merged from
+this stage. Business-event webhook integration remains queued separately.
+
+Scope:
+
+- Delivery-time behaviour in `triggerWebhooks()` when a stored webhook signing
+  secret was encrypted with an old key or otherwise cannot be decrypted.
+- Ensure one stale/corrupt webhook secret cannot prevent other enabled matching
+  webhooks from receiving an event once business-event wiring is added.
+- Avoid decrypting secrets for webhooks that do not subscribe to the triggered
+  event.
+
+Confirmed issue fixed:
+
+- `triggerWebhooks()` now converts each row to masked metadata first and checks
+  event matching before decrypting the signing secret.
+- If a matching webhook's secret cannot be decrypted, the failure is logged for
+  that webhook and the trigger loop continues.
+- Other valid matching webhooks still dispatch asynchronously through
+  `deliverWebhook()`.
+- Existing create/test/delivery code paths still decrypt where a plaintext
+  signing secret is genuinely needed.
+
+Related merged work:
+
+- #1076 - Fix webhook trigger stale-secret isolation, merged as `9c4f4bac`.
+
+Verification:
+
+- #1076 local checks passed:
+  - backend `npm ci --no-audit --no-fund`
+  - backend `npm run db:generate` with the local Windows TLS workaround
+  - backend `npm run type-check`
+  - backend `npm run lint`
+  - backend `npm run format:check`
+  - backend pure helper test
+    `npm run test -- src/routes/webhooks/delivery.test.ts`
+  - `git diff --check`
+  - changed-file `fallow audit --base origin/master --format json --quiet`,
+    verdict `pass`; no introduced dead code, complexity, or duplication.
+- Local DB-backed `npm run test -- src/routes/webhooks.test.ts` was attempted,
+  but the isolated worktree had no local `DATABASE_URL`; Prisma stopped at test
+  setup. The new DB-backed trigger regression ran in GitHub CI.
+- PR #1076 checks passed before merge: Backend, Frontend PR E2E smoke, Detect
+  changes, and Vercel's ignored-build status. The full Frontend job was skipped
+  on the PR because only backend files changed.
+- Master CI run `27921976943` passed after merge, including Backend, Frontend,
+  and full post-merge Frontend E2E.
+- After merge, production health checks returned HTTP 200 for:
+  - `https://site-proof-production.up.railway.app/ready`
+  - `https://site-proof.vercel.app`
+
+Not live-exercised in this stage:
+
+- No real production webhooks were created, tested, disabled, or deleted.
+- Real production key rotation was not performed. The stale-secret condition is
+  covered with encrypted-secret/key-change regression tests in CI.
+- Production business events still do not call `triggerWebhooks()`; that event
+  integration needs a deliberate event taxonomy before coding.
+
+Remaining findings for a later pass:
+
+- Webhooks are still not wired to real business events. `triggerWebhooks()`
+  exists but needs deliberate event integration for the intended event set.
 - Decide what should happen to webhook ownership/configuration when the creator
   is offboarded from the company.
 
