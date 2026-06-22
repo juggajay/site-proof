@@ -461,8 +461,9 @@ async function mockForemanShellApi(page: Page) {
     }
 
     if (path === `/api/dockets/${encodeURIComponent(dockets[0].id)}/query`) {
-      docketQueries.push(request.postDataJSON());
+      const body = request.postDataJSON();
       await fulfillJson(route, {});
+      docketQueries.push(body);
       return;
     }
 
@@ -483,8 +484,9 @@ async function mockForemanShellApi(page: Page) {
     }
 
     if (path === `/api/ncrs/${encodeURIComponent(ncrs[0].id)}/respond`) {
-      ncrResponses.push(request.postDataJSON());
+      const body = request.postDataJSON();
       await fulfillJson(route, {});
+      ncrResponses.push(body);
       return;
     }
 
@@ -505,8 +507,9 @@ async function mockForemanShellApi(page: Page) {
     }
 
     if (path === `/api/documents/${encodeURIComponent(documents[0].id)}`) {
-      photoRefileBodies.push(request.postDataJSON());
+      const body = request.postDataJSON();
       await fulfillJson(route, {});
+      photoRefileBodies.push(body);
       return;
     }
 
