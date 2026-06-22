@@ -5,9 +5,22 @@ import { DateFormatProvider } from '@/lib/dateFormat';
 import { TimezoneProvider } from '@/lib/timezone';
 import { apiFetch } from '@/lib/api';
 import { ReportsPage } from './ReportsPage';
-import type { DiaryReport } from './types';
+import type { DiaryReport, LotStatusReport } from './types';
 
 vi.mock('@/lib/api', () => ({
+  ApiError: class ApiError extends Error {
+    status: number;
+    body: string;
+    data: null;
+
+    constructor(status: number, body: string) {
+      super(`API Error ${status}: ${body}`);
+      this.name = 'ApiError';
+      this.status = status;
+      this.body = body;
+      this.data = null;
+    }
+  },
   apiFetch: vi.fn(),
   apiUrl: (path: string) => path,
 }));
@@ -68,11 +81,46 @@ function buildDiaryReport(): DiaryReport {
   };
 }
 
-function renderReportsPage() {
+function buildLotStatusReport(): LotStatusReport {
+  return {
+    generatedAt: '2026-06-21T05:00:00.000Z',
+    projectId: 'project-1',
+    totalLots: 1,
+    statusCounts: { conformed: 1 },
+    activityCounts: { Earthworks: 1 },
+    lots: [
+      {
+        id: 'lot-1',
+        lotNumber: 'LOT-STALE-001',
+        description: 'Previously loaded lot',
+        status: 'conformed',
+        activityType: 'Earthworks',
+        chainageStart: null,
+        chainageEnd: null,
+        offset: null,
+        layer: null,
+        areaZone: null,
+        createdAt: '2026-06-21T00:00:00.000Z',
+        conformedAt: '2026-06-21T04:00:00.000Z',
+      },
+    ],
+    summary: {
+      notStarted: 0,
+      inProgress: 0,
+      awaitingTest: 0,
+      holdPoint: 0,
+      ncrRaised: 0,
+      conformed: 1,
+      claimed: 0,
+    },
+  };
+}
+
+function renderReportsPage(initialEntry = '/projects/project-1/reports?tab=diary') {
   render(
     <DateFormatProvider>
       <TimezoneProvider>
-        <MemoryRouter initialEntries={['/projects/project-1/reports?tab=diary']}>
+        <MemoryRouter initialEntries={[initialEntry]}>
           <Routes>
             <Route path="/projects/:projectId/reports" element={<ReportsPage />} />
           </Routes>
@@ -148,5 +196,50 @@ describe('ReportsPage diary tab', () => {
     expect(apiFetchMock).toHaveBeenCalledWith(
       expect.stringContaining(`endDate=${selectedEndDate}`),
     );
+  });
+});
+
+describe('ReportsPage stale report handling', () => {
+  beforeEach(() => {
+    apiFetchMock.mockReset();
+  });
+
+  it('clears the active report instead of showing stale data after refresh fails', async () => {
+    const firstReport = buildLotStatusReport();
+    let lotStatusRequestCount = 0;
+
+    apiFetchMock.mockImplementation((path) => {
+      if (path === '/api/company') {
+        return Promise.resolve({
+          company: { subscriptionTier: 'professional', name: 'QA Company', logoUrl: null },
+        });
+      }
+
+      if (path === '/api/projects/project-1') {
+        return Promise.resolve({
+          project: { name: 'QA Project', currentUserRole: 'project_manager' },
+        });
+      }
+
+      if (path.startsWith('/api/reports/lot-status?')) {
+        lotStatusRequestCount += 1;
+        if (lotStatusRequestCount === 1) {
+          return Promise.resolve(firstReport);
+        }
+
+        return Promise.reject(new Error('Report service unavailable'));
+      }
+
+      return Promise.reject(new Error(`Unexpected API path: ${path}`));
+    });
+
+    renderReportsPage('/projects/project-1/reports?tab=lot-status');
+
+    expect(await screen.findByText('LOT-STALE-001')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh Report' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Report service unavailable');
+    expect(screen.queryByText('LOT-STALE-001')).not.toBeInTheDocument();
   });
 });

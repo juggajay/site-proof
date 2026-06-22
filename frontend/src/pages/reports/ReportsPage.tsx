@@ -119,6 +119,32 @@ export function ReportsPage() {
     [dateFormat, timezone],
   );
 
+  const clearReportState = useCallback((reportType?: ReportDataTab) => {
+    if (!reportType || reportType === 'lot-status') {
+      setLotReport(null);
+    }
+    if (!reportType || reportType === 'ncr') {
+      setNCRReport(null);
+    }
+    if (!reportType || reportType === 'test') {
+      setTestReport(null);
+    }
+    if (!reportType || reportType === 'diary') {
+      setDiaryReport(null);
+    }
+    if (!reportType || reportType === 'claims') {
+      setClaimsReport(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    reportRequestRef.current += 1;
+    inFlightReportRequestKeyRef.current = null;
+    lastAutomaticReportRequestKeyRef.current = null;
+    clearReportState();
+    setError(null);
+  }, [projectId, clearReportState]);
+
   const tabs = useMemo(
     () =>
       [
@@ -181,11 +207,13 @@ export function ReportsPage() {
   const fetchReport = useCallback(
     async (reportType: ReportDataTab, extraParams?: Record<string, string>) => {
       if (!projectId) {
+        clearReportState();
         setError('Project not found');
         return;
       }
 
       if (reportType === 'claims' && !canViewClaimsReport) {
+        clearReportState('claims');
         setError('Commercial report access required');
         return;
       }
@@ -233,6 +261,7 @@ export function ReportsPage() {
         requestId = reportRequestRef.current + 1;
         reportRequestRef.current = requestId;
         inFlightReportRequestKeyRef.current = requestKey;
+        clearReportState(reportType);
         setLoading(true);
         setError(null);
 
@@ -269,7 +298,7 @@ export function ReportsPage() {
         }
       }
     },
-    [projectId, canViewClaimsReport],
+    [projectId, canViewClaimsReport, clearReportState],
   );
 
   useEffect(() => {

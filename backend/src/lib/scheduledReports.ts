@@ -402,17 +402,6 @@ async function buildPreDeliverySkipResult(
   lockMs: number,
   recipientCount: number,
 ): Promise<ScheduledReportDeliveryResult | null> {
-  if (!canDeliverScheduledReportForTier(schedule.project.company?.subscriptionTier)) {
-    return {
-      scheduleId: schedule.id,
-      projectId: schedule.projectId,
-      reportType: schedule.reportType,
-      recipients: recipientCount,
-      status: 'skipped',
-      error: 'Scheduled reports require a Professional or Enterprise subscription',
-    };
-  }
-
   const claimed = await claimScheduledReport(schedule.id, now, lockMs);
   if (!claimed) {
     return {
@@ -423,6 +412,24 @@ async function buildPreDeliverySkipResult(
       status: 'skipped',
       error: 'Schedule was already claimed or is no longer due',
     };
+  }
+
+  if (!canDeliverScheduledReportForTier(schedule.project.company?.subscriptionTier)) {
+    assertScheduledReportFrequency(schedule.frequency);
+    const nextRunAt = calculateNextScheduledReportRunAt(
+      schedule.frequency,
+      schedule.dayOfWeek,
+      schedule.dayOfMonth,
+      schedule.timeOfDay,
+      now,
+    );
+
+    return markScheduledReportSkipped(
+      schedule,
+      nextRunAt,
+      recipientCount,
+      'Scheduled reports require a Professional or Enterprise subscription',
+    );
   }
 
   return null;
