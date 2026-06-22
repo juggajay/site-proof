@@ -16,6 +16,112 @@ keep going until the app has been exercised end to end.
   `1secmail.com` from an old Codex process, so future email QA must use Jay's
   nominated inbox, a trusted mailbox, or Resend's safe test recipient.
 
+## Stage 39 - Hold-Point Secure Release QA
+
+Status: landed in PR #1082; PR CI, post-merge master CI, full post-merge E2E,
+and production health checks passed.
+
+Scope:
+
+- Public external-superintendent secure release page at `/hp-release/:token`.
+- Named and unnamed token-recipient identity behavior.
+- Already released, expired, and backend-rejected secure-link states.
+- Mobile secure-link release layout.
+- Backend public token release behavior, including notification preferences,
+  ITP completion pickup, ITP instance status, and lot progression.
+- Evidence-package and PDF state after a secure-link release.
+
+Subagent coverage:
+
+- Public release frontend reviewer found the secure-link page could show stale
+  evidence/PDF state immediately after release, rendered an inert form for an
+  already released payload, lacked unnamed-recipient browser coverage, and had
+  no mobile public release coverage.
+- Backend release reviewer found the public release route bypassed the project
+  `holdPointReleases` notification toggle and could update ITP completion/lot
+  progression while leaving the stored `ITPInstance.status` stale.
+- Subagents were read-only. No files were edited by them.
+
+Confirmed issues fixed locally:
+
+- Public secure-link release now carries the ITP checklist item id through the
+  evidence package and release response, so the browser updates the exact hold
+  point checklist row instead of guessing by description text.
+- After secure-link release, the public evidence summary and checklist table
+  update from `0/1` and `No` to `1/1` and `Yes`; the generated evidence PDF now
+  uses the updated in-memory package instead of stale pre-release data.
+- Named secure-link recipients cannot overwrite the assigned release identity
+  in the public form; unnamed recipients must type a release identity before the
+  release button enables.
+- Already released secure-link payloads render read-only release evidence
+  instead of an inert release form.
+- Public secure-link releases now respect the same project-level
+  `holdPointReleases` notification preference gate as authenticated releases.
+- Public secure-link release progression now also updates
+  `ITPInstance.status`, fixing stale project overview counts after the hold
+  point completion is picked up.
+
+Related merged work:
+
+- #1082 - Fix public hold point release completion state, merged as
+  `07ae41e9`.
+
+Verification:
+
+- Local headed public secure-link Playwright coverage passed:
+  - `npx playwright test e2e/holdpoints.spec.ts -g "Public hold point secure release page" --project=chromium --headed`
+- Local full hold-points E2E file passed:
+  - `npx playwright test e2e/holdpoints.spec.ts --project=chromium`
+- Local frontend checks passed:
+  - `npm run type-check`
+  - `npm run lint`, passing with the existing unrelated
+    `src/lib/theme.tsx` fast-refresh warning
+  - `npm run format:check`
+- Local backend pure tests passed:
+  - `npm run test -- src/routes/itp/helpers/lotProgression.test.ts src/routes/holdpoints/actionResponses.test.ts src/routes/holdpoints/evidencePackage.test.ts`
+  - `npm run type-check`
+  - `npm run lint`
+  - `npm run format:check`
+- `git diff --check` passed.
+- Local DB-backed `src/routes/holdpoints.test.ts` could not run in the worktree
+  because no local `DATABASE_URL` was configured. PR Backend CI ran with
+  Postgres and passed.
+- `fallow audit --base origin/master --format json --quiet` found no dead code
+  but failed its local gate on repeated test setup and touched existing large
+  route/helper functions. This is not a repo CI gate.
+- PR #1082 checks passed: Detect changes, Backend, Frontend, Frontend PR E2E
+  smoke, Vercel ignored-build status, and Vercel Preview Comments.
+- Master CI run `27926771818` passed after merge, including Backend, Frontend,
+  and full post-merge Frontend E2E.
+- After merge, production health checks returned HTTP 200 for:
+  - `https://site-proof-production.up.railway.app/ready`
+  - `https://site-proof.vercel.app`
+
+Not live-exercised in this stage:
+
+- Opening a real delivered superintendent email from an inbox. Browser coverage
+  mocked the public token endpoint and route behavior; the product must still
+  use Jay's nominated inbox or another trusted mailbox for future inbox-read
+  QA.
+- Manual production release against real project data. This stage used local
+  headed Playwright, unit tests, DB-backed PR CI, post-merge CI, and production
+  health checks.
+
+Remaining findings for a later pass:
+
+- Decide whether public secure-link release should emit a richer ITP/lot
+  audit/webhook taxonomy beyond the existing public hold-point release audit
+  event. The current fix preserves behavior and records `HP_PUBLIC_RELEASED`,
+  but does not add separate ITP-completed or lot-progressed external events.
+- Continue staged QA into `/p/*` subcontractor mobile shell and `/m/*` foreman
+  mobile shell workflows once the parallel foreman UI workstream is ready.
+
+Artifacts:
+
+- No bearer tokens, session cookies, generated passwords, production secrets,
+  external-superintendent emails, report recipient emails, or browser-session
+  data were committed or copied into this ledger.
+
 ## Stage 38 - Reports Project-Scoped Commercial Access QA
 
 Status: landed in PR #1080; PR CI, post-merge master CI, full post-merge E2E,
