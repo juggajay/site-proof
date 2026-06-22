@@ -94,6 +94,7 @@ export function DocsScreen() {
   const { user } = useAuth();
   const { projectId, companyName, projectName, isModuleEnabled } = useSubbieShellContext();
   const canViewDocuments = isModuleEnabled('documents');
+  const encodedProjectId = projectId ? encodeURIComponent(projectId) : '';
 
   const {
     data: documents = [],
@@ -103,7 +104,7 @@ export function DocsScreen() {
     queryKey: queryKeys.portalDocuments(user?.id, projectId),
     queryFn: async () => {
       const res = await apiFetch<{ documents: DocItem[] }>(
-        `/api/documents/${projectId}?subcontractorView=true`,
+        `/api/documents/${encodedProjectId}?subcontractorView=true`,
       );
       return res.documents || [];
     },

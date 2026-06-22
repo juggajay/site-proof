@@ -118,6 +118,7 @@ export function NcrsScreen() {
   const { user } = useAuth();
   const { projectId, isModuleEnabled } = useSubbieShellContext();
   const canViewNCRs = isModuleEnabled('ncrs');
+  const encodedProjectId = projectId ? encodeURIComponent(projectId) : '';
 
   const {
     data: ncrs = [],
@@ -127,7 +128,7 @@ export function NcrsScreen() {
     queryKey: queryKeys.portalNCRs(user?.id, projectId),
     queryFn: async () => {
       const res = await apiFetch<{ ncrs: NCR[] }>(
-        `/api/ncrs?projectId=${projectId}&subcontractorView=true`,
+        `/api/ncrs?projectId=${encodedProjectId}&subcontractorView=true`,
       );
       return res.ncrs || [];
     },

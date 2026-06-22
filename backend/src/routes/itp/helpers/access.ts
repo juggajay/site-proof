@@ -207,7 +207,10 @@ export async function requireItpSubcontractorCompletionPermission(
   projectId: string,
   lotId: string,
   message = 'Not authorized to complete ITP items on this lot',
-): Promise<{ itpRequiresVerification: boolean } | null> {
+): Promise<{
+  itpRequiresVerification: boolean;
+  subcontractorCompany: { id: string; companyName: string };
+} | null> {
   if (!isItpSubcontractorUser(user)) {
     return null;
   }
@@ -223,7 +226,12 @@ export async function requireItpSubcontractorCompletionPermission(
         users: { some: { userId: user.userId } },
       }),
     },
-    select: { itpRequiresVerification: true },
+    select: {
+      itpRequiresVerification: true,
+      subcontractorCompany: {
+        select: { id: true, companyName: true },
+      },
+    },
   });
 
   if (!assignment) {

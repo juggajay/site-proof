@@ -79,7 +79,10 @@ export function useSubbieItpRun(lotId: string | undefined): SubbieItpRun {
   const fetchData = useCallback(async () => {
     if (!lotId) return;
     try {
-      const lotData = await apiFetch<{ lot: SubbieLot }>(`/api/lots/${lotId}?portalModule=itps`);
+      const encodedLotId = encodeURIComponent(lotId);
+      const lotData = await apiFetch<{ lot: SubbieLot }>(
+        `/api/lots/${encodedLotId}?portalModule=itps`,
+      );
       setLot(lotData.lot);
 
       const canCompleteItems =
@@ -88,7 +91,7 @@ export function useSubbieItpRun(lotId: string | undefined): SubbieItpRun {
 
       try {
         const itpData = await apiFetch<{ instance: ITPInstance | null }>(
-          `/api/itp/instances/lot/${lotId}?subcontractorView=true`,
+          `/api/itp/instances/lot/${encodedLotId}?subcontractorView=true`,
         );
         setInstance(itpData.instance);
       } catch {

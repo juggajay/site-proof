@@ -88,7 +88,7 @@ export function SubcontractorDocumentsPage() {
     queryKey: queryKeys.portalDocuments(user?.id, company?.projectId),
     queryFn: async () => {
       const res = await apiFetch<{ documents: Document[] }>(
-        `/api/documents/${company!.projectId}?subcontractorView=true`,
+        `/api/documents/${encodeURIComponent(company!.projectId)}?subcontractorView=true`,
       );
       return res.documents || [];
     },

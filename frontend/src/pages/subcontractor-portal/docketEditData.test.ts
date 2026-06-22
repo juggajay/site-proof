@@ -41,17 +41,20 @@ describe('docket edit data – path builders', () => {
     expect(buildMyCompanyPath('proj 1')).toBe('/api/subcontractors/my-company?projectId=proj%201');
   });
 
-  it('interpolates the project id into the assigned-lots path without encoding', () => {
-    // Preserves the original inline behavior, which did not encode the project id.
-    expect(buildAssignedLotsPath('proj 1')).toBe('/api/lots?projectId=proj 1');
+  it('encodes the project id in the assigned-lots path', () => {
+    expect(buildAssignedLotsPath('proj 1&subcontractorView=false')).toBe(
+      '/api/lots?projectId=proj%201%26subcontractorView%3Dfalse',
+    );
   });
 
   it('builds the docket detail path', () => {
     expect(buildDocketDetailPath('docket-1')).toBe('/api/dockets/docket-1');
   });
 
-  it('interpolates the project id into the existing-dockets path without encoding', () => {
-    expect(buildExistingDocketsPath('proj 1')).toBe('/api/dockets?projectId=proj 1');
+  it('encodes the project id in the existing-dockets path', () => {
+    expect(buildExistingDocketsPath('proj 1&subcontractorView=false')).toBe(
+      '/api/dockets?projectId=proj%201%26subcontractorView%3Dfalse',
+    );
   });
 });
 

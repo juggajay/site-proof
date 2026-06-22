@@ -100,6 +100,14 @@ describe('subbie shell DocsScreen', () => {
     expect(apiFetchMock).toHaveBeenCalledWith('/api/documents/proj-1?subcontractorView=true');
   });
 
+  it('encodes projectId in the documents path segment', () => {
+    _ctx = { ...makeCtx(), projectId: 'proj-1/sub-folder' };
+    renderScreen();
+    expect(apiFetchMock).toHaveBeenCalledWith(
+      '/api/documents/proj-1%2Fsub-folder?subcontractorView=true',
+    );
+  });
+
   it('groups documents by category', async () => {
     setApi({
       documents: [

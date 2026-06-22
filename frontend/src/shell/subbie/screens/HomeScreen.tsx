@@ -283,12 +283,15 @@ export function HomeScreen() {
   const holdsOrTests = isModuleEnabled('holdPoints') || isModuleEnabled('testResults');
   const documentsEnabled = isModuleEnabled('documents');
   const itpsEnabled = isModuleEnabled('itps');
+  const encodedProjectId = projectId ? encodeURIComponent(projectId) : '';
 
   // Dockets — existing portal key; drives the hero + recent/queried counts.
   const { data: docketsData } = useQuery({
     queryKey: queryKeys.portalDockets(user?.id, projectId),
     queryFn: async () => {
-      const res = await apiFetch<{ dockets: Docket[] }>(`/api/dockets?projectId=${projectId}`);
+      const res = await apiFetch<{ dockets: Docket[] }>(
+        `/api/dockets?projectId=${encodedProjectId}`,
+      );
       return res.dockets ?? [];
     },
     enabled: !!user?.id && !!projectId,
@@ -305,7 +308,7 @@ export function HomeScreen() {
     queryKey: queryKeys.portalAssignedWork(user?.id, projectId),
     queryFn: async () => {
       const res = await apiFetch<{ lots: Lot[] }>(
-        `/api/lots?projectId=${projectId}&portalModule=lots`,
+        `/api/lots?projectId=${encodedProjectId}&portalModule=lots`,
       );
       return res.lots ?? [];
     },
@@ -335,7 +338,9 @@ export function HomeScreen() {
     item.link.startsWith('/subcontractor-portal/docket/')
       ? {
           ...item,
-          link: `/p/docket/${item.link.slice('/subcontractor-portal/docket/'.length)}${currentProjectQuery}`,
+          link: `/p/docket/${encodeURIComponent(
+            item.link.slice('/subcontractor-portal/docket/'.length),
+          )}${currentProjectQuery}`,
         }
       : item,
   );
@@ -355,7 +360,9 @@ export function HomeScreen() {
   const docketPath =
     hero.kind === 'none'
       ? `/p/docket${currentProjectQuery}`
-      : `/p/docket/${(hero as { docketId: string }).docketId}${currentProjectQuery}`;
+      : `/p/docket/${encodeURIComponent(
+          (hero as { docketId: string }).docketId,
+        )}${currentProjectQuery}`;
   const docketsPath = `/p/dockets${currentProjectQuery}`;
 
   const projectLabel = companyName

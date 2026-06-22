@@ -111,6 +111,7 @@ const SubbieShellRoutes = lazy(() =>
   import('@/shell/subbie/SubbieShellRoutes').then((m) => ({ default: m.SubbieShellRoutes })),
 );
 import { SubbieShellGuard } from '@/shell/SubbieShellGuard';
+import { SubbieShellRouteGuard } from '@/shell/SubbieShellRouteGuard';
 import { applyShellFlagFromUrl } from '@/shell/shellFlag';
 // Apply ?shell= param immediately (runs once before first render)
 applyShellFlagFromUrl();
@@ -179,7 +180,9 @@ function App() {
               path="/p/*"
               element={
                 <RoleProtectedRoute allowedRoles={SUBCONTRACTOR_ROLES}>
-                  <SubbieShellRoutes />
+                  <SubbieShellRouteGuard>
+                    <SubbieShellRoutes />
+                  </SubbieShellRouteGuard>
                 </RoleProtectedRoute>
               }
             />

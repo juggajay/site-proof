@@ -19,8 +19,9 @@ vi.mock('@/lib/useOfflineStatus', () => ({
 vi.mock('@/lib/auth', () => ({
   useAuth: () => ({ user: { id: 'u1', fullName: 'Mick', role: 'subcontractor' } }),
 }));
+let projectId = 'proj-1';
 vi.mock('../../../subbieShellContext', () => ({
-  useSubbieShellContext: () => ({ projectId: 'proj-1' }),
+  useSubbieShellContext: () => ({ projectId }),
 }));
 
 const apiFetchMock = vi.fn();
@@ -109,7 +110,18 @@ function renderList() {
 describe('subbie shell DocketsListScreen', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    projectId = 'proj-1';
     setApi();
+  });
+
+  it('encodes projectId before building the dockets URL', async () => {
+    projectId = 'proj-1&subcontractorView=false';
+    setApi([]);
+    renderList();
+    await screen.findByText('No dockets yet.');
+    expect(apiFetchMock).toHaveBeenCalledWith(
+      '/api/dockets?projectId=proj-1%26subcontractorView%3Dfalse',
+    );
   });
 
   it('renders the month-approved sub-line', async () => {

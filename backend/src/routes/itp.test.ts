@@ -3768,6 +3768,110 @@ describe('ITP Completion Decision Logic (characterization)', () => {
     }
   });
 
+  it('uses the lot-assigned subcontractor company name in pending verification notifications', async () => {
+    const suffix = Date.now();
+    const wrongCompany = await prisma.subcontractorCompany.create({
+      data: {
+        projectId,
+        companyName: `Wrong ITP Notify Company ${suffix}`,
+        status: 'approved',
+        portalAccess: { itps: true },
+      },
+    });
+    const assignedCompany = await prisma.subcontractorCompany.create({
+      data: {
+        projectId,
+        companyName: `Assigned ITP Notify Company ${suffix}`,
+        status: 'approved',
+        portalAccess: { itps: true },
+      },
+    });
+    const subcontractor = await registerTestUser(
+      'itp-decision-multi-company',
+      'ITP Decision Multi Company Subcontractor',
+    );
+
+    await prisma.user.update({
+      where: { id: subcontractor.userId },
+      data: { companyId: null, roleInCompany: 'subcontractor' },
+    });
+    await prisma.subcontractorUser.createMany({
+      data: [
+        {
+          userId: subcontractor.userId,
+          subcontractorCompanyId: wrongCompany.id,
+          role: 'user',
+        },
+        {
+          userId: subcontractor.userId,
+          subcontractorCompanyId: assignedCompany.id,
+          role: 'user',
+        },
+      ],
+    });
+    await prisma.lotSubcontractorAssignment.create({
+      data: {
+        projectId,
+        lotId,
+        subcontractorCompanyId: assignedCompany.id,
+        status: 'active',
+        canCompleteITP: true,
+        itpRequiresVerification: true,
+      },
+    });
+    await prisma.project.update({
+      where: { id: projectId },
+      data: { settings: JSON.stringify({ requireSubcontractorVerification: true }) },
+    });
+    await prisma.iTPCompletion.deleteMany({
+      where: { itpInstanceId: instanceId, checklistItemId: subcontractorItemId },
+    });
+    await prisma.notification.deleteMany({
+      where: { projectId, type: 'itp_subbie_completion' },
+    });
+
+    try {
+      const res = await request(app)
+        .post('/api/itp/completions')
+        .set('Authorization', `Bearer ${subcontractor.token}`)
+        .send({
+          itpInstanceId: instanceId,
+          checklistItemId: subcontractorItemId,
+          status: 'completed',
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.completion.verificationStatus).toBe('pending_verification');
+      expect(res.body.subbieCompletionNotification).toMatchObject({
+        notificationsSent: 1,
+        subcontractorCompany: assignedCompany.companyName,
+      });
+
+      const notifications = await prisma.notification.findMany({
+        where: { projectId, type: 'itp_subbie_completion', userId },
+      });
+      expect(notifications).toHaveLength(1);
+      expect(notifications[0].message).toContain(assignedCompany.companyName);
+      expect(notifications[0].message).not.toContain(wrongCompany.companyName);
+    } finally {
+      await prisma.notification.deleteMany({
+        where: { projectId, type: 'itp_subbie_completion' },
+      });
+      await prisma.iTPCompletion.deleteMany({
+        where: { itpInstanceId: instanceId, checklistItemId: subcontractorItemId },
+      });
+      await prisma.lotSubcontractorAssignment.deleteMany({
+        where: { subcontractorCompanyId: { in: [wrongCompany.id, assignedCompany.id] } },
+      });
+      await prisma.subcontractorUser.deleteMany({ where: { userId: subcontractor.userId } });
+      await prisma.subcontractorCompany.deleteMany({
+        where: { id: { in: [wrongCompany.id, assignedCompany.id] } },
+      });
+      await cleanupTestUser(subcontractor.userId);
+      await prisma.project.update({ where: { id: projectId }, data: { settings: null } });
+    }
+  });
+
   it('auto-verifies (no notification) when the project requires verification but the lot assignment does not', async () => {
     const suffix = Date.now();
     const subcontractorCompany = await prisma.subcontractorCompany.create({

@@ -80,7 +80,7 @@ export function AssignedWorkPage() {
     queryKey: queryKeys.portalAssignedWork(user?.id, company?.projectId),
     queryFn: async () => {
       const res = await apiFetch<{ lots: Lot[] }>(
-        `/api/lots?projectId=${company!.projectId}&portalModule=lots`,
+        `/api/lots?projectId=${encodeURIComponent(company!.projectId)}&portalModule=lots`,
       );
       return res.lots || [];
     },

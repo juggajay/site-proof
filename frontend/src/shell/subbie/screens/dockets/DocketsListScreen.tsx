@@ -92,12 +92,15 @@ export function DocketsListScreen() {
   const { user } = useAuth();
   const { projectId } = useSubbieShellContext();
   const projectQuery = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
+  const encodedProjectId = projectId ? encodeURIComponent(projectId) : '';
   const [filter, setFilter] = useState<FilterKey>('all');
 
   const { data: dockets = [], isLoading } = useQuery({
     queryKey: queryKeys.portalDockets(user?.id, projectId),
     queryFn: async () => {
-      const res = await apiFetch<{ dockets: Docket[] }>(`/api/dockets?projectId=${projectId}`);
+      const res = await apiFetch<{ dockets: Docket[] }>(
+        `/api/dockets?projectId=${encodedProjectId}`,
+      );
       return res.dockets ?? [];
     },
     enabled: !!user?.id && !!projectId,
@@ -145,7 +148,7 @@ export function DocketsListScreen() {
     return Object.values(groups);
   }, [visible]);
 
-  const docketHref = (id: string) => `/p/docket/${id}${projectQuery}`;
+  const docketHref = (id: string) => `/p/docket/${encodeURIComponent(id)}${projectQuery}`;
 
   const sub = (
     <span>

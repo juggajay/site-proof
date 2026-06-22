@@ -183,7 +183,9 @@ completionsRouter.post(
       throw AppError.badRequest('Unable to determine project for ITP completion');
     }
 
-    let subcontractorCompletionAssignment: { itpRequiresVerification: boolean } | null = null;
+    let subcontractorCompletionAssignment: Awaited<
+      ReturnType<typeof requireItpSubcontractorCompletionPermission>
+    > = null;
     if (itpInstanceForAccess.lotId) {
       await requireItpLotRole(
         user,
@@ -281,12 +283,7 @@ completionsRouter.post(
       }
     }
 
-    // Feature #271: Check if user is a subcontractor
-    const subcontractorUser = await prisma.subcontractorUser.findFirst({
-      where: { userId: user.userId },
-      include: { subcontractorCompany: { select: { id: true, companyName: true } } },
-    });
-    const isSubcontractor = !!subcontractorUser;
+    const isSubcontractor = isItpSubcontractorUser(user);
 
     // Determine completedAt and completedById based on status
     const isFinished = isItpCompletionFinished(newStatus);
@@ -309,7 +306,7 @@ completionsRouter.post(
         },
       });
 
-      if (itpInstanceForPermCheck?.lotId && subcontractorUser) {
+      if (itpInstanceForPermCheck?.lotId && isSubcontractor) {
         if (!subcontractorCompletionAssignment) {
           throw AppError.forbidden('Not authorized to complete ITP items on this lot');
         }
@@ -541,7 +538,7 @@ completionsRouter.post(
           const project = lot.project;
           const itemDescription = completion.checklistItem?.description || 'ITP item';
           const subbieName =
-            subcontractorUser?.subcontractorCompany?.companyName || 'Subcontractor';
+            subcontractorCompletionAssignment?.subcontractorCompany.companyName || 'Subcontractor';
 
           // Find project managers and superintendents to notify
           const projectManagers = await prisma.projectUser.findMany({

@@ -106,6 +106,17 @@ describe('subbie shell WorkScreen', () => {
     );
   });
 
+  it('encodes projectId before building the assigned lots URL', async () => {
+    _ctx = makeCtx({ projectId: 'proj-1&subcontractorView=false' });
+    setLots([]);
+    renderWork();
+    await waitFor(() =>
+      expect(apiFetchMock).toHaveBeenCalledWith(
+        '/api/lots?projectId=proj-1%26subcontractorView%3Dfalse&portalModule=lots',
+      ),
+    );
+  });
+
   it('groups lots by status into the four sections', async () => {
     setLots([
       { id: 'l1', lotNumber: 'LOT-001', status: 'in_progress' },

@@ -149,6 +149,7 @@ export function WorkScreen() {
 
   const lotsEnabled = isModuleEnabled('lots');
   const itpsEnabled = isModuleEnabled('itps');
+  const encodedProjectId = projectId ? encodeURIComponent(projectId) : '';
 
   const {
     data: lots = [],
@@ -158,7 +159,7 @@ export function WorkScreen() {
     queryKey: queryKeys.portalAssignedWork(user?.id, projectId),
     queryFn: async () => {
       const res = await apiFetch<{ lots: Lot[] }>(
-        `/api/lots?projectId=${projectId}&portalModule=lots`,
+        `/api/lots?projectId=${encodedProjectId}&portalModule=lots`,
       );
       return res.lots ?? [];
     },
@@ -181,7 +182,9 @@ export function WorkScreen() {
   // Tapping a lot opens the ITP run only when the itps module is enabled.
   const onPressLot = itpsEnabled
     ? (lotId: string) =>
-        navigate(`/p/lots/${lotId}/itp${projectId ? `?projectId=${projectId}` : ''}`)
+        navigate(
+          `/p/lots/${encodeURIComponent(lotId)}/itp${projectId ? `?projectId=${encodedProjectId}` : ''}`,
+        )
     : undefined;
 
   if (isLoading) {

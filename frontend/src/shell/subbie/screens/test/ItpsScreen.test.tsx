@@ -115,6 +115,17 @@ describe('subbie shell ItpsScreen', () => {
     );
   });
 
+  it('encodes projectId before building the ITP list URL', async () => {
+    _ctx = makeCtx({ projectId: 'proj-1&portalModule=lots' });
+    setLots([]);
+    renderItps();
+    await waitFor(() =>
+      expect(apiFetchMock).toHaveBeenCalledWith(
+        '/api/lots?projectId=proj-1%26portalModule%3Dlots&includeITP=true&portalModule=itps',
+      ),
+    );
+  });
+
   it('filters out lots without ITP instances', async () => {
     setLots([
       {
