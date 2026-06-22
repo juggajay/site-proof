@@ -562,7 +562,7 @@ describe('processDueScheduledReports', () => {
   });
 
   it('does not send due schedules for basic-tier companies', async () => {
-    const { company, project, now, dueAt, schedule } = await createDueScheduleFixture({
+    const { company, project, now, schedule } = await createDueScheduleFixture({
       subscriptionTier: 'basic',
     });
     try {
@@ -574,7 +574,7 @@ describe('processDueScheduledReports', () => {
       expect(result.results[0]?.error).toContain('Professional or Enterprise');
       expect(getQueuedEmails()).toEqual([]);
 
-      await expectScheduleNotSent(schedule.id, dueAt);
+      await expectScheduleAdvanced(schedule.id, now, false);
     } finally {
       await cleanupProject(project.id, company.id);
     }
