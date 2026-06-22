@@ -20,6 +20,7 @@ import { ImageOff, Loader2, AlertTriangle } from 'lucide-react';
 import { SecureDocumentImage } from '@/components/documents/SecureDocumentImage';
 import { cn } from '@/lib/utils';
 import { ShellScreen } from '../../components/ShellScreen';
+import { withProjectQuery } from '../../shellPaths';
 import { usePhotosShellContext } from './photosShellContext';
 import {
   PHOTO_FILTERS,
@@ -118,8 +119,7 @@ export function PhotosListScreen() {
 
   const visible = useMemo(() => filterPhotos(items, filter), [items, filter]);
 
-  const photoHref = (item: PhotoItem) =>
-    projectId ? `/m/photos/${item.id}?projectId=${projectId}` : `/m/photos/${item.id}`;
+  const photoHref = (item: PhotoItem) => withProjectQuery(`/m/photos/${item.id}`, projectId);
 
   const sub = (
     <span className="flex items-center gap-2">

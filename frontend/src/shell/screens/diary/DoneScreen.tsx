@@ -21,6 +21,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, useReducedMotion } from 'framer-motion';
 import { Check, WifiOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { withProjectQuery } from '../../shellPaths';
 import { useDiaryShellData } from './useDiaryShellData';
 import { useEffectiveProjectId } from '@/hooks/useEffectiveProjectId';
 
@@ -35,7 +36,7 @@ export function DoneScreen() {
 
   const isQueued = searchParams.get('queued') === '1';
 
-  const homePath = projectId ? `/m?projectId=${projectId}` : '/m';
+  const homePath = withProjectQuery('/m', projectId);
 
   const handleDone = useCallback(() => {
     navigate(homePath, { replace: true });

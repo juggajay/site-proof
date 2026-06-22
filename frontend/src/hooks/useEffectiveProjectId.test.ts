@@ -8,7 +8,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 // module real. A QueryClientProvider wrapper backs the useQuery call.
 vi.mock('react-router-dom', async (importOriginal) => {
   const actual = await importOriginal<typeof import('react-router-dom')>();
-  return { ...actual, useParams: vi.fn(() => ({})) };
+  return {
+    ...actual,
+    useParams: vi.fn(() => ({})),
+    useSearchParams: vi.fn(() => [new URLSearchParams(), vi.fn()]),
+  };
 });
 vi.mock('@/lib/auth', () => ({ useAuth: vi.fn() }));
 vi.mock('@/lib/api', async (importOriginal) => {
@@ -16,12 +20,13 @@ vi.mock('@/lib/api', async (importOriginal) => {
   return { ...actual, apiFetch: vi.fn() };
 });
 
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { apiFetch } from '@/lib/api';
 import { useEffectiveProjectId } from './useEffectiveProjectId';
 
 const useParamsMock = vi.mocked(useParams);
+const useSearchParamsMock = vi.mocked(useSearchParams);
 const useAuthMock = vi.mocked(useAuth);
 const apiFetchMock = vi.mocked(apiFetch);
 
@@ -58,6 +63,7 @@ async function expectForemanFallbackProject(expectedProjectId = 'api-project') {
 
 beforeEach(() => {
   useParamsMock.mockReturnValue({});
+  useSearchParamsMock.mockReturnValue([new URLSearchParams(), vi.fn()]);
   setUser('foreman');
 });
 
@@ -73,6 +79,22 @@ describe('useEffectiveProjectId', () => {
 
     expect(result.current).toEqual({
       projectId: 'url-project',
+      isResolving: false,
+      hasNoProject: false,
+    });
+    expect(apiFetchMock).not.toHaveBeenCalled();
+  });
+
+  it('uses the query-string project id before fetching the foreman fallback', () => {
+    useSearchParamsMock.mockReturnValue([
+      new URLSearchParams('projectId=query-project%2Falpha+%26+beta'),
+      vi.fn(),
+    ]);
+
+    const { result } = renderHook(() => useEffectiveProjectId(), { wrapper: createWrapper() });
+
+    expect(result.current).toEqual({
+      projectId: 'query-project/alpha & beta',
       isResolving: false,
       hasNoProject: false,
     });

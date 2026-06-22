@@ -23,6 +23,7 @@ import { Loader2 } from 'lucide-react';
 import { useOfflineStatus } from '@/lib/useOfflineStatus';
 import { cn } from '@/lib/utils';
 import { ShellScreen } from '../../components/ShellScreen';
+import { withProjectQuery } from '../../shellPaths';
 import { useDocketsShellContext } from './docketsShellContext';
 import { useShellDocketParam } from './useShellDocketParam';
 import { useDocketAction } from './useDocketAction';
@@ -48,10 +49,8 @@ export function AdjustHoursScreen() {
   const [reason, setReason] = useState('');
   const [notes, setNotes] = useState('');
 
-  const detailPath = projectId
-    ? `/m/dockets/${docketId}?projectId=${projectId}`
-    : `/m/dockets/${docketId}`;
-  const listPath = projectId ? `/m/dockets?projectId=${projectId}` : '/m/dockets';
+  const detailPath = withProjectQuery(`/m/dockets/${docketId}`, projectId);
+  const listPath = withProjectQuery('/m/dockets', projectId);
 
   const labourValidation = validateHours(labour);
   const plantValidation = validateHours(plant);

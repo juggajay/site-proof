@@ -36,6 +36,7 @@ import { queryKeys } from '@/lib/queryKeys';
 import { useEffectiveProjectId } from '@/hooks/useEffectiveProjectId';
 import { CaptureModal } from '@/components/foreman/CaptureModal';
 import { cn } from '@/lib/utils';
+import { withProjectQuery } from '../shellPaths';
 import { deriveDiaryStepState } from './diary/diaryStepState';
 import type { DailyDiary } from '@/pages/diary/types';
 
@@ -241,7 +242,9 @@ export function HomeScreen() {
   const { data: todayData } = useQuery<ForemanTodayPayload>({
     queryKey: queryKeys.foremanBadges(projectId ?? 'default'),
     queryFn: () =>
-      apiFetch<ForemanTodayPayload>(`/api/dashboard/projects/${projectId}/foreman/today`),
+      apiFetch<ForemanTodayPayload>(
+        `/api/dashboard/projects/${encodeURIComponent(projectId!)}/foreman/today`,
+      ),
     enabled: !!projectId,
     staleTime: 5 * 60_000,
     refetchInterval: 5 * 60_000,
@@ -272,7 +275,9 @@ export function HomeScreen() {
   const { data: docketData } = useQuery<DocketListResponse>({
     queryKey: queryKeys.dockets(projectId ?? 'default', 'pending_approval'),
     queryFn: () =>
-      apiFetch<DocketListResponse>(`/api/dockets?projectId=${projectId}&status=pending_approval`),
+      apiFetch<DocketListResponse>(
+        withProjectQuery('/api/dockets', projectId, { status: 'pending_approval' }),
+      ),
     enabled: !!projectId,
     staleTime: 2 * 60_000,
   });
@@ -281,7 +286,8 @@ export function HomeScreen() {
   // ── Open NCR count ────────────────────────────────────────────────────────
   const { data: ncrData } = useQuery<NcrListResponse>({
     queryKey: [...queryKeys.ncrs(projectId ?? undefined), 'open'],
-    queryFn: () => apiFetch<NcrListResponse>(`/api/ncrs?projectId=${projectId}&status=open`),
+    queryFn: () =>
+      apiFetch<NcrListResponse>(withProjectQuery('/api/ncrs', projectId, { status: 'open' })),
     enabled: !!projectId,
     staleTime: 5 * 60_000,
   });
@@ -290,11 +296,11 @@ export function HomeScreen() {
   // ── Navigation helpers ────────────────────────────────────────────────────
   const navTo = (sub: string) => {
     if (projectId) {
-      navigate(`/m/${sub}?projectId=${projectId}`);
+      navigate(withProjectQuery(`/m/${sub}`, projectId));
     }
   };
 
-  const diaryPath = projectId ? `/m/diary?projectId=${projectId}` : '/m/diary';
+  const diaryPath = withProjectQuery('/m/diary', projectId);
 
   if (isResolving) {
     // Skeleton state while project resolves

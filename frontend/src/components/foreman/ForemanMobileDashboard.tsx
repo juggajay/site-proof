@@ -300,7 +300,7 @@ export function ForemanMobileDashboard() {
             onClick={() =>
               navigate(
                 effectiveProjectId
-                  ? `/projects/${effectiveProjectId}/diary?date=${formatDateForUrl(new Date())}`
+                  ? getProjectPath(`diary?date=${formatDateForUrl(new Date())}`)
                   : `/diary?date=${formatDateForUrl(new Date())}`,
               )
             }
@@ -330,7 +330,7 @@ export function ForemanMobileDashboard() {
             onClick={() =>
               navigate(
                 effectiveProjectId
-                  ? `/projects/${effectiveProjectId}/dockets?status=pending_approval`
+                  ? getProjectPath('dockets?status=pending_approval')
                   : '/dockets?status=pending_approval',
               )
             }
@@ -392,11 +392,7 @@ export function ForemanMobileDashboard() {
               ))}
               {data.inspectionsDueToday.count > 3 && (
                 <Link
-                  to={
-                    effectiveProjectId
-                      ? `/projects/${effectiveProjectId}/hold-points`
-                      : '/hold-points'
-                  }
+                  to={effectiveProjectId ? getProjectPath('hold-points') : '/hold-points'}
                   className="block text-center text-sm text-primary py-2"
                 >
                   View all {data.inspectionsDueToday.count} inspections

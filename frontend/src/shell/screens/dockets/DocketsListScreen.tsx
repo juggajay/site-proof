@@ -14,6 +14,7 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ShellScreen } from '../../components/ShellScreen';
+import { withProjectQuery } from '../../shellPaths';
 import { useDocketsShellContext } from './docketsShellContext';
 import {
   DOCKET_FILTERS,
@@ -94,8 +95,7 @@ export function DocketsListScreen() {
     [dockets, filter],
   );
 
-  const docketHref = (docketId: string) =>
-    projectId ? `/m/dockets/${docketId}?projectId=${projectId}` : `/m/dockets/${docketId}`;
+  const docketHref = (docketId: string) => withProjectQuery(`/m/dockets/${docketId}`, projectId);
 
   const sub = (
     <span className="flex items-center gap-2">

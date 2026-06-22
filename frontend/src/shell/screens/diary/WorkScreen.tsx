@@ -13,6 +13,7 @@ import { useNavigate } from 'react-router-dom';
 import { Wrench, Clock, Truck, Flag, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ShellScreen } from '../../components/ShellScreen';
+import { withProjectQuery } from '../../shellPaths';
 import { useDiaryShellData } from './useDiaryShellData';
 import { useEffectiveProjectId } from '@/hooks/useEffectiveProjectId';
 import type { TimelineEntry } from '@/components/foreman/DiaryTimelineEntry';
@@ -37,19 +38,15 @@ export function WorkScreen() {
       e.type === 'activity' || e.type === 'delay' || e.type === 'delivery' || e.type === 'event',
   );
 
-  const backPath = projectId ? `/m/diary?projectId=${projectId}` : '/m/diary';
+  const backPath = withProjectQuery('/m/diary', projectId);
 
   const navToForm = (type: string) => {
     if (isSubmitted) return;
-    const path = projectId
-      ? `/m/diary/work/${type}?projectId=${projectId}`
-      : `/m/diary/work/${type}`;
-    navigate(path);
+    navigate(withProjectQuery(`/m/diary/work/${type}`, projectId));
   };
 
   const navToReview = () => {
-    const path = projectId ? `/m/diary/review?projectId=${projectId}` : '/m/diary/review';
-    navigate(path);
+    navigate(withProjectQuery('/m/diary/review', projectId));
   };
 
   const sub = (

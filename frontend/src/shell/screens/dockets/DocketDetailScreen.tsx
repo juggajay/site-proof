@@ -23,6 +23,7 @@ import { useOfflineStatus } from '@/lib/useOfflineStatus';
 import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ShellScreen } from '../../components/ShellScreen';
+import { withProjectQuery } from '../../shellPaths';
 import { useDocketsShellContext } from './docketsShellContext';
 import { useShellDocketParam } from './useShellDocketParam';
 import { useDocketAction } from './useDocketAction';
@@ -55,8 +56,8 @@ export function DocketDetailScreen() {
   const labourEntries = detailQuery.data?.labourEntries ?? [];
   const plantEntries = detailQuery.data?.plantEntries ?? [];
 
-  const backPath = projectId ? `/m/dockets?projectId=${projectId}` : '/m/dockets';
-  const withProject = (path: string) => (projectId ? `${path}?projectId=${projectId}` : path);
+  const backPath = withProjectQuery('/m/dockets', projectId);
+  const withProject = (path: string) => withProjectQuery(path, projectId);
 
   // ── Not-found / loading guards ─────────────────────────────────────────────
   if (loading && !docket) {

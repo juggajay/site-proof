@@ -26,13 +26,13 @@ const navItems: NavItem[] = [
     id: 'today',
     label: 'Today',
     icon: ListChecks,
-    getPath: (projectId) => `/projects/${projectId}/foreman/today`,
+    getPath: (projectId) => `/projects/${encodeURIComponent(projectId)}/foreman/today`,
   },
   {
     id: 'issues',
     label: 'Issues',
     icon: AlertTriangle,
-    getPath: (projectId) => `/projects/${projectId}/ncr`,
+    getPath: (projectId) => `/projects/${encodeURIComponent(projectId)}/ncr`,
   },
   {
     id: 'capture',
@@ -45,13 +45,13 @@ const navItems: NavItem[] = [
     id: 'diary',
     label: 'Diary',
     icon: BookOpen,
-    getPath: (projectId) => `/projects/${projectId}/diary`,
+    getPath: (projectId) => `/projects/${encodeURIComponent(projectId)}/diary`,
   },
   {
     id: 'lots',
     label: 'Lots',
     icon: MapPin,
-    getPath: (projectId) => `/projects/${projectId}/lots`,
+    getPath: (projectId) => `/projects/${encodeURIComponent(projectId)}/lots`,
   },
 ];
 
@@ -74,7 +74,7 @@ export function ForemanBottomNavV2({
     queryKey: queryKeys.foremanBadges(effectiveProjectId!),
     queryFn: () =>
       apiFetch<{ blocking?: unknown[]; dueToday?: unknown[] }>(
-        `/api/dashboard/projects/${effectiveProjectId}/foreman/today`,
+        `/api/dashboard/projects/${encodeURIComponent(effectiveProjectId!)}/foreman/today`,
       ),
     enabled: externalBadgeCount === undefined && !!effectiveProjectId,
     refetchInterval: 300_000, // 5 minutes

@@ -15,6 +15,7 @@ import { useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ShellScreen } from '../../components/ShellScreen';
+import { withProjectQuery } from '../../shellPaths';
 import { useDiaryShellData } from './useDiaryShellData';
 import { useEffectiveProjectId } from '@/hooks/useEffectiveProjectId';
 import {
@@ -114,7 +115,7 @@ export function WeatherScreen() {
     draft.discardDraft();
   };
 
-  const backPath = projectId ? `/m/diary?projectId=${projectId}` : '/m/diary';
+  const backPath = withProjectQuery('/m/diary', projectId);
 
   const handleSave = () => {
     if (weatherNumberError) return;

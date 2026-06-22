@@ -95,7 +95,9 @@ export function useLotsShellData(projectId: string | null): LotsShellData {
   const todayQuery = useQuery<ForemanTodayPayload>({
     queryKey: queryKeys.foremanBadges(projectId ?? 'default'),
     queryFn: () =>
-      apiFetch<ForemanTodayPayload>(`/api/dashboard/projects/${projectId}/foreman/today`),
+      apiFetch<ForemanTodayPayload>(
+        `/api/dashboard/projects/${encodeURIComponent(projectId!)}/foreman/today`,
+      ),
     enabled,
     staleTime: 5 * 60_000,
   });

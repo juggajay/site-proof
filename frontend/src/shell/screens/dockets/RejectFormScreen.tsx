@@ -17,6 +17,7 @@ import { Loader2 } from 'lucide-react';
 import { useOfflineStatus } from '@/lib/useOfflineStatus';
 import { cn } from '@/lib/utils';
 import { ShellScreen } from '../../components/ShellScreen';
+import { withProjectQuery } from '../../shellPaths';
 import { useDocketsShellContext } from './docketsShellContext';
 import { useShellDocketParam } from './useShellDocketParam';
 import { useDocketAction } from './useDocketAction';
@@ -32,10 +33,8 @@ export function RejectFormScreen() {
 
   const docket = useMemo(() => dockets.find((d) => d.id === docketId) ?? null, [dockets, docketId]);
 
-  const detailPath = projectId
-    ? `/m/dockets/${docketId}?projectId=${projectId}`
-    : `/m/dockets/${docketId}`;
-  const listPath = projectId ? `/m/dockets?projectId=${projectId}` : '/m/dockets';
+  const detailPath = withProjectQuery(`/m/dockets/${docketId}`, projectId);
+  const listPath = withProjectQuery('/m/dockets', projectId);
 
   const canSubmit = isReasonValid(reason) && isOnline && Boolean(docket);
 
