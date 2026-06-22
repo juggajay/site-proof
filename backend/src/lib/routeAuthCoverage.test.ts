@@ -409,8 +409,9 @@ describe('route authentication coverage', () => {
       'AuditAction.USER_EMAIL_VERIFIED',
     );
     expect(routeSourceForDescriptor(registrationRoutesSource, 'POST /register')).toContain(
-      'sendVerificationEmail',
+      'sendRegistrationVerificationEmailOrRetireToken',
     );
+    expect(registrationRoutesSource).toContain('sendVerificationEmail');
     expect(routeSourceForDescriptor(registrationRoutesSource, 'POST /register')).toContain(
       'domain_allowlist',
     );
@@ -729,6 +730,7 @@ describe('route authentication coverage', () => {
     ]);
 
     expect(publicRouteDescriptorsBeforeRouteWideAuth(holdpointsSource)).toEqual([
+      'GET /public/:token/documents/:documentId',
       'GET /public/:token',
       'POST /public/:token/release',
     ]);
