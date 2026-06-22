@@ -16,6 +16,130 @@ keep going until the app has been exercised end to end.
   `1secmail.com` from an old Codex process, so future email QA must use Jay's
   nominated inbox, a trusted mailbox, or Resend's safe test recipient.
 
+## Stage 45 - Multi-Company Subcontractor Portal Access Sweep
+
+Status: landed in PR #1094; PR CI, post-merge master CI, full post-merge E2E,
+Vercel deployment status, Railway deployment status, and public production
+health checks passed.
+
+Scope:
+
+- Continued Stage 44's multi-company subcontractor portal audit beyond comments
+  and documents.
+- Dockets list/create/read access for standalone subcontractor users linked to
+  more than one subcontractor company on the same project.
+- Subcontractor `my-company` roster and plant register reads/mutations.
+- Lot list/detail/readiness/conformance-status/subcontractor-assignment reads.
+- Hold point list/detail access.
+- Test result list/detail/workflow access.
+- NCR list/detail/responsible-party workflow/evidence access.
+- ITP subcontractor completion permission when multiple matching assignments
+  exist on the same lot.
+
+Subagent coverage:
+
+- A dockets/company sidecar confirmed that docket list and create paths were
+  still scoped through one arbitrary `SubcontractorUser.findFirst()` row, and
+  that `my-company` employee/plant mutations could hit the wrong same-project
+  subcontractor company unless the exact company id was supplied.
+- A lots/hold-points/test-results/ITP sidecar confirmed single-link deny bugs
+  across lots, hold points, and test results, plus a conservative ITP completion
+  verification edge case when multiple assignments match one user/lot.
+- An NCR sidecar confirmed read/workflow/evidence deny bugs for the second
+  linked company, and a mixed-module over-share risk when one linked company had
+  NCR access enabled and another did not.
+
+Confirmed issues fixed:
+
+- Shared project access helpers now expose all active subcontractor portal
+  company links/ids for a user/project, with optional per-company portal-module
+  filtering.
+- Docket list/read access now filters by every active linked subcontractor
+  company, not one arbitrary link.
+- Docket create now accepts `subcontractorCompanyId`, validates it is an active
+  linked company for the requested project, and rejects ambiguous multi-link
+  creates when the frontend does not send a company id.
+- Desktop and mobile subcontractor docket create flows now send the active
+  company id, including offline docket sync.
+- `my-company` employee and plant mutations now send and enforce the exact
+  subcontractor company id, including delete operations.
+- Backend `my-company` scoping now rejects mismatched project/company requests
+  instead of silently falling back to a different linked company.
+- Lot list/detail presenters now filter subcontractor-facing assignment fields
+  against a set of linked company ids.
+- Lot detail, readiness, and conform-status routes now preserve explicit portal
+  module denial messages while also requiring access through a company whose own
+  portal modules allow the requested surface.
+- Hold point and test result access now uses all active linked company ids and
+  per-module filtering.
+- NCR list/read/workflow/evidence access now uses all active linked companies
+  whose own `ncrs` portal module is enabled.
+- ITP subcontractor completion permission now evaluates all matching active
+  `canCompleteITP` assignments and treats verification conservatively if any
+  matching assignment requires verification.
+
+Related merged work:
+
+- #1094 - Fix multi-company subcontractor access scoping, merged as
+  `1790ebcb`.
+
+Verification:
+
+- #1094 local checks passed:
+  - backend `npm run type-check`
+  - backend `npm run lint`
+  - backend targeted unit tests:
+    `npx vitest run src/routes/lots/listPresentation.test.ts src/routes/lots/detailPresentation.test.ts`
+  - frontend `npm run type-check`
+  - frontend `npm run lint`, passing with the existing unrelated
+    `src/lib/theme.tsx` fast-refresh warning
+  - frontend targeted tests:
+    `npx vitest run src/shell/subbie/screens/test/CompanyScreen.test.tsx src/shell/subbie/screens/dockets/test/DocketScreen.test.tsx`
+  - frontend targeted offline/data tests:
+    `npx vitest run src/pages/subcontractor-portal/docketEditData.test.ts src/lib/offline/syncWorker.test.ts src/lib/useOfflineStatus.test.tsx`
+  - `git diff --check`
+  - repo precommit hook during commit/amends, including backend/frontend lint
+    and format checks for staged files
+- Local DB-backed backend route tests were intentionally left to CI because the
+  worktree did not have a safe local disposable `DATABASE_URL`.
+- PR #1094 checks passed before merge: Backend, Frontend, Frontend PR E2E
+  smoke, Detect changes, and Vercel's ignored-build status.
+- Master CI run `27941931073` passed after merge, including Backend, Frontend,
+  and full post-merge Frontend E2E.
+- Commit status for `1790ebcb` reported success from:
+  - Vercel
+  - Railway `hearty-harmony - site-proof`
+- After merge, production health checks returned HTTP 200 for:
+  - `https://site-proof-production.up.railway.app/health`
+  - `https://site-proof-production.up.railway.app/ready`
+  - `https://site-proof.vercel.app`
+
+Not live-exercised in this stage:
+
+- Real browser multi-user role choreography was not repeated for every affected
+  surface after the patch; the pass relied on route/unit coverage plus CI and
+  production health checks.
+- Real external-superintendent inbox-link verification was not part of this
+  stage.
+- The old main checkout still contains unrelated local work and was not used
+  for edits.
+
+Remaining findings for a later pass:
+
+- Continue scanning for route-local `SubcontractorUser.findFirst()` paths that
+  are company-specific rather than existence checks.
+- Consider a UI affordance for users linked to multiple subcontractor companies
+  in the same project, so company context is visible before creating dockets,
+  roster entries, plant records, or other company-scoped records.
+- The existing frontend `src/lib/theme.tsx` fast-refresh warning remains
+  unrelated to this stage.
+
+Artifacts:
+
+- No bearer tokens, session cookies, generated passwords, production secrets,
+  external email content, or browser-session data were committed or copied into
+  this ledger.
+
 ## Stage 44 - Multi-Company Subcontractor Comment and Document QA
 
 Status: landed in PR #1092; PR CI, post-merge master CI, full post-merge E2E,
