@@ -1,5 +1,6 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
 import { mockAuthenticatedUserState } from './helpers';
+import { formatDateKey } from '../src/lib/localDate';
 
 // This spec relies on exhaustive API route mocks. Blocking service workers keeps
 // mocked fetches under Playwright's control during the full-suite CI run.
@@ -7,7 +8,7 @@ test.use({ serviceWorkers: 'block' });
 
 const PROJECT_ID = 'project/alpha & beta';
 const PROJECT_NAME = 'Awkward Foreman Project';
-const DATE_KEY = new Intl.DateTimeFormat('en-CA').format(new Date());
+const DATE_KEY = formatDateKey();
 const TODAY = '2026-06-22T08:00:00.000Z';
 
 const FOREMAN_USER = {
