@@ -21,6 +21,7 @@ import { parseLotRouteParam } from './requestParsing.js';
 import { LOT_CONFORMERS, LOT_FORCE_CONFORMERS, STATUS_OVERRIDERS } from './roles.js';
 import { buildLotConformedResponse, buildLotStatusOverrideResponse } from './statusResponses.js';
 import { conformLotSchema, overrideStatusSchema } from './validation.js';
+import { emitLotWebhookEvent } from './webhookEvents.js';
 
 export const lotQualityRouter = Router();
 
@@ -272,6 +273,17 @@ lotQualityRouter.post(
       req,
     });
 
+    emitLotWebhookEvent(lot.projectId, 'lot.updated', {
+      lotId: updatedLot.id,
+      projectId: lot.projectId,
+      lotNumber: lot.lotNumber,
+      status: updatedLot.status,
+      actorUserId: user.id,
+      action: force ? 'force_conformed' : 'conformed',
+      changedFields: ['conformedAt', 'conformedById', 'status'],
+      previousStatus: lot.status,
+    });
+
     res.json(buildLotConformedResponse(updatedLot));
   }),
 );
@@ -348,6 +360,17 @@ lotQualityRouter.post(
         override: true,
       },
       req,
+    });
+
+    emitLotWebhookEvent(lot.projectId, 'lot.updated', {
+      lotId: updatedLot.id,
+      projectId: lot.projectId,
+      lotNumber: updatedLot.lotNumber,
+      status: updatedLot.status,
+      actorUserId: user.id,
+      action: 'status_override',
+      changedFields: ['status'],
+      previousStatus,
     });
 
     res.json(buildLotStatusOverrideResponse(updatedLot, previousStatus, reason));

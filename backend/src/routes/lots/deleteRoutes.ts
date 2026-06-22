@@ -13,6 +13,7 @@ import {
 import { LOT_DELETERS } from './roles.js';
 import { buildLotDeletedResponse } from './coreResponses.js';
 import { buildLotsBulkDeletedResponse } from './bulkMutationResponses.js';
+import { emitLotWebhookEvent, emitLotWebhookEvents } from './webhookEvents.js';
 
 export const lotDeleteRouter = Router();
 
@@ -80,6 +81,15 @@ lotDeleteRouter.delete(
 
     await prisma.lot.delete({
       where: { id },
+    });
+
+    emitLotWebhookEvent(lot.projectId, 'lot.deleted', {
+      lotId: lot.id,
+      projectId: lot.projectId,
+      lotNumber: lot.lotNumber,
+      status: lot.status,
+      actorUserId: user.id,
+      action: 'deleted',
     });
 
     res.json(buildLotDeletedResponse());
@@ -166,6 +176,26 @@ lotDeleteRouter.post(
         status: { notIn: ['conformed', 'claimed'] },
       },
     });
+
+    for (const projectId of projectIds) {
+      emitLotWebhookEvents(
+        projectId,
+        lotsToDelete
+          .filter((lot) => lot.projectId === projectId)
+          .map((lot) => ({
+            event: 'lot.deleted',
+            payload: {
+              lotId: lot.id,
+              projectId: lot.projectId,
+              lotNumber: lot.lotNumber,
+              status: lot.status,
+              actorUserId: user.id,
+              action: 'deleted',
+              bulk: true,
+            },
+          })),
+      );
+    }
 
     res.json(buildLotsBulkDeletedResponse(result.count));
   }),

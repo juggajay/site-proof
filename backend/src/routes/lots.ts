@@ -23,6 +23,7 @@ import { lotDeleteRouter } from './lots/deleteRoutes.js';
 import { lotSubcontractorAssignmentsRouter } from './lots/subcontractorAssignments.js';
 import { lotBulkMutationRouter } from './lots/bulkMutationRoutes.js';
 import { lotQualityRouter } from './lots/qualityRoutes.js';
+import { emitLotWebhookEvent } from './lots/webhookEvents.js';
 
 export const lotsRouter = Router();
 
@@ -232,6 +233,21 @@ lotsRouter.patch(
 
       return updated;
     });
+
+    const changedFields = Object.keys(updateData).sort();
+    if (changedFields.length > 0) {
+      emitLotWebhookEvent(lot.projectId, 'lot.updated', {
+        lotId: updatedLot.id,
+        projectId: lot.projectId,
+        lotNumber: updatedLot.lotNumber,
+        status: updatedLot.status,
+        actorUserId: user.id,
+        action: 'updated',
+        changedFields,
+        previousStatus: lot.status,
+        assignedSubcontractorId: updatedLot.assignedSubcontractorId,
+      });
+    }
 
     res.json(buildLotUpdatedResponse(updatedLot, canViewLotBudget(userProjectRole)));
   }),

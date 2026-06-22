@@ -45,6 +45,7 @@ import {
   buildLotsCreatedResponse,
 } from './coreResponses.js';
 import { buildTemplateSnapshot, type TemplateSnapshot } from '../itp/helpers/templateSnapshot.js';
+import { emitLotWebhookEvent, emitLotWebhookEvents } from './webhookEvents.js';
 
 export const lotCreateRouter = Router();
 
@@ -195,6 +196,15 @@ lotCreateRouter.post(
       req,
     });
 
+    emitLotWebhookEvent(projectId, 'lot.created', {
+      lotId: lot.id,
+      projectId,
+      lotNumber: lot.lotNumber,
+      status: lot.status,
+      actorUserId: user.id,
+      action: 'created',
+    });
+
     res.status(201).json(buildLotCreatedResponse(lot));
   }),
 );
@@ -265,6 +275,22 @@ lotCreateRouter.post(
           req,
         }),
       ),
+    );
+
+    emitLotWebhookEvents(
+      projectId,
+      createdLots.map((lot) => ({
+        event: 'lot.created',
+        payload: {
+          lotId: lot.id,
+          projectId,
+          lotNumber: lot.lotNumber,
+          status: lot.status,
+          actorUserId: user.id,
+          action: 'created',
+          bulk: true,
+        },
+      })),
     );
 
     res.status(201).json(buildLotsCreatedResponse(createdLots));
@@ -375,6 +401,16 @@ lotCreateRouter.post(
       }
 
       return lot;
+    });
+
+    emitLotWebhookEvent(sourceLot.projectId, 'lot.created', {
+      lotId: clonedLot.id,
+      projectId: sourceLot.projectId,
+      lotNumber: clonedLot.lotNumber,
+      status: clonedLot.status,
+      actorUserId: user.id,
+      action: 'cloned',
+      sourceLotId: sourceLot.id,
     });
 
     res.status(201).json(buildLotClonedResponse(clonedLot, sourceLot.id, sourceLot.lotNumber));

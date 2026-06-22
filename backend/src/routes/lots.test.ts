@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import { lotsRouter } from './lots.js';
@@ -54,6 +54,26 @@ async function createLotWithReleasedHoldPoint(projectId: string, lotNumber: stri
     },
   });
   return lot;
+}
+
+async function waitForWebhookDeliveries(webhookId: string, expectedCount: number) {
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const deliveries = await prisma.webhookDelivery.findMany({
+      where: { webhookId },
+      orderBy: { deliveredAt: 'asc' },
+    });
+
+    if (deliveries.length >= expectedCount) {
+      return deliveries;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+
+  return prisma.webhookDelivery.findMany({
+    where: { webhookId },
+    orderBy: { deliveredAt: 'asc' },
+  });
 }
 
 describe('Lots API', () => {
@@ -118,6 +138,10 @@ describe('Lots API', () => {
     }
 
     await prisma.company.delete({ where: { id: companyId } }).catch(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   describe('POST /api/lots', () => {
@@ -2065,6 +2089,126 @@ describe('Lots API', () => {
         expect(res.body.error.message).toContain('Cannot edit a claimed lot');
       } finally {
         await prisma.lot.delete({ where: { id: claimedLot.id } }).catch(() => {});
+      }
+    });
+  });
+
+  describe('lot webhook events', () => {
+    it('triggers lot lifecycle webhooks for successful create, update, and delete mutations', async () => {
+      const fetchMock = vi
+        .spyOn(globalThis, 'fetch')
+        .mockImplementation(() => Promise.resolve(new Response('accepted', { status: 200 })));
+      const webhook = await prisma.webhookConfig.create({
+        data: {
+          companyId,
+          url: 'https://example.com/siteproof-lot-events',
+          secret: 'test-webhook-secret',
+          events: JSON.stringify(['lot.created', 'lot.updated', 'lot.deleted']),
+          enabled: true,
+          createdById: userId,
+        },
+      });
+      const lotNumber = `LOT-WEBHOOK-${Date.now()}`;
+      let createdLotId: string | undefined;
+
+      try {
+        const createRes = await request(app)
+          .post('/api/lots')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            projectId,
+            lotNumber,
+            description: 'Webhook lifecycle lot',
+            activityType: 'Earthworks',
+          });
+
+        expect(createRes.status).toBe(201);
+        createdLotId = createRes.body.lot.id;
+
+        const createDeliveries = await waitForWebhookDeliveries(webhook.id, 1);
+        expect(createDeliveries).toHaveLength(1);
+        expect(createDeliveries[0]).toMatchObject({
+          event: 'lot.created',
+          success: true,
+          responseStatus: 200,
+        });
+        expect(createDeliveries[0].payload).toMatchObject({
+          event: 'lot.created',
+          data: {
+            lotId: createdLotId,
+            projectId,
+            lotNumber,
+            status: 'not_started',
+            actorUserId: userId,
+            action: 'created',
+          },
+        });
+
+        const updateRes = await request(app)
+          .patch(`/api/lots/${createdLotId}`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            description: 'Webhook lifecycle lot updated',
+            status: 'in_progress',
+          });
+
+        expect(updateRes.status).toBe(200);
+
+        const updateDeliveries = await waitForWebhookDeliveries(webhook.id, 2);
+        expect(updateDeliveries).toHaveLength(2);
+        expect(updateDeliveries[1]).toMatchObject({
+          event: 'lot.updated',
+          success: true,
+          responseStatus: 200,
+        });
+        expect(updateDeliveries[1].payload).toMatchObject({
+          event: 'lot.updated',
+          data: {
+            lotId: createdLotId,
+            projectId,
+            lotNumber,
+            status: 'in_progress',
+            actorUserId: userId,
+            action: 'updated',
+            previousStatus: 'not_started',
+          },
+        });
+        expect(
+          (updateDeliveries[1].payload as { data?: { changedFields?: string[] } }).data
+            ?.changedFields,
+        ).toEqual(['description', 'status']);
+
+        const deleteRes = await request(app)
+          .delete(`/api/lots/${createdLotId}`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(deleteRes.status).toBe(200);
+        createdLotId = undefined;
+
+        const deleteDeliveries = await waitForWebhookDeliveries(webhook.id, 3);
+        expect(deleteDeliveries).toHaveLength(3);
+        expect(deleteDeliveries[2]).toMatchObject({
+          event: 'lot.deleted',
+          success: true,
+          responseStatus: 200,
+        });
+        expect(deleteDeliveries[2].payload).toMatchObject({
+          event: 'lot.deleted',
+          data: {
+            projectId,
+            lotNumber,
+            status: 'in_progress',
+            actorUserId: userId,
+            action: 'deleted',
+          },
+        });
+        expect(fetchMock).toHaveBeenCalledTimes(3);
+      } finally {
+        if (createdLotId) {
+          await prisma.lot.delete({ where: { id: createdLotId } }).catch(() => {});
+        }
+        await prisma.webhookDelivery.deleteMany({ where: { webhookId: webhook.id } });
+        await prisma.webhookConfig.delete({ where: { id: webhook.id } }).catch(() => {});
       }
     });
   });
