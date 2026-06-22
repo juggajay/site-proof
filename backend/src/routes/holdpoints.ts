@@ -17,16 +17,8 @@ import {
 import { holdPointReleaseTokenLookup } from './holdpoints/tokens.js';
 import { requireSuperintendentApprovalRecipients } from './holdpoints/superintendentRecipients.js';
 import {
-  buildHoldPointEvidenceChecklist,
-  buildHoldPointEvidenceChecklistItemIdSet,
-  buildHoldPointEvidencePhotoDocuments,
-  buildHoldPointEvidenceSummary,
+  buildHoldPointEvidencePackage,
   buildPublicHoldPointEvidencePackageResponse,
-  mapHoldPointEvidenceItpTemplate,
-  mapHoldPointEvidenceLot,
-  mapHoldPointEvidencePhotos,
-  mapHoldPointEvidenceProject,
-  mapHoldPointEvidenceTestResults,
 } from './holdpoints/evidencePackage.js';
 import { buildPublicHoldPointReleasedResponse } from './holdpoints/actionResponses.js';
 import {
@@ -43,13 +35,142 @@ import { holdPointRequestReleaseRouter } from './holdpoints/requestReleaseRoutes
 import { holdPointActionRouter } from './holdpoints/actionRoutes.js';
 import { updateLotStatusFromITP } from './itp/helpers/lotProgression.js';
 import { isProjectNotificationEnabled } from '../lib/projectNotificationPreferences.js';
-import {
-  getHoldPointChecklistItemsForInstance,
-  getHoldPointItpTemplateForInstance,
-  resolveHoldPointChecklistItemForInstance,
-} from './holdpoints/itpSnapshot.js';
+import { parseDocumentContentDisposition, sendDocumentFile } from './documents/fileHelpers.js';
+import { resolveHoldPointEvidenceInputs } from './holdpoints/evidencePackageInputs.js';
 
 const holdpointsRouter = Router();
+
+async function loadPublicHoldPointReleaseToken(rawToken: string) {
+  return prisma.holdPointReleaseToken.findFirst({
+    where: holdPointReleaseTokenLookup(rawToken),
+    include: {
+      holdPoint: {
+        include: {
+          itpChecklistItem: true,
+          lot: {
+            include: {
+              project: true,
+              itpInstance: {
+                include: {
+                  template: {
+                    include: {
+                      checklistItems: {
+                        orderBy: { sequenceNumber: 'asc' },
+                      },
+                    },
+                  },
+                  completions: {
+                    include: {
+                      completedBy: {
+                        select: { id: true, fullName: true, email: true },
+                      },
+                      verifiedBy: {
+                        select: { id: true, fullName: true, email: true },
+                      },
+                      attachments: {
+                        include: {
+                          document: true,
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+              testResults: {
+                include: {
+                  verifiedBy: {
+                    select: { id: true, fullName: true, email: true },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+}
+
+type PublicHoldPointReleaseToken = NonNullable<
+  Awaited<ReturnType<typeof loadPublicHoldPointReleaseToken>>
+>;
+
+function assertPublicHoldPointTokenAvailable(
+  releaseToken: PublicHoldPointReleaseToken | null,
+): asserts releaseToken is PublicHoldPointReleaseToken {
+  if (!releaseToken) {
+    throw AppError.notFound('Invalid or expired link');
+  }
+
+  if (new Date() > releaseToken.expiresAt) {
+    throw new AppError(
+      410,
+      'This secure release link has expired. Please contact the site team for a new link.',
+      'TOKEN_EXPIRED',
+    );
+  }
+}
+
+function buildPublicHoldPointReleasePayload(releaseToken: PublicHoldPointReleaseToken) {
+  const holdPoint = releaseToken.holdPoint;
+  const lot = holdPoint.lot;
+  const { itpInstance, checklistItems, holdPointItem, itpTemplate } =
+    resolveHoldPointEvidenceInputs({
+      itpInstance: lot.itpInstance,
+      checklistItemId: holdPoint.itpChecklistItemId,
+      liveFallback: holdPoint.itpChecklistItem,
+    });
+
+  const evidencePackage = buildHoldPointEvidencePackage({
+    holdPoint: {
+      id: holdPoint.id,
+      description: holdPoint.description,
+      itpChecklistItemId: holdPoint.itpChecklistItemId,
+      status: holdPoint.status,
+      notificationSentAt: holdPoint.notificationSentAt,
+      scheduledDate: holdPoint.scheduledDate,
+      scheduledTime: holdPoint.scheduledTime,
+      releasedAt: holdPoint.releasedAt,
+      releasedByName: holdPoint.releasedByName,
+      releaseNotes: holdPoint.releaseNotes,
+    },
+    lot,
+    itpTemplate,
+    checklistItems,
+    completions: itpInstance.completions,
+    holdPointSequenceNumber: holdPointItem.sequenceNumber,
+  });
+
+  return {
+    evidencePackage,
+    tokenInfo: {
+      recipientEmail: releaseToken.recipientEmail,
+      recipientName: releaseToken.recipientName,
+      expiresAt: releaseToken.expiresAt,
+      canRelease: holdPoint.status !== 'released' && !releaseToken.usedAt,
+    },
+  };
+}
+
+function getPublicEvidenceDocumentIds(
+  evidencePackage: ReturnType<typeof buildPublicHoldPointReleasePayload>['evidencePackage'],
+): Set<string> {
+  const documentIds = new Set<string>();
+
+  for (const item of evidencePackage.checklist) {
+    for (const attachment of item.attachments) {
+      if (attachment.documentId) {
+        documentIds.add(attachment.documentId);
+      }
+    }
+  }
+
+  for (const photo of evidencePackage.photos) {
+    documentIds.add(photo.id);
+  }
+
+  return documentIds;
+}
 
 // Authenticated read/detail/evidence routes (project list, lot/item detail,
 // evidence package + preview, working hours, notification-time calculation).
@@ -76,161 +197,51 @@ holdpointsRouter.use(holdPointActionRouter);
 // These endpoints use secure time-limited tokens for superintendent access
 // ============================================================================
 
+// Download one file from the token-scoped evidence package (no auth required)
+holdpointsRouter.get(
+  '/public/:token/documents/:documentId',
+  asyncHandler(async (req: Request, res: Response) => {
+    const token = parseHoldPointRouteParam(req.params.token, 'token', MAX_RELEASE_TOKEN_LENGTH);
+    const documentId = parseHoldPointRouteParam(req.params.documentId, 'documentId');
+    const disposition = parseDocumentContentDisposition(req.query.disposition);
+
+    const releaseToken = await loadPublicHoldPointReleaseToken(token);
+    assertPublicHoldPointTokenAvailable(releaseToken);
+    const { evidencePackage } = buildPublicHoldPointReleasePayload(releaseToken);
+    const scopedDocumentIds = getPublicEvidenceDocumentIds(evidencePackage);
+
+    if (!scopedDocumentIds.has(documentId)) {
+      throw AppError.forbidden('This document is not part of this hold point evidence package.');
+    }
+
+    const document = await prisma.document.findUnique({
+      where: { id: documentId },
+      select: {
+        fileUrl: true,
+        filename: true,
+        mimeType: true,
+        projectId: true,
+        documentType: true,
+      },
+    });
+
+    if (!document) {
+      throw AppError.notFound('Document');
+    }
+
+    await sendDocumentFile(document, res, disposition);
+  }),
+);
+
 // Get hold point and evidence package via secure link (no auth required)
 holdpointsRouter.get(
   '/public/:token',
   asyncHandler(async (req: Request, res: Response) => {
     const token = parseHoldPointRouteParam(req.params.token, 'token', MAX_RELEASE_TOKEN_LENGTH);
 
-    // Find the token and validate it
-    const releaseToken = await prisma.holdPointReleaseToken.findFirst({
-      where: holdPointReleaseTokenLookup(token),
-      include: {
-        holdPoint: {
-          include: {
-            itpChecklistItem: true,
-            lot: {
-              include: {
-                project: true,
-                itpInstance: {
-                  include: {
-                    template: {
-                      include: {
-                        checklistItems: {
-                          orderBy: { sequenceNumber: 'asc' },
-                        },
-                      },
-                    },
-                    completions: {
-                      include: {
-                        completedBy: {
-                          select: { id: true, fullName: true, email: true },
-                        },
-                        verifiedBy: {
-                          select: { id: true, fullName: true, email: true },
-                        },
-                        attachments: {
-                          include: {
-                            document: true,
-                          },
-                        },
-                      },
-                    },
-                  },
-                },
-                testResults: {
-                  include: {
-                    verifiedBy: {
-                      select: { id: true, fullName: true, email: true },
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-    });
-
-    if (!releaseToken) {
-      throw AppError.notFound('Invalid or expired link');
-    }
-
-    // Check if token has expired
-    if (new Date() > releaseToken.expiresAt) {
-      throw new AppError(
-        410,
-        'This secure release link has expired. Please contact the site team for a new link.',
-        'TOKEN_EXPIRED',
-      );
-    }
-
-    // Check if token has been used (hold point already released via this token)
-    if (releaseToken.usedAt) {
-      throw new AppError(
-        410,
-        'This hold point has already been released using this link.',
-        'TOKEN_USED',
-        {
-          releasedAt: releaseToken.usedAt as unknown as Record<string, unknown>,
-          releasedByName: releaseToken.releasedByName as unknown as Record<string, unknown>,
-        },
-      );
-    }
-
-    const holdPoint = releaseToken.holdPoint;
-    const lot = holdPoint.lot;
-    const itpInstance = lot.itpInstance;
-
-    if (!itpInstance) {
-      throw AppError.badRequest('No ITP assigned to this lot');
-    }
-
-    const checklistItems = getHoldPointChecklistItemsForInstance(itpInstance);
-
-    // Get all checklist items up to and including the hold point from the
-    // assigned ITP snapshot, falling back to live data only for legacy instances.
-    const holdPointItem = resolveHoldPointChecklistItemForInstance(
-      itpInstance,
-      holdPoint.itpChecklistItemId,
-      holdPoint.itpChecklistItem,
-    );
-    if (!holdPointItem) {
-      throw AppError.notFound('Hold point checklist item');
-    }
-    const includedChecklistItemIds = buildHoldPointEvidenceChecklistItemIdSet(
-      checklistItems,
-      holdPointItem.sequenceNumber,
-    );
-    const checklistWithStatus = buildHoldPointEvidenceChecklist(
-      checklistItems,
-      itpInstance.completions,
-      holdPointItem.sequenceNumber,
-    );
-    const itpTemplate = getHoldPointItpTemplateForInstance(itpInstance);
-    if (!itpTemplate) {
-      throw AppError.badRequest('No ITP template assigned to this lot');
-    }
-
-    const scope = { includedChecklistItemIds };
-    const testResults = mapHoldPointEvidenceTestResults(lot.testResults, scope);
-
-    const photos = mapHoldPointEvidencePhotos(
-      buildHoldPointEvidencePhotoDocuments(itpInstance.completions),
-      scope,
-    );
-
-    // Build evidence package response
-    const evidencePackage = {
-      holdPoint: {
-        id: holdPoint.id,
-        description: holdPoint.description,
-        itpChecklistItemId: holdPoint.itpChecklistItemId,
-        status: holdPoint.status,
-        notificationSentAt: holdPoint.notificationSentAt,
-        scheduledDate: holdPoint.scheduledDate,
-        scheduledTime: holdPoint.scheduledTime,
-        releasedAt: holdPoint.releasedAt,
-        releasedByName: holdPoint.releasedByName,
-        releaseNotes: holdPoint.releaseNotes,
-      },
-      lot: mapHoldPointEvidenceLot(lot),
-      project: mapHoldPointEvidenceProject(lot.project),
-      itpTemplate: mapHoldPointEvidenceItpTemplate(itpTemplate),
-      checklist: checklistWithStatus,
-      testResults,
-      photos,
-      summary: buildHoldPointEvidenceSummary(checklistWithStatus, testResults, photos),
-      generatedAt: new Date().toISOString(),
-    };
-
-    // Token info for the UI
-    const tokenInfo = {
-      recipientEmail: releaseToken.recipientEmail,
-      recipientName: releaseToken.recipientName,
-      expiresAt: releaseToken.expiresAt,
-      canRelease: holdPoint.status !== 'released',
-    };
+    const releaseToken = await loadPublicHoldPointReleaseToken(token);
+    assertPublicHoldPointTokenAvailable(releaseToken);
+    const { evidencePackage, tokenInfo } = buildPublicHoldPointReleasePayload(releaseToken);
 
     res.json(buildPublicHoldPointEvidencePackageResponse(evidencePackage, tokenInfo));
   }),
@@ -418,7 +429,16 @@ holdpointsRouter.post(
     });
 
     if (releasedItpInstanceId) {
-      await updateLotStatusFromITP(releasedItpInstanceId);
+      try {
+        await updateLotStatusFromITP(releasedItpInstanceId);
+      } catch (progressionError) {
+        logError('[HP Secure Release] Failed to update lot status after public release:', {
+          holdPointId: holdPoint.id,
+          lotId: holdPoint.lotId,
+          itpInstanceId: releasedItpInstanceId,
+          error: progressionError instanceof Error ? progressionError.message : progressionError,
+        });
+      }
     }
 
     // Create in-app notifications for project team members

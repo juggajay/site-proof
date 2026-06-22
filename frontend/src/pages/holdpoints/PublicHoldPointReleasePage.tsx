@@ -9,7 +9,7 @@ import {
   Loader2,
   LockKeyhole,
 } from 'lucide-react';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, apiUrl } from '@/lib/api';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import type { HPEvidencePackageData } from '@/lib/pdfGenerator';
 import { Button } from '@/components/ui/button';
@@ -60,6 +60,14 @@ function formatDate(value: string | null | undefined): string {
   return new Intl.DateTimeFormat('en-AU', {
     dateStyle: 'medium',
   }).format(date);
+}
+
+function getPublicEvidenceDocumentUrl(token: string, documentId: string): string {
+  return apiUrl(
+    `/api/holdpoints/public/${encodeURIComponent(token)}/documents/${encodeURIComponent(
+      documentId,
+    )}?disposition=inline`,
+  );
 }
 
 function StatusPill({ status }: { status: string }) {
@@ -414,7 +422,26 @@ export function PublicHoldPointReleasePage() {
                       <td className="px-5 py-3 align-top">{item.isCompleted ? 'Yes' : 'No'}</td>
                       <td className="px-5 py-3 align-top">{item.isVerified ? 'Yes' : 'No'}</td>
                       <td className="max-w-sm px-5 py-3 align-top text-muted-foreground">
-                        {item.notes || '-'}
+                        <div>{item.notes || '-'}</div>
+                        {token && item.attachments.length > 0 && (
+                          <div className="mt-2 space-y-1">
+                            {item.attachments.map((attachment) => {
+                              const documentId = attachment.documentId || attachment.id;
+                              return (
+                                <a
+                                  key={attachment.id}
+                                  href={getPublicEvidenceDocumentUrl(token, documentId)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 text-xs font-medium text-foreground underline-offset-2 hover:underline"
+                                >
+                                  <Download className="h-3.5 w-3.5" />
+                                  {attachment.filename}
+                                </a>
+                              );
+                            })}
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -459,8 +486,20 @@ export function PublicHoldPointReleasePage() {
               </p>
               <div className="mt-3 space-y-2">
                 {evidencePackage.photos.slice(0, 5).map((photo) => (
-                  <div key={photo.id} className="truncate text-sm">
-                    {photo.filename}
+                  <div key={photo.id} className="flex items-center justify-between gap-2 text-sm">
+                    <span className="min-w-0 flex-1 truncate">{photo.filename}</span>
+                    {token && (
+                      <Button asChild size="sm" variant="outline" className="h-8 shrink-0">
+                        <a
+                          href={getPublicEvidenceDocumentUrl(token, photo.id)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                          Open
+                        </a>
+                      </Button>
+                    )}
                   </div>
                 ))}
                 {evidencePackage.photos.length > 5 && (

@@ -205,6 +205,7 @@ export interface HPEvidencePackageData {
     notes: string | null;
     attachments: {
       id: string;
+      documentId?: string | null;
       filename: string;
       fileUrl?: string | null;
       caption: string | null;

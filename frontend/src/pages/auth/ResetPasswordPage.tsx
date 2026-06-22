@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -22,6 +22,7 @@ export function ResetPasswordPage() {
   const [validating, setValidating] = useState(true);
   const [tokenValid, setTokenValid] = useState(false);
   const [tokenError, setTokenError] = useState('');
+  const handledRef = useRef(false);
 
   const {
     register,
@@ -51,6 +52,11 @@ export function ResetPasswordPage() {
 
   // Validate token on mount
   useEffect(() => {
+    if (handledRef.current) {
+      return;
+    }
+    handledRef.current = true;
+
     async function validateToken() {
       if (!token) {
         setTokenError('No reset token provided');
@@ -59,6 +65,8 @@ export function ResetPasswordPage() {
       }
 
       try {
+        window.history.replaceState(null, document.title, '/reset-password');
+
         const data = await apiFetch<{ valid: boolean; message?: string }>(
           `/api/auth/validate-reset-token?token=${encodeURIComponent(token)}`,
         );
@@ -91,7 +99,7 @@ export function ResetPasswordPage() {
 
       // Redirect to login after 3 seconds
       setTimeout(() => {
-        navigate('/login');
+        navigate('/login', { replace: true });
       }, 3000);
     } catch {
       setError('root', { message: 'Failed to reset password. Please try again.' });

@@ -103,7 +103,13 @@ describe('buildHoldPointEvidenceChecklist', () => {
       verifiedBy: 'Bob',
       notes: 'looks good',
       attachments: [
-        { id: 'a1', filename: 'photo.jpg', fileUrl: 'https://x/photo.jpg', caption: 'cap' },
+        {
+          id: 'a1',
+          documentId: 'd1',
+          filename: 'photo.jpg',
+          fileUrl: 'https://x/photo.jpg',
+          caption: 'cap',
+        },
       ],
     });
   });
@@ -165,6 +171,7 @@ describe('hold point evidence-package response helpers', () => {
           attachments: [
             {
               id: 'att-1',
+              documentId: 'doc-1',
               filename: 'release-photo.jpg',
               fileUrl: 'supabase://documents/project-id/release-photo.jpg',
               caption: 'release evidence',
@@ -193,6 +200,7 @@ describe('hold point evidence-package response helpers', () => {
             attachments: [
               {
                 id: 'att-1',
+                documentId: 'doc-1',
                 filename: 'release-photo.jpg',
                 caption: 'release evidence',
               },
@@ -237,6 +245,7 @@ describe('hold point evidence-package response helpers', () => {
           attachments: [
             {
               id: 'att-1',
+              documentId: 'doc-1',
               filename: 'release-photo.jpg',
               fileUrl: 'supabase://documents/project-id/release-photo.jpg',
               caption: 'release evidence',
@@ -265,6 +274,7 @@ describe('hold point evidence-package response helpers', () => {
             attachments: [
               {
                 id: 'att-1',
+                documentId: 'doc-1',
                 filename: 'release-photo.jpg',
                 caption: 'release evidence',
               },

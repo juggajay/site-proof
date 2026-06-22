@@ -215,6 +215,51 @@ describe('POST /api/auth/register', () => {
     expect(JSON.stringify(changes)).not.toMatch(/password|token|secret/i);
   });
 
+  it('does not leave an active verification token or claim email delivery when registration email fails', async () => {
+    const email = `failed-register-email-${Date.now()}@example.com`;
+    let userId: string | undefined;
+    const sendSpy = vi.spyOn(emailService, 'sendVerificationEmail').mockResolvedValueOnce({
+      success: false,
+      error: 'Verification email provider unavailable',
+      statusCode: 503,
+      provider: 'resend',
+    });
+
+    try {
+      const res = await request(app).post('/api/auth/register').send({
+        email,
+        password: 'SecureP@ssword123!',
+        fullName: 'Failed Register Email User',
+        tosAccepted: true,
+      });
+
+      expect(res.status).toBe(201);
+      expect(res.body.user.email).toBe(email);
+      expect(res.body.verificationRequired).toBe(true);
+      expect(res.body.verificationEmailSent).toBe(false);
+      expect(res.body.message).toContain('could not be sent');
+      userId = res.body.user.id as string;
+
+      await expect(
+        prisma.emailVerificationToken.count({
+          where: {
+            userId,
+            usedAt: null,
+            expiresAt: { gt: new Date() },
+          },
+        }),
+      ).resolves.toBe(0);
+      expect(sendSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      sendSpy.mockRestore();
+      if (userId) {
+        await prisma.emailVerificationToken.deleteMany({ where: { userId } });
+        await clearUserAuditLogs(userId);
+        await prisma.user.delete({ where: { id: userId } }).catch(() => {});
+      }
+    }
+  });
+
   it('auto-verifies explicitly configured demo domains without creating a verification token', async () => {
     const previousBypassDomains = process.env.VERIFICATION_BYPASS_EMAIL_DOMAINS;
     const email = `demo-bypass-${Date.now()}@demo.siteproof.test`;

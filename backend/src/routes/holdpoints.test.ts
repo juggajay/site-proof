@@ -2,6 +2,8 @@ import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
 import { authRouter } from './auth.js';
 import { prisma } from '../lib/prisma.js';
 import { AuditAction, parseAuditLogChanges } from '../lib/auditLog.js';
@@ -1833,6 +1835,8 @@ describe('Hold Point Token Release', () => {
   let completionId: string;
   let holdPointId: string;
   let releaseToken: string;
+  let evidenceDocumentId: string;
+  let evidenceFilePath: string;
 
   beforeAll(async () => {
     const company = await prisma.company.create({
@@ -1910,6 +1914,29 @@ describe('Hold Point Token Release', () => {
       },
     });
     completionId = completion.id;
+    const evidenceFilename = `public-hp-evidence-${Date.now()}.pdf`;
+    const evidenceUploadDir = path.join(process.cwd(), 'uploads', 'documents');
+    evidenceFilePath = path.join(evidenceUploadDir, evidenceFilename);
+    fs.mkdirSync(evidenceUploadDir, { recursive: true });
+    fs.writeFileSync(evidenceFilePath, Buffer.from('%PDF-1.4 public hold point evidence'));
+    const evidenceDocument = await prisma.document.create({
+      data: {
+        projectId,
+        lotId,
+        documentType: 'photo',
+        category: 'itp_evidence',
+        filename: 'release-evidence.pdf',
+        fileUrl: `/uploads/documents/${evidenceFilename}`,
+        mimeType: 'application/pdf',
+      },
+    });
+    evidenceDocumentId = evidenceDocument.id;
+    await prisma.iTPCompletionAttachment.create({
+      data: {
+        completionId,
+        documentId: evidenceDocument.id,
+      },
+    });
 
     const hp = await prisma.holdPoint.create({
       data: {
@@ -1938,12 +1965,17 @@ describe('Hold Point Token Release', () => {
   afterAll(async () => {
     await prisma.holdPointReleaseToken.deleteMany({ where: { holdPointId } });
     await prisma.holdPoint.deleteMany({ where: { lotId } });
+    await prisma.iTPCompletionAttachment.deleteMany({ where: { completionId } });
+    await prisma.document.deleteMany({ where: { id: evidenceDocumentId } });
     await prisma.iTPInstance.deleteMany({ where: { lotId } });
     await prisma.lot.deleteMany({ where: { projectId } });
     await prisma.iTPChecklistItem.deleteMany({ where: { templateId } });
     await prisma.iTPTemplate.deleteMany({ where: { projectId } });
     await prisma.project.delete({ where: { id: projectId } }).catch(() => {});
     await prisma.company.delete({ where: { id: companyId } }).catch(() => {});
+    if (evidenceFilePath) {
+      fs.rmSync(evidenceFilePath, { force: true });
+    }
   });
 
   it('should get hold point by public token', async () => {
@@ -1959,7 +1991,27 @@ describe('Hold Point Token Release', () => {
     expect(JSON.stringify(res.body.evidencePackage.checklist)).not.toContain(
       'Live Mutated External Hold Point',
     );
+    expect(res.body.evidencePackage.checklist[0].attachments[0]).toMatchObject({
+      documentId: evidenceDocumentId,
+      filename: 'release-evidence.pdf',
+    });
+    expect(JSON.stringify(res.body.evidencePackage)).not.toContain('/uploads/documents/');
     expect(res.body.tokenInfo).toBeDefined();
+  });
+
+  it('should download only documents scoped to the public evidence package', async () => {
+    const res = await request(app).get(
+      `/api/holdpoints/public/${releaseToken}/documents/${evidenceDocumentId}?disposition=inline`,
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('application/pdf');
+    expect(res.headers['content-disposition']).toContain('inline');
+
+    const deniedRes = await request(app).get(
+      `/api/holdpoints/public/${releaseToken}/documents/not-in-package`,
+    );
+    expect(deniedRes.status).toBe(403);
   });
 
   it('should reject plaintext public token storage', async () => {
@@ -2293,6 +2345,18 @@ describe('Hold Point Token Release', () => {
     expect(completion.completedAt).toBeInstanceOf(Date);
     expect(completion.completedById).toBeNull();
     expect(completion.verifiedById).toBeNull();
+  });
+
+  it('should reopen a used public release token as read-only evidence', async () => {
+    const res = await request(app).get(`/api/holdpoints/public/${releaseToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.evidencePackage.holdPoint.status).toBe('released');
+    expect(res.body.tokenInfo.canRelease).toBe(false);
+    expect(res.body.evidencePackage.checklist[0].attachments[0]).toMatchObject({
+      documentId: evidenceDocumentId,
+      filename: 'release-evidence.pdf',
+    });
   });
 
   it('should reject reuse of a public release token', async () => {

@@ -2,11 +2,12 @@ import { Router, type Request } from 'express';
 import type { PrismaClient } from '@prisma/client';
 
 import { generateToken, hashPassword } from '../../lib/auth.js';
-import { AuditAction } from '../../lib/auditLog.js';
+import { AuditAction, createAuditLog } from '../../lib/auditLog.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { sendVerificationEmail } from '../../lib/email.js';
 import { buildFrontendUrl } from '../../lib/runtimeConfig.js';
+import { logError } from '../../lib/serverLogger.js';
 import {
   isSubcontractorInvitationAcceptableStatus,
   isSubcontractorInvitationExpired,
@@ -104,6 +105,75 @@ function normalizeSubcontractorInvitationId(value: unknown): string {
   return normalized;
 }
 
+function buildRegistrationDisplayName(
+  fullName: unknown,
+  firstName: unknown,
+  lastName: unknown,
+): string | null {
+  const rawName =
+    fullName ||
+    (firstName && lastName ? `${firstName} ${lastName}` : firstName || lastName || null);
+
+  return typeof rawName === 'string' ? rawName : null;
+}
+
+function buildRegistrationSuccessMessage(
+  verificationBypass: { bypass: boolean },
+  verificationEmailSent: boolean,
+): string {
+  if (verificationBypass.bypass) {
+    return 'Account created. Email verified for this configured demo domain.';
+  }
+
+  if (verificationEmailSent) {
+    return 'Account created. Please check your email to verify your account.';
+  }
+
+  return 'Account created, but the verification email could not be sent. Use resend verification to request a new link.';
+}
+
+async function sendRegistrationVerificationEmailOrRetireToken({
+  prisma,
+  emailVerificationTokenId,
+  normalizedEmail,
+  name,
+  verifyUrl,
+}: {
+  prisma: PrismaClient;
+  emailVerificationTokenId: string;
+  normalizedEmail: string;
+  name: string | null;
+  verifyUrl: string;
+}): Promise<boolean> {
+  let verificationEmailSent = true;
+
+  try {
+    const emailResult = await sendVerificationEmail({
+      to: normalizedEmail,
+      userName: name || undefined,
+      verificationUrl: verifyUrl,
+      expiresInHours: 24,
+    });
+
+    if (!emailResult.success) {
+      verificationEmailSent = false;
+      logError('[Registration] Failed to send verification email:', emailResult.error);
+    }
+  } catch (emailError) {
+    verificationEmailSent = false;
+    logError('[Registration] Failed to send verification email:', emailError);
+  }
+
+  if (!verificationEmailSent) {
+    await prisma.emailVerificationToken.updateMany({
+      where: { id: emailVerificationTokenId, usedAt: null },
+      data: { usedAt: new Date() },
+    });
+  }
+
+  return verificationEmailSent;
+}
+
 export function createRegistrationRouter({
   prisma,
   normalizeEmailInput,
@@ -150,10 +220,7 @@ export function createRegistrationRouter({
         throw AppError.badRequest('Email already in use');
       }
 
-      // Build full name from parts if not provided directly
-      const name =
-        fullName ||
-        (firstName && lastName ? `${firstName} ${lastName}` : firstName || lastName || null);
+      const name = buildRegistrationDisplayName(fullName, firstName, lastName);
       const verificationBypass = shouldBypassEmailVerification(normalizedEmail);
       const emailVerifiedAt = verificationBypass.bypass ? new Date() : null;
 
@@ -180,6 +247,8 @@ export function createRegistrationRouter({
       // Use PostgreSQL NOW() function for timestamp compatibility
       await prisma.$executeRaw`UPDATE users SET tos_accepted_at = NOW(), tos_version = ${CURRENT_TOS_VERSION} WHERE id = ${user.id}`;
 
+      let verificationEmailSent = verificationBypass.bypass;
+
       if (!verificationBypass.bypass) {
         // Generate email verification token
         const crypto = await import('crypto');
@@ -188,7 +257,7 @@ export function createRegistrationRouter({
         // Token expires in 24 hours
         const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-        await prisma.emailVerificationToken.create({
+        const emailVerificationToken = await prisma.emailVerificationToken.create({
           data: {
             userId: user.id,
             token: hashOneTimeToken(verificationToken),
@@ -198,12 +267,12 @@ export function createRegistrationRouter({
 
         const verifyUrl = buildFrontendUrl(`/verify-email?token=${verificationToken}`);
 
-        // Send verification email
-        await sendVerificationEmail({
-          to: normalizedEmail,
-          userName: name || undefined,
-          verificationUrl: verifyUrl,
-          expiresInHours: 24,
+        verificationEmailSent = await sendRegistrationVerificationEmailOrRetireToken({
+          prisma,
+          emailVerificationTokenId: emailVerificationToken.id,
+          normalizedEmail,
+          name,
+          verifyUrl,
         });
       }
 
@@ -241,10 +310,9 @@ export function createRegistrationRouter({
           hasPassword: true,
         },
         token,
-        message: verificationBypass.bypass
-          ? 'Account created. Email verified for this configured demo domain.'
-          : 'Account created. Please check your email to verify your account.',
+        message: buildRegistrationSuccessMessage(verificationBypass, verificationEmailSent),
         verificationRequired: !verificationBypass.bypass,
+        verificationEmailSent,
       });
     }),
   );
@@ -377,6 +445,20 @@ export function createRegistrationRouter({
         userId: user.id,
         email: user.email,
         role: user.roleInCompany,
+      });
+
+      await createAuditLog({
+        projectId: subcontractor.project.id,
+        userId: user.id,
+        entityType: 'subcontractor',
+        entityId: subcontractor.id,
+        action: AuditAction.SUBCONTRACTOR_INVITATION_ACCEPTED,
+        changes: {
+          companyName: subcontractor.companyName,
+          acceptedEmail: user.email,
+          createdAccount: true,
+        },
+        req,
       });
 
       res.status(201).json({

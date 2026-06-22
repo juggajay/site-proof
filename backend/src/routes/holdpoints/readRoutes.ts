@@ -36,25 +36,17 @@ import {
 } from './listPresentation.js';
 import { buildHoldPointDetailResponse, resolveHoldPointDetailSettings } from './detailResponse.js';
 import {
-  buildHoldPointEvidenceChecklist,
-  buildHoldPointEvidenceChecklistItemIdSet,
-  buildHoldPointEvidencePhotoDocuments,
+  buildHoldPointEvidencePackage,
   buildHoldPointEvidencePackageResponse,
-  buildHoldPointEvidenceSummary,
-  mapHoldPointEvidenceItpTemplate,
-  mapHoldPointEvidenceLot,
-  mapHoldPointEvidencePhotos,
-  mapHoldPointEvidenceProject,
-  mapHoldPointEvidenceTestResults,
 } from './evidencePackage.js';
 import {
   buildNotificationTimeResponse,
   buildProjectWorkingHoursResponse,
 } from './workingHoursResponses.js';
 import { isReleaseGatedChecklistItem } from '../../lib/holdPointReleaseGating.js';
+import { resolveHoldPointEvidenceInputs } from './evidencePackageInputs.js';
 import {
   getHoldPointChecklistItemsForInstance,
-  getHoldPointItpTemplateForInstance,
   resolveHoldPointChecklistItemForInstance,
 } from './itpSnapshot.js';
 
@@ -338,47 +330,14 @@ holdPointReadRouter.get(
     await requireHoldPointReadAccess(holdPoint, req.user!);
 
     const lot = holdPoint.lot;
-    const itpInstance = lot.itpInstance;
+    const { itpInstance, checklistItems, holdPointItem, itpTemplate } =
+      resolveHoldPointEvidenceInputs({
+        itpInstance: lot.itpInstance,
+        checklistItemId: holdPoint.itpChecklistItemId,
+        liveFallback: holdPoint.itpChecklistItem,
+      });
 
-    if (!itpInstance) {
-      throw AppError.badRequest('No ITP assigned to this lot');
-    }
-
-    const checklistItems = getHoldPointChecklistItemsForInstance(itpInstance);
-
-    // Get all checklist items up to and including the hold point
-    const holdPointItem = resolveHoldPointChecklistItemForInstance(
-      itpInstance,
-      holdPoint.itpChecklistItemId,
-      holdPoint.itpChecklistItem,
-    );
-    if (!holdPointItem) {
-      throw AppError.notFound('Hold point checklist item');
-    }
-    const includedChecklistItemIds = buildHoldPointEvidenceChecklistItemIdSet(
-      checklistItems,
-      holdPointItem.sequenceNumber,
-    );
-    const checklistWithStatus = buildHoldPointEvidenceChecklist(
-      checklistItems,
-      itpInstance.completions,
-      holdPointItem.sequenceNumber,
-    );
-    const itpTemplate = getHoldPointItpTemplateForInstance(itpInstance);
-    if (!itpTemplate) {
-      throw AppError.badRequest('No ITP template assigned to this lot');
-    }
-
-    const scope = { includedChecklistItemIds };
-    const testResults = mapHoldPointEvidenceTestResults(lot.testResults, scope);
-
-    const photos = mapHoldPointEvidencePhotos(
-      buildHoldPointEvidencePhotoDocuments(itpInstance.completions),
-      scope,
-    );
-
-    // Build evidence package response
-    const evidencePackage = {
+    const evidencePackage = buildHoldPointEvidencePackage({
       holdPoint: {
         id: holdPoint.id,
         description: holdPoint.description,
@@ -389,15 +348,12 @@ holdPointReadRouter.get(
         releasedByName: holdPoint.releasedByName,
         releaseNotes: holdPoint.releaseNotes,
       },
-      lot: mapHoldPointEvidenceLot(lot),
-      project: mapHoldPointEvidenceProject(lot.project),
-      itpTemplate: mapHoldPointEvidenceItpTemplate(itpTemplate),
-      checklist: checklistWithStatus,
-      testResults,
-      photos,
-      summary: buildHoldPointEvidenceSummary(checklistWithStatus, testResults, photos),
-      generatedAt: new Date().toISOString(),
-    };
+      lot,
+      itpTemplate,
+      checklistItems,
+      completions: itpInstance.completions,
+      holdPointSequenceNumber: holdPointItem.sequenceNumber,
+    });
 
     res.json(buildHoldPointEvidencePackageResponse(evidencePackage));
   }),
@@ -541,45 +497,13 @@ holdPointReadRouter.post(
       'You do not have permission to preview hold point evidence packages',
     );
 
-    const itpInstance = lot.itpInstance;
-    if (!itpInstance) {
-      throw AppError.badRequest('No ITP assigned to this lot');
-    }
+    const { itpInstance, checklistItems, holdPointItem, itpTemplate } =
+      resolveHoldPointEvidenceInputs({
+        itpInstance: lot.itpInstance,
+        checklistItemId: itpChecklistItemId,
+      });
 
-    const checklistItems = getHoldPointChecklistItemsForInstance(itpInstance);
-
-    // Get the hold point checklist item from the assigned ITP snapshot.
-    const holdPointItem = resolveHoldPointChecklistItemForInstance(itpInstance, itpChecklistItemId);
-
-    if (!holdPointItem) {
-      throw AppError.notFound('Hold point checklist item');
-    }
-
-    // Get all checklist items up to and including the hold point
-    const includedChecklistItemIds = buildHoldPointEvidenceChecklistItemIdSet(
-      checklistItems,
-      holdPointItem.sequenceNumber,
-    );
-    const checklistWithStatus = buildHoldPointEvidenceChecklist(
-      checklistItems,
-      itpInstance.completions,
-      holdPointItem.sequenceNumber,
-    );
-    const itpTemplate = getHoldPointItpTemplateForInstance(itpInstance);
-    if (!itpTemplate) {
-      throw AppError.badRequest('No ITP template assigned to this lot');
-    }
-
-    const scope = { includedChecklistItemIds };
-    const testResults = mapHoldPointEvidenceTestResults(lot.testResults, scope);
-
-    const photos = mapHoldPointEvidencePhotos(
-      buildHoldPointEvidencePhotoDocuments(itpInstance.completions),
-      scope,
-    );
-
-    // Build preview evidence package response
-    const evidencePackage = {
+    const evidencePackage = buildHoldPointEvidencePackage({
       holdPoint: {
         id: 'preview', // Placeholder for preview
         description: holdPointItem.description,
@@ -590,16 +514,13 @@ holdPointReadRouter.post(
         releasedByName: null,
         releaseNotes: null,
       },
-      lot: mapHoldPointEvidenceLot(lot),
-      project: mapHoldPointEvidenceProject(lot.project),
-      itpTemplate: mapHoldPointEvidenceItpTemplate(itpTemplate),
-      checklist: checklistWithStatus,
-      testResults,
-      photos,
-      summary: buildHoldPointEvidenceSummary(checklistWithStatus, testResults, photos),
-      isPreview: true,
-      generatedAt: new Date().toISOString(),
-    };
+      lot,
+      itpTemplate,
+      checklistItems,
+      completions: itpInstance.completions,
+      holdPointSequenceNumber: holdPointItem.sequenceNumber,
+      extraFields: { isPreview: true },
+    });
 
     res.json(buildHoldPointEvidencePackageResponse(evidencePackage));
   }),

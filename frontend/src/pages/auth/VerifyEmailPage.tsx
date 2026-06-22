@@ -1,4 +1,4 @@
-import { useCallback, useState, useEffect } from 'react';
+import { useCallback, useState, useEffect, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -21,6 +21,7 @@ export function VerifyEmailPage() {
 
   const [status, setStatus] = useState<'loading' | 'success' | 'error' | 'no-token'>('loading');
   const [message, setMessage] = useState('');
+  const handledRef = useRef(false);
 
   // For resend functionality
   const [resendStatus, setResendStatus] = useState<'idle' | 'loading' | 'success' | 'error'>(
@@ -92,11 +93,17 @@ export function VerifyEmailPage() {
   );
 
   useEffect(() => {
+    if (handledRef.current) {
+      return;
+    }
+    handledRef.current = true;
+
     if (!token) {
       setStatus('no-token');
       return;
     }
 
+    window.history.replaceState(null, document.title, '/verify-email');
     verifyEmail(token);
   }, [token, verifyEmail]);
 

@@ -152,7 +152,7 @@ describe('hold point request-release delivery failure', () => {
     });
   });
 
-  it('returns 502 and skips audit when email delivery is not accepted', async () => {
+  it('returns 502 but still audits the committed request when every email delivery fails', async () => {
     mocks.sendHPReleaseRequestEmail.mockResolvedValueOnce({
       success: false,
       error: 'Resend rejected the message',
@@ -168,10 +168,14 @@ describe('hold point request-release delivery failure', () => {
     expect(res.status).toBe(502);
     expect(res.body.error.message).toBe('Failed to send hold point release request email');
     expect(mocks.sendHPReleaseRequestEmail).toHaveBeenCalledOnce();
-    expect(mocks.createAuditLog).not.toHaveBeenCalled();
+    expect(mocks.createAuditLog).toHaveBeenCalledOnce();
+    expect(mocks.createAuditLog.mock.calls[0][0].changes.emailDelivery).toEqual({
+      sent: 0,
+      failed: 1,
+    });
   });
 
-  it('commits release tokens before sending recipient emails so accepted links stay valid when a later send fails', async () => {
+  it('returns success with a delivery warning when at least one committed release link was emailed', async () => {
     const events: string[] = [];
     mocks.prisma.$transaction.mockImplementationOnce(async (callback) => {
       events.push('transaction:start');
@@ -202,7 +206,12 @@ describe('hold point request-release delivery failure', () => {
       notificationSentTo: 'first@example.com, second@example.com',
     });
 
-    expect(res.status).toBe(502);
+    expect(res.status).toBe(200);
+    expect(res.body.emailDelivery).toEqual({
+      sent: 1,
+      failed: 1,
+      warning: 'Some release request emails could not be sent.',
+    });
     expect(events).toEqual([
       'transaction:start',
       'transaction:commit',
@@ -211,7 +220,11 @@ describe('hold point request-release delivery failure', () => {
     ]);
     expect(mocks.tx.holdPointReleaseToken.createMany).toHaveBeenCalledOnce();
     expect(mocks.sendHPReleaseRequestEmail).toHaveBeenCalledTimes(2);
-    expect(mocks.createAuditLog).not.toHaveBeenCalled();
+    expect(mocks.createAuditLog).toHaveBeenCalledOnce();
+    expect(mocks.createAuditLog.mock.calls[0][0].changes.emailDelivery).toEqual({
+      sent: 1,
+      failed: 1,
+    });
   });
 
   it('does not re-notify a hold point that becomes released before the transaction writes', async () => {
