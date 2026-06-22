@@ -274,7 +274,7 @@ describe('buildItpSubbieCompletionNotifications', () => {
         type: 'itp_subbie_completion',
         title: 'Subcontractor ITP Item Completed',
         message:
-          'Acme Civil has completed ITP item "Compaction check" on lot L-001. Verification required.',
+          'Acme Civil has marked ITP item "Compaction check" as completed on lot L-001. Verification required.',
         linkUrl: '/projects/project-1/lots/lot-1?tab=itp&highlight=item-1',
       },
       {
@@ -283,7 +283,7 @@ describe('buildItpSubbieCompletionNotifications', () => {
         type: 'itp_subbie_completion',
         title: 'Subcontractor ITP Item Completed',
         message:
-          'Acme Civil has completed ITP item "Compaction check" on lot L-001. Verification required.',
+          'Acme Civil has marked ITP item "Compaction check" as completed on lot L-001. Verification required.',
         linkUrl: '/projects/project-1/lots/lot-1?tab=itp&highlight=item-1',
       },
     ]);

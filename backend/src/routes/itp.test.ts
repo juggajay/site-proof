@@ -3768,6 +3768,121 @@ describe('ITP Completion Decision Logic (characterization)', () => {
     }
   });
 
+  it('requires HC verification for subcontractor N/A and failed outcomes when the project requires verification', async () => {
+    const suffix = Date.now();
+    const subcontractorCompany = await prisma.subcontractorCompany.create({
+      data: {
+        projectId,
+        companyName: `ITP Decision Pending Review ${suffix}`,
+        status: 'approved',
+        portalAccess: { itps: true },
+      },
+    });
+    const subcontractor = await registerTestUser(
+      'itp-decision-pending-review',
+      'ITP Decision Pending Review Subcontractor',
+    );
+
+    await prisma.user.update({
+      where: { id: subcontractor.userId },
+      data: { companyId: null, roleInCompany: 'subcontractor' },
+    });
+    await prisma.subcontractorUser.create({
+      data: {
+        userId: subcontractor.userId,
+        subcontractorCompanyId: subcontractorCompany.id,
+        role: 'user',
+      },
+    });
+    await prisma.lotSubcontractorAssignment.create({
+      data: {
+        projectId,
+        lotId,
+        subcontractorCompanyId: subcontractorCompany.id,
+        status: 'active',
+        canCompleteITP: true,
+        itpRequiresVerification: true,
+      },
+    });
+    await prisma.project.update({
+      where: { id: projectId },
+      data: { settings: JSON.stringify({ requireSubcontractorVerification: true }) },
+    });
+
+    try {
+      for (const outcome of [
+        {
+          status: 'not_applicable',
+          body: { status: 'not_applicable', notes: 'Area deleted from subcontract scope' },
+          assertion: (completion: { isNotApplicable?: boolean; isFailed?: boolean }) => {
+            expect(completion.isNotApplicable).toBe(true);
+            expect(completion.isFailed).toBe(false);
+          },
+        },
+        {
+          status: 'failed',
+          body: {
+            status: 'failed',
+            ncrDescription: 'Subcontractor found survey mismatch before handover',
+          },
+          assertion: (completion: { isNotApplicable?: boolean; isFailed?: boolean }) => {
+            expect(completion.isFailed).toBe(true);
+            expect(completion.isNotApplicable).toBe(false);
+          },
+        },
+      ] as const) {
+        await prisma.notification.deleteMany({
+          where: { projectId, type: 'itp_subbie_completion' },
+        });
+        await prisma.nCRLot.deleteMany({ where: { lotId } });
+        await prisma.nCR.deleteMany({ where: { projectId } });
+        await prisma.iTPCompletion.deleteMany({
+          where: { itpInstanceId: instanceId, checklistItemId: subcontractorItemId },
+        });
+
+        const res = await request(app)
+          .post('/api/itp/completions')
+          .set('Authorization', `Bearer ${subcontractor.token}`)
+          .send({
+            itpInstanceId: instanceId,
+            checklistItemId: subcontractorItemId,
+            ...outcome.body,
+          });
+
+        expect(res.status).toBe(200);
+        expect(res.body.completion.status).toBe(outcome.status);
+        expect(res.body.completion.verificationStatus).toBe('pending_verification');
+        expect(res.body.completion.isPendingVerification).toBe(true);
+        expect(res.body.completion.isVerified).toBe(false);
+        outcome.assertion(res.body.completion);
+        expect(res.body.subbieCompletionNotification).toMatchObject({
+          notificationsSent: 1,
+          subcontractorCompany: subcontractorCompany.companyName,
+          lotNumber: expect.any(String),
+          itemDescription: 'Subcontractor decision item',
+        });
+      }
+    } finally {
+      await prisma.notification.deleteMany({
+        where: { projectId, type: 'itp_subbie_completion' },
+      });
+      await prisma.nCRLot.deleteMany({ where: { lotId } });
+      await prisma.nCR.deleteMany({ where: { projectId } });
+      await prisma.iTPCompletion.deleteMany({
+        where: { itpInstanceId: instanceId, checklistItemId: subcontractorItemId },
+      });
+      await prisma.lotSubcontractorAssignment.deleteMany({
+        where: { subcontractorCompanyId: subcontractorCompany.id },
+      });
+      await prisma.subcontractorUser.deleteMany({ where: { userId: subcontractor.userId } });
+      await prisma.subcontractorCompany
+        .delete({ where: { id: subcontractorCompany.id } })
+        .catch(() => {});
+      await cleanupTestUser(subcontractor.userId);
+      await prisma.project.update({ where: { id: projectId }, data: { settings: null } });
+    }
+  });
+
   it('uses the lot-assigned subcontractor company name in pending verification notifications', async () => {
     const suffix = Date.now();
     const wrongCompany = await prisma.subcontractorCompany.create({
