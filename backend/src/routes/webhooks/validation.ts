@@ -1,5 +1,6 @@
 import { promises as dns } from 'node:dns';
 import { AppError } from '../../lib/AppError.js';
+import { isSupportedWebhookEvent, SUPPORTED_WEBHOOK_EVENTS } from './eventCatalog.js';
 
 const LOCAL_WEBHOOK_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0', '::1'];
 const MAX_WEBHOOK_URL_LENGTH = 2048;
@@ -79,6 +80,14 @@ export function normalizeEvents(events: unknown): string[] {
     )
   ) {
     throw AppError.badRequest('events contains an invalid event name');
+  }
+  const unsupportedEvents = normalized.filter(
+    (event) => event !== '*' && !isSupportedWebhookEvent(event),
+  );
+  if (unsupportedEvents.length > 0) {
+    throw AppError.badRequest(
+      `events contains unsupported event name(s): ${unsupportedEvents.join(', ')}. Supported events are: *, ${SUPPORTED_WEBHOOK_EVENTS.join(', ')}`,
+    );
   }
 
   return Array.from(new Set(normalized));

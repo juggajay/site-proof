@@ -33,6 +33,7 @@ import { holdPointEscalationRouter } from './escalationRoutes.js';
 import { isProjectNotificationEnabled } from '../../lib/projectNotificationPreferences.js';
 import { SECURE_LINK_EXPIRY_HOURS, hashHoldPointReleaseToken } from './tokens.js';
 import { updateLotStatusFromITP } from '../itp/helpers/lotProgression.js';
+import { emitHoldPointWebhookEvent } from './webhookEvents.js';
 
 // =============================================================================
 // Authenticated hold point ACTION routes (release, chase, escalate,
@@ -573,6 +574,24 @@ holdPointActionRouter.post(
         releaseEvidenceCategory: releaseEvidenceDocument?.category ?? null,
       },
       req,
+    });
+
+    emitHoldPointWebhookEvent(existingHP.lot.projectId, 'hold_point.released', {
+      holdPointId: holdPoint.id,
+      projectId: existingHP.lot.projectId,
+      lotId: holdPoint.lotId,
+      lotNumber: holdPoint.lot.lotNumber,
+      itpChecklistItemId: holdPoint.itpChecklistItemId,
+      description: holdPoint.description,
+      status: holdPoint.status,
+      actorUserId: req.user!.userId,
+      action: 'released',
+      releaseSource: 'authenticated',
+      releaseMethod: releaseMethod || null,
+      releasedByName: releasedByName || null,
+      releasedByOrg: releasedByOrg || null,
+      releaseEvidenceDocumentId: releaseEvidenceDocument?.id ?? null,
+      hasReleaseNotes: Boolean(releaseNotes?.trim()),
     });
 
     res.json(buildHoldPointReleasedResponse(holdPoint, projectUsers));

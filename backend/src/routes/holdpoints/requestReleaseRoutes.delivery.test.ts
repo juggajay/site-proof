@@ -31,6 +31,7 @@ const mocks = vi.hoisted(() => {
     requireLotReadAccess: vi.fn(),
     requireProjectRole: vi.fn(),
     requireSuperintendentApprovalRecipients: vi.fn(),
+    emitHoldPointWebhookEvent: vi.fn(),
   };
 });
 
@@ -70,6 +71,10 @@ vi.mock('./access.js', () => ({
 
 vi.mock('./superintendentRecipients.js', () => ({
   requireSuperintendentApprovalRecipients: mocks.requireSuperintendentApprovalRecipients,
+}));
+
+vi.mock('./webhookEvents.js', () => ({
+  emitHoldPointWebhookEvent: mocks.emitHoldPointWebhookEvent,
 }));
 
 import { errorHandler } from '../../middleware/errorHandler.js';
