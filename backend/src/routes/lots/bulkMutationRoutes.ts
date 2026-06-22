@@ -25,6 +25,7 @@ import {
   bulkAssignSubcontractorSchema,
   assignSubcontractorSchema,
 } from './validation.js';
+import { emitLotWebhookEvent, emitLotWebhookEvents } from './webhookEvents.js';
 
 export const lotBulkMutationRouter = Router();
 
@@ -82,6 +83,28 @@ lotBulkMutationRouter.post(
       },
     });
 
+    for (const projectId of projectIds) {
+      emitLotWebhookEvents(
+        projectId,
+        lotsToUpdate
+          .filter((lot) => lot.projectId === projectId)
+          .map((lot) => ({
+            event: 'lot.updated',
+            payload: {
+              lotId: lot.id,
+              projectId: lot.projectId,
+              lotNumber: lot.lotNumber,
+              status,
+              actorUserId: user.id,
+              action: 'bulk_status_update',
+              bulk: true,
+              changedFields: ['status'],
+              previousStatus: lot.status,
+            },
+          })),
+      );
+    }
+
     res.json(buildLotsBulkStatusUpdatedResponse(result.count, status));
   }),
 );
@@ -110,6 +133,7 @@ lotBulkMutationRouter.post(
         projectId: true,
         lotNumber: true,
         status: true,
+        assignedSubcontractorId: true,
       },
     });
     assertAllRequestedLotsFound(uniqueLotIds, lotsToUpdate);
@@ -163,6 +187,29 @@ lotBulkMutationRouter.post(
 
       return updateResult;
     });
+
+    for (const projectId of projectIds) {
+      emitLotWebhookEvents(
+        projectId,
+        lotsToUpdate
+          .filter((lot) => lot.projectId === projectId)
+          .map((lot) => ({
+            event: 'lot.updated',
+            payload: {
+              lotId: lot.id,
+              projectId: lot.projectId,
+              lotNumber: lot.lotNumber,
+              status: lot.status,
+              actorUserId: user.id,
+              action: 'bulk_subcontractor_assignment',
+              bulk: true,
+              changedFields: ['assignedSubcontractorId'],
+              previousSubcontractorId: lot.assignedSubcontractorId,
+              assignedSubcontractorId: subcontractorId || null,
+            },
+          })),
+      );
+    }
 
     res.json(buildLotsBulkSubcontractorAssignedResponse(result.count, subcontractorId));
   }),
@@ -294,6 +341,18 @@ lotBulkMutationRouter.post(
         },
       });
     }
+
+    emitLotWebhookEvent(lot.projectId, 'lot.updated', {
+      lotId: updatedLot.id,
+      projectId: lot.projectId,
+      lotNumber: updatedLot.lotNumber,
+      status: updatedLot.status,
+      actorUserId: user.id,
+      action: 'subcontractor_assignment',
+      changedFields: ['assignedSubcontractorId'],
+      previousSubcontractorId: lot.assignedSubcontractorId,
+      assignedSubcontractorId: subcontractorId || null,
+    });
 
     res.json(buildLegacyLotAssignmentMutationResponse(subcontractorId, updatedLot));
   }),
