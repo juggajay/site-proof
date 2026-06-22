@@ -288,9 +288,9 @@ completionsRouter.post(
     // Determine completedAt and completedById based on status
     const isFinished = isItpCompletionFinished(newStatus);
 
-    // Feature #271: Subcontractor completions - check lot assignment for ITP permissions
+    // Feature #271: Subcontractor finished outcomes - check lot assignment for verification rules.
     let verificationStatus: string | undefined;
-    if (isSubcontractor && isFinished && newStatus === 'completed') {
+    if (isSubcontractor && isFinished) {
       // Get the ITP instance to find the lot and project
       const itpInstanceForPermCheck = await prisma.iTPInstance.findUnique({
         where: { id: itpInstanceId },
@@ -392,7 +392,7 @@ completionsRouter.post(
             completedById: isFinished ? user.userId : null,
             // Feature #463: Signature capture
             ...(signatureDataUrl !== undefined ? { signatureUrl: signatureDataUrl } : {}),
-            // Feature #271: Set pending_verification for subcontractor completions
+            // Feature #271: Set pending_verification for subcontractor finished outcomes
             ...(verificationStatus ? { verificationStatus } : {}),
             ...witnessData,
           },
@@ -413,7 +413,7 @@ completionsRouter.post(
           completedById: isFinished ? user.userId : null,
           // Feature #463: Signature capture
           signatureUrl: signatureDataUrl || null,
-          // Feature #271: Set pending_verification for subcontractor completions
+          // Feature #271: Set pending_verification for subcontractor finished outcomes
           ...(verificationStatus ? { verificationStatus } : {}),
           ...witnessData,
         },
@@ -512,14 +512,9 @@ completionsRouter.post(
       );
     }
 
-    // Feature #271: Notify head contractor when subcontractor completes an item (only if verification required)
+    // Feature #271: Notify head contractor when a subcontractor outcome needs verification.
     let subbieCompletionNotification = null;
-    if (
-      isSubcontractor &&
-      isFinished &&
-      newStatus === 'completed' &&
-      verificationStatus === 'pending_verification'
-    ) {
+    if (isSubcontractor && isFinished && verificationStatus === 'pending_verification') {
       try {
         // Get the ITP instance with lot and project info
         const itpInstance = await prisma.iTPInstance.findUnique({
@@ -558,6 +553,12 @@ completionsRouter.post(
             checklistItemId,
             itemDescription,
             subbieName,
+            outcomeLabel:
+              newStatus === 'not_applicable'
+                ? 'not applicable'
+                : newStatus === 'failed'
+                  ? 'failed'
+                  : 'completed',
           });
           if (subbieNotifications) {
             await prisma.notification.createMany({

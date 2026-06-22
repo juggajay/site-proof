@@ -236,6 +236,7 @@ export interface ItpSubbieNotificationContext {
   checklistItemId: string;
   itemDescription: string;
   subbieName: string;
+  outcomeLabel?: string;
 }
 
 export interface ItpSubbieNotificationRow {
@@ -269,12 +270,17 @@ export function buildItpSubbieCompletionNotifications(
     return null;
   }
 
+  const outcomeLabel = ctx.outcomeLabel ?? 'completed';
+  const title =
+    outcomeLabel === 'completed'
+      ? 'Subcontractor ITP Item Completed'
+      : 'Subcontractor ITP Item Submitted for Review';
   const rows = recipients.map((pm) => ({
     userId: pm.userId,
     projectId: ctx.projectId,
     type: 'itp_subbie_completion',
-    title: 'Subcontractor ITP Item Completed',
-    message: `${ctx.subbieName} has completed ITP item "${ctx.itemDescription}" on lot ${ctx.lotNumber}. Verification required.`,
+    title,
+    message: `${ctx.subbieName} has marked ITP item "${ctx.itemDescription}" as ${outcomeLabel} on lot ${ctx.lotNumber}. Verification required.`,
     linkUrl: `/projects/${ctx.projectId}/lots/${ctx.lotId}?tab=itp&highlight=${ctx.checklistItemId}`,
   }));
 
