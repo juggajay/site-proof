@@ -6,7 +6,9 @@ import {
   activeSubcontractorCompanyWhere,
   assertProjectAllowsWrite,
   checkProjectAccess,
+  getSubcontractorPortalModuleAccessDeniedMessage,
   hasSubcontractorPortalModuleAccess,
+  hasPortalModuleEnabled,
   isStandaloneSubcontractorPortalIdentity,
   requireSubcontractorPortalModuleAccess,
 } from '../../lib/projectAccess.js';
@@ -20,6 +22,11 @@ export type DocumentAccessRecord = {
   uploadedById: string | null;
   documentType?: string | null;
   category?: string | null;
+};
+
+type SubcontractorDocumentCompany = {
+  id: string;
+  portalAccess: Prisma.JsonValue | null;
 };
 
 const DOCUMENT_WRITE_ROLES = [
@@ -107,30 +114,38 @@ export async function requireSubcontractorDocumentPortalAccess(
   });
 }
 
-async function getProjectSubcontractorCompanyId(
+async function getProjectSubcontractorCompanies(
   userId: string,
   projectId: string,
-): Promise<string | null> {
-  const subcontractorUser = await prisma.subcontractorUser.findFirst({
+): Promise<SubcontractorDocumentCompany[]> {
+  const subcontractorUsers = await prisma.subcontractorUser.findMany({
     where: {
       userId,
       subcontractorCompany: activeSubcontractorCompanyWhere({ projectId }),
     },
-    select: { subcontractorCompanyId: true },
+    select: {
+      subcontractorCompany: {
+        select: { id: true, portalAccess: true },
+      },
+    },
   });
 
-  return subcontractorUser?.subcontractorCompanyId ?? null;
+  return subcontractorUsers.map((link) => link.subcontractorCompany);
 }
 
 async function getAssignedDocumentLotIds(
   projectId: string,
-  subcontractorCompanyId: string,
+  subcontractorCompanyIds: string[],
 ): Promise<string[]> {
+  if (subcontractorCompanyIds.length === 0) {
+    return [];
+  }
+
   const [assignments, legacyLots] = await Promise.all([
     prisma.lotSubcontractorAssignment.findMany({
       where: {
         projectId,
-        subcontractorCompanyId,
+        subcontractorCompanyId: { in: subcontractorCompanyIds },
         status: 'active',
       },
       select: { lotId: true },
@@ -138,7 +153,7 @@ async function getAssignedDocumentLotIds(
     prisma.lot.findMany({
       where: {
         projectId,
-        assignedSubcontractorId: subcontractorCompanyId,
+        assignedSubcontractorId: { in: subcontractorCompanyIds },
       },
       select: { id: true },
     }),
@@ -152,6 +167,35 @@ async function getAssignedDocumentLotIds(
   ];
 }
 
+function getDocumentModuleCompanyIds(
+  companies: SubcontractorDocumentCompany[],
+  category?: string | null,
+): string[] {
+  const module = getDocumentPortalModule(category);
+  return companies
+    .filter((company) => hasPortalModuleEnabled(company.portalAccess, module))
+    .map((company) => company.id);
+}
+
+function getGeneralDocumentCategoryScope(): Prisma.DocumentWhereInput {
+  return {
+    OR: [{ category: null }, { category: { notIn: [...DOCUMENT_SPECIAL_PORTAL_CATEGORIES] } }],
+  };
+}
+
+function getLotDocumentAccessScope(
+  assignedLotIds: string[],
+  userId: string,
+): Prisma.DocumentWhereInput {
+  return {
+    OR: [
+      { lotId: null },
+      { uploadedById: userId },
+      ...(assignedLotIds.length > 0 ? [{ lotId: { in: assignedLotIds } }] : []),
+    ],
+  };
+}
+
 export async function applyDocumentReadScope(
   user: AuthUser,
   projectId: string,
@@ -161,22 +205,50 @@ export async function applyDocumentReadScope(
     return;
   }
 
-  const subcontractorCompanyId = await getProjectSubcontractorCompanyId(user.id, projectId);
-  if (!subcontractorCompanyId) {
+  const subcontractorCompanies = await getProjectSubcontractorCompanies(user.id, projectId);
+  if (subcontractorCompanies.length === 0) {
     where.id = '__no_subcontractor_document_access__';
     return;
   }
 
-  const assignedLotIds = await getAssignedDocumentLotIds(projectId, subcontractorCompanyId);
-  const scopedAccess: Prisma.DocumentWhereInput = {
-    OR: [
-      { lotId: null },
-      { uploadedById: user.id },
-      ...(assignedLotIds.length > 0 ? [{ lotId: { in: assignedLotIds } }] : []),
-    ],
-  };
+  const generalCompanyIds = getDocumentModuleCompanyIds(subcontractorCompanies, null);
+  const itpCompanyIds = getDocumentModuleCompanyIds(subcontractorCompanies, 'itp_evidence');
+  const testResultCompanyIds = getDocumentModuleCompanyIds(subcontractorCompanies, 'test_results');
+  const [generalAssignedLotIds, itpAssignedLotIds, testResultAssignedLotIds] = await Promise.all([
+    getAssignedDocumentLotIds(projectId, generalCompanyIds),
+    getAssignedDocumentLotIds(projectId, itpCompanyIds),
+    getAssignedDocumentLotIds(projectId, testResultCompanyIds),
+  ]);
 
-  appendDocumentWhereClause(where, scopedAccess);
+  const scopedAccess: Prisma.DocumentWhereInput[] = [];
+  if (generalCompanyIds.length > 0) {
+    scopedAccess.push({
+      AND: [
+        getGeneralDocumentCategoryScope(),
+        getLotDocumentAccessScope(generalAssignedLotIds, user.id),
+      ],
+    });
+  }
+  if (itpCompanyIds.length > 0) {
+    scopedAccess.push({
+      AND: [{ category: 'itp_evidence' }, getLotDocumentAccessScope(itpAssignedLotIds, user.id)],
+    });
+  }
+  if (testResultCompanyIds.length > 0) {
+    scopedAccess.push({
+      AND: [
+        { category: 'test_results' },
+        getLotDocumentAccessScope(testResultAssignedLotIds, user.id),
+      ],
+    });
+  }
+
+  if (scopedAccess.length === 0) {
+    where.id = '__no_subcontractor_document_access__';
+    return;
+  }
+
+  appendDocumentWhereClause(where, { OR: scopedAccess });
   appendDocumentWhereClause(where, { NOT: { documentType: 'drawing' } });
 }
 
@@ -241,19 +313,44 @@ export async function canReadDocument(
     return true;
   }
 
-  const subcontractorCompanyId = await getProjectSubcontractorCompanyId(
+  const subcontractorCompanies = await getProjectSubcontractorCompanies(
     user.id,
     document.projectId,
   );
-  if (!subcontractorCompanyId) {
-    return false;
+  const moduleCompanyIds = getDocumentModuleCompanyIds(subcontractorCompanies, document.category);
+  const assignedLotIds = await getAssignedDocumentLotIds(document.projectId, moduleCompanyIds);
+  return assignedLotIds.includes(document.lotId);
+}
+
+async function hasAssignedDocumentLotAccess(
+  user: AuthUser,
+  projectId: string,
+  lotId: string,
+  category?: string | null,
+): Promise<'allowed' | 'module-disabled' | 'not-assigned'> {
+  const subcontractorCompanies = await getProjectSubcontractorCompanies(user.id, projectId);
+  if (subcontractorCompanies.length === 0) {
+    return 'not-assigned';
   }
 
-  const assignedLotIds = await getAssignedDocumentLotIds(
-    document.projectId,
-    subcontractorCompanyId,
+  const allCompanyIds = subcontractorCompanies.map((company) => company.id);
+  const moduleCompanyIds = getDocumentModuleCompanyIds(subcontractorCompanies, category);
+  const [allAssignedLotIds, moduleAssignedLotIds] = await Promise.all([
+    getAssignedDocumentLotIds(projectId, allCompanyIds),
+    getAssignedDocumentLotIds(projectId, moduleCompanyIds),
+  ]);
+
+  if (!allAssignedLotIds.includes(lotId)) {
+    return 'not-assigned';
+  }
+
+  return moduleAssignedLotIds.includes(lotId) ? 'allowed' : 'module-disabled';
+}
+
+function throwDocumentPortalModuleAccessDenied(category?: string | null): never {
+  throw AppError.forbidden(
+    getSubcontractorPortalModuleAccessDeniedMessage(getDocumentPortalModule(category)),
   );
-  return assignedLotIds.includes(document.lotId);
 }
 
 async function getEffectiveProjectRole(user: AuthUser, projectId: string): Promise<string | null> {
@@ -332,6 +429,7 @@ async function requireSubcontractorAssignedLotWriteScope(
   user: AuthUser,
   projectId: string,
   lotId?: string | null,
+  category?: string | null,
   message = 'Subcontractor document writes must be linked to an assigned lot',
 ): Promise<void> {
   if (!isDocumentSubcontractorUser(user)) {
@@ -342,14 +440,12 @@ async function requireSubcontractorAssignedLotWriteScope(
     throw AppError.forbidden(message);
   }
 
-  const subcontractorCompanyId = await getProjectSubcontractorCompanyId(user.id, projectId);
-  if (!subcontractorCompanyId) {
-    throw AppError.forbidden('Access denied');
+  const lotAccess = await hasAssignedDocumentLotAccess(user, projectId, lotId, category);
+  if (lotAccess === 'not-assigned') {
+    throw AppError.forbidden(message);
   }
-
-  const assignedLotIds = await getAssignedDocumentLotIds(projectId, subcontractorCompanyId);
-  if (!assignedLotIds.includes(lotId)) {
-    throw AppError.forbidden('Subcontractor document writes are limited to assigned lots');
+  if (lotAccess === 'module-disabled') {
+    throwDocumentPortalModuleAccessDenied(category);
   }
 }
 
@@ -362,7 +458,7 @@ export async function requireDocumentUploadAccess(
   await requireProjectWriteAccess(user, projectId);
   await requireSubcontractorDocumentPortalAccess(user, projectId, category);
   await requireLotInProject(projectId, lotId);
-  await requireSubcontractorAssignedLotWriteScope(user, projectId, lotId);
+  await requireSubcontractorAssignedLotWriteScope(user, projectId, lotId, category);
 }
 
 export async function requireDocumentMutationAccess(
@@ -402,6 +498,7 @@ export async function requireDocumentMutationAccess(
     user,
     document.projectId,
     effectiveLotId,
+    effectiveCategory,
     'Subcontractor documents must stay linked to an assigned lot',
   );
 }

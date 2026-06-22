@@ -359,6 +359,156 @@ describe('Comments API', () => {
       expect(unassignedRes.status).toBe(403);
     });
 
+    it('should allow subcontractor comments through any active linked company assigned to the lot', async () => {
+      const content = `Multi-company assigned lot comment ${Date.now()}`;
+      const secondSubcontractorCompany = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `Comments Second Subcontractor ${Date.now()}`,
+          primaryContactName: 'Comments Second Subcontractor',
+          primaryContactEmail: `comments-second-sub-${Date.now()}@example.com`,
+          status: 'approved',
+          portalAccess: { lots: true },
+        },
+      });
+
+      try {
+        await prisma.subcontractorUser.create({
+          data: {
+            userId: subcontractorUserId,
+            subcontractorCompanyId: secondSubcontractorCompany.id,
+            role: 'user',
+          },
+        });
+        await prisma.lotSubcontractorAssignment.create({
+          data: {
+            projectId,
+            lotId: unassignedLotId,
+            subcontractorCompanyId: secondSubcontractorCompany.id,
+            status: 'active',
+            assignedById: userId,
+          },
+        });
+
+        const readRes = await request(app)
+          .get('/api/comments')
+          .set('Authorization', `Bearer ${subcontractorToken}`)
+          .query({
+            entityType: 'Lot',
+            entityId: unassignedLotId,
+          });
+
+        expect(readRes.status).toBe(200);
+
+        const createRes = await request(app)
+          .post('/api/comments')
+          .set('Authorization', `Bearer ${subcontractorToken}`)
+          .send({
+            entityType: 'Lot',
+            entityId: unassignedLotId,
+            content,
+          });
+
+        expect(createRes.status).toBe(201);
+        expect(createRes.body.comment.authorId).toBe(subcontractorUserId);
+      } finally {
+        await prisma.comment.deleteMany({ where: { entityId: unassignedLotId, content } });
+        await prisma.lotSubcontractorAssignment.deleteMany({
+          where: { subcontractorCompanyId: secondSubcontractorCompany.id },
+        });
+        await prisma.subcontractorUser.deleteMany({
+          where: { subcontractorCompanyId: secondSubcontractorCompany.id },
+        });
+        await prisma.subcontractorCompany
+          .delete({ where: { id: secondSubcontractorCompany.id } })
+          .catch(() => {});
+      }
+    });
+
+    it('should enforce comment portal modules on the assigned linked company', async () => {
+      const secondSubcontractorCompany = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `Comments Disabled Assigned Subcontractor ${Date.now()}`,
+          primaryContactName: 'Comments Disabled Assigned Subcontractor',
+          primaryContactEmail: `comments-disabled-sub-${Date.now()}@example.com`,
+          status: 'approved',
+          portalAccess: { lots: false },
+        },
+      });
+
+      try {
+        await prisma.subcontractorCompany.update({
+          where: { id: subcontractorCompanyId },
+          data: { portalAccess: { lots: true } },
+        });
+        await prisma.subcontractorUser.create({
+          data: {
+            userId: subcontractorUserId,
+            subcontractorCompanyId: secondSubcontractorCompany.id,
+            role: 'user',
+          },
+        });
+        await prisma.lotSubcontractorAssignment.create({
+          data: {
+            projectId,
+            lotId: unassignedLotId,
+            subcontractorCompanyId: secondSubcontractorCompany.id,
+            status: 'active',
+            assignedById: userId,
+          },
+        });
+
+        const readRes = await request(app)
+          .get('/api/comments')
+          .set('Authorization', `Bearer ${subcontractorToken}`)
+          .query({
+            entityType: 'Lot',
+            entityId: unassignedLotId,
+          });
+
+        expect(readRes.status).toBe(403);
+        expect(readRes.body.error.message).toContain('Assigned work portal access is not enabled');
+
+        const createRes = await request(app)
+          .post('/api/comments')
+          .set('Authorization', `Bearer ${subcontractorToken}`)
+          .send({
+            entityType: 'Lot',
+            entityId: unassignedLotId,
+            content: 'Disabled assigned company comment',
+          });
+
+        expect(createRes.status).toBe(403);
+        expect(createRes.body.error.message).toContain(
+          'Assigned work portal access is not enabled',
+        );
+      } finally {
+        await prisma.lotSubcontractorAssignment.deleteMany({
+          where: { subcontractorCompanyId: secondSubcontractorCompany.id },
+        });
+        await prisma.subcontractorUser.deleteMany({
+          where: { subcontractorCompanyId: secondSubcontractorCompany.id },
+        });
+        await prisma.subcontractorCompany
+          .delete({ where: { id: secondSubcontractorCompany.id } })
+          .catch(() => {});
+        await prisma.subcontractorCompany.update({
+          where: { id: subcontractorCompanyId },
+          data: {
+            portalAccess: {
+              lots: true,
+              itps: false,
+              holdPoints: false,
+              testResults: false,
+              ncrs: false,
+              documents: false,
+            },
+          },
+        });
+      }
+    });
+
     it('should enforce subcontractor portal module gates for lot-scoped comments', async () => {
       const lotContent = `Disabled lots portal comment ${Date.now()}`;
       const itpContent = `Enabled ITP portal comment ${Date.now()}`;

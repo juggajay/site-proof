@@ -389,6 +389,93 @@ describe('checkProjectAccess', () => {
     }
   });
 
+  it('allows subcontractor portal module access when any active linked company enables the module', async () => {
+    const suffix = Date.now();
+    const company = await prisma.company.create({
+      data: { name: `Portal Multi Company ${suffix}` },
+    });
+    const project = await prisma.project.create({
+      data: {
+        companyId: company.id,
+        name: `Portal Multi Project ${suffix}`,
+        projectNumber: `PMP-${suffix}`,
+        state: 'NSW',
+        specificationSet: 'TfNSW',
+      },
+    });
+    const user = await prisma.user.create({
+      data: {
+        email: `portal-multi-sub-${suffix}@example.com`,
+        fullName: 'Portal Multi Subcontractor',
+        roleInCompany: 'subcontractor',
+        companyId: null,
+      },
+    });
+    const disabledCompany = await prisma.subcontractorCompany.create({
+      data: {
+        projectId: project.id,
+        companyName: `Portal Multi Disabled Sub ${suffix}`,
+        primaryContactName: 'Portal Multi Disabled Subcontractor',
+        primaryContactEmail: `portal-multi-disabled-${suffix}@example.com`,
+        status: 'approved',
+        portalAccess: { documents: false },
+      },
+    });
+    const enabledCompany = await prisma.subcontractorCompany.create({
+      data: {
+        projectId: project.id,
+        companyName: `Portal Multi Enabled Sub ${suffix}`,
+        primaryContactName: 'Portal Multi Enabled Subcontractor',
+        primaryContactEmail: `portal-multi-enabled-${suffix}@example.com`,
+        status: 'approved',
+        portalAccess: { documents: true },
+      },
+    });
+
+    try {
+      await prisma.subcontractorUser.createMany({
+        data: [
+          {
+            userId: user.id,
+            subcontractorCompanyId: disabledCompany.id,
+            role: 'user',
+          },
+          {
+            userId: user.id,
+            subcontractorCompanyId: enabledCompany.id,
+            role: 'user',
+          },
+        ],
+      });
+
+      await expect(checkProjectAccess(user.id, project.id)).resolves.toBe(true);
+      await expect(
+        hasSubcontractorPortalModuleAccess({
+          userId: user.id,
+          role: user.roleInCompany,
+          projectId: project.id,
+          module: 'documents',
+        }),
+      ).resolves.toBe(true);
+      await expect(
+        requireSubcontractorPortalModuleAccess({
+          userId: user.id,
+          role: user.roleInCompany,
+          projectId: project.id,
+          module: 'documents',
+        }),
+      ).resolves.toBeUndefined();
+    } finally {
+      await prisma.subcontractorUser.deleteMany({ where: { userId: user.id } });
+      await prisma.subcontractorCompany.deleteMany({
+        where: { id: { in: [disabledCompany.id, enabledCompany.id] } },
+      });
+      await prisma.user.delete({ where: { id: user.id } }).catch(() => {});
+      await prisma.project.delete({ where: { id: project.id } }).catch(() => {});
+      await prisma.company.delete({ where: { id: company.id } }).catch(() => {});
+    }
+  });
+
   it('defaults new subcontractor portal access to assigned work and evidence modules', () => {
     for (const module of ['lots', 'itps', 'holdPoints', 'testResults', 'documents'] as const) {
       expect(hasPortalModuleEnabled(undefined, module)).toBe(true);
