@@ -2,7 +2,7 @@ import type { Request } from 'express';
 
 import { AppError } from '../../lib/AppError.js';
 import { prisma } from '../../lib/prisma.js';
-import { isSubcontractorPortalRole } from '../../lib/projectAccess.js';
+import { isStandaloneSubcontractorPortalIdentity } from '../../lib/projectAccess.js';
 
 type AuthenticatedUser = NonNullable<Request['user']>;
 
@@ -23,7 +23,7 @@ export async function requireProjectTemplateAccess(
   user: AuthenticatedUser,
   manage = false,
 ) {
-  const isSubcontractor = isSubcontractorPortalRole(user.roleInCompany);
+  const isSubcontractor = isStandaloneSubcontractorPortalIdentity(user);
   const [project, projectUser] = await Promise.all([
     prisma.project.findUnique({
       where: { id: projectId },
@@ -63,7 +63,7 @@ export async function requireProjectTemplateAccess(
 }
 
 export async function getReadableProjects(user: AuthenticatedUser) {
-  if (isSubcontractorPortalRole(user.roleInCompany)) {
+  if (isStandaloneSubcontractorPortalIdentity(user)) {
     return [];
   }
 

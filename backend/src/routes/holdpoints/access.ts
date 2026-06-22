@@ -5,7 +5,7 @@ import {
   activeSubcontractorCompanyWhere,
   checkProjectAccess,
   getEffectiveProjectRole,
-  isSubcontractorPortalRole,
+  isStandaloneSubcontractorPortalIdentity,
   requireInternalProjectAccess,
   requireProjectRoleExcludingSubcontractors as requireProjectRole,
   requireSubcontractorPortalModuleAccess,
@@ -35,7 +35,7 @@ export const HP_REQUEST_ROLES = [
 ];
 
 export function isSubcontractorUser(user: AuthenticatedUser): boolean {
-  return isSubcontractorPortalRole(user.roleInCompany);
+  return isStandaloneSubcontractorPortalIdentity(user);
 }
 
 export async function requireProjectReadAccess(
