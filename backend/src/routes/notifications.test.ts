@@ -1248,6 +1248,56 @@ describe('Notifications API', () => {
         }
       });
 
+      it('rejects assigning docket alerts to company-linked stale subcontractor roles', async () => {
+        const staleUser = await registerTestUser(app, {
+          emailPrefix: 'notifications-stale-sub-role',
+          fullName: 'Notifications Stale Subcontractor Role',
+          companyId,
+          roleInCompany: 'subcontractor',
+        });
+
+        await prisma.subcontractorUser.create({
+          data: {
+            userId: staleUser.userId,
+            subcontractorCompanyId,
+            role: 'user',
+          },
+        });
+
+        try {
+          const beforeCount = await prisma.notification.count({
+            where: { userId: staleUser.userId },
+          });
+
+          const res = await request(app)
+            .post('/api/notifications/alerts')
+            .set('Authorization', `Bearer ${authToken}`)
+            .send({
+              type: 'pending_approval',
+              severity: 'medium',
+              title: 'Stale subcontractor role docket alert',
+              message: 'This should not be assignable through an old subcontractor link',
+              entityId: 'stale-role-docket-alert',
+              entityType: 'docket',
+              projectId,
+              assignedTo: staleUser.userId,
+            });
+
+          expect(res.status).toBe(403);
+          expect(res.body.error.message).toContain('Assigned user does not have project access');
+
+          const afterCount = await prisma.notification.count({
+            where: { userId: staleUser.userId },
+          });
+          expect(afterCount).toBe(beforeCount);
+        } finally {
+          await prisma.subcontractorUser.deleteMany({ where: { userId: staleUser.userId } });
+          await prisma.notification.deleteMany({ where: { userId: staleUser.userId } });
+          await prisma.emailVerificationToken.deleteMany({ where: { userId: staleUser.userId } });
+          await prisma.user.delete({ where: { id: staleUser.userId } }).catch(() => {});
+        }
+      });
+
       it('should reject unauthorized requests', async () => {
         const res = await request(app).post('/api/notifications/alerts').send({
           type: 'overdue_ncr',

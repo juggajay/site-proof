@@ -829,6 +829,57 @@ describe('Projects API', () => {
         await prisma.user.delete({ where: { id: viewerId } }).catch(() => {});
       }
     });
+
+    it('does not expose subcontractor-linked projects to company-linked stale subcontractor roles', async () => {
+      const suffix = Date.now();
+      const staleUser = await registerTestUser(app, {
+        emailPrefix: 'projects-stale-sub-role',
+        fullName: 'Projects Stale Subcontractor Role',
+        companyId,
+        roleInCompany: 'subcontractor',
+      });
+      const subcontractorCompany = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `Projects Stale Subcontractor ${suffix}`,
+          status: 'approved',
+        },
+      });
+
+      await prisma.subcontractorUser.create({
+        data: {
+          userId: staleUser.userId,
+          subcontractorCompanyId: subcontractorCompany.id,
+          role: 'user',
+        },
+      });
+
+      try {
+        const listRes = await request(app)
+          .get('/api/projects')
+          .set('Authorization', `Bearer ${staleUser.token}`);
+
+        expect(listRes.status).toBe(200);
+        expect(
+          (listRes.body.projects as Array<{ id: string }>).some(
+            (project) => project.id === projectId,
+          ),
+        ).toBe(false);
+
+        const detailRes = await request(app)
+          .get(`/api/projects/${projectId}`)
+          .set('Authorization', `Bearer ${staleUser.token}`);
+
+        expect(detailRes.status).toBe(403);
+      } finally {
+        await prisma.subcontractorUser.deleteMany({ where: { userId: staleUser.userId } });
+        await prisma.subcontractorCompany
+          .delete({ where: { id: subcontractorCompany.id } })
+          .catch(() => {});
+        await prisma.emailVerificationToken.deleteMany({ where: { userId: staleUser.userId } });
+        await prisma.user.delete({ where: { id: staleUser.userId } }).catch(() => {});
+      }
+    });
   });
 
   describe('GET /api/projects/:id', () => {
@@ -964,7 +1015,7 @@ describe('Projects API', () => {
 
       await prisma.user.update({
         where: { id: subcontractorUserId },
-        data: { companyId, roleInCompany: 'subcontractor' },
+        data: { companyId: null, roleInCompany: 'subcontractor' },
       });
       await prisma.subcontractorUser.create({
         data: {

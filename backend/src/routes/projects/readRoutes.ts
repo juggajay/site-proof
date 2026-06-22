@@ -2,6 +2,7 @@ import { Router, type Request } from 'express';
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
+import { isStandaloneSubcontractorPortalIdentity } from '../../lib/projectAccess.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
 import { buildProjectCostsResponse } from './costResponses.js';
 import { buildProjectDetailResponse, buildProjectListResponse } from './listDetailResponses.js';
@@ -118,6 +119,7 @@ export function createProjectReadRouter({
     asyncHandler(async (req, res) => {
       const user = req.user!;
       const isSubcontractor = isSubcontractorUser(user);
+      const isStandaloneSubcontractor = isStandaloneSubcontractorPortalIdentity(user);
 
       // Get projects the user has access to via ProjectUser table
       const projectUsers = isSubcontractor
@@ -134,7 +136,7 @@ export function createProjectReadRouter({
       // For subcontractor users, get projects via SubcontractorUser -> SubcontractorCompany
       let subcontractorProjectIds: string[] = [];
 
-      if (isSubcontractor) {
+      if (isStandaloneSubcontractor) {
         // Get linked subcontractor companies, excluding suspended/removed project links.
         const subcontractorUsers = await prisma.subcontractorUser.findMany({
           where: { userId: user.id },
@@ -189,7 +191,7 @@ export function createProjectReadRouter({
           : { ...project, contractValue: null };
       });
 
-      res.json(buildProjectListResponse(sanitizedProjects, isSubcontractor));
+      res.json(buildProjectListResponse(sanitizedProjects, isStandaloneSubcontractor));
     }),
   );
 
@@ -200,6 +202,7 @@ export function createProjectReadRouter({
       const id = parseProjectRouteParam(req.params.id, 'id');
       const user = req.user!;
       const isSubcontractor = isSubcontractorUser(user);
+      const isStandaloneSubcontractor = isStandaloneSubcontractorPortalIdentity(user);
 
       // Check access - user must have access to the project
       const projectUser = isSubcontractor
@@ -212,7 +215,7 @@ export function createProjectReadRouter({
             },
           });
 
-      const { hasSubcontractorAccess, subcontractorSuspended } = isSubcontractor
+      const { hasSubcontractorAccess, subcontractorSuspended } = isStandaloneSubcontractor
         ? await getSubcontractorProjectAccess(user.id, id, isBlockedSubcontractorStatus)
         : { hasSubcontractorAccess: false, subcontractorSuspended: false };
 
@@ -256,7 +259,7 @@ export function createProjectReadRouter({
       const hasCompanyAdminAccess = isCompanyAdmin && isCompanyProject;
 
       // Provide specific error message for suspended subcontractors
-      if (isSubcontractor && subcontractorSuspended) {
+      if (isStandaloneSubcontractor && subcontractorSuspended) {
         throw AppError.forbidden(
           'Your company has been suspended from this project. Please contact the project manager.',
         );
@@ -269,12 +272,12 @@ export function createProjectReadRouter({
       const effectiveRole = getProjectDetailRole({
         hasCompanyAdminAccess,
         hasSubcontractorAccess,
-        isSubcontractor,
+        isSubcontractor: isStandaloneSubcontractor,
         projectUserRole: projectUser?.role,
         userRoleInCompany: user.roleInCompany,
       });
       const visibleProject = maskProjectDetailForCurrentUser(project, {
-        isSubcontractor,
+        isSubcontractor: isStandaloneSubcontractor,
         role: effectiveRole,
       });
 
