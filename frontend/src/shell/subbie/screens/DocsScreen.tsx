@@ -23,6 +23,7 @@ import { openDocumentAccessUrl } from '@/lib/documentAccess';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { toast } from '@/components/ui/toaster';
 import { logError } from '@/lib/logger';
+import { buildPortalCompanyQuery } from '@/pages/subcontractor-portal/portalCompanyScope';
 import { ShellAccessDenied } from './ShellAccessDenied';
 import { useSubbieShellContext } from '../subbieShellContext';
 
@@ -92,19 +93,23 @@ function DocCard({ doc }: { doc: DocItem }) {
 
 export function DocsScreen() {
   const { user } = useAuth();
-  const { projectId, companyName, projectName, isModuleEnabled } = useSubbieShellContext();
+  const { projectId, subcontractorCompanyId, companyName, projectName, isModuleEnabled } =
+    useSubbieShellContext();
   const canViewDocuments = isModuleEnabled('documents');
   const encodedProjectId = projectId ? encodeURIComponent(projectId) : '';
+  const projectQuery = buildPortalCompanyQuery({ projectId, subcontractorCompanyId });
+  const parentPath = `/p${projectQuery}`;
 
   const {
     data: documents = [],
     isLoading,
     error,
   } = useQuery({
-    queryKey: queryKeys.portalDocuments(user?.id, projectId),
+    queryKey: queryKeys.portalDocuments(user?.id, projectId, subcontractorCompanyId),
     queryFn: async () => {
+      const scopeQuery = buildPortalCompanyQuery({ subcontractorCompanyId });
       const res = await apiFetch<{ documents: DocItem[] }>(
-        `/api/documents/${encodedProjectId}?subcontractorView=true`,
+        `/api/documents/${encodedProjectId}${scopeQuery ? `${scopeQuery}&` : '?'}subcontractorView=true`,
       );
       return res.documents || [];
     },
@@ -133,7 +138,7 @@ export function DocsScreen() {
 
   if (isLoading) {
     return (
-      <ShellScreen variant="inner" title="Documents" parent="/p" sub={sub}>
+      <ShellScreen variant="inner" title="Documents" parent={parentPath} sub={sub}>
         {[1, 2, 3].map((i) => (
           <div key={i} className="h-[72px] animate-pulse rounded-2xl bg-muted" />
         ))}
@@ -142,7 +147,7 @@ export function DocsScreen() {
   }
 
   return (
-    <ShellScreen variant="inner" title="Documents" parent="/p" sub={sub}>
+    <ShellScreen variant="inner" title="Documents" parent={parentPath} sub={sub}>
       {error ? (
         <div className="rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-[13px] font-semibold text-destructive">
           {extractErrorMessage(error, 'Failed to load documents')}

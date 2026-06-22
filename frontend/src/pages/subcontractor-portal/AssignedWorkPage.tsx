@@ -9,6 +9,15 @@ import { extractErrorMessage } from '@/lib/errorHandling';
 import { cn } from '@/lib/utils';
 import { PortalAccessDenied } from './portalAccess';
 import { isPortalModuleEnabled, type PortalAccess } from './portalAccessModel';
+import {
+  applyPortalCompanyOptionToParams,
+  buildPortalCompanyQuery,
+  buildPortalCompanyScopedPath,
+  findPortalCompanyOptionByValue,
+  getPortalCompanyOptionLabel,
+  getPortalCompanyOptionValue,
+  type PortalCompanyOption,
+} from './portalCompanyScope';
 
 interface Lot {
   id: string;
@@ -49,23 +58,34 @@ export function AssignedWorkPage() {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedProjectId = searchParams.get('projectId');
+  const requestedSubcontractorCompanyId = searchParams.get('subcontractorCompanyId');
   const { data: company, isLoading: companyLoading } = useQuery({
-    queryKey: [...queryKeys.portalCompanies(user?.id), requestedProjectId ?? 'default'],
+    queryKey: [
+      ...queryKeys.portalCompanies(user?.id),
+      requestedProjectId ?? 'default',
+      requestedSubcontractorCompanyId ?? 'default-company',
+    ],
     queryFn: async () => {
-      const query = requestedProjectId
-        ? `?projectId=${encodeURIComponent(requestedProjectId)}`
-        : '';
       const res = await apiFetch<{
         company: {
+          id: string;
           projectName: string;
           projectId: string;
           portalAccess?: PortalAccess;
           availableProjects?: Array<{
+            id?: string | null;
+            subcontractorCompanyId?: string | null;
             projectId: string;
             projectName: string;
+            companyName?: string | null;
           }>;
         };
-      }>(`/api/subcontractors/my-company${query}`);
+      }>(
+        `/api/subcontractors/my-company${buildPortalCompanyQuery({
+          projectId: requestedProjectId,
+          subcontractorCompanyId: requestedSubcontractorCompanyId,
+        })}`,
+      );
       return res.company;
     },
     enabled: !!user?.id,
@@ -77,10 +97,13 @@ export function AssignedWorkPage() {
     isLoading: lotsLoading,
     error,
   } = useQuery({
-    queryKey: queryKeys.portalAssignedWork(user?.id, company?.projectId),
+    queryKey: queryKeys.portalAssignedWork(user?.id, company?.projectId, company?.id),
     queryFn: async () => {
       const res = await apiFetch<{ lots: Lot[] }>(
-        `/api/lots?projectId=${encodeURIComponent(company!.projectId)}&portalModule=lots`,
+        `/api/lots${buildPortalCompanyQuery({
+          projectId: company!.projectId,
+          subcontractorCompanyId: company!.id,
+        })}&portalModule=lots`,
       );
       return res.lots || [];
     },
@@ -89,13 +112,17 @@ export function AssignedWorkPage() {
 
   const loading = companyLoading || (canViewAssignedWork && lotsLoading);
   const projectName = company?.projectName || '';
-  const projectOptions = company?.availableProjects || [];
+  const projectOptions: PortalCompanyOption[] = company?.availableProjects || [];
   const showProjectSwitcher = projectOptions.length > 1;
+  const portalPath = buildPortalCompanyScopedPath('/subcontractor-portal', {
+    projectId: company?.projectId ?? requestedProjectId,
+    subcontractorCompanyId: company?.id ?? requestedSubcontractorCompanyId,
+  });
 
-  const handleProjectChange = (projectId: string) => {
-    const nextParams = new URLSearchParams(searchParams);
-    nextParams.set('projectId', projectId);
-    setSearchParams(nextParams);
+  const handleProjectChange = (value: string) => {
+    const selected = findPortalCompanyOptionByValue(projectOptions, value);
+    if (!selected) return;
+    setSearchParams(applyPortalCompanyOptionToParams(searchParams, selected));
   };
 
   // Group lots by status
@@ -119,7 +146,7 @@ export function AssignedWorkPage() {
   }
 
   if (!canViewAssignedWork) {
-    return <PortalAccessDenied moduleName="Assigned work" />;
+    return <PortalAccessDenied moduleName="Assigned work" backTo={portalPath} />;
   }
 
   if (error) {
@@ -130,7 +157,7 @@ export function AssignedWorkPage() {
           <p>{extractErrorMessage(error, 'Failed to load assigned work')}</p>
         </div>
         <Link
-          to="/subcontractor-portal"
+          to={portalPath}
           className="inline-flex items-center gap-2 mt-4 px-4 py-2 border border-border rounded-lg hover:bg-muted/50 transition-colors text-muted-foreground"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -144,10 +171,7 @@ export function AssignedWorkPage() {
     <div className="container max-w-2xl mx-auto p-4 pb-20 md:pb-4 space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Link
-          to="/subcontractor-portal"
-          className="p-2 rounded-lg hover:bg-muted transition-colors"
-        >
+        <Link to={portalPath} className="p-2 rounded-lg hover:bg-muted transition-colors">
           <ArrowLeft className="h-5 w-5 text-muted-foreground" />
         </Link>
         <div>
@@ -166,13 +190,16 @@ export function AssignedWorkPage() {
           </label>
           <select
             id="assigned-work-project-switcher"
-            value={company?.projectId || ''}
+            value={company?.id || company?.projectId || ''}
             onChange={(event) => handleProjectChange(event.target.value)}
             className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground"
           >
             {projectOptions.map((option) => (
-              <option key={option.projectId} value={option.projectId}>
-                {option.projectName}
+              <option
+                key={getPortalCompanyOptionValue(option)}
+                value={getPortalCompanyOptionValue(option)}
+              >
+                {getPortalCompanyOptionLabel(option, projectOptions)}
               </option>
             ))}
           </select>

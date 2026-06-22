@@ -17,9 +17,10 @@ export function DocketEditLoading() {
 
 interface DocketEditErrorProps {
   message: string;
+  backTo: string;
 }
 
-export function DocketEditError({ message }: DocketEditErrorProps) {
+export function DocketEditError({ message, backTo }: DocketEditErrorProps) {
   return (
     <div className="container max-w-2xl mx-auto p-4">
       <div className="flex items-start gap-3 p-4 bg-destructive/10 border border-destructive/30 rounded-lg text-destructive">
@@ -27,7 +28,7 @@ export function DocketEditError({ message }: DocketEditErrorProps) {
         <p>{message}</p>
       </div>
       <Link
-        to="/subcontractor-portal"
+        to={backTo}
         className="inline-flex items-center gap-2 mt-4 px-4 py-2 border border-border rounded-lg hover:bg-muted/50 transition-colors"
       >
         <ArrowLeft className="h-4 w-4" />
@@ -42,6 +43,7 @@ interface DocketEditHeaderProps {
   isNewDocket: boolean;
   projectName?: string;
   today: string;
+  backTo: string;
 }
 
 export function DocketEditHeader({
@@ -49,10 +51,11 @@ export function DocketEditHeader({
   isNewDocket,
   projectName,
   today,
+  backTo,
 }: DocketEditHeaderProps) {
   return (
     <div className="flex items-center gap-3 mb-6">
-      <Link to="/subcontractor-portal" className="p-2 rounded-lg hover:bg-muted transition-colors">
+      <Link to={backTo} className="p-2 rounded-lg hover:bg-muted transition-colors">
         <ArrowLeft className="h-5 w-5 text-muted-foreground" />
       </Link>
       <div>

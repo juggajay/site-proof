@@ -55,6 +55,10 @@ docketsRouter.get(
     const user = req.user!;
     const projectId = parseRequiredQueryString(req.query.projectId, 'projectId');
     const status = parseOptionalDocketStatus(req.query.status);
+    const requestedSubcontractorCompanyId =
+      req.query.subcontractorCompanyId === undefined
+        ? null
+        : parseDocketRouteParam(req.query.subcontractorCompanyId, 'subcontractorCompanyId');
 
     const projectReadScope = await requireProjectReadAccess(user, projectId);
 
@@ -72,7 +76,15 @@ docketsRouter.get(
       whereClause.status = status;
     }
 
-    if (projectReadScope.subcontractorCompanyIds) {
+    if (requestedSubcontractorCompanyId) {
+      if (
+        projectReadScope.subcontractorCompanyIds &&
+        !projectReadScope.subcontractorCompanyIds.includes(requestedSubcontractorCompanyId)
+      ) {
+        throw AppError.forbidden('Access denied');
+      }
+      whereClause.subcontractorCompanyId = requestedSubcontractorCompanyId;
+    } else if (projectReadScope.subcontractorCompanyIds) {
       whereClause.subcontractorCompanyId = { in: projectReadScope.subcontractorCompanyIds };
     }
 

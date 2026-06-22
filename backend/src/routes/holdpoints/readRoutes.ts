@@ -77,6 +77,10 @@ holdPointReadRouter.get(
   asyncHandler(async (req: Request, res: Response) => {
     const projectId = parseHoldPointRouteParam(req.params.projectId, 'projectId');
     const user = req.user!;
+    const requestedSubcontractorCompanyId =
+      req.query.subcontractorCompanyId === undefined
+        ? undefined
+        : parseHoldPointRouteParam(req.query.subcontractorCompanyId, 'subcontractorCompanyId');
 
     await requireProjectReadAccess(projectId, user);
     await requireHoldPointsPortalAccess(projectId, user);
@@ -86,11 +90,17 @@ holdPointReadRouter.get(
 
     // Subcontractors can only see hold points on their assigned lots
     if (isSubcontractorUser(user)) {
-      const subcontractorCompanyIds = await getActiveSubcontractorPortalCompanyIdsForProject({
-        userId: user.id,
-        projectId,
-        module: 'holdPoints',
-      });
+      const accessibleSubcontractorCompanyIds =
+        await getActiveSubcontractorPortalCompanyIdsForProject({
+          userId: user.id,
+          projectId,
+          module: 'holdPoints',
+        });
+      const subcontractorCompanyIds = requestedSubcontractorCompanyId
+        ? accessibleSubcontractorCompanyIds.includes(requestedSubcontractorCompanyId)
+          ? [requestedSubcontractorCompanyId]
+          : []
+        : accessibleSubcontractorCompanyIds;
 
       if (subcontractorCompanyIds.length > 0) {
         // Get lots assigned via LotSubcontractorAssignment

@@ -22,6 +22,7 @@ import { cn } from '@/lib/utils';
 import { ShellScreen } from '@/shell/components/ShellScreen';
 import { formatCurrency } from '@/pages/subcontractor-portal/subcontractorDashboardHelpers';
 import { getDocketDisplayTotalCost } from '@/pages/subcontractor-portal/docketEditData';
+import { buildPortalCompanyQuery } from '@/pages/subcontractor-portal/portalCompanyScope';
 import { useSubbieShellContext } from '../../subbieShellContext';
 
 interface Docket {
@@ -90,17 +91,14 @@ function formatRowDate(dateStr: string): string {
 export function DocketsListScreen() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { projectId } = useSubbieShellContext();
-  const projectQuery = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
-  const encodedProjectId = projectId ? encodeURIComponent(projectId) : '';
+  const { projectId, subcontractorCompanyId } = useSubbieShellContext();
+  const projectQuery = buildPortalCompanyQuery({ projectId, subcontractorCompanyId });
   const [filter, setFilter] = useState<FilterKey>('all');
 
   const { data: dockets = [], isLoading } = useQuery({
-    queryKey: queryKeys.portalDockets(user?.id, projectId),
+    queryKey: queryKeys.portalDockets(user?.id, projectId, subcontractorCompanyId),
     queryFn: async () => {
-      const res = await apiFetch<{ dockets: Docket[] }>(
-        `/api/dockets?projectId=${encodedProjectId}`,
-      );
+      const res = await apiFetch<{ dockets: Docket[] }>(`/api/dockets${projectQuery}`);
       return res.dockets ?? [];
     },
     enabled: !!user?.id && !!projectId,
@@ -159,7 +157,12 @@ export function DocketsListScreen() {
 
   if (isLoading) {
     return (
-      <ShellScreen variant="inner" title="My Dockets" parent="/p" sub={<span>Loading…</span>}>
+      <ShellScreen
+        variant="inner"
+        title="My Dockets"
+        parent={`/p${projectQuery}`}
+        sub={<span>Loading...</span>}
+      >
         {[1, 2, 3].map((i) => (
           <div key={i} className="h-[76px] animate-pulse rounded-2xl bg-muted" />
         ))}
@@ -168,7 +171,7 @@ export function DocketsListScreen() {
   }
 
   return (
-    <ShellScreen variant="inner" title="My Dockets" parent="/p" sub={sub}>
+    <ShellScreen variant="inner" title="My Dockets" parent={`/p${projectQuery}`} sub={sub}>
       {/* Filter chips */}
       <div
         className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1"

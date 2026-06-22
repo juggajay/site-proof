@@ -48,7 +48,10 @@ vi.mock('@/lib/api', () => ({
       };
     }
 
-    if (url === '/api/documents/project-1?subcontractorView=true') {
+    if (
+      url ===
+      '/api/documents/project-1?subcontractorView=true&subcontractorCompanyId=subbie-company-1'
+    ) {
       return {
         documents: [
           {
@@ -64,7 +67,10 @@ vi.mock('@/lib/api', () => ({
       };
     }
 
-    if (url === '/api/documents/project-2?subcontractorView=true') {
+    if (
+      url ===
+      '/api/documents/project-2?subcontractorView=true&subcontractorCompanyId=subbie-company-1'
+    ) {
       return {
         documents: [
           {
@@ -118,7 +124,9 @@ describe('SubcontractorDocumentsPage', () => {
     expect(screen.getByText('Second QA Project')).toBeInTheDocument();
     expect(screen.getByText('sanitised-specification.pdf')).toBeInTheDocument();
     expect(apiFetch).toHaveBeenCalledWith('/api/subcontractors/my-company?projectId=project-2');
-    expect(apiFetch).toHaveBeenCalledWith('/api/documents/project-2?subcontractorView=true');
+    expect(apiFetch).toHaveBeenCalledWith(
+      '/api/documents/project-2?subcontractorView=true&subcontractorCompanyId=subbie-company-1',
+    );
   });
 
   it('shows an access error instead of an empty state when the selected project is denied', async () => {
@@ -132,7 +140,9 @@ describe('SubcontractorDocumentsPage', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Selected project is unavailable');
     expect(screen.queryByText('No documents available')).not.toBeInTheDocument();
-    expect(apiFetch).not.toHaveBeenCalledWith('/api/documents/project-2?subcontractorView=true');
+    expect(apiFetch).not.toHaveBeenCalledWith(
+      '/api/documents/project-2?subcontractorView=true&subcontractorCompanyId=subbie-company-1',
+    );
     expect(screen.getByRole('link', { name: /back to portal/i })).toHaveAttribute(
       'href',
       '/subcontractor-portal?projectId=project-2',
@@ -157,10 +167,12 @@ describe('SubcontractorDocumentsPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'Documents portal access is not enabled for your company.',
     );
-    expect(apiFetch).not.toHaveBeenCalledWith('/api/documents/project-2?subcontractorView=true');
+    expect(apiFetch).not.toHaveBeenCalledWith(
+      '/api/documents/project-2?subcontractorView=true&subcontractorCompanyId=subbie-company-1',
+    );
     expect(screen.getByRole('link', { name: /back to portal/i })).toHaveAttribute(
       'href',
-      '/subcontractor-portal?projectId=project-2',
+      '/subcontractor-portal?projectId=project-2&subcontractorCompanyId=subbie-company-1',
     );
   });
 

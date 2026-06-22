@@ -25,6 +25,7 @@ import { apiFetch } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 import { useAuth } from '@/lib/auth';
 import { extractErrorMessage } from '@/lib/errorHandling';
+import { buildPortalCompanyQuery } from '@/pages/subcontractor-portal/portalCompanyScope';
 import { ShellAccessDenied } from './ShellAccessDenied';
 import { useSubbieShellContext } from '../subbieShellContext';
 
@@ -145,21 +146,22 @@ function LotGroup({
 export function WorkScreen() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { projectId, projectName, isModuleEnabled } = useSubbieShellContext();
+  const { projectId, projectName, subcontractorCompanyId, isModuleEnabled } =
+    useSubbieShellContext();
 
   const lotsEnabled = isModuleEnabled('lots');
   const itpsEnabled = isModuleEnabled('itps');
-  const encodedProjectId = projectId ? encodeURIComponent(projectId) : '';
+  const projectQuery = buildPortalCompanyQuery({ projectId, subcontractorCompanyId });
 
   const {
     data: lots = [],
     isLoading,
     error,
   } = useQuery({
-    queryKey: queryKeys.portalAssignedWork(user?.id, projectId),
+    queryKey: queryKeys.portalAssignedWork(user?.id, projectId, subcontractorCompanyId),
     queryFn: async () => {
       const res = await apiFetch<{ lots: Lot[] }>(
-        `/api/lots?projectId=${encodedProjectId}&portalModule=lots`,
+        `/api/lots${projectQuery}${projectQuery ? '&' : '?'}portalModule=lots`,
       );
       return res.lots ?? [];
     },
@@ -181,15 +183,17 @@ export function WorkScreen() {
 
   // Tapping a lot opens the ITP run only when the itps module is enabled.
   const onPressLot = itpsEnabled
-    ? (lotId: string) =>
-        navigate(
-          `/p/lots/${encodeURIComponent(lotId)}/itp${projectId ? `?projectId=${encodedProjectId}` : ''}`,
-        )
+    ? (lotId: string) => navigate(`/p/lots/${encodeURIComponent(lotId)}/itp${projectQuery}`)
     : undefined;
 
   if (isLoading) {
     return (
-      <ShellScreen variant="inner" title="My Work" parent="/p" sub={<span>Loading…</span>}>
+      <ShellScreen
+        variant="inner"
+        title="My Work"
+        parent={`/p${projectQuery}`}
+        sub={<span>Loading…</span>}
+      >
         {[1, 2, 3].map((i) => (
           <div key={i} className="h-[96px] animate-pulse rounded-2xl bg-muted" />
         ))}
@@ -205,7 +209,7 @@ export function WorkScreen() {
   );
 
   return (
-    <ShellScreen variant="inner" title="My Work" parent="/p" sub={sub}>
+    <ShellScreen variant="inner" title="My Work" parent={`/p${projectQuery}`} sub={sub}>
       {error ? (
         <div className="rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-[13px] font-semibold text-destructive">
           {extractErrorMessage(error, 'Failed to load assigned work')}

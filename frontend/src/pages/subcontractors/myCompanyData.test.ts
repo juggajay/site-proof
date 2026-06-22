@@ -31,7 +31,13 @@ describe('buildMyCompanyPath', () => {
 
   it('url-encodes project ids containing reserved characters', () => {
     expect(buildMyCompanyPath('id/with space')).toBe(
-      '/api/subcontractors/my-company?projectId=id%2Fwith%20space',
+      '/api/subcontractors/my-company?projectId=id%2Fwith+space',
+    );
+  });
+
+  it('includes the selected subcontractor company id when requested', () => {
+    expect(buildMyCompanyPath('project-1', 'subbie-2')).toBe(
+      '/api/subcontractors/my-company?projectId=project-1&subcontractorCompanyId=subbie-2',
     );
   });
 });
@@ -56,10 +62,22 @@ describe('queryKeys.myCompany', () => {
       'my-company',
       'user-1',
       'project-1',
+      'default-company',
+    ]);
+    expect(queryKeys.myCompany('user-1', 'project-1', 'subbie-2')).toEqual([
+      'my-company',
+      'user-1',
+      'project-1',
+      'subbie-2',
     ]);
   });
 
   it('falls back to anonymous and default sentinels when ids are absent', () => {
-    expect(queryKeys.myCompany(undefined, null)).toEqual(['my-company', 'anonymous', 'default']);
+    expect(queryKeys.myCompany(undefined, null)).toEqual([
+      'my-company',
+      'anonymous',
+      'default',
+      'default-company',
+    ]);
   });
 });

@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/auth';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { PortalAccessDenied } from './portalAccess';
 import { isPortalModuleEnabled, type PortalAccess } from './portalAccessModel';
+import { buildPortalCompanyQuery, buildPortalCompanyScopedPath } from './portalCompanyScope';
 
 interface TestResult {
   id: string;
@@ -92,14 +93,19 @@ export function SubcontractorTestResultsPage() {
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const requestedProjectId = searchParams.get('projectId');
+  const requestedSubcontractorCompanyId = searchParams.get('subcontractorCompanyId');
   const { data: company, isLoading: companyLoading } = useQuery({
-    queryKey: [...queryKeys.portalCompanies(user?.id), requestedProjectId ?? 'default'],
+    queryKey: [
+      ...queryKeys.portalCompanies(user?.id),
+      requestedProjectId ?? 'default',
+      requestedSubcontractorCompanyId ?? 'default-company',
+    ],
     queryFn: async () => {
-      const query = requestedProjectId
-        ? `?projectId=${encodeURIComponent(requestedProjectId)}`
-        : '';
       const res = await apiFetch<{ company: SubcontractorCompany }>(
-        `/api/subcontractors/my-company${query}`,
+        `/api/subcontractors/my-company${buildPortalCompanyQuery({
+          projectId: requestedProjectId,
+          subcontractorCompanyId: requestedSubcontractorCompanyId,
+        })}`,
       );
       return res.company;
     },
@@ -112,12 +118,13 @@ export function SubcontractorTestResultsPage() {
     isLoading: testsLoading,
     error,
   } = useQuery({
-    queryKey: queryKeys.portalTestResults(user?.id, company?.projectId),
+    queryKey: queryKeys.portalTestResults(user?.id, company?.projectId, company?.id),
     queryFn: async () => {
       const res = await apiFetch<{ testResults?: ApiTestResult[] }>(
-        `/api/test-results?projectId=${encodeURIComponent(
-          company!.projectId,
-        )}&subcontractorView=true`,
+        `/api/test-results${buildPortalCompanyQuery({
+          projectId: company!.projectId,
+          subcontractorCompanyId: company!.id,
+        })}&subcontractorView=true`,
       );
       return (res.testResults || []).map(normalizeTestResult);
     },
@@ -125,6 +132,10 @@ export function SubcontractorTestResultsPage() {
   });
 
   const loading = companyLoading || (canViewTestResults && testsLoading);
+  const portalPath = buildPortalCompanyScopedPath('/subcontractor-portal', {
+    projectId: company?.projectId ?? requestedProjectId,
+    subcontractorCompanyId: company?.id ?? requestedSubcontractorCompanyId,
+  });
 
   const passed = testResults.filter((t) => t.result === 'pass');
   const failed = testResults.filter((t) => t.result === 'fail');
@@ -144,7 +155,7 @@ export function SubcontractorTestResultsPage() {
   }
 
   if (!canViewTestResults) {
-    return <PortalAccessDenied moduleName="Test results" />;
+    return <PortalAccessDenied moduleName="Test results" backTo={portalPath} />;
   }
 
   if (error) {
@@ -155,7 +166,7 @@ export function SubcontractorTestResultsPage() {
           <p>{extractErrorMessage(error, 'Failed to load test results')}</p>
         </div>
         <Link
-          to="/subcontractor-portal"
+          to={portalPath}
           className="inline-flex items-center gap-2 mt-4 px-4 py-2 border border-border rounded-lg hover:bg-muted/50 transition-colors text-foreground"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -169,10 +180,7 @@ export function SubcontractorTestResultsPage() {
     <div className="container max-w-2xl mx-auto p-4 pb-20 md:pb-4 space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Link
-          to="/subcontractor-portal"
-          className="p-2 rounded-lg hover:bg-muted transition-colors"
-        >
+        <Link to={portalPath} className="p-2 rounded-lg hover:bg-muted transition-colors">
           <ArrowLeft className="h-5 w-5 text-muted-foreground" />
         </Link>
         <div>

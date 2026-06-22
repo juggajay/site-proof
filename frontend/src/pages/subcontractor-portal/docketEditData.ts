@@ -1,6 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
+import {
+  buildPortalCompanyQuery,
+  portalCompanyQueryKeyParts,
+  type PortalCompanyOption,
+  type PortalCompanyScope,
+} from './portalCompanyScope';
 
 // ===== Data contract =====
 // Response shapes for the docket edit page bootstrap reads (my-company, assigned
@@ -96,6 +102,8 @@ export interface Company {
   id: string;
   projectId: string;
   projectName: string;
+  companyName?: string;
+  availableProjects?: PortalCompanyOption[];
   employees: Employee[];
   plant: Plant[];
 }
@@ -104,28 +112,43 @@ export interface Company {
 // Query values are always encoded before interpolation. Project ids are server
 // controlled in normal use, but deep links can still carry arbitrary values.
 
-export function buildMyCompanyPath(requestedProjectId: string | null): string {
-  const companyQuery = requestedProjectId
-    ? `?projectId=${encodeURIComponent(requestedProjectId)}`
-    : '';
-  return `/api/subcontractors/my-company${companyQuery}`;
+export function buildMyCompanyPath(
+  requestedProjectId: string | null,
+  requestedSubcontractorCompanyId?: string | null,
+): string {
+  return `/api/subcontractors/my-company${buildPortalCompanyQuery({
+    projectId: requestedProjectId,
+    subcontractorCompanyId: requestedSubcontractorCompanyId,
+  })}`;
 }
 
-export function buildAssignedLotsPath(projectId: string): string {
-  return `/api/lots?projectId=${encodeURIComponent(projectId)}`;
+export function buildAssignedLotsPath(
+  projectId: string,
+  subcontractorCompanyId?: string | null,
+): string {
+  return `/api/lots${buildPortalCompanyQuery({ projectId, subcontractorCompanyId })}`;
 }
 
 export function buildDocketDetailPath(docketId: string): string {
   return `/api/dockets/${docketId}`;
 }
 
-export function buildExistingDocketsPath(projectId: string): string {
-  return `/api/dockets?projectId=${encodeURIComponent(projectId)}`;
+export function buildExistingDocketsPath(
+  projectId: string,
+  subcontractorCompanyId?: string | null,
+): string {
+  return `/api/dockets${buildPortalCompanyQuery({ projectId, subcontractorCompanyId })}`;
 }
 
-export function buildDocketEditRoute(docketId: string, projectId?: string | null): string {
-  const projectQuery = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
-  return `/subcontractor-portal/docket/${docketId}${projectQuery}`;
+export function buildDocketEditRoute(
+  docketId: string,
+  projectId?: string | null,
+  subcontractorCompanyId?: string | null,
+): string {
+  return `/subcontractor-portal/docket/${docketId}${buildPortalCompanyQuery({
+    projectId,
+    subcontractorCompanyId,
+  })}`;
 }
 
 // ===== Response normalizers / selectors =====
@@ -223,13 +246,23 @@ export function hasDocketPlantEntryCostAdjustment(
 
 // ===== Fetchers =====
 
-async function fetchMyCompany(requestedProjectId: string | null): Promise<Company> {
-  const data = await apiFetch<{ company: Company }>(buildMyCompanyPath(requestedProjectId));
+async function fetchMyCompany(
+  requestedProjectId: string | null,
+  requestedSubcontractorCompanyId?: string | null,
+): Promise<Company> {
+  const data = await apiFetch<{ company: Company }>(
+    buildMyCompanyPath(requestedProjectId, requestedSubcontractorCompanyId),
+  );
   return data.company;
 }
 
-async function fetchAssignedLots(projectId: string): Promise<Lot[]> {
-  const data = await apiFetch<{ lots: Lot[] }>(buildAssignedLotsPath(projectId));
+async function fetchAssignedLots(
+  projectId: string,
+  subcontractorCompanyId?: string | null,
+): Promise<Lot[]> {
+  const data = await apiFetch<{ lots: Lot[] }>(
+    buildAssignedLotsPath(projectId, subcontractorCompanyId),
+  );
   return normalizeAssignedLots(data);
 }
 
@@ -238,8 +271,13 @@ async function fetchDocketDetail(docketId: string): Promise<Docket> {
   return data.docket;
 }
 
-async function fetchExistingDockets(projectId: string): Promise<Docket[]> {
-  const data = await apiFetch<{ dockets: Docket[] }>(buildExistingDocketsPath(projectId));
+async function fetchExistingDockets(
+  projectId: string,
+  subcontractorCompanyId?: string | null,
+): Promise<Docket[]> {
+  const data = await apiFetch<{ dockets: Docket[] }>(
+    buildExistingDocketsPath(projectId, subcontractorCompanyId),
+  );
   return normalizeExistingDockets(data);
 }
 
@@ -252,10 +290,15 @@ async function fetchExistingDockets(projectId: string): Promise<Docket[]> {
 export function useMyCompanyQuery(
   userId: string | null | undefined,
   requestedProjectId: string | null,
+  requestedSubcontractorCompanyId?: string | null,
 ) {
+  const scope: PortalCompanyScope = {
+    projectId: requestedProjectId,
+    subcontractorCompanyId: requestedSubcontractorCompanyId,
+  };
   return useQuery({
-    queryKey: [...queryKeys.portalCompanies(userId), requestedProjectId ?? 'default'],
-    queryFn: () => fetchMyCompany(requestedProjectId),
+    queryKey: [...queryKeys.portalCompanies(userId), ...portalCompanyQueryKeyParts(scope)],
+    queryFn: () => fetchMyCompany(requestedProjectId, requestedSubcontractorCompanyId),
     enabled: Boolean(userId),
     retry: false,
   });
@@ -264,10 +307,11 @@ export function useMyCompanyQuery(
 export function useAssignedLotsQuery(
   userId: string | null | undefined,
   projectId: string | null | undefined,
+  subcontractorCompanyId?: string | null,
 ) {
   return useQuery({
-    queryKey: queryKeys.portalDocketEditLots(userId, projectId),
-    queryFn: () => fetchAssignedLots(projectId!),
+    queryKey: queryKeys.portalDocketEditLots(userId, projectId, subcontractorCompanyId),
+    queryFn: () => fetchAssignedLots(projectId!, subcontractorCompanyId),
     enabled: Boolean(userId) && Boolean(projectId),
     retry: false,
   });
@@ -289,11 +333,12 @@ export function useDocketEditQuery(
 export function useExistingDocketsQuery(
   userId: string | null | undefined,
   projectId: string | null | undefined,
+  subcontractorCompanyId: string | null | undefined,
   enabled: boolean,
 ) {
   return useQuery({
-    queryKey: queryKeys.portalDockets(userId, projectId),
-    queryFn: () => fetchExistingDockets(projectId!),
+    queryKey: queryKeys.portalDockets(userId, projectId, subcontractorCompanyId),
+    queryFn: () => fetchExistingDockets(projectId!, subcontractorCompanyId),
     enabled: Boolean(userId) && Boolean(projectId) && enabled,
     retry: false,
   });

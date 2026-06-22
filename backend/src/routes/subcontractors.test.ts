@@ -2078,6 +2078,8 @@ describe('Subcontractors API', () => {
       expect(res.body.company.companyName).toContain('Portal Test Co');
       expect(res.body.company.availableProjects).toEqual([
         expect.objectContaining({
+          id: portalSubId,
+          subcontractorCompanyId: portalSubId,
           projectId,
           companyName: expect.stringContaining('Portal Test Co'),
         }),
@@ -2247,6 +2249,34 @@ describe('Subcontractors API', () => {
         expect(companyRes.status).toBe(200);
         expect(companyRes.body.company.id).toBe(otherSub.id);
         expect(companyRes.body.company.companyName).toBe(otherSub.companyName);
+        expect(companyRes.body.company.availableProjects).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ projectId, subcontractorCompanyId: portalSubId }),
+            expect.objectContaining({ projectId, subcontractorCompanyId: otherSub.id }),
+          ]),
+        );
+
+        const ambiguousCompanyRes = await request(app)
+          .get(`/api/subcontractors/my-company?projectId=${projectId}`)
+          .set('Authorization', `Bearer ${portalToken}`);
+        expect(ambiguousCompanyRes.status).toBe(400);
+        expect(ambiguousCompanyRes.body.error.message).toContain(
+          'subcontractorCompanyId is required',
+        );
+
+        const ambiguousEmployeeRes = await request(app)
+          .post('/api/subcontractors/my-company/employees')
+          .set('Authorization', `Bearer ${portalToken}`)
+          .send({
+            projectId,
+            name: `Ambiguous Same Project Employee ${suffix}`,
+            role: 'Operator',
+            hourlyRate: 77,
+          });
+        expect(ambiguousEmployeeRes.status).toBe(400);
+        expect(ambiguousEmployeeRes.body.error.message).toContain(
+          'subcontractorCompanyId is required',
+        );
 
         const employeeRes = await request(app)
           .post('/api/subcontractors/my-company/employees')

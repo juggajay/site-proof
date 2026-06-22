@@ -45,6 +45,13 @@ import {
   type NeedsAttentionItem,
 } from '@/pages/subcontractor-portal/subcontractorDashboardHelpers';
 import { getDocketDisplayTotalCost } from '@/pages/subcontractor-portal/docketEditData';
+import {
+  buildPortalCompanyQuery,
+  findPortalCompanyOptionByValue,
+  getPortalCompanyOptionLabel,
+  getPortalCompanyOptionValue,
+  type PortalCompanyOption,
+} from '@/pages/subcontractor-portal/portalCompanyScope';
 import { useSubbieShellContext } from '../subbieShellContext';
 
 // ── Minimal response shapes (existing portal contracts) ───────────────────────
@@ -241,13 +248,7 @@ function HubTile({
 
 // ── Project switcher (headerExtra) ────────────────────────────────────────────
 
-function ProjectSwitcher({
-  value,
-  options,
-}: {
-  value: string;
-  options: { projectId: string; projectName: string }[];
-}) {
+function ProjectSwitcher({ value, options }: { value: string; options: PortalCompanyOption[] }) {
   const navigate = useNavigate();
   return (
     <div className="mt-2.5">
@@ -257,12 +258,24 @@ function ProjectSwitcher({
       <select
         id="subbie-project-switcher"
         value={value}
-        onChange={(e) => navigate(`/p?projectId=${encodeURIComponent(e.target.value)}`)}
+        onChange={(e) => {
+          const option = findPortalCompanyOptionByValue(options, e.target.value);
+          if (!option) return;
+          navigate(
+            `/p${buildPortalCompanyQuery({
+              projectId: option.projectId,
+              subcontractorCompanyId: option.subcontractorCompanyId || option.id,
+            })}`,
+          );
+        }}
         className="w-full rounded-lg border border-input bg-card px-3 py-2 text-[13px] text-foreground"
       >
         {options.map((o) => (
-          <option key={o.projectId} value={o.projectId}>
-            {o.projectName}
+          <option
+            key={`${o.projectId}:${getPortalCompanyOptionValue(o)}`}
+            value={getPortalCompanyOptionValue(o)}
+          >
+            {getPortalCompanyOptionLabel(o, options)}
           </option>
         ))}
       </select>
@@ -275,22 +288,29 @@ function ProjectSwitcher({
 export function HomeScreen() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { projectId, company, companyName, projectName, availableProjects, isModuleEnabled } =
-    useSubbieShellContext();
+  const {
+    projectId,
+    subcontractorCompanyId,
+    company,
+    companyName,
+    projectName,
+    availableProjects,
+    isModuleEnabled,
+  } = useSubbieShellContext();
 
   const lotsEnabled = isModuleEnabled('lots');
   const ncrsEnabled = isModuleEnabled('ncrs');
   const holdsOrTests = isModuleEnabled('holdPoints') || isModuleEnabled('testResults');
   const documentsEnabled = isModuleEnabled('documents');
   const itpsEnabled = isModuleEnabled('itps');
-  const encodedProjectId = projectId ? encodeURIComponent(projectId) : '';
+  const currentProjectQuery = buildPortalCompanyQuery({ projectId, subcontractorCompanyId });
 
   // Dockets — existing portal key; drives the hero + recent/queried counts.
   const { data: docketsData } = useQuery({
-    queryKey: queryKeys.portalDockets(user?.id, projectId),
+    queryKey: queryKeys.portalDockets(user?.id, projectId, subcontractorCompanyId),
     queryFn: async () => {
       const res = await apiFetch<{ dockets: Docket[] }>(
-        `/api/dockets?projectId=${encodedProjectId}`,
+        `/api/dockets${buildPortalCompanyQuery({ projectId, subcontractorCompanyId })}`,
       );
       return res.dockets ?? [];
     },
@@ -305,10 +325,10 @@ export function HomeScreen() {
 
   // Assigned lots — existing portal key; count chip + prerequisite state.
   const { data: assignedLots = [] } = useQuery({
-    queryKey: queryKeys.portalAssignedWork(user?.id, projectId),
+    queryKey: queryKeys.portalAssignedWork(user?.id, projectId, subcontractorCompanyId),
     queryFn: async () => {
       const res = await apiFetch<{ lots: Lot[] }>(
-        `/api/lots?projectId=${encodedProjectId}&portalModule=lots`,
+        `/api/lots${currentProjectQuery}${currentProjectQuery ? '&' : '?'}portalModule=lots`,
       );
       return res.lots ?? [];
     },
@@ -323,7 +343,6 @@ export function HomeScreen() {
   });
   const notifications = notifData?.notifications ?? [];
 
-  const currentProjectQuery = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
   // Keep the rate-counter notice inside the shell (My Company lives at /p/company).
   const myCompanyLink = `/p/company${currentProjectQuery}`;
 
@@ -377,11 +396,8 @@ export function HomeScreen() {
       headerExtra={
         availableProjects.length > 1 && projectId ? (
           <ProjectSwitcher
-            value={projectId}
-            options={availableProjects.map((p) => ({
-              projectId: p.projectId,
-              projectName: p.projectName,
-            }))}
+            value={subcontractorCompanyId || projectId || ''}
+            options={availableProjects}
           />
         ) : undefined
       }

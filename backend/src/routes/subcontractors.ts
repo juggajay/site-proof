@@ -273,11 +273,9 @@ async function getScopedSubcontractorUserLink(req: Request, user: AuthenticatedU
   });
 
   let subcontractorUser =
-    activeLinks.length === 1 || requestedSubcontractorCompanyId || !requestedProjectId
-      ? (activeLinks[0] ?? null)
-      : null;
+    activeLinks.length === 1 || requestedSubcontractorCompanyId ? (activeLinks[0] ?? null) : null;
 
-  if (!subcontractorUser && requestedProjectId && activeLinks.length > 1) {
+  if (!subcontractorUser && activeLinks.length > 1) {
     throw AppError.badRequest(
       'subcontractorCompanyId is required when your account is linked to multiple subcontractors for this project',
     );

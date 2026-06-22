@@ -19,6 +19,7 @@ import {
   type Lot,
   type PlantEntry,
 } from './docketEditData';
+import { buildPortalCompanyScopedPath } from './portalCompanyScope';
 import {
   calculateHours,
   isEditableDocketStatus,
@@ -47,6 +48,7 @@ export function DocketEditPage() {
   const { user } = useAuth();
   const userId = user?.id;
   const requestedProjectId = searchParams.get('projectId');
+  const requestedSubcontractorCompanyId = searchParams.get('subcontractorCompanyId');
   const isNewDocket = !docketId || docketId === 'new';
 
   const [saving, setSaving] = useState(false);
@@ -63,10 +65,14 @@ export function DocketEditPage() {
   // Bootstrap reads are served from TanStack Query: the subbie's company, their
   // assigned lots, and either the docket being edited or (for a new docket) the
   // "does one already exist for today?" check.
-  const companyQuery = useMyCompanyQuery(userId, requestedProjectId);
+  const companyQuery = useMyCompanyQuery(
+    userId,
+    requestedProjectId,
+    requestedSubcontractorCompanyId,
+  );
   const company = companyQuery.data ?? null;
 
-  const lotsQuery = useAssignedLotsQuery(userId, company?.projectId);
+  const lotsQuery = useAssignedLotsQuery(userId, company?.projectId, company?.id);
   const assignedLots = lotsQuery.data ?? EMPTY_LOTS;
   // The lot list 403s when the HC has turned off the subbie's "Assigned Work"
   // (lots) portal module. Labour lines require a lot, so surface a plain-language
@@ -97,7 +103,12 @@ export function DocketEditPage() {
   } = useDocketEntrySheetState(assignedLots);
 
   const docketQuery = useDocketEditQuery(userId, docketId, !isNewDocket);
-  const existingDocketsQuery = useExistingDocketsQuery(userId, company?.projectId, isNewDocket);
+  const existingDocketsQuery = useExistingDocketsQuery(
+    userId,
+    company?.projectId,
+    company?.id,
+    isNewDocket,
+  );
 
   const todayDocket =
     isNewDocket && existingDocketsQuery.data
@@ -117,9 +128,11 @@ export function DocketEditPage() {
   // A docket already exists for today: send the subbie to it instead of a new one.
   useEffect(() => {
     if (todayDocket) {
-      navigate(buildDocketEditRoute(todayDocket.id, company?.projectId), { replace: true });
+      navigate(buildDocketEditRoute(todayDocket.id, company?.projectId, company?.id), {
+        replace: true,
+      });
     }
-  }, [todayDocket, company?.projectId, navigate]);
+  }, [todayDocket, company?.projectId, company?.id, navigate]);
 
   // Keep the spinner up until the company, lots, and the docket/existing-docket
   // read have all settled — and while a redirect to today's docket is pending.
@@ -159,10 +172,9 @@ export function DocketEditPage() {
       };
       setDocket(newDocket);
       // Update URL to show docket ID
-      const projectQuery = company?.projectId
-        ? `?projectId=${encodeURIComponent(company.projectId)}`
-        : '';
-      navigate(`/subcontractor-portal/docket/${newDocket.id}${projectQuery}`, { replace: true });
+      navigate(buildDocketEditRoute(newDocket.id, company?.projectId, company?.id), {
+        replace: true,
+      });
       return newDocket;
     } catch (err) {
       logError('Error creating docket:', err);
@@ -377,9 +389,24 @@ export function DocketEditPage() {
   // Get approved employees/plant only
   const approvedEmployees = company?.employees.filter((e) => e.status === 'approved') || [];
   const approvedPlant = company?.plant.filter((p) => p.status === 'approved') || [];
-  const myCompanyLink = company?.projectId
-    ? `/my-company?projectId=${encodeURIComponent(company.projectId)}`
-    : '/my-company';
+  const myCompanyLink = company
+    ? buildPortalCompanyScopedPath('/my-company', {
+        projectId: company.projectId,
+        subcontractorCompanyId: company.id,
+      })
+    : buildPortalCompanyScopedPath('/my-company', {
+        projectId: requestedProjectId,
+        subcontractorCompanyId: requestedSubcontractorCompanyId,
+      });
+  const portalPath = company
+    ? buildPortalCompanyScopedPath('/subcontractor-portal', {
+        projectId: company.projectId,
+        subcontractorCompanyId: company.id,
+      })
+    : buildPortalCompanyScopedPath('/subcontractor-portal', {
+        projectId: requestedProjectId,
+        subcontractorCompanyId: requestedSubcontractorCompanyId,
+      });
 
   // Total cost
   const totalCost = docket ? getDocketDisplayTotalCost(docket) : 0;
@@ -396,7 +423,7 @@ export function DocketEditPage() {
   }
 
   if (error) {
-    return <DocketEditError message={error} />;
+    return <DocketEditError message={error} backTo={portalPath} />;
   }
 
   return (
@@ -406,6 +433,7 @@ export function DocketEditPage() {
         isNewDocket={isNewDocket}
         projectName={company?.projectName}
         today={today}
+        backTo={portalPath}
       />
 
       <DocketEditNotices

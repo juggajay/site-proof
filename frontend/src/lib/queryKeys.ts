@@ -56,8 +56,17 @@ export const queryKeys = {
     ['pending-subcontractor-invitation', userId ?? 'anonymous'] as const,
   // Subbie-facing "My Company" read; user-scoped so one subbie's cache never
   // leaks to another account in the same browser session (commit 9574ced).
-  myCompany: (userId: string | null | undefined, projectId: string | null | undefined) =>
-    ['my-company', userId ?? 'anonymous', projectId ?? 'default'] as const,
+  myCompany: (
+    userId: string | null | undefined,
+    projectId: string | null | undefined,
+    subcontractorCompanyId?: string | null | undefined,
+  ) =>
+    [
+      'my-company',
+      userId ?? 'anonymous',
+      projectId ?? 'default',
+      subcontractorCompanyId ?? 'default-company',
+    ] as const,
 
   // Users & Auth
   profile: ['profile'] as const,
@@ -84,24 +93,96 @@ export const queryKeys = {
     ['portal-companies', userId ?? 'anonymous'] as const,
   portalDashboard: (userId: string | null | undefined) =>
     ['portal-dashboard', userId ?? 'anonymous'] as const,
-  portalDockets: (userId: string | null | undefined, projectId: string | null | undefined) =>
-    ['portal-dockets', userId ?? 'anonymous', projectId ?? 'no-project'] as const,
+  portalDockets: (
+    userId: string | null | undefined,
+    projectId: string | null | undefined,
+    subcontractorCompanyId?: string | null | undefined,
+  ) =>
+    [
+      'portal-dockets',
+      userId ?? 'anonymous',
+      projectId ?? 'no-project',
+      subcontractorCompanyId ?? 'all-companies',
+    ] as const,
   portalDocket: (userId: string | null | undefined, docketId: string | null | undefined) =>
     ['portal-docket', userId ?? 'anonymous', docketId ?? 'no-docket'] as const,
-  portalDocketEditLots: (userId: string | null | undefined, projectId: string | null | undefined) =>
-    ['portal-docket-edit-lots', userId ?? 'anonymous', projectId ?? 'no-project'] as const,
-  portalNCRs: (userId: string | null | undefined, projectId: string | null | undefined) =>
-    ['portal-ncrs', userId ?? 'anonymous', projectId ?? 'no-project'] as const,
-  portalTestResults: (userId: string | null | undefined, projectId: string | null | undefined) =>
-    ['portal-test-results', userId ?? 'anonymous', projectId ?? 'no-project'] as const,
-  portalITPs: (userId: string | null | undefined, projectId: string | null | undefined) =>
-    ['portal-itps', userId ?? 'anonymous', projectId ?? 'no-project'] as const,
-  portalHoldPoints: (userId: string | null | undefined, projectId: string | null | undefined) =>
-    ['portal-hold-points', userId ?? 'anonymous', projectId ?? 'no-project'] as const,
-  portalDocuments: (userId: string | null | undefined, projectId: string | null | undefined) =>
-    ['portal-documents', userId ?? 'anonymous', projectId ?? 'no-project'] as const,
-  portalAssignedWork: (userId: string | null | undefined, projectId: string | null | undefined) =>
-    ['portal-assigned-work', userId ?? 'anonymous', projectId ?? 'no-project'] as const,
+  portalDocketEditLots: (
+    userId: string | null | undefined,
+    projectId: string | null | undefined,
+    subcontractorCompanyId?: string | null | undefined,
+  ) =>
+    [
+      'portal-docket-edit-lots',
+      userId ?? 'anonymous',
+      projectId ?? 'no-project',
+      subcontractorCompanyId ?? 'default-company',
+    ] as const,
+  portalNCRs: (
+    userId: string | null | undefined,
+    projectId: string | null | undefined,
+    subcontractorCompanyId?: string | null | undefined,
+  ) =>
+    [
+      'portal-ncrs',
+      userId ?? 'anonymous',
+      projectId ?? 'no-project',
+      subcontractorCompanyId ?? 'default-company',
+    ] as const,
+  portalTestResults: (
+    userId: string | null | undefined,
+    projectId: string | null | undefined,
+    subcontractorCompanyId?: string | null | undefined,
+  ) =>
+    [
+      'portal-test-results',
+      userId ?? 'anonymous',
+      projectId ?? 'no-project',
+      subcontractorCompanyId ?? 'default-company',
+    ] as const,
+  portalITPs: (
+    userId: string | null | undefined,
+    projectId: string | null | undefined,
+    subcontractorCompanyId?: string | null | undefined,
+  ) =>
+    [
+      'portal-itps',
+      userId ?? 'anonymous',
+      projectId ?? 'no-project',
+      subcontractorCompanyId ?? 'default-company',
+    ] as const,
+  portalHoldPoints: (
+    userId: string | null | undefined,
+    projectId: string | null | undefined,
+    subcontractorCompanyId?: string | null | undefined,
+  ) =>
+    [
+      'portal-hold-points',
+      userId ?? 'anonymous',
+      projectId ?? 'no-project',
+      subcontractorCompanyId ?? 'default-company',
+    ] as const,
+  portalDocuments: (
+    userId: string | null | undefined,
+    projectId: string | null | undefined,
+    subcontractorCompanyId?: string | null | undefined,
+  ) =>
+    [
+      'portal-documents',
+      userId ?? 'anonymous',
+      projectId ?? 'no-project',
+      subcontractorCompanyId ?? 'default-company',
+    ] as const,
+  portalAssignedWork: (
+    userId: string | null | undefined,
+    projectId: string | null | undefined,
+    subcontractorCompanyId?: string | null | undefined,
+  ) =>
+    [
+      'portal-assigned-work',
+      userId ?? 'anonymous',
+      projectId ?? 'no-project',
+      subcontractorCompanyId ?? 'default-company',
+    ] as const,
 
   // Reports
   reports: (projectId: string) => ['reports', projectId] as const,

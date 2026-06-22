@@ -26,6 +26,7 @@ import { queryKeys } from '@/lib/queryKeys';
 import { useAuth } from '@/lib/auth';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { cn } from '@/lib/utils';
+import { buildPortalCompanyQuery } from '@/pages/subcontractor-portal/portalCompanyScope';
 import { useSubbieShellContext } from '../subbieShellContext';
 
 // ── Hold-point shapes (classic SubcontractorHoldPointsPage contract) ──────────
@@ -223,18 +224,21 @@ function TestResultCard({ test }: { test: TestResult & { requirement?: string } 
 
 export function QualityScreen() {
   const { user } = useAuth();
-  const { projectId, isModuleEnabled } = useSubbieShellContext();
+  const { projectId, subcontractorCompanyId, isModuleEnabled } = useSubbieShellContext();
 
   const holdsEnabled = isModuleEnabled('holdPoints');
   const testsEnabled = isModuleEnabled('testResults');
   const eitherEnabled = holdsEnabled || testsEnabled;
   const encodedProjectId = projectId ? encodeURIComponent(projectId) : '';
+  const projectQuery = buildPortalCompanyQuery({ projectId, subcontractorCompanyId });
+  const parentPath = `/p${projectQuery}`;
 
   const holdPointsQuery = useQuery({
-    queryKey: queryKeys.portalHoldPoints(user?.id, projectId),
+    queryKey: queryKeys.portalHoldPoints(user?.id, projectId, subcontractorCompanyId),
     queryFn: async () => {
+      const scopeQuery = buildPortalCompanyQuery({ subcontractorCompanyId });
       const res = await apiFetch<{ holdPoints: ApiHoldPoint[] }>(
-        `/api/holdpoints/project/${encodedProjectId}?subcontractorView=true`,
+        `/api/holdpoints/project/${encodedProjectId}${scopeQuery ? `${scopeQuery}&` : '?'}subcontractorView=true`,
       );
       return (res.holdPoints || []).map(normalizeHoldPoint);
     },
@@ -242,10 +246,10 @@ export function QualityScreen() {
   });
 
   const testsQuery = useQuery({
-    queryKey: queryKeys.portalTestResults(user?.id, projectId),
+    queryKey: queryKeys.portalTestResults(user?.id, projectId, subcontractorCompanyId),
     queryFn: async () => {
       const res = await apiFetch<{ testResults?: ApiTestResult[] }>(
-        `/api/test-results?projectId=${encodedProjectId}&subcontractorView=true`,
+        `/api/test-results${projectQuery}${projectQuery ? '&' : '?'}subcontractorView=true`,
       );
       return (res.testResults || []).map(normalizeTestResult);
     },
@@ -276,7 +280,7 @@ export function QualityScreen() {
       <ShellScreen
         variant="inner"
         title="Holds &amp; Tests"
-        parent="/p"
+        parent={parentPath}
         sub={<span className="text-muted-foreground">Read-only</span>}
       >
         <div className="flex flex-col items-center gap-3 py-16 text-center">
@@ -294,7 +298,7 @@ export function QualityScreen() {
     <ShellScreen
       variant="inner"
       title="Holds &amp; Tests"
-      parent="/p"
+      parent={parentPath}
       sub={
         <span className="text-muted-foreground">
           Read-only — the head contractor releases these

@@ -101,6 +101,7 @@ export function buildSubcontractorPortalCompanyResponse(
       status: company.status,
       availableProjects: subcontractorUsers.map((link) => ({
         id: link.subcontractorCompany.id,
+        subcontractorCompanyId: link.subcontractorCompany.id,
         companyName: link.subcontractorCompany.companyName,
         projectId: link.subcontractorCompany.projectId,
         projectName: link.subcontractorCompany.project?.name || '',

@@ -37,6 +37,7 @@ describe('DocketEditPagePanels', () => {
         isNewDocket={false}
         projectName="North Upgrade"
         today="2026-06-07"
+        backTo="/subcontractor-portal?projectId=project-1&subcontractorCompanyId=subbie-1"
       />,
     );
 
@@ -46,7 +47,7 @@ describe('DocketEditPagePanels', () => {
   });
 
   it('renders the error fallback with the portal link', () => {
-    renderInRouter(<DocketEditError message="Docket not found" />);
+    renderInRouter(<DocketEditError message="Docket not found" backTo="/subcontractor-portal" />);
 
     expect(screen.getByText('Docket not found')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /back to portal/i })).toHaveAttribute(

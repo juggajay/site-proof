@@ -4,6 +4,7 @@ import {
   activeSubcontractorCompanyWhere,
   assertProjectAllowsWrite,
   checkProjectAccess,
+  hasPortalModuleEnabled,
   isStandaloneSubcontractorPortalIdentity,
   requireSubcontractorPortalModuleAccess,
 } from '../../../lib/projectAccess.js';
@@ -112,6 +113,7 @@ export async function requireItpProjectAccess(user: AuthUser, projectId: string)
 export async function getAssignedItpSubcontractorLotIds(
   user: AuthUser,
   projectId: string,
+  requestedSubcontractorCompanyId?: string | null,
 ): Promise<string[] | null> {
   if (!isItpSubcontractorUser(user)) {
     return null;
@@ -122,10 +124,21 @@ export async function getAssignedItpSubcontractorLotIds(
       userId: user.userId,
       subcontractorCompany: activeSubcontractorCompanyWhere({ projectId }),
     },
-    select: { subcontractorCompanyId: true },
+    select: {
+      subcontractorCompanyId: true,
+      subcontractorCompany: { select: { portalAccess: true } },
+    },
   });
 
-  const subcontractorCompanyIds = subcontractorUsers.map((link) => link.subcontractorCompanyId);
+  const accessibleSubcontractorCompanyIds = subcontractorUsers
+    .filter((link) => hasPortalModuleEnabled(link.subcontractorCompany.portalAccess, 'itps'))
+    .map((link) => link.subcontractorCompanyId);
+  const subcontractorCompanyIds = requestedSubcontractorCompanyId
+    ? accessibleSubcontractorCompanyIds.includes(requestedSubcontractorCompanyId)
+      ? [requestedSubcontractorCompanyId]
+      : []
+    : accessibleSubcontractorCompanyIds;
+
   if (subcontractorCompanyIds.length === 0) {
     return [];
   }
@@ -161,10 +174,15 @@ export async function requireItpLotAccess(
   projectId: string,
   lotId: string,
   message = 'Access denied',
+  requestedSubcontractorCompanyId?: string | null,
 ): Promise<void> {
   await requireItpProjectAccess(user, projectId);
 
-  const assignedLotIds = await getAssignedItpSubcontractorLotIds(user, projectId);
+  const assignedLotIds = await getAssignedItpSubcontractorLotIds(
+    user,
+    projectId,
+    requestedSubcontractorCompanyId,
+  );
   if (assignedLotIds !== null && !assignedLotIds.includes(lotId)) {
     throw AppError.forbidden(message);
   }

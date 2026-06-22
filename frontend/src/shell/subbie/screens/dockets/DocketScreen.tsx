@@ -61,6 +61,7 @@ import { useDocketEntrySheetState } from '@/pages/subcontractor-portal/useDocket
 import { useDocketSubmitActions } from '@/pages/subcontractor-portal/useDocketSubmitActions';
 import { formatCurrency } from '@/pages/subcontractor-portal/subcontractorDashboardHelpers';
 import { LOTS_MODULE_DISABLED_DOCKET_MESSAGE } from '@/pages/subcontractor-portal/subcontractorDashboardHelpers';
+import { buildPortalCompanyQuery } from '@/pages/subcontractor-portal/portalCompanyScope';
 import { LabourSheet, PlantSheet } from './DocketEntrySheets';
 
 // Stable empty reference so an empty lot list keeps the same identity per render.
@@ -93,6 +94,7 @@ export function DocketScreen() {
   const { isOnline } = useOfflineStatus();
   const userId = user?.id;
   const requestedProjectId = searchParams.get('projectId');
+  const requestedSubcontractorCompanyId = searchParams.get('subcontractorCompanyId');
   const isNewDocket = !docketId || docketId === 'new';
 
   const [saving, setSaving] = useState(false);
@@ -109,7 +111,11 @@ export function DocketScreen() {
   const today = formatDateKey();
 
   // ── Bootstrap reads (classic query hooks, shared cache) ─────────────────────
-  const companyQuery = useMyCompanyQuery(userId, requestedProjectId);
+  const companyQuery = useMyCompanyQuery(
+    userId,
+    requestedProjectId,
+    requestedSubcontractorCompanyId,
+  );
   const company = companyQuery.data ?? null;
 
   const lotsQuery = useAssignedLotsQuery(userId, company?.projectId);
@@ -117,7 +123,12 @@ export function DocketScreen() {
   const lotsModuleDisabled = isForbidden(lotsQuery.error);
 
   const docketQuery = useDocketEditQuery(userId, docketId, !isNewDocket);
-  const existingDocketsQuery = useExistingDocketsQuery(userId, company?.projectId, isNewDocket);
+  const existingDocketsQuery = useExistingDocketsQuery(
+    userId,
+    company?.projectId,
+    company?.id,
+    isNewDocket,
+  );
 
   const todayDocket =
     isNewDocket && existingDocketsQuery.data
@@ -171,12 +182,13 @@ export function DocketScreen() {
   // A docket already exists for today → redirect to it (history.replace), staying in /p.
   useEffect(() => {
     if (todayDocket) {
-      const projectQuery = company?.projectId
-        ? `?projectId=${encodeURIComponent(company.projectId)}`
-        : '';
-      navigate(`/p/docket/${encodeURIComponent(todayDocket.id)}${projectQuery}`, { replace: true });
+      const query = new URLSearchParams();
+      if (company?.projectId) query.set('projectId', company.projectId);
+      if (company?.id) query.set('subcontractorCompanyId', company.id);
+      const queryString = query.toString() ? `?${query.toString()}` : '';
+      navigate(`/p/docket/${encodeURIComponent(todayDocket.id)}${queryString}`, { replace: true });
     }
-  }, [todayDocket, company?.projectId, navigate]);
+  }, [todayDocket, company?.projectId, company?.id, navigate]);
 
   const loading =
     companyQuery.isLoading ||
@@ -219,10 +231,11 @@ export function DocketScreen() {
       // navigate below must not re-seed (see seededDocketIdRef above).
       seededDocketIdRef.current = newDocket.id;
       setDocket(newDocket);
-      const projectQuery = company?.projectId
-        ? `?projectId=${encodeURIComponent(company.projectId)}`
-        : '';
-      navigate(`/p/docket/${encodeURIComponent(newDocket.id)}${projectQuery}`, { replace: true });
+      const query = new URLSearchParams();
+      if (company?.projectId) query.set('projectId', company.projectId);
+      if (company?.id) query.set('subcontractorCompanyId', company.id);
+      const queryString = query.toString() ? `?${query.toString()}` : '';
+      navigate(`/p/docket/${encodeURIComponent(newDocket.id)}${queryString}`, { replace: true });
       return newDocket;
     } catch (err) {
       logError('Error creating docket:', err);
@@ -469,7 +482,10 @@ export function DocketScreen() {
   const isQueried = docket?.status === 'queried';
   const isRejected = docket?.status === 'rejected';
 
-  const backPath = '/p';
+  const backPath = `/p${buildPortalCompanyQuery({
+    projectId: company?.projectId ?? requestedProjectId,
+    subcontractorCompanyId: company?.id ?? requestedSubcontractorCompanyId,
+  })}`;
 
   // ── Loading / error guards ──────────────────────────────────────────────────
   if (loading) {
@@ -516,7 +532,7 @@ export function DocketScreen() {
             <button
               type="button"
               className="shell-primary-btn"
-              onClick={() => navigate('/p')}
+              onClick={() => navigate(backPath)}
               aria-label="Done"
             >
               Done

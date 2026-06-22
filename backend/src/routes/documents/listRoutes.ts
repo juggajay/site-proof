@@ -35,11 +35,13 @@ type CreateDocumentListRouterDependencies = {
     user: AuthUser,
     projectId: string,
     where: Prisma.DocumentWhereInput,
+    requestedSubcontractorCompanyId?: string | null,
   ) => Promise<void>;
   applyDocumentPortalCategoryScope: (
     user: AuthUser,
     projectId: string,
     where: Prisma.DocumentWhereInput,
+    requestedSubcontractorCompanyId?: string | null,
   ) => Promise<void>;
 };
 
@@ -80,6 +82,11 @@ export function createDocumentListRouter({
       const category = getOptionalQueryString(req.query, 'category', maxCategoryLength);
       const documentType = getOptionalQueryString(req.query, 'documentType', maxDocumentTypeLength);
       const lotId = getOptionalQueryString(req.query, 'lotId', maxDocumentIdLength);
+      const requestedSubcontractorCompanyId = getOptionalQueryString(
+        req.query,
+        'subcontractorCompanyId',
+        maxDocumentIdLength,
+      );
       const search = getOptionalQueryString(req.query, 'search', maxSearchLength);
       const dateFrom = getOptionalDateQuery(req.query, 'dateFrom');
       const dateTo = getOptionalDateQuery(req.query, 'dateTo', true);
@@ -113,9 +120,14 @@ export function createDocumentListRouter({
         ];
       }
 
-      await applyDocumentReadScope(user, projectId, where);
+      await applyDocumentReadScope(user, projectId, where, requestedSubcontractorCompanyId);
       if (!category) {
-        await applyDocumentPortalCategoryScope(user, projectId, where);
+        await applyDocumentPortalCategoryScope(
+          user,
+          projectId,
+          where,
+          requestedSubcontractorCompanyId,
+        );
       }
 
       const pagination = parsePagination(req.query);
