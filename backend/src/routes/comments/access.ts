@@ -3,8 +3,9 @@ import { AppError } from '../../lib/AppError.js';
 import {
   activeSubcontractorCompanyWhere,
   checkProjectAccess,
+  getSubcontractorPortalModuleAccessDeniedMessage,
+  hasPortalModuleEnabled,
   isStandaloneSubcontractorPortalIdentity,
-  requireSubcontractorPortalModuleAccess,
   type SubcontractorPortalAccessKey,
 } from '../../lib/projectAccess.js';
 
@@ -74,40 +75,62 @@ async function hasAssignedSubcontractorLotAccess(
   userId: string,
   projectId: string,
   lotId: string,
-): Promise<boolean> {
-  const subcontractorUser = await prisma.subcontractorUser.findFirst({
+  module: SubcontractorPortalAccessKey,
+): Promise<'allowed' | 'module-disabled' | 'not-assigned'> {
+  const subcontractorUsers = await prisma.subcontractorUser.findMany({
     where: {
       userId,
       subcontractorCompany: activeSubcontractorCompanyWhere({ projectId }),
     },
-    select: { subcontractorCompanyId: true },
+    select: {
+      subcontractorCompanyId: true,
+      subcontractorCompany: {
+        select: { portalAccess: true },
+      },
+    },
   });
 
-  if (!subcontractorUser) {
-    return false;
+  if (subcontractorUsers.length === 0) {
+    return 'not-assigned';
   }
 
+  const subcontractorCompanyIds = subcontractorUsers.map((link) => link.subcontractorCompanyId);
   const [assignment, legacyLot] = await Promise.all([
-    prisma.lotSubcontractorAssignment.findFirst({
+    prisma.lotSubcontractorAssignment.findMany({
       where: {
         projectId,
         lotId,
-        subcontractorCompanyId: subcontractorUser.subcontractorCompanyId,
+        subcontractorCompanyId: { in: subcontractorCompanyIds },
         status: 'active',
       },
-      select: { id: true },
+      select: { subcontractorCompanyId: true },
     }),
     prisma.lot.findFirst({
       where: {
         id: lotId,
         projectId,
-        assignedSubcontractorId: subcontractorUser.subcontractorCompanyId,
+        assignedSubcontractorId: { in: subcontractorCompanyIds },
       },
-      select: { id: true },
+      select: { assignedSubcontractorId: true },
     }),
   ]);
 
-  return Boolean(assignment || legacyLot);
+  const assignedCompanyIds = new Set([
+    ...assignment.map((record) => record.subcontractorCompanyId),
+    ...(legacyLot?.assignedSubcontractorId ? [legacyLot.assignedSubcontractorId] : []),
+  ]);
+
+  if (assignedCompanyIds.size === 0) {
+    return 'not-assigned';
+  }
+
+  const assignedCompanyHasModule = subcontractorUsers.some(
+    (link) =>
+      assignedCompanyIds.has(link.subcontractorCompanyId) &&
+      hasPortalModuleEnabled(link.subcontractorCompany.portalAccess, module),
+  );
+
+  return assignedCompanyHasModule ? 'allowed' : 'module-disabled';
 }
 
 async function getCommentEntityAccessTarget(
@@ -251,24 +274,25 @@ export async function requireCommentEntityAccess(
   const target = await getCommentEntityAccessTarget(entityType, entityId);
 
   if (isSubcontractorUser(user)) {
-    if (
-      !target.subcontractorLotScoped ||
-      !target.lotId ||
-      !(await hasAssignedSubcontractorLotAccess(user.id, target.projectId, target.lotId))
-    ) {
+    if (!target.subcontractorLotScoped || !target.lotId || !target.subcontractorPortalModule) {
       throw AppError.forbidden('Access denied');
     }
 
-    if (!target.subcontractorPortalModule) {
+    const lotAccess = await hasAssignedSubcontractorLotAccess(
+      user.id,
+      target.projectId,
+      target.lotId,
+      target.subcontractorPortalModule,
+    );
+    if (lotAccess === 'not-assigned') {
       throw AppError.forbidden('Access denied');
     }
 
-    await requireSubcontractorPortalModuleAccess({
-      userId: user.id,
-      role: user.roleInCompany,
-      projectId: target.projectId,
-      module: target.subcontractorPortalModule,
-    });
+    if (lotAccess === 'module-disabled') {
+      throw AppError.forbidden(
+        getSubcontractorPortalModuleAccessDeniedMessage(target.subcontractorPortalModule),
+      );
+    }
 
     return target.projectId;
   }

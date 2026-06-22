@@ -271,6 +271,12 @@ export function hasPortalModuleEnabled(
   return readPortalAccess(portalAccess)[module];
 }
 
+export function getSubcontractorPortalModuleAccessDeniedMessage(
+  module: SubcontractorPortalAccessKey,
+): string {
+  return `${PORTAL_ACCESS_LABELS[module]} portal access is not enabled for this subcontractor`;
+}
+
 export async function hasSubcontractorPortalModuleAccess({
   userId,
   role,
@@ -295,7 +301,7 @@ export async function hasSubcontractorPortalModuleAccess({
     return false;
   }
 
-  const subcontractorUser = await prisma.subcontractorUser.findFirst({
+  const subcontractorUsers = await prisma.subcontractorUser.findMany({
     where: {
       userId,
       subcontractorCompany: activeSubcontractorCompanyWhere({ projectId }),
@@ -307,11 +313,9 @@ export async function hasSubcontractorPortalModuleAccess({
     },
   });
 
-  if (!subcontractorUser) {
-    return false;
-  }
-
-  return hasPortalModuleEnabled(subcontractorUser.subcontractorCompany.portalAccess, module);
+  return subcontractorUsers.some((subcontractorUser) =>
+    hasPortalModuleEnabled(subcontractorUser.subcontractorCompany.portalAccess, module),
+  );
 }
 
 export async function requireSubcontractorPortalModuleAccess(args: {
@@ -321,9 +325,7 @@ export async function requireSubcontractorPortalModuleAccess(args: {
   module: SubcontractorPortalAccessKey;
 }): Promise<void> {
   if (!(await hasSubcontractorPortalModuleAccess(args))) {
-    throw AppError.forbidden(
-      `${PORTAL_ACCESS_LABELS[args.module]} portal access is not enabled for this subcontractor`,
-    );
+    throw AppError.forbidden(getSubcontractorPortalModuleAccessDeniedMessage(args.module));
   }
 }
 

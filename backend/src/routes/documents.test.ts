@@ -2267,6 +2267,195 @@ describe('Documents API', () => {
       }
     }, 60000);
 
+    it('should scope subcontractor documents across all active linked companies', async () => {
+      const suffix = `${Date.now()}-${crypto.randomUUID()}`;
+      const subRes = await request(app)
+        .post('/api/auth/register')
+        .send({
+          email: `doc-sub-multi-${suffix}@example.com`,
+          password: 'SecureP@ssword123!',
+          fullName: 'Document Multi Company Subcontractor',
+          tosAccepted: true,
+        });
+      const subToken = subRes.body.token;
+      const subUserId = subRes.body.user.id;
+
+      const disabledCompany = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `Document Disabled Subcontractor ${suffix}`,
+          primaryContactName: 'Document Disabled Sub',
+          primaryContactEmail: `doc-disabled-sub-${suffix}@example.com`,
+          status: 'approved',
+          portalAccess: { documents: false },
+        },
+      });
+      const enabledCompany = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `Document Enabled Subcontractor ${suffix}`,
+          primaryContactName: 'Document Enabled Sub',
+          primaryContactEmail: `doc-enabled-sub-${suffix}@example.com`,
+          status: 'approved',
+          portalAccess: { documents: true },
+        },
+      });
+      const enabledLot = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `DOC-MULTI-LOT-${suffix}`,
+          status: 'not_started',
+          lotType: 'chainage',
+          activityType: 'Earthworks',
+        },
+      });
+      const disabledDocument = await prisma.document.create({
+        data: {
+          projectId,
+          lotId,
+          documentType: 'photo',
+          category: 'Site Photos',
+          filename: `multi-disabled-${suffix}.pdf`,
+          fileUrl: `/uploads/documents/multi-disabled-${suffix}.pdf`,
+          fileSize: validPdfBytes.length,
+          mimeType: 'application/pdf',
+          uploadedById: userId,
+        },
+      });
+      const enabledDocument = await prisma.document.create({
+        data: {
+          projectId,
+          lotId: enabledLot.id,
+          documentType: 'photo',
+          category: 'Site Photos',
+          filename: `multi-enabled-${suffix}.pdf`,
+          fileUrl: `/uploads/documents/multi-enabled-${suffix}.pdf`,
+          fileSize: validPdfBytes.length,
+          mimeType: 'application/pdf',
+          uploadedById: userId,
+        },
+      });
+      let uploadedDocumentId: string | null = null;
+
+      try {
+        await prisma.user.update({
+          where: { id: subUserId },
+          data: { companyId: null, roleInCompany: 'subcontractor' },
+        });
+        await prisma.subcontractorUser.create({
+          data: {
+            userId: subUserId,
+            subcontractorCompanyId: disabledCompany.id,
+            role: 'user',
+          },
+        });
+        await prisma.subcontractorUser.create({
+          data: {
+            userId: subUserId,
+            subcontractorCompanyId: enabledCompany.id,
+            role: 'user',
+          },
+        });
+        await prisma.lotSubcontractorAssignment.create({
+          data: {
+            projectId,
+            lotId,
+            subcontractorCompanyId: disabledCompany.id,
+            status: 'active',
+            assignedById: userId,
+          },
+        });
+        await prisma.lotSubcontractorAssignment.create({
+          data: {
+            projectId,
+            lotId: enabledLot.id,
+            subcontractorCompanyId: enabledCompany.id,
+            status: 'active',
+            assignedById: userId,
+          },
+        });
+
+        const listRes = await request(app)
+          .get(`/api/documents/${projectId}?subcontractorView=true`)
+          .set('Authorization', `Bearer ${subToken}`);
+
+        expect(listRes.status).toBe(200);
+        const returnedDocumentIds = listRes.body.documents.map(
+          (document: { id: string }) => document.id,
+        );
+        expect(returnedDocumentIds).toContain(enabledDocument.id);
+        expect(returnedDocumentIds).not.toContain(disabledDocument.id);
+
+        const enabledSignedUrlRes = await request(app)
+          .post(`/api/documents/${enabledDocument.id}/signed-url`)
+          .set('Authorization', `Bearer ${subToken}`);
+        expect(enabledSignedUrlRes.status).toBe(200);
+
+        const disabledSignedUrlRes = await request(app)
+          .post(`/api/documents/${disabledDocument.id}/signed-url`)
+          .set('Authorization', `Bearer ${subToken}`);
+        expect(disabledSignedUrlRes.status).toBe(403);
+
+        const uploadPath = writeTestUpload(uploadDir, `multi-company-upload-${suffix}.pdf`);
+        try {
+          const uploadRes = await request(app)
+            .post('/api/documents/upload')
+            .set('Authorization', `Bearer ${subToken}`)
+            .field('projectId', projectId)
+            .field('lotId', enabledLot.id)
+            .field('documentType', 'photo')
+            .field('category', 'Site Photos')
+            .attach('file', uploadPath);
+
+          uploadedDocumentId = expectCreatedDocumentUploadResponse(uploadRes);
+        } finally {
+          if (fs.existsSync(uploadPath)) fs.unlinkSync(uploadPath);
+        }
+
+        const patchRes = await request(app)
+          .patch(`/api/documents/${uploadedDocumentId}`)
+          .set('Authorization', `Bearer ${subToken}`)
+          .send({ caption: 'Multi-company subcontractor update' });
+        expect(patchRes.status).toBe(200);
+        expect(patchRes.body.caption).toBe('Multi-company subcontractor update');
+
+        const deleteRes = await request(app)
+          .delete(`/api/documents/${uploadedDocumentId}`)
+          .set('Authorization', `Bearer ${subToken}`);
+        expect(deleteRes.status).toBe(204);
+        uploadedDocumentId = null;
+      } finally {
+        if (uploadedDocumentId) {
+          const uploadedDocument = await prisma.document.findUnique({
+            where: { id: uploadedDocumentId },
+            select: { fileUrl: true },
+          });
+          const uploadedFileUrl = uploadedDocument?.fileUrl;
+          if (uploadedFileUrl?.startsWith('/uploads/documents/')) {
+            const uploadedPath = path.join(uploadDir, path.basename(uploadedFileUrl));
+            if (fs.existsSync(uploadedPath)) fs.unlinkSync(uploadedPath);
+          }
+          await prisma.document.deleteMany({ where: { id: uploadedDocumentId } });
+        }
+        await prisma.documentSignedUrlToken.deleteMany({
+          where: { documentId: { in: [disabledDocument.id, enabledDocument.id] } },
+        });
+        await prisma.document.deleteMany({
+          where: { id: { in: [disabledDocument.id, enabledDocument.id] } },
+        });
+        await prisma.lotSubcontractorAssignment.deleteMany({
+          where: { subcontractorCompanyId: { in: [disabledCompany.id, enabledCompany.id] } },
+        });
+        await prisma.lot.delete({ where: { id: enabledLot.id } }).catch(() => {});
+        await prisma.subcontractorUser.deleteMany({ where: { userId: subUserId } });
+        await prisma.subcontractorCompany.deleteMany({
+          where: { id: { in: [disabledCompany.id, enabledCompany.id] } },
+        });
+        await prisma.emailVerificationToken.deleteMany({ where: { userId: subUserId } });
+        await prisma.user.delete({ where: { id: subUserId } }).catch(() => {});
+      }
+    }, 60000);
+
     it('should filter subcontractor document lists by category portal modules', async () => {
       const suffix = `${Date.now()}-${crypto.randomUUID()}`;
       const subRes = await request(app)
