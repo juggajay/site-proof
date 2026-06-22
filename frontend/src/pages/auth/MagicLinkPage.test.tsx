@@ -32,6 +32,7 @@ import { MagicLinkPage } from './MagicLinkPage';
 
 afterEach(() => {
   vi.clearAllMocks();
+  vi.restoreAllMocks();
   window.history.replaceState(null, document.title, '/');
 });
 
@@ -73,4 +74,37 @@ describe('MagicLinkPage', () => {
     expect(mocks.apiFetch).not.toHaveBeenCalled();
     expect(mocks.setToken).not.toHaveBeenCalled();
   });
+
+  it('preserves safe invite redirects after successful verification', async () => {
+    mocks.apiFetch.mockResolvedValue({ token: 'jwt-token' });
+    mocks.setToken.mockResolvedValue({
+      id: 'user-1',
+      email: 'user@example.com',
+      role: 'member',
+      roleInCompany: 'member',
+      companyId: 'company-1',
+    });
+
+    renderWithProviders(<MagicLinkPage />, {
+      initialEntries: [
+        '/auth/magic-link?token=magic_once&redirect=%2Fsubcontractor-portal%2Faccept-invite%3Fid%3Dinvite-1',
+      ],
+    });
+
+    await waitFor(() => {
+      expect(mocks.setToken).toHaveBeenCalledWith('jwt-token');
+    });
+
+    await waitFor(
+      () => {
+        expect(mocks.navigate).toHaveBeenCalledWith(
+          '/subcontractor-portal/accept-invite?id=invite-1',
+          {
+            replace: true,
+          },
+        );
+      },
+      { timeout: 3000 },
+    );
+  }, 8000);
 });

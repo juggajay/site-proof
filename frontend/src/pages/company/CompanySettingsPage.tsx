@@ -8,6 +8,7 @@ import { logError } from '@/lib/logger';
 import { DEFAULT_SUPPORT_EMAIL, normalizeSupportEmail } from '@/lib/contactLinks';
 import {
   getCompanyLoadErrorMessage,
+  isOwnershipTransferEligibleMember,
   toCompanyFormData,
   useCompanySettingsQuery,
   type Company,
@@ -241,8 +242,10 @@ export function CompanySettingsPage() {
 
     try {
       const data = await apiFetch<{ members: CompanyMember[] }>('/api/company/members');
-      // Filter out the current user (owner)
-      const otherMembers = data.members.filter((m: CompanyMember) => m.id !== user?.id);
+      // Only active members can receive company ownership.
+      const otherMembers = data.members.filter(
+        (m: CompanyMember) => m.id !== user?.id && isOwnershipTransferEligibleMember(m),
+      );
       setMembers(otherMembers);
     } catch (err) {
       setMembers([]);

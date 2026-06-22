@@ -103,6 +103,7 @@ export interface RoleOption {
 export const ROLE_OPTIONS: RoleOption[] = [
   { value: 'admin', label: 'Admin' },
   { value: 'project_manager', label: 'Project Manager' },
+  { value: 'site_manager', label: 'Site Manager' },
   { value: 'site_engineer', label: 'Site Engineer' },
   { value: 'quality_manager', label: 'Quality Manager' },
   { value: 'foreman', label: 'Foreman' },

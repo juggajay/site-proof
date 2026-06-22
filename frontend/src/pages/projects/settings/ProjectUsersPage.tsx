@@ -40,6 +40,7 @@ const ROLES = [
     description: 'Manage project settings and team',
   },
   { value: 'quality_manager', label: 'Quality Manager', description: 'Manage quality, ITPs, NCRs' },
+  { value: 'site_manager', label: 'Site Manager', description: 'Coordinate site operations' },
   { value: 'site_engineer', label: 'Site Engineer', description: 'Field quality and testing' },
   { value: 'foreman', label: 'Foreman', description: 'Manage lots and daily activities' },
   { value: 'viewer', label: 'Viewer', description: 'Read-only access' },
