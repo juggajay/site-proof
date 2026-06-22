@@ -24,7 +24,7 @@ describe('shapeLotDetailResponse (pure)', () => {
   it('head contractor: keeps edit contract fields, all assignments, and assignedSubcontractor', () => {
     const result = shapeLotDetailResponse(makeLot(), {
       isSubcontractor: false,
-      subcontractorCompanyId: null,
+      subcontractorCompanyIds: null,
       canViewBudgetAmount: true,
     });
 
@@ -44,7 +44,7 @@ describe('shapeLotDetailResponse (pure)', () => {
   it('subcontractor: filters assignments to the matching company', () => {
     const result = shapeLotDetailResponse(makeLot(), {
       isSubcontractor: true,
-      subcontractorCompanyId: 'sub-B',
+      subcontractorCompanyIds: ['sub-B'],
       canViewBudgetAmount: false,
     });
 
@@ -57,7 +57,7 @@ describe('shapeLotDetailResponse (pure)', () => {
   it('subcontractor: nulls assignedSubcontractor when the legacy assigned company differs', () => {
     const result = shapeLotDetailResponse(makeLot(), {
       isSubcontractor: true,
-      subcontractorCompanyId: 'sub-B', // lot.assignedSubcontractorId is 'sub-A'
+      subcontractorCompanyIds: ['sub-B'], // lot.assignedSubcontractorId is 'sub-A'
       canViewBudgetAmount: false,
     });
 
@@ -67,7 +67,7 @@ describe('shapeLotDetailResponse (pure)', () => {
   it('subcontractor: keeps assignedSubcontractor when the legacy assigned company matches', () => {
     const result = shapeLotDetailResponse(makeLot(), {
       isSubcontractor: true,
-      subcontractorCompanyId: 'sub-A',
+      subcontractorCompanyIds: ['sub-A'],
       canViewBudgetAmount: false,
     });
 
@@ -80,7 +80,7 @@ describe('shapeLotDetailResponse (pure)', () => {
     // Gated on isSubcontractor, not on a non-null company id.
     const result = shapeLotDetailResponse(makeLot(), {
       isSubcontractor: true,
-      subcontractorCompanyId: null,
+      subcontractorCompanyIds: null,
       canViewBudgetAmount: false,
     });
 
@@ -93,7 +93,7 @@ describe('shapeLotDetailResponse (pure)', () => {
     const lot = makeLot();
     shapeLotDetailResponse(lot, {
       isSubcontractor: true,
-      subcontractorCompanyId: 'sub-B',
+      subcontractorCompanyIds: ['sub-B'],
       canViewBudgetAmount: false,
     });
 

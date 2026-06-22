@@ -3,8 +3,9 @@ import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../lib/AppError.js';
 import { ROLE_GROUPS, hasRoleInGroup } from '../../lib/roles.js';
 import {
-  activeSubcontractorCompanyWhere,
+  getActiveSubcontractorPortalCompanyLinksForProject,
   getEffectiveProjectRole,
+  hasPortalModuleEnabled,
   isStandaloneSubcontractorPortalIdentity,
   requireProjectRoleExcludingSubcontractors as requireProjectRole,
   requireSubcontractorPortalModuleAccess,
@@ -42,28 +43,44 @@ async function getProjectSubcontractorCompanyId(
   userId: string,
   projectId: string,
 ): Promise<string | null> {
-  const subcontractorUser = await prisma.subcontractorUser.findFirst({
-    where: {
-      userId,
-      subcontractorCompany: activeSubcontractorCompanyWhere({ projectId }),
-    },
-    select: { subcontractorCompanyId: true },
-  });
+  return (await getProjectSubcontractorCompanyIds(userId, projectId))[0] ?? null;
+}
 
-  return subcontractorUser?.subcontractorCompanyId ?? null;
+async function getProjectSubcontractorCompanyIds(
+  userId: string,
+  projectId: string,
+  modules: SubcontractorPortalAccessKey[] = ['lots'],
+): Promise<string[]> {
+  const links = await getActiveSubcontractorPortalCompanyLinksForProject({ userId, projectId });
+  return [
+    ...new Set(
+      links
+        .filter((link) =>
+          modules.every((module) =>
+            hasPortalModuleEnabled(link.subcontractorCompany.portalAccess, module),
+          ),
+        )
+        .map((link) => link.subcontractorCompanyId),
+    ),
+  ];
 }
 
 async function hasAssignedSubcontractorLotAccess(
   user: AuthenticatedUser,
   projectId: string,
   lotId: string,
+  modules: SubcontractorPortalAccessKey[] = ['lots'],
 ): Promise<boolean> {
   if (!isSubcontractorUser(user)) {
     return true;
   }
 
-  const subcontractorCompanyId = await getProjectSubcontractorCompanyId(user.id, projectId);
-  if (!subcontractorCompanyId) {
+  const subcontractorCompanyIds = await getProjectSubcontractorCompanyIds(
+    user.id,
+    projectId,
+    modules,
+  );
+  if (subcontractorCompanyIds.length === 0) {
     return false;
   }
 
@@ -72,7 +89,7 @@ async function hasAssignedSubcontractorLotAccess(
       where: {
         projectId,
         lotId,
-        subcontractorCompanyId,
+        subcontractorCompanyId: { in: subcontractorCompanyIds },
         status: 'active',
       },
       select: { id: true },
@@ -81,7 +98,7 @@ async function hasAssignedSubcontractorLotAccess(
       where: {
         id: lotId,
         projectId,
-        assignedSubcontractorId: subcontractorCompanyId,
+        assignedSubcontractorId: { in: subcontractorCompanyIds },
       },
       select: { id: true },
     }),
@@ -94,9 +111,10 @@ async function requireLotReadAccess(
   lot: { id: string; projectId: string },
   user: AuthenticatedUser,
   message = 'You do not have access to this lot',
+  modules: SubcontractorPortalAccessKey[] = ['lots'],
 ): Promise<void> {
   if (isSubcontractorUser(user)) {
-    if (!(await hasAssignedSubcontractorLotAccess(user, lot.projectId, lot.id))) {
+    if (!(await hasAssignedSubcontractorLotAccess(user, lot.projectId, lot.id, modules))) {
       throw AppError.forbidden(message);
     }
     return;
@@ -117,6 +135,7 @@ export {
   requireSubcontractorLotPortalModules,
   requireProjectRole,
   getProjectSubcontractorCompanyId,
+  getProjectSubcontractorCompanyIds,
   hasAssignedSubcontractorLotAccess,
   requireLotReadAccess,
 };

@@ -2,8 +2,8 @@ import type { Request } from 'express';
 import { AppError } from '../../lib/AppError.js';
 import { prisma } from '../../lib/prisma.js';
 import {
-  activeSubcontractorCompanyWhere,
   checkProjectAccess,
+  getActiveSubcontractorPortalCompanyIdsForProject,
   getEffectiveProjectRole,
   isStandaloneSubcontractorPortalIdentity,
   requireInternalProjectAccess,
@@ -90,15 +90,13 @@ export async function hasAssignedSubcontractorLotAccess(
     return true;
   }
 
-  const subcontractorUser = await prisma.subcontractorUser.findFirst({
-    where: {
-      userId: user.id,
-      subcontractorCompany: activeSubcontractorCompanyWhere({ projectId }),
-    },
-    select: { subcontractorCompanyId: true },
+  const subcontractorCompanyIds = await getActiveSubcontractorPortalCompanyIdsForProject({
+    userId: user.id,
+    projectId,
+    module: 'holdPoints',
   });
 
-  if (!subcontractorUser) {
+  if (subcontractorCompanyIds.length === 0) {
     return false;
   }
 
@@ -107,7 +105,7 @@ export async function hasAssignedSubcontractorLotAccess(
       where: {
         projectId,
         lotId,
-        subcontractorCompanyId: subcontractorUser.subcontractorCompanyId,
+        subcontractorCompanyId: { in: subcontractorCompanyIds },
         status: 'active',
       },
       select: { id: true },
@@ -116,7 +114,7 @@ export async function hasAssignedSubcontractorLotAccess(
       where: {
         id: lotId,
         projectId,
-        assignedSubcontractorId: subcontractorUser.subcontractorCompanyId,
+        assignedSubcontractorId: { in: subcontractorCompanyIds },
       },
       select: { id: true },
     }),

@@ -2,9 +2,8 @@ import { prisma } from '../../lib/prisma.js';
 import { type AuthUser } from '../../lib/auth.js';
 import { AppError } from '../../lib/AppError.js';
 import {
-  activeSubcontractorCompanyWhere,
   assertProjectAllowsWrite,
-  hasSubcontractorPortalModuleAccess,
+  getActiveSubcontractorPortalCompanyLinksForProject,
   isStandaloneSubcontractorPortalIdentity,
   isSubcontractorPortalRole,
   requireSubcontractorPortalModuleAccess,
@@ -214,22 +213,25 @@ async function getResponsibleSubcontractorAccess(
     module: 'ncrs',
   });
 
-  const subcontractorUser = await prisma.subcontractorUser.findFirst({
-    where: {
-      userId: user.userId,
-      subcontractorCompany: activeSubcontractorCompanyWhere({ projectId: ncr.projectId }),
-    },
-    select: { id: true, role: true, subcontractorCompanyId: true },
+  const subcontractorLinks = await getActiveSubcontractorPortalCompanyLinksForProject({
+    userId: user.userId,
+    projectId: ncr.projectId,
+    module: 'ncrs',
   });
+  const subcontractorCompanyIds = subcontractorLinks.map((link) => link.subcontractorCompanyId);
 
   if (
-    subcontractorUser &&
+    subcontractorLinks.length > 0 &&
     (ncr.responsibleUserId === user.userId ||
-      ncr.responsibleSubcontractorId === subcontractorUser.subcontractorCompanyId ||
+      (typeof ncr.responsibleSubcontractorId === 'string' &&
+        subcontractorCompanyIds.includes(ncr.responsibleSubcontractorId)) ||
       uploadedById === user.userId)
   ) {
     await assertProjectAllowsWrite(ncr.projectId);
-    return { id: `subcontractor-user:${subcontractorUser.id}`, role: userDetails!.roleInCompany };
+    return {
+      id: `subcontractor-user:${subcontractorLinks[0].id}`,
+      role: userDetails!.roleInCompany,
+    };
   }
 
   throw AppError.forbidden(message);
@@ -292,32 +294,21 @@ export async function canReadNcr(ncr: NcrReadAccessRecord, user: AuthUser): Prom
     return false;
   }
 
-  if (
-    !(await hasSubcontractorPortalModuleAccess({
-      userId: user.userId,
-      role: userDetails.roleInCompany,
-      projectId: ncr.projectId,
-      module: 'ncrs',
-    }))
-  ) {
-    return false;
-  }
-
-  const subcontractorUser = await prisma.subcontractorUser.findFirst({
-    where: {
-      userId: user.userId,
-      subcontractorCompany: activeSubcontractorCompanyWhere({ projectId: ncr.projectId }),
-    },
-    select: { subcontractorCompanyId: true },
+  const subcontractorLinks = await getActiveSubcontractorPortalCompanyLinksForProject({
+    userId: user.userId,
+    projectId: ncr.projectId,
+    module: 'ncrs',
   });
+  const subcontractorCompanyIds = subcontractorLinks.map((link) => link.subcontractorCompanyId);
 
-  if (!subcontractorUser) {
+  if (subcontractorCompanyIds.length === 0) {
     return false;
   }
 
   if (
     ncr.responsibleUserId === user.userId ||
-    ncr.responsibleSubcontractorId === subcontractorUser.subcontractorCompanyId
+    (typeof ncr.responsibleSubcontractorId === 'string' &&
+      subcontractorCompanyIds.includes(ncr.responsibleSubcontractorId))
   ) {
     return true;
   }
@@ -330,7 +321,7 @@ export async function canReadNcr(ncr: NcrReadAccessRecord, user: AuthUser): Prom
   const assignment = await prisma.lotSubcontractorAssignment.findFirst({
     where: {
       projectId: ncr.projectId,
-      subcontractorCompanyId: subcontractorUser.subcontractorCompanyId,
+      subcontractorCompanyId: { in: subcontractorCompanyIds },
       status: 'active',
       lotId: { in: ncrLotIds },
     },
@@ -344,7 +335,7 @@ export async function canReadNcr(ncr: NcrReadAccessRecord, user: AuthUser): Prom
   const legacyLot = await prisma.lot.findFirst({
     where: {
       projectId: ncr.projectId,
-      assignedSubcontractorId: subcontractorUser.subcontractorCompanyId,
+      assignedSubcontractorId: { in: subcontractorCompanyIds },
       id: { in: ncrLotIds },
     },
     select: { id: true },

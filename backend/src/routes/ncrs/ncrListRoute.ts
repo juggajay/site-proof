@@ -9,6 +9,7 @@ import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import {
   activeSubcontractorCompanyWhere,
+  getActiveSubcontractorPortalCompanyIdsForProject,
   isStandaloneSubcontractorPortalIdentity,
   isSubcontractorPortalRole,
   requireSubcontractorPortalModuleAccess,
@@ -144,18 +145,19 @@ ncrListRouter.get(
     // Subcontractors can see NCRs linked to lots assigned to their company OR assigned to them as responsible party
     if (isStandaloneSubcontractor) {
       // Find all of the user's subcontractor companies in the current project scope.
-      const subcontractorUsers = await prisma.subcontractorUser.findMany({
-        where: {
-          userId: user.userId,
-          subcontractorCompany: activeSubcontractorCompanyWhere({
-            projectId: { in: scopedSubcontractorProjectIds },
-          }),
-        },
-        select: { subcontractorCompanyId: true },
-      });
       const subCompanyIds = [
         ...new Set(
-          subcontractorUsers.map((subcontractorUser) => subcontractorUser.subcontractorCompanyId),
+          (
+            await Promise.all(
+              scopedSubcontractorProjectIds.map((scopedProjectId) =>
+                getActiveSubcontractorPortalCompanyIdsForProject({
+                  userId: user.userId,
+                  projectId: scopedProjectId,
+                  module: 'ncrs',
+                }),
+              ),
+            )
+          ).flat(),
         ),
       ];
 

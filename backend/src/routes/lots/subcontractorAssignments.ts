@@ -28,7 +28,7 @@ import { parseLotRouteParam } from './requestParsing.js';
 import {
   isSubcontractorUser,
   requireProjectRole,
-  getProjectSubcontractorCompanyId,
+  getProjectSubcontractorCompanyIds,
 } from './access.js';
 import {
   createSubcontractorAssignmentSchema,
@@ -100,8 +100,8 @@ lotSubcontractorAssignmentsRouter.get(
       throw AppError.forbidden('Subcontractor access required');
     }
 
-    const subcontractorCompanyId = await getProjectSubcontractorCompanyId(user.id, lot.projectId);
-    if (!subcontractorCompanyId) {
+    const subcontractorCompanyIds = await getProjectSubcontractorCompanyIds(user.id, lot.projectId);
+    if (subcontractorCompanyIds.length === 0) {
       throw AppError.forbidden('You do not have access to this lot');
     }
 
@@ -109,7 +109,7 @@ lotSubcontractorAssignmentsRouter.get(
       where: {
         lotId: id,
         projectId: lot.projectId,
-        subcontractorCompanyId,
+        subcontractorCompanyId: { in: subcontractorCompanyIds },
         status: 'active',
       },
       include: {
@@ -127,16 +127,18 @@ lotSubcontractorAssignmentsRouter.get(
       where: {
         id,
         projectId: lot.projectId,
-        assignedSubcontractorId: subcontractorCompanyId,
+        assignedSubcontractorId: { in: subcontractorCompanyIds },
       },
-      select: { id: true },
+      select: { id: true, assignedSubcontractorId: true },
     });
 
     if (!legacyLot) {
       throw AppError.notFound('Assignment');
     }
 
-    res.json(buildLegacyLotAssignmentResponse(id, lot.projectId, subcontractorCompanyId));
+    res.json(
+      buildLegacyLotAssignmentResponse(id, lot.projectId, legacyLot.assignedSubcontractorId!),
+    );
   }),
 );
 

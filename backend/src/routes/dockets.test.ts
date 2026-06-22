@@ -360,6 +360,88 @@ describe('Dockets API', () => {
       }
     });
 
+    it('creates dockets for the selected linked subcontractor company in the same project', async () => {
+      const suffix = Date.now();
+      const date = '2031-07-01';
+      const otherSubcontractorCompany = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `Second Linked Docket Subcontractor ${suffix}`,
+          primaryContactName: 'Second Linked Contact',
+          primaryContactEmail: `second-linked-docket-${suffix}@example.com`,
+          status: 'approved',
+        },
+      });
+      const primaryDocket = await prisma.dailyDocket.create({
+        data: {
+          projectId,
+          subcontractorCompanyId,
+          date: new Date(`${date}T00:00:00.000Z`),
+          status: 'draft',
+          notes: 'Existing primary company docket',
+        },
+      });
+      let createdDocketId: string | undefined;
+
+      await prisma.subcontractorUser.create({
+        data: {
+          userId: subcontractorUserId,
+          subcontractorCompanyId: otherSubcontractorCompany.id,
+          role: 'admin',
+        },
+      });
+
+      try {
+        const ambiguousRes = await request(app)
+          .post('/api/dockets')
+          .set('Authorization', `Bearer ${subcontractorToken}`)
+          .send({
+            projectId,
+            date: '2031-07-02',
+            notes: 'Ambiguous same-project docket',
+          });
+        expect(ambiguousRes.status).toBe(400);
+        expect(ambiguousRes.body.error.message).toContain('subcontractorCompanyId is required');
+
+        const res = await request(app)
+          .post('/api/dockets')
+          .set('Authorization', `Bearer ${subcontractorToken}`)
+          .send({
+            projectId,
+            subcontractorCompanyId: otherSubcontractorCompany.id,
+            date,
+            notes: 'Selected second company docket',
+          });
+
+        expect(res.status).toBe(201);
+        createdDocketId = res.body.docket.id;
+        const stored = await prisma.dailyDocket.findUniqueOrThrow({
+          where: { id: createdDocketId },
+          select: { subcontractorCompanyId: true },
+        });
+        expect(stored.subcontractorCompanyId).toBe(otherSubcontractorCompany.id);
+        await expect(
+          prisma.dailyDocket.count({
+            where: {
+              projectId,
+              date: new Date(`${date}T00:00:00.000Z`),
+            },
+          }),
+        ).resolves.toBe(2);
+      } finally {
+        if (createdDocketId) {
+          await prisma.dailyDocket.delete({ where: { id: createdDocketId } }).catch(() => {});
+        }
+        await prisma.dailyDocket.delete({ where: { id: primaryDocket.id } }).catch(() => {});
+        await prisma.subcontractorUser.deleteMany({
+          where: { subcontractorCompanyId: otherSubcontractorCompany.id },
+        });
+        await prisma.subcontractorCompany
+          .delete({ where: { id: otherSubcontractorCompany.id } })
+          .catch(() => {});
+      }
+    });
+
     it('should enforce daily docket uniqueness at the database layer', async () => {
       const docketDate = new Date('2031-05-21T00:00:00.000Z');
 
@@ -518,6 +600,63 @@ describe('Dockets API', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.dockets).toBeDefined();
+    });
+
+    it('lists dockets for every linked subcontractor company in the project', async () => {
+      const suffix = Date.now();
+      const otherSubcontractorCompany = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `Second Listed Docket Subcontractor ${suffix}`,
+          primaryContactName: 'Second Listed Contact',
+          primaryContactEmail: `second-listed-docket-${suffix}@example.com`,
+          status: 'approved',
+        },
+      });
+      const ownDocket = await prisma.dailyDocket.create({
+        data: {
+          projectId,
+          subcontractorCompanyId,
+          date: new Date('2031-08-01T00:00:00.000Z'),
+          status: 'draft',
+        },
+      });
+      const otherDocket = await prisma.dailyDocket.create({
+        data: {
+          projectId,
+          subcontractorCompanyId: otherSubcontractorCompany.id,
+          date: new Date('2031-08-02T00:00:00.000Z'),
+          status: 'draft',
+        },
+      });
+
+      await prisma.subcontractorUser.create({
+        data: {
+          userId: subcontractorUserId,
+          subcontractorCompanyId: otherSubcontractorCompany.id,
+          role: 'admin',
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .get(`/api/dockets?projectId=${projectId}&limit=100`)
+          .set('Authorization', `Bearer ${subcontractorToken}`);
+
+        expect(res.status).toBe(200);
+        const returnedIds = (res.body.dockets as Array<{ id: string }>).map((docket) => docket.id);
+        expect(returnedIds).toContain(ownDocket.id);
+        expect(returnedIds).toContain(otherDocket.id);
+      } finally {
+        await prisma.dailyDocket.delete({ where: { id: otherDocket.id } }).catch(() => {});
+        await prisma.dailyDocket.delete({ where: { id: ownDocket.id } }).catch(() => {});
+        await prisma.subcontractorUser.deleteMany({
+          where: { subcontractorCompanyId: otherSubcontractorCompany.id },
+        });
+        await prisma.subcontractorCompany
+          .delete({ where: { id: otherSubcontractorCompany.id } })
+          .catch(() => {});
+      }
     });
 
     it('should reject invalid status and sort fields', async () => {

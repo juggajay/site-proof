@@ -44,8 +44,8 @@ const STARTED_COMPLETION_STATUSES = new Set(['completed', 'not_applicable', 'fai
 export interface PresentLotListOptions {
   /** When false, `budgetAmount` is nulled out for the caller. */
   canViewBudgetAmount: boolean;
-  /** When set, assignments are filtered to this company; null leaves them as-is. */
-  subcontractorCompanyId: string | null;
+  /** When set, assignments are filtered to these companies; null leaves them as-is. */
+  subcontractorCompanyIds: string[] | null;
   /** When true, adds the `itpInstances` compatibility array. */
   includeITP: boolean;
 }
@@ -138,21 +138,27 @@ export function presentLotList<
     itpInstance?: unknown;
   },
 >(lots: TLot[], options: PresentLotListOptions) {
-  const { canViewBudgetAmount, subcontractorCompanyId, includeITP } = options;
+  const { canViewBudgetAmount, subcontractorCompanyIds, includeITP } = options;
+  const subcontractorCompanyIdSet = subcontractorCompanyIds
+    ? new Set(subcontractorCompanyIds)
+    : null;
 
   // Apply budget visibility + subcontractor assignment filtering.
   const visibleLots = lots.map((lot) => {
     const visibleLot = {
       ...lot,
       budgetAmount: canViewBudgetAmount ? lot.budgetAmount : null,
-      subcontractorAssignments: subcontractorCompanyId
-        ? lot.subcontractorAssignments.filter(
-            (assignment) => assignment.subcontractorCompanyId === subcontractorCompanyId,
+      subcontractorAssignments: subcontractorCompanyIdSet
+        ? lot.subcontractorAssignments.filter((assignment) =>
+            subcontractorCompanyIdSet.has(assignment.subcontractorCompanyId),
           )
         : lot.subcontractorAssignments,
     };
 
-    if (subcontractorCompanyId && lot.assignedSubcontractorId !== subcontractorCompanyId) {
+    if (
+      subcontractorCompanyIdSet &&
+      (!lot.assignedSubcontractorId || !subcontractorCompanyIdSet.has(lot.assignedSubcontractorId))
+    ) {
       if ('assignedSubcontractorId' in visibleLot) {
         visibleLot.assignedSubcontractorId = null;
       }

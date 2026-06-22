@@ -24,8 +24,8 @@ export type LotDetailAssignment = { subcontractorCompanyId: string };
 export interface ShapeLotDetailResponseOptions {
   /** True when the requesting user is a subcontractor (gates the filtering). */
   isSubcontractor: boolean;
-  /** The subcontractor user's resolved company for this project (may be null). */
-  subcontractorCompanyId: string | null;
+  /** The subcontractor user's resolved companies for this project (may be null). */
+  subcontractorCompanyIds: string[] | null;
   /** When false, `budgetAmount` is nulled out for the caller. */
   canViewBudgetAmount: boolean;
 }
@@ -45,13 +45,17 @@ export function shapeLotDetailResponse<
   },
 >(lot: TLot, options: ShapeLotDetailResponseOptions) {
   const { projectId, budgetAmount, assignedSubcontractorId, ...lotResponse } = lot;
+  const subcontractorCompanyIdSet = options.subcontractorCompanyIds
+    ? new Set(options.subcontractorCompanyIds)
+    : null;
 
   const visibleLotResponse = {
     ...lotResponse,
     projectId,
     budgetAmount: options.canViewBudgetAmount ? budgetAmount : null,
     assignedSubcontractorId:
-      !options.isSubcontractor || assignedSubcontractorId === options.subcontractorCompanyId
+      !options.isSubcontractor ||
+      (assignedSubcontractorId && subcontractorCompanyIdSet?.has(assignedSubcontractorId))
         ? assignedSubcontractorId
         : null,
   };
@@ -65,10 +69,10 @@ export function shapeLotDetailResponse<
   return {
     ...visibleLotResponse,
     subcontractorAssignments: visibleLotResponse.subcontractorAssignments.filter(
-      (assignment) => assignment.subcontractorCompanyId === options.subcontractorCompanyId,
+      (assignment) => subcontractorCompanyIdSet?.has(assignment.subcontractorCompanyId) ?? false,
     ),
     assignedSubcontractor:
-      lot.assignedSubcontractorId === options.subcontractorCompanyId
+      lot.assignedSubcontractorId && subcontractorCompanyIdSet?.has(lot.assignedSubcontractorId)
         ? visibleLotResponse.assignedSubcontractor
         : null,
   };

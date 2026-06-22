@@ -69,6 +69,10 @@ export function createSubcontractorMyCompanyRouter({
         req.query.projectId === undefined
           ? null
           : normalizeIdParam(req.query.projectId, 'projectId');
+      const requestedSubcontractorCompanyId =
+        req.query.subcontractorCompanyId === undefined
+          ? null
+          : normalizeIdParam(req.query.subcontractorCompanyId, 'subcontractorCompanyId');
 
       // Get every active project link for this subcontractor portal user. A single subcontractor
       // identity can work across multiple head-contractor projects, so the portal must not silently
@@ -95,11 +99,16 @@ export function createSubcontractorMyCompanyRouter({
         orderBy: { createdAt: 'desc' },
       });
 
-      const subcontractorUser = requestedProjectId
-        ? subcontractorUsers.find(
+      const projectScopedSubcontractorUsers = requestedProjectId
+        ? subcontractorUsers.filter(
             (link) => link.subcontractorCompany.projectId === requestedProjectId,
           )
-        : subcontractorUsers[0];
+        : subcontractorUsers;
+      const subcontractorUser = requestedSubcontractorCompanyId
+        ? projectScopedSubcontractorUsers.find(
+            (link) => link.subcontractorCompanyId === requestedSubcontractorCompanyId,
+          )
+        : projectScopedSubcontractorUsers[0];
 
       if (!subcontractorUser || !subcontractorUser.subcontractorCompany) {
         throw AppError.forbidden(

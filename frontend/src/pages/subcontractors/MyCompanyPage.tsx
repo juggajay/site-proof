@@ -81,6 +81,7 @@ export function MyCompanyPage() {
         method: 'POST',
         body: JSON.stringify({
           projectId,
+          subcontractorCompanyId: companyData?.id,
           name,
           phone,
           role,
@@ -122,6 +123,7 @@ export function MyCompanyPage() {
         method: 'POST',
         body: JSON.stringify({
           projectId,
+          subcontractorCompanyId: companyData?.id,
           type,
           description,
           idRego,
@@ -146,11 +148,12 @@ export function MyCompanyPage() {
     setActionError(null);
 
     try {
-      const query = companyData?.projectId
-        ? `?projectId=${encodeURIComponent(companyData.projectId)}`
-        : '';
+      const query = new URLSearchParams();
+      if (companyData?.projectId) query.set('projectId', companyData.projectId);
+      if (companyData?.id) query.set('subcontractorCompanyId', companyData.id);
+      const queryString = query.toString() ? `?${query.toString()}` : '';
       await apiFetch(
-        `/api/subcontractors/my-company/employees/${encodeURIComponent(empId)}${query}`,
+        `/api/subcontractors/my-company/employees/${encodeURIComponent(empId)}${queryString}`,
         {
           method: 'DELETE',
         },
@@ -169,11 +172,12 @@ export function MyCompanyPage() {
     setActionError(null);
 
     try {
-      const query = companyData?.projectId
-        ? `?projectId=${encodeURIComponent(companyData.projectId)}`
-        : '';
+      const query = new URLSearchParams();
+      if (companyData?.projectId) query.set('projectId', companyData.projectId);
+      if (companyData?.id) query.set('subcontractorCompanyId', companyData.id);
+      const queryString = query.toString() ? `?${query.toString()}` : '';
       await apiFetch(
-        `/api/subcontractors/my-company/plant/${encodeURIComponent(plantId)}${query}`,
+        `/api/subcontractors/my-company/plant/${encodeURIComponent(plantId)}${queryString}`,
         {
           method: 'DELETE',
         },

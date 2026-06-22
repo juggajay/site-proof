@@ -218,7 +218,7 @@ export async function requireItpSubcontractorCompletionPermission(
     return null;
   }
 
-  const assignment = await prisma.lotSubcontractorAssignment.findFirst({
+  const assignments = await prisma.lotSubcontractorAssignment.findMany({
     where: {
       projectId,
       lotId,
@@ -237,11 +237,21 @@ export async function requireItpSubcontractorCompletionPermission(
     },
   });
 
-  if (!assignment) {
+  if (assignments.length === 0) {
     throw AppError.forbidden(message);
   }
 
   await assertProjectAllowsWrite(projectId);
 
-  return assignment;
+  if (assignments.length === 1) {
+    return assignments[0];
+  }
+
+  return {
+    itpRequiresVerification: assignments.some((assignment) => assignment.itpRequiresVerification),
+    subcontractorCompany: {
+      id: assignments.map((assignment) => assignment.subcontractorCompany.id).join(','),
+      companyName: 'Multiple subcontractors',
+    },
+  };
 }

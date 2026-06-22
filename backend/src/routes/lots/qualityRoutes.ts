@@ -91,8 +91,13 @@ lotQualityRouter.get(
       throw AppError.notFound('Lot');
     }
 
-    await requireLotReadAccess(lot, user);
     await requireSubcontractorLotPortalModules(user, lot.projectId, [
+      'itps',
+      'testResults',
+      'ncrs',
+    ]);
+    await requireLotReadAccess(lot, user, 'You do not have access to this lot', [
+      'lots',
       'itps',
       'testResults',
       'ncrs',
@@ -172,8 +177,13 @@ lotQualityRouter.get(
       throw AppError.notFound('Lot');
     }
 
-    await requireLotReadAccess(lot, user);
     await requireSubcontractorLotPortalModules(user, lot.projectId, [
+      'itps',
+      'testResults',
+      'ncrs',
+    ]);
+    await requireLotReadAccess(lot, user, 'You do not have access to this lot', [
+      'lots',
       'itps',
       'testResults',
       'ncrs',

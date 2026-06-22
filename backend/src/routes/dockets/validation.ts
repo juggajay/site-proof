@@ -83,6 +83,7 @@ export const optionalDateStringSchema = z
 // Zod schemas for request body validation
 export const createDocketSchema = z.object({
   projectId: requiredDocketIdSchema('projectId'),
+  subcontractorCompanyId: requiredDocketIdSchema('subcontractorCompanyId').optional(),
   date: optionalDateStringSchema,
   labourHours: finiteNonNegativeNumber('Labour total').optional(),
   plantHours: finiteNonNegativeNumber('Plant total').optional(),
