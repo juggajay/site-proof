@@ -16,6 +16,119 @@ keep going until the app has been exercised end to end.
   `1secmail.com` from an old Codex process, so future email QA must use Jay's
   nominated inbox, a trusted mailbox, or Resend's safe test recipient.
 
+## Stage 44 - Multi-Company Subcontractor Comment and Document QA
+
+Status: landed in PR #1092; PR CI, post-merge master CI, full post-merge E2E,
+Vercel deployment status, Railway health, and production health checks passed.
+
+Scope:
+
+- Follow-up from Stage 43's queued `findFirst` concern for subcontractor portal
+  users linked to more than one active subcontractor company in the same
+  project.
+- Comment access for lot-scoped subcontractor comments.
+- Document list, direct read/signed-url, upload, update, and delete access for
+  subcontractor portal users.
+- Shared subcontractor portal module checks used by comments/documents and
+  other portal-gated surfaces.
+
+Subagent coverage:
+
+- A comments sidecar confirmed a real deny bug in
+  `backend/src/routes/comments/access.ts`: the old helper chose one arbitrary
+  `SubcontractorUser.findFirst()` link, then checked only that company against
+  lot assignments. It also noted the module check had to be tied to the same
+  company that grants the lot assignment.
+- A documents sidecar confirmed the same real deny/scoping bug in
+  `backend/src/routes/documents/access.ts`: list/read/write document scopes
+  were built from one arbitrary subcontractor-company link instead of all
+  active links for that user/project.
+
+Confirmed issues fixed:
+
+- Shared subcontractor portal module access now evaluates all active linked
+  subcontractor companies for a standalone subcontractor portal identity, not a
+  single arbitrary `findFirst()` record.
+- Lot-scoped comments now allow access when any active linked subcontractor
+  company is assigned to the target lot and has the relevant portal module.
+- Lot-scoped comments now deny with the module-specific message when the user
+  is assigned through a company whose matching portal module is disabled, even
+  if another linked company has that module enabled.
+- Document read scopes now consider all active linked companies, while keeping
+  category/module gates tied to the company set that grants the relevant lot
+  access.
+- Direct document signed-url/read checks now allow documents on lots assigned
+  through any matching active linked company.
+- Subcontractor document upload, update, and delete now work through any active
+  linked company assigned to the target lot, while still blocking writes to
+  unassigned lots or lots where the assigned company lacks the needed module.
+- Regression coverage now exercises the multi-link shared access helper,
+  comment read/create access, document list/signed-url access, and document
+  upload/update/delete access.
+
+Related merged work:
+
+- #1092 - Fix multi-company subcontractor portal access, merged as `4e1eb051`.
+
+Verification:
+
+- #1092 local checks passed:
+  - backend focused ESLint on the changed source and test files
+  - backend focused Prettier check on the changed source and test files
+  - backend `npm run type-check`
+  - `git diff --check`
+  - repo precommit hook during commit, which reran full backend lint and
+    backend format checks
+  - changed-file `fallow audit --base origin/master --format json --quiet`,
+    verdict `warn`; no introduced dead code or complexity. The advisory
+    introduced warnings were duplicated setup blocks in the new regression
+    tests.
+- Local Prisma client generation needed the same Windows certificate-chain
+  workaround noted in Stage 43. GitHub CI generated Prisma normally and remains
+  the authoritative backend gate.
+- Local DB-backed route suites were not run against a local database because no
+  safe disposable local `DATABASE_URL` was configured. The new DB-backed route
+  regressions ran in GitHub CI against disposable CI Postgres.
+- Final PR #1092 checks passed before merge: Backend, Frontend PR E2E smoke,
+  Detect changes, Vercel's ignored-build status, and Vercel Preview Comments.
+  The full Frontend job was skipped on the PR because only backend files
+  changed.
+- Master CI run `27937740835` passed after merge, including Backend, Frontend,
+  and full post-merge Frontend E2E.
+- After merge, production health checks returned HTTP 200 for:
+  - `https://site-proof.vercel.app`
+  - `https://site-proof-production.up.railway.app/health`
+  - `https://site-proof-production.up.railway.app/ready`
+
+Not live-exercised in this stage:
+
+- No production browser sessions were mutated during this backend
+  access-control-focused stage.
+- No real production subcontractor links, comments, documents, signed URLs, or
+  uploads were created or edited.
+- The stage did not decide whether the product should intentionally allow one
+  subcontractor portal user to represent multiple subcontractor companies in
+  the same project; it made the current permitted data shape behave
+  consistently.
+
+Remaining findings for a later pass:
+
+- Decide the product rule for one user representing multiple subcontractor
+  companies in a single project. If the desired rule is one company per user per
+  project, enforce it at invitation/link creation and with a reviewed database
+  constraint.
+- Continue looking for any other route-local `SubcontractorUser.findFirst()`
+  access paths where multi-link users could still get arbitrary deny/scoping
+  behaviour.
+- Consider extracting backend test factories for repeated company/project/user
+  setup if these staged QA regressions continue adding similar fixture blocks.
+
+Artifacts:
+
+- No bearer tokens, session cookies, generated passwords, production secrets,
+  recipient emails, database URLs, signed document URLs, or browser-session data
+  were committed or copied into this ledger.
+
 ## Stage 43 - Route-Local Subcontractor Guard Hardening
 
 Status: landed in PR #1090; PR CI, post-merge master CI, full post-merge E2E,
