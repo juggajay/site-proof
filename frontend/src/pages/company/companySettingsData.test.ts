@@ -7,6 +7,7 @@ import {
   getPlanBillingLabel,
   getPlanStorageLabel,
   hasFiniteLimit,
+  isOwnershipTransferEligibleMember,
   normalizeCompanyResponse,
   toCompanyFormData,
   type Company,
@@ -131,6 +132,26 @@ describe('company settings data helpers', () => {
 
     it('falls back to a default message for opaque errors', () => {
       expect(getCompanyLoadErrorMessage(null)).toBe('Failed to load company settings');
+    });
+  });
+
+  describe('isOwnershipTransferEligibleMember', () => {
+    it('allows active OAuth-only members from the status field', () => {
+      expect(isOwnershipTransferEligibleMember({ status: 'active', hasPassword: false })).toBe(
+        true,
+      );
+    });
+
+    it('blocks pending invited members', () => {
+      expect(isOwnershipTransferEligibleMember({ status: 'pending', hasPassword: false })).toBe(
+        false,
+      );
+    });
+
+    it('falls back to the legacy hasPassword flag when status is absent', () => {
+      expect(isOwnershipTransferEligibleMember({ hasPassword: false })).toBe(false);
+      expect(isOwnershipTransferEligibleMember({ hasPassword: true })).toBe(true);
+      expect(isOwnershipTransferEligibleMember({})).toBe(true);
     });
   });
 });

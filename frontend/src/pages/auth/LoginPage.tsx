@@ -8,7 +8,7 @@ import { MfaRequiredError } from '@/lib/authErrors';
 import { apiFetch, apiUrl } from '@/lib/api';
 import { loginSchema, emailSchema } from '@/lib/validation';
 import { renderChainageTicks } from '@/lib/chainageTicks';
-import { getPostLoginRedirect } from './postLoginRedirect';
+import { getPostLoginRedirect, getRequestedPostLoginRedirect } from './postLoginRedirect';
 import './authSurvey.css';
 
 /* ============================================================
@@ -226,9 +226,10 @@ export function LoginPage() {
     setLoading(true);
 
     try {
+      const redirect = getRequestedPostLoginRedirect(searchParams, location.state);
       await apiFetch('/api/auth/magic-link/request', {
         method: 'POST',
-        body: JSON.stringify({ email: data.email }),
+        body: JSON.stringify({ email: data.email, ...(redirect ? { redirect } : {}) }),
       });
 
       setMagicLinkEmail(data.email);

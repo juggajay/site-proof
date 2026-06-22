@@ -2188,9 +2188,91 @@ describe('Magic Link Authentication', () => {
       AuditAction.MAGIC_LINK_REQUESTED,
     );
     expect(auditLog.userId).toBe(user!.id);
-    expect(changes).toEqual({ method: 'magic_link', expiresInMinutes: 15 });
+    expect(changes).toEqual({
+      method: 'magic_link',
+      expiresInMinutes: 15,
+      redirectPreserved: false,
+    });
     expect(JSON.stringify(changes)).not.toContain(storedToken!.token);
     expect(JSON.stringify(changes)).not.toMatch(/token|secret|password/i);
+  });
+
+  it('should include a safe relative redirect in the magic link email', async () => {
+    const user = await prisma.user.findUnique({ where: { email: magicEmail } });
+    expect(user).toBeDefined();
+    await clearUserAuditLogs(user!.id);
+
+    const sendSpy = vi.spyOn(emailService, 'sendMagicLinkEmail').mockResolvedValueOnce({
+      success: true,
+    });
+
+    try {
+      const redirect = '/subcontractor-portal/accept-invite?id=invite-1';
+      const res = await request(app)
+        .post('/api/auth/magic-link/request')
+        .send({ email: magicEmail, redirect });
+
+      expect(res.status).toBe(200);
+      expect(sendSpy).toHaveBeenCalledTimes(1);
+      const magicLinkUrl = sendSpy.mock.calls[0]?.[0]?.magicLinkUrl;
+      expect(magicLinkUrl).toBeDefined();
+      const parsedUrl = new URL(magicLinkUrl!);
+      expect(parsedUrl.pathname).toBe('/auth/magic-link');
+      expect(parsedUrl.searchParams.get('token')).toMatch(/^magic_/);
+      expect(parsedUrl.searchParams.get('redirect')).toBe(redirect);
+
+      const { changes } = await expectLatestUserAuditLog(
+        user!.id,
+        AuditAction.MAGIC_LINK_REQUESTED,
+      );
+      expect(changes).toEqual({
+        method: 'magic_link',
+        expiresInMinutes: 15,
+        redirectPreserved: true,
+      });
+      expect(JSON.stringify(changes)).not.toContain(redirect);
+    } finally {
+      sendSpy.mockRestore();
+      await prisma.passwordResetToken.deleteMany({ where: { userId: user!.id } });
+      await clearUserAuditLogs(user!.id);
+    }
+  });
+
+  it('should ignore unsafe magic link redirects', async () => {
+    const user = await prisma.user.findUnique({ where: { email: magicEmail } });
+    expect(user).toBeDefined();
+    await clearUserAuditLogs(user!.id);
+
+    const sendSpy = vi.spyOn(emailService, 'sendMagicLinkEmail').mockResolvedValueOnce({
+      success: true,
+    });
+
+    try {
+      const res = await request(app)
+        .post('/api/auth/magic-link/request')
+        .send({ email: magicEmail, redirect: '//evil.example/steal' });
+
+      expect(res.status).toBe(200);
+      expect(sendSpy).toHaveBeenCalledTimes(1);
+      const magicLinkUrl = sendSpy.mock.calls[0]?.[0]?.magicLinkUrl;
+      expect(magicLinkUrl).toBeDefined();
+      const parsedUrl = new URL(magicLinkUrl!);
+      expect(parsedUrl.searchParams.get('redirect')).toBeNull();
+
+      const { changes } = await expectLatestUserAuditLog(
+        user!.id,
+        AuditAction.MAGIC_LINK_REQUESTED,
+      );
+      expect(changes).toEqual({
+        method: 'magic_link',
+        expiresInMinutes: 15,
+        redirectPreserved: false,
+      });
+    } finally {
+      sendSpy.mockRestore();
+      await prisma.passwordResetToken.deleteMany({ where: { userId: user!.id } });
+      await clearUserAuditLogs(user!.id);
+    }
   });
 
   it('should not invalidate active password reset tokens when requesting a magic link', async () => {

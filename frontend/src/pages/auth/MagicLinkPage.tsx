@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { ApiError, apiFetch } from '@/lib/api';
-import { getDefaultPostLoginRedirect } from './postLoginRedirect';
+import { getPostLoginRedirect } from './postLoginRedirect';
 
 function getMagicLinkErrorMessage(error: unknown): string {
   if (error instanceof ApiError) {
@@ -57,7 +57,7 @@ export function MagicLinkPage() {
 
           // Redirect to the right app entry point after a brief success state.
           setTimeout(() => {
-            navigate(getDefaultPostLoginRedirect(signedInUser), { replace: true });
+            navigate(getPostLoginRedirect(searchParams, null, signedInUser), { replace: true });
           }, 1500);
         } else {
           setStatus('error');

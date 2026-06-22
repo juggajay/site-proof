@@ -33,6 +33,23 @@ type MagicLinkRoutesDependencies = {
   ) => Promise<void>;
 };
 
+function normalizeMagicLinkRedirect(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+
+  const trimmed = value.trim();
+  if (!trimmed || !trimmed.startsWith('/') || trimmed.startsWith('//') || trimmed.includes('\\')) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(trimmed, 'https://siteproof.local');
+    if (parsed.origin !== 'https://siteproof.local') return null;
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return null;
+  }
+}
+
 export function createMagicLinkRouter({
   prisma,
   normalizeEmailInput,
@@ -54,6 +71,7 @@ export function createMagicLinkRouter({
         throw AppError.badRequest('Email is required');
       }
       const normalizedEmail = normalizeEmailInput(email);
+      const redirect = normalizeMagicLinkRedirect(req.body.redirect);
 
       // Find user
       const user = await prisma.user.findUnique({
@@ -114,7 +132,11 @@ export function createMagicLinkRouter({
         },
       });
 
-      const magicLinkUrl = buildFrontendUrl(`/auth/magic-link?token=magic_${token}`);
+      const magicLinkParams = new URLSearchParams({ token: `magic_${token}` });
+      if (redirect) {
+        magicLinkParams.set('redirect', redirect);
+      }
+      const magicLinkUrl = buildFrontendUrl(`/auth/magic-link?${magicLinkParams.toString()}`);
 
       // Send magic link email
       try {
@@ -151,6 +173,7 @@ export function createMagicLinkRouter({
       await auditUserAuthEvent(req, user.id, AuditAction.MAGIC_LINK_REQUESTED, {
         method: 'magic_link',
         expiresInMinutes: MAGIC_LINK_EXPIRY_MINUTES,
+        redirectPreserved: Boolean(redirect),
       });
 
       res.json({

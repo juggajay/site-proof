@@ -9,7 +9,7 @@ export type RedirectUser = {
   hasSubcontractorPortalAccess?: boolean;
 };
 
-function getSafeRedirectPath(redirect: string | null): string | null {
+export function getSafeRedirectPath(redirect: string | null): string | null {
   if (!redirect || !redirect.startsWith('/') || redirect.startsWith('//')) {
     return null;
   }
@@ -29,6 +29,16 @@ function getSafeLocationRedirect(from: unknown): string | null {
     typeof location.hash === 'string' && location.hash.startsWith('#') ? location.hash : '';
 
   return `${location.pathname}${search}${hash}`;
+}
+
+export function getRequestedPostLoginRedirect(
+  searchParams: URLSearchParams,
+  locationState: unknown,
+): string | null {
+  return (
+    getSafeRedirectPath(searchParams.get('redirect')) ||
+    getSafeLocationRedirect((locationState as { from?: unknown } | null)?.from)
+  );
 }
 
 function getRedirectPathname(redirect: string): string {
@@ -103,9 +113,7 @@ export function getPostLoginRedirect(
   locationState: unknown,
   user: RedirectUser,
 ): string {
-  const redirect =
-    getSafeRedirectPath(searchParams.get('redirect')) ||
-    getSafeLocationRedirect((locationState as { from?: unknown } | null)?.from);
+  const redirect = getRequestedPostLoginRedirect(searchParams, locationState);
 
   if (redirect && isAllowedPostLoginRedirect(redirect, user)) {
     return mapLegacyRedirectToActiveShell(redirect, user);

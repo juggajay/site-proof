@@ -644,31 +644,68 @@ companyMemberRoutes.post(
       throw AppError.badRequest('Cannot transfer ownership to yourself');
     }
 
-    // Verify new owner is a member of the same company
-    const newOwner = await prisma.user.findFirst({
-      where: {
-        id: newOwnerId,
-        companyId: user.companyId,
-      },
+    const { newOwner, transferredAt } = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`
+        SELECT id
+        FROM companies
+        WHERE id = ${user.companyId}
+        FOR UPDATE
+      `;
+
+      const currentOwner = await tx.user.findFirst({
+        where: {
+          id: user.userId,
+          companyId: user.companyId,
+        },
+        select: { id: true, roleInCompany: true },
+      });
+
+      if (!currentOwner) {
+        throw AppError.forbidden('Invalid company session');
+      }
+
+      if (currentOwner.roleInCompany !== 'owner') {
+        throw AppError.conflict('Company ownership has already changed. Refresh and try again.');
+      }
+
+      // Verify new owner is a member of the same company.
+      const newOwner = await tx.user.findFirst({
+        where: {
+          id: newOwnerId,
+          companyId: user.companyId,
+        },
+      });
+
+      if (!newOwner) {
+        throw AppError.notFound('User in your company');
+      }
+
+      if (!newOwner.passwordHash && !newOwner.oauthProvider) {
+        throw AppError.badRequest(
+          'New owner must have accepted their invitation before ownership can be transferred',
+        );
+      }
+
+      const demoteResult = await tx.user.updateMany({
+        where: {
+          id: user.userId,
+          companyId: user.companyId,
+          roleInCompany: 'owner',
+        },
+        data: { roleInCompany: 'admin' },
+      });
+
+      if (demoteResult.count !== 1) {
+        throw AppError.conflict('Company ownership has already changed. Refresh and try again.');
+      }
+
+      await tx.user.update({
+        where: { id: newOwnerId },
+        data: { roleInCompany: 'owner' },
+      });
+
+      return { newOwner, transferredAt: new Date() };
     });
-
-    if (!newOwner) {
-      throw AppError.notFound('User in your company');
-    }
-
-    if (!newOwner.passwordHash) {
-      throw AppError.badRequest(
-        'New owner must have accepted their invitation before ownership can be transferred',
-      );
-    }
-
-    // Transfer ownership: update both users in a transaction
-    await prisma.$transaction([
-      // Set new owner
-      prisma.$executeRaw`UPDATE users SET role_in_company = 'owner' WHERE id = ${newOwnerId}`,
-      // Demote current owner to admin
-      prisma.$executeRaw`UPDATE users SET role_in_company = 'admin' WHERE id = ${user.userId}`,
-    ]);
 
     await createAuditLog({
       userId: user.userId,
@@ -684,6 +721,6 @@ companyMemberRoutes.post(
       req,
     });
 
-    res.json(buildCompanyOwnershipTransferredResponse(newOwner, new Date()));
+    res.json(buildCompanyOwnershipTransferredResponse(newOwner, transferredAt));
   }),
 );

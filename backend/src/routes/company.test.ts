@@ -2388,6 +2388,128 @@ describe('Company API', () => {
       }
     });
 
+    it('should transfer ownership to an active OAuth-only company member', async () => {
+      const suffix = Date.now();
+      const oauthTransferCompany = await prisma.company.create({
+        data: { name: `OAuth Transfer Company ${suffix}` },
+      });
+      const owner = await registerTestUser(app, {
+        emailPrefix: `oauth-transfer-owner-${suffix}`,
+        fullName: 'OAuth Transfer Current Owner',
+        companyId: oauthTransferCompany.id,
+        roleInCompany: 'owner',
+      });
+      const oauthMember = await prisma.user.create({
+        data: {
+          email: `oauth-transfer-target-${suffix}@example.com`,
+          fullName: 'OAuth Transfer Target',
+          companyId: oauthTransferCompany.id,
+          roleInCompany: 'admin',
+          passwordHash: null,
+          emailVerified: true,
+          emailVerifiedAt: new Date(),
+          oauthProvider: 'google',
+          oauthProviderId: `oauth-transfer-target-${suffix}`,
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .post('/api/company/transfer-ownership')
+          .set('Authorization', `Bearer ${owner.token}`)
+          .send({ newOwnerId: oauthMember.id });
+
+        expect(res.status).toBe(200);
+        expect(res.body.newOwner.id).toBe(oauthMember.id);
+
+        const [previousOwner, newOwner] = await Promise.all([
+          prisma.user.findUniqueOrThrow({ where: { id: owner.userId } }),
+          prisma.user.findUniqueOrThrow({ where: { id: oauthMember.id } }),
+        ]);
+        expect(previousOwner.roleInCompany).toBe('admin');
+        expect(newOwner.roleInCompany).toBe('owner');
+      } finally {
+        await prisma.emailVerificationToken.deleteMany({
+          where: { userId: { in: [owner.userId, oauthMember.id] } },
+        });
+        await prisma.auditLog.deleteMany({
+          where: {
+            OR: [
+              { entityId: oauthTransferCompany.id },
+              { userId: { in: [owner.userId, oauthMember.id] } },
+            ],
+          },
+        });
+        await prisma.user.deleteMany({ where: { id: { in: [owner.userId, oauthMember.id] } } });
+        await prisma.company.delete({ where: { id: oauthTransferCompany.id } }).catch(() => {});
+      }
+    });
+
+    it('should reject a stale owner session after ownership has already transferred', async () => {
+      const suffix = Date.now();
+      const staleTransferCompany = await prisma.company.create({
+        data: { name: `Stale Transfer Company ${suffix}` },
+      });
+      const owner = await registerTestUser(app, {
+        emailPrefix: `stale-transfer-owner-${suffix}`,
+        fullName: 'Stale Transfer Current Owner',
+        companyId: staleTransferCompany.id,
+        roleInCompany: 'owner',
+      });
+      const firstTarget = await registerTestUser(app, {
+        emailPrefix: `stale-transfer-first-${suffix}`,
+        fullName: 'Stale Transfer First Target',
+        companyId: staleTransferCompany.id,
+        roleInCompany: 'admin',
+      });
+      const secondTarget = await registerTestUser(app, {
+        emailPrefix: `stale-transfer-second-${suffix}`,
+        fullName: 'Stale Transfer Second Target',
+        companyId: staleTransferCompany.id,
+        roleInCompany: 'admin',
+      });
+      const userIds = [owner.userId, firstTarget.userId, secondTarget.userId];
+
+      try {
+        const firstRes = await request(app)
+          .post('/api/company/transfer-ownership')
+          .set('Authorization', `Bearer ${owner.token}`)
+          .send({ newOwnerId: firstTarget.userId });
+
+        expect(firstRes.status).toBe(200);
+
+        const staleRes = await request(app)
+          .post('/api/company/transfer-ownership')
+          .set('Authorization', `Bearer ${owner.token}`)
+          .send({ newOwnerId: secondTarget.userId });
+
+        expect(staleRes.status).toBe(403);
+        expect(staleRes.body.error.message).toContain('Only the company owner');
+
+        const companyMembers = await prisma.user.findMany({
+          where: { companyId: staleTransferCompany.id },
+          select: { id: true, roleInCompany: true },
+        });
+        expect(companyMembers.filter((member) => member.roleInCompany === 'owner')).toEqual([
+          { id: firstTarget.userId, roleInCompany: 'owner' },
+        ]);
+        expect(
+          companyMembers.find((member) => member.id === secondTarget.userId)?.roleInCompany,
+        ).toBe('admin');
+      } finally {
+        await prisma.emailVerificationToken.deleteMany({
+          where: { userId: { in: userIds } },
+        });
+        await prisma.auditLog.deleteMany({
+          where: {
+            OR: [{ entityId: staleTransferCompany.id }, { userId: { in: userIds } }],
+          },
+        });
+        await prisma.user.deleteMany({ where: { id: { in: userIds } } });
+        await prisma.company.delete({ where: { id: staleTransferCompany.id } }).catch(() => {});
+      }
+    });
+
     it('should reject non-owner users', async () => {
       // Create admin user
       const adminEmail = `admin-transfer-${Date.now()}@example.com`;

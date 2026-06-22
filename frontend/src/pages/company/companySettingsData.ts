@@ -74,6 +74,16 @@ export function formatCompanyRoleLabel(role: string): string {
   return COMPANY_MEMBER_ROLE_OPTIONS.find((option) => option.value === role)?.label ?? role;
 }
 
+export function isOwnershipTransferEligibleMember(
+  member: Pick<CompanyMember, 'status' | 'hasPassword'>,
+): boolean {
+  if (member.status) {
+    return member.status === 'active';
+  }
+
+  return member.hasPassword !== false;
+}
+
 interface CompanyResponse {
   company: Company;
 }
