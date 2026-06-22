@@ -696,6 +696,20 @@ describe('Webhooks API', () => {
         expect(res.body.error.message).toContain('event');
       });
 
+      it('should reject unsupported webhook event subscriptions', async () => {
+        const res = await request(app)
+          .post('/api/webhooks')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            url: 'https://example.com/webhook',
+            events: ['ncr.closed'],
+          });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.message).toContain('unsupported event');
+        expect(res.body.error.message).toContain('hold_point.released');
+      });
+
       it('should reject excessive webhook event subscriptions', async () => {
         const res = await request(app)
           .post('/api/webhooks')
@@ -820,7 +834,7 @@ describe('Webhooks API', () => {
           .set('Authorization', `Bearer ${authToken}`)
           .send({
             url: 'https://example.com/webhook',
-            events: ['test.event'],
+            events: ['hold_point.released'],
           });
         webhookId = res.body.id;
       });

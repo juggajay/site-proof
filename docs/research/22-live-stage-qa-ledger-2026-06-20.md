@@ -16,6 +16,94 @@ keep going until the app has been exercised end to end.
   `1secmail.com` from an old Codex process, so future email QA must use Jay's
   nominated inbox, a trusted mailbox, or Resend's safe test recipient.
 
+## Stage 49 - Hold-Point Business Webhook Events QA
+
+Status: in progress. Code changes are prepared on
+`qa/stage49-webhook-business-events`; PR/CI/merge still pending.
+
+Scope:
+
+- Follow-up on the staged webhook audit after lot lifecycle events.
+- Focused on turning the most immediate non-lot business workflow into real
+  outbound webhook events: hold-point release request and hold-point release.
+- Rechecked the webhook event subscription contract so admins cannot configure
+  valid-looking event names that the app never emits.
+
+Subagent coverage:
+
+- One sidecar reviewed the webhook management/API surface and found there is no
+  frontend event picker yet; the backend previously accepted arbitrary
+  syntactically valid event names, including domains that never emit events.
+- One sidecar mapped actual `triggerWebhooks()` callers and confirmed lots were
+  the only live business-domain caller before this stage. It recommended
+  hold-point request/release as the smallest safe next domain.
+- One sidecar reviewed the webhook test strategy and recommended route-level
+  mutation tests that create a webhook config, mock fetch, perform the mutation,
+  poll `WebhookDelivery`, and assert conservative payload contents.
+
+Confirmed issues fixed in this branch:
+
+- Webhook create/update validation now rejects unsupported event subscriptions
+  instead of accepting event names that never fire. Supported events are now
+  limited to `*`, `lot.created`, `lot.updated`, `lot.deleted`,
+  `hold_point.release_requested`, and `hold_point.released`.
+- Hold-point request-release now emits `hold_point.release_requested` after the
+  request transaction commits and audit logging is recorded.
+- Authenticated hold-point release now emits `hold_point.released` after the
+  release transaction commits and audit logging is recorded.
+- Public secure-link superintendent release now emits `hold_point.released`
+  after release/audit completion.
+- Hold-point webhook payloads intentionally avoid public release tokens, secure
+  links, signature data URLs, reviewer email addresses, webhook secrets, and raw
+  storage URLs.
+
+Verification so far:
+
+- Local backend:
+  - `npm run db:generate` with the local Windows TLS workaround.
+  - `npm run format:check`
+  - `npm run type-check`
+  - `npm run lint`
+  - `npm run build`
+  - `npm test -- src/routes/webhooks/validation.test.ts src/routes/webhooks/delivery.test.ts src/routes/holdpoints/requestReleaseRoutes.delivery.test.ts`
+    (3 files, 13 tests)
+- Repo checks:
+  - `git diff --check`
+  - `npm run fallow:audit`, verdict `warn`; no dead files or dead exports were
+    introduced. Remaining warnings are the inherited `pdfjs-dist` unused
+    dependency, repeated backend test fixture duplication, and existing large
+    hold-point/webhook route test and route-handler functions touched by this
+    targeted patch.
+
+Not live-exercised locally:
+
+- DB-backed webhook/hold-point route regressions were added for
+  release-request, authenticated release, public secure-link release, and
+  unsupported event subscriptions, but were not run locally because this
+  isolated worktree has no safe disposable `DATABASE_URL` configured. These
+  suites are expected to run in GitHub CI against the disposable CI database.
+- No real production webhook receiver was called.
+- No real external superintendent email was sent in this stage.
+
+Remaining findings for a later pass:
+
+- Broader business-event webhook wiring is still incomplete for ITPs, NCRs,
+  dockets, diary, test results, claims, documents, drawings, subcontractors, and
+  other workflow domains.
+- There is still no frontend webhook event picker or public event taxonomy docs
+  surface.
+- Existing stored webhook configurations with unsupported event names are not
+  migrated by this branch; create/update validation rejects unsupported events
+  going forward.
+- Decide what should happen to webhook ownership/configuration when the creator
+  is offboarded from the company.
+
+Artifacts:
+
+- No bearer tokens, session cookies, generated passwords, production secrets,
+  recipient emails, public release tokens, webhook URLs, webhook secrets, or
+  browser-session data were committed or copied into this ledger.
+
 ## Stage 47 - Foreman Mobile Shell Project Scope QA
 
 Status: landed in PR #1099. Follow-up E2E stability fix pending for the
@@ -3911,8 +3999,8 @@ Artifacts:
 
 ## Stage 48 - Public Email, Invite, Auth Token, and Hold-Point Evidence QA
 
-Status: in progress. Code changes are prepared on `qa/stage48-public-email`;
-PR/CI/merge still pending.
+Status: landed in commit `c63ff11a`. PR CI, merge, post-merge master CI, and
+production health checks passed.
 
 Scope:
 

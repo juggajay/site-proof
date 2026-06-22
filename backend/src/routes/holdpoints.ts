@@ -37,6 +37,7 @@ import { updateLotStatusFromITP } from './itp/helpers/lotProgression.js';
 import { isProjectNotificationEnabled } from '../lib/projectNotificationPreferences.js';
 import { parseDocumentContentDisposition, sendDocumentFile } from './documents/fileHelpers.js';
 import { resolveHoldPointEvidenceInputs } from './holdpoints/evidencePackageInputs.js';
+import { emitHoldPointWebhookEvent } from './holdpoints/webhookEvents.js';
 
 const holdpointsRouter = Router();
 
@@ -557,6 +558,24 @@ holdpointsRouter.post(
         tokenRecipientName: releaseToken.recipientName,
       },
       req,
+    });
+
+    emitHoldPointWebhookEvent(releaseToken.holdPoint.lot.projectId, 'hold_point.released', {
+      holdPointId: holdPoint.id,
+      projectId: releaseToken.holdPoint.lot.projectId,
+      lotId: holdPoint.lotId,
+      lotNumber: holdPoint.lot.lotNumber,
+      itpChecklistItemId: holdPoint.itpChecklistItemId,
+      description: holdPoint.description,
+      status: holdPoint.status,
+      actorUserId: null,
+      action: 'released',
+      releaseSource: 'public_secure_link',
+      releaseMethod: 'secure_link',
+      releasedByName: effectiveReleasedByName || null,
+      releasedByOrg: releasedByOrg || null,
+      releaseEvidenceDocumentId: null,
+      hasReleaseNotes: Boolean(releaseNotes?.trim()),
     });
 
     res.json(buildPublicHoldPointReleasedResponse(holdPoint));

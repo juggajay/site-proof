@@ -39,19 +39,24 @@ describe('webhook validation helpers', () => {
 
   describe('events', () => {
     it('normalizes, deduplicates, serializes, and parses stored events', () => {
-      const events = normalizeEvents([' lot.created ', 'lot.created', 'ncr.closed']);
+      const events = normalizeEvents([
+        ' lot.created ',
+        'lot.created',
+        'hold_point.release_requested',
+      ]);
 
-      expect(events).toEqual(['lot.created', 'ncr.closed']);
-      expect(serializeEvents(events)).toBe('["lot.created","ncr.closed"]');
+      expect(events).toEqual(['lot.created', 'hold_point.release_requested']);
+      expect(serializeEvents(events)).toBe('["lot.created","hold_point.release_requested"]');
       expect(parseStoredEvents(serializeEvents(events))).toEqual(events);
       expect(parseStoredEvents('not-json')).toEqual(['*']);
     });
 
-    it('preserves existing event validation messages', () => {
+    it('rejects malformed and unsupported event names', () => {
       expect(normalizeEvents(undefined)).toEqual(['*']);
       expect(() => normalizeEvents('lot.created')).toThrow('events must be an array of strings');
       expect(() => normalizeEvents([])).toThrow('events must include at least one event name');
       expect(() => normalizeEvents(['bad event'])).toThrow('events contains an invalid event name');
+      expect(() => normalizeEvents(['ncr.closed'])).toThrow('unsupported event');
       expect(() =>
         normalizeEvents(Array.from({ length: 51 }, (_, index) => `event.${index}`)),
       ).toThrow('events cannot include more than 50 entries');

@@ -40,6 +40,36 @@ async function cleanupTestUser(userId: string) {
   await prisma.user.delete({ where: { id: userId } }).catch(() => {});
 }
 
+type WebhookDeliveryForTest = Awaited<ReturnType<typeof prisma.webhookDelivery.findMany>>[number];
+
+function deliveryPayloadContains(delivery: WebhookDeliveryForTest, value: string) {
+  return JSON.stringify(delivery.payload).includes(value);
+}
+
+async function waitForWebhookDeliveries(
+  webhookId: string,
+  expectedCount: number,
+  matcher?: (delivery: WebhookDeliveryForTest) => boolean,
+) {
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const deliveries = await prisma.webhookDelivery.findMany({
+      where: { webhookId },
+      orderBy: { deliveredAt: 'asc' },
+    });
+
+    if (deliveries.length >= expectedCount && (!matcher || deliveries.some(matcher))) {
+      return deliveries;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+
+  return prisma.webhookDelivery.findMany({
+    where: { webhookId },
+    orderBy: { deliveredAt: 'asc' },
+  });
+}
+
 describe('Hold Points API', () => {
   let authToken: string;
   let userId: string;
@@ -482,6 +512,88 @@ describe('Hold Points API', () => {
       }
     });
 
+    it('triggers a hold point release-request webhook after committing tokens', async () => {
+      clearEmailQueue();
+      const fetchMock = vi
+        .spyOn(globalThis, 'fetch')
+        .mockImplementation(() => Promise.resolve(new Response('accepted', { status: 200 })));
+      const webhook = await prisma.webhookConfig.create({
+        data: {
+          companyId,
+          url: 'https://example.com/siteproof-hold-point-events',
+          secret: 'test-webhook-secret',
+          events: JSON.stringify(['hold_point.release_requested']),
+          enabled: true,
+          createdById: userId,
+        },
+      });
+      const lot = await createRequestReleaseLot('webhook-requested');
+      let holdPointIdToDelete: string | undefined;
+
+      try {
+        const res = await request(app)
+          .post('/api/holdpoints/request-release')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            lotId: lot.id,
+            itpChecklistItemId: checklistItemId,
+            notificationSentTo: 'webhook-reviewer@example.com',
+          });
+
+        expect(res.status).toBe(200);
+        holdPointIdToDelete = res.body.holdPoint.id;
+
+        const deliveries = await waitForWebhookDeliveries(webhook.id, 1, (delivery) =>
+          deliveryPayloadContains(delivery, holdPointIdToDelete ?? ''),
+        );
+        const delivery = deliveries.find((item) =>
+          deliveryPayloadContains(item, holdPointIdToDelete ?? ''),
+        );
+        expect(delivery).toBeDefined();
+        expect(delivery).toMatchObject({
+          event: 'hold_point.release_requested',
+          success: true,
+          responseStatus: 200,
+        });
+        expect(delivery?.payload).toMatchObject({
+          event: 'hold_point.release_requested',
+          data: {
+            holdPointId: holdPointIdToDelete,
+            projectId,
+            lotId: lot.id,
+            lotNumber: lot.lotNumber,
+            itpChecklistItemId: checklistItemId,
+            status: 'notified',
+            actorUserId: userId,
+            action: 'release_requested',
+            recipientCount: 1,
+            emailDelivery: {
+              sent: 1,
+              failed: 0,
+            },
+            noticePeriodOverride: false,
+          },
+        });
+        const serializedPayload = JSON.stringify(delivery?.payload);
+        expect(serializedPayload).not.toContain('webhook-reviewer@example.com');
+        expect(serializedPayload).not.toContain('/hp-release/');
+        expect(serializedPayload).not.toContain('sha256:');
+        expect(fetchMock).toHaveBeenCalled();
+      } finally {
+        if (!holdPointIdToDelete) {
+          const createdHoldPoint = await prisma.holdPoint.findFirst({
+            where: { lotId: lot.id, itpChecklistItemId: checklistItemId },
+            select: { id: true },
+          });
+          holdPointIdToDelete = createdHoldPoint?.id;
+        }
+        await prisma.webhookDelivery.deleteMany({ where: { webhookId: webhook.id } });
+        await prisma.webhookConfig.delete({ where: { id: webhook.id } }).catch(() => {});
+        await cleanupRequestReleaseLot(lot.id, holdPointIdToDelete);
+        fetchMock.mockRestore();
+      }
+    });
+
     it('honours minimum notice days saved by project settings UI', async () => {
       clearEmailQueue();
       const lot = await createRequestReleaseLot('ui-minimum-notice');
@@ -760,6 +872,70 @@ describe('Hold Points API', () => {
       expect(res.body.holdPoint.status).toBe('released');
       expect(res.body.holdPoint.releaseMethod).toBe('email');
       expect(res.body.holdPoint.releaseSignatureUrl).toBeNull();
+    });
+
+    it('triggers a hold point released webhook after authenticated release', async () => {
+      const fetchMock = vi
+        .spyOn(globalThis, 'fetch')
+        .mockImplementation(() => Promise.resolve(new Response('accepted', { status: 200 })));
+      const webhook = await prisma.webhookConfig.create({
+        data: {
+          companyId,
+          url: 'https://example.com/siteproof-hold-point-release-events',
+          secret: 'test-webhook-secret',
+          events: JSON.stringify(['hold_point.released']),
+          enabled: true,
+          createdById: userId,
+        },
+      });
+      const { holdPoint: hp, completion } = await createReleaseReadyHoldPoint();
+
+      try {
+        const res = await postRelease(hp.id, emailReleasePayload());
+
+        expect(res.status).toBe(200);
+
+        const deliveries = await waitForWebhookDeliveries(webhook.id, 1, (delivery) =>
+          deliveryPayloadContains(delivery, hp.id),
+        );
+        const delivery = deliveries.find((item) => deliveryPayloadContains(item, hp.id));
+        expect(delivery).toBeDefined();
+        expect(delivery).toMatchObject({
+          event: 'hold_point.released',
+          success: true,
+          responseStatus: 200,
+        });
+        expect(delivery?.payload).toMatchObject({
+          event: 'hold_point.released',
+          data: {
+            holdPointId: hp.id,
+            projectId,
+            lotId,
+            lotNumber: expect.any(String),
+            itpChecklistItemId: checklistItemId,
+            status: 'released',
+            actorUserId: userId,
+            action: 'released',
+            releaseSource: 'authenticated',
+            releaseMethod: 'email',
+            releasedByName: 'Email Release Reviewer',
+            releasedByOrg: 'Superintendent Team',
+            releaseEvidenceDocumentId: null,
+            hasReleaseNotes: true,
+          },
+        });
+        const serializedPayload = JSON.stringify(delivery?.payload);
+        expect(serializedPayload).not.toContain('data:image');
+        expect(serializedPayload).not.toContain('/hp-release/');
+        expect(serializedPayload).not.toContain('external@example.com');
+        expect(fetchMock).toHaveBeenCalled();
+      } finally {
+        await prisma.webhookDelivery.deleteMany({ where: { webhookId: webhook.id } });
+        await prisma.webhookConfig.delete({ where: { id: webhook.id } }).catch(() => {});
+        await prisma.iTPCompletion.delete({ where: { id: completion.id } }).catch(() => {});
+        await prisma.holdPoint.delete({ where: { id: hp.id } }).catch(() => {});
+        fetchMock.mockRestore();
+      }
     });
 
     it('allows only one authenticated release when two users release the same hold point together', async () => {
@@ -2313,6 +2489,122 @@ describe('Hold Point Token Release', () => {
       await prisma.projectUser.deleteMany({ where: { projectId, userId: foreman.userId } });
       await cleanupTestUser(foreman.userId);
       clearEmailQueue();
+    }
+  });
+
+  it('triggers a hold point released webhook after public secure-link release', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(() => Promise.resolve(new Response('accepted', { status: 200 })));
+    const webhook = await prisma.webhookConfig.create({
+      data: {
+        companyId,
+        url: 'https://example.com/siteproof-public-hold-point-release-events',
+        secret: 'test-webhook-secret',
+        events: JSON.stringify(['hold_point.released']),
+        enabled: true,
+      },
+    });
+    const webhookLot = await prisma.lot.create({
+      data: {
+        projectId,
+        lotNumber: `TOK-WEBHOOK-${Date.now()}`,
+        status: 'not_started',
+        lotType: 'chainage',
+        activityType: 'Earthworks',
+      },
+    });
+    const templateSnapshotSource = await prisma.iTPTemplate.findUniqueOrThrow({
+      where: { id: templateId },
+      include: { checklistItems: { orderBy: { sequenceNumber: 'asc' } } },
+    });
+    const webhookInstance = await prisma.iTPInstance.create({
+      data: {
+        templateId,
+        lotId: webhookLot.id,
+        templateSnapshot: JSON.stringify(buildTemplateSnapshot(templateSnapshotSource)),
+        status: 'not_started',
+      },
+    });
+    const webhookHoldPoint = await prisma.holdPoint.create({
+      data: {
+        lotId: webhookLot.id,
+        itpChecklistItemId: checklistItemId,
+        pointType: 'hold_point',
+        status: 'pending',
+      },
+    });
+    const rawWebhookToken = `webhook-public-token-${Date.now()}`;
+    await prisma.holdPointReleaseToken.create({
+      data: {
+        holdPointId: webhookHoldPoint.id,
+        token: hashHoldPointReleaseTokenForTest(rawWebhookToken),
+        recipientEmail: 'public-webhook-external@example.com',
+        recipientName: 'Public Webhook External Reviewer',
+        expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+      },
+    });
+
+    try {
+      const res = await request(app)
+        .post(`/api/holdpoints/public/${rawWebhookToken}/release`)
+        .send({
+          releasedByName: 'Submitted Public Name',
+          releasedByOrg: 'Client Company',
+          releaseNotes: 'Approved from secure link',
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.holdPoint.status).toBe('released');
+
+      const deliveries = await waitForWebhookDeliveries(webhook.id, 1, (delivery) =>
+        deliveryPayloadContains(delivery, webhookHoldPoint.id),
+      );
+      const delivery = deliveries.find((item) =>
+        deliveryPayloadContains(item, webhookHoldPoint.id),
+      );
+      expect(delivery).toBeDefined();
+      expect(delivery).toMatchObject({
+        event: 'hold_point.released',
+        success: true,
+        responseStatus: 200,
+      });
+      expect(delivery?.payload).toMatchObject({
+        event: 'hold_point.released',
+        data: {
+          holdPointId: webhookHoldPoint.id,
+          projectId,
+          lotId: webhookLot.id,
+          lotNumber: webhookLot.lotNumber,
+          itpChecklistItemId: checklistItemId,
+          status: 'released',
+          actorUserId: null,
+          action: 'released',
+          releaseSource: 'public_secure_link',
+          releaseMethod: 'secure_link',
+          releasedByName: 'Public Webhook External Reviewer',
+          releasedByOrg: 'Client Company',
+          releaseEvidenceDocumentId: null,
+          hasReleaseNotes: true,
+        },
+      });
+      const serializedPayload = JSON.stringify(delivery?.payload);
+      expect(serializedPayload).not.toContain('public-webhook-external@example.com');
+      expect(serializedPayload).not.toContain(rawWebhookToken);
+      expect(serializedPayload).not.toContain('/hp-release/');
+      expect(serializedPayload).not.toContain('sha256:');
+      expect(fetchMock).toHaveBeenCalled();
+    } finally {
+      await prisma.webhookDelivery.deleteMany({ where: { webhookId: webhook.id } });
+      await prisma.webhookConfig.delete({ where: { id: webhook.id } }).catch(() => {});
+      await prisma.holdPointReleaseToken.deleteMany({
+        where: { holdPointId: webhookHoldPoint.id },
+      });
+      await prisma.holdPoint.delete({ where: { id: webhookHoldPoint.id } }).catch(() => {});
+      await prisma.iTPCompletion.deleteMany({ where: { itpInstanceId: webhookInstance.id } });
+      await prisma.iTPInstance.delete({ where: { id: webhookInstance.id } }).catch(() => {});
+      await prisma.lot.delete({ where: { id: webhookLot.id } }).catch(() => {});
+      fetchMock.mockRestore();
     }
   });
 
