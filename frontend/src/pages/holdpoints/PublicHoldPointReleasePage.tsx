@@ -30,9 +30,11 @@ interface ReleaseResultResponse {
   message: string;
   holdPoint: {
     status: string;
+    itpChecklistItemId?: string | null;
     releasedAt: string | null;
     releasedByName: string | null;
     releasedByOrg: string | null;
+    releaseMethod?: string | null;
     releaseNotes: string | null;
   };
 }
@@ -78,6 +80,53 @@ function StatusPill({ status }: { status: string }) {
       {label}
     </span>
   );
+}
+
+function applyReleaseToEvidencePackage(
+  evidencePackage: HPEvidencePackageData,
+  releasedHoldPoint: ReleaseResultResponse['holdPoint'],
+): HPEvidencePackageData {
+  const releasedAt = releasedHoldPoint.releasedAt;
+  const releasedByName = releasedHoldPoint.releasedByName;
+  const releasedChecklistItemId =
+    releasedHoldPoint.itpChecklistItemId || evidencePackage.holdPoint.itpChecklistItemId || null;
+  const updatedChecklist = evidencePackage.checklist.map((item) => {
+    const isReleasedHoldPoint =
+      item.pointType === 'hold_point' &&
+      ((releasedChecklistItemId && item.itpChecklistItemId === releasedChecklistItemId) ||
+        (!releasedChecklistItemId && item.description === evidencePackage.holdPoint.description));
+
+    if (!isReleasedHoldPoint) {
+      return item;
+    }
+
+    return {
+      ...item,
+      isCompleted: true,
+      completedAt: item.completedAt || releasedAt,
+      completedBy: item.completedBy || releasedByName,
+      isVerified: true,
+      verifiedAt: item.verifiedAt || releasedAt,
+      verifiedBy: item.verifiedBy || releasedByName,
+    };
+  });
+
+  return {
+    ...evidencePackage,
+    holdPoint: {
+      ...evidencePackage.holdPoint,
+      status: releasedHoldPoint.status,
+      releasedAt: releasedHoldPoint.releasedAt,
+      releasedByName: releasedHoldPoint.releasedByName,
+      releaseNotes: releasedHoldPoint.releaseNotes,
+    },
+    checklist: updatedChecklist,
+    summary: {
+      ...evidencePackage.summary,
+      completedItems: updatedChecklist.filter((item) => item.isCompleted).length,
+      verifiedItems: updatedChecklist.filter((item) => item.isVerified).length,
+    },
+  };
 }
 
 export function PublicHoldPointReleasePage() {
@@ -135,8 +184,21 @@ export function PublicHoldPointReleasePage() {
   const evidencePackage = data?.evidencePackage;
   const currentStatus =
     releaseResult?.holdPoint.status || evidencePackage?.holdPoint.status || 'pending';
+  const releasedHoldPoint =
+    releaseResult?.holdPoint ||
+    (evidencePackage?.holdPoint.status === 'released'
+      ? {
+          status: evidencePackage.holdPoint.status,
+          itpChecklistItemId: evidencePackage.holdPoint.itpChecklistItemId,
+          releasedAt: evidencePackage.holdPoint.releasedAt,
+          releasedByName: evidencePackage.holdPoint.releasedByName,
+          releasedByOrg: null,
+          releaseNotes: evidencePackage.holdPoint.releaseNotes,
+        }
+      : null);
   const canRelease =
     Boolean(data?.tokenInfo.canRelease) && currentStatus !== 'released' && !releaseResult;
+  const tokenRecipientName = data?.tokenInfo.recipientName?.trim() || '';
   const checklistStats = useMemo(() => {
     if (!evidencePackage) return null;
     return {
@@ -183,6 +245,17 @@ export function PublicHoldPointReleasePage() {
         },
       );
       setReleaseResult(result);
+      setData((current) =>
+        current
+          ? {
+              ...current,
+              evidencePackage: applyReleaseToEvidencePackage(
+                current.evidencePackage,
+                result.holdPoint,
+              ),
+            }
+          : current,
+      );
     } catch (error) {
       setSubmitError(extractErrorMessage(error, 'Could not release this hold point.'));
     } finally {
@@ -401,16 +474,21 @@ export function PublicHoldPointReleasePage() {
         </section>
 
         <aside className="rounded-lg border bg-card p-5 shadow-sm lg:sticky lg:top-6 lg:self-start">
-          {releaseResult ? (
+          {releasedHoldPoint ? (
             <div>
               <div className="flex items-center gap-2 text-success" role="status">
                 <CheckCircle2 className="h-5 w-5" />
                 <h2 className="font-semibold">Hold Point Released</h2>
               </div>
               <p className="mt-3 text-sm text-muted-foreground">
-                Released by {releaseResult.holdPoint.releasedByName || releasedByName} at{' '}
-                {formatDateTime(releaseResult.holdPoint.releasedAt)}.
+                Released by {releasedHoldPoint.releasedByName || releasedByName} at{' '}
+                {formatDateTime(releasedHoldPoint.releasedAt)}.
               </p>
+              {releasedHoldPoint.releaseNotes && (
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {releasedHoldPoint.releaseNotes}
+                </p>
+              )}
               <Button
                 type="button"
                 variant="outline"
@@ -451,9 +529,14 @@ export function PublicHoldPointReleasePage() {
                   onChange={(event) => setReleasedByName(event.target.value)}
                   maxLength={120}
                   required
-                  disabled={!canRelease || submitting}
+                  disabled={Boolean(tokenRecipientName) || !canRelease || submitting}
                   className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:ring-2 focus:ring-ring"
                 />
+                {tokenRecipientName && (
+                  <span className="mt-1 block text-xs text-muted-foreground">
+                    This secure link is assigned to {tokenRecipientName}.
+                  </span>
+                )}
               </label>
 
               <label className="block text-sm font-medium">

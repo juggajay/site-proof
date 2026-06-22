@@ -164,6 +164,7 @@ export interface HPEvidencePackageData {
   holdPoint: {
     id: string;
     description: string;
+    itpChecklistItemId?: string | null;
     status: string;
     notificationSentAt: string | null;
     scheduledDate: string | null;
@@ -190,6 +191,7 @@ export interface HPEvidencePackageData {
     activityType: string | null;
   };
   checklist: {
+    itpChecklistItemId?: string | null;
     sequenceNumber: number;
     description: string;
     pointType: string | null;

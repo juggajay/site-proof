@@ -100,6 +100,12 @@ export async function updateLotStatusFromITP(itpInstanceId: string) {
         data: { status: newStatus },
       });
     }
+    if (newStatus && newStatus !== instance.status) {
+      await prisma.iTPInstance.update({
+        where: { id: instance.id },
+        data: { status: newStatus },
+      });
+    }
   } catch (error) {
     // Log but don't throw - status update is not critical
     // Note: This helper intentionally catches errors since lot status update is non-critical

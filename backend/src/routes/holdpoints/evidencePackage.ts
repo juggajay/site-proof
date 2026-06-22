@@ -135,6 +135,7 @@ export function buildHoldPointEvidenceChecklist(
   return itemsUpToHP.map((item) => {
     const completion = completions.find((c) => c.checklistItemId === item.id);
     return {
+      itpChecklistItemId: item.id,
       sequenceNumber: item.sequenceNumber,
       description: item.description,
       pointType: item.pointType,

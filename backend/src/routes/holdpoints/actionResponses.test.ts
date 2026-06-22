@@ -79,6 +79,7 @@ describe('hold point action response builders', () => {
     const publicHoldPoint = {
       id: 'hp-2',
       description: 'Witness compaction test',
+      itpChecklistItemId: 'item-hp-2',
       status: 'released',
       releasedAt,
       releasedByName: 'Superintendent',
@@ -97,6 +98,7 @@ describe('hold point action response builders', () => {
       holdPoint: {
         id: 'hp-2',
         description: 'Witness compaction test',
+        itpChecklistItemId: 'item-hp-2',
         status: 'released',
         releasedAt,
         releasedByName: 'Superintendent',

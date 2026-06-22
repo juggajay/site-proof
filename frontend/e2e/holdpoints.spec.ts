@@ -314,6 +314,185 @@ async function mockSeededHoldPointsApi(page: Page, options: MockHoldPointsOption
   };
 }
 
+function buildPublicReleasePackage({
+  status = 'notified',
+  recipientName = 'E2E Superintendent',
+}: {
+  status?: string;
+  recipientName?: string | null;
+} = {}) {
+  const released = status === 'released';
+  return {
+    evidencePackage: {
+      holdPoint: {
+        id: 'e2e-public-hp',
+        description: 'External superintendent release before concrete pour',
+        itpChecklistItemId: 'e2e-public-checklist-item',
+        status,
+        notificationSentAt: '2026-03-01T22:00:00.000Z',
+        scheduledDate: '2026-03-02T00:00:00.000Z',
+        releasedAt: released ? '2026-03-02T01:00:00.000Z' : null,
+        releasedByName: released ? 'Already Released Superintendent' : null,
+        releaseNotes: released ? 'Released before reopening the secure link' : null,
+      },
+      lot: {
+        id: 'e2e-public-lot',
+        lotNumber: 'HP-PUBLIC-001',
+        description: 'Concrete slab pour',
+        activityType: 'Structures',
+        chainageStart: null,
+        chainageEnd: null,
+      },
+      project: {
+        id: E2E_PROJECT_ID,
+        name: 'E2E Highway Upgrade',
+        projectNumber: 'E2E-001',
+      },
+      itpTemplate: {
+        id: 'e2e-public-itp',
+        name: 'Structures Hold Point ITP',
+        activityType: 'Structures',
+      },
+      checklist: [
+        {
+          itpChecklistItemId: 'e2e-public-checklist-item',
+          sequenceNumber: 1,
+          description: 'Confirm formwork and reinforcement before pour',
+          pointType: 'hold_point',
+          responsibleParty: 'Superintendent',
+          isCompleted: released,
+          completedAt: released ? '2026-03-02T01:00:00.000Z' : null,
+          completedBy: released ? 'Already Released Superintendent' : null,
+          isVerified: released,
+          verifiedAt: released ? '2026-03-02T01:00:00.000Z' : null,
+          verifiedBy: released ? 'Already Released Superintendent' : null,
+          notes: 'Ready for superintendent release',
+          attachments: [],
+        },
+      ],
+      testResults: [
+        {
+          id: 'e2e-public-test',
+          testType: 'Concrete slump',
+          testRequestNumber: 'TR-PUBLIC-001',
+          laboratoryName: 'E2E Lab',
+          resultValue: 80,
+          resultUnit: 'mm',
+          passFail: 'pass',
+          status: 'verified',
+          isVerified: true,
+          verifiedBy: 'E2E Engineer',
+          createdAt: '2026-03-02T00:45:00.000Z',
+        },
+      ],
+      photos: [
+        {
+          id: 'e2e-public-photo',
+          filename: 'reinforcement-before-pour.jpg',
+          caption: 'Pre-pour inspection',
+          uploadedAt: '2026-03-02T00:50:00.000Z',
+        },
+      ],
+      summary: {
+        totalChecklistItems: 1,
+        completedItems: released ? 1 : 0,
+        verifiedItems: released ? 1 : 0,
+        totalTestResults: 1,
+        passingTests: 1,
+        totalPhotos: 1,
+        totalAttachments: 0,
+      },
+      generatedAt: '2026-03-02T01:00:00.000Z',
+    },
+    tokenInfo: {
+      recipientEmail: 'external.superintendent@example.com',
+      recipientName,
+      expiresAt: '2026-03-04T00:00:00.000Z',
+      canRelease: !released,
+    },
+  };
+}
+
+async function mockPublicHoldPointReleaseApi(
+  page: Page,
+  options: {
+    loadStatus?: number;
+    loadMessage?: string;
+    releaseStatus?: number;
+    releaseMessage?: string;
+    initialStatus?: string;
+    recipientName?: string | null;
+  } = {},
+) {
+  let releaseRequest: unknown;
+  let releaseCount = 0;
+
+  await page.route('**/api/holdpoints/public/e2e-public-token', async (route) => {
+    if ((options.loadStatus || 200) !== 200) {
+      await route.fulfill({
+        status: options.loadStatus || 410,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: { message: options.loadMessage || 'This secure release link has expired.' },
+        }),
+      });
+      return;
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(
+        buildPublicReleasePackage({
+          status: options.initialStatus || 'notified',
+          recipientName: Object.prototype.hasOwnProperty.call(options, 'recipientName')
+            ? options.recipientName
+            : 'E2E Superintendent',
+        }),
+      ),
+    });
+  });
+
+  await page.route('**/api/holdpoints/public/e2e-public-token/release', async (route) => {
+    releaseCount += 1;
+    releaseRequest = route.request().postDataJSON();
+    const requestBody = releaseRequest as { releasedByName?: string };
+
+    if ((options.releaseStatus || 200) !== 200) {
+      await route.fulfill({
+        status: options.releaseStatus || 400,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: { message: options.releaseMessage || 'Release could not be recorded.' },
+        }),
+      });
+      return;
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        success: true,
+        message: 'Hold point released successfully via secure link',
+        holdPoint: {
+          status: 'released',
+          itpChecklistItemId: 'e2e-public-checklist-item',
+          releasedAt: '2026-03-02T01:20:00.000Z',
+          releasedByName: requestBody.releasedByName || 'E2E Superintendent',
+          releasedByOrg: 'Client Superintendent Org',
+          releaseNotes: 'Evidence reviewed and accepted',
+        },
+      }),
+    });
+  });
+
+  return {
+    getReleaseRequest: () => releaseRequest,
+    getReleaseCount: () => releaseCount,
+  };
+}
+
 test.describe('Hold points seeded release contract', () => {
   test('renders seeded hold points, requests release, filters notified items, and chases release @pr-smoke', async ({
     page,
@@ -562,6 +741,161 @@ test.describe('Hold points seeded release contract', () => {
     await expect(recordModal.getByRole('alert')).toContainText('Release date must be a valid date');
     await expect(recordModal).toBeVisible();
     await expect(notifiedRow.getByText('Released', { exact: true })).toBeHidden();
+  });
+});
+
+test.describe('Public hold point secure release page', () => {
+  test('lets a named external superintendent review evidence and release from a secure link', async ({
+    page,
+  }) => {
+    const api = await mockPublicHoldPointReleaseApi(page);
+
+    await page.goto('/hp-release/e2e-public-token');
+
+    await expect(page.getByText('Secure SiteProof Release')).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'External superintendent release before concrete pour' }),
+    ).toBeVisible();
+    await expect(page.getByText('E2E Highway Upgrade')).toBeVisible();
+    await expect(page.getByText('HP-PUBLIC-001')).toBeVisible();
+    await expect(page.getByText('0/1 checklist items')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Evidence Package' })).toBeVisible();
+    await expect(page.getByText('Confirm formwork and reinforcement before pour')).toBeVisible();
+    await expect(page.getByRole('row').filter({ hasText: 'Confirm formwork' })).toContainText('No');
+    await expect(page.getByRole('heading', { name: 'Test Results' })).toBeVisible();
+    await expect(page.getByText('Concrete slump')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Photos And Attachments' })).toBeVisible();
+    await expect(page.getByText('reinforcement-before-pour.jpg')).toBeVisible();
+    await expect(page.locator('body')).not.toContainText('/storage/v1/object/public/');
+
+    const releasedBy = page.getByLabel('Released By');
+    await expect(releasedBy).toHaveValue('E2E Superintendent');
+    await expect(releasedBy).toBeDisabled();
+    await expect(
+      page.getByText('This secure link is assigned to E2E Superintendent.'),
+    ).toBeVisible();
+
+    await page.getByLabel('Organisation').fill('Client Superintendent Org');
+    await page.getByLabel('Release Notes').fill('Evidence reviewed and accepted');
+    await page.getByRole('button', { name: 'Release Hold Point' }).click();
+
+    await expect.poll(() => api.getReleaseCount()).toBe(1);
+    expect(api.getReleaseRequest()).toMatchObject({
+      releasedByName: 'E2E Superintendent',
+      releasedByOrg: 'Client Superintendent Org',
+      releaseNotes: 'Evidence reviewed and accepted',
+    });
+    await expect(page.getByRole('status')).toContainText('Hold Point Released');
+    await expect(page.getByText('Released by E2E Superintendent')).toBeVisible();
+    await expect(page.getByText('1/1 checklist items')).toBeVisible();
+    await expect(page.getByRole('row').filter({ hasText: 'Confirm formwork' })).toContainText(
+      'Yes',
+    );
+    await expect(page.getByRole('button', { name: 'Download Evidence PDF' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Release Hold Point' })).toHaveCount(0);
+  });
+
+  test('requires an unnamed secure-link recipient to enter their release identity', async ({
+    page,
+  }) => {
+    const api = await mockPublicHoldPointReleaseApi(page, { recipientName: null });
+
+    await page.goto('/hp-release/e2e-public-token');
+
+    const releasedBy = page.getByLabel('Released By');
+    await expect(releasedBy).toBeEnabled();
+    await expect(releasedBy).toHaveValue('');
+    await expect(page.getByRole('button', { name: 'Release Hold Point' })).toBeDisabled();
+
+    await releasedBy.fill('Typed External Reviewer');
+    await page.getByRole('button', { name: 'Release Hold Point' }).click();
+
+    await expect.poll(() => api.getReleaseCount()).toBe(1);
+    expect(api.getReleaseRequest()).toMatchObject({
+      releasedByName: 'Typed External Reviewer',
+    });
+    await expect(page.getByText('Released by Typed External Reviewer')).toBeVisible();
+  });
+
+  test('renders an already released secure link as read-only release evidence', async ({
+    page,
+  }) => {
+    await mockPublicHoldPointReleaseApi(page, { initialStatus: 'released' });
+
+    await page.goto('/hp-release/e2e-public-token');
+
+    await expect(page.getByText('Already Released Superintendent')).toBeVisible();
+    await expect(page.getByText('Released before reopening the secure link')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Release Hold Point' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Download Evidence PDF' })).toBeVisible();
+  });
+
+  test('keeps the public secure release flow usable on mobile', async ({ page }) => {
+    const api = await mockPublicHoldPointReleaseApi(page, { recipientName: null });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.addInitScript(() => {
+      localStorage.setItem(
+        'cookie_consent',
+        JSON.stringify({
+          version: 'v1',
+          accepted: true,
+          timestamp: '2026-01-15T00:00:00.000Z',
+        }),
+      );
+    });
+
+    await page.goto('/hp-release/e2e-public-token');
+
+    await expect(page.getByRole('heading', { name: 'Evidence Package' })).toBeVisible();
+    await page.getByRole('heading', { name: 'Release Hold Point' }).scrollIntoViewIfNeeded();
+    await expect(page.getByLabel('Released By')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Release Hold Point' })).toBeVisible();
+
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - window.innerWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(1);
+
+    await page.getByLabel('Released By').fill('Mobile External Reviewer');
+    await page.getByRole('button', { name: 'Release Hold Point' }).click();
+
+    await expect.poll(() => api.getReleaseCount()).toBe(1);
+    await expect(page.getByText('Released by Mobile External Reviewer')).toBeVisible();
+  });
+
+  test('shows expired secure-link errors without rendering the release form', async ({ page }) => {
+    await mockPublicHoldPointReleaseApi(page, {
+      loadStatus: 410,
+      loadMessage: 'This secure release link has expired. Please contact the site team.',
+    });
+
+    await page.goto('/hp-release/e2e-public-token');
+
+    await expect(page.getByRole('heading', { name: 'Release Link Unavailable' })).toBeVisible();
+    await expect(page.getByRole('alert')).toContainText('secure release link has expired');
+    await expect(page.getByRole('link', { name: 'Go to SiteProof' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Release Hold Point' })).toHaveCount(0);
+  });
+
+  test('keeps the secure release form open when the backend rejects submission', async ({
+    page,
+  }) => {
+    const api = await mockPublicHoldPointReleaseApi(page, {
+      releaseStatus: 400,
+      releaseMessage: 'This hold point has already been released.',
+    });
+
+    await page.goto('/hp-release/e2e-public-token');
+
+    await page.getByLabel('Organisation').fill('Client Superintendent Org');
+    await page.getByRole('button', { name: 'Release Hold Point' }).click();
+
+    await expect.poll(() => api.getReleaseCount()).toBe(1);
+    await expect(page.getByRole('alert')).toContainText(
+      'This hold point has already been released.',
+    );
+    await expect(page.getByRole('button', { name: 'Release Hold Point' })).toBeVisible();
+    await expect(page.getByRole('status', { name: /Hold Point Released/i })).toHaveCount(0);
   });
 });
 

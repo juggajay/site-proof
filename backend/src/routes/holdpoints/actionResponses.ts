@@ -71,6 +71,7 @@ export function buildHoldPointEscalationResolvedResponse<THoldPoint>(holdPoint: 
 type PublicReleasedHoldPoint = {
   id: string;
   description: string | null;
+  itpChecklistItemId: string;
   status: string;
   releasedAt: Date | null;
   releasedByName: string | null;
@@ -90,6 +91,7 @@ export function buildPublicHoldPointReleasedResponse(holdPoint: PublicReleasedHo
     holdPoint: {
       id: holdPoint.id,
       description: holdPoint.description,
+      itpChecklistItemId: holdPoint.itpChecklistItemId,
       status: holdPoint.status,
       releasedAt: holdPoint.releasedAt,
       releasedByName: holdPoint.releasedByName,

@@ -2185,12 +2185,82 @@ describe('Hold Point Token Release', () => {
 
       const updatedLot = await prisma.lot.findUniqueOrThrow({ where: { id: freshLot.id } });
       expect(updatedLot.status).toBe('completed');
+      const updatedInstance = await prisma.iTPInstance.findUniqueOrThrow({
+        where: { id: freshInstance.id },
+      });
+      expect(updatedInstance.status).toBe('completed');
     } finally {
       await prisma.holdPointReleaseToken.deleteMany({ where: { holdPointId: freshHoldPoint.id } });
       await prisma.holdPoint.delete({ where: { id: freshHoldPoint.id } }).catch(() => {});
       await prisma.iTPCompletion.deleteMany({ where: { itpInstanceId: freshInstance.id } });
       await prisma.iTPInstance.delete({ where: { id: freshInstance.id } }).catch(() => {});
       await prisma.lot.delete({ where: { id: freshLot.id } }).catch(() => {});
+    }
+  });
+
+  it('suppresses public release notifications and emails when the project toggle is off', async () => {
+    const originalProject = await prisma.project.findUniqueOrThrow({
+      where: { id: projectId },
+      select: { settings: true },
+    });
+    const foreman = await registerTestUser('HP Public Release Foreman Off', 'user', companyId);
+    const publicToggleHoldPoint = await prisma.holdPoint.create({
+      data: {
+        lotId,
+        itpChecklistItemId: checklistItemId,
+        pointType: 'hold_point',
+        status: 'pending',
+      },
+    });
+    const rawToggleToken = `toggle-public-token-${Date.now()}`;
+    await prisma.holdPointReleaseToken.create({
+      data: {
+        holdPointId: publicToggleHoldPoint.id,
+        token: hashHoldPointReleaseTokenForTest(rawToggleToken),
+        recipientEmail: 'toggle-public-external@example.com',
+        recipientName: 'Toggle Public External Reviewer',
+        expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+      },
+    });
+    await prisma.projectUser.create({
+      data: { projectId, userId: foreman.userId, role: 'foreman', status: 'active' },
+    });
+    await prisma.project.update({
+      where: { id: projectId },
+      data: {
+        settings: JSON.stringify({ notificationPreferences: { holdPointReleases: false } }),
+      },
+    });
+
+    try {
+      clearEmailQueue();
+      const res = await request(app).post(`/api/holdpoints/public/${rawToggleToken}/release`).send({
+        releasedByName: 'Toggle Public External Reviewer',
+        releasedByOrg: 'Client Company',
+        releaseNotes: 'Project toggle should suppress team notifications',
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.body.holdPoint.status).toBe('released');
+
+      const notifications = await prisma.notification.findMany({
+        where: { projectId, type: 'hold_point_release' },
+      });
+      expect(notifications).toHaveLength(0);
+      expect(getQueuedEmails()).toHaveLength(0);
+    } finally {
+      await prisma.project.update({
+        where: { id: projectId },
+        data: { settings: originalProject.settings },
+      });
+      await prisma.notification.deleteMany({ where: { projectId, type: 'hold_point_release' } });
+      await prisma.holdPointReleaseToken.deleteMany({
+        where: { holdPointId: publicToggleHoldPoint.id },
+      });
+      await prisma.holdPoint.delete({ where: { id: publicToggleHoldPoint.id } }).catch(() => {});
+      await prisma.projectUser.deleteMany({ where: { projectId, userId: foreman.userId } });
+      await cleanupTestUser(foreman.userId);
+      clearEmailQueue();
     }
   });
 
