@@ -205,6 +205,7 @@ export function useItpInstance({
   });
 
   const { mobileMarkNA, mobileMarkFailed } = useItpMobileActions({
+    lotId,
     itpInstance,
     setItpInstance,
     updatingCompletionRef,

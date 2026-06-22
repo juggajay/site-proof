@@ -92,6 +92,7 @@ export function useShellItpRun(
   // either action because the due-count and lot hub CTA depend on ITP state.
   const noopRefresh = useCallback(async () => {}, []);
   const { mobileMarkNA, mobileMarkFailed } = useItpMobileActions({
+    lotId,
     itpInstance: instance,
     setItpInstance: setInstance,
     updatingCompletionRef: updatingRef,
