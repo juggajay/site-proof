@@ -87,7 +87,7 @@ describe('Dockets API', () => {
 
     await prisma.user.update({
       where: { id: subcontractorUserId },
-      data: { companyId, roleInCompany: 'subcontractor' },
+      data: { companyId: null, roleInCompany: 'subcontractor' },
     });
 
     // Link subcontractor user to subcontractor company
@@ -217,6 +217,73 @@ describe('Dockets API', () => {
           where: { id: projectId },
           data: { status: 'active' },
         });
+      }
+    });
+
+    it('rejects company-linked stale subcontractor roles even with old links', async () => {
+      const staleUser = await registerTestUser(app, {
+        emailPrefix: 'dockets-stale-subcontractor',
+        fullName: 'Dockets Stale Subcontractor',
+        companyId,
+        roleInCompany: 'subcontractor',
+      });
+      const staleDocket = await prisma.dailyDocket.create({
+        data: {
+          projectId,
+          subcontractorCompanyId,
+          date: new Date('2031-06-22T00:00:00.000Z'),
+          status: 'draft',
+          notes: 'Stale identity should not read or submit this docket',
+        },
+      });
+
+      try {
+        await prisma.subcontractorUser.create({
+          data: {
+            userId: staleUser.userId,
+            subcontractorCompanyId,
+            role: 'admin',
+          },
+        });
+        await prisma.projectUser.create({
+          data: {
+            projectId,
+            userId: staleUser.userId,
+            role: 'project_manager',
+            status: 'active',
+          },
+        });
+
+        const createRes = await request(app)
+          .post('/api/dockets')
+          .set('Authorization', `Bearer ${staleUser.token}`)
+          .send({
+            projectId,
+            date: '2031-06-23',
+            notes: 'Stale subcontractor create attempt',
+          });
+        expect(createRes.status).toBe(403);
+
+        const listRes = await request(app)
+          .get(`/api/dockets?projectId=${projectId}`)
+          .set('Authorization', `Bearer ${staleUser.token}`);
+        expect(listRes.status).toBe(403);
+
+        const detailRes = await request(app)
+          .get(`/api/dockets/${staleDocket.id}`)
+          .set('Authorization', `Bearer ${staleUser.token}`);
+        expect(detailRes.status).toBe(403);
+
+        const submitRes = await request(app)
+          .post(`/api/dockets/${staleDocket.id}/submit`)
+          .set('Authorization', `Bearer ${staleUser.token}`);
+        expect(submitRes.status).toBe(403);
+      } finally {
+        await prisma.dailyDocket.delete({ where: { id: staleDocket.id } }).catch(() => {});
+        await prisma.projectUser.deleteMany({ where: { projectId, userId: staleUser.userId } });
+        await prisma.subcontractorUser.deleteMany({ where: { userId: staleUser.userId } });
+        await prisma.emailVerificationToken.deleteMany({ where: { userId: staleUser.userId } });
+        await prisma.user.delete({ where: { id: staleUser.userId } }).catch(() => {});
       }
     });
 
@@ -2444,7 +2511,7 @@ describe('Dockets API', () => {
 
       await prisma.user.update({
         where: { id: tempUserId },
-        data: { companyId, roleInCompany: 'subcontractor' },
+        data: { companyId: null, roleInCompany: 'subcontractor' },
       });
       await prisma.subcontractorUser.create({
         data: {

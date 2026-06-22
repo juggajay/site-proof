@@ -7,8 +7,8 @@ import { canViewLotBudget, isSubcontractorUser, type AuthenticatedUser } from '.
 // in CI. This locks the commercial-field-hiding and subcontractor-detection
 // contracts called out as behavior-preserving for the lots access extraction.
 
-const asUser = (roleInCompany: string | null): AuthenticatedUser =>
-  ({ roleInCompany }) as unknown as AuthenticatedUser;
+const asUser = (roleInCompany: string | null, companyId: string | null = null): AuthenticatedUser =>
+  ({ roleInCompany, companyId }) as unknown as AuthenticatedUser;
 
 describe('lots access helpers (pure, DB-free)', () => {
   describe('canViewLotBudget', () => {
@@ -33,6 +33,11 @@ describe('lots access helpers (pure, DB-free)', () => {
     it('detects subcontractor portal roles', () => {
       expect(isSubcontractorUser(asUser('subcontractor'))).toBe(true);
       expect(isSubcontractorUser(asUser('subcontractor_admin'))).toBe(true);
+    });
+
+    it('rejects stale company-linked subcontractor portal roles', () => {
+      expect(isSubcontractorUser(asUser('subcontractor', 'company-1'))).toBe(false);
+      expect(isSubcontractorUser(asUser('subcontractor_admin', 'company-1'))).toBe(false);
     });
 
     it('treats internal roles as non-subcontractor', () => {

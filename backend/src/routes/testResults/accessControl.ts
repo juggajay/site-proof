@@ -7,6 +7,7 @@ import {
   checkProjectAccess,
   getEffectiveProjectRole,
   isCompanyAdminRole,
+  isStandaloneSubcontractorPortalIdentity,
   isSubcontractorPortalRole,
   requireSubcontractorPortalModuleAccess,
 } from '../../lib/projectAccess.js';
@@ -47,10 +48,14 @@ export function isCompanyAdmin(user: AuthenticatedUser): boolean {
 }
 
 export function isSubcontractorUser(user: AuthenticatedUser): boolean {
-  return isSubcontractorPortalRole(user.roleInCompany);
+  return isStandaloneSubcontractorPortalIdentity(user);
 }
 
 export async function getReadableProjectIds(user: AuthenticatedUser): Promise<string[]> {
+  if (isSubcontractorPortalRole(user.roleInCompany) && !isSubcontractorUser(user)) {
+    return [];
+  }
+
   const isSubcontractor = isSubcontractorUser(user);
   const [projectUsers, companyProjects, subcontractorCompanies] = await Promise.all([
     isSubcontractor

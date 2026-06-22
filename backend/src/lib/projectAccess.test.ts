@@ -158,7 +158,7 @@ describe('checkProjectAccess', () => {
         companyName: `Project Membership Bypass Sub ${suffix}`,
         primaryContactName: 'Project Membership Bypass Subcontractor',
         primaryContactEmail: `project-membership-bypass-company-${suffix}@example.com`,
-        status: 'suspended',
+        status: 'approved',
         portalAccess: {
           lots: true,
           itps: true,

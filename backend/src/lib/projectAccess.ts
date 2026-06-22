@@ -286,6 +286,15 @@ export async function hasSubcontractorPortalModuleAccess({
     return true;
   }
 
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { companyId: true, roleInCompany: true },
+  });
+
+  if (!user || !isStandaloneSubcontractorPortalIdentity(user)) {
+    return false;
+  }
+
   const subcontractorUser = await prisma.subcontractorUser.findFirst({
     where: {
       userId,

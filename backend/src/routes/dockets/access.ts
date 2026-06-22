@@ -6,6 +6,7 @@ import {
   checkProjectAccess,
   getEffectiveProjectRole,
   isCompanyAdminRole,
+  isStandaloneSubcontractorPortalIdentity,
   isSubcontractorPortalRole,
 } from '../../lib/projectAccess.js';
 
@@ -31,7 +32,7 @@ export type DocketProjectReadScope = {
 };
 
 export function isSubcontractorUser(user: AuthUser): boolean {
-  return isSubcontractorPortalRole(user.roleInCompany);
+  return isStandaloneSubcontractorPortalIdentity(user);
 }
 
 export function isDocketEntryEditable(status: string): boolean {
@@ -88,15 +89,18 @@ export async function requireProjectReadAccess(
     throw AppError.forbidden('Access denied');
   }
 
+  const hasSubcontractorRole = isSubcontractorPortalRole(user.roleInCompany);
+  const isStandaloneSubcontractor = isSubcontractorUser(user);
+
   if (
-    !isSubcontractorUser(user) &&
+    !hasSubcontractorRole &&
     isCompanyAdminRole(user.roleInCompany) &&
     project.companyId === user.companyId
   ) {
     return {};
   }
 
-  if (!isSubcontractorUser(user)) {
+  if (!hasSubcontractorRole) {
     const projectUser = await prisma.projectUser.findFirst({
       where: {
         projectId,
@@ -111,12 +115,16 @@ export async function requireProjectReadAccess(
     }
   }
 
-  const subcontractorCompanyId = await getLinkedSubcontractorCompanyIdForProject(
-    user.id,
-    projectId,
-  );
-  if (subcontractorCompanyId) {
-    return { subcontractorCompanyId };
+  if (isStandaloneSubcontractor || !hasSubcontractorRole) {
+    const subcontractorCompanyId = await getLinkedSubcontractorCompanyIdForProject(
+      user.id,
+      projectId,
+    );
+    if (subcontractorCompanyId) {
+      return { subcontractorCompanyId };
+    }
+  } else if (hasSubcontractorRole) {
+    throw AppError.forbidden('Access denied');
   }
 
   if (!(await checkProjectAccess(user.id, projectId))) {
@@ -142,6 +150,10 @@ export async function requireDocketApproverAccess(
 }
 
 export async function requireDocketReadAccess(user: AuthUser, docket: DocketAccess): Promise<void> {
+  if (isSubcontractorPortalRole(user.roleInCompany) && !isSubcontractorUser(user)) {
+    throw AppError.forbidden('Access denied');
+  }
+
   if (isSubcontractorUser(user)) {
     if (!(await hasLinkedSubcontractorCompany(user.id, docket.subcontractorCompanyId))) {
       throw AppError.forbidden('Access denied');

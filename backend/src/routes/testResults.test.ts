@@ -1165,6 +1165,73 @@ describe('Test Results API', () => {
       }
     });
 
+    it('does not expose laboratory names to stale company-linked subcontractor roles', async () => {
+      const suffix = Date.now();
+      const staleLabName = `Stale Linked Lab ${suffix}`;
+      const subcontractorCompany = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `Test Results Stale Subcontractor ${suffix}`,
+          status: 'approved',
+          portalAccess: {
+            testResults: true,
+          },
+        },
+      });
+      const staleUser = await registerTestUser(
+        'Test Results Stale Subcontractor',
+        'subcontractor',
+        companyId,
+      );
+      const assignedTestResult = await prisma.testResult.create({
+        data: {
+          projectId,
+          lotId,
+          testType: 'Stale Linked Lab Test',
+          laboratoryName: staleLabName,
+        },
+      });
+
+      try {
+        await prisma.subcontractorUser.create({
+          data: {
+            userId: staleUser.userId,
+            subcontractorCompanyId: subcontractorCompany.id,
+            role: 'user',
+          },
+        });
+        await prisma.lotSubcontractorAssignment.create({
+          data: {
+            projectId,
+            lotId,
+            subcontractorCompanyId: subcontractorCompany.id,
+            status: 'active',
+          },
+        });
+
+        const allLabsRes = await request(app)
+          .get('/api/test-results/laboratories')
+          .set('Authorization', `Bearer ${staleUser.token}`);
+        expect(allLabsRes.status).toBe(200);
+        expect(allLabsRes.body.laboratories).not.toContain(staleLabName);
+
+        const projectLabsRes = await request(app)
+          .get(`/api/test-results/laboratories?projectId=${projectId}`)
+          .set('Authorization', `Bearer ${staleUser.token}`);
+        expect(projectLabsRes.status).toBe(403);
+      } finally {
+        await prisma.lotSubcontractorAssignment.deleteMany({
+          where: { subcontractorCompanyId: subcontractorCompany.id },
+        });
+        await prisma.subcontractorUser.deleteMany({ where: { userId: staleUser.userId } });
+        await prisma.testResult.delete({ where: { id: assignedTestResult.id } }).catch(() => {});
+        await prisma.subcontractorCompany
+          .delete({ where: { id: subcontractorCompany.id } })
+          .catch(() => {});
+        await cleanupTestUser(staleUser.userId);
+      }
+    });
+
     it('rejects subcontractor direct test-result reads when portal access is disabled', async () => {
       const subcontractorCompany = await prisma.subcontractorCompany.create({
         data: {

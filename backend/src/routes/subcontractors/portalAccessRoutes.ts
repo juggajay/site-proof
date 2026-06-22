@@ -4,6 +4,7 @@ import { AppError } from '../../lib/AppError.js';
 import { AuditAction, createAuditLog } from '../../lib/auditLog.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { prisma } from '../../lib/prisma.js';
+import { isStandaloneSubcontractorPortalIdentity } from '../../lib/projectAccess.js';
 import {
   buildSubcontractorPortalAccessResponse,
   buildSubcontractorPortalAccessUpdatedResponse,
@@ -26,10 +27,14 @@ export interface SubcontractorPortalAccessRouterDependencies {
 
 async function hasLinkedSubcontractorAccess(
   subcontractorCompanyId: string,
-  userId: string,
+  user: AuthenticatedUser,
 ): Promise<boolean> {
+  if (!isStandaloneSubcontractorPortalIdentity(user)) {
+    return false;
+  }
+
   const subcontractorUser = await prisma.subcontractorUser.findFirst({
-    where: { subcontractorCompanyId, userId },
+    where: { subcontractorCompanyId, userId: user.id },
     select: { id: true },
   });
 
@@ -140,7 +145,7 @@ export function createSubcontractorPortalAccessRouter({
         throw AppError.notFound('Subcontractor company');
       }
 
-      const hasPortalUserAccess = await hasLinkedSubcontractorAccess(id, user.id);
+      const hasPortalUserAccess = await hasLinkedSubcontractorAccess(id, user);
       if (!hasPortalUserAccess) {
         await requireSubcontractorProjectAccess(subcontractor.projectId, user);
       } else {
