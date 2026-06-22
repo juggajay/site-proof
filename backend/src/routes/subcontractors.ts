@@ -224,33 +224,95 @@ function getRequestedProjectScope(req: Request): string | null {
   return bodyProjectId || queryProjectId;
 }
 
+function getRequestedSubcontractorCompanyScope(req: Request): string | null {
+  const querySubcontractorCompanyId =
+    req.query.subcontractorCompanyId === undefined
+      ? null
+      : normalizeIdParam(req.query.subcontractorCompanyId, 'subcontractorCompanyId');
+  const bodySubcontractorCompanyId =
+    req.body && Object.prototype.hasOwnProperty.call(req.body, 'subcontractorCompanyId')
+      ? normalizeIdParam(req.body.subcontractorCompanyId, 'subcontractorCompanyId')
+      : null;
+
+  if (
+    querySubcontractorCompanyId &&
+    bodySubcontractorCompanyId &&
+    querySubcontractorCompanyId !== bodySubcontractorCompanyId
+  ) {
+    throw AppError.badRequest('subcontractorCompanyId in query and body must match');
+  }
+
+  return bodySubcontractorCompanyId || querySubcontractorCompanyId;
+}
+
 async function getScopedSubcontractorUserLink(req: Request, user: AuthenticatedUser) {
   const requestedProjectId = getRequestedProjectScope(req);
+  const requestedSubcontractorCompanyId = getRequestedSubcontractorCompanyScope(req);
   const baseWhere: Prisma.SubcontractorUserWhereInput = {
     userId: user.id,
+    ...(requestedSubcontractorCompanyId
+      ? { subcontractorCompanyId: requestedSubcontractorCompanyId }
+      : {}),
     subcontractorCompany: requestedProjectId ? { projectId: requestedProjectId } : {},
   };
-  const subcontractorUser =
-    (await prisma.subcontractorUser.findFirst({
-      where: {
-        userId: user.id,
-        subcontractorCompany: activeSubcontractorCompanyWhere(
-          requestedProjectId ? { projectId: requestedProjectId } : {},
-        ),
-      },
-      include: { subcontractorCompany: true },
-      orderBy: { createdAt: 'desc' },
-    })) ||
-    (await prisma.subcontractorUser.findFirst({
+
+  const activeWhere: Prisma.SubcontractorUserWhereInput = {
+    userId: user.id,
+    ...(requestedSubcontractorCompanyId
+      ? { subcontractorCompanyId: requestedSubcontractorCompanyId }
+      : {}),
+    subcontractorCompany: activeSubcontractorCompanyWhere(
+      requestedProjectId ? { projectId: requestedProjectId } : {},
+    ),
+  };
+
+  const activeLinks = await prisma.subcontractorUser.findMany({
+    where: activeWhere,
+    include: { subcontractorCompany: true },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  let subcontractorUser =
+    activeLinks.length === 1 || requestedSubcontractorCompanyId || !requestedProjectId
+      ? (activeLinks[0] ?? null)
+      : null;
+
+  if (!subcontractorUser && requestedProjectId && activeLinks.length > 1) {
+    throw AppError.badRequest(
+      'subcontractorCompanyId is required when your account is linked to multiple subcontractors for this project',
+    );
+  }
+
+  if (!subcontractorUser) {
+    subcontractorUser = await prisma.subcontractorUser.findFirst({
       where: baseWhere,
       include: { subcontractorCompany: true },
       orderBy: { createdAt: 'desc' },
-    }));
+    });
+  }
+
+  if (!subcontractorUser && requestedSubcontractorCompanyId) {
+    subcontractorUser = await prisma.subcontractorUser.findFirst({
+      where: {
+        userId: user.id,
+        subcontractorCompanyId: requestedSubcontractorCompanyId,
+      },
+      include: { subcontractorCompany: true },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
 
   if (!subcontractorUser || !subcontractorUser.subcontractorCompany) {
     throw requestedProjectId
       ? AppError.forbidden('You do not have subcontractor portal access to this project')
       : AppError.notFound('Subcontractor company');
+  }
+
+  if (
+    requestedProjectId &&
+    subcontractorUser.subcontractorCompany.projectId !== requestedProjectId
+  ) {
+    throw AppError.badRequest('subcontractorCompanyId does not belong to the requested project');
   }
 
   return subcontractorUser;

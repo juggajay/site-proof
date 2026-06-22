@@ -17,7 +17,7 @@ describe('presentLotList (pure)', () => {
   it('keeps budgetAmount when canViewBudgetAmount is true', () => {
     const [lot] = presentLotList([makeLot()], {
       canViewBudgetAmount: true,
-      subcontractorCompanyId: null,
+      subcontractorCompanyIds: null,
       includeITP: false,
     });
     expect(lot.budgetAmount).toBe(1000);
@@ -26,7 +26,7 @@ describe('presentLotList (pure)', () => {
   it('nulls budgetAmount when canViewBudgetAmount is false', () => {
     const [lot] = presentLotList([makeLot()], {
       canViewBudgetAmount: false,
-      subcontractorCompanyId: null,
+      subcontractorCompanyIds: null,
       includeITP: false,
     });
     expect(lot.budgetAmount).toBeNull();
@@ -35,7 +35,7 @@ describe('presentLotList (pure)', () => {
   it('returns all active assignments when no subcontractorCompanyId', () => {
     const [lot] = presentLotList([makeLot()], {
       canViewBudgetAmount: true,
-      subcontractorCompanyId: null,
+      subcontractorCompanyIds: null,
       includeITP: false,
     });
     expect(lot.subcontractorAssignments.map((a) => a.subcontractorCompanyId)).toEqual([
@@ -47,7 +47,7 @@ describe('presentLotList (pure)', () => {
   it('filters assignments to the given subcontractorCompanyId', () => {
     const [lot] = presentLotList([makeLot()], {
       canViewBudgetAmount: true,
-      subcontractorCompanyId: 'sub-B',
+      subcontractorCompanyIds: ['sub-B'],
       includeITP: false,
     });
     expect(lot.subcontractorAssignments.map((a) => a.subcontractorCompanyId)).toEqual(['sub-B']);
@@ -63,7 +63,7 @@ describe('presentLotList (pure)', () => {
       ],
       {
         canViewBudgetAmount: true,
-        subcontractorCompanyId: 'sub-B',
+        subcontractorCompanyIds: ['sub-B'],
         includeITP: false,
       },
     );
@@ -76,7 +76,7 @@ describe('presentLotList (pure)', () => {
     const itpInstance = { id: 'itp-1', templateId: 't-1', status: 'in_progress' };
     const [lot] = presentLotList([makeLot({ itpInstance })], {
       canViewBudgetAmount: true,
-      subcontractorCompanyId: null,
+      subcontractorCompanyIds: null,
       includeITP: true,
     });
     expect((lot as Record<string, unknown>).itpInstances).toEqual([
@@ -109,7 +109,7 @@ describe('presentLotList (pure)', () => {
       ],
       {
         canViewBudgetAmount: true,
-        subcontractorCompanyId: null,
+        subcontractorCompanyIds: null,
         includeITP: true,
       },
     );
@@ -145,7 +145,7 @@ describe('presentLotList (pure)', () => {
       ],
       {
         canViewBudgetAmount: true,
-        subcontractorCompanyId: null,
+        subcontractorCompanyIds: null,
         includeITP: true,
       },
     );
@@ -175,7 +175,7 @@ describe('presentLotList (pure)', () => {
       ],
       {
         canViewBudgetAmount: true,
-        subcontractorCompanyId: null,
+        subcontractorCompanyIds: null,
         includeITP: true,
       },
     );
@@ -190,7 +190,7 @@ describe('presentLotList (pure)', () => {
       [makeLot({ itpInstance: { id: 'itp-1', templateId: 't-1', status: 'completed' } })],
       {
         canViewBudgetAmount: true,
-        subcontractorCompanyId: null,
+        subcontractorCompanyIds: null,
         includeITP: true,
       },
     );
@@ -203,7 +203,7 @@ describe('presentLotList (pure)', () => {
   it('includeITP true produces an empty itpInstances array when itpInstance is null', () => {
     const [lot] = presentLotList([makeLot({ itpInstance: null })], {
       canViewBudgetAmount: true,
-      subcontractorCompanyId: null,
+      subcontractorCompanyIds: null,
       includeITP: true,
     });
     expect((lot as Record<string, unknown>).itpInstances).toEqual([]);
@@ -212,7 +212,7 @@ describe('presentLotList (pure)', () => {
   it('includeITP false leaves the itpInstances compatibility key absent', () => {
     const [lot] = presentLotList([makeLot()], {
       canViewBudgetAmount: true,
-      subcontractorCompanyId: null,
+      subcontractorCompanyIds: null,
       includeITP: false,
     });
     expect('itpInstances' in lot).toBe(false);
@@ -221,7 +221,7 @@ describe('presentLotList (pure)', () => {
   it('preserves all other lot fields and their key order via the spread', () => {
     const [lot] = presentLotList([makeLot({ description: 'Bridge deck', status: 'open' })], {
       canViewBudgetAmount: false,
-      subcontractorCompanyId: null,
+      subcontractorCompanyIds: null,
       includeITP: false,
     });
     // Spread preserves untouched fields and the original insertion order;

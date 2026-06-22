@@ -210,6 +210,7 @@ export async function syncOfflineDocketDraft(docket: OfflineDocket): Promise<str
     },
     body: JSON.stringify({
       projectId: docket.projectId,
+      subcontractorCompanyId: docket.subcontractorCompanyId,
       date: docket.date,
       labourHours: sumDocketLabourHours(docket),
       plantHours: sumDocketPlantHours(docket),

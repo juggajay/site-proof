@@ -201,7 +201,12 @@ export function DocketScreen() {
     try {
       const data = await apiFetch<{ docket: Docket }>(`/api/dockets`, {
         method: 'POST',
-        body: JSON.stringify({ projectId: company?.projectId, date: today, notes }),
+        body: JSON.stringify({
+          projectId: company?.projectId,
+          subcontractorCompanyId: company?.id,
+          date: today,
+          notes,
+        }),
       });
       const newDocket: Docket = {
         ...data.docket,

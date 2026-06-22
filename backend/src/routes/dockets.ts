@@ -6,8 +6,9 @@ import { parsePagination, getPaginationMeta, getPrismaSkipTake } from '../lib/pa
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
 import { createAuditLog, AuditAction } from '../lib/auditLog.js';
-import { activeSubcontractorCompanyWhere, assertProjectAllowsWrite } from '../lib/projectAccess.js';
+import { assertProjectAllowsWrite } from '../lib/projectAccess.js';
 import {
+  getLinkedSubcontractorCompanyIdsForProject,
   isDocketEntryEditable,
   isSubcontractorUser,
   requireDocketReadAccess,
@@ -71,8 +72,8 @@ docketsRouter.get(
       whereClause.status = status;
     }
 
-    if (projectReadScope.subcontractorCompanyId) {
-      whereClause.subcontractorCompanyId = projectReadScope.subcontractorCompanyId;
+    if (projectReadScope.subcontractorCompanyIds) {
+      whereClause.subcontractorCompanyId = { in: projectReadScope.subcontractorCompanyIds };
     }
 
     const [dockets, total] = await Promise.all([
@@ -133,27 +134,36 @@ docketsRouter.post(
       throw AppError.badRequest(parseResult.error.errors[0]?.message || 'Invalid request body');
     }
 
-    const { projectId, date, labourHours, plantHours, notes } = parseResult.data;
+    const { projectId, subcontractorCompanyId, date, labourHours, plantHours, notes } =
+      parseResult.data;
 
     if (!isSubcontractorUser(user)) {
       throw AppError.forbidden('Only subcontractors can create dockets');
     }
 
-    // Find user's subcontractor company
-    const subcontractorUser = await prisma.subcontractorUser.findFirst({
-      where: {
-        userId: user.id,
-        subcontractorCompany: activeSubcontractorCompanyWhere({ projectId }),
-      },
-      include: {
-        subcontractorCompany: {
-          select: { projectId: true },
-        },
-      },
-    });
+    const linkedSubcontractorCompanyIds = await getLinkedSubcontractorCompanyIdsForProject(
+      user.id,
+      projectId,
+    );
 
-    if (!subcontractorUser) {
+    if (linkedSubcontractorCompanyIds.length === 0) {
       throw AppError.forbidden('Only subcontractors can create dockets');
+    }
+
+    const selectedSubcontractorCompanyId =
+      subcontractorCompanyId ?? linkedSubcontractorCompanyIds[0] ?? null;
+
+    if (
+      !selectedSubcontractorCompanyId ||
+      !linkedSubcontractorCompanyIds.includes(selectedSubcontractorCompanyId)
+    ) {
+      throw AppError.forbidden('Selected subcontractor company is not linked to this project');
+    }
+
+    if (!subcontractorCompanyId && linkedSubcontractorCompanyIds.length > 1) {
+      throw AppError.badRequest(
+        'subcontractorCompanyId is required when your account is linked to multiple subcontractors for this project',
+      );
     }
 
     await assertProjectAllowsWrite(projectId);
@@ -163,14 +173,14 @@ docketsRouter.post(
       await tx.$queryRaw<Array<{ id: string }>>`
         SELECT id
         FROM subcontractor_companies
-        WHERE id = ${subcontractorUser.subcontractorCompanyId}
+        WHERE id = ${selectedSubcontractorCompanyId}
         FOR UPDATE
       `;
 
       const existingDocket = await tx.dailyDocket.findFirst({
         where: {
           projectId,
-          subcontractorCompanyId: subcontractorUser.subcontractorCompanyId,
+          subcontractorCompanyId: selectedSubcontractorCompanyId,
           date: docketDate,
         },
         select: { id: true },
@@ -183,7 +193,7 @@ docketsRouter.post(
       return tx.dailyDocket.create({
         data: {
           projectId,
-          subcontractorCompanyId: subcontractorUser.subcontractorCompanyId,
+          subcontractorCompanyId: selectedSubcontractorCompanyId,
           date: docketDate,
           status: 'draft',
           notes,

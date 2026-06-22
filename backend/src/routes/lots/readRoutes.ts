@@ -26,18 +26,14 @@ import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { getPaginationMeta, getPrismaSkipTake } from '../../lib/pagination.js';
-import {
-  activeSubcontractorCompanyWhere,
-  checkProjectAccess,
-  getEffectiveProjectRole,
-} from '../../lib/projectAccess.js';
+import { checkProjectAccess, getEffectiveProjectRole } from '../../lib/projectAccess.js';
 import { lotSortFields, MAX_ID_LENGTH, MAX_SEARCH_LENGTH } from './validation.js';
 import {
   isSubcontractorUser,
   canViewLotBudget,
   requireSubcontractorLotPortalModules,
   requireProjectRole,
-  getProjectSubcontractorCompanyId,
+  getProjectSubcontractorCompanyIds,
   requireLotReadAccess,
 } from './access.js';
 import {
@@ -101,7 +97,7 @@ lotReadRouter.get(
 
     // Build where clause based on user role
     const whereClause: Prisma.LotWhereInput = { projectId };
-    let subcontractorCompanyId: string | null = null;
+    let subcontractorCompanyIds: string[] | null = null;
 
     const hasProjectAccess = await checkProjectAccess(user.id, projectId);
     if (!hasProjectAccess) {
@@ -134,26 +130,20 @@ lotReadRouter.get(
 
     // Subcontractors can only see lots assigned to their company
     if (user.roleInCompany === 'subcontractor' || user.roleInCompany === 'subcontractor_admin') {
-      // Find the user's subcontractor company for this project
-      const subcontractorUser = await prisma.subcontractorUser.findFirst({
-        where: {
-          userId: user.id,
-          subcontractorCompany: activeSubcontractorCompanyWhere({ projectId }),
-        },
-        include: { subcontractorCompany: true },
-      });
+      subcontractorCompanyIds = await getProjectSubcontractorCompanyIds(
+        user.id,
+        projectId,
+        portalModule === 'itps' || includeITP === 'true' ? ['lots', 'itps'] : ['lots'],
+      );
 
-      if (subcontractorUser) {
-        const subCompanyId = subcontractorUser.subcontractorCompanyId;
-        subcontractorCompanyId = subCompanyId;
-
+      if (subcontractorCompanyIds.length > 0) {
         // Include lots from both legacy field AND new assignment model
         whereClause.OR = [
-          { assignedSubcontractorId: subCompanyId },
+          { assignedSubcontractorId: { in: subcontractorCompanyIds } },
           {
             subcontractorAssignments: {
               some: {
-                subcontractorCompanyId: subCompanyId,
+                subcontractorCompanyId: { in: subcontractorCompanyIds },
                 status: 'active',
                 projectId,
               },
@@ -188,7 +178,7 @@ lotReadRouter.get(
     // (budget visibility, subcontractor-assignment filtering, itpInstances shape)
     const transformedLots = presentLotList(lots, {
       canViewBudgetAmount,
-      subcontractorCompanyId,
+      subcontractorCompanyIds,
       includeITP: includeITP === 'true',
     });
 
@@ -318,12 +308,15 @@ lotReadRouter.get(
       throw AppError.notFound('Lot');
     }
 
-    await requireLotReadAccess(lot, user);
     await requireSubcontractorLotPortalModules(
       user,
       lot.projectId,
       portalModule === 'itps' ? ['itps'] : [],
     );
+    await requireLotReadAccess(lot, user, 'You do not have access to this lot', [
+      'lots',
+      ...(portalModule === 'itps' ? (['itps'] as const) : []),
+    ]);
 
     // Shape the response: strip internal fields and scope assignments for
     // subcontractor users (route owns resolving their company id via the DB).
@@ -335,13 +328,16 @@ lotReadRouter.get(
           throwIfProjectMissing: true,
         });
     const canViewBudgetAmount = canViewLotBudget(effectiveProjectRole);
-    const subcontractorCompanyId = isSubcontractor
-      ? await getProjectSubcontractorCompanyId(user.id, lot.projectId)
+    const subcontractorCompanyIds = isSubcontractor
+      ? await getProjectSubcontractorCompanyIds(user.id, lot.projectId, [
+          'lots',
+          ...(portalModule === 'itps' ? (['itps'] as const) : []),
+        ])
       : null;
 
     const lotResponse = shapeLotDetailResponse(lot, {
       isSubcontractor,
-      subcontractorCompanyId,
+      subcontractorCompanyIds,
       canViewBudgetAmount,
     });
 

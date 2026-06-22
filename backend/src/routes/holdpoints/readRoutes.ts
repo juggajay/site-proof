@@ -4,7 +4,7 @@ import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { parsePagination, getPaginationMeta } from '../../lib/pagination.js';
-import { activeSubcontractorCompanyWhere } from '../../lib/projectAccess.js';
+import { getActiveSubcontractorPortalCompanyIdsForProject } from '../../lib/projectAccess.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
 import {
   parseHoldPointRouteParam,
@@ -86,21 +86,17 @@ holdPointReadRouter.get(
 
     // Subcontractors can only see hold points on their assigned lots
     if (isSubcontractorUser(user)) {
-      const subcontractorUser = await prisma.subcontractorUser.findFirst({
-        where: {
-          userId: user.id,
-          subcontractorCompany: activeSubcontractorCompanyWhere({ projectId }),
-        },
-        include: { subcontractorCompany: true },
+      const subcontractorCompanyIds = await getActiveSubcontractorPortalCompanyIdsForProject({
+        userId: user.id,
+        projectId,
+        module: 'holdPoints',
       });
 
-      if (subcontractorUser) {
-        const subCompanyId = subcontractorUser.subcontractorCompanyId;
-
+      if (subcontractorCompanyIds.length > 0) {
         // Get lots assigned via LotSubcontractorAssignment
         const lotAssignments = await prisma.lotSubcontractorAssignment.findMany({
           where: {
-            subcontractorCompanyId: subCompanyId,
+            subcontractorCompanyId: { in: subcontractorCompanyIds },
             status: 'active',
             projectId,
           },
@@ -110,7 +106,7 @@ holdPointReadRouter.get(
 
         // Include lots from both legacy field AND new assignment model
         lotsWhere.OR = [
-          { assignedSubcontractorId: subCompanyId },
+          { assignedSubcontractorId: { in: subcontractorCompanyIds } },
           ...(assignedLotIds.length > 0 ? [{ id: { in: assignedLotIds } }] : []),
         ];
       } else {

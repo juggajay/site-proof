@@ -160,6 +160,7 @@ describe('subbie shell CompanyScreen', () => {
         method: 'POST',
         body: JSON.stringify({
           projectId: 'proj-1',
+          subcontractorCompanyId: 'c1',
           name: 'Dane Carter',
           phone: '0412',
           role: 'Labourer',
@@ -204,6 +205,7 @@ describe('subbie shell CompanyScreen', () => {
         method: 'POST',
         body: JSON.stringify({
           projectId: 'proj-1',
+          subcontractorCompanyId: 'c1',
           type: 'Excavator',
           description: 'CAT 320',
           idRego: 'EXC-014',
@@ -235,14 +237,14 @@ describe('subbie shell CompanyScreen', () => {
     fireEvent.click(removeBtn);
     expect(removeBtn).toHaveTextContent('Remove?');
     expect(apiFetchMock).not.toHaveBeenCalledWith(
-      '/api/subcontractors/my-company/employees/e9?projectId=proj-1',
+      '/api/subcontractors/my-company/employees/e9?projectId=proj-1&subcontractorCompanyId=c1',
       { method: 'DELETE' },
     );
 
     fireEvent.click(removeBtn);
     await waitFor(() =>
       expect(apiFetchMock).toHaveBeenCalledWith(
-        '/api/subcontractors/my-company/employees/e9?projectId=proj-1',
+        '/api/subcontractors/my-company/employees/e9?projectId=proj-1&subcontractorCompanyId=c1',
         { method: 'DELETE' },
       ),
     );

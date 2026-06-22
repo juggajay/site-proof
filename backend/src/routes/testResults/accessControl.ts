@@ -5,6 +5,7 @@ import {
   activeSubcontractorCompanyWhere,
   assertProjectAllowsWrite,
   checkProjectAccess,
+  getActiveSubcontractorPortalCompanyIdsForProject,
   getEffectiveProjectRole,
   isCompanyAdminRole,
   isStandaloneSubcontractorPortalIdentity,
@@ -115,15 +116,13 @@ export async function getAssignedSubcontractorLotIds(
     return null;
   }
 
-  const subcontractorUser = await prisma.subcontractorUser.findFirst({
-    where: {
-      userId: user.id,
-      subcontractorCompany: activeSubcontractorCompanyWhere({ projectId }),
-    },
-    select: { subcontractorCompanyId: true },
+  const subcontractorCompanyIds = await getActiveSubcontractorPortalCompanyIdsForProject({
+    userId: user.id,
+    projectId,
+    module: 'testResults',
   });
 
-  if (!subcontractorUser) {
+  if (subcontractorCompanyIds.length === 0) {
     return [];
   }
 
@@ -131,7 +130,7 @@ export async function getAssignedSubcontractorLotIds(
     prisma.lotSubcontractorAssignment.findMany({
       where: {
         projectId,
-        subcontractorCompanyId: subcontractorUser.subcontractorCompanyId,
+        subcontractorCompanyId: { in: subcontractorCompanyIds },
         status: 'active',
       },
       select: { lotId: true },
@@ -139,7 +138,7 @@ export async function getAssignedSubcontractorLotIds(
     prisma.lot.findMany({
       where: {
         projectId,
-        assignedSubcontractorId: subcontractorUser.subcontractorCompanyId,
+        assignedSubcontractorId: { in: subcontractorCompanyIds },
       },
       select: { id: true },
     }),

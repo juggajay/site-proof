@@ -4,6 +4,7 @@ import {
   activeSubcontractorCompanyWhere,
   assertProjectAllowsWrite,
   checkProjectAccess,
+  getActiveSubcontractorPortalCompanyIdsForProject,
   getEffectiveProjectRole,
   isCompanyAdminRole,
   isStandaloneSubcontractorPortalIdentity,
@@ -28,7 +29,7 @@ export type DocketAccess = {
   subcontractorCompanyId: string;
 };
 export type DocketProjectReadScope = {
-  subcontractorCompanyId?: string;
+  subcontractorCompanyIds?: string[];
 };
 
 export function isSubcontractorUser(user: AuthUser): boolean {
@@ -66,14 +67,14 @@ export async function getLinkedSubcontractorCompanyIdForProject(
   userId: string,
   projectId: string,
 ): Promise<string | null> {
-  const subcontractorUser = await prisma.subcontractorUser.findFirst({
-    where: {
-      userId,
-      subcontractorCompany: activeSubcontractorCompanyWhere({ projectId }),
-    },
-    select: { subcontractorCompanyId: true },
-  });
-  return subcontractorUser?.subcontractorCompanyId ?? null;
+  return (await getLinkedSubcontractorCompanyIdsForProject(userId, projectId))[0] ?? null;
+}
+
+export async function getLinkedSubcontractorCompanyIdsForProject(
+  userId: string,
+  projectId: string,
+): Promise<string[]> {
+  return getActiveSubcontractorPortalCompanyIdsForProject({ userId, projectId });
 }
 
 export async function requireProjectReadAccess(
@@ -116,12 +117,12 @@ export async function requireProjectReadAccess(
   }
 
   if (isStandaloneSubcontractor || !hasSubcontractorRole) {
-    const subcontractorCompanyId = await getLinkedSubcontractorCompanyIdForProject(
+    const subcontractorCompanyIds = await getLinkedSubcontractorCompanyIdsForProject(
       user.id,
       projectId,
     );
-    if (subcontractorCompanyId) {
-      return { subcontractorCompanyId };
+    if (subcontractorCompanyIds.length > 0) {
+      return { subcontractorCompanyIds };
     }
   } else if (hasSubcontractorRole) {
     throw AppError.forbidden('Access denied');
@@ -163,8 +164,8 @@ export async function requireDocketReadAccess(user: AuthUser, docket: DocketAcce
 
   const scope = await requireProjectReadAccess(user, docket.projectId);
   if (
-    scope.subcontractorCompanyId &&
-    scope.subcontractorCompanyId !== docket.subcontractorCompanyId
+    scope.subcontractorCompanyIds &&
+    !scope.subcontractorCompanyIds.includes(docket.subcontractorCompanyId)
   ) {
     throw AppError.forbidden('Access denied');
   }

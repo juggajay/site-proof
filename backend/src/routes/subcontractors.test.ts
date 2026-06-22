@@ -2216,6 +2216,167 @@ describe('Subcontractors API', () => {
       }
     });
 
+    it('should manage the exact same-project subcontractor company when one user has multiple links', async () => {
+      const suffix = Date.now();
+      const otherSub = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `Portal Same Project Co ${suffix}`,
+          primaryContactEmail: `portal-same-project-${suffix}@example.com`,
+          status: 'approved',
+        },
+      });
+      await prisma.subcontractorUser.create({
+        data: {
+          userId: portalUserId,
+          subcontractorCompanyId: otherSub.id,
+          role: 'admin',
+        },
+      });
+
+      let employeeId: string | undefined;
+      let plantId: string | undefined;
+
+      try {
+        const companyRes = await request(app)
+          .get(
+            `/api/subcontractors/my-company?projectId=${projectId}&subcontractorCompanyId=${otherSub.id}`,
+          )
+          .set('Authorization', `Bearer ${portalToken}`);
+
+        expect(companyRes.status).toBe(200);
+        expect(companyRes.body.company.id).toBe(otherSub.id);
+        expect(companyRes.body.company.companyName).toBe(otherSub.companyName);
+
+        const employeeRes = await request(app)
+          .post('/api/subcontractors/my-company/employees')
+          .set('Authorization', `Bearer ${portalToken}`)
+          .send({
+            projectId,
+            subcontractorCompanyId: otherSub.id,
+            name: `Same Project Employee ${suffix}`,
+            role: 'Operator',
+            hourlyRate: 77,
+          });
+        expect(employeeRes.status).toBe(201);
+        employeeId = employeeRes.body.employee.id;
+        await expect(
+          prisma.employeeRoster.findUnique({
+            where: { id: employeeId },
+            select: { subcontractorCompanyId: true },
+          }),
+        ).resolves.toMatchObject({ subcontractorCompanyId: otherSub.id });
+
+        const plantRes = await request(app)
+          .post('/api/subcontractors/my-company/plant')
+          .set('Authorization', `Bearer ${portalToken}`)
+          .send({
+            projectId,
+            subcontractorCompanyId: otherSub.id,
+            type: 'Roller',
+            description: `Same Project Plant ${suffix}`,
+            dryRate: 155,
+          });
+        expect(plantRes.status).toBe(201);
+        plantId = plantRes.body.plant.id;
+        await expect(
+          prisma.plantRegister.findUnique({
+            where: { id: plantId },
+            select: { subcontractorCompanyId: true },
+          }),
+        ).resolves.toMatchObject({ subcontractorCompanyId: otherSub.id });
+
+        const deleteEmployeeRes = await request(app)
+          .delete(
+            `/api/subcontractors/my-company/employees/${employeeId}?projectId=${projectId}&subcontractorCompanyId=${otherSub.id}`,
+          )
+          .set('Authorization', `Bearer ${portalToken}`);
+        expect(deleteEmployeeRes.status).toBe(200);
+        employeeId = undefined;
+
+        const deletePlantRes = await request(app)
+          .delete(
+            `/api/subcontractors/my-company/plant/${plantId}?projectId=${projectId}&subcontractorCompanyId=${otherSub.id}`,
+          )
+          .set('Authorization', `Bearer ${portalToken}`);
+        expect(deletePlantRes.status).toBe(200);
+        plantId = undefined;
+      } finally {
+        if (employeeId) {
+          await prisma.employeeRoster.delete({ where: { id: employeeId } }).catch(() => {});
+        }
+        if (plantId) {
+          await prisma.plantRegister.delete({ where: { id: plantId } }).catch(() => {});
+        }
+        await prisma.subcontractorUser.deleteMany({
+          where: { subcontractorCompanyId: otherSub.id },
+        });
+        await prisma.subcontractorCompany.delete({ where: { id: otherSub.id } }).catch(() => {});
+      }
+    });
+
+    it('should reject a requested subcontractor company from a different project scope', async () => {
+      const suffix = Date.now();
+      const otherProject = await prisma.project.create({
+        data: {
+          companyId,
+          name: `Portal Mismatch Project ${suffix}`,
+          projectNumber: `PORTAL-MISMATCH-${suffix}`,
+          status: 'active',
+          state: 'NSW',
+          specificationSet: 'TfNSW',
+        },
+      });
+      const otherSub = await prisma.subcontractorCompany.create({
+        data: {
+          projectId: otherProject.id,
+          companyName: `Portal Mismatch Co ${suffix}`,
+          primaryContactEmail: `portal-mismatch-${suffix}@example.com`,
+          status: 'approved',
+        },
+      });
+      await prisma.subcontractorUser.create({
+        data: {
+          userId: portalUserId,
+          subcontractorCompanyId: otherSub.id,
+          role: 'admin',
+        },
+      });
+
+      const employeeName = `Mismatched Project Employee ${suffix}`;
+
+      try {
+        const res = await request(app)
+          .post('/api/subcontractors/my-company/employees')
+          .set('Authorization', `Bearer ${portalToken}`)
+          .send({
+            projectId,
+            subcontractorCompanyId: otherSub.id,
+            name: employeeName,
+            role: 'Operator',
+            hourlyRate: 82,
+          });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.message).toContain(
+          'subcontractorCompanyId does not belong to the requested project',
+        );
+
+        await expect(
+          prisma.employeeRoster.findFirst({
+            where: { subcontractorCompanyId: otherSub.id, name: employeeName },
+          }),
+        ).resolves.toBeNull();
+      } finally {
+        await prisma.employeeRoster.deleteMany({ where: { name: employeeName } });
+        await prisma.subcontractorUser.deleteMany({
+          where: { subcontractorCompanyId: otherSub.id },
+        });
+        await prisma.subcontractorCompany.delete({ where: { id: otherSub.id } }).catch(() => {});
+        await prisma.project.delete({ where: { id: otherProject.id } }).catch(() => {});
+      }
+    });
+
     it('should reject stale head-contractor accounts with subcontractor links from my-company endpoints', async () => {
       const staleUser = await registerTestUser('stale-hc-portal-link', 'Stale HC Portal Link User');
 

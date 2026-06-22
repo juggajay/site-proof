@@ -321,7 +321,14 @@ export function CompanyScreen() {
     try {
       await apiFetch('/api/subcontractors/my-company/employees', {
         method: 'POST',
-        body: JSON.stringify({ projectId: company?.projectId, name, phone, role, hourlyRate }),
+        body: JSON.stringify({
+          projectId: company?.projectId,
+          subcontractorCompanyId: company?.id,
+          name,
+          phone,
+          role,
+          hourlyRate,
+        }),
       });
       await refetchCompany();
       setEmployeeForm({ name: '', phone: '', role: '', hourlyRate: '' });
@@ -355,6 +362,7 @@ export function CompanyScreen() {
         method: 'POST',
         body: JSON.stringify({
           projectId: company?.projectId,
+          subcontractorCompanyId: company?.id,
           type,
           description,
           idRego,
@@ -376,9 +384,12 @@ export function CompanyScreen() {
   const deleteEmployee = async (empId: string) => {
     setSaving(true);
     try {
-      const query = company?.projectId ? `?projectId=${encodeURIComponent(company.projectId)}` : '';
+      const query = new URLSearchParams();
+      if (company?.projectId) query.set('projectId', company.projectId);
+      if (company?.id) query.set('subcontractorCompanyId', company.id);
+      const queryString = query.toString() ? `?${query.toString()}` : '';
       await apiFetch(
-        `/api/subcontractors/my-company/employees/${encodeURIComponent(empId)}${query}`,
+        `/api/subcontractors/my-company/employees/${encodeURIComponent(empId)}${queryString}`,
         { method: 'DELETE' },
       );
       await refetchCompany();
@@ -392,9 +403,12 @@ export function CompanyScreen() {
   const deletePlant = async (plantId: string) => {
     setSaving(true);
     try {
-      const query = company?.projectId ? `?projectId=${encodeURIComponent(company.projectId)}` : '';
+      const query = new URLSearchParams();
+      if (company?.projectId) query.set('projectId', company.projectId);
+      if (company?.id) query.set('subcontractorCompanyId', company.id);
+      const queryString = query.toString() ? `?${query.toString()}` : '';
       await apiFetch(
-        `/api/subcontractors/my-company/plant/${encodeURIComponent(plantId)}${query}`,
+        `/api/subcontractors/my-company/plant/${encodeURIComponent(plantId)}${queryString}`,
         { method: 'DELETE' },
       );
       await refetchCompany();

@@ -271,6 +271,67 @@ export function hasPortalModuleEnabled(
   return readPortalAccess(portalAccess)[module];
 }
 
+export type ActiveSubcontractorPortalCompanyLink = {
+  id: string;
+  role: string;
+  subcontractorCompanyId: string;
+  subcontractorCompany: {
+    id: string;
+    projectId: string;
+    companyName: string;
+    portalAccess: Prisma.JsonValue | null;
+  };
+};
+
+export async function getActiveSubcontractorPortalCompanyLinksForProject({
+  userId,
+  projectId,
+  module,
+}: {
+  userId: string;
+  projectId: string;
+  module?: SubcontractorPortalAccessKey;
+}): Promise<ActiveSubcontractorPortalCompanyLink[]> {
+  const links = await prisma.subcontractorUser.findMany({
+    where: {
+      userId,
+      subcontractorCompany: activeSubcontractorCompanyWhere({ projectId }),
+    },
+    select: {
+      id: true,
+      role: true,
+      subcontractorCompanyId: true,
+      subcontractorCompany: {
+        select: {
+          id: true,
+          projectId: true,
+          companyName: true,
+          portalAccess: true,
+        },
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  return module
+    ? links.filter((link) => hasPortalModuleEnabled(link.subcontractorCompany.portalAccess, module))
+    : links;
+}
+
+export async function getActiveSubcontractorPortalCompanyIdsForProject(args: {
+  userId: string;
+  projectId: string;
+  module?: SubcontractorPortalAccessKey;
+}): Promise<string[]> {
+  return [
+    ...new Set(
+      (await getActiveSubcontractorPortalCompanyLinksForProject(args)).map(
+        (link) => link.subcontractorCompanyId,
+      ),
+    ),
+  ];
+}
+
 export function getSubcontractorPortalModuleAccessDeniedMessage(
   module: SubcontractorPortalAccessKey,
 ): string {

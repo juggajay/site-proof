@@ -144,6 +144,7 @@ export function DocketEditPage() {
         method: 'POST',
         body: JSON.stringify({
           projectId: company?.projectId,
+          subcontractorCompanyId: company?.id,
           date: today,
           notes,
         }),
