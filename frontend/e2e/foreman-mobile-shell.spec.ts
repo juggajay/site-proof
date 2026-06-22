@@ -1,6 +1,10 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
 import { mockAuthenticatedUserState } from './helpers';
 
+// This spec relies on exhaustive API route mocks. Blocking service workers keeps
+// mocked fetches under Playwright's control during the full-suite CI run.
+test.use({ serviceWorkers: 'block' });
+
 const PROJECT_ID = 'project/alpha & beta';
 const PROJECT_NAME = 'Awkward Foreman Project';
 const DATE_KEY = new Intl.DateTimeFormat('en-CA').format(new Date());
@@ -516,6 +520,30 @@ async function mockForemanShellApi(page: Page) {
 test.describe('Foreman mobile shell', () => {
   test('honours query project scope across core mobile surfaces', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
+    await page.addInitScript(() => {
+      const openedUrls: string[] = [];
+      Object.defineProperty(window, '__siteProofOpenedUrls', {
+        value: openedUrls,
+        configurable: true,
+      });
+
+      window.open = ((url?: string | URL) => {
+        openedUrls.push(String(url ?? ''));
+        return {
+          closed: false,
+          opener: null,
+          close: () => undefined,
+          location: {
+            set href(value: string) {
+              openedUrls.push(String(value));
+            },
+            get href() {
+              return '';
+            },
+          },
+        } as unknown as Window;
+      }) as typeof window.open;
+    });
     const consoleErrors: string[] = [];
     const pageErrors: string[] = [];
     page.on('console', (message) => {
@@ -606,18 +634,25 @@ test.describe('Foreman mobile shell', () => {
     await unfiledPhoto.click();
     await expect(page.getByRole('heading', { name: 'Photo' })).toBeVisible();
     await page.getByRole('button', { name: 'File to a lot' }).click();
+    const lotFetchesBeforeRefile = api.lotsProjectIds.length;
     await page.getByRole('button', { name: /LOT-001/i }).click();
     await expect.poll(() => api.photoRefileBodies).toContainEqual({ lotId: lot.id });
+    await expect.poll(() => api.lotsProjectIds.length).toBeGreaterThan(lotFetchesBeforeRefile);
 
     await page.goto(`/m/docs?projectId=${encodeURIComponent(PROJECT_ID)}`);
     await expect(page.getByRole('heading', { name: 'Drawings & Docs' })).toBeVisible();
     await expect(page.getByRole('button', { name: /DRG-001/i })).toBeVisible();
     expect(api.drawingProjectIds).toContain(PROJECT_ID);
-    const popupPromise = page.waitForEvent('popup');
     await page.getByRole('button', { name: /DRG-001/i }).click();
-    const popup = await popupPromise;
     await expect.poll(() => api.signedUrlDocumentIds).toContain('drawing-doc-1');
-    await popup.close();
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const state = window as Window & { __siteProofOpenedUrls?: string[] };
+          return state.__siteProofOpenedUrls ?? [];
+        }),
+      )
+      .toContain('data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==');
 
     expect(consoleErrors).toEqual([]);
     expect(pageErrors).toEqual([]);

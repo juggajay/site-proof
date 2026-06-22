@@ -18,7 +18,8 @@ keep going until the app has been exercised end to end.
 
 ## Stage 47 - Foreman Mobile Shell Project Scope QA
 
-Status: local code fix and verification complete. PR/CI/merge pending.
+Status: landed in PR #1099. Follow-up E2E stability fix pending for the
+post-merge full-suite run.
 
 Scope:
 
@@ -66,6 +67,13 @@ Verification:
 - `npm run lint` passed with one existing unrelated warning in
   `src/lib/theme.tsx`.
 - `npm run test:coverage` passed: 291 files, 2524 tests.
+- PR #1099 passed PR CI and merged. The post-merge full E2E run exposed a
+  harness-only issue in the new spec: a background lots refetch could be
+  cancelled by immediate navigation after photo filing, and headless Chromium
+  could block the drawing popup. A follow-up stabilizes the spec by waiting for
+  the refile invalidation and stubbing `window.open` while still asserting the
+  signed-URL request.
+- Follow-up local `npm run test:e2e` passed: 331 tests.
 
 Not live-exercised in this stage:
 
