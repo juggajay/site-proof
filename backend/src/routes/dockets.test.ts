@@ -287,7 +287,7 @@ describe('Dockets API', () => {
       }
     });
 
-    it('returns legacy create-hour fields separately from submitted totals', async () => {
+    it('returns legacy create-hour fields but never seeds the submitted-cost columns with hours', async () => {
       const date = '2031-05-21';
       let createdDocketId: string | undefined;
 
@@ -305,10 +305,22 @@ describe('Dockets API', () => {
 
         expect(res.status).toBe(201);
         createdDocketId = res.body.docket.id;
+        // Legacy create-hour echo fields are returned verbatim from the request...
         expect(res.body.docket.labourHours).toBe(3.25);
         expect(res.body.docket.plantHours).toBe(2);
-        expect(res.body.docket.totalLabourSubmitted).toBe(3.25);
-        expect(res.body.docket.totalPlantSubmitted).toBe(2);
+        // ...but totalLabourSubmitted/totalPlantSubmitted are dollar COSTS (see
+        // refreshLabourSubmittedTotals), not hours, and are recomputed from
+        // entries. A freshly created docket has no entries, so they must be 0 —
+        // create must never persist the submitted hours into the cost columns.
+        expect(res.body.docket.totalLabourSubmitted).toBe(0);
+        expect(res.body.docket.totalPlantSubmitted).toBe(0);
+
+        const stored = await prisma.dailyDocket.findUnique({
+          where: { id: createdDocketId },
+          select: { totalLabourSubmitted: true, totalPlantSubmitted: true },
+        });
+        expect(Number(stored?.totalLabourSubmitted)).toBe(0);
+        expect(Number(stored?.totalPlantSubmitted)).toBe(0);
       } finally {
         if (createdDocketId) {
           await prisma.dailyDocket.delete({ where: { id: createdDocketId } }).catch(() => {});

@@ -209,8 +209,12 @@ docketsRouter.post(
           date: docketDate,
           status: 'draft',
           notes,
-          totalLabourSubmitted: labourHours || 0,
-          totalPlantSubmitted: plantHours || 0,
+          // totalLabourSubmitted/totalPlantSubmitted are dollar costs, recomputed
+          // from labour/plant entries (see refreshLabourSubmittedTotals). A new
+          // docket has no entries, so they start at 0 — never seed them with the
+          // submitted HOURS, which corrupts every downstream cost figure.
+          totalLabourSubmitted: 0,
+          totalPlantSubmitted: 0,
         },
         include: {
           subcontractorCompany: {
