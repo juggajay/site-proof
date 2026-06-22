@@ -132,11 +132,18 @@ export function toWebhookConfigMetadata(record: WebhookConfigRecord): WebhookCon
   };
 }
 
-export function toWebhookConfig(record: WebhookConfigRecord): WebhookConfig {
+function toWebhookConfigForDelivery(
+  record: WebhookConfigRecord,
+  metadata = toWebhookConfigMetadata(record),
+): WebhookConfig {
   return {
-    ...toWebhookConfigMetadata(record),
+    ...metadata,
     secret: decryptWebhookSecret(record.secret),
   };
+}
+
+export function toWebhookConfig(record: WebhookConfigRecord): WebhookConfig {
+  return toWebhookConfigForDelivery(record);
 }
 
 export function toPublicWebhookConfig(
@@ -157,6 +164,13 @@ export async function getWebhookConfig(id: string): Promise<WebhookConfig | null
 export async function getWebhookConfigMetadata(id: string): Promise<WebhookConfigMetadata | null> {
   const record = await prisma.webhookConfig.findUnique({ where: { id } });
   return record ? toWebhookConfigMetadata(record) : null;
+}
+
+function webhookMatchesEvent(
+  config: Pick<WebhookConfigMetadata, 'events'>,
+  event: string,
+): boolean {
+  return config.events.includes('*') || config.events.includes(event);
 }
 
 async function pruneOldDeliveries(webhookId: string): Promise<void> {
@@ -338,8 +352,19 @@ export async function triggerWebhooks(
   });
 
   for (const record of configs) {
-    const config = toWebhookConfig(record);
-    if (!config.events.includes('*') && !config.events.includes(event)) {
+    const metadata = toWebhookConfigMetadata(record);
+    if (!webhookMatchesEvent(metadata, event)) {
+      continue;
+    }
+
+    let config: WebhookConfig;
+    try {
+      config = toWebhookConfigForDelivery(record, metadata);
+    } catch (err) {
+      logError(
+        `[Webhook] Failed to decrypt secret for ${event} to ${sanitizeWebhookUrlForLog(metadata.url)}; skipping delivery:`,
+        err,
+      );
       continue;
     }
 
