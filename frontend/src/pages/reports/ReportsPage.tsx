@@ -54,6 +54,7 @@ interface ProjectNameResponse {
   name?: string;
   project?: {
     name?: string | null;
+    currentUserRole?: string | null;
   } | null;
 }
 
@@ -65,6 +66,8 @@ export function ReportsPage() {
   const { user } = useAuth();
   const activeTab = searchParams.get('tab') || 'lot-status';
   const reportRequestRef = useRef(0);
+  const inFlightReportRequestKeyRef = useRef<string | null>(null);
+  const lastAutomaticReportRequestKeyRef = useRef<string | null>(null);
 
   const [lotReport, setLotReport] = useState<LotStatusReport | null>(null);
   const [ncrReport, setNCRReport] = useState<NCRReport | null>(null);
@@ -83,9 +86,13 @@ export function ReportsPage() {
 
   // Project name for print header
   const [projectName, setProjectName] = useState<string>('');
+  const [currentProjectRole, setCurrentProjectRole] = useState<string | null | undefined>(
+    undefined,
+  );
 
   const setActiveTab = useCallback(
     (tab: string) => {
+      lastAutomaticReportRequestKeyRef.current = null;
       setSearchParams({ tab });
     },
     [setSearchParams],
@@ -97,10 +104,14 @@ export function ReportsPage() {
     () => subscriptionTier !== null && ADVANCED_ANALYTICS_TIERS.includes(subscriptionTier),
     [subscriptionTier],
   );
-  const projectScopedRole = useMemo(() => getProjectScopedRole(user), [user]);
+  const projectRoleResolved = !projectId || currentProjectRole !== undefined;
+  const projectScopedRole = useMemo(
+    () => (projectRoleResolved ? (currentProjectRole ?? getProjectScopedRole(user)) : ''),
+    [currentProjectRole, projectRoleResolved, user],
+  );
   const canViewClaimsReport = useMemo(
-    () => hasRoleInGroup(projectScopedRole, ROLE_GROUPS.COMMERCIAL),
-    [projectScopedRole],
+    () => projectRoleResolved && hasRoleInGroup(projectScopedRole, ROLE_GROUPS.COMMERCIAL),
+    [projectRoleResolved, projectScopedRole],
   );
   const canManageScheduledReports = canViewClaimsReport;
   const printGeneratedAt = useMemo(
@@ -146,15 +157,21 @@ export function ReportsPage() {
   // Fetch project name for print header
   useEffect(() => {
     const fetchProjectName = async () => {
-      if (!projectId) return;
+      setCurrentProjectRole(undefined);
+      if (!projectId) {
+        setCurrentProjectRole(null);
+        return;
+      }
 
       try {
         const data = await apiFetch<ProjectNameResponse>(
           `/api/projects/${encodeURIComponent(projectId)}`,
         );
         setProjectName(data.name || data.project?.name || 'Project');
+        setCurrentProjectRole(data.project?.currentUserRole ?? null);
       } catch (err) {
         logError('Failed to fetch project name:', err);
+        setCurrentProjectRole(null);
       }
     };
 
@@ -173,10 +190,8 @@ export function ReportsPage() {
         return;
       }
 
-      const requestId = reportRequestRef.current + 1;
-      reportRequestRef.current = requestId;
-      setLoading(true);
-      setError(null);
+      let requestId = 0;
+      let requestKey: string | null = null;
 
       try {
         let endpoint = '';
@@ -210,6 +225,17 @@ export function ReportsPage() {
             break;
         }
 
+        requestKey = `${endpoint}?${queryParams.toString()}`;
+        if (inFlightReportRequestKeyRef.current === requestKey) {
+          return;
+        }
+
+        requestId = reportRequestRef.current + 1;
+        reportRequestRef.current = requestId;
+        inFlightReportRequestKeyRef.current = requestKey;
+        setLoading(true);
+        setError(null);
+
         const data = await apiFetch<unknown>(`/api/reports/${endpoint}?${queryParams.toString()}`);
         if (requestId !== reportRequestRef.current) return;
 
@@ -235,6 +261,9 @@ export function ReportsPage() {
         logError('Error fetching report:', err);
         setError(extractErrorMessage(err, 'Failed to load report data. Please try again.'));
       } finally {
+        if (requestKey && inFlightReportRequestKeyRef.current === requestKey) {
+          inFlightReportRequestKeyRef.current = null;
+        }
         if (requestId === reportRequestRef.current) {
           setLoading(false);
         }
@@ -244,17 +273,27 @@ export function ReportsPage() {
   );
 
   useEffect(() => {
-    if (activeTab === 'claims' && !canViewClaimsReport) {
+    if (!projectRoleResolved) {
+      return;
+    }
+
+    if (activeTab === 'claims' && projectRoleResolved && !canViewClaimsReport) {
       setActiveTab('lot-status');
       return;
     }
 
     if (projectId && isReportDataTab(activeTab)) {
+      const automaticRequestKey = `${projectId}:${activeTab}`;
+      if (lastAutomaticReportRequestKeyRef.current === automaticRequestKey) {
+        return;
+      }
+      lastAutomaticReportRequestKeyRef.current = automaticRequestKey;
       fetchReport(activeTab);
     }
-  }, [projectId, activeTab, fetchReport, canViewClaimsReport, setActiveTab]);
+  }, [projectId, activeTab, fetchReport, projectRoleResolved, canViewClaimsReport, setActiveTab]);
 
   const handleRefreshReport = useCallback(() => {
+    lastAutomaticReportRequestKeyRef.current = null;
     if (isReportDataTab(activeTab)) {
       fetchReport(activeTab);
     } else if (!projectId) {
