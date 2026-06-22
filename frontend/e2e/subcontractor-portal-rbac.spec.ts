@@ -317,13 +317,14 @@ test.describe('Subcontractor portal RBAC', () => {
 
     await page.goto('/subcontractor-portal/work');
 
-    await expect(page.getByLabel('Project')).toHaveValue(E2E_PROJECT_ID);
+    await expect(page.getByLabel('Project')).toHaveValue('e2e-subcontractor-company');
     await expect(page.getByText('SUB-LOT-001')).toBeVisible();
 
-    await page.getByLabel('Project').selectOption(E2E_SECOND_PROJECT_ID);
+    await page.getByLabel('Project').selectOption('e2e-second-subcontractor-company');
 
     await expect(page).toHaveURL(new RegExp(`projectId=${E2E_SECOND_PROJECT_ID}`));
-    await expect(page.getByLabel('Project')).toHaveValue(E2E_SECOND_PROJECT_ID);
+    await expect(page).toHaveURL(/subcontractorCompanyId=e2e-second-subcontractor-company/);
+    await expect(page.getByLabel('Project')).toHaveValue('e2e-second-subcontractor-company');
     await expect(page.getByText('SUB-LOT-002')).toBeVisible();
   });
 });

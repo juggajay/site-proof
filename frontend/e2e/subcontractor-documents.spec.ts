@@ -25,15 +25,18 @@ type JsonRoute = (body: unknown, status?: number) => Promise<void>;
 
 function subcontractorCompanyPayload(url: URL) {
   const requestedProjectId = url.searchParams.get('projectId') || 'project-1';
+  const selectedCompanyId =
+    requestedProjectId === 'project-2' ? 'portal-project-2' : 'portal-project-1';
   return {
     company: {
-      id: 'e2e-sub-company',
+      id: selectedCompanyId,
       companyName: 'E2E Subbie Pty Ltd',
       projectId: requestedProjectId,
       projectName: requestedProjectId === 'project-2' ? 'Second QA Project' : 'Default QA Project',
       availableProjects: [
         {
           id: 'portal-project-1',
+          subcontractorCompanyId: 'portal-project-1',
           companyName: 'E2E Subbie Pty Ltd',
           projectId: 'project-1',
           projectName: 'Default QA Project',
@@ -42,6 +45,7 @@ function subcontractorCompanyPayload(url: URL) {
         },
         {
           id: 'portal-project-2',
+          subcontractorCompanyId: 'portal-project-2',
           companyName: 'E2E Subbie Pty Ltd',
           projectId: 'project-2',
           projectName: 'Second QA Project',
@@ -136,7 +140,7 @@ test.describe('Subcontractor documents mobile access', () => {
 
     await page.goto('/subcontractor-portal?projectId=project-2');
     await expect(page).toHaveURL(/\/p\?projectId=project-2/);
-    await expect(page.getByRole('combobox', { name: 'Project' })).toHaveValue('project-2');
+    await expect(page.getByRole('combobox', { name: 'Project' })).toHaveValue('portal-project-2');
     await page.getByRole('button', { name: 'Documents' }).click();
 
     await expect(page).toHaveURL(/\/p\/docs\?projectId=project-2/);
