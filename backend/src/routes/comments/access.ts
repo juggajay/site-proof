@@ -3,11 +3,11 @@ import { AppError } from '../../lib/AppError.js';
 import {
   activeSubcontractorCompanyWhere,
   checkProjectAccess,
+  isStandaloneSubcontractorPortalIdentity,
   requireSubcontractorPortalModuleAccess,
   type SubcontractorPortalAccessKey,
 } from '../../lib/projectAccess.js';
 
-const SUBCONTRACTOR_COMMENT_ROLES = ['subcontractor', 'subcontractor_admin'];
 const COMMENT_ENTITY_TYPE_ALIASES: Record<string, string> = {
   lot: 'Lot',
   ncr: 'NCR',
@@ -43,7 +43,7 @@ interface CommentEntityAccessTarget {
 }
 
 function isSubcontractorUser(user: AuthUser): boolean {
-  return SUBCONTRACTOR_COMMENT_ROLES.includes(user.roleInCompany || '');
+  return isStandaloneSubcontractorPortalIdentity(user);
 }
 
 function normalizeCommentEntityType(entityType: string): string {

@@ -8,7 +8,7 @@ import { HP_REQUEST_ROLES, isSubcontractorUser, type AuthenticatedUser } from '.
 // DB-backed holdpoints.test.ts access-control suite in CI; only this pure
 // predicate is unit-tested here.
 
-function makeUser(roleInCompany: string): AuthenticatedUser {
+function makeUser(roleInCompany: string, companyId: string | null = null): AuthenticatedUser {
   return {
     id: 'user-1',
     userId: 'user-1',
@@ -16,7 +16,7 @@ function makeUser(roleInCompany: string): AuthenticatedUser {
     fullName: 'Test User',
     roleInCompany,
     role: roleInCompany,
-    companyId: 'company-1',
+    companyId,
   };
 }
 
@@ -24,6 +24,11 @@ describe('isSubcontractorUser', () => {
   it('returns true for subcontractor portal roles', () => {
     expect(isSubcontractorUser(makeUser('subcontractor'))).toBe(true);
     expect(isSubcontractorUser(makeUser('subcontractor_admin'))).toBe(true);
+  });
+
+  it('returns false for company-linked subcontractor roles', () => {
+    expect(isSubcontractorUser(makeUser('subcontractor', 'company-1'))).toBe(false);
+    expect(isSubcontractorUser(makeUser('subcontractor_admin', 'company-1'))).toBe(false);
   });
 
   it('returns false for internal company roles', () => {

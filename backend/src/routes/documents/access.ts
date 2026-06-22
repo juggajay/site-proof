@@ -7,6 +7,7 @@ import {
   assertProjectAllowsWrite,
   checkProjectAccess,
   hasSubcontractorPortalModuleAccess,
+  isStandaloneSubcontractorPortalIdentity,
   requireSubcontractorPortalModuleAccess,
 } from '../../lib/projectAccess.js';
 import type { SubcontractorPortalAccessKey } from '../../lib/projectAccess.js';
@@ -48,7 +49,7 @@ const GENERIC_DOCUMENT_MUTATION_BLOCKED_MESSAGES: Record<string, string> = {
 };
 
 function isDocumentSubcontractorUser(user: AuthUser): boolean {
-  return user.roleInCompany === 'subcontractor' || user.roleInCompany === 'subcontractor_admin';
+  return isStandaloneSubcontractorPortalIdentity(user);
 }
 
 function isDrawingBackedDocument(documentType?: string | null): boolean {

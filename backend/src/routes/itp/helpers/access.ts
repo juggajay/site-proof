@@ -4,6 +4,7 @@ import {
   activeSubcontractorCompanyWhere,
   assertProjectAllowsWrite,
   checkProjectAccess,
+  isStandaloneSubcontractorPortalIdentity,
   requireSubcontractorPortalModuleAccess,
 } from '../../../lib/projectAccess.js';
 import type { AuthUser } from '../../../lib/auth.js';
@@ -37,10 +38,11 @@ export const ITP_VERIFY_ROLES = [
   'superintendent',
 ];
 
-const ITP_SUBCONTRACTOR_ROLES = new Set(['subcontractor', 'subcontractor_admin']);
-
 export function isItpSubcontractorUser(user: AuthUser): boolean {
-  return ITP_SUBCONTRACTOR_ROLES.has(user.role);
+  return isStandaloneSubcontractorPortalIdentity({
+    companyId: user.companyId,
+    roleInCompany: user.role,
+  });
 }
 
 async function getEffectiveItpProjectRole(

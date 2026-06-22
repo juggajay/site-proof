@@ -196,6 +196,14 @@ describe('checkProjectAccess', () => {
           module: 'documents',
         }),
       ).resolves.toBe(false);
+      await expect(
+        requireSubcontractorPortalModuleAccess({
+          userId: user.id,
+          role: user.roleInCompany,
+          projectId: project.id,
+          module: 'documents',
+        }),
+      ).rejects.toThrow('Documents portal access is not enabled');
 
       await prisma.subcontractorUser.deleteMany({ where: { userId: user.id } });
       await expect(checkProjectAccess(user.id, project.id)).resolves.toBe(false);
@@ -207,6 +215,14 @@ describe('checkProjectAccess', () => {
           module: 'documents',
         }),
       ).resolves.toBe(false);
+      await expect(
+        requireSubcontractorPortalModuleAccess({
+          userId: user.id,
+          role: user.roleInCompany,
+          projectId: project.id,
+          module: 'documents',
+        }),
+      ).rejects.toThrow('Documents portal access is not enabled');
     } finally {
       await prisma.projectUser.deleteMany({ where: { projectId: project.id, userId: user.id } });
       await prisma.subcontractorUser.deleteMany({ where: { userId: user.id } });
