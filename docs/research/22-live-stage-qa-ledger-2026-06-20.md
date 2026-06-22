@@ -16,6 +16,112 @@ keep going until the app has been exercised end to end.
   `1secmail.com` from an old Codex process, so future email QA must use Jay's
   nominated inbox, a trusted mailbox, or Resend's safe test recipient.
 
+## Stage 41 - Subcontractor Portal Identity and API Scope QA
+
+Status: landed in PR #1086; PR CI, post-merge master CI, full post-merge E2E,
+Vercel deployment, Railway deployment, and production health checks passed.
+
+Scope:
+
+- Backend subcontractor portal identity invariants after the Stage 40 mobile
+  shell/project-scope fixes.
+- Route-local access helpers that treated `roleInCompany='subcontractor'` as
+  enough to grant subcontractor portal access even when the user still had a
+  head-contractor `companyId`.
+- NCR list scoping for users linked to more than one subcontractor company or
+  project.
+- Confirmed API surfaces: dockets, NCRs, lot assignment lookup,
+  subcontractor portal-access, and test-result laboratory lists.
+
+Subagent coverage:
+
+- An NCR-focused sidecar found that unscoped subcontractor `GET /api/ncrs`
+  could return a partial, misleading list because it used one `findFirst`
+  subcontractor-company link while the project scope could include multiple
+  linked companies/projects.
+- A route-identity sidecar found the broader stale-identity class: several
+  APIs classified subcontractor users by role only instead of the canonical
+  standalone portal identity (`companyId == null` plus subcontractor role).
+  It also identified lower-risk route-local helpers for a later cleanup pass.
+
+Confirmed issues fixed:
+
+- Shared subcontractor portal-module checks now require the canonical
+  standalone portal identity before trusting `SubcontractorUser` links.
+- Dockets now reject company-linked stale subcontractor-role users even if they
+  still have old subcontractor links and project memberships. Existing
+  historical-link behavior for non-subcontractor-role former subcontractors was
+  preserved.
+- NCR list/detail/workflow access now rejects stale company-linked
+  subcontractor-role users and no longer grants project access through old
+  subcontractor links or project memberships.
+- Unscoped subcontractor NCR listing now aggregates all linked subcontractor
+  companies inside the active project scope instead of filtering through a
+  single arbitrary company link.
+- `GET /api/lots/:id/subcontractors/mine` now requires a standalone
+  subcontractor portal identity.
+- `GET /api/subcontractors/:id/portal-access` no longer lets a company-linked
+  stale subcontractor-role user read portal access through an old
+  `SubcontractorUser` link.
+- Unscoped `GET /api/test-results/laboratories` no longer exposes laboratory
+  names through stale subcontractor links.
+- Older route-test fixtures that represented valid subcontractor portal users
+  were corrected to `companyId: null`; new stale-identity regression fixtures
+  deliberately keep `companyId` set.
+
+Related merged work:
+
+- #1086 - Fix subcontractor portal identity scoping, merged as `e06d5365`.
+
+Verification:
+
+- #1086 local checks passed:
+  - backend `type-check`
+  - focused backend ESLint on every changed file
+  - focused backend Prettier check on every changed file
+  - backend pure helper tests:
+    `npx vitest run src/routes/dockets/access.test.ts src/routes/lots/access.test.ts`
+  - `git diff --check`
+  - precommit: full backend lint plus backend format check
+- PR #1086 checks passed before merge: Backend, Frontend PR E2E smoke, Detect
+  changes, Vercel's ignored-build status, and Vercel Preview Comments.
+- Master CI run `27931647265` passed after merge, including Backend, Frontend,
+  and full post-merge Frontend E2E.
+- After merge, production health checks returned HTTP 200 for:
+  - `https://site-proof.vercel.app`
+  - `https://site-proof-production.up.railway.app/health`
+  - `https://site-proof-production.up.railway.app/ready`
+
+Not live-exercised in this stage:
+
+- No production subcontractor, foreman, or owner browser sessions were mutated
+  during this backend API-scope stage.
+- DB-backed route regressions were not run locally because the isolated
+  worktree had no safe local disposable `DATABASE_URL`; the changed route
+  suites ran in GitHub CI against disposable CI Postgres.
+- No real production NCRs, dockets, lot assignments, test results, comments,
+  or notifications were created or edited.
+
+Remaining findings for a later pass:
+
+- Continue the lower-risk route-local helper cleanup in documents,
+  hold-points, ITP, comments, notifications, and project read paths so future
+  route additions cannot reintroduce role-only subcontractor identity checks.
+- Decide whether multiple active `SubcontractorUser` links for the same user
+  and project should be valid. If invalid, add a defensive data check/unique
+  constraint plan; if valid, keep avoiding `findFirst` as a trust boundary.
+- Consider adding an explicit product policy note for historical
+  subcontractor-company links on users who later become internal/company
+  members. Stage 41 preserved existing docket read scoping for non-subcontractor
+  roles with old links, while denying the dangerous stale subcontractor-role
+  state.
+
+Artifacts:
+
+- No bearer tokens, session cookies, generated passwords, production secrets,
+  recipient emails, database URLs, or browser-session data were committed or
+  copied into this ledger.
+
 ## Stage 40 - Subcontractor Mobile Shell and Project Scope QA
 
 Status: landed in PR #1084; PR CI, post-merge master CI, full post-merge E2E,
