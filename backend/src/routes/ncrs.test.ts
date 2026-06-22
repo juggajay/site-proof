@@ -3639,6 +3639,113 @@ describe('NCR Access Hardening', () => {
     }
   });
 
+  it('should reject unreadable same-project documents when responsible subcontractors add NCR evidence', async () => {
+    const suffix = Date.now();
+    const subcontractorCompany = await prisma.subcontractorCompany.create({
+      data: {
+        projectId,
+        companyName: `NCR Evidence Scope Sub ${suffix}`,
+        primaryContactName: 'NCR Evidence Scope Contact',
+        primaryContactEmail: `ncr-evidence-scope-${suffix}@example.com`,
+        status: 'approved',
+        portalAccess: { ncrs: true, documents: true },
+      },
+    });
+    const subcontractor = await registerTestUser(
+      'ncr-evidence-scope-sub',
+      'NCR Evidence Scope Subcontractor',
+    );
+    const assignedLot = await prisma.lot.create({
+      data: {
+        projectId,
+        lotNumber: `NCR-EVID-SCOPE-ASSIGNED-${suffix}`,
+        status: 'in_progress',
+        lotType: 'area',
+        activityType: 'Earthworks',
+      },
+    });
+    const otherLot = await prisma.lot.create({
+      data: {
+        projectId,
+        lotNumber: `NCR-EVID-SCOPE-OTHER-${suffix}`,
+        status: 'in_progress',
+        lotType: 'area',
+        activityType: 'Earthworks',
+      },
+    });
+    const responsibleNcr = await prisma.nCR.create({
+      data: {
+        projectId,
+        ncrNumber: `NCR-EVID-SCOPE-${suffix}`,
+        description: 'Responsible subcontractor cannot attach documents they cannot read',
+        category: 'Workmanship',
+        severity: 'minor',
+        raisedById: userId,
+        responsibleSubcontractorId: subcontractorCompany.id,
+      },
+    });
+    const unreadableDocument = await prisma.document.create({
+      data: {
+        projectId,
+        lotId: otherLot.id,
+        documentType: 'photo',
+        category: 'Site Photos',
+        filename: `responsible-sub-unreadable-evidence-${suffix}.jpg`,
+        fileUrl: `/uploads/documents/responsible-sub-unreadable-evidence-${suffix}.jpg`,
+        uploadedById: userId,
+      },
+    });
+
+    try {
+      await prisma.user.update({
+        where: { id: subcontractor.userId },
+        data: { companyId: null, roleInCompany: 'subcontractor' },
+      });
+      await prisma.subcontractorUser.create({
+        data: {
+          userId: subcontractor.userId,
+          subcontractorCompanyId: subcontractorCompany.id,
+          role: 'user',
+        },
+      });
+      await prisma.lotSubcontractorAssignment.create({
+        data: {
+          projectId,
+          lotId: assignedLot.id,
+          subcontractorCompanyId: subcontractorCompany.id,
+          canCompleteITP: true,
+        },
+      });
+
+      const addRes = await request(app)
+        .post(`/api/ncrs/${responsibleNcr.id}/evidence`)
+        .set('Authorization', `Bearer ${subcontractor.token}`)
+        .send({
+          documentId: unreadableDocument.id,
+          evidenceType: 'photo',
+        });
+      expect(addRes.status).toBe(403);
+
+      const linkedEvidence = await prisma.nCREvidence.count({
+        where: { ncrId: responsibleNcr.id, documentId: unreadableDocument.id },
+      });
+      expect(linkedEvidence).toBe(0);
+    } finally {
+      await prisma.nCREvidence.deleteMany({ where: { ncrId: responsibleNcr.id } });
+      await prisma.document.deleteMany({ where: { id: unreadableDocument.id } });
+      await prisma.nCR.delete({ where: { id: responsibleNcr.id } }).catch(() => {});
+      await prisma.lotSubcontractorAssignment.deleteMany({
+        where: { subcontractorCompanyId: subcontractorCompany.id },
+      });
+      await prisma.lot.deleteMany({ where: { id: { in: [assignedLot.id, otherLot.id] } } });
+      await prisma.subcontractorUser.deleteMany({ where: { userId: subcontractor.userId } });
+      await prisma.subcontractorCompany
+        .delete({ where: { id: subcontractorCompany.id } })
+        .catch(() => {});
+      await cleanupTestUser(subcontractor.userId);
+    }
+  });
+
   it('should reject unrelated subcontractors from NCR evidence routes', async () => {
     const suffix = Date.now();
     const responsibleCompany = await prisma.subcontractorCompany.create({

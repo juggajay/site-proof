@@ -3,7 +3,6 @@ import type { Prisma } from '@prisma/client';
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { prisma } from '../../lib/prisma.js';
-import { type AuthUser } from '../../lib/auth.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
@@ -26,6 +25,7 @@ import {
   buildNcrEvidenceRemovedResponse,
 } from './ncrEvidenceResponses.js';
 import { isUniqueConstraintOn } from './ncrCoreValidation.js';
+import { canReadDocument } from '../documents/access.js';
 
 const MAX_DOCUMENT_FILE_SIZE_BYTES = 2_147_483_647;
 const MAX_EVIDENCE_TYPE_LENGTH = 80;
@@ -109,6 +109,7 @@ const addEvidenceSchema = z
   });
 
 type AddEvidenceInput = z.infer<typeof addEvidenceSchema>;
+type RequestAuthUser = NonNullable<Request['user']>;
 type NcrEvidenceWithDocument = Prisma.NCREvidenceGetPayload<{
   include: typeof ncrEvidenceDocumentInclude;
 }>;
@@ -117,7 +118,7 @@ export const ncrEvidenceRouter = Router();
 
 async function resolveNcrEvidenceDocumentId(
   projectId: string,
-  userId: string,
+  user: RequestAuthUser,
   evidenceInput: AddEvidenceInput,
 ): Promise<string> {
   const { documentId, evidenceType, filename, fileUrl, fileSize, mimeType, caption } =
@@ -129,11 +130,22 @@ async function resolveNcrEvidenceDocumentId(
         id: documentId,
         projectId,
       },
-      select: { id: true },
+      select: {
+        id: true,
+        projectId: true,
+        lotId: true,
+        uploadedById: true,
+        documentType: true,
+        category: true,
+      },
     });
 
     if (!existingDocument) {
       throw AppError.notFound('Document');
+    }
+
+    if (!(await canReadDocument(user, existingDocument))) {
+      throw AppError.forbidden('You do not have access to this evidence document');
     }
 
     return documentId;
@@ -157,7 +169,7 @@ async function resolveNcrEvidenceDocumentId(
       fileUrl: storedFileUrl,
       fileSize,
       mimeType,
-      uploadedById: userId,
+      uploadedById: user.userId,
       caption,
     },
   });
@@ -224,7 +236,7 @@ ncrEvidenceRouter.post(
       throw AppError.badRequest('Validation failed', { issues: validation.error.issues });
     }
 
-    const user = req.user as AuthUser;
+    const user = req.user as RequestAuthUser;
     const id = parseNcrRouteParam(req.params.id, 'id');
     const { evidenceType, projectId: _providedProjectId } = validation.data;
 
@@ -245,7 +257,7 @@ ncrEvidenceRouter.post(
 
     const finalDocumentId = await resolveNcrEvidenceDocumentId(
       ncr.projectId,
-      user.userId,
+      user,
       validation.data,
     );
 
@@ -278,7 +290,7 @@ ncrEvidenceRouter.get(
   '/:id/evidence',
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
-    const user = req.user as AuthUser;
+    const user = req.user as RequestAuthUser;
     const id = parseNcrRouteParam(req.params.id, 'id');
 
     const ncr = await prisma.nCR.findUnique({
@@ -322,7 +334,7 @@ ncrEvidenceRouter.delete(
   '/:id/evidence/:evidenceId',
   requireAuth,
   asyncHandler(async (req: Request, res: Response) => {
-    const user = req.user as AuthUser;
+    const user = req.user as RequestAuthUser;
     const id = parseNcrRouteParam(req.params.id, 'id');
     const evidenceId = parseNcrRouteParam(req.params.evidenceId, 'evidenceId');
 
