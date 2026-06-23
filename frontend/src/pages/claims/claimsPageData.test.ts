@@ -40,6 +40,30 @@ describe('buildClaimSummaryTotals', () => {
       outstanding: 500,
     });
   });
+
+  it('excludes disputed claims from Total Certified and Outstanding (M42)', () => {
+    const totals = buildClaimSummaryTotals([
+      makeClaim({
+        status: 'certified',
+        totalClaimedAmount: 1000,
+        certifiedAmount: 900,
+        paidAmount: 400,
+      }),
+      makeClaim({
+        status: 'disputed',
+        totalClaimedAmount: 2000,
+        certifiedAmount: 1500,
+        paidAmount: 600,
+      }),
+    ]);
+
+    // Disputed certified (1500) and its paid (600) drop out of certified/outstanding.
+    expect(totals.totalCertified).toBe(900);
+    expect(totals.outstanding).toBe(500); // 900 certified - 400 paid (non-disputed)
+    // Gross claimed/paid cards still reflect all claims.
+    expect(totals.totalClaimed).toBe(3000);
+    expect(totals.totalPaid).toBe(1000);
+  });
 });
 
 describe('buildCumulativeClaimChartData', () => {

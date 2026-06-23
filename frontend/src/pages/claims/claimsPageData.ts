@@ -41,15 +41,20 @@ function sortClaimsByPeriodEnd(claims: Claim[]): Claim[] {
 }
 
 export function buildClaimSummaryTotals(claims: Claim[]): ClaimSummaryTotals {
+  // Disputed claims are excluded from Total Certified and Outstanding — a
+  // contested certification shouldn't be reported as money owed (M42). The gross
+  // Claimed/Paid cards still reflect all claims.
+  const nonDisputed = claims.filter((c) => c.status !== 'disputed');
   const totalClaimed = claims.reduce((sum, c) => sum + c.totalClaimedAmount, 0);
-  const totalCertified = claims.reduce((sum, c) => sum + (c.certifiedAmount || 0), 0);
+  const totalCertified = nonDisputed.reduce((sum, c) => sum + (c.certifiedAmount || 0), 0);
   const totalPaid = claims.reduce((sum, c) => sum + (c.paidAmount || 0), 0);
+  const nonDisputedPaid = nonDisputed.reduce((sum, c) => sum + (c.paidAmount || 0), 0);
 
   return {
     totalClaimed,
     totalCertified,
     totalPaid,
-    outstanding: totalCertified - totalPaid,
+    outstanding: totalCertified - nonDisputedPaid,
   };
 }
 
