@@ -42,6 +42,8 @@ import {
   getDocketPrerequisiteState,
   formatCurrency,
   getToday,
+  LOTS_MODULE_DISABLED_DOCKET_MESSAGE,
+  type DocketPrerequisiteState,
   type NeedsAttentionItem,
 } from '@/pages/subcontractor-portal/subcontractorDashboardHelpers';
 import { getDocketDisplayTotalCost } from '@/pages/subcontractor-portal/docketEditData';
@@ -198,6 +200,47 @@ function NoticeCard({ item }: { item: NeedsAttentionItem }) {
         <span className="block truncate text-[13.5px]">{item.message}</span>
       </div>
     </Link>
+  );
+}
+
+// Surfaces the already-computed docket prerequisite state on the home screen so a
+// subbie who can't yet raise a docket sees why (no approved crew/plant, no lots,
+// or the lots module is off) instead of a dead-end (M78). Renders nothing once
+// prerequisites are met.
+export function FinishSetupNotice({
+  state,
+  myCompanyLink,
+}: {
+  state: DocketPrerequisiteState;
+  myCompanyLink: string;
+}) {
+  if (state.prerequisitesMet) {
+    return null;
+  }
+  return (
+    <div className="shell-notice shell-notice-warn" role="status">
+      <AlertTriangle size={19} aria-hidden="true" className="mt-px shrink-0 text-warning" />
+      <div className="min-w-0 space-y-1">
+        <b className="block text-[13.5px]">Finish setup before filling out a docket</b>
+        {!state.hasDocketResources && (
+          <span className="block text-[13.5px]">
+            Add approved employees or plant in{' '}
+            <Link to={myCompanyLink} className="underline">
+              My Company
+            </Link>{' '}
+            and wait for rate approval.
+          </span>
+        )}
+        {state.needsLotAssignment && (
+          <span className="block text-[13.5px]">
+            No lots assigned yet. Contact your project manager to get lot assignments.
+          </span>
+        )}
+        {state.lotsModuleDisabled && (
+          <span className="block text-[13.5px]">{LOTS_MODULE_DISABLED_DOCKET_MESSAGE}</span>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -364,11 +407,11 @@ export function HomeScreen() {
       : item,
   );
 
-  // Prerequisite state — reused from the shared helper (drives nothing fatal in
-  // the shell yet, but keeps the same honest model for later screens).
+  // Prerequisite state — reused from the shared helper and surfaced as a
+  // "finish setup" notice below when a docket can't yet be raised (M78).
   const approvedEmployees = company?.employees?.filter((e) => e.status === 'approved') ?? [];
   const approvedPlant = company?.plant?.filter((p) => p.status === 'approved') ?? [];
-  getDocketPrerequisiteState({
+  const docketPrerequisites = getDocketPrerequisiteState({
     approvedEmployeeCount: approvedEmployees.length,
     approvedPlantCount: approvedPlant.length,
     lotsModuleEnabled: lotsEnabled,
@@ -417,6 +460,9 @@ export function HomeScreen() {
     >
       {/* Today's docket hero */}
       <DocketHero state={hero} onPress={() => navigate(docketPath)} />
+
+      {/* Finish-setup notice (shown until a docket can actually be raised) */}
+      <FinishSetupNotice state={docketPrerequisites} myCompanyLink={myCompanyLink} />
 
       {/* Needs-attention notices */}
       {needsAttention.slice(0, 3).map((item) => (

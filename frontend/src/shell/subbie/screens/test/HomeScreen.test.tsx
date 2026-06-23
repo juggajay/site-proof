@@ -43,7 +43,8 @@ vi.mock('../../subbieShellContext', () => ({
   useSubbieShellContext: () => _ctx,
 }));
 
-import { HomeScreen } from '../HomeScreen';
+import { HomeScreen, FinishSetupNotice } from '../HomeScreen';
+import type { DocketPrerequisiteState } from '@/pages/subcontractor-portal/subcontractorDashboardHelpers';
 
 interface DocketSeed {
   id: string;
@@ -228,5 +229,37 @@ describe('subbie shell HomeScreen', () => {
     renderHome();
     fireEvent.click(screen.getByRole('button', { name: "Add today's hours" }));
     expect(screen.getByText('docket editor')).toBeInTheDocument();
+  });
+});
+
+describe('FinishSetupNotice (M78)', () => {
+  const renderNotice = (state: DocketPrerequisiteState) =>
+    render(
+      <MemoryRouter>
+        <FinishSetupNotice state={state} myCompanyLink="/p/company?projectId=p1" />
+      </MemoryRouter>,
+    );
+
+  it('shows the finish-setup notice with a My Company link when there are no approved resources', () => {
+    renderNotice({
+      hasDocketResources: false,
+      needsLotAssignment: false,
+      lotsModuleDisabled: false,
+      prerequisitesMet: false,
+    });
+
+    expect(screen.getByText(/finish setup before filling out a docket/i)).toBeInTheDocument();
+    const link = screen.getByRole('link', { name: /my company/i });
+    expect(link.getAttribute('href')).toBe('/p/company?projectId=p1');
+  });
+
+  it('renders nothing once prerequisites are met', () => {
+    const { container } = renderNotice({
+      hasDocketResources: true,
+      needsLotAssignment: false,
+      lotsModuleDisabled: false,
+      prerequisitesMet: true,
+    });
+    expect(container).toBeEmptyDOMElement();
   });
 });
