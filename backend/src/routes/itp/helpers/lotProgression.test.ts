@@ -33,7 +33,11 @@ function makeInstance({
     evidenceRequired?: string | null;
     testType?: string | null;
   }>;
-  completions: Array<{ checklistItemId: string; status: string }>;
+  completions: Array<{
+    checklistItemId: string;
+    status: string;
+    verificationStatus?: string | null;
+  }>;
 }) {
   return {
     id: 'itp-1',
@@ -70,6 +74,22 @@ describe('updateLotStatusFromITP', () => {
       where: { id: 'itp-1' },
       data: { status: 'completed' },
     });
+  });
+
+  it('does not count a rejected completion toward auto-progression', async () => {
+    mocks.instanceFindUnique.mockResolvedValue(
+      makeInstance({
+        items: [{ id: 'item-1', evidenceRequired: 'none', testType: null }],
+        completions: [
+          { checklistItemId: 'item-1', status: 'completed', verificationStatus: 'rejected' },
+        ],
+      }),
+    );
+
+    await updateLotStatusFromITP('itp-1');
+
+    expect(mocks.lotUpdate).not.toHaveBeenCalled();
+    expect(mocks.instanceUpdate).not.toHaveBeenCalled();
   });
 
   it('moves a partially completed not-started ITP to in progress', async () => {

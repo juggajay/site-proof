@@ -15,8 +15,14 @@ export function buildClaimEvidenceReviewFromInputs(
 
     if (itpInstance) {
       const totalItems = itpInstance.template.checklistItems.length;
+      // N/A items are finished work (matching lotProgression + conformance), but
+      // a completed item that was rejected or is still awaiting verification is
+      // NOT claim-ready evidence and must not count toward the complete tally.
       const completedItems = itpInstance.completions.filter(
-        (completion) => completion.status === 'completed',
+        (completion) =>
+          (completion.status === 'completed' || completion.status === 'not_applicable') &&
+          completion.verificationStatus !== 'rejected' &&
+          completion.verificationStatus !== 'pending_verification',
       ).length;
       const missingItems = Math.max(0, totalItems - completedItems);
 
