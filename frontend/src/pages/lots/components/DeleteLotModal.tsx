@@ -49,7 +49,11 @@ export function DeleteLotModal({ isOpen, lot, onClose, onDeleted, onError }: Del
           <p className="mt-1 text-sm text-muted-foreground">&quot;{lot.description}&quot;</p>
         )}
         <p className="mt-3 text-sm text-destructive">
-          This action cannot be undone. All associated data will be permanently deleted.
+          This permanently deletes the lot and cannot be undone.
+        </p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Lots that are conformed, claimed, or have hold point or docket history can&rsquo;t be
+          deleted — only empty setup lots can be removed.
         </p>
       </ModalBody>
       <ModalFooter>
