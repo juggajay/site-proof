@@ -386,6 +386,9 @@ instancesRouter.get(
         releaseMethod: true,
         releasedAt: true,
       },
+      // Oldest-first so that when several released hold points share a checklist
+      // item, the Map below keeps the most-recent release deterministically.
+      orderBy: { releasedAt: 'asc' },
     });
     const holdPointReleaseByItem = new Map(
       releasedHoldPoints.map((hp) => [hp.itpChecklistItemId, hp]),

@@ -1,4 +1,5 @@
 import { prisma } from './prisma.js';
+import { isReleaseGatedChecklistItem } from './holdPointReleaseGating.js';
 import {
   getChecklistItemsForInstance,
   type ChecklistItem,
@@ -185,13 +186,9 @@ async function applyNaHoldPointBypassGuard(
     completions.filter((c) => c.status === 'not_applicable').map((c) => c.checklistItemId),
   );
 
-  const naHoldPointSignoffItems = checklistItems.filter((item) => {
-    if (!naCompletionItemIds.has(item.id)) return false;
-    const isHoldPointSignoffItem =
-      item.pointType === 'hold_point' ||
-      (item.responsibleParty === 'superintendent' && item.pointType !== 'witness');
-    return isHoldPointSignoffItem;
-  });
+  const naHoldPointSignoffItems = checklistItems.filter(
+    (item) => naCompletionItemIds.has(item.id) && isReleaseGatedChecklistItem(item),
+  );
 
   if (naHoldPointSignoffItems.length === 0) {
     return;

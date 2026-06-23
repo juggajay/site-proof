@@ -314,6 +314,15 @@ const SUPER_SIGNOFF_ITEM: ChecklistItemFixture = {
   testType: null,
 };
 
+const WITNESS_POINT_TYPE_ITEM: ChecklistItemFixture = {
+  id: 'wpt1',
+  description: 'Superintendent witness point',
+  pointType: 'witness_point',
+  responsibleParty: 'superintendent',
+  evidenceRequired: 'none',
+  testType: null,
+};
+
 const PASSING_VERIFIED_TEST = {
   id: 'test-1',
   testType: 'Compaction',
@@ -607,6 +616,26 @@ describe('checkConformancePrerequisites — gate wiring (mocked Prisma)', () => 
     expect(result.canConform).toBe(true);
     expect(result.blockingReasons).toEqual([]);
     // holdPoint guard was not triggered (no N/A hold-point sign-off items)
+    expect(mocks.holdPointFindMany).not.toHaveBeenCalled();
+  });
+
+  it('witness_point (superintendent) N/A → passes (not release-gated; M17 drift fix)', async () => {
+    // The inline predicate only excluded pointType 'witness', so a
+    // 'witness_point' superintendent item was wrongly treated as a hold-point
+    // sign-off and blocked conformance. The shared isReleaseGatedChecklistItem
+    // excludes both witness variants.
+    mocks.lotFindUnique.mockResolvedValue(
+      makeLot({
+        checklistItems: [NON_TEST_ITEM, WITNESS_POINT_TYPE_ITEM],
+        completionStatuses: { i1: 'completed', wpt1: 'not_applicable' },
+        testResults: [],
+      }),
+    );
+
+    const result = await checkConformancePrerequisites('lot-1');
+
+    expect(result.canConform).toBe(true);
+    expect(result.blockingReasons).toEqual([]);
     expect(mocks.holdPointFindMany).not.toHaveBeenCalled();
   });
 
