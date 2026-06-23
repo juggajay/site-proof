@@ -27,6 +27,7 @@ import { useDiaryShellData } from './useDiaryShellData';
 import { useEffectiveProjectId } from '@/hooks/useEffectiveProjectId';
 import { apiFetch, isRetriableNetworkFailure } from '@/lib/api';
 import { extractErrorMessage } from '@/lib/errorHandling';
+import { extractSubmitWarnings } from '@/lib/diarySubmitWarnings';
 import { logError } from '@/lib/logger';
 import { toast } from '@/components/ui/toaster';
 import { useHaptics } from '@/hooks/useHaptics';
@@ -154,7 +155,10 @@ export function ReviewScreen() {
   const { trigger: triggerHaptic } = useHaptics();
 
   const [submitting, setSubmitting] = useState(false);
-  const [submitWarnings] = useState<string[]>([]);
+  // M30: populated from the server's 422 acknowledgement gate (was a dead
+  // useState that never updated, so the warnings UI never showed and the diary
+  // submitted without the foreman ever acknowledging the server warnings).
+  const [submitWarnings, setSubmitWarnings] = useState<string[]>([]);
   const isSubmitted = diary?.status === 'submitted';
 
   const backPath = withProjectQuery('/m/diary', projectId);
@@ -203,6 +207,17 @@ export function ReviewScreen() {
         // Offline — queue and show the offline ceremony
         triggerHaptic('light');
         navigate(withProjectQuery('/m/diary/done', projectId, { queued: 1 }), { replace: true });
+        return;
+      }
+      // M30: the server's 422 acknowledgement gate — surface the warnings and
+      // keep the foreman here; the next submit sends acknowledgeWarnings: true.
+      const backendWarnings = extractSubmitWarnings(err);
+      if (backendWarnings) {
+        setSubmitWarnings(backendWarnings);
+        toast({
+          description: 'Review the warnings before submitting the diary.',
+          variant: 'warning',
+        });
         return;
       }
       logError('Diary submit error:', err);

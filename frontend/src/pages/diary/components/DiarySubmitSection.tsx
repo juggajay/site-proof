@@ -1,6 +1,7 @@
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState } from 'react';
 import { apiFetch } from '@/lib/api';
 import { extractErrorMessage } from '@/lib/errorHandling';
+import { extractSubmitWarnings } from '@/lib/diarySubmitWarnings';
 import { logError } from '@/lib/logger';
 import { toast } from '@/components/ui/toaster';
 import type { DailyDiaryPDFData } from '@/lib/pdfGenerator';
@@ -47,29 +48,11 @@ export const DiarySubmitSection = React.memo(function DiarySubmitSection({
   const printingRef = useRef(false);
   const addingAddendumRef = useRef(false);
 
-  // Check for empty sections and generate warnings
-  const getSubmitWarnings = useCallback((): string[] => {
-    const warnings: string[] = [];
-
-    if (!diary.weatherConditions) {
-      warnings.push('Weather conditions not recorded');
-    }
-    if (diary.personnel.length === 0) {
-      warnings.push('No personnel recorded');
-    }
-    if (diary.activities.length === 0) {
-      warnings.push('No activities recorded');
-    }
-    if (!diary.generalNotes && diary.delays.length === 0 && diary.plant.length === 0) {
-      warnings.push('No general notes, plant, or delays recorded');
-    }
-
-    return warnings;
-  }, [diary]);
-
+  // M30: the warning list is the SERVER's (its 422 acknowledgement gate), not a
+  // client-side re-derivation — so the warnings the foreman sees and the gate the
+  // server enforces can never drift apart.
   const handleSubmitClick = () => {
-    const warnings = getSubmitWarnings();
-    setSubmitWarnings(warnings);
+    setSubmitWarnings([]);
     setShowSubmitConfirm(true);
   };
 
@@ -77,26 +60,40 @@ export const DiarySubmitSection = React.memo(function DiarySubmitSection({
     if (saving || submittingRef.current) return;
     submittingRef.current = true;
     setSaving(true);
-    setShowSubmitConfirm(false);
+
+    // First confirm submits WITHOUT acknowledgement so the server can answer with
+    // its 422 warning gate. Once those warnings are shown, the next confirm
+    // acknowledges them.
+    const acknowledging = submitWarnings.length > 0;
     try {
       const data = await apiFetch<{ diary: DailyDiary }>(
         `/api/diary/${encodeURIComponent(diary.id)}/submit`,
         {
           method: 'POST',
-          body: JSON.stringify({ acknowledgeWarnings: true }),
+          body: acknowledging ? JSON.stringify({ acknowledgeWarnings: true }) : undefined,
         },
       );
 
+      setShowSubmitConfirm(false);
+      setSubmitWarnings([]);
       onDiaryUpdate(data.diary);
       onRefreshDiaries();
       toast({ title: 'Daily diary submitted', variant: 'success' });
     } catch (err) {
-      logError('Error submitting diary:', err);
-      toast({
-        title: 'Failed to submit diary',
-        description: extractErrorMessage(err, 'Please try again.'),
-        variant: 'error',
-      });
+      // A 422 acknowledgement gate on the first attempt keeps the modal open with
+      // the server's warnings; the foreman re-confirms to acknowledge.
+      const backendWarnings = !acknowledging ? extractSubmitWarnings(err) : null;
+      if (backendWarnings) {
+        setSubmitWarnings(backendWarnings);
+      } else {
+        logError('Error submitting diary:', err);
+        toast({
+          title: 'Failed to submit diary',
+          description: extractErrorMessage(err, 'Please try again.'),
+          variant: 'error',
+        });
+        setShowSubmitConfirm(false);
+      }
     } finally {
       submittingRef.current = false;
       setSaving(false);
