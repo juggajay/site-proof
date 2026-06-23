@@ -130,4 +130,33 @@ describe('hold point release signature validation (pure, DB-free)', () => {
       ).toBe(false);
     }
   });
+
+  it('requires a signature on the public secure-link release (M20)', () => {
+    // The public secure-link release page must capture the external reviewer's
+    // signature; the schema rejects a release with no signature.
+    for (const signatureDataUrl of [undefined, null, '']) {
+      expect(
+        publicReleaseSchema.safeParse({
+          releasedByName: 'External Superintendent',
+          signatureDataUrl,
+        }).success,
+      ).toBe(false);
+    }
+
+    expect(
+      publicReleaseSchema.safeParse({
+        releasedByName: 'External Superintendent',
+        signatureDataUrl: validSignature,
+      }).success,
+    ).toBe(true);
+
+    // The authenticated release keeps the signature optional (e.g. email
+    // confirmation releases without a drawn signature).
+    expect(
+      releaseHoldPointSchema.safeParse({
+        releasedByName: 'Internal QM',
+        releasedByOrg: 'SiteProof',
+      }).success,
+    ).toBe(true);
+  });
 });

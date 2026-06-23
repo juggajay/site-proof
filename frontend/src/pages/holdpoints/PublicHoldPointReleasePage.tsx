@@ -13,6 +13,7 @@ import { apiFetch, apiUrl } from '@/lib/api';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import type { HPEvidencePackageData } from '@/lib/pdfGenerator';
 import { Button } from '@/components/ui/button';
+import { SignaturePad } from '@/components/ui/SignaturePad';
 import { formatStatusLabel } from '@/lib/statusLabels';
 
 interface PublicReleaseResponse {
@@ -145,6 +146,7 @@ export function PublicHoldPointReleasePage() {
   const [releasedByName, setReleasedByName] = useState('');
   const [releasedByOrg, setReleasedByOrg] = useState('');
   const [releaseNotes, setReleaseNotes] = useState('');
+  const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
@@ -235,7 +237,7 @@ export function PublicHoldPointReleasePage() {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!token || !releasedByName.trim() || submittingRef.current) return;
+    if (!token || !releasedByName.trim() || !signatureDataUrl || submittingRef.current) return;
 
     submittingRef.current = true;
     setSubmitting(true);
@@ -249,6 +251,7 @@ export function PublicHoldPointReleasePage() {
             releasedByName: releasedByName.trim(),
             releasedByOrg: releasedByOrg.trim() || undefined,
             releaseNotes: releaseNotes.trim() || undefined,
+            signatureDataUrl,
           }),
         },
       );
@@ -601,6 +604,20 @@ export function PublicHoldPointReleasePage() {
                 />
               </label>
 
+              <div>
+                <SignaturePad
+                  onChange={setSignatureDataUrl}
+                  required
+                  fullWidth
+                  label="Sign to confirm release"
+                />
+                {!signatureDataUrl && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    A signature is required to release this hold point.
+                  </p>
+                )}
+              </div>
+
               {submitError && (
                 <div
                   className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
@@ -613,7 +630,7 @@ export function PublicHoldPointReleasePage() {
               <Button
                 type="submit"
                 className="w-full"
-                disabled={!canRelease || submitting || !releasedByName.trim()}
+                disabled={!canRelease || submitting || !releasedByName.trim() || !signatureDataUrl}
               >
                 {submitting ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
