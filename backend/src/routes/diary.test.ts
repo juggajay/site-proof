@@ -1438,4 +1438,70 @@ describe('Daily Diary API', () => {
       expect(res.body.error.message).toContain('submitted');
     });
   });
+
+  describe('GET previous-personnel / previous-plant (H11)', () => {
+    it('copies only manually-entered rows, never docket-sourced crew or plant', async () => {
+      const prevDiary = await prisma.dailyDiary.create({
+        data: {
+          projectId,
+          date: new Date('2026-02-01T00:00:00.000Z'),
+          personnel: {
+            create: [
+              { name: 'Manual Person', source: 'manual' },
+              { name: 'Docket Person', source: 'docket' },
+            ],
+          },
+          plant: {
+            create: [
+              { description: 'Manual Excavator', source: 'manual' },
+              { description: 'Docket Excavator', source: 'docket' },
+            ],
+          },
+        },
+      });
+
+      try {
+        const personnelRes = await request(app)
+          .get(`/api/diary/${projectId}/2026-02-05/previous-personnel`)
+          .set('Authorization', `Bearer ${authToken}`);
+        expect(personnelRes.status).toBe(200);
+        expect((personnelRes.body.personnel as Array<{ name: string }>).map((p) => p.name)).toEqual(
+          ['Manual Person'],
+        );
+
+        const plantRes = await request(app)
+          .get(`/api/diary/${projectId}/2026-02-05/previous-plant`)
+          .set('Authorization', `Bearer ${authToken}`);
+        expect(plantRes.status).toBe(200);
+        expect(
+          (plantRes.body.plant as Array<{ description: string }>).map((p) => p.description),
+        ).toEqual(['Manual Excavator']);
+      } finally {
+        await prisma.diaryPersonnel.deleteMany({ where: { diaryId: prevDiary.id } });
+        await prisma.diaryPlant.deleteMany({ where: { diaryId: prevDiary.id } });
+        await prisma.dailyDiary.delete({ where: { id: prevDiary.id } }).catch(() => {});
+      }
+    });
+
+    it('skips a previous diary that has only docket-sourced rows', async () => {
+      const prevDiary = await prisma.dailyDiary.create({
+        data: {
+          projectId,
+          date: new Date('2026-02-02T00:00:00.000Z'),
+          personnel: { create: [{ name: 'Docket Only', source: 'docket' }] },
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .get(`/api/diary/${projectId}/2026-02-06/previous-personnel`)
+          .set('Authorization', `Bearer ${authToken}`);
+        expect(res.status).toBe(200);
+        expect(res.body.personnel).toEqual([]);
+      } finally {
+        await prisma.diaryPersonnel.deleteMany({ where: { diaryId: prevDiary.id } });
+        await prisma.dailyDiary.delete({ where: { id: prevDiary.id } }).catch(() => {});
+      }
+    });
+  });
 });

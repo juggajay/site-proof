@@ -383,12 +383,15 @@ router.get(
         date: {
           lt: referenceDate,
         },
+        // H11: only consider manually-entered personnel. Docket-sourced crew is
+        // synced from dockets each day, so copying it forward would create
+        // manual duplicates of rows the docket sync re-creates.
         personnel: {
-          some: {}, // Only find diaries that have at least one personnel entry
+          some: { source: 'manual' },
         },
       },
       include: {
-        personnel: true,
+        personnel: { where: { source: 'manual' } },
       },
       orderBy: {
         date: 'desc',
@@ -446,12 +449,15 @@ router.get(
         date: {
           lt: referenceDate,
         },
+        // H11: only consider manually-entered plant. Docket-sourced plant is
+        // synced from dockets each day, so copying it forward would create
+        // manual duplicates of rows the docket sync re-creates.
         plant: {
-          some: {}, // Only find diaries that have at least one plant entry
+          some: { source: 'manual' },
         },
       },
       include: {
-        plant: true,
+        plant: { where: { source: 'manual' } },
       },
       orderBy: {
         date: 'desc',
