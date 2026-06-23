@@ -1,4 +1,5 @@
 import { prisma } from '../../lib/prisma.js';
+import { createNotification } from '../../lib/notificationDispatch.js';
 import { buildProjectEntityLink } from './links.js';
 
 /**
@@ -81,18 +82,16 @@ export async function createMentionNotifications(
       const authorName = author?.fullName || author?.email || 'Someone';
 
       // Create notification
-      await prisma.notification.create({
-        data: {
-          userId: user.id,
-          projectId: projectId || null,
-          type: 'mention',
-          title: `${authorName} mentioned you in a comment`,
-          message: content.length > 100 ? content.substring(0, 100) + '...' : content,
-          linkUrl: buildProjectEntityLink(entityType, entityId, projectId, {
-            tab: 'comments',
-            commentId,
-          }),
-        },
+      await createNotification({
+        userId: user.id,
+        projectId: projectId || null,
+        type: 'mention',
+        title: `${authorName} mentioned you in a comment`,
+        message: content.length > 100 ? content.substring(0, 100) + '...' : content,
+        linkUrl: buildProjectEntityLink(entityType, entityId, projectId, {
+          tab: 'comments',
+          commentId,
+        }),
       });
     }
   }
