@@ -20,6 +20,7 @@ import {
   buildCompanyLeftResponse,
   buildCompanyMemberInvitedResponse,
   buildCompanyMemberRemovedResponse,
+  buildCompanyMemberRoleChangedResponse,
   buildCompanyMembersResponse,
   buildCompanyOwnershipTransferredResponse,
 } from './responses.js';
@@ -621,6 +622,102 @@ companyMemberRoutes.delete(
     });
 
     res.json(buildCompanyMemberRemovedResponse({ memberId, status: removalStatus, removedAt }));
+  }),
+);
+
+// H23: change a company member's role. Owner/admin only; the owner's role can
+// only change through transfer-ownership, and an admin cannot change their own
+// role here (mirrors the team UI, which hides the control for self and owner).
+companyMemberRoutes.patch(
+  '/members/:memberId',
+  asyncHandler(async (req, res) => {
+    const user = req.user!;
+    requireBrowserSession(req, 'Company member role change');
+    const companyId = requireCompanyAdmin(user);
+    const memberId = normalizeCompanyString(req.params.memberId, 'Member ID', 128, {
+      required: true,
+    });
+
+    if (!memberId) {
+      throw AppError.badRequest('Member ID is required');
+    }
+
+    if (memberId === user.userId) {
+      throw AppError.badRequest('You cannot change your own company role');
+    }
+
+    const newRole = normalizeCompanyMemberRole(req.body?.roleInCompany);
+
+    let previousRole = '';
+    let targetEmail = '';
+
+    await prisma.$transaction(async (tx) => {
+      const currentUser = await tx.user.findUnique({
+        where: { id: user.userId },
+        select: { companyId: true, roleInCompany: true },
+      });
+
+      if (currentUser?.companyId !== companyId) {
+        throw AppError.forbidden('Invalid company session');
+      }
+
+      if (!['owner', 'admin'].includes(currentUser.roleInCompany || '')) {
+        throw AppError.forbidden('Only company owners and admins can change member roles');
+      }
+
+      await tx.$queryRaw`
+        SELECT id
+        FROM companies
+        WHERE id = ${companyId}
+        FOR UPDATE
+      `;
+
+      const targetMember = await tx.user.findFirst({
+        where: { id: memberId, companyId },
+        select: { id: true, email: true, roleInCompany: true },
+      });
+
+      if (!targetMember) {
+        throw AppError.notFound('Company member');
+      }
+
+      if (targetMember.roleInCompany === 'owner') {
+        throw AppError.badRequest('Company owners must transfer ownership to change their role');
+      }
+
+      previousRole = targetMember.roleInCompany;
+      targetEmail = targetMember.email;
+
+      if (previousRole === newRole) {
+        // No-op: nothing to change, so skip the write and the audit record.
+        return;
+      }
+
+      await tx.user.update({
+        where: { id: memberId },
+        data: { roleInCompany: newRole },
+      });
+
+      // M73: write the audit inside the transaction so a privileged role change
+      // cannot persist without it (hard-fail).
+      await writeAuditLogInTransaction(tx, {
+        userId: user.userId,
+        entityType: 'user',
+        entityId: memberId,
+        action: AuditAction.USER_ROLE_CHANGED,
+        changes: {
+          targetUserId: memberId,
+          targetUserEmail: targetEmail,
+          companyId,
+          roleInCompany: { from: previousRole, to: newRole },
+        },
+        req,
+      });
+    });
+
+    res.json(
+      buildCompanyMemberRoleChangedResponse({ memberId, roleInCompany: newRole, previousRole }),
+    );
   }),
 );
 

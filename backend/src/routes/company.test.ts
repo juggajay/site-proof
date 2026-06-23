@@ -1289,6 +1289,127 @@ describe('Company API', () => {
     });
   });
 
+  describe('PATCH /api/company/members/:memberId', () => {
+    let memberId: string;
+    let memberToken: string;
+
+    beforeAll(async () => {
+      const memberRes = await request(app)
+        .post('/api/auth/register')
+        .send({
+          email: `member-role-${Date.now()}@example.com`,
+          password: 'SecureP@ssword123!',
+          fullName: 'Member Role User',
+          tosAccepted: true,
+        });
+      memberId = memberRes.body.user.id;
+      memberToken = memberRes.body.token;
+      await prisma.user.update({
+        where: { id: memberId },
+        data: {
+          companyId,
+          roleInCompany: 'foreman',
+          emailVerified: true,
+          emailVerifiedAt: new Date(),
+        },
+      });
+    });
+
+    afterEach(async () => {
+      await prisma.auditLog.deleteMany({
+        where: { entityId: memberId, action: AuditAction.USER_ROLE_CHANGED },
+      });
+      await prisma.user.update({ where: { id: memberId }, data: { roleInCompany: 'foreman' } });
+    });
+
+    afterAll(async () => {
+      await prisma.emailVerificationToken.deleteMany({ where: { userId: memberId } });
+      await prisma.user.delete({ where: { id: memberId } }).catch(() => {});
+    });
+
+    it('changes a member role and writes an audited from/to change (owner)', async () => {
+      const res = await request(app)
+        .patch(`/api/company/members/${memberId}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ roleInCompany: 'project_manager' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.member).toMatchObject({ id: memberId, roleInCompany: 'project_manager' });
+      expect(res.body.previousRole).toBe('foreman');
+
+      const updated = await prisma.user.findUniqueOrThrow({
+        where: { id: memberId },
+        select: { roleInCompany: true },
+      });
+      expect(updated.roleInCompany).toBe('project_manager');
+
+      const auditLog = await prisma.auditLog.findFirst({
+        where: { entityId: memberId, action: AuditAction.USER_ROLE_CHANGED },
+      });
+      expect(auditLog).toBeTruthy();
+      const changes = parseAuditLogChanges(auditLog?.changes ?? null) as Record<string, unknown>;
+      expect(changes.roleInCompany).toEqual({ from: 'foreman', to: 'project_manager' });
+    });
+
+    it('rejects changing your own company role', async () => {
+      const res = await request(app)
+        .patch(`/api/company/members/${userId}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ roleInCompany: 'admin' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toContain('your own company role');
+    });
+
+    it('rejects changing an unsupported or owner role', async () => {
+      const unsupported = await request(app)
+        .patch(`/api/company/members/${memberId}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ roleInCompany: 'owner' });
+      expect(unsupported.status).toBe(400);
+      expect(unsupported.body.error.message).toContain('not supported');
+    });
+
+    it('rejects field users', async () => {
+      const res = await request(app)
+        .patch(`/api/company/members/${memberId}`)
+        .set('Authorization', `Bearer ${memberToken}`)
+        .send({ roleInCompany: 'admin' });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.message).toContain('Only company owners and admins');
+    });
+
+    it('requires authentication', async () => {
+      const res = await request(app)
+        .patch(`/api/company/members/${memberId}`)
+        .send({ roleInCompany: 'admin' });
+      expect(res.status).toBe(401);
+    });
+
+    it('returns 404 for a member outside the company', async () => {
+      const outsiderRes = await request(app)
+        .post('/api/auth/register')
+        .send({
+          email: `outsider-role-${Date.now()}@example.com`,
+          password: 'SecureP@ssword123!',
+          fullName: 'Outsider',
+          tosAccepted: true,
+        });
+      const outsiderId = outsiderRes.body.user.id;
+
+      const res = await request(app)
+        .patch(`/api/company/members/${outsiderId}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ roleInCompany: 'admin' });
+
+      expect(res.status).toBe(404);
+
+      await prisma.emailVerificationToken.deleteMany({ where: { userId: outsiderId } });
+      await prisma.user.delete({ where: { id: outsiderId } }).catch(() => {});
+    });
+  });
+
   describe('POST /api/company/members/invite', () => {
     const invitedUserIds: string[] = [];
     const invitedCompanyIds: string[] = [];
