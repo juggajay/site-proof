@@ -23,6 +23,7 @@ import {
 } from './components/CompanySettingsSections';
 import { CompanyTeamMembersSection } from './components/CompanyTeamMembersSection';
 import { CompanyApiKeysSection } from './components/CompanyApiKeysSection';
+import { CompanyWebhooksSection } from './components/CompanyWebhooksSection';
 import { OwnershipTransferModal } from './components/OwnershipTransferModal';
 
 interface LogoUploadResponse {
@@ -369,8 +370,10 @@ export function CompanySettingsPage() {
 
       {canManageCompanyTeam && <CompanyTeamMembersSection currentUserId={user?.id} />}
 
-      {/* H22: company integrations — API keys (webhooks follow) */}
+      {/* H22: company integrations — API keys + webhooks */}
       {canManageCompanyTeam && <CompanyApiKeysSection currentUserId={user?.id} />}
+
+      {canManageCompanyTeam && <CompanyWebhooksSection />}
 
       {/* Billing & Subscription - Only visible to owners (Feature #703) */}
       {isCompanyOwner && <CompanyBillingSection company={company} supportEmail={supportEmail} />}
