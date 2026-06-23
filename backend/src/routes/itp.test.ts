@@ -2238,6 +2238,60 @@ describe('ITP Completion Attachments', () => {
     }
   });
 
+  it('clears the rejection and prior verifier attribution when a rejected item is resubmitted (H6)', async () => {
+    try {
+      // Simulate a head-contractor rejection: the item carries the verifier's
+      // identity, timestamp, and the rejection note.
+      await prisma.iTPCompletion.update({
+        where: { id: completionId },
+        data: {
+          status: 'completed',
+          completedById: completionAuthorUserId,
+          completedAt: new Date('2026-01-01T00:00:00.000Z'),
+          verificationStatus: 'rejected',
+          verifiedAt: new Date('2026-01-02T03:04:05.000Z'),
+          verifiedById: userId,
+          verificationNotes: 'Photo does not show the bedding layer',
+        },
+      });
+
+      const res = await request(app)
+        .post('/api/itp/completions')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          itpInstanceId: instanceId,
+          checklistItemId,
+          status: 'completed',
+          notes: 'Resubmitted with corrected evidence',
+        });
+
+      expect(res.status).toBe(200);
+      // Resubmitting a rejected item re-queues it (the rejection is cleared);
+      // for a non-subcontractor completer no verification is required, so it
+      // returns to the neutral "none" state rather than staying rejected.
+      expect(res.body.completion.verificationStatus).toBe('none');
+      expect(res.body.completion.isRejected).toBe(false);
+
+      const after = await prisma.iTPCompletion.findUniqueOrThrow({
+        where: { id: completionId },
+        select: {
+          status: true,
+          verificationStatus: true,
+          verifiedById: true,
+          verifiedAt: true,
+          verificationNotes: true,
+        },
+      });
+      expect(after.status).toBe('completed');
+      expect(after.verificationStatus).toBe('none');
+      expect(after.verifiedById).toBeNull();
+      expect(after.verifiedAt).toBeNull();
+      expect(after.verificationNotes).toBeNull();
+    } finally {
+      await resetCompletionWorkflowState();
+    }
+  });
+
   it('should reject inline data URLs for new attachment records', async () => {
     const res = await request(app)
       .post(`/api/itp/completions/${completionId}/attachments`)
