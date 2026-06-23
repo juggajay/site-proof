@@ -59,6 +59,23 @@ export function calculatePendingDocketStats(pendingDockets: PendingDocketHoursSo
   };
 }
 
+/**
+ * Quality-manager ITP verification rate: the share of recorded ITP completions
+ * that have been verified, as a 0–100 percentage. The numerator and denominator
+ * MUST count the same population (completion rows for the project's instances) —
+ * dividing per-lot verified completions by a per-template checklist-item count
+ * produced rates above 100% once a template was applied to multiple lots.
+ * Clamped defensively to [0, 100].
+ */
+export function calculateItpVerificationRate(
+  verifiedCompletions: number,
+  totalCompletions: number,
+): number {
+  if (totalCompletions <= 0) return 100;
+  const rate = (verifiedCompletions / totalCompletions) * 100;
+  return Math.min(100, Math.max(0, rate));
+}
+
 // Feature #292: GET /api/dashboard/foreman - Simplified dashboard for foreman role
 // Shows today's diary status, pending dockets, inspections due today, and weather
 dashboardRoleDashboardsRouter.get(
@@ -357,8 +374,11 @@ dashboardRoleDashboardsRouter.get(
           completedAt: { gte: twoWeeksAgo, lt: oneWeekAgo },
         },
       }),
-      prisma.iTPChecklistItem.count({
-        where: { template: { itpInstances: { some: { lot: { projectId } } } } },
+      // Denominator and numerator must count the same population (completion
+      // rows for the project's instances) so the verification rate stays within
+      // 0–100% — see calculateItpVerificationRate.
+      prisma.iTPCompletion.count({
+        where: { itpInstance: { lot: { projectId } } },
       }),
       prisma.iTPCompletion.count({
         where: { itpInstance: { lot: { projectId } }, verificationStatus: 'verified' },
@@ -403,7 +423,7 @@ dashboardRoleDashboardsRouter.get(
       avgTimeToRelease = Math.round(totalHours / recentReleased.length);
     }
 
-    const itpCompletionRate = totalITPItems > 0 ? (completedITPItems / totalITPItems) * 100 : 100;
+    const itpCompletionRate = calculateItpVerificationRate(completedITPItems, totalITPItems);
     const trend =
       completedThisWeek > completedLastWeek
         ? 'up'
