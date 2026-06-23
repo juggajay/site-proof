@@ -11,12 +11,16 @@ import { toast } from '@/components/ui/toaster';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { getResponseErrorMessage } from '../utils';
 import { recomputeReviewPassFail } from '../certificateReview';
+import type { FailedTestNcrInput } from '../failedTestNcr';
 
 interface UploadCertificateModalProps {
   isOpen: boolean;
   onClose: () => void;
   projectId: string;
   onTestResultsUpdated: (testResults: TestResult[]) => void;
+  // M45: fired after a confirmed certificate whose reviewed result is a fail, so
+  // the parent can offer to raise an NCR.
+  onFailedResult?: (input: FailedTestNcrInput) => void;
 }
 
 export const UploadCertificateModal = React.memo(function UploadCertificateModal({
@@ -24,6 +28,7 @@ export const UploadCertificateModal = React.memo(function UploadCertificateModal
   onClose,
   projectId,
   onTestResultsUpdated,
+  onFailedResult,
 }: UploadCertificateModalProps) {
   const [uploading, setUploading] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
@@ -149,6 +154,9 @@ export const UploadCertificateModal = React.memo(function UploadCertificateModal
     if (!extractedTestId) return;
 
     setConfirmingExtraction(true);
+    // Capture the reviewed data before resetState() clears it (M45).
+    const confirmedTestId = extractedTestId;
+    const reviewed = reviewFormData;
 
     try {
       await apiFetch(
@@ -172,6 +180,19 @@ export const UploadCertificateModal = React.memo(function UploadCertificateModal
         title: 'Extraction saved',
         variant: 'success',
       });
+
+      // M45: a confirmed certificate that resolves to a fail offers an NCR.
+      if (reviewed.passFail === 'fail') {
+        onFailedResult?.({
+          testId: confirmedTestId,
+          testType: reviewed.testType || 'Test',
+          resultValue: reviewed.resultValue || '',
+          resultUnit: reviewed.resultUnit,
+          specificationMin: reviewed.specificationMin,
+          specificationMax: reviewed.specificationMax,
+          lotId: null,
+        });
+      }
     } catch (err) {
       toast({
         title: 'Failed to confirm extraction',
@@ -181,7 +202,15 @@ export const UploadCertificateModal = React.memo(function UploadCertificateModal
     } finally {
       setConfirmingExtraction(false);
     }
-  }, [extractedTestId, reviewFormData, resetState, onClose, projectId, onTestResultsUpdated]);
+  }, [
+    extractedTestId,
+    reviewFormData,
+    resetState,
+    onClose,
+    projectId,
+    onTestResultsUpdated,
+    onFailedResult,
+  ]);
 
   const confidenceForField = useCallback(
     (field: string) => {

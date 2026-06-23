@@ -43,10 +43,16 @@ beforeEach(() => {
   apiFetchMock.mockResolvedValue({ testResults: [] } as never);
 });
 
-async function reachReview() {
+async function reachReview(onFailedResult?: (input: unknown) => void) {
   authFetchMock.mockResolvedValue(batchResponse());
   render(
-    <BatchUploadModal isOpen onClose={vi.fn()} projectId="p1" onTestResultsUpdated={vi.fn()} />,
+    <BatchUploadModal
+      isOpen
+      onClose={vi.fn()}
+      projectId="p1"
+      onTestResultsUpdated={vi.fn()}
+      onFailedResult={onFailedResult}
+    />,
   );
   fireEvent.change(screen.getByLabelText('Select Files'), {
     target: { files: [new File(['x'], 'cert.pdf', { type: 'application/pdf' })] },
@@ -77,5 +83,23 @@ describe('BatchUploadModal pass/fail review (H13)', () => {
       expect(confirmCall).toBeDefined();
       expect(String((confirmCall?.[1] as { body?: string })?.body)).toContain('"passFail":"fail"');
     });
+  });
+
+  it('offers an NCR (onFailedResult) for the first failing batch result (M45)', async () => {
+    const onFailedResult = vi.fn();
+    await reachReview(onFailedResult);
+
+    fireEvent.click(screen.getByRole('button', { name: /Confirm All/ }));
+
+    await waitFor(() => expect(onFailedResult).toHaveBeenCalledTimes(1));
+    expect(onFailedResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        testId: 'tr-1',
+        testType: 'Compaction',
+        resultValue: '5',
+        specificationMin: '10',
+        lotId: null,
+      }),
+    );
   });
 });

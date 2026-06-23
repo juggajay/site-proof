@@ -11,12 +11,16 @@ import { toast } from '@/components/ui/toaster';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { getResponseErrorMessage } from '../utils';
 import { recomputeReviewPassFail } from '../certificateReview';
+import type { FailedTestNcrInput } from '../failedTestNcr';
 
 interface BatchUploadModalProps {
   isOpen: boolean;
   onClose: () => void;
   projectId: string;
   onTestResultsUpdated: (testResults: TestResult[]) => void;
+  // M45: fired (once, for the first failing result) after a batch confirm so the
+  // parent can offer to raise an NCR.
+  onFailedResult?: (input: FailedTestNcrInput) => void;
 }
 
 interface BatchExtractedField {
@@ -47,6 +51,7 @@ export const BatchUploadModal = React.memo(function BatchUploadModal({
   onClose,
   projectId,
   onTestResultsUpdated,
+  onFailedResult,
 }: BatchUploadModalProps) {
   const [batchUploading, setBatchUploading] = useState(false);
   const [batchFiles, setBatchFiles] = useState<File[]>([]);
@@ -181,6 +186,12 @@ export const BatchUploadModal = React.memo(function BatchUploadModal({
         body: JSON.stringify({ confirmations }),
       });
 
+      // M45: capture the first failing confirmed result before resetState clears
+      // the review data, so the parent can offer to raise an NCR for it.
+      const firstFailed = confirmations.find(
+        (c) => batchReviewData[c.testResultId]?.passFail === 'fail',
+      );
+
       // Close modal and reset
       resetState();
       onClose();
@@ -194,6 +205,19 @@ export const BatchUploadModal = React.memo(function BatchUploadModal({
         title: 'Extractions saved',
         variant: 'success',
       });
+
+      if (firstFailed) {
+        const reviewed = batchReviewData[firstFailed.testResultId] || {};
+        onFailedResult?.({
+          testId: firstFailed.testResultId,
+          testType: reviewed.testType || 'Test',
+          resultValue: reviewed.resultValue || '',
+          resultUnit: reviewed.resultUnit,
+          specificationMin: reviewed.specificationMin,
+          specificationMax: reviewed.specificationMax,
+          lotId: null,
+        });
+      }
     } catch (err) {
       toast({
         title: 'Failed to confirm extractions',
@@ -203,7 +227,15 @@ export const BatchUploadModal = React.memo(function BatchUploadModal({
     } finally {
       setBatchConfirming(false);
     }
-  }, [batchResults, batchReviewData, resetState, onClose, projectId, onTestResultsUpdated]);
+  }, [
+    batchResults,
+    batchReviewData,
+    resetState,
+    onClose,
+    projectId,
+    onTestResultsUpdated,
+    onFailedResult,
+  ]);
 
   if (!isOpen) return null;
 

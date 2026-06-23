@@ -41,7 +41,10 @@ beforeEach(() => {
   Object.defineProperty(URL, 'revokeObjectURL', { value: vi.fn(), configurable: true });
 });
 
-async function reachReview(fields: Record<string, string>) {
+async function reachReview(
+  fields: Record<string, string>,
+  onFailedResult?: (input: unknown) => void,
+) {
   authFetchMock.mockResolvedValue(extractionResponse(fields));
   render(
     <UploadCertificateModal
@@ -49,6 +52,7 @@ async function reachReview(fields: Record<string, string>) {
       onClose={vi.fn()}
       projectId="p1"
       onTestResultsUpdated={vi.fn()}
+      onFailedResult={onFailedResult}
     />,
   );
   const fileInput = screen.getByLabelText('Select File');
@@ -87,5 +91,44 @@ describe('UploadCertificateModal pass/fail review (H13)', () => {
       expect(confirmCall).toBeDefined();
       expect(String((confirmCall?.[1] as { body?: string })?.body)).toContain('"passFail":"fail"');
     });
+  });
+
+  it('offers an NCR (onFailedResult) after confirming a failing certificate (M45)', async () => {
+    const onFailedResult = vi.fn();
+    await reachReview(
+      { testType: 'Compaction', resultValue: '5', specificationMin: '10' },
+      onFailedResult,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Confirm & Save/ }));
+
+    await waitFor(() => expect(onFailedResult).toHaveBeenCalledTimes(1));
+    expect(onFailedResult).toHaveBeenCalledWith(
+      expect.objectContaining({
+        testId: 'test-1',
+        testType: 'Compaction',
+        resultValue: '5',
+        specificationMin: '10',
+        lotId: null,
+      }),
+    );
+  });
+
+  it('does not offer an NCR when the confirmed certificate passes (M45)', async () => {
+    const onFailedResult = vi.fn();
+    await reachReview(
+      { testType: 'Compaction', resultValue: '12', specificationMin: '10' },
+      onFailedResult,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Confirm & Save/ }));
+
+    await waitFor(() => {
+      const confirmCall = apiFetchMock.mock.calls.find((call) =>
+        String(call[0]).includes('/confirm-extraction'),
+      );
+      expect(confirmCall).toBeDefined();
+    });
+    expect(onFailedResult).not.toHaveBeenCalled();
   });
 });
