@@ -11,6 +11,7 @@ import { buildFrontendUrl } from '../../lib/runtimeConfig.js';
 import { logError } from '../../lib/serverLogger.js';
 import { releaseHoldPointSchema, parseHoldPointRouteParam } from './validation.js';
 import { parseReleaseDateTimeInput } from './dateParsing.js';
+import { projectTimeZoneFromState } from '../../lib/projectTimeZone.js';
 import {
   HP_REQUEST_ROLES,
   requireHoldPointReadAccess,
@@ -351,7 +352,10 @@ holdPointActionRouter.post(
       existingHP,
     );
 
-    const releasedAt = parseReleaseDateTimeInput(releaseDate, releaseTime);
+    // M84: interpret the release wall-clock in the project's timezone (derived
+    // from its state), so the stored instant is correct regardless of server tz.
+    const projectTimeZone = projectTimeZoneFromState(existingHP.lot.project.state);
+    const releasedAt = parseReleaseDateTimeInput(releaseDate, releaseTime, projectTimeZone);
     let releasedItpInstanceId: string | null = null;
     const holdPoint = await prisma.$transaction(async (tx) => {
       const releaseTransition = await tx.holdPoint.updateMany({
@@ -501,6 +505,7 @@ holdPointActionRouter.post(
           `/projects/${existingHP.lot.projectId}/lots/${existingHP.lot.id}`,
         );
         const releasedAtDisplay = releasedAt.toLocaleString('en-AU', {
+          timeZone: projectTimeZone,
           weekday: 'long',
           year: 'numeric',
           month: 'long',

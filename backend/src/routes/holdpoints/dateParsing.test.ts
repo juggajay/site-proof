@@ -89,65 +89,65 @@ describe('parseScheduledDateInput', () => {
   });
 });
 
-describe('parseReleaseDateTimeInput', () => {
-  it('builds a local date-time from a date-only value plus a time', () => {
-    const result = parseReleaseDateTimeInput('2026-03-15', '14:30');
-    expect(result.getFullYear()).toBe(2026);
-    expect(result.getMonth()).toBe(2); // March (0-indexed)
-    expect(result.getDate()).toBe(15);
-    expect(result.getHours()).toBe(14);
-    expect(result.getMinutes()).toBe(30);
-    expect(result.getSeconds()).toBe(0);
-    expect(result.getMilliseconds()).toBe(0);
+describe('parseReleaseDateTimeInput (M84: project-timezone aware)', () => {
+  function timeOfDayInZone(date: Date, timeZone: string): string {
+    return new Intl.DateTimeFormat('en-GB', {
+      timeZone,
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).format(date);
+  }
+
+  it('interprets a date-only value plus a time in the project timezone (Brisbane, UTC+10)', () => {
+    // 14:30 in Brisbane is 04:30 UTC, deterministic regardless of the server clock.
+    const result = parseReleaseDateTimeInput('2026-03-15', '14:30', 'Australia/Brisbane');
+    expect(result.toISOString()).toBe('2026-03-15T04:30:00.000Z');
   });
 
-  it('defaults to local midnight when a date-only value has no time', () => {
-    const result = parseReleaseDateTimeInput('2026-03-15', null);
-    expect(result.getFullYear()).toBe(2026);
-    expect(result.getMonth()).toBe(2);
-    expect(result.getDate()).toBe(15);
-    expect(result.getHours()).toBe(0);
-    expect(result.getMinutes()).toBe(0);
-    expect(result.getSeconds()).toBe(0);
+  it('applies the project zone DST offset (Sydney AEDT vs Perth)', () => {
+    expect(parseReleaseDateTimeInput('2026-01-15', '12:00', 'Australia/Sydney').toISOString()).toBe(
+      '2026-01-15T01:00:00.000Z',
+    );
+    expect(parseReleaseDateTimeInput('2026-01-15', '12:00', 'Australia/Perth').toISOString()).toBe(
+      '2026-01-15T04:00:00.000Z',
+    );
+  });
+
+  it('defaults to midnight in the project timezone when a date-only value has no time', () => {
+    // Midnight in Brisbane (UTC+10) is 14:00 the previous day in UTC.
+    const result = parseReleaseDateTimeInput('2026-03-15', null, 'Australia/Brisbane');
+    expect(result.toISOString()).toBe('2026-03-14T14:00:00.000Z');
   });
 
   it('throws for an impossible calendar release date', () => {
     expectBadRequest(
-      () => parseReleaseDateTimeInput('2026-02-30', '10:00'),
+      () => parseReleaseDateTimeInput('2026-02-30', '10:00', 'Australia/Sydney'),
       'releaseDate must be a valid date',
     );
   });
 
   it('preserves the ISO date-time fallback when the value is not date-only', () => {
-    const result = parseReleaseDateTimeInput('2026-03-15T10:30:00Z', null);
+    const result = parseReleaseDateTimeInput('2026-03-15T10:30:00Z', null, 'Australia/Brisbane');
     expect(result.toISOString()).toBe('2026-03-15T10:30:00.000Z');
   });
 
   it('throws for an unparseable non-date-only release date', () => {
     expectBadRequest(
-      () => parseReleaseDateTimeInput('garbage-date', null),
+      () => parseReleaseDateTimeInput('garbage-date', null, 'Australia/Sydney'),
       'releaseDate must be a valid date',
     );
   });
 
-  it('falls back to the current time when no release date is given, applying the supplied time', () => {
-    const before = Date.now();
-    const result = parseReleaseDateTimeInput(null, '09:15');
-    const after = Date.now();
-    // Date portion is "now"; only the time-of-day is set explicitly.
-    expect(result.getHours()).toBe(9);
-    expect(result.getMinutes()).toBe(15);
-    expect(result.getSeconds()).toBe(0);
-    expect(result.getMilliseconds()).toBe(0);
-    // Same calendar day as when the helper ran.
-    const beforeDay = new Date(before);
-    const afterDay = new Date(after);
-    expect([beforeDay.getDate(), afterDay.getDate()]).toContain(result.getDate());
+  it('uses the current day in the project timezone when only a time is given', () => {
+    const result = parseReleaseDateTimeInput(null, '09:15', 'Australia/Brisbane');
+    // The instant reads as 09:15 on the project's wall clock.
+    expect(timeOfDayInZone(result, 'Australia/Brisbane')).toBe('09:15');
   });
 
   it('returns the current instant when neither date nor time is given', () => {
     const before = Date.now();
-    const result = parseReleaseDateTimeInput(null, null);
+    const result = parseReleaseDateTimeInput(null, null, 'Australia/Sydney');
     const after = Date.now();
     expect(result.getTime()).toBeGreaterThanOrEqual(before);
     expect(result.getTime()).toBeLessThanOrEqual(after);
