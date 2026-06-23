@@ -36,6 +36,7 @@ import { NotifyClientModal } from './components/NotifyClientModal';
 import { RejectRectificationModal } from './components/RejectRectificationModal';
 import { CloseNCRModal } from './components/CloseNCRModal';
 import { ConcessionModal } from './components/ConcessionModal';
+import { NCRMobileDetailSheet } from './components/NCRMobileDetailSheet';
 
 // Read side of the "Copy link" action (?ncr=<id>): stable references so the
 // deep-link effect doesn't re-run on every render.
@@ -57,7 +58,7 @@ export function NCRPage() {
   const { ncrs, loading, error, setError, userRole, fetchNcrs } = useNCRData({ projectId, token });
 
   // Modal state
-  const { activeModal, selectedNcr, openModal, closeModal, selectNcr } = useNCRModals();
+  const { activeModal, selectedNcr, openModal, closeModal } = useNCRModals();
 
   // Deep link from a copied register link (?ncr=<id>): scroll to + highlight
   // the linked NCR once the register has loaded, or toast if it isn't here.
@@ -257,7 +258,7 @@ export function NCRPage() {
           isRefreshing={isRefreshing}
           progress={progress}
           highlightedNcrId={deepLinkedNcrId}
-          onSelectNcr={selectNcr}
+          onSelectNcr={(ncr) => openModal('detail', ncr)}
           onCopyLink={handleCopyNcrLink}
         />
       ) : !error ? (
@@ -352,6 +353,28 @@ export function NCRPage() {
         ncr={selectedNcr}
         onClose={closeModal}
         onSuccess={fetchNcrs}
+      />
+
+      {/* H7: mobile NCR detail sheet — its status-gated actions open the modals
+          above (openModal switches activeModal, closing this sheet). */}
+      <NCRMobileDetailSheet
+        isOpen={activeModal === 'detail'}
+        ncr={selectedNcr}
+        userRole={userRole}
+        actionLoading={actionLoading}
+        onClose={closeModal}
+        onAssign={(ncr) => openModal('assign', ncr)}
+        onRespond={(ncr) => openModal('respond', ncr)}
+        onReviewResponse={(ncr) => openModal('qmReview', ncr)}
+        onQmApprove={(id) => {
+          void handleRequestQmApproval(id);
+          closeModal();
+        }}
+        onNotifyClient={(ncr) => openModal('notifyClient', ncr)}
+        onRectify={(ncr) => openModal('rectify', ncr)}
+        onRejectRectification={(ncr) => openModal('rejectRectification', ncr)}
+        onCloseNcr={(ncr) => openModal('close', ncr)}
+        onConcession={(ncr) => openModal('concession', ncr)}
       />
 
       {/* Mobile Context FAB for Raising NCR */}
