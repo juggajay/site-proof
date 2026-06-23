@@ -73,30 +73,54 @@ describe('DiaryMobileView copy-from-yesterday affordance', () => {
     expect(screen.queryByTestId('copy-from-yesterday-affordance')).not.toBeInTheDocument();
   });
 
-  it('hides the affordance when there are existing personnel entries', () => {
-    const personnelEntry: TimelineEntry = {
-      id: 'p-1',
-      type: 'personnel',
-      description: 'Alice',
-      createdAt: '2026-06-11T07:00:00.000Z',
-      lot: null,
-      data: {},
-    };
-    renderWithProviders(<DiaryMobileView {...buildProps({ timeline: [personnelEntry] })} />);
+  it('hides the affordance when there is a manually-entered crew row', () => {
+    renderWithProviders(
+      <DiaryMobileView
+        {...buildProps({ manualEntries: { personnel: [{ id: 'p-1', name: 'Alice' }], plant: [] } })}
+      />,
+    );
     expect(screen.queryByTestId('copy-from-yesterday-affordance')).not.toBeInTheDocument();
   });
 
-  it('hides the affordance when there are existing plant entries', () => {
-    const plantEntry: TimelineEntry = {
-      id: 'pl-1',
-      type: 'plant',
-      description: 'Excavator',
+  it('hides the affordance when there is a manually-entered plant row', () => {
+    renderWithProviders(
+      <DiaryMobileView
+        {...buildProps({
+          manualEntries: { personnel: [], plant: [{ id: 'pl-1', description: 'Excavator' }] },
+        })}
+      />,
+    );
+    expect(screen.queryByTestId('copy-from-yesterday-affordance')).not.toBeInTheDocument();
+  });
+
+  it('still shows the affordance when the timeline has only docket-sourced rows (M33)', () => {
+    // Docket-sourced crew/plant appear in the timeline but are not manual entries,
+    // so the day still has nothing manual yet and the copy offer must remain.
+    const docketPersonnel: TimelineEntry = {
+      id: 'p-docket',
+      type: 'personnel',
+      description: 'Docket Crew',
       createdAt: '2026-06-11T07:00:00.000Z',
       lot: null,
       data: {},
     };
-    renderWithProviders(<DiaryMobileView {...buildProps({ timeline: [plantEntry] })} />);
-    expect(screen.queryByTestId('copy-from-yesterday-affordance')).not.toBeInTheDocument();
+    const docketPlant: TimelineEntry = {
+      id: 'pl-docket',
+      type: 'plant',
+      description: 'Docket Excavator',
+      createdAt: '2026-06-11T07:00:00.000Z',
+      lot: null,
+      data: {},
+    };
+    renderWithProviders(
+      <DiaryMobileView
+        {...buildProps({
+          timeline: [docketPersonnel, docketPlant],
+          manualEntries: { personnel: [], plant: [] },
+        })}
+      />,
+    );
+    expect(screen.getByTestId('copy-from-yesterday-affordance')).toBeInTheDocument();
   });
 
   it('hides the affordance when the diary is submitted', () => {
