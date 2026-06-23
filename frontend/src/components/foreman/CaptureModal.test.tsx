@@ -267,6 +267,35 @@ describe('CaptureModal defect mode', () => {
     await waitFor(() => expect(onClose).toHaveBeenCalled());
   });
 
+  it('header Save honours the chosen Defect + description (M56: no silent plain-photo save)', async () => {
+    const onClose = vi.fn();
+    const { container } = renderWithProviders(
+      <CaptureModal projectId="p1" isOpen onClose={onClose} />,
+    );
+    await captureAPhoto(container);
+
+    fireEvent.click(screen.getByText('Defect'));
+    fireEvent.change(screen.getByPlaceholderText('Brief defect description'), {
+      target: { value: 'Cracked kerb face' },
+    });
+
+    // The persistent top-right header "Save" (exact name) — NOT the contextual
+    // "Save Defect Photo" button — must honour the chosen type + description and
+    // raise the NCR, instead of silently resetting to a plain photo.
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(apiFetchMock).toHaveBeenCalledWith(
+        '/api/ncrs',
+        expect.objectContaining({ method: 'POST' }),
+      ),
+    );
+    const ncrCall = apiFetchMock.mock.calls.find(([path]) => path === '/api/ncrs');
+    const sentBody = JSON.parse((ncrCall?.[1] as { body: string }).body);
+    expect(sentBody).toMatchObject({ projectId: 'p1', description: 'Cracked kerb face' });
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+  });
+
   it('non-defect photo capture is unchanged: no NCR call, plain "Photo saved" toast', async () => {
     const onClose = vi.fn();
     const { container } = renderWithProviders(
