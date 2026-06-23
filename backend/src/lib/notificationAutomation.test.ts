@@ -94,7 +94,9 @@ describe('notification automation jobs', () => {
       { role: 'foreman', label: 'foreman' },
       { role: 'project_manager', companyRole: 'admin', label: 'manager' },
     ]);
-    const now = new Date(2026, 4, 11, 18, 0, 0, 0);
+    // M84: the due-time gate now uses the project's timezone (fixture state NSW
+    // -> Australia/Sydney). 08:00 UTC is 18:00 in Sydney, past the 17:00 reminder.
+    const now = new Date(Date.UTC(2026, 4, 11, 8, 0, 0, 0));
     const targetDate = new Date(now);
     targetDate.setHours(0, 0, 0, 0);
     const expectedDateKey = targetDate.toISOString().split('T')[0]!;
@@ -140,7 +142,9 @@ describe('notification automation jobs', () => {
       { role: 'foreman', label: 'foreman' },
       { role: 'project_manager', companyRole: 'admin', label: 'manager' },
     ]);
-    const now = new Date(2026, 4, 11, 18, 0, 0, 0);
+    // M84: the due-time gate now uses the project's timezone (fixture state NSW
+    // -> Australia/Sydney). 08:00 UTC is 18:00 in Sydney, past the 17:00 reminder.
+    const now = new Date(Date.UTC(2026, 4, 11, 8, 0, 0, 0));
 
     let releaseReads: () => void = () => {};
     let matchingReads = 0;
@@ -208,7 +212,9 @@ describe('notification automation jobs', () => {
       { role: 'foreman', label: 'foreman' },
       { role: 'project_manager', companyRole: 'admin', label: 'manager' },
     ]);
-    const now = new Date(2026, 4, 11, 18, 0, 0, 0);
+    // M84: the due-time gate now uses the project's timezone (fixture state NSW
+    // -> Australia/Sydney). 08:00 UTC is 18:00 in Sydney, past the 17:00 reminder.
+    const now = new Date(Date.UTC(2026, 4, 11, 8, 0, 0, 0));
     const emailSpy = vi.spyOn(email, 'sendNotificationEmail').mockResolvedValue({
       success: false,
       error: 'Email delivery is not configured',
