@@ -55,6 +55,8 @@ export function CompanyTeamMembersSection({ currentUserId }: CompanyTeamMembersS
   const [removeError, setRemoveError] = useState('');
   const [removeSuccess, setRemoveSuccess] = useState('');
   const [removing, setRemoving] = useState(false);
+  const [changingRoleId, setChangingRoleId] = useState<string | null>(null);
+  const [roleChangeError, setRoleChangeError] = useState('');
   const invitingRef = useRef(false);
   const removingRef = useRef(false);
 
@@ -146,6 +148,32 @@ export function CompanyTeamMembersSection({ currentUserId }: CompanyTeamMembersS
     } finally {
       invitingRef.current = false;
       setInviting(false);
+    }
+  };
+
+  // H23: change a member's company role. The control is only offered for other
+  // non-owner members (the owner's role moves via transfer-ownership, and you
+  // cannot change your own role); the backend enforces all three.
+  const handleChangeRole = async (member: CompanyMember, nextRole: string) => {
+    if (nextRole === member.roleInCompany || changingRoleId) return;
+
+    setChangingRoleId(member.id);
+    setRoleChangeError('');
+    try {
+      await apiFetch(`/api/company/members/${encodeURIComponent(member.id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ roleInCompany: nextRole }),
+      });
+      setMembers((current) =>
+        current.map((entry) =>
+          entry.id === member.id ? { ...entry, roleInCompany: nextRole } : entry,
+        ),
+      );
+      void queryClient.invalidateQueries({ queryKey: queryKeys.companySettings });
+    } catch (error) {
+      setRoleChangeError(extractErrorMessage(error, 'Failed to change member role'));
+    } finally {
+      setChangingRoleId(null);
     }
   };
 
@@ -253,6 +281,8 @@ export function CompanyTeamMembersSection({ currentUserId }: CompanyTeamMembersS
               const status = getMemberStatus(member);
               const isCurrentUser = member.id === currentUserId;
               const canRemove = !isCurrentUser && member.roleInCompany !== 'owner';
+              // Same gate as removal: not yourself and not the owner.
+              const canChangeRole = canRemove;
               return (
                 <div
                   key={member.id}
@@ -269,7 +299,25 @@ export function CompanyTeamMembersSection({ currentUserId }: CompanyTeamMembersS
                     </div>
                     <div className="truncate text-xs text-muted-foreground">{member.email}</div>
                   </div>
-                  <div>{formatCompanyRoleLabel(member.roleInCompany)}</div>
+                  <div>
+                    {canChangeRole ? (
+                      <select
+                        aria-label={`Change role for ${member.fullName || member.email}`}
+                        value={member.roleInCompany}
+                        disabled={changingRoleId === member.id}
+                        onChange={(event) => void handleChangeRole(member, event.target.value)}
+                        className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground disabled:opacity-50"
+                      >
+                        {COMPANY_MEMBER_ROLE_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      formatCompanyRoleLabel(member.roleInCompany)
+                    )}
+                  </div>
                   <div>
                     <span
                       className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${
@@ -305,6 +353,12 @@ export function CompanyTeamMembersSection({ currentUserId }: CompanyTeamMembersS
           </div>
         </div>
       )}
+
+      {roleChangeError ? (
+        <p className="mt-2 text-sm text-destructive" role="alert">
+          {roleChangeError}
+        </p>
+      ) : null}
 
       {showInviteModal && (
         <Modal onClose={closeInviteModal} className="max-w-md">

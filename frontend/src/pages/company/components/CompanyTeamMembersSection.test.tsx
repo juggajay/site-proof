@@ -208,4 +208,102 @@ describe('CompanyTeamMembersSection', () => {
     expect(await screen.findByText('Active Member was removed from the company.')).toBeVisible();
     expect(screen.queryByText('Active Member')).not.toBeInTheDocument();
   });
+
+  it('offers a role select only for other non-owner members (H23)', async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      members: [
+        {
+          id: 'owner-1',
+          email: 'owner@example.com',
+          fullName: 'Owner User',
+          roleInCompany: 'owner',
+          hasPassword: true,
+          status: 'active',
+        },
+        {
+          id: 'admin-2',
+          email: 'admin@example.com',
+          fullName: 'Admin Two',
+          roleInCompany: 'admin',
+          hasPassword: true,
+          status: 'active',
+        },
+        {
+          id: 'member-1',
+          email: 'member@example.com',
+          fullName: 'Active Member',
+          roleInCompany: 'site_engineer',
+          hasPassword: true,
+          status: 'active',
+        },
+      ],
+    });
+
+    renderWithQueryClient(<CompanyTeamMembersSection currentUserId="admin-2" />);
+    await screen.findByText('Active Member');
+
+    expect(
+      screen.getByRole('combobox', { name: 'Change role for Active Member' }),
+    ).toBeInTheDocument();
+    // The owner's role and your own role are not editable here.
+    expect(
+      screen.queryByRole('combobox', { name: 'Change role for Owner User' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('combobox', { name: 'Change role for Admin Two' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('changes a member role via PATCH and reflects the new role (H23)', async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      members: [
+        {
+          id: 'owner-1',
+          email: 'owner@example.com',
+          fullName: 'Owner User',
+          roleInCompany: 'owner',
+          hasPassword: true,
+          status: 'active',
+        },
+        {
+          id: 'member-1',
+          email: 'member@example.com',
+          fullName: 'Active Member',
+          roleInCompany: 'site_engineer',
+          hasPassword: true,
+          status: 'active',
+        },
+      ],
+    });
+    apiFetchMock.mockResolvedValueOnce({
+      message: 'Company member role updated successfully',
+      member: { id: 'member-1', roleInCompany: 'project_manager' },
+      previousRole: 'site_engineer',
+    });
+
+    renderWithQueryClient(<CompanyTeamMembersSection currentUserId="owner-1" />);
+    await screen.findByText('Active Member');
+
+    const select = screen.getByRole('combobox', {
+      name: 'Change role for Active Member',
+    }) as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: 'project_manager' } });
+
+    await waitFor(() => {
+      expect(apiFetchMock).toHaveBeenCalledWith('/api/company/members/member-1', {
+        method: 'PATCH',
+        body: JSON.stringify({ roleInCompany: 'project_manager' }),
+      });
+    });
+
+    await waitFor(() => {
+      expect(
+        (
+          screen.getByRole('combobox', {
+            name: 'Change role for Active Member',
+          }) as HTMLSelectElement
+        ).value,
+      ).toBe('project_manager');
+    });
+  });
 });
