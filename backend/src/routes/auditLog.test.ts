@@ -683,6 +683,32 @@ describe('Audit Log API', () => {
       }
     });
 
+    it('should allow audit logs based on active quality manager project role (M75)', async () => {
+      const qm = await registerAuditUser(
+        'audit-quality-manager',
+        'Audit Quality Manager',
+        'viewer',
+      );
+      await prisma.projectUser.create({
+        data: { projectId, userId: qm.userId, role: 'quality_manager', status: 'active' },
+      });
+
+      try {
+        const res = await request(app)
+          .get('/api/audit-logs')
+          .set('Authorization', `Bearer ${qm.token}`)
+          .query({ projectId });
+
+        expect(res.status).toBe(200);
+        expect(res.body.logs.length).toBeGreaterThan(0);
+        res.body.logs.forEach((log: any) => {
+          expect(log.projectId).toBe(projectId);
+        });
+      } finally {
+        await cleanupAuditUser(qm.userId);
+      }
+    });
+
     it('should not grant subcontractors audit access through project memberships', async () => {
       const subcontractor = await registerAuditUser(
         'audit-subcontractor-project-manager',
