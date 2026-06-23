@@ -12,14 +12,15 @@ import { ESCALATION_CONFIG, createAlertRecord, updateAlertEscalation } from './a
 // in no database), so the returned Alert shape is also verified. The DB-backed
 // behaviour is additionally covered by the notifications route suite in CI.
 
-const { create, update } = vi.hoisted(() => ({
+const { create, updateMany, findUnique } = vi.hoisted(() => ({
   create: vi.fn(),
-  update: vi.fn(),
+  updateMany: vi.fn(),
+  findUnique: vi.fn(),
 }));
 
 vi.mock('../../lib/prisma.js', () => ({
   prisma: {
-    notificationAlert: { create, update },
+    notificationAlert: { create, updateMany, findUnique },
   },
 }));
 
@@ -163,24 +164,38 @@ describe('createAlertRecord', () => {
 describe('updateAlertEscalation', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('updates only the escalation fields by id and returns the mapped record', async () => {
+  it('compare-and-swaps on the expected level and returns the mapped record when it wins', async () => {
     const escalatedAt = new Date('2026-06-01T07:00:00.000Z');
-    update.mockResolvedValue(
+    updateMany.mockResolvedValue({ count: 1 });
+    findUnique.mockResolvedValue(
       makeRecord({ escalationLevel: 2, escalatedAt, escalatedTo: ['user-2', 'user-3'] }),
     );
 
-    const result = await updateAlertEscalation('alert-1', 2, escalatedAt, ['user-2', 'user-3']);
+    const result = await updateAlertEscalation('alert-1', 1, 2, escalatedAt, ['user-2', 'user-3']);
 
-    expect(update).toHaveBeenCalledTimes(1);
-    expect(update).toHaveBeenCalledWith({
-      where: { id: 'alert-1' },
+    // Guarded write: only escalates when the row is still unresolved AND at the
+    // expected (old) level, so a concurrent run can't double-escalate.
+    expect(updateMany).toHaveBeenCalledTimes(1);
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { id: 'alert-1', resolvedAt: null, escalationLevel: 1 },
       data: {
         escalationLevel: 2,
         escalatedAt,
         escalatedTo: ['user-2', 'user-3'],
       },
     });
-    expect(result.escalationLevel).toBe(2);
-    expect(result.escalatedTo).toEqual(['user-2', 'user-3']);
+    expect(findUnique).toHaveBeenCalledWith({ where: { id: 'alert-1' } });
+    expect(result?.escalationLevel).toBe(2);
+    expect(result?.escalatedTo).toEqual(['user-2', 'user-3']);
+  });
+
+  it('returns null and reads nothing back when another run already escalated (count 0)', async () => {
+    const escalatedAt = new Date('2026-06-01T07:00:00.000Z');
+    updateMany.mockResolvedValue({ count: 0 });
+
+    const result = await updateAlertEscalation('alert-1', 1, 2, escalatedAt, ['user-2']);
+
+    expect(result).toBeNull();
+    expect(findUnique).not.toHaveBeenCalled();
   });
 });

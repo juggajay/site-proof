@@ -269,6 +269,7 @@ notificationAlertsRouter.post(
     if (!user || !userId) {
       throw AppError.unauthorized();
     }
+    requireNotificationAdmin(user);
     const accessibleProjectIds = new Set(await getManageableActiveProjectIds(user));
 
     const now = new Date();
@@ -331,13 +332,25 @@ notificationAlertsRouter.post(
 
         const escalatedToIds = escalationUsers.map((u) => u.id);
 
-        const escalatedAlert = await updateAlertEscalation(alert.id, newLevel, now, escalatedToIds);
+        const escalatedAlert = await updateAlertEscalation(
+          alert.id,
+          alert.escalationLevel,
+          newLevel,
+          now,
+          escalatedToIds,
+        );
+
+        // Another concurrent check-escalations run already moved this alert up a
+        // level; the compare-and-swap lost, so skip the (duplicate) notifications.
+        if (!escalatedAlert) {
+          continue;
+        }
 
         // Create notifications for escalation recipients
-        for (const user of escalationUsers) {
+        for (const escalationUser of escalationUsers) {
           await prisma.notification.create({
             data: {
-              userId: user.id,
+              userId: escalationUser.id,
               projectId: alert.projectId || null,
               type: 'alert_escalation',
               title: `ESCALATED: ${alert.title}`,
@@ -347,7 +360,7 @@ notificationAlertsRouter.post(
           });
 
           // Send email notification for escalation (always immediate for escalations)
-          await sendNotificationIfEnabled(user.id, 'ncrAssigned', {
+          await sendNotificationIfEnabled(escalationUser.id, 'ncrAssigned', {
             title: `ESCALATED ALERT: ${alert.title}`,
             message: `This alert has been escalated to you because it was not resolved within ${newLevel === 1 ? config.firstEscalationAfterHours : config.secondEscalationAfterHours} hours.\n\n${alert.message}`,
             linkUrl: buildProjectEntityLink(alert.entityType, alert.entityId, alert.projectId),
@@ -454,7 +467,17 @@ notificationAlertsRouter.post(
     const escalatedToIds = escalationUsers.map((u) => u.id);
 
     const escalatedAt = new Date();
-    const escalatedAlert = await updateAlertEscalation(id, newLevel, escalatedAt, escalatedToIds);
+    const escalatedAlert = await updateAlertEscalation(
+      id,
+      alert.escalationLevel,
+      newLevel,
+      escalatedAt,
+      escalatedToIds,
+    );
+
+    if (!escalatedAlert) {
+      throw AppError.badRequest('Alert escalation level changed concurrently; please retry');
+    }
 
     // Create notifications for escalation recipients
     for (const user of escalationUsers) {
