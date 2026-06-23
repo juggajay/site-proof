@@ -273,35 +273,6 @@ export function CaptureModal({
     onClose,
   ]);
 
-  const handleQuickSave = useCallback(async () => {
-    setCaptureType('photo');
-    setLinkedLot(defaultLotId || null);
-    setDescription('');
-    if (!capturedFile || !user) return;
-
-    setSaving(true);
-    try {
-      const photo = await capturePhotoOffline(projectId, capturedFile, {
-        lotId: defaultLotId || undefined,
-        entityType: 'general',
-        documentType: 'photo',
-        caption: undefined,
-        capturedBy: user.id,
-        gpsLatitude: latitude ?? undefined,
-        gpsLongitude: longitude ?? undefined,
-      });
-
-      toast({ description: 'Photo saved', variant: 'success' });
-      onCapture?.({ type: 'photo', id: photo.id });
-      onClose();
-    } catch (error) {
-      logError('Failed to save:', error);
-      toast({ description: 'Failed to save', variant: 'error' });
-    } finally {
-      setSaving(false);
-    }
-  }, [capturedFile, user, projectId, defaultLotId, latitude, longitude, onCapture, onClose]);
-
   const handleVoiceInput = useCallback((text: string) => {
     setDescription((prev) => (prev ? `${prev} ${text}` : text));
   }, []);
@@ -362,7 +333,10 @@ export function CaptureModal({
               <X className="w-6 h-6" />
             </Button>
             <h2 className="text-white font-medium">Captured</h2>
-            <Button onClick={handleQuickSave} disabled={saving} size="sm" className="min-h-[44px]">
+            {/* M56: the header Save honours the chosen type/description/lot — it
+                drives the same handleSave as the contextual button below, so it
+                never silently discards a Defect/Note choice as a plain photo. */}
+            <Button onClick={handleSave} disabled={saving} size="sm" className="min-h-[44px]">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save'}
             </Button>
           </div>
