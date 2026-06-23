@@ -171,8 +171,9 @@ export function PushNotificationSettings() {
       </div>
 
       <p className="text-sm text-muted-foreground mb-6">
-        Receive instant notifications on your device when important events occur, such as hold point
-        releases, NCR assignments, and mentions.
+        Push notifications are in preview: you can send a test notification to this device today.
+        Automatic alerts for events like hold point releases, NCR assignments, and mentions are
+        coming soon.
       </p>
 
       {/* Browser Support Check */}
@@ -287,8 +288,8 @@ export function PushNotificationSettings() {
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {status.subscribed
-                    ? 'You will receive push notifications on this device'
-                    : 'Enable to receive notifications when the app is closed'}
+                    ? 'Test notifications only for now — automatic event alerts are coming soon'
+                    : 'Enable to send test notifications to this device (event alerts coming soon)'}
                 </p>
               </div>
             </div>
@@ -348,7 +349,7 @@ export function PushNotificationSettings() {
           <li>For best results, add SiteProof to your home screen</li>
           <li>On iOS 16.4+: Safari → Share → Add to Home Screen</li>
           <li>On Android: Chrome → Menu → Add to Home Screen</li>
-          <li>Push notifications will then work even when the app is closed</li>
+          <li>Test notifications will then work even when the app is closed</li>
         </ul>
       </div>
     </div>
