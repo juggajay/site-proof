@@ -114,10 +114,13 @@ export function AssignedWorkPage() {
   const projectName = company?.projectName || '';
   const projectOptions: PortalCompanyOption[] = company?.availableProjects || [];
   const showProjectSwitcher = projectOptions.length > 1;
-  const portalPath = buildPortalCompanyScopedPath('/subcontractor-portal', {
+  const portalScope = {
     projectId: company?.projectId ?? requestedProjectId,
     subcontractorCompanyId: company?.id ?? requestedSubcontractorCompanyId,
-  });
+  };
+  const portalPath = buildPortalCompanyScopedPath('/subcontractor-portal', portalScope);
+  const lotItpPath = (lotId: string) =>
+    buildPortalCompanyScopedPath(`/subcontractor-portal/lots/${lotId}/itp`, portalScope);
 
   const handleProjectChange = (value: string) => {
     const selected = findPortalCompanyOptionByValue(projectOptions, value);
@@ -256,7 +259,7 @@ export function AssignedWorkPage() {
               </h2>
               <div className="space-y-2">
                 {inProgress.map((lot) => (
-                  <LotCard key={lot.id} lot={lot} />
+                  <LotCard key={lot.id} lot={lot} to={lotItpPath(lot.id)} />
                 ))}
               </div>
             </div>
@@ -270,7 +273,7 @@ export function AssignedWorkPage() {
               </h2>
               <div className="space-y-2">
                 {notStarted.map((lot) => (
-                  <LotCard key={lot.id} lot={lot} />
+                  <LotCard key={lot.id} lot={lot} to={lotItpPath(lot.id)} />
                 ))}
               </div>
             </div>
@@ -284,7 +287,7 @@ export function AssignedWorkPage() {
               </h2>
               <div className="space-y-2">
                 {onHold.map((lot) => (
-                  <LotCard key={lot.id} lot={lot} />
+                  <LotCard key={lot.id} lot={lot} to={lotItpPath(lot.id)} />
                 ))}
               </div>
             </div>
@@ -298,7 +301,7 @@ export function AssignedWorkPage() {
               </h2>
               <div className="space-y-2">
                 {completed.map((lot) => (
-                  <LotCard key={lot.id} lot={lot} />
+                  <LotCard key={lot.id} lot={lot} to={lotItpPath(lot.id)} />
                 ))}
               </div>
             </div>
@@ -309,9 +312,12 @@ export function AssignedWorkPage() {
   );
 }
 
-function LotCard({ lot }: { lot: Lot }) {
+export function LotCard({ lot, to }: { lot: Lot; to: string }) {
   return (
-    <div className="border border-border rounded-lg bg-card shadow-sm">
+    <Link
+      to={to}
+      className="block border border-border rounded-lg bg-card shadow-sm transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+    >
       <div className="p-4">
         <div className="flex items-start justify-between">
           <div className="flex items-start gap-3">
@@ -331,6 +337,6 @@ function LotCard({ lot }: { lot: Lot }) {
           {getStatusBadge(lot.status)}
         </div>
       </div>
-    </div>
+    </Link>
   );
 }
