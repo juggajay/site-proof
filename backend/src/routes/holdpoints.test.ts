@@ -12,6 +12,7 @@ import { holdpointsRouter } from './holdpoints.js';
 import { clearEmailQueue, getQueuedEmails } from '../lib/email.js';
 import { registerTestUser as registerSharedTestUser } from '../test/routeTestHarness.js';
 import { buildTemplateSnapshot } from './itp/helpers/templateSnapshot.js';
+import { projectTimeZoneFromState, zonedWallClockToUtc } from '../lib/projectTimeZone.js';
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
@@ -791,7 +792,16 @@ describe('Hold Points API', () => {
         signatureDataUrl: 'data:image/png;base64,ZmFrZS1zaWduYXR1cmU=',
       });
 
-      const expectedReleasedAt = new Date(2026, 0, 20, 9, 15, 0, 0);
+      // M84: the release wall-clock is interpreted in the project's timezone
+      // (NSW -> Australia/Sydney, AEDT +11 in January), not the server's.
+      const expectedReleasedAt = zonedWallClockToUtc(
+        2026,
+        1,
+        20,
+        9,
+        15,
+        projectTimeZoneFromState('NSW'),
+      );
       expect(res.status).toBe(200);
       expect(res.body.holdPoint).toBeDefined();
       expect(res.body.holdPoint.status).toBe('released');
