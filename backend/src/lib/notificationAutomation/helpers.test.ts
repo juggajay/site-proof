@@ -73,6 +73,15 @@ describe('notification automation helpers', () => {
     expect(isDueForProjectTime(now, '17:00')).toBe(true);
   });
 
+  it('evaluates the due-time gate in the supplied project timezone (M84)', () => {
+    delete process.env.DIARY_REMINDER_TIME_OF_DAY;
+    // 07:00 UTC is 17:00 in Sydney (AEST +10) but 15:00 in Perth (+8), so a
+    // 16:00 reminder is due for the Sydney project but not the Perth project.
+    const now = new Date('2026-05-12T07:00:00Z');
+    expect(isDueForProjectTime(now, '16:00', 'Australia/Sydney')).toBe(true);
+    expect(isDueForProjectTime(now, '16:00', 'Australia/Perth')).toBe(false);
+  });
+
   it('keeps working-day date logic stable', () => {
     const monday = new Date(2026, 4, 11, 12, 0, 0, 0);
     const sunday = new Date(2026, 4, 10, 12, 0, 0, 0);

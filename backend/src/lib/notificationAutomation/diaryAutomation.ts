@@ -2,6 +2,7 @@ import type { PrismaClient } from '@prisma/client';
 import { formatDateKey, isDueForProjectTime, isWorkingDay, startOfDay } from './helpers.js';
 import type { NotificationTypeWithTiming } from './preferences.js';
 import { isProjectNotificationEnabled } from '../projectNotificationPreferences.js';
+import { projectTimeZoneFromState } from '../projectTimeZone.js';
 
 type DiaryAutomationPrisma = Pick<PrismaClient, 'dailyDiary' | 'notification'>;
 
@@ -9,6 +10,7 @@ type DiaryProjectForAutomation = {
   id: string;
   name: string;
   companyId: string;
+  state: string | null;
   workingHoursEnd: string | null;
   workingDays: string | null;
   settings: string | null;
@@ -99,7 +101,10 @@ export async function processDueDiaryReminders(
       continue;
     }
 
-    if (!isWorkingDay(project, targetDate) || !isDueForProjectTime(now, project.workingHoursEnd)) {
+    if (
+      !isWorkingDay(project, targetDate) ||
+      !isDueForProjectTime(now, project.workingHoursEnd, projectTimeZoneFromState(project.state))
+    ) {
       result.skippedProjects += 1;
       continue;
     }

@@ -41,6 +41,7 @@ type ProjectForAutomation = {
   id: string;
   name: string;
   companyId: string;
+  state: string | null;
   workingHoursEnd: string | null;
   workingDays: string | null;
   settings: string | null;
@@ -175,6 +176,7 @@ async function findActiveProjects(
       id: true,
       name: true,
       companyId: true,
+      state: true,
       workingHoursEnd: true,
       workingDays: true,
       settings: true,

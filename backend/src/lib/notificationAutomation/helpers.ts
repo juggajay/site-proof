@@ -110,9 +110,15 @@ export function getZonedMinutesOfDay(date: Date, timeZone: string = resolveAppTi
   return hour * 60 + partValue('minute');
 }
 
-export function isDueForProjectTime(now: Date, timeOfDay: string | null | undefined): boolean {
+export function isDueForProjectTime(
+  now: Date,
+  timeOfDay: string | null | undefined,
+  timeZone: string = resolveAppTimeZone(),
+): boolean {
   const { hours, minutes } = parseTimeOfDay(process.env.DIARY_REMINDER_TIME_OF_DAY ?? timeOfDay);
-  return getZonedMinutesOfDay(now) >= hours * 60 + minutes;
+  // M84: evaluate the wall-clock gate in the PROJECT'S timezone, so a Perth
+  // project's 17:00 reminder fires on Perth time, not app-wide Sydney time.
+  return getZonedMinutesOfDay(now, timeZone) >= hours * 60 + minutes;
 }
 
 export function appendQueryParams(
