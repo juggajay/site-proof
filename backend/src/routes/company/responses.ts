@@ -149,6 +149,21 @@ export function buildCompanyMemberRemovedResponse(params: {
   };
 }
 
+export function buildCompanyMemberRoleChangedResponse(params: {
+  memberId: string;
+  roleInCompany: string;
+  previousRole: string;
+}) {
+  return {
+    message: 'Company member role updated successfully',
+    member: {
+      id: params.memberId,
+      roleInCompany: params.roleInCompany,
+    },
+    previousRole: params.previousRole,
+  };
+}
+
 export function buildCompanyOwnershipTransferredResponse(newOwner: NewOwner, transferredAt: Date) {
   return {
     message: 'Ownership transferred successfully',
