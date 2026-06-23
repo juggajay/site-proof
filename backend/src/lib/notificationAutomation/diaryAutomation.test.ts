@@ -31,7 +31,6 @@ function buildDeps(
     } as unknown as DiaryAutomationDependencies['prisma'],
     dayMs: 24 * 60 * 60 * 1000,
     diaryReminderRoles: ['foreman'],
-    missingDiaryAlertRoles: ['project_manager'],
     findActiveProjects: vi.fn().mockResolvedValue([project]),
     findProjectUsersByRoles: vi
       .fn()

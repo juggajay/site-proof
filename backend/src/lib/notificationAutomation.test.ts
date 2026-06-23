@@ -180,7 +180,6 @@ describe('notification automation jobs', () => {
       const skippedRunner = results.find(
         (result) =>
           result.diaryReminders.projectsChecked === 0 &&
-          result.missingDiaryAlerts.projectsChecked === 0 &&
           result.docketBacklogAlerts.projectsWithBacklog === 0 &&
           result.systemAlerts.projectsChecked === 0 &&
           result.alertEscalations.alertsChecked === 0,

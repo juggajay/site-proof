@@ -12,7 +12,6 @@ import {
 import {
   type DiaryAutomationDependencies,
   processDueDiaryReminders as processDueDiaryRemindersJob,
-  processMissingDiaryAlerts as processMissingDiaryAlertsJob,
 } from './notificationAutomation/diaryAutomation.js';
 import {
   type EmailPreferences,
@@ -37,7 +36,6 @@ const HOUR_MS = 60 * 60 * 1000;
 const DEFAULT_JOB_LIMIT = 100;
 
 const DIARY_REMINDER_ROLES = ['site_engineer', 'foreman', 'project_manager'];
-const MISSING_DIARY_ALERT_ROLES = ['project_manager', 'admin', 'owner'];
 
 type ProjectForAutomation = {
   id: string;
@@ -75,13 +73,6 @@ export type DiaryReminderJobResult = NotificationDeliverySummary & {
   date: string;
 };
 
-export type MissingDiaryAlertJobResult = NotificationDeliverySummary & {
-  projectsChecked: number;
-  alertsCreated: number;
-  skippedProjects: number;
-  usersNotified: number;
-};
-
 export type DocketBacklogAlertJobResult = NotificationDeliverySummary & {
   overdueDockets: number;
   projectsWithBacklog: number;
@@ -104,7 +95,6 @@ export type AlertEscalationJobResult = AlertEscalationAutomationResult;
 
 export type NotificationAutomationRunResult = {
   diaryReminders: DiaryReminderJobResult;
-  missingDiaryAlerts: MissingDiaryAlertJobResult;
   docketBacklogAlerts: DocketBacklogAlertJobResult;
   systemAlerts: SystemAlertJobResult;
   alertEscalations: AlertEscalationJobResult;
@@ -325,7 +315,6 @@ const diaryAutomationDependencies = {
   prisma,
   dayMs: DAY_MS,
   diaryReminderRoles: DIARY_REMINDER_ROLES,
-  missingDiaryAlertRoles: MISSING_DIARY_ALERT_ROLES,
   findActiveProjects,
   findProjectUsersByRoles,
   notifyUsers,
@@ -345,6 +334,7 @@ const systemAutomationDependencies = {
   hourMs: HOUR_MS,
   findActiveProjects,
   findProjectUsersByRoles,
+  notifyUsers,
 } satisfies SystemAutomationDependencies;
 
 const alertEscalationDependencies = {
@@ -359,12 +349,6 @@ export async function processDueDiaryReminders(
   options: NotificationAutomationJobOptions = {},
 ): Promise<DiaryReminderJobResult> {
   return processDueDiaryRemindersJob(options, diaryAutomationDependencies);
-}
-
-export async function processMissingDiaryAlerts(
-  options: NotificationAutomationJobOptions = {},
-): Promise<MissingDiaryAlertJobResult> {
-  return processMissingDiaryAlertsJob(options, diaryAutomationDependencies);
 }
 
 export async function processDocketBacklogAlerts(
@@ -393,7 +377,6 @@ async function processNotificationAutomationUnlocked(
 
   return {
     diaryReminders: await processDueDiaryReminders(sharedOptions),
-    missingDiaryAlerts: await processMissingDiaryAlerts(sharedOptions),
     docketBacklogAlerts: await processDocketBacklogAlerts(sharedOptions),
     systemAlerts: await processSystemAlerts(sharedOptions),
     alertEscalations: await processAlertEscalations(sharedOptions),
