@@ -99,12 +99,19 @@ export async function registerTestUser(
 
   const userId = res.body.user.id as string;
 
-  if (roleInCompany !== undefined) {
-    await prisma.user.update({
-      where: { id: userId },
-      data: { companyId: options.companyId ?? null, roleInCompany },
-    });
-  }
+  // Test users are treated as email-verified so they can exercise the
+  // verification-gated happy paths (company creation, invites — M1). Tests that
+  // specifically assert unverified behaviour register via the API directly.
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      emailVerified: true,
+      emailVerifiedAt: new Date(),
+      ...(roleInCompany !== undefined
+        ? { companyId: options.companyId ?? null, roleInCompany }
+        : {}),
+    },
+  });
 
   return {
     token: res.body.token as string,

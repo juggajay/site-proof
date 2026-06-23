@@ -8,6 +8,7 @@ import { sendSubcontractorInvitationEmail } from '../../lib/email.js';
 import { prisma } from '../../lib/prisma.js';
 import { buildFrontendUrl } from '../../lib/runtimeConfig.js';
 import { logError } from '../../lib/serverLogger.js';
+import { requireEmailVerified } from '../../middleware/requireEmailVerified.js';
 import {
   getSubcontractorInvitationExpiresAt,
   isSubcontractorInvitationAcceptableStatus,
@@ -191,6 +192,7 @@ export function createSubcontractorInvitationRouters({
   // Now supports selecting from global directory via globalSubcontractorId
   authenticatedRouter.post(
     '/invite',
+    requireEmailVerified,
     asyncHandler(async (req, res) => {
       const user = req.user!;
       const { companyName, abn, primaryContactName, primaryContactEmail, primaryContactPhone } =
