@@ -43,14 +43,22 @@ export async function createAlertRecord(alert: Alert): Promise<Alert> {
   return toAlert(record);
 }
 
+/**
+ * Escalate an alert with an optimistic compare-and-swap. The write only lands
+ * when the row is still unresolved AND still at `expectedLevel`, so two
+ * concurrent check-escalations runs can't both move the same alert up a level
+ * (which would double-escalate and double-notify). Returns the updated alert
+ * when this caller won the race, or `null` when another run got there first.
+ */
 export async function updateAlertEscalation(
   id: string,
+  expectedLevel: number,
   escalationLevel: number,
   escalatedAt: Date,
   escalatedTo: string[],
-): Promise<Alert> {
-  const record = await prisma.notificationAlert.update({
-    where: { id },
+): Promise<Alert | null> {
+  const updateResult = await prisma.notificationAlert.updateMany({
+    where: { id, resolvedAt: null, escalationLevel: expectedLevel },
     data: {
       escalationLevel,
       escalatedAt,
@@ -58,5 +66,10 @@ export async function updateAlertEscalation(
     },
   });
 
-  return toAlert(record);
+  if (updateResult.count === 0) {
+    return null;
+  }
+
+  const record = await prisma.notificationAlert.findUnique({ where: { id } });
+  return record ? toAlert(record) : null;
 }
