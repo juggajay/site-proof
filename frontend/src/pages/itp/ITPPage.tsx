@@ -18,10 +18,11 @@ import { formatActivityTypeLabel, type NewChecklistItem } from './itpTemplateFor
 import { CreateTemplateModal } from './components/CreateTemplateModal';
 import { EditTemplateModal } from './components/EditTemplateModal';
 import { ImportFromProjectModal } from './components/ImportFromProjectModal';
+import { PendingItpVerificationsSection } from './components/PendingItpVerificationsSection';
 
 export function ITPPage() {
   const { projectId } = useParams();
-  const { actualRole } = useAuth();
+  const { user, actualRole } = useAuth();
   // Foremen (and other field roles) can view ITP templates for context but must
   // not be led into template setup/admin work — those actions 403 on the backend.
   const canManage = canManageItpTemplates(actualRole);
@@ -277,6 +278,12 @@ export function ITPPage() {
           )}
         </div>
       </div>
+
+      {/* H4: head-contractor pending-verifications queue (renders only for
+          reviewers; the endpoint 403s for everyone else). */}
+      {projectId && (
+        <PendingItpVerificationsSection projectId={projectId} currentUserId={user?.id} />
+      )}
 
       {/* Filters */}
       <div className="flex items-center gap-6 pb-2 border-b">

@@ -27,6 +27,12 @@ vi.mock('react-router-dom', async (importOriginal) => {
   return { ...actual, useParams: () => ({ projectId: 'p1' }) };
 });
 
+// The pending-verifications queue is covered by its own test and fetches on
+// mount; stub it out here so this suite stays focused on template management.
+vi.mock('./components/PendingItpVerificationsSection', () => ({
+  PendingItpVerificationsSection: () => null,
+}));
+
 // Drive the page's bootstrap query directly: this test isolates role-aware
 // action visibility, not the data/network layer.
 vi.mock('./itpPageData', async (importOriginal) => {
