@@ -4,6 +4,7 @@ import {
   buildProjectEntityLink,
   formatDateKey,
   getPreviousWorkingDay,
+  getZonedMinutesOfDay,
   isDueForProjectTime,
   isWorkingDay,
   parsePositiveInteger,
@@ -24,6 +25,30 @@ afterEach(() => {
   process.env = { ...ORIGINAL_ENV };
 });
 
+describe('getZonedMinutesOfDay (Australia/Sydney wall-clock)', () => {
+  // Oracle values computed by hand: AEST = UTC+10 (winter), AEDT = UTC+11
+  // (summer). Inputs are explicit UTC instants so the result is independent of
+  // the machine/CI timezone.
+  const SYD = 'Australia/Sydney';
+
+  it('derives AEST (UTC+10) wall-clock minutes in winter', () => {
+    // 2026-05-10 07:00Z + 10h = 17:00 AEST
+    expect(getZonedMinutesOfDay(new Date('2026-05-10T07:00:00Z'), SYD)).toBe(17 * 60);
+    // 06:30Z + 10h = 16:30 AEST
+    expect(getZonedMinutesOfDay(new Date('2026-05-10T06:30:00Z'), SYD)).toBe(16 * 60 + 30);
+  });
+
+  it('derives AEDT (UTC+11) wall-clock minutes in summer (DST)', () => {
+    // 2026-01-10 06:00Z + 11h = 17:00 AEDT
+    expect(getZonedMinutesOfDay(new Date('2026-01-10T06:00:00Z'), SYD)).toBe(17 * 60);
+  });
+
+  it('returns 0 at AU midnight (no 24:00 quirk)', () => {
+    // 2026-05-09 14:00Z + 10h = 2026-05-10 00:00 AEST
+    expect(getZonedMinutesOfDay(new Date('2026-05-09T14:00:00Z'), SYD)).toBe(0);
+  });
+});
+
 describe('notification automation helpers', () => {
   it('parses positive integers with the existing fallback semantics', () => {
     expect(parsePositiveInteger(5, 10)).toBe(5);
@@ -37,7 +62,10 @@ describe('notification automation helpers', () => {
     expect(parseTimeOfDay('06:30')).toEqual({ hours: 6, minutes: 30 });
     expect(parseTimeOfDay('bad')).toEqual({ hours: 17, minutes: 0 });
 
-    const now = new Date(2026, 4, 12, 16, 45, 0, 0);
+    // Explicit UTC instant (16:45). The suite pins APP_TIMEZONE=UTC, so the
+    // due-time gate evaluates this as 16:45 wall-clock deterministically; the
+    // Australia/Sydney conversion is verified separately above.
+    const now = new Date('2026-05-12T16:45:00Z');
     expect(isDueForProjectTime(now, '16:30')).toBe(true);
     expect(isDueForProjectTime(now, '17:00')).toBe(false);
 
