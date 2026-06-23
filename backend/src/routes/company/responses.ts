@@ -149,6 +149,37 @@ export function buildCompanyMemberRemovedResponse(params: {
   };
 }
 
+export function buildCompanyApiKeyInventoryResponse(
+  apiKeys: Array<{
+    id: string;
+    name: string;
+    keyPrefix: string;
+    scopes: string;
+    lastUsedAt: Date | null;
+    expiresAt: Date | null;
+    isActive: boolean;
+    createdAt: Date;
+    user: { id: string; fullName: string | null; email: string } | null;
+  }>,
+) {
+  return {
+    apiKeys: apiKeys.map((key) => ({
+      id: key.id,
+      name: key.name,
+      keyPrefix: key.keyPrefix,
+      scopes: key.scopes,
+      lastUsedAt: key.lastUsedAt ? key.lastUsedAt.toISOString() : null,
+      expiresAt: key.expiresAt ? key.expiresAt.toISOString() : null,
+      isActive: key.isActive,
+      createdAt: key.createdAt.toISOString(),
+      owner: key.user
+        ? { id: key.user.id, fullName: key.user.fullName, email: key.user.email }
+        : null,
+    })),
+    count: apiKeys.length,
+  };
+}
+
 export function buildCompanyMemberRoleChangedResponse(params: {
   memberId: string;
   roleInCompany: string;

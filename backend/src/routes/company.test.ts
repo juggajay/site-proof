@@ -1410,6 +1410,132 @@ describe('Company API', () => {
     });
   });
 
+  describe('GET /api/company/api-keys (M72b inventory)', () => {
+    let memberId: string;
+    let memberToken: string;
+    const createdKeyIds: string[] = [];
+
+    beforeAll(async () => {
+      const memberRes = await request(app)
+        .post('/api/auth/register')
+        .send({
+          email: `keys-inventory-member-${Date.now()}@example.com`,
+          password: 'SecureP@ssword123!',
+          fullName: 'Keys Inventory Member',
+          tosAccepted: true,
+        });
+      memberId = memberRes.body.user.id;
+      memberToken = memberRes.body.token;
+      await prisma.user.update({
+        where: { id: memberId },
+        data: { companyId, roleInCompany: 'foreman' },
+      });
+
+      const ownerKey = await prisma.apiKey.create({
+        data: {
+          userId,
+          name: 'Owner key',
+          keyHash: `hash-inv-owner-${Date.now()}`,
+          keyPrefix: 'sp_invown1',
+          scopes: 'read',
+          isActive: true,
+        },
+      });
+      const memberKey = await prisma.apiKey.create({
+        data: {
+          userId: memberId,
+          name: 'Member key',
+          keyHash: `hash-inv-member-${Date.now()}`,
+          keyPrefix: 'sp_invmem1',
+          scopes: 'write',
+          isActive: false,
+        },
+      });
+      createdKeyIds.push(ownerKey.id, memberKey.id);
+    });
+
+    afterAll(async () => {
+      await prisma.apiKey.deleteMany({ where: { id: { in: createdKeyIds } } });
+      await prisma.emailVerificationToken.deleteMany({ where: { userId: memberId } });
+      await prisma.user.delete({ where: { id: memberId } }).catch(() => {});
+    });
+
+    it('lists every company API key with its owner for an owner/admin', async () => {
+      const res = await request(app)
+        .get('/api/company/api-keys')
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(200);
+      const keysById = new Map((res.body.apiKeys as Array<{ id: string }>).map((k) => [k.id, k]));
+      const ownerKey = keysById.get(createdKeyIds[0]) as Record<string, unknown>;
+      const memberKey = keysById.get(createdKeyIds[1]) as Record<string, unknown>;
+
+      expect(ownerKey).toMatchObject({ keyPrefix: 'sp_invown1', isActive: true });
+      expect((ownerKey.owner as { id: string }).id).toBe(userId);
+      expect(memberKey).toMatchObject({ keyPrefix: 'sp_invmem1', isActive: false });
+      expect((memberKey.owner as { id: string }).id).toBe(memberId);
+      // The raw key / hash is never exposed in the inventory.
+      expect(ownerKey).not.toHaveProperty('keyHash');
+      expect(ownerKey).not.toHaveProperty('key');
+    });
+
+    it('does not include keys from another company', async () => {
+      const otherCompany = await prisma.company.create({
+        data: { name: `Other Keys Co ${Date.now()}` },
+      });
+      const otherRes = await request(app)
+        .post('/api/auth/register')
+        .send({
+          email: `other-keys-${Date.now()}@example.com`,
+          password: 'SecureP@ssword123!',
+          fullName: 'Other Keys User',
+          tosAccepted: true,
+        });
+      const otherUserId = otherRes.body.user.id;
+      await prisma.user.update({
+        where: { id: otherUserId },
+        data: { companyId: otherCompany.id, roleInCompany: 'admin' },
+      });
+      const otherKey = await prisma.apiKey.create({
+        data: {
+          userId: otherUserId,
+          name: 'Other co key',
+          keyHash: `hash-inv-other-${Date.now()}`,
+          keyPrefix: 'sp_invoth1',
+          scopes: 'read',
+          isActive: true,
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .get('/api/company/api-keys')
+          .set('Authorization', `Bearer ${authToken}`);
+        expect(res.status).toBe(200);
+        const ids = (res.body.apiKeys as Array<{ id: string }>).map((k) => k.id);
+        expect(ids).not.toContain(otherKey.id);
+      } finally {
+        await prisma.apiKey.deleteMany({ where: { userId: otherUserId } });
+        await prisma.emailVerificationToken.deleteMany({ where: { userId: otherUserId } });
+        await prisma.user.delete({ where: { id: otherUserId } }).catch(() => {});
+        await prisma.company.delete({ where: { id: otherCompany.id } }).catch(() => {});
+      }
+    });
+
+    it('rejects field users', async () => {
+      const res = await request(app)
+        .get('/api/company/api-keys')
+        .set('Authorization', `Bearer ${memberToken}`);
+      expect(res.status).toBe(403);
+      expect(res.body.error.message).toContain('Only company owners and admins');
+    });
+
+    it('requires authentication', async () => {
+      const res = await request(app).get('/api/company/api-keys');
+      expect(res.status).toBe(401);
+    });
+  });
+
   describe('POST /api/company/members/invite', () => {
     const invitedUserIds: string[] = [];
     const invitedCompanyIds: string[] = [];

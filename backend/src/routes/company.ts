@@ -44,6 +44,7 @@ import {
   requireCompanyAdmin,
 } from './company/access.js';
 import { companyMemberRoutes } from './company/memberRoutes.js';
+import { companyApiKeyRoutes } from './company/apiKeyInventoryRoutes.js';
 
 export const companyRouter = Router();
 
@@ -337,6 +338,7 @@ companyRouter.get(
 );
 
 companyRouter.use(companyMemberRoutes);
+companyRouter.use(companyApiKeyRoutes);
 
 // POST /api/company/logo - Upload and store a company logo file
 companyRouter.post(
