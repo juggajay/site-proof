@@ -3619,4 +3619,197 @@ describe('Lot Bulk Operations', () => {
       expect(conformedStillExists).not.toBeNull();
     });
   });
+
+  describe('batch 2: audit + clone-ITP + conformance reset', () => {
+    it('clears the conformance stamp and audits the reset when overriding a conformed lot (H3)', async () => {
+      const lot = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `LOT-CONFORM-RESET-${Date.now()}`,
+          status: 'conformed',
+          conformedAt: new Date(),
+          conformedById: userId,
+          lotType: 'chainage',
+          activityType: 'Earthworks',
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .post(`/api/lots/${lot.id}/override-status`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ status: 'in_progress', reason: 'Defect found post-conformance' });
+        expect(res.status).toBe(200);
+
+        const updated = await prisma.lot.findUniqueOrThrow({
+          where: { id: lot.id },
+          select: { status: true, conformedAt: true, conformedById: true },
+        });
+        expect(updated.status).toBe('in_progress');
+        expect(updated.conformedAt).toBeNull();
+        expect(updated.conformedById).toBeNull();
+
+        const auditLog = await prisma.auditLog.findFirst({
+          where: {
+            projectId,
+            userId,
+            entityType: 'lot',
+            entityId: lot.id,
+            action: AuditAction.LOT_STATUS_CHANGED,
+          },
+        });
+        expect(auditLog?.changes ? JSON.parse(auditLog.changes) : null).toMatchObject({
+          conformanceReset: true,
+          status: { from: 'conformed', to: 'in_progress' },
+        });
+      } finally {
+        await prisma.auditLog.deleteMany({ where: { entityId: lot.id } });
+        await prisma.lot.delete({ where: { id: lot.id } }).catch(() => {});
+      }
+    });
+
+    it('writes a LOT_UPDATED audit with status + budget from/to on PATCH (M8)', async () => {
+      const lot = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `LOT-PATCH-AUDIT-${Date.now()}`,
+          status: 'not_started',
+          lotType: 'chainage',
+          activityType: 'Earthworks',
+          budgetAmount: 1000,
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .patch(`/api/lots/${lot.id}`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ status: 'in_progress', budgetAmount: 2500 });
+        expect(res.status).toBe(200);
+
+        const auditLog = await prisma.auditLog.findFirst({
+          where: {
+            projectId,
+            userId,
+            entityType: 'lot',
+            entityId: lot.id,
+            action: AuditAction.LOT_UPDATED,
+          },
+        });
+        expect(auditLog).toBeTruthy();
+        expect(auditLog?.changes ? JSON.parse(auditLog.changes) : null).toMatchObject({
+          status: { from: 'not_started', to: 'in_progress' },
+          budgetAmount: { from: 1000, to: 2500 },
+        });
+      } finally {
+        await prisma.auditLog.deleteMany({ where: { entityId: lot.id } });
+        await prisma.lot.delete({ where: { id: lot.id } }).catch(() => {});
+      }
+    });
+
+    it('audits each lot on bulk status update (M7)', async () => {
+      const suffix = Date.now();
+      const a = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `LOT-BULK-A-${suffix}`,
+          status: 'not_started',
+          lotType: 'chainage',
+          activityType: 'Earthworks',
+        },
+      });
+      const b = await prisma.lot.create({
+        data: {
+          projectId,
+          lotNumber: `LOT-BULK-B-${suffix}`,
+          status: 'not_started',
+          lotType: 'chainage',
+          activityType: 'Earthworks',
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .post('/api/lots/bulk-update-status')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ lotIds: [a.id, b.id], status: 'in_progress' });
+        expect(res.status).toBe(200);
+
+        for (const lot of [a, b]) {
+          const auditLog = await prisma.auditLog.findFirst({
+            where: {
+              projectId,
+              userId,
+              entityType: 'lot',
+              entityId: lot.id,
+              action: AuditAction.LOT_STATUS_CHANGED,
+            },
+          });
+          expect(auditLog?.changes ? JSON.parse(auditLog.changes) : null).toMatchObject({
+            status: { from: 'not_started', to: 'in_progress' },
+            bulk: true,
+          });
+        }
+      } finally {
+        await prisma.auditLog.deleteMany({ where: { entityId: { in: [a.id, b.id] } } });
+        await prisma.lot.deleteMany({ where: { id: { in: [a.id, b.id] } } });
+      }
+    });
+
+    it('carries the ITP forward as a fresh not_started instance when cloning (M9)', async () => {
+      const suffix = Date.now();
+      const template = await prisma.iTPTemplate.create({
+        data: {
+          projectId,
+          name: `Clone ITP ${suffix}`,
+          description: 'Clone should carry this ITP forward',
+          activityType: 'Earthworks',
+          checklistItems: {
+            create: [
+              {
+                description: 'Clone item',
+                sequenceNumber: 1,
+                pointType: 'standard',
+                responsibleParty: 'contractor',
+                evidenceRequired: 'none',
+              },
+            ],
+          },
+        },
+      });
+
+      const sourceRes = await request(app)
+        .post('/api/lots')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ projectId, lotNumber: `LOT-CLONE-SRC-${suffix}`, itpTemplateId: template.id });
+      expect(sourceRes.status).toBe(201);
+      const sourceId = sourceRes.body.lot.id;
+      let cloneId: string | undefined;
+
+      try {
+        const res = await request(app)
+          .post(`/api/lots/${sourceId}/clone`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ lotNumber: `LOT-CLONE-DST-${suffix}` });
+        expect(res.status).toBe(201);
+        cloneId = res.body.lot.id;
+
+        const instance = await prisma.iTPInstance.findUniqueOrThrow({
+          where: { lotId: cloneId },
+          select: { templateId: true, status: true, completions: { select: { id: true } } },
+        });
+        expect(instance.templateId).toBe(template.id);
+        expect(instance.status).toBe('not_started');
+        expect(instance.completions).toHaveLength(0);
+      } finally {
+        for (const cleanupId of [cloneId, sourceId]) {
+          if (cleanupId) {
+            await prisma.iTPInstance.deleteMany({ where: { lotId: cleanupId } });
+            await prisma.lot.delete({ where: { id: cleanupId } }).catch(() => {});
+          }
+        }
+        await prisma.iTPTemplate.delete({ where: { id: template.id } }).catch(() => {});
+      }
+    });
+  });
 });
