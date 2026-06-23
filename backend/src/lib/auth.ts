@@ -171,19 +171,6 @@ export function generateMfaChallengeToken(userId: string): string {
   );
 }
 
-export function verifyMfaChallengeToken(token: string, expectedUserId: string): boolean {
-  try {
-    const payload = jwt.verify(token, EFFECTIVE_JWT_SECRET) as {
-      userId?: unknown;
-      type?: unknown;
-    };
-
-    return payload.type === MFA_CHALLENGE_TOKEN_TYPE && payload.userId === expectedUserId;
-  } catch {
-    return false;
-  }
-}
-
 /**
  * Hash a password using bcrypt
  * Uses 12 rounds of salting for security

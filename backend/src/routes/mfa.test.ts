@@ -9,7 +9,6 @@ import crypto from 'crypto';
 import * as _otplib from 'otplib';
 import { encrypt, decrypt } from '../lib/encryption.js';
 import { errorHandler } from '../middleware/errorHandler.js';
-import { clearFailedAuthAttempts } from '../middleware/rateLimiter.js';
 import { enableMfaAndReplaceBackupCodes } from '../lib/mfaBackupCodes.js';
 
 // Mock otplib to control secret and verification
@@ -541,245 +540,6 @@ describe('MFA API', () => {
     });
   });
 
-  describe('POST /api/mfa/verify', () => {
-    let publicVerifyIpCounter = 1;
-
-    const getPublicVerifyIp = () => {
-      const ip = `198.51.101.${publicVerifyIpCounter}`;
-      publicVerifyIpCounter += 1;
-      return ip;
-    };
-
-    const requestMfaChallengeToken = async () => {
-      const challengeRes = await request(app).post('/api/auth/login').send({
-        email: testEmail,
-        password: testPassword,
-      });
-
-      expect(challengeRes.status).toBe(200);
-      expect(challengeRes.body.mfaRequired).toBe(true);
-      expect(challengeRes.body.userId).toBe(userId);
-      expect(typeof challengeRes.body.mfaChallengeToken).toBe('string');
-
-      return challengeRes.body.mfaChallengeToken as string;
-    };
-
-    beforeAll(async () => {
-      // Ensure MFA is enabled
-      const encryptedSecret = encrypt('TESTSECRET1234567890');
-      await prisma.user.update({
-        where: { id: userId },
-        data: {
-          twoFactorEnabled: true,
-          twoFactorSecret: encryptedSecret,
-        },
-      });
-    });
-
-    it('should reject valid MFA code without a password challenge token', async () => {
-      const testIp = getPublicVerifyIp();
-
-      try {
-        const res = await request(app).post('/api/mfa/verify').set('X-Forwarded-For', testIp).send({
-          userId,
-          code: '123456',
-        });
-
-        expect(res.status).toBe(401);
-        expect(res.body.error.message).toContain('Invalid verification code');
-        expect(res.body.user).toBeUndefined();
-      } finally {
-        await clearFailedAuthAttempts(testIp);
-        await clearFailedAuthAttempts(testIp, userId);
-      }
-    });
-
-    it('should verify valid MFA code with a password challenge token', async () => {
-      const mfaChallengeToken = await requestMfaChallengeToken();
-
-      const res = await request(app).post('/api/mfa/verify').send({
-        userId,
-        code: '123456',
-        mfaChallengeToken,
-      });
-
-      expect(res.status).toBe(200);
-      expect(res.body.valid).toBe(true);
-      expect(res.body.user).toBeUndefined();
-    });
-
-    it('should reject invalid MFA code', async () => {
-      const testIp = getPublicVerifyIp();
-      const mfaChallengeToken = await requestMfaChallengeToken();
-
-      try {
-        const res = await request(app).post('/api/mfa/verify').set('X-Forwarded-For', testIp).send({
-          userId,
-          code: '000000',
-          mfaChallengeToken,
-        });
-
-        expect(res.status).toBe(401);
-        expect(res.body.error.message).toContain('Invalid verification code');
-      } finally {
-        await clearFailedAuthAttempts(testIp);
-        await clearFailedAuthAttempts(testIp, userId);
-      }
-    });
-
-    it('should lock out repeated invalid public MFA verification attempts', async () => {
-      const testIp = `198.51.100.${Math.floor(Math.random() * 200) + 1}`;
-
-      try {
-        for (let attempt = 0; attempt < 5; attempt += 1) {
-          const res = await request(app)
-            .post('/api/mfa/verify')
-            .set('X-Forwarded-For', testIp)
-            .send({
-              userId,
-              code: '000000',
-            });
-
-          expect(res.status).toBe(401);
-        }
-
-        const lockedRes = await request(app)
-          .post('/api/mfa/verify')
-          .set('X-Forwarded-For', testIp)
-          .send({
-            userId,
-            code: '123456',
-          });
-
-        expect(lockedRes.status).toBe(429);
-        expect(lockedRes.body.error.code).toBe('ACCOUNT_LOCKED');
-      } finally {
-        await clearFailedAuthAttempts(testIp);
-        await clearFailedAuthAttempts(testIp, userId);
-      }
-    });
-
-    it('should reject verification without userId', async () => {
-      const res = await request(app).post('/api/mfa/verify').send({
-        code: '123456',
-      });
-
-      expect(res.status).toBe(400);
-      expect(res.body.error.message).toContain('required');
-    });
-
-    it('should reject verification without code', async () => {
-      const res = await request(app).post('/api/mfa/verify').send({
-        userId,
-      });
-
-      expect(res.status).toBe(400);
-      expect(res.body.error.message).toContain('required');
-    });
-
-    it('should reject verification for non-existent user', async () => {
-      const testIp = getPublicVerifyIp();
-      const mfaChallengeToken = await requestMfaChallengeToken();
-
-      try {
-        const res = await request(app).post('/api/mfa/verify').set('X-Forwarded-For', testIp).send({
-          userId: 'non-existent-user-id',
-          code: '123456',
-          mfaChallengeToken,
-        });
-
-        expect(res.status).toBe(401);
-        expect(res.body.error.message).toContain('Invalid verification code');
-      } finally {
-        await clearFailedAuthAttempts(testIp);
-        await clearFailedAuthAttempts(testIp, 'non-existent-user-id');
-      }
-    });
-
-    it('should reject verification when MFA is not enabled', async () => {
-      const testIp = getPublicVerifyIp();
-      const mfaChallengeToken = await requestMfaChallengeToken();
-
-      // Disable MFA
-      await prisma.user.update({
-        where: { id: userId },
-        data: {
-          twoFactorEnabled: false,
-          twoFactorSecret: null,
-        },
-      });
-
-      try {
-        const res = await request(app).post('/api/mfa/verify').set('X-Forwarded-For', testIp).send({
-          userId,
-          code: '123456',
-          mfaChallengeToken,
-        });
-
-        expect(res.status).toBe(401);
-        expect(res.body.error.message).toContain('Invalid verification code');
-      } finally {
-        await clearFailedAuthAttempts(testIp);
-        await clearFailedAuthAttempts(testIp, userId);
-      }
-    });
-
-    it('should not require bearer authentication when a password challenge token is provided', async () => {
-      // Re-enable MFA
-      const encryptedSecret = encrypt('TESTSECRET1234567890');
-      await prisma.user.update({
-        where: { id: userId },
-        data: {
-          twoFactorEnabled: true,
-          twoFactorSecret: encryptedSecret,
-        },
-      });
-
-      const mfaChallengeToken = await requestMfaChallengeToken();
-
-      const res = await request(app).post('/api/mfa/verify').send({
-        userId,
-        code: '123456',
-        mfaChallengeToken,
-      });
-
-      expect(res.status).toBe(200);
-      expect(res.body.valid).toBe(true);
-    });
-
-    it('should not consume backup codes through the public verifier', async () => {
-      const encryptedSecret = encrypt('TESTSECRET1234567890');
-      await prisma.user.update({
-        where: { id: userId },
-        data: {
-          twoFactorEnabled: true,
-          twoFactorSecret: encryptedSecret,
-        },
-      });
-      await enableMfaAndReplaceBackupCodes(userId, ['ABCDEF1234']);
-
-      const res = await request(app).post('/api/mfa/verify').send({
-        userId,
-        code: 'ABCDEF1234',
-      });
-
-      expect(res.status).toBe(401);
-      expect(res.body.error.message).toContain('Invalid verification code');
-
-      const verifyMock = vi.mocked(_otplib.verify);
-      verifyMock.mockClear();
-      const loginRes = await request(app).post('/api/auth/login').send({
-        email: testEmail,
-        password: testPassword,
-        mfaCode: 'ABCDEF1234',
-      });
-
-      expect(loginRes.status).toBe(200);
-      expect(loginRes.body.token).toBeDefined();
-      expect(verifyMock).not.toHaveBeenCalled();
-    });
-  });
-
   describe('MFA Full Workflow Integration', () => {
     let workflowUserId: string;
     let workflowToken: string;
@@ -857,7 +617,7 @@ describe('MFA API', () => {
       expect(res.status).toBe(200);
       expect(res.body.mfaEnabled).toBe(true);
 
-      // Step 5: Verify MFA code (simulating login)
+      // Step 5: Complete MFA at login by re-submitting credentials with the code
       const challengeRes = await request(app).post('/api/auth/login').send({
         email: workflowEmail,
         password: testPassword,
@@ -865,16 +625,15 @@ describe('MFA API', () => {
       expect(challengeRes.status).toBe(200);
       expect(challengeRes.body.mfaRequired).toBe(true);
       expect(challengeRes.body.userId).toBe(workflowUserId);
-      expect(typeof challengeRes.body.mfaChallengeToken).toBe('string');
 
-      res = await request(app).post('/api/mfa/verify').send({
-        userId: workflowUserId,
-        code: '654321',
-        mfaChallengeToken: challengeRes.body.mfaChallengeToken,
+      res = await request(app).post('/api/auth/login').send({
+        email: workflowEmail,
+        password: testPassword,
+        mfaCode: '654321',
       });
 
       expect(res.status).toBe(200);
-      expect(res.body.valid).toBe(true);
+      expect(res.body.token).toBeDefined();
 
       // Step 6: Disable MFA
       res = await request(app)

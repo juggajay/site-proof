@@ -21,7 +21,6 @@ const allowedPublicRouteFiles = new Set([
   'support.ts',
   'documents.ts',
   'holdpoints.ts',
-  'mfa.ts',
   'subcontractors.ts',
   'subcontractors/invitationRoutes.ts',
   'webhooks.ts',
@@ -735,11 +734,8 @@ describe('route authentication coverage', () => {
       'POST /public/:token/release',
     ]);
 
-    expect(unprotectedRouteDescriptors(mfaSource)).toEqual(['POST /verify']);
-    expect(mfaSource).toContain('authRateLimiter');
-    expect(mfaSource).toContain('isLockedOut(clientIp, normalizedUserId)');
-    expect(mfaSource).toContain('recordFailedAuthAttempt(clientIp, normalizedUserId)');
-    expect(mfaSource).toContain('clearFailedAuthAttempts(clientIp, normalizedUserId)');
+    // M6: the public /verify login endpoint was removed; every MFA route now requires auth.
+    expect(unprotectedRouteDescriptors(mfaSource)).toEqual([]);
 
     expect(publicRouteDescriptorsBeforeRouteWideAuth(subcontractorsSource)).toEqual([]);
     expect(

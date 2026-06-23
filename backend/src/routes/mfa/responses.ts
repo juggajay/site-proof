@@ -25,7 +25,3 @@ export function buildMfaDisabledResponse() {
     message: 'Two-factor authentication has been disabled.',
   };
 }
-
-export function buildMfaVerifiedResponse() {
-  return { valid: true };
-}

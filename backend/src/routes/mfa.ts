@@ -3,20 +3,13 @@
 
 import { Router, type Request } from 'express';
 import { prisma } from '../lib/prisma.js';
-import { verifyMfaChallengeToken, verifyPassword } from '../lib/auth.js';
+import { verifyPassword } from '../lib/auth.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
 import { generateSecret, verify as verifyOtp, generateURI } from 'otplib';
 import QRCode from 'qrcode';
 import { encrypt, decrypt } from '../lib/encryption.js';
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
-import {
-  authRateLimiter,
-  clearFailedAuthAttempts,
-  getClientIp,
-  isLockedOut,
-  recordFailedAuthAttempt,
-} from '../middleware/rateLimiter.js';
 import {
   disableMfaAndDeleteBackupCodes,
   enableMfaAndReplaceBackupCodes,
@@ -30,7 +23,6 @@ import {
   buildMfaSetupResponse,
   buildMfaSetupVerifiedResponse,
   buildMfaStatusResponse,
-  buildMfaVerifiedResponse,
 } from './mfa/responses.js';
 
 export const mfaRouter = Router();
@@ -321,80 +313,5 @@ mfaRouter.post(
     });
 
     res.json(buildMfaDisabledResponse());
-  }),
-);
-
-// POST /api/mfa/verify - Verify MFA code during login
-mfaRouter.post(
-  '/verify',
-  authRateLimiter,
-  asyncHandler(async (req, res) => {
-    const { userId, code, mfaChallengeToken } = req.body;
-
-    if (typeof userId !== 'string' || !userId.trim() || typeof code !== 'string' || !code.trim()) {
-      throw AppError.badRequest('User ID and code are required');
-    }
-    const normalizedUserId = userId.trim();
-    const normalizedCode = code.trim();
-    const normalizedChallengeToken =
-      typeof mfaChallengeToken === 'string' ? mfaChallengeToken.trim() : '';
-    const clientIp = getClientIp(req);
-
-    if (!TOTP_CODE_PATTERN.test(normalizedCode)) {
-      throw AppError.unauthorized('Invalid verification code');
-    }
-
-    const accountLockout = await isLockedOut(clientIp, normalizedUserId);
-    if (accountLockout.locked) {
-      throw new AppError(
-        429,
-        `Too many failed attempts. Please try again in ${Math.ceil(accountLockout.remainingSeconds / 60)} minutes.`,
-        'ACCOUNT_LOCKED',
-        { retryAfter: accountLockout.remainingSeconds, locked: true },
-      );
-    }
-
-    if (
-      !normalizedChallengeToken ||
-      !verifyMfaChallengeToken(normalizedChallengeToken, normalizedUserId)
-    ) {
-      await recordFailedAuthAttempt(clientIp, normalizedUserId);
-      throw AppError.unauthorized('Invalid verification code');
-    }
-
-    // Get user's MFA secret
-    const userResult = await prisma.$queryRaw<
-      Array<{
-        id: string;
-        two_factor_secret: string | null;
-        two_factor_enabled: boolean;
-      }>
-    >`SELECT id, two_factor_secret, two_factor_enabled FROM users WHERE id = ${normalizedUserId}`;
-
-    const user = userResult[0];
-    if (!user || !user.two_factor_enabled || !user.two_factor_secret) {
-      await recordFailedAuthAttempt(clientIp, normalizedUserId);
-      throw AppError.unauthorized('Invalid verification code');
-    }
-
-    // Decrypt the secret before verifying
-    const decryptedSecret = decrypt(user.two_factor_secret);
-
-    // Verify the code using otplib v13 functional API
-    const isValid = isOtpVerifyResultValid(
-      await verifyOtp({
-        token: normalizedCode,
-        secret: decryptedSecret,
-      }),
-    );
-
-    if (!isValid) {
-      await recordFailedAuthAttempt(clientIp, normalizedUserId);
-      throw AppError.unauthorized('Invalid verification code');
-    }
-
-    await clearFailedAuthAttempts(clientIp, normalizedUserId);
-
-    res.json(buildMfaVerifiedResponse());
   }),
 );
