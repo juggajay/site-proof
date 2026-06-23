@@ -5,7 +5,6 @@ import {
   buildMfaSetupResponse,
   buildMfaSetupVerifiedResponse,
   buildMfaStatusResponse,
-  buildMfaVerifiedResponse,
 } from './responses.js';
 
 describe('MFA response helpers', () => {
@@ -33,11 +32,10 @@ describe('MFA response helpers', () => {
     });
   });
 
-  it('preserves disable and login verification response shapes', () => {
+  it('preserves the disable response shape', () => {
     expect(buildMfaDisabledResponse()).toEqual({
       success: true,
       message: 'Two-factor authentication has been disabled.',
     });
-    expect(buildMfaVerifiedResponse()).toEqual({ valid: true });
   });
 });
