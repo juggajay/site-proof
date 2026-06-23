@@ -17,7 +17,8 @@ import {
 import { motion, useReducedMotion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { apiFetch, ApiError, isRetriableNetworkFailure } from '@/lib/api';
-import { extractErrorDetails, extractErrorMessage } from '@/lib/errorHandling';
+import { extractErrorMessage } from '@/lib/errorHandling';
+import { extractSubmitWarnings } from '@/lib/diarySubmitWarnings';
 import { logError } from '@/lib/logger';
 import { toast } from '@/components/ui/toaster';
 import { formatDateKey } from '@/lib/localDate';
@@ -131,23 +132,6 @@ function normalizeDiaryDraft(diary: ApiDiary): DiaryDraft {
     })),
     isComplete: diary.status === 'submitted',
   };
-}
-
-function extractSubmitWarnings(error: unknown): string[] | null {
-  if (!(error instanceof ApiError) || error.status !== 422) {
-    return null;
-  }
-
-  const details = extractErrorDetails(error);
-  if (details?.requiresAcknowledgement !== true || !Array.isArray(details.warnings)) {
-    return null;
-  }
-
-  const warnings = details.warnings.filter(
-    (warning): warning is string => typeof warning === 'string' && warning.trim().length > 0,
-  );
-
-  return warnings.length > 0 ? warnings : null;
 }
 
 // ---------------------------------------------------------------------------
