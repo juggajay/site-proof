@@ -717,7 +717,12 @@ describe('Company API', () => {
 
       await prisma.user.update({
         where: { id: adminRes.body.user.id },
-        data: { companyId, roleInCompany: 'admin' },
+        data: {
+          companyId,
+          roleInCompany: 'admin',
+          emailVerified: true,
+          emailVerifiedAt: new Date(),
+        },
       });
 
       const res = await request(app)
@@ -1174,7 +1179,12 @@ describe('Company API', () => {
 
       await prisma.user.update({
         where: { id: memberId },
-        data: { companyId, roleInCompany: 'admin' },
+        data: {
+          companyId,
+          roleInCompany: 'admin',
+          emailVerified: true,
+          emailVerifiedAt: new Date(),
+        },
       });
     });
 
@@ -1561,7 +1571,12 @@ describe('Company API', () => {
 
       await prisma.user.update({
         where: { id: adminRes.body.user.id },
-        data: { companyId, roleInCompany: 'admin' },
+        data: {
+          companyId,
+          roleInCompany: 'admin',
+          emailVerified: true,
+          emailVerifiedAt: new Date(),
+        },
       });
 
       const invitedEmail = `company-invite-by-admin-${Date.now()}@example.com`;
@@ -1663,7 +1678,12 @@ describe('Company API', () => {
 
       await prisma.user.update({
         where: { id: ownerRes.body.user.id },
-        data: { companyId: limitedCompany.id, roleInCompany: 'owner' },
+        data: {
+          companyId: limitedCompany.id,
+          roleInCompany: 'owner',
+          emailVerified: true,
+          emailVerifiedAt: new Date(),
+        },
       });
 
       for (let index = 0; index < 4; index += 1) {
@@ -1714,7 +1734,12 @@ describe('Company API', () => {
 
       await prisma.user.update({
         where: { id: ownerRes.body.user.id },
-        data: { companyId: professionalCompany.id, roleInCompany: 'owner' },
+        data: {
+          companyId: professionalCompany.id,
+          roleInCompany: 'owner',
+          emailVerified: true,
+          emailVerifiedAt: new Date(),
+        },
       });
 
       for (let index = 0; index < 4; index += 1) {
@@ -1763,7 +1788,12 @@ describe('Company API', () => {
 
       await prisma.user.update({
         where: { id: ownerRes.body.user.id },
-        data: { companyId: limitedCompany.id, roleInCompany: 'owner' },
+        data: {
+          companyId: limitedCompany.id,
+          roleInCompany: 'owner',
+          emailVerified: true,
+          emailVerifiedAt: new Date(),
+        },
       });
 
       const existingMember = await prisma.user.create({
@@ -1878,7 +1908,12 @@ describe('Company API', () => {
 
       await prisma.user.update({
         where: { id: ownerRes.body.user.id },
-        data: { companyId: limitedCompany.id, roleInCompany: 'owner' },
+        data: {
+          companyId: limitedCompany.id,
+          roleInCompany: 'owner',
+          emailVerified: true,
+          emailVerifiedAt: new Date(),
+        },
       });
 
       for (let index = 0; index < 3; index += 1) {
@@ -2557,7 +2592,12 @@ describe('Company API', () => {
 
       await prisma.user.update({
         where: { id: adminRes.body.user.id },
-        data: { companyId, roleInCompany: 'admin' },
+        data: {
+          companyId,
+          roleInCompany: 'admin',
+          emailVerified: true,
+          emailVerifiedAt: new Date(),
+        },
       });
 
       const res = await request(app)
