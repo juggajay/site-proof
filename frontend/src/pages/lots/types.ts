@@ -116,6 +116,13 @@ export interface ITPCompletion {
   completedAt: string | null;
   completedBy: { id: string; fullName: string; email: string } | null;
   isVerified: boolean;
+  // M15: head-contractor verification field-state. `isPendingVerification` and
+  // `isRejected` mirror the backend's derived flags; `verificationNotes` carries
+  // the rejection reason so the field worker can see why an item was sent back.
+  isPendingVerification?: boolean;
+  isRejected?: boolean;
+  verificationStatus?: 'none' | 'pending_verification' | 'verified' | 'rejected' | string;
+  verificationNotes?: string | null;
   verifiedAt: string | null;
   verifiedBy: { id: string; fullName: string; email: string } | null;
   attachments: ITPAttachment[];

@@ -6,6 +6,7 @@ import {
   getItpAttachments,
   getItpCategoryProgress,
   getItpChecklistProgress,
+  getItpVerificationDisplay,
   groupItpChecklistItemsByCategory,
   isItpTemplateActivityMatch,
   sortItpTemplatesForLotActivity,
@@ -38,6 +39,10 @@ function completion(overrides: Partial<ITPCompletion> = {}): ITPCompletion {
     completedAt: overrides.completedAt ?? null,
     completedBy: overrides.completedBy ?? null,
     isVerified: overrides.isVerified ?? false,
+    isPendingVerification: overrides.isPendingVerification,
+    isRejected: overrides.isRejected,
+    verificationStatus: overrides.verificationStatus,
+    verificationNotes: overrides.verificationNotes,
     verifiedAt: overrides.verifiedAt ?? null,
     verifiedBy: overrides.verifiedBy ?? null,
     attachments: overrides.attachments ?? [],
@@ -252,5 +257,61 @@ describe('toggleExpandedItpCategory', () => {
     expect([...withDrainage]).toEqual(['Earthworks', 'Drainage']);
     expect([...withoutEarthworks]).toEqual([]);
     expect([...expandedCategories]).toEqual(['Earthworks']);
+  });
+});
+
+describe('getItpVerificationDisplay (M15 rejected field-state)', () => {
+  it('returns the rejected state with the head-contractor reason', () => {
+    expect(
+      getItpVerificationDisplay(
+        completion({
+          isRejected: true,
+          verificationStatus: 'rejected',
+          verificationNotes: 'Photo does not show the bedding layer',
+        }),
+      ),
+    ).toEqual({
+      tone: 'rejected',
+      label: 'Rejected',
+      rejectionReason: 'Photo does not show the bedding layer',
+    });
+  });
+
+  it('returns a null reason for a rejected item with no recorded note', () => {
+    expect(
+      getItpVerificationDisplay(completion({ isRejected: true, verificationNotes: null })),
+    ).toEqual({ tone: 'rejected', label: 'Rejected', rejectionReason: null });
+  });
+
+  it('returns the pending-verification state', () => {
+    expect(getItpVerificationDisplay(completion({ isPendingVerification: true }))).toEqual({
+      tone: 'pending',
+      label: 'Pending verification',
+      rejectionReason: null,
+    });
+  });
+
+  it('returns the verified state', () => {
+    expect(getItpVerificationDisplay(completion({ isVerified: true }))).toEqual({
+      tone: 'verified',
+      label: 'Verified',
+      rejectionReason: null,
+    });
+  });
+
+  it('prioritises the rejected state over a stale verified flag', () => {
+    expect(
+      getItpVerificationDisplay(
+        completion({ isRejected: true, isVerified: true, verificationNotes: 'Redo it' }),
+      ),
+    ).toEqual({ tone: 'rejected', label: 'Rejected', rejectionReason: 'Redo it' });
+  });
+
+  it('returns null when the item is not in a verification workflow', () => {
+    expect(getItpVerificationDisplay(completion())).toBeNull();
+  });
+
+  it('returns null when there is no completion', () => {
+    expect(getItpVerificationDisplay(undefined)).toBeNull();
   });
 });

@@ -66,6 +66,42 @@ export function filterItpChecklistItems(
   });
 }
 
+export type ItpVerificationTone = 'verified' | 'pending' | 'rejected';
+
+export interface ItpVerificationDisplay {
+  tone: ItpVerificationTone;
+  label: string;
+  /** Only populated for the rejected state — the head-contractor's reason. */
+  rejectionReason: string | null;
+}
+
+/**
+ * M15: derive the head-contractor verification field-state shown on an ITP item
+ * row. A rejected item (with its reason) takes precedence so a field worker
+ * always sees why work was sent back; otherwise pending/verified are surfaced,
+ * and items not in a verification workflow ("none") show no badge.
+ */
+export function getItpVerificationDisplay(
+  completion: ITPCompletion | undefined,
+): ItpVerificationDisplay | null {
+  if (!completion) return null;
+
+  if (completion.isRejected) {
+    return {
+      tone: 'rejected',
+      label: 'Rejected',
+      rejectionReason: completion.verificationNotes ?? null,
+    };
+  }
+  if (completion.isPendingVerification) {
+    return { tone: 'pending', label: 'Pending verification', rejectionReason: null };
+  }
+  if (completion.isVerified) {
+    return { tone: 'verified', label: 'Verified', rejectionReason: null };
+  }
+  return null;
+}
+
 export function getItpCategoryProgress(
   checklistItems: ITPChecklistItem[],
   completions: ITPCompletion[],
