@@ -147,9 +147,14 @@ describe('pill labels + tones', () => {
 describe('canForemanRespond (BINDING — research doc 14)', () => {
   const me = 'user-me';
 
-  it('TRUE only when foreman is the responsibleUserId on an open NCR', () => {
+  it('TRUE only when foreman is the responsibleUserId on an OPEN NCR', () => {
     expect(canForemanRespond({ responsibleUserId: me, status: 'open' }, me)).toBe(true);
-    expect(canForemanRespond({ responsibleUserId: me, status: 'investigating' }, me)).toBe(true);
+  });
+
+  it('FALSE for non-open active statuses (the backend /respond only accepts open)', () => {
+    for (const status of ['investigating', 'rectification', 'verification'] as const) {
+      expect(canForemanRespond({ responsibleUserId: me, status }, me)).toBe(false);
+    }
   });
 
   it('FALSE when foreman is NOT the responsible user', () => {

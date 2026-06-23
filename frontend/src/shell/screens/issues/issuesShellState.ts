@@ -145,6 +145,8 @@ export function canForemanRespond(
 ): boolean {
   if (!currentUserId) return false;
   if (!ncr.responsibleUserId) return false;
-  if (isClosedNcr(ncr)) return false;
+  // The backend /respond endpoint only accepts an NCR in 'open' status, so only
+  // surface Respond then — in any other status the button is a guaranteed 400.
+  if (ncr.status !== 'open') return false;
   return ncr.responsibleUserId === currentUserId;
 }
