@@ -1,5 +1,10 @@
-import { describe, expect, it } from 'vitest';
-import { parseAuditLogChanges, sanitizeAuditChanges } from './auditLog.js';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  AuditAction,
+  parseAuditLogChanges,
+  sanitizeAuditChanges,
+  writeAuditLogInTransaction,
+} from './auditLog.js';
 
 describe('audit log sanitization', () => {
   it('redacts sensitive keys before audit changes are stored', () => {
@@ -70,5 +75,44 @@ describe('audit log sanitization', () => {
   it('redacts malformed legacy change blobs that appear to contain secrets', () => {
     expect(parseAuditLogChanges('password=plaintext')).toEqual({ raw: '[REDACTED]' });
     expect(parseAuditLogChanges('legacy note')).toEqual({ raw: 'legacy note' });
+  });
+});
+
+describe('writeAuditLogInTransaction (M73 hard-fail)', () => {
+  it('writes the audit entry through the provided transaction client with sanitized changes', async () => {
+    const create = vi.fn().mockResolvedValue({ id: 'audit-1' });
+    const tx = { auditLog: { create } } as never;
+
+    await writeAuditLogInTransaction(tx, {
+      userId: 'user-1',
+      entityType: 'api_key',
+      entityId: 'key-1',
+      action: AuditAction.API_KEY_CREATED,
+      changes: { name: 'CI key', secret: 'sp_live_should_be_redacted' },
+    });
+
+    expect(create).toHaveBeenCalledTimes(1);
+    const data = create.mock.calls[0][0].data;
+    expect(data).toMatchObject({
+      userId: 'user-1',
+      entityType: 'api_key',
+      entityId: 'key-1',
+      action: 'api_key_created',
+    });
+    expect(JSON.parse(data.changes)).toEqual({ name: 'CI key', secret: '[REDACTED]' });
+  });
+
+  it('propagates the error (does NOT swallow) so the surrounding transaction rolls back', async () => {
+    const create = vi.fn().mockRejectedValue(new Error('audit insert failed'));
+    const tx = { auditLog: { create } } as never;
+
+    await expect(
+      writeAuditLogInTransaction(tx, {
+        userId: 'user-1',
+        entityType: 'company',
+        entityId: 'company-1',
+        action: AuditAction.COMPANY_OWNERSHIP_TRANSFERRED,
+      }),
+    ).rejects.toThrow('audit insert failed');
   });
 });

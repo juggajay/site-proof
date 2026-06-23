@@ -1,7 +1,7 @@
 import { Router, type Request } from 'express';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
-import { createAuditLog, AuditAction } from '../../lib/auditLog.js';
+import { createAuditLog, AuditAction, writeAuditLogInTransaction } from '../../lib/auditLog.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
@@ -252,27 +252,28 @@ export function createProjectTeamRouter({
           data: { role },
         });
 
+        // M73: write the audit record inside the transaction so a role change
+        // cannot persist without it (hard-fail).
+        await writeAuditLogInTransaction(tx, {
+          projectId,
+          userId: currentUser.id,
+          entityType: 'project_user',
+          entityId: targetProjectUser.id,
+          action: AuditAction.USER_ROLE_CHANGED,
+          changes: {
+            targetUserId,
+            targetUserEmail: targetProjectUser.user.email,
+            oldRole,
+            newRole: role,
+          },
+          req,
+        });
+
         return {
           targetProjectUser,
           oldRole,
           updated: updatedProjectUser,
         };
-      });
-
-      // Audit log
-      await createAuditLog({
-        projectId,
-        userId: currentUser.id,
-        entityType: 'project_user',
-        entityId: targetForAudit.id,
-        action: AuditAction.USER_ROLE_CHANGED,
-        changes: {
-          targetUserId,
-          targetUserEmail: targetForAudit.user.email,
-          oldRole,
-          newRole: role,
-        },
-        req,
       });
 
       // Feature #940 - Send role change notification to the user
@@ -362,22 +363,23 @@ export function createProjectTeamRouter({
           where: { id: targetProjectUser.id },
         });
 
-        return targetProjectUser;
-      });
+        // M73: write the audit record inside the transaction so the removal
+        // cannot persist without it (hard-fail).
+        await writeAuditLogInTransaction(tx, {
+          projectId,
+          userId: currentUser.id,
+          entityType: 'project_user',
+          entityId: targetProjectUser.id,
+          action: AuditAction.USER_REMOVED,
+          changes: {
+            removedUserId: targetUserId,
+            removedUserEmail: targetProjectUser.user.email,
+            removedUserRole: targetProjectUser.role,
+          },
+          req,
+        });
 
-      // Audit log
-      await createAuditLog({
-        projectId,
-        userId: currentUser.id,
-        entityType: 'project_user',
-        entityId: removedProjectUser.id,
-        action: AuditAction.USER_REMOVED,
-        changes: {
-          removedUserId: targetUserId,
-          removedUserEmail: removedProjectUser.user.email,
-          removedUserRole: removedProjectUser.role,
-        },
-        req,
+        return targetProjectUser;
       });
 
       // Feature #941 - Send removal notification to the removed user

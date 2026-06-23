@@ -4,7 +4,7 @@ import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
-import { AuditAction, createAuditLog } from '../lib/auditLog.js';
+import { AuditAction, writeAuditLogInTransaction } from '../lib/auditLog.js';
 import {
   buildApiKeyCreatedResponse,
   buildApiKeyListResponse,
@@ -187,38 +187,43 @@ router.post(
       expiresAt.setDate(expiresAt.getDate() + expiresInDays);
     }
 
-    // Create the API key record
-    const apiKeyRecord = await prisma.apiKey.create({
-      data: {
-        userId,
-        name,
-        keyHash,
-        keyPrefix,
-        scopes: normalizedScopes,
-        expiresAt,
-      },
-      select: {
-        id: true,
-        name: true,
-        keyPrefix: true,
-        scopes: true,
-        expiresAt: true,
-        createdAt: true,
-      },
-    });
+    // Create the API key record and its audit entry atomically (M73): the key
+    // must not be persisted without a corresponding audit record.
+    const apiKeyRecord = await prisma.$transaction(async (tx) => {
+      const created = await tx.apiKey.create({
+        data: {
+          userId,
+          name,
+          keyHash,
+          keyPrefix,
+          scopes: normalizedScopes,
+          expiresAt,
+        },
+        select: {
+          id: true,
+          name: true,
+          keyPrefix: true,
+          scopes: true,
+          expiresAt: true,
+          createdAt: true,
+        },
+      });
 
-    await createAuditLog({
-      userId,
-      entityType: 'api_key',
-      entityId: apiKeyRecord.id,
-      action: AuditAction.API_KEY_CREATED,
-      changes: {
-        name: apiKeyRecord.name,
-        scopes: apiKeyRecord.scopes,
-        keyPrefix: apiKeyRecord.keyPrefix,
-        expiresAt: apiKeyRecord.expiresAt?.toISOString() ?? null,
-      },
-      req,
+      await writeAuditLogInTransaction(tx, {
+        userId,
+        entityType: 'api_key',
+        entityId: created.id,
+        action: AuditAction.API_KEY_CREATED,
+        changes: {
+          name: created.name,
+          scopes: created.scopes,
+          keyPrefix: created.keyPrefix,
+          expiresAt: created.expiresAt?.toISOString() ?? null,
+        },
+        req,
+      });
+
+      return created;
     });
 
     // Return the key (only shown once!)
@@ -268,24 +273,27 @@ router.delete(
       throw AppError.notFound('API key');
     }
 
-    // Soft delete by deactivating
-    await prisma.apiKey.update({
-      where: { id: keyId },
-      data: { isActive: false },
-    });
+    // Soft delete by deactivating, writing the audit entry in the same
+    // transaction (M73) so the revocation cannot persist without it.
+    await prisma.$transaction(async (tx) => {
+      await tx.apiKey.update({
+        where: { id: keyId },
+        data: { isActive: false },
+      });
 
-    await createAuditLog({
-      userId,
-      entityType: 'api_key',
-      entityId: apiKey.id,
-      action: AuditAction.API_KEY_REVOKED,
-      changes: {
-        name: apiKey.name,
-        scopes: apiKey.scopes,
-        keyPrefix: apiKey.keyPrefix,
-        isActive: { from: true, to: false },
-      },
-      req,
+      await writeAuditLogInTransaction(tx, {
+        userId,
+        entityType: 'api_key',
+        entityId: apiKey.id,
+        action: AuditAction.API_KEY_REVOKED,
+        changes: {
+          name: apiKey.name,
+          scopes: apiKey.scopes,
+          keyPrefix: apiKey.keyPrefix,
+          isActive: { from: true, to: false },
+        },
+        req,
+      });
     });
 
     res.json(buildApiKeyRevokedResponse());
