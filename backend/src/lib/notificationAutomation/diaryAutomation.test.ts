@@ -1,14 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
 import { processDueDiaryReminders, type DiaryAutomationDependencies } from './diaryAutomation.js';
 
-// A Monday afternoon (getDay() === 1) so the project is in a working day and the
-// reminder time has passed. 2026-06-08 is a Monday.
-const NOW = new Date(2026, 5, 8, 18, 0, 0, 0);
+// A Monday on which the reminder time has passed in the project's timezone.
+// 2026-06-08 is a Monday; 08:00 UTC is 18:00 in Australia/Sydney (NSW project,
+// AEST +10), past the 17:00 reminder (M84: the gate uses the project's tz).
+const NOW = new Date(Date.UTC(2026, 5, 8, 8, 0, 0, 0));
 
 type DiaryProject = {
   id: string;
   name: string;
   companyId: string;
+  state: string | null;
   workingHoursEnd: string | null;
   workingDays: string | null;
   settings: string | null;
@@ -44,6 +46,7 @@ function baseProject(settings: string | null): DiaryProject {
     id: 'project-1',
     name: 'Test Project',
     companyId: 'company-1',
+    state: 'NSW',
     workingHoursEnd: '17:00',
     workingDays: '1,2,3,4,5',
     settings,
