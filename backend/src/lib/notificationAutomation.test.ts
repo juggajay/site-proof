@@ -180,7 +180,6 @@ describe('notification automation jobs', () => {
       const skippedRunner = results.find(
         (result) =>
           result.diaryReminders.projectsChecked === 0 &&
-          result.missingDiaryAlerts.projectsChecked === 0 &&
           result.docketBacklogAlerts.projectsWithBacklog === 0 &&
           result.systemAlerts.projectsChecked === 0 &&
           result.alertEscalations.alertsChecked === 0,
@@ -191,7 +190,11 @@ describe('notification automation jobs', () => {
         where: { projectId: fixture.projectId, type: 'diary_reminder' },
       });
       expect(notifications).toHaveLength(2);
-      expect(getQueuedEmails()).toHaveLength(3);
+      // 2 diary-reminder emails (foreman + PM) + 2 missing-diary emails. Since
+      // M60 the single missing-diary alert emails the full SYSTEM_DIARY_ALERT_ROLES
+      // set (site_engineer/foreman/project_manager → foreman + PM here), replacing
+      // the old PM-only diaryAutomation path.
+      expect(getQueuedEmails()).toHaveLength(4);
     } finally {
       middlewareActive = false;
       clearTimeout(releaseFallback);

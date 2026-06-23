@@ -34,13 +34,6 @@ function emptyNotificationAutomationResult(now: Date): NotificationAutomationRun
       usersNotified: 0,
       date,
     },
-    missingDiaryAlerts: {
-      ...emptyDeliverySummary(),
-      projectsChecked: 0,
-      alertsCreated: 0,
-      skippedProjects: 0,
-      usersNotified: 0,
-    },
     docketBacklogAlerts: {
       ...emptyDeliverySummary(),
       overdueDockets: 0,
@@ -113,7 +106,6 @@ function getNotificationAutomationWorkerIntervalMs(): number {
 function countAutomationChanges(result: NotificationAutomationRunResult): number {
   return (
     result.diaryReminders.remindersCreated +
-    result.missingDiaryAlerts.alertsCreated +
     result.docketBacklogAlerts.alertsCreated +
     result.systemAlerts.alertsCreated +
     result.alertEscalations.escalated
@@ -142,7 +134,6 @@ export function startNotificationAutomationWorker(
       if (changes > 0) {
         logInfo('[Notification Automation] Processed notification jobs', {
           diaryReminders: result.diaryReminders.remindersCreated,
-          missingDiaryAlerts: result.missingDiaryAlerts.alertsCreated,
           docketBacklogAlerts: result.docketBacklogAlerts.alertsCreated,
           systemAlerts: result.systemAlerts.alertsCreated,
           alertEscalations: result.alertEscalations.escalated,

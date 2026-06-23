@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 import { STALE_HOLD_POINT_ALERT_ROLES } from '../notificationAlertConfig.js';
 import { buildProjectEntityLink, formatDateKey, getPreviousWorkingDay } from './helpers.js';
+import type { NotificationTypeWithTiming } from './preferences.js';
 
 const SYSTEM_DIARY_ALERT_ROLES = ['site_engineer', 'foreman', 'project_manager'];
 const ALERT_OWNER_ROLE_PRIORITY = [
@@ -52,6 +53,13 @@ export type SystemAlertAutomationResult = {
   skippedAlerts: number;
 };
 
+type SystemNotificationDeliverySummary = {
+  inAppCreated: number;
+  emailsSent: number;
+  emailsQueued: number;
+  emailsFailed: number;
+};
+
 export type SystemAutomationDependencies = {
   prisma: SystemAutomationPrisma;
   dayMs: number;
@@ -61,6 +69,24 @@ export type SystemAutomationDependencies = {
     projectId: string,
     roles: string[],
   ): Promise<SystemNotificationRecipient[]>;
+  notifyUsers(
+    users: SystemNotificationRecipient[],
+    inAppNotification: {
+      projectId: string | null;
+      type: string;
+      title: string;
+      message: string;
+      linkUrl?: string | null;
+      createdAt?: Date;
+    },
+    emailNotificationType: NotificationTypeWithTiming,
+    emailData: {
+      title: string;
+      message: string;
+      linkUrl?: string;
+      projectName?: string;
+    },
+  ): Promise<SystemNotificationDeliverySummary & { usersNotified: number }>;
 };
 
 function generateAlertId(): string {
@@ -337,23 +363,34 @@ export async function processSystemAlerts(
           createdAt: now,
         });
 
+        // M60: this is the single missing-diary alert. It both escalates (via
+        // the notificationAlert record created above) AND notifies recipients
+        // in-app + by email through the shared notifyUsers helper, replacing the
+        // former duplicate emit in diaryAutomation.processMissingDiaryAlerts.
         const users = await deps.findProjectUsersByRoles(project.id, SYSTEM_DIARY_ALERT_ROLES);
-        if (users.length > 0) {
-          await deps.prisma.notification.createMany({
-            data: users.map((user) => ({
-              userId: user.id,
-              projectId: project.id,
-              type: 'alert_missing_diary',
-              title,
-              message,
-              linkUrl: `/projects/${project.id}/diary`,
-            })),
-          });
-        }
+        const linkUrl = `/projects/${project.id}/diary`;
+        const delivery = await deps.notifyUsers(
+          users,
+          {
+            projectId: project.id,
+            type: 'alert_missing_diary',
+            title,
+            message,
+            linkUrl,
+            createdAt: now,
+          },
+          'ncrAssigned',
+          {
+            title,
+            message,
+            projectName: project.name,
+            linkUrl,
+          },
+        );
 
         result.alertsCreated += 1;
         result.missingDiaryAlerts += 1;
-        result.notificationsCreated += users.length;
+        result.notificationsCreated += delivery.inAppCreated;
       }
     }
   }
