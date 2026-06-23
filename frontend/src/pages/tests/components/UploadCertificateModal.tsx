@@ -6,9 +6,11 @@ import { Modal, ModalHeader, ModalBody } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { NativeSelect } from '@/components/ui/native-select';
 import { toast } from '@/components/ui/toaster';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { getResponseErrorMessage } from '../utils';
+import { recomputeReviewPassFail } from '../certificateReview';
 
 interface UploadCertificateModalProps {
   isOpen: boolean;
@@ -92,18 +94,23 @@ export const UploadCertificateModal = React.memo(function UploadCertificateModal
 
         // Set form data for review from extracted values
         const extractedFields = data.extraction.extractedFields;
-        setReviewFormData({
-          testType: extractedFields.testType?.value || '',
-          laboratoryName: extractedFields.laboratoryName?.value || '',
-          laboratoryReportNumber: extractedFields.laboratoryReportNumber?.value || '',
-          sampleDate: extractedFields.sampleDate?.value || '',
-          testDate: extractedFields.testDate?.value || '',
-          sampleLocation: extractedFields.sampleLocation?.value || '',
-          resultValue: extractedFields.resultValue?.value || '',
-          resultUnit: extractedFields.resultUnit?.value || '',
-          specificationMin: extractedFields.specificationMin?.value || '',
-          specificationMax: extractedFields.specificationMax?.value || '',
-        });
+        // H13: seed pass/fail from the extracted value + spec so the reviewer
+        // sees a computed outcome they can confirm or override.
+        setReviewFormData(
+          recomputeReviewPassFail({
+            testType: extractedFields.testType?.value || '',
+            laboratoryName: extractedFields.laboratoryName?.value || '',
+            laboratoryReportNumber: extractedFields.laboratoryReportNumber?.value || '',
+            sampleDate: extractedFields.sampleDate?.value || '',
+            testDate: extractedFields.testDate?.value || '',
+            sampleLocation: extractedFields.sampleLocation?.value || '',
+            resultValue: extractedFields.resultValue?.value || '',
+            resultUnit: extractedFields.resultUnit?.value || '',
+            specificationMin: extractedFields.specificationMin?.value || '',
+            specificationMax: extractedFields.specificationMax?.value || '',
+            passFail: 'pending',
+          }),
+        );
 
         // Create preview URL for the PDF
         const previewUrl = URL.createObjectURL(uploadedFile);
@@ -388,7 +395,9 @@ export const UploadCertificateModal = React.memo(function UploadCertificateModal
                         step="any"
                         value={reviewFormData.resultValue || ''}
                         onChange={(e) =>
-                          setReviewFormData({ ...reviewFormData, resultValue: e.target.value })
+                          setReviewFormData((prev) =>
+                            recomputeReviewPassFail({ ...prev, resultValue: e.target.value }),
+                          )
                         }
                         className={confidenceForField('resultValue').color}
                       />
@@ -419,7 +428,9 @@ export const UploadCertificateModal = React.memo(function UploadCertificateModal
                         step="any"
                         value={reviewFormData.specificationMin || ''}
                         onChange={(e) =>
-                          setReviewFormData({ ...reviewFormData, specificationMin: e.target.value })
+                          setReviewFormData((prev) =>
+                            recomputeReviewPassFail({ ...prev, specificationMin: e.target.value }),
+                          )
                         }
                         className={confidenceForField('specificationMin').color}
                       />
@@ -434,7 +445,9 @@ export const UploadCertificateModal = React.memo(function UploadCertificateModal
                         step="any"
                         value={reviewFormData.specificationMax || ''}
                         onChange={(e) =>
-                          setReviewFormData({ ...reviewFormData, specificationMax: e.target.value })
+                          setReviewFormData((prev) =>
+                            recomputeReviewPassFail({ ...prev, specificationMax: e.target.value }),
+                          )
                         }
                         className={confidenceForField('specificationMax').color}
                       />
@@ -442,6 +455,35 @@ export const UploadCertificateModal = React.memo(function UploadCertificateModal
                         {confidenceForField('specificationMax').text}
                       </p>
                     </div>
+                  </div>
+                  <div>
+                    <Label htmlFor="upload-pass-fail">
+                      Pass/Fail
+                      {reviewFormData.resultValue &&
+                        (reviewFormData.specificationMin || reviewFormData.specificationMax) && (
+                          <span className="ml-2 text-xs text-muted-foreground">
+                            (auto-calculated)
+                          </span>
+                        )}
+                    </Label>
+                    <NativeSelect
+                      id="upload-pass-fail"
+                      value={reviewFormData.passFail || 'pending'}
+                      onChange={(e) =>
+                        setReviewFormData((prev) => ({ ...prev, passFail: e.target.value }))
+                      }
+                      className={
+                        reviewFormData.passFail === 'pass'
+                          ? 'border-success bg-success/10'
+                          : reviewFormData.passFail === 'fail'
+                            ? 'border-destructive bg-destructive/10'
+                            : ''
+                      }
+                    >
+                      <option value="pending">Pending</option>
+                      <option value="pass">Pass</option>
+                      <option value="fail">Fail</option>
+                    </NativeSelect>
                   </div>
                 </div>
               </div>
