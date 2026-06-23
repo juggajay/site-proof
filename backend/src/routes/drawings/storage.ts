@@ -33,27 +33,49 @@ const diskStorage = multer.diskStorage({
 
 const memoryStorage = multer.memoryStorage();
 
+const ALLOWED_DRAWING_MIME_TYPES = [
+  'application/pdf',
+  'image/jpeg',
+  'image/png',
+  'image/tiff',
+  'application/dxf',
+  'application/dwg',
+  'application/vnd.dwg',
+];
+const ALLOWED_DRAWING_EXTENSIONS = [
+  '.pdf',
+  '.dwg',
+  '.dxf',
+  '.jpg',
+  '.jpeg',
+  '.png',
+  '.tiff',
+  '.tif',
+];
+
+/**
+ * Accept by MIME type OR extension; the magic-byte assert in drawings.ts
+ * (assertUploadedFileMatchesDeclaredType) is the real content gate, so this
+ * filter only screens obviously-wrong files.
+ */
+export function isAllowedDrawingUpload(originalname: string, mimetype: string): boolean {
+  const ext = path.extname(originalname).toLowerCase();
+  return ALLOWED_DRAWING_MIME_TYPES.includes(mimetype) || ALLOWED_DRAWING_EXTENSIONS.includes(ext);
+}
+
+/** Descriptive rejection naming the file and the supported formats (M49). */
+export function unsupportedDrawingMessage(originalname: string): string {
+  return `"${originalname}" is not a supported drawing file. Upload a PDF, JPEG, PNG, TIFF, DWG, or DXF file.`;
+}
+
 export const upload = multer({
   storage: isSupabaseConfigured() ? memoryStorage : diskStorage,
   limits: { fileSize: 100 * 1024 * 1024 }, // 100MB limit for drawings
   fileFilter: (_req, file, cb) => {
-    const allowedTypes = [
-      'application/pdf',
-      'image/jpeg',
-      'image/png',
-      'image/tiff',
-      'application/dxf',
-      'application/dwg',
-      'application/vnd.dwg',
-    ];
-    const ext = path.extname(file.originalname).toLowerCase();
-    if (
-      allowedTypes.includes(file.mimetype) ||
-      ['.pdf', '.dwg', '.dxf', '.jpg', '.jpeg', '.png', '.tiff', '.tif'].includes(ext)
-    ) {
+    if (isAllowedDrawingUpload(file.originalname, file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Invalid file type'));
+      cb(new Error(unsupportedDrawingMessage(file.originalname)));
     }
   },
 });

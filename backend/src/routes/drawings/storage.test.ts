@@ -10,12 +10,35 @@ vi.mock('../../lib/supabase.js', async (importOriginal) => {
 });
 
 import * as supabaseLib from '../../lib/supabase.js';
-import { storeDrawingUpload } from './storage.js';
+import {
+  isAllowedDrawingUpload,
+  storeDrawingUpload,
+  unsupportedDrawingMessage,
+} from './storage.js';
 
 const mockGetSupabaseClient = vi.mocked(supabaseLib.getSupabaseClient);
 
 beforeEach(() => {
   mockGetSupabaseClient.mockReset();
+});
+
+describe('drawing upload filter (M49)', () => {
+  it('accepts supported drawing files by extension or mime type', () => {
+    expect(isAllowedDrawingUpload('plan.pdf', 'application/octet-stream')).toBe(true);
+    expect(isAllowedDrawingUpload('survey.DWG', 'application/octet-stream')).toBe(true);
+    expect(isAllowedDrawingUpload('scan', 'image/tiff')).toBe(true);
+  });
+
+  it('rejects unsupported files', () => {
+    expect(isAllowedDrawingUpload('notes.txt', 'text/plain')).toBe(false);
+    expect(isAllowedDrawingUpload('sheet.xlsx', 'application/vnd.ms-excel')).toBe(false);
+  });
+
+  it('builds a descriptive rejection naming the file and supported formats', () => {
+    const message = unsupportedDrawingMessage('notes.txt');
+    expect(message).toContain('notes.txt');
+    expect(message).toMatch(/PDF, JPEG, PNG, TIFF, DWG, or DXF/);
+  });
 });
 
 describe('drawing Supabase storage', () => {
