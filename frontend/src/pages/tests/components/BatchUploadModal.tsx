@@ -6,9 +6,11 @@ import { Modal, ModalHeader, ModalBody } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { NativeSelect } from '@/components/ui/native-select';
 import { toast } from '@/components/ui/toaster';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { getResponseErrorMessage } from '../utils';
+import { recomputeReviewPassFail } from '../certificateReview';
 
 interface BatchUploadModalProps {
   isOpen: boolean;
@@ -107,7 +109,8 @@ export const BatchUploadModal = React.memo(function BatchUploadModal({
         for (const result of results) {
           if (result.success && result.testResult) {
             const extracted = result.extraction?.extractedFields || {};
-            reviewData[result.testResult.id] = {
+            // H13: seed pass/fail from the extracted value + spec for review.
+            reviewData[result.testResult.id] = recomputeReviewPassFail({
               testType: extracted.testType?.value || '',
               laboratoryName: extracted.laboratoryName?.value || '',
               laboratoryReportNumber: extracted.laboratoryReportNumber?.value || '',
@@ -118,7 +121,8 @@ export const BatchUploadModal = React.memo(function BatchUploadModal({
               resultUnit: extracted.resultUnit?.value || '',
               specificationMin: extracted.specificationMin?.value || '',
               specificationMax: extracted.specificationMax?.value || '',
-            };
+              passFail: 'pending',
+            });
           }
         }
         setBatchReviewData(reviewData);
@@ -357,10 +361,18 @@ export const BatchUploadModal = React.memo(function BatchUploadModal({
                       const testId = result.testResult.id;
                       const formData = batchReviewData[testId] || {};
                       const updateField = (field: string, value: string) => {
-                        setBatchReviewData((prev) => ({
-                          ...prev,
-                          [testId]: { ...prev[testId], [field]: value },
-                        }));
+                        setBatchReviewData((prev) => {
+                          const nextRow = { ...prev[testId], [field]: value };
+                          // H13: recompute pass/fail when the value or spec changes.
+                          const recomputed = [
+                            'resultValue',
+                            'specificationMin',
+                            'specificationMax',
+                          ].includes(field)
+                            ? recomputeReviewPassFail(nextRow)
+                            : nextRow;
+                          return { ...prev, [testId]: recomputed };
+                        });
                       };
 
                       return (
@@ -467,6 +479,33 @@ export const BatchUploadModal = React.memo(function BatchUploadModal({
                                 className={`h-8 text-sm ${getBatchConfidenceIndicator(result, 'specificationMax').color}`}
                               />
                             </div>
+                          </div>
+                          <div>
+                            <Label className="text-xs">
+                              Pass/Fail
+                              {formData.resultValue &&
+                                (formData.specificationMin || formData.specificationMax) && (
+                                  <span className="ml-2 text-muted-foreground">
+                                    (auto-calculated)
+                                  </span>
+                                )}
+                            </Label>
+                            <NativeSelect
+                              aria-label="Pass/Fail"
+                              value={formData.passFail || 'pending'}
+                              onChange={(e) => updateField('passFail', e.target.value)}
+                              className={`h-8 text-sm ${
+                                formData.passFail === 'pass'
+                                  ? 'border-success bg-success/10'
+                                  : formData.passFail === 'fail'
+                                    ? 'border-destructive bg-destructive/10'
+                                    : ''
+                              }`}
+                            >
+                              <option value="pending">Pending</option>
+                              <option value="pass">Pass</option>
+                              <option value="fail">Fail</option>
+                            </NativeSelect>
                           </div>
                         </>
                       );
