@@ -121,6 +121,11 @@ describe('Company API', () => {
       });
 
       const onboardingUserId = regRes.body.user.id as string;
+      // Company creation is gated on email verification (M1).
+      await prisma.user.update({
+        where: { id: onboardingUserId },
+        data: { emailVerified: true, emailVerifiedAt: new Date() },
+      });
       let createdCompanyId: string | undefined;
 
       try {
@@ -183,6 +188,30 @@ describe('Company API', () => {
       }
     });
 
+    it('blocks an unverified user from creating a company (M1)', async () => {
+      const unverifiedEmail = `company-unverified-${Date.now()}@example.com`;
+      const regRes = await request(app).post('/api/auth/register').send({
+        email: unverifiedEmail,
+        password: 'SecureP@ssword123!',
+        fullName: 'Unverified Onboarding User',
+        tosAccepted: true,
+      });
+      const unverifiedUserId = regRes.body.user.id as string;
+
+      try {
+        const res = await request(app)
+          .post('/api/company')
+          .set('Authorization', `Bearer ${regRes.body.token}`)
+          .send({ name: 'Unverified Civil Pty Ltd' });
+
+        expect(res.status).toBe(403);
+        expect(JSON.stringify(res.body.error)).toMatch(/verify your email/i);
+      } finally {
+        await prisma.emailVerificationToken.deleteMany({ where: { userId: unverifiedUserId } });
+        await prisma.user.delete({ where: { id: unverifiedUserId } }).catch(() => {});
+      }
+    });
+
     it('rejects company creation when the user already belongs to a company', async () => {
       const res = await request(app)
         .post('/api/company')
@@ -203,6 +232,12 @@ describe('Company API', () => {
         tosAccepted: true,
       });
       const portalUserId = regRes.body.user.id as string;
+      // Verify the email so the request reaches the subcontractor guard rather
+      // than short-circuiting on the M1 email-verification gate.
+      await prisma.user.update({
+        where: { id: portalUserId },
+        data: { emailVerified: true, emailVerifiedAt: new Date() },
+      });
       let createdCompanyId: string | undefined;
       let projectId: string | undefined;
       let subcontractorCompanyId: string | undefined;
@@ -682,7 +717,12 @@ describe('Company API', () => {
 
       await prisma.user.update({
         where: { id: adminRes.body.user.id },
-        data: { companyId, roleInCompany: 'admin' },
+        data: {
+          companyId,
+          roleInCompany: 'admin',
+          emailVerified: true,
+          emailVerifiedAt: new Date(),
+        },
       });
 
       const res = await request(app)
@@ -1139,7 +1179,12 @@ describe('Company API', () => {
 
       await prisma.user.update({
         where: { id: memberId },
-        data: { companyId, roleInCompany: 'admin' },
+        data: {
+          companyId,
+          roleInCompany: 'admin',
+          emailVerified: true,
+          emailVerifiedAt: new Date(),
+        },
       });
     });
 
@@ -1526,7 +1571,12 @@ describe('Company API', () => {
 
       await prisma.user.update({
         where: { id: adminRes.body.user.id },
-        data: { companyId, roleInCompany: 'admin' },
+        data: {
+          companyId,
+          roleInCompany: 'admin',
+          emailVerified: true,
+          emailVerifiedAt: new Date(),
+        },
       });
 
       const invitedEmail = `company-invite-by-admin-${Date.now()}@example.com`;
@@ -1548,7 +1598,14 @@ describe('Company API', () => {
 
       await prisma.user.update({
         where: { id: fieldRes.body.user.id },
-        data: { companyId, roleInCompany: 'foreman' },
+        // Verified so the request reaches the role check rather than the M1
+        // email-verification gate (this test asserts the admin-only message).
+        data: {
+          companyId,
+          roleInCompany: 'foreman',
+          emailVerified: true,
+          emailVerifiedAt: new Date(),
+        },
       });
 
       const rejectedRes = await request(app)
@@ -1628,7 +1685,12 @@ describe('Company API', () => {
 
       await prisma.user.update({
         where: { id: ownerRes.body.user.id },
-        data: { companyId: limitedCompany.id, roleInCompany: 'owner' },
+        data: {
+          companyId: limitedCompany.id,
+          roleInCompany: 'owner',
+          emailVerified: true,
+          emailVerifiedAt: new Date(),
+        },
       });
 
       for (let index = 0; index < 4; index += 1) {
@@ -1679,7 +1741,12 @@ describe('Company API', () => {
 
       await prisma.user.update({
         where: { id: ownerRes.body.user.id },
-        data: { companyId: professionalCompany.id, roleInCompany: 'owner' },
+        data: {
+          companyId: professionalCompany.id,
+          roleInCompany: 'owner',
+          emailVerified: true,
+          emailVerifiedAt: new Date(),
+        },
       });
 
       for (let index = 0; index < 4; index += 1) {
@@ -1728,7 +1795,12 @@ describe('Company API', () => {
 
       await prisma.user.update({
         where: { id: ownerRes.body.user.id },
-        data: { companyId: limitedCompany.id, roleInCompany: 'owner' },
+        data: {
+          companyId: limitedCompany.id,
+          roleInCompany: 'owner',
+          emailVerified: true,
+          emailVerifiedAt: new Date(),
+        },
       });
 
       const existingMember = await prisma.user.create({
@@ -1843,7 +1915,12 @@ describe('Company API', () => {
 
       await prisma.user.update({
         where: { id: ownerRes.body.user.id },
-        data: { companyId: limitedCompany.id, roleInCompany: 'owner' },
+        data: {
+          companyId: limitedCompany.id,
+          roleInCompany: 'owner',
+          emailVerified: true,
+          emailVerifiedAt: new Date(),
+        },
       });
 
       for (let index = 0; index < 3; index += 1) {
@@ -2522,7 +2599,12 @@ describe('Company API', () => {
 
       await prisma.user.update({
         where: { id: adminRes.body.user.id },
-        data: { companyId, roleInCompany: 'admin' },
+        data: {
+          companyId,
+          roleInCompany: 'admin',
+          emailVerified: true,
+          emailVerifiedAt: new Date(),
+        },
       });
 
       const res = await request(app)

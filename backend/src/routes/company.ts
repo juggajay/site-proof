@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
+import { requireEmailVerified } from '../middleware/requireEmailVerified.js';
 import { getProjectLimitForTier, getUserLimitForTier } from '../lib/tierLimits.js';
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
@@ -163,6 +164,7 @@ async function resolveCompanyLogoUpdate(
 // POST /api/company - Create the current user's first company
 companyRouter.post(
   '/',
+  requireEmailVerified,
   asyncHandler(async (req, res) => {
     const user = req.user!;
     requireBrowserSession(req, 'Company creation');

@@ -10,6 +10,7 @@ import { logError } from '../../lib/serverLogger.js';
 import { AuditAction, createAuditLog } from '../../lib/auditLog.js';
 import { sendCompanyMemberInvitationEmail } from '../../lib/email.js';
 import { createEmailDeliveryFailureError } from '../../lib/emailDeliveryErrors.js';
+import { requireEmailVerified } from '../../middleware/requireEmailVerified.js';
 import { getUserLimitForTier, normalizeSubscriptionTier } from '../../lib/tierLimits.js';
 import {
   buildCompanyLeftResponse,
@@ -198,6 +199,7 @@ companyMemberRoutes.get(
 // POST /api/company/members/invite - Invite or attach a user to the current company
 companyMemberRoutes.post(
   '/members/invite',
+  requireEmailVerified,
   asyncHandler(async (req, res) => {
     const user = req.user!;
     requireBrowserSession(req, 'Company member invitation');

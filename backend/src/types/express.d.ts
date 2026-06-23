@@ -15,6 +15,7 @@ declare global {
         companyId: string | null;
         hasSubcontractorPortalAccess?: boolean;
         dashboardRole?: DashboardRole | null;
+        emailVerified?: boolean;
       };
       apiKey?: {
         id: string;
