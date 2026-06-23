@@ -12,6 +12,11 @@ export default defineConfig({
       SUPABASE_URL: '',
       SUPABASE_SERVICE_ROLE_KEY: '',
       SUPABASE_ANON_KEY: '',
+      // Pin the app timezone to UTC for deterministic notification-timing
+      // fixtures (which build `now` from UTC instants). Production defaults to
+      // Australia/Sydney; the AU conversion is covered by getZonedMinutesOfDay
+      // unit tests that pass the zone explicitly.
+      APP_TIMEZONE: 'UTC',
     },
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.test.ts'],

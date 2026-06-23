@@ -1,5 +1,6 @@
 import type { DigestItem } from './email.js';
 import { sendDailyDigestEmail } from './email.js';
+import { getZonedMinutesOfDay } from './notificationAutomation/helpers.js';
 import { prisma } from './prisma.js';
 import { logError, logInfo } from './serverLogger.js';
 
@@ -74,10 +75,17 @@ function parseTimeOfDay(value: string | undefined): { hours: number; minutes: nu
 
 function getDigestCutoff(now: Date, timeOfDay: string | undefined): Date | null {
   const { hours, minutes } = parseTimeOfDay(timeOfDay);
-  const cutoff = new Date(now);
-  cutoff.setHours(hours, minutes, 0, 0);
-
-  return now >= cutoff ? cutoff : null;
+  // Gate on Australia/Sydney wall-clock time, not the server's UTC clock — the
+  // previous cutoff.setHours() evaluated the daily digest time in server-local
+  // (UTC in production), firing ~8-11h off the intended AU time.
+  if (getZonedMinutesOfDay(now) < hours * 60 + minutes) {
+    return null;
+  }
+  // Past today's AU digest time: include everything accumulated up to now.
+  // Digest items are deleted after a successful send (see processUserDigest), so
+  // using `now` rather than a reconstructed AU-local HH:MM instant cannot
+  // double-send.
+  return now;
 }
 
 function toDigestItem(record: NotificationDigestItemRecord): DigestItem {

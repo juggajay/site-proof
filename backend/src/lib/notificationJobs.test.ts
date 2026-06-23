@@ -41,7 +41,9 @@ describe('processDueNotificationDigests', () => {
     const user = await createDigestUser(true);
     const now = new Date(2026, 4, 10, 17, 30, 0, 0);
     const dueAt = new Date(2026, 4, 10, 16, 30, 0, 0);
-    const futureAt = new Date(2026, 4, 10, 17, 15, 0, 0);
+    // After `now`: the cutoff is the run instant (items are deleted after send),
+    // so an item created after `now` is held for the next digest window.
+    const futureAt = new Date(2026, 4, 10, 17, 45, 0, 0);
 
     await prisma.notificationDigestItem.createMany({
       data: [
@@ -74,7 +76,7 @@ describe('processDueNotificationDigests', () => {
       expect(result.processed).toBe(1);
       expect(result.sent).toBe(1);
       expect(result.failed).toBe(0);
-      expect(result.cutoffAt).toBe(new Date(2026, 4, 10, 17, 0, 0, 0).toISOString());
+      expect(result.cutoffAt).toBe(now.toISOString());
 
       const queuedEmails = getQueuedEmails();
       expect(queuedEmails).toHaveLength(1);

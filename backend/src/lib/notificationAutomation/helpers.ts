@@ -76,9 +76,43 @@ export function isWorkingDay(project: ProjectWorkingDays, date: Date): boolean {
   return parseWorkingDays(project.workingDays).has(date.getDay());
 }
 
+/**
+ * Default application timezone. The product targets Australian civil
+ * contractors, so daily reminder/digest "wall-clock" times (e.g. 17:00) are
+ * evaluated in Australian Eastern time, not the server's UTC clock. Overridable
+ * via APP_TIMEZONE (the test suite pins it to UTC for deterministic fixtures;
+ * the Australia/Sydney conversion itself is covered by getZonedMinutesOfDay
+ * unit tests that pass the zone explicitly).
+ */
+export const APP_TIME_ZONE = 'Australia/Sydney';
+
+export function resolveAppTimeZone(): string {
+  return process.env.APP_TIMEZONE || APP_TIME_ZONE;
+}
+
+/**
+ * Minutes-since-midnight of `date`'s wall clock in `timeZone`. DST-correct:
+ * Intl resolves the zone's offset for that exact instant (AEST +10 vs AEDT +11),
+ * so a daily fire-time gate is evaluated in local time regardless of the
+ * server's timezone.
+ */
+export function getZonedMinutesOfDay(date: Date, timeZone: string = resolveAppTimeZone()): number {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(date);
+  const partValue = (type: string) =>
+    Number(parts.find((part) => part.type === type)?.value ?? '0');
+  let hour = partValue('hour');
+  if (hour === 24) hour = 0; // some engines emit '24' for midnight
+  return hour * 60 + partValue('minute');
+}
+
 export function isDueForProjectTime(now: Date, timeOfDay: string | null | undefined): boolean {
   const { hours, minutes } = parseTimeOfDay(process.env.DIARY_REMINDER_TIME_OF_DAY ?? timeOfDay);
-  return now.getHours() * 60 + now.getMinutes() >= hours * 60 + minutes;
+  return getZonedMinutesOfDay(now) >= hours * 60 + minutes;
 }
 
 export function appendQueryParams(
