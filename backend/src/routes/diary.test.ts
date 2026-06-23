@@ -1241,6 +1241,132 @@ describe('Daily Diary API', () => {
       expect(longContentRes.status).toBe(400);
     });
 
+    async function createSubmittedDiary(dayOffset: number) {
+      const date = new Date(Date.now() + dayOffset * 86400000).toISOString().split('T')[0];
+      const draftRes = await request(app)
+        .post('/api/diary')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ projectId, date });
+      expect(draftRes.status).toBe(201);
+      const submitRes = await request(app)
+        .post(`/api/diary/${draftRes.body.id}/submit`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ acknowledgeWarnings: true });
+      expect(submitRes.status).toBe(200);
+      return draftRes.body.id as string;
+    }
+
+    it('reopens a submitted diary back to draft with an audited reason (M31)', async () => {
+      const reopenDiaryId = await createSubmittedDiary(40);
+
+      const res = await request(app)
+        .post(`/api/diary/${reopenDiaryId}/reopen`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ reason: 'Personnel hours were entered incorrectly' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.diary.status).toBe('draft');
+
+      const reopened = await prisma.dailyDiary.findUniqueOrThrow({ where: { id: reopenDiaryId } });
+      expect(reopened.status).toBe('draft');
+      expect(reopened.submittedAt).toBeNull();
+      expect(reopened.lockedAt).toBeNull();
+
+      const auditLog = await prisma.auditLog.findFirst({
+        where: {
+          projectId,
+          entityType: 'daily_diary',
+          entityId: reopenDiaryId,
+          action: 'diary_reopened',
+        },
+      });
+      expect(auditLog).not.toBeNull();
+      expect(auditLog?.changes ? JSON.parse(auditLog.changes) : null).toMatchObject({
+        status: { from: 'submitted', to: 'draft' },
+        reason: 'Personnel hours were entered incorrectly',
+      });
+
+      // Reopening restores edit access.
+      const editRes = await request(app)
+        .post(`/api/diary/${reopenDiaryId}/activities`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ description: 'Corrected activity after reopen' });
+      expect(editRes.status).toBe(201);
+    });
+
+    it('requires a reason to reopen a diary (M31)', async () => {
+      const id = await createSubmittedDiary(41);
+
+      const res = await request(app)
+        .post(`/api/diary/${id}/reopen`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ reason: '   ' });
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toContain('reason is required');
+
+      const stillSubmitted = await prisma.dailyDiary.findUniqueOrThrow({ where: { id } });
+      expect(stillSubmitted.status).toBe('submitted');
+    });
+
+    it('rejects reopening a diary that is not submitted (M31)', async () => {
+      const date = new Date(Date.now() + 42 * 86400000).toISOString().split('T')[0];
+      const draftRes = await request(app)
+        .post('/api/diary')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ projectId, date });
+
+      const res = await request(app)
+        .post(`/api/diary/${draftRes.body.id}/reopen`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ reason: 'Trying to reopen a draft' });
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toContain('submitted');
+    });
+
+    it('forbids a foreman from reopening a submitted diary (M31)', async () => {
+      const foreman = await registerDiaryUser('Diary Reopen Foreman', 'foreman', companyId);
+      userIds.push(foreman.userId);
+      await prisma.projectUser.create({
+        data: { projectId, userId: foreman.userId, role: 'foreman', status: 'active' },
+      });
+
+      const id = await createSubmittedDiary(43);
+
+      const res = await request(app)
+        .post(`/api/diary/${id}/reopen`)
+        .set('Authorization', `Bearer ${foreman.token}`)
+        .send({ reason: 'Foreman should not be able to reopen' });
+      expect(res.status).toBe(403);
+
+      const stillSubmitted = await prisma.dailyDiary.findUniqueOrThrow({ where: { id } });
+      expect(stillSubmitted.status).toBe('submitted');
+    });
+
+    it('auto-locks a submitted diary from addendums after the cutoff, and reopen overrides it (M32)', async () => {
+      const id = await createSubmittedDiary(44);
+
+      // Backdate the submission past the 7-day lock cutoff.
+      await prisma.dailyDiary.update({
+        where: { id },
+        data: { submittedAt: new Date(Date.now() - 8 * 86400000) },
+      });
+
+      const addendumRes = await request(app)
+        .post(`/api/diary/${id}/addendum`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ content: 'Trying to add a note to a locked diary' });
+      expect(addendumRes.status).toBe(400);
+      expect(addendumRes.body.error.message).toContain('locked');
+
+      // M31 reopen overrides the auto-lock even after the cutoff.
+      const reopenRes = await request(app)
+        .post(`/api/diary/${id}/reopen`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ reason: 'Reopen overrides the auto-lock' });
+      expect(reopenRes.status).toBe(200);
+      expect(reopenRes.body.diary.status).toBe('draft');
+    });
+
     it('should add submitted diary addendum and write an audit log without storing addendum content', async () => {
       const addendumDiaryDate = new Date(Date.now() + 691200000).toISOString().split('T')[0];
       const draftRes = await request(app)

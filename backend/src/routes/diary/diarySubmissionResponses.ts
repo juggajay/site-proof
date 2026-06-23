@@ -37,6 +37,10 @@ export function buildDiarySubmitResponse(diary: unknown, warningsAcknowledged: b
   return { diary, warningsAcknowledged };
 }
 
+export function buildDiaryReopenedResponse(diary: unknown) {
+  return { diary };
+}
+
 export function buildDiaryAddendumCreatedResponse(addendum: unknown) {
   return addendum;
 }
