@@ -100,7 +100,12 @@ describe('createMentionNotifications', () => {
     expect(userFindFirst).toHaveBeenCalledWith({
       where: {
         AND: [
-          { OR: [{ email: 'alice' }, { fullName: 'alice' }] },
+          {
+            OR: [
+              { email: { equals: 'alice', mode: 'insensitive' } },
+              { fullName: { equals: 'alice', mode: 'insensitive' } },
+            ],
+          },
           {
             OR: [
               { projectUsers: { some: { projectId: 'project-1', status: 'active' } } },
@@ -118,7 +123,15 @@ describe('createMentionNotifications', () => {
     expect(projectFindUnique).not.toHaveBeenCalled();
     expect(userFindFirst).toHaveBeenCalledWith({
       where: {
-        AND: [{ OR: [{ email: 'alice' }, { fullName: 'alice' }] }, {}],
+        AND: [
+          {
+            OR: [
+              { email: { equals: 'alice', mode: 'insensitive' } },
+              { fullName: { equals: 'alice', mode: 'insensitive' } },
+            ],
+          },
+          {},
+        ],
       },
     });
   });
