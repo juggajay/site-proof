@@ -1664,7 +1664,7 @@ describe('Company API', () => {
       expect(res.body.error.message).toContain('already belongs to another company');
     });
 
-    it('rejects new company member invites that exceed the subscription seat limit', async () => {
+    it('allows company member invites past the seat limit while tier enforcement is disabled (G1)', async () => {
       const limitedCompany = await prisma.company.create({
         data: {
           name: `Seat Limited Company ${Date.now()}`,
@@ -1713,11 +1713,10 @@ describe('Company API', () => {
         .set('Authorization', `Bearer ${ownerRes.body.token}`)
         .send({ email: overLimitEmail, roleInCompany: 'site_engineer' });
 
-      expect(res.status).toBe(403);
-      expect(res.body.error.message).toContain('basic subscription allows up to 5 users');
-      await expect(prisma.user.findUnique({ where: { email: overLimitEmail } })).resolves.toBe(
-        null,
-      );
+      // G1: seat enforcement is disabled, so the over-limit invite succeeds.
+      expect(res.status).toBe(201);
+      expect(res.body.member.email).toBe(overLimitEmail);
+      invitedUserIds.push(res.body.member.id);
     });
 
     it('normalizes paid tier values before enforcing the subscription seat limit', async () => {
@@ -1894,7 +1893,7 @@ describe('Company API', () => {
       }
     });
 
-    it('serializes concurrent member invites against the subscription seat limit', async () => {
+    it('allows concurrent member invites past the seat limit while tier enforcement is disabled (G1)', async () => {
       const limitedCompany = await prisma.company.create({
         data: {
           name: `Concurrent Seat Limited Company ${Date.now()}`,
@@ -1977,10 +1976,11 @@ describe('Company API', () => {
         });
         invitedUserIds.push(...createdInvitees.map((invitee) => invitee.id));
 
-        expect(responses.map((res) => res.status).sort((a, b) => a - b)).toEqual([201, 403]);
-        expect(createdInvitees).toHaveLength(1);
+        // G1: seat enforcement is disabled, so both concurrent invites succeed.
+        expect(responses.map((res) => res.status).sort((a, b) => a - b)).toEqual([201, 201]);
+        expect(createdInvitees).toHaveLength(2);
         await expect(prisma.user.count({ where: { companyId: limitedCompany.id } })).resolves.toBe(
-          5,
+          6,
         );
       } finally {
         await prisma.$executeRaw`
