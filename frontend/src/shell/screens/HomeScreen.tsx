@@ -28,6 +28,7 @@ import {
   FileText,
   AlertTriangle,
   FileSpreadsheet,
+  ClipboardCheck,
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { ShellScreen } from '../components/ShellScreen';
@@ -236,7 +237,7 @@ function HubTile({
 export function HomeScreen() {
   const navigate = useNavigate();
   const [captureOpen, setCaptureOpen] = useState(false);
-  const { projectId, isResolving } = useEffectiveProjectId();
+  const { projectId, isResolving, hasNoProject } = useEffectiveProjectId();
 
   // ── Foreman today endpoint: ITP checks due ─────────────────────────────────
   const { data: todayData } = useQuery<ForemanTodayPayload>({
@@ -310,6 +311,34 @@ export function HomeScreen() {
         <div className="h-[76px] animate-pulse rounded-2xl bg-muted" />
         <div className="h-[76px] animate-pulse rounded-2xl bg-muted" />
         <div className="h-[76px] animate-pulse rounded-2xl bg-muted" />
+      </ShellScreen>
+    );
+  }
+
+  if (hasNoProject) {
+    // A newly-invited foreman not yet on a project would otherwise see a hub of
+    // dead tiles + a camera bar that silently do nothing. Show a guided empty
+    // state with a way forward instead (mirrors ForemanMobileDashboard).
+    return (
+      <ShellScreen variant="home">
+        <div className="rounded-2xl border bg-card p-6 text-center">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+            <ClipboardCheck className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
+          </div>
+          <h2 className="mb-2 text-lg font-semibold">No Project Assigned</h2>
+          <p className="mb-4 text-sm text-muted-foreground">
+            You haven&rsquo;t been added to a project yet. Ask your site manager or admin to add you
+            to a project team &mdash; then your foreman hub will appear here.
+          </p>
+          <button
+            type="button"
+            onClick={() => navigate('/projects')}
+            className="inline-flex min-h-[44px] touch-manipulation items-center gap-1 rounded-lg bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90"
+          >
+            View Projects
+            <ChevronRight className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
       </ShellScreen>
     );
   }
