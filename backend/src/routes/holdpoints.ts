@@ -394,36 +394,29 @@ holdpointsRouter.post(
         // was never ticked. This is a public release (no authenticated user), so
         // completedById / verifiedById stay null — attribution lives on the
         // HoldPoint (releasedByName/Org/Method) and is surfaced via the GET
-        // serializer. ITPCompletion has no unique key on
-        // [itpInstanceId, checklistItemId] (only @@index), so this is a
-        // find-then-update-or-create inside the existing transaction.
+        // serializer. ITPCompletion has a compound unique key on
+        // [itpInstanceId, checklistItemId], so a single upsert handles the
+        // never-ticked and previously-ticked cases atomically.
         const completionData = {
           status: 'completed',
           completedAt: releasedAt,
           verificationStatus: 'verified',
           verifiedAt: releasedAt,
         };
-        const existingCompletion = await tx.iTPCompletion.findFirst({
+        await tx.iTPCompletion.upsert({
           where: {
-            itpInstanceId: itpInstance.id,
-            checklistItemId: updatedHoldPoint.itpChecklistItemId,
-          },
-          select: { id: true },
-        });
-        if (existingCompletion) {
-          await tx.iTPCompletion.update({
-            where: { id: existingCompletion.id },
-            data: completionData,
-          });
-        } else {
-          await tx.iTPCompletion.create({
-            data: {
+            itpInstanceId_checklistItemId: {
               itpInstanceId: itpInstance.id,
               checklistItemId: updatedHoldPoint.itpChecklistItemId,
-              ...completionData,
             },
-          });
-        }
+          },
+          update: completionData,
+          create: {
+            itpInstanceId: itpInstance.id,
+            checklistItemId: updatedHoldPoint.itpChecklistItemId,
+            ...completionData,
+          },
+        });
       }
 
       return updatedHoldPoint;
@@ -500,7 +493,10 @@ holdpointsRouter.post(
         const lotUrl = buildFrontendUrl(
           `/projects/${releaseToken.holdPoint.lot.projectId}/lots/${releaseToken.holdPoint.lot.id}`,
         );
-        const releasedAt = new Date().toLocaleString('en-AU', {
+        // Format the instant we actually recorded on the hold point (above),
+        // not a fresh new Date(), so the confirmation email always matches the
+        // stored release time.
+        const releasedAtDisplay = releasedAt.toLocaleString('en-AU', {
           weekday: 'long',
           year: 'numeric',
           month: 'long',
@@ -516,7 +512,7 @@ holdpointsRouter.post(
           releasedByOrg,
           releaseMethod: 'secure_link',
           releaseNotes,
-          releasedAt,
+          releasedAt: releasedAtDisplay,
           lotUrl,
         };
 

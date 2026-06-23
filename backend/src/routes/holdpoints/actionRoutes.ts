@@ -397,9 +397,9 @@ holdPointActionRouter.post(
         // I1-core RECONCILE: releasing the hold point satisfies the ITP item.
         // Set status='completed' + completedAt (releasedAt) alongside the
         // verification fields, and CREATE the completion row if the hold point
-        // was never ticked. ITPCompletion has no unique key on
-        // [itpInstanceId, checklistItemId] (only @@index), so this is a
-        // find-then-update-or-create inside the existing transaction.
+        // was never ticked. ITPCompletion has a compound unique key on
+        // [itpInstanceId, checklistItemId], so a single upsert handles the
+        // never-ticked and previously-ticked cases atomically.
         const completionData = {
           status: 'completed',
           completedAt: releasedAt,
@@ -408,27 +408,20 @@ holdPointActionRouter.post(
           verifiedById: req.user!.userId,
           verifiedAt: releasedAt,
         };
-        const existingCompletion = await tx.iTPCompletion.findFirst({
+        await tx.iTPCompletion.upsert({
           where: {
-            itpInstanceId: itpInstance.id,
-            checklistItemId: updatedHoldPoint.itpChecklistItemId,
-          },
-          select: { id: true },
-        });
-        if (existingCompletion) {
-          await tx.iTPCompletion.update({
-            where: { id: existingCompletion.id },
-            data: completionData,
-          });
-        } else {
-          await tx.iTPCompletion.create({
-            data: {
+            itpInstanceId_checklistItemId: {
               itpInstanceId: itpInstance.id,
               checklistItemId: updatedHoldPoint.itpChecklistItemId,
-              ...completionData,
             },
-          });
-        }
+          },
+          update: completionData,
+          create: {
+            itpInstanceId: itpInstance.id,
+            checklistItemId: updatedHoldPoint.itpChecklistItemId,
+            ...completionData,
+          },
+        });
       }
 
       return updatedHoldPoint;
