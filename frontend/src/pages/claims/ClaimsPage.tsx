@@ -191,7 +191,7 @@ export function ClaimsPage() {
   }, [invalidateClaimAdjacentProjectCaches]);
 
   const handleSubmitClaim = useCallback(
-    async (claimId: string, _method: SubmitMethod) => {
+    async (claimId: string, method: SubmitMethod, submittedTo?: string) => {
       const claim = claims.find((c) => c.id === claimId);
       if (!claim || !projectId || submittingClaimsRef.current.has(claimId)) return;
 
@@ -201,7 +201,11 @@ export function ClaimsPage() {
           claim: Partial<Claim> & { status?: Claim['status']; submittedAt?: string | null };
         }>(`/api/projects/${encodeURIComponent(projectId)}/claims/${encodeURIComponent(claimId)}`, {
           method: 'PUT',
-          body: JSON.stringify({ status: 'submitted' }),
+          body: JSON.stringify({
+            status: 'submitted',
+            submissionMethod: method,
+            ...(submittedTo ? { submittedTo } : {}),
+          }),
         });
         const submittedAt = data.claim.submittedAt ?? new Date().toISOString();
         updateClaimInCache(claimId, (c) => ({ ...c, status: 'submitted' as const, submittedAt }));
