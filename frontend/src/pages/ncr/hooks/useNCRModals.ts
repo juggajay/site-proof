@@ -10,7 +10,10 @@ type ModalType =
   | 'notifyClient'
   | 'qmReview'
   | 'rectify'
-  | 'rejectRectification';
+  | 'rejectRectification'
+  // H7: mobile NCR detail sheet (tapping a card on mobile) from which the
+  // status-gated workflow actions open the modals above.
+  | 'detail';
 
 interface UseNCRModalsReturn {
   activeModal: ModalType | null;
