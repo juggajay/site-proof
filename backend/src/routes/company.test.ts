@@ -2214,6 +2214,46 @@ describe('Company API', () => {
       });
     });
 
+    it('revokes the removed member API keys (M72a)', async () => {
+      const member = await registerTestUser(app, {
+        emailPrefix: 'company-remove-keys',
+        fullName: 'Company Remove Keys',
+        companyId,
+        roleInCompany: 'site_engineer',
+      });
+      removalUserIds.push(member.userId);
+
+      const activeKey = await prisma.apiKey.create({
+        data: {
+          userId: member.userId,
+          name: 'Active key',
+          keyHash: `hash-active-${member.userId}`,
+          keyPrefix: 'sp_active1',
+          scopes: 'read',
+          isActive: true,
+        },
+      });
+
+      const res = await request(app)
+        .delete(`/api/company/members/${member.userId}`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(200);
+
+      const revokedKey = await prisma.apiKey.findUniqueOrThrow({
+        where: { id: activeKey.id },
+        select: { isActive: true },
+      });
+      expect(revokedKey.isActive).toBe(false);
+
+      const auditLog = await prisma.auditLog.findFirst({
+        where: { entityType: 'user', entityId: member.userId, action: AuditAction.USER_REMOVED },
+        orderBy: { createdAt: 'desc' },
+      });
+      const changes = parseAuditLogChanges(auditLog?.changes ?? null) as Record<string, unknown>;
+      expect(changes.revokedKeyCount).toBe(1);
+    });
+
     it('cancels a pending company invitation and frees the seat', async () => {
       const pendingEmail = `company-remove-pending-${Date.now()}@example.com`;
       const pendingUser = await prisma.user.create({
@@ -2909,6 +2949,68 @@ describe('Company API', () => {
         await prisma.user.delete({ where: { id: user.id } }).catch(() => {});
       }
       await prisma.company.delete({ where: { id: leaveCompanyId } }).catch(() => {});
+    });
+
+    it('revokes the leaving member API keys (M72a)', async () => {
+      const company = await prisma.company.create({
+        data: { name: `Leave Keys Co ${Date.now()}` },
+      });
+      const memberRes = await request(app)
+        .post('/api/auth/register')
+        .send({
+          email: `leave-keys-${Date.now()}@example.com`,
+          password: 'SecureP@ssword123!',
+          fullName: 'Leave Keys Member',
+          tosAccepted: true,
+        });
+      const memberId = memberRes.body.user.id;
+      const memberToken = memberRes.body.token;
+      await prisma.user.update({
+        where: { id: memberId },
+        data: { companyId: company.id, roleInCompany: 'admin' },
+      });
+      const key = await prisma.apiKey.create({
+        data: {
+          userId: memberId,
+          name: 'Leave key',
+          keyHash: `hash-leave-${memberId}`,
+          keyPrefix: 'sp_leave01',
+          scopes: 'read',
+          isActive: true,
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .post('/api/company/leave')
+          .set('Authorization', `Bearer ${memberToken}`);
+        expect(res.status).toBe(200);
+
+        const revoked = await prisma.apiKey.findUniqueOrThrow({
+          where: { id: key.id },
+          select: { isActive: true },
+        });
+        expect(revoked.isActive).toBe(false);
+
+        const auditLog = await prisma.auditLog.findFirst({
+          where: {
+            entityType: 'company',
+            entityId: company.id,
+            action: AuditAction.COMPANY_MEMBER_LEFT,
+          },
+          orderBy: { createdAt: 'desc' },
+        });
+        const changes = parseAuditLogChanges(auditLog?.changes ?? null) as Record<string, unknown>;
+        expect(changes.revokedKeyCount).toBe(1);
+      } finally {
+        await prisma.auditLog.deleteMany({
+          where: { OR: [{ entityId: company.id }, { userId: memberId }] },
+        });
+        await prisma.apiKey.deleteMany({ where: { userId: memberId } });
+        await prisma.emailVerificationToken.deleteMany({ where: { userId: memberId } });
+        await prisma.user.delete({ where: { id: memberId } }).catch(() => {});
+        await prisma.company.delete({ where: { id: company.id } }).catch(() => {});
+      }
     });
 
     it('should allow non-owner to leave company', async () => {
