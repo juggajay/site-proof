@@ -28,6 +28,8 @@ import { extractErrorMessage } from '@/lib/errorHandling';
 import { cn } from '@/lib/utils';
 import { buildPortalCompanyQuery } from '@/pages/subcontractor-portal/portalCompanyScope';
 import { useSubbieShellContext } from '../subbieShellContext';
+import { useModuleAccessRevoked } from '../useModuleAccessRevoked';
+import { ModuleAccessChangedNotice } from '../ModuleAccessChangedNotice';
 
 // ── Hold-point shapes (classic SubcontractorHoldPointsPage contract) ──────────
 
@@ -273,6 +275,7 @@ export function QualityScreen() {
 
   const holdsError = holdsEnabled && holdPointsQuery.error ? holdPointsQuery.error : null;
   const testsError = testsEnabled && testsQuery.error ? testsQuery.error : null;
+  const accessRevoked = useModuleAccessRevoked(holdsError ?? testsError);
 
   // Neither module → access denied.
   if (!eitherEnabled) {
@@ -305,8 +308,10 @@ export function QualityScreen() {
         </span>
       }
     >
+      {accessRevoked && <ModuleAccessChangedNotice />}
+
       {/* HOLD POINTS section (holdPoints module) */}
-      {holdsEnabled && (
+      {!accessRevoked && holdsEnabled && (
         <>
           <SectionLabel count={holdPoints.length || undefined}>HOLD POINTS</SectionLabel>
           {holdsError ? (
@@ -324,7 +329,7 @@ export function QualityScreen() {
       )}
 
       {/* TEST RESULTS section (testResults module) */}
-      {testsEnabled && (
+      {!accessRevoked && testsEnabled && (
         <>
           <SectionLabel count={tests.length || undefined}>TEST RESULTS</SectionLabel>
           {testsError ? (

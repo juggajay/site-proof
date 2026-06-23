@@ -26,6 +26,8 @@ import { logError } from '@/lib/logger';
 import { buildPortalCompanyQuery } from '@/pages/subcontractor-portal/portalCompanyScope';
 import { ShellAccessDenied } from './ShellAccessDenied';
 import { useSubbieShellContext } from '../subbieShellContext';
+import { useModuleAccessRevoked } from '../useModuleAccessRevoked';
+import { ModuleAccessChangedNotice } from '../ModuleAccessChangedNotice';
 
 interface DocItem {
   id: string;
@@ -115,6 +117,7 @@ export function DocsScreen() {
     },
     enabled: !!user?.id && !!projectId && canViewDocuments,
   });
+  const accessRevoked = useModuleAccessRevoked(error);
 
   if (!canViewDocuments) {
     return <ShellAccessDenied title="Documents" moduleName="Documents" />;
@@ -148,7 +151,9 @@ export function DocsScreen() {
 
   return (
     <ShellScreen variant="inner" title="Documents" parent={parentPath} sub={sub}>
-      {error ? (
+      {accessRevoked ? (
+        <ModuleAccessChangedNotice />
+      ) : error ? (
         <div className="rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-[13px] font-semibold text-destructive">
           {extractErrorMessage(error, 'Failed to load documents')}
         </div>
