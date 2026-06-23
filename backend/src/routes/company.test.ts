@@ -1598,7 +1598,14 @@ describe('Company API', () => {
 
       await prisma.user.update({
         where: { id: fieldRes.body.user.id },
-        data: { companyId, roleInCompany: 'foreman' },
+        // Verified so the request reaches the role check rather than the M1
+        // email-verification gate (this test asserts the admin-only message).
+        data: {
+          companyId,
+          roleInCompany: 'foreman',
+          emailVerified: true,
+          emailVerifiedAt: new Date(),
+        },
       });
 
       const rejectedRes = await request(app)
