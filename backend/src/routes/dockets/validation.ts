@@ -148,30 +148,44 @@ export const lotAllocationSchema = z.object({
   hours: dailyHoursNumber('Lot allocation hours'),
 });
 
-export const addLabourEntrySchema = z.object({
-  employeeId: requiredDocketIdSchema('employeeId'),
-  startTime: requiredTimeSchema('Start time'),
-  finishTime: requiredTimeSchema('Finish time'),
-  lotAllocations: z
-    .array(lotAllocationSchema)
-    .max(
-      MAX_LOT_ALLOCATIONS_PER_ENTRY,
-      `Cannot allocate more than ${MAX_LOT_ALLOCATIONS_PER_ENTRY} lots to one entry`,
-    )
-    .optional(),
-});
+// A docket time entry must span real time — start === finish is a 0-hour (or
+// ambiguous 24h) entry that would distort hour/cost rollups (M86). Only enforced
+// when both times are present (a partial update keeps the other side as-is).
+const startFinishDiffer = (data: { startTime?: string; finishTime?: string }): boolean =>
+  !(data.startTime && data.finishTime && data.startTime === data.finishTime);
+const startFinishRefinement = {
+  message: 'Start and finish time cannot be the same',
+  path: ['finishTime'],
+};
 
-export const updateLabourEntrySchema = z.object({
-  startTime: optionalTimeSchema,
-  finishTime: optionalTimeSchema,
-  lotAllocations: z
-    .array(lotAllocationSchema)
-    .max(
-      MAX_LOT_ALLOCATIONS_PER_ENTRY,
-      `Cannot allocate more than ${MAX_LOT_ALLOCATIONS_PER_ENTRY} lots to one entry`,
-    )
-    .optional(),
-});
+export const addLabourEntrySchema = z
+  .object({
+    employeeId: requiredDocketIdSchema('employeeId'),
+    startTime: requiredTimeSchema('Start time'),
+    finishTime: requiredTimeSchema('Finish time'),
+    lotAllocations: z
+      .array(lotAllocationSchema)
+      .max(
+        MAX_LOT_ALLOCATIONS_PER_ENTRY,
+        `Cannot allocate more than ${MAX_LOT_ALLOCATIONS_PER_ENTRY} lots to one entry`,
+      )
+      .optional(),
+  })
+  .refine(startFinishDiffer, startFinishRefinement);
+
+export const updateLabourEntrySchema = z
+  .object({
+    startTime: optionalTimeSchema,
+    finishTime: optionalTimeSchema,
+    lotAllocations: z
+      .array(lotAllocationSchema)
+      .max(
+        MAX_LOT_ALLOCATIONS_PER_ENTRY,
+        `Cannot allocate more than ${MAX_LOT_ALLOCATIONS_PER_ENTRY} lots to one entry`,
+      )
+      .optional(),
+  })
+  .refine(startFinishDiffer, startFinishRefinement);
 
 export const addPlantEntrySchema = z.object({
   plantId: requiredDocketIdSchema('plantId'),

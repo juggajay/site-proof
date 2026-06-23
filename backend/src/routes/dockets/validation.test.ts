@@ -14,6 +14,7 @@ import {
   rejectDocketSchema,
   respondDocketSchema,
   updateDocketSchema,
+  updateLabourEntrySchema,
   updatePlantEntrySchema,
 } from './validation.js';
 
@@ -217,6 +218,24 @@ describe('dockets validation helpers', () => {
       });
       expect(result.success).toBe(false);
       expect(firstMessage(result)).toBe('Lot allocation hours must be greater than 0');
+    });
+
+    it('rejects a labour entry whose start equals its finish (M86)', () => {
+      const result = addLabourEntrySchema.safeParse({
+        employeeId: 'e1',
+        startTime: '07:00',
+        finishTime: '07:00',
+      });
+      expect(result.success).toBe(false);
+      expect(firstMessage(result)).toBe('Start and finish time cannot be the same');
+    });
+
+    it('rejects a labour update whose start equals its finish, but allows a partial time update (M86)', () => {
+      expect(
+        updateLabourEntrySchema.safeParse({ startTime: '07:00', finishTime: '07:00' }).success,
+      ).toBe(false);
+      // Updating only one of the two times is fine (the handler keeps the other).
+      expect(updateLabourEntrySchema.safeParse({ startTime: '07:00' }).success).toBe(true);
     });
 
     it('requires start and finish times on new labour entries', () => {
