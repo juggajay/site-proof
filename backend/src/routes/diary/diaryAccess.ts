@@ -24,6 +24,29 @@ const DIARY_WRITE_ROLES = new Set([
   'foreman',
   'site_engineer',
 ]);
+// M32: submitted diaries auto-lock this long after submission. After the cutoff
+// they can no longer receive addendums; a project manager must reopen (M31) to
+// make further changes. Computed on read so no scheduled job is required.
+export const DIARY_LOCK_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Whether a diary is locked: an explicit `lockedAt` always wins, otherwise a
+ * submitted diary locks once {@link DIARY_LOCK_AFTER_MS} has elapsed since
+ * submission.
+ */
+export function isDiaryLocked(
+  diary: { status: string; submittedAt: Date | null; lockedAt?: Date | null },
+  now: Date = new Date(),
+): boolean {
+  if (diary.lockedAt) {
+    return true;
+  }
+  if (diary.status !== 'submitted' || !diary.submittedAt) {
+    return false;
+  }
+  return now.getTime() - diary.submittedAt.getTime() >= DIARY_LOCK_AFTER_MS;
+}
+
 const DATE_ONLY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 const DIARY_QUERY_TEXT_MAX_LENGTH = 120;
 export const DIARY_ROUTE_PARAM_MAX_LENGTH = 128;

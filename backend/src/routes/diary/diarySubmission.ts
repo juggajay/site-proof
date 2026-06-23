@@ -2,22 +2,29 @@ import { Router, Request, Response } from 'express';
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
-import { createAuditLog, AuditAction } from '../../lib/auditLog.js';
+import { createAuditLog, writeAuditLogInTransaction, AuditAction } from '../../lib/auditLog.js';
+import { requireEffectiveProjectRole } from '../../lib/projectAccess.js';
 import {
   parseDiaryRouteParam,
   requireDiaryReadAccess,
   requireDiaryWriteAccess,
   requireEditableDiaryForWrite,
+  isDiaryLocked,
 } from './diaryAccess.js';
 import {
   buildDiaryAddendumCreatedResponse,
   buildDiaryAddendumsResponse,
+  buildDiaryReopenedResponse,
   buildDiarySubmitResponse,
   buildDiaryValidationResponse,
 } from './diarySubmissionResponses.js';
 
 const router = Router();
 const DIARY_ADDENDUM_MAX_LENGTH = 5000;
+// M31: reopening a submitted diary is restricted to project leadership; foreman
+// and site roles cannot. A reason is mandatory and audited.
+const DIARY_REOPEN_ROLES = new Set(['owner', 'admin', 'project_manager']);
+const DIARY_REOPEN_REASON_MAX_LENGTH = 1000;
 
 // GET /api/diary/:diaryId/validate - Validate diary before submission
 router.get(
@@ -286,6 +293,14 @@ router.post(
       throw AppError.badRequest('Addendums can only be added to submitted diaries');
     }
 
+    // M32: once a submitted diary auto-locks, it is finalized — a project
+    // manager must reopen it (M31) before any further changes.
+    if (isDiaryLocked(diary)) {
+      throw AppError.badRequest(
+        'This diary is locked. Ask a project manager to reopen it before adding notes.',
+      );
+    }
+
     // Create the addendum
     const addendum = await prisma.diaryAddendum.create({
       data: {
@@ -313,6 +328,83 @@ router.post(
     });
 
     res.status(201).json(buildDiaryAddendumCreatedResponse(addendum));
+  }),
+);
+
+// POST /api/diary/:diaryId/reopen - Reopen a submitted diary back to draft (M31)
+router.post(
+  '/:diaryId/reopen',
+  asyncHandler(async (req: Request, res: Response) => {
+    const diaryId = parseDiaryRouteParam(req.params.diaryId, 'diaryId');
+    const userId = req.user!.id;
+
+    if (!userId) {
+      throw AppError.unauthorized('Unauthorized');
+    }
+
+    const { reason } = req.body;
+    if (typeof reason !== 'string' || reason.trim().length === 0) {
+      throw AppError.badRequest('A reason is required to reopen a diary');
+    }
+    const trimmedReason = reason.trim();
+    if (trimmedReason.length > DIARY_REOPEN_REASON_MAX_LENGTH) {
+      throw AppError.badRequest(
+        `Reason cannot exceed ${DIARY_REOPEN_REASON_MAX_LENGTH} characters`,
+      );
+    }
+
+    const updatedDiary = await prisma.$transaction(async (tx) => {
+      const rows = await tx.$queryRaw<Array<{ id: string; projectId: string; status: string }>>`
+        SELECT id, project_id AS "projectId", status
+        FROM daily_diaries
+        WHERE id = ${diaryId}
+        FOR UPDATE
+      `;
+      const diary = rows[0];
+      if (!diary) {
+        throw AppError.notFound('Diary not found');
+      }
+
+      // M31: only owner/admin/project_manager may reopen (foreman/site roles
+      // cannot). This is the override for the M32 auto-lock, so it deliberately
+      // does not check the lock state.
+      await requireEffectiveProjectRole(
+        req.user!,
+        diary.projectId,
+        DIARY_REOPEN_ROLES,
+        'Only project managers, admins, and owners can reopen submitted diaries',
+        { client: tx, excludeSubcontractorProjectMemberships: true, requireWritable: true },
+      );
+
+      if (diary.status !== 'submitted') {
+        throw AppError.badRequest('Only submitted diaries can be reopened');
+      }
+
+      const reopened = await tx.dailyDiary.update({
+        where: { id: diaryId },
+        data: { status: 'draft', submittedAt: null, submittedById: null, lockedAt: null },
+      });
+
+      // Reopening reverts a submitted record, so the audited reason must persist
+      // with the change (hard-fail in-transaction).
+      await writeAuditLogInTransaction(tx, {
+        projectId: reopened.projectId,
+        userId,
+        entityType: 'daily_diary',
+        entityId: reopened.id,
+        action: AuditAction.DIARY_REOPENED,
+        changes: {
+          date: reopened.date.toISOString().split('T')[0],
+          status: { from: 'submitted', to: 'draft' },
+          reason: trimmedReason,
+        },
+        req,
+      });
+
+      return reopened;
+    });
+
+    res.json(buildDiaryReopenedResponse(updatedDiary));
   }),
 );
 
