@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { parsePagination, getPrismaSkipTake } from '../../lib/pagination.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
+import { isUniqueConstraintOn } from '../ncrs/ncrCoreValidation.js';
 import {
   DIARY_DATE_INPUT_MAX_LENGTH,
   DIARY_ROUTE_PARAM_MAX_LENGTH,
@@ -263,23 +264,51 @@ router.post(
 
     const diaryDate = normalizeDiaryDate(data.date);
 
-    const { diary, existing } = await prisma.$transaction(async (tx) => {
-      // Check if diary already exists for this date
-      const existing = await tx.dailyDiary.findFirst({
-        where: {
-          projectId: data.projectId,
-          date: diaryDate,
-        },
-        select: { id: true },
-      });
+    const upsertDiaryForDate = () =>
+      prisma.$transaction(async (tx) => {
+        // Check if diary already exists for this date
+        const existing = await tx.dailyDiary.findFirst({
+          where: {
+            projectId: data.projectId,
+            date: diaryDate,
+          },
+          select: { id: true },
+        });
 
-      if (existing) {
-        await requireEditableDiaryForWrite(tx, req.user!, existing.id);
+        if (existing) {
+          await requireEditableDiaryForWrite(tx, req.user!, existing.id);
 
-        // Update existing diary while the draft row is locked.
-        const diary = await tx.dailyDiary.update({
-          where: { id: existing.id },
+          // Update existing diary while the draft row is locked.
+          const diary = await tx.dailyDiary.update({
+            where: { id: existing.id },
+            data: {
+              weatherConditions: data.weatherConditions,
+              temperatureMin: data.temperatureMin,
+              temperatureMax: data.temperatureMax,
+              rainfallMm: data.rainfallMm,
+              weatherNotes: data.weatherNotes,
+              generalNotes: data.generalNotes,
+            },
+            include: {
+              personnel: { include: { lot: { select: { id: true, lotNumber: true } } } },
+              plant: { include: { lot: { select: { id: true, lotNumber: true } } } },
+              activities: { include: { lot: { select: { id: true, lotNumber: true } } } },
+              visitors: true,
+              delays: { include: { lot: { select: { id: true, lotNumber: true } } } },
+              deliveries: { include: { lot: { select: { id: true, lotNumber: true } } } },
+              events: { include: { lot: { select: { id: true, lotNumber: true } } } },
+            },
+          });
+
+          return { diary, existing: true };
+        }
+
+        // Create new diary
+        const diary = await tx.dailyDiary.create({
           data: {
+            projectId: data.projectId,
+            date: diaryDate,
+            status: 'draft',
             weatherConditions: data.weatherConditions,
             temperatureMin: data.temperatureMin,
             temperatureMax: data.temperatureMax,
@@ -298,35 +327,23 @@ router.post(
           },
         });
 
-        return { diary, existing: true };
-      }
-
-      // Create new diary
-      const diary = await tx.dailyDiary.create({
-        data: {
-          projectId: data.projectId,
-          date: diaryDate,
-          status: 'draft',
-          weatherConditions: data.weatherConditions,
-          temperatureMin: data.temperatureMin,
-          temperatureMax: data.temperatureMax,
-          rainfallMm: data.rainfallMm,
-          weatherNotes: data.weatherNotes,
-          generalNotes: data.generalNotes,
-        },
-        include: {
-          personnel: { include: { lot: { select: { id: true, lotNumber: true } } } },
-          plant: { include: { lot: { select: { id: true, lotNumber: true } } } },
-          activities: { include: { lot: { select: { id: true, lotNumber: true } } } },
-          visitors: true,
-          delays: { include: { lot: { select: { id: true, lotNumber: true } } } },
-          deliveries: { include: { lot: { select: { id: true, lotNumber: true } } } },
-          events: { include: { lot: { select: { id: true, lotNumber: true } } } },
-        },
+        return { diary, existing: false };
       });
 
-      return { diary, existing: false };
-    });
+    let result: Awaited<ReturnType<typeof upsertDiaryForDate>>;
+    try {
+      result = await upsertDiaryForDate();
+    } catch (error) {
+      // A concurrent request created the diary for this (projectId, date) between
+      // our existence check and the insert. Re-run once: the row now exists, so we
+      // take the update branch and return 200 — instead of a confusing 409/500 that
+      // the offline sync worker treats as a permanent failure (M83/M34).
+      if (!isUniqueConstraintOn(error, ['projectId', 'date'])) {
+        throw error;
+      }
+      result = await upsertDiaryForDate();
+    }
+    const { diary, existing } = result;
 
     res.status(existing ? 200 : 201).json(diary);
   }),

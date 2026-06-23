@@ -180,6 +180,71 @@ describe('Daily Diary API', () => {
       expect(res.body.generalNotes).toBe('Updated notes');
     });
 
+    it('resolves a concurrent first-write race to the same diary without a 409 (M83/M34)', async () => {
+      // A far-future date unique to this test so the row it creates can't collide
+      // with another test's date assertions; it is also cleaned up below.
+      const raceDate = new Date(Date.now() + 400 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+      // Hold both requests at the existence check until both have read "no diary
+      // yet", so the second insert hits the (projectId, date) unique constraint
+      // and must fall back to the update path rather than 409/500.
+      let releaseReads: () => void = () => {};
+      const bothRead = new Promise<void>((resolve) => {
+        releaseReads = resolve;
+      });
+      let matchingReads = 0;
+      let active = true;
+      const fallback = setTimeout(() => releaseReads(), 1500);
+
+      prisma.$use(async (params, next) => {
+        const result = await next(params);
+        const where = params.args?.where as { projectId?: string; date?: unknown } | undefined;
+        if (
+          active &&
+          params.model === 'DailyDiary' &&
+          params.action === 'findFirst' &&
+          where?.projectId === projectId &&
+          where?.date
+        ) {
+          matchingReads += 1;
+          if (matchingReads >= 2) {
+            clearTimeout(fallback);
+            releaseReads();
+          }
+          await bothRead;
+        }
+        return result;
+      });
+
+      try {
+        const [a, b] = await Promise.all([
+          request(app)
+            .post('/api/diary')
+            .set('Authorization', `Bearer ${authToken}`)
+            .send({ projectId, date: raceDate }),
+          request(app)
+            .post('/api/diary')
+            .set('Authorization', `Bearer ${authToken}`)
+            .send({ projectId, date: raceDate }),
+        ]);
+
+        active = false;
+        expect([200, 201]).toContain(a.status);
+        expect([200, 201]).toContain(b.status);
+        expect(a.body.id).toBeDefined();
+        expect(a.body.id).toBe(b.body.id);
+
+        // Don't leave the raced diary behind for later tests.
+        if (a.body.id) {
+          await prisma.dailyDiary.delete({ where: { id: a.body.id } }).catch(() => {});
+        }
+      } finally {
+        active = false;
+        clearTimeout(fallback);
+        releaseReads();
+      }
+    });
+
     it('should reject invalid diary dates', async () => {
       const res = await request(app)
         .post('/api/diary')
@@ -327,7 +392,9 @@ describe('Daily Diary API', () => {
           await prisma.dailyDiary.create({
             data: {
               projectId,
-              date: new Date(Date.now() + 345600000),
+              // +13d, unique to this test so it can't collide with the
+              // viewer-submission test's fresh-draft date (test isolation).
+              date: new Date(Date.now() + 1123200000),
             },
           })
         ).id;
@@ -1037,7 +1104,9 @@ describe('Daily Diary API', () => {
         .set('Authorization', `Bearer ${authToken}`)
         .send({
           projectId,
-          date: new Date(Date.now() + 345600000).toISOString().split('T')[0],
+          // +17d, unique to this test so the fresh-draft create is always a 201
+          // (the subcontractor-read test above used to share +4d -> flaky 200).
+          date: new Date(Date.now() + 1468800000).toISOString().split('T')[0],
         });
       expect(draftRes.status).toBe(201);
 
