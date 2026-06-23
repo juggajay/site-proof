@@ -115,7 +115,7 @@ describe('CompanyBillingSection', () => {
     expect(screen.getByText('$99/month')).toBeInTheDocument();
     expect(screen.getByText('2 / 3')).toBeInTheDocument();
     expect(screen.getByText('4 / 5')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Upgrade Plan' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Contact Us to Add Capacity' })).toHaveAttribute(
       'href',
       expect.stringContaining('billing@example.com'),
     );

@@ -66,7 +66,7 @@ describe('CompanyUsageSection', () => {
     expect(screen.getByText('50 of Unlimited projects used')).toBeInTheDocument();
     expect(screen.getByText('5 of Unlimited users in company')).toBeInTheDocument();
     expect(container.querySelectorAll('.h-full.rounded-full')).toHaveLength(0);
-    expect(screen.queryByText(/reached your project limit/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/project allowance/)).not.toBeInTheDocument();
   });
 
   it('colors the project bar success below 80%, warning at 80%, and destructive at the limit', () => {
@@ -93,9 +93,7 @@ describe('CompanyUsageSection', () => {
     bar = getOnlyProgressBar(red.container);
     expect(bar).toHaveClass('bg-destructive');
     expect(
-      screen.getByText(
-        "You've reached your project limit. Upgrade your plan to create more projects.",
-      ),
+      screen.getByText("You've reached your plan's project allowance. Contact us to add capacity."),
     ).toBeInTheDocument();
   });
 
@@ -118,7 +116,7 @@ describe('CompanyUsageSection', () => {
 
     expect(
       screen.getByText(
-        "You've reached your user limit. Remove inactive team members, cancel pending invitations, or upgrade your plan to add more people.",
+        "You've reached your plan's user allowance. Remove inactive team members, cancel pending invitations, or contact us to add capacity.",
       ),
     ).toBeInTheDocument();
   });
