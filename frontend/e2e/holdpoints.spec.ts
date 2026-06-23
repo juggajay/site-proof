@@ -500,6 +500,21 @@ async function mockPublicHoldPointReleaseApi(
   };
 }
 
+// M20: the public secure-link release requires a signature. Draw a short stroke
+// on the SignaturePad canvas so onChange fires a non-empty data URL and the
+// "Release Hold Point" button becomes enabled.
+async function drawReleaseSignature(page: Page) {
+  const canvas = page.locator('canvas');
+  await expect(canvas).toBeVisible();
+  const box = await canvas.boundingBox();
+  if (!box) throw new Error('Signature canvas was not rendered');
+  await page.mouse.move(box.x + box.width * 0.25, box.y + box.height * 0.5);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.35);
+  await page.mouse.move(box.x + box.width * 0.75, box.y + box.height * 0.6);
+  await page.mouse.up();
+}
+
 test.describe('Hold points seeded release contract', () => {
   test('renders seeded hold points, requests release, filters notified items, and chases release @pr-smoke', async ({
     page,
@@ -793,6 +808,9 @@ test.describe('Public hold point secure release page', () => {
 
     await page.getByLabel('Organisation').fill('Client Superintendent Org');
     await page.getByLabel('Release Notes').fill('Evidence reviewed and accepted');
+    // M20: signature is required before the release can be submitted.
+    await expect(page.getByRole('button', { name: 'Release Hold Point' })).toBeDisabled();
+    await drawReleaseSignature(page);
     await page.getByRole('button', { name: 'Release Hold Point' }).click();
 
     await expect.poll(() => api.getReleaseCount()).toBe(1);
@@ -824,6 +842,9 @@ test.describe('Public hold point secure release page', () => {
     await expect(page.getByRole('button', { name: 'Release Hold Point' })).toBeDisabled();
 
     await releasedBy.fill('Typed External Reviewer');
+    // M20: still disabled until a signature is captured.
+    await expect(page.getByRole('button', { name: 'Release Hold Point' })).toBeDisabled();
+    await drawReleaseSignature(page);
     await page.getByRole('button', { name: 'Release Hold Point' }).click();
 
     await expect.poll(() => api.getReleaseCount()).toBe(1);
@@ -873,6 +894,7 @@ test.describe('Public hold point secure release page', () => {
     expect(overflow).toBeLessThanOrEqual(1);
 
     await page.getByLabel('Released By').fill('Mobile External Reviewer');
+    await drawReleaseSignature(page);
     await page.getByRole('button', { name: 'Release Hold Point' }).click();
 
     await expect.poll(() => api.getReleaseCount()).toBe(1);
@@ -904,6 +926,7 @@ test.describe('Public hold point secure release page', () => {
     await page.goto('/hp-release/e2e-public-token');
 
     await page.getByLabel('Organisation').fill('Client Superintendent Org');
+    await drawReleaseSignature(page);
     await page.getByRole('button', { name: 'Release Hold Point' }).click();
 
     await expect.poll(() => api.getReleaseCount()).toBe(1);

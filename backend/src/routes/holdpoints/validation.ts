@@ -171,6 +171,17 @@ export const nullableSignatureDataUrlSchema = nullableTrimmedStringSchema(
   'signatureDataUrl must be a base64 PNG, JPEG, or WebP image data URL',
 );
 
+// M20: the public secure-link release page must capture the external reviewer's
+// signature, so it is required (unlike the authenticated release, which allows
+// email-confirmation releases without a drawn signature).
+export const requiredSignatureDataUrlSchema = requiredTrimmedStringSchema(
+  'signatureDataUrl',
+  MAX_SIGNATURE_DATA_URL_LENGTH,
+).refine(
+  (value) => SIGNATURE_IMAGE_DATA_URL_RE.test(value),
+  'A signature is required to release this hold point.',
+);
+
 export const nullableScheduledDateSchema = nullableTrimmedStringSchema(
   MAX_DATE_INPUT_LENGTH,
   'scheduledDate',
@@ -244,7 +255,7 @@ export const publicReleaseSchema = z.object({
   releasedByName: requiredTrimmedStringSchema('Released by name', MAX_NAME_LENGTH),
   releasedByOrg: optionalTrimmedStringSchema(MAX_ORG_LENGTH, 'releasedByOrg'),
   releaseNotes: optionalTrimmedStringSchema(MAX_NOTE_LENGTH, 'releaseNotes'),
-  signatureDataUrl: nullableSignatureDataUrlSchema,
+  signatureDataUrl: requiredSignatureDataUrlSchema,
 });
 
 // =============================================================================

@@ -2231,6 +2231,7 @@ describe('Hold Point Token Release', () => {
       const res = await request(app).post(`/api/holdpoints/public/${releaseToken}/release`).send({
         releasedByName: 'External Reviewer',
         releasedByOrg: 'Client Company',
+        signatureDataUrl: 'data:image/png;base64,ZmFrZS1zaWduYXR1cmU=',
       });
 
       expect(res.status).toBe(403);
@@ -2306,6 +2307,7 @@ describe('Hold Point Token Release', () => {
           releasedByName: 'Imposter Name',
           releasedByOrg: 'Client Company',
           releaseNotes: 'Approved externally',
+          signatureDataUrl: 'data:image/png;base64,ZmFrZS1zaWduYXR1cmU=',
         });
 
       expect(res.status).toBe(200);
@@ -2401,6 +2403,7 @@ describe('Hold Point Token Release', () => {
         releasedByName: 'Fresh External Reviewer',
         releasedByOrg: 'Client Company',
         releaseNotes: 'Approved from secure link before anyone ticked the ITP item',
+        signatureDataUrl: 'data:image/png;base64,ZmFrZS1zaWduYXR1cmU=',
       });
 
       expect(res.status).toBe(200);
@@ -2476,6 +2479,7 @@ describe('Hold Point Token Release', () => {
         releasedByName: 'Toggle Public External Reviewer',
         releasedByOrg: 'Client Company',
         releaseNotes: 'Project toggle should suppress team notifications',
+        signatureDataUrl: 'data:image/png;base64,ZmFrZS1zaWduYXR1cmU=',
       });
 
       expect(res.status).toBe(200);
@@ -2562,6 +2566,7 @@ describe('Hold Point Token Release', () => {
           releasedByName: 'Submitted Public Name',
           releasedByOrg: 'Client Company',
           releaseNotes: 'Approved from secure link',
+          signatureDataUrl: 'data:image/png;base64,ZmFrZS1zaWduYXR1cmU=',
         });
 
       expect(res.status).toBe(200);
@@ -2623,6 +2628,7 @@ describe('Hold Point Token Release', () => {
       releasedByName: 'External Reviewer',
       releasedByOrg: 'Client Company',
       releaseNotes: 'Approved externally',
+      signatureDataUrl: 'data:image/png;base64,ZmFrZS1zaWduYXR1cmU=',
     });
 
     expect(res.status).toBe(200);
@@ -2665,6 +2671,7 @@ describe('Hold Point Token Release', () => {
     const res = await request(app).post(`/api/holdpoints/public/${releaseToken}/release`).send({
       releasedByName: 'External Reviewer',
       releasedByOrg: 'Client Company',
+      signatureDataUrl: 'data:image/png;base64,ZmFrZS1zaWduYXR1cmU=',
     });
 
     expect(res.status).toBe(410);
