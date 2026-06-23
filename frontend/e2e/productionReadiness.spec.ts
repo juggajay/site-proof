@@ -190,13 +190,21 @@ test.describe('production readiness guardrails', () => {
   });
 
   test('foreman diary finish flow can acknowledge backend submission warnings', async () => {
+    // M30: the 422 acknowledgement-gate PARSING lives in the shared helper used
+    // by all three submit surfaces; the finish flow WIRES it into the submit +
+    // acknowledge UI.
+    const helper = await readFile(
+      new URL('../src/lib/diarySubmitWarnings.ts', import.meta.url),
+      'utf8',
+    );
+    expect(helper).toContain('extractErrorDetails');
+    expect(helper).toContain('requiresAcknowledgement');
+
     const source = await readFile(
       new URL('../src/components/foreman/DiaryFinishFlow.tsx', import.meta.url),
       'utf8',
     );
-
-    expect(source).toContain('extractErrorDetails');
-    expect(source).toContain('requiresAcknowledgement');
+    expect(source).toContain('extractSubmitWarnings');
     expect(source).toContain('acknowledgeWarnings: true');
     expect(source).toContain('Submit with warnings');
   });
