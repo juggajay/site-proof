@@ -62,7 +62,7 @@ export function CompanyUsageSection({ company }: CompanyUsageSectionProps) {
           company?.projectCount !== undefined &&
           company.projectCount >= company.projectLimit && (
             <p className="text-sm text-destructive mt-2">
-              You've reached your project limit. Upgrade your plan to create more projects.
+              You've reached your plan's project allowance. Contact us to add capacity.
             </p>
           )}
       </div>
@@ -98,8 +98,8 @@ export function CompanyUsageSection({ company }: CompanyUsageSectionProps) {
           company?.userCount !== undefined &&
           company.userCount >= company.userLimit && (
             <p className="text-sm text-destructive mt-2">
-              You've reached your user limit. Remove inactive team members, cancel pending
-              invitations, or upgrade your plan to add more people.
+              You've reached your plan's user allowance. Remove inactive team members, cancel
+              pending invitations, or contact us to add capacity.
             </p>
           )}
       </div>

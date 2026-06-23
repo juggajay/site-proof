@@ -285,7 +285,9 @@ export function CompanyBillingSection({ company, supportEmail }: CompanyBillingS
 
       <div className="flex gap-3 pt-2">
         <Button asChild>
-          <a href={supportMailtoHref(supportEmail, 'Upgrade SiteProof plan')}>Upgrade Plan</a>
+          <a href={supportMailtoHref(supportEmail, 'Add SiteProof capacity')}>
+            Contact Us to Add Capacity
+          </a>
         </Button>
         <Button asChild variant="outline">
           <a href={supportMailtoHref(supportEmail, 'SiteProof billing inquiry')}>
