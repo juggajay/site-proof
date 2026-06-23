@@ -2,6 +2,7 @@ import { Router, type Request } from 'express';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { createAuditLog, AuditAction, writeAuditLogInTransaction } from '../../lib/auditLog.js';
+import { createNotification } from '../../lib/notificationDispatch.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
@@ -174,15 +175,13 @@ export function createProjectTeamRouter({
         const inviterName = currentUser.fullName || currentUser.email || 'A team member';
 
         // Create in-app notification
-        await prisma.notification.create({
-          data: {
-            userId: invitedUser.id,
-            projectId,
-            type: 'team_invitation',
-            title: 'Team Invitation',
-            message: `${inviterName} has invited you to join ${projectDetails?.name || 'a project'} as ${role.replace('_', ' ')}.`,
-            linkUrl: `/projects/${projectId}`,
-          },
+        await createNotification({
+          userId: invitedUser.id,
+          projectId,
+          type: 'team_invitation',
+          title: 'Team Invitation',
+          message: `${inviterName} has invited you to join ${projectDetails?.name || 'a project'} as ${role.replace('_', ' ')}.`,
+          linkUrl: `/projects/${projectId}`,
         });
 
         // Send email notification
@@ -290,15 +289,13 @@ export function createProjectTeamRouter({
           const formattedNewRole = role.replace(/_/g, ' ');
 
           // Create in-app notification
-          await prisma.notification.create({
-            data: {
-              userId: targetUserId,
-              projectId,
-              type: 'role_change',
-              title: 'Role Changed',
-              message: `Your role on ${projectDetails?.name || 'a project'} has been changed from ${formattedOldRole} to ${formattedNewRole} by ${changerName}.`,
-              linkUrl: `/projects/${projectId}`,
-            },
+          await createNotification({
+            userId: targetUserId,
+            projectId,
+            type: 'role_change',
+            title: 'Role Changed',
+            message: `Your role on ${projectDetails?.name || 'a project'} has been changed from ${formattedOldRole} to ${formattedNewRole} by ${changerName}.`,
+            linkUrl: `/projects/${projectId}`,
           });
 
           // Send email notification
@@ -394,15 +391,13 @@ export function createProjectTeamRouter({
         const formattedRole = removedProjectUser.role.replace(/_/g, ' ');
 
         // Create in-app notification
-        await prisma.notification.create({
-          data: {
-            userId: targetUserId,
-            projectId: null, // Project access has been removed, so we don't link to the project
-            type: 'project_removal',
-            title: 'Removed from Project',
-            message: `You have been removed from ${projectDetails?.name || 'a project'} by ${removerName}. Your previous role was ${formattedRole}.`,
-            linkUrl: '/projects', // Link to projects list since they no longer have access to this project
-          },
+        await createNotification({
+          userId: targetUserId,
+          projectId: null, // Project access has been removed, so we don't link to the project
+          type: 'project_removal',
+          title: 'Removed from Project',
+          message: `You have been removed from ${projectDetails?.name || 'a project'} by ${removerName}. Your previous role was ${formattedRole}.`,
+          linkUrl: '/projects', // Link to projects list since they no longer have access to this project
         });
 
         // Send email notification
