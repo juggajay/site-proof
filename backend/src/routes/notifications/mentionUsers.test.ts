@@ -67,12 +67,20 @@ describe('buildMentionableUserFilters', () => {
     expect(filters).toEqual([{ companyId: 'company-1' }]);
   });
 
-  it('adds a lower-cased email/fullName contains filter for a 2+ character search', () => {
+  it('adds a case-insensitive email/fullName contains filter for a 2+ character search', () => {
+    // Postgres `contains` is case-sensitive without mode:'insensitive', so a
+    // lower-cased search would never match an original-cased stored name. The
+    // filter must use insensitive mode against the original search text.
     const filters = buildMentionableUserFilters(makeUser({ companyId: 'company-1' }), 'AB');
 
     expect(filters).toEqual([
       { companyId: 'company-1' },
-      { OR: [{ email: { contains: 'ab' } }, { fullName: { contains: 'ab' } }] },
+      {
+        OR: [
+          { email: { contains: 'AB', mode: 'insensitive' } },
+          { fullName: { contains: 'AB', mode: 'insensitive' } },
+        ],
+      },
     ]);
   });
 

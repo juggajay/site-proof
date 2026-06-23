@@ -39,14 +39,18 @@ export async function createMentionNotifications(
       })
     : null;
 
-  // Find users by email or fullName (case-insensitive for SQLite)
+  // Find users by email or fullName. Postgres equality is case-sensitive, so
+  // match insensitively against the original mention text — otherwise a
+  // display-name @mention silently matches nobody and no notification is sent.
   for (const mention of uniqueMentions) {
-    const mentionLower = mention.toLowerCase();
     const user = await prisma.user.findFirst({
       where: {
         AND: [
           {
-            OR: [{ email: mentionLower }, { fullName: mentionLower }],
+            OR: [
+              { email: { equals: mention, mode: 'insensitive' } },
+              { fullName: { equals: mention, mode: 'insensitive' } },
+            ],
           },
           projectId && project
             ? {
