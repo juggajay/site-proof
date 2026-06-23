@@ -181,7 +181,9 @@ describe('Daily Diary API', () => {
     });
 
     it('resolves a concurrent first-write race to the same diary without a 409 (M83/M34)', async () => {
-      const raceDate = new Date(Date.now() + 4 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      // A far-future date unique to this test so the row it creates can't collide
+      // with another test's date assertions; it is also cleaned up below.
+      const raceDate = new Date(Date.now() + 400 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
       // Hold both requests at the existence check until both have read "no diary
       // yet", so the second insert hits the (projectId, date) unique constraint
@@ -231,6 +233,11 @@ describe('Daily Diary API', () => {
         expect([200, 201]).toContain(b.status);
         expect(a.body.id).toBeDefined();
         expect(a.body.id).toBe(b.body.id);
+
+        // Don't leave the raced diary behind for later tests.
+        if (a.body.id) {
+          await prisma.dailyDiary.delete({ where: { id: a.body.id } }).catch(() => {});
+        }
       } finally {
         active = false;
         clearTimeout(fallback);
@@ -385,7 +392,9 @@ describe('Daily Diary API', () => {
           await prisma.dailyDiary.create({
             data: {
               projectId,
-              date: new Date(Date.now() + 345600000),
+              // +13d, unique to this test so it can't collide with the
+              // viewer-submission test's fresh-draft date (test isolation).
+              date: new Date(Date.now() + 1123200000),
             },
           })
         ).id;
@@ -1095,7 +1104,9 @@ describe('Daily Diary API', () => {
         .set('Authorization', `Bearer ${authToken}`)
         .send({
           projectId,
-          date: new Date(Date.now() + 345600000).toISOString().split('T')[0],
+          // +17d, unique to this test so the fresh-draft create is always a 201
+          // (the subcontractor-read test above used to share +4d -> flaky 200).
+          date: new Date(Date.now() + 1468800000).toISOString().split('T')[0],
         });
       expect(draftRes.status).toBe(201);
 
