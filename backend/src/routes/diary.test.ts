@@ -392,7 +392,9 @@ describe('Daily Diary API', () => {
           await prisma.dailyDiary.create({
             data: {
               projectId,
-              date: new Date(Date.now() + 345600000),
+              // +13d, unique to this test so it can't collide with the
+              // viewer-submission test's fresh-draft date (test isolation).
+              date: new Date(Date.now() + 1123200000),
             },
           })
         ).id;
@@ -1102,7 +1104,9 @@ describe('Daily Diary API', () => {
         .set('Authorization', `Bearer ${authToken}`)
         .send({
           projectId,
-          date: new Date(Date.now() + 345600000).toISOString().split('T')[0],
+          // +17d, unique to this test so the fresh-draft create is always a 201
+          // (the subcontractor-read test above used to share +4d -> flaky 200).
+          date: new Date(Date.now() + 1468800000).toISOString().split('T')[0],
         });
       expect(draftRes.status).toBe(201);
 
