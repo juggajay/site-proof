@@ -4,6 +4,7 @@ import { useTimezone } from '@/lib/timezone';
 import type { LotStatusReport } from '../types';
 import { STATUS_COLORS, STATUS_LABELS } from '../types';
 import { formatReportDateTime } from '../reportFormatting';
+import { buildReportPaginationCaption } from '../reportPagination';
 
 export interface LotStatusTabProps {
   report: LotStatusReport;
@@ -13,6 +14,11 @@ export const LotStatusTab = React.memo(function LotStatusTab({ report }: LotStat
   const { dateFormat } = useDateFormat();
   const { timezone } = useTimezone();
   const generatedAt = formatReportDateTime(report.generatedAt, dateFormat, timezone);
+  const paginationCaption = buildReportPaginationCaption(
+    report.lots.length,
+    report.totalLots,
+    'lots',
+  );
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
@@ -183,6 +189,9 @@ export const LotStatusTab = React.memo(function LotStatusTab({ report }: LotStat
 
         {/* Lots Table */}
         <h3 className="text-lg font-medium mb-3">Lot Details</h3>
+        {paginationCaption && (
+          <p className="text-sm text-muted-foreground mb-3">{paginationCaption}</p>
+        )}
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-border">
             <thead className="bg-muted">

@@ -278,9 +278,11 @@ export function createDiaryReportRouter({
       // Parse sections parameter (comma-separated) - default to all sections
       const selectedSections = parseDiaryReportSections(sections, parseOptionalCommaSeparatedQuery);
 
-      // Build date filter
+      // Build date filter. endDate is parsed to end-of-day (23:59:59.999) so a
+      // diary saved later on the end date is still included — matching the test
+      // and claim reports (M70).
       const parsedStartDate = parseOptionalDateQuery(startDate, 'startDate');
-      const parsedEndDate = parseOptionalDateQuery(endDate, 'endDate');
+      const parsedEndDate = parseOptionalDateQuery(endDate, 'endDate', true);
       validateDateRange(parsedStartDate, parsedEndDate);
       const dateFilter: { gte?: Date; lte?: Date } = {};
       if (parsedStartDate) {
