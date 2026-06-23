@@ -125,13 +125,11 @@ export function SubcontractorLotITPPage() {
       },
     });
 
-  const handleToggleCompletionForChecklist = async (
+  const handleToggleCompletionForChecklist = (
     checklistItemId: string,
     isCompleted: boolean,
     notes: string | null,
-  ): Promise<void> => {
-    await handleToggleCompletion(checklistItemId, isCompleted, notes);
-  };
+  ): Promise<boolean> => handleToggleCompletion(checklistItemId, isCompleted, notes);
 
   const handleAddPhoto = async (checklistItemId: string, file: File) => {
     if (!itpInstance || !lot) return;

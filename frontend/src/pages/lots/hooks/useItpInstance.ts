@@ -215,27 +215,32 @@ export function useItpInstance({
     refreshNcrsAfterFailure,
   });
 
+  // Returns true when the toggle is handled (saved, queued offline, or a
+  // witness/evidence gate modal was opened to continue the completion) and false
+  // only when a save was attempted and definitively failed. M57: the mobile PASS
+  // sheet awaits this and closes only on a truthy result.
   const toggleCompletion = async (
     checklistItemId: string,
     currentlyCompleted: boolean,
     existingNotes: string | null,
     forceComplete = false,
     witnessData?: { witnessPresent: boolean; witnessName?: string; witnessCompany?: string },
-  ) => {
-    if (!itpInstance || updatingCompletionRef.current === checklistItemId) return;
+  ): Promise<boolean> => {
+    if (!itpInstance || updatingCompletionRef.current === checklistItemId) return false;
 
     const item = itpInstance.template.checklistItems.find((i) => i.id === checklistItemId);
     const completion = itpInstance.completions.find((c) => c.checklistItemId === checklistItemId);
 
     // Check if this is a witness point and we're completing (not uncompleting)
     if (!currentlyCompleted && !forceComplete && item?.pointType === 'witness' && !witnessData) {
-      // Show witness modal to collect witness details
+      // Show witness modal to collect witness details. The gate modal takes over,
+      // so the originating sheet may close (true) — the save continues there.
       onRequestWitness({
         checklistItemId,
         itemDescription: item.description,
         existingNotes,
       });
-      return;
+      return true;
     }
 
     // Check if this item requires evidence and doesn't have any yet
@@ -258,7 +263,7 @@ export function useItpInstance({
           evidenceType: evidenceTypeLabel,
           currentNotes: existingNotes,
         });
-        return;
+        return true;
       }
     }
 
@@ -291,6 +296,7 @@ export function useItpInstance({
           variant: 'default',
         });
       }
+      return true;
     } catch (err) {
       // Definitive rejections (4xx, e.g. the hold-point guard) reach here.
       logError('Failed to update completion:', err);
@@ -299,6 +305,7 @@ export function useItpInstance({
         description: 'Failed to update checklist item. Please try again.',
         variant: 'error',
       });
+      return false;
     } finally {
       updatingCompletionRef.current = null;
       setUpdatingCompletion(null);

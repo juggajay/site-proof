@@ -48,7 +48,7 @@ export interface ITPChecklistTabProps {
     existingNotes: string | null,
     forceComplete?: boolean,
     witnessData?: { witnessPresent: boolean; witnessName?: string; witnessCompany?: string },
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   onUpdateNotes: (checklistItemId: string, notes: string) => Promise<void>;
   /** Must resolve true on success / false on failure so the mobile sheet can stay open. */
   onMarkAsNA: (checklistItemId: string, reason: string) => Promise<boolean>;
@@ -256,9 +256,9 @@ export function ITPChecklistTab({
         templateName={itpInstance.template.name}
         checklistItems={itpInstance.template.checklistItems}
         completions={itpInstance.completions}
-        onToggleCompletion={async (checklistItemId, isCompleted, notes) => {
-          await onToggleCompletion(checklistItemId, !isCompleted, notes);
-        }}
+        onToggleCompletion={(checklistItemId, isCompleted, notes) =>
+          onToggleCompletion(checklistItemId, !isCompleted, notes)
+        }
         onMarkNotApplicable={onMarkAsNA}
         onMarkFailed={onMarkAsFailed}
         onUpdateNotes={onUpdateNotes}
