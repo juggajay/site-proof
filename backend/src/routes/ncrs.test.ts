@@ -3089,6 +3089,13 @@ describe('Major NCR QM Approval', () => {
       },
     });
 
+    // Major NCRs require the client to have been notified before they can be
+    // closed (M27); record that here so the close proceeds normally.
+    await prisma.nCR.update({
+      where: { id: ncrId },
+      data: { clientNotifiedAt: new Date() },
+    });
+
     try {
       const res = await request(app)
         .post(`/api/ncrs/${ncrId}/close`)
