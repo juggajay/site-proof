@@ -7,7 +7,7 @@ import { requireScope } from './apiKeys.js';
 import crypto from 'crypto';
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
-import { AuditAction, createAuditLog } from '../lib/auditLog.js';
+import { AuditAction, writeAuditLogInTransaction } from '../lib/auditLog.js';
 import { prisma } from '../lib/prisma.js';
 import { encrypt } from '../lib/encryption.js';
 import {
@@ -214,25 +214,32 @@ router.post(
 
     const eventList = normalizeEvents(events);
     const secret = crypto.randomBytes(32).toString('hex');
-    const config = toWebhookConfig(
-      await prisma.webhookConfig.create({
-        data: {
-          companyId: user.companyId!,
-          url: webhookUrl,
-          secret: encryptWebhookSecret(secret),
-          events: serializeEvents(eventList),
-          enabled: true,
-          createdById: user.id,
-        },
-      }),
-    );
-    await createAuditLog({
-      userId: user.id,
-      entityType: 'webhook',
-      entityId: config.id,
-      action: AuditAction.WEBHOOK_CREATED,
-      changes: getWebhookAuditSnapshot(config),
-      req,
+    // M73: create the webhook and its audit entry atomically so the config
+    // cannot be persisted without a corresponding audit record.
+    const config = await prisma.$transaction(async (tx) => {
+      const created = toWebhookConfig(
+        await tx.webhookConfig.create({
+          data: {
+            companyId: user.companyId!,
+            url: webhookUrl,
+            secret: encryptWebhookSecret(secret),
+            events: serializeEvents(eventList),
+            enabled: true,
+            createdById: user.id,
+          },
+        }),
+      );
+
+      await writeAuditLogInTransaction(tx, {
+        userId: user.id,
+        entityType: 'webhook',
+        entityId: created.id,
+        action: AuditAction.WEBHOOK_CREATED,
+        changes: getWebhookAuditSnapshot(created),
+        req,
+      });
+
+      return created;
     });
 
     res.status(201).json(buildWebhookCreatedResponse(config));
@@ -296,23 +303,30 @@ router.patch(
       data.enabled = enabled;
     }
 
-    const updatedConfig = toWebhookConfigMetadata(
-      await prisma.webhookConfig.update({
-        where: { id },
-        data,
-      }),
-    );
-    const auditChanges = buildWebhookUpdateAuditChanges(config, updatedConfig);
-    if (Object.keys(auditChanges).length > 0) {
-      await createAuditLog({
-        userId: user.id,
-        entityType: 'webhook',
-        entityId: updatedConfig.id,
-        action: AuditAction.WEBHOOK_UPDATED,
-        changes: auditChanges,
-        req,
-      });
-    }
+    // M73: update the webhook and write its audit entry in the same
+    // transaction so the change cannot persist without an audit record.
+    const updatedConfig = await prisma.$transaction(async (tx) => {
+      const updated = toWebhookConfigMetadata(
+        await tx.webhookConfig.update({
+          where: { id },
+          data,
+        }),
+      );
+
+      const auditChanges = buildWebhookUpdateAuditChanges(config, updated);
+      if (Object.keys(auditChanges).length > 0) {
+        await writeAuditLogInTransaction(tx, {
+          userId: user.id,
+          entityType: 'webhook',
+          entityId: updated.id,
+          action: AuditAction.WEBHOOK_UPDATED,
+          changes: auditChanges,
+          req,
+        });
+      }
+
+      return updated;
+    });
 
     res.json(toPublicWebhookConfig(updatedConfig));
   }),
@@ -335,14 +349,19 @@ router.delete(
       throw AppError.forbidden('Access denied');
     }
 
-    await prisma.webhookConfig.delete({ where: { id } });
-    await createAuditLog({
-      userId: user.id,
-      entityType: 'webhook',
-      entityId: config.id,
-      action: AuditAction.WEBHOOK_DELETED,
-      changes: getWebhookAuditSnapshot(config),
-      req,
+    // M73: delete the webhook and write its audit entry in the same
+    // transaction so the deletion cannot persist without an audit record.
+    await prisma.$transaction(async (tx) => {
+      await tx.webhookConfig.delete({ where: { id } });
+
+      await writeAuditLogInTransaction(tx, {
+        userId: user.id,
+        entityType: 'webhook',
+        entityId: config.id,
+        action: AuditAction.WEBHOOK_DELETED,
+        changes: getWebhookAuditSnapshot(config),
+        req,
+      });
     });
 
     res.status(204).send();
@@ -375,17 +394,22 @@ router.post(
     }
 
     const secret = crypto.randomBytes(32).toString('hex');
-    await prisma.webhookConfig.update({
-      where: { id },
-      data: { secret: encryptWebhookSecret(secret) },
-    });
-    await createAuditLog({
-      userId: user.id,
-      entityType: 'webhook',
-      entityId: record.id,
-      action: AuditAction.WEBHOOK_SECRET_REGENERATED,
-      changes: { regenerated: true },
-      req,
+    // M73: rotate the secret and write its audit entry in the same transaction
+    // so the new secret cannot persist without an audit record.
+    await prisma.$transaction(async (tx) => {
+      await tx.webhookConfig.update({
+        where: { id },
+        data: { secret: encryptWebhookSecret(secret) },
+      });
+
+      await writeAuditLogInTransaction(tx, {
+        userId: user.id,
+        entityType: 'webhook',
+        entityId: record.id,
+        action: AuditAction.WEBHOOK_SECRET_REGENERATED,
+        changes: { regenerated: true },
+        req,
+      });
     });
 
     res.json(buildWebhookSecretRegeneratedResponse(record.id, secret));

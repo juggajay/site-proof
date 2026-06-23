@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { prisma } from './prisma.js';
 import { Request } from 'express';
 import { sanitizeUrlValueForLog } from './logSanitization.js';
@@ -58,11 +59,7 @@ export function sanitizeAuditChanges(changes: Record<string, unknown>): Record<s
   );
 }
 
-/**
- * Create an audit log entry
- * Used to track changes to important entities like users, roles, projects
- */
-export async function createAuditLog({
+function buildAuditLogData({
   projectId,
   userId,
   entityType,
@@ -70,24 +67,51 @@ export async function createAuditLog({
   action,
   changes,
   req,
-}: AuditLogParams): Promise<void> {
+}: AuditLogParams): Prisma.AuditLogUncheckedCreateInput {
+  return {
+    projectId,
+    userId,
+    entityType,
+    entityId,
+    action,
+    changes: changes ? JSON.stringify(sanitizeAuditChanges(changes)) : null,
+    ipAddress: req?.ip || req?.connection?.remoteAddress || null,
+    userAgent: req?.get('user-agent') || null,
+  };
+}
+
+/**
+ * Create an audit log entry (best-effort).
+ *
+ * Failures are logged but never propagated, so a transient audit-store outage
+ * cannot block the main operation. Use this for high-frequency, low-stakes
+ * events (logins, profile reads). For privileged company/security actions
+ * where losing the audit trail is unacceptable, use
+ * {@link writeAuditLogInTransaction} instead so the action hard-fails.
+ */
+export async function createAuditLog(params: AuditLogParams): Promise<void> {
   try {
-    await prisma.auditLog.create({
-      data: {
-        projectId,
-        userId,
-        entityType,
-        entityId,
-        action,
-        changes: changes ? JSON.stringify(sanitizeAuditChanges(changes)) : null,
-        ipAddress: req?.ip || req?.connection?.remoteAddress || null,
-        userAgent: req?.get('user-agent') || null,
-      },
-    });
+    await prisma.auditLog.create({ data: buildAuditLogData(params) });
   } catch (error) {
     // Log error but don't fail the main operation
     logError('Failed to create audit log:', error);
   }
+}
+
+/**
+ * Write an audit log entry inside an existing transaction, propagating any
+ * failure so the surrounding transaction rolls back (hard-fail).
+ *
+ * Use for privileged company/security actions — role changes, ownership
+ * transfer, member/key/webhook deletions and mutations — where the change
+ * must not be persisted without a corresponding audit record. The audit write
+ * must share the caller's transaction client so both commit or both roll back.
+ */
+export async function writeAuditLogInTransaction(
+  tx: Prisma.TransactionClient,
+  params: AuditLogParams,
+): Promise<void> {
+  await tx.auditLog.create({ data: buildAuditLogData(params) });
 }
 
 export function parseAuditLogChanges(changes: string | null): unknown {

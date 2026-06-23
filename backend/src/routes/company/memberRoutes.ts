@@ -7,7 +7,7 @@ import { asyncHandler } from '../../lib/asyncHandler.js';
 import { buildFrontendUrl } from '../../lib/runtimeConfig.js';
 import { assertCanRemoveUserFromProjectAdminRoles } from '../../lib/projectAdminInvariant.js';
 import { logError } from '../../lib/serverLogger.js';
-import { AuditAction, createAuditLog } from '../../lib/auditLog.js';
+import { AuditAction, createAuditLog, writeAuditLogInTransaction } from '../../lib/auditLog.js';
 import { sendCompanyMemberInvitationEmail } from '../../lib/email.js';
 import { createEmailDeliveryFailureError } from '../../lib/emailDeliveryErrors.js';
 import { requireEmailVerified } from '../../middleware/requireEmailVerified.js';
@@ -584,33 +584,34 @@ companyMemberRoutes.delete(
         removalStatus = 'cancelled';
         await tx.emailVerificationToken.deleteMany({ where: { userId: memberId } });
         await tx.user.delete({ where: { id: memberId } });
-        return;
+      } else {
+        await tx.user.update({
+          where: { id: memberId },
+          data: {
+            companyId: null,
+            roleInCompany: 'member',
+          },
+        });
       }
 
-      await tx.user.update({
-        where: { id: memberId },
-        data: {
-          companyId: null,
-          roleInCompany: 'member',
+      // M73: write the audit record inside the transaction so the removal
+      // cannot persist without it (hard-fail).
+      await writeAuditLogInTransaction(tx, {
+        userId: user.userId,
+        entityType: 'user',
+        entityId: memberId,
+        action: AuditAction.USER_REMOVED,
+        changes: {
+          removedUserId: memberId,
+          removedUserEmail: targetEmail,
+          companyId,
+          previousRole,
+          status: removalStatus,
+          removedProjectMembershipCount,
+          cancelledSetupInviteCount,
         },
+        req,
       });
-    });
-
-    await createAuditLog({
-      userId: user.userId,
-      entityType: 'user',
-      entityId: memberId,
-      action: AuditAction.USER_REMOVED,
-      changes: {
-        removedUserId: memberId,
-        removedUserEmail: targetEmail,
-        companyId,
-        previousRole,
-        status: removalStatus,
-        removedProjectMembershipCount,
-        cancelledSetupInviteCount,
-      },
-      req,
     });
 
     res.json(buildCompanyMemberRemovedResponse({ memberId, status: removalStatus, removedAt }));
@@ -635,6 +636,7 @@ companyMemberRoutes.post(
     if (!user.companyId) {
       throw AppError.notFound('Company');
     }
+    const companyId = user.companyId;
 
     // Only owners can transfer ownership
     if (user.roleInCompany !== 'owner') {
@@ -706,21 +708,23 @@ companyMemberRoutes.post(
         data: { roleInCompany: 'owner' },
       });
 
-      return { newOwner, transferredAt: new Date() };
-    });
+      // M73: write the audit record inside the transaction so ownership cannot
+      // transfer without it (hard-fail).
+      await writeAuditLogInTransaction(tx, {
+        userId: user.userId,
+        entityType: 'company',
+        entityId: companyId,
+        action: AuditAction.COMPANY_OWNERSHIP_TRANSFERRED,
+        changes: {
+          previousOwnerId: user.userId,
+          newOwnerId,
+          previousOwnerRole: { from: 'owner', to: 'admin' },
+          newOwnerRole: { from: newOwner.roleInCompany, to: 'owner' },
+        },
+        req,
+      });
 
-    await createAuditLog({
-      userId: user.userId,
-      entityType: 'company',
-      entityId: user.companyId,
-      action: AuditAction.COMPANY_OWNERSHIP_TRANSFERRED,
-      changes: {
-        previousOwnerId: user.userId,
-        newOwnerId,
-        previousOwnerRole: { from: 'owner', to: 'admin' },
-        newOwnerRole: { from: newOwner.roleInCompany, to: 'owner' },
-      },
-      req,
+      return { newOwner, transferredAt: new Date() };
     });
 
     res.json(buildCompanyOwnershipTransferredResponse(newOwner, transferredAt));
