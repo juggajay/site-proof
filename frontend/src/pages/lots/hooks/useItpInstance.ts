@@ -416,6 +416,61 @@ export function useItpInstance({
     }
   };
 
+  // H4: head-contractor verifies a subcontractor completion that is awaiting
+  // verification. Re-fetches the instance afterwards so the derived verification
+  // flags (isVerified/isPendingVerification/isRejected from the M15 transform)
+  // refresh correctly. Returns true on success.
+  const verifyCompletion = async (completionId: string): Promise<boolean> => {
+    try {
+      await apiFetch(`/api/itp/completions/${encodeURIComponent(completionId)}/verify`, {
+        method: 'POST',
+      });
+      await fetchItpInstance();
+      refetchReadiness();
+      refetchConformStatus();
+      toast({
+        title: 'Item verified',
+        description: 'The ITP item has been verified.',
+      });
+      return true;
+    } catch (err) {
+      handleApiError(err, 'Failed to verify item');
+      return false;
+    }
+  };
+
+  // H4: head-contractor rejects a completion awaiting verification with a
+  // mandatory reason; the subcontractor is notified to resubmit (which clears
+  // the rejection via the H6 backend path). Returns true on success.
+  const rejectCompletion = async (completionId: string, reason: string): Promise<boolean> => {
+    if (!reason.trim()) {
+      toast({
+        title: 'Reason required',
+        description: 'Please provide a reason for rejecting this item.',
+        variant: 'error',
+      });
+      return false;
+    }
+
+    try {
+      await apiFetch(`/api/itp/completions/${encodeURIComponent(completionId)}/reject`, {
+        method: 'POST',
+        body: JSON.stringify({ reason: reason.trim() }),
+      });
+      await fetchItpInstance();
+      refetchReadiness();
+      refetchConformStatus();
+      toast({
+        title: 'Item rejected',
+        description: 'The subcontractor has been notified to correct and resubmit it.',
+      });
+      return true;
+    } catch (err) {
+      handleApiError(err, 'Failed to reject item');
+      return false;
+    }
+  };
+
   // Complete a witness point: force-complete the toggle with witness details,
   // then toast. The page owns the witness modal state / submitting flag and the
   // (effectively unreachable) error path, since toggleCompletion never throws.
@@ -462,5 +517,7 @@ export function useItpInstance({
     mobileMarkNA,
     mobileMarkFailed,
     completeWitnessPoint,
+    verifyCompletion,
+    rejectCompletion,
   };
 }
