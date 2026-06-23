@@ -119,6 +119,7 @@ companyMemberRoutes.post(
     const companyId = user.companyId;
     const previousRole = user.roleInCompany || null;
     let removedProjectMembershipCount = 0;
+    let revokedApiKeyCount = 0;
     await prisma.$transaction(async (tx) => {
       await assertCanRemoveUserFromProjectAdminRoles(user.userId, {
         companyId,
@@ -144,6 +145,15 @@ companyMemberRoutes.post(
       });
       removedProjectMembershipCount = removedProjectMemberships.count;
 
+      // M72(a): revoke the leaving user's API keys. The user row is kept (only
+      // detached from the company), so their keys would otherwise stay active and
+      // continue to authenticate against the API after they leave.
+      const revokedApiKeys = await tx.apiKey.updateMany({
+        where: { userId: user.userId, isActive: true },
+        data: { isActive: false },
+      });
+      revokedApiKeyCount = revokedApiKeys.count;
+
       // Remove company association from user using raw SQL to avoid Prisma quirks
       // Set role_in_company to 'member' (default) since it's NOT NULL
       await tx.$executeRaw`UPDATE users SET company_id = NULL, role_in_company = 'member' WHERE id = ${user.userId}`;
@@ -158,6 +168,7 @@ companyMemberRoutes.post(
         memberUserId: user.userId,
         previousRole,
         removedProjectMembershipCount,
+        revokedApiKeyCount,
       },
       req,
     });
@@ -509,6 +520,7 @@ companyMemberRoutes.delete(
     const removedAt = new Date();
     let removedProjectMembershipCount = 0;
     let cancelledSetupInviteCount = 0;
+    let revokedApiKeyCount = 0;
     let removalStatus: 'removed' | 'cancelled' = 'removed';
     let targetEmail = '';
     let previousRole = '';
@@ -590,8 +602,19 @@ companyMemberRoutes.delete(
       if (!targetMember.passwordHash && !targetMember.oauthProvider) {
         removalStatus = 'cancelled';
         await tx.emailVerificationToken.deleteMany({ where: { userId: memberId } });
+        // A pending-invite user is hard-deleted; ApiKey has onDelete: Cascade, so
+        // any keys go with the row — no explicit revoke needed.
         await tx.user.delete({ where: { id: memberId } });
       } else {
+        // M72(a): the user row is kept (only detached from the company), so revoke
+        // their API keys — otherwise the keys stay active and keep authenticating
+        // against the API after the member is removed.
+        const revokedApiKeys = await tx.apiKey.updateMany({
+          where: { userId: memberId, isActive: true },
+          data: { isActive: false },
+        });
+        revokedApiKeyCount = revokedApiKeys.count;
+
         await tx.user.update({
           where: { id: memberId },
           data: {
@@ -616,6 +639,7 @@ companyMemberRoutes.delete(
           status: removalStatus,
           removedProjectMembershipCount,
           cancelledSetupInviteCount,
+          revokedApiKeyCount,
         },
         req,
       });
