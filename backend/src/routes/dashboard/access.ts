@@ -92,6 +92,35 @@ export async function getDashboardProjectAccess(user: AuthUser): Promise<Dashboa
   return Array.from(accessByProject.values());
 }
 
+/**
+ * M71: resolve which project a role dashboard should show, plus the list of
+ * projects to offer in the header switcher.
+ *
+ * - `projects` is the user's eligible ACTIVE projects (the switchable set).
+ * - `primaryProject` is the requested project when the user has access to it
+ *   (active or not), otherwise the first active project, otherwise the first
+ *   eligible project, otherwise null.
+ *
+ * `eligibleProjectAccess` must already be filtered to the dashboard's role set.
+ */
+export function resolveDashboardProject(
+  eligibleProjectAccess: DashboardProjectAccess[],
+  requestedProjectId?: string | null,
+): { primaryProject: DashboardProject | null; projects: DashboardProject[] } {
+  const activeProjects = eligibleProjectAccess
+    .filter((pa) => pa.project.status === 'active')
+    .map((pa) => pa.project);
+
+  const requested = requestedProjectId
+    ? (eligibleProjectAccess.find((pa) => pa.project.id === requestedProjectId)?.project ?? null)
+    : null;
+
+  const primaryProject =
+    requested ?? activeProjects[0] ?? eligibleProjectAccess[0]?.project ?? null;
+
+  return { primaryProject, projects: activeProjects };
+}
+
 function hasAnyProjectAccess(
   projectAccess: Array<{ role: string }>,
   allowedRoles: Set<string>,
