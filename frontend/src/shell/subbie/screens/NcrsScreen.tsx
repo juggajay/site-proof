@@ -23,6 +23,8 @@ import { formatStatusLabel } from '@/lib/statusLabels';
 import { cn } from '@/lib/utils';
 import { buildPortalCompanyQuery } from '@/pages/subcontractor-portal/portalCompanyScope';
 import { useSubbieShellContext } from '../subbieShellContext';
+import { useModuleAccessRevoked } from '../useModuleAccessRevoked';
+import { ModuleAccessChangedNotice } from '../ModuleAccessChangedNotice';
 
 interface NCR {
   id: string;
@@ -136,6 +138,7 @@ export function NcrsScreen() {
     },
     enabled: !!user?.id && !!projectId && canViewNCRs,
   });
+  const accessRevoked = useModuleAccessRevoked(error);
 
   const sub = (
     <span className="text-muted-foreground">Read-only — non-conformances on your lots</span>
@@ -170,7 +173,9 @@ export function NcrsScreen() {
 
   return (
     <ShellScreen variant="inner" title="NCRs" parent={parentPath} sub={sub}>
-      {error ? (
+      {accessRevoked ? (
+        <ModuleAccessChangedNotice />
+      ) : error ? (
         <div className="rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-[13px] font-semibold text-destructive">
           {extractErrorMessage(error, 'Failed to load NCRs')}
         </div>
