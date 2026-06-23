@@ -21,6 +21,8 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { ProjectSwitcher } from './ProjectSwitcher';
+import { useDashboardProjectId } from '@/hooks/useDashboardProjectId';
 
 interface QMDashboardData {
   // Lot conformance
@@ -84,6 +86,8 @@ interface QMDashboardData {
     name: string;
     projectNumber: string;
   } | null;
+  // M71: the projects the user can switch between (active eligible set).
+  projects?: Array<{ id: string; name: string; projectNumber: string; status: string }>;
 }
 
 const defaultQMData: QMDashboardData = {
@@ -95,6 +99,7 @@ const defaultQMData: QMDashboardData = {
   itpTrends: { completedThisWeek: 0, completedLastWeek: 0, trend: 'stable', completionRate: 0 },
   auditReadiness: { score: 0, status: 'not_ready', issues: [] },
   project: null,
+  projects: [],
 };
 
 function getProjectRoute(projectId: string | undefined, suffix: string): string {
@@ -113,14 +118,18 @@ export function QualityManagerDashboard() {
   const navigate = useNavigate();
   const [refreshing, setRefreshing] = useState(false);
 
+  const { requestedProjectId, setProjectId } = useDashboardProjectId();
   const {
     data: dashboardData,
     isLoading: loading,
     error,
     refetch,
   } = useQuery({
-    queryKey: queryKeys.qmDashboard,
-    queryFn: () => apiFetch<QMDashboardData>('/api/dashboard/quality-manager'),
+    queryKey: [...queryKeys.qmDashboard, requestedProjectId ?? null],
+    queryFn: () =>
+      apiFetch<QMDashboardData>(
+        `/api/dashboard/quality-manager${requestedProjectId ? `?projectId=${encodeURIComponent(requestedProjectId)}` : ''}`,
+      ),
   });
   const data = dashboardData ?? defaultQMData;
   const errorMessage = error
@@ -188,10 +197,17 @@ export function QualityManagerDashboard() {
           <h1 className="text-2xl font-bold">Quality Dashboard</h1>
           <p className="text-muted-foreground">Quality metrics and conformance overview</p>
         </div>
-        <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
-          <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-3">
+          <ProjectSwitcher
+            projects={data.projects ?? []}
+            value={data.project?.id}
+            onChange={setProjectId}
+          />
+          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
+            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {errorMessage && (

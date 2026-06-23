@@ -74,6 +74,8 @@ export interface PMDashboardData {
     projectNumber: string;
     status: string;
   } | null;
+  // M71: the projects the user can switch between (active eligible set).
+  projects?: Array<{ id: string; name: string; projectNumber: string; status: string }>;
 }
 
 export const defaultPMData: PMDashboardData = {
@@ -113,6 +115,7 @@ export const defaultPMData: PMDashboardData = {
   },
   attentionItems: [],
   project: null,
+  projects: [],
 };
 
 export function getProjectRoute(projectId: string | undefined, suffix: string): string {
