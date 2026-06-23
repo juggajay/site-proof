@@ -1,11 +1,17 @@
 import { type Dispatch, type MutableRefObject, type SetStateAction } from 'react';
 import { toast } from '@/components/ui/toaster';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, isRetriableNetworkFailure } from '@/lib/api';
+import { updateChecklistItemOffline } from '@/lib/offlineDb';
 import { handleApiError } from '@/lib/errorHandling';
 import type { ITPCompletion, ITPInstance } from '../types';
 import { mergeCompletionIntoInstance } from '../lib/itpCompletionState';
 
 interface UseItpMobileActionsParams {
+  /**
+   * Owning lot id. Required to queue an N/A or FAIL mark to the offline pipeline
+   * when the network is unavailable; without it the offline fallback is skipped.
+   */
+  lotId: string | undefined;
   itpInstance: ITPInstance | null;
   setItpInstance: Dispatch<SetStateAction<ITPInstance | null>>;
   updatingCompletionRef: MutableRefObject<string | null>;
@@ -16,6 +22,7 @@ interface UseItpMobileActionsParams {
 }
 
 export function useItpMobileActions({
+  lotId,
   itpInstance,
   setItpInstance,
   updatingCompletionRef,
@@ -24,11 +31,48 @@ export function useItpMobileActions({
   refetchConformStatus,
   refreshNcrsAfterFailure,
 }: UseItpMobileActionsParams) {
+  // Queue an N/A or FAIL mark to the offline pipeline and apply optimistic local
+  // state, mirroring the PASS path's online-then-offline fallback
+  // (writeItpCompletionToggle). Returns true when the mark was queued so the
+  // caller can close the sheet — the entry is NOT lost. Returns false when there
+  // is no lotId to key the offline cache, so the caller falls back to error UI.
+  const queueOfflineMark = async (
+    checklistItemId: string,
+    offlineStatus: 'na' | 'failed',
+    notes: string,
+  ): Promise<boolean> => {
+    if (!lotId) return false;
+
+    await updateChecklistItemOffline(lotId, checklistItemId, offlineStatus, notes, 'You (Offline)');
+
+    const optimistic: ITPCompletion = {
+      id: `offline-${checklistItemId}-${Date.now()}`,
+      checklistItemId,
+      isCompleted: false,
+      isNotApplicable: offlineStatus === 'na',
+      isFailed: offlineStatus === 'failed',
+      notes,
+      completedAt: new Date().toISOString(),
+      completedBy: { id: 'offline', fullName: 'You (Offline)', email: '' },
+      isVerified: false,
+      verifiedAt: null,
+      verifiedBy: null,
+      attachments: [],
+    };
+
+    setItpInstance((prev) => mergeCompletionIntoInstance(prev, optimistic));
+    refetchReadiness();
+    refetchConformStatus();
+    return true;
+  };
+
   // Returns true on success so the mobile sheet can close; false when the write
   // failed (or was skipped by the in-flight guard) so the sheet stays open and
   // the typed reason is preserved.
   const mobileMarkNA = async (checklistItemId: string, reason: string): Promise<boolean> => {
     if (!itpInstance || updatingCompletionRef.current === checklistItemId) return false;
+
+    const notes = reason.trim() || 'Marked as N/A';
 
     try {
       updatingCompletionRef.current = checklistItemId;
@@ -39,7 +83,7 @@ export function useItpMobileActions({
           itpInstanceId: itpInstance.id,
           checklistItemId,
           status: 'not_applicable',
-          notes: reason.trim() || 'Marked as N/A',
+          notes,
         }),
       });
 
@@ -52,6 +96,22 @@ export function useItpMobileActions({
       });
       return true;
     } catch (err) {
+      // A no-signal site is the common case for field N/A marks: on a retriable
+      // network failure, queue the mark offline so it syncs later instead of
+      // being lost.
+      if (isRetriableNetworkFailure(err)) {
+        try {
+          if (await queueOfflineMark(checklistItemId, 'na', notes)) {
+            toast({
+              title: 'Saved offline',
+              description: "This N/A mark will sync when you're back online.",
+            });
+            return true;
+          }
+        } catch {
+          // Offline write itself failed — fall through to the error path below.
+        }
+      }
       handleApiError(err, 'Failed to mark as N/A');
       return false;
     } finally {
@@ -64,6 +124,8 @@ export function useItpMobileActions({
   const mobileMarkFailed = async (checklistItemId: string, reason: string): Promise<boolean> => {
     if (!itpInstance || updatingCompletionRef.current === checklistItemId) return false;
 
+    const notes = `Failed: ${reason.trim() || 'Item failed inspection'}`;
+
     try {
       updatingCompletionRef.current = checklistItemId;
       setUpdatingCompletion(checklistItemId);
@@ -75,7 +137,7 @@ export function useItpMobileActions({
             itpInstanceId: itpInstance.id,
             checklistItemId,
             status: 'failed',
-            notes: `Failed: ${reason.trim() || 'Item failed inspection'}`,
+            notes,
             ncrDescription: reason.trim() || 'Item failed ITP inspection',
             ncrCategory: 'workmanship',
             ncrSeverity: 'minor',
@@ -98,6 +160,23 @@ export function useItpMobileActions({
       });
       return true;
     } catch (err) {
+      // Recording a defect/FAIL is the highest-value field action and most likely
+      // to happen offline. Queue it so the failed result is not lost; on sync the
+      // backend raises the NCR from the failed status (the typed reason is kept in
+      // the queued notes).
+      if (isRetriableNetworkFailure(err)) {
+        try {
+          if (await queueOfflineMark(checklistItemId, 'failed', notes)) {
+            toast({
+              title: 'Saved offline',
+              description: "This failed item will sync and raise an NCR when you're back online.",
+            });
+            return true;
+          }
+        } catch {
+          // Offline write itself failed — fall through to the error path below.
+        }
+      }
       handleApiError(err, 'Failed to mark item');
       return false;
     } finally {
