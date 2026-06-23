@@ -1,6 +1,7 @@
 import { SecureDocumentImage } from '@/components/documents/SecureDocumentImage';
 import { isReleaseGatedChecklistItem } from '@/lib/itpReleaseGating';
 import type { ITPInstance, ITPAttachment, ITPCompletion } from '../types';
+import { getItpVerificationDisplay, type ItpVerificationTone } from './itpChecklistTabHelpers';
 
 // I1-core: human-readable hold-point release method for the attribution line.
 const RELEASE_METHOD_LABELS: Record<string, string> = {
@@ -12,6 +13,13 @@ const RELEASE_METHOD_LABELS: Record<string, string> = {
 function formatReleaseMethod(method: string): string {
   return RELEASE_METHOD_LABELS[method] ?? method.replace(/_/g, ' ');
 }
+
+// M15: badge styling per head-contractor verification state.
+const VERIFICATION_TONE_CLASSES: Record<ItpVerificationTone, string> = {
+  verified: 'bg-primary/10 text-primary',
+  pending: 'bg-warning/10 text-warning',
+  rejected: 'bg-destructive/10 text-destructive',
+};
 
 // Props for the ITP checklist item row
 export interface ITPChecklistItemRowProps {
@@ -55,6 +63,8 @@ export function ITPChecklistItemRow({
   const isHoldPoint = isReleaseGatedChecklistItem(item);
   const isReleased = !!completion?.holdPointRelease?.releasedByName;
   const isHoldPointLocked = isHoldPoint && !isReleased && !isNotApplicable && !isFailed;
+  // M15: head-contractor verification field-state (verified / pending / rejected).
+  const verification = getItpVerificationDisplay(completion);
 
   return (
     <div
@@ -146,6 +156,15 @@ export function ITPChecklistItemRow({
             {isHoldPoint && (
               <span className="text-xs bg-destructive/10 text-destructive px-2 py-0.5 rounded">
                 Hold Point
+              </span>
+            )}
+            {/* M15: head-contractor verification badge */}
+            {verification && (
+              <span
+                className={`text-xs px-2 py-0.5 rounded font-medium ${VERIFICATION_TONE_CLASSES[verification.tone]}`}
+                title="Head-contractor verification status"
+              >
+                {verification.label}
               </span>
             )}
             {/* Responsible party badge */}
@@ -402,6 +421,24 @@ export function ITPChecklistItemRow({
                   </a>
                 )}
               </p>
+            )}
+
+            {/* M15: head-contractor rejection — show the reason so the field
+                worker knows what to fix, plus how to clear it (H6 resubmit). */}
+            {verification?.tone === 'rejected' && (
+              <div className="mt-2 p-2 bg-destructive/10 border border-destructive/30 rounded">
+                <p className="text-xs font-medium text-destructive">
+                  Rejected by head contractor{verification.rejectionReason ? ':' : ''}
+                </p>
+                {verification.rejectionReason && (
+                  <p className="text-xs text-destructive/90 mt-0.5">
+                    {verification.rejectionReason}
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground mt-1">
+                  Redo the work and re-complete this item to resubmit it for verification.
+                </p>
+              </div>
             )}
           </div>
         </div>

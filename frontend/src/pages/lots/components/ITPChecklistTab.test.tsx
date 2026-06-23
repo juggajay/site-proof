@@ -139,6 +139,50 @@ describe('ITPChecklistTab desktop default expansion', () => {
   });
 });
 
+describe('ITPChecklistTab verification field-state (M15)', () => {
+  it('shows the head-contractor rejection badge and reason on a rejected item', async () => {
+    const instance: ITPInstance = {
+      id: 'instance-2',
+      template: {
+        id: 'template-1',
+        name: 'Earthworks ITP',
+        checklistItems: [
+          makeChecklistItem({
+            id: 'item-1',
+            description: 'Place bedding',
+            category: 'Drainage',
+            order: 1,
+          }),
+          // A still-pending item keeps the Drainage category expanded by default.
+          makeChecklistItem({
+            id: 'item-2',
+            description: 'Backfill trench',
+            category: 'Drainage',
+            order: 2,
+          }),
+        ],
+      },
+      completions: [
+        makeCompletion({
+          checklistItemId: 'item-1',
+          isCompleted: true,
+          isRejected: true,
+          verificationStatus: 'rejected',
+          verificationNotes: 'Photo does not show the bedding layer',
+        }),
+      ],
+    };
+
+    renderChecklist({ itpInstance: instance });
+
+    expect(await screen.findByText(/Place bedding/i)).toBeInTheDocument();
+    expect(screen.getByText('Rejected')).toBeInTheDocument();
+    expect(screen.getByText(/Rejected by head contractor/i)).toBeInTheDocument();
+    expect(screen.getByText(/Photo does not show the bedding layer/i)).toBeInTheDocument();
+    expect(screen.getByText(/re-complete this item to resubmit/i)).toBeInTheDocument();
+  });
+});
+
 describe('ITPChecklistTab no-assignment state', () => {
   it('shows assignment controls when the user can manage ITP templates', () => {
     renderChecklist();
