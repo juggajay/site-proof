@@ -38,11 +38,12 @@ interface MobileITPChecklistProps {
   templateName: string;
   checklistItems: ITPChecklistItem[];
   completions: ITPCompletion[];
+  /** Must resolve true on success / false on failure so the PASS sheet can stay open. */
   onToggleCompletion: (
     checklistItemId: string,
     isCompleted: boolean,
     notes: string | null,
-  ) => Promise<void>;
+  ) => Promise<boolean>;
   /** Must resolve true on success / false on failure so the sheet can stay open. */
   onMarkNotApplicable: (checklistItemId: string, reason: string) => Promise<boolean>;
   /** Must resolve true on success / false on failure so the sheet can stay open. */
@@ -201,15 +202,18 @@ export function MobileITPChecklist({
         canComplete={canCompleteItems && !selectedReleaseRequired}
         releaseRequired={selectedReleaseRequired}
         onClose={() => setSelectedItem(null)}
-        onPass={(notes) => {
-          if (!selectedItem) return;
+        onPass={async (notes) => {
+          if (!selectedItem) return false;
           if (!canCompleteItems) {
             trigger('error');
-            return;
+            return false;
           }
           trigger('medium');
-          onToggleCompletion(selectedItem.id, true, notes);
-          setSelectedItem(null);
+          // Await the save and close only on success so a failed PASS keeps the
+          // sheet open (mirrors the N/A and Fail handlers below).
+          const saved = await onToggleCompletion(selectedItem.id, true, notes);
+          if (saved) setSelectedItem(null);
+          return saved;
         }}
         onNA={async (reason) => {
           if (!selectedItem) return false;

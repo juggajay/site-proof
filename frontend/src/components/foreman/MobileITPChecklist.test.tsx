@@ -196,3 +196,33 @@ describe('MobileITPChecklist N/A and Fail keep failure context', () => {
     );
   });
 });
+
+describe('MobileITPChecklist PASS awaits the save and closes only on success (M57)', () => {
+  it('keeps the sheet open with an inline error when the PASS save fails', async () => {
+    const onToggleCompletion = vi.fn().mockResolvedValue(false);
+    renderChecklist({ onToggleCompletion });
+
+    fireEvent.click(screen.getByText(/Compact subgrade/i));
+    fireEvent.click(screen.getByRole('button', { name: /PASS/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent(/Could not save/i);
+    });
+    // The toggle was attempted (complete = true) and the sheet stayed open.
+    expect(onToggleCompletion).toHaveBeenCalledWith('item-2', true, null);
+    expect(screen.getByRole('button', { name: /PASS/i })).toBeInTheDocument();
+  });
+
+  it('closes the sheet when the PASS save succeeds', async () => {
+    const onToggleCompletion = vi.fn().mockResolvedValue(true);
+    renderChecklist({ onToggleCompletion });
+
+    fireEvent.click(screen.getByText(/Compact subgrade/i));
+    fireEvent.click(screen.getByRole('button', { name: /PASS/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: /PASS/i })).not.toBeInTheDocument();
+    });
+    expect(onToggleCompletion).toHaveBeenCalledWith('item-2', true, null);
+  });
+});

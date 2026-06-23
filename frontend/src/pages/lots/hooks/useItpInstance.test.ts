@@ -629,6 +629,69 @@ describe('useItpInstance — completion mutations', () => {
     expect(onToggleSettled).toHaveBeenCalledTimes(1);
   });
 
+  describe('toggleCompletion return value (M57 — mobile PASS closes only on success)', () => {
+    it('resolves true on a server-confirmed save', async () => {
+      const { result } = await mountMutationHook({
+        postCompletion: () => ({ completion: completionResponse({ id: 'completion-1' }) }),
+      });
+      let returned: boolean | undefined;
+      await act(async () => {
+        returned = await result.current.toggleCompletion('item-1', false, null);
+      });
+      expect(returned).toBe(true);
+    });
+
+    it('resolves true when a retriable failure queues the write offline', async () => {
+      const { result } = await mountMutationHook({
+        postCompletion: () => {
+          throw new ApiError(503, 'upstream unavailable');
+        },
+      });
+      let returned: boolean | undefined;
+      await act(async () => {
+        returned = await result.current.toggleCompletion('item-1', false, null);
+      });
+      expect(returned).toBe(true);
+    });
+
+    it('resolves false on a definitive 4xx rejection', async () => {
+      const { result } = await mountMutationHook({
+        postCompletion: () => {
+          throw new ApiError(400, 'completion rejected');
+        },
+      });
+      let returned: boolean | undefined;
+      await act(async () => {
+        returned = await result.current.toggleCompletion('item-1', false, null);
+      });
+      expect(returned).toBe(false);
+    });
+
+    it('resolves true when a witness gate opens (the gate modal continues the save)', async () => {
+      const { result } = await mountMutationHook(
+        { postCompletion: () => ({ completion: completionResponse() }) },
+        { onRequestWitness: vi.fn() },
+      );
+      let returned: boolean | undefined;
+      await act(async () => {
+        returned = await result.current.toggleCompletion('item-w', false, 'prior notes');
+      });
+      expect(returned).toBe(true);
+    });
+
+    it('resolves true when an evidence gate opens', async () => {
+      const { result } = await mountMutationHook(
+        { postCompletion: () => ({ completion: completionResponse() }) },
+        { onRequestEvidenceWarning: vi.fn() },
+      );
+      let returned: boolean | undefined;
+      await act(async () => {
+        returned = await result.current.toggleCompletion('item-e', false, null);
+      });
+      expect(returned).toBe(true);
+    });
+  });
+
   it('updateNotes posts the note against the current completion state and merges the result', async () => {
     let body: Record<string, unknown> | undefined;
     const updated = completionResponse({

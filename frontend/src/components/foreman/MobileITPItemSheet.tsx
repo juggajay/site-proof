@@ -12,7 +12,8 @@ interface MobileITPItemSheetProps {
   canComplete: boolean;
   releaseRequired?: boolean;
   onClose: () => void;
-  onPass: (notes: string | null) => void;
+  /** Resolves true when saved; false keeps the sheet open with an inline error. */
+  onPass: (notes: string | null) => Promise<boolean>;
   /** Resolves true when saved; false keeps the sheet open with the reason intact. */
   onNA: (reason: string) => Promise<boolean>;
   /** Resolves true when saved; false keeps the sheet open with the reason intact. */
@@ -63,20 +64,31 @@ export function MobileITPItemSheet({
 
   // Await the save; only a successful save closes the sheet (the parent owns
   // that). On failure keep everything as typed and show an inline error.
-  const submitStatus = async (action: (reason: string) => Promise<boolean>, reason: string) => {
+  const runSave = async (action: () => Promise<boolean>, failMessage: string) => {
     setSavingStatus(true);
     setStatusError(null);
     let saved = false;
     try {
-      saved = await action(reason);
+      saved = await action();
     } catch {
       saved = false;
     }
     setSavingStatus(false);
     if (!saved) {
-      setStatusError('Could not save this item. Your reason is kept - please try again.');
+      setStatusError(failMessage);
     }
   };
+
+  const submitStatus = (action: (reason: string) => Promise<boolean>, reason: string) =>
+    runSave(
+      () => action(reason),
+      'Could not save this item. Your reason is kept - please try again.',
+    );
+
+  // M57: PASS awaits the completion write and closes only on a successful save.
+  // On failure the sheet stays open with an inline error so the tap is honest.
+  const submitPass = () =>
+    runSave(() => onPass(notes || null), 'Could not save this item. Please try again.');
 
   const handlePhotoSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -162,9 +174,11 @@ export function MobileITPItemSheet({
         {/* Status buttons - large touch targets */}
         <div className="grid grid-cols-3 gap-2">
           <button
-            onClick={() => canComplete && onPass(notes || null)}
-            disabled={!canComplete}
-            className={`py-4 rounded-lg font-bold text-center transition-all touch-manipulation min-h-[72px] ${
+            onClick={() => {
+              if (canComplete && !savingStatus) void submitPass();
+            }}
+            disabled={!canComplete || savingStatus}
+            className={`py-4 rounded-lg font-bold text-center transition-all touch-manipulation min-h-[72px] disabled:opacity-60 ${
               !canComplete
                 ? 'bg-muted text-muted-foreground cursor-not-allowed'
                 : isCompleted
@@ -173,18 +187,20 @@ export function MobileITPItemSheet({
             }`}
           >
             <span className="text-2xl block mb-1">✓</span>
-            <span className="text-sm">PASS</span>
+            <span className="text-sm">
+              {savingStatus && !showNAInput && !showFailInput ? 'Saving…' : 'PASS'}
+            </span>
           </button>
           <button
             onClick={() => {
-              if (!canComplete || isNA) return;
+              if (!canComplete || isNA || savingStatus) return;
               if (!showNAInput) {
                 setShowNAInput(true);
                 setShowFailInput(false);
                 setStatusError(null);
               }
             }}
-            disabled={!canComplete}
+            disabled={!canComplete || savingStatus}
             className={`py-4 rounded-lg font-bold text-center transition-all touch-manipulation min-h-[72px] ${
               !canComplete
                 ? 'bg-muted text-muted-foreground cursor-not-allowed'
@@ -198,14 +214,14 @@ export function MobileITPItemSheet({
           </button>
           <button
             onClick={() => {
-              if (!canComplete || isFailed) return;
+              if (!canComplete || isFailed || savingStatus) return;
               if (!showFailInput) {
                 setShowFailInput(true);
                 setShowNAInput(false);
                 setStatusError(null);
               }
             }}
-            disabled={!canComplete}
+            disabled={!canComplete || savingStatus}
             className={`py-4 rounded-lg font-bold text-center transition-all touch-manipulation min-h-[72px] ${
               !canComplete
                 ? 'bg-muted text-muted-foreground cursor-not-allowed'
@@ -218,6 +234,14 @@ export function MobileITPItemSheet({
             <span className="text-sm">FAIL</span>
           </button>
         </div>
+
+        {/* M57: inline error for a failed PASS save (the N/A / Fail panels render
+            their own copy of this error within their reason inputs). */}
+        {statusError && !showNAInput && !showFailInput && (
+          <p role="alert" className="text-sm text-destructive">
+            {statusError}
+          </p>
+        )}
 
         {/* N/A reason input */}
         {showNAInput && (
