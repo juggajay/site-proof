@@ -73,6 +73,22 @@ describe('ncrWorkflowValidation', () => {
     }
   });
 
+  it('requires a reason when overriding the client-notification close gate (M27)', () => {
+    const missingReason = closeNcrSchema.safeParse({ overrideClientNotification: true });
+    expect(missingReason.success).toBe(false);
+    if (!missingReason.success) {
+      expect(missingReason.error.issues[0]?.message).toBe(
+        'A reason is required to override the client notification requirement',
+      );
+    }
+
+    const withReason = closeNcrSchema.safeParse({
+      overrideClientNotification: true,
+      clientNotificationOverrideReason: 'Client notified verbally on site; email to follow',
+    });
+    expect(withReason.success).toBe(true);
+  });
+
   it('accepts blank recipient email as omitted', () => {
     const result = notifyClientSchema.parse({
       recipientEmail: '   ',
