@@ -24,6 +24,8 @@ import {
   Plus,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { ProjectSwitcher } from './ProjectSwitcher';
+import { useDashboardProjectId } from '@/hooks/useDashboardProjectId';
 
 interface ForemanDashboardData {
   // Today's diary
@@ -62,6 +64,8 @@ interface ForemanDashboardData {
     name: string;
     projectNumber: string;
   } | null;
+  // M71: the projects the user can switch between (active eligible set).
+  projects?: Array<{ id: string; name: string; projectNumber: string; status: string }>;
 }
 
 const getWeatherIcon = (conditions: string | null) => {
@@ -82,6 +86,7 @@ const defaultForemanData: ForemanDashboardData = {
   inspectionsDueToday: { count: 0, items: [] },
   weather: { conditions: null, temperatureMin: null, temperatureMax: null, rainfallMm: null },
   project: null,
+  projects: [],
 };
 
 function getSafeInternalLink(link: string | undefined, fallback: string): string {
@@ -95,6 +100,7 @@ export function ForemanDashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [refreshing, setRefreshing] = useState(false);
+  const { requestedProjectId, setProjectId } = useDashboardProjectId();
 
   const {
     data: dashboardData,
@@ -102,8 +108,11 @@ export function ForemanDashboard() {
     error,
     refetch,
   } = useQuery({
-    queryKey: queryKeys.foremanDashboard('current'),
-    queryFn: () => apiFetch<ForemanDashboardData>('/api/dashboard/foreman'),
+    queryKey: queryKeys.foremanDashboard(requestedProjectId ?? 'current'),
+    queryFn: () =>
+      apiFetch<ForemanDashboardData>(
+        `/api/dashboard/foreman${requestedProjectId ? `?projectId=${encodeURIComponent(requestedProjectId)}` : ''}`,
+      ),
   });
   const data = dashboardData ?? defaultForemanData;
   const errorMessage = error
@@ -220,10 +229,17 @@ export function ForemanDashboard() {
             {today}
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
-          <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-3">
+          <ProjectSwitcher
+            projects={data.projects ?? []}
+            value={data.project?.id}
+            onChange={setProjectId}
+          />
+          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
+            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {errorMessage && (

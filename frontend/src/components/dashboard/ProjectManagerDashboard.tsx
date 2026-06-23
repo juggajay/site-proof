@@ -27,6 +27,8 @@ import {
   ProjectManagerProjectContext,
   ProjectManagerQuickActions,
 } from './ProjectManagerDashboardChrome';
+import { ProjectSwitcher } from './ProjectSwitcher';
+import { useDashboardProjectId } from '@/hooks/useDashboardProjectId';
 import { ProjectManagerAttentionItems } from './ProjectManagerAttentionItems';
 
 export function ProjectManagerDashboard() {
@@ -34,14 +36,18 @@ export function ProjectManagerDashboard() {
   const navigate = useNavigate();
   const [refreshing, setRefreshing] = useState(false);
 
+  const { requestedProjectId, setProjectId } = useDashboardProjectId();
   const {
     data: dashboardData,
     isLoading: loading,
     error,
     refetch,
   } = useQuery({
-    queryKey: queryKeys.pmDashboard,
-    queryFn: () => apiFetch<PMDashboardData>('/api/dashboard/project-manager'),
+    queryKey: [...queryKeys.pmDashboard, requestedProjectId ?? null],
+    queryFn: () =>
+      apiFetch<PMDashboardData>(
+        `/api/dashboard/project-manager${requestedProjectId ? `?projectId=${encodeURIComponent(requestedProjectId)}` : ''}`,
+      ),
   });
   const data = dashboardData ?? defaultPMData;
   const errorMessage = error
@@ -98,10 +104,17 @@ export function ProjectManagerDashboard() {
           <h1 className="text-2xl font-bold">Project Dashboard</h1>
           <p className="text-muted-foreground">Project overview and key metrics</p>
         </div>
-        <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
-          <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-3">
+          <ProjectSwitcher
+            projects={data.projects ?? []}
+            value={data.project?.id}
+            onChange={setProjectId}
+          />
+          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
+            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {errorMessage && (
