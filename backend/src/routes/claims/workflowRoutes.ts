@@ -335,8 +335,15 @@ export function createClaimWorkflowRouter({
       if (!validation.success) {
         throw AppError.fromZodError(validation.error);
       }
-      const { status, certifiedAmount, paidAmount, paymentReference, disputeNotes } =
-        validation.data;
+      const {
+        status,
+        certifiedAmount,
+        paidAmount,
+        paymentReference,
+        disputeNotes,
+        submittedTo,
+        submissionMethod,
+      } = validation.data;
       const roundedCertifiedAmount =
         certifiedAmount === undefined ? undefined : roundClaimAmountToCents(certifiedAmount);
       const roundedPaidAmount =
@@ -432,6 +439,10 @@ export function createClaimWorkflowRouter({
           updateData.status = status;
           if (status === 'submitted') {
             updateData.submittedAt = new Date();
+            // M82: record who/where the claim was submitted to for the audit trail.
+            if (submittedTo !== undefined) {
+              updateData.submittedTo = submittedTo || null;
+            }
           }
           if (status === 'certified' && roundedCertifiedAmount !== undefined) {
             updateData.certifiedAmount = roundedCertifiedAmount;
@@ -639,6 +650,12 @@ export function createClaimWorkflowRouter({
             newStatus: status,
             certifiedAmount: roundedCertifiedAmount,
             paidAmount: roundedPaidAmount,
+            ...(status === 'submitted'
+              ? {
+                  submittedTo: submittedTo || null,
+                  submissionMethod: submissionMethod ?? null,
+                }
+              : {}),
           },
           req,
         });

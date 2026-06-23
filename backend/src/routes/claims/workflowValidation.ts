@@ -5,6 +5,7 @@ import { AppError } from '../../lib/AppError.js';
 const CLAIM_DATE_INPUT_MAX_LENGTH = 64;
 const CLAIM_ID_MAX_LENGTH = 120;
 const CLAIM_PAYMENT_REFERENCE_MAX_LENGTH = 160;
+const CLAIM_SUBMITTED_TO_MAX_LENGTH = 200;
 const CLAIM_DISPUTE_NOTES_MAX_LENGTH = 5000;
 export const CLAIM_VARIATION_NOTES_MAX_LENGTH = 2000;
 const CLAIM_PAYMENT_NOTES_MAX_LENGTH = 3000;
@@ -95,6 +96,10 @@ export const updateClaimSchema = z
       CLAIM_PAYMENT_REFERENCE_MAX_LENGTH,
     ),
     disputeNotes: optionalTrimmedClaimString('disputeNotes', CLAIM_DISPUTE_NOTES_MAX_LENGTH),
+    // M82: recorded when a claim is submitted, for the audit trail. submittedTo
+    // (recipient) persists to the existing column; submissionMethod is audit-only.
+    submittedTo: optionalTrimmedClaimString('submittedTo', CLAIM_SUBMITTED_TO_MAX_LENGTH),
+    submissionMethod: z.enum(['download']).optional(),
   })
   .superRefine((data, ctx) => {
     if (data.status === 'disputed' && !data.disputeNotes?.trim()) {

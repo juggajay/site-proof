@@ -375,7 +375,12 @@ test.describe('Claims seeded commercial contract', () => {
     expect(submitDownload.suggestedFilename()).toBe('claim-7.csv');
     await submitDownload.delete();
 
-    expect(api.getUpdateRequests()).toContainEqual({ status: 'submitted' });
+    // M82: submit now also records the submission method (recipient is optional
+    // and left blank here).
+    expect(api.getUpdateRequests()).toContainEqual({
+      status: 'submitted',
+      submissionMethod: 'download',
+    });
     await expect(page.getByText('Claim 7 was downloaded and marked as submitted.')).toBeVisible();
     await expect(claimRow.getByText('Submitted')).toBeVisible();
     await expect(claimRow.getByRole('button', { name: 'Mark as Disputed' })).toBeVisible();

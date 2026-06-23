@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button';
 interface SubmitClaimModalProps {
   claim: Claim;
   onClose: () => void;
-  onSubmitted: (claimId: string, method: SubmitMethod) => Promise<void>;
+  onSubmitted: (claimId: string, method: SubmitMethod, submittedTo?: string) => Promise<void>;
 }
 
 export const SubmitClaimModal = React.memo(function SubmitClaimModal({
@@ -23,6 +23,7 @@ export const SubmitClaimModal = React.memo(function SubmitClaimModal({
   onSubmitted,
 }: SubmitClaimModalProps) {
   const [submitting, setSubmitting] = useState(false);
+  const [submittedTo, setSubmittedTo] = useState('');
   const submittingRef = useRef(false);
 
   const handleSubmit = async (method: SubmitMethod) => {
@@ -31,7 +32,7 @@ export const SubmitClaimModal = React.memo(function SubmitClaimModal({
     submittingRef.current = true;
     setSubmitting(true);
     try {
-      await onSubmitted(claim.id, method);
+      await onSubmitted(claim.id, method, submittedTo.trim() || undefined);
     } finally {
       submittingRef.current = false;
       setSubmitting(false);
@@ -45,9 +46,24 @@ export const SubmitClaimModal = React.memo(function SubmitClaimModal({
         Download a claim summary CSV and mark this progress claim as submitted.
       </ModalDescription>
       <ModalBody>
-        <p className="text-muted-foreground mb-6">
+        <p className="text-muted-foreground mb-4">
           Download the register export, then submit the claim through your client channel.
         </p>
+
+        <div className="mb-6">
+          <label htmlFor="claim-submitted-to" className="mb-1.5 block text-sm font-medium">
+            Submitted to <span className="text-muted-foreground">(optional)</span>
+          </label>
+          <input
+            id="claim-submitted-to"
+            type="text"
+            value={submittedTo}
+            onChange={(event) => setSubmittedTo(event.target.value)}
+            placeholder="e.g. client name or email — recorded on the claim"
+            maxLength={200}
+            className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+          />
+        </div>
 
         <div className="space-y-3">
           {CLAIM_SUBMISSION_OPTIONS.map((option) => (

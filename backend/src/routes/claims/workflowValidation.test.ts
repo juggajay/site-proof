@@ -14,9 +14,31 @@ import {
   roundClaimAmountToCents,
   serializeDisputeNotesForStatusTransition,
   sumClaimedPercentages,
+  updateClaimSchema,
 } from './workflowValidation.js';
 
 describe('claims workflow validation', () => {
+  it('accepts a submission recipient and method when submitting a claim (M82)', () => {
+    const result = updateClaimSchema.safeParse({
+      status: 'submitted',
+      submittedTo: '  Head Contractor — accounts@example.com  ',
+      submissionMethod: 'download',
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.submittedTo).toBe('Head Contractor — accounts@example.com');
+      expect(result.data.submissionMethod).toBe('download');
+    }
+  });
+
+  it('rejects an unknown submission method (M82)', () => {
+    const result = updateClaimSchema.safeParse({
+      status: 'submitted',
+      submissionMethod: 'carrier-pigeon',
+    });
+    expect(result.success).toBe(false);
+  });
+
   it('keeps legacy lotIds rejected until callers provide lot percentages', () => {
     const result = createClaimSchema.safeParse({
       periodStart: '2026-06-01',
