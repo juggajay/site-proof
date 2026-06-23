@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertCircle, Bell, CheckCircle, Clock, Settings, User } from 'lucide-react';
+import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { AlertCircle, Bell, CheckCircle, Clock, Settings, Trash2, User } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 import { createMutationErrorHandler } from '@/lib/errorHandling';
 import { queryKeys } from '@/lib/queryKeys';
@@ -24,7 +24,23 @@ interface Notification {
 
 type NotificationFilter = 'all' | 'unread' | 'mention' | 'alert';
 
+interface NotificationsPage {
+  notifications: Notification[];
+  unreadCount: number;
+}
+
 const NOTIFICATIONS_PAGE_LIMIT = 100;
+
+function buildNotificationsRequestUrl(offset: number, unreadOnly: boolean): string {
+  const params = new URLSearchParams({
+    limit: String(NOTIFICATIONS_PAGE_LIMIT),
+    offset: String(offset),
+  });
+  if (unreadOnly) {
+    params.set('unreadOnly', 'true');
+  }
+  return `/api/notifications?${params.toString()}`;
+}
 
 function getSafeInternalPath(linkUrl: string | null): string | null {
   const trimmed = linkUrl?.trim();
@@ -84,17 +100,27 @@ export function NotificationsPage() {
   const queryClient = useQueryClient();
   const [filter, setFilter] = useState<NotificationFilter>('all');
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: queryKeys.notifications,
-    queryFn: () =>
-      apiFetch<{ notifications: Notification[]; unreadCount: number }>(
-        `/api/notifications?limit=${NOTIFICATIONS_PAGE_LIMIT}`,
-      ),
-    refetchInterval: 60000,
-  });
+  // The 'unread' tab is pushed down to the server (the backend supports
+  // limit/offset/unreadOnly). 'mention'/'alert' are type filters with no
+  // server-side equivalent, so they stay client-side over the loaded pages.
+  const serverUnreadOnly = filter === 'unread';
 
-  const notifications = data?.notifications ?? [];
-  const unreadCount = data?.unreadCount ?? 0;
+  const { data, isLoading, error, fetchNextPage, hasNextPage, isFetchingNextPage } =
+    useInfiniteQuery({
+      queryKey: [...queryKeys.notifications, { unreadOnly: serverUnreadOnly }],
+      queryFn: ({ pageParam = 0 }) =>
+        apiFetch<NotificationsPage>(buildNotificationsRequestUrl(pageParam, serverUnreadOnly)),
+      // A full page implies there may be more; the next page starts after every
+      // row we have already loaded.
+      getNextPageParam: (lastPage, allPages) =>
+        lastPage.notifications.length === NOTIFICATIONS_PAGE_LIMIT
+          ? allPages.length * NOTIFICATIONS_PAGE_LIMIT
+          : undefined,
+      refetchInterval: 60000,
+    });
+
+  const notifications = data?.pages.flatMap((page) => page.notifications) ?? [];
+  const unreadCount = data?.pages[0]?.unreadCount ?? 0;
   const filteredNotifications = notifications.filter((notification) =>
     matchesFilter(notification, filter),
   );
@@ -116,6 +142,16 @@ export function NotificationsPage() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.notificationUnreadCount });
     },
     onError: createMutationErrorHandler('Failed to mark all notifications as read'),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (notificationId: string) =>
+      apiFetch(`/api/notifications/${notificationId}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.notifications });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.notificationUnreadCount });
+    },
+    onError: createMutationErrorHandler('Failed to delete notification'),
   });
 
   const handleOpenNotification = (notification: Notification) => {
@@ -202,13 +238,14 @@ export function NotificationsPage() {
         ) : (
           <ul className="divide-y">
             {filteredNotifications.map((notification) => (
-              <li key={notification.id}>
+              <li
+                key={notification.id}
+                className={`flex items-stretch ${notification.isRead ? '' : 'bg-primary/5'}`}
+              >
                 <button
                   type="button"
                   onClick={() => handleOpenNotification(notification)}
-                  className={`flex w-full items-start gap-4 px-4 py-4 text-left hover:bg-muted/60 ${
-                    notification.isRead ? '' : 'bg-primary/5'
-                  }`}
+                  className="flex min-w-0 flex-1 items-start gap-4 px-4 py-4 text-left hover:bg-muted/60"
                 >
                   <span className="mt-0.5 flex-shrink-0">
                     {getNotificationIcon(notification.type)}
@@ -235,9 +272,27 @@ export function NotificationsPage() {
                     <span className="mt-2 h-2 w-2 flex-shrink-0 rounded-full bg-primary" />
                   )}
                 </button>
+                <button
+                  type="button"
+                  aria-label="Delete notification"
+                  title="Delete notification"
+                  onClick={() => deleteMutation.mutate(notification.id)}
+                  disabled={deleteMutation.isLoading}
+                  className="flex flex-shrink-0 items-center px-4 text-muted-foreground hover:text-destructive disabled:opacity-50"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
               </li>
             ))}
           </ul>
+        )}
+
+        {hasNextPage && filteredNotifications.length > 0 && (
+          <div className="border-t p-3 text-center">
+            <Button variant="outline" onClick={() => fetchNextPage()} disabled={isFetchingNextPage}>
+              {isFetchingNextPage ? 'Loading…' : 'Load more'}
+            </Button>
+          </div>
         )}
       </div>
     </div>
