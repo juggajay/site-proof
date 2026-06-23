@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { ITPAttachment, ITPChecklistItem, ITPCompletion, ITPTemplate } from '../types';
 import {
+  canReviewItpByRole,
+  canReviewItpItem,
   filterItpChecklistItems,
   getAdjacentItpAttachment,
   getItpAttachments,
@@ -313,5 +315,96 @@ describe('getItpVerificationDisplay (M15 rejected field-state)', () => {
 
   it('returns null when there is no completion', () => {
     expect(getItpVerificationDisplay(undefined)).toBeNull();
+  });
+});
+
+describe('canReviewItpByRole (H4)', () => {
+  it('allows the head-contractor verification roles', () => {
+    for (const role of [
+      'owner',
+      'admin',
+      'project_manager',
+      'quality_manager',
+      'site_manager',
+      'superintendent',
+    ]) {
+      expect(canReviewItpByRole(role)).toBe(true);
+    }
+  });
+
+  it('rejects field/subcontractor roles and empty values', () => {
+    for (const role of ['foreman', 'site_engineer', 'subcontractor', 'subcontractor_admin', '']) {
+      expect(canReviewItpByRole(role)).toBe(false);
+    }
+    expect(canReviewItpByRole(null)).toBe(false);
+    expect(canReviewItpByRole(undefined)).toBe(false);
+  });
+});
+
+describe('canReviewItpItem (H4 verify/reject gating)', () => {
+  it('permits review of a pending-verification item by a different user with a review role', () => {
+    expect(
+      canReviewItpItem({
+        canReviewByRole: true,
+        currentUserId: 'verifier-1',
+        completion: completion({
+          isPendingVerification: true,
+          completedBy: { id: 'subbie-1', fullName: 'Sub Bie', email: 's@x.test' },
+        }),
+      }),
+    ).toBe(true);
+  });
+
+  it('blocks review when the reviewer completed the item themselves (assertDifferentVerifier)', () => {
+    expect(
+      canReviewItpItem({
+        canReviewByRole: true,
+        currentUserId: 'verifier-1',
+        completion: completion({
+          isPendingVerification: true,
+          completedBy: { id: 'verifier-1', fullName: 'Same Person', email: 'v@x.test' },
+        }),
+      }),
+    ).toBe(false);
+  });
+
+  it('blocks review without a verification role', () => {
+    expect(
+      canReviewItpItem({
+        canReviewByRole: false,
+        currentUserId: 'verifier-1',
+        completion: completion({
+          isPendingVerification: true,
+          completedBy: { id: 'subbie-1', fullName: 'Sub Bie', email: 's@x.test' },
+        }),
+      }),
+    ).toBe(false);
+  });
+
+  it('blocks review of an item that is not pending verification', () => {
+    expect(
+      canReviewItpItem({
+        canReviewByRole: true,
+        currentUserId: 'verifier-1',
+        completion: completion({ isVerified: true }),
+      }),
+    ).toBe(false);
+    expect(
+      canReviewItpItem({
+        canReviewByRole: true,
+        currentUserId: 'verifier-1',
+        completion: completion({ isRejected: true }),
+      }),
+    ).toBe(false);
+  });
+
+  it('blocks review when there is no completion', () => {
+    expect(
+      canReviewItpItem({
+        canReviewByRole: true,
+        currentUserId: 'verifier-1',
+        completion: undefined,
+      }),
+    ).toBe(false);
   });
 });

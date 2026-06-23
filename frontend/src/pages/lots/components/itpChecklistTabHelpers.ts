@@ -102,6 +102,41 @@ export function getItpVerificationDisplay(
   return null;
 }
 
+// H4: roles permitted to verify/reject an ITP completion. Mirrors the backend
+// ITP_VERIFY_ROLES in backend/src/routes/itp/helpers/access.ts; the backend
+// independently enforces this, so this gate is purely for affordance/UX.
+export const ITP_VERIFY_ROLES = [
+  'owner',
+  'admin',
+  'project_manager',
+  'quality_manager',
+  'site_manager',
+  'superintendent',
+] as const;
+
+export function canReviewItpByRole(role: string | null | undefined): boolean {
+  return !!role && (ITP_VERIFY_ROLES as readonly string[]).includes(role);
+}
+
+/**
+ * H4: decide whether the current user may verify/reject a specific ITP item.
+ * Requires a verification role, the item to be awaiting verification, and — per
+ * the backend's assertDifferentVerifier — that the reviewer is not the person
+ * who completed the item.
+ */
+export function canReviewItpItem(input: {
+  canReviewByRole: boolean;
+  currentUserId: string | null | undefined;
+  completion: ITPCompletion | undefined;
+}): boolean {
+  if (!input.canReviewByRole) return false;
+  if (!input.completion?.isPendingVerification) return false;
+  if (input.currentUserId && input.completion.completedBy?.id === input.currentUserId) {
+    return false;
+  }
+  return true;
+}
+
 export function getItpCategoryProgress(
   checklistItems: ITPChecklistItem[],
   completions: ITPCompletion[],

@@ -1,4 +1,4 @@
-import { cleanup, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '@/test/renderWithProviders';
 import { ITPChecklistTab, type ITPChecklistTabProps } from './ITPChecklistTab';
@@ -180,6 +180,109 @@ describe('ITPChecklistTab verification field-state (M15)', () => {
     expect(screen.getByText(/Rejected by head contractor/i)).toBeInTheDocument();
     expect(screen.getByText(/Photo does not show the bedding layer/i)).toBeInTheDocument();
     expect(screen.getByText(/re-complete this item to resubmit/i)).toBeInTheDocument();
+  });
+});
+
+describe('ITPChecklistTab verify/reject actions (H4)', () => {
+  const pendingInstance: ITPInstance = {
+    id: 'instance-3',
+    template: {
+      id: 'template-1',
+      name: 'Earthworks ITP',
+      checklistItems: [
+        makeChecklistItem({
+          id: 'item-1',
+          description: 'Place bedding',
+          category: 'Drainage',
+          order: 1,
+        }),
+        // A pending sibling keeps the Drainage category expanded by default.
+        makeChecklistItem({
+          id: 'item-2',
+          description: 'Backfill trench',
+          category: 'Drainage',
+          order: 2,
+        }),
+      ],
+    },
+    completions: [
+      makeCompletion({
+        checklistItemId: 'item-1',
+        id: 'completion-item-1',
+        isCompleted: true,
+        isPendingVerification: true,
+        verificationStatus: 'pending_verification',
+        completedBy: { id: 'subbie-9', fullName: 'Sub Bie', email: 's@x.test' },
+      }),
+    ],
+  };
+
+  it('offers Verify and Reject for a pending item completed by another user', async () => {
+    renderChecklist({
+      itpInstance: pendingInstance,
+      canReviewITP: true,
+      currentUserId: 'verifier-1',
+    });
+
+    expect(await screen.findByText(/Place bedding/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Verify' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reject' })).toBeInTheDocument();
+  });
+
+  it('hides the actions on the reviewer’s own completion (assertDifferentVerifier)', async () => {
+    renderChecklist({
+      itpInstance: pendingInstance,
+      canReviewITP: true,
+      currentUserId: 'subbie-9',
+    });
+
+    expect(await screen.findByText(/Place bedding/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Verify' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reject' })).not.toBeInTheDocument();
+  });
+
+  it('hides the actions when the user lacks a review role', async () => {
+    renderChecklist({
+      itpInstance: pendingInstance,
+      canReviewITP: false,
+      currentUserId: 'verifier-1',
+    });
+
+    expect(await screen.findByText(/Place bedding/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Verify' })).not.toBeInTheDocument();
+  });
+
+  it('verifies a completion through the handler', async () => {
+    const onVerifyCompletion = vi.fn().mockResolvedValue(true);
+    renderChecklist({
+      itpInstance: pendingInstance,
+      canReviewITP: true,
+      currentUserId: 'verifier-1',
+      onVerifyCompletion,
+    });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Verify' }));
+    expect(onVerifyCompletion).toHaveBeenCalledWith('completion-item-1');
+  });
+
+  it('rejects a completion with a required reason via the modal', async () => {
+    const onRejectCompletion = vi.fn().mockResolvedValue(true);
+    renderChecklist({
+      itpInstance: pendingInstance,
+      canReviewITP: true,
+      currentUserId: 'verifier-1',
+      onRejectCompletion,
+    });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Reject' }));
+    const reason = screen.getByLabelText(/Reason for rejection/i);
+    fireEvent.change(reason, { target: { value: 'Photo missing chainage marker' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Reject item' }));
+
+    expect(onRejectCompletion).toHaveBeenCalledWith(
+      'completion-item-1',
+      'Photo missing chainage marker',
+    );
   });
 });
 

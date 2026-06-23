@@ -1,7 +1,11 @@
 import { SecureDocumentImage } from '@/components/documents/SecureDocumentImage';
 import { isReleaseGatedChecklistItem } from '@/lib/itpReleaseGating';
 import type { ITPInstance, ITPAttachment, ITPCompletion } from '../types';
-import { getItpVerificationDisplay, type ItpVerificationTone } from './itpChecklistTabHelpers';
+import {
+  canReviewItpItem,
+  getItpVerificationDisplay,
+  type ItpVerificationTone,
+} from './itpChecklistTabHelpers';
 
 // I1-core: human-readable hold-point release method for the attribution line.
 const RELEASE_METHOD_LABELS: Record<string, string> = {
@@ -38,6 +42,14 @@ export interface ITPChecklistItemRowProps {
   onMarkAsFailed: (checklistItemId: string, itemDescription: string) => void;
   onPhotoClick: (photo: ITPAttachment) => void;
   setItpInstance: React.Dispatch<React.SetStateAction<ITPInstance | null>>;
+  // H4: head-contractor verify/reject affordances. `canReviewITP` is the
+  // role-based gate; the row additionally hides the actions on the user's own
+  // completion (assertDifferentVerifier) via canReviewItpItem.
+  canReviewITP?: boolean;
+  currentUserId?: string;
+  reviewingCompletionId?: string | null;
+  onVerifyCompletion?: (completionId: string) => void;
+  onRequestReject?: (completionId: string, itemDescription: string) => void;
 }
 
 export function ITPChecklistItemRow({
@@ -52,6 +64,11 @@ export function ITPChecklistItemRow({
   onMarkAsFailed,
   onPhotoClick,
   setItpInstance,
+  canReviewITP = false,
+  currentUserId,
+  reviewingCompletionId = null,
+  onVerifyCompletion,
+  onRequestReject,
 }: ITPChecklistItemRowProps) {
   const isCompleted = completion?.isCompleted || false;
   const isNotApplicable = completion?.isNotApplicable || false;
@@ -65,6 +82,9 @@ export function ITPChecklistItemRow({
   const isHoldPointLocked = isHoldPoint && !isReleased && !isNotApplicable && !isFailed;
   // M15: head-contractor verification field-state (verified / pending / rejected).
   const verification = getItpVerificationDisplay(completion);
+  // H4: whether to offer Verify/Reject on this row (role + pending + not-own-completion).
+  const canReview = canReviewItpItem({ canReviewByRole: canReviewITP, currentUserId, completion });
+  const isReviewing = !!completion?.id && reviewingCompletionId === completion.id;
 
   return (
     <div
@@ -421,6 +441,29 @@ export function ITPChecklistItemRow({
                   </a>
                 )}
               </p>
+            )}
+
+            {/* H4: head-contractor verify/reject actions for an item awaiting
+                verification. Hidden on the user's own completion. */}
+            {canReview && completion?.id && (
+              <div className="mt-3 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => onVerifyCompletion?.(completion.id)}
+                  disabled={isReviewing}
+                  className="inline-flex items-center gap-1 rounded border border-primary/40 px-3 py-1 text-xs font-medium text-primary hover:bg-primary/10 disabled:opacity-50"
+                >
+                  Verify
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onRequestReject?.(completion.id, item.description)}
+                  disabled={isReviewing}
+                  className="inline-flex items-center gap-1 rounded border border-destructive/40 px-3 py-1 text-xs font-medium text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                >
+                  Reject
+                </button>
+              </div>
             )}
 
             {/* M15: head-contractor rejection — show the reason so the field

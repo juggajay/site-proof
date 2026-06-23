@@ -2,6 +2,7 @@ import { useParams, useNavigate, useSearchParams, useLocation } from 'react-rout
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useCommercialAccess } from '@/hooks/useCommercialAccess';
+import { useAuth } from '@/lib/auth';
 import { apiFetch, ApiError } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 import { extractErrorMessage } from '@/lib/errorHandling';
@@ -12,6 +13,7 @@ import { useIsMobile } from '@/hooks/useMediaQuery';
 // Types and constants extracted to separate files
 import type { Lot, ConformStatus, LocationState, LotSubcontractorAssignment } from './types';
 import { getLotTabsForRole } from './constants';
+import { canReviewItpByRole } from './components/itpChecklistTabHelpers';
 import { buildConformanceStatusPath, useLotQualityAccessQuery } from './lotDetailData';
 import { useItpInstance } from './hooks/useItpInstance';
 import { useConformanceReportGeneration } from './hooks/useConformanceReportGeneration';
@@ -41,6 +43,7 @@ export function LotDetailPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { user } = useAuth();
 
   // Get return filters from navigation state (passed from LotsPage)
   const locationState = location.state as LocationState | null;
@@ -223,6 +226,8 @@ export function LotDetailPage() {
     mobileMarkNA,
     mobileMarkFailed,
     completeWitnessPoint,
+    verifyCompletion,
+    rejectCompletion,
   } = useItpInstance({
     projectId,
     lotId,
@@ -302,6 +307,8 @@ export function LotDetailPage() {
   const canAssignITPTemplate = qualityAccess?.canManageITPTemplates || false;
 
   const effectiveRole = qualityAccess?.role || '';
+  // H4: head-contractor verify/reject affordance gate (backend enforces too).
+  const canReviewITP = canReviewItpByRole(effectiveRole);
   const canEditLot = [
     'owner',
     'admin',
@@ -458,6 +465,10 @@ export function LotDetailPage() {
         handleAssignItpActionHandled={handleAssignItpActionHandled}
         setNaModal={setNaModal}
         setFailedModal={setFailedModal}
+        canReviewITP={canReviewITP}
+        currentUserId={user?.id}
+        verifyCompletion={verifyCompletion}
+        rejectCompletion={rejectCompletion}
         testResults={testResults}
         loadingTests={loadingTests}
         ncrs={ncrs}

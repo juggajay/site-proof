@@ -51,6 +51,10 @@ interface LotDetailTabPanelProps {
   handleAssignItpActionHandled: () => void;
   setNaModal: ITPChecklistTabProps['onOpenNaModal'];
   setFailedModal: ITPChecklistTabProps['onOpenFailedModal'];
+  canReviewITP: ITPChecklistTabProps['canReviewITP'];
+  currentUserId: ITPChecklistTabProps['currentUserId'];
+  verifyCompletion: ITPChecklistTabProps['onVerifyCompletion'];
+  rejectCompletion: ITPChecklistTabProps['onRejectCompletion'];
   // Tests tab
   testResults: TestResult[];
   loadingTests: boolean;
@@ -97,6 +101,10 @@ export function LotDetailTabPanel({
   handleAssignItpActionHandled,
   setNaModal,
   setFailedModal,
+  canReviewITP,
+  currentUserId,
+  verifyCompletion,
+  rejectCompletion,
   testResults,
   loadingTests,
   ncrs,
@@ -164,6 +172,10 @@ export function LotDetailTabPanel({
             onAutoOpenAssignTemplateHandled={handleAssignItpActionHandled}
             onOpenNaModal={(data) => setNaModal(data)}
             onOpenFailedModal={(data) => setFailedModal(data)}
+            canReviewITP={canReviewITP}
+            currentUserId={currentUserId}
+            onVerifyCompletion={verifyCompletion}
+            onRejectCompletion={rejectCompletion}
           />
         </div>
       )}

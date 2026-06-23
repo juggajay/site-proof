@@ -68,6 +68,12 @@ export interface ITPChecklistTabProps {
   // Modal state setters
   onOpenNaModal: (data: { checklistItemId: string; itemDescription: string }) => void;
   onOpenFailedModal: (data: { checklistItemId: string; itemDescription: string }) => void;
+  // H4: head-contractor verify/reject. `canReviewITP` is the role-based gate;
+  // per-row the actions are also hidden on the user's own completion.
+  canReviewITP?: boolean;
+  currentUserId?: string;
+  onVerifyCompletion?: (completionId: string) => Promise<boolean> | void;
+  onRejectCompletion?: (completionId: string, reason: string) => Promise<boolean>;
 }
 
 export function ITPChecklistTab({
@@ -98,6 +104,10 @@ export function ITPChecklistTab({
   onAutoOpenAssignTemplateHandled,
   onOpenNaModal,
   onOpenFailedModal,
+  canReviewITP = false,
+  currentUserId,
+  onVerifyCompletion,
+  onRejectCompletion,
 }: ITPChecklistTabProps) {
   const navigate = useNavigate();
   const assignTemplateCardRef = useRef<HTMLDivElement>(null);
@@ -110,6 +120,45 @@ export function ITPChecklistTab({
   const [selectedPhoto, setSelectedPhoto] = useState<ITPAttachment | null>(null);
   const [photoZoom, setPhotoZoom] = useState(1);
   const hasAppliedDefaultItpExpansion = useRef(false);
+  // H4: verify/reject in-flight + reject-reason modal state.
+  const [reviewingCompletionId, setReviewingCompletionId] = useState<string | null>(null);
+  const [rejectModal, setRejectModal] = useState<{
+    completionId: string;
+    itemDescription: string;
+  } | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [submittingReject, setSubmittingReject] = useState(false);
+
+  const handleVerifyCompletion = async (completionId: string) => {
+    if (!onVerifyCompletion) return;
+    setReviewingCompletionId(completionId);
+    try {
+      await onVerifyCompletion(completionId);
+    } finally {
+      setReviewingCompletionId(null);
+    }
+  };
+
+  const handleRequestReject = (completionId: string, itemDescription: string) => {
+    setRejectReason('');
+    setRejectModal({ completionId, itemDescription });
+  };
+
+  const handleSubmitReject = async () => {
+    if (!rejectModal || !onRejectCompletion) return;
+    setSubmittingReject(true);
+    setReviewingCompletionId(rejectModal.completionId);
+    try {
+      const ok = await onRejectCompletion(rejectModal.completionId, rejectReason);
+      if (ok) {
+        setRejectModal(null);
+        setRejectReason('');
+      }
+    } finally {
+      setSubmittingReject(false);
+      setReviewingCompletionId(null);
+    }
+  };
 
   // Default-expand the first category that still has work once the instance
   // loads (same behavior as the mobile checklist), instead of all-collapsed.
@@ -407,6 +456,11 @@ export function ITPChecklistTab({
                           }
                           onPhotoClick={setSelectedPhoto}
                           setItpInstance={setItpInstance}
+                          canReviewITP={canReviewITP}
+                          currentUserId={currentUserId}
+                          reviewingCompletionId={reviewingCompletionId}
+                          onVerifyCompletion={handleVerifyCompletion}
+                          onRequestReject={handleRequestReject}
                         />
                       );
                     })}
@@ -430,6 +484,54 @@ export function ITPChecklistTab({
             onZoomOut={() => setPhotoZoom((prev) => Math.max(prev - 0.5, 0.5))}
             onResetZoom={() => setPhotoZoom(1)}
           />
+        )}
+
+        {/* H4: reject-reason modal (reason required, max 3000) */}
+        {rejectModal && (
+          <div
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Reject ITP item"
+          >
+            <div className="bg-background rounded-lg p-6 w-full max-w-md">
+              <h2 className="text-lg font-semibold mb-1">Reject ITP item</h2>
+              <p className="text-sm text-muted-foreground mb-3">{rejectModal.itemDescription}</p>
+              <label htmlFor="itp-reject-reason" className="block text-sm font-medium mb-1">
+                Reason for rejection <span className="text-destructive">*</span>
+              </label>
+              <textarea
+                id="itp-reject-reason"
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                maxLength={3000}
+                rows={4}
+                className="w-full px-2 py-1 text-sm border border-border rounded bg-background text-foreground"
+                placeholder="Explain what needs to be corrected before this item can be verified..."
+              />
+              <div className="flex justify-end gap-2 mt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRejectModal(null);
+                    setRejectReason('');
+                  }}
+                  disabled={submittingReject}
+                  className="px-4 py-2 border rounded-lg hover:bg-muted disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSubmitReject}
+                  disabled={submittingReject || !rejectReason.trim()}
+                  className="px-4 py-2 rounded-lg bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50"
+                >
+                  {submittingReject ? 'Rejecting...' : 'Reject item'}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </>
     );
