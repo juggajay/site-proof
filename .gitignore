@@ -70,7 +70,9 @@ init.sh
 *.dump.sha256
 backups/
 backend/backups/
-reports/
+# Root-anchored so it only ignores the generated report-output dir, not source
+# directories named "reports" (e.g. frontend/src/pages/reports).
+/reports/
 backend/reports/
 retention-report-*.json
 

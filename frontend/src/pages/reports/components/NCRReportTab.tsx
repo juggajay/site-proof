@@ -3,6 +3,7 @@ import { useDateFormat } from '@/lib/dateFormat';
 import { useTimezone } from '@/lib/timezone';
 import type { NCRReport } from '../types';
 import { formatReportDateTime } from '../reportFormatting';
+import { buildReportPaginationCaption } from '../reportPagination';
 
 export interface NCRReportTabProps {
   report: NCRReport;
@@ -12,6 +13,11 @@ export const NCRReportTab = React.memo(function NCRReportTab({ report }: NCRRepo
   const { dateFormat } = useDateFormat();
   const { timezone } = useTimezone();
   const generatedAt = formatReportDateTime(report.generatedAt, dateFormat, timezone);
+  const paginationCaption = buildReportPaginationCaption(
+    report.ncrs.length,
+    report.totalNCRs,
+    'NCRs',
+  );
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
@@ -168,6 +174,9 @@ export const NCRReportTab = React.memo(function NCRReportTab({ report }: NCRRepo
           <h3 className="text-lg font-medium">NCR Details</h3>
           <span className="text-sm text-muted-foreground">Generated: {generatedAt}</span>
         </div>
+        {paginationCaption && (
+          <p className="text-sm text-muted-foreground mb-3">{paginationCaption}</p>
+        )}
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-border">
             <thead className="bg-muted">

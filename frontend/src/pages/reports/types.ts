@@ -3,6 +3,13 @@
  * Extracted from ReportsPage.tsx for reusability.
  */
 
+export interface ReportPagination {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
 export interface LotStatusReport {
   generatedAt: string;
   projectId: string;
@@ -40,6 +47,7 @@ export interface LotStatusReport {
     currentPeriodLabel: string;
     previousPeriodLabel: string;
   };
+  pagination?: ReportPagination;
 }
 
 export interface NCRReport {
@@ -75,6 +83,7 @@ export interface NCRReport {
     minor: number;
     major: number;
   };
+  pagination?: ReportPagination;
 }
 
 export interface TestReport {
