@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Loader2 } from 'lucide-react';
 import type { DailyDiary } from '@/pages/diary/types';
 import { formatDateKey } from '@/lib/localDate';
+import { shouldShowCopyFromYesterday } from './diaryCopyAffordance';
 
 interface DiaryMobileViewProps {
   // Date & lot
@@ -97,17 +98,19 @@ export function DiaryMobileView(props: DiaryMobileViewProps) {
   // submitted from a phone instead of being stuck until the foreman finds a desktop.
   const canReviewSubmit = Boolean(onReviewSubmit) && diary?.status === 'draft';
 
-  // Show copy-from-yesterday affordance when the diary exists (weather recorded)
-  // and there are no personnel or plant entries yet on this day.
-  const hasPersonnelEntries = timeline.some((e) => e.type === 'personnel');
-  const hasPlantEntries = timeline.some((e) => e.type === 'plant');
-  const showCopyAffordance =
-    !isSubmitted &&
-    diary !== null &&
-    !loading &&
-    !hasPersonnelEntries &&
-    !hasPlantEntries &&
-    (Boolean(onCopyPersonnelFromYesterday) || Boolean(onCopyPlantFromYesterday));
+  // M33: show copy-from-yesterday when the diary exists and there is no MANUAL
+  // crew/plant yet. Docket-sourced rows (which appear in the timeline but are
+  // synced automatically) must not suppress the affordance, so the gate is based
+  // on manualEntries — mirroring the H11 backend filter that only copies manual
+  // rows forward.
+  const showCopyAffordance = shouldShowCopyFromYesterday({
+    isSubmitted,
+    hasDiary: diary !== null,
+    loading,
+    manualPersonnelCount: manualEntries?.personnel.length ?? 0,
+    manualPlantCount: manualEntries?.plant.length ?? 0,
+    hasCopyHandler: Boolean(onCopyPersonnelFromYesterday) || Boolean(onCopyPlantFromYesterday),
+  });
 
   const dateLabel = new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-AU', {
     weekday: 'short',
