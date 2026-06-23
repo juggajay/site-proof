@@ -14,7 +14,10 @@ import {
 } from './auditLog/responses.js';
 
 export const auditLogRouter = Router();
-const AUDIT_LOG_ROLES = ['owner', 'admin', 'project_manager'];
+// quality_manager is included so QMs can self-serve audit investigations on
+// their own projects. It is NOT in COMPANY_AUDIT_ROLES, so access stays
+// project-scoped (own projects only) rather than company-wide (M75).
+const AUDIT_LOG_ROLES = ['owner', 'admin', 'project_manager', 'quality_manager'];
 const COMPANY_AUDIT_ROLES = new Set(['owner', 'admin']);
 const AUDIT_SUBCONTRACTOR_ROLES = new Set(['subcontractor', 'subcontractor_admin']);
 const AUDIT_FILTER_MAX_LENGTH = 120;

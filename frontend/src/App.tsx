@@ -12,6 +12,7 @@ import { CookieConsentBanner } from '@/components/CookieConsentBanner';
 import { PageSkeleton } from '@/components/ui/Skeleton';
 import {
   ADMIN_ROLES,
+  AUDIT_LOG_PAGE_ROLES,
   COMPANY_ADMIN_ROLES,
   COMMERCIAL_ROLES,
   INTERNAL_ROLES,
@@ -436,11 +437,11 @@ function App() {
               <Route path="/documentation" element={<Navigate to="/docs" replace />} />
               <Route path="/support" element={<SupportPage />} />
 
-              {/* Audit Log - Admin Only */}
+              {/* Audit Log - admins + project-scoped quality managers (M75) */}
               <Route
                 path="/audit-log"
                 element={
-                  <RoleProtectedRoute allowedRoles={ADMIN_ROLES}>
+                  <RoleProtectedRoute allowedRoles={AUDIT_LOG_PAGE_ROLES}>
                     <AuditLogPage />
                   </RoleProtectedRoute>
                 }
