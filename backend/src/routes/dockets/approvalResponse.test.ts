@@ -34,6 +34,36 @@ describe('resolveDocketApprovedTotals', () => {
       plantApproved: plantSubmitted,
     });
   });
+
+  it('clamps an approved class to 0 when it has no entries (M37: no phantom hours)', () => {
+    expect(
+      resolveDocketApprovedTotals({
+        adjustedLabourHours: 6,
+        adjustedPlantHours: 4,
+        submittedLabourHours: 6,
+        submittedPlantHours: 4,
+        labourEntryCount: 0,
+        plantEntryCount: 2,
+      }),
+    ).toEqual({
+      labourApproved: 0,
+      plantApproved: 4,
+    });
+  });
+
+  it('clamps the submitted fallback to 0 when a class has no entries', () => {
+    expect(
+      resolveDocketApprovedTotals({
+        submittedLabourHours: 10,
+        submittedPlantHours: 5,
+        labourEntryCount: 3,
+        plantEntryCount: 0,
+      }),
+    ).toEqual({
+      labourApproved: 10,
+      plantApproved: 0,
+    });
+  });
 });
 
 describe('buildDocketApprovalEntryUpdates', () => {

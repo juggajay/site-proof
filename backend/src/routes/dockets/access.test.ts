@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DOCKET_APPROVERS,
   isDocketEntryEditable,
   isSubcontractorUser,
   requireApprovedDocketResource,
@@ -26,6 +27,12 @@ const userWithRole = (
 });
 
 describe('dockets access helpers (pure)', () => {
+  describe('DOCKET_APPROVERS (M35)', () => {
+    it('includes quality_manager so QMs can approve/query/reject dockets', () => {
+      expect(DOCKET_APPROVERS).toContain('quality_manager');
+    });
+  });
+
   describe('isSubcontractorUser', () => {
     it('returns true for subcontractor portal roles', () => {
       expect(isSubcontractorUser(userWithRole('subcontractor', null))).toBe(true);

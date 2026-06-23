@@ -19,8 +19,16 @@ import {
 // scoping, assigned-lot enforcement, and editable docket statuses.
 // =============================================================================
 
-// Roles that can approve dockets
-export const DOCKET_APPROVERS = ['owner', 'admin', 'project_manager', 'site_manager', 'foreman'];
+// Roles that can approve dockets. quality_manager is included so QMs can
+// approve/query/reject as documented in the role matrix (M35).
+export const DOCKET_APPROVERS = [
+  'owner',
+  'admin',
+  'project_manager',
+  'site_manager',
+  'foreman',
+  'quality_manager',
+];
 export const DOCKET_ENTRY_EDIT_STATUSES = new Set(['draft', 'queried', 'rejected']);
 
 export type AuthUser = NonNullable<Express.Request['user']>;

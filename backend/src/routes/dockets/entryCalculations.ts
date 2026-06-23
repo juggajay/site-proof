@@ -1,7 +1,35 @@
+import { AppError } from '../../lib/AppError.js';
+
 export type DocketLotAllocationInput = {
   lotId: string;
   hours: number;
 };
+
+// Small float tolerance so e.g. 2.1 + 5.9 == 8 doesn't trip on binary rounding.
+const LOT_ALLOCATION_HOURS_TOLERANCE = 0.001;
+
+/**
+ * Guard the invariant that hours spread across lots can't exceed the hours the
+ * entry actually records — otherwise a docket could bill more lot-hours than
+ * were worked (M38). No-op when there are no allocations.
+ */
+export function assertLotAllocationHoursWithinEntry(
+  entryHours: number,
+  lotAllocations: DocketLotAllocationInput[] | undefined,
+): void {
+  if (!lotAllocations?.length) {
+    return;
+  }
+  const allocatedHours = lotAllocations.reduce(
+    (sum, allocation) => sum + (Number(allocation.hours) || 0),
+    0,
+  );
+  if (allocatedHours > entryHours + LOT_ALLOCATION_HOURS_TOLERANCE) {
+    throw AppError.badRequest(
+      `Lot allocation hours (${roundDocketAmountToCents(allocatedHours)}) cannot exceed the entry hours (${roundDocketAmountToCents(entryHours)}).`,
+    );
+  }
+}
 
 export function calculateHoursFromTimeRange(
   startTime: string | null | undefined,

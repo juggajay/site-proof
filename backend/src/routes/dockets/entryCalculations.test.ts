@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  assertLotAllocationHoursWithinEntry,
   buildLabourLotAllocationCreate,
   buildLabourLotAllocationRows,
   calculateHoursFromTimeRange,
@@ -8,6 +9,31 @@ import {
   roundDocketAmountToCents,
   selectPlantHourlyRate,
 } from './entryCalculations.js';
+
+describe('assertLotAllocationHoursWithinEntry (M38)', () => {
+  it('allows allocations summing below or equal to the entry hours', () => {
+    expect(() =>
+      assertLotAllocationHoursWithinEntry(8, [
+        { lotId: 'lot-1', hours: 3 },
+        { lotId: 'lot-2', hours: 5 },
+      ]),
+    ).not.toThrow();
+  });
+
+  it('allows no allocations', () => {
+    expect(() => assertLotAllocationHoursWithinEntry(8, undefined)).not.toThrow();
+    expect(() => assertLotAllocationHoursWithinEntry(8, [])).not.toThrow();
+  });
+
+  it('throws when allocations sum above the entry hours', () => {
+    expect(() =>
+      assertLotAllocationHoursWithinEntry(8, [
+        { lotId: 'lot-1', hours: 5 },
+        { lotId: 'lot-2', hours: 5 },
+      ]),
+    ).toThrow(/exceed/i);
+  });
+});
 
 describe('docket entry calculations', () => {
   it('calculates labour hours for same-day and overnight shifts', () => {

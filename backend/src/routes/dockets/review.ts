@@ -129,6 +129,8 @@ docketReviewRouter.post(
       adjustedPlantHours,
       submittedLabourHours,
       submittedPlantHours,
+      labourEntryCount: docket.labourEntries.length,
+      plantEntryCount: docket.plantEntries.length,
     });
     const approvalEntryUpdates = buildDocketApprovalEntryUpdates({
       labourEntries: docket.labourEntries,
