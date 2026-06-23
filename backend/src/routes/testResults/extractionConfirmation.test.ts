@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AppError } from '../../lib/AppError.js';
 import {
+  applyConfirmedPassFailBackstop,
   assertConfirmedResultRecorded,
   buildConfirmationUpdateData,
   processBatchConfirm,
@@ -154,5 +155,57 @@ describe('processBatchConfirm', () => {
       { success: false, testResultId: '', error: 'Invalid test result id' },
       { success: false, testResultId: '', error: 'Invalid test result id' },
     ]);
+  });
+});
+
+describe('applyConfirmedPassFailBackstop (H13)', () => {
+  it('recomputes fail from the corrected value, overriding a client-confirmed pass', () => {
+    const updateData = { resultValue: 5, passFail: 'pass' } as Record<string, unknown>;
+    applyConfirmedPassFailBackstop(updateData, {
+      resultValue: null,
+      specificationMin: 10,
+      specificationMax: null,
+    });
+    expect(updateData.passFail).toBe('fail');
+  });
+
+  it('recomputes pass for an in-spec corrected value', () => {
+    const updateData = { resultValue: 15, passFail: 'fail' } as Record<string, unknown>;
+    applyConfirmedPassFailBackstop(updateData, {
+      resultValue: null,
+      specificationMin: 10,
+      specificationMax: 20,
+    });
+    expect(updateData.passFail).toBe('pass');
+  });
+
+  it('falls back to the stored value/spec when the correction does not set them', () => {
+    const updateData = { passFail: 'pass' } as Record<string, unknown>;
+    applyConfirmedPassFailBackstop(updateData, {
+      resultValue: 5,
+      specificationMin: 10,
+      specificationMax: null,
+    });
+    expect(updateData.passFail).toBe('fail');
+  });
+
+  it('leaves passFail untouched when there is no basis to recompute (no value or no spec)', () => {
+    const updateData = { passFail: 'pass' } as Record<string, unknown>;
+    applyConfirmedPassFailBackstop(updateData, {
+      resultValue: null,
+      specificationMin: null,
+      specificationMax: null,
+    });
+    expect(updateData.passFail).toBe('pass');
+  });
+
+  it('coerces Decimal-like stored values (objects with toNumber)', () => {
+    const updateData = {} as Record<string, unknown>;
+    applyConfirmedPassFailBackstop(updateData, {
+      resultValue: { toNumber: () => 25 },
+      specificationMin: { toNumber: () => 10 },
+      specificationMax: { toNumber: () => 20 },
+    });
+    expect(updateData.passFail).toBe('fail');
   });
 });

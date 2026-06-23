@@ -2,11 +2,65 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../lib/AppError.js';
 import { applyTestResultCorrections, type TestResultCorrections } from './corrections.js';
+import { derivePassFail } from './certificateExtraction.js';
 import {
   hasRecordedResult,
   RESULT_REQUIRED_CODE,
   RESULT_REQUIRED_MESSAGE,
 } from './statusWorkflow.js';
+
+/** Coerce a stored Decimal / number / numeric string into a comparable number. */
+function toComparableNumber(value: unknown): number | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value === 'string') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  if (
+    typeof value === 'object' &&
+    'toNumber' in value &&
+    typeof (value as { toNumber: unknown }).toNumber === 'function'
+  ) {
+    const parsed = (value as { toNumber: () => number }).toNumber();
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+/**
+ * H13: server-side pass/fail backstop. After corrections are applied, recompute
+ * the pass/fail outcome from the EFFECTIVE result value + acceptance criteria
+ * (corrected value when the payload set it, otherwise the stored row), so a
+ * confirm cannot record a pass when the value is out of spec — the client's
+ * pass/fail is never trusted when the data can decide it. When there is no value
+ * or no spec bound, derivePassFail returns 'pending' and we leave the existing
+ * pass/fail untouched (no basis to override a deliberate pending/manual value).
+ */
+export function applyConfirmedPassFailBackstop(
+  updateData: Prisma.TestResultUncheckedUpdateInput,
+  stored: { resultValue: unknown; specificationMin: unknown; specificationMax: unknown },
+): void {
+  const effectiveValue = 'resultValue' in updateData ? updateData.resultValue : stored.resultValue;
+  const effectiveMin =
+    'specificationMin' in updateData ? updateData.specificationMin : stored.specificationMin;
+  const effectiveMax =
+    'specificationMax' in updateData ? updateData.specificationMax : stored.specificationMax;
+
+  const computed = derivePassFail(
+    toComparableNumber(effectiveValue),
+    toComparableNumber(effectiveMin),
+    toComparableNumber(effectiveMax),
+  );
+
+  if (computed !== 'pending') {
+    updateData.passFail = computed;
+  }
+}
 
 // Ticket T2: confirming an extraction marks the test 'entered', which now
 // requires a real result value + pass/fail outcome. Corrections may overwrite
@@ -94,6 +148,11 @@ export async function confirmExtraction({
   }
 
   const updateData = buildConfirmationUpdateData(corrections, userId);
+
+  // H13: recompute pass/fail server-side from the effective value + spec before
+  // the row is recorded, so a confirmed result can't claim a pass the data
+  // doesn't support.
+  applyConfirmedPassFailBackstop(updateData, testResult);
 
   // Ticket T2: confirming moves the row to 'entered' — require a real result.
   // Thrown outside any catch, so it surfaces as a 400 (like invalid corrections).
@@ -201,6 +260,9 @@ export async function processBatchConfirm({ confirmations, userId, authorize }: 
       }
 
       const updateData = buildConfirmationUpdateData(corrections, userId);
+
+      // H13: same server-side pass/fail backstop as the single-confirm path.
+      applyConfirmedPassFailBackstop(updateData, testResult);
 
       // Ticket T2: a blank/pending result is recorded as a per-item failure
       // (thrown inside this try → caught below as 'Failed to confirm'), matching
