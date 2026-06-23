@@ -41,11 +41,16 @@ export function buildMentionableUserFilters(
       ? [{ companyId: user.companyId }]
       : [{ id: user.id }];
 
-  // If search provided, filter by email or fullName (SQLite - case-sensitive contains)
+  // If search provided, filter by email or fullName. Postgres `contains` is
+  // case-sensitive without mode:'insensitive', so match insensitively against
+  // the original search text (a lower-cased search would miss original-cased
+  // stored names).
   if (search && search.length >= 2) {
-    const searchLower = search.toLowerCase();
     filters.push({
-      OR: [{ email: { contains: searchLower } }, { fullName: { contains: searchLower } }],
+      OR: [
+        { email: { contains: search, mode: 'insensitive' } },
+        { fullName: { contains: search, mode: 'insensitive' } },
+      ],
     });
   }
 
