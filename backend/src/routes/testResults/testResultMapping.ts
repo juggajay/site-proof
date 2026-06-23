@@ -78,6 +78,33 @@ export function buildTestResultData(
   };
 }
 
+/**
+ * Extract a chainage in metres from a free-text location string.
+ *
+ * AU chainage convention (M46): "CH N+M" means M whole metres past station N,
+ * so `CH 1234+50` is 1284 m — NOT 1234.50. A "." separator is a plain decimal
+ * (`1234.50` -> 1234.5), matching how lot chainages are stored. The earlier
+ * `/100` offset conflated the two and was also wrong for single-digit decimals.
+ */
+export function parseChainageFromLocation(locationString: string): number | null {
+  // "CH N+M" / "N+M": station plus a whole-metre offset.
+  const plusMatch = locationString.match(/(?:CH\s*)?(\d+)\+(\d+)/i);
+  if (plusMatch) {
+    return parseFloat(plusMatch[1]!) + parseFloat(plusMatch[2]!);
+  }
+  // "CH N.M" / "N.M": decimal metres (could also be coordinates without CH).
+  const decimalMatch = locationString.match(/(?:CH\s*)?(\d+)\.(\d+)/i);
+  if (decimalMatch) {
+    return parseFloat(`${decimalMatch[1]}.${decimalMatch[2]}`);
+  }
+  // "CH N" / "chainage N": whole metres.
+  const wholeMatch = locationString.match(/(?:CH|chainage)\s*(\d+)/i);
+  if (wholeMatch) {
+    return parseFloat(wholeMatch[1]!);
+  }
+  return null;
+}
+
 // Feature #727: Parse chainage from location string and suggest matching lots.
 export async function suggestLotsFromLocation(
   projectId: string,
@@ -92,30 +119,7 @@ export async function suggestLotsFromLocation(
   }>;
   extractedChainage: number | null;
 }> {
-  // Try to extract chainage from various formats: "CH 1234+50", "1234.50", "CH1234", etc.
-  const chainagePatterns = [
-    /CH\s*(\d+)\+(\d+)/i, // CH 1234+50 format
-    /CH\s*(\d+)\.(\d+)/i, // CH 1234.50 format
-    /(\d+)\+(\d+)/, // 1234+50 format
-    /(\d+)\.(\d+)/, // 1234.50 format (could be chainage or coordinates)
-    /CH\s*(\d+)/i, // CH 1234 format
-    /chainage\s*(\d+)/i, // "chainage 1234"
-  ];
-
-  let extractedChainage: number | null = null;
-
-  for (const pattern of chainagePatterns) {
-    const match = locationString.match(pattern);
-    if (match) {
-      if (match[2]) {
-        // Format with decimal/offset: 1234+50 means 1234.50
-        extractedChainage = parseFloat(match[1]) + parseFloat(match[2]) / 100;
-      } else {
-        extractedChainage = parseFloat(match[1]);
-      }
-      break;
-    }
-  }
+  const extractedChainage = parseChainageFromLocation(locationString);
 
   if (extractedChainage === null) {
     return { suggestedLots: [], extractedChainage: null };
