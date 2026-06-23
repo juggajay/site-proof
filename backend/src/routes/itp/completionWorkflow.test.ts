@@ -6,8 +6,10 @@ import {
   buildItpCompletionWitnessData,
   buildItpSubbieCompletionNotifications,
   deriveItpCompletionStatus,
+  deriveItpVerificationFlags,
   isItpCompletionFinished,
   parseProjectRequiresSubcontractorVerification,
+  resolveItpRecompletionVerificationFields,
   resolveSubcontractorVerificationStatus,
   shouldCreateFailedItpNcr,
 } from './completionWorkflow.js';
@@ -316,6 +318,7 @@ describe('buildItpCompletionTransform', () => {
       isFailed: false,
       isVerified: true,
       isPendingVerification: false,
+      isRejected: false,
       linkedNcr: ncr,
     });
   });
@@ -336,6 +339,7 @@ describe('buildItpCompletionTransform', () => {
       isFailed: false,
       isVerified: false,
       isPendingVerification: true,
+      isRejected: false,
       attachments: [],
       linkedNcr: null,
     });
@@ -348,5 +352,116 @@ describe('buildItpCompletionTransform', () => {
     expect(transformed.isFailed).toBe(true);
     expect(transformed.isCompleted).toBe(false);
     expect(transformed.linkedNcr).toEqual({ id: 'ncr-9' });
+  });
+
+  it('flags a rejected completion so the field worker sees the rejection (M15)', () => {
+    const completion = {
+      id: 'completion-4',
+      status: 'completed',
+      verificationStatus: 'rejected',
+      verificationNotes: 'Photo does not show the bedding layer',
+    };
+
+    const transformed = buildItpCompletionTransform(completion, null);
+    expect(transformed.isRejected).toBe(true);
+    expect(transformed.isVerified).toBe(false);
+    expect(transformed.isPendingVerification).toBe(false);
+    // The rejection reason rides along on the spread so the UI can display it.
+    expect(transformed.verificationNotes).toBe('Photo does not show the bedding layer');
+  });
+});
+
+describe('deriveItpVerificationFlags (M15)', () => {
+  it('flags a verified completion', () => {
+    expect(deriveItpVerificationFlags('verified')).toEqual({
+      isVerified: true,
+      isPendingVerification: false,
+      isRejected: false,
+    });
+  });
+
+  it('flags a pending_verification completion', () => {
+    expect(deriveItpVerificationFlags('pending_verification')).toEqual({
+      isVerified: false,
+      isPendingVerification: true,
+      isRejected: false,
+    });
+  });
+
+  it('flags a rejected completion', () => {
+    expect(deriveItpVerificationFlags('rejected')).toEqual({
+      isVerified: false,
+      isPendingVerification: false,
+      isRejected: true,
+    });
+  });
+
+  it('treats "none" / null / undefined as no verification state', () => {
+    const expected = { isVerified: false, isPendingVerification: false, isRejected: false };
+    expect(deriveItpVerificationFlags('none')).toEqual(expected);
+    expect(deriveItpVerificationFlags(null)).toEqual(expected);
+    expect(deriveItpVerificationFlags(undefined)).toEqual(expected);
+  });
+});
+
+describe('resolveItpRecompletionVerificationFields (H6)', () => {
+  it('re-queues a rejected item to pending_verification and clears the prior verifier attribution', () => {
+    expect(
+      resolveItpRecompletionVerificationFields({
+        existingVerificationStatus: 'rejected',
+        computedVerificationStatus: 'pending_verification',
+      }),
+    ).toEqual({
+      verificationStatus: 'pending_verification',
+      verifiedById: null,
+      verifiedAt: null,
+      verificationNotes: null,
+    });
+  });
+
+  it('auto-verifies a rejected item on resubmit when no verification is required, still clearing verifier fields', () => {
+    expect(
+      resolveItpRecompletionVerificationFields({
+        existingVerificationStatus: 'rejected',
+        computedVerificationStatus: 'verified',
+      }),
+    ).toEqual({
+      verificationStatus: 'verified',
+      verifiedById: null,
+      verifiedAt: null,
+      verificationNotes: null,
+    });
+  });
+
+  it('clears a rejected item back to "none" when the completer is not a subcontractor (no computed status)', () => {
+    expect(
+      resolveItpRecompletionVerificationFields({
+        existingVerificationStatus: 'rejected',
+        computedVerificationStatus: undefined,
+      }),
+    ).toEqual({
+      verificationStatus: 'none',
+      verifiedById: null,
+      verifiedAt: null,
+      verificationNotes: null,
+    });
+  });
+
+  it('only sets the computed status (no verifier clearing) when the item was not rejected', () => {
+    expect(
+      resolveItpRecompletionVerificationFields({
+        existingVerificationStatus: 'none',
+        computedVerificationStatus: 'pending_verification',
+      }),
+    ).toEqual({ verificationStatus: 'pending_verification' });
+  });
+
+  it('leaves verification untouched when the item was not rejected and nothing was computed', () => {
+    expect(
+      resolveItpRecompletionVerificationFields({
+        existingVerificationStatus: 'pending_verification',
+        computedVerificationStatus: undefined,
+      }),
+    ).toEqual({});
   });
 });

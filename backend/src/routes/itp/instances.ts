@@ -22,6 +22,7 @@ import {
 import { requireSubcontractorPortalModuleAccess } from '../../lib/projectAccess.js';
 import { buildItpInstanceResponse } from './instances/responses.js';
 import { sanitizeItpCompletionResponse } from './completionResponses.js';
+import { deriveItpVerificationFlags } from './completionWorkflow.js';
 import { findLinkedNcrsForChecklistItems, type NcrLinkClient } from './instances/ncrLinks.js';
 
 // Type for ITP completion with attachments
@@ -405,8 +406,9 @@ instancesRouter.get(
           isCompleted: c.status === 'completed' || c.status === 'not_applicable',
           isNotApplicable: c.status === 'not_applicable',
           isFailed: c.status === 'failed',
-          isVerified: c.verificationStatus === 'verified',
-          isPendingVerification: c.verificationStatus === 'pending_verification',
+          // M15: surface verified / pending_verification / rejected so the lot
+          // ITP tab can render the rejected field-state and its reason.
+          ...deriveItpVerificationFlags(c.verificationStatus),
           linkedNcr:
             c.status === 'failed' ? (linkedNcrsByItem.get(c.checklistItemId) ?? null) : null,
           holdPointRelease: holdPointReleaseByItem.has(c.checklistItemId)

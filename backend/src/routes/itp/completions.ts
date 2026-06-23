@@ -28,6 +28,7 @@ import {
   deriveItpCompletionStatus,
   isItpCompletionFinished,
   parseProjectRequiresSubcontractorVerification,
+  resolveItpRecompletionVerificationFields,
   resolveSubcontractorVerificationStatus,
   shouldCreateFailedItpNcr,
 } from './completionWorkflow.js';
@@ -392,8 +393,14 @@ completionsRouter.post(
             completedById: isFinished ? user.userId : null,
             // Feature #463: Signature capture
             ...(signatureDataUrl !== undefined ? { signatureUrl: signatureDataUrl } : {}),
-            // Feature #271: Set pending_verification for subcontractor finished outcomes
-            ...(verificationStatus ? { verificationStatus } : {}),
+            // Feature #271: Set pending_verification for subcontractor finished outcomes.
+            // H6: a previously rejected item that is resubmitted re-enters the
+            // queue and its prior verifier attribution (verifiedBy/At/notes) is
+            // cleared; a non-rejected item just takes the computed status.
+            ...resolveItpRecompletionVerificationFields({
+              existingVerificationStatus: existingCompletion.verificationStatus,
+              computedVerificationStatus: verificationStatus,
+            }),
             ...witnessData,
           },
           include: completionInclude,

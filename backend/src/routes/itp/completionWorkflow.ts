@@ -295,6 +295,25 @@ export function buildItpSubbieCompletionNotifications(
 }
 
 /**
+ * M15: derive the verification-state booleans surfaced on every ITP completion
+ * the frontend renders. `rejected` is the field worker's signal that the
+ * head-contractor sent the item back; it sits alongside the existing
+ * verified / pending_verification flags. Anything else ("none"/null/undefined)
+ * means the item is not in a verification workflow.
+ */
+export function deriveItpVerificationFlags(verificationStatus: string | null | undefined): {
+  isVerified: boolean;
+  isPendingVerification: boolean;
+  isRejected: boolean;
+} {
+  return {
+    isVerified: verificationStatus === 'verified',
+    isPendingVerification: verificationStatus === 'pending_verification',
+    isRejected: verificationStatus === 'rejected',
+  };
+}
+
+/**
  * Shape of the persisted completion needed to derive the frontend-friendly flags.
  * Kept structural so the builder stays DB-free.
  */
@@ -318,9 +337,44 @@ export function buildItpCompletionTransform<T extends ItpCompletionForTransform>
     isCompleted: completion.status === 'completed' || completion.status === 'not_applicable',
     isNotApplicable: completion.status === 'not_applicable',
     isFailed: completion.status === 'failed',
-    isVerified: completion.verificationStatus === 'verified',
-    isPendingVerification: completion.verificationStatus === 'pending_verification',
+    ...deriveItpVerificationFlags(completion.verificationStatus),
     attachments: completion.attachments || [],
     linkedNcr: createdNcr,
   };
+}
+
+/**
+ * H6: when an ITP item that was previously `rejected` is re-completed
+ * ("resubmitted"), the rejection must be cleared and the prior verifier
+ * attribution wiped so the item re-enters the queue as a fresh submission —
+ * never silently inheriting the old verifier's identity or rejection note.
+ *
+ * - A rejected item resets to the freshly computed status (pending_verification
+ *   when a subcontractor must be verified, verified when the project/lot needs no
+ *   verification) and clears verifiedById / verifiedAt / verificationNotes. When
+ *   the completer is not a subcontractor no status is computed, so the rejection
+ *   simply clears back to `none`.
+ * - A non-rejected item keeps the existing behaviour: only the computed status is
+ *   written (if any), and verifier attribution is left untouched.
+ */
+export function resolveItpRecompletionVerificationFields(input: {
+  existingVerificationStatus: string | null | undefined;
+  computedVerificationStatus?: string;
+}): {
+  verificationStatus?: string;
+  verifiedById?: null;
+  verifiedAt?: null;
+  verificationNotes?: null;
+} {
+  if (input.existingVerificationStatus === 'rejected') {
+    return {
+      verificationStatus: input.computedVerificationStatus ?? 'none',
+      verifiedById: null,
+      verifiedAt: null,
+      verificationNotes: null,
+    };
+  }
+  return input.computedVerificationStatus
+    ? { verificationStatus: input.computedVerificationStatus }
+    : {};
 }
