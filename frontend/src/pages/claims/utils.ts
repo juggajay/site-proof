@@ -87,6 +87,17 @@ export function calculatePaymentDueDate(submittedAt: string, state: string = 'NS
   return dueDate.toISOString();
 }
 
+/**
+ * Whole calendar days from `now` until `due`, flooring both to local midnight so
+ * a SOPA countdown reads the same all day (no off-by-one between morning and
+ * evening). Positive = days remaining, 0 = due today, negative = overdue (M41).
+ */
+export function calendarDaysUntil(due: Date, now: Date): number {
+  const startOfLocalDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const msPerDay = 1000 * 60 * 60 * 24;
+  return Math.round((startOfLocalDay(due).getTime() - startOfLocalDay(now).getTime()) / msPerDay);
+}
+
 /** Get payment-schedule response due status - only for submitted claims awaiting response */
 export function getCertificationDueStatus(claim: Claim): CertificationDueStatus | null {
   // Only show payment-schedule due for submitted claims (not yet certified/paid)
@@ -101,7 +112,7 @@ export function getCertificationDueStatus(claim: Claim): CertificationDueStatus 
   if (!dueDate) return null;
   const now = new Date();
   const due = new Date(dueDate);
-  const daysUntilDue = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  const daysUntilDue = calendarDaysUntil(due, now);
 
   if (daysUntilDue < 0) {
     return {
@@ -136,7 +147,7 @@ export function getPaymentDueStatus(claim: Claim): PaymentDueStatus | null {
   if (!dueDate) return null;
   const now = new Date();
   const due = new Date(dueDate);
-  const daysUntilDue = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  const daysUntilDue = calendarDaysUntil(due, now);
 
   if (daysUntilDue < 0) {
     return { text: `Overdue by ${Math.abs(daysUntilDue)} days`, className: 'text-destructive' };

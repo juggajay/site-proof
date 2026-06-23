@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   addBusinessDays,
+  calendarDaysUntil,
   calculateCertificationDueDate,
   calculateLotClaimAmount,
   calculatePaymentDueDate,
@@ -12,6 +13,19 @@ import {
   parseClaimPercentageInput,
 } from './utils';
 import type { Claim, ConformedLot } from './types';
+
+describe('calendarDaysUntil (M41 SOPA day-floor)', () => {
+  it('counts whole calendar days and is stable across the time of day', () => {
+    const due = new Date(2026, 5, 13); // 13 June, local midnight
+    // Same calendar day (10 June) at very different times => identical countdown.
+    expect(calendarDaysUntil(due, new Date(2026, 5, 10, 0, 1))).toBe(3);
+    expect(calendarDaysUntil(due, new Date(2026, 5, 10, 23, 59))).toBe(3);
+    // Due today => 0 (not -1 just because it's the afternoon).
+    expect(calendarDaysUntil(due, new Date(2026, 5, 13, 15, 0))).toBe(0);
+    // Past the due date => negative whole days.
+    expect(calendarDaysUntil(due, new Date(2026, 5, 15, 9, 0))).toBe(-2);
+  });
+});
 
 function makeLot(overrides: Partial<ConformedLot> = {}): ConformedLot {
   return {
