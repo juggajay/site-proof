@@ -341,11 +341,19 @@ lotQualityRouter.post(
     );
 
     const previousStatus = lot.status;
+    // Overriding a conformed lot back to an operational status (the override
+    // target is always operational — never 'conformed') must clear the
+    // conformance stamp, otherwise the lot keeps showing "Conformed by X on Y"
+    // (stale audit/compliance data) while no longer conformed.
+    const clearsConformance = previousStatus === 'conformed';
 
     // Update the lot status
     const updatedLot = await prisma.lot.update({
       where: { id },
-      data: { status },
+      data: {
+        status,
+        ...(clearsConformance ? { conformedAt: null, conformedById: null } : {}),
+      },
       select: {
         id: true,
         lotNumber: true,
@@ -368,6 +376,7 @@ lotQualityRouter.post(
         },
         reason: reason.trim(),
         override: true,
+        ...(clearsConformance ? { conformanceReset: true } : {}),
       },
       req,
     });
@@ -379,7 +388,7 @@ lotQualityRouter.post(
       status: updatedLot.status,
       actorUserId: user.id,
       action: 'status_override',
-      changedFields: ['status'],
+      changedFields: clearsConformance ? ['status', 'conformedAt', 'conformedById'] : ['status'],
       previousStatus,
     });
 

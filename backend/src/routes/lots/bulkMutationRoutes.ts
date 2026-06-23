@@ -2,6 +2,7 @@ import { Router } from 'express';
 
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
+import { createAuditLog, AuditAction } from '../../lib/auditLog.js';
 import { prisma } from '../../lib/prisma.js';
 import { requireProjectRole } from './access.js';
 import {
@@ -82,6 +83,24 @@ lotBulkMutationRouter.post(
         updatedAt: new Date(),
       },
     });
+
+    // Audit each mutated lot (all requested lots are mutable here —
+    // assertLotsBulkMutable rejects the request if any are conformed/claimed).
+    for (const lot of lotsToUpdate) {
+      await createAuditLog({
+        projectId: lot.projectId,
+        userId: user.id,
+        entityType: 'lot',
+        entityId: lot.id,
+        action: AuditAction.LOT_STATUS_CHANGED,
+        changes: {
+          lotNumber: lot.lotNumber,
+          status: { from: lot.status, to: status },
+          bulk: true,
+        },
+        req,
+      });
+    }
 
     for (const projectId of projectIds) {
       emitLotWebhookEvents(
@@ -187,6 +206,23 @@ lotBulkMutationRouter.post(
 
       return updateResult;
     });
+
+    for (const lot of lotsToUpdate) {
+      await createAuditLog({
+        projectId: lot.projectId,
+        userId: user.id,
+        entityType: 'lot',
+        entityId: lot.id,
+        action: AuditAction.LOT_SUBCONTRACTOR_ASSIGNED,
+        changes: {
+          lotNumber: lot.lotNumber,
+          previousSubcontractorId: lot.assignedSubcontractorId,
+          assignedSubcontractorId: subcontractorId || null,
+          bulk: true,
+        },
+        req,
+      });
+    }
 
     for (const projectId of projectIds) {
       emitLotWebhookEvents(

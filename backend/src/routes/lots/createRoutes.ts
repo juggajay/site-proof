@@ -328,6 +328,7 @@ lotCreateRouter.post(
         layer: true,
         areaZone: true,
         assignedSubcontractorId: true,
+        itpTemplateId: true,
       },
     });
 
@@ -342,6 +343,22 @@ lotCreateRouter.post(
       'You do not have permission to create lots in this project.',
       { requireWritable: true },
     );
+
+    // Carry the source lot's ITP forward so the clone is inspectable. We snapshot
+    // the CURRENT template and start a fresh not_started instance — completions
+    // are never copied. If the template no longer exists, the clone simply has
+    // no ITP (rather than failing).
+    let clonedTemplateSnapshot: TemplateSnapshot | null = null;
+    if (sourceLot.itpTemplateId) {
+      const template = await prisma.iTPTemplate.findUnique({
+        where: { id: sourceLot.itpTemplateId },
+        include: { checklistItems: { orderBy: { sequenceNumber: 'asc' } } },
+      });
+      if (template) {
+        clonedTemplateSnapshot = buildTemplateSnapshot(template);
+      }
+    }
+    const cloneItpTemplateId = clonedTemplateSnapshot ? sourceLot.itpTemplateId : null;
 
     // Compute the cloned lot number + final chainage (suggestion, increment,
     // and range validation), keeping the route's DB/transaction work below.
@@ -374,6 +391,7 @@ lotCreateRouter.post(
           layer: sourceLot.layer,
           areaZone: sourceLot.areaZone,
           assignedSubcontractorId: sourceLot.assignedSubcontractorId,
+          itpTemplateId: cloneItpTemplateId,
         },
         select: {
           id: true,
@@ -390,6 +408,17 @@ lotCreateRouter.post(
           createdAt: true,
         },
       });
+
+      if (cloneItpTemplateId) {
+        await tx.iTPInstance.create({
+          data: {
+            lotId: lot.id,
+            templateId: cloneItpTemplateId,
+            templateSnapshot: JSON.stringify(clonedTemplateSnapshot),
+            status: 'not_started',
+          },
+        });
+      }
 
       if (sourceLot.assignedSubcontractorId) {
         await syncPrimaryLotSubcontractorAssignment(tx, {

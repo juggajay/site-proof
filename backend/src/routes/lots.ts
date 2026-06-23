@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
+import { createAuditLog, AuditAction } from '../lib/auditLog.js';
 import { updateLotSchema } from './lots/validation.js';
 import { canViewLotBudget, requireProjectRole } from './lots/access.js';
 import {
@@ -54,7 +55,9 @@ lotsRouter.patch(
       select: {
         id: true,
         projectId: true,
+        lotNumber: true,
         status: true,
+        budgetAmount: true,
         updatedAt: true,
       },
     });
@@ -236,6 +239,29 @@ lotsRouter.patch(
 
     const changedFields = Object.keys(updateData).sort();
     if (changedFields.length > 0) {
+      await createAuditLog({
+        projectId: lot.projectId,
+        userId: user.id,
+        entityType: 'lot',
+        entityId: id,
+        action: AuditAction.LOT_UPDATED,
+        changes: {
+          lotNumber: updatedLot.lotNumber,
+          fields: changedFields,
+          ...(updateData.status !== undefined
+            ? { status: { from: lot.status, to: updatedLot.status } }
+            : {}),
+          ...(updateData.budgetAmount !== undefined
+            ? {
+                budgetAmount: {
+                  from: lot.budgetAmount != null ? Number(lot.budgetAmount) : null,
+                  to: updatedLot.budgetAmount != null ? Number(updatedLot.budgetAmount) : null,
+                },
+              }
+            : {}),
+        },
+        req,
+      });
       emitLotWebhookEvent(lot.projectId, 'lot.updated', {
         lotId: updatedLot.id,
         projectId: lot.projectId,
