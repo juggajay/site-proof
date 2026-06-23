@@ -11,7 +11,11 @@ import { AuditAction, createAuditLog, writeAuditLogInTransaction } from '../../l
 import { sendCompanyMemberInvitationEmail } from '../../lib/email.js';
 import { createEmailDeliveryFailureError } from '../../lib/emailDeliveryErrors.js';
 import { requireEmailVerified } from '../../middleware/requireEmailVerified.js';
-import { getUserLimitForTier, normalizeSubscriptionTier } from '../../lib/tierLimits.js';
+import {
+  TIER_QUOTA_ENFORCEMENT_ENABLED,
+  getUserLimitForTier,
+  normalizeSubscriptionTier,
+} from '../../lib/tierLimits.js';
 import {
   buildCompanyLeftResponse,
   buildCompanyMemberInvitedResponse,
@@ -324,7 +328,9 @@ companyMemberRoutes.post(
         : [];
 
       const consumesSeat = !existingUser || existingUser.companyId !== companyId;
-      if (consumesSeat) {
+      // G1: seat-quota enforcement is disabled until a billing/upgrade path
+      // exists, so the user ceiling cannot brick a company.
+      if (TIER_QUOTA_ENFORCEMENT_ENABLED && consumesSeat) {
         const tier = normalizeSubscriptionTier(company.subscriptionTier);
         const userLimit = getUserLimitForTier(company.subscriptionTier);
 

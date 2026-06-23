@@ -3,6 +3,16 @@
  * Shared across routes that enforce tier-based quotas.
  */
 
+/**
+ * G1: tier-quota enforcement is turned OFF until a billing/upgrade path
+ * exists. The basic 3-project / 5-user ceilings would otherwise permanently
+ * brick companies with no way to pay for more capacity. The nominal limits
+ * below are still surfaced for display; only the blocking checks are gated on
+ * this flag. Flip this to `true` (or replace with a billing-aware check) once
+ * an upgrade mechanism ships.
+ */
+export const TIER_QUOTA_ENFORCEMENT_ENABLED: boolean = false;
+
 export const TIER_PROJECT_LIMITS: Record<string, number> = {
   basic: 3,
   professional: 10,

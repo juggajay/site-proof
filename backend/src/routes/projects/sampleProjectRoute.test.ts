@@ -113,7 +113,7 @@ describe('POST /api/projects/sample', () => {
     expect(res.body.error.message).toContain('organization');
   });
 
-  it('enforces the same project cap as normal project creation', async () => {
+  it('no longer caps sample project creation while tier enforcement is disabled (G1)', async () => {
     const limitedCompany = await prisma.company.create({
       data: {
         name: `Sample Project Cap Company ${Date.now()}`,
@@ -147,8 +147,11 @@ describe('POST /api/projects/sample', () => {
         .post('/api/projects/sample')
         .set('Authorization', `Bearer ${limitedAdmin.token}`);
 
-      expect(res.status).toBe(403);
-      expect(res.body.error.message).toContain('basic subscription allows up to 3 projects');
+      // G1: tier enforcement is disabled, so the sample project is created.
+      expect(res.status).toBe(201);
+      await expect(prisma.project.count({ where: { companyId: limitedCompany.id } })).resolves.toBe(
+        4,
+      );
     } finally {
       await prisma.project.deleteMany({ where: { companyId: limitedCompany.id } });
       await prisma.emailVerificationToken.deleteMany({ where: { userId: limitedAdmin.userId } });

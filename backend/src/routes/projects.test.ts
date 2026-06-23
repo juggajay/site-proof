@@ -533,7 +533,7 @@ describe('Projects API', () => {
       await prisma.project.delete({ where: { id: res.body.project.id } });
     });
 
-    it('should enforce the basic subscription project limit', async () => {
+    it('allows project creation past the basic limit while tier enforcement is disabled (G1)', async () => {
       const suffix = Date.now();
       const limitCompany = await prisma.company.create({
         data: {
@@ -580,10 +580,10 @@ describe('Projects API', () => {
             projectNumber: `BASIC-LIMIT-BLOCKED-${suffix}`,
           });
 
-        expect(res.status).toBe(403);
-        expect(res.body.error.message).toContain('basic subscription allows up to 3 projects');
+        // G1: tier enforcement is disabled, so the over-limit project is created.
+        expect(res.status).toBe(201);
         await expect(prisma.project.count({ where: { companyId: limitCompany.id } })).resolves.toBe(
-          3,
+          4,
         );
       } finally {
         const projects = await prisma.project.findMany({
@@ -600,7 +600,7 @@ describe('Projects API', () => {
       }
     });
 
-    it('should enforce the basic project limit under concurrent creates', async () => {
+    it('allows concurrent project creates past the basic limit while tier enforcement is disabled (G1)', async () => {
       const suffix = Date.now();
       const limitCompany = await prisma.company.create({
         data: {
@@ -654,10 +654,11 @@ describe('Projects API', () => {
         const successCount = responses.filter((res) => res.status === 201).length;
         const rejectedCount = responses.filter((res) => res.status === 403).length;
 
-        expect(successCount).toBe(1);
-        expect(rejectedCount).toBe(7);
+        // G1: tier enforcement is disabled, so all concurrent creates succeed.
+        expect(successCount).toBe(8);
+        expect(rejectedCount).toBe(0);
         await expect(prisma.project.count({ where: { companyId: limitCompany.id } })).resolves.toBe(
-          3,
+          10,
         );
       } finally {
         const projects = await prisma.project.findMany({

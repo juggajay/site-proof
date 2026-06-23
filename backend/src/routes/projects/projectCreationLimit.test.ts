@@ -41,12 +41,10 @@ describe('assertCompanyProjectCapacity', () => {
     expect(client.project.count).toHaveBeenCalledWith({ where: { companyId: 'company-1' } });
   });
 
-  it('rejects project creation when the tier limit is already reached', async () => {
+  it('does not reject project creation at the tier limit while enforcement is disabled (G1)', async () => {
     const { calls, client } = createProjectLimitClient({ projectCount: 3 });
 
-    await expect(assertCompanyProjectCapacity(client, 'company-1')).rejects.toThrow(
-      'basic subscription allows up to 3 projects',
-    );
+    await expect(assertCompanyProjectCapacity(client, 'company-1')).resolves.toBeUndefined();
     expect(calls).toEqual(['lock', 'company', 'count']);
   });
 
@@ -70,14 +68,12 @@ describe('assertCompanyProjectCapacity', () => {
     expect(calls).toEqual(['lock', 'company', 'count']);
   });
 
-  it('normalizes cased and padded tiers in project cap errors', async () => {
+  it('does not reject an over-limit paid tier while enforcement is disabled (G1)', async () => {
     const { client } = createProjectLimitClient({
       subscriptionTier: ' Professional ',
       projectCount: 10,
     });
 
-    await expect(assertCompanyProjectCapacity(client, 'company-1')).rejects.toThrow(
-      'professional subscription allows up to 10 projects',
-    );
+    await expect(assertCompanyProjectCapacity(client, 'company-1')).resolves.toBeUndefined();
   });
 });

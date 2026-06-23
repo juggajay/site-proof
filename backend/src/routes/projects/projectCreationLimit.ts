@@ -1,5 +1,9 @@
 import { AppError } from '../../lib/AppError.js';
-import { getProjectLimitForTier, normalizeSubscriptionTier } from '../../lib/tierLimits.js';
+import {
+  TIER_QUOTA_ENFORCEMENT_ENABLED,
+  getProjectLimitForTier,
+  normalizeSubscriptionTier,
+} from '../../lib/tierLimits.js';
 
 export type ProjectCreationLimitClient = {
   $queryRaw: (query: TemplateStringsArray, ...values: unknown[]) => Promise<unknown>;
@@ -45,7 +49,10 @@ export async function assertCompanyProjectCapacity(
     where: { companyId },
   });
 
-  if (projectCount >= limit) {
+  // G1: quota enforcement is disabled until a billing/upgrade path exists, so
+  // the ceiling cannot brick a company. The count above is retained so this
+  // becomes enforcing again the moment TIER_QUOTA_ENFORCEMENT_ENABLED is set.
+  if (TIER_QUOTA_ENFORCEMENT_ENABLED && projectCount >= limit) {
     throw AppError.forbidden(
       `Your ${tier} subscription allows up to ${limit} projects. Please upgrade to create more projects.`,
     );
