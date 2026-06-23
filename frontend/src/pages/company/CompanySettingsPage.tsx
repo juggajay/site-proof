@@ -22,6 +22,7 @@ import {
   TransferOwnershipCard,
 } from './components/CompanySettingsSections';
 import { CompanyTeamMembersSection } from './components/CompanyTeamMembersSection';
+import { CompanyApiKeysSection } from './components/CompanyApiKeysSection';
 import { OwnershipTransferModal } from './components/OwnershipTransferModal';
 
 interface LogoUploadResponse {
@@ -367,6 +368,9 @@ export function CompanySettingsPage() {
       <CompanyAccountInformationCard company={company} />
 
       {canManageCompanyTeam && <CompanyTeamMembersSection currentUserId={user?.id} />}
+
+      {/* H22: company integrations — API keys (webhooks follow) */}
+      {canManageCompanyTeam && <CompanyApiKeysSection currentUserId={user?.id} />}
 
       {/* Billing & Subscription - Only visible to owners (Feature #703) */}
       {isCompanyOwner && <CompanyBillingSection company={company} supportEmail={supportEmail} />}
