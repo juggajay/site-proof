@@ -76,6 +76,33 @@ export function calculateItpVerificationRate(
   return Math.min(100, Math.max(0, rate));
 }
 
+type ItpInspectionCompletionSource = {
+  id: string;
+  checklistItem: { description: string };
+  itpInstance: { lot: { id: string; lotNumber: string } | null };
+};
+
+/**
+ * Map outstanding (pending/in-progress) ITP completions to foreman "inspections
+ * needing attention" items. The foreman dashboard previously listed EVERY
+ * checklist item for any template used on the project regardless of completion
+ * status; this maps the real outstanding-completion query instead.
+ */
+export function buildItpInspectionItems(
+  itpCompletions: ItpInspectionCompletionSource[],
+  projectId: string,
+) {
+  return itpCompletions.map((c) => ({
+    id: c.id,
+    type: 'ITP' as const,
+    description: c.checklistItem.description,
+    lotNumber: c.itpInstance.lot?.lotNumber || 'Unknown',
+    link: c.itpInstance.lot?.id
+      ? `/projects/${projectId}/lots/${c.itpInstance.lot.id}?tab=itp`
+      : `/projects/${projectId}/itp`,
+  }));
+}
+
 // Feature #292: GET /api/dashboard/foreman - Simplified dashboard for foreman role
 // Shows today's diary status, pending dockets, inspections due today, and weather
 dashboardRoleDashboardsRouter.get(
@@ -174,32 +201,25 @@ dashboardRoleDashboardsRouter.get(
         },
         take: 10,
       }),
-      // Also check ITP completions due today
-      prisma.iTPChecklistItem.findMany({
+      // Outstanding ITP items needing attention: pending/in-progress completions
+      // for the project's lots, excluding hold points (handled above). The
+      // previous query listed EVERY checklist item for any template used on the
+      // project regardless of completion status.
+      prisma.iTPCompletion.findMany({
         where: {
-          template: {
-            itpInstances: {
-              some: {
-                lot: { projectId },
-              },
-            },
-          },
+          itpInstance: { lot: { projectId } },
+          status: { in: ['pending', 'in_progress'] },
+          checklistItem: { pointType: { not: 'hold_point' } },
         },
         include: {
-          template: {
+          checklistItem: { select: { description: true } },
+          itpInstance: {
             include: {
-              itpInstances: {
-                where: {
-                  lot: { projectId },
-                },
-                include: {
-                  lot: { select: { lotNumber: true, id: true, projectId: true } },
-                },
-                take: 1,
-              },
+              lot: { select: { lotNumber: true, id: true } },
             },
           },
         },
+        orderBy: { checklistItem: { sequenceNumber: 'asc' } },
         take: 10,
       }),
     ]);
@@ -214,13 +234,7 @@ dashboardRoleDashboardsRouter.get(
         lotNumber: hp.lot.lotNumber,
         link: `/projects/${hp.lot.projectId}/hold-points?hp=${hp.id}`,
       })),
-      ...itpsDueToday.map((item) => ({
-        id: item.id,
-        type: 'ITP',
-        description: item.description,
-        lotNumber: item.template?.itpInstances?.[0]?.lot?.lotNumber || 'Unknown',
-        link: `/projects/${projectId}/itp`,
-      })),
+      ...buildItpInspectionItems(itpsDueToday, projectId),
     ];
 
     // 4. Weather from today's diary

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { calculatePendingDocketStats, calculateItpVerificationRate } from './roleDashboards.js';
+import {
+  calculatePendingDocketStats,
+  calculateItpVerificationRate,
+  buildItpInspectionItems,
+} from './roleDashboards.js';
 
 describe('calculatePendingDocketStats', () => {
   it('uses docket entry hours instead of submitted cost totals', () => {
@@ -37,5 +41,40 @@ describe('calculateItpVerificationRate', () => {
 
   it('never goes below 0', () => {
     expect(calculateItpVerificationRate(-1, 4)).toBe(0);
+  });
+});
+
+describe('buildItpInspectionItems', () => {
+  it('maps an outstanding ITP completion to an inspection item linked to the lot ITP tab', () => {
+    const items = buildItpInspectionItems(
+      [
+        {
+          id: 'completion-1',
+          checklistItem: { description: 'Compaction test' },
+          itpInstance: { lot: { id: 'lot-9', lotNumber: 'L-09' } },
+        },
+      ],
+      'project-1',
+    );
+
+    expect(items).toEqual([
+      {
+        id: 'completion-1',
+        type: 'ITP',
+        description: 'Compaction test',
+        lotNumber: 'L-09',
+        link: '/projects/project-1/lots/lot-9?tab=itp',
+      },
+    ]);
+  });
+
+  it('falls back to the project ITP link and Unknown lot when the lot is missing', () => {
+    const items = buildItpInspectionItems(
+      [{ id: 'c2', checklistItem: { description: 'Levels' }, itpInstance: { lot: null } }],
+      'project-1',
+    );
+
+    expect(items[0].lotNumber).toBe('Unknown');
+    expect(items[0].link).toBe('/projects/project-1/itp');
   });
 });
