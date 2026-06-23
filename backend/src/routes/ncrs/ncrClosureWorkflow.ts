@@ -197,6 +197,8 @@ ncrClosureWorkflowRouter.post(
       withConcession,
       concessionJustification,
       concessionRiskAssessment,
+      overrideClientNotification,
+      clientNotificationOverrideReason,
     } = validation.data;
 
     const ncr = await prisma.nCR.findUnique({
@@ -239,6 +241,19 @@ ncrClosureWorkflowRouter.post(
         );
       }
     }
+
+    // M27: don't let a "client notification required" NCR be closed before the
+    // client was actually notified, unless the closer supplies an explicit,
+    // reasoned override (audited below).
+    const clientNotificationOutstanding = ncr.clientNotificationRequired && !ncr.clientNotifiedAt;
+    if (clientNotificationOutstanding && !overrideClientNotification) {
+      throw AppError.badRequest(
+        'This NCR requires client notification before it can be closed. Record the client notification, or close with an explicit override and reason.',
+        { clientNotificationRequired: true, clientNotifiedAt: null },
+      );
+    }
+    const clientNotificationOverridden =
+      clientNotificationOutstanding && overrideClientNotification;
 
     const closeStatus = withConcession ? 'closed_concession' : 'closed';
     const closedAt = new Date();
@@ -310,6 +325,12 @@ ncrClosureWorkflowRouter.post(
         verificationNotesPresent: Boolean(verificationNotes),
         lessonsLearnedPresent: Boolean(lessonsLearned),
         affectedLotCount: ncr.ncrLots.length,
+        ...(clientNotificationOverridden
+          ? {
+              clientNotificationOverridden: true,
+              clientNotificationOverrideReason: clientNotificationOverrideReason ?? null,
+            }
+          : {}),
       },
       req,
     });

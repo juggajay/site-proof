@@ -88,8 +88,23 @@ export const closeNcrSchema = z
       'Concession risk assessment',
       NCR_WORKFLOW_TEXT_MAX_LENGTH,
     ),
+    // M27: a major NCR that requires client notification can only be closed once
+    // clientNotifiedAt is set, OR with an explicit, reasoned override.
+    overrideClientNotification: z.boolean().optional(),
+    clientNotificationOverrideReason: optionalTrimmedWorkflowString(
+      'Client notification override reason',
+      NCR_WORKFLOW_TEXT_MAX_LENGTH,
+    ),
   })
   .superRefine((data, ctx) => {
+    if (data.overrideClientNotification && !data.clientNotificationOverrideReason) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['clientNotificationOverrideReason'],
+        message: 'A reason is required to override the client notification requirement',
+      });
+    }
+
     if (!data.withConcession) {
       return;
     }
