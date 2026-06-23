@@ -1,6 +1,30 @@
 import { describe, expect, it } from 'vitest';
 import { emptyCertificateExtraction } from './certificateExtraction.js';
-import { buildTestResultData } from './testResultMapping.js';
+import { buildTestResultData, parseChainageFromLocation } from './testResultMapping.js';
+
+describe('parseChainageFromLocation (M46: AU chainage convention)', () => {
+  it('treats CH N+M as M whole metres past station N (1234+50 -> 1284)', () => {
+    expect(parseChainageFromLocation('CH 1234+50')).toBe(1284);
+    expect(parseChainageFromLocation('1234+50')).toBe(1284);
+    expect(parseChainageFromLocation(' CH 1234+50 ')).toBe(1284);
+  });
+
+  it('treats CH N.M as decimal metres (1234.50 -> 1234.5, 1234.5 -> 1234.5)', () => {
+    expect(parseChainageFromLocation('CH 1234.50')).toBe(1234.5);
+    // Previously the /100 offset wrongly yielded 1234.05 for a single decimal digit.
+    expect(parseChainageFromLocation('1234.5')).toBe(1234.5);
+  });
+
+  it('parses whole-metre chainage with a CH or chainage prefix', () => {
+    expect(parseChainageFromLocation('CH 1234')).toBe(1234);
+    expect(parseChainageFromLocation('chainage 1234')).toBe(1234);
+  });
+
+  it('returns null when no chainage is present', () => {
+    expect(parseChainageFromLocation('north abutment')).toBeNull();
+    expect(parseChainageFromLocation('')).toBeNull();
+  });
+});
 
 describe('testResultMapping helpers', () => {
   it('maps extracted certificate fields into TestResult create data', () => {
