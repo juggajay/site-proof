@@ -2251,7 +2251,7 @@ describe('Company API', () => {
         orderBy: { createdAt: 'desc' },
       });
       const changes = parseAuditLogChanges(auditLog?.changes ?? null) as Record<string, unknown>;
-      expect(changes.revokedApiKeyCount).toBe(1);
+      expect(changes.revokedKeyCount).toBe(1);
     });
 
     it('cancels a pending company invitation and frees the seat', async () => {
@@ -3001,7 +3001,7 @@ describe('Company API', () => {
           orderBy: { createdAt: 'desc' },
         });
         const changes = parseAuditLogChanges(auditLog?.changes ?? null) as Record<string, unknown>;
-        expect(changes.revokedApiKeyCount).toBe(1);
+        expect(changes.revokedKeyCount).toBe(1);
       } finally {
         await prisma.auditLog.deleteMany({
           where: { OR: [{ entityId: company.id }, { userId: memberId }] },

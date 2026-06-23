@@ -168,7 +168,9 @@ companyMemberRoutes.post(
         memberUserId: user.userId,
         previousRole,
         removedProjectMembershipCount,
-        revokedApiKeyCount,
+        // Field name avoids the audit redactor's /api[-_]?key/i pattern — a count
+        // of revoked keys is not sensitive and must stay readable in the log.
+        revokedKeyCount: revokedApiKeyCount,
       },
       req,
     });
@@ -639,7 +641,8 @@ companyMemberRoutes.delete(
           status: removalStatus,
           removedProjectMembershipCount,
           cancelledSetupInviteCount,
-          revokedApiKeyCount,
+          // See the leave handler: keep this count out of the audit redactor.
+          revokedKeyCount: revokedApiKeyCount,
         },
         req,
       });
