@@ -7,7 +7,9 @@ import {
   COMMERCIAL_DASHBOARD_ROLES,
   getDashboardProjectAccess,
   requireDashboardRoleIfProjectMember,
+  resolveDashboardProject,
 } from './access.js';
+import { parseOptionalDashboardString } from './operationalQuery.js';
 import {
   buildEmptyProjectManagerDashboardResponse,
   buildProjectManagerDashboardResponse,
@@ -39,15 +41,16 @@ projectManagerDashboardRouter.get(
       COMMERCIAL_DASHBOARD_ROLES.has(pa.role),
     );
 
-    const activeProjects = eligibleProjectAccess
-      .filter((pa) => pa.project.status === 'active')
-      .map((pa) => pa.project);
-
-    const primaryProject = activeProjects[0] || eligibleProjectAccess[0]?.project || null;
+    // M71: honour an optional ?projectId (sticky header switcher).
+    const requestedProjectId = parseOptionalDashboardString(req.query.projectId, 'projectId');
+    const { primaryProject, projects } = resolveDashboardProject(
+      eligibleProjectAccess,
+      requestedProjectId,
+    );
     const projectId = primaryProject?.id;
 
     if (!projectId || !primaryProject) {
-      return res.json(buildEmptyProjectManagerDashboardResponse());
+      return res.json({ ...buildEmptyProjectManagerDashboardResponse(), projects });
     }
 
     // 1. Lot Progress
@@ -201,8 +204,8 @@ projectManagerDashboardRouter.get(
       }),
     ]);
 
-    res.json(
-      buildProjectManagerDashboardResponse({
+    res.json({
+      ...buildProjectManagerDashboardResponse({
         projectId,
         lotStats,
         majorNCRs,
@@ -223,6 +226,7 @@ projectManagerDashboardRouter.get(
         majorNCRList,
         primaryProject,
       }),
-    );
+      projects,
+    });
   }),
 );

@@ -7,7 +7,9 @@ import {
   QUALITY_DASHBOARD_ROLES,
   getDashboardProjectAccess,
   requireDashboardRoleIfProjectMember,
+  resolveDashboardProject,
 } from './access.js';
+import { parseOptionalDashboardString } from './operationalQuery.js';
 import {
   buildEmptyForemanDashboardResponse,
   buildForemanDashboardResponse,
@@ -127,17 +129,18 @@ dashboardRoleDashboardsRouter.get(
       FOREMAN_DASHBOARD_ROLES.has(pa.role),
     );
 
-    const activeProjects = eligibleProjectAccess
-      .filter((pa) => pa.project.status === 'active')
-      .map((pa) => pa.project);
-
-    // Use the most recently updated active project, or first project if none active
-    const primaryProject = activeProjects[0] || eligibleProjectAccess[0]?.project || null;
+    // M71: honour an optional ?projectId (sticky header switcher), defaulting to
+    // the most recently updated active project. `projects` is the switchable set.
+    const requestedProjectId = parseOptionalDashboardString(req.query.projectId, 'projectId');
+    const { primaryProject, projects } = resolveDashboardProject(
+      eligibleProjectAccess,
+      requestedProjectId,
+    );
     const projectId = primaryProject?.id;
 
     // Return empty data if no project access
     if (!projectId) {
-      return res.json(buildEmptyForemanDashboardResponse());
+      return res.json({ ...buildEmptyForemanDashboardResponse(), projects });
     }
 
     // Get today's date range
@@ -254,15 +257,16 @@ dashboardRoleDashboardsRouter.get(
       };
     }
 
-    res.json(
-      buildForemanDashboardResponse({
+    res.json({
+      ...buildForemanDashboardResponse({
         todayDiary,
         pendingDockets: docketStats,
         inspectionItems,
         weather,
         project: primaryProject,
       }),
-    );
+      projects,
+    });
   }),
 );
 
@@ -290,15 +294,16 @@ dashboardRoleDashboardsRouter.get(
       QUALITY_DASHBOARD_ROLES.has(pa.role),
     );
 
-    const activeProjects = eligibleProjectAccess
-      .filter((pa) => pa.project.status === 'active')
-      .map((pa) => pa.project);
-
-    const primaryProject = activeProjects[0] || eligibleProjectAccess[0]?.project || null;
+    // M71: honour an optional ?projectId (sticky header switcher).
+    const requestedProjectId = parseOptionalDashboardString(req.query.projectId, 'projectId');
+    const { primaryProject, projects } = resolveDashboardProject(
+      eligibleProjectAccess,
+      requestedProjectId,
+    );
     const projectId = primaryProject?.id;
 
     if (!projectId) {
-      return res.json(buildEmptyQualityManagerDashboardResponse());
+      return res.json({ ...buildEmptyQualityManagerDashboardResponse(), projects });
     }
 
     // Run all independent queries in parallel for performance
@@ -483,8 +488,8 @@ dashboardRoleDashboardsRouter.get(
     const auditStatus =
       auditScore >= 80 ? 'ready' : auditScore >= 50 ? 'needs_attention' : 'not_ready';
 
-    res.json(
-      buildQualityManagerDashboardResponse({
+    res.json({
+      ...buildQualityManagerDashboardResponse({
         totalLots,
         conformingLots,
         nonConformingLots,
@@ -507,7 +512,8 @@ dashboardRoleDashboardsRouter.get(
         auditIssues,
         project: primaryProject,
       }),
-    );
+      projects,
+    });
   }),
 );
 
