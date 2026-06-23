@@ -340,23 +340,23 @@ most of those routes have been split into focused folders. Re-measure before
 choosing a refactor target, and keep changes behavior-preserving with
 characterization coverage.
 
-Largest current files measured on 2026-06-19:
+Largest current files measured on 2026-06-23:
 
-- `frontend/src/pages/LandingPage.tsx` (~902 lines)
-- `frontend/src/shell/subbie/screens/dockets/DocketScreen.tsx` (~846 lines)
-- `frontend/src/lib/offline/syncWorker.ts` (~701 lines)
-- `frontend/src/shell/subbie/screens/CompanyScreen.tsx` (~653 lines)
-- `frontend/src/pages/tests/TestResultsPage.tsx` (~639 lines)
-- `frontend/src/components/foreman/DiaryFinishFlow.tsx` (~636 lines)
-- `backend/src/routes/holdpoints/actionRoutes.ts` (~634 lines)
-- `backend/src/routes/projects/writeRoutes.ts` (~609 lines)
-- `frontend/src/pages/itp/ITPPage.tsx` (~594 lines)
-- `backend/src/routes/ncrs/ncrCore.ts` (~573 lines)
-- `backend/src/routes/dockets/review.ts` (~563 lines)
-- `frontend/src/shell/screens/lots/ItpRunScreen.tsx` (~561 lines)
-- `frontend/src/pages/holdpoints/HoldPointsPage.tsx` (~559 lines)
-- `backend/src/routes/itp/completions.ts` (~559 lines)
-- `backend/src/routes/claims/workflowRoutes.ts` (~558 lines)
+- `frontend/src/shell/subbie/screens/dockets/DocketScreen.tsx` (~971 lines)
+- `frontend/src/pages/LandingPage.tsx` (~943 lines)
+- `frontend/src/lib/offline/syncWorker.ts` (~932 lines)
+- `frontend/src/pages/tests/TestResultsPage.tsx` (~734 lines)
+- `backend/src/routes/company/memberRoutes.ts` (~726 lines)
+- `backend/src/routes/holdpoints/actionRoutes.ts` (~723 lines)
+- `frontend/src/shell/subbie/screens/CompanyScreen.tsx` (~713 lines)
+- `backend/src/routes/ncrs/ncrCore.ts` (~703 lines)
+- `frontend/src/components/foreman/DiaryFinishFlow.tsx` (~695 lines)
+- `backend/src/routes/projects/writeRoutes.ts` (~683 lines)
+- `backend/src/routes/claims/workflowRoutes.ts` (~658 lines)
+- `backend/src/routes/dockets/review.ts` (~655 lines)
+- `backend/src/lib/scheduledReports.ts` (~645 lines)
+- `frontend/src/pages/holdpoints/PublicHoldPointReleasePage.tsx` (~631 lines)
+- `frontend/src/pages/subcontractor-portal/SubcontractorDashboard.tsx` (~622 lines)
 
 Current top-level backend route files are comparatively small
 (`oauth.ts`, `holdpoints.ts`, `auth.ts`, `dockets.ts`, `subcontractors.ts`, and
