@@ -5,6 +5,11 @@ type ApprovedTotalInput<TSubmittedLabourHours, TSubmittedPlantHours> = {
   adjustedPlantHours?: number;
   submittedLabourHours: TSubmittedLabourHours;
   submittedPlantHours: TSubmittedPlantHours;
+  // Number of entries of each class on the docket. When a class has zero
+  // entries the approved total is forced to 0 so an adjusted/submitted value
+  // can't conjure phantom hours that no entry accounts for (M37).
+  labourEntryCount?: number;
+  plantEntryCount?: number;
 };
 
 type NumericLike = number | string | { toString(): string } | null | undefined;
@@ -70,13 +75,25 @@ export function resolveDocketApprovedTotals<TSubmittedLabourHours, TSubmittedPla
   adjustedPlantHours,
   submittedLabourHours,
   submittedPlantHours,
+  labourEntryCount,
+  plantEntryCount,
 }: ApprovedTotalInput<TSubmittedLabourHours, TSubmittedPlantHours>): {
   labourApproved: number | TSubmittedLabourHours;
   plantApproved: number | TSubmittedPlantHours;
 } {
   return {
-    labourApproved: adjustedLabourHours !== undefined ? adjustedLabourHours : submittedLabourHours,
-    plantApproved: adjustedPlantHours !== undefined ? adjustedPlantHours : submittedPlantHours,
+    labourApproved:
+      labourEntryCount === 0
+        ? 0
+        : adjustedLabourHours !== undefined
+          ? adjustedLabourHours
+          : submittedLabourHours,
+    plantApproved:
+      plantEntryCount === 0
+        ? 0
+        : adjustedPlantHours !== undefined
+          ? adjustedPlantHours
+          : submittedPlantHours,
   };
 }
 

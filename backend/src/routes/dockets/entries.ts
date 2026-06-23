@@ -22,6 +22,7 @@ import {
   mapDocketLabourEntry,
 } from './presentation.js';
 import {
+  assertLotAllocationHoursWithinEntry,
   buildLabourLotAllocationCreate,
   buildLabourLotAllocationRows,
   calculateHoursFromTimeRange,
@@ -124,6 +125,7 @@ docketEntriesRouter.post(
     requireApprovedDocketResource(employee.status, 'Employee');
 
     const hours = calculateHoursFromTimeRange(startTime, finishTime);
+    assertLotAllocationHoursWithinEntry(hours, lotAllocations);
     const hourlyRate = Number(employee.hourlyRate) || 0;
     const cost = calculateLabourEntryCost(hours, hourlyRate);
 
@@ -209,6 +211,7 @@ docketEntriesRouter.put(
       finishTime,
       Number(entry.submittedHours) || 0,
     );
+    assertLotAllocationHoursWithinEntry(hours, lotAllocations);
 
     const hourlyRate = Number(entry.hourlyRate) || Number(entry.employee.hourlyRate) || 0;
     const cost = calculateLabourEntryCost(hours, hourlyRate);
