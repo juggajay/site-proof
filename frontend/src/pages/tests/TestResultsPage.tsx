@@ -17,6 +17,7 @@ import { UploadCertificateModal } from './components/UploadCertificateModal';
 import { BatchUploadModal } from './components/BatchUploadModal';
 import { RejectTestModal } from './components/RejectTestModal';
 import { NcrPromptModal, NcrCreateModal } from './components/NcrModals';
+import { buildFailedTestNcrContext, type FailedTestNcrInput } from './failedTestNcr';
 import { BottomSheet } from '@/components/foreman/sheets/BottomSheet';
 import { downloadCsv } from '@/lib/csv';
 import { formatDateKey } from '@/lib/localDate';
@@ -147,6 +148,20 @@ export function TestResultsPage() {
     [testResults],
   );
 
+  const getTestById = useCallback(
+    (testId: string) => testResults.find((test) => test.id === testId),
+    [testResults],
+  );
+
+  // M45: open the "raise an NCR?" prompt for a failed test result, used by the
+  // manual-create, enter-results, and AI certificate confirm paths alike.
+  const promptNcrForFailedTest = useCallback((input: FailedTestNcrInput) => {
+    const { failedTest, description } = buildFailedTestNcrContext(input);
+    setFailedTestForNcr(failedTest);
+    setNcrInitialDescription(description);
+    setShowNcrPromptModal(true);
+  }, []);
+
   // Refresh helper
   const refreshTestResults = useCallback(
     async (lotIds: Array<string | null | undefined> = []) => {
@@ -264,13 +279,28 @@ export function TestResultsPage() {
 
         await refreshTestResults([getTestLotId(testId)]);
         setEnterResultsTest(null);
+
+        // M45: entering a failing result prompts to raise an NCR, just like the
+        // manual-create and AI-import paths.
+        if (values.passFail === 'fail') {
+          const test = getTestById(testId);
+          promptNcrForFailedTest({
+            testId,
+            testType: test?.testType || 'Test',
+            resultValue: values.resultValue,
+            resultUnit: values.resultUnit,
+            specificationMin: values.specificationMin,
+            specificationMax: values.specificationMax,
+            lotId: test?.lotId ?? null,
+          });
+        }
       } finally {
         // On failure the error propagates to the modal (which stays open); the
         // finally always clears the in-flight guard.
         enteringResultsRef.current = null;
       }
     },
-    [getTestLotId, refreshTestResults],
+    [getTestLotId, getTestById, promptNcrForFailedTest, refreshTestResults],
   );
 
   // Reject handler
@@ -388,22 +418,21 @@ export function TestResultsPage() {
 
         // Feature #210: If test failed, prompt to raise NCR
         if (sanitizedFormData.passFail === 'fail') {
-          setFailedTestForNcr({
+          promptNcrForFailedTest({
             testId: data.testResult.id,
             testType: sanitizedFormData.testType,
             resultValue: sanitizedFormData.resultValue,
+            resultUnit: sanitizedFormData.resultUnit,
+            specificationMin: sanitizedFormData.specificationMin,
+            specificationMax: sanitizedFormData.specificationMax,
             lotId: sanitizedFormData.lotId || null,
           });
-          setNcrInitialDescription(
-            `Test failure: ${sanitizedFormData.testType} result (${sanitizedFormData.resultValue} ${sanitizedFormData.resultUnit}) is outside specification (min: ${sanitizedFormData.specificationMin || 'N/A'}, max: ${sanitizedFormData.specificationMax || 'N/A'})`,
-          );
-          setShowNcrPromptModal(true);
         }
       } finally {
         creatingTestRef.current = false;
       }
     },
-    [projectId, refreshTestResults],
+    [projectId, refreshTestResults, promptNcrForFailedTest],
   );
 
   // NCR handlers
@@ -696,6 +725,7 @@ export function TestResultsPage() {
         onClose={() => setShowUploadModal(false)}
         projectId={projectId || ''}
         onTestResultsUpdated={handleTestResultsUpdated}
+        onFailedResult={promptNcrForFailedTest}
       />
 
       <BatchUploadModal
@@ -703,6 +733,7 @@ export function TestResultsPage() {
         onClose={() => setShowBatchUploadModal(false)}
         projectId={projectId || ''}
         onTestResultsUpdated={handleTestResultsUpdated}
+        onFailedResult={promptNcrForFailedTest}
       />
 
       <RejectTestModal
