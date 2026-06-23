@@ -394,6 +394,72 @@ describe('evidence readiness helpers', () => {
     ).toBe(true);
   });
 
+  it('counts N/A items as complete and excludes rejected items from claim readiness', () => {
+    const buildReview = (
+      completions: Array<{
+        id: string;
+        status: string;
+        verificationStatus: string | null;
+        checklistItemId: string;
+      }>,
+    ) =>
+      buildClaimEvidenceReviewFromInputs({
+        analyzedAt: '2026-06-10T00:00:00.000Z',
+        claim: {
+          id: 'claim-itp',
+          claimNumber: 9,
+          totalClaimedAmount: 1000,
+          claimedLots: [
+            {
+              amountClaimed: 1000,
+              lot: {
+                id: 'lot-itp',
+                lotNumber: 'LOT-ITP',
+                activityType: 'Earthworks',
+                testResults: [{ id: 'test-1', status: 'verified', passFail: 'pass' }],
+                ncrLots: [],
+                documents: [
+                  { id: 'photo-1', documentType: 'photo' },
+                  { id: 'photo-2', documentType: 'photo' },
+                  { id: 'photo-3', documentType: 'photo' },
+                ],
+                itpInstance: {
+                  template: {
+                    checklistItems: [
+                      { id: 'item-1', pointType: 'standard' },
+                      { id: 'item-2', pointType: 'standard' },
+                    ],
+                  },
+                  completions,
+                },
+                holdPoints: [],
+              },
+            },
+          ],
+        },
+      }).lots[0].claim;
+
+    // M13: a completed item + an N/A item = fully complete (N/A counts as done).
+    const naReview = buildReview([
+      { id: 'c1', status: 'completed', verificationStatus: 'verified', checklistItemId: 'item-1' },
+      { id: 'c2', status: 'not_applicable', verificationStatus: null, checklistItemId: 'item-2' },
+    ]);
+    expect(naReview.support.map((readinessItem) => readinessItem.code)).toContain('itp_complete');
+
+    // H5: a completed-but-rejected item must NOT count as complete.
+    const rejectedReview = buildReview([
+      { id: 'c1', status: 'completed', verificationStatus: 'verified', checklistItemId: 'item-1' },
+      { id: 'c2', status: 'completed', verificationStatus: 'rejected', checklistItemId: 'item-2' },
+    ]);
+    const rejectedCodes = [
+      ...rejectedReview.blockers,
+      ...rejectedReview.warnings,
+      ...rejectedReview.support,
+    ].map((readinessItem) => readinessItem.code);
+    expect(rejectedCodes).toContain('itp_incomplete');
+    expect(rejectedCodes).not.toContain('itp_complete');
+  });
+
   it('treats an unverified passing test as a pending warning, not claim support', () => {
     const review = buildClaimEvidenceReviewFromInputs({
       analyzedAt: '2026-06-07T00:00:00.000Z',
