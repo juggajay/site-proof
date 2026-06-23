@@ -5,6 +5,7 @@ import {
   createNotification,
   createNotificationsForRecipients,
   dedupeRecipientIds,
+  dispatchNotificationPush,
 } from './notificationDispatch.js';
 
 describe('buildNotificationCreateData', () => {
@@ -125,5 +126,42 @@ describe('createNotificationsForRecipients', () => {
 
     expect(result).toEqual({ count: 0 });
     expect(createMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('dispatchNotificationPush (G4 web-push fan-out)', () => {
+  it('sends a push with the notification mapped to the push payload', async () => {
+    const send = vi.fn().mockResolvedValue({ success: true, sent: 1, failed: 0 });
+
+    await dispatchNotificationPush(
+      { userId: 'user-1', title: 'Released', message: 'HP-1 released', linkUrl: '/projects/p1' },
+      send,
+    );
+
+    expect(send).toHaveBeenCalledWith('user-1', {
+      title: 'Released',
+      body: 'HP-1 released',
+      url: '/projects/p1',
+    });
+  });
+
+  it('falls back to the title for the body and omits a missing url', async () => {
+    const send = vi.fn().mockResolvedValue({ success: false, sent: 0, failed: 0 });
+
+    await dispatchNotificationPush({ userId: 'user-1', title: 'Role Changed' }, send);
+
+    expect(send).toHaveBeenCalledWith('user-1', {
+      title: 'Role Changed',
+      body: 'Role Changed',
+      url: undefined,
+    });
+  });
+
+  it('never throws when the push sender fails (best-effort)', async () => {
+    const send = vi.fn().mockRejectedValue(new Error('push transport down'));
+
+    await expect(
+      dispatchNotificationPush({ userId: 'user-1', title: 'X', message: 'Y' }, send),
+    ).resolves.toBeUndefined();
   });
 });

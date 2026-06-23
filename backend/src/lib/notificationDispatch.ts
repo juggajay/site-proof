@@ -1,5 +1,7 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from './prisma.js';
+import { logError } from './serverLogger.js';
+import { sendPushNotification } from '../routes/pushNotifications/delivery.js';
 
 // G6: a single place to create in-app notifications. Today this is a thin,
 // behavior-preserving wrapper around prisma.notification.create(Many); it is the
@@ -42,12 +44,46 @@ export function dedupeRecipientIds(ids: Array<string | null | undefined>): strin
   );
 }
 
-/** Create a single in-app notification. */
+type PushSender = (
+  userId: string,
+  payload: { title: string; body: string; url?: string },
+) => Promise<unknown>;
+
+/**
+ * G4: fan out a web push for a freshly-created notification, best-effort. The
+ * push send is gated on VAPID config and cleans up expired subscriptions inside
+ * {@link sendPushNotification}; any failure here must never affect the in-app
+ * notification, so errors are swallowed (logged).
+ */
+export async function dispatchNotificationPush(
+  input: { userId: string; title: string; message?: string | null; linkUrl?: string | null },
+  send: PushSender = sendPushNotification,
+): Promise<void> {
+  try {
+    await send(input.userId, {
+      title: input.title,
+      body: input.message ?? input.title,
+      url: input.linkUrl ?? undefined,
+    });
+  } catch (error) {
+    logError('Failed to dispatch web push for notification', error);
+  }
+}
+
+/** Create a single in-app notification, then best-effort fan out a web push. */
 export async function createNotification(
   input: NotificationInput,
   client: NotificationDispatchClient = prisma,
 ) {
-  return client.notification.create({ data: buildNotificationCreateData(input) });
+  const created = await client.notification.create({ data: buildNotificationCreateData(input) });
+  // G4: only push outside a transaction — inside a tx the row is not yet
+  // committed and the push send must not run network I/O in the tx. Callers
+  // creating notifications in a transaction should dispatch the push after
+  // commit.
+  if (client === prisma) {
+    await dispatchNotificationPush(input);
+  }
+  return created;
 }
 
 /**
@@ -63,7 +99,12 @@ export async function createNotificationsForRecipients(
   if (userIds.length === 0) {
     return { count: 0 };
   }
-  return client.notification.createMany({
+  const result = await client.notification.createMany({
     data: userIds.map((userId) => buildNotificationCreateData({ ...input, userId })),
   });
+  // G4: best-effort web push per recipient (only outside a transaction).
+  if (client === prisma) {
+    await Promise.all(userIds.map((userId) => dispatchNotificationPush({ ...input, userId })));
+  }
+  return result;
 }
