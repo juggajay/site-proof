@@ -1,4 +1,5 @@
 import { AppError } from '../../lib/AppError.js';
+import { zonedDateParts, zonedWallClockToUtc } from '../../lib/projectTimeZone.js';
 import { DATE_COMPONENT_RE, DATE_ONLY_RE } from './validation.js';
 
 // =============================================================================
@@ -40,17 +41,27 @@ export function parseScheduledDateInput(value: string | null | undefined): Date 
   return parsedDate;
 }
 
+/**
+ * Parse a hold-point release date/time into the true absolute instant (M84).
+ *
+ * Wall-clock inputs (a `YYYY-MM-DD` date, optionally with `HH:mm`) are
+ * interpreted in the PROJECT'S timezone, not the server's, so the stored
+ * instant is correct regardless of where the API runs. Full ISO date-time
+ * strings carry their own offset and are passed through unchanged.
+ */
 export function parseReleaseDateTimeInput(
   releaseDate: string | null | undefined,
   releaseTime: string | null | undefined,
+  timeZone: string,
 ): Date {
   if (!releaseDate) {
-    const parsedDate = new Date();
-    if (releaseTime) {
-      const [hours, minutes] = releaseTime.split(':').map(Number);
-      parsedDate.setHours(hours, minutes, 0, 0);
+    if (!releaseTime) {
+      return new Date();
     }
-    return parsedDate;
+    const [hours, minutes] = releaseTime.split(':').map(Number);
+    // "Today" in the project's timezone at the supplied wall-clock time.
+    const today = zonedDateParts(new Date(), timeZone);
+    return zonedWallClockToUtc(today.year, today.month, today.day, hours, minutes, timeZone);
   }
 
   assertValidDateComponent(releaseDate, 'releaseDate must be a valid date');
@@ -62,11 +73,6 @@ export function parseReleaseDateTimeInput(
       throw AppError.badRequest('releaseDate must be a valid date');
     }
 
-    if (releaseTime) {
-      const [hours, minutes] = releaseTime.split(':').map(Number);
-      parsedDate.setHours(hours, minutes, 0, 0);
-    }
-
     return parsedDate;
   }
 
@@ -74,17 +80,8 @@ export function parseReleaseDateTimeInput(
   const month = Number(dateOnlyMatch[2]);
   const day = Number(dateOnlyMatch[3]);
   const [hours, minutes] = releaseTime ? releaseTime.split(':').map(Number) : [0, 0];
-  const parsedDate = new Date(year, month - 1, day, hours, minutes, 0, 0);
 
-  if (
-    parsedDate.getFullYear() !== year ||
-    parsedDate.getMonth() !== month - 1 ||
-    parsedDate.getDate() !== day
-  ) {
-    throw AppError.badRequest('releaseDate must be a valid date');
-  }
-
-  return parsedDate;
+  return zonedWallClockToUtc(year, month, day, hours, minutes, timeZone);
 }
 
 export function parseRequiredDateTimeInput(value: string, fieldName: string): Date {
