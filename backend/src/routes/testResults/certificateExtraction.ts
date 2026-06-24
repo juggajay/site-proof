@@ -330,3 +330,20 @@ export function derivePassFail(
 
   return 'pass';
 }
+
+/**
+ * H13 server-side pass/fail backstop for the manual create path: recompute the
+ * outcome from the value + acceptance criteria so a client-supplied pass/fail
+ * cannot contradict the data. Falls back to the client's value only when the data
+ * is undecidable (no value, or no spec bound), i.e. when derivePassFail returns
+ * 'pending'.
+ */
+export function resolveEffectivePassFail(
+  clientPassFail: string | undefined,
+  resultValue: number | null,
+  specificationMin: number | null,
+  specificationMax: number | null,
+): string | undefined {
+  const computed = derivePassFail(resultValue, specificationMin, specificationMax);
+  return computed === 'pending' ? clientPassFail : computed;
+}
