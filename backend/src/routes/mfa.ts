@@ -5,6 +5,7 @@ import { Router, type Request } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { verifyPassword } from '../lib/auth.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
+import { authRateLimiter } from '../middleware/rateLimiter.js';
 import { generateSecret, verify as verifyOtp, generateURI } from 'otplib';
 import QRCode from 'qrcode';
 import { encrypt, decrypt } from '../lib/encryption.js';
@@ -116,6 +117,7 @@ mfaRouter.get(
 // POST /api/mfa/setup - Generate MFA secret and QR code
 mfaRouter.post(
   '/setup',
+  authRateLimiter,
   requireAuth,
   asyncHandler(async (req, res) => {
     requireBrowserSession(req, 'MFA setup');
@@ -165,6 +167,7 @@ mfaRouter.post(
 // POST /api/mfa/verify-setup - Verify the setup code and enable MFA
 mfaRouter.post(
   '/verify-setup',
+  authRateLimiter,
   requireAuth,
   asyncHandler(async (req, res) => {
     requireBrowserSession(req, 'MFA setup verification');
@@ -228,6 +231,7 @@ mfaRouter.post(
 // POST /api/mfa/disable - Disable MFA (requires password)
 mfaRouter.post(
   '/disable',
+  authRateLimiter,
   requireAuth,
   asyncHandler(async (req, res) => {
     requireBrowserSession(req, 'MFA disable');
