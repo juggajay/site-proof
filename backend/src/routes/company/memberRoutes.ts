@@ -31,6 +31,7 @@ import {
   normalizeCompanyString,
 } from './validation.js';
 import {
+  assertActorMayManageCompanyMemberRole,
   COMPANY_SUBCONTRACTOR_ROLES,
   requireBrowserSession,
   requireCompanyAdmin,
@@ -317,6 +318,14 @@ companyMemberRoutes.post(
         throw AppError.badRequest('Company owners are managed through ownership transfer');
       }
 
+      // Role-rank rule: a non-owner admin cannot mint new admins or re-role an
+      // existing admin via the invite path.
+      assertActorMayManageCompanyMemberRole({
+        actorRole: currentUser.roleInCompany,
+        targetCurrentRole: existingUser?.roleInCompany,
+        targetNewRole: roleInCompany,
+      });
+
       const previousMemberState: CompanyMemberInvitationRollbackState | null = existingUser
         ? {
             id: existingUser.id,
@@ -567,6 +576,12 @@ companyMemberRoutes.delete(
         throw AppError.badRequest('Company owners must transfer ownership before being removed');
       }
 
+      // Role-rank rule: only the owner may remove another admin.
+      assertActorMayManageCompanyMemberRole({
+        actorRole: currentUser.roleInCompany,
+        targetCurrentRole: targetMember.roleInCompany,
+      });
+
       previousRole = targetMember.roleInCompany;
       targetEmail = targetMember.email;
 
@@ -711,6 +726,14 @@ companyMemberRoutes.patch(
       if (targetMember.roleInCompany === 'owner') {
         throw AppError.badRequest('Company owners must transfer ownership to change their role');
       }
+
+      // Role-rank rule: only the owner may change another admin's role or grant
+      // the admin role; admins may only manage members below the admin tier.
+      assertActorMayManageCompanyMemberRole({
+        actorRole: currentUser.roleInCompany,
+        targetCurrentRole: targetMember.roleInCompany,
+        targetNewRole: newRole,
+      });
 
       previousRole = targetMember.roleInCompany;
       targetEmail = targetMember.email;
