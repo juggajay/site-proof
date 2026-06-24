@@ -5,7 +5,7 @@ import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { buildLotReadinessFromInputs } from '../../lib/evidenceReadiness.js';
-import { checkConformancePrerequisites } from '../../lib/conformancePrerequisites.js';
+import { checkConformancePrerequisitesBatch } from '../../lib/conformancePrerequisites.js';
 import { isPendingTestResultStatus } from '../../lib/testResultStatus.js';
 import { getCumulativeClaimedPercentByLot } from './cumulativeClaims.js';
 import {
@@ -209,48 +209,53 @@ export function createClaimReadRouter({
         lots.map((lot) => lot.id),
       );
 
-      const readinessLots = await Promise.all(
-        lots.map(async (lot) => {
-          const conformStatus = await checkConformancePrerequisites(lot.id);
-          if (!conformStatus.prerequisites) {
-            throw AppError.notFound('Lot');
-          }
-
-          const readiness = buildLotReadinessFromInputs({
-            lot: {
-              id: lot.id,
-              lotNumber: lot.lotNumber,
-              status: lot.status,
-              budgetAmount: lot.budgetAmount ? Number(lot.budgetAmount) : null,
-              claimedInId: lot.claimedInId,
-              claimedPercentage: cumulativeClaimedByLotId.get(lot.id) ?? 0,
-            },
-            canViewCommercial: true,
-            conformStatus: {
-              canConform: Boolean(conformStatus.canConform),
-              blockingReasons: conformStatus.blockingReasons ?? [],
-              prerequisites: conformStatus.prerequisites,
-            },
-            evidenceCounts: {
-              unreleasedHoldPoints: lot.holdPoints.filter(
-                (holdPoint) => holdPoint.status !== 'released',
-              ).length,
-              releasedHoldPoints: lot.holdPoints.filter(
-                (holdPoint) => holdPoint.status === 'released',
-              ).length,
-              approvedDockets: 0,
-              diaryEntries: 0,
-              documents: lot.documents.length,
-              photos: lot.documents.filter((document) => document.documentType === 'photo').length,
-              pendingTests: lot.testResults.filter((testResult) =>
-                isPendingTestResultStatus(testResult.status),
-              ).length,
-            },
-          });
-
-          return mapClaimReadinessItem(lot, readiness);
-        }),
+      // M39: resolve conformance for every lot in a constant number of queries
+      // (one lot.findMany + at most one holdPoint.findMany) instead of the old
+      // per-lot ~2N+1 fan-out.
+      const conformStatusByLotId = await checkConformancePrerequisitesBatch(
+        lots.map((lot) => lot.id),
       );
+
+      const readinessLots = lots.map((lot) => {
+        const conformStatus = conformStatusByLotId.get(lot.id);
+        if (!conformStatus?.prerequisites) {
+          throw AppError.notFound('Lot');
+        }
+
+        const readiness = buildLotReadinessFromInputs({
+          lot: {
+            id: lot.id,
+            lotNumber: lot.lotNumber,
+            status: lot.status,
+            budgetAmount: lot.budgetAmount ? Number(lot.budgetAmount) : null,
+            claimedInId: lot.claimedInId,
+            claimedPercentage: cumulativeClaimedByLotId.get(lot.id) ?? 0,
+          },
+          canViewCommercial: true,
+          conformStatus: {
+            canConform: Boolean(conformStatus.canConform),
+            blockingReasons: conformStatus.blockingReasons ?? [],
+            prerequisites: conformStatus.prerequisites,
+          },
+          evidenceCounts: {
+            unreleasedHoldPoints: lot.holdPoints.filter(
+              (holdPoint) => holdPoint.status !== 'released',
+            ).length,
+            releasedHoldPoints: lot.holdPoints.filter(
+              (holdPoint) => holdPoint.status === 'released',
+            ).length,
+            approvedDockets: 0,
+            diaryEntries: 0,
+            documents: lot.documents.length,
+            photos: lot.documents.filter((document) => document.documentType === 'photo').length,
+            pendingTests: lot.testResults.filter((testResult) =>
+              isPendingTestResultStatus(testResult.status),
+            ).length,
+          },
+        });
+
+        return mapClaimReadinessItem(lot, readiness);
+      });
 
       res.json(buildClaimReadinessResponse(readinessLots));
     }),
