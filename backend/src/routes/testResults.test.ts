@@ -292,6 +292,68 @@ describe('Test Results API', () => {
       expect(res.body.testResult).toBeDefined();
     });
 
+    it('recomputes pass/fail from the spec on manual create, overriding a contradictory client pass (H13)', async () => {
+      const res = await request(app)
+        .post('/api/test-results')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          projectId,
+          lotId,
+          testType: 'H13 Create Backstop',
+          resultValue: '80',
+          specificationMin: '90',
+          specificationMax: '100',
+          passFail: 'pass',
+        });
+
+      expect(res.status).toBe(201);
+      const createdId = res.body.testResult.id;
+      try {
+        const stored = await prisma.testResult.findUniqueOrThrow({
+          where: { id: createdId },
+          select: { passFail: true },
+        });
+        // 80 is below the minimum spec of 90, so the data overrides the client 'pass'.
+        expect(stored.passFail).toBe('fail');
+      } finally {
+        await prisma.testResult.deleteMany({ where: { id: createdId } });
+      }
+    });
+
+    it('recomputes pass/fail from the spec on manual edit, overriding a contradictory client pass (H13)', async () => {
+      const created = await prisma.testResult.create({
+        data: {
+          projectId,
+          lotId,
+          testType: `H13 Edit Backstop ${Date.now()}`,
+          status: 'entered',
+          resultValue: 98.5,
+          specificationMin: 90,
+          specificationMax: 100,
+          passFail: 'pass',
+          enteredById: userId,
+          enteredAt: new Date(),
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .patch(`/api/test-results/${created.id}`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ resultValue: '80', passFail: 'pass' });
+
+        expect(res.status).toBe(200);
+        const stored = await prisma.testResult.findUniqueOrThrow({
+          where: { id: created.id },
+          select: { passFail: true },
+        });
+        // The new value 80 is below the stored minimum spec of 90.
+        expect(stored.passFail).toBe('fail');
+      } finally {
+        await prisma.testResult.deleteMany({ where: { id: created.id } });
+      }
+    });
+
     it('should keep company admin test result rights when project membership is lower', async () => {
       await prisma.projectUser.updateMany({
         where: { projectId, userId },

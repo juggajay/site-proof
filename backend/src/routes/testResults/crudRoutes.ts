@@ -18,6 +18,8 @@ import {
   isOwnedSupabaseCertificateUrl,
 } from './certificateStorage.js';
 import { applyTestResultCorrections } from './corrections.js';
+import { resolveEffectivePassFail } from './certificateExtraction.js';
+import { applyConfirmedPassFailBackstop } from './extractionConfirmation.js';
 import {
   buildTestResultCreatedResponse,
   buildTestResultDeletedResponse,
@@ -140,6 +142,13 @@ crudRoutes.post(
     const specificationMinValue = toNullableFloat(specificationMin, 'specificationMin');
     const specificationMaxValue = toNullableFloat(specificationMax, 'specificationMax');
     const passFailValue = normalizePassFail(passFail, 'pending');
+    // H13 backstop: the client pass/fail cannot contradict the value + spec.
+    const effectivePassFail = resolveEffectivePassFail(
+      passFailValue,
+      resultValueValue,
+      specificationMinValue,
+      specificationMaxValue,
+    );
 
     await requireTestProjectRole(
       projectIdValue,
@@ -169,7 +178,7 @@ crudRoutes.post(
         resultUnit: resultUnitValue,
         specificationMin: specificationMinValue,
         specificationMax: specificationMaxValue,
-        passFail: passFailValue,
+        passFail: effectivePassFail,
         status: 'requested', // Feature #196: Start in 'requested' status
       },
       select: {
@@ -196,7 +205,7 @@ crudRoutes.post(
       entityType: 'test_result',
       entityId: testResult.id,
       action: AuditAction.TEST_RESULT_CREATED,
-      changes: { testType: testTypeValue, lotId: lotIdValue, passFail: passFailValue },
+      changes: { testType: testTypeValue, lotId: lotIdValue, passFail: effectivePassFail },
       req,
     });
 
@@ -273,6 +282,18 @@ crudRoutes.patch(
       specificationMax,
       passFail,
     });
+
+    // H13 backstop on the manual edit path (mirrors the confirm flow): when the
+    // edit touches the value, spec, or pass/fail, recompute the outcome from the
+    // effective value + spec so a stored/edited pass cannot contradict the data.
+    if (
+      'passFail' in updateData ||
+      'resultValue' in updateData ||
+      'specificationMin' in updateData ||
+      'specificationMax' in updateData
+    ) {
+      applyConfirmedPassFailBackstop(updateData, testResult);
+    }
 
     if (testResult.status === 'verified' && Object.keys(updateData).length > 0) {
       updateData.status = 'entered';
