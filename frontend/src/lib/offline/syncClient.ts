@@ -4,6 +4,7 @@ import {
   buildOfflineDiaryPayload,
   buildOfflineDocketNotes,
   compactText,
+  filterUnsyncedByContent,
   sumDocketLabourHours,
   sumDocketPlantHours,
   syncKey,
@@ -106,33 +107,59 @@ export async function syncOfflineDiarySnapshot(diary: OfflineDailyDiary): Promis
     body: JSON.stringify(buildOfflineDiaryPayload(diary)),
   });
 
-  const activityKeys = new Set(
-    (serverDiary.activities || []).map((activity) =>
-      syncKey(activity.description, activity.lotId, activity.notes),
-    ),
-  );
-
+  // Count-aware replay dedupe (see filterUnsyncedByContent): skip only as many
+  // local rows as the server already holds for each content key, so two distinct
+  // entries that happen to share identical text both still post instead of the
+  // second being silently dropped.
+  const activityPayloads: Array<{
+    description: string;
+    lotId: string | undefined;
+    notes: string | undefined;
+  }> = [];
   for (const activity of diary.activities) {
     const description = compactText(activity.description);
     if (!description) continue;
-
-    const payload = {
+    activityPayloads.push({
       description,
       lotId: activity.lotIds?.[0],
       notes: compactText(activity.progress),
-    };
-    const key = syncKey(payload.description, payload.lotId, payload.notes);
-    if (activityKeys.has(key)) continue;
+    });
+  }
 
+  const activitiesToPost = filterUnsyncedByContent(
+    (serverDiary.activities || []).map((activity) =>
+      syncKey(activity.description, activity.lotId, activity.notes),
+    ),
+    activityPayloads,
+    (payload) => syncKey(payload.description, payload.lotId, payload.notes),
+  );
+
+  for (const payload of activitiesToPost) {
     await fetchJson<unknown>(apiUrl(`/api/diary/${serverDiary.id}/activities`), {
       method: 'POST',
       headers,
       body: JSON.stringify(payload),
     });
-    activityKeys.add(key);
   }
 
-  const delayKeys = new Set(
+  const delayPayloads: Array<{
+    delayType: string;
+    description: string;
+    durationHours: number | undefined;
+    impact: string | undefined;
+  }> = [];
+  for (const delay of diary.delays) {
+    const description = compactText(delay.description);
+    if (!description) continue;
+    delayPayloads.push({
+      delayType: compactText(delay.type) || 'other',
+      description,
+      durationHours: toFiniteNumber(delay.duration),
+      impact: compactText(delay.impact),
+    });
+  }
+
+  const delaysToPost = filterUnsyncedByContent(
     (serverDiary.delays || []).map((delay) =>
       syncKey(
         delay.delayType,
@@ -141,58 +168,48 @@ export async function syncOfflineDiarySnapshot(diary: OfflineDailyDiary): Promis
         delay.impact,
       ),
     ),
+    delayPayloads,
+    (payload) =>
+      syncKey(payload.delayType, payload.description, payload.durationHours, payload.impact),
   );
 
-  for (const delay of diary.delays) {
-    const description = compactText(delay.description);
-    if (!description) continue;
-
-    const payload = {
-      delayType: compactText(delay.type) || 'other',
-      description,
-      durationHours: toFiniteNumber(delay.duration),
-      impact: compactText(delay.impact),
-    };
-    const key = syncKey(
-      payload.delayType,
-      payload.description,
-      payload.durationHours,
-      payload.impact,
-    );
-    if (delayKeys.has(key)) continue;
-
+  for (const payload of delaysToPost) {
     await fetchJson<unknown>(apiUrl(`/api/diary/${serverDiary.id}/delays`), {
       method: 'POST',
       headers,
       body: JSON.stringify(payload),
     });
-    delayKeys.add(key);
   }
 
-  const plantKeys = new Set(
-    (serverDiary.plant || []).map((plant) =>
-      syncKey(plant.description, toFiniteNumber(plant.hoursOperated), plant.notes),
-    ),
-  );
-
+  const plantPayloads: Array<{
+    description: string;
+    hoursOperated: number | undefined;
+    notes: string | undefined;
+  }> = [];
   for (const equipment of diary.equipment) {
     const description = compactText(equipment.name);
     if (!description) continue;
-
-    const payload = {
+    plantPayloads.push({
       description,
       hoursOperated: toFiniteNumber(equipment.hours),
       notes: compactText(equipment.status),
-    };
-    const key = syncKey(payload.description, payload.hoursOperated, payload.notes);
-    if (plantKeys.has(key)) continue;
+    });
+  }
 
+  const plantToPost = filterUnsyncedByContent(
+    (serverDiary.plant || []).map((plant) =>
+      syncKey(plant.description, toFiniteNumber(plant.hoursOperated), plant.notes),
+    ),
+    plantPayloads,
+    (payload) => syncKey(payload.description, payload.hoursOperated, payload.notes),
+  );
+
+  for (const payload of plantToPost) {
     await fetchJson<unknown>(apiUrl(`/api/diary/${serverDiary.id}/plant`), {
       method: 'POST',
       headers,
       body: JSON.stringify(payload),
     });
-    plantKeys.add(key);
   }
 
   return serverDiary.id;

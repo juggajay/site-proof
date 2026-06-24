@@ -25,6 +25,41 @@ export function syncKey(...parts: Array<string | number | null | undefined>): st
     .join('|');
 }
 
+/**
+ * Count-aware replay filter for offline diary snapshot child rows.
+ *
+ * The diary snapshot can be re-POSTed (e.g. when a later queued item resolves the
+ * server diary id), so already-synced rows must not be duplicated. The old
+ * Set-based dedupe matched purely on content, which silently DROPPED genuinely
+ * distinct local entries that shared identical text (two "Concrete pour"
+ * activities collapsed to one). This filter instead skips only as many local
+ * items as the server already holds for each content key and posts the rest, so
+ * distinct local entries survive while true replays stay suppressed.
+ */
+export function filterUnsyncedByContent<T>(
+  serverKeys: string[],
+  localItems: T[],
+  keyOf: (item: T) => string,
+): T[] {
+  const remaining = new Map<string, number>();
+  for (const key of serverKeys) {
+    remaining.set(key, (remaining.get(key) ?? 0) + 1);
+  }
+
+  const unsynced: T[] = [];
+  for (const item of localItems) {
+    const key = keyOf(item);
+    const matches = remaining.get(key) ?? 0;
+    if (matches > 0) {
+      remaining.set(key, matches - 1);
+      continue;
+    }
+    unsynced.push(item);
+  }
+
+  return unsynced;
+}
+
 function buildOfflineDiaryNotes(diary: OfflineDailyDiary): string | undefined {
   const sections: string[] = [];
 
