@@ -155,61 +155,23 @@ function getNormalizedChecklistItems(
   }));
 }
 
-async function applyItpPrerequisites(
-  lotId: string,
-  itpInstance: ItpInstanceForConformance,
-  prerequisites: ConformancePrerequisites,
-): Promise<NormalizedChecklistItem[]> {
-  prerequisites.itpAssigned = true;
-  const checklistItems = getNormalizedChecklistItems(itpInstance);
-
-  const completeness = buildItpChecklistCompleteness(checklistItems, itpInstance.completions);
-
-  prerequisites.itpTotalCount = completeness.totalCount;
-  prerequisites.itpCompletedCount = completeness.completedCount;
-  prerequisites.itpCompleted = completeness.completed;
-  prerequisites.itpIncompleteItems = completeness.incompleteItems;
-  prerequisites.testRequired = itpRequiresTest(checklistItems);
-
-  await applyNaHoldPointBypassGuard(lotId, checklistItems, itpInstance.completions, prerequisites);
-
-  return checklistItems;
-}
-
-async function applyNaHoldPointBypassGuard(
-  lotId: string,
+// The N/A'd hold-point sign-off items whose HoldPoint must be RELEASED for the
+// N/A to satisfy conformance (the bypass-guard inputs). Pure: the released
+// lookup is performed by the caller (single or batch path) and the released ids
+// are fed back into computeConformanceResult. Extracted from the old
+// applyNaHoldPointBypassGuard so the single and batch conformance paths share
+// one definition (M39).
+function getNaHoldPointSignoffItemIds(
   checklistItems: NormalizedChecklistItem[],
   completions: ChecklistCompletenessCompletion[],
-  prerequisites: ConformancePrerequisites,
-): Promise<void> {
+): string[] {
   const naCompletionItemIds = new Set(
     completions.filter((c) => c.status === 'not_applicable').map((c) => c.checklistItemId),
   );
 
-  const naHoldPointSignoffItems = checklistItems.filter(
-    (item) => naCompletionItemIds.has(item.id) && isReleaseGatedChecklistItem(item),
-  );
-
-  if (naHoldPointSignoffItems.length === 0) {
-    return;
-  }
-
-  const releasedHoldPoints = await prisma.holdPoint.findMany({
-    where: {
-      lotId,
-      itpChecklistItemId: { in: naHoldPointSignoffItems.map((item) => item.id) },
-      status: 'released',
-    },
-    select: { itpChecklistItemId: true },
-  });
-
-  const releasedItemIds = new Set(releasedHoldPoints.map((hp) => hp.itpChecklistItemId));
-  const unreleasedNaCount = naHoldPointSignoffItems.filter(
-    (item) => !releasedItemIds.has(item.id),
-  ).length;
-
-  prerequisites.naHoldPointBlockerCount = unreleasedNaCount;
-  prerequisites.noNaHoldPointBypass = unreleasedNaCount === 0;
+  return checklistItems
+    .filter((item) => naCompletionItemIds.has(item.id) && isReleaseGatedChecklistItem(item))
+    .map((item) => item.id);
 }
 
 function normalizeTestType(value: string | null | undefined): string {
@@ -248,55 +210,77 @@ function hasVerifiedPassingTestForItem(
   });
 }
 
-export async function checkConformancePrerequisites(
-  lotId: string,
-): Promise<ConformanceCheckResult> {
-  const lot = await prisma.lot.findUnique({
-    where: { id: lotId },
+// The deep lot include shared by the single-lot and batch conformance fetches —
+// exactly the fields the conformance computation reads, nothing more. Extracted
+// to a const so both paths fetch an identical shape (M39).
+const CONFORMANCE_LOT_INCLUDE = {
+  itpInstance: {
     include: {
-      itpInstance: {
+      template: {
         include: {
-          template: {
-            include: {
-              checklistItems: true,
-            },
-          },
-          completions: true,
+          checklistItems: true,
         },
       },
-      testResults: {
+      completions: true,
+    },
+  },
+  testResults: {
+    select: {
+      id: true,
+      itpChecklistItemId: true,
+      testType: true,
+      passFail: true,
+      status: true,
+    },
+  },
+  ncrLots: {
+    where: {
+      ncr: {
+        status: { notIn: ['closed', 'closed_concession'] },
+      },
+    },
+    include: {
+      ncr: {
         select: {
           id: true,
-          itpChecklistItemId: true,
-          testType: true,
-          passFail: true,
+          ncrNumber: true,
+          description: true,
           status: true,
         },
       },
-      ncrLots: {
-        where: {
-          ncr: {
-            status: { notIn: ['closed', 'closed_concession'] },
-          },
-        },
-        include: {
-          ncr: {
-            select: {
-              id: true,
-              ncrNumber: true,
-              description: true,
-              status: true,
-            },
-          },
-        },
-      },
     },
-  });
+  },
+};
 
-  if (!lot) {
-    return { error: 'Lot not found', lot: null };
-  }
+// The fetched-lot shape the pure conformance computation consumes. Structurally
+// a subset of the Prisma payload from CONFORMANCE_LOT_INCLUDE, so the
+// findUnique/findMany results assign directly.
+interface LotForConformance {
+  id: string;
+  lotNumber: string;
+  status: string;
+  projectId: string;
+  itpInstance: ItpInstanceForConformance | null;
+  testResults: {
+    id: string;
+    itpChecklistItemId: string | null;
+    testType: string;
+    passFail: string;
+    status: string;
+  }[];
+  ncrLots: { ncr: { id: string; ncrNumber: string; description: string; status: string } }[];
+}
 
+// Pure (DB-free) conformance computation. Takes a fetched lot plus the set of
+// its checklist-item ids whose hold point is RELEASED, and returns the full
+// prerequisites + canConform + blockingReasons. Extracted (M39) so the single
+// path and the batched create-claim path produce byte-identical results from
+// one place — the only difference between them is HOW the released-hold-point
+// ids are fetched (one query per lot vs one query for all lots).
+export function computeConformanceResult(
+  lot: LotForConformance,
+  releasedHoldPointItemIds: ReadonlySet<string>,
+): ConformanceCheckResult {
   const prerequisites: ConformancePrerequisites = {
     itpAssigned: false,
     itpCompleted: false,
@@ -314,7 +298,27 @@ export async function checkConformancePrerequisites(
 
   let checklistItems: NormalizedChecklistItem[] = [];
   if (lot.itpInstance) {
-    checklistItems = await applyItpPrerequisites(lot.id, lot.itpInstance, prerequisites);
+    prerequisites.itpAssigned = true;
+    checklistItems = getNormalizedChecklistItems(lot.itpInstance);
+
+    const completeness = buildItpChecklistCompleteness(checklistItems, lot.itpInstance.completions);
+    prerequisites.itpTotalCount = completeness.totalCount;
+    prerequisites.itpCompletedCount = completeness.completedCount;
+    prerequisites.itpCompleted = completeness.completed;
+    prerequisites.itpIncompleteItems = completeness.incompleteItems;
+    prerequisites.testRequired = itpRequiresTest(checklistItems);
+
+    // N/A hold-point bypass guard: an N/A'd hold-point sign-off item only counts
+    // as finished when its hold point is released.
+    const naSignoffItemIds = getNaHoldPointSignoffItemIds(
+      checklistItems,
+      lot.itpInstance.completions,
+    );
+    const unreleasedNaCount = naSignoffItemIds.filter(
+      (id) => !releasedHoldPointItemIds.has(id),
+    ).length;
+    prerequisites.naHoldPointBlockerCount = unreleasedNaCount;
+    prerequisites.noNaHoldPointBypass = unreleasedNaCount === 0;
   }
 
   // Check test results - need at least one passing and verified test
@@ -385,4 +389,99 @@ export async function checkConformancePrerequisites(
     canConform,
     blockingReasons,
   };
+}
+
+// Released-hold-point checklist-item ids for ONE lot (single path). Preserves
+// the original query shape and the skip-when-no-na-items behavior so the
+// single-lot gate stays byte-identical.
+async function fetchReleasedHoldPointItemIdsForLot(lot: LotForConformance): Promise<Set<string>> {
+  if (!lot.itpInstance) return new Set();
+  const checklistItems = getNormalizedChecklistItems(lot.itpInstance);
+  const naSignoffItemIds = getNaHoldPointSignoffItemIds(
+    checklistItems,
+    lot.itpInstance.completions,
+  );
+  if (naSignoffItemIds.length === 0) return new Set();
+
+  const releasedHoldPoints = await prisma.holdPoint.findMany({
+    where: {
+      lotId: lot.id,
+      itpChecklistItemId: { in: naSignoffItemIds },
+      status: 'released',
+    },
+    select: { itpChecklistItemId: true },
+  });
+
+  return new Set(
+    releasedHoldPoints.map((hp) => hp.itpChecklistItemId).filter((id): id is string => id !== null),
+  );
+}
+
+export async function checkConformancePrerequisites(
+  lotId: string,
+): Promise<ConformanceCheckResult> {
+  const lot = await prisma.lot.findUnique({
+    where: { id: lotId },
+    include: CONFORMANCE_LOT_INCLUDE,
+  });
+
+  if (!lot) {
+    return { error: 'Lot not found', lot: null };
+  }
+
+  const releasedHoldPointItemIds = await fetchReleasedHoldPointItemIdsForLot(lot);
+  return computeConformanceResult(lot, releasedHoldPointItemIds);
+}
+
+// Batched conformance for many lots — collapses the per-lot ~2N+1 queries the
+// create-claim readiness loop used to fire (one lot.findUnique + one
+// holdPoint.findMany PER lot) into a constant number: one lot.findMany and at
+// most one holdPoint.findMany for ALL lots. Returns a map keyed by lot id; a
+// requested lot id missing from the map means the lot was not found (callers
+// that require every lot should treat a missing key as not-found). (M39)
+export async function checkConformancePrerequisitesBatch(
+  lotIds: string[],
+): Promise<Map<string, ConformanceCheckResult>> {
+  const results = new Map<string, ConformanceCheckResult>();
+  if (lotIds.length === 0) return results;
+
+  const lots = await prisma.lot.findMany({
+    where: { id: { in: lotIds } },
+    include: CONFORMANCE_LOT_INCLUDE,
+  });
+
+  // Union of N/A hold-point sign-off item ids across all lots, so a single
+  // holdPoint.findMany resolves every lot's bypass guard.
+  const allNaSignoffItemIds: string[] = [];
+  for (const lot of lots) {
+    if (!lot.itpInstance) continue;
+    const checklistItems = getNormalizedChecklistItems(lot.itpInstance);
+    allNaSignoffItemIds.push(
+      ...getNaHoldPointSignoffItemIds(checklistItems, lot.itpInstance.completions),
+    );
+  }
+
+  const releasedByLot = new Map<string, Set<string>>();
+  if (allNaSignoffItemIds.length > 0) {
+    const releasedHoldPoints = await prisma.holdPoint.findMany({
+      where: {
+        lotId: { in: lotIds },
+        itpChecklistItemId: { in: allNaSignoffItemIds },
+        status: 'released',
+      },
+      select: { lotId: true, itpChecklistItemId: true },
+    });
+    for (const hp of releasedHoldPoints) {
+      if (!hp.itpChecklistItemId) continue;
+      const set = releasedByLot.get(hp.lotId) ?? new Set<string>();
+      set.add(hp.itpChecklistItemId);
+      releasedByLot.set(hp.lotId, set);
+    }
+  }
+
+  for (const lot of lots) {
+    results.set(lot.id, computeConformanceResult(lot, releasedByLot.get(lot.id) ?? new Set()));
+  }
+
+  return results;
 }

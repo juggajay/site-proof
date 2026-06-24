@@ -5,12 +5,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // holdPoint.findMany are used.
 const mocks = vi.hoisted(() => ({
   lotFindUnique: vi.fn(),
+  lotFindMany: vi.fn(),
   holdPointFindMany: vi.fn(),
 }));
 
 vi.mock('./prisma.js', () => ({
   prisma: {
-    lot: { findUnique: mocks.lotFindUnique },
+    lot: { findUnique: mocks.lotFindUnique, findMany: mocks.lotFindMany },
     holdPoint: { findMany: mocks.holdPointFindMany },
   },
 }));
@@ -18,6 +19,8 @@ vi.mock('./prisma.js', () => ({
 import {
   buildItpChecklistCompleteness,
   checkConformancePrerequisites,
+  checkConformancePrerequisitesBatch,
+  computeConformanceResult,
   isItpCompletionFinished,
   itpRequiresTest,
 } from './conformancePrerequisites.js';
@@ -267,7 +270,10 @@ function makeLot(opts: {
         verificationStatus: typeof status === 'string' ? 'none' : status.verificationStatus,
       })),
     },
-    testResults: opts.testResults ?? [],
+    testResults: (opts.testResults ?? []).map((testResult) => ({
+      ...testResult,
+      itpChecklistItemId: testResult.itpChecklistItemId ?? null,
+    })),
     ncrLots: (opts.ncrs ?? []).map((ncr) => ({ ncr })),
   };
 }
@@ -671,5 +677,139 @@ describe('checkConformancePrerequisites — gate wiring (mocked Prisma)', () => 
 
     expect(result.canConform).toBe(false);
     expect(result.blockingReasons).toContain('1 open NCR(s) must be closed');
+  });
+});
+
+/**
+ * computeConformanceResult is the pure (DB-free) core extracted in M39 so the
+ * single-lot and batched create-claim paths share one computation. It takes a
+ * fetched lot plus the set of its checklist-item ids whose hold point is
+ * released, and must reproduce the gate exactly.
+ */
+describe('computeConformanceResult — pure conformance core (M39)', () => {
+  it('conforms a completed no-test lot with no released hold points needed', () => {
+    const result = computeConformanceResult(
+      makeLot({ checklistItems: [NON_TEST_ITEM], completionStatuses: { i1: 'completed' } }),
+      new Set(),
+    );
+
+    expect(result.canConform).toBe(true);
+    expect(result.prerequisites?.itpCompleted).toBe(true);
+    expect(result.blockingReasons).toEqual([]);
+  });
+
+  it('blocks an N/A hold-point sign-off item when its id is NOT in the released set', () => {
+    const result = computeConformanceResult(
+      makeLot({
+        checklistItems: [HOLD_POINT_ITEM],
+        completionStatuses: { hp1: 'not_applicable' },
+      }),
+      new Set(), // hp1 not released
+    );
+
+    expect(result.canConform).toBe(false);
+    expect(result.prerequisites?.naHoldPointBlockerCount).toBe(1);
+    expect(result.prerequisites?.noNaHoldPointBypass).toBe(false);
+    expect(result.blockingReasons).toContain('1 hold point item marked N/A but not released');
+  });
+
+  it('passes the same N/A hold-point item once its id IS in the released set', () => {
+    const result = computeConformanceResult(
+      makeLot({
+        checklistItems: [HOLD_POINT_ITEM],
+        completionStatuses: { hp1: 'not_applicable' },
+      }),
+      new Set(['hp1']), // hp1 released
+    );
+
+    expect(result.canConform).toBe(true);
+    expect(result.prerequisites?.naHoldPointBlockerCount).toBe(0);
+    expect(result.prerequisites?.noNaHoldPointBypass).toBe(true);
+  });
+
+  it('still requires a passing verified test for a test-point lot (released set irrelevant)', () => {
+    const result = computeConformanceResult(
+      makeLot({ checklistItems: [TEST_ITEM], completionStatuses: { i2: 'completed' } }),
+      new Set(),
+    );
+
+    expect(result.prerequisites?.testRequired).toBe(true);
+    expect(result.prerequisites?.hasPassingTest).toBe(false);
+    expect(result.canConform).toBe(false);
+    expect(result.blockingReasons).toContain(
+      'ITP requires a matching passing verified test result',
+    );
+  });
+});
+
+/**
+ * checkConformancePrerequisitesBatch resolves many lots in a CONSTANT number of
+ * queries (one lot.findMany + at most one holdPoint.findMany) instead of the
+ * per-lot ~2N+1 the create-claim readiness loop used to fire. Each entry must
+ * match what the single-lot gate would have returned.
+ */
+describe('checkConformancePrerequisitesBatch — constant-query batch (mocked Prisma)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.holdPointFindMany.mockResolvedValue([]);
+  });
+
+  function lotWithId<T extends { id: string; lotNumber: string }>(base: T, id: string): T {
+    return { ...base, id, lotNumber: id.toUpperCase() };
+  }
+
+  it('resolves every lot with a single lot.findMany and no per-lot fan-out', async () => {
+    const lotA = lotWithId(
+      makeLot({ checklistItems: [NON_TEST_ITEM], completionStatuses: { i1: 'completed' } }),
+      'lot-a',
+    );
+    const lotB = lotWithId(
+      makeLot({ checklistItems: [TEST_ITEM], completionStatuses: { i2: 'completed' } }),
+      'lot-b',
+    );
+    mocks.lotFindMany.mockResolvedValue([lotA, lotB]);
+
+    const result = await checkConformancePrerequisitesBatch(['lot-a', 'lot-b']);
+
+    expect(mocks.lotFindMany).toHaveBeenCalledTimes(1);
+    // No N/A hold-point sign-off items → the hold-point query is skipped entirely.
+    expect(mocks.holdPointFindMany).not.toHaveBeenCalled();
+
+    expect(result.get('lot-a')?.canConform).toBe(true);
+    // lot-b is a test point with no passing test → blocked.
+    expect(result.get('lot-b')?.canConform).toBe(false);
+    expect(result.get('lot-b')?.blockingReasons).toContain(
+      'ITP requires a matching passing verified test result',
+    );
+  });
+
+  it('fires ONE holdPoint.findMany for all lots and scopes released ids per lot', async () => {
+    const lotA = lotWithId(
+      makeLot({ checklistItems: [HOLD_POINT_ITEM], completionStatuses: { hp1: 'not_applicable' } }),
+      'lot-a',
+    );
+    const lotB = lotWithId(
+      makeLot({ checklistItems: [HOLD_POINT_ITEM], completionStatuses: { hp1: 'not_applicable' } }),
+      'lot-b',
+    );
+    mocks.lotFindMany.mockResolvedValue([lotA, lotB]);
+    // Only lot-a's hold point is released; lot-b's stays blocked.
+    mocks.holdPointFindMany.mockResolvedValue([{ lotId: 'lot-a', itpChecklistItemId: 'hp1' }]);
+
+    const result = await checkConformancePrerequisitesBatch(['lot-a', 'lot-b']);
+
+    expect(mocks.holdPointFindMany).toHaveBeenCalledTimes(1);
+    expect(result.get('lot-a')?.prerequisites?.noNaHoldPointBypass).toBe(true);
+    expect(result.get('lot-a')?.canConform).toBe(true);
+    expect(result.get('lot-b')?.prerequisites?.naHoldPointBlockerCount).toBe(1);
+    expect(result.get('lot-b')?.canConform).toBe(false);
+  });
+
+  it('returns an empty map (and no queries) for an empty lot id list', async () => {
+    const result = await checkConformancePrerequisitesBatch([]);
+
+    expect(result.size).toBe(0);
+    expect(mocks.lotFindMany).not.toHaveBeenCalled();
+    expect(mocks.holdPointFindMany).not.toHaveBeenCalled();
   });
 });
