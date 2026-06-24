@@ -3,7 +3,7 @@
  *
  * States (per foreman profile §Design consequences):
  *   "All saved"    green  — online + no pending items
- *   "N waiting ↑"  amber  — pending items in the offline queue
+ *   "N waiting"    amber  — pending items in the offline queue (status-only)
  *   "Syncing…"     amber  — a flush is actively in progress
  *
  * Uses useOfflineStatus (lib/useOfflineStatus.ts) for live counts.
@@ -24,7 +24,9 @@ function syncChipLabel(state: SyncState, pendingSyncCount: number, failedSyncCou
     case 'failed':
       return `${failedSyncCount} failed`;
     case 'waiting':
-      return `${pendingSyncCount} waiting ↑`;
+      // M58: status-only — no actionable '↑'. The OfflineIndicator pill is the
+      // single interactive sync surface; the chip only reports state.
+      return `${pendingSyncCount} waiting`;
   }
 }
 
