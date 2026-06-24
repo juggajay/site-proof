@@ -10,6 +10,7 @@ import {
   buildOfflineDocketNotes,
   buildOfflineLotEditPayload,
   compactText,
+  filterUnsyncedByContent,
   sumDocketLabourHours,
   sumDocketPlantHours,
   syncKey,
@@ -295,5 +296,41 @@ describe('buildOfflineLotEditPayload', () => {
       status: 'in_progress',
       budgetAmount: 5000,
     });
+  });
+});
+
+describe('filterUnsyncedByContent', () => {
+  const keyOf = (item: { text: string }) => syncKey(item.text);
+
+  it('returns all local items when the server has none', () => {
+    const local = [{ text: 'a' }, { text: 'b' }];
+    expect(filterUnsyncedByContent([], local, keyOf)).toEqual(local);
+  });
+
+  it('suppresses a true replay of an already-synced item', () => {
+    const local = [{ text: 'concrete pour' }];
+    expect(filterUnsyncedByContent([syncKey('concrete pour')], local, keyOf)).toEqual([]);
+  });
+
+  it('keeps distinct local entries that share identical text (no Set collapse)', () => {
+    const local = [{ text: 'concrete pour' }, { text: 'concrete pour' }];
+    // Server has none of them yet -> both must post.
+    expect(filterUnsyncedByContent([], local, keyOf)).toEqual(local);
+  });
+
+  it('skips only as many local items as the server already holds', () => {
+    const local = [{ text: 'concrete pour' }, { text: 'concrete pour' }];
+    // Server already has one -> one is a replay, one is genuinely new.
+    expect(filterUnsyncedByContent([syncKey('concrete pour')], local, keyOf)).toEqual([
+      { text: 'concrete pour' },
+    ]);
+  });
+
+  it('handles mixed keys independently', () => {
+    const local = [{ text: 'a' }, { text: 'b' }, { text: 'a' }];
+    expect(filterUnsyncedByContent([syncKey('a')], local, keyOf)).toEqual([
+      { text: 'b' },
+      { text: 'a' },
+    ]);
   });
 });
