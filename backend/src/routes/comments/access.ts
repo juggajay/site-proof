@@ -3,11 +3,17 @@ import { AppError } from '../../lib/AppError.js';
 import {
   activeSubcontractorCompanyWhere,
   checkProjectAccess,
+  getEffectiveProjectRole,
   getSubcontractorPortalModuleAccessDeniedMessage,
   hasPortalModuleEnabled,
   isStandaloneSubcontractorPortalIdentity,
   type SubcontractorPortalAccessKey,
 } from '../../lib/projectAccess.js';
+
+// Progress-claim comment threads carry commercial discussion, so they honour the
+// same role boundary the claims API enforces (owner/admin/project_manager) rather
+// than admitting any active project member.
+const COMMENT_COMMERCIAL_ROLES = new Set(['owner', 'admin', 'project_manager']);
 
 const COMMENT_ENTITY_TYPE_ALIASES: Record<string, string> = {
   lot: 'Lot',
@@ -41,6 +47,9 @@ interface CommentEntityAccessTarget {
   lotId?: string | null;
   subcontractorLotScoped: boolean;
   subcontractorPortalModule?: SubcontractorPortalAccessKey | null;
+  // When true, internal users must hold a commercial project role (not merely
+  // project access) to read or write comments on this entity.
+  commercialRoleRequired?: boolean;
 }
 
 function isSubcontractorUser(user: AuthUser): boolean {
@@ -260,7 +269,11 @@ async function getCommentEntityAccessTarget(
       select: { projectId: true },
     });
     if (!entity) throw AppError.notFound('Comment entity');
-    return { projectId: entity.projectId, subcontractorLotScoped: false };
+    return {
+      projectId: entity.projectId,
+      subcontractorLotScoped: false,
+      commercialRoleRequired: true,
+    };
   }
 
   throw AppError.badRequest('Unsupported comment entityType');
@@ -292,6 +305,15 @@ export async function requireCommentEntityAccess(
       throw AppError.forbidden(
         getSubcontractorPortalModuleAccessDeniedMessage(target.subcontractorPortalModule),
       );
+    }
+
+    return target.projectId;
+  }
+
+  if (target.commercialRoleRequired) {
+    const effectiveRole = await getEffectiveProjectRole(user, target.projectId);
+    if (!effectiveRole || !COMMENT_COMMERCIAL_ROLES.has(effectiveRole)) {
+      throw AppError.forbidden('Commercial access required');
     }
 
     return target.projectId;
