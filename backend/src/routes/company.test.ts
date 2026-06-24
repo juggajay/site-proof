@@ -2140,6 +2140,65 @@ describe('Company API', () => {
       }
     });
 
+    it('notifies an existing passworded user on attach without flipping their emailVerified', async () => {
+      const email = `company-invite-absorb-${Date.now()}@example.com`;
+      const existingUser = await prisma.user.create({
+        data: {
+          email,
+          fullName: 'Existing Passworded Member',
+          companyId: null,
+          roleInCompany: 'member',
+          emailVerified: false,
+          emailVerifiedAt: null,
+          passwordHash: 'hashed-password-value',
+        },
+      });
+      invitedUserIds.push(existingUser.id);
+      const setupSpy = vi.spyOn(emailService, 'sendCompanyMemberInvitationEmail');
+      const notifySpy = vi
+        .spyOn(emailService, 'sendNotificationEmail')
+        .mockResolvedValue({ success: true } as never);
+
+      try {
+        const res = await request(app)
+          .post('/api/company/members/invite')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ email, roleInCompany: 'site_engineer' });
+
+        expect(res.status).toBe(201);
+        expect(res.body.member).toMatchObject({ id: existingUser.id, status: 'active' });
+        // A credentialed account gets no setup invitation...
+        expect(setupSpy).not.toHaveBeenCalled();
+        // ...but a membership notification so the attach is never silent.
+        expect(notifySpy).toHaveBeenCalledTimes(1);
+        expect(notifySpy).toHaveBeenCalledWith(
+          email,
+          'company_membership_added',
+          expect.objectContaining({ title: expect.stringContaining('added to') }),
+        );
+
+        const updatedUser = await prisma.user.findUnique({
+          where: { id: existingUser.id },
+          select: {
+            companyId: true,
+            roleInCompany: true,
+            emailVerified: true,
+            emailVerifiedAt: true,
+          },
+        });
+        // Attached and re-roled, but their email-verification state is preserved.
+        expect(updatedUser).toMatchObject({
+          companyId,
+          roleInCompany: 'site_engineer',
+          emailVerified: false,
+          emailVerifiedAt: null,
+        });
+      } finally {
+        setupSpy.mockRestore();
+        notifySpy.mockRestore();
+      }
+    });
+
     it('allows concurrent member invites past the seat limit while tier enforcement is disabled (G1)', async () => {
       const limitedCompany = await prisma.company.create({
         data: {

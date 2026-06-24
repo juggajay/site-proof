@@ -8,7 +8,7 @@ import { buildFrontendUrl } from '../../lib/runtimeConfig.js';
 import { assertCanRemoveUserFromProjectAdminRoles } from '../../lib/projectAdminInvariant.js';
 import { logError } from '../../lib/serverLogger.js';
 import { AuditAction, createAuditLog, writeAuditLogInTransaction } from '../../lib/auditLog.js';
-import { sendCompanyMemberInvitationEmail } from '../../lib/email.js';
+import { sendCompanyMemberInvitationEmail, sendNotificationEmail } from '../../lib/email.js';
 import { createEmailDeliveryFailureError } from '../../lib/emailDeliveryErrors.js';
 import { requireEmailVerified } from '../../middleware/requireEmailVerified.js';
 import {
@@ -36,6 +36,10 @@ import {
   requireBrowserSession,
   requireCompanyAdmin,
 } from './access.js';
+import {
+  shouldMarkInvitedMemberVerified,
+  shouldNotifyAttachedCompanyMember,
+} from './memberInvitation.js';
 
 const COMPANY_MEMBER_INVITATION_EXPIRES_DAYS = 7;
 const ONE_TIME_TOKEN_HASH_PREFIX = 'sha256:';
@@ -243,6 +247,7 @@ companyMemberRoutes.post(
       createdUser,
       previousMemberState,
       previousActiveSetupTokenIds,
+      notifyAttachedMember,
     } = await prisma.$transaction(async (tx) => {
       const currentUser = await tx.user.findUnique({
         where: { id: user.userId },
@@ -373,8 +378,11 @@ companyMemberRoutes.post(
             data: {
               companyId,
               roleInCompany,
-              emailVerified: true,
-              emailVerifiedAt: existingUser.passwordHash ? existingUser.updatedAt : new Date(),
+              // Existing credentialed accounts keep their own emailVerified
+              // state; only accounts onboarding via the setup link are verified.
+              ...(shouldMarkInvitedMemberVerified(existingUser)
+                ? { emailVerified: true, emailVerifiedAt: new Date() }
+                : {}),
               ...(fullName !== undefined ? { fullName } : {}),
             },
             select: {
@@ -436,6 +444,7 @@ companyMemberRoutes.post(
         createdUser,
         previousMemberState,
         previousActiveSetupTokenIds,
+        notifyAttachedMember: shouldNotifyAttachedCompanyMember(existingUser, companyId),
       };
     });
 
@@ -483,6 +492,20 @@ companyMemberRoutes.post(
           emailResult,
           COMPANY_MEMBER_INVITATION_EMAIL_FAILURE_COPY,
         );
+      }
+    } else if (notifyAttachedMember) {
+      // Existing credentialed account attached to the company without a setup
+      // email — notify them so the membership change is never silent. Best-effort:
+      // a delivery failure must not roll back the membership.
+      try {
+        await sendNotificationEmail(member.email, 'company_membership_added', {
+          title: `You were added to ${company.name}`,
+          message: `${user.email} added your SiteProof account to ${company.name} as a ${roleInCompany}. If you were not expecting this, contact ${user.email} or SiteProof support.`,
+          userName: member.fullName ?? undefined,
+          linkUrl: '/settings',
+        });
+      } catch (notifyError) {
+        logError('[Company Member Invite] Failed to send membership notification:', notifyError);
       }
     }
 
