@@ -69,7 +69,7 @@ describe('SyncChip — render', () => {
     expect(screen.getByRole('status')).toHaveAttribute('aria-label', 'All changes saved');
   });
 
-  it('shows "N waiting ↑" when pending > 0', () => {
+  it('shows "N waiting" (status-only, no actionable arrow) when pending > 0', () => {
     mockOfflineStatus.mockReturnValue({
       isOnline: true,
       pendingSyncCount: 3,
@@ -77,11 +77,13 @@ describe('SyncChip — render', () => {
       isSyncing: false,
     });
     render(<SyncChip />);
-    expect(screen.getByRole('status')).toHaveTextContent('3 waiting ↑');
+    expect(screen.getByRole('status')).toHaveTextContent('3 waiting');
+    // M58: the chip is a status indicator, not an action — no tap-to-sync arrow.
+    expect(screen.getByRole('status')).not.toHaveTextContent('↑');
     expect(screen.getByRole('status')).toHaveAttribute('aria-label', '3 changes waiting to sync');
   });
 
-  it('shows "1 waiting ↑" with singular label for count 1', () => {
+  it('shows "1 waiting" with singular label for count 1', () => {
     mockOfflineStatus.mockReturnValue({
       isOnline: true,
       pendingSyncCount: 1,
@@ -89,7 +91,8 @@ describe('SyncChip — render', () => {
       isSyncing: false,
     });
     render(<SyncChip />);
-    expect(screen.getByRole('status')).toHaveTextContent('1 waiting ↑');
+    expect(screen.getByRole('status')).toHaveTextContent('1 waiting');
+    expect(screen.getByRole('status')).not.toHaveTextContent('↑');
     expect(screen.getByRole('status')).toHaveAttribute('aria-label', '1 change waiting to sync');
   });
 
@@ -113,7 +116,8 @@ describe('SyncChip — render', () => {
       isSyncing: false,
     });
     render(<SyncChip />);
-    expect(screen.getByRole('status')).toHaveTextContent('0 waiting ↑');
+    expect(screen.getByRole('status')).toHaveTextContent('0 waiting');
+    expect(screen.getByRole('status')).not.toHaveTextContent('↑');
   });
 
   it('shows failed syncs instead of "All saved"', () => {
