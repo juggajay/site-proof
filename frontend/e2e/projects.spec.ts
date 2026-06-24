@@ -414,14 +414,17 @@ test.describe('Projects seeded account contract', () => {
     await expect(page.getByLabel('Loading project dashboard')).toHaveCount(0);
   });
 
-  test('redirects foreman mobile users to the foreman today view', async ({ page }) => {
+  test('converges foreman mobile users onto the /m shell scoped to the project (M77)', async ({
+    page,
+  }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await mockProjectsApi(page, { user: foremanUser });
 
     await page.goto(`/projects/${E2E_PROJECT_ID}`);
 
-    await expect(page).toHaveURL(`/projects/${E2E_PROJECT_ID}/foreman/today`);
-    await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible();
+    // M77: the default-shell mobile foreman now lands on the /m shell (scoped via
+    // ?projectId) instead of the legacy /projects/:id/foreman/today surface.
+    await expect(page).toHaveURL(/\/m\?projectId=/);
   });
 
   test('keeps foreman mobile bottom navigation on mounted project routes', async ({ page }) => {
