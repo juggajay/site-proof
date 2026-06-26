@@ -56,7 +56,7 @@ describe('webhook validation helpers', () => {
       expect(() => normalizeEvents('lot.created')).toThrow('events must be an array of strings');
       expect(() => normalizeEvents([])).toThrow('events must include at least one event name');
       expect(() => normalizeEvents(['bad event'])).toThrow('events contains an invalid event name');
-      expect(() => normalizeEvents(['ncr.closed'])).toThrow('unsupported event');
+      expect(() => normalizeEvents(['ncr.deleted'])).toThrow('unsupported event');
       expect(() =>
         normalizeEvents(Array.from({ length: 51 }, (_, index) => `event.${index}`)),
       ).toThrow('events cannot include more than 50 entries');

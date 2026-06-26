@@ -23,10 +23,12 @@ import {
   buildNcrWorkflowMessageResponse,
   buildNcrWorkflowResponse,
 } from './ncrWorkflowResponses.js';
+import { emitNcrWebhookEvent } from './webhookEvents.js';
 import {
   closeNcrSchema,
   notifyClientSchema,
   reopenNcrSchema,
+  requireMajorConcessionClientApproval,
   submitForVerificationSchema,
 } from './ncrWorkflowValidation.js';
 import { claimNcrVerificationSubmission } from './ncrVerificationSubmission.js';
@@ -199,6 +201,7 @@ ncrClosureWorkflowRouter.post(
       concessionRiskAssessment,
       overrideClientNotification,
       clientNotificationOverrideReason,
+      clientApprovalReference,
     } = validation.data;
 
     const ncr = await prisma.nCR.findUnique({
@@ -255,6 +258,14 @@ ncrClosureWorkflowRouter.post(
     const clientNotificationOverridden =
       clientNotificationOutstanding && overrideClientNotification;
 
+    // H9: a major NCR accepted by concession must carry the client's approval
+    // reference, so an accepted major defect has a durable record of sign-off.
+    requireMajorConcessionClientApproval({
+      severity: ncr.severity,
+      withConcession,
+      clientApprovalReference,
+    });
+
     const closeStatus = withConcession ? 'closed_concession' : 'closed';
     const closedAt = new Date();
 
@@ -270,6 +281,7 @@ ncrClosureWorkflowRouter.post(
         lessonsLearned,
         concessionJustification: withConcession ? concessionJustification : null,
         concessionRiskAssessment: withConcession ? concessionRiskAssessment : null,
+        clientApprovalReference: withConcession ? (clientApprovalReference ?? null) : null,
       },
     });
     await ensureCloseClaimed(id, closeUpdate.count);
@@ -325,6 +337,7 @@ ncrClosureWorkflowRouter.post(
         verificationNotesPresent: Boolean(verificationNotes),
         lessonsLearnedPresent: Boolean(lessonsLearned),
         affectedLotCount: ncr.ncrLots.length,
+        ...(withConcession ? { clientApprovalReference: clientApprovalReference ?? null } : {}),
         ...(clientNotificationOverridden
           ? {
               clientNotificationOverridden: true,
@@ -333,6 +346,16 @@ ncrClosureWorkflowRouter.post(
           : {}),
       },
       req,
+    });
+
+    emitNcrWebhookEvent(ncr.projectId, 'ncr.closed', {
+      ncrId: ncr.id,
+      projectId: ncr.projectId,
+      ncrNumber: ncr.ncrNumber,
+      status: updatedNcr.status,
+      severity: ncr.severity,
+      actorUserId: user.userId,
+      action: withConcession ? 'closed_concession' : 'closed',
     });
 
     res.json(buildNcrClosedResponse(updatedNcr, ncr.severity));

@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { AppError } from '../../lib/AppError.js';
+
 export const NCR_WORKFLOW_SHORT_TEXT_MAX_LENGTH = 160;
 export const NCR_WORKFLOW_TEXT_MAX_LENGTH = 5000;
 export const NCR_WORKFLOW_MESSAGE_MAX_LENGTH = 3000;
@@ -95,6 +97,13 @@ export const closeNcrSchema = z
       'Client notification override reason',
       NCR_WORKFLOW_TEXT_MAX_LENGTH,
     ),
+    // H9: the client's approval reference for a major-NCR concession (e.g. an
+    // email/letter/document id). Persisted + required server-side for major
+    // concessions; previously collected by the UI and silently dropped.
+    clientApprovalReference: optionalTrimmedWorkflowString(
+      'Client approval reference',
+      NCR_WORKFLOW_SHORT_TEXT_MAX_LENGTH,
+    ),
   })
   .superRefine((data, ctx) => {
     if (data.overrideClientNotification && !data.clientNotificationOverrideReason) {
@@ -125,6 +134,23 @@ export const closeNcrSchema = z
       });
     }
   });
+
+/**
+ * H9: a major NCR closed by concession must record the client's approval
+ * reference. Severity lives on the persisted NCR (not the request body), so
+ * this is enforced in the close handler rather than the close schema.
+ */
+export function requireMajorConcessionClientApproval(params: {
+  severity: string;
+  withConcession: boolean | undefined;
+  clientApprovalReference: string | undefined;
+}): void {
+  if (params.withConcession && params.severity === 'major' && !params.clientApprovalReference) {
+    throw AppError.badRequest(
+      'Closing a major NCR with concession requires a client approval reference.',
+    );
+  }
+}
 
 export const notifyClientSchema = z.object({
   recipientEmail: optionalTrimmedWorkflowString(

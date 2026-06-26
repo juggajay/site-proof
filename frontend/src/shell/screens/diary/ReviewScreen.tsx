@@ -26,6 +26,7 @@ import { withProjectQuery } from '../../shellPaths';
 import { useDiaryShellData } from './useDiaryShellData';
 import { useEffectiveProjectId } from '@/hooks/useEffectiveProjectId';
 import { apiFetch, isRetriableNetworkFailure } from '@/lib/api';
+import { submitDiaryOffline } from '@/lib/offlineDb';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { extractSubmitWarnings } from '@/lib/diarySubmitWarnings';
 import { logError } from '@/lib/logger';
@@ -204,7 +205,35 @@ export function ReviewScreen() {
       navigate(withProjectQuery('/m/diary/done', projectId), { replace: true });
     } catch (err) {
       if (isRetriableNetworkFailure(err)) {
-        // Offline — queue and show the offline ceremony
+        // H16: actually enqueue a replayable diary_submit before the offline
+        // ceremony. Without this the "saved — will send when back online"
+        // message was a lie: nothing was queued and the end-of-day diary was
+        // silently lost on a no-signal site. submitDiaryOffline flips the local
+        // snapshot to submitted and queues a diary_submit the sync worker
+        // replays (push snapshot, then POST /submit). Only show the queued
+        // ceremony if the enqueue succeeded.
+        // Residual: a diary edited only while online and submitted in the one
+        // moment signal drops has no local snapshot to replay; that narrow case
+        // still cannot be queued (but is strictly better than losing every
+        // offline submit as before).
+        if (!projectId) {
+          logError('Diary offline submit skipped: no project id', err);
+          toast({
+            description: 'Could not save the diary offline. Try again when you have signal.',
+            variant: 'error',
+          });
+          return;
+        }
+        try {
+          await submitDiaryOffline(projectId, diary.date);
+        } catch (queueErr) {
+          logError('Diary offline submit enqueue failed:', queueErr);
+          toast({
+            description: 'Could not save the diary offline. Try again when you have signal.',
+            variant: 'error',
+          });
+          return;
+        }
         triggerHaptic('light');
         navigate(withProjectQuery('/m/diary/done', projectId, { queued: 1 }), { replace: true });
         return;
