@@ -702,7 +702,7 @@ describe('Webhooks API', () => {
           .set('Authorization', `Bearer ${authToken}`)
           .send({
             url: 'https://example.com/webhook',
-            events: ['ncr.closed'],
+            events: ['ncr.deleted'],
           });
 
         expect(res.status).toBe(400);
