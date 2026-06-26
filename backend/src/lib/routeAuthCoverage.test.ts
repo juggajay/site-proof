@@ -354,9 +354,9 @@ describe('route authentication coverage', () => {
       ...extractedRegistrationRouteDescriptors(registrationRoutesSource),
       ...authRouteDescriptors.slice(0, testExpiredTokenIndex),
       ...magicLinkRouteDescriptors,
-      ...sessionRouteDescriptors.slice(0, 3),
+      ...sessionRouteDescriptors.slice(0, 4),
       ...extractedProfileRouteDescriptors(profileRoutesSource),
-      sessionRouteDescriptors[3],
+      sessionRouteDescriptors[4],
       ...emailVerificationRouteDescriptors,
       ...authRouteDescriptors.slice(testExpiredTokenIndex),
       ...accountPrivacyRouteDescriptors,
@@ -368,6 +368,7 @@ describe('route authentication coverage', () => {
       'POST /magic-link/request',
       'POST /magic-link/verify',
       'GET /me',
+      'POST /onboarding/complete',
       'POST /logout',
       'POST /logout-all-devices',
       'PATCH /profile',
@@ -458,6 +459,7 @@ describe('route authentication coverage', () => {
     );
     expect(extractedSessionRouteDescriptors(sessionRoutesSource)).toEqual([
       'GET /me',
+      'POST /onboarding/complete',
       'POST /logout',
       'POST /logout-all-devices',
       'POST /change-password',
@@ -467,6 +469,12 @@ describe('route authentication coverage', () => {
     );
     expect(routeSourceForDescriptor(sessionRoutesSource, 'GET /me')).toContain(
       'verifyToken(token)',
+    );
+    expect(routeSourceForDescriptor(sessionRoutesSource, 'POST /onboarding/complete')).toContain(
+      'verifyToken(authHeader.substring(7))',
+    );
+    expect(routeSourceForDescriptor(sessionRoutesSource, 'POST /onboarding/complete')).toContain(
+      'onboardingCompletedAt',
     );
     expect(routeSourceForDescriptor(sessionRoutesSource, 'POST /logout')).toContain(
       'Logged out successfully',
