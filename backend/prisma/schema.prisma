@@ -730,6 +730,7 @@ model NCR {
   closedAt                   DateTime? @map("closed_at")
   concessionJustification    String?   @map("concession_justification")
   concessionRiskAssessment   String?   @map("concession_risk_assessment")
+  clientApprovalReference    String?   @map("client_approval_reference")
   clientNotificationRequired Boolean   @default(false) @map("client_notification_required")
   clientNotifiedAt           DateTime? @map("client_notified_at")
   lessonsLearned             String?   @map("lessons_learned")

@@ -3,6 +3,7 @@ import {
   closeNcrSchema,
   notifyClientSchema,
   rejectRectificationSchema,
+  requireMajorConcessionClientApproval,
   respondNcrSchema,
 } from './ncrWorkflowValidation.js';
 
@@ -71,6 +72,54 @@ describe('ncrWorkflowValidation', () => {
         'Concession risk assessment is required when closing with concession',
       );
     }
+  });
+
+  it('accepts and trims a client approval reference on close (H9)', () => {
+    const result = closeNcrSchema.parse({
+      withConcession: true,
+      concessionJustification: 'Approved by superintendent',
+      concessionRiskAssessment: 'Low residual risk',
+      clientApprovalReference: '  Email ref RFI-204  ',
+    });
+
+    expect(result.clientApprovalReference).toBe('Email ref RFI-204');
+  });
+
+  it('requires a client approval reference to close a MAJOR NCR with concession (H9)', () => {
+    expect(() =>
+      requireMajorConcessionClientApproval({
+        severity: 'major',
+        withConcession: true,
+        clientApprovalReference: undefined,
+      }),
+    ).toThrow('Closing a major NCR with concession requires a client approval reference');
+
+    // Minor concession does not require it.
+    expect(() =>
+      requireMajorConcessionClientApproval({
+        severity: 'minor',
+        withConcession: true,
+        clientApprovalReference: undefined,
+      }),
+    ).not.toThrow();
+
+    // Major non-concession close (rectified) does not require it.
+    expect(() =>
+      requireMajorConcessionClientApproval({
+        severity: 'major',
+        withConcession: false,
+        clientApprovalReference: undefined,
+      }),
+    ).not.toThrow();
+
+    // Major concession WITH a reference is allowed.
+    expect(() =>
+      requireMajorConcessionClientApproval({
+        severity: 'major',
+        withConcession: true,
+        clientApprovalReference: 'Letter 2026-44',
+      }),
+    ).not.toThrow();
   });
 
   it('requires a reason when overriding the client-notification close gate (M27)', () => {

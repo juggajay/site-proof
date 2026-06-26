@@ -60,7 +60,7 @@ interface UseNCRActionsReturn {
     data: {
       concessionJustification: string;
       concessionRiskAssessment: string;
-      clientApprovalDocId?: string;
+      clientApprovalReference?: string;
       verificationNotes?: string;
     },
   ) => Promise<void>;
@@ -300,7 +300,7 @@ export function useNCRActions({
       data: {
         concessionJustification: string;
         concessionRiskAssessment: string;
-        clientApprovalDocId?: string;
+        clientApprovalReference?: string;
         verificationNotes?: string;
       },
     ) => {
@@ -314,7 +314,7 @@ export function useNCRActions({
             withConcession: true,
             concessionJustification: data.concessionJustification.trim(),
             concessionRiskAssessment: data.concessionRiskAssessment.trim(),
-            clientApprovalDocId: data.clientApprovalDocId,
+            clientApprovalReference: data.clientApprovalReference,
             verificationNotes: optionalTrimmed(data.verificationNotes),
           }),
         });

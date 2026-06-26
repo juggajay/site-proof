@@ -28,7 +28,7 @@ interface ConcessionModalProps {
     data: {
       concessionJustification: string;
       concessionRiskAssessment: string;
-      clientApprovalDocId?: string;
+      clientApprovalReference?: string;
       verificationNotes?: string;
     },
   ) => void;
@@ -58,19 +58,25 @@ function ConcessionModalInner({ isOpen, ncr, onClose, onSubmit, loading }: Conce
   });
 
   const clientApprovalConfirmed = watch('clientApprovalConfirmed');
+  const clientApprovalReference = watch('clientApprovalReference');
   const justification = watch('justification');
   const riskAssessment = watch('riskAssessment');
 
   const onFormSubmit = (data: ConcessionFormData) => {
     if (!ncr) return;
-    if (requiresClientApproval && !data.clientApprovalConfirmed) {
+    if (
+      requiresClientApproval &&
+      (!data.clientApprovalConfirmed || !data.clientApprovalReference?.trim())
+    ) {
       return;
     }
     onSubmit(ncr.id, {
       concessionJustification: data.justification.trim(),
       concessionRiskAssessment: data.riskAssessment.trim(),
       verificationNotes: data.verificationNotes?.trim() || undefined,
-      clientApprovalDocId: data.clientApprovalReference?.trim() || undefined,
+      // H9: send the approval reference under its real name so the backend
+      // persists it (the major-concession sign-off record).
+      clientApprovalReference: data.clientApprovalReference?.trim() || undefined,
     });
   };
 
@@ -80,7 +86,10 @@ function ConcessionModalInner({ isOpen, ncr, onClose, onSubmit, loading }: Conce
   };
 
   const isFormValid =
-    justification && riskAssessment && (!requiresClientApproval || clientApprovalConfirmed);
+    justification &&
+    riskAssessment &&
+    (!requiresClientApproval ||
+      (clientApprovalConfirmed && Boolean(clientApprovalReference?.trim())));
 
   if (!isOpen || !ncr) return null;
 
