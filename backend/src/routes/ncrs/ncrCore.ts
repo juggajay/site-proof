@@ -26,6 +26,7 @@ import { createNcrSchema, parseOptionalNcrDueDate, updateNcrSchema } from './ncr
 import { createNcrWithAllocatedNumber } from './ncrNumberAllocation.js';
 import { ncrListRouter } from './ncrListRoute.js';
 import { assertNcrLinkableLots } from './ncrLotStatus.js';
+import { emitNcrWebhookEvent } from './webhookEvents.js';
 
 export const ncrCoreRouter = Router();
 
@@ -501,6 +502,16 @@ ncrCoreRouter.post(
         });
       }
     }
+
+    emitNcrWebhookEvent(ncr.projectId, 'ncr.created', {
+      ncrId: ncr.id,
+      projectId: ncr.projectId,
+      ncrNumber: ncr.ncrNumber,
+      status: ncr.status,
+      severity: ncr.severity,
+      actorUserId: user.userId,
+      action: 'created',
+    });
 
     res.status(201).json(buildNcrResponse(ncr));
   }),

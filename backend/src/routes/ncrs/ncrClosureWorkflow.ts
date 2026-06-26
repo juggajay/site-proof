@@ -23,6 +23,7 @@ import {
   buildNcrWorkflowMessageResponse,
   buildNcrWorkflowResponse,
 } from './ncrWorkflowResponses.js';
+import { emitNcrWebhookEvent } from './webhookEvents.js';
 import {
   closeNcrSchema,
   notifyClientSchema,
@@ -333,6 +334,16 @@ ncrClosureWorkflowRouter.post(
           : {}),
       },
       req,
+    });
+
+    emitNcrWebhookEvent(ncr.projectId, 'ncr.closed', {
+      ncrId: ncr.id,
+      projectId: ncr.projectId,
+      ncrNumber: ncr.ncrNumber,
+      status: updatedNcr.status,
+      severity: ncr.severity,
+      actorUserId: user.userId,
+      action: withConcession ? 'closed_concession' : 'closed',
     });
 
     res.json(buildNcrClosedResponse(updatedNcr, ncr.severity));
