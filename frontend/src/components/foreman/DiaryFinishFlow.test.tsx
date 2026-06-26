@@ -4,6 +4,7 @@ import { Route, Routes } from 'react-router-dom';
 import { renderWithProviders, screen, fireEvent, waitFor } from '@/test/renderWithProviders';
 import { apiFetch } from '@/lib/api';
 import * as apiModule from '@/lib/api';
+import { submitDiaryOffline } from '@/lib/offlineDb';
 import { DiaryFinishFlow } from './DiaryFinishFlow';
 
 vi.mock('@/lib/api', async (importOriginal) => {
@@ -12,6 +13,10 @@ vi.mock('@/lib/api', async (importOriginal) => {
 });
 
 vi.mock('@/components/ui/toaster', () => ({ toast: vi.fn() }));
+
+// H16: the legacy offline submit must enqueue a replayable diary_submit too.
+vi.mock('@/lib/offlineDb', () => ({ submitDiaryOffline: vi.fn() }));
+const submitDiaryOfflineMock = vi.mocked(submitDiaryOffline);
 
 // useHaptics is a no-op in test — navigator.vibrate doesn't exist in jsdom
 vi.mock('@/hooks/useHaptics', () => ({
@@ -117,6 +122,8 @@ describe('DiaryFinishFlow selected-date submission', () => {
 describe('DiaryFinishFlow — submit ceremony', () => {
   beforeEach(() => {
     vi.mocked(apiFetch).mockReset();
+    submitDiaryOfflineMock.mockReset();
+    submitDiaryOfflineMock.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -177,6 +184,24 @@ describe('DiaryFinishFlow — submit ceremony', () => {
 
     // Must NOT show "Diary submitted"
     expect(screen.queryByText('Diary submitted')).not.toBeInTheDocument();
+  });
+
+  it('enqueues a replayable diary submit (not just the ceremony) when offline', async () => {
+    vi.mocked(apiFetch)
+      .mockResolvedValueOnce(pastDiary)
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    vi.spyOn(apiModule, 'isRetriableNetworkFailure').mockReturnValue(true);
+
+    renderFlow(PAST_DATE);
+
+    const submitButton = await screen.findByRole('button', { name: 'Submit Diary' });
+    fireEvent.click(submitButton);
+
+    // The offline branch must queue the submit keyed by projectId + diary date,
+    // so the sync worker replays it — otherwise "saved, will send" is a lie.
+    await waitFor(() => {
+      expect(submitDiaryOfflineMock).toHaveBeenCalledWith('p1', PAST_DATE);
+    });
   });
 
   it('Done button closes the ceremony', async () => {

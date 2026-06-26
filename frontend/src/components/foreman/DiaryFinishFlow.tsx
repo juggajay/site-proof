@@ -17,6 +17,7 @@ import {
 import { motion, useReducedMotion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { apiFetch, ApiError, isRetriableNetworkFailure } from '@/lib/api';
+import { submitDiaryOffline } from '@/lib/offlineDb';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { extractSubmitWarnings } from '@/lib/diarySubmitWarnings';
 import { logError } from '@/lib/logger';
@@ -342,10 +343,22 @@ export function DiaryFinishFlow({ isOpen, onClose, onSubmit, date }: DiaryFinish
       // show the "will send when back on signal" ceremony — never lie about
       // whether the server confirmed receipt.
       if (isRetriableNetworkFailure(err)) {
-        // The offline submit is a best-effort local queue; we don't await it
-        // here to keep the UI snappy. If this also fails we still show the
-        // honest "saved offline" copy because the foreman typed it and it's
-        // in their local diary.
+        // H16: actually enqueue a replayable diary_submit before the offline
+        // ceremony. submitDiaryOffline flips the local snapshot to submitted and
+        // queues a diary_submit the sync worker replays (push snapshot, then
+        // POST /submit). Without this the "saved — will send when back on
+        // signal" copy was a lie: nothing was queued and the diary was silently
+        // lost. Only show the queued ceremony if the enqueue succeeded.
+        try {
+          await submitDiaryOffline(projectId, diaryDate);
+        } catch (queueErr) {
+          logError('Diary offline submit enqueue failed:', queueErr);
+          toast({
+            description: 'Could not save the diary offline. Try again when you have signal.',
+            variant: 'error',
+          });
+          return;
+        }
         triggerHaptic('light');
         onSubmit?.();
         setCeremonyVariant('queued');

@@ -33,16 +33,24 @@ vi.mock('@/lib/api', async (importOriginal) => {
   return { ...actual, apiFetch: vi.fn() };
 });
 vi.mock('@/components/ui/toaster', () => ({ toast: vi.fn() }));
+// H16: the offline submit must actually queue a diary_submit the sync worker can
+// replay. Mock only the submit primitive so we can assert it is invoked.
+vi.mock('@/lib/offlineDb', () => ({ submitDiaryOffline: vi.fn() }));
 
 import { ReviewScreen } from './ReviewScreen';
 import { useDiaryShellData } from './useDiaryShellData';
 import { apiFetch } from '@/lib/api';
+import { submitDiaryOffline } from '@/lib/offlineDb';
+import { toast } from '@/components/ui/toaster';
 
 const useDiaryShellDataMock = vi.mocked(useDiaryShellData);
 const apiFetchMock = vi.mocked(apiFetch);
+const submitDiaryOfflineMock = vi.mocked(submitDiaryOffline);
+const toastMock = vi.mocked(toast);
 
 const draftDiary = {
   id: 'd1',
+  date: '2026-06-20',
   status: 'draft',
   activities: [{ id: 'a1', description: 'Kerb pour', lot: null }],
   delays: [],
@@ -62,6 +70,9 @@ function warn422(warnings: string[]): ApiError {
 
 beforeEach(() => {
   apiFetchMock.mockReset();
+  toastMock.mockReset();
+  submitDiaryOfflineMock.mockReset();
+  submitDiaryOfflineMock.mockResolvedValue(undefined);
   useDiaryShellDataMock.mockReturnValue({ diary: draftDiary } as unknown as ReturnType<
     typeof useDiaryShellData
   >);
@@ -81,5 +92,36 @@ describe('ReviewScreen server-422 warning gate (M30)', () => {
 
     // Still on review — the gate did not let the diary through.
     expect(screen.getByRole('button', { name: /Submit diary/i })).toBeInTheDocument();
+  });
+});
+
+describe('ReviewScreen offline submit (H16)', () => {
+  it('queues a replayable diary submit when the network is unavailable, not just the ceremony', async () => {
+    // A retriable network failure (offline) on the submit POST.
+    apiFetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+
+    renderWithProviders(<ReviewScreen />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Submit diary/i }));
+
+    // The offline branch must enqueue the submit (keyed by projectId + diary
+    // date) so the sync worker can replay it — otherwise the "saved, will send
+    // when back online" ceremony is a lie and the diary is silently lost.
+    await vi.waitFor(() => {
+      expect(submitDiaryOfflineMock).toHaveBeenCalledWith('p1', '2026-06-20');
+    });
+  });
+
+  it('shows an error instead of a false "queued" ceremony when the offline enqueue fails', async () => {
+    apiFetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    submitDiaryOfflineMock.mockRejectedValueOnce(new Error('IndexedDB unavailable'));
+
+    renderWithProviders(<ReviewScreen />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Submit diary/i }));
+
+    await vi.waitFor(() => {
+      expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ variant: 'error' }));
+    });
   });
 });
