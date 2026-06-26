@@ -3902,3 +3902,82 @@ describe('Account Deletion', () => {
     }
   });
 });
+
+describe('Onboarding tour completion', () => {
+  it('exposes onboardingCompletedAt (null for a new account) on login and /me', async () => {
+    const email = `onboarding-fields-${Date.now()}@example.com`;
+    const password = 'SecureP@ssword123!';
+    const regRes = await request(app).post('/api/auth/register').send({
+      email,
+      password,
+      fullName: 'Onboarding Fields User',
+      tosAccepted: true,
+    });
+    const userId = regRes.body.user.id;
+
+    try {
+      // A brand-new account has not completed the tour yet.
+      const loginRes = await request(app).post('/api/auth/login').send({ email, password });
+      expect(loginRes.status).toBe(200);
+      expect(loginRes.body.user.onboardingCompletedAt ?? null).toBeNull();
+
+      const meRes = await request(app)
+        .get('/api/auth/me')
+        .set('Authorization', `Bearer ${loginRes.body.token}`);
+      expect(meRes.status).toBe(200);
+      expect(meRes.body.user.onboardingCompletedAt ?? null).toBeNull();
+    } finally {
+      await prisma.auditLog.deleteMany({ where: { userId } });
+      await prisma.emailVerificationToken.deleteMany({ where: { userId } });
+      await prisma.user.delete({ where: { id: userId } }).catch(() => {});
+    }
+  });
+
+  it('records the completion timestamp once and does not move it on replay', async () => {
+    const email = `onboarding-complete-${Date.now()}@example.com`;
+    const password = 'SecureP@ssword123!';
+    const regRes = await request(app).post('/api/auth/register').send({
+      email,
+      password,
+      fullName: 'Onboarding Complete User',
+      tosAccepted: true,
+    });
+    const userId = regRes.body.user.id;
+    const token = regRes.body.token;
+
+    try {
+      const firstComplete = await request(app)
+        .post('/api/auth/onboarding/complete')
+        .set('Authorization', `Bearer ${token}`);
+      expect(firstComplete.status).toBe(200);
+      expect(typeof firstComplete.body.onboardingCompletedAt).toBe('string');
+      const firstTimestamp = firstComplete.body.onboardingCompletedAt;
+
+      // It is now persisted and surfaced through /me.
+      const meRes = await request(app).get('/api/auth/me').set('Authorization', `Bearer ${token}`);
+      expect(meRes.status).toBe(200);
+      expect(meRes.body.user.onboardingCompletedAt ?? null).not.toBeNull();
+
+      const storedUser = await prisma.user.findUnique({ where: { id: userId } });
+      expect(storedUser?.onboardingCompletedAt ?? null).not.toBeNull();
+
+      // Replaying the tour must not move the original completion timestamp.
+      const secondComplete = await request(app)
+        .post('/api/auth/onboarding/complete')
+        .set('Authorization', `Bearer ${token}`);
+      expect(secondComplete.status).toBe(200);
+      expect(new Date(secondComplete.body.onboardingCompletedAt).getTime()).toBe(
+        new Date(firstTimestamp).getTime(),
+      );
+    } finally {
+      await prisma.auditLog.deleteMany({ where: { userId } });
+      await prisma.emailVerificationToken.deleteMany({ where: { userId } });
+      await prisma.user.delete({ where: { id: userId } }).catch(() => {});
+    }
+  });
+
+  it('rejects an unauthenticated completion request', async () => {
+    const res = await request(app).post('/api/auth/onboarding/complete');
+    expect(res.status).toBe(401);
+  });
+});

@@ -46,6 +46,9 @@ interface User {
   companyName?: string | null;
   hasSubcontractorPortalAccess?: boolean;
   createdAt?: string;
+  // Account-level "has completed/dismissed the product tour" marker. Durable
+  // across devices and storage clears, unlike the per-device localStorage flag.
+  onboardingCompletedAt?: string | null;
   avatarUrl?: string | null;
   hasPassword?: boolean;
   emailVerified?: boolean;

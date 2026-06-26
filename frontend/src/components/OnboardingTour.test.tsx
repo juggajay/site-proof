@@ -9,6 +9,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ComponentProps } from 'react';
 
 vi.mock('@/lib/auth', () => ({ useAuth: vi.fn() }));
+// The tour now records an account-level completion via the API; stub it so the
+// component never makes a real request during these tests.
+vi.mock('@/lib/api', () => ({ apiFetch: vi.fn().mockResolvedValue({}) }));
 
 import { OnboardingTour, onboardingStorageKey, startOnboardingTour } from './OnboardingTour';
 import { useAuth } from '@/lib/auth';
@@ -124,6 +127,18 @@ describe('OnboardingTour first-run auto-show', () => {
     advancePastAutoShowDelay();
 
     expect(screen.getByText(TOUR_HEADING)).toBeInTheDocument();
+  });
+
+  it('does not auto-show when the account already completed the tour server-side, even on a fresh device', () => {
+    // No device marker (cleared in beforeEach), but the account carries an
+    // onboardingCompletedAt — an existing user on a new browser must NOT be
+    // treated as new.
+    mockUser({ ...PM_USER, onboardingCompletedAt: '2026-01-01T00:00:00.000Z' });
+
+    renderTour();
+    advancePastAutoShowDelay();
+
+    expect(screen.queryByText(TOUR_HEADING)).not.toBeInTheDocument();
   });
 });
 

@@ -46,6 +46,7 @@ export interface AuthUser {
   companyId?: string | null;
   companyName?: string | null;
   createdAt?: Date;
+  onboardingCompletedAt?: Date | null;
   avatarUrl?: string | null;
   emailVerified?: boolean;
   hasPassword?: boolean;
@@ -71,13 +72,14 @@ export async function verifyToken(token: string): Promise<AuthUser | null> {
         company_id: string | null;
         company_name: string | null;
         created_at: Date;
+        onboarding_completed_at: Date | null;
         avatar_url: string | null;
         token_invalidated_at: Date | null;
         email_verified: boolean;
         has_password: boolean;
         has_subcontractor_portal_access: boolean;
       }>
-    >`SELECT users.id, users.email, users.full_name, users.phone, users.role_in_company, users.company_id, companies.name AS company_name, users.created_at, users.avatar_url, users.token_invalidated_at, users.email_verified, users.password_hash IS NOT NULL AS has_password,
+    >`SELECT users.id, users.email, users.full_name, users.phone, users.role_in_company, users.company_id, companies.name AS company_name, users.created_at, users.onboarding_completed_at, users.avatar_url, users.token_invalidated_at, users.email_verified, users.password_hash IS NOT NULL AS has_password,
         users.company_id IS NULL
         AND users.role_in_company IN ('subcontractor', 'subcontractor_admin')
         AND EXISTS (
@@ -128,6 +130,7 @@ export async function verifyToken(token: string): Promise<AuthUser | null> {
       companyName: user.company_name,
       role: user.role_in_company,
       createdAt: user.created_at,
+      onboardingCompletedAt: user.onboarding_completed_at,
       avatarUrl: buildAvatarDisplayUrl(user.id, user.avatar_url),
       emailVerified: Boolean(user.email_verified),
       hasPassword: Boolean(user.has_password),
