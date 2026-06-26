@@ -22,56 +22,28 @@
  */
 
 import { PrismaClient } from '@prisma/client';
-import type { Prisma } from '@prisma/client';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { requireDatabaseTargetConfirmation } from './lib/database-target.js';
+import {
+  RETENTION_POLICIES,
+  DAYS_TO_MS,
+  applyRetentionPolicies,
+  buildExpiredDocumentSignedUrlTokenWhere,
+  buildExpiredOrOldUsedHoldPointReleaseTokenWhere,
+} from '../src/lib/dataRetention.js';
 
-const prisma = new PrismaClient();
-
-// Retention periods in days
-export const RETENTION_POLICIES = {
-  // Construction records (7 years per Australian standards)
-  projectRecords: 7 * 365, // 2555 days
-
-  // Audit trails (7 years for compliance)
-  auditLogs: 7 * 365,
-
-  // Session/auth data (short-lived)
-  expiredSessions: 30,
-  passwordResetTokens: 1,
-  emailVerificationTokens: 7,
-  usedHoldPointReleaseTokens: 30,
-
-  // Notifications
-  readNotifications: 90,
-
-  // Sync queue (processed items)
-  processedSyncItems: 7,
+// The retention policy definitions and the delete logic now live in
+// src/lib/dataRetention.ts so the in-process retention worker shares one source
+// of truth. Re-exported here for callers/tests that import them from this CLI.
+export {
+  RETENTION_POLICIES,
+  buildExpiredDocumentSignedUrlTokenWhere,
+  buildExpiredOrOldUsedHoldPointReleaseTokenWhere,
 };
 
-const DAYS_TO_MS = 24 * 60 * 60 * 1000;
-
-export function buildExpiredDocumentSignedUrlTokenWhere(
-  now: Date,
-): Prisma.DocumentSignedUrlTokenWhereInput {
-  return {
-    expiresAt: { lt: now },
-  };
-}
-
-export function buildExpiredOrOldUsedHoldPointReleaseTokenWhere(
-  now: Date,
-): Prisma.HoldPointReleaseTokenWhereInput {
-  const usedCutoff = new Date(
-    now.getTime() - RETENTION_POLICIES.usedHoldPointReleaseTokens * DAYS_TO_MS,
-  );
-
-  return {
-    OR: [{ expiresAt: { lt: now } }, { usedAt: { not: null, lt: usedCutoff } }],
-  };
-}
+const prisma = new PrismaClient();
 
 interface RetentionReport {
   timestamp: string;
@@ -305,73 +277,35 @@ function displayReport(report: RetentionReport): void {
   console.log(`  Records to Delete:     ${report.summary.recordsToDelete.toLocaleString()}`);
 }
 
-async function applyRetentionPolicies(): Promise<void> {
+async function runRetentionApply(): Promise<void> {
   console.log('🔄 Applying data retention policies...\n');
 
-  const now = new Date();
-  let totalDeleted = 0;
+  const result = await applyRetentionPolicies(prisma);
 
-  // Delete expired password reset tokens
-  const deletedPasswordTokens = await prisma.passwordResetToken.deleteMany({
-    where: {
-      expiresAt: { lt: now },
-    },
-  });
-  if (deletedPasswordTokens.count > 0) {
-    console.log(`✅ Deleted ${deletedPasswordTokens.count} expired password reset tokens`);
-    totalDeleted += deletedPasswordTokens.count;
+  if (result.passwordResetTokens > 0) {
+    console.log(`✅ Deleted ${result.passwordResetTokens} expired password reset tokens`);
   }
-
-  // Delete expired email verification tokens
-  const deletedEmailTokens = await prisma.emailVerificationToken.deleteMany({
-    where: {
-      expiresAt: { lt: now },
-    },
-  });
-  if (deletedEmailTokens.count > 0) {
-    console.log(`✅ Deleted ${deletedEmailTokens.count} expired email verification tokens`);
-    totalDeleted += deletedEmailTokens.count;
+  if (result.emailVerificationTokens > 0) {
+    console.log(`✅ Deleted ${result.emailVerificationTokens} expired email verification tokens`);
   }
-
-  // Delete old processed sync queue items
-  const syncCutoff = new Date(now.getTime() - RETENTION_POLICIES.processedSyncItems * DAYS_TO_MS);
-  const deletedSyncItems = await prisma.syncQueue.deleteMany({
-    where: {
-      status: 'synced',
-      syncedAt: { lt: syncCutoff },
-    },
-  });
-  if (deletedSyncItems.count > 0) {
-    console.log(`✅ Deleted ${deletedSyncItems.count} processed sync queue items`);
-    totalDeleted += deletedSyncItems.count;
+  if (result.processedSyncItems > 0) {
+    console.log(`✅ Deleted ${result.processedSyncItems} processed sync queue items`);
   }
-
-  // Delete expired bearer-link document tokens
-  const deletedDocumentSignedUrlTokens = await prisma.documentSignedUrlToken.deleteMany({
-    where: buildExpiredDocumentSignedUrlTokenWhere(now),
-  });
-  if (deletedDocumentSignedUrlTokens.count > 0) {
+  if (result.documentSignedUrlTokens > 0) {
     console.log(
-      `✅ Deleted ${deletedDocumentSignedUrlTokens.count} expired document signed-link tokens`,
+      `✅ Deleted ${result.documentSignedUrlTokens} expired document signed-link tokens`,
     );
-    totalDeleted += deletedDocumentSignedUrlTokens.count;
   }
-
-  // Delete expired release-link tokens and old used release-link tokens
-  const deletedHoldPointReleaseTokens = await prisma.holdPointReleaseToken.deleteMany({
-    where: buildExpiredOrOldUsedHoldPointReleaseTokenWhere(now),
-  });
-  if (deletedHoldPointReleaseTokens.count > 0) {
+  if (result.holdPointReleaseTokens > 0) {
     console.log(
-      `✅ Deleted ${deletedHoldPointReleaseTokens.count} expired or old used hold point release-link tokens`,
+      `✅ Deleted ${result.holdPointReleaseTokens} expired or old used hold point release-link tokens`,
     );
-    totalDeleted += deletedHoldPointReleaseTokens.count;
   }
 
   // Note: Notifications are retained until a real archive field/table exists
   // Note: Project data, NCRs, lots, test results are NEVER auto-deleted
 
-  console.log(`\n✨ Retention policies applied. ${totalDeleted} records cleaned up.`);
+  console.log(`\n✨ Retention policies applied. ${result.totalDeleted} records cleaned up.`);
   console.log(
     '\n⚠️  Note: Project records, notifications, NCRs, lots, and test results are retained per policy.',
   );
@@ -412,7 +346,7 @@ async function main() {
         console.log('⚠️  This will permanently delete data according to retention policies.');
         console.log('   Press Ctrl+C within 5 seconds to cancel...\n');
         await new Promise((resolve) => setTimeout(resolve, 5000));
-        await applyRetentionPolicies();
+        await runRetentionApply();
         break;
 
       case 'report': {

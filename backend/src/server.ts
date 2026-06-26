@@ -49,6 +49,7 @@ import { logError, logInfo } from './lib/serverLogger.js';
 import { startScheduledReportWorker } from './lib/scheduledReports.js';
 import { startNotificationDigestWorker } from './lib/notificationJobs.js';
 import { startNotificationAutomationWorker } from './lib/notificationAutomation.js';
+import { startDataRetentionWorker } from './lib/dataRetentionWorker.js';
 
 export async function startServer(): Promise<void> {
   const app = express();
@@ -167,6 +168,7 @@ export async function startServer(): Promise<void> {
   const scheduledReportWorker = startScheduledReportWorker();
   const notificationDigestWorker = startNotificationDigestWorker();
   const notificationAutomationWorker = startNotificationAutomationWorker();
+  const dataRetentionWorker = startDataRetentionWorker();
 
   // Feature #757: Graceful shutdown handling
   async function gracefulShutdown(signal: string) {
@@ -197,6 +199,7 @@ export async function startServer(): Promise<void> {
       scheduledReportWorker?.stop();
       notificationDigestWorker?.stop();
       notificationAutomationWorker?.stop();
+      dataRetentionWorker?.stop();
 
       // Wait a bit for in-flight requests to complete
       logInfo('Waiting for in-flight requests to complete...');
