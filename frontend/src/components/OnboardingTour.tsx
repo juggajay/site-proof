@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { X, ChevronRight, ChevronLeft, CheckCircle2 } from 'lucide-react';
+import { apiFetch } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { hasCommercialAccess } from '@/lib/roles';
 import {
@@ -86,6 +87,17 @@ function hasCompletedOnboarding(userId: string | null | undefined): boolean {
   );
 }
 
+// Record the account-level completion so the tour is never re-shown on another
+// device or after local storage is cleared. Fire-and-forget: the per-device
+// marker already covers the current session, and a failed call is retried the
+// next time the tour opens. The server records the first completion only, so
+// calling this on every open/dismiss is idempotent.
+function persistOnboardingCompletedAt(): void {
+  void apiFetch('/api/auth/onboarding/complete', { method: 'POST' }).catch(() => {
+    // Best-effort telemetry-style write — never block or surface tour UI on it.
+  });
+}
+
 // Replay trigger: dispatched by the header user menu ("Take the tour") and
 // handled by the single OnboardingTour instance mounted in ProtectedAppShell.
 export const ONBOARDING_TOUR_EVENT = 'siteproof:start-onboarding-tour';
@@ -139,17 +151,18 @@ export function OnboardingTour({
       return;
     }
 
-    if (!autoShow || hasCompletedOnboarding(userId)) {
+    if (!autoShow || hasCompletedOnboarding(userId) || Boolean(user?.onboardingCompletedAt)) {
       return;
     }
 
     // Small delay to let the page render first
     const timer = setTimeout(() => {
       writeLocalStorageItem(onboardingStorageKey(userId), 'true');
+      persistOnboardingCompletedAt();
       setIsVisible(true);
     }, 500);
     return () => clearTimeout(timer);
-  }, [enabled, autoShow, forceShow, userId]);
+  }, [enabled, autoShow, forceShow, userId, user?.onboardingCompletedAt]);
 
   // Replay: reopen from the first step when the header entry point fires.
   // Opening also re-persists the seen marker so an abandoned replay never
@@ -200,6 +213,7 @@ export function OnboardingTour({
 
   const completeTour = () => {
     writeLocalStorageItem(onboardingStorageKey(userId), 'true');
+    persistOnboardingCompletedAt();
     setIsVisible(false);
     onComplete?.();
   };
@@ -307,13 +321,19 @@ export function OnboardingTour({
 export function useOnboarding() {
   const { user } = useAuth();
   const userId = user?.id;
-  const [completed, setCompleted] = useState(() => hasCompletedOnboarding(userId));
+  const serverCompletedAt = user?.onboardingCompletedAt;
+  const [completed, setCompleted] = useState(
+    () => hasCompletedOnboarding(userId) || Boolean(serverCompletedAt),
+  );
 
   useEffect(() => {
-    setCompleted(hasCompletedOnboarding(userId));
-  }, [userId]);
+    setCompleted(hasCompletedOnboarding(userId) || Boolean(serverCompletedAt));
+  }, [userId, serverCompletedAt]);
 
   const resetOnboarding = () => {
+    // Local-only reset (for the replay entry point); the account-level marker is
+    // intentionally not cleared here so a deliberate replay can't re-arm the
+    // first-run auto-show on the next load.
     removeLocalStorageItem(onboardingStorageKey(userId));
     removeLocalStorageItem(LEGACY_ONBOARDING_STORAGE_KEY);
     setCompleted(false);
@@ -321,6 +341,7 @@ export function useOnboarding() {
 
   const markCompleted = () => {
     writeLocalStorageItem(onboardingStorageKey(userId), 'true');
+    persistOnboardingCompletedAt();
     setCompleted(true);
   };
 

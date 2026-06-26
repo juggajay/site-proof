@@ -53,6 +53,10 @@ model User {
   oauthProviderId    String?   @map("oauth_provider_id")
   // Token invalidation for logout-all-devices feature
   tokenInvalidatedAt DateTime? @map("token_invalidated_at")
+  // Account-level product-tour completion. Durable across devices and storage
+  // clears so an existing user is never re-shown the first-run onboarding tour
+  // (the per-device localStorage marker is only a cache on top of this).
+  onboardingCompletedAt DateTime? @map("onboarding_completed_at")
   createdAt          DateTime  @default(now()) @map("created_at")
   updatedAt          DateTime  @updatedAt @map("updated_at")
 

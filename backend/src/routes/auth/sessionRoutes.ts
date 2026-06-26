@@ -81,6 +81,43 @@ export function createSessionRouter({
     }),
   );
 
+  // POST /api/auth/onboarding/complete
+  // Records the account-level product-tour completion so an existing user is
+  // never re-shown the first-run tour on a new device or after clearing local
+  // storage. The frontend keeps a per-device localStorage marker as a cache on
+  // top of this. Idempotent: only the first completion timestamp is stored, so
+  // replaying the tour never moves it.
+  sessionRouter.post(
+    '/onboarding/complete',
+    asyncHandler(async (req, res) => {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        throw AppError.unauthorized();
+      }
+
+      const user = await verifyToken(authHeader.substring(7));
+      if (!user) {
+        throw AppError.unauthorized('Invalid token');
+      }
+
+      const existing = user.onboardingCompletedAt ?? null;
+      const onboardingCompletedAt = existing ?? new Date();
+      if (!existing) {
+        await prisma.user.update({
+          where: { id: user.userId },
+          data: { onboardingCompletedAt },
+        });
+      }
+
+      res.json({
+        onboardingCompletedAt:
+          onboardingCompletedAt instanceof Date
+            ? onboardingCompletedAt.toISOString()
+            : onboardingCompletedAt,
+      });
+    }),
+  );
+
   // POST /api/auth/logout
   sessionRouter.post(
     '/logout',
