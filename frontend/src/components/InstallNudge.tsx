@@ -13,6 +13,7 @@ import { useEffect, useState } from 'react';
 import { X, Share, PlusSquare, Plus } from 'lucide-react';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { usePwaInstall } from '@/hooks/usePwaInstall';
+import { useAuth } from '@/lib/auth';
 import {
   readInstallNudgeOpenCount,
   incrementInstallNudgeOpenCount,
@@ -36,6 +37,8 @@ function shouldShowNudge(): boolean {
 }
 
 export function InstallNudge() {
+  const { user } = useAuth();
+  const isAuthenticated = Boolean(user);
   const isMobile = useIsMobile();
   const { state: installState, canPromptInstall, promptInstall } = usePwaInstall();
   const [visible, setVisible] = useState(false);
@@ -47,13 +50,16 @@ export function InstallNudge() {
 
   // Decide whether to show the nudge after counting the open.
   useEffect(() => {
+    // Authenticated users only — never nudge logged-out visitors on the public
+    // landing/login pages (the nudge is mounted app-wide, outside the router).
+    if (!isAuthenticated) return;
     if (!isMobile) return;
     if (installState === 'installed' || installState === 'unsupported') return;
     // Show only for ios-manual or chromium (canPromptInstall may be false for
     // chromium until the event fires, so we show both as soon as state is set).
     if (installState !== 'ios-manual' && installState !== 'chromium') return;
     if (shouldShowNudge()) setVisible(true);
-  }, [isMobile, installState]);
+  }, [isAuthenticated, isMobile, installState]);
 
   const handleDismiss = () => {
     writeInstallNudgeDismissedAt();

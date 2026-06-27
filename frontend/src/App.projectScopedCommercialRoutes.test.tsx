@@ -152,3 +152,30 @@ describe('project-scoped commercial routes', () => {
     expect(screen.queryByRole('heading', { name: 'Access Denied' })).not.toBeInTheDocument();
   });
 });
+
+describe('root route (/)', () => {
+  it('shows the landing page to logged-out visitors (not the login wall)', async () => {
+    authState.user = null;
+
+    renderAppAt('/');
+
+    expect(await screen.findByText('Landing')).toBeInTheDocument();
+    expect(screen.queryByText('Dashboard')).not.toBeInTheDocument();
+  });
+
+  it('sends authenticated users straight to the dashboard', async () => {
+    authState.user = {
+      id: 'u1',
+      email: 'u1@example.com',
+      role: 'member',
+      roleInCompany: 'member',
+      dashboardRole: 'project_manager',
+      companyId: 'company-1',
+    };
+
+    renderAppAt('/');
+
+    expect(await screen.findByText('Dashboard')).toBeInTheDocument();
+    expect(screen.queryByText('Landing')).not.toBeInTheDocument();
+  });
+});
