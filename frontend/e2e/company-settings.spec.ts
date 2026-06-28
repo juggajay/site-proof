@@ -201,9 +201,9 @@ test.describe('Company settings seeded owner contract', () => {
     await expect(page.getByLabel('ABN')).toHaveAttribute('placeholder', '51 824 753 556');
     await expect(page.getByRole('heading', { name: 'Billing & Subscription' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Transfer Ownership' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Upgrade Plan' })).toHaveAttribute(
+    await expect(page.getByRole('link', { name: 'Contact Us to Add Capacity' })).toHaveAttribute(
       'href',
-      'mailto:configured-support@example.com?subject=Upgrade%20SiteProof%20plan',
+      'mailto:configured-support@example.com?subject=Add%20SiteProof%20capacity',
     );
     await expect(page.getByRole('link', { name: 'Manage Payment Method' })).toHaveAttribute(
       'href',

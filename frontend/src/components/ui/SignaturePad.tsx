@@ -43,6 +43,7 @@ export function SignaturePad({
   const containerRef = useRef<HTMLDivElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasSignature, setHasSignature] = useState(false);
+  const hasSignatureRef = useRef(false);
   const [ctx, setCtx] = useState<CanvasRenderingContext2D | null>(null);
   const [isFocused, setIsFocused] = useState(false);
 
@@ -131,6 +132,7 @@ export function SignaturePad({
       ctx.beginPath();
       ctx.moveTo(x, y);
       setIsDrawing(true);
+      hasSignatureRef.current = true;
       setHasSignature(true);
       setIsFocused(true);
     },
@@ -156,11 +158,11 @@ export function SignaturePad({
 
     // Export signature as data URL
     const canvas = canvasRef.current;
-    if (canvas && hasSignature) {
+    if (canvas && hasSignatureRef.current) {
       const dataUrl = canvas.toDataURL('image/png');
       onChange(dataUrl);
     }
-  }, [ctx, hasSignature, onChange]);
+  }, [ctx, onChange]);
 
   const clearSignature = useCallback(() => {
     if (!ctx || !canvasRef.current) return;
@@ -191,6 +193,7 @@ export function SignaturePad({
     ctx.strokeStyle = '#1a1a2e';
     ctx.lineWidth = 2.5;
 
+    hasSignatureRef.current = false;
     setHasSignature(false);
     onChange(null);
   }, [ctx, width, height, fullWidth, mobileHeight, onChange]);

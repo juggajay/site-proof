@@ -490,7 +490,8 @@ test.describe('Daily diary seeded UI contract', () => {
     });
 
     await expect.poll(() => api.getSubmitRequestCount()).toBe(1);
-    expect(api.getSubmitRequest()).toMatchObject({ acknowledgeWarnings: true });
+    expect(api.getSubmitRequest()).toBeNull();
+    expect(api.getSubmitRequestCount()).toBe(1);
     await expect(
       page
         .locator('span')

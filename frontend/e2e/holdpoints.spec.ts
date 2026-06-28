@@ -434,6 +434,17 @@ async function mockPublicHoldPointReleaseApi(
   let releaseRequest: unknown;
   let releaseCount = 0;
 
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      'cookie_consent',
+      JSON.stringify({
+        version: 'v1',
+        accepted: true,
+        timestamp: '2026-01-15T00:00:00.000Z',
+      }),
+    );
+  });
+
   await page.route('**/api/holdpoints/public/e2e-public-token', async (route) => {
     if ((options.loadStatus || 200) !== 200) {
       await route.fulfill({
@@ -504,15 +515,16 @@ async function mockPublicHoldPointReleaseApi(
 // on the SignaturePad canvas so onChange fires a non-empty data URL and the
 // "Release Hold Point" button becomes enabled.
 async function drawReleaseSignature(page: Page) {
-  const canvas = page.locator('canvas');
+  const canvas = page.locator('canvas').first();
   await expect(canvas).toBeVisible();
   const box = await canvas.boundingBox();
   if (!box) throw new Error('Signature canvas was not rendered');
-  await page.mouse.move(box.x + box.width * 0.25, box.y + box.height * 0.5);
-  await page.mouse.down();
-  await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.35);
-  await page.mouse.move(box.x + box.width * 0.75, box.y + box.height * 0.6);
-  await page.mouse.up();
+  await canvas.dragTo(canvas, {
+    sourcePosition: { x: box.width * 0.25, y: box.height * 0.5 },
+    targetPosition: { x: box.width * 0.75, y: box.height * 0.6 },
+  });
+  await expect(page.getByText('Signature captured')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Release Hold Point' })).toBeEnabled();
 }
 
 test.describe('Hold points seeded release contract', () => {
@@ -870,16 +882,6 @@ test.describe('Public hold point secure release page', () => {
   test('keeps the public secure release flow usable on mobile', async ({ page }) => {
     const api = await mockPublicHoldPointReleaseApi(page, { recipientName: null });
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.addInitScript(() => {
-      localStorage.setItem(
-        'cookie_consent',
-        JSON.stringify({
-          version: 'v1',
-          accepted: true,
-          timestamp: '2026-01-15T00:00:00.000Z',
-        }),
-      );
-    });
 
     await page.goto('/hp-release/e2e-public-token');
 
