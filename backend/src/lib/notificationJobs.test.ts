@@ -1,10 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { Prisma } from '@prisma/client';
 import * as email from './email.js';
 import { clearEmailQueue, getQueuedEmails } from './email.js';
 import { processDueNotificationDigests } from './notificationJobs.js';
 import { prisma } from './prisma.js';
 
-async function createDigestUser(dailyDigest = true, id?: string) {
+async function createDigestUser(
+  dailyDigest = true,
+  id?: string,
+  preferenceOverrides: Partial<Prisma.NotificationEmailPreferenceUncheckedCreateInput> = {},
+) {
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const user = await prisma.user.create({
     data: {
@@ -21,6 +26,7 @@ async function createDigestUser(dailyDigest = true, id?: string) {
       userId: user.id,
       enabled: true,
       dailyDigest,
+      ...preferenceOverrides,
     },
   });
 
@@ -92,6 +98,85 @@ describe('processDueNotificationDigests', () => {
       });
       expect(remainingItems).toHaveLength(1);
       expect(remainingItems[0]!.title).toBe('Later reply');
+    } finally {
+      await cleanupDigestUser(user.id);
+    }
+  });
+
+  it('filters queued items against current category opt-outs before sending', async () => {
+    const user = await createDigestUser(true, undefined, { ncrAssigned: false });
+    const now = new Date(Date.UTC(2026, 4, 10, 17, 30, 0, 0));
+    const dueAt = new Date(Date.UTC(2026, 4, 10, 16, 30, 0, 0));
+
+    await prisma.notificationDigestItem.createMany({
+      data: [
+        {
+          userId: user.id,
+          type: 'mentions',
+          title: 'Allowed mention',
+          message: 'This category is still enabled',
+          createdAt: dueAt,
+        },
+        {
+          userId: user.id,
+          type: 'ncrAssigned',
+          title: 'Suppressed NCR',
+          message: 'This category was disabled after queueing',
+          createdAt: dueAt,
+        },
+      ],
+    });
+
+    try {
+      const result = await processDueNotificationDigests({
+        now,
+        timeOfDay: '17:00',
+        userIds: [user.id],
+      });
+
+      expect(result.sent).toBe(1);
+      expect(result.results[0]!.itemCount).toBe(1);
+
+      const queuedEmails = getQueuedEmails();
+      expect(queuedEmails).toHaveLength(1);
+      expect(queuedEmails[0]!.text).toContain('Allowed mention');
+      expect(queuedEmails[0]!.text).not.toContain('Suppressed NCR');
+
+      await expect(
+        prisma.notificationDigestItem.count({ where: { userId: user.id } }),
+      ).resolves.toBe(0);
+    } finally {
+      await cleanupDigestUser(user.id);
+    }
+  });
+
+  it('deletes due digest items without emailing when every queued category is now disabled', async () => {
+    const user = await createDigestUser(true, undefined, { ncrAssigned: false });
+    const now = new Date(Date.UTC(2026, 4, 10, 17, 30, 0, 0));
+
+    await prisma.notificationDigestItem.create({
+      data: {
+        userId: user.id,
+        type: 'ncrAssigned',
+        title: 'Suppressed NCR',
+        message: 'This category was disabled after queueing',
+        createdAt: new Date(Date.UTC(2026, 4, 10, 15, 0, 0, 0)),
+      },
+    });
+
+    try {
+      const result = await processDueNotificationDigests({
+        now,
+        timeOfDay: '17:00',
+        userIds: [user.id],
+      });
+
+      expect(result.sent).toBe(0);
+      expect(result.skipped).toBe(1);
+      expect(getQueuedEmails()).toHaveLength(0);
+      await expect(
+        prisma.notificationDigestItem.count({ where: { userId: user.id } }),
+      ).resolves.toBe(0);
     } finally {
       await cleanupDigestUser(user.id);
     }

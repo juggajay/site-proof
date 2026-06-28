@@ -18,6 +18,7 @@ import {
   isStoredDocumentReference,
   normalizeStoredDocumentReference,
 } from '../../lib/uploadPaths.js';
+import { canReadDocument } from '../documents/access.js';
 import {
   buildItpCompletionAttachmentDeletedResponse,
   buildItpCompletionAttachmentResponse,
@@ -218,6 +219,10 @@ completionAttachmentRoutes.post(
         existingDocument.lotId !== itpInstance.lotId
       ) {
         throw AppError.badRequest('Document must belong to the same lot as the ITP completion');
+      }
+
+      if (!(await canReadDocument(req.user!, existingDocument))) {
+        throw AppError.forbidden('You do not have access to this ITP attachment document');
       }
 
       const updateData: {

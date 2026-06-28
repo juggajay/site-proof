@@ -33,6 +33,7 @@ export type HoldPointReleaseConfirmationRole = 'contractor' | 'superintendent';
 
 // A candidate project user (only the email and full name are read here).
 export type HoldPointReleaseConfirmationRecipient = {
+  userId?: string;
   user: {
     email: string;
     fullName: string | null;
@@ -82,6 +83,14 @@ export function selectHoldPointReleaseSuperintendents<T extends { role: string }
   projectUsers: T[],
 ): T[] {
   return projectUsers.filter((pu) => HP_RELEASE_SUPERINTENDENT_ROLES.includes(pu.role));
+}
+
+export function selectImmediateHoldPointReleaseConfirmationRecipients<
+  T extends { userId?: string },
+>(recipients: T[], immediateEmailUserIds: Set<string>): T[] {
+  return recipients.filter(
+    (recipient) => recipient.userId && immediateEmailUserIds.has(recipient.userId),
+  );
 }
 
 // Build the confirmation email payload for one recipient. The recipient-name

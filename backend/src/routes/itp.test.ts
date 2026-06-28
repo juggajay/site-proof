@@ -2509,6 +2509,111 @@ describe('ITP Completion Attachments', () => {
     expect(res.body.error.message).toContain('same project');
   });
 
+  it('should reject existing documents the user cannot normally read', async () => {
+    const suffix = Date.now();
+    const originalInstance = await prisma.iTPInstance.findUniqueOrThrow({
+      where: { id: instanceId },
+      select: { templateSnapshot: true },
+    });
+    const restrictedDocument = await prisma.document.create({
+      data: {
+        projectId,
+        lotId,
+        documentType: 'test_certificate',
+        category: 'test_results',
+        filename: `restricted-test-certificate-${suffix}.pdf`,
+        fileUrl: `/uploads/documents/restricted-test-certificate-${suffix}.pdf`,
+        fileSize: 1024,
+        mimeType: 'application/pdf',
+        uploadedById: userId,
+      },
+    });
+    const subcontractorCompany = await prisma.subcontractorCompany.create({
+      data: {
+        projectId,
+        companyName: `ITP Restricted Document Subcontractor ${suffix}`,
+        status: 'approved',
+        portalAccess: { itps: true, testResults: false },
+      },
+    });
+    const subcontractor = await registerTestUser(
+      'itp-restricted-document-subcontractor',
+      'ITP Restricted Document Subcontractor',
+    );
+
+    await prisma.user.update({
+      where: { id: subcontractor.userId },
+      data: { companyId: null, roleInCompany: 'subcontractor' },
+    });
+    await prisma.subcontractorUser.create({
+      data: {
+        userId: subcontractor.userId,
+        subcontractorCompanyId: subcontractorCompany.id,
+        role: 'user',
+      },
+    });
+    await prisma.lotSubcontractorAssignment.create({
+      data: {
+        projectId,
+        lotId,
+        subcontractorCompanyId: subcontractorCompany.id,
+        status: 'active',
+        canCompleteITP: true,
+      },
+    });
+
+    try {
+      await prisma.iTPInstance.update({
+        where: { id: instanceId },
+        data: {
+          templateSnapshot: JSON.stringify({
+            id: templateId,
+            name: 'Attachment Test ITP',
+            checklistItems: [
+              {
+                id: checklistItemId,
+                description: 'Upload evidence photo',
+                pointType: 'verification',
+                responsibleParty: 'contractor',
+                sequenceNumber: 1,
+              },
+            ],
+          }),
+        },
+      });
+
+      const res = await request(app)
+        .post(`/api/itp/completions/${completionId}/attachments`)
+        .set('Authorization', `Bearer ${subcontractor.token}`)
+        .send({ documentId: restrictedDocument.id });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.message).toContain('access to this ITP attachment document');
+      await expect(
+        prisma.iTPCompletionAttachment.count({
+          where: { completionId, documentId: restrictedDocument.id },
+        }),
+      ).resolves.toBe(0);
+    } finally {
+      await prisma.iTPCompletionAttachment.deleteMany({
+        where: { documentId: restrictedDocument.id },
+      });
+      await prisma.lotSubcontractorAssignment.deleteMany({
+        where: { subcontractorCompanyId: subcontractorCompany.id },
+      });
+      await prisma.subcontractorUser.deleteMany({ where: { userId: subcontractor.userId } });
+      await prisma.subcontractorCompany
+        .delete({ where: { id: subcontractorCompany.id } })
+        .catch(() => {});
+      await prisma.document.deleteMany({ where: { id: restrictedDocument.id } });
+      await prisma.iTPInstance.update({
+        where: { id: instanceId },
+        data: { templateSnapshot: originalInstance.templateSnapshot },
+      });
+      await cleanupTestUser(subcontractor.userId);
+    }
+  });
+
   it('should reject malformed pending verification project query parameters', async () => {
     const missingProjectRes = await request(app)
       .get('/api/itp/pending-verifications')
