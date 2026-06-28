@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiFetch } from '@/lib/api';
 import { CompanyApiKeysSection } from './CompanyApiKeysSection';
@@ -47,7 +47,7 @@ beforeEach(() => {
 });
 
 describe('CompanyApiKeysSection', () => {
-  it('lists keys and offers revoke only on the current user’s active key', async () => {
+  it('lists keys and offers revoke for active company inventory keys', async () => {
     apiFetchMock.mockResolvedValueOnce(inventory);
 
     render(<CompanyApiKeysSection currentUserId="me" />);
@@ -56,7 +56,7 @@ describe('CompanyApiKeysSection', () => {
     expect(screen.getByText('Their key')).toBeInTheDocument();
     expect(screen.getByText('Me User')).toBeInTheDocument();
     expect(screen.getByText('Them User')).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: /Revoke/ })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: /Revoke/ })).toHaveLength(2);
     expect(apiFetchMock).toHaveBeenCalledWith('/api/company/api-keys');
   });
 
@@ -99,17 +99,47 @@ describe('CompanyApiKeysSection', () => {
     expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument();
   });
 
-  it('revokes the current user’s key', async () => {
+  it('requires confirmation before revoking an active company key', async () => {
     apiFetchMock.mockResolvedValueOnce(inventory);
     apiFetchMock.mockResolvedValueOnce({ message: 'revoked' });
 
     render(<CompanyApiKeysSection currentUserId="me" />);
     await screen.findByText('My key');
 
-    fireEvent.click(screen.getByRole('button', { name: /Revoke/ }));
+    fireEvent.click(screen.getAllByRole('button', { name: /Revoke/ })[0]);
+    const dialog = screen.getByRole('alertdialog', { name: 'Revoke API key' });
+    expect(within(dialog).getByText(/Revoke My key/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/sp_own1234/)).toBeInTheDocument();
+    expect(apiFetchMock).not.toHaveBeenCalledWith('/api/company/api-keys/key-own', {
+      method: 'DELETE',
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Keep key' }));
+    expect(screen.queryByText(/Revoke My key/)).not.toBeInTheDocument();
+    expect(apiFetchMock).not.toHaveBeenCalledWith('/api/company/api-keys/key-own', {
+      method: 'DELETE',
+    });
+
+    fireEvent.click(screen.getAllByRole('button', { name: /Revoke/ })[0]);
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke API key' }));
 
     await waitFor(() => {
-      expect(apiFetchMock).toHaveBeenCalledWith('/api/api-keys/key-own', { method: 'DELETE' });
+      expect(apiFetchMock).toHaveBeenCalledWith('/api/company/api-keys/key-own', {
+        method: 'DELETE',
+      });
     });
+  });
+
+  it('renders explicit guidance for already revoked keys instead of an empty action cell', async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      apiKeys: [{ ...inventory.apiKeys[1], isActive: false }],
+      count: 1,
+    });
+
+    render(<CompanyApiKeysSection currentUserId="me" />);
+
+    await screen.findByText('Their key');
+    expect(screen.getByText('Already revoked')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Revoke/ })).not.toBeInTheDocument();
   });
 });

@@ -442,11 +442,11 @@ async function respondApiKeyRevoke(
   json: JsonResponder,
   state: CompanySettingsApiState,
 ): Promise<boolean> {
-  if (!url.pathname.startsWith('/api/api-keys/') || route.request().method() !== 'DELETE') {
+  if (!url.pathname.startsWith('/api/company/api-keys/') || route.request().method() !== 'DELETE') {
     return false;
   }
 
-  const keyId = decodeURIComponent(url.pathname.replace('/api/api-keys/', ''));
+  const keyId = decodeURIComponent(url.pathname.replace('/api/company/api-keys/', ''));
   state.apiKeyRevokeRequests.push(keyId);
   state.apiKeys = state.apiKeys.map((key) =>
     key.id === keyId ? { ...key, isActive: false } : key,
@@ -875,8 +875,17 @@ test.describe('Company settings seeded owner contract', () => {
     await expect(page.getByText('Power BI export')).toBeVisible();
 
     await page.getByRole('button', { name: 'Revoke' }).first().click();
+    await expect(page.getByRole('alertdialog', { name: 'Revoke API key' })).toContainText(
+      'Owner reporting key',
+    );
+    expect(api.getApiKeyRevokeRequests()).toHaveLength(0);
+    await page.getByRole('button', { name: 'Keep key' }).click();
+    expect(api.getApiKeyRevokeRequests()).toHaveLength(0);
+
+    await page.getByRole('button', { name: 'Revoke' }).first().click();
+    await page.getByRole('button', { name: 'Revoke API key' }).click();
     expect(api.getApiKeyRevokeRequests()).toContain('e2e-api-key-own');
-    await expect(page.getByText('Revoked')).toBeVisible();
+    await expect(page.getByText('Revoked', { exact: true })).toBeVisible();
 
     await expect(page.getByRole('heading', { name: 'Webhooks' })).toBeVisible();
     await expect(page.getByText('https://hooks.example.com/siteproof')).toBeVisible();
@@ -892,11 +901,30 @@ test.describe('Company settings seeded owner contract', () => {
     });
 
     await page.getByRole('button', { name: 'Regenerate secret' }).click();
+    await expect(
+      page.getByRole('alertdialog', { name: 'Regenerate signing secret' }),
+    ).toContainText('old signing secret stops working');
+    expect(api.getWebhookRegenerateRequests()).toHaveLength(0);
+    await page.getByRole('button', { name: 'Keep current secret' }).click();
+    expect(api.getWebhookRegenerateRequests()).toHaveLength(0);
+
+    await page.getByRole('button', { name: 'Regenerate secret' }).click();
+    await page.getByRole('button', { name: 'Regenerate signing secret' }).click();
     await expect(page.getByText('whsec_e2e_regenerated_once')).toBeVisible();
+    await expect(page.getByText('The old signing secret no longer works.')).toBeVisible();
     expect(api.getWebhookRegenerateRequests()).toContain('e2e-webhook-1');
     await page.getByRole('button', { name: 'Done' }).click();
 
     await page.getByRole('button', { name: 'Delete' }).click();
+    await expect(page.getByRole('alertdialog', { name: 'Delete webhook' })).toContainText(
+      'https://hooks.example.com/siteproof',
+    );
+    expect(api.getWebhookDeleteRequests()).toHaveLength(0);
+    await page.getByRole('button', { name: 'Keep webhook' }).click();
+    expect(api.getWebhookDeleteRequests()).toHaveLength(0);
+
+    await page.getByRole('button', { name: 'Delete' }).click();
+    await page.getByRole('button', { name: 'Delete webhook' }).click();
     await expect(page.getByText('https://hooks.example.com/siteproof')).toHaveCount(0);
     expect(api.getWebhookDeleteRequests()).toContain('e2e-webhook-1');
 
@@ -914,6 +942,19 @@ test.describe('Company settings seeded owner contract', () => {
     });
     await page.getByRole('button', { name: 'Done' }).click();
     await expect(page.getByText('https://hooks.example.com/siteproof-new')).toBeVisible();
+  });
+
+  test('keeps company settings integration actions reachable on mobile', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await mockCompanySettingsApi(page);
+
+    await page.goto('/company-settings');
+
+    await expect(page.getByRole('heading', { name: 'Team Members' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Invite Member' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Revoke' }).first()).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Regenerate secret' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Delete' })).toBeVisible();
   });
 
   test('prevents duplicate ownership transfer submissions', async ({ page }) => {

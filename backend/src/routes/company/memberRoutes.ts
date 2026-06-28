@@ -162,22 +162,22 @@ companyMemberRoutes.post(
       // Remove company association from user using raw SQL to avoid Prisma quirks
       // Set role_in_company to 'member' (default) since it's NOT NULL
       await tx.$executeRaw`UPDATE users SET company_id = NULL, role_in_company = 'member' WHERE id = ${user.userId}`;
-    });
 
-    await createAuditLog({
-      userId: user.userId,
-      entityType: 'company',
-      entityId: companyId,
-      action: AuditAction.COMPANY_MEMBER_LEFT,
-      changes: {
-        memberUserId: user.userId,
-        previousRole,
-        removedProjectMembershipCount,
-        // Field name avoids the audit redactor's /api[-_]?key/i pattern — a count
-        // of revoked keys is not sensitive and must stay readable in the log.
-        revokedKeyCount: revokedApiKeyCount,
-      },
-      req,
+      await writeAuditLogInTransaction(tx, {
+        userId: user.userId,
+        entityType: 'company',
+        entityId: companyId,
+        action: AuditAction.COMPANY_MEMBER_LEFT,
+        changes: {
+          memberUserId: user.userId,
+          previousRole,
+          removedProjectMembershipCount,
+          // Field name avoids the audit redactor's /api[-_]?key/i pattern — a count
+          // of revoked keys is not sensitive and must stay readable in the log.
+          revokedKeyCount: revokedApiKeyCount,
+        },
+        req,
+      });
     });
 
     res.json(buildCompanyLeftResponse(new Date()));
@@ -372,50 +372,61 @@ companyMemberRoutes.post(
         }
       }
 
-      const member = existingUser
-        ? await tx.user.update({
-            where: { id: existingUser.id },
-            data: {
-              companyId,
-              roleInCompany,
-              // Existing credentialed accounts keep their own emailVerified
-              // state; only accounts onboarding via the setup link are verified.
-              ...(shouldMarkInvitedMemberVerified(existingUser)
-                ? { emailVerified: true, emailVerifiedAt: new Date() }
-                : {}),
-              ...(fullName !== undefined ? { fullName } : {}),
-            },
-            select: {
-              id: true,
-              email: true,
-              fullName: true,
-              roleInCompany: true,
-              passwordHash: true,
-              oauthProvider: true,
-              createdAt: true,
-              updatedAt: true,
-            },
-          })
-        : await tx.user.create({
-            data: {
-              email,
-              fullName: fullName ?? null,
-              companyId,
-              roleInCompany,
-              emailVerified: true,
-              emailVerifiedAt: new Date(),
-            },
-            select: {
-              id: true,
-              email: true,
-              fullName: true,
-              roleInCompany: true,
-              passwordHash: true,
-              oauthProvider: true,
-              createdAt: true,
-              updatedAt: true,
-            },
-          });
+      const memberSelect = {
+        id: true,
+        email: true,
+        fullName: true,
+        roleInCompany: true,
+        passwordHash: true,
+        oauthProvider: true,
+        createdAt: true,
+        updatedAt: true,
+      } satisfies Parameters<typeof tx.user.findUnique>[0]['select'];
+
+      let member;
+      if (existingUser) {
+        const updated = await tx.user.updateMany({
+          where: {
+            id: existingUser.id,
+            OR: [{ companyId: null }, { companyId }],
+          },
+          data: {
+            companyId,
+            roleInCompany,
+            // Existing credentialed accounts keep their own emailVerified
+            // state; only accounts onboarding via the setup link are verified.
+            ...(shouldMarkInvitedMemberVerified(existingUser)
+              ? { emailVerified: true, emailVerifiedAt: new Date() }
+              : {}),
+            ...(fullName !== undefined ? { fullName } : {}),
+          },
+        });
+
+        if (updated.count !== 1) {
+          throw AppError.conflict('This user already belongs to another company');
+        }
+
+        member = await tx.user.findUnique({
+          where: { id: existingUser.id },
+          select: memberSelect,
+        });
+
+        if (!member) {
+          throw AppError.notFound('Company member');
+        }
+      } else {
+        member = await tx.user.create({
+          data: {
+            email,
+            fullName: fullName ?? null,
+            companyId,
+            roleInCompany,
+            emailVerified: true,
+            emailVerifiedAt: new Date(),
+          },
+          select: memberSelect,
+        });
+      }
 
       const setupRequired = !member.passwordHash && !member.oauthProvider;
       if (setupRequired) {

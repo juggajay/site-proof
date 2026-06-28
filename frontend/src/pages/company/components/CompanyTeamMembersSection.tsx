@@ -228,12 +228,17 @@ export function CompanyTeamMembersSection({ currentUserId }: CompanyTeamMembersS
             Add people to your company before assigning them to projects.
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button type="button" variant="outline" onClick={() => void loadMembers()}>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full sm:w-auto"
+            onClick={() => void loadMembers()}
+          >
             <RefreshCw className="h-4 w-4" />
             Refresh
           </Button>
-          <Button type="button" onClick={openInviteModal}>
+          <Button type="button" className="w-full sm:w-auto" onClick={openInviteModal}>
             <UserPlus className="h-4 w-4" />
             Invite Member
           </Button>
@@ -270,7 +275,7 @@ export function CompanyTeamMembersSection({ currentUserId }: CompanyTeamMembersS
         </div>
       ) : (
         <div className="overflow-hidden rounded-lg border">
-          <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(120px,0.7fr)_minmax(96px,0.5fr)_minmax(96px,0.4fr)] bg-muted/50 px-4 py-2 text-xs font-medium uppercase text-muted-foreground">
+          <div className="hidden grid-cols-[minmax(0,1.4fr)_minmax(120px,0.7fr)_minmax(96px,0.5fr)_minmax(112px,0.45fr)] bg-muted/50 px-4 py-2 text-xs font-medium uppercase text-muted-foreground md:grid">
             <span>Member</span>
             <span>Role</span>
             <span>Status</span>
@@ -286,7 +291,7 @@ export function CompanyTeamMembersSection({ currentUserId }: CompanyTeamMembersS
               return (
                 <div
                   key={member.id}
-                  className="grid grid-cols-[minmax(0,1.4fr)_minmax(120px,0.7fr)_minmax(96px,0.5fr)_minmax(96px,0.4fr)] items-center gap-3 px-4 py-3 text-sm"
+                  className="grid gap-3 px-4 py-3 text-sm md:grid-cols-[minmax(0,1.4fr)_minmax(120px,0.7fr)_minmax(96px,0.5fr)_minmax(112px,0.45fr)] md:items-center"
                 >
                   <div className="min-w-0">
                     <div className="truncate font-medium">
@@ -300,6 +305,9 @@ export function CompanyTeamMembersSection({ currentUserId }: CompanyTeamMembersS
                     <div className="truncate text-xs text-muted-foreground">{member.email}</div>
                   </div>
                   <div>
+                    <span className="mb-1 block text-xs font-medium uppercase text-muted-foreground md:hidden">
+                      Role
+                    </span>
                     {canChangeRole ? (
                       <select
                         aria-label={`Change role for ${member.fullName || member.email}`}
@@ -319,6 +327,9 @@ export function CompanyTeamMembersSection({ currentUserId }: CompanyTeamMembersS
                     )}
                   </div>
                   <div>
+                    <span className="mb-1 block text-xs font-medium uppercase text-muted-foreground md:hidden">
+                      Status
+                    </span>
                     <span
                       className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${
                         status === 'active'
@@ -329,12 +340,13 @@ export function CompanyTeamMembersSection({ currentUserId }: CompanyTeamMembersS
                       {status === 'active' ? 'Active' : 'Pending'}
                     </span>
                   </div>
-                  <div className="flex justify-end">
+                  <div className="flex md:justify-end">
                     {canRemove ? (
                       <Button
                         type="button"
                         variant={status === 'pending' ? 'outline' : 'destructive'}
                         size="sm"
+                        className="w-full sm:w-auto"
                         onClick={() => openRemoveModal(member)}
                         title={status === 'pending' ? 'Cancel invitation' : 'Remove member'}
                       >

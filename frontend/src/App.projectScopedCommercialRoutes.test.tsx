@@ -151,4 +151,20 @@ describe('project-scoped commercial routes', () => {
     expect(await screen.findByText(expectedText)).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Access Denied' })).not.toBeInTheDocument();
   });
+
+  it('allows project-scoped quality managers to open the audit log', async () => {
+    authState.user = {
+      id: 'project-qm-1',
+      email: 'project-qm@example.com',
+      role: 'member',
+      roleInCompany: 'member',
+      dashboardRole: 'quality_manager',
+      companyId: 'company-1',
+    };
+
+    renderAppAt('/audit-log');
+
+    expect(await screen.findByText('Audit log')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Access Denied' })).not.toBeInTheDocument();
+  });
 });

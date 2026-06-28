@@ -50,4 +50,12 @@ describe('AuditLogTable', () => {
     expect(onViewDetails).toHaveBeenCalledTimes(1);
     expect(onViewDetails).toHaveBeenCalledWith(baseLog);
   });
+
+  it('wraps the table in horizontal overflow so details remain reachable on narrow screens', () => {
+    render(<AuditLogTable logs={[baseLog]} onViewDetails={vi.fn()} />);
+
+    const table = screen.getByRole('table');
+    expect(table.parentElement).toHaveClass('overflow-x-auto');
+    expect(table.className).toContain('min-w-');
+  });
 });

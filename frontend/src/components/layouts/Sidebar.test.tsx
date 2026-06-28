@@ -139,4 +139,22 @@ describe('Sidebar project navigation', () => {
     expect(screen.getByRole('link', { name: /Subcontractors/i })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Project Settings/i })).not.toBeInTheDocument();
   });
+
+  it('shows audit log but not company settings for project-scoped quality managers', () => {
+    useAuthMock.mockReturnValue({
+      user: {
+        id: 'project-qm-1',
+        email: 'project-qm@example.com',
+        role: 'member',
+        roleInCompany: 'member',
+        dashboardRole: 'quality_manager',
+        companyId: 'company-1',
+      },
+    } as unknown as ReturnType<typeof useAuth>);
+
+    renderProjectSidebar();
+
+    expect(screen.getByRole('link', { name: /Audit Log/i })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Company Settings/i })).not.toBeInTheDocument();
+  });
 });
