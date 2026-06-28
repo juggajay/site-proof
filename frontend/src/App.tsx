@@ -3,6 +3,7 @@ import { requestPersistentStorage } from '@/lib/offline/storagePersistence';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from '@/components/ui/toaster';
 import { AuthProvider } from '@/lib/auth';
+import { ProjectProtectedRoute } from '@/components/auth/ProjectProtectedRoute';
 import { RoleProtectedRoute } from '@/components/auth/RoleProtectedRoute';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { DeferredOfflineIndicator } from '@/components/DeferredOfflineIndicator';
@@ -221,9 +222,9 @@ function App() {
               <Route
                 path="/projects/:projectId/foreman"
                 element={
-                  <RoleProtectedRoute allowedRoles={INTERNAL_ROLES} allowProjectScopedRole>
+                  <ProjectProtectedRoute allowedRoles={INTERNAL_ROLES}>
                     <ForemanMobileShell />
-                  </RoleProtectedRoute>
+                  </ProjectProtectedRoute>
                 }
               >
                 <Route index element={<Navigate to="today" replace />} />
@@ -234,25 +235,25 @@ function App() {
               <Route
                 path="/projects/:projectId/settings"
                 element={
-                  <RoleProtectedRoute allowedRoles={ADMIN_ROLES} allowProjectScopedRole>
+                  <ProjectProtectedRoute allowedRoles={ADMIN_ROLES}>
                     <ProjectSettingsPage />
-                  </RoleProtectedRoute>
+                  </ProjectProtectedRoute>
                 }
               />
               <Route
                 path="/projects/:projectId/users"
                 element={
-                  <RoleProtectedRoute allowedRoles={ADMIN_ROLES} allowProjectScopedRole>
+                  <ProjectProtectedRoute allowedRoles={ADMIN_ROLES}>
                     <ProjectUsersPage />
-                  </RoleProtectedRoute>
+                  </ProjectProtectedRoute>
                 }
               />
               <Route
                 path="/projects/:projectId/areas"
                 element={
-                  <RoleProtectedRoute allowedRoles={ADMIN_ROLES} allowProjectScopedRole>
+                  <ProjectProtectedRoute allowedRoles={ADMIN_ROLES}>
                     <ProjectAreasPage />
-                  </RoleProtectedRoute>
+                  </ProjectProtectedRoute>
                 }
               />
 
@@ -260,25 +261,25 @@ function App() {
               <Route
                 path="/projects/:projectId/lots"
                 element={
-                  <RoleProtectedRoute allowedRoles={PROJECT_WORKSPACE_ROLES} allowProjectScopedRole>
+                  <ProjectProtectedRoute allowedRoles={PROJECT_WORKSPACE_ROLES}>
                     <LotsPage />
-                  </RoleProtectedRoute>
+                  </ProjectProtectedRoute>
                 }
               />
               <Route
                 path="/projects/:projectId/lots/:lotId"
                 element={
-                  <RoleProtectedRoute allowedRoles={PROJECT_WORKSPACE_ROLES} allowProjectScopedRole>
+                  <ProjectProtectedRoute allowedRoles={PROJECT_WORKSPACE_ROLES}>
                     <LotDetailPage />
-                  </RoleProtectedRoute>
+                  </ProjectProtectedRoute>
                 }
               />
               <Route
                 path="/projects/:projectId/lots/:lotId/edit"
                 element={
-                  <RoleProtectedRoute allowedRoles={LOT_EDITOR_ROLES} allowProjectScopedRole>
+                  <ProjectProtectedRoute allowedRoles={LOT_EDITOR_ROLES}>
                     <LotEditPage />
-                  </RoleProtectedRoute>
+                  </ProjectProtectedRoute>
                 }
               />
 
@@ -286,9 +287,9 @@ function App() {
               <Route
                 path="/projects/:projectId/itp"
                 element={
-                  <RoleProtectedRoute allowedRoles={INTERNAL_ROLES} allowProjectScopedRole>
+                  <ProjectProtectedRoute allowedRoles={INTERNAL_ROLES}>
                     <ITPPage />
-                  </RoleProtectedRoute>
+                  </ProjectProtectedRoute>
                 }
               />
 
@@ -296,9 +297,9 @@ function App() {
               <Route
                 path="/projects/:projectId/hold-points"
                 element={
-                  <RoleProtectedRoute allowedRoles={INTERNAL_ROLES} allowProjectScopedRole>
+                  <ProjectProtectedRoute allowedRoles={INTERNAL_ROLES}>
                     <HoldPointsPage />
-                  </RoleProtectedRoute>
+                  </ProjectProtectedRoute>
                 }
               />
 
@@ -306,9 +307,9 @@ function App() {
               <Route
                 path="/projects/:projectId/tests"
                 element={
-                  <RoleProtectedRoute allowedRoles={INTERNAL_ROLES} allowProjectScopedRole>
+                  <ProjectProtectedRoute allowedRoles={INTERNAL_ROLES}>
                     <TestResultsPage />
-                  </RoleProtectedRoute>
+                  </ProjectProtectedRoute>
                 }
               />
 
@@ -316,9 +317,9 @@ function App() {
               <Route
                 path="/projects/:projectId/ncr"
                 element={
-                  <RoleProtectedRoute allowedRoles={INTERNAL_ROLES} allowProjectScopedRole>
+                  <ProjectProtectedRoute allowedRoles={INTERNAL_ROLES}>
                     <NCRPage />
-                  </RoleProtectedRoute>
+                  </ProjectProtectedRoute>
                 }
               />
 
@@ -326,17 +327,17 @@ function App() {
               <Route
                 path="/projects/:projectId/diary"
                 element={
-                  <RoleProtectedRoute allowedRoles={INTERNAL_ROLES} allowProjectScopedRole>
+                  <ProjectProtectedRoute allowedRoles={INTERNAL_ROLES}>
                     <DailyDiaryPage />
-                  </RoleProtectedRoute>
+                  </ProjectProtectedRoute>
                 }
               />
               <Route
                 path="/projects/:projectId/delays"
                 element={
-                  <RoleProtectedRoute allowedRoles={INTERNAL_ROLES} allowProjectScopedRole>
+                  <ProjectProtectedRoute allowedRoles={INTERNAL_ROLES}>
                     <DelayRegisterPage />
-                  </RoleProtectedRoute>
+                  </ProjectProtectedRoute>
                 }
               />
 
@@ -344,9 +345,9 @@ function App() {
               <Route
                 path="/projects/:projectId/dockets"
                 element={
-                  <RoleProtectedRoute allowedRoles={INTERNAL_ROLES} allowProjectScopedRole>
+                  <ProjectProtectedRoute allowedRoles={INTERNAL_ROLES}>
                     <DocketApprovalsPage />
-                  </RoleProtectedRoute>
+                  </ProjectProtectedRoute>
                 }
               />
 
@@ -354,9 +355,9 @@ function App() {
               <Route
                 path="/projects/:projectId/claims"
                 element={
-                  <RoleProtectedRoute allowedRoles={COMMERCIAL_ROLES} allowProjectScopedRole>
+                  <ProjectProtectedRoute allowedRoles={COMMERCIAL_ROLES}>
                     <ClaimsPage />
-                  </RoleProtectedRoute>
+                  </ProjectProtectedRoute>
                 }
               />
 
@@ -364,9 +365,9 @@ function App() {
               <Route
                 path="/projects/:projectId/costs"
                 element={
-                  <RoleProtectedRoute allowedRoles={COMMERCIAL_ROLES} allowProjectScopedRole>
+                  <ProjectProtectedRoute allowedRoles={COMMERCIAL_ROLES}>
                     <CostsPage />
-                  </RoleProtectedRoute>
+                  </ProjectProtectedRoute>
                 }
               />
 
@@ -374,9 +375,9 @@ function App() {
               <Route
                 path="/projects/:projectId/documents"
                 element={
-                  <RoleProtectedRoute allowedRoles={INTERNAL_ROLES} allowProjectScopedRole>
+                  <ProjectProtectedRoute allowedRoles={INTERNAL_ROLES}>
                     <DocumentsPage />
-                  </RoleProtectedRoute>
+                  </ProjectProtectedRoute>
                 }
               />
 
@@ -384,9 +385,9 @@ function App() {
               <Route
                 path="/projects/:projectId/drawings"
                 element={
-                  <RoleProtectedRoute allowedRoles={REPORT_ROLES} allowProjectScopedRole>
+                  <ProjectProtectedRoute allowedRoles={REPORT_ROLES}>
                     <DrawingsPage />
-                  </RoleProtectedRoute>
+                  </ProjectProtectedRoute>
                 }
               />
 
@@ -394,9 +395,9 @@ function App() {
               <Route
                 path="/projects/:projectId/subcontractors"
                 element={
-                  <RoleProtectedRoute allowedRoles={MANAGEMENT_ROLES} allowProjectScopedRole>
+                  <ProjectProtectedRoute allowedRoles={MANAGEMENT_ROLES}>
                     <SubcontractorsPage />
-                  </RoleProtectedRoute>
+                  </ProjectProtectedRoute>
                 }
               />
 
@@ -404,9 +405,9 @@ function App() {
               <Route
                 path="/projects/:projectId/reports"
                 element={
-                  <RoleProtectedRoute allowedRoles={REPORT_ROLES} allowProjectScopedRole>
+                  <ProjectProtectedRoute allowedRoles={REPORT_ROLES}>
                     <ReportsPage />
-                  </RoleProtectedRoute>
+                  </ProjectProtectedRoute>
                 }
               />
 

@@ -1389,6 +1389,171 @@ describe('Projects API', () => {
     });
   });
 
+  describe('GET /api/projects/:id/access', () => {
+    it('returns the caller role for the specific project', async () => {
+      const adminRes = await request(app)
+        .get(`/api/projects/${projectId}/access`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(adminRes.status).toBe(200);
+      expect(adminRes.body.access).toEqual({
+        hasProjectAccess: true,
+        role: 'admin',
+        isProjectAdmin: true,
+      });
+    });
+
+    it('does not let a role on one project unlock another project', async () => {
+      const suffix = Date.now();
+      const otherProject = await prisma.project.create({
+        data: {
+          companyId,
+          name: `Project Access Cross Role ${suffix}`,
+          projectNumber: `ACCESS-CROSS-${suffix}`,
+          status: 'active',
+          state: 'NSW',
+          specificationSet: 'TfNSW',
+        },
+      });
+      const scopedUser = await registerTestUser(app, {
+        emailPrefix: 'projects-access-cross-role',
+        fullName: 'Projects Access Cross Role User',
+        companyId,
+        roleInCompany: 'member',
+      });
+
+      await prisma.projectUser.createMany({
+        data: [
+          {
+            projectId,
+            userId: scopedUser.userId,
+            role: 'viewer',
+            status: 'active',
+            acceptedAt: new Date(),
+          },
+          {
+            projectId: otherProject.id,
+            userId: scopedUser.userId,
+            role: 'project_manager',
+            status: 'active',
+            acceptedAt: new Date(),
+          },
+        ],
+      });
+
+      try {
+        const viewerProjectRes = await request(app)
+          .get(`/api/projects/${projectId}/access`)
+          .set('Authorization', `Bearer ${scopedUser.token}`);
+
+        expect(viewerProjectRes.status).toBe(200);
+        expect(viewerProjectRes.body.access.role).toBe('viewer');
+        expect(viewerProjectRes.body.access.isProjectAdmin).toBe(false);
+
+        const managerProjectRes = await request(app)
+          .get(`/api/projects/${otherProject.id}/access`)
+          .set('Authorization', `Bearer ${scopedUser.token}`);
+
+        expect(managerProjectRes.status).toBe(200);
+        expect(managerProjectRes.body.access.role).toBe('project_manager');
+        expect(managerProjectRes.body.access.isProjectAdmin).toBe(true);
+      } finally {
+        await prisma.projectUser.deleteMany({ where: { userId: scopedUser.userId } });
+        await prisma.emailVerificationToken.deleteMany({ where: { userId: scopedUser.userId } });
+        await prisma.user.delete({ where: { id: scopedUser.userId } }).catch(() => {});
+        await prisma.project.delete({ where: { id: otherProject.id } }).catch(() => {});
+      }
+    });
+
+    it('rejects same-company members without active access to the project', async () => {
+      const member = await registerTestUser(app, {
+        emailPrefix: 'projects-access-denied-member',
+        fullName: 'Projects Access Denied Member',
+        companyId,
+        roleInCompany: 'member',
+      });
+
+      try {
+        const res = await request(app)
+          .get(`/api/projects/${projectId}/access`)
+          .set('Authorization', `Bearer ${member.token}`);
+
+        expect(res.status).toBe(403);
+      } finally {
+        await prisma.emailVerificationToken.deleteMany({ where: { userId: member.userId } });
+        await prisma.user.delete({ where: { id: member.userId } }).catch(() => {});
+      }
+    });
+
+    it('rejects pending project memberships', async () => {
+      const pendingUser = await registerTestUser(app, {
+        emailPrefix: 'projects-access-pending-member',
+        fullName: 'Projects Access Pending Member',
+        companyId,
+        roleInCompany: 'member',
+      });
+
+      await prisma.projectUser.create({
+        data: {
+          projectId,
+          userId: pendingUser.userId,
+          role: 'project_manager',
+          status: 'pending',
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .get(`/api/projects/${projectId}/access`)
+          .set('Authorization', `Bearer ${pendingUser.token}`);
+
+        expect(res.status).toBe(403);
+      } finally {
+        await prisma.projectUser.deleteMany({ where: { userId: pendingUser.userId } });
+        await prisma.emailVerificationToken.deleteMany({ where: { userId: pendingUser.userId } });
+        await prisma.user.delete({ where: { id: pendingUser.userId } }).catch(() => {});
+      }
+    });
+
+    it('does not let subcontractor identities borrow internal project memberships', async () => {
+      const subcontractor = await registerTestUser(app, {
+        emailPrefix: 'projects-access-subcontractor',
+        fullName: 'Projects Access Subcontractor',
+        companyId,
+        roleInCompany: 'subcontractor',
+      });
+
+      await prisma.projectUser.create({
+        data: {
+          projectId,
+          userId: subcontractor.userId,
+          role: 'project_manager',
+          status: 'active',
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .get(`/api/projects/${projectId}/access`)
+          .set('Authorization', `Bearer ${subcontractor.token}`);
+
+        expect(res.status).toBe(403);
+      } finally {
+        await prisma.projectUser.deleteMany({ where: { userId: subcontractor.userId } });
+        await prisma.emailVerificationToken.deleteMany({ where: { userId: subcontractor.userId } });
+        await prisma.user.delete({ where: { id: subcontractor.userId } }).catch(() => {});
+      }
+    });
+
+    it('returns 404 when the project does not exist', async () => {
+      const res = await request(app)
+        .get('/api/projects/non-existent-id/access')
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(404);
+    });
+  });
+
   describe('GET /api/projects/:id/costs', () => {
     it('allows commercial roles and rejects active project viewers', async () => {
       const adminRes = await request(app)

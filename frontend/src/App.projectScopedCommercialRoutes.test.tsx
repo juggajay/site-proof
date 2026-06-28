@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { MemoryRouter, Outlet } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
 
 const authState = vi.hoisted(() => ({
@@ -15,10 +16,28 @@ const authState = vi.hoisted(() => ({
   loading: false,
 }));
 
+const projectAccessState = vi.hoisted(() => ({
+  role: 'project_manager',
+}));
+
 vi.mock('@/lib/auth', () => ({
   AuthProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
   useAuth: () => ({ user: authState.user, loading: authState.loading }),
 }));
+
+vi.mock('@/lib/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/api')>();
+  return {
+    ...actual,
+    apiFetch: vi.fn(async () => ({
+      access: {
+        hasProjectAccess: true,
+        role: projectAccessState.role,
+        isProjectAdmin: projectAccessState.role === 'project_manager',
+      },
+    })),
+  };
+});
 
 vi.mock('@/lib/offline/storagePersistence', () => ({
   requestPersistentStorage: vi.fn(),
@@ -120,10 +139,18 @@ vi.mock('./appLazyPages', () => ({
 import App from './App';
 
 function renderAppAt(path: string) {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+    },
+  });
+
   return render(
-    <MemoryRouter initialEntries={[path]}>
-      <App />
-    </MemoryRouter>,
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={[path]}>
+        <App />
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 
@@ -137,6 +164,7 @@ beforeEach(() => {
     dashboardRole: 'project_manager',
     companyId: 'company-1',
   };
+  projectAccessState.role = 'project_manager';
 });
 
 describe('project-scoped commercial routes', () => {
@@ -152,6 +180,15 @@ describe('project-scoped commercial routes', () => {
     expect(screen.queryByRole('heading', { name: 'Access Denied' })).not.toBeInTheDocument();
   });
 
+  it('blocks commercial project routes when this project only resolves to viewer access', async () => {
+    projectAccessState.role = 'viewer';
+
+    renderAppAt('/projects/project-1/claims');
+
+    expect(await screen.findByRole('heading', { name: 'Access Denied' })).toBeInTheDocument();
+    expect(screen.queryByText('Claims route reached')).not.toBeInTheDocument();
+  });
+
   it.each(['quality_manager', 'site_manager'])(
     'blocks project-scoped %s users from opening progress claims',
     async (dashboardRole) => {
@@ -163,6 +200,7 @@ describe('project-scoped commercial routes', () => {
         dashboardRole,
         companyId: 'company-1',
       };
+      projectAccessState.role = dashboardRole;
 
       renderAppAt('/projects/project-1/claims');
 

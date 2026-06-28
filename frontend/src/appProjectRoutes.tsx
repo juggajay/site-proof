@@ -1,6 +1,6 @@
 import { Navigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { RoleProtectedRoute } from '@/components/auth/RoleProtectedRoute';
+import { ProjectProtectedRoute } from '@/components/auth/ProjectProtectedRoute';
 import { AccessDeniedState } from '@/components/AccessDeniedState';
 import { PageSkeleton } from '@/components/ui/Skeleton';
 import { apiFetch } from '@/lib/api';
@@ -62,8 +62,8 @@ export function ProjectDetailRoute() {
   }
 
   return (
-    <RoleProtectedRoute allowedRoles={PROJECT_WORKSPACE_ROLES} allowProjectScopedRole>
+    <ProjectProtectedRoute allowedRoles={PROJECT_WORKSPACE_ROLES}>
       <ProjectDetailPage />
-    </RoleProtectedRoute>
+    </ProjectProtectedRoute>
   );
 }
