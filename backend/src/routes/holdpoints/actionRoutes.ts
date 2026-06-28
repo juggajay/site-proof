@@ -25,6 +25,7 @@ import {
 } from './releaseNotifications.js';
 import {
   buildHoldPointReleaseConfirmationEmail,
+  selectImmediateHoldPointReleaseConfirmationRecipients,
   selectHoldPointReleaseContractors,
   selectHoldPointReleaseSuperintendents,
 } from './releaseConfirmationEmails.js';
@@ -484,9 +485,17 @@ holdPointActionRouter.post(
         releaseMethod,
         releaseNotes,
       });
+      const immediateHoldPointReleaseEmailUserIds = new Set<string>();
       for (const pu of projectUsers) {
         try {
-          await sendNotificationIfEnabled(pu.userId, 'holdPointRelease', releaseEmailNotification);
+          const delivery = await sendNotificationIfEnabled(
+            pu.userId,
+            'holdPointRelease',
+            releaseEmailNotification,
+          );
+          if (delivery.sent) {
+            immediateHoldPointReleaseEmailUserIds.add(pu.userId);
+          }
         } catch (emailError) {
           logError(`[HP Release] Failed to send email to user ${pu.userId}:`, emailError);
           // Continue with other notifications even if one fails
@@ -527,7 +536,10 @@ holdPointActionRouter.post(
         };
 
         // Send to contractors (site_engineer, foreman roles)
-        const contractors = selectHoldPointReleaseContractors(projectUsers);
+        const contractors = selectImmediateHoldPointReleaseConfirmationRecipients(
+          selectHoldPointReleaseContractors(projectUsers),
+          immediateHoldPointReleaseEmailUserIds,
+        );
         for (const contractor of contractors) {
           await sendHPReleaseConfirmationEmail(
             buildHoldPointReleaseConfirmationEmail(contractor, 'contractor', confirmationContext),
@@ -535,7 +547,10 @@ holdPointActionRouter.post(
         }
 
         // Send to superintendents
-        const superintendents = selectHoldPointReleaseSuperintendents(projectUsers);
+        const superintendents = selectImmediateHoldPointReleaseConfirmationRecipients(
+          selectHoldPointReleaseSuperintendents(projectUsers),
+          immediateHoldPointReleaseEmailUserIds,
+        );
         for (const superintendent of superintendents) {
           await sendHPReleaseConfirmationEmail(
             buildHoldPointReleaseConfirmationEmail(

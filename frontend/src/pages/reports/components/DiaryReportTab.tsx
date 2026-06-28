@@ -4,6 +4,7 @@ import { useTimezone } from '@/lib/timezone';
 import type { DiaryReport } from '../types';
 import { DIARY_SECTIONS, applyDatePreset } from '../types';
 import { formatReportDateTime } from '../reportFormatting';
+import { buildReportPaginationCaption } from '../reportPagination';
 
 export interface DiaryReportTabProps {
   report: DiaryReport | null;
@@ -29,6 +30,13 @@ export const DiaryReportTab = React.memo(function DiaryReportTab({
   const [diaryEndDate, setDiaryEndDate] = useState<string>('');
   const generatedAt = report
     ? formatReportDateTime(report.generatedAt, dateFormat, timezone)
+    : null;
+  const paginationCaption = report
+    ? buildReportPaginationCaption(
+        report.diaries.length,
+        report.pagination?.total ?? report.totalDiaries,
+        'diary entries',
+      )
     : null;
 
   const toggleDiarySection = useCallback((sectionId: string) => {
@@ -300,6 +308,9 @@ export const DiaryReportTab = React.memo(function DiaryReportTab({
               <h3 className="text-lg font-medium">Diary Entries</h3>
               <span className="text-sm text-muted-foreground">Generated: {generatedAt}</span>
             </div>
+            {paginationCaption && (
+              <p className="text-sm text-muted-foreground mb-3">{paginationCaption}</p>
+            )}
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-border">
                 <thead className="bg-muted">

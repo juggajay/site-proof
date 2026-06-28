@@ -115,6 +115,7 @@ export interface TestReport {
     pending: number;
     passRate: string;
   };
+  pagination?: ReportPagination;
 }
 
 export interface DiaryReport {
@@ -190,6 +191,7 @@ export interface DiaryReport {
       byType: Record<string, { count: number; hours: number }>;
     };
   };
+  pagination?: ReportPagination;
 }
 
 export interface ClaimsReport {

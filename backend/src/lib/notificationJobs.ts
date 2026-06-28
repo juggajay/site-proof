@@ -11,6 +11,17 @@ const DEFAULT_DIGEST_ITEM_LIMIT = 200;
 const DEFAULT_DIGEST_RETENTION_DAYS = 30;
 const NOTIFICATION_DIGEST_WORKER_LOCK_ID = 731_452_020;
 
+const DIGEST_ITEM_PREFERENCE_KEYS = {
+  mentions: 'mentions',
+  ncrAssigned: 'ncrAssigned',
+  ncrStatusChange: 'ncrStatusChange',
+  holdPointReminder: 'holdPointReminder',
+  holdPointRelease: 'holdPointRelease',
+  commentReply: 'commentReply',
+  scheduledReports: 'scheduledReports',
+  diaryReminder: 'diaryReminder',
+} as const;
+
 type NotificationDigestItemRecord = {
   id: string;
   type: string;
@@ -20,6 +31,14 @@ type NotificationDigestItemRecord = {
   linkUrl: string | null;
   createdAt: Date;
 };
+
+type DigestItemPreferenceKey =
+  (typeof DIGEST_ITEM_PREFERENCE_KEYS)[keyof typeof DIGEST_ITEM_PREFERENCE_KEYS];
+
+type NotificationDigestPreferences = {
+  enabled: boolean;
+  dailyDigest: boolean;
+} & Partial<Record<DigestItemPreferenceKey, boolean>>;
 
 export type NotificationDigestDeliveryStatus = 'sent' | 'failed' | 'skipped';
 
@@ -99,6 +118,18 @@ function toDigestItem(record: NotificationDigestItemRecord): DigestItem {
   };
 }
 
+function getDigestItemPreferenceKey(type: string): DigestItemPreferenceKey | null {
+  return DIGEST_ITEM_PREFERENCE_KEYS[type as keyof typeof DIGEST_ITEM_PREFERENCE_KEYS] ?? null;
+}
+
+function isDigestItemEnabledForPreferences(
+  item: NotificationDigestItemRecord,
+  preferences: NotificationDigestPreferences,
+): boolean {
+  const preferenceKey = getDigestItemPreferenceKey(item.type);
+  return preferenceKey ? preferences[preferenceKey] !== false : true;
+}
+
 async function cleanupExpiredDigestItems(now: Date, retentionDays: number): Promise<number> {
   const cutoff = new Date(now.getTime() - retentionDays * 24 * 60 * 60 * 1000);
   const deleted = await prisma.notificationDigestItem.deleteMany({
@@ -166,11 +197,33 @@ async function processUserDigest(
     };
   }
 
-  const emailResult = await sendDailyDigestEmail(user.email, itemRecords.map(toDigestItem));
+  const enabledItemRecords = itemRecords.filter((item) =>
+    isDigestItemEnabledForPreferences(item, preferences),
+  );
+  const disabledItemIds = itemRecords
+    .filter((item) => !isDigestItemEnabledForPreferences(item, preferences))
+    .map((item) => item.id);
+
+  if (disabledItemIds.length > 0) {
+    await prisma.notificationDigestItem.deleteMany({
+      where: { id: { in: disabledItemIds } },
+    });
+  }
+
+  if (enabledItemRecords.length === 0) {
+    return {
+      userId,
+      itemCount: 0,
+      status: 'skipped',
+      error: 'No digest items enabled by current preferences',
+    };
+  }
+
+  const emailResult = await sendDailyDigestEmail(user.email, enabledItemRecords.map(toDigestItem));
   if (!emailResult.success) {
     return {
       userId,
-      itemCount: itemRecords.length,
+      itemCount: enabledItemRecords.length,
       status: 'failed',
       error: emailResult.error || 'Digest email failed',
     };
@@ -178,13 +231,13 @@ async function processUserDigest(
 
   await prisma.notificationDigestItem.deleteMany({
     where: {
-      id: { in: itemRecords.map((item) => item.id) },
+      id: { in: enabledItemRecords.map((item) => item.id) },
     },
   });
 
   return {
     userId,
-    itemCount: itemRecords.length,
+    itemCount: enabledItemRecords.length,
     status: 'sent',
   };
 }

@@ -4,6 +4,7 @@ import { useTimezone } from '@/lib/timezone';
 import type { TestReport } from '../types';
 import { applyDatePreset } from '../types';
 import { formatReportDateTime } from '../reportFormatting';
+import { buildReportPaginationCaption } from '../reportPagination';
 
 export interface TestResultsTabProps {
   report: TestReport | null;
@@ -23,6 +24,13 @@ export const TestResultsTab = React.memo(function TestResultsTab({
   const [selectedTestTypes, setSelectedTestTypes] = useState<string[]>([]);
   const generatedAt = report
     ? formatReportDateTime(report.generatedAt, dateFormat, timezone)
+    : null;
+  const paginationCaption = report
+    ? buildReportPaginationCaption(
+        report.tests.length,
+        report.pagination?.total ?? report.totalTests,
+        'test results',
+      )
     : null;
 
   const availableTestTypes = useMemo(() => {
@@ -214,6 +222,9 @@ export const TestResultsTab = React.memo(function TestResultsTab({
               <h3 className="text-lg font-medium">Test Details</h3>
               <span className="text-sm text-muted-foreground">Generated: {generatedAt}</span>
             </div>
+            {paginationCaption && (
+              <p className="text-sm text-muted-foreground mb-3">{paginationCaption}</p>
+            )}
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-border">
                 <thead className="bg-muted">

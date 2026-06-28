@@ -27,6 +27,7 @@ import {
 } from './holdpoints/releaseNotifications.js';
 import {
   buildHoldPointReleaseConfirmationEmail,
+  selectImmediateHoldPointReleaseConfirmationRecipients,
   selectHoldPointReleaseContractors,
   selectHoldPointReleaseSuperintendents,
 } from './holdpoints/releaseConfirmationEmails.js';
@@ -500,9 +501,17 @@ holdpointsRouter.post(
         releaseNotes,
       });
 
+      const immediateHoldPointReleaseEmailUserIds = new Set<string>();
       for (const pu of projectUsers) {
         try {
-          await sendNotificationIfEnabled(pu.userId, 'holdPointRelease', releaseEmailNotification);
+          const delivery = await sendNotificationIfEnabled(
+            pu.userId,
+            'holdPointRelease',
+            releaseEmailNotification,
+          );
+          if (delivery.sent) {
+            immediateHoldPointReleaseEmailUserIds.add(pu.userId);
+          }
         } catch (emailError) {
           logError(`[HP Secure Release] Failed to send email to user ${pu.userId}:`, emailError);
         }
@@ -536,14 +545,20 @@ holdpointsRouter.post(
           lotUrl,
         };
 
-        const contractors = selectHoldPointReleaseContractors(projectUsers);
+        const contractors = selectImmediateHoldPointReleaseConfirmationRecipients(
+          selectHoldPointReleaseContractors(projectUsers),
+          immediateHoldPointReleaseEmailUserIds,
+        );
         for (const contractor of contractors) {
           await sendHPReleaseConfirmationEmail(
             buildHoldPointReleaseConfirmationEmail(contractor, 'contractor', confirmationContext),
           );
         }
 
-        const superintendents = selectHoldPointReleaseSuperintendents(projectUsers);
+        const superintendents = selectImmediateHoldPointReleaseConfirmationRecipients(
+          selectHoldPointReleaseSuperintendents(projectUsers),
+          immediateHoldPointReleaseEmailUserIds,
+        );
         for (const superintendent of superintendents) {
           await sendHPReleaseConfirmationEmail(
             buildHoldPointReleaseConfirmationEmail(
