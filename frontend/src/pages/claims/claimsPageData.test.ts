@@ -64,6 +64,24 @@ describe('buildClaimSummaryTotals', () => {
     expect(totals.totalClaimed).toBe(3000);
     expect(totals.totalPaid).toBe(1000);
   });
+
+  it('does not display a negative outstanding total for inconsistent payment data', () => {
+    const totals = buildClaimSummaryTotals([
+      makeClaim({
+        status: 'draft',
+        totalClaimedAmount: 1000,
+        certifiedAmount: null,
+        paidAmount: 400,
+      }),
+    ]);
+
+    expect(totals).toMatchObject({
+      totalClaimed: 1000,
+      totalCertified: 0,
+      totalPaid: 400,
+      outstanding: 0,
+    });
+  });
 });
 
 describe('buildCumulativeClaimChartData', () => {
