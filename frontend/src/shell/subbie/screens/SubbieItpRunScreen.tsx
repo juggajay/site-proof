@@ -31,6 +31,7 @@ import { ShellScreen } from '@/shell/components/ShellScreen';
 import {
   advanceToNextIncomplete,
   firstIncompleteIndex,
+  formatItpFinishedCopy,
   holdPointGateDecision,
   itpCompletionDisposition,
   runItemOrder,
@@ -256,14 +257,20 @@ export function SubbieItpRunScreen() {
 
   // ── Finished state ────────────────────────────────────────────────────────
   if (currentIndex < 0 || progress.allDone) {
+    const finishedCopy = formatItpFinishedCopy(progress);
+    const FinishedIcon = finishedCopy.hasFailures ? AlertTriangle : Check;
     return (
       <ShellScreen
         variant="inner"
         title="Inspection"
         parent={lotHref}
         sub={
-          <span className="shell-mono text-[12px] font-semibold uppercase tracking-[0.1em] text-success">
-            ALL CHECKS DONE
+          <span
+            className={`shell-mono text-[12px] font-semibold uppercase tracking-[0.1em] ${
+              finishedCopy.hasFailures ? 'text-warning' : 'text-success'
+            }`}
+          >
+            {finishedCopy.eyebrow}
           </span>
         }
         bottom={
@@ -275,12 +282,15 @@ export function SubbieItpRunScreen() {
         }
       >
         <div className="flex flex-1 flex-col items-center justify-center gap-4 py-12 text-center">
-          <div className="shell-bigtick" aria-hidden>
-            <Check size={54} strokeWidth={2.4} />
+          <div
+            className={finishedCopy.hasFailures ? 'shell-bigtick text-warning' : 'shell-bigtick'}
+            aria-hidden
+          >
+            <FinishedIcon size={54} strokeWidth={2.4} />
           </div>
-          <div className="shell-display-title">All checks complete</div>
+          <div className="shell-display-title">{finishedCopy.title}</div>
           <div className="shell-mono text-[12.5px] text-muted-foreground">
-            {progress.total} OF {progress.total} DONE
+            {finishedCopy.detail}
           </div>
         </div>
       </ShellScreen>

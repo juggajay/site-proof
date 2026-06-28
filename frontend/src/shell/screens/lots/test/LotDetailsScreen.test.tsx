@@ -95,6 +95,62 @@ function instanceWith(total: number, resolved: number): ITPInstance {
   return { id: 'inst-1', template: { id: 't1', name: 'ITP', checklistItems: items }, completions };
 }
 
+function instanceWithFailedCheck(): ITPInstance {
+  const items = Array.from({ length: 3 }, (_, i) => ({
+    id: `i${i}`,
+    description: `Item ${i}`,
+    category: 'General',
+    responsibleParty: 'contractor' as const,
+    isHoldPoint: false,
+    pointType: 'standard' as const,
+    evidenceRequired: 'none' as const,
+    order: i,
+  }));
+  return {
+    id: 'inst-1',
+    template: { id: 't1', name: 'ITP', checklistItems: items },
+    completions: [
+      {
+        id: 'c0',
+        checklistItemId: 'i0',
+        isCompleted: true,
+        notes: null,
+        completedAt: '2026-06-11',
+        completedBy: null,
+        isVerified: false,
+        verifiedAt: null,
+        verifiedBy: null,
+        attachments: [],
+      },
+      {
+        id: 'c1',
+        checklistItemId: 'i1',
+        isCompleted: true,
+        notes: null,
+        completedAt: '2026-06-11',
+        completedBy: null,
+        isVerified: false,
+        verifiedAt: null,
+        verifiedBy: null,
+        attachments: [],
+      },
+      {
+        id: 'c2',
+        checklistItemId: 'i2',
+        isCompleted: false,
+        isFailed: true,
+        notes: 'Failed density',
+        completedAt: '2026-06-11',
+        completedBy: null,
+        isVerified: false,
+        verifiedAt: null,
+        verifiedBy: null,
+        attachments: [],
+      },
+    ],
+  };
+}
+
 function renderScreen() {
   return render(
     <MemoryRouter initialEntries={['/m/lots/lot-1/details']}>
@@ -118,7 +174,7 @@ describe('LotDetailsScreen', () => {
     expect(screen.getByText('Status')).toBeInTheDocument();
     expect(screen.getByText('In Progress')).toBeInTheDocument();
     expect(screen.getByText('100–200')).toBeInTheDocument();
-    expect(screen.getByText('3 of 5 done')).toBeInTheDocument();
+    expect(screen.getByText('3 passed checks · 2 checks not started')).toBeInTheDocument();
   });
 
   it('derives a "what\'s left" readiness line (not the gated endpoint)', () => {
@@ -139,6 +195,16 @@ describe('LotDetailsScreen', () => {
     _lots = [makeLot({ ncrCount: 2 })];
     renderScreen();
     expect(screen.getByText(/2 open issues/i)).toBeInTheDocument();
+  });
+
+  it('shows failed ITP checks as blockers, not completed work', () => {
+    _instance = instanceWithFailedCheck();
+    _lots = [makeLot({ ncrCount: 1 })];
+    renderScreen();
+    expect(screen.getByText(/2 passed checks/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/1 failed check/i).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText(/1 failed check to resolve/i)).toBeInTheDocument();
+    expect(screen.getByText(/1 open issue/i)).toBeInTheDocument();
   });
 
   it('has NO edit affordances (read-only)', () => {

@@ -116,9 +116,9 @@ export function itpCompletionDisposition(
   ) {
     return 'review';
   }
-  if (completion.isCompleted) return 'completed';
-  if (completion.isNotApplicable) return 'na';
   if (completion.isFailed) return 'failed';
+  if (completion.isNotApplicable) return 'na';
+  if (completion.isCompleted) return 'completed';
   return 'pending';
 }
 
@@ -229,10 +229,68 @@ export function advanceToNextIncomplete(
 export interface RunProgress {
   /** Resolved items (completed + na + failed). */
   resolved: number;
+  /** Accepted for conformance-style progress: passed/completed + N/A. Failed does not count. */
+  accepted: number;
+  completed: number;
+  notApplicable: number;
+  failed: number;
+  pendingReview: number;
+  rejected: number;
+  pending: number;
   total: number;
   /** 1-based human counter for "CHECK n/m" — clamped to [1, total]. */
   checkNumber: number;
   allDone: boolean;
+}
+
+type ItpOutcomeCounts = Omit<RunProgress, 'checkNumber' | 'allDone'>;
+
+function countItpOutcomes(
+  orderedItems: ITPChecklistItem[],
+  completions: ITPCompletion[],
+): ItpOutcomeCounts {
+  const counts: ItpOutcomeCounts = {
+    total: orderedItems.length,
+    resolved: 0,
+    accepted: 0,
+    completed: 0,
+    notApplicable: 0,
+    failed: 0,
+    pendingReview: 0,
+    rejected: 0,
+    pending: 0,
+  };
+
+  for (const item of orderedItems) {
+    switch (itpCompletionDisposition(completionFor(completions, item.id))) {
+      case 'completed':
+        counts.completed += 1;
+        counts.accepted += 1;
+        counts.resolved += 1;
+        break;
+      case 'na':
+        counts.notApplicable += 1;
+        counts.accepted += 1;
+        counts.resolved += 1;
+        break;
+      case 'failed':
+        counts.failed += 1;
+        counts.resolved += 1;
+        break;
+      case 'review':
+        counts.pendingReview += 1;
+        break;
+      case 'rejected':
+        counts.rejected += 1;
+        break;
+      case 'pending':
+      default:
+        counts.pending += 1;
+        break;
+    }
+  }
+
+  return counts;
 }
 
 export function runProgress(
@@ -240,15 +298,13 @@ export function runProgress(
   completions: ITPCompletion[],
   currentIndex: number,
 ): RunProgress {
-  const total = orderedItems.length;
-  const resolved = orderedItems.reduce(
-    (acc, item) => acc + (isItpItemResolved(completionFor(completions, item.id)) ? 1 : 0),
-    0,
-  );
+  const counts = countItpOutcomes(orderedItems, completions);
+  const total = counts.total;
+  const resolved = counts.resolved;
   const allDone = total > 0 && resolved === total;
   // "CHECK n/m": the human position of the item on screen (1-based), clamped.
   const checkNumber = total === 0 ? 0 : Math.min(Math.max(currentIndex + 1, 1), total);
-  return { resolved, total, checkNumber, allDone };
+  return { ...counts, checkNumber, allDone };
 }
 
 // ── Hold-point gate ──────────────────────────────────────────────────────────────
@@ -299,6 +355,14 @@ export function canCompleteItem(
 export interface ItpHubSummary {
   total: number;
   resolved: number;
+  /** Accepted for conformance-style progress: passed/completed + N/A. Failed does not count. */
+  accepted: number;
+  completed: number;
+  notApplicable: number;
+  failed: number;
+  pendingReview: number;
+  rejected: number;
+  pending: number;
   due: number;
 }
 
@@ -308,13 +372,95 @@ export interface ItpHubSummary {
  * count for the lot (not derived from the instance, which has no due dates here).
  */
 export function itpHubSummary(instance: ITPInstance | null, checksDue: number): ItpHubSummary {
-  if (!instance) return { total: 0, resolved: 0, due: Math.max(checksDue, 0) };
-  const total = instance.template.checklistItems.length;
-  const resolved = instance.template.checklistItems.reduce(
-    (acc, item) => acc + (isItpItemResolved(completionFor(instance.completions, item.id)) ? 1 : 0),
-    0,
-  );
-  return { total, resolved, due: Math.max(checksDue, 0) };
+  if (!instance) {
+    return {
+      total: 0,
+      resolved: 0,
+      accepted: 0,
+      completed: 0,
+      notApplicable: 0,
+      failed: 0,
+      pendingReview: 0,
+      rejected: 0,
+      pending: 0,
+      due: Math.max(checksDue, 0),
+    };
+  }
+  return {
+    ...countItpOutcomes(instance.template.checklistItems, instance.completions),
+    due: Math.max(checksDue, 0),
+  };
+}
+
+function plural(count: number, singular: string, pluralLabel = `${singular}s`): string {
+  return `${count} ${count === 1 ? singular : pluralLabel}`;
+}
+
+function joinOutcomeParts(parts: string[]): string {
+  return parts.length > 0 ? parts.join(' · ') : 'No checks started';
+}
+
+export function formatItpOutcomeSummary(
+  summary: Pick<
+    ItpHubSummary,
+    | 'total'
+    | 'accepted'
+    | 'completed'
+    | 'notApplicable'
+    | 'failed'
+    | 'pendingReview'
+    | 'rejected'
+    | 'pending'
+  >,
+): string {
+  if (summary.total === 0) return 'No ITP assigned yet';
+
+  const allAccepted = summary.accepted === summary.total;
+  if (allAccepted) return `${summary.accepted} of ${summary.total} done`;
+
+  const parts: string[] = [];
+  if (summary.completed > 0) parts.push(plural(summary.completed, 'passed check'));
+  if (summary.notApplicable > 0) parts.push(`${summary.notApplicable} N/A`);
+  if (summary.failed > 0) parts.push(plural(summary.failed, 'failed check'));
+  if (summary.pendingReview > 0) {
+    parts.push(`${plural(summary.pendingReview, 'check')} awaiting review`);
+  }
+  if (summary.rejected > 0) parts.push(`${plural(summary.rejected, 'check')} rejected`);
+  if (summary.pending > 0) parts.push(`${plural(summary.pending, 'check')} not started`);
+
+  return joinOutcomeParts(parts);
+}
+
+export function formatItpFinishedCopy(progress: RunProgress): {
+  eyebrow: string;
+  title: string;
+  detail: string;
+  hasFailures: boolean;
+} {
+  if (progress.failed > 0) {
+    return {
+      eyebrow: 'CHECKS REVIEWED',
+      title: 'Issues need attention',
+      detail: formatItpOutcomeSummary(progress),
+      hasFailures: true,
+    };
+  }
+
+  if (progress.notApplicable > 0) {
+    return {
+      eyebrow: 'CHECKS ADDRESSED',
+      title: 'All checks addressed',
+      detail: formatItpOutcomeSummary(progress),
+      hasFailures: false,
+    };
+  }
+
+  return {
+    eyebrow: 'ALL CHECKS DONE',
+    title: 'All checks complete',
+    detail: `${progress.total} OF ${progress.total} DONE`,
+    hasFailures: false,
+  };
 }
 
 export interface LotReadinessLine {
@@ -333,7 +479,7 @@ export interface LotReadinessLine {
  * count. Conformance itself stays the office's call.
  */
 export function deriveLotReadinessLine(summary: ItpHubSummary, openNcrs: number): LotReadinessLine {
-  const remainingItp = Math.max(summary.total - summary.resolved, 0);
+  const remainingItp = Math.max(summary.total - summary.accepted, 0);
   const conformable = summary.total > 0 && remainingItp === 0 && openNcrs === 0;
 
   let line: string;
@@ -343,8 +489,21 @@ export function deriveLotReadinessLine(summary: ItpHubSummary, openNcrs: number)
     line = 'All checks done, no open issues — ready for the office to review.';
   } else {
     const parts: string[] = [];
-    if (remainingItp > 0) {
-      parts.push(`${remainingItp} check${remainingItp === 1 ? '' : 's'} left`);
+    if (summary.failed > 0) {
+      parts.push(`${plural(summary.failed, 'failed check')} to resolve`);
+    }
+    if (summary.pendingReview > 0) {
+      parts.push(`${plural(summary.pendingReview, 'check')} awaiting review`);
+    }
+    if (summary.rejected > 0) {
+      parts.push(`${plural(summary.rejected, 'check')} rejected`);
+    }
+    const remainingOpenChecks = Math.max(
+      remainingItp - summary.failed - summary.pendingReview - summary.rejected,
+      0,
+    );
+    if (remainingOpenChecks > 0) {
+      parts.push(`${plural(remainingOpenChecks, 'check')} left`);
     }
     if (openNcrs > 0) {
       parts.push(`${openNcrs} open issue${openNcrs === 1 ? '' : 's'}`);

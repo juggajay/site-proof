@@ -211,6 +211,61 @@ describe('SubbieItpRunScreen', () => {
     await waitFor(() => expect(pass).toHaveBeenCalledWith('a', null));
   });
 
+  it('does not call failed checks complete in the finished state', () => {
+    _run = makeRun(
+      makeInstance(
+        [makeItem({ id: 'a' }), makeItem({ id: 'b' }), makeItem({ id: 'c' })],
+        [
+          {
+            id: 'comp-a',
+            checklistItemId: 'a',
+            isCompleted: true,
+            notes: null,
+            completedAt: null,
+            completedBy: null,
+            isVerified: false,
+            verifiedAt: null,
+            verifiedBy: null,
+            attachments: [],
+          },
+          {
+            id: 'comp-b',
+            checklistItemId: 'b',
+            isCompleted: true,
+            notes: null,
+            completedAt: null,
+            completedBy: null,
+            isVerified: false,
+            verifiedAt: null,
+            verifiedBy: null,
+            attachments: [],
+          },
+          {
+            id: 'comp-c',
+            checklistItemId: 'c',
+            isCompleted: false,
+            isFailed: true,
+            notes: 'Out of tolerance',
+            completedAt: null,
+            completedBy: null,
+            isVerified: false,
+            verifiedAt: null,
+            verifiedBy: null,
+            attachments: [],
+          },
+        ],
+      ),
+    );
+
+    renderRun();
+
+    expect(screen.getByText('CHECKS REVIEWED')).toBeInTheDocument();
+    expect(screen.getByText('Issues need attention')).toBeInTheDocument();
+    expect(screen.getByText(/2 passed checks/i)).toBeInTheDocument();
+    expect(screen.getByText(/1 failed check/i)).toBeInTheDocument();
+    expect(screen.queryByText('All checks complete')).not.toBeInTheDocument();
+  });
+
   it('passes the right per-item states to the dot track', () => {
     const items = [
       makeItem({ id: 'a' }),

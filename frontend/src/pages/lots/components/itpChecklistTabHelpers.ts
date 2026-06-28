@@ -24,6 +24,18 @@ export function isItpCompletionAcceptedForProgress(completion: ITPCompletion | u
   return completion.isCompleted || Boolean(completion.isNotApplicable);
 }
 
+function isAcceptedNotApplicableCompletion(completion: ITPCompletion | undefined): boolean {
+  return isItpCompletionAcceptedForProgress(completion) && Boolean(completion?.isNotApplicable);
+}
+
+function isAcceptedCompletedCompletion(completion: ITPCompletion | undefined): boolean {
+  return (
+    isItpCompletionAcceptedForProgress(completion) &&
+    Boolean(completion?.isCompleted) &&
+    !completion?.isNotApplicable
+  );
+}
+
 function isCompletionForItem(
   completion: ITPCompletion,
   checklistItemIds: ReadonlySet<string>,
@@ -42,8 +54,8 @@ export function getItpChecklistProgress(
       isCompletionForItem(completion, checklistItemIds) &&
       isItpCompletionAcceptedForProgress(completion),
   );
-  const completedItems = acceptedCompletions.filter((completion) => completion.isCompleted).length;
-  const naItems = acceptedCompletions.filter((completion) => completion.isNotApplicable).length;
+  const completedItems = acceptedCompletions.filter(isAcceptedCompletedCompletion).length;
+  const naItems = acceptedCompletions.filter(isAcceptedNotApplicableCompletion).length;
   const finishedItems = completedItems + naItems;
   const percentage = totalItems > 0 ? Math.round((finishedItems / totalItems) * 100) : 0;
 
@@ -73,8 +85,8 @@ export function filterItpChecklistItems(
   return checklistItems.filter((item) => {
     const completion = completions.find((entry) => entry.checklistItemId === item.id);
     const isAccepted = isItpCompletionAcceptedForProgress(completion);
-    const isCompleted = isAccepted && (completion?.isCompleted || false);
-    const isNotApplicable = isAccepted && (completion?.isNotApplicable || false);
+    const isCompleted = isAcceptedCompletedCompletion(completion);
+    const isNotApplicable = isAcceptedNotApplicableCompletion(completion);
     const isFailed = completion?.isFailed || false;
     const isPending = !isAccepted && !isFailed;
 

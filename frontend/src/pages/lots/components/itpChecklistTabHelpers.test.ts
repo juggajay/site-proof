@@ -154,6 +154,21 @@ describe('getItpChecklistProgress', () => {
     });
   });
 
+  it('counts backend N/A double-flag rows once, as N/A not completed', () => {
+    const progress = getItpChecklistProgress(
+      [item({ id: 'na' })],
+      [completion({ checklistItemId: 'na', isCompleted: true, isNotApplicable: true })],
+    );
+
+    expect(progress).toEqual({
+      totalItems: 1,
+      completedItems: 0,
+      naItems: 1,
+      finishedItems: 1,
+      percentage: 100,
+    });
+  });
+
   it('returns zero percent when the template has no checklist items', () => {
     expect(getItpChecklistProgress([], [completion({ isCompleted: true })]).percentage).toBe(0);
   });
@@ -280,6 +295,20 @@ describe('filterItpChecklistItems', () => {
     ]);
     expect(filterItpChecklistItems(checklistItems, completions, 'failed', false)).toEqual([
       expect.objectContaining({ id: 'failed' }),
+    ]);
+  });
+
+  it('filters backend N/A double-flag rows as N/A only', () => {
+    const doubleFlagItems = [item({ id: 'na' })];
+    const doubleFlagCompletions = [
+      completion({ checklistItemId: 'na', isCompleted: true, isNotApplicable: true }),
+    ];
+
+    expect(
+      filterItpChecklistItems(doubleFlagItems, doubleFlagCompletions, 'completed', false),
+    ).toEqual([]);
+    expect(filterItpChecklistItems(doubleFlagItems, doubleFlagCompletions, 'na', false)).toEqual([
+      expect.objectContaining({ id: 'na' }),
     ]);
   });
 });
