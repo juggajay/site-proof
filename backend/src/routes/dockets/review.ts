@@ -411,8 +411,8 @@ docketReviewRouter.post(
         'pending_approval',
         {
           status: 'rejected',
-          approvedById: user.id,
-          approvedAt: new Date(),
+          approvedById: null,
+          approvedAt: null,
           foremanNotes: reason,
         },
         'Only pending dockets can be rejected',

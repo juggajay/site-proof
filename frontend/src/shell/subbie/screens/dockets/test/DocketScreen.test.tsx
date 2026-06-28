@@ -150,6 +150,26 @@ describe('subbie shell DocketScreen', () => {
     });
   });
 
+  it('scopes assigned lots to the selected subcontractor company', async () => {
+    setApi({
+      company: {
+        id: 'company-selected',
+        projectId: PROJECT_ID,
+        projectName: 'Demo',
+        employees: [APPROVED_EMP],
+        plant: [APPROVED_PLANT],
+      },
+      existingDockets: [],
+    });
+
+    renderDocket('/p/docket?projectId=proj-1&subcontractorCompanyId=company-selected');
+
+    await screen.findByRole('button', { name: 'Add crew hours' });
+    expect(apiFetchMock).toHaveBeenCalledWith(
+      '/api/lots?projectId=proj-1&subcontractorCompanyId=company-selected',
+    );
+  });
+
   it('does NOT POST a docket before the first entry is added, then rewrites URL after', async () => {
     setApi({ existingDockets: [] }); // new docket, none today
     // Capture the labour POST.

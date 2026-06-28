@@ -26,6 +26,7 @@ vi.mock('../../../subbieShellContext', () => ({
 
 const apiFetchMock = vi.fn();
 vi.mock('@/lib/api', () => ({
+  ApiError: class ApiError extends Error {},
   apiFetch: (...args: unknown[]) => apiFetchMock(...args),
 }));
 
@@ -129,6 +130,16 @@ describe('subbie shell DocketsListScreen', () => {
     // Only the approved docket counts: $2,180.
     expect(await screen.findByText('$2,180')).toBeInTheDocument();
     expect(screen.getByText(/approved/)).toBeInTheDocument();
+  });
+
+  it('shows a load error instead of an empty docket history when the API fails', async () => {
+    apiFetchMock.mockReset();
+    apiFetchMock.mockRejectedValue(new Error('Docket history unavailable'));
+
+    renderList();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Docket history unavailable');
+    expect(screen.queryByText('No dockets yet.')).not.toBeInTheDocument();
   });
 
   it('shows all dockets under All, with entry count + $ total', async () => {

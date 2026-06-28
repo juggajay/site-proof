@@ -38,12 +38,18 @@ describe('assertDocketSubmittable (pure, DB-free)', () => {
     expect(() => assertDocketSubmittable(docket)).not.toThrow();
   });
 
-  it('passes when at least one of several labour entries has a lot allocation', () => {
+  it('throws LOT_REQUIRED when any labour entry has no lot allocation', () => {
     const docket = makeDocket({
       status: 'draft',
       labourEntries: [labourEntry(0), labourEntry(1), labourEntry(0)],
     });
-    expect(() => assertDocketSubmittable(docket)).not.toThrow();
+    const err = captureError(() => assertDocketSubmittable(docket));
+    expect(err).toBeInstanceOf(AppError);
+    expect(err.statusCode).toBe(400);
+    expect(err.code).toBe('LOT_REQUIRED');
+    expect(err.message).toBe(
+      'Every labour entry must be allocated to a lot before submitting the docket.',
+    );
   });
 
   it('throws a VALIDATION_ERROR bad-request for a non-draft/non-rejected status', () => {
@@ -79,7 +85,7 @@ describe('assertDocketSubmittable (pure, DB-free)', () => {
     expect(err.statusCode).toBe(400);
     expect(err.code).toBe('LOT_REQUIRED');
     expect(err.message).toBe(
-      'At least one labour entry must be allocated to a lot before submitting the docket.',
+      'Every labour entry must be allocated to a lot before submitting the docket.',
     );
   });
 

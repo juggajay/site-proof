@@ -3,6 +3,7 @@ import { mockAuthenticatedUserState } from './helpers';
 
 const PROJECT_ID = 'project/alpha & beta';
 const PROJECT_NAME = 'Awkward Query Project';
+const SUBCONTRACTOR_COMPANY_ID = 'e2e-subbie-mobile-shell-company';
 
 const SUBBIE_USER = {
   id: 'e2e-subbie-mobile-shell-user',
@@ -29,6 +30,10 @@ function selectedProjectId(url: URL): string {
   return url.searchParams.get('projectId') || PROJECT_ID;
 }
 
+function selectedSubcontractorCompanyId(url: URL): string {
+  return url.searchParams.get('subcontractorCompanyId') || SUBCONTRACTOR_COMPANY_ID;
+}
+
 async function fulfillJson(route: Route, body: unknown, status = 200) {
   await route.fulfill({
     status,
@@ -40,6 +45,7 @@ async function fulfillJson(route: Route, body: unknown, status = 200) {
 async function mockSubbieShellApi(page: Page) {
   const myCompanyProjectIds: Array<string | null> = [];
   const lotsProjectIds: Array<string | null> = [];
+  const lotsSubcontractorCompanyIds: Array<string | null> = [];
 
   await page.route('**/api/**', async (route) => {
     const url = new URL(route.request().url());
@@ -69,7 +75,7 @@ async function mockSubbieShellApi(page: Page) {
       myCompanyProjectIds.push(requestedProjectId);
       await fulfillJson(route, {
         company: {
-          id: 'e2e-subbie-mobile-shell-company',
+          id: selectedSubcontractorCompanyId(url),
           companyName: 'Mobile Shell Civil',
           projectId: selectedProjectId(url),
           projectName: PROJECT_NAME,
@@ -79,6 +85,7 @@ async function mockSubbieShellApi(page: Page) {
           availableProjects: [
             {
               id: 'portal-company-1',
+              subcontractorCompanyId: SUBCONTRACTOR_COMPANY_ID,
               companyName: 'Mobile Shell Civil',
               projectId: PROJECT_ID,
               projectName: PROJECT_NAME,
@@ -93,6 +100,7 @@ async function mockSubbieShellApi(page: Page) {
 
     if (url.pathname === '/api/lots') {
       lotsProjectIds.push(url.searchParams.get('projectId'));
+      lotsSubcontractorCompanyIds.push(url.searchParams.get('subcontractorCompanyId'));
       await fulfillJson(route, {
         lots: [
           {
@@ -121,6 +129,7 @@ async function mockSubbieShellApi(page: Page) {
   return {
     myCompanyProjectIds: () => myCompanyProjectIds,
     lotsProjectIds: () => lotsProjectIds,
+    lotsSubcontractorCompanyIds: () => lotsSubcontractorCompanyIds,
   };
 }
 
@@ -153,5 +162,26 @@ test.describe('Subbie mobile shell direct routes', () => {
     await expect(page.getByText('QA-001')).toBeVisible();
     expect(api.myCompanyProjectIds()).toContain(PROJECT_ID);
     expect(api.lotsProjectIds()).toContain(PROJECT_ID);
+  });
+
+  test('mobile direct /p/docket scopes assigned lots to the selected subcontractor company', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    const api = await mockSubbieShellApi(page);
+    const selectedCompanyId = 'subbie/company & two';
+
+    await page.goto(
+      `/p/docket?projectId=${encodeURIComponent(PROJECT_ID)}&subcontractorCompanyId=${encodeURIComponent(
+        selectedCompanyId,
+      )}`,
+    );
+
+    await expect.poll(() => new URL(page.url()).pathname).toBe('/p/docket');
+    await expect(page.getByRole('heading', { name: "Today's Docket" })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Add crew hours' })).toBeVisible();
+    expect(api.myCompanyProjectIds()).toContain(PROJECT_ID);
+    expect(api.lotsProjectIds()).toContain(PROJECT_ID);
+    expect(api.lotsSubcontractorCompanyIds()).toContain(selectedCompanyId);
   });
 });

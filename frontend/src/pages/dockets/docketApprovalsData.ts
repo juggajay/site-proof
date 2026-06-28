@@ -65,7 +65,14 @@ export interface ProjectResponse {
   };
 }
 
-const DOCKET_APPROVER_ROLES = ['owner', 'admin', 'project_manager', 'site_manager', 'foreman'];
+const DOCKET_APPROVER_ROLES = [
+  'owner',
+  'admin',
+  'project_manager',
+  'site_manager',
+  'foreman',
+  'quality_manager',
+];
 
 export function canApproveDocketsForProjectRole(role: string | null | undefined): boolean {
   return Boolean(role && DOCKET_APPROVER_ROLES.includes(role));
