@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import type { Lot } from '@/pages/lots/lotsPageTypes';
+import type { ITPCompletion, ITPInstance } from '@/pages/lots/types';
 import type { LotsShellData } from '../useLotsShellData';
 
 vi.mock('@/lib/useOfflineStatus', () => ({
@@ -24,9 +25,10 @@ let _data: LotsShellData;
 vi.mock('../lotsShellContext', () => ({
   useLotsShellContext: () => _data,
 }));
+let _instance: ITPInstance | null;
 vi.mock('../useShellItpRun', () => ({
   useShellItpRun: () => ({
-    instance: null,
+    instance: _instance,
     loading: false,
     loadError: null,
     isOfflineData: false,
@@ -55,6 +57,24 @@ function makeLot(over: Partial<Lot>): Lot {
     layer: null,
     areaZone: null,
     ...over,
+  };
+}
+
+function makeInstance(completions: ITPCompletion[]): ITPInstance {
+  const items = ['a', 'b', 'c'].map((id, index) => ({
+    id,
+    description: `Item ${id}`,
+    category: 'General',
+    responsibleParty: 'contractor' as const,
+    isHoldPoint: false,
+    pointType: 'standard' as const,
+    evidenceRequired: 'none' as const,
+    order: index,
+  }));
+  return {
+    id: 'inst-1',
+    template: { id: 'template-1', name: 'ITP', checklistItems: items },
+    completions,
   };
 }
 
@@ -89,6 +109,7 @@ describe('LotHubScreen', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     _data = makeData();
+    _instance = null;
   });
 
   it('carries project and lot context to the Drawings & Docs surface', () => {
@@ -99,5 +120,54 @@ describe('LotHubScreen', () => {
     expect(screen.getByTestId('location')).toHaveTextContent(
       '/m/docs?projectId=proj-1&lotId=lot-1',
     );
+  });
+
+  it('shows failed inspections instead of a green done chip', () => {
+    _instance = makeInstance([
+      {
+        id: 'c-a',
+        checklistItemId: 'a',
+        isCompleted: true,
+        notes: null,
+        completedAt: null,
+        completedBy: null,
+        isVerified: false,
+        verifiedAt: null,
+        verifiedBy: null,
+        attachments: [],
+      },
+      {
+        id: 'c-b',
+        checklistItemId: 'b',
+        isCompleted: true,
+        notes: null,
+        completedAt: null,
+        completedBy: null,
+        isVerified: false,
+        verifiedAt: null,
+        verifiedBy: null,
+        attachments: [],
+      },
+      {
+        id: 'c-c',
+        checklistItemId: 'c',
+        isCompleted: false,
+        isFailed: true,
+        notes: 'Failed density',
+        completedAt: null,
+        completedBy: null,
+        isVerified: false,
+        verifiedAt: null,
+        verifiedBy: null,
+        attachments: [],
+      },
+    ]);
+
+    renderScreen();
+
+    expect(screen.getByRole('button', { name: /2 passed checks/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /1 failed check/i })).toBeInTheDocument();
+    expect(screen.getByText('1 failed')).toBeInTheDocument();
+    expect(screen.queryByText('Done')).not.toBeInTheDocument();
   });
 });

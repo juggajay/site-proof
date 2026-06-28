@@ -22,7 +22,7 @@ import { ChevronRight, ClipboardCheck, Camera, Ruler, Info } from 'lucide-react'
 import { ShellScreen } from '../../components/ShellScreen';
 import { useLotsShellContext } from './lotsShellContext';
 import { useShellItpRun } from './useShellItpRun';
-import { itpHubSummary, lotStatusTone } from './lotsShellState';
+import { formatItpOutcomeSummary, itpHubSummary, lotStatusTone } from './lotsShellState';
 import { formatStatusLabel } from '@/lib/statusLabels';
 import { useShellLotParam } from './useShellLotParam';
 
@@ -95,7 +95,7 @@ export function LotHubScreen() {
     ? 'Loading checklist…'
     : summary.total === 0
       ? 'No ITP assigned yet'
-      : `${summary.resolved} of ${summary.total} done${due > 0 ? ` · ${due} due today` : ''}`;
+      : `${formatItpOutcomeSummary(summary)}${due > 0 ? ` · ${due} due today` : ''}`;
 
   const sub = (
     <span className="flex items-center gap-2">
@@ -144,11 +144,13 @@ export function LotHubScreen() {
         chip={
           due > 0
             ? `${due} due`
-            : summary.total > 0 && summary.resolved === summary.total
-              ? 'Done'
-              : undefined
+            : summary.failed > 0
+              ? `${summary.failed} failed`
+              : summary.total > 0 && summary.accepted === summary.total
+                ? 'Done'
+                : undefined
         }
-        chipOk={summary.total > 0 && summary.resolved === summary.total}
+        chipOk={summary.total > 0 && summary.accepted === summary.total && summary.failed === 0}
         onPress={() => navigate(withProject(`/m/lots/${lotId}/itp`))}
         ariaLabel={`Inspections — ${inspectionsDesc}`}
       />

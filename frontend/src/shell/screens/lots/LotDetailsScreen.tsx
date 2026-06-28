@@ -17,7 +17,12 @@ import { ShellScreen } from '../../components/ShellScreen';
 import { useLotsShellContext } from './lotsShellContext';
 import { useShellItpRun } from './useShellItpRun';
 import { useShellLotParam } from './useShellLotParam';
-import { deriveLotReadinessLine, itpHubSummary, lotStatusTone } from './lotsShellState';
+import {
+  deriveLotReadinessLine,
+  formatItpOutcomeSummary,
+  itpHubSummary,
+  lotStatusTone,
+} from './lotsShellState';
 import { formatStatusLabel } from '@/lib/statusLabels';
 
 function Field({ label, value }: { label: string; value: string }) {
@@ -102,7 +107,7 @@ export function LotDetailsScreen() {
         {lot.activityType && <Field label="Activity" value={lot.activityType} />}
         <Field label="Chainage" value={chainageText(lot.chainageStart, lot.chainageEnd)} />
         {lot.areaZone && <Field label="Area / zone" value={lot.areaZone} />}
-        <Field label="ITP items" value={`${summary.resolved} of ${summary.total} done`} />
+        <Field label="ITP items" value={formatItpOutcomeSummary(summary)} />
         <Field label="Open issues" value={`${issues}`} />
       </div>
 

@@ -471,6 +471,33 @@ describe('reconcileItpCompletionFromServer', () => {
       }),
     );
   });
+
+  it('maps backend N/A double-flag rows as N/A, not completed', async () => {
+    mockChecklistLookup(undefined);
+
+    await reconcileItpCompletionFromServer('lot-1', 'item-1', {
+      id: 'completion-1',
+      checklistItemId: 'item-1',
+      isCompleted: true,
+      isNotApplicable: true,
+      notes: 'Not in scope',
+    });
+
+    expect(offlineDb.itpCompletions.put).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'lot-1-item-1',
+        status: 'na',
+        notes: 'Not in scope',
+        syncStatus: 'synced',
+        serverCompletionBase: expect.objectContaining({
+          exists: true,
+          id: 'completion-1',
+          status: 'not_applicable',
+          notes: 'Not in scope',
+        }),
+      }),
+    );
+  });
 });
 
 describe('markCompletionSynced', () => {

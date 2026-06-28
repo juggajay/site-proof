@@ -117,7 +117,7 @@ describe('mapInstanceToOfflineItems', () => {
     });
   });
 
-  it('prefers completed over na/failed when multiple flags are set (precedence)', () => {
+  it('prefers failed over N/A/completed when multiple flags are set', () => {
     const items = [makeChecklistItem({ id: 'a' })];
     const completions = [
       makeCompletion({
@@ -128,7 +128,23 @@ describe('mapInstanceToOfflineItems', () => {
       }),
     ];
 
-    expect(mapInstanceToOfflineItems(makeInstance(items, completions))[0].status).toBe('completed');
+    expect(mapInstanceToOfflineItems(makeInstance(items, completions))[0].status).toBe('failed');
+  });
+
+  it('maps backend N/A double-flag rows as N/A, not completed', () => {
+    const items = [makeChecklistItem({ id: 'a' })];
+    const completions = [
+      makeCompletion({
+        checklistItemId: 'a',
+        isCompleted: true,
+        isNotApplicable: true,
+      }),
+    ];
+
+    const [mapped] = mapInstanceToOfflineItems(makeInstance(items, completions));
+
+    expect(mapped.status).toBe('na');
+    expect(mapped.serverCompletionBase?.status).toBe('not_applicable');
   });
 
   it('trusts the raw server status over derived flags when both are present', () => {

@@ -28,9 +28,9 @@ function completionStatusForCache(completion?: ITPCompletion): OfflineChecklistI
   if (completion.status === 'completed') return 'completed';
   if (completion.status === 'not_applicable') return 'na';
   if (completion.status === 'failed') return 'failed';
-  if (completion.isCompleted) return 'completed';
-  if (completion.isNotApplicable) return 'na';
   if (completion.isFailed) return 'failed';
+  if (completion.isNotApplicable) return 'na';
+  if (completion.isCompleted) return 'completed';
   return 'pending';
 }
 
@@ -59,9 +59,10 @@ function buildServerCompletionBase(
 
 /**
  * Project a server `ITPInstance` into `OfflineChecklistItem[]` for caching.
- * Status is derived from the matching completion with completed > na > failed
- * precedence, falling back to `pending` when there is no completion (or no flag
- * is set). Caller guards `instance.template` before invoking.
+ * Status is derived from the matching completion with the explicit status first,
+ * then failed/N-A before completed because backend N/A responses also set
+ * `isCompleted: true`. Falls back to `pending` when there is no completion (or
+ * no flag is set). Caller guards `instance.template` before invoking.
  */
 export function mapInstanceToOfflineItems(instance: ITPInstance): OfflineChecklistItem[] {
   return instance.template.checklistItems.map((item: ITPChecklistItem) => {

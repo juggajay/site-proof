@@ -368,6 +368,59 @@ describe('ItpRunScreen — finished + empty', () => {
     expect(screen.getByRole('button', { name: /Back to lot/i })).toBeInTheDocument();
   });
 
+  it('does not call failed checks complete in the finished state', () => {
+    _run = makeRun(
+      makeInstance(
+        [makeItem({ id: 'a' }), makeItem({ id: 'b' }), makeItem({ id: 'c' })],
+        [
+          {
+            id: 'c-a',
+            checklistItemId: 'a',
+            isCompleted: true,
+            notes: null,
+            completedAt: '2026-06-11',
+            completedBy: null,
+            isVerified: false,
+            verifiedAt: null,
+            verifiedBy: null,
+            attachments: [],
+          },
+          {
+            id: 'c-b',
+            checklistItemId: 'b',
+            isCompleted: true,
+            notes: null,
+            completedAt: '2026-06-11',
+            completedBy: null,
+            isVerified: false,
+            verifiedAt: null,
+            verifiedBy: null,
+            attachments: [],
+          },
+          {
+            id: 'c-c',
+            checklistItemId: 'c',
+            isCompleted: false,
+            isFailed: true,
+            notes: 'Out of spec',
+            completedAt: '2026-06-11',
+            completedBy: null,
+            isVerified: false,
+            verifiedAt: null,
+            verifiedBy: null,
+            attachments: [],
+          },
+        ],
+      ),
+    );
+    renderRun();
+    expect(screen.getByText('CHECKS REVIEWED')).toBeInTheDocument();
+    expect(screen.getByText('Issues need attention')).toBeInTheDocument();
+    expect(screen.getByText(/2 passed checks/i)).toBeInTheDocument();
+    expect(screen.getByText(/1 failed check/i)).toBeInTheDocument();
+    expect(screen.queryByText('All checks complete')).not.toBeInTheDocument();
+  });
+
   it('shows a no-checklist state when there is no instance', () => {
     _run = makeRun(null);
     renderRun();
