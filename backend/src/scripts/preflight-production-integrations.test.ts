@@ -21,17 +21,39 @@ afterEach(async () => {
   });
 });
 
-function startBucketListServer(bucketPublicValue: boolean): Promise<string> {
+function startSupabaseStorageServer(options: {
+  bucketPublicValue: boolean;
+  uploadStatus?: number;
+  uploadBody?: Record<string, unknown>;
+  deleteStatus?: number;
+  deleteBody?: Record<string, unknown>;
+}): Promise<string> {
   return new Promise((resolve) => {
     testServer = http.createServer((req, res) => {
       if (req.url !== '/storage/v1/bucket') {
+        if (req.url?.startsWith('/storage/v1/object/documents/siteproof-preflight/')) {
+          res.statusCode = options.uploadStatus ?? 200;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify(options.uploadBody ?? { Key: req.url }));
+          return;
+        }
+
+        if (req.url === '/storage/v1/object/documents' && req.method === 'DELETE') {
+          res.statusCode = options.deleteStatus ?? 200;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify(options.deleteBody ?? [{ name: 'probe.txt' }]));
+          return;
+        }
+
         res.statusCode = 404;
         res.end('not found');
         return;
       }
 
       res.setHeader('Content-Type', 'application/json');
-      res.end(JSON.stringify([{ id: 'documents', name: 'documents', public: bucketPublicValue }]));
+      res.end(
+        JSON.stringify([{ id: 'documents', name: 'documents', public: options.bucketPublicValue }]),
+      );
     });
 
     testServer.listen(0, '127.0.0.1', () => {
@@ -207,7 +229,7 @@ describe('production integration preflight', () => {
   });
 
   it('fails when the documents bucket is public', async () => {
-    const supabaseUrl = await startBucketListServer(true);
+    const supabaseUrl = await startSupabaseStorageServer({ bucketPublicValue: true });
 
     const result = await runPreflightAsync({
       SUPABASE_URL: supabaseUrl,
@@ -222,7 +244,7 @@ describe('production integration preflight', () => {
   });
 
   it('passes the Supabase storage check when the documents bucket is private', async () => {
-    const supabaseUrl = await startBucketListServer(false);
+    const supabaseUrl = await startSupabaseStorageServer({ bucketPublicValue: false });
 
     const result = await runPreflightAsync({
       SUPABASE_URL: supabaseUrl,
@@ -232,6 +254,26 @@ describe('production integration preflight', () => {
     const output = `${result.stdout}\n${result.stderr}`;
 
     expect(output).toContain('[pass] supabase-storage');
-    expect(output).toContain('reachable and private');
+    expect(output).toContain('accepts upload/delete probes');
+  });
+
+  it('fails the Supabase storage check when the service role cannot upload', async () => {
+    const supabaseUrl = await startSupabaseStorageServer({
+      bucketPublicValue: false,
+      uploadStatus: 403,
+      uploadBody: { message: 'insert denied for storage object' },
+    });
+
+    const result = await runPreflightAsync({
+      SUPABASE_URL: supabaseUrl,
+      SUPABASE_SERVICE_ROLE_KEY: 's'.repeat(32),
+    });
+
+    const output = `${result.stdout}\n${result.stderr}`;
+
+    expect(result.status).toBe(1);
+    expect(output).toContain('[fail] supabase-storage');
+    expect(output).toContain('Supabase storage upload probe failed with HTTP 403');
+    expect(output).toContain('insert denied for storage object');
   });
 });

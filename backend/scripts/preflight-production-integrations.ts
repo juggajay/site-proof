@@ -22,6 +22,7 @@ type FetchWithTimeout = (url: string, init: RequestInit, timeoutMs: number) => P
 
 const PREFLIGHT_TIMEOUT_MS = Number(process.env.PREFLIGHT_TIMEOUT_MS || 10000);
 const DOCUMENTS_BUCKET = 'documents';
+const SUPABASE_PREFLIGHT_PREFIX = 'siteproof-preflight';
 const DEFAULT_RESEND_DOMAINS_ENDPOINT = 'https://api.resend.com/domains';
 const DEFAULT_RESEND_EMAILS_ENDPOINT = 'https://api.resend.com/emails';
 const DEFAULT_RESEND_PREFLIGHT_RECIPIENT = 'delivered+siteproof-production-preflight@resend.dev';
@@ -63,6 +64,14 @@ function safeUrlForLog(url: string): string {
   } catch {
     return url;
   }
+}
+
+function getSupabaseStorageHeaders(serviceRoleKey: string, extra: Record<string, string> = {}) {
+  return {
+    apikey: serviceRoleKey,
+    Authorization: `Bearer ${serviceRoleKey}`,
+    ...extra,
+  };
 }
 
 async function runNetworkRequest(
@@ -242,11 +251,7 @@ async function checkSupabaseStorage(): Promise<Omit<PreflightResult, 'name'>> {
     fetchWithTimeout(
       bucketsUrl,
       {
-        headers: {
-          apikey: serviceRoleKey,
-          Authorization: `Bearer ${serviceRoleKey}`,
-          Accept: 'application/json',
-        },
+        headers: getSupabaseStorageHeaders(serviceRoleKey, { Accept: 'application/json' }),
       },
       PREFLIGHT_TIMEOUT_MS,
     ),
@@ -270,7 +275,46 @@ async function checkSupabaseStorage(): Promise<Omit<PreflightResult, 'name'>> {
     );
   }
 
-  return pass(`Supabase Storage bucket "${DOCUMENTS_BUCKET}" is reachable and private.`);
+  const probePath = `${SUPABASE_PREFLIGHT_PREFIX}/${Date.now()}-${Math.random()
+    .toString(36)
+    .slice(2)}.txt`;
+  const uploadUrl = new URL(
+    `/storage/v1/object/${DOCUMENTS_BUCKET}/${probePath}`,
+    supabaseUrl,
+  ).toString();
+  await runProviderCheck('Supabase storage upload probe', uploadUrl, () =>
+    fetchWithTimeout(
+      uploadUrl,
+      {
+        method: 'POST',
+        headers: getSupabaseStorageHeaders(serviceRoleKey, {
+          'Content-Type': 'text/plain',
+          'x-upsert': 'false',
+        }),
+        body: 'SiteProof production storage preflight',
+      },
+      PREFLIGHT_TIMEOUT_MS,
+    ),
+  );
+
+  const deleteUrl = new URL(`/storage/v1/object/${DOCUMENTS_BUCKET}`, supabaseUrl).toString();
+  await runProviderCheck('Supabase storage delete probe', deleteUrl, () =>
+    fetchWithTimeout(
+      deleteUrl,
+      {
+        method: 'DELETE',
+        headers: getSupabaseStorageHeaders(serviceRoleKey, {
+          'Content-Type': 'application/json',
+        }),
+        body: JSON.stringify({ prefixes: [probePath] }),
+      },
+      PREFLIGHT_TIMEOUT_MS,
+    ),
+  );
+
+  return pass(
+    `Supabase Storage bucket "${DOCUMENTS_BUCKET}" is reachable, private, and accepts upload/delete probes.`,
+  );
 }
 
 async function checkGoogleOAuth(): Promise<Omit<PreflightResult, 'name'>> {

@@ -124,4 +124,35 @@ describe('document Supabase storage ownership', () => {
       upsert: false,
     });
   });
+
+  it('reports Supabase upload failures as temporary storage outages', async () => {
+    const upload = vi.fn().mockResolvedValue({
+      data: null,
+      error: { message: 'fetch failed' },
+    });
+    const from = vi.fn(() => ({ upload }));
+
+    mockGetSupabaseClient.mockReturnValue({
+      storage: { from },
+    } as unknown as ReturnType<typeof supabaseLib.getSupabaseClient>);
+
+    await expect(
+      uploadToSupabase(
+        {
+          originalname: 'Evidence Photo.png',
+          mimetype: 'image/png',
+          buffer: Buffer.from('document bytes'),
+        } as Express.Multer.File,
+        'project-a',
+        {
+          buildStoredFilename: () => 'stored evidence.png',
+          getSafeStoredDocumentMimeType: () => 'image/png',
+        },
+      ),
+    ).rejects.toMatchObject({
+      statusCode: 503,
+      code: 'UPLOAD_FAILED',
+      message: 'File storage is unavailable. Please try again later.',
+    });
+  });
 });
