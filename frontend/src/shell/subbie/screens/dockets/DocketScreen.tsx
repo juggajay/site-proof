@@ -118,7 +118,7 @@ export function DocketScreen() {
   );
   const company = companyQuery.data ?? null;
 
-  const lotsQuery = useAssignedLotsQuery(userId, company?.projectId);
+  const lotsQuery = useAssignedLotsQuery(userId, company?.projectId, company?.id);
   const assignedLots = lotsQuery.data ?? EMPTY_LOTS;
   const lotsModuleDisabled = isForbidden(lotsQuery.error);
 

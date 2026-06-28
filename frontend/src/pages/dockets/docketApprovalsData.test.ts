@@ -57,6 +57,7 @@ describe('docket approvals data helpers', () => {
   it('uses the current project role for docket approval permission checks', () => {
     expect(canApproveDocketsForProjectRole('project_manager')).toBe(true);
     expect(canApproveDocketsForProjectRole('site_manager')).toBe(true);
+    expect(canApproveDocketsForProjectRole('quality_manager')).toBe(true);
     expect(canApproveDocketsForProjectRole('viewer')).toBe(false);
     expect(canApproveDocketsForProjectRole(null)).toBe(false);
   });

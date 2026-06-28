@@ -2220,6 +2220,14 @@ describe('Dockets API', () => {
       expect(res.status).toBe(200);
       expect(res.body.docket.status).toBe('rejected');
 
+      const stored = await prisma.dailyDocket.findUniqueOrThrow({
+        where: { id: rejectableDocketId },
+        select: { status: true, approvedById: true, approvedAt: true },
+      });
+      expect(stored.status).toBe('rejected');
+      expect(stored.approvedById).toBeNull();
+      expect(stored.approvedAt).toBeNull();
+
       const auditLog = await prisma.auditLog.findFirst({
         where: {
           projectId,
