@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, useEffect } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { toast } from '@/components/ui/toaster';
@@ -19,6 +19,12 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { logError } from '@/lib/logger';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { formatProjectUserJoinedDate } from './projectUserDateFormatting';
+import {
+  ProjectAdminLoadError,
+  ProjectAdminResourceGate,
+  ProjectAdminStatusBanners,
+} from './ProjectAdminPageState';
+import { useProjectAdminResource } from './projectPageAccess';
 
 interface ProjectUser {
   id: string;
@@ -67,12 +73,176 @@ function getProjectUserInviteErrorMessage(error: unknown): string {
   return message;
 }
 
+function ProjectUsersEmptyState({
+  readOnly,
+  onInvite,
+}: {
+  readOnly: boolean;
+  onInvite: () => void;
+}) {
+  return (
+    <div className="rounded-lg border p-12 text-center">
+      <Shield className="mx-auto h-12 w-12 text-muted-foreground/50" />
+      <h3 className="mt-4 text-lg font-semibold">No team members yet</h3>
+      <p className="mt-2 text-muted-foreground">Invite users to collaborate on this project.</p>
+      <Button type="button" onClick={onInvite} className="mt-4" disabled={readOnly}>
+        Invite First User
+      </Button>
+    </div>
+  );
+}
+
+function ProjectUsersTable({
+  users,
+  currentUserId,
+  editingUser,
+  editRole,
+  saving,
+  removingUserId,
+  readOnly,
+  onEditRoleChange,
+  onStartEditing,
+  onSaveRole,
+  onCancelEditing,
+  onRequestRemove,
+}: {
+  users: ProjectUser[];
+  currentUserId: string | undefined;
+  editingUser: ProjectUser | null;
+  editRole: string;
+  saving: boolean;
+  removingUserId: string | null;
+  readOnly: boolean;
+  onEditRoleChange: (role: string) => void;
+  onStartEditing: (user: ProjectUser) => void;
+  onSaveRole: () => void;
+  onCancelEditing: () => void;
+  onRequestRemove: (user: ProjectUser) => void;
+}) {
+  return (
+    <div className="rounded-lg border overflow-hidden">
+      <table className="w-full">
+        <thead className="border-b bg-muted/50">
+          <tr>
+            <th className="text-left px-4 py-3 text-sm font-medium">User</th>
+            <th className="text-left px-4 py-3 text-sm font-medium">Role</th>
+            <th className="text-left px-4 py-3 text-sm font-medium">Status</th>
+            <th className="text-left px-4 py-3 text-sm font-medium">Joined</th>
+            <th className="text-left px-4 py-3 text-sm font-medium">Actions</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y">
+          {users.map((user) => (
+            <tr key={user.id} className="hover:bg-muted/25">
+              <td className="px-4 py-3">
+                <div>
+                  <div className="font-medium">
+                    {user.fullName || 'No name'}
+                    {user.userId === currentUserId && (
+                      <span className="ml-2 text-xs text-muted-foreground">(You)</span>
+                    )}
+                  </div>
+                  <div className="text-sm text-muted-foreground">{user.email}</div>
+                </div>
+              </td>
+              <td className="px-4 py-3">
+                {editingUser?.id === user.id ? (
+                  <NativeSelect
+                    aria-label={`Role for ${user.fullName || user.email}`}
+                    value={editRole}
+                    onChange={(e) => onEditRoleChange(e.target.value)}
+                    className="w-auto"
+                  >
+                    {ROLES.map((role) => (
+                      <option key={role.value} value={role.value}>
+                        {role.label}
+                      </option>
+                    ))}
+                  </NativeSelect>
+                ) : (
+                  <span className="capitalize">
+                    {ROLES.find((r) => r.value === user.role)?.label || user.role.replace('_', ' ')}
+                  </span>
+                )}
+              </td>
+              <td className="px-4 py-3">
+                <span
+                  className={`px-2 py-1 rounded-full text-xs ${
+                    statusColors[user.status] || statusColors.inactive
+                  }`}
+                >
+                  {user.status}
+                </span>
+              </td>
+              <td className="px-4 py-3 text-sm text-muted-foreground">
+                {formatProjectUserJoinedDate(user)}
+              </td>
+              <td className="px-4 py-3">
+                {user.userId !== currentUserId && !readOnly && (
+                  <div className="flex items-center gap-2">
+                    {editingUser?.id === user.id ? (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={onSaveRole}
+                          disabled={saving}
+                          className="text-primary hover:bg-primary/5"
+                          aria-label={`Save role for ${user.fullName || user.email}`}
+                          title="Save"
+                        >
+                          <Check className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={onCancelEditing}
+                          className="text-muted-foreground hover:bg-muted/50"
+                          aria-label={`Cancel role edit for ${user.fullName || user.email}`}
+                          title="Cancel"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => onStartEditing(user)}
+                          className="text-primary hover:bg-primary/5"
+                          aria-label={`Change role for ${user.fullName || user.email}`}
+                          title="Change role"
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => onRequestRemove(user)}
+                          disabled={removingUserId === user.id}
+                          className="text-destructive hover:bg-destructive/10"
+                          aria-label={`Remove ${user.fullName || user.email} from project`}
+                          title="Remove from project"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export function ProjectUsersPage() {
   const { projectId } = useParams();
   const { user: currentUser } = useAuth();
-  const [users, setUsers] = useState<ProjectUser[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState('viewer');
@@ -86,39 +256,37 @@ export function ProjectUsersPage() {
   const savingRolesRef = useRef(new Set<string>());
   const removingUsersRef = useRef(new Set<string>());
 
-  // Fetch project users
-  const fetchUsers = useCallback(async () => {
-    if (!projectId) {
-      setUsers([]);
-      setLoading(false);
-      setLoadError('Project not found');
-      return;
-    }
+  const loadProjectUsers = useCallback(async (id: string) => {
+    const data = await apiFetch<{ users: ProjectUser[] }>(
+      `/api/projects/${encodeURIComponent(id)}/users`,
+    );
+    return data.users || [];
+  }, []);
 
-    setLoading(true);
-    setLoadError(null);
+  const {
+    project,
+    items: users,
+    setItems: setUsers,
+    loading,
+    loadError,
+    reload,
+    canManageProject: canManageUsers,
+    readOnly,
+  } = useProjectAdminResource<ProjectUser>({
+    projectId,
+    resourceLabel: 'project team',
+    loadItems: loadProjectUsers,
+  });
 
-    try {
-      const data = await apiFetch<{ users: ProjectUser[] }>(
-        `/api/projects/${encodeURIComponent(projectId)}/users`,
-      );
-      setUsers(data.users || []);
-    } catch (err) {
-      logError('Failed to fetch project users:', err);
-      setUsers([]);
-      setLoadError(extractErrorMessage(err, 'Could not load project team. Please try again.'));
-    } finally {
-      setLoading(false);
-    }
-  }, [projectId]);
-
-  useEffect(() => {
-    fetchUsers();
-  }, [fetchUsers]);
+  const openInviteModal = () => {
+    if (readOnly) return;
+    setShowInviteModal(true);
+  };
 
   // Invite user
   const handleInvite = async () => {
     const email = normalizeInviteEmail(inviteEmail);
+    if (readOnly) return;
     if (!projectId || !email || invitingRef.current) return;
 
     invitingRef.current = true;
@@ -164,6 +332,7 @@ export function ProjectUsersPage() {
 
   // Update user role
   const handleUpdateRole = async () => {
+    if (readOnly) return;
     if (!editingUser || !editRole || !projectId) return;
 
     const updateKey = `${editingUser.userId}:${editRole}`;
@@ -202,6 +371,7 @@ export function ProjectUsersPage() {
 
   // Remove user
   const handleRemoveUser = async (user: ProjectUser) => {
+    if (readOnly) return;
     if (!projectId || removingUsersRef.current.has(user.id)) return;
 
     removingUsersRef.current.add(user.id);
@@ -234,6 +404,7 @@ export function ProjectUsersPage() {
   };
 
   const startEditing = (user: ProjectUser) => {
+    if (readOnly) return;
     setEditingUser(user);
     setEditRole(user.role);
   };
@@ -250,155 +421,44 @@ export function ProjectUsersPage() {
           <h1 className="text-2xl font-bold">Project Team</h1>
           <p className="text-muted-foreground">Manage team members and their roles</p>
         </div>
-        <Button type="button" onClick={() => setShowInviteModal(true)}>
-          <UserPlus className="h-4 w-4" />
-          Invite User
-        </Button>
+        {canManageUsers && (
+          <Button type="button" onClick={openInviteModal} disabled={readOnly}>
+            <UserPlus className="h-4 w-4" />
+            Invite User
+          </Button>
+        )}
       </div>
 
-      {loadError && (
-        <div
-          className="mb-6 flex items-center justify-between gap-3 rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
-          role="alert"
-        >
-          <span>{loadError}</span>
-          <Button type="button" variant="outline" size="sm" onClick={() => void fetchUsers()}>
-            Try again
-          </Button>
-        </div>
-      )}
+      <ProjectAdminStatusBanners
+        project={project}
+        canManage={canManageUsers}
+        readOnly={readOnly}
+        deniedMessage="You don't have permission to manage users for this project."
+        archivedMessage="Archived projects are read-only. Restore the project before editing team members."
+      />
 
-      {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-        </div>
-      ) : loadError ? null : users.length === 0 ? (
-        <div className="rounded-lg border p-12 text-center">
-          <Shield className="mx-auto h-12 w-12 text-muted-foreground/50" />
-          <h3 className="mt-4 text-lg font-semibold">No team members yet</h3>
-          <p className="mt-2 text-muted-foreground">Invite users to collaborate on this project.</p>
-          <Button type="button" onClick={() => setShowInviteModal(true)} className="mt-4">
-            Invite First User
-          </Button>
-        </div>
-      ) : (
-        <div className="rounded-lg border overflow-hidden">
-          <table className="w-full">
-            <thead className="border-b bg-muted/50">
-              <tr>
-                <th className="text-left px-4 py-3 text-sm font-medium">User</th>
-                <th className="text-left px-4 py-3 text-sm font-medium">Role</th>
-                <th className="text-left px-4 py-3 text-sm font-medium">Status</th>
-                <th className="text-left px-4 py-3 text-sm font-medium">Joined</th>
-                <th className="text-left px-4 py-3 text-sm font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {users.map((user) => (
-                <tr key={user.id} className="hover:bg-muted/25">
-                  <td className="px-4 py-3">
-                    <div>
-                      <div className="font-medium">
-                        {user.fullName || 'No name'}
-                        {user.userId === currentUser?.id && (
-                          <span className="ml-2 text-xs text-muted-foreground">(You)</span>
-                        )}
-                      </div>
-                      <div className="text-sm text-muted-foreground">{user.email}</div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    {editingUser?.id === user.id ? (
-                      <NativeSelect
-                        aria-label={`Role for ${user.fullName || user.email}`}
-                        value={editRole}
-                        onChange={(e) => setEditRole(e.target.value)}
-                        className="w-auto"
-                      >
-                        {ROLES.map((role) => (
-                          <option key={role.value} value={role.value}>
-                            {role.label}
-                          </option>
-                        ))}
-                      </NativeSelect>
-                    ) : (
-                      <span className="capitalize">
-                        {ROLES.find((r) => r.value === user.role)?.label ||
-                          user.role.replace('_', ' ')}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`px-2 py-1 rounded-full text-xs ${statusColors[user.status] || statusColors.inactive}`}
-                    >
-                      {user.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-muted-foreground">
-                    {formatProjectUserJoinedDate(user)}
-                  </td>
-                  <td className="px-4 py-3">
-                    {user.userId !== currentUser?.id && (
-                      <div className="flex items-center gap-2">
-                        {editingUser?.id === user.id ? (
-                          <>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={handleUpdateRole}
-                              disabled={saving}
-                              className="text-primary hover:bg-primary/5"
-                              aria-label={`Save role for ${user.fullName || user.email}`}
-                              title="Save"
-                            >
-                              <Check className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={cancelEditing}
-                              className="text-muted-foreground hover:bg-muted/50"
-                              aria-label={`Cancel role edit for ${user.fullName || user.email}`}
-                              title="Cancel"
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </>
-                        ) : (
-                          <>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => startEditing(user)}
-                              className="text-primary hover:bg-primary/5"
-                              aria-label={`Change role for ${user.fullName || user.email}`}
-                              title="Change role"
-                            >
-                              <Edit2 className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => setUserPendingRemove(user)}
-                              disabled={removingUserId === user.id}
-                              className="text-destructive hover:bg-destructive/10"
-                              aria-label={`Remove ${user.fullName || user.email} from project`}
-                              title="Remove from project"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <ProjectAdminLoadError message={loadError} onRetry={() => void reload()} />
+
+      <ProjectAdminResourceGate loading={loading} loadError={loadError} canManage={canManageUsers}>
+        {users.length === 0 ? (
+          <ProjectUsersEmptyState readOnly={readOnly} onInvite={openInviteModal} />
+        ) : (
+          <ProjectUsersTable
+            users={users}
+            currentUserId={currentUser?.id}
+            editingUser={editingUser}
+            editRole={editRole}
+            saving={saving}
+            removingUserId={removingUserId}
+            readOnly={readOnly}
+            onEditRoleChange={setEditRole}
+            onStartEditing={startEditing}
+            onSaveRole={handleUpdateRole}
+            onCancelEditing={cancelEditing}
+            onRequestRemove={setUserPendingRemove}
+          />
+        )}
+      </ProjectAdminResourceGate>
 
       {/* Invite User Modal */}
       {showInviteModal && (

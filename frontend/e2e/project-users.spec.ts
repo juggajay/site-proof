@@ -14,6 +14,8 @@ type ProjectUser = {
 type ProjectUsersApiOptions = {
   failUserLoadsUntil?: number;
   inviteDelayMs?: number;
+  user?: typeof E2E_ADMIN_USER;
+  projectOverrides?: Record<string, unknown>;
 };
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -48,12 +50,17 @@ const viewerUser: ProjectUser = {
   joinedAt: '2026-05-03T00:00:00.000Z',
 };
 
-async function mockProjectShellApi(page: Page) {
+async function mockProjectShellApi(
+  page: Page,
+  options: { user?: typeof E2E_ADMIN_USER; projectOverrides?: Record<string, unknown> } = {},
+) {
+  const user = options.user ?? E2E_ADMIN_USER;
+
   await page.route('**/api/auth/me', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ user: E2E_ADMIN_USER }),
+      body: JSON.stringify({ user }),
     });
   });
 
@@ -92,6 +99,8 @@ async function mockProjectShellApi(page: Page) {
           name: 'E2E Highway Upgrade',
           projectNumber: 'E2E-001',
           status: 'active',
+          currentUserRole: 'admin',
+          ...(options.projectOverrides ?? {}),
         },
       }),
     });
@@ -109,7 +118,10 @@ async function mockSeededProjectUsersApi(page: Page, options: ProjectUsersApiOpt
   let removeUserId: string | null = null;
   let userLoadCount = 0;
 
-  await mockProjectShellApi(page);
+  await mockProjectShellApi(page, {
+    user: options.user,
+    projectOverrides: options.projectOverrides,
+  });
 
   await page.route(`**/api/projects/${E2E_PROJECT_ID}/users`, async (route) => {
     if (route.request().method() === 'GET') {
@@ -201,7 +213,7 @@ async function mockSeededProjectUsersApi(page: Page, options: ProjectUsersApiOpt
     });
   });
 
-  await mockAuthenticatedUserState(page);
+  await mockAuthenticatedUserState(page, options.user ?? E2E_ADMIN_USER);
 
   return {
     getInviteRequest: () => inviteRequests.at(-1),
@@ -314,5 +326,29 @@ test.describe('Project users seeded admin contract', () => {
       email: 'qa.manager@example.com',
       role: 'quality_manager',
     });
+  });
+
+  test('blocks direct team-admin route when this project role is not an admin role', async ({
+    page,
+  }) => {
+    const projectManagerElsewhere = {
+      ...E2E_ADMIN_USER,
+      role: 'member',
+      roleInCompany: 'member',
+      dashboardRole: 'project_manager',
+    };
+    const api = await mockSeededProjectUsersApi(page, {
+      user: projectManagerElsewhere,
+      projectOverrides: { currentUserRole: 'viewer' },
+    });
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/users`);
+
+    await expect(page.getByRole('heading', { name: 'Project Team' })).toBeVisible();
+    await expect(page.getByRole('alert')).toContainText(
+      "You don't have permission to manage users for this project.",
+    );
+    await expect(page.getByRole('button', { name: 'Invite User' })).toHaveCount(0);
+    expect(api.getUserLoadCount()).toBe(0);
   });
 });

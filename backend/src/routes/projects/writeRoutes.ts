@@ -432,7 +432,7 @@ export function createProjectWriteRouter({
           ? Object.keys(req.body)
           : [];
       const isStatusOnlyUpdate = requestKeys.length === 1 && requestKeys[0] === 'status';
-      if (project.status === 'archived' && !isStatusOnlyUpdate) {
+      if (project.status === 'archived' && (!isStatusOnlyUpdate || status !== 'active')) {
         throw AppError.conflict(ARCHIVED_PROJECT_READ_ONLY_MESSAGE);
       }
 

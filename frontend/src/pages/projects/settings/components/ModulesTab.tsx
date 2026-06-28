@@ -7,6 +7,7 @@ import { extractErrorMessage } from '@/lib/errorHandling';
 interface ModulesTabProps {
   projectId: string;
   initialEnabledModules: EnabledModules;
+  readOnly?: boolean;
 }
 
 const MODULE_CONFIG = [
@@ -37,7 +38,11 @@ const MODULE_CONFIG = [
   },
 ] as const;
 
-export function ModulesTab({ projectId, initialEnabledModules }: ModulesTabProps) {
+export function ModulesTab({
+  projectId,
+  initialEnabledModules,
+  readOnly = false,
+}: ModulesTabProps) {
   const [enabledModules, setEnabledModules] = useState<EnabledModules>(initialEnabledModules);
   const [savingModule, setSavingModule] = useState<keyof EnabledModules | null>(null);
   const [saveError, setSaveError] = useState('');
@@ -48,6 +53,7 @@ export function ModulesTab({ projectId, initialEnabledModules }: ModulesTabProps
   }, [initialEnabledModules]);
 
   const handleModuleChange = async (moduleKey: keyof EnabledModules) => {
+    if (readOnly) return;
     if (savingModuleRef.current) return;
     if (!projectId) {
       setSaveError('Project not found');
@@ -94,6 +100,11 @@ export function ModulesTab({ projectId, initialEnabledModules }: ModulesTabProps
             {saveError}
           </div>
         )}
+        {readOnly && (
+          <div role="status" className="mb-4 rounded-lg bg-warning/10 p-3 text-sm text-warning">
+            Module shortcuts are read-only while this project is archived.
+          </div>
+        )}
         <div className="space-y-3">
           {MODULE_CONFIG.map((module) => (
             <label
@@ -110,7 +121,7 @@ export function ModulesTab({ projectId, initialEnabledModules }: ModulesTabProps
                 type="checkbox"
                 checked={enabledModules[module.key]}
                 onChange={() => void handleModuleChange(module.key)}
-                disabled={savingModule !== null}
+                disabled={readOnly || savingModule !== null}
                 className="h-5 w-5 cursor-pointer accent-primary"
               />
             </label>

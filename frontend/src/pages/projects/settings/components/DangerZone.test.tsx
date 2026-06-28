@@ -47,4 +47,19 @@ describe('DangerZone permissions', () => {
 
     expect(screen.getByRole('button', { name: /delete project/i })).toBeInTheDocument();
   });
+
+  it('only offers restore for an archived project', () => {
+    renderWithProviders(
+      <DangerZone
+        projectId="project-1"
+        project={{ ...project, status: 'archived' }}
+        onProjectUpdate={vi.fn()}
+        canDeleteProject={false}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: /mark as completed/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /restore project/i })).toBeInTheDocument();
+    expect(screen.getByText(/currently archived \(read-only\)/i)).toBeInTheDocument();
+  });
 });
