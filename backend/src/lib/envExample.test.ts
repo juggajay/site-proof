@@ -25,6 +25,8 @@ describe('.env.example', () => {
       'ALLOW_LOCAL_FILE_STORAGE',
     ]);
     expect(envExample).not.toMatch(/^SUPABASE_SERVICE_KEY=/m);
+    expect(envExample).toContain('Production requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY');
+    expect(envExample).toContain('production rejects it');
   });
 
   it('documents the disposable shadow database used by Prisma drift checks', async () => {
