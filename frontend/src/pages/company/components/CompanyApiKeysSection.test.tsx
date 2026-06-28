@@ -56,6 +56,7 @@ describe('CompanyApiKeysSection', () => {
     expect(screen.getByText('Their key')).toBeInTheDocument();
     expect(screen.getByText('Me User')).toBeInTheDocument();
     expect(screen.getByText('Them User')).toBeInTheDocument();
+    expect(screen.getAllByText('No expiry')).toHaveLength(2);
     expect(screen.getAllByRole('button', { name: /Revoke/ })).toHaveLength(2);
     expect(apiFetchMock).toHaveBeenCalledWith('/api/company/api-keys');
   });
@@ -68,7 +69,7 @@ describe('CompanyApiKeysSection', () => {
         name: 'New',
         keyPrefix: 'sp_new12345',
         scopes: 'read',
-        expiresAt: null,
+        expiresAt: '2026-12-18T00:00:00.000Z',
         createdAt: '2026-06-21T00:00:00.000Z',
         key: 'sp_thefullsecret',
       },
@@ -81,16 +82,18 @@ describe('CompanyApiKeysSection', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Create API key/ }));
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'New' } });
+    fireEvent.change(screen.getByLabelText('Expires after'), { target: { value: '180' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create key' }));
 
     await waitFor(() => {
       expect(apiFetchMock).toHaveBeenCalledWith('/api/api-keys', {
         method: 'POST',
-        body: JSON.stringify({ name: 'New', scopes: 'read' }),
+        body: JSON.stringify({ name: 'New', scopes: 'read', expiresInDays: 180 }),
       });
     });
 
     expect(await screen.findByText('sp_thefullsecret')).toBeInTheDocument();
+    expect(screen.getByText('Expires 18/12/2026')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Copy to clipboard' }));
     await waitFor(() => {

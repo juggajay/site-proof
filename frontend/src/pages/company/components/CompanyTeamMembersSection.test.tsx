@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -67,7 +67,7 @@ describe('CompanyTeamMembersSection', () => {
   it('shows an actionable empty state', async () => {
     apiFetchMock.mockResolvedValueOnce({ members: [] });
 
-    renderWithQueryClient(<CompanyTeamMembersSection />);
+    renderWithQueryClient(<CompanyTeamMembersSection currentUserCompanyRole="owner" />);
 
     await screen.findByText('No team members yet');
     expect(screen.getAllByRole('button', { name: 'Invite Member' })).toHaveLength(2);
@@ -90,7 +90,9 @@ describe('CompanyTeamMembersSection', () => {
       },
     });
 
-    const { invalidateSpy } = renderWithQueryClient(<CompanyTeamMembersSection />);
+    const { invalidateSpy } = renderWithQueryClient(
+      <CompanyTeamMembersSection currentUserCompanyRole="owner" />,
+    );
 
     await screen.findByText('No team members yet');
     fireEvent.click(screen.getAllByRole('button', { name: 'Invite Member' })[0]);
@@ -145,7 +147,9 @@ describe('CompanyTeamMembersSection', () => {
       status: 'cancelled',
     });
 
-    const { invalidateSpy } = renderWithQueryClient(<CompanyTeamMembersSection />);
+    const { invalidateSpy } = renderWithQueryClient(
+      <CompanyTeamMembersSection currentUserCompanyRole="owner" />,
+    );
 
     await screen.findByText('Pending Foreman');
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
@@ -251,6 +255,68 @@ describe('CompanyTeamMembersSection', () => {
     ).not.toBeInTheDocument();
     expect(
       screen.queryByRole('combobox', { name: 'Change role for Admin Two' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('hides owner-only member controls from non-owner company admins', async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      members: [
+        {
+          id: 'owner-1',
+          email: 'owner@example.com',
+          fullName: 'Owner User',
+          roleInCompany: 'owner',
+          hasPassword: true,
+          status: 'active',
+        },
+        {
+          id: 'admin-2',
+          email: 'admin@example.com',
+          fullName: 'Admin Two',
+          roleInCompany: 'admin',
+          hasPassword: true,
+          status: 'active',
+        },
+        {
+          id: 'admin-3',
+          email: 'peer-admin@example.com',
+          fullName: 'Peer Admin',
+          roleInCompany: 'admin',
+          hasPassword: true,
+          status: 'active',
+        },
+        {
+          id: 'member-1',
+          email: 'member@example.com',
+          fullName: 'Active Member',
+          roleInCompany: 'site_engineer',
+          hasPassword: true,
+          status: 'active',
+        },
+      ],
+    });
+
+    renderWithQueryClient(
+      <CompanyTeamMembersSection currentUserId="admin-2" currentUserCompanyRole="admin" />,
+    );
+    await screen.findByText('Active Member');
+
+    expect(
+      screen.queryByRole('combobox', { name: 'Change role for Peer Admin' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText('Peer Admin').closest('.grid')).toHaveTextContent('Owner only');
+
+    const memberRoleSelect = screen.getByRole('combobox', {
+      name: 'Change role for Active Member',
+    });
+    expect(
+      within(memberRoleSelect).queryByRole('option', { name: 'Admin' }),
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Invite Member' }));
+    const inviteRoleSelect = screen.getByLabelText('Company Role');
+    expect(
+      within(inviteRoleSelect).queryByRole('option', { name: 'Admin' }),
     ).not.toBeInTheDocument();
   });
 

@@ -9,8 +9,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Modal, ModalBody, ModalFooter, ModalHeader } from '@/components/ui/Modal';
 import {
-  COMPANY_MEMBER_ROLE_OPTIONS,
+  canCompanyActorManageMember,
   formatCompanyRoleLabel,
+  getCompanyMemberRoleOptionsForActor,
   type CompanyMember,
   type CompanyMemberInviteResponse,
 } from '../companySettingsData';
@@ -26,6 +27,7 @@ interface CompanyMemberRemoveResponse {
 
 interface CompanyTeamMembersSectionProps {
   currentUserId?: string;
+  currentUserCompanyRole?: string | null;
 }
 
 const defaultInviteForm = {
@@ -41,7 +43,10 @@ function getMemberStatus(member: CompanyMember): 'active' | 'pending' {
   return member.hasPassword === false ? 'pending' : 'active';
 }
 
-export function CompanyTeamMembersSection({ currentUserId }: CompanyTeamMembersSectionProps) {
+export function CompanyTeamMembersSection({
+  currentUserId,
+  currentUserCompanyRole,
+}: CompanyTeamMembersSectionProps) {
   const queryClient = useQueryClient();
   const [members, setMembers] = useState<CompanyMember[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(true);
@@ -78,6 +83,10 @@ export function CompanyTeamMembersSection({ currentUserId }: CompanyTeamMembersS
   useEffect(() => {
     void loadMembers();
   }, [loadMembers]);
+
+  const actorRole =
+    currentUserCompanyRole ?? members.find((member) => member.id === currentUserId)?.roleInCompany;
+  const roleOptions = getCompanyMemberRoleOptionsForActor(actorRole);
 
   const openInviteModal = () => {
     setInviteForm(defaultInviteForm);
@@ -285,9 +294,13 @@ export function CompanyTeamMembersSection({ currentUserId }: CompanyTeamMembersS
             {members.map((member) => {
               const status = getMemberStatus(member);
               const isCurrentUser = member.id === currentUserId;
-              const canRemove = !isCurrentUser && member.roleInCompany !== 'owner';
-              // Same gate as removal: not yourself and not the owner.
-              const canChangeRole = canRemove;
+              const canManageMember = canCompanyActorManageMember({
+                actorRole,
+                targetRole: member.roleInCompany,
+                isCurrentUser,
+              });
+              const canRemove = canManageMember;
+              const canChangeRole = canManageMember;
               return (
                 <div
                   key={member.id}
@@ -316,7 +329,7 @@ export function CompanyTeamMembersSection({ currentUserId }: CompanyTeamMembersS
                         onChange={(event) => void handleChangeRole(member, event.target.value)}
                         className="w-full rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground disabled:opacity-50"
                       >
-                        {COMPANY_MEMBER_ROLE_OPTIONS.map((option) => (
+                        {roleOptions.map((option) => (
                           <option key={option.value} value={option.value}>
                             {option.label}
                           </option>
@@ -355,7 +368,11 @@ export function CompanyTeamMembersSection({ currentUserId }: CompanyTeamMembersS
                       </Button>
                     ) : (
                       <span className="text-xs text-muted-foreground">
-                        {isCurrentUser ? 'You' : 'Owner'}
+                        {isCurrentUser
+                          ? 'You'
+                          : member.roleInCompany === 'owner'
+                            ? 'Owner'
+                            : 'Owner only'}
                       </span>
                     )}
                   </div>
@@ -417,7 +434,7 @@ export function CompanyTeamMembersSection({ currentUserId }: CompanyTeamMembersS
                   }
                   disabled={inviting}
                 >
-                  {COMPANY_MEMBER_ROLE_OPTIONS.map((option) => (
+                  {roleOptions.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
                     </option>

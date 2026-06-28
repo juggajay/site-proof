@@ -70,6 +70,30 @@ export const COMPANY_MEMBER_ROLE_OPTIONS = [
   { value: 'member', label: 'Member' },
 ] as const;
 
+export function getCompanyMemberRoleOptionsForActor(actorRole: string | null | undefined) {
+  if (actorRole === 'owner') {
+    return COMPANY_MEMBER_ROLE_OPTIONS;
+  }
+
+  return COMPANY_MEMBER_ROLE_OPTIONS.filter((option) => option.value !== 'admin');
+}
+
+export function canCompanyActorManageMember(params: {
+  actorRole: string | null | undefined;
+  targetRole: string | null | undefined;
+  isCurrentUser: boolean;
+}): boolean {
+  if (params.isCurrentUser || params.targetRole === 'owner') {
+    return false;
+  }
+
+  if (params.actorRole === 'owner') {
+    return true;
+  }
+
+  return params.actorRole === 'admin' && params.targetRole !== 'admin';
+}
+
 export function formatCompanyRoleLabel(role: string): string {
   return COMPANY_MEMBER_ROLE_OPTIONS.find((option) => option.value === role)?.label ?? role;
 }

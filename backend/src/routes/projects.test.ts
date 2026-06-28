@@ -2531,6 +2531,89 @@ describe('Project Team Management', () => {
     expect(res.body.error.message).toContain('own project role');
   });
 
+  it('should reject project managers managing project administrators', async () => {
+    const suffix = Date.now();
+    const managerEmail = `team-project-manager-${suffix}@example.com`;
+    const inviteeEmail = `team-project-admin-invitee-${suffix}@example.com`;
+    const managerRes = await request(app).post('/api/auth/register').send({
+      email: managerEmail,
+      password: 'SecureP@ssword123!',
+      fullName: 'Team Project Manager',
+      tosAccepted: true,
+    });
+    const inviteeRes = await request(app).post('/api/auth/register').send({
+      email: inviteeEmail,
+      password: 'SecureP@ssword123!',
+      fullName: 'Team Admin Invitee',
+      tosAccepted: true,
+    });
+    const managerToken = managerRes.body.token;
+    const managerId = managerRes.body.user.id;
+    const inviteeId = inviteeRes.body.user.id;
+
+    await prisma.user.updateMany({
+      where: { id: { in: [managerId, inviteeId] } },
+      data: { companyId, roleInCompany: 'viewer' },
+    });
+    await prisma.projectUser.upsert({
+      where: { projectId_userId: { projectId, userId } },
+      update: { role: 'admin', status: 'active' },
+      create: { projectId, userId, role: 'admin', status: 'active' },
+    });
+    await prisma.projectUser.upsert({
+      where: { projectId_userId: { projectId, userId: managerId } },
+      update: { role: 'project_manager', status: 'active' },
+      create: { projectId, userId: managerId, role: 'project_manager', status: 'active' },
+    });
+
+    try {
+      const inviteAdminRes = await request(app)
+        .post(`/api/projects/${projectId}/users`)
+        .set('Authorization', `Bearer ${managerToken}`)
+        .send({
+          email: inviteeEmail,
+          role: 'admin',
+        });
+
+      expect(inviteAdminRes.status).toBe(403);
+      expect(inviteAdminRes.body.error.message).toContain('grant the project admin role');
+      await expect(
+        prisma.projectUser.findFirst({ where: { projectId, userId: inviteeId } }),
+      ).resolves.toBeNull();
+
+      const demoteAdminRes = await request(app)
+        .patch(`/api/projects/${projectId}/users/${userId}`)
+        .set('Authorization', `Bearer ${managerToken}`)
+        .send({
+          role: 'viewer',
+        });
+
+      expect(demoteAdminRes.status).toBe(403);
+      expect(demoteAdminRes.body.error.message).toContain('manage project administrators');
+
+      const removeAdminRes = await request(app)
+        .delete(`/api/projects/${projectId}/users/${userId}`)
+        .set('Authorization', `Bearer ${managerToken}`);
+
+      expect(removeAdminRes.status).toBe(403);
+      expect(removeAdminRes.body.error.message).toContain('manage project administrators');
+      await expect(
+        prisma.projectUser.findFirst({
+          where: { projectId, userId },
+          select: { role: true, status: true },
+        }),
+      ).resolves.toMatchObject({ role: 'admin', status: 'active' });
+    } finally {
+      await prisma.projectUser.deleteMany({
+        where: { projectId, userId: { in: [managerId, inviteeId] } },
+      });
+      await prisma.emailVerificationToken.deleteMany({
+        where: { userId: { in: [managerId, inviteeId] } },
+      });
+      await prisma.user.deleteMany({ where: { id: { in: [managerId, inviteeId] } } });
+    }
+  });
+
   it('should keep at least one active project admin', async () => {
     const companyAdminEmail = `team-company-admin-${Date.now()}@example.com`;
     const companyAdminRes = await request(app).post('/api/auth/register').send({

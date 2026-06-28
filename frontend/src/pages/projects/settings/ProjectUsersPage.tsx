@@ -20,6 +20,11 @@ import { logError } from '@/lib/logger';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { formatProjectUserJoinedDate } from './projectUserDateFormatting';
 import {
+  canAssignProjectRole,
+  canRemoveProjectUser,
+  isLastActiveProjectTeamLead,
+} from './projectUsersGuards';
+import {
   ProjectAdminLoadError,
   ProjectAdminResourceGate,
   ProjectAdminStatusBanners,
@@ -132,108 +137,128 @@ function ProjectUsersTable({
           </tr>
         </thead>
         <tbody className="divide-y">
-          {users.map((user) => (
-            <tr key={user.id} className="hover:bg-muted/25">
-              <td className="px-4 py-3">
-                <div>
-                  <div className="font-medium">
-                    {user.fullName || 'No name'}
-                    {user.userId === currentUserId && (
-                      <span className="ml-2 text-xs text-muted-foreground">(You)</span>
-                    )}
+          {users.map((user) => {
+            const lastActiveTeamLead = isLastActiveProjectTeamLead(user, users);
+            const roleOptions = ROLES.filter((role) =>
+              canAssignProjectRole(user, role.value, users),
+            );
+            const canRemove = canRemoveProjectUser(user, users);
+            const teamLeadGuardCopy =
+              'Add another active admin or project manager before changing this role.';
+
+            return (
+              <tr key={user.id} className="hover:bg-muted/25">
+                <td className="px-4 py-3">
+                  <div>
+                    <div className="font-medium">
+                      {user.fullName || 'No name'}
+                      {user.userId === currentUserId && (
+                        <span className="ml-2 text-xs text-muted-foreground">(You)</span>
+                      )}
+                    </div>
+                    <div className="text-sm text-muted-foreground">{user.email}</div>
                   </div>
-                  <div className="text-sm text-muted-foreground">{user.email}</div>
-                </div>
-              </td>
-              <td className="px-4 py-3">
-                {editingUser?.id === user.id ? (
-                  <NativeSelect
-                    aria-label={`Role for ${user.fullName || user.email}`}
-                    value={editRole}
-                    onChange={(e) => onEditRoleChange(e.target.value)}
-                    className="w-auto"
+                </td>
+                <td className="px-4 py-3">
+                  {editingUser?.id === user.id ? (
+                    <>
+                      <NativeSelect
+                        aria-label={`Role for ${user.fullName || user.email}`}
+                        value={editRole}
+                        onChange={(e) => onEditRoleChange(e.target.value)}
+                        className="w-auto"
+                      >
+                        {roleOptions.map((role) => (
+                          <option key={role.value} value={role.value}>
+                            {role.label}
+                          </option>
+                        ))}
+                      </NativeSelect>
+                      {lastActiveTeamLead ? (
+                        <p className="mt-1 text-xs text-muted-foreground">{teamLeadGuardCopy}</p>
+                      ) : null}
+                    </>
+                  ) : (
+                    <span className="capitalize">
+                      {ROLES.find((r) => r.value === user.role)?.label ||
+                        user.role.replace('_', ' ')}
+                    </span>
+                  )}
+                </td>
+                <td className="px-4 py-3">
+                  <span
+                    className={`px-2 py-1 rounded-full text-xs ${
+                      statusColors[user.status] || statusColors.inactive
+                    }`}
                   >
-                    {ROLES.map((role) => (
-                      <option key={role.value} value={role.value}>
-                        {role.label}
-                      </option>
-                    ))}
-                  </NativeSelect>
-                ) : (
-                  <span className="capitalize">
-                    {ROLES.find((r) => r.value === user.role)?.label || user.role.replace('_', ' ')}
+                    {user.status}
                   </span>
-                )}
-              </td>
-              <td className="px-4 py-3">
-                <span
-                  className={`px-2 py-1 rounded-full text-xs ${
-                    statusColors[user.status] || statusColors.inactive
-                  }`}
-                >
-                  {user.status}
-                </span>
-              </td>
-              <td className="px-4 py-3 text-sm text-muted-foreground">
-                {formatProjectUserJoinedDate(user)}
-              </td>
-              <td className="px-4 py-3">
-                {user.userId !== currentUserId && !readOnly && (
-                  <div className="flex items-center gap-2">
-                    {editingUser?.id === user.id ? (
-                      <>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={onSaveRole}
-                          disabled={saving}
-                          className="text-primary hover:bg-primary/5"
-                          aria-label={`Save role for ${user.fullName || user.email}`}
-                          title="Save"
-                        >
-                          <Check className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={onCancelEditing}
-                          className="text-muted-foreground hover:bg-muted/50"
-                          aria-label={`Cancel role edit for ${user.fullName || user.email}`}
-                          title="Cancel"
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </>
-                    ) : (
-                      <>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => onStartEditing(user)}
-                          className="text-primary hover:bg-primary/5"
-                          aria-label={`Change role for ${user.fullName || user.email}`}
-                          title="Change role"
-                        >
-                          <Edit2 className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => onRequestRemove(user)}
-                          disabled={removingUserId === user.id}
-                          className="text-destructive hover:bg-destructive/10"
-                          aria-label={`Remove ${user.fullName || user.email} from project`}
-                          title="Remove from project"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                )}
-              </td>
-            </tr>
-          ))}
+                </td>
+                <td className="px-4 py-3 text-sm text-muted-foreground">
+                  {formatProjectUserJoinedDate(user)}
+                </td>
+                <td className="px-4 py-3">
+                  {user.userId !== currentUserId && !readOnly && (
+                    <div className="flex items-center gap-2">
+                      {editingUser?.id === user.id ? (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={onSaveRole}
+                            disabled={saving}
+                            className="text-primary hover:bg-primary/5"
+                            aria-label={`Save role for ${user.fullName || user.email}`}
+                            title="Save"
+                          >
+                            <Check className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={onCancelEditing}
+                            className="text-muted-foreground hover:bg-muted/50"
+                            aria-label={`Cancel role edit for ${user.fullName || user.email}`}
+                            title="Cancel"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => onStartEditing(user)}
+                            className="text-primary hover:bg-primary/5"
+                            aria-label={`Change role for ${user.fullName || user.email}`}
+                            title="Change role"
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => onRequestRemove(user)}
+                            disabled={removingUserId === user.id || !canRemove}
+                            className="text-destructive hover:bg-destructive/10"
+                            aria-label={`Remove ${user.fullName || user.email} from project`}
+                            title={
+                              canRemove
+                                ? 'Remove from project'
+                                : 'Add another active admin or project manager before removing this user'
+                            }
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

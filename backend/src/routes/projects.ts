@@ -320,6 +320,7 @@ async function getProjectAccessContext(projectId: string, user: AuthenticatedUse
   return {
     project,
     projectUser,
+    hasCompanyAdminAccess,
     hasProjectAccess: Boolean(projectUser) || hasCompanyAdminAccess,
     isProjectAdmin,
   };
