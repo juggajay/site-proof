@@ -21,6 +21,7 @@ import { useAuth } from '@/lib/auth';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { formatStatusLabel } from '@/lib/statusLabels';
 import { cn } from '@/lib/utils';
+import { NCREvidenceList } from '@/pages/ncr/components/NCREvidenceList';
 import { buildPortalCompanyQuery } from '@/pages/subcontractor-portal/portalCompanyScope';
 import { useSubbieShellContext } from '../subbieShellContext';
 import { useModuleAccessRevoked } from '../useModuleAccessRevoked';
@@ -35,6 +36,18 @@ interface NCR {
   raisedAt: string;
   raisedBy?: { fullName: string };
   ncrLots?: Array<{ lot?: { lotNumber?: string } }>;
+  ncrEvidence?: Array<{
+    id: string;
+    evidenceType: string;
+    uploadedAt?: string | null;
+    document: {
+      id: string;
+      filename: string;
+      fileUrl?: string | null;
+      mimeType?: string | null;
+      uploadedAt?: string | null;
+    } | null;
+  }>;
 }
 
 // Classic grouping (SubcontractorNCRsPage): Open / In Progress / Closed.
@@ -75,6 +88,7 @@ function NcrCard({ ncr }: { ncr: NCR }) {
     ?.map((l) => l.lot?.lotNumber)
     .filter(Boolean)
     .join(', ');
+  const evidence = ncr.ncrEvidence ?? [];
   const severity = SEVERITY_BADGE[ncr.severity] ?? SEVERITY_BADGE.minor;
   const status = statusBadge(ncr.status);
 
@@ -99,6 +113,11 @@ function NcrCard({ ncr }: { ncr: NCR }) {
             Raised {formatRaisedDate(ncr.raisedAt)}
             {ncr.raisedBy ? ` by ${ncr.raisedBy.fullName}` : ''}
           </div>
+          {evidence.length > 0 && (
+            <div className="mt-3">
+              <NCREvidenceList evidence={evidence} title="Evidence" variant="inline" />
+            </div>
+          )}
         </div>
         <span className={cn('shell-badge', status.cls)}>{status.label}</span>
       </div>

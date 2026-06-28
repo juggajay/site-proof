@@ -8,6 +8,7 @@ interface NCREvidenceListProps {
   evidence: NonNullable<NCR['ncrEvidence']>;
   title?: string;
   emptyLabel?: string;
+  variant?: 'panel' | 'inline';
 }
 
 function isImageEvidence(mimeType?: string | null) {
@@ -18,9 +19,13 @@ export function NCREvidenceList({
   evidence,
   title = 'Evidence',
   emptyLabel = 'No evidence uploaded yet.',
+  variant = 'panel',
 }: NCREvidenceListProps) {
+  const wrapperClassName =
+    variant === 'inline' ? 'border-t pt-3' : 'rounded-lg border bg-muted/30 p-3';
+
   return (
-    <div className="rounded-lg border bg-muted/30 p-3">
+    <div className={wrapperClassName}>
       <div className="mb-2 flex items-center justify-between gap-2">
         <p className="text-sm font-medium text-foreground">{title}</p>
         <span className="text-xs text-muted-foreground">{evidence.length}</span>
