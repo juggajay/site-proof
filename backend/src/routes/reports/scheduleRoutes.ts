@@ -13,6 +13,7 @@ import {
   MAX_SCHEDULED_REPORTS_PER_PROJECT,
   calculateNextScheduledReportRunAt,
 } from '../../lib/scheduledReports.js';
+import { projectTimeZoneFromState } from '../../lib/projectTimeZone.js';
 import {
   buildScheduledReportDeletedResponse,
   buildScheduledReportResponse,
@@ -48,7 +49,7 @@ type ScheduledReportRouterDependencies = {
     user: AuthUser | undefined,
     projectId: string,
     options?: { requireWritable?: boolean },
-  ) => Promise<void>;
+  ) => Promise<string | null>;
 };
 
 function parseScheduleRouteId(
@@ -231,7 +232,10 @@ export function createScheduledReportRouter({
     asyncHandler(async (req, res) => {
       const projectId = parseRequiredString(req.query.projectId, 'projectId');
 
-      await requireScheduledReportAccess(req.user, projectId, { requireWritable: true });
+      const projectState = await requireScheduledReportAccess(req.user, projectId, {
+        requireWritable: true,
+      });
+      const projectTimeZone = projectTimeZoneFromState(projectState);
 
       const schedules = await prisma.scheduledReport.findMany({
         where: { projectId },
@@ -239,7 +243,13 @@ export function createScheduledReportRouter({
         take: MAX_SCHEDULED_REPORTS_PER_PROJECT,
       });
 
-      res.json(buildScheduledReportsResponse(schedules, MAX_SCHEDULED_REPORTS_PER_PROJECT));
+      res.json(
+        buildScheduledReportsResponse(
+          schedules,
+          MAX_SCHEDULED_REPORTS_PER_PROJECT,
+          projectTimeZone,
+        ),
+      );
     }),
   );
 
@@ -254,7 +264,9 @@ export function createScheduledReportRouter({
       if (reportType === undefined || frequency === undefined || recipients === undefined) {
         throw AppError.badRequest('projectId, reportType, frequency, and recipients are required');
       }
-      await requireScheduledReportAccess(req.user, projectId, { requireWritable: true });
+      const projectState = await requireScheduledReportAccess(req.user, projectId, {
+        requireWritable: true,
+      });
 
       const normalizedReportType = parseScheduledReportType(reportType);
       const normalizedFrequency = parseScheduledReportFrequency(frequency);
@@ -271,6 +283,8 @@ export function createScheduledReportRouter({
         scheduleTiming.dayOfWeek,
         scheduleTiming.dayOfMonth,
         scheduleTiming.timeOfDay,
+        new Date(),
+        projectTimeZoneFromState(projectState),
       );
 
       const schedule = await prisma.$transaction(async (tx) => {
@@ -292,7 +306,9 @@ export function createScheduledReportRouter({
         });
       });
 
-      res.status(201).json(buildScheduledReportResponse(schedule));
+      res
+        .status(201)
+        .json(buildScheduledReportResponse(schedule, projectTimeZoneFromState(projectState)));
     }),
   );
 
@@ -312,7 +328,10 @@ export function createScheduledReportRouter({
       if (!existing) {
         throw AppError.notFound('Scheduled report');
       }
-      await requireScheduledReportAccess(req.user, existing.projectId, { requireWritable: true });
+      const projectState = await requireScheduledReportAccess(req.user, existing.projectId, {
+        requireWritable: true,
+      });
+      const projectTimeZone = projectTimeZoneFromState(projectState);
 
       const updateData: Prisma.ScheduledReportUpdateInput = {};
 
@@ -363,6 +382,8 @@ export function createScheduledReportRouter({
           scheduleTiming.dayOfWeek,
           scheduleTiming.dayOfMonth,
           scheduleTiming.timeOfDay,
+          new Date(),
+          projectTimeZone,
         );
       }
 
@@ -383,6 +404,8 @@ export function createScheduledReportRouter({
           existing.dayOfWeek,
           existing.dayOfMonth,
           existing.timeOfDay,
+          new Date(),
+          projectTimeZone,
         );
       }
 
@@ -391,7 +414,7 @@ export function createScheduledReportRouter({
         data: updateData,
       });
 
-      res.json(buildScheduledReportResponse(schedule));
+      res.json(buildScheduledReportResponse(schedule, projectTimeZone));
     }),
   );
 

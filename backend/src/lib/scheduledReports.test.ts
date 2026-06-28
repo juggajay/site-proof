@@ -10,6 +10,7 @@ import {
 type ScheduledReportProjectOptions = {
   subscriptionTier?: string;
   projectStatus?: string;
+  projectState?: string;
 };
 
 type DueScheduleOverrides = {
@@ -47,6 +48,7 @@ const SCHEDULE_RETRY_DELAY_MS = 5 * 60 * 1000;
 async function createScheduledReportProject({
   subscriptionTier = 'professional',
   projectStatus = 'active',
+  projectState = 'NSW',
 }: ScheduledReportProjectOptions = {}) {
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const company = await prisma.company.create({
@@ -61,7 +63,7 @@ async function createScheduledReportProject({
       projectNumber: `SCHPROC-${suffix}`,
       companyId: company.id,
       status: projectStatus,
-      state: 'NSW',
+      state: projectState,
       specificationSet: 'TfNSW',
     },
   });
@@ -361,35 +363,63 @@ afterEach(async () => {
 
 describe('calculateNextScheduledReportRunAt', () => {
   it('schedules daily reports later today or tomorrow', () => {
-    const beforeRun = new Date(2026, 4, 10, 8, 0, 0, 0);
-    const afterRun = new Date(2026, 4, 10, 10, 0, 0, 0);
+    const beforeRun = new Date('2026-05-10T08:00:00.000Z');
+    const afterRun = new Date('2026-05-10T10:00:00.000Z');
 
-    const today = calculateNextScheduledReportRunAt('daily', null, null, '09:00', beforeRun);
-    const tomorrow = calculateNextScheduledReportRunAt('daily', null, null, '09:00', afterRun);
+    const today = calculateNextScheduledReportRunAt('daily', null, null, '09:00', beforeRun, 'UTC');
+    const tomorrow = calculateNextScheduledReportRunAt(
+      'daily',
+      null,
+      null,
+      '09:00',
+      afterRun,
+      'UTC',
+    );
 
-    expect(today.getDate()).toBe(10);
-    expect(today.getHours()).toBe(9);
-    expect(today.getMinutes()).toBe(0);
-    expect(tomorrow.getDate()).toBe(11);
-    expect(tomorrow.getHours()).toBe(9);
-    expect(tomorrow.getMinutes()).toBe(0);
+    expect(today.toISOString()).toBe('2026-05-10T09:00:00.000Z');
+    expect(tomorrow.toISOString()).toBe('2026-05-11T09:00:00.000Z');
+  });
+
+  it('schedules reports from the project timezone rather than the server timezone', () => {
+    const perthMorning = new Date('2026-06-15T00:30:00.000Z'); // 08:30 in Perth
+    const nextRun = calculateNextScheduledReportRunAt(
+      'daily',
+      null,
+      null,
+      '09:00',
+      perthMorning,
+      'Australia/Perth',
+    );
+
+    expect(nextRun.toISOString()).toBe('2026-06-15T01:00:00.000Z');
+  });
+
+  it('uses the project timezone DST offset for summer schedules', () => {
+    const sydneySummerMorning = new Date('2026-01-14T21:00:00.000Z'); // 08:00 AEDT
+    const nextRun = calculateNextScheduledReportRunAt(
+      'daily',
+      null,
+      null,
+      '09:00',
+      sydneySummerMorning,
+      'Australia/Sydney',
+    );
+
+    expect(nextRun.toISOString()).toBe('2026-01-14T22:00:00.000Z');
   });
 
   it('clamps monthly runs to the last day of shorter months', () => {
-    const afterJanuaryRun = new Date(2026, 0, 31, 10, 0, 0, 0);
+    const afterJanuaryRun = new Date('2026-01-31T10:00:00.000Z');
     const nextRun = calculateNextScheduledReportRunAt(
       'monthly',
       null,
       31,
       '09:00',
       afterJanuaryRun,
+      'UTC',
     );
 
-    expect(nextRun.getFullYear()).toBe(2026);
-    expect(nextRun.getMonth()).toBe(1);
-    expect(nextRun.getDate()).toBe(28);
-    expect(nextRun.getHours()).toBe(9);
-    expect(nextRun.getMinutes()).toBe(0);
+    expect(nextRun.toISOString()).toBe('2026-02-28T09:00:00.000Z');
   });
 });
 
@@ -596,6 +626,26 @@ describe('processDueScheduledReports', () => {
       expect(result.sent).toBe(1);
       expect(result.failed).toBe(0);
       expect(getQueuedEmails()).toHaveLength(1);
+    } finally {
+      await cleanupProject(project.id, company.id);
+    }
+  });
+
+  it('advances delivered schedules using the project state timezone', async () => {
+    const { company, project } = await createScheduledReportProject({ projectState: 'WA' });
+    const now = new Date('2026-06-15T01:30:00.000Z'); // 09:30 in Perth
+    const schedule = await createDueSchedule(project.id, new Date(now.getTime() - 60_000), {
+      recipients: 'perth-recipient@example.com',
+    });
+
+    try {
+      const result = await processDueScheduledReports({ now, scheduleIds: [schedule.id] });
+
+      expectSingleSentResult(result);
+      expect(result.results[0]?.nextRunAt).toBe('2026-06-16T01:00:00.000Z');
+
+      const updatedSchedule = await getScheduledReport(schedule.id);
+      expect(updatedSchedule?.nextRunAt?.toISOString()).toBe('2026-06-16T01:00:00.000Z');
     } finally {
       await cleanupProject(project.id, company.id);
     }
