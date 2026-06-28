@@ -870,6 +870,7 @@ test.describe('Company settings seeded owner contract', () => {
     expect(api.getApiKeyCreateRequests()).toContainEqual({
       name: 'Power BI export',
       scopes: 'write',
+      expiresInDays: 90,
     });
     await page.getByRole('button', { name: 'Done' }).click();
     await expect(page.getByText('Power BI export')).toBeVisible();
