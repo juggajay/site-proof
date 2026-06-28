@@ -113,6 +113,7 @@ interface ClaimsMainContentProps {
   onExportMonthlyData: () => void;
   onCreateClaim: () => void;
   onSubmitClaim: (claimId: string) => void;
+  onDeleteDraftClaim: (claimId: string) => void;
   onDisputeClaim: (claimId: string) => void;
   onCertifyClaim: (claimId: string) => void;
   onRecordPayment: (claimId: string) => void;
@@ -133,6 +134,7 @@ export function ClaimsMainContent({
   onExportMonthlyData,
   onCreateClaim,
   onSubmitClaim,
+  onDeleteDraftClaim,
   onDisputeClaim,
   onCertifyClaim,
   onRecordPayment,
@@ -166,6 +168,7 @@ export function ClaimsMainContent({
         generatingEvidence={generatingEvidence}
         onCreateClaim={onCreateClaim}
         onSubmitClaim={onSubmitClaim}
+        onDeleteDraftClaim={onDeleteDraftClaim}
         onDisputeClaim={onDisputeClaim}
         onCertifyClaim={onCertifyClaim}
         onRecordPayment={onRecordPayment}
