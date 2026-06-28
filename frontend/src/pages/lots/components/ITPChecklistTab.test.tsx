@@ -181,6 +181,77 @@ describe('ITPChecklistTab verification field-state (M15)', () => {
     expect(screen.getByText(/Photo does not show the bedding layer/i)).toBeInTheDocument();
     expect(screen.getByText(/re-complete this item to resubmit/i)).toBeInTheDocument();
   });
+
+  it('renders a rejected completed row as actionable rather than accepted complete', async () => {
+    const onToggleCompletion = vi.fn();
+    const instance: ITPInstance = {
+      id: 'instance-rejected-action',
+      template: {
+        id: 'template-1',
+        name: 'Earthworks ITP',
+        checklistItems: [
+          makeChecklistItem({
+            id: 'item-1',
+            description: 'Place bedding',
+            category: 'Drainage',
+            order: 1,
+          }),
+        ],
+      },
+      completions: [
+        makeCompletion({
+          checklistItemId: 'item-1',
+          isCompleted: true,
+          isRejected: true,
+          verificationStatus: 'rejected',
+          verificationNotes: 'Photo does not show the bedding layer',
+        }),
+      ],
+    };
+
+    renderChecklist({ itpInstance: instance, onToggleCompletion });
+
+    const label = await screen.findByText('1. Place bedding');
+    expect(label.className).not.toContain('line-through');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mark "Place bedding" as complete' }));
+    expect(onToggleCompletion).toHaveBeenCalledWith('item-1', false, '');
+  });
+
+  it('locks a pending-review row instead of rendering it as accepted complete', async () => {
+    const instance: ITPInstance = {
+      id: 'instance-pending-review-action',
+      template: {
+        id: 'template-1',
+        name: 'Earthworks ITP',
+        checklistItems: [
+          makeChecklistItem({
+            id: 'item-1',
+            description: 'Place bedding',
+            category: 'Drainage',
+            order: 1,
+          }),
+        ],
+      },
+      completions: [
+        makeCompletion({
+          checklistItemId: 'item-1',
+          isCompleted: true,
+          isPendingVerification: true,
+          verificationStatus: 'pending_verification',
+        }),
+      ],
+    };
+
+    renderChecklist({ itpInstance: instance, canReviewITP: false });
+
+    const label = await screen.findByText('1. Place bedding');
+    expect(label.className).not.toContain('line-through');
+    expect(
+      screen.getByRole('button', { name: 'Awaiting verification for "Place bedding"' }),
+    ).toBeDisabled();
+    expect(screen.queryByText('Mark as N/A')).not.toBeInTheDocument();
+  });
 });
 
 describe('ITPChecklistTab verify/reject actions (H4)', () => {

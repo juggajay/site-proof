@@ -43,13 +43,15 @@ export async function updateLotStatusFromITP(itpInstanceId: string) {
       return;
     }
 
-    // Count completed items (including N/A items as "finished"), but a rejected
-    // completion is not finished work and must not auto-progress the lot.
+    // Count completed items (including N/A items as "finished"), but work that
+    // is still awaiting review or has been rejected is not accepted yet and must
+    // not auto-progress the lot.
     const completedItemIds = new Set(
       instance.completions
         .filter(
           (c) =>
             (c.status === 'completed' || c.status === 'not_applicable') &&
+            c.verificationStatus !== 'pending_verification' &&
             c.verificationStatus !== 'rejected',
         )
         .map((c) => c.checklistItemId),

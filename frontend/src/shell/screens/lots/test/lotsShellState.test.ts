@@ -11,6 +11,7 @@ import {
   deriveLotShellMeta,
   firstIncompleteIndex,
   holdPointGateDecision,
+  isItpItemActionable,
   isItpItemResolved,
   itpCompletionDisposition,
   itpHubSummary,
@@ -191,6 +192,25 @@ describe('itpCompletionDisposition / isItpItemResolved', () => {
   it('a bare completion with no flags is pending', () => {
     expect(isItpItemResolved(makeCompletion())).toBe(false);
   });
+  it('pending-verification and rejected submissions are not resolved', () => {
+    const pendingReview = makeCompletion({
+      isCompleted: true,
+      isPendingVerification: true,
+      verificationStatus: 'pending_verification',
+    });
+    const rejected = makeCompletion({
+      isCompleted: true,
+      isRejected: true,
+      verificationStatus: 'rejected',
+    });
+
+    expect(itpCompletionDisposition(pendingReview)).toBe('review');
+    expect(isItpItemResolved(pendingReview)).toBe(false);
+    expect(isItpItemActionable(pendingReview)).toBe(false);
+    expect(itpCompletionDisposition(rejected)).toBe('rejected');
+    expect(isItpItemResolved(rejected)).toBe(false);
+    expect(isItpItemActionable(rejected)).toBe(true);
+  });
 });
 
 // ── runItemOrder ──────────────────────────────────────────────────────────────
@@ -231,6 +251,29 @@ describe('firstIncompleteIndex', () => {
     const completions = [makeCompletion({ checklistItemId: 'a', isCompleted: true })];
     expect(firstIncompleteIndex(items, completions)).toBe(1);
   });
+  it('skips an item awaiting verification when actionable work remains', () => {
+    const completions = [
+      makeCompletion({
+        checklistItemId: 'a',
+        isCompleted: true,
+        verificationStatus: 'pending_verification',
+      }),
+      makeCompletion({ checklistItemId: 'b', isCompleted: true }),
+    ];
+    expect(firstIncompleteIndex(items, completions)).toBe(2);
+  });
+  it('lands on an item awaiting verification when no actionable work remains', () => {
+    const completions = [
+      makeCompletion({
+        checklistItemId: 'a',
+        isCompleted: true,
+        verificationStatus: 'pending_verification',
+      }),
+      makeCompletion({ checklistItemId: 'b', isCompleted: true }),
+      makeCompletion({ checklistItemId: 'c', isCompleted: true }),
+    ];
+    expect(firstIncompleteIndex(items, completions)).toBe(0);
+  });
   it('returns -1 when all resolved', () => {
     const completions = items.map((i) =>
       makeCompletion({ checklistItemId: i.id, isCompleted: true }),
@@ -255,6 +298,28 @@ describe('advanceToNextIncomplete', () => {
     const completions = [makeCompletion({ checklistItemId: 'c', isCompleted: true })];
     // From index 2 (just-resolved c), wrap to a (0).
     expect(advanceToNextIncomplete(items, completions, 2)).toBe(0);
+  });
+  it('skips pending-review rows while actionable work remains', () => {
+    const completions = [
+      makeCompletion({
+        checklistItemId: 'b',
+        isCompleted: true,
+        verificationStatus: 'pending_verification',
+      }),
+    ];
+    expect(advanceToNextIncomplete(items, completions, 0)).toBe(2);
+  });
+  it('returns pending-review rows when they are the only unresolved work left', () => {
+    const completions = [
+      makeCompletion({ checklistItemId: 'a', isCompleted: true }),
+      makeCompletion({
+        checklistItemId: 'b',
+        isCompleted: true,
+        verificationStatus: 'pending_verification',
+      }),
+      makeCompletion({ checklistItemId: 'c', isCompleted: true }),
+    ];
+    expect(advanceToNextIncomplete(items, completions, 0)).toBe(1);
   });
   it('returns -1 when everything is resolved', () => {
     const completions = items.map((i) =>

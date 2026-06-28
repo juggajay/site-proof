@@ -142,6 +142,68 @@ describe('MobileITPChecklist point metadata', () => {
   });
 });
 
+describe('MobileITPChecklist verification-aware progress', () => {
+  it('does not count pending-verification or rejected completions as complete', () => {
+    renderChecklist({
+      checklistItems: [
+        makeItem({ id: 'item-1', description: 'Submitted item', category: 'General', order: 1 }),
+        makeItem({ id: 'item-2', description: 'Rejected item', category: 'General', order: 2 }),
+        makeItem({ id: 'item-3', description: 'Accepted item', category: 'General', order: 3 }),
+      ],
+      completions: [
+        makeCompletion({
+          checklistItemId: 'item-1',
+          isCompleted: true,
+          isPendingVerification: true,
+          verificationStatus: 'pending_verification',
+        }),
+        makeCompletion({
+          checklistItemId: 'item-2',
+          isCompleted: true,
+          isRejected: true,
+          verificationStatus: 'rejected',
+          verificationNotes: 'Missing photo evidence',
+        }),
+        makeCompletion({ checklistItemId: 'item-3', isCompleted: true }),
+        makeCompletion({ checklistItemId: 'stale-item', isCompleted: true }),
+      ],
+    });
+
+    expect(screen.getByText('33%')).toBeInTheDocument();
+    expect(screen.getAllByText('1/3')[0]).toBeInTheDocument();
+    expect(screen.getByText('Awaiting verification')).toBeInTheDocument();
+    expect(screen.getByText('Rejected')).toBeInTheDocument();
+  });
+
+  it('opens rejected items with the rejection reason and resubmit guidance', () => {
+    renderChecklist({
+      checklistItems: [
+        makeItem({
+          id: 'item-1',
+          description: 'Retake photo before resubmitting',
+          category: 'General',
+          order: 1,
+        }),
+      ],
+      completions: [
+        makeCompletion({
+          checklistItemId: 'item-1',
+          isCompleted: true,
+          isRejected: true,
+          verificationStatus: 'rejected',
+          verificationNotes: 'Photo evidence was blurry',
+        }),
+      ],
+    });
+
+    fireEvent.click(screen.getByText(/Retake photo before resubmitting/i));
+
+    expect(screen.getByText('Rejected by head contractor')).toBeInTheDocument();
+    expect(screen.getAllByText('Photo evidence was blurry')[0]).toBeInTheDocument();
+    expect(screen.getByText(/Update the item and resubmit it for review/i)).toBeInTheDocument();
+  });
+});
+
 describe('MobileITPChecklist N/A and Fail keep failure context', () => {
   it('keeps the sheet open with the typed reason and an inline error when N/A fails', async () => {
     const onMarkNotApplicable = vi.fn().mockResolvedValue(false);

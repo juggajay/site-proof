@@ -32,6 +32,7 @@ import {
   advanceToNextIncomplete,
   firstIncompleteIndex,
   holdPointGateDecision,
+  itpCompletionDisposition,
   runItemOrder,
   runProgress,
 } from '@/shell/screens/lots/lotsShellState';
@@ -72,6 +73,8 @@ const STRIP_STATE_LINE: Record<string, string> = {
   failed: '✕ Failed — needs attention',
   na: 'N/A — reason recorded',
   hold: 'Awaiting hold point release',
+  review: 'Awaiting head-contractor verification',
+  rejected: 'Rejected — update and resubmit',
   open: 'Not started',
 };
 
@@ -122,6 +125,9 @@ export function SubbieItpRunScreen() {
   const progress = runProgress(orderedItems, completions, currentIndex);
   const currentItem = currentIndex >= 0 ? orderedItems[currentIndex] : undefined;
   const currentCompletion = currentItem ? run.completionFor(currentItem.id) : undefined;
+  const currentDisposition = itpCompletionDisposition(currentCompletion);
+  const awaitingVerification = currentDisposition === 'review';
+  const wasRejected = currentDisposition === 'rejected';
   const gate = currentItem
     ? holdPointGateDecision(currentItem, currentCompletion)
     : { kind: 'open' as const };
@@ -174,6 +180,7 @@ export function SubbieItpRunScreen() {
 
   const handlePass = async () => {
     if (!currentItem || submitting) return;
+    if (awaitingVerification) return;
     if (gate.kind === 'awaiting-release') return; // never complete an un-released hold point
     setSubmitting(true);
     const ok = await run.pass(currentItem.id, currentCompletion?.notes ?? null);
@@ -378,7 +385,8 @@ export function SubbieItpRunScreen() {
 
   // Tri-state cluster — hidden entirely for read-only subbies. Hold points still
   // never offer Pass.
-  const triStateCluster = readOnly ? null : gate.kind === 'awaiting-release' ? (
+  const triStateCluster = readOnly ? null : awaitingVerification ? null : gate.kind ===
+    'awaiting-release' ? (
     <div className="grid grid-cols-2 gap-3">
       <button
         type="button"
@@ -506,19 +514,23 @@ export function SubbieItpRunScreen() {
                       ? 'text-success'
                       : cellState === 'failed'
                         ? 'text-destructive'
-                        : cellState === 'hold'
-                          ? 'text-warning'
-                          : 'text-muted-foreground',
+                        : cellState === 'rejected'
+                          ? 'text-destructive'
+                          : cellState === 'hold' || cellState === 'review'
+                            ? 'text-warning'
+                            : 'text-muted-foreground',
                   ].join(' ')}
                 >
                   {STRIP_STATE_LINE[cellState]}
                 </p>
-                {/* Pending-verification — surfaced from the shared completion, not
-                    invented. A resolved-but-unverified completion shows the quiet
-                    "awaiting HC verification" line the classic surface exposes. */}
-                {cellState === 'done' && cellCompletion && !cellCompletion.isVerified && (
+                {cellState === 'review' && (
                   <p className="text-[12px] text-muted-foreground">
                     Awaiting head-contractor verification.
+                  </p>
+                )}
+                {cellState === 'rejected' && cellCompletion?.verificationNotes && (
+                  <p className="text-[12px] text-destructive">
+                    Rejected: {cellCompletion.verificationNotes}
                   </p>
                 )}
               </>
@@ -538,6 +550,26 @@ export function SubbieItpRunScreen() {
               />
               <p className="text-[13px] leading-relaxed text-warning-foreground">
                 View only — contact your PM for completion access.
+              </p>
+            </div>
+          )}
+          {!readOnly && awaitingVerification && (
+            <div className="rounded-2xl border border-warning/40 bg-warning/10 p-4">
+              <div className="flex items-center gap-2 text-[14px] font-semibold text-warning">
+                Awaiting head-contractor verification
+              </div>
+              <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">
+                This check has been submitted and is waiting for review.
+              </p>
+            </div>
+          )}
+          {!readOnly && wasRejected && (
+            <div className="rounded-2xl border border-destructive/30 bg-destructive/10 p-4">
+              <div className="flex items-center gap-2 text-[14px] font-semibold text-destructive">
+                Rejected by head contractor
+              </div>
+              <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">
+                {currentCompletion?.verificationNotes || 'Update the check and resubmit it.'}
               </p>
             </div>
           )}

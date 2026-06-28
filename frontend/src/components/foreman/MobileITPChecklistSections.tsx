@@ -117,6 +117,7 @@ interface MobileITPItemProps {
   isUpdating: boolean;
   canComplete: boolean;
   releaseRequired?: boolean;
+  verificationReason?: string | null;
   onTap: () => void;
   onQuickComplete: () => void;
 }
@@ -130,6 +131,7 @@ export function MobileITPItem({
   isUpdating,
   canComplete,
   releaseRequired = false,
+  verificationReason = null,
   onTap,
   onQuickComplete,
 }: MobileITPItemProps) {
@@ -138,6 +140,8 @@ export function MobileITPItem({
     completed: 'bg-primary border-primary text-primary-foreground',
     na: 'bg-muted-foreground border-muted-foreground text-background',
     failed: 'bg-destructive border-destructive text-destructive-foreground',
+    review: 'bg-warning/10 border-warning text-warning',
+    rejected: 'bg-destructive/10 border-destructive text-destructive',
     disabled: 'bg-muted border-border text-muted-foreground',
   };
 
@@ -146,7 +150,14 @@ export function MobileITPItem({
     completed: '✓',
     na: '—',
     failed: '✗',
+    review: '',
+    rejected: '!',
   };
+
+  const quickCompleteAllowed =
+    status === 'pending' || status === 'completed' || status === 'rejected';
+  const statusLabel =
+    status === 'review' ? 'Awaiting verification' : status === 'rejected' ? 'Rejected' : null;
 
   const pointTypeBadge = {
     standard: {
@@ -179,12 +190,24 @@ export function MobileITPItem({
       <button
         onClick={(e) => {
           e.stopPropagation();
-          if (canComplete && (status === 'pending' || status === 'completed')) {
+          if (canComplete && quickCompleteAllowed) {
             onQuickComplete();
           }
         }}
-        disabled={isUpdating || status === 'na' || status === 'failed' || !canComplete}
-        title={releaseRequired ? 'Release this hold point before passing it' : undefined}
+        disabled={
+          isUpdating ||
+          status === 'na' ||
+          status === 'failed' ||
+          status === 'review' ||
+          !canComplete
+        }
+        title={
+          releaseRequired
+            ? 'Release this hold point before passing it'
+            : status === 'review'
+              ? 'Awaiting head-contractor verification'
+              : undefined
+        }
         className={`flex-shrink-0 w-12 h-12 rounded-full border-2 flex items-center justify-center text-xl font-bold transition-all touch-manipulation ${
           !canComplete ? statusColors.disabled : statusColors[status]
         } ${isUpdating ? 'animate-pulse' : ''} ${!canComplete ? 'cursor-not-allowed' : ''}`}
@@ -224,6 +247,16 @@ export function MobileITPItem({
           {hasNotes && (
             <span className="flex items-center gap-1 text-muted-foreground">
               <MessageSquare className="w-3 h-3" />
+            </span>
+          )}
+          {statusLabel && (
+            <span className={status === 'rejected' ? 'text-destructive' : 'text-warning'}>
+              {statusLabel}
+            </span>
+          )}
+          {status === 'rejected' && verificationReason && (
+            <span className="truncate text-destructive" title={verificationReason}>
+              {verificationReason}
             </span>
           )}
         </div>

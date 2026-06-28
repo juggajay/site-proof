@@ -67,6 +67,22 @@ function makeInstance(items: ITPChecklistItem[], completions: ITPCompletion[] = 
   };
 }
 
+function makeCompletion(overrides: Partial<ITPCompletion>): ITPCompletion {
+  return {
+    id: 'completion-1',
+    checklistItemId: 'item-1',
+    isCompleted: false,
+    notes: null,
+    completedAt: null,
+    completedBy: null,
+    isVerified: false,
+    verifiedAt: null,
+    verifiedBy: null,
+    attachments: [],
+    ...overrides,
+  };
+}
+
 function makeRun(instance: ITPInstance | null) {
   return {
     instance,
@@ -152,6 +168,51 @@ describe('ItpRunScreen — active item', () => {
     const input = container.querySelector('input[type="file"]') as HTMLInputElement;
     fireEvent.change(input, { target: { files: [file] } });
     expect(addPhoto).toHaveBeenCalledWith('a', file);
+  });
+
+  it('shows pending verification as waiting for review and hides completion actions', () => {
+    _run = makeRun(
+      makeInstance(
+        [makeItem({ id: 'a' })],
+        [
+          makeCompletion({
+            checklistItemId: 'a',
+            isCompleted: true,
+            isPendingVerification: true,
+            verificationStatus: 'pending_verification',
+          }),
+        ],
+      ),
+    );
+
+    renderRun();
+
+    expect(screen.getAllByText(/Awaiting head-contractor verification/i).length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: /Pass this check/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Fail this check/i })).toBeNull();
+  });
+
+  it('shows rejected verification reason and keeps rework actions available', () => {
+    _run = makeRun(
+      makeInstance(
+        [makeItem({ id: 'a', description: 'Retake photo' })],
+        [
+          makeCompletion({
+            checklistItemId: 'a',
+            isCompleted: true,
+            isRejected: true,
+            verificationStatus: 'rejected',
+            verificationNotes: 'Photo evidence was blurry',
+          }),
+        ],
+      ),
+    );
+
+    renderRun();
+
+    expect(screen.getByText('Rejected by head contractor')).toBeInTheDocument();
+    expect(screen.getAllByText(/Photo evidence was blurry/i).length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: /Pass this check/i })).toBeInTheDocument();
   });
 });
 
