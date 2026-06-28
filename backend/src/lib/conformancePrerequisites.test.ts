@@ -141,6 +141,23 @@ describe('buildItpChecklistCompleteness', () => {
     ]);
   });
 
+  it.each(['pending_verification', 'rejected'])(
+    'blocks N/A items that are %s instead of accepted',
+    (verificationStatus) => {
+      const result = buildItpChecklistCompleteness(items, [
+        { checklistItemId: 'i1', status: 'completed', verificationStatus: 'none' },
+        { checklistItemId: 'i2', status: 'not_applicable', verificationStatus },
+        { checklistItemId: 'i3', status: 'completed', verificationStatus: 'none' },
+      ]);
+
+      expect(result.completed).toBe(false);
+      expect(result.completedCount).toBe(2);
+      expect(result.incompleteItems).toEqual([
+        { id: 'i2', description: 'Second', pointType: 'witness_point' },
+      ]);
+    },
+  );
+
   it('is not complete for an empty checklist (matches existing semantics)', () => {
     const result = buildItpChecklistCompleteness([], []);
 
@@ -550,6 +567,27 @@ describe('checkConformancePrerequisites — gate wiring (mocked Prisma)', () => 
     expect(result.blockingReasons).toEqual([]);
     expect(result.prerequisites?.itpCompleted).toBe(true);
   });
+
+  it.each(['pending_verification', 'rejected'])(
+    'standard item N/A with %s verification still blocks conformance',
+    async (verificationStatus) => {
+      mocks.lotFindUnique.mockResolvedValue(
+        makeLot({
+          checklistItems: [NON_TEST_ITEM],
+          completionStatuses: {
+            i1: { status: 'not_applicable', verificationStatus },
+          },
+          testResults: [],
+        }),
+      );
+
+      const result = await checkConformancePrerequisites('lot-1');
+
+      expect(result.prerequisites?.itpCompleted).toBe(false);
+      expect(result.canConform).toBe(false);
+      expect(result.blockingReasons).toContain('ITP checklist incomplete (0/1 items completed)');
+    },
+  );
 
   it('hold-point item N/A + hold point NOT released → blocked with N/A hold-point message', async () => {
     mocks.lotFindUnique.mockResolvedValue(

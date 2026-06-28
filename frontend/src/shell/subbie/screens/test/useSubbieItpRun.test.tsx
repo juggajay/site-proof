@@ -222,4 +222,33 @@ describe('useSubbieItpRun', () => {
     expect(saved).toBe(false);
     expect(handleToggleCompletionMock).toHaveBeenCalledWith('item-1', true, 'ready');
   });
+
+  it('pass resubmits a rejected completed item instead of treating it as done', async () => {
+    const rejected: ITPCompletion = {
+      id: 'comp-rejected',
+      checklistItemId: 'item-1',
+      isCompleted: true,
+      isRejected: true,
+      verificationStatus: 'rejected',
+      verificationNotes: 'Redo this check',
+      notes: 'old pass',
+      completedAt: '2026-06-10',
+      completedBy: null,
+      isVerified: false,
+      verifiedAt: null,
+      verifiedBy: null,
+      attachments: [],
+    };
+    setApi({ canComplete: true, completions: [rejected] });
+    const { result } = renderHook(() => useSubbieItpRun('lot-1'));
+    await waitFor(() => expect(result.current.instance).not.toBeNull());
+
+    let saved: boolean | undefined;
+    await act(async () => {
+      saved = await result.current.pass('item-1', 'ready after rework');
+    });
+
+    expect(saved).toBe(true);
+    expect(handleToggleCompletionMock).toHaveBeenCalledWith('item-1', true, 'ready after rework');
+  });
 });

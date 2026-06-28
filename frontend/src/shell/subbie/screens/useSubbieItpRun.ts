@@ -162,7 +162,8 @@ export function useSubbieItpRun(
   const pass = useCallback(
     async (checklistItemId: string, notes: string | null): Promise<boolean> => {
       const existing = instance?.completions.find((c) => c.checklistItemId === checklistItemId);
-      if (existing?.isCompleted) return true; // idempotent advance
+      const wasRejected = existing?.isRejected || existing?.verificationStatus === 'rejected';
+      if (existing?.isCompleted && !wasRejected) return true; // idempotent advance
       try {
         return await handleToggleCompletion(checklistItemId, true, notes);
       } catch {

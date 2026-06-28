@@ -1,10 +1,33 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { E2E_PROJECT_ID, login, loginAsAdmin, loginAsSubcontractor } from './helpers';
 
+const E2E_OUTCOME_LOT_ID = 'e2e-itp-outcomes-lot';
+const E2E_OUTCOME_INSTANCE_ID = '8e580001-15c7-4f8b-9a2a-000000000002';
+const E2E_OUTCOME_PASS_ITEM_ID = '8e580001-15c7-4f8b-9a2a-000000000003';
+const E2E_OUTCOME_NA_ITEM_ID = '8e580001-15c7-4f8b-9a2a-000000000004';
+const E2E_OUTCOME_FAIL_ITEM_ID = '8e580001-15c7-4f8b-9a2a-000000000005';
+
 function futureDateKey(daysAhead: number) {
   const date = new Date();
   date.setDate(date.getDate() + daysAhead);
   return date.toISOString().slice(0, 10);
+}
+
+async function waitForItpCompletionPost(page: Page, action: () => Promise<void>) {
+  const [response] = await Promise.all([
+    page.waitForResponse(
+      (res) =>
+        res.url().includes('/api/itp/completions') &&
+        res.request().method() === 'POST' &&
+        res.status() === 200,
+    ),
+    action(),
+  ]);
+
+  return {
+    requestBody: response.request().postDataJSON(),
+    responseBody: await response.json(),
+  };
 }
 
 async function drawSignature(page: Page, scope: Locator) {
@@ -52,6 +75,82 @@ test.describe.serial('seeded real-backend role journeys', () => {
     await expect(page.getByText('Verify formation is ready for inspection')).toBeVisible();
     await expect(page.getByText(/View only/i)).toHaveCount(0);
     await expect(page.getByText(/do not have permission to complete/i)).toHaveCount(0);
+  });
+
+  test('assigned subcontractor can submit ordinary ITP pass, N/A, and fail outcomes', async ({
+    page,
+  }) => {
+    await loginAsSubcontractor(page);
+
+    await page.goto(
+      `/subcontractor-portal/lots/${E2E_OUTCOME_LOT_ID}/itp?projectId=${E2E_PROJECT_ID}`,
+    );
+
+    await expect(page.getByRole('heading', { name: 'LOT-ITP-STD' }).first()).toBeVisible();
+    await expect(page.getByText('Subcontractor PASS ordinary item')).toBeVisible();
+    await expect(page.getByText('Subcontractor N/A ordinary item')).toBeVisible();
+    await expect(page.getByText('Subcontractor FAIL ordinary item')).toBeVisible();
+    await expect(page.getByText(/View only/i)).toHaveCount(0);
+    await expect(page.getByText(/do not have permission to complete/i)).toHaveCount(0);
+
+    await page.getByText('Subcontractor PASS ordinary item').click();
+    const passResult = await waitForItpCompletionPost(page, () =>
+      page.getByRole('button', { name: /PASS/ }).click(),
+    );
+
+    expect(passResult.requestBody).toMatchObject({
+      itpInstanceId: E2E_OUTCOME_INSTANCE_ID,
+      checklistItemId: E2E_OUTCOME_PASS_ITEM_ID,
+      isCompleted: true,
+    });
+    expect(passResult.responseBody.completion).toMatchObject({
+      checklistItemId: E2E_OUTCOME_PASS_ITEM_ID,
+      isCompleted: true,
+      verificationStatus: 'pending_verification',
+    });
+
+    await page.getByText('Subcontractor N/A ordinary item').click();
+    await page.getByRole('button', { name: /N\/A/ }).click();
+    await page
+      .getByPlaceholder('Why is this item not applicable?')
+      .fill('Existing survey mark makes this check not applicable.');
+    const naResult = await waitForItpCompletionPost(page, () =>
+      page.getByRole('button', { name: 'Mark as N/A' }).click(),
+    );
+
+    expect(naResult.requestBody).toMatchObject({
+      itpInstanceId: E2E_OUTCOME_INSTANCE_ID,
+      checklistItemId: E2E_OUTCOME_NA_ITEM_ID,
+      status: 'not_applicable',
+      notes: 'Existing survey mark makes this check not applicable.',
+    });
+    expect(naResult.responseBody.completion).toMatchObject({
+      checklistItemId: E2E_OUTCOME_NA_ITEM_ID,
+      isNotApplicable: true,
+      verificationStatus: 'pending_verification',
+    });
+
+    await page.getByText('Subcontractor FAIL ordinary item').click();
+    await page.getByRole('button', { name: /FAIL/ }).click();
+    await page.getByPlaceholder('Describe the issue...').fill('Edge restraint is damaged.');
+    const failResult = await waitForItpCompletionPost(page, () =>
+      page.getByRole('button', { name: 'Mark as Failed' }).click(),
+    );
+
+    expect(failResult.requestBody).toMatchObject({
+      itpInstanceId: E2E_OUTCOME_INSTANCE_ID,
+      checklistItemId: E2E_OUTCOME_FAIL_ITEM_ID,
+      status: 'failed',
+      ncrDescription: 'Edge restraint is damaged.',
+      ncrCategory: 'workmanship',
+      ncrSeverity: 'minor',
+    });
+    expect(failResult.responseBody.completion).toMatchObject({
+      checklistItemId: E2E_OUTCOME_FAIL_ITEM_ID,
+      isFailed: true,
+      verificationStatus: 'pending_verification',
+    });
+    expect(failResult.responseBody.ncr?.ncrNumber).toMatch(/^NCR-/);
   });
 
   test('seeded foreman reaches the mobile shell against the real backend', async ({ page }) => {

@@ -3101,6 +3101,136 @@ describe('ITP Completion Decision Logic (characterization)', () => {
     await prisma.lot.update({ where: { id: lotId }, data: { status: 'not_started' } });
   }
 
+  it('allows a foreman to save ordinary PASS, N/A, and FAIL outcomes without HC verification', async () => {
+    const foreman = await registerTestUser('itp-decision-foreman', 'ITP Decision Foreman');
+
+    await prisma.user.update({
+      where: { id: foreman.userId },
+      data: { companyId, roleInCompany: 'foreman' },
+    });
+    await prisma.projectUser.create({
+      data: { projectId, userId: foreman.userId, role: 'foreman', status: 'active' },
+    });
+
+    try {
+      for (const outcome of [
+        {
+          label: 'PASS',
+          expectedStatus: 'completed',
+          body: { isCompleted: true, notes: 'Foreman checked and passed' },
+          assertion: (completion: {
+            isCompleted?: boolean;
+            isNotApplicable?: boolean;
+            isFailed?: boolean;
+          }) => {
+            expect(completion.isCompleted).toBe(true);
+            expect(completion.isNotApplicable).toBe(false);
+            expect(completion.isFailed).toBe(false);
+          },
+          expectsNcr: false,
+        },
+        {
+          label: 'N/A',
+          expectedStatus: 'not_applicable',
+          body: { status: 'not_applicable', notes: 'Foreman confirmed item is not applicable' },
+          assertion: (completion: {
+            isCompleted?: boolean;
+            isNotApplicable?: boolean;
+            isFailed?: boolean;
+          }) => {
+            expect(completion.isCompleted).toBe(true);
+            expect(completion.isNotApplicable).toBe(true);
+            expect(completion.isFailed).toBe(false);
+          },
+          expectsNcr: false,
+        },
+        {
+          label: 'FAIL',
+          expectedStatus: 'failed',
+          body: {
+            status: 'failed',
+            ncrDescription: 'Foreman found ordinary ITP defect',
+            ncrCategory: 'workmanship',
+            ncrSeverity: 'minor',
+          },
+          assertion: (completion: {
+            isCompleted?: boolean;
+            isNotApplicable?: boolean;
+            isFailed?: boolean;
+          }) => {
+            expect(completion.isCompleted).toBe(false);
+            expect(completion.isNotApplicable).toBe(false);
+            expect(completion.isFailed).toBe(true);
+          },
+          expectsNcr: true,
+        },
+      ] as const) {
+        await resetContractorCompletion();
+        await prisma.nCRLot.deleteMany({ where: { lotId } });
+        await prisma.nCR.deleteMany({ where: { projectId, raisedById: foreman.userId } });
+        await prisma.auditLog.deleteMany({
+          where: { action: AuditAction.ITP_ITEM_COMPLETED, userId: foreman.userId },
+        });
+
+        const res = await request(app)
+          .post('/api/itp/completions')
+          .set('Authorization', `Bearer ${foreman.token}`)
+          .send({
+            itpInstanceId: instanceId,
+            checklistItemId: contractorItemId,
+            ...outcome.body,
+          });
+
+        expect(res.status, outcome.label).toBe(200);
+        expect(res.body.completion.status).toBe(outcome.expectedStatus);
+        expect(res.body.completion.verificationStatus).toBe('none');
+        expect(res.body.completion.isPendingVerification).toBe(false);
+        expect(res.body.completion.isVerified).toBe(false);
+        expect(res.body.subbieCompletionNotification).toBeNull();
+        outcome.assertion(res.body.completion);
+
+        if (outcome.expectsNcr) {
+          expect(res.body.ncr?.ncrNumber).toMatch(/^NCR-/);
+          const lotAfterFail = await prisma.lot.findUniqueOrThrow({
+            where: { id: lotId },
+            select: { status: true },
+          });
+          expect(lotAfterFail.status).toBe('ncr_raised');
+        } else {
+          expect(res.body.ncr).toBeNull();
+        }
+
+        const auditLog = await prisma.auditLog.findFirst({
+          where: {
+            entityId: res.body.completion.id,
+            action: AuditAction.ITP_ITEM_COMPLETED,
+            userId: foreman.userId,
+          },
+          orderBy: { createdAt: 'desc' },
+        });
+        expect(auditLog).toBeTruthy();
+        const auditChanges = parseAuditLogChanges(auditLog?.changes ?? null) as Record<
+          string,
+          unknown
+        >;
+        expect(auditChanges).toMatchObject({
+          status: outcome.expectedStatus,
+          checklistItemId: contractorItemId,
+        });
+        expect(auditChanges.verificationStatus ?? 'none').toBe('none');
+      }
+    } finally {
+      await resetContractorCompletion();
+      await prisma.nCRLot.deleteMany({ where: { lotId } });
+      await prisma.nCR.deleteMany({ where: { projectId, raisedById: foreman.userId } });
+      await prisma.auditLog.deleteMany({
+        where: { action: AuditAction.ITP_ITEM_COMPLETED, userId: foreman.userId },
+      });
+      await prisma.projectUser.deleteMany({ where: { projectId, userId: foreman.userId } });
+      await cleanupTestUser(foreman.userId);
+    }
+  });
+
   // I1-core: a hold-point (superintendent sign-off) item must go through the
   // hold-point release flow before it can be completed via the bare path.
   it('rejects completing a hold-point item via the bare path and persists nothing', async () => {
