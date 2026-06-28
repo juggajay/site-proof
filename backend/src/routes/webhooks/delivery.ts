@@ -1,10 +1,12 @@
 import crypto from 'crypto';
 import type { Prisma, WebhookConfig as WebhookConfigRecord } from '@prisma/client';
 
+import { AppError } from '../../lib/AppError.js';
 import { prisma } from '../../lib/prisma.js';
 import { decrypt } from '../../lib/encryption.js';
 import { sanitizeUrlValueForLog } from '../../lib/logSanitization.js';
 import { logError } from '../../lib/serverLogger.js';
+import { sendWebhookDeliveryRequest } from './deliveryRequest.js';
 import {
   assertWebhookDestinationResolvesPublicly,
   normalizeWebhookUrl,
@@ -98,6 +100,10 @@ function getWebhookDeliveryRetryDelayMs(): number {
 
 function shouldRetryWebhookStatus(status: number): boolean {
   return status === 408 || status === 425 || status === 429 || status >= 500;
+}
+
+function isWebhookDestinationValidationError(error: unknown): boolean {
+  return error instanceof AppError && error.statusCode === 400;
 }
 
 function waitForRetryDelay(ms: number): Promise<void> {
@@ -292,8 +298,7 @@ export async function deliverWebhook(
     const timeout = setTimeout(() => abortController.abort(), timeoutMs);
 
     try {
-      const response = await fetch(deliveryUrl, {
-        method: 'POST',
+      const response = await sendWebhookDeliveryRequest(deliveryUrl, {
         headers: {
           'Content-Type': 'application/json',
           'X-Webhook-Signature': signature,
@@ -301,7 +306,6 @@ export async function deliverWebhook(
           'X-Webhook-ID': deliveryId,
         },
         body: payload,
-        redirect: 'error',
         signal: abortController.signal,
       });
 
@@ -324,6 +328,10 @@ export async function deliverWebhook(
         delivery.error = error instanceof Error ? error.message : 'Unknown error';
       }
       delivery.success = false;
+
+      if (isWebhookDestinationValidationError(error)) {
+        break;
+      }
 
       if (attempt === maxAttempts) {
         logError(

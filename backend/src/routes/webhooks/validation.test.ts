@@ -93,6 +93,12 @@ describe('webhook validation helpers', () => {
       expect(() => normalizeWebhookUrl('https://[::1]/hooks')).toThrow(
         'Webhook URL host is not allowed',
       );
+      expect(() => normalizeWebhookUrl('https://192.0.2.1/hooks')).toThrow(
+        'Webhook URL host is not allowed',
+      );
+      expect(() => normalizeWebhookUrl('https://[2001:db8::1]/hooks')).toThrow(
+        'Webhook URL host is not allowed',
+      );
     });
   });
 });

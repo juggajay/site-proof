@@ -8,7 +8,7 @@ import { asyncHandler } from '../lib/asyncHandler.js';
 import { buildApiUrl } from '../lib/runtimeConfig.js';
 import { assertUploadedImageFile } from '../lib/imageValidation.js';
 import { logWarn } from '../lib/serverLogger.js';
-import { AuditAction, createAuditLog } from '../lib/auditLog.js';
+import { AuditAction, writeAuditLogInTransaction } from '../lib/auditLog.js';
 import { DOCUMENTS_BUCKET, getSupabaseClient, isSupabaseConfigured } from '../lib/supabase.js';
 import {
   buildCompanyCreatedResponse,
@@ -263,18 +263,18 @@ companyRouter.post(
         },
       });
 
-      return { company, updatedUser };
-    });
+      await writeAuditLogInTransaction(tx, {
+        userId: user.userId,
+        entityType: 'company',
+        entityId: company.id,
+        action: AuditAction.COMPANY_CREATED,
+        changes: {
+          companyName: company.name,
+        },
+        req,
+      });
 
-    await createAuditLog({
-      userId: user.userId,
-      entityType: 'company',
-      entityId: company.id,
-      action: AuditAction.COMPANY_CREATED,
-      changes: {
-        companyName: company.name,
-      },
-      req,
+      return { company, updatedUser };
     });
 
     res.status(201).json(buildCompanyCreatedResponse(company, updatedUser));
@@ -387,33 +387,37 @@ companyRouter.post(
 
     let updatedCompany;
     try {
-      updatedCompany = await prisma.company.update({
-        where: { id: companyId },
-        data: { logoUrl },
-        select: {
-          id: true,
-          name: true,
-          abn: true,
-          address: true,
-          logoUrl: true,
-          subscriptionTier: true,
-          createdAt: true,
-          updatedAt: true,
-        },
+      updatedCompany = await prisma.$transaction(async (tx) => {
+        const updated = await tx.company.update({
+          where: { id: companyId },
+          data: { logoUrl },
+          select: {
+            id: true,
+            name: true,
+            abn: true,
+            address: true,
+            logoUrl: true,
+            subscriptionTier: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+        });
+
+        await writeAuditLogInTransaction(tx, {
+          userId: user.userId,
+          entityType: 'company',
+          entityId: companyId,
+          action: AuditAction.COMPANY_LOGO_UPDATED,
+          changes: { changedFields: ['logoUrl'] },
+          req,
+        });
+
+        return updated;
       });
     } catch (error) {
       await cleanupStoredCompanyLogoUpload(logoUrl, uploadedFile!, companyId);
       throw error;
     }
-
-    await createAuditLog({
-      userId: user.userId,
-      entityType: 'company',
-      entityId: companyId,
-      action: AuditAction.COMPANY_LOGO_UPDATED,
-      changes: { changedFields: ['logoUrl'] },
-      req,
-    });
 
     if (currentCompany.logoUrl) {
       try {
@@ -457,19 +461,35 @@ companyRouter.patch(
       updateData.logoUrl = logoUpdate.logoUrl;
     }
 
-    const updatedCompany = await prisma.company.update({
-      where: { id: companyId },
-      data: updateData,
-      select: {
-        id: true,
-        name: true,
-        abn: true,
-        address: true,
-        logoUrl: true,
-        subscriptionTier: true,
-        createdAt: true,
-        updatedAt: true,
-      },
+    const changedFields = Object.keys(updateData);
+    const updatedCompany = await prisma.$transaction(async (tx) => {
+      const updated = await tx.company.update({
+        where: { id: companyId },
+        data: updateData,
+        select: {
+          id: true,
+          name: true,
+          abn: true,
+          address: true,
+          logoUrl: true,
+          subscriptionTier: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+
+      if (changedFields.length > 0) {
+        await writeAuditLogInTransaction(tx, {
+          userId: user.userId,
+          entityType: 'company',
+          entityId: companyId,
+          action: AuditAction.COMPANY_UPDATED,
+          changes: { changedFields },
+          req,
+        });
+      }
+
+      return updated;
     });
 
     if (logoUpdate.shouldCleanupPreviousLogo && logoUpdate.previousLogoUrl) {
@@ -478,18 +498,6 @@ companyRouter.patch(
       } catch (error) {
         logWarn('Failed to delete previous company logo after PATCH:', error);
       }
-    }
-
-    const changedFields = Object.keys(updateData);
-    if (changedFields.length > 0) {
-      await createAuditLog({
-        userId: user.userId,
-        entityType: 'company',
-        entityId: companyId,
-        action: AuditAction.COMPANY_UPDATED,
-        changes: { changedFields },
-        req,
-      });
     }
 
     res.json(buildCompanyUpdatedResponse(updatedCompany));

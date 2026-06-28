@@ -4,7 +4,15 @@ import { extractErrorMessage } from '@/lib/errorHandling';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Modal, ModalBody, ModalFooter, ModalHeader } from '@/components/ui/Modal';
+import {
+  AlertModalDescription,
+  AlertModalFooter,
+  AlertModalHeader,
+  Modal,
+  ModalBody,
+  ModalFooter,
+  ModalHeader,
+} from '@/components/ui/Modal';
 import {
   createWebhook,
   deleteWebhook,
@@ -21,6 +29,7 @@ import {
 interface RevealedSecret {
   title: string;
   secret: string;
+  rotated?: boolean;
 }
 
 export function CompanyWebhooksSection() {
@@ -34,6 +43,8 @@ export function CompanyWebhooksSection() {
   const [revealed, setRevealed] = useState<RevealedSecret | null>(null);
   const [copied, setCopied] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<CompanyWebhook | null>(null);
+  const [regenerateTarget, setRegenerateTarget] = useState<CompanyWebhook | null>(null);
   const [actionError, setActionError] = useState('');
   const [testResults, setTestResults] = useState<Record<string, string>>({});
   const creatingRef = useRef(false);
@@ -117,6 +128,7 @@ export function CompanyWebhooksSection() {
     try {
       await deleteWebhook(webhook.id);
       setWebhooks((current) => current.filter((entry) => entry.id !== webhook.id));
+      setDeleteTarget(null);
     } catch (err) {
       setActionError(extractErrorMessage(err, 'Failed to delete webhook'));
     } finally {
@@ -131,7 +143,8 @@ export function CompanyWebhooksSection() {
     try {
       const data = await regenerateWebhookSecret(webhook.id);
       setCopied(false);
-      setRevealed({ title: 'New signing secret', secret: data.secret });
+      setRevealed({ title: 'New signing secret', secret: data.secret, rotated: true });
+      setRegenerateTarget(null);
     } catch (err) {
       setActionError(extractErrorMessage(err, 'Failed to regenerate secret'));
     } finally {
@@ -189,7 +202,10 @@ export function CompanyWebhooksSection() {
       ) : (
         <div className="divide-y rounded-lg border">
           {webhooks.map((webhook) => (
-            <div key={webhook.id} className="flex flex-wrap items-start justify-between gap-3 p-4">
+            <div
+              key={webhook.id}
+              className="grid gap-3 p-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-start"
+            >
               <div className="min-w-0">
                 <div className="truncate font-medium">{webhook.url}</div>
                 <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
@@ -208,11 +224,12 @@ export function CompanyWebhooksSection() {
                   <p className="mt-1 text-xs text-muted-foreground">{testResults[webhook.id]}</p>
                 ) : null}
               </div>
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-end">
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
+                  className="w-full sm:w-auto"
                   disabled={busyId === webhook.id}
                   onClick={() => handleToggle(webhook)}
                 >
@@ -222,6 +239,7 @@ export function CompanyWebhooksSection() {
                   type="button"
                   variant="outline"
                   size="sm"
+                  className="w-full sm:w-auto"
                   disabled={busyId === webhook.id}
                   onClick={() => handleTest(webhook)}
                 >
@@ -231,8 +249,9 @@ export function CompanyWebhooksSection() {
                   type="button"
                   variant="outline"
                   size="sm"
+                  className="w-full sm:w-auto"
                   disabled={busyId === webhook.id}
-                  onClick={() => handleRegenerate(webhook)}
+                  onClick={() => setRegenerateTarget(webhook)}
                 >
                   Regenerate secret
                 </Button>
@@ -240,8 +259,9 @@ export function CompanyWebhooksSection() {
                   type="button"
                   variant="destructive"
                   size="sm"
+                  className="w-full sm:w-auto"
                   disabled={busyId === webhook.id}
-                  onClick={() => handleDelete(webhook)}
+                  onClick={() => setDeleteTarget(webhook)}
                 >
                   Delete
                 </Button>
@@ -296,11 +316,79 @@ export function CompanyWebhooksSection() {
         </Modal>
       )}
 
+      {regenerateTarget && (
+        <Modal
+          alert
+          onClose={() => (busyId ? undefined : setRegenerateTarget(null))}
+          className="max-w-md"
+        >
+          <AlertModalHeader>Regenerate signing secret</AlertModalHeader>
+          <AlertModalDescription>
+            Regenerate the signing secret for {regenerateTarget.url}? The old signing secret stops
+            working immediately, so receivers must be updated before they verify new deliveries.
+          </AlertModalDescription>
+          <AlertModalFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busyId === regenerateTarget.id}
+              onClick={() => setRegenerateTarget(null)}
+            >
+              Keep current secret
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={busyId === regenerateTarget.id}
+              onClick={() => void handleRegenerate(regenerateTarget)}
+            >
+              {busyId === regenerateTarget.id ? 'Regenerating...' : 'Regenerate signing secret'}
+            </Button>
+          </AlertModalFooter>
+        </Modal>
+      )}
+
+      {deleteTarget && (
+        <Modal
+          alert
+          onClose={() => (busyId ? undefined : setDeleteTarget(null))}
+          className="max-w-md"
+        >
+          <AlertModalHeader>Delete webhook</AlertModalHeader>
+          <AlertModalDescription>
+            Delete webhook {deleteTarget.url}? SiteProof will stop sending events to this endpoint.
+          </AlertModalDescription>
+          <AlertModalFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busyId === deleteTarget.id}
+              onClick={() => setDeleteTarget(null)}
+            >
+              Keep webhook
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={busyId === deleteTarget.id}
+              onClick={() => void handleDelete(deleteTarget)}
+            >
+              {busyId === deleteTarget.id ? 'Deleting...' : 'Delete webhook'}
+            </Button>
+          </AlertModalFooter>
+        </Modal>
+      )}
+
       {revealed && (
         <Modal onClose={() => setRevealed(null)} className="max-w-lg">
           <ModalHeader>{revealed.title}</ModalHeader>
           <ModalBody>
             <div className="space-y-3">
+              {revealed.rotated ? (
+                <p className="text-sm font-medium text-destructive">
+                  The old signing secret no longer works.
+                </p>
+              ) : null}
               <p className="text-sm text-muted-foreground">
                 Copy this signing secret now — for security it{' '}
                 <span className="font-medium">will not be shown again</span> after you close this

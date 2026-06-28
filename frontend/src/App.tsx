@@ -441,7 +441,7 @@ function App() {
               <Route
                 path="/audit-log"
                 element={
-                  <RoleProtectedRoute allowedRoles={AUDIT_LOG_PAGE_ROLES}>
+                  <RoleProtectedRoute allowedRoles={AUDIT_LOG_PAGE_ROLES} allowProjectScopedRole>
                     <AuditLogPage />
                   </RoleProtectedRoute>
                 }

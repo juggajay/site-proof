@@ -71,6 +71,7 @@ interface NavigationItem {
   requiresProject?: boolean;
   requiresCommercialAccess?: boolean;
   requiresAdmin?: boolean;
+  requiresAuditLogAccess?: boolean;
   requiresManagement?: boolean;
   requiresProjectSettingsAccess?: boolean;
   allowedRoles?: readonly string[];
@@ -128,7 +129,7 @@ const settingsNavigation: NavigationItem[] = [
   { name: 'Documentation', href: '/docs', icon: BookOpen },
   { name: 'Help & Support', href: '/support', icon: HelpCircle },
   { name: 'Company Settings', href: '/company-settings', icon: Building2, requiresAdmin: true },
-  { name: 'Audit Log', href: '/audit-log', icon: ClipboardList, requiresAdmin: true },
+  { name: 'Audit Log', href: '/audit-log', icon: ClipboardList, requiresAuditLogAccess: true },
 ];
 
 // Subcontractor-specific navigation
@@ -204,6 +205,8 @@ export function Sidebar() {
   // Role-based access checks
   const hasCommercial = hasCommercialAccess(projectScopedRole);
   const hasAdmin = isAdminRole(userRole);
+  const hasAuditLogAccess =
+    hasAdmin || projectScopedRole === 'project_manager' || projectScopedRole === 'quality_manager';
   const hasManagement = hasRoleInGroup(projectScopedRole, ROLE_GROUPS.MANAGEMENT);
   const hasProjectSettingsAccess = canManageProjectSettings(projectScopedRole);
   const isForeman = isForemanDashboardUser(user);
@@ -218,6 +221,9 @@ export function Sidebar() {
     }
     // Check admin access requirement
     if (item.requiresAdmin && !hasAdmin) {
+      return false;
+    }
+    if (item.requiresAuditLogAccess && !hasAuditLogAccess) {
       return false;
     }
     // Check management access requirement

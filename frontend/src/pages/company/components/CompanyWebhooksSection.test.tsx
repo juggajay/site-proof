@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiFetch } from '@/lib/api';
 import { CompanyWebhooksSection } from './CompanyWebhooksSection';
@@ -96,7 +96,7 @@ describe('CompanyWebhooksSection', () => {
     expect(await screen.findByRole('button', { name: 'Enable' })).toBeInTheDocument();
   });
 
-  it('regenerates the signing secret and reveals it', async () => {
+  it('requires confirmation before regenerating the signing secret and reveals it', async () => {
     apiFetchMock.mockResolvedValueOnce(list);
     apiFetchMock.mockResolvedValueOnce({ id: 'wh-1', secret: 'whsec_new', message: 'rotated' });
 
@@ -104,6 +104,15 @@ describe('CompanyWebhooksSection', () => {
     await screen.findByText('https://example.com/hook');
 
     fireEvent.click(screen.getByRole('button', { name: 'Regenerate secret' }));
+    expect(screen.getByText(/old signing secret stops working/i)).toBeInTheDocument();
+    expect(apiFetchMock).not.toHaveBeenCalledWith('/api/webhooks/wh-1/regenerate-secret', {
+      method: 'POST',
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Keep current secret' }));
+    expect(screen.queryByText(/old signing secret stops working/i)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Regenerate secret' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Regenerate signing secret' }));
 
     await waitFor(() => {
       expect(apiFetchMock).toHaveBeenCalledWith('/api/webhooks/wh-1/regenerate-secret', {
@@ -111,9 +120,10 @@ describe('CompanyWebhooksSection', () => {
       });
     });
     expect(await screen.findByText('whsec_new')).toBeInTheDocument();
+    expect(screen.getByText(/The old signing secret no longer works/i)).toBeInTheDocument();
   });
 
-  it('deletes a webhook', async () => {
+  it('requires confirmation before deleting a webhook', async () => {
     apiFetchMock.mockResolvedValueOnce(list);
     apiFetchMock.mockResolvedValueOnce({ message: 'deleted' });
 
@@ -121,6 +131,14 @@ describe('CompanyWebhooksSection', () => {
     await screen.findByText('https://example.com/hook');
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    const dialog = screen.getByRole('alertdialog', { name: 'Delete webhook' });
+    expect(within(dialog).getByText(/https:\/\/example.com\/hook/)).toBeInTheDocument();
+    expect(apiFetchMock).not.toHaveBeenCalledWith('/api/webhooks/wh-1', { method: 'DELETE' });
+    fireEvent.click(screen.getByRole('button', { name: 'Keep webhook' }));
+    expect(screen.queryByText(/Delete webhook/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete webhook' }));
 
     await waitFor(() => {
       expect(apiFetchMock).toHaveBeenCalledWith('/api/webhooks/wh-1', { method: 'DELETE' });

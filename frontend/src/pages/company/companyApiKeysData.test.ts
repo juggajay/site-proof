@@ -22,12 +22,9 @@ function key(overrides: Partial<CompanyApiKey> = {}): CompanyApiKey {
 }
 
 describe('canRevokeApiKey', () => {
-  it('allows revoking an active key the current user owns', () => {
+  it('allows revoking any active company key through the company inventory endpoint', () => {
     expect(canRevokeApiKey(key({ isActive: true }), 'user-1')).toBe(true);
-  });
-
-  it('does not allow revoking another user’s key', () => {
-    expect(canRevokeApiKey(key({ isActive: true }), 'user-2')).toBe(false);
+    expect(canRevokeApiKey(key({ isActive: true }), 'user-2')).toBe(true);
   });
 
   it('does not allow revoking an already-revoked key', () => {
@@ -35,8 +32,8 @@ describe('canRevokeApiKey', () => {
   });
 
   it('handles an unknown current user or ownerless key', () => {
-    expect(canRevokeApiKey(key(), undefined)).toBe(false);
-    expect(canRevokeApiKey(key({ owner: null }), 'user-1')).toBe(false);
+    expect(canRevokeApiKey(key(), undefined)).toBe(true);
+    expect(canRevokeApiKey(key({ owner: null }), 'user-1')).toBe(true);
   });
 });
 

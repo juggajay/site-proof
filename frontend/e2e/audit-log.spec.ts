@@ -496,4 +496,20 @@ test.describe('Audit log seeded admin contract', () => {
     await expect(page.getByRole('button', { name: 'Export CSV' })).toBeDisabled();
     await expect(page.getByText('No Audit Logs Found')).toBeHidden();
   });
+
+  test('keeps audit log details reachable on mobile', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await mockAuditLogApi(page);
+
+    await page.goto('/audit-log');
+
+    await expect(page.getByRole('heading', { name: 'Audit Log' })).toBeVisible();
+    const scrollRegion = page.getByTestId('audit-log-table-scroll');
+    await expect(scrollRegion).toBeVisible();
+    await scrollRegion.evaluate((element) => {
+      element.scrollLeft = element.scrollWidth;
+    });
+    await page.getByRole('button', { name: /View details for Lot created Lot e2e-lot/ }).click();
+    await expect(page.getByRole('dialog').filter({ hasText: 'Audit Log Details' })).toBeVisible();
+  });
 });

@@ -2100,6 +2100,9 @@ test.describe('production readiness guardrails', () => {
       '/backend/src/lib/fetchWithTimeout.ts',
       '/backend/src/routes/webhooks.ts',
       '/backend/src/routes/webhooks/delivery.ts',
+      // Webhook deliveryRequest receives the AbortSignal created in
+      // delivery.ts; production delivery uses the pinned Node transport path.
+      '/backend/src/routes/webhooks/deliveryRequest.ts',
     ];
     const rawFetchOffenders: string[] = [];
 
