@@ -39,6 +39,7 @@ import { isProjectNotificationEnabled } from '../lib/projectNotificationPreferen
 import { parseDocumentContentDisposition, sendDocumentFile } from './documents/fileHelpers.js';
 import { resolveHoldPointEvidenceInputs } from './holdpoints/evidencePackageInputs.js';
 import { emitHoldPointWebhookEvent } from './holdpoints/webhookEvents.js';
+import { assertHoldPointCompletionCanBeReleased } from './holdpoints/releaseCompletionGuard.js';
 
 const holdpointsRouter = Router();
 
@@ -409,6 +410,16 @@ holdpointsRouter.post(
 
       if (itpInstance) {
         releasedItpInstanceId = itpInstance.id;
+        const completionKey = {
+          itpInstanceId: itpInstance.id,
+          checklistItemId: updatedHoldPoint.itpChecklistItemId,
+        };
+        const existingCompletion = await tx.iTPCompletion.findUnique({
+          where: { itpInstanceId_checklistItemId: completionKey },
+          select: { status: true },
+        });
+        assertHoldPointCompletionCanBeReleased(existingCompletion);
+
         // I1-core RECONCILE: releasing the hold point satisfies the ITP item.
         // Set status='completed' + completedAt (releasedAt) alongside the
         // verification fields, and CREATE the completion row if the hold point
@@ -426,15 +437,11 @@ holdpointsRouter.post(
         };
         await tx.iTPCompletion.upsert({
           where: {
-            itpInstanceId_checklistItemId: {
-              itpInstanceId: itpInstance.id,
-              checklistItemId: updatedHoldPoint.itpChecklistItemId,
-            },
+            itpInstanceId_checklistItemId: completionKey,
           },
           update: completionData,
           create: {
-            itpInstanceId: itpInstance.id,
-            checklistItemId: updatedHoldPoint.itpChecklistItemId,
+            ...completionKey,
             ...completionData,
           },
         });

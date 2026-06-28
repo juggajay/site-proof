@@ -873,6 +873,44 @@ describe('Hold Points API', () => {
       expect(created.verifiedAt).toBeInstanceOf(Date);
     });
 
+    it('does not overwrite a failed ITP completion when recording hold point release', async () => {
+      const { holdPoint: hp, completion } = await createReleaseReadyHoldPoint();
+      await prisma.iTPCompletion.update({
+        where: { id: completion.id },
+        data: {
+          status: 'failed',
+          verificationStatus: 'none',
+          completedAt: null,
+          completedById: null,
+          verifiedAt: null,
+          verifiedById: null,
+        },
+      });
+
+      try {
+        const res = await postRelease(hp.id, emailReleasePayload());
+
+        expect(res.status).toBe(409);
+        expect(res.body.error.message).toContain('Failed ITP hold-point items must be resubmitted');
+
+        const unchangedCompletion = await prisma.iTPCompletion.findUniqueOrThrow({
+          where: { id: completion.id },
+        });
+        expect(unchangedCompletion.status).toBe('failed');
+        expect(unchangedCompletion.verificationStatus).toBe('none');
+        expect(unchangedCompletion.verifiedAt).toBeNull();
+
+        const unchangedHoldPoint = await prisma.holdPoint.findUniqueOrThrow({
+          where: { id: hp.id },
+        });
+        expect(unchangedHoldPoint.status).toBe('notified');
+        expect(unchangedHoldPoint.releasedAt).toBeNull();
+      } finally {
+        await prisma.holdPoint.delete({ where: { id: hp.id } }).catch(() => {});
+        await prisma.iTPCompletion.delete({ where: { id: completion.id } }).catch(() => {});
+      }
+    });
+
     it('should accept email confirmation release with no signature data', async () => {
       const { holdPoint: hp } = await createReleaseReadyHoldPoint();
 
@@ -2280,6 +2318,80 @@ describe('Hold Point Token Release', () => {
       await prisma.iTPCompletion.update({
         where: { id: completionId },
         data: {
+          verificationStatus: 'none',
+          verifiedAt: null,
+          verifiedById: null,
+        },
+      });
+    }
+  });
+
+  it('does not overwrite a failed ITP completion when public token releases a hold point', async () => {
+    const rawFailedToken = `failed-public-token-${Date.now()}`;
+    const failedToken = await prisma.holdPointReleaseToken.create({
+      data: {
+        holdPointId,
+        token: hashHoldPointReleaseTokenForTest(rawFailedToken),
+        recipientEmail: 'failed-public-external@example.com',
+        recipientName: 'Failed Public Reviewer',
+        expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+      },
+    });
+
+    await prisma.iTPCompletion.update({
+      where: { id: completionId },
+      data: {
+        status: 'failed',
+        verificationStatus: 'none',
+        completedAt: null,
+        verifiedAt: null,
+        verifiedById: null,
+      },
+    });
+
+    try {
+      const res = await request(app).post(`/api/holdpoints/public/${rawFailedToken}/release`).send({
+        releasedByName: 'Failed Public Reviewer',
+        releasedByOrg: 'Client Company',
+        releaseNotes: 'Should not overwrite the failed ITP outcome',
+        signatureDataUrl: 'data:image/png;base64,ZmFrZS1zaWduYXR1cmU=',
+      });
+
+      expect(res.status).toBe(409);
+      expect(res.body.error.message).toContain('Failed ITP hold-point items must be resubmitted');
+
+      const unchangedCompletion = await prisma.iTPCompletion.findUniqueOrThrow({
+        where: { id: completionId },
+      });
+      expect(unchangedCompletion.status).toBe('failed');
+      expect(unchangedCompletion.verificationStatus).toBe('none');
+      expect(unchangedCompletion.verifiedAt).toBeNull();
+
+      const holdPoint = await prisma.holdPoint.findUniqueOrThrow({ where: { id: holdPointId } });
+      expect(holdPoint.status).not.toBe('released');
+
+      const storedToken = await prisma.holdPointReleaseToken.findUniqueOrThrow({
+        where: { id: failedToken.id },
+      });
+      expect(storedToken.usedAt).toBeNull();
+    } finally {
+      await prisma.holdPointReleaseToken.delete({ where: { id: failedToken.id } }).catch(() => {});
+      await prisma.holdPoint.update({
+        where: { id: holdPointId },
+        data: {
+          status: 'pending',
+          releasedAt: null,
+          releasedByName: null,
+          releasedByOrg: null,
+          releaseMethod: null,
+          releaseSignatureUrl: null,
+          releaseNotes: null,
+        },
+      });
+      await prisma.iTPCompletion.update({
+        where: { id: completionId },
+        data: {
+          status: 'completed',
           verificationStatus: 'none',
           verifiedAt: null,
           verifiedById: null,
