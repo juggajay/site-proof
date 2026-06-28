@@ -32,6 +32,10 @@ const PROJECT_SUMMARY_SELECT = {
   status: true,
   createdAt: true,
 } as const;
+const SAMPLE_PROJECT_TRANSACTION_OPTIONS = {
+  maxWait: 10_000,
+  timeout: 30_000,
+} as const;
 
 function isUniqueConstraintViolation(error: unknown): boolean {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
@@ -246,7 +250,7 @@ async function seedSampleProject(user: AuthenticatedUser, companyId: string) {
     }
 
     return project;
-  });
+  }, SAMPLE_PROJECT_TRANSACTION_OPTIONS);
 }
 
 export function createSampleProjectRouter({
