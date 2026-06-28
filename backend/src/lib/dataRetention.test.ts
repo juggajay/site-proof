@@ -8,6 +8,7 @@ function makeClient() {
     syncQueue: { deleteMany: vi.fn().mockResolvedValue({ count: 3 }) },
     documentSignedUrlToken: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
     holdPointReleaseToken: { deleteMany: vi.fn().mockResolvedValue({ count: 4 }) },
+    revokedAuthToken: { deleteMany: vi.fn().mockResolvedValue({ count: 5 }) },
   };
 }
 
@@ -15,7 +16,6 @@ describe('applyRetentionPolicies (GAP-B/C)', () => {
   it('deletes expired tokens + processed sync rows and returns per-category totals', async () => {
     const client = makeClient();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result = await applyRetentionPolicies(client as any);
 
     expect(client.passwordResetToken.deleteMany).toHaveBeenCalledWith({
@@ -38,9 +38,13 @@ describe('applyRetentionPolicies (GAP-B/C)', () => {
       { expiresAt: { lt: expect.any(Date) } },
       { usedAt: { not: null, lt: expect.any(Date) } },
     ]);
+    expect(client.revokedAuthToken.deleteMany).toHaveBeenCalledWith({
+      where: { expiresAt: { lt: expect.any(Date) } },
+    });
 
-    expect(result.totalDeleted).toBe(2 + 1 + 3 + 0 + 4);
+    expect(result.totalDeleted).toBe(2 + 1 + 3 + 0 + 4 + 5);
     expect(result.holdPointReleaseTokens).toBe(4);
     expect(result.passwordResetTokens).toBe(2);
+    expect(result.revokedAuthTokens).toBe(5);
   });
 });

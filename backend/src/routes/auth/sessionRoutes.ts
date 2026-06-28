@@ -1,7 +1,15 @@
 import { Router, type Request } from 'express';
 import type { PrismaClient } from '@prisma/client';
 
-import { getTokenAuthTime, hashPassword, verifyPassword, verifyToken } from '../../lib/auth.js';
+import {
+  getTokenAuthTime,
+  getTokenExpiresAt,
+  hashAuthToken,
+  hashPassword,
+  isRevokedAuthTokenStorageUnavailable,
+  verifyPassword,
+  verifyToken,
+} from '../../lib/auth.js';
 import { AuditAction } from '../../lib/auditLog.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
@@ -33,13 +41,52 @@ export function createSessionRouter({
 }: CreateSessionRouterDependencies) {
   const sessionRouter = Router();
 
-  async function invalidateBearerSession(req: Request) {
+  function getBearerToken(req: Request) {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       throw AppError.unauthorized('Authentication required');
     }
 
-    const token = authHeader.substring(7);
+    return authHeader.substring(7);
+  }
+
+  async function revokeCurrentBearerSession(req: Request) {
+    const token = getBearerToken(req);
+    const user = await verifyToken(token);
+
+    if (!user) {
+      throw AppError.unauthorized('Invalid or expired token');
+    }
+
+    const tokenHash = hashAuthToken(token);
+    const expiresAt = getTokenExpiresAt(token) ?? new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const revokedAt = new Date();
+
+    try {
+      await prisma.revokedAuthToken.upsert({
+        where: { tokenHash },
+        create: {
+          userId: user.userId,
+          tokenHash,
+          expiresAt,
+          revokedAt,
+        },
+        update: {
+          expiresAt,
+          revokedAt,
+        },
+      });
+    } catch (error) {
+      if (!isRevokedAuthTokenStorageUnavailable(error)) {
+        throw error;
+      }
+    }
+
+    return { loggedOutAt: revokedAt, userId: user.userId };
+  }
+
+  async function invalidateAllBearerSessions(req: Request) {
+    const token = getBearerToken(req);
     const user = await verifyToken(token);
 
     if (!user) {
@@ -122,17 +169,16 @@ export function createSessionRouter({
   sessionRouter.post(
     '/logout',
     asyncHandler(async (req, res) => {
-      const { invalidatedAt, userId } = await invalidateBearerSession(req);
+      const { loggedOutAt, userId } = await revokeCurrentBearerSession(req);
 
       await auditUserAuthEvent(req, userId, AuditAction.USER_LOGOUT, {
-        scope: 'all_devices',
-        requestedScope: 'current_session',
+        scope: 'current_session',
         sessionsInvalidated: true,
       });
 
       res.json({
         message: 'Logged out successfully',
-        loggedOutAt: invalidatedAt.toISOString(),
+        loggedOutAt: loggedOutAt.toISOString(),
       });
     }),
   );
@@ -141,7 +187,7 @@ export function createSessionRouter({
   sessionRouter.post(
     '/logout-all-devices',
     asyncHandler(async (req, res) => {
-      const { invalidatedAt, userId } = await invalidateBearerSession(req);
+      const { invalidatedAt, userId } = await invalidateAllBearerSessions(req);
       const apiKeyRevocation = await revokeActiveApiKeysForUser(prisma, userId);
 
       await auditUserAuthEvent(req, userId, AuditAction.USER_LOGOUT, {

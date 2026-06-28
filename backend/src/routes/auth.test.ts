@@ -630,10 +630,73 @@ describe('JWT invalidation precision', () => {
 
   it('invalidates normal logout immediately after login', async () => {
     await expectLogoutEndpointInvalidatesImmediateToken('/api/auth/logout', {
-      scope: 'all_devices',
-      requestedScope: 'current_session',
+      scope: 'current_session',
       sessionsInvalidated: true,
     });
+  });
+
+  it('keeps other active bearer sessions alive on normal logout', async () => {
+    const email = `current-session-logout-${Date.now()}@example.com`;
+    const password = 'SecureP@ssword123!';
+    const regRes = await request(app).post('/api/auth/register').send({
+      email,
+      password,
+      fullName: 'Current Session Logout User',
+      tosAccepted: true,
+    });
+
+    const firstToken = regRes.body.token as string;
+    const userId = regRes.body.user.id as string;
+
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      const loginRes = await request(app).post('/api/auth/login').send({ email, password });
+      expect(loginRes.status).toBe(200);
+      const secondToken = loginRes.body.token as string;
+      expect(secondToken).not.toBe(firstToken);
+
+      await clearUserAuditLogs(userId);
+
+      const logoutRes = await request(app)
+        .post('/api/auth/logout')
+        .set('Authorization', `Bearer ${firstToken}`);
+      expect(logoutRes.status).toBe(200);
+
+      const oldSessionRes = await request(app)
+        .get('/api/auth/me')
+        .set('Authorization', `Bearer ${firstToken}`);
+      expect(oldSessionRes.status).toBe(401);
+
+      const otherSessionRes = await request(app)
+        .get('/api/auth/me')
+        .set('Authorization', `Bearer ${secondToken}`);
+      expect(otherSessionRes.status).toBe(200);
+      expect(otherSessionRes.body.user.id).toBe(userId);
+
+      const revokedToken = await prisma.revokedAuthToken.findUnique({
+        where: { tokenHash: hashAuthTokenForTest(firstToken) },
+      });
+      expect(revokedToken?.userId).toBe(userId);
+      expect(revokedToken?.tokenHash).toBe(hashAuthTokenForTest(firstToken));
+
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { tokenInvalidatedAt: true },
+      });
+      expect(user?.tokenInvalidatedAt).toBeNull();
+
+      const { auditLog, changes } = await expectLatestUserAuditLog(userId, AuditAction.USER_LOGOUT);
+      expect(auditLog.userId).toBe(userId);
+      expect(changes).toEqual({
+        scope: 'current_session',
+        sessionsInvalidated: true,
+      });
+    } finally {
+      await prisma.revokedAuthToken.deleteMany({ where: { userId } });
+      await prisma.emailVerificationToken.deleteMany({ where: { userId } });
+      await clearUserAuditLogs(userId);
+      await prisma.user.delete({ where: { id: userId } }).catch(() => {});
+    }
   });
 
   it('invalidates logout-all-devices immediately after login', async () => {

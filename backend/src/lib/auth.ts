@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
+import { Prisma } from '@prisma/client';
 import { prisma } from './prisma.js';
 import { logInfo, logWarn } from './serverLogger.js';
 import { resolveDashboardRoleForUser, type DashboardRole } from './dashboardRole.js';
@@ -31,9 +32,17 @@ interface TokenPayload {
   type?: string;
   authTime?: number;
   iat?: number; // Issued at timestamp (added by JWT)
+  exp?: number; // Expiry timestamp (added by JWT)
 }
 
 const MFA_CHALLENGE_TOKEN_TYPE = 'mfa_challenge';
+
+export function isRevokedAuthTokenStorageUnavailable(error: unknown): boolean {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    (error.code === 'P2021' || error.code === 'P2022')
+  );
+}
 
 export interface AuthUser {
   id?: string;
@@ -59,6 +68,21 @@ export async function verifyToken(token: string): Promise<AuthUser | null> {
     const payload = jwt.verify(token, EFFECTIVE_JWT_SECRET) as TokenPayload;
     if (payload.type && payload.type !== 'access') {
       return null;
+    }
+
+    try {
+      const tokenHash = hashAuthToken(token);
+      const revokedToken = await prisma.revokedAuthToken.findUnique({
+        where: { tokenHash },
+        select: { expiresAt: true },
+      });
+      if (revokedToken && revokedToken.expiresAt > new Date()) {
+        return null;
+      }
+    } catch (error) {
+      if (!isRevokedAuthTokenStorageUnavailable(error)) {
+        throw error;
+      }
     }
 
     // Get user from database, including token_invalidated_at for session invalidation check
@@ -151,6 +175,10 @@ export function generateToken(payload: TokenPayload): string {
   });
 }
 
+export function hashAuthToken(token: string): string {
+  return `sha256:${crypto.createHash('sha256').update(token).digest('hex')}`;
+}
+
 export function getTokenAuthTime(token: string): number | null {
   const decoded = jwt.decode(token);
   if (!decoded || typeof decoded === 'string') {
@@ -159,6 +187,16 @@ export function getTokenAuthTime(token: string): number | null {
 
   const authTime = (decoded as { authTime?: unknown }).authTime;
   return typeof authTime === 'number' && Number.isFinite(authTime) ? authTime : null;
+}
+
+export function getTokenExpiresAt(token: string): Date | null {
+  const decoded = jwt.decode(token);
+  if (!decoded || typeof decoded === 'string') {
+    return null;
+  }
+
+  const exp = (decoded as { exp?: unknown }).exp;
+  return typeof exp === 'number' && Number.isFinite(exp) ? new Date(exp * 1000) : null;
 }
 
 // For testing: generate an already-expired token

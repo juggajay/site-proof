@@ -480,13 +480,13 @@ describe('route authentication coverage', () => {
       'Logged out successfully',
     );
     expect(routeSourceForDescriptor(sessionRoutesSource, 'POST /logout')).toContain(
-      'invalidateBearerSession(req)',
+      'revokeCurrentBearerSession(req)',
     );
     expect(routeSourceForDescriptor(sessionRoutesSource, 'POST /logout')).toContain(
       'AuditAction.USER_LOGOUT',
     );
     expect(routeSourceForDescriptor(sessionRoutesSource, 'POST /logout-all-devices')).toContain(
-      'invalidateBearerSession(req)',
+      'invalidateAllBearerSessions(req)',
     );
     expect(routeSourceForDescriptor(sessionRoutesSource, 'POST /logout-all-devices')).toContain(
       'AuditAction.USER_LOGOUT',
