@@ -28,6 +28,9 @@ vi.mock('@/lib/auth', () => ({
 
 const apiFetchMock = vi.fn();
 vi.mock('@/lib/api', () => ({ apiFetch: (...a: unknown[]) => apiFetchMock(...a) }));
+vi.mock('@/lib/documentAccess', () => ({ openDocumentAccessUrl: vi.fn() }));
+vi.mock('@/components/ui/toaster', () => ({ toast: vi.fn() }));
+vi.mock('@/lib/logger', () => ({ logError: vi.fn() }));
 
 let _ctx: SubbieShellData;
 vi.mock('../../subbieShellContext', () => ({ useSubbieShellContext: () => _ctx }));
@@ -106,6 +109,17 @@ describe('subbie shell NcrsScreen', () => {
           severity: 'critical',
           raisedAt: '2026-06-09T00:00:00.000Z',
           ncrLots: [{ lot: { lotNumber: 'LOT-014' } }],
+          ncrEvidence: [
+            {
+              id: 'ev-1',
+              evidenceType: 'photo',
+              document: {
+                id: 'doc-1',
+                filename: 'rectification-photo.jpg',
+                mimeType: 'image/jpeg',
+              },
+            },
+          ],
         },
         {
           id: 'n2',
@@ -134,5 +148,6 @@ describe('subbie shell NcrsScreen', () => {
     expect(screen.getByText('RECTIFICATION')).toBeInTheDocument();
     expect(screen.getByText('CRITICAL')).toBeInTheDocument();
     expect(screen.getByText(/Lot: LOT-014/)).toBeInTheDocument();
+    expect(screen.getByText('rectification-photo.jpg')).toBeInTheDocument();
   });
 });

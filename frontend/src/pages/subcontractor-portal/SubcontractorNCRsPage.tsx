@@ -10,6 +10,7 @@ import { formatStatusLabel } from '@/lib/statusLabels';
 import { PortalAccessDenied } from './portalAccess';
 import { isPortalModuleEnabled, type PortalAccess } from './portalAccessModel';
 import { buildPortalCompanyQuery, buildPortalCompanyScopedPath } from './portalCompanyScope';
+import { NCREvidenceList } from '../ncr/components/NCREvidenceList';
 
 interface NCR {
   id: string;
@@ -25,6 +26,18 @@ interface NCR {
       lotNumber?: string;
       description?: string | null;
     };
+  }>;
+  ncrEvidence?: Array<{
+    id: string;
+    evidenceType: string;
+    uploadedAt?: string | null;
+    document: {
+      id: string;
+      filename: string;
+      fileUrl?: string | null;
+      mimeType?: string | null;
+      uploadedAt?: string | null;
+    } | null;
   }>;
 }
 
@@ -281,6 +294,7 @@ function NCRCard({ ncr }: { ncr: NCR }) {
     ?.map((ncrLot) => ncrLot.lot?.lotNumber)
     .filter(Boolean)
     .join(', ');
+  const evidence = ncr.ncrEvidence ?? [];
 
   return (
     <div className="border border-border rounded-lg bg-card">
@@ -305,6 +319,11 @@ function NCRCard({ ncr }: { ncr: NCR }) {
           </div>
           {getStatusBadge(ncr.status)}
         </div>
+        {evidence.length > 0 && (
+          <div className="mt-3">
+            <NCREvidenceList evidence={evidence} title="Evidence" variant="inline" />
+          </div>
+        )}
       </div>
     </div>
   );
