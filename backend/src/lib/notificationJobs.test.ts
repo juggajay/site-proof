@@ -4,11 +4,12 @@ import { clearEmailQueue, getQueuedEmails } from './email.js';
 import { processDueNotificationDigests } from './notificationJobs.js';
 import { prisma } from './prisma.js';
 
-async function createDigestUser(dailyDigest = true) {
+async function createDigestUser(dailyDigest = true, id?: string) {
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const user = await prisma.user.create({
     data: {
-      email: `digest-${suffix}@example.com`,
+      ...(id ? { id } : {}),
+      email: `digest-${id ?? suffix}@example.com`,
       passwordHash: 'hash',
       fullName: 'Digest User',
       emailVerified: true,
@@ -39,11 +40,11 @@ afterEach(() => {
 describe('processDueNotificationDigests', () => {
   it('sends due digest items and leaves future items queued', async () => {
     const user = await createDigestUser(true);
-    const now = new Date(2026, 4, 10, 17, 30, 0, 0);
-    const dueAt = new Date(2026, 4, 10, 16, 30, 0, 0);
+    const now = new Date(Date.UTC(2026, 4, 10, 17, 30, 0, 0));
+    const dueAt = new Date(Date.UTC(2026, 4, 10, 16, 30, 0, 0));
     // After `now`: the cutoff is the run instant (items are deleted after send),
     // so an item created after `now` is held for the next digest window.
-    const futureAt = new Date(2026, 4, 10, 17, 45, 0, 0);
+    const futureAt = new Date(Date.UTC(2026, 4, 10, 17, 45, 0, 0));
 
     await prisma.notificationDigestItem.createMany({
       data: [
@@ -98,7 +99,7 @@ describe('processDueNotificationDigests', () => {
 
   it('does not send before the configured digest time', async () => {
     const user = await createDigestUser(true);
-    const now = new Date(2026, 4, 10, 16, 30, 0, 0);
+    const now = new Date(Date.UTC(2026, 4, 10, 16, 30, 0, 0));
 
     await prisma.notificationDigestItem.create({
       data: {
@@ -106,7 +107,7 @@ describe('processDueNotificationDigests', () => {
         type: 'mentions',
         title: 'Queued mention',
         message: 'This should wait for the digest window',
-        createdAt: new Date(2026, 4, 10, 15, 0, 0, 0),
+        createdAt: new Date(Date.UTC(2026, 4, 10, 15, 0, 0, 0)),
       },
     });
 
@@ -130,7 +131,7 @@ describe('processDueNotificationDigests', () => {
 
   it('skips users that have disabled daily digest delivery', async () => {
     const user = await createDigestUser(false);
-    const now = new Date(2026, 4, 10, 17, 30, 0, 0);
+    const now = new Date(Date.UTC(2026, 4, 10, 17, 30, 0, 0));
 
     await prisma.notificationDigestItem.create({
       data: {
@@ -138,7 +139,7 @@ describe('processDueNotificationDigests', () => {
         type: 'mentions',
         title: 'Queued mention',
         message: 'This user disabled digest delivery',
-        createdAt: new Date(2026, 4, 10, 15, 0, 0, 0),
+        createdAt: new Date(Date.UTC(2026, 4, 10, 15, 0, 0, 0)),
       },
     });
 
@@ -149,19 +150,67 @@ describe('processDueNotificationDigests', () => {
         userIds: [user.id],
       });
 
-      expect(result.processed).toBe(1);
+      expect(result.processed).toBe(0);
       expect(result.sent).toBe(0);
-      expect(result.skipped).toBe(1);
-      expect(result.results[0]!.error).toContain('disabled');
+      expect(result.skipped).toBe(0);
+      await expect(
+        prisma.notificationDigestItem.count({ where: { userId: user.id } }),
+      ).resolves.toBe(1);
       expect(getQueuedEmails()).toHaveLength(0);
     } finally {
       await cleanupDigestUser(user.id);
     }
   });
 
+  it('selects enabled digest users before applying the user batch limit', async () => {
+    const disabledUsers = await Promise.all(
+      Array.from({ length: 3 }, (_, index) =>
+        createDigestUser(false, `digest-disabled-${Date.now()}-${index}`),
+      ),
+    );
+    const enabledUser = await createDigestUser(true, `digest-enabled-${Date.now()}`);
+    const now = new Date(Date.UTC(2026, 4, 10, 17, 30, 0, 0));
+    const dueAt = new Date(Date.UTC(2026, 4, 10, 15, 0, 0, 0));
+    const allUsers = [...disabledUsers, enabledUser];
+
+    await prisma.notificationDigestItem.createMany({
+      data: allUsers.map((user) => ({
+        userId: user.id,
+        type: 'mentions',
+        title: user.id === enabledUser.id ? 'Enabled digest item' : 'Disabled digest item',
+        message: 'Queued digest item',
+        createdAt: dueAt,
+      })),
+    });
+
+    try {
+      const result = await processDueNotificationDigests({
+        now,
+        timeOfDay: '17:00',
+        userIds: allUsers.map((user) => user.id),
+        limit: 1,
+      });
+
+      expect(result.processed).toBe(1);
+      expect(result.sent).toBe(1);
+      expect(getQueuedEmails()).toHaveLength(1);
+      expect(getQueuedEmails()[0]!.to).toBe(enabledUser.email);
+
+      await expect(
+        prisma.notificationDigestItem.count({
+          where: { userId: { in: disabledUsers.map((user) => user.id) } },
+        }),
+      ).resolves.toBe(disabledUsers.length);
+    } finally {
+      for (const user of allUsers) {
+        await cleanupDigestUser(user.id);
+      }
+    }
+  });
+
   it('does not send duplicate digest emails when a concurrent worker starts mid-send', async () => {
     const user = await createDigestUser(true);
-    const now = new Date(2026, 4, 10, 17, 30, 0, 0);
+    const now = new Date(Date.UTC(2026, 4, 10, 17, 30, 0, 0));
     let releaseFirstSend: () => void = () => {};
     let firstSendStarted: () => void = () => {};
     const firstSendStartedPromise = new Promise<void>((resolve) => {
@@ -186,7 +235,7 @@ describe('processDueNotificationDigests', () => {
         type: 'mentions',
         title: 'Queued mention',
         message: 'This item should only be sent once',
-        createdAt: new Date(2026, 4, 10, 15, 0, 0, 0),
+        createdAt: new Date(Date.UTC(2026, 4, 10, 15, 0, 0, 0)),
       },
     });
 

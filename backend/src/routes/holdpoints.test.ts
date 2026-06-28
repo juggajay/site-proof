@@ -2288,6 +2288,80 @@ describe('Hold Point Token Release', () => {
     }
   });
 
+  it('should reject a public release token that expires between lookup and consume', async () => {
+    const rawRaceToken = `expiry-race-token-${Date.now()}`;
+    const raceToken = await prisma.holdPointReleaseToken.create({
+      data: {
+        holdPointId,
+        token: hashHoldPointReleaseTokenForTest(rawRaceToken),
+        recipientEmail: 'expiry-race@example.com',
+        recipientName: 'Expiry Race Reviewer',
+        expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+      },
+    });
+    let middlewareActive = true;
+
+    prisma.$use(async (params, next) => {
+      if (
+        middlewareActive &&
+        params.model === 'HoldPointReleaseToken' &&
+        params.action === 'updateMany' &&
+        (params.args?.where as { id?: string } | undefined)?.id === raceToken.id
+      ) {
+        middlewareActive = false;
+        await prisma.holdPointReleaseToken.update({
+          where: { id: raceToken.id },
+          data: { expiresAt: new Date(Date.now() - 1000) },
+        });
+      }
+
+      return next(params);
+    });
+
+    try {
+      const res = await request(app).post(`/api/holdpoints/public/${rawRaceToken}/release`).send({
+        releasedByName: 'Expiry Race Reviewer',
+        releasedByOrg: 'Client Company',
+        releaseNotes: 'Should be rejected because the token expired during consume',
+        signatureDataUrl: 'data:image/png;base64,ZmFrZS1zaWduYXR1cmU=',
+      });
+
+      expect(res.status).toBe(410);
+      expect(res.body.error.code).toBe('TOKEN_EXPIRED');
+
+      const storedToken = await prisma.holdPointReleaseToken.findUniqueOrThrow({
+        where: { id: raceToken.id },
+      });
+      expect(storedToken.usedAt).toBeNull();
+
+      const holdPoint = await prisma.holdPoint.findUniqueOrThrow({ where: { id: holdPointId } });
+      expect(holdPoint.status).not.toBe('released');
+    } finally {
+      middlewareActive = false;
+      await prisma.holdPointReleaseToken.delete({ where: { id: raceToken.id } }).catch(() => {});
+      await prisma.holdPoint.update({
+        where: { id: holdPointId },
+        data: {
+          status: 'pending',
+          releasedAt: null,
+          releasedByName: null,
+          releasedByOrg: null,
+          releaseMethod: null,
+          releaseSignatureUrl: null,
+          releaseNotes: null,
+        },
+      });
+      await prisma.iTPCompletion.update({
+        where: { id: completionId },
+        data: {
+          verificationStatus: 'none',
+          verifiedAt: null,
+          verifiedById: null,
+        },
+      });
+    }
+  });
+
   it('should bind public release identity to the token recipient when present', async () => {
     const rawIdentityToken = `identity-token-${Date.now()}`;
     const identityToken = await prisma.holdPointReleaseToken.create({

@@ -1,4 +1,5 @@
 import { prisma } from '../../lib/prisma.js';
+import { activeSubcontractorCompanyWhere } from '../../lib/projectAccess.js';
 import { sendNotificationIfEnabled } from '../notifications.js';
 import type { DocketEmailNotification, DocketInAppNotification } from './notifications.js';
 
@@ -20,6 +21,7 @@ export async function notifyDocketSubcontractorUsers({
   const subcontractorUserLinks = await prisma.subcontractorUser.findMany({
     where: {
       subcontractorCompanyId,
+      subcontractorCompany: activeSubcontractorCompanyWhere(),
     },
   });
 

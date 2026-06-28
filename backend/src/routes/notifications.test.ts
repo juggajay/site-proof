@@ -1647,6 +1647,102 @@ describe('Notifications API', () => {
         expect(alert.escalatedTo).toContain(subcontractorUserId);
       });
 
+      it('should not let unrelated escalated alerts hide an older alert escalated to the user', async () => {
+        const prefix = `alert-escalated-flood-${Date.now()}`;
+        let otherCompanyId: string | undefined;
+        let otherProjectId: string | undefined;
+        let otherAssigneeId: string | undefined;
+
+        try {
+          const otherCompany = await prisma.company.create({
+            data: { name: `${prefix} Company` },
+          });
+          otherCompanyId = otherCompany.id;
+          const otherProject = await prisma.project.create({
+            data: {
+              name: `${prefix} Project`,
+              projectNumber: `AEF-${Date.now()}`,
+              companyId: otherCompany.id,
+              status: 'active',
+              state: 'NSW',
+              specificationSet: 'TfNSW',
+            },
+          });
+          otherProjectId = otherProject.id;
+          const otherAssignee = await prisma.user.create({
+            data: {
+              email: `${prefix}@example.com`,
+              passwordHash: 'hash',
+              fullName: `${prefix} Assignee`,
+              companyId: otherCompany.id,
+              roleInCompany: 'admin',
+              emailVerified: true,
+            },
+          });
+          otherAssigneeId = otherAssignee.id;
+
+          const olderCreatedAt = new Date('2032-04-01T00:00:00.000Z');
+          const visibleTitle = `${prefix} escalated to current user`;
+          await prisma.notificationAlert.create({
+            data: {
+              id: `${prefix}-match`,
+              type: 'overdue_ncr',
+              severity: 'high',
+              title: visibleTitle,
+              message: 'This older inaccessible-project alert is visible via escalatedTo.',
+              entityId: `${prefix}-match-entity`,
+              entityType: 'ncr',
+              projectId: otherProject.id,
+              assignedToId: otherAssignee.id,
+              createdAt: olderCreatedAt,
+              escalationLevel: 1,
+              escalatedAt: olderCreatedAt,
+              escalatedTo: [userId],
+            },
+          });
+
+          await prisma.notificationAlert.createMany({
+            data: Array.from({ length: MAX_ALERT_LIST_RESULTS + 5 }, (_, index) => {
+              const createdAt = new Date(olderCreatedAt.getTime() + (index + 1) * 1000);
+              return {
+                id: `${prefix}-noise-${index}`,
+                type: 'overdue_ncr',
+                severity: 'medium',
+                title: `${prefix} unrelated escalated alert ${index}`,
+                message: 'Unrelated escalated alert from an inaccessible project',
+                entityId: `${prefix}-noise-entity-${index}`,
+                entityType: 'ncr',
+                projectId: otherProject.id,
+                assignedToId: otherAssignee.id,
+                createdAt,
+                escalationLevel: 1,
+                escalatedAt: createdAt,
+                escalatedTo: [otherAssignee.id],
+              };
+            }),
+          });
+
+          const res = await request(app)
+            .get('/api/notifications/alerts')
+            .set('Authorization', `Bearer ${authToken}`);
+
+          expect(res.status).toBe(200);
+          expect(res.body.alerts.map((alert: any) => alert.title)).toContain(visibleTitle);
+        } finally {
+          await prisma.notificationAlert.deleteMany({ where: { id: { startsWith: prefix } } });
+          if (otherAssigneeId) {
+            await prisma.emailVerificationToken.deleteMany({ where: { userId: otherAssigneeId } });
+            await prisma.user.delete({ where: { id: otherAssigneeId } }).catch(() => {});
+          }
+          if (otherProjectId) {
+            await prisma.project.delete({ where: { id: otherProjectId } }).catch(() => {});
+          }
+          if (otherCompanyId) {
+            await prisma.company.delete({ where: { id: otherCompanyId } }).catch(() => {});
+          }
+        }
+      });
+
       it('should reject unauthorized requests', async () => {
         const res = await request(app).get('/api/notifications/alerts');
 

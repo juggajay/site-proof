@@ -58,7 +58,10 @@ describe('notifyDocketSubcontractorUsers', () => {
 
     expect(users).toEqual([]);
     expect(prismaMock.subcontractorUser.findMany).toHaveBeenCalledWith({
-      where: { subcontractorCompanyId: 'subbie-company-1' },
+      where: {
+        subcontractorCompanyId: 'subbie-company-1',
+        subcontractorCompany: { status: { notIn: ['suspended', 'removed'] } },
+      },
     });
     expect(prismaMock.user.findMany).not.toHaveBeenCalled();
     expect(prismaMock.notification.createMany).not.toHaveBeenCalled();
@@ -98,6 +101,25 @@ describe('notifyDocketSubcontractorUsers', () => {
     expect(sendNotificationIfEnabledMock).toHaveBeenCalledTimes(2);
     expect(sendNotificationIfEnabledMock).toHaveBeenNthCalledWith(1, 'user-1', 'enabled', email);
     expect(sendNotificationIfEnabledMock).toHaveBeenNthCalledWith(2, 'user-2', 'enabled', email);
+  });
+
+  it('filters linked users through active subcontractor company status', async () => {
+    prismaMock.subcontractorUser.findMany.mockResolvedValue([]);
+
+    await notifyDocketSubcontractorUsers({
+      subcontractorCompanyId: 'suspended-subbie-company',
+      inApp,
+      email,
+    });
+
+    expect(prismaMock.subcontractorUser.findMany).toHaveBeenCalledWith({
+      where: {
+        subcontractorCompanyId: 'suspended-subbie-company',
+        subcontractorCompany: { status: { notIn: ['suspended', 'removed'] } },
+      },
+    });
+    expect(prismaMock.notification.createMany).not.toHaveBeenCalled();
+    expect(sendNotificationIfEnabledMock).not.toHaveBeenCalled();
   });
 
   it('swallows individual email delivery failures after creating in-app notifications', async () => {

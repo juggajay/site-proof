@@ -189,4 +189,55 @@ describe('email service configuration', () => {
     expect(htmlBodies).not.toContain('<script>');
     expect(htmlBodies).not.toContain('onerror="alert(1)"');
   });
+
+  it('does not double-prefix absolute links in digest emails', async () => {
+    process.env.NODE_ENV = 'development';
+    process.env.EMAIL_PROVIDER = 'mock';
+    process.env.FRONTEND_URL = 'https://app.siteproof.example';
+    delete process.env.RESEND_API_KEY;
+
+    const { getQueuedEmails, sendDailyDigestEmail } = await loadEmailModule();
+    const absoluteReportUrl = 'https://app.siteproof.example/projects/project-1/reports?tab=ncr';
+
+    await sendDailyDigestEmail('recipient@example.com', [
+      {
+        type: 'scheduledReports',
+        title: 'Scheduled report ready',
+        message: 'Your scheduled NCR report is ready.',
+        projectName: 'Gateway Upgrade',
+        linkUrl: absoluteReportUrl,
+        timestamp: new Date(),
+      },
+    ]);
+
+    const queuedEmail = getQueuedEmails()[0]!;
+    expect(queuedEmail.html).toContain(absoluteReportUrl);
+    expect(queuedEmail.text).toContain(absoluteReportUrl);
+    expect(`${queuedEmail.html}\n${queuedEmail.text}`).not.toContain(
+      'https://app.siteproof.example/https://app.siteproof.example',
+    );
+  });
+
+  it('sanitizes company member invitation subject lines', async () => {
+    process.env.NODE_ENV = 'development';
+    process.env.EMAIL_PROVIDER = 'mock';
+    delete process.env.RESEND_API_KEY;
+
+    const { getQueuedEmails, sendCompanyMemberInvitationEmail } = await loadEmailModule();
+
+    await sendCompanyMemberInvitationEmail({
+      to: 'recipient@example.com',
+      userName: 'Recipient',
+      companyName: 'Builder Co\r\nBcc: attacker@example.com',
+      inviterEmail: 'admin@example.com',
+      setupUrl: 'https://app.siteproof.example/setup',
+      expiresInDays: 7,
+    });
+
+    const queuedEmail = getQueuedEmails()[0]!;
+    expect(queuedEmail.subject).toBe(
+      '[SiteProof] Invitation to join Builder Co Bcc: attacker@example.com',
+    );
+    expect(queuedEmail.subject).not.toMatch(/[\r\n]/);
+  });
 });

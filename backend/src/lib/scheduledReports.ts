@@ -349,10 +349,14 @@ async function sendImmediateScheduledReportEmail(
   now: Date,
   pdfBuffer: Buffer,
   recipients: string[],
-): Promise<void> {
+): Promise<{ sent: number; failed: number; firstError?: string }> {
   if (recipients.length === 0) {
-    return;
+    return { sent: 0, failed: 0 };
   }
+
+  let sent = 0;
+  let failed = 0;
+  let firstError: string | undefined;
 
   for (const recipient of recipients) {
     const emailResult = await sendScheduledReportEmail({
@@ -365,9 +369,15 @@ async function sendImmediateScheduledReportEmail(
     });
 
     if (!emailResult.success) {
-      throw new Error(emailResult.error || 'Scheduled report email failed');
+      failed += 1;
+      firstError ||= emailResult.error || 'Scheduled report email failed';
+      continue;
     }
+
+    sent += 1;
   }
+
+  return { sent, failed, firstError };
 }
 
 async function markScheduledReportSent(
@@ -467,14 +477,35 @@ async function deliverClaimedScheduledReport(
     );
   }
 
-  await sendImmediateScheduledReportEmail(schedule, document, now, pdfBuffer, immediateRecipients);
+  const immediateDelivery = await sendImmediateScheduledReportEmail(
+    schedule,
+    document,
+    now,
+    pdfBuffer,
+    immediateRecipients,
+  );
   await queueScheduledReportDigestItems(schedule, document, digestRecipientUserIds);
+
+  if (immediateDelivery.failed > 0) {
+    if (immediateDelivery.sent === 0 && digestRecipientUserIds.length === 0) {
+      throw new Error(immediateDelivery.firstError || 'Scheduled report email failed');
+    }
+
+    logError('[Scheduled Reports] Partial delivery failure', {
+      scheduleId: schedule.id,
+      projectId: schedule.projectId,
+      reportType: schedule.reportType,
+      sent: immediateDelivery.sent,
+      failed: immediateDelivery.failed,
+      error: immediateDelivery.firstError || 'Scheduled report email failed',
+    });
+  }
 
   return markScheduledReportSent(
     schedule,
     now,
     nextRunAt,
-    immediateRecipients.length + digestRecipientUserIds.length,
+    immediateDelivery.sent + digestRecipientUserIds.length,
   );
 }
 

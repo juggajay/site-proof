@@ -330,6 +330,7 @@ holdpointsRouter.post(
         where: {
           id: releaseToken.id,
           usedAt: null,
+          expiresAt: { gt: releasedAt },
         },
         data: {
           usedAt: releasedAt,
@@ -341,10 +342,29 @@ holdpointsRouter.post(
       });
 
       if (tokenUpdate.count !== 1) {
+        const currentToken = await tx.holdPointReleaseToken.findUnique({
+          where: { id: releaseToken.id },
+          select: { usedAt: true, expiresAt: true, releasedByName: true },
+        });
+
+        if (!currentToken || currentToken.expiresAt <= releasedAt) {
+          throw new AppError(
+            410,
+            'This secure release link has expired. Please contact the site team for a new link.',
+            'TOKEN_EXPIRED',
+          );
+        }
+
         throw new AppError(
           410,
           'This hold point has already been released using this link.',
           'TOKEN_USED',
+          currentToken.usedAt
+            ? {
+                releasedAt: currentToken.usedAt as unknown as Record<string, unknown>,
+                releasedByName: currentToken.releasedByName as unknown as Record<string, unknown>,
+              }
+            : undefined,
         );
       }
 

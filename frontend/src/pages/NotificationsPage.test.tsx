@@ -135,4 +135,27 @@ describe('NotificationsPage', () => {
       ).toBe(true);
     });
   });
+
+  it('keeps Load more available when a client-side filter has no matches on the loaded page', async () => {
+    const fullPage = Array.from({ length: 100 }, (_, i) =>
+      buildNotification({ id: `n${i}`, title: `General notification ${i}`, type: 'info' }),
+    );
+    apiFetchMock.mockResolvedValue({ notifications: fullPage, unreadCount: 100 });
+
+    renderPage();
+    await screen.findByText('General notification 0');
+
+    await userEvent.click(screen.getByRole('button', { name: /@mentions/i }));
+
+    expect(await screen.findByText('No notifications')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /load more/i }));
+
+    await waitFor(() => {
+      expect(
+        apiFetchMock.mock.calls.some(
+          ([path]) => typeof path === 'string' && path.includes('offset=100'),
+        ),
+      ).toBe(true);
+    });
+  });
 });
