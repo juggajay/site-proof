@@ -20,7 +20,7 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 function buildClaim(
   status: ClaimStatus = 'draft',
   disputeNotes: string | null = null,
-  paidAmount = status === 'paid' ? 90000 : 25000,
+  paidAmount = status === 'paid' ? 90000 : status === 'partially_paid' ? 25000 : 0,
   certifiedAmount: number | null = status === 'draft' ? null : 90000,
 ) {
   return {
@@ -49,7 +49,9 @@ async function mockSeededClaimsApi(page: Page, options: SeededClaimsApiOptions =
       : claimStatus === 'draft'
         ? null
         : 90000;
-  let paidAmount = options.initialPaidAmount ?? (claimStatus === 'paid' ? 90000 : 25000);
+  let paidAmount =
+    options.initialPaidAmount ??
+    (claimStatus === 'paid' ? 90000 : claimStatus === 'partially_paid' ? 25000 : 0);
   const updateRequests: unknown[] = [];
   const certificationRequests: unknown[] = [];
   const paymentRequests: unknown[] = [];
@@ -330,14 +332,14 @@ test.describe('Claims seeded commercial contract', () => {
     const outstandingCard = page
       .locator('.rounded-lg.border.bg-card.p-4')
       .filter({ hasText: 'Outstanding' });
-    await expect(outstandingCard.getByText('-$25,000')).toBeVisible();
+    await expect(outstandingCard.getByText('$0')).toBeVisible();
 
     const claimRow = page.getByRole('row').filter({ hasText: 'Claim 7' });
     await expect(claimRow).toBeVisible();
     await expect(claimRow.getByText('Draft')).toBeVisible();
     await expect(claimRow.getByRole('cell', { name: '3', exact: true })).toBeVisible();
     await expect(claimRow.getByText('$120,000')).toBeVisible();
-    await expect(claimRow.getByText('$25,000')).toBeVisible();
+    await expect(claimRow.getByText('$0')).toBeVisible();
     await expect(claimRow.getByRole('button', { name: 'Submit Claim' })).toBeVisible();
     await expect(claimRow.getByRole('button', { name: 'Claim Evidence Review' })).toBeVisible();
     await expect(claimRow.getByRole('button', { name: 'Generate Evidence Package' })).toBeVisible();
