@@ -136,22 +136,24 @@ describe('DocsListScreen', () => {
     expect(screen.getByText(/No drawings in the register yet/i)).toBeInTheDocument();
   });
 
-  it('filters to a lot via the ?lotId= deep-link (honest empty when none match)', () => {
-    // Project-wide drawings (no lot link) → a lot-scoped entry shows the
-    // lot-specific empty state, not the whole register.
+  it('keeps project-wide drawings visible via the ?lotId= deep-link', () => {
+    // The register is project-scoped today, so project-wide drawings are still
+    // relevant when a lot hub links into the drawings surface.
     _data = makeData([makeItem({ lotId: null })]);
     renderScreen('/m/docs?lotId=lot-77');
-    expect(screen.getByText(/No drawings for this lot yet/i)).toBeInTheDocument();
-    expect(screen.queryByText('DRG-1204')).toBeNull();
+    expect(screen.getByText('DRG-1204')).toBeInTheDocument();
+    expect(screen.getByText('PROJECT-WIDE')).toBeInTheDocument();
   });
 
-  it('shows only the matching lot drawings when lot-linked', () => {
+  it('shows matching lot drawings and project-wide drawings when lot-linked', () => {
     _data = makeData([
       makeItem({ id: 'a', number: 'DRG-1', lotId: 'lot-77', lotLabel: 'LOT-077' }),
       makeItem({ id: 'b', number: 'DRG-2', lotId: 'lot-99', lotLabel: 'LOT-099' }),
+      makeItem({ id: 'c', number: 'DRG-3', lotId: null, lotLabel: null }),
     ]);
     renderScreen('/m/docs?lotId=lot-77');
     expect(screen.getByText('DRG-1')).toBeInTheDocument();
+    expect(screen.getByText('DRG-3')).toBeInTheDocument();
     expect(screen.queryByText('DRG-2')).toBeNull();
   });
 

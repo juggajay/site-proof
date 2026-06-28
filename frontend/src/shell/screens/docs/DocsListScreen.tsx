@@ -15,10 +15,9 @@
  * belong to the desktop Drawing Register. A search input appears once the
  * register is long enough to scroll past.
  *
- * The optional ?lotId= deep-link (the lot hub's Drawings tile) is honoured: the
- * list narrows to that lot. Drawings have no lot link in the data model yet, so a
- * lot-scoped entry shows an honest "no drawings for this lot" empty state rather
- * than the whole register.
+ * The optional ?lotId= deep-link (the lot hub's Drawings tile) is honoured:
+ * lot-linked rows narrow to that lot, while project-wide drawings stay visible
+ * because the drawing register is project-scoped today.
  */
 import { useMemo, useState } from 'react';
 import { ChevronRight, FileSpreadsheet, Search } from 'lucide-react';
@@ -114,7 +113,7 @@ export function DocsListScreen() {
   const sub = (
     <span className="flex items-center gap-2">
       {lotId ? (
-        <span>Current revisions for this lot</span>
+        <span>Current revisions linked to this lot and project-wide</span>
       ) : currentInScope > 0 ? (
         <span className="shell-mono text-[12px] font-semibold uppercase tracking-[0.1em] text-success">
           {currentInScope} current

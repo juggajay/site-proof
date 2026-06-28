@@ -336,10 +336,6 @@ holdPointRequestReleaseRouter.post(
 
     const notificationSentAt = new Date();
     const requestedBy = requestingUser?.fullName || requestingUser?.email || 'Unknown';
-    const releaseUrl = buildFrontendUrl(
-      `/projects/${releaseLot.project.id}/lots/${releaseLot.id}?tab=itp`,
-    );
-
     // Format scheduled date for display
     const formattedScheduledDate = scheduledDateValue
       ? scheduledDateValue.toLocaleDateString('en-AU', {
@@ -365,8 +361,7 @@ holdPointRequestReleaseRouter.post(
           scheduledDate: formattedScheduledDate,
           scheduledTime: scheduledTime || undefined,
           evidencePackageUrl,
-          releaseUrl,
-          secureReleaseUrl, // Feature #23 - Include secure release link
+          releaseUrl: secureReleaseUrl,
           requestedBy,
           noticeOverrideReason: noticePeriodOverrideReason || undefined,
         });

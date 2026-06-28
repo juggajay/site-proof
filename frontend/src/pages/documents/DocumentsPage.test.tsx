@@ -47,7 +47,7 @@ describe('DocumentsPage', () => {
     renderDocumentsPage('/projects/project-1/documents?lotId=lot-1&upload=1');
 
     await waitFor(() => {
-      expect(apiFetchMock).toHaveBeenCalledWith('/api/documents/project-1?lotId=lot-1');
+      expect(apiFetchMock).toHaveBeenCalledWith('/api/documents/project-1?lotId=lot-1&limit=100');
     });
 
     expect(screen.getByLabelText('Lot')).toHaveValue('lot-1');

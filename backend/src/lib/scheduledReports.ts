@@ -354,18 +354,19 @@ async function sendImmediateScheduledReportEmail(
     return;
   }
 
-  const emailResult = await sendScheduledReportEmail({
-    to: recipients,
-    projectName: schedule.project.name,
-    reportType: document.reportTypeLabel,
-    reportName: document.reportName,
-    generatedAt: now.toISOString(),
-    pdfBuffer,
-    viewReportUrl: document.viewReportUrl,
-  });
+  for (const recipient of recipients) {
+    const emailResult = await sendScheduledReportEmail({
+      to: recipient,
+      projectName: schedule.project.name,
+      reportType: document.reportTypeLabel,
+      reportName: document.reportName,
+      generatedAt: now.toISOString(),
+      pdfBuffer,
+    });
 
-  if (!emailResult.success) {
-    throw new Error(emailResult.error || 'Scheduled report email failed');
+    if (!emailResult.success) {
+      throw new Error(emailResult.error || 'Scheduled report email failed');
+    }
   }
 }
 

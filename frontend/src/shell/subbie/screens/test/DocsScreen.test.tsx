@@ -6,7 +6,7 @@
  *
  * Pins:
  *   - documents module gating (off → PortalAccessDenied, no query)
- *   - exact query URL incl. subcontractorView=true
+ *   - exact query URL incl. subcontractorView=true + capped page size
  *   - grouping by category
  *   - tapping a row delegates to openDocumentAccessUrl(id, fileUrl)
  */
@@ -34,7 +34,10 @@ vi.mock('@/lib/documentAccess', () => ({
 vi.mock('@/components/ui/toaster', () => ({ toast: vi.fn() }));
 
 const apiFetchMock = vi.fn();
-vi.mock('@/lib/api', () => ({ apiFetch: (...a: unknown[]) => apiFetchMock(...a) }));
+vi.mock('@/lib/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/api')>();
+  return { ...actual, apiFetch: (...a: unknown[]) => apiFetchMock(...a) };
+});
 
 let _ctx: SubbieShellData;
 vi.mock('../../subbieShellContext', () => ({ useSubbieShellContext: () => _ctx }));
@@ -97,14 +100,16 @@ describe('subbie shell DocsScreen', () => {
     expect(
       screen.getByText('Shared with Hargraves Earthmoving — Demo — view only'),
     ).toBeInTheDocument();
-    expect(apiFetchMock).toHaveBeenCalledWith('/api/documents/proj-1?subcontractorView=true');
+    expect(apiFetchMock).toHaveBeenCalledWith(
+      '/api/documents/proj-1?subcontractorView=true&limit=100',
+    );
   });
 
   it('encodes projectId in the documents path segment', () => {
     _ctx = { ...makeCtx(), projectId: 'proj-1/sub-folder' };
     renderScreen();
     expect(apiFetchMock).toHaveBeenCalledWith(
-      '/api/documents/proj-1%2Fsub-folder?subcontractorView=true',
+      '/api/documents/proj-1%2Fsub-folder?subcontractorView=true&limit=100',
     );
   });
 
@@ -151,5 +156,19 @@ describe('subbie shell DocsScreen', () => {
     await waitFor(() =>
       expect(openDocumentAccessUrlMock).toHaveBeenCalledWith('d1', 'https://x/sw201.pdf'),
     );
+  });
+
+  it('shows a retry action when document loading fails', async () => {
+    apiFetchMock.mockReset();
+    apiFetchMock.mockRejectedValueOnce(new Error('Documents temporarily unavailable'));
+
+    renderScreen();
+
+    expect(await screen.findByRole('button', { name: /retry/i })).toBeInTheDocument();
+
+    apiFetchMock.mockResolvedValueOnce({ documents: [] });
+    fireEvent.click(screen.getByRole('button', { name: /retry/i }));
+
+    await waitFor(() => expect(apiFetchMock).toHaveBeenCalledTimes(2));
   });
 });

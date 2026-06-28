@@ -39,6 +39,8 @@ interface DocItem {
   fileSize?: number;
 }
 
+const SUBBIE_SHELL_DOCS_PAGE_LIMIT = 100;
+
 function formatFileSize(bytes?: number): string {
   if (!bytes) return '';
   if (bytes < 1024) return `${bytes} B`;
@@ -106,12 +108,15 @@ export function DocsScreen() {
     data: documents = [],
     isLoading,
     error,
+    refetch,
   } = useQuery({
     queryKey: queryKeys.portalDocuments(user?.id, projectId, subcontractorCompanyId),
     queryFn: async () => {
       const scopeQuery = buildPortalCompanyQuery({ subcontractorCompanyId });
       const res = await apiFetch<{ documents: DocItem[] }>(
-        `/api/documents/${encodedProjectId}${scopeQuery ? `${scopeQuery}&` : '?'}subcontractorView=true`,
+        `/api/documents/${encodedProjectId}${
+          scopeQuery ? `${scopeQuery}&` : '?'
+        }subcontractorView=true&limit=${SUBBIE_SHELL_DOCS_PAGE_LIMIT}`,
       );
       return res.documents || [];
     },
@@ -154,8 +159,15 @@ export function DocsScreen() {
       {accessRevoked ? (
         <ModuleAccessChangedNotice />
       ) : error ? (
-        <div className="rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-[13px] font-semibold text-destructive">
-          {extractErrorMessage(error, 'Failed to load documents')}
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-[13px] font-semibold text-destructive">
+          <span>{extractErrorMessage(error, 'Failed to load documents')}</span>
+          <button
+            type="button"
+            onClick={() => void refetch()}
+            className="shrink-0 underline underline-offset-2"
+          >
+            Retry
+          </button>
         </div>
       ) : documents.length === 0 ? (
         <div className="flex flex-col items-center gap-2 py-16 text-center text-[14px] leading-relaxed text-muted-foreground">
