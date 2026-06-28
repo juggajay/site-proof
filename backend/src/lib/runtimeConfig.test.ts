@@ -78,6 +78,9 @@ describe('runtimeConfig', () => {
     delete process.env.GOOGLE_REDIRECT_URI;
 
     expect(buildFrontendUrl('/dashboard')).toBe('https://app.siteproof.example/dashboard');
+    expect(buildFrontendUrl('https://app.siteproof.example/projects/p1/reports')).toBe(
+      'https://app.siteproof.example/projects/p1/reports',
+    );
     expect(buildBackendUrl('/api/documents/1')).toBe(
       'https://api.siteproof.example/api/documents/1',
     );

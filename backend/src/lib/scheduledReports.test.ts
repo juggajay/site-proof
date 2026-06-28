@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import * as email from './email.js';
 import { clearEmailQueue, getQueuedEmails } from './email.js';
 import { prisma } from './prisma.js';
 import {
@@ -596,6 +597,40 @@ describe('processDueScheduledReports', () => {
       expect(result.failed).toBe(0);
       expect(getQueuedEmails()).toHaveLength(1);
     } finally {
+      await cleanupProject(project.id, company.id);
+    }
+  });
+
+  it('does not retry recipients who already received a scheduled report before another recipient fails', async () => {
+    const { company, project, now, schedule } = await createDueScheduleFixture(
+      {},
+      { recipients: 'sent-recipient@example.com,failed-recipient@example.com' },
+    );
+    const sendSpy = vi
+      .spyOn(email, 'sendScheduledReportEmail')
+      .mockImplementation(async ({ to }) =>
+        to === 'failed-recipient@example.com'
+          ? { success: false, error: 'temporary provider failure' }
+          : { success: true, messageId: 'sent-ok', provider: 'mock' },
+      );
+
+    try {
+      const result = await processDueScheduledReports({ now, scheduleIds: [schedule.id] });
+
+      expectSingleSentResult(result, 1);
+      expect(result.results[0]?.error).toBeUndefined();
+      expect(sendSpy.mock.calls.map(([data]) => data.to)).toEqual([
+        'sent-recipient@example.com',
+        'failed-recipient@example.com',
+      ]);
+      await expectScheduleAdvanced(schedule.id, now, true);
+
+      sendSpy.mockClear();
+      const secondRun = await processDueScheduledReports({ now, scheduleIds: [schedule.id] });
+      expect(secondRun.processed).toBe(0);
+      expect(sendSpy).not.toHaveBeenCalled();
+    } finally {
+      sendSpy.mockRestore();
       await cleanupProject(project.id, company.id);
     }
   });

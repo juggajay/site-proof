@@ -346,6 +346,10 @@ export function getGoogleRedirectUri(): string {
 }
 
 export function buildFrontendUrl(path: string): string {
+  if (/^https?:\/\//i.test(path)) {
+    return path;
+  }
+
   return appendPath(getFrontendUrl(), path);
 }
 

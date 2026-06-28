@@ -55,5 +55,6 @@ describe('processAlertEscalations stale hold-point routing', () => {
       'assigned-1',
     );
     expect(notifyUsers).toHaveBeenCalledTimes(1);
+    expect(notifyUsers.mock.calls[0]?.[2]).toBe('holdPointReminder');
   });
 });

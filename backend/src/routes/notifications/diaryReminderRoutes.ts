@@ -320,17 +320,12 @@ notificationDiaryReminderRouter.post(
         for (const user of users) {
           usersNotified.add(user.id);
 
-          // Send email notification for alerts (always immediate for escalations)
-          await sendNotificationIfEnabled(
-            user.id,
-            'ncrAssigned', // Using ncrAssigned for urgent alerts
-            {
-              title: 'Missing Diary Alert',
-              message: `ALERT: No daily diary entry was completed for ${project.name} on ${yesterdayString}. This is more than 24 hours overdue.`,
-              projectName: project.name,
-              linkUrl: `/projects/${project.id}/diary`,
-            },
-          );
+          await sendNotificationIfEnabled(user.id, 'diaryReminder', {
+            title: 'Missing Diary Alert',
+            message: `ALERT: No daily diary entry was completed for ${project.name} on ${yesterdayString}. This is more than 24 hours overdue.`,
+            projectName: project.name,
+            linkUrl: `/projects/${project.id}/diary`,
+          });
         }
 
         alertsCreated.push({

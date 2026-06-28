@@ -287,7 +287,7 @@ export function NotificationsPage() {
           </ul>
         )}
 
-        {hasNextPage && filteredNotifications.length > 0 && (
+        {hasNextPage && (
           <div className="border-t p-3 text-center">
             <Button variant="outline" onClick={() => fetchNextPage()} disabled={isFetchingNextPage}>
               {isFetchingNextPage ? 'Loading…' : 'Load more'}

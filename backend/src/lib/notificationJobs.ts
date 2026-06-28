@@ -133,6 +133,13 @@ async function processUserDigest(
 
   const preferences = user.notificationEmailPreference;
   if (!preferences?.enabled || !preferences.dailyDigest) {
+    await prisma.notificationDigestItem.deleteMany({
+      where: {
+        userId,
+        createdAt: { lte: cutoffAt },
+      },
+    });
+
     return {
       userId,
       itemCount: 0,
@@ -212,19 +219,28 @@ async function processDueNotificationDigestsUnlocked(
 
   const limit = parsePositiveInteger(options.limit, DEFAULT_DIGEST_USER_LIMIT);
   const itemLimit = parsePositiveInteger(options.itemLimit, DEFAULT_DIGEST_ITEM_LIMIT);
-  const userGroups = await prisma.notificationDigestItem.groupBy({
-    by: ['userId'],
+  const dueUsers = await prisma.notificationDigestItem.findMany({
     where: {
       ...(options.userIds ? { userId: { in: options.userIds } } : {}),
       createdAt: { lte: cutoffAt },
+      user: {
+        notificationEmailPreference: {
+          is: {
+            enabled: true,
+            dailyDigest: true,
+          },
+        },
+      },
     },
+    select: { userId: true },
+    distinct: ['userId'],
     orderBy: { userId: 'asc' },
     take: limit,
   });
 
   const results: NotificationDigestDeliveryResult[] = [];
-  for (const group of userGroups) {
-    results.push(await processUserDigest(group.userId, cutoffAt, itemLimit));
+  for (const user of dueUsers) {
+    results.push(await processUserDigest(user.userId, cutoffAt, itemLimit));
   }
 
   const sent = results.filter((result) => result.status === 'sent').length;

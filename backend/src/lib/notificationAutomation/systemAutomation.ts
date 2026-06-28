@@ -1,6 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
-import { STALE_HOLD_POINT_ALERT_ROLES } from '../notificationAlertConfig.js';
+import {
+  getAlertEmailNotificationType,
+  STALE_HOLD_POINT_ALERT_ROLES,
+} from '../notificationAlertConfig.js';
 import { buildProjectEntityLink, formatDateKey, getPreviousWorkingDay } from './helpers.js';
 import type { NotificationTypeWithTiming } from './preferences.js';
 
@@ -379,7 +382,7 @@ export async function processSystemAlerts(
             linkUrl,
             createdAt: now,
           },
-          'ncrAssigned',
+          getAlertEmailNotificationType({ type: 'pending_approval', entityType: 'diary' }),
           {
             title,
             message,
