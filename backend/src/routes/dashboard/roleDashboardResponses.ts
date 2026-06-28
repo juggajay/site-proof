@@ -1,4 +1,5 @@
 import type { DashboardProject } from './access.js';
+import { getDocketCommercialCosts, type DocketNumericLike } from '../../lib/docketCosts.js';
 
 // =============================================================================
 // Role dashboard response builders. These helpers keep the route modules focused
@@ -50,8 +51,10 @@ export type ProjectManagerProjectBudget = {
 } | null;
 
 export type ProjectManagerDocketCost = {
-  totalLabourSubmitted: unknown;
-  totalPlantSubmitted: unknown;
+  totalLabourSubmitted: DocketNumericLike;
+  totalPlantSubmitted: DocketNumericLike;
+  totalLabourApprovedCost?: DocketNumericLike;
+  totalPlantApprovedCost?: DocketNumericLike;
 };
 
 export type ProjectManagerAttentionNcr = {
@@ -205,8 +208,9 @@ export function buildProjectManagerDashboardResponse({
   let labourCost = 0;
   let plantCost = 0;
   dockets.forEach((docket) => {
-    labourCost += Number(docket.totalLabourSubmitted || 0);
-    plantCost += Number(docket.totalPlantSubmitted || 0);
+    const costs = getDocketCommercialCosts(docket);
+    labourCost += costs.labourCost;
+    plantCost += costs.plantCost;
   });
 
   const budgetTotal = Number(project?.contractValue || 0);

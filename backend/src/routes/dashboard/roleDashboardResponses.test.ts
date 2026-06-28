@@ -111,7 +111,12 @@ describe('role dashboard response helpers', () => {
         ],
         project: { contractValue: '1000' },
         dockets: [
-          { totalLabourSubmitted: '600', totalPlantSubmitted: '455' },
+          {
+            totalLabourSubmitted: '600',
+            totalPlantSubmitted: '455',
+            totalLabourApprovedCost: '500',
+            totalPlantApprovedCost: '400',
+          },
           { totalLabourSubmitted: null, totalPlantSubmitted: '0' },
         ],
         overdueNCRList: [{ id: 'ncr-1', ncrNumber: 'NCR-001', description: 'Overdue NCR' }],
@@ -153,10 +158,10 @@ describe('role dashboard response helpers', () => {
       });
       expect(response.costTracking).toMatchObject({
         budgetTotal: 1000,
-        actualSpend: 1055,
-        variance: 55,
-        variancePercentage: 5.5,
-        trend: 'over',
+        actualSpend: 900,
+        variance: -100,
+        variancePercentage: -10,
+        trend: 'under',
       });
       expect(response.attentionItems).toEqual([
         {

@@ -7,6 +7,11 @@ import { requireAuth } from '../../middleware/authMiddleware.js';
 import { buildProjectCostsResponse } from './costResponses.js';
 import { buildProjectDetailResponse, buildProjectListResponse } from './listDetailResponses.js';
 import { createProjectOverviewRouter } from './projectOverviewRoute.js';
+import {
+  getApprovedOrSubmittedCost,
+  getDocketCommercialCosts,
+  splitCostByLotAllocations,
+} from '../../lib/docketCosts.js';
 
 type AuthenticatedUser = NonNullable<Request['user']>;
 
@@ -340,7 +345,12 @@ export function createProjectReadRouter({
           projectId,
           status: 'approved',
         },
-        include: {
+        select: {
+          subcontractorCompanyId: true,
+          totalLabourSubmitted: true,
+          totalPlantSubmitted: true,
+          totalLabourApprovedCost: true,
+          totalPlantApprovedCost: true,
           subcontractorCompany: {
             select: { id: true, companyName: true },
           },
@@ -373,8 +383,7 @@ export function createProjectReadRouter({
       >();
 
       for (const docket of dockets) {
-        const labour = Number(docket.totalLabourSubmitted || 0);
-        const plant = Number(docket.totalPlantSubmitted || 0);
+        const { labourCost: labour, plantCost: plant } = getDocketCommercialCosts(docket);
 
         totalLabourCost += labour;
         totalPlantCost += plant;
@@ -413,36 +422,34 @@ export function createProjectReadRouter({
       });
 
       // Get cost allocations per lot from docket entries
-      // Labour allocations
-      const labourLotAllocations = await prisma.docketLabourLot.findMany({
+      const labourEntries = await prisma.docketLabour.findMany({
         where: {
-          docketLabour: {
-            docket: {
-              projectId,
-              status: 'approved',
-            },
+          docket: {
+            projectId,
+            status: 'approved',
           },
         },
-        include: {
-          docketLabour: {
-            select: { submittedCost: true },
+        select: {
+          submittedCost: true,
+          approvedCost: true,
+          lotAllocations: {
+            select: { lotId: true, hours: true },
           },
         },
       });
 
-      // Plant allocations
-      const plantLotAllocations = await prisma.docketPlantLot.findMany({
+      const plantEntries = await prisma.docketPlant.findMany({
         where: {
-          docketPlant: {
-            docket: {
-              projectId,
-              status: 'approved',
-            },
+          docket: {
+            projectId,
+            status: 'approved',
           },
         },
-        include: {
-          docketPlant: {
-            select: { submittedCost: true },
+        select: {
+          submittedCost: true,
+          approvedCost: true,
+          lotAllocations: {
+            select: { lotId: true, hours: true },
           },
         },
       });
@@ -450,18 +457,26 @@ export function createProjectReadRouter({
       // Calculate cost per lot
       const lotCostMap = new Map<string, number>();
 
-      // Add labour costs
-      for (const alloc of labourLotAllocations) {
-        const cost = Number(alloc.docketLabour?.submittedCost || 0);
-        const existing = lotCostMap.get(alloc.lotId) || 0;
-        lotCostMap.set(alloc.lotId, existing + cost);
+      for (const entry of labourEntries) {
+        const entryCost = getApprovedOrSubmittedCost(entry);
+        for (const allocation of splitCostByLotAllocations({
+          cost: entryCost,
+          allocations: entry.lotAllocations,
+        })) {
+          const existing = lotCostMap.get(allocation.lotId) || 0;
+          lotCostMap.set(allocation.lotId, existing + allocation.cost);
+        }
       }
 
-      // Add plant costs
-      for (const alloc of plantLotAllocations) {
-        const cost = Number(alloc.docketPlant?.submittedCost || 0);
-        const existing = lotCostMap.get(alloc.lotId) || 0;
-        lotCostMap.set(alloc.lotId, existing + cost);
+      for (const entry of plantEntries) {
+        const entryCost = getApprovedOrSubmittedCost(entry);
+        for (const allocation of splitCostByLotAllocations({
+          cost: entryCost,
+          allocations: entry.lotAllocations,
+        })) {
+          const existing = lotCostMap.get(allocation.lotId) || 0;
+          lotCostMap.set(allocation.lotId, existing + allocation.cost);
+        }
       }
 
       // Build lot costs array
