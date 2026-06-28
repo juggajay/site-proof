@@ -47,6 +47,13 @@ export const API_KEY_SCOPE_OPTIONS = [
   { value: 'write', label: 'Read & write' },
 ] as const;
 
+export const API_KEY_EXPIRY_OPTIONS = [
+  { value: '30', label: '30 days' },
+  { value: '90', label: '90 days' },
+  { value: '180', label: '180 days' },
+  { value: '365', label: '365 days' },
+] as const;
+
 export function canRevokeApiKey(
   key: Pick<CompanyApiKey, 'isActive' | 'owner'>,
   _currentUserId: string | null | undefined,
@@ -63,6 +70,19 @@ export function formatApiKeyLastUsed(lastUsedAt: string | null): string {
     return 'Never used';
   }
   return new Date(lastUsedAt).toLocaleDateString('en-AU');
+}
+
+export function formatApiKeyExpiry(expiresAt: string | null): string {
+  if (!expiresAt) {
+    return 'No expiry';
+  }
+
+  const date = new Date(expiresAt);
+  if (Number.isNaN(date.getTime())) {
+    return 'Expiry unknown';
+  }
+
+  return `Expires ${date.toLocaleDateString('en-AU')}`;
 }
 
 export function fetchCompanyApiKeys() {

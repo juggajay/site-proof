@@ -93,7 +93,9 @@ describe('CompanyUsageSection', () => {
     bar = getOnlyProgressBar(red.container);
     expect(bar).toHaveClass('bg-destructive');
     expect(
-      screen.getByText("You've reached your plan's project allowance. Contact us to add capacity."),
+      screen.getByText(
+        "You're at this plan's listed project allowance. Contact us to plan extra capacity before adding more projects.",
+      ),
     ).toBeInTheDocument();
   });
 
@@ -116,7 +118,7 @@ describe('CompanyUsageSection', () => {
 
     expect(
       screen.getByText(
-        "You've reached your plan's user allowance. Remove inactive team members, cancel pending invitations, or contact us to add capacity.",
+        "You're at this plan's listed user allowance. Review inactive team members, cancel pending invitations, or contact us to plan extra capacity.",
       ),
     ).toBeInTheDocument();
   });

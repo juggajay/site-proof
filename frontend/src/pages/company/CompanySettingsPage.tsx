@@ -40,7 +40,8 @@ export function CompanySettingsPage() {
   const companyQuery = useCompanySettingsQuery();
   const [company, setCompany] = useState<Company | null>(null);
   const [supportEmail, setSupportEmail] = useState(DEFAULT_SUPPORT_EMAIL);
-  const isCompanyOwner = user?.roleInCompany === 'owner' || user?.role === 'owner';
+  const currentUserCompanyRole = user?.roleInCompany ?? user?.role ?? null;
+  const isCompanyOwner = currentUserCompanyRole === 'owner';
   const canManageCompanyTeam =
     user?.roleInCompany === 'owner' ||
     user?.roleInCompany === 'admin' ||
@@ -368,7 +369,12 @@ export function CompanySettingsPage() {
 
       <CompanyAccountInformationCard company={company} />
 
-      {canManageCompanyTeam && <CompanyTeamMembersSection currentUserId={user?.id} />}
+      {canManageCompanyTeam && (
+        <CompanyTeamMembersSection
+          currentUserId={user?.id}
+          currentUserCompanyRole={currentUserCompanyRole}
+        />
+      )}
 
       {/* H22: company integrations — API keys + webhooks */}
       {canManageCompanyTeam && <CompanyApiKeysSection currentUserId={user?.id} />}

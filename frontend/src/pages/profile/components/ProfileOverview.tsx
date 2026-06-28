@@ -11,6 +11,7 @@ type ProfileOverviewUser = {
   companyName?: string | null;
   createdAt?: string;
   avatarUrl?: string | null;
+  hasPassword?: boolean;
 };
 
 type ProfileOverviewProps = {
@@ -127,9 +128,16 @@ export function ProfileOverview({
       <div className="rounded-lg border bg-card p-6">
         <h3 className="text-lg font-semibold mb-4">Account Actions</h3>
         <div className="flex flex-wrap gap-3">
-          <Button type="button" variant="outline" onClick={onChangePassword}>
-            Change Password
-          </Button>
+          {user?.hasPassword === false ? (
+            <div className="rounded-md border border-muted bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+              This account does not have a password yet. Use password reset from the login screen to
+              set one.
+            </div>
+          ) : (
+            <Button type="button" variant="outline" onClick={onChangePassword}>
+              Change Password
+            </Button>
+          )}
           <Button type="button" variant="outline" onClick={onEditProfile}>
             Edit Profile
           </Button>

@@ -14,10 +14,12 @@ import {
   ModalHeader,
 } from '@/components/ui/Modal';
 import {
+  API_KEY_EXPIRY_OPTIONS,
   API_KEY_SCOPE_OPTIONS,
   canRevokeApiKey,
   createApiKey,
   describeApiKeyStatus,
+  formatApiKeyExpiry,
   fetchCompanyApiKeys,
   formatApiKeyLastUsed,
   revokeApiKey,
@@ -29,7 +31,7 @@ interface CompanyApiKeysSectionProps {
   currentUserId?: string;
 }
 
-const defaultCreateForm = { name: '', scopes: 'read' };
+const defaultCreateForm = { name: '', scopes: 'read', expiresInDays: '90' };
 
 export function CompanyApiKeysSection({ currentUserId }: CompanyApiKeysSectionProps) {
   const [keys, setKeys] = useState<CompanyApiKey[]>([]);
@@ -76,7 +78,11 @@ export function CompanyApiKeysSection({ currentUserId }: CompanyApiKeysSectionPr
     setCreating(true);
     setCreateError('');
     try {
-      const data = await createApiKey({ name, scopes: createForm.scopes });
+      const data = await createApiKey({
+        name,
+        scopes: createForm.scopes,
+        expiresInDays: Number(createForm.expiresInDays),
+      });
       setShowCreateModal(false);
       setCreateForm(defaultCreateForm);
       setCopied(false);
@@ -172,6 +178,9 @@ export function CompanyApiKeysSection({ currentUserId }: CompanyApiKeysSectionPr
                   <div className="truncate font-mono text-xs text-muted-foreground">
                     {key.keyPrefix}… · {key.scopes}
                   </div>
+                  <div className="text-xs text-muted-foreground">
+                    {formatApiKeyExpiry(key.expiresAt)}
+                  </div>
                 </div>
                 <div className="min-w-0 text-xs text-muted-foreground">
                   <span className="mb-1 block font-medium uppercase text-muted-foreground md:hidden">
@@ -264,6 +273,27 @@ export function CompanyApiKeysSection({ currentUserId }: CompanyApiKeysSectionPr
                   ))}
                 </select>
               </div>
+              <div>
+                <Label htmlFor="api-key-expiry">Expires after</Label>
+                <select
+                  id="api-key-expiry"
+                  value={createForm.expiresInDays}
+                  onChange={(event) =>
+                    setCreateForm((form) => ({ ...form, expiresInDays: event.target.value }))
+                  }
+                  className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
+                >
+                  {API_KEY_EXPIRY_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  New browser-created keys expire automatically. Rotate external integrations before
+                  this date.
+                </p>
+              </div>
               {createError ? <p className="text-sm text-destructive">{createError}</p> : null}
             </div>
           </ModalBody>
@@ -328,6 +358,9 @@ export function CompanyApiKeysSection({ currentUserId }: CompanyApiKeysSectionPr
               <div className="break-all rounded-md border bg-muted/50 p-3 font-mono text-sm">
                 {revealedKey.key}
               </div>
+              <p className="text-xs text-muted-foreground">
+                {formatApiKeyExpiry(revealedKey.expiresAt)}
+              </p>
               <Button type="button" variant="outline" size="sm" onClick={handleCopy}>
                 {copied ? 'Copied' : 'Copy to clipboard'}
               </Button>

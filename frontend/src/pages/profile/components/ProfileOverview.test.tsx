@@ -84,4 +84,21 @@ describe('ProfileOverview', () => {
 
     expect(screen.getByRole('button', { name: 'Logging out...' })).toBeDisabled();
   });
+
+  it('hides the change-password action for passwordless accounts', () => {
+    const onChangePassword = vi.fn();
+
+    render(
+      <ProfileOverview
+        user={{ email: 'oauth@example.com', hasPassword: false }}
+        loggingOutAll={false}
+        onChangePassword={onChangePassword}
+        onEditProfile={() => {}}
+        onLogoutAllDevices={() => {}}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: 'Change Password' })).not.toBeInTheDocument();
+    expect(screen.getByText(/This account does not have a password yet/i)).toBeInTheDocument();
+  });
 });

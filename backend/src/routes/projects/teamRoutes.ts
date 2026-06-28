@@ -22,7 +22,9 @@ type ProjectAccessContext = {
     id: string;
     companyId: string;
   };
+  projectUser: { role: string } | null;
   hasProjectAccess: boolean;
+  hasCompanyAdminAccess: boolean;
   isProjectAdmin: boolean;
 };
 
@@ -44,6 +46,25 @@ type ProjectTeamRouterDependencies = {
 
 function isProjectUserUniqueConstraintError(error: unknown): boolean {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
+}
+
+function assertActorMayManageProjectMemberRole(params: {
+  actorProjectRole: string | null | undefined;
+  actorHasCompanyAdminAccess: boolean;
+  targetCurrentRole?: string | null;
+  targetNewRole?: string | null;
+}): void {
+  if (params.actorHasCompanyAdminAccess || params.actorProjectRole === 'admin') {
+    return;
+  }
+
+  if (params.targetCurrentRole === 'admin') {
+    throw AppError.forbidden('Only project admins can manage project administrators');
+  }
+
+  if (params.targetNewRole === 'admin') {
+    throw AppError.forbidden('Only project admins can grant the project admin role');
+  }
 }
 
 export function createProjectTeamRouter({
@@ -104,6 +125,11 @@ export function createProjectTeamRouter({
         throw AppError.forbidden('Only admins can invite users');
       }
       await assertProjectAllowsWrite(projectId);
+      assertActorMayManageProjectMemberRole({
+        actorProjectRole: access.projectUser?.role,
+        actorHasCompanyAdminAccess: access.hasCompanyAdminAccess,
+        targetNewRole: role,
+      });
 
       // Project team assignment links an existing company member to a project;
       // it does not create a new company seat.
@@ -241,6 +267,13 @@ export function createProjectTeamRouter({
         }
 
         const oldRole = targetProjectUser.role;
+        assertActorMayManageProjectMemberRole({
+          actorProjectRole: access.projectUser?.role,
+          actorHasCompanyAdminAccess: access.hasCompanyAdminAccess,
+          targetCurrentRole: oldRole,
+          targetNewRole: role,
+        });
+
         if (!isProjectAdminRole(role)) {
           await assertCanReduceProjectAdmin(tx, projectId, targetProjectUser);
         }
@@ -352,6 +385,12 @@ export function createProjectTeamRouter({
         if (!targetProjectUser) {
           throw AppError.notFound('User in project');
         }
+
+        assertActorMayManageProjectMemberRole({
+          actorProjectRole: access.projectUser?.role,
+          actorHasCompanyAdminAccess: access.hasCompanyAdminAccess,
+          targetCurrentRole: targetProjectUser.role,
+        });
 
         await assertCanReduceProjectAdmin(tx, projectId, targetProjectUser);
 
