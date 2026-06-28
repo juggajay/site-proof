@@ -80,7 +80,7 @@ export function CookieConsentBanner() {
   return (
     <div
       className={cn(
-        'fixed left-0 right-0 z-50 bg-card border-t border-border px-3 py-2 shadow-lg sm:p-4',
+        'fixed left-0 right-0 z-40 bg-card border-t border-border px-3 py-2 shadow-lg sm:p-4',
         user ? 'bottom-16 md:bottom-0' : 'bottom-0',
       )}
       role="dialog"

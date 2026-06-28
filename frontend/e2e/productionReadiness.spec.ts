@@ -2478,6 +2478,8 @@ test.describe('production readiness guardrails', () => {
     expect(cookieConsent).toContain('function readStoredConsent');
     expect(cookieConsent).toContain('function hasCurrentConsent');
     expect(cookieConsent).toContain('setConsent(hasCurrentConsent(storedConsent)');
+    expect(cookieConsent).toContain('z-40');
+    expect(cookieConsent).not.toContain('z-50 bg-card');
     expect(cookieConsent).not.toContain('setConsent(JSON.parse(consentData))');
     expect(cookieConsent).not.toContain('localStorage.getItem(CONSENT_KEY)');
     expect(cookieConsent).not.toContain('localStorage.setItem(CONSENT_KEY');
