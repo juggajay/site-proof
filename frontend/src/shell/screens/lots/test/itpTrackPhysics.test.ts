@@ -689,6 +689,24 @@ describe('dotStateFor — per-dot state from EXISTING run data', () => {
     expect(dotStateFor(makeItem(), makeCompletion({ isNotApplicable: true }))).toBe('na');
   });
 
+  it('pending verification → review, not done', () => {
+    expect(
+      dotStateFor(
+        makeItem(),
+        makeCompletion({ isCompleted: true, verificationStatus: 'pending_verification' }),
+      ),
+    ).toBe('review');
+  });
+
+  it('rejected → rejected, not done', () => {
+    expect(
+      dotStateFor(
+        makeItem(),
+        makeCompletion({ isCompleted: true, verificationStatus: 'rejected' }),
+      ),
+    ).toBe('rejected');
+  });
+
   it('un-released hold-point sign-off item → hold (locked)', () => {
     const hp = makeItem({ pointType: 'hold_point', isHoldPoint: true });
     expect(dotStateFor(hp, undefined)).toBe('hold');
@@ -719,6 +737,8 @@ describe('dotStateLabel — uppercase tooltip labels', () => {
     ['failed', 'FAILED'],
     ['na', 'N/A'],
     ['hold', 'HOLD'],
+    ['review', 'REVIEW'],
+    ['rejected', 'REJECTED'],
     ['open', 'OPEN'],
   ];
   it.each(cases)('%s → %s', (state, label) => {

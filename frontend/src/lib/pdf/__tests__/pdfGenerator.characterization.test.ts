@@ -424,6 +424,41 @@ describe('pdfGenerator characterization', () => {
     expect(textContent).not.toContain('SiteProof v2');
   });
 
+  it('keeps claim evidence ITP detail counts aligned with accepted completion percentage', async () => {
+    const reviewSensitiveLot = {
+      ...submittedClaimEvidencePackageFixture.lots[1],
+      lotNumber: 'QA-REVIEW',
+      description: 'Verification-sensitive checklist',
+      itp: {
+        ...submittedClaimEvidencePackageFixture.lots[1].itp!,
+        checklistItems: [{}, {}, {}],
+        completions: [
+          { isCompleted: true },
+          { isCompleted: false },
+          { isCompleted: false, isNotApplicable: true },
+        ],
+      },
+      summary: {
+        ...submittedClaimEvidencePackageFixture.lots[1].summary,
+        itpCompletionPercentage: 67,
+      },
+    };
+
+    await generateClaimEvidencePackagePDF({
+      ...submittedClaimEvidencePackageFixture,
+      lots: [reviewSensitiveLot],
+      summary: {
+        ...submittedClaimEvidencePackageFixture.summary,
+        totalLots: 1,
+        conformedLots: 0,
+      },
+    });
+
+    const textContent = renderedText(latestPdf()).join('\n');
+    expect(textContent).toContain('Completion: 2/3 items (67%)');
+    expect(textContent).not.toContain('Completion: 3/3 items (67%)');
+  });
+
   it('renders selected claim evidence sections when detailed lot metadata is excluded', async () => {
     await generateClaimEvidencePackagePDF(submittedClaimEvidencePackageFixture, {
       includeLotSummary: false,

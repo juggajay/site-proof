@@ -245,6 +245,7 @@ export interface HPEvidencePackageData {
 
 export interface ClaimItpCompletion {
   isCompleted?: boolean;
+  isNotApplicable?: boolean;
 }
 
 export interface ClaimHoldPoint {

@@ -144,6 +144,17 @@ export function createClaimEvidenceRouter({
         lots: claim.claimedLots.map((claimedLot) => {
           const lot = claimedLot.lot;
           const itpInstance = lot.itpInstance;
+          const itpChecklistItemIds = new Set(
+            itpInstance?.template.checklistItems.map((item) => item.id) ?? [],
+          );
+          const acceptedItpCompletionCount =
+            itpInstance?.completions.filter(
+              (completion) =>
+                itpChecklistItemIds.has(completion.checklistItemId) &&
+                (completion.status === 'completed' || completion.status === 'not_applicable') &&
+                completion.verificationStatus !== 'pending_verification' &&
+                completion.verificationStatus !== 'rejected',
+            ).length ?? 0;
 
           return {
             id: lot.id,
@@ -180,27 +191,40 @@ export function createClaimEvidenceRouter({
                     isHoldPoint: item.pointType === 'hold_point',
                     evidenceRequired: item.evidenceRequired || '',
                   })),
-                  completions: itpInstance.completions.map((c) => ({
-                    checklistItemId: c.checklistItemId,
-                    isCompleted: c.status === 'completed',
-                    notes: c.notes || null,
-                    completedAt: c.completedAt?.toISOString() || null,
-                    completedBy: c.completedBy
-                      ? {
-                          name: c.completedBy.fullName || c.completedBy.email,
-                          email: c.completedBy.email,
-                        }
-                      : null,
-                    isVerified: c.verificationStatus === 'verified',
-                    verifiedAt: c.verifiedAt?.toISOString() || null,
-                    verifiedBy: c.verifiedBy
-                      ? {
-                          name: c.verifiedBy.fullName || c.verifiedBy.email,
-                          email: c.verifiedBy.email,
-                        }
-                      : null,
-                    attachmentCount: c.attachments?.length || 0,
-                  })),
+                  completions: itpInstance.completions.map((c) => {
+                    const isAcceptedCompletion =
+                      itpChecklistItemIds.has(c.checklistItemId) &&
+                      (c.status === 'completed' || c.status === 'not_applicable') &&
+                      c.verificationStatus !== 'pending_verification' &&
+                      c.verificationStatus !== 'rejected';
+
+                    return {
+                      checklistItemId: c.checklistItemId,
+                      isCompleted: isAcceptedCompletion && c.status === 'completed',
+                      isNotApplicable: isAcceptedCompletion && c.status === 'not_applicable',
+                      isPendingVerification: c.verificationStatus === 'pending_verification',
+                      isRejected: c.verificationStatus === 'rejected',
+                      verificationStatus: c.verificationStatus,
+                      verificationNotes: c.verificationNotes || null,
+                      notes: c.notes || null,
+                      completedAt: c.completedAt?.toISOString() || null,
+                      completedBy: c.completedBy
+                        ? {
+                            name: c.completedBy.fullName || c.completedBy.email,
+                            email: c.completedBy.email,
+                          }
+                        : null,
+                      isVerified: c.verificationStatus === 'verified',
+                      verifiedAt: c.verifiedAt?.toISOString() || null,
+                      verifiedBy: c.verifiedBy
+                        ? {
+                            name: c.verifiedBy.fullName || c.verifiedBy.email,
+                            email: c.verifiedBy.email,
+                          }
+                        : null,
+                      attachmentCount: c.attachments?.length || 0,
+                    };
+                  }),
                 }
               : null,
 
@@ -271,7 +295,7 @@ export function createClaimEvidenceRouter({
               photoCount: lot.documents.filter((d) => d.documentType === 'photo').length,
               itpCompletionPercentage: itpInstance
                 ? Math.round(
-                    (itpInstance.completions.filter((c) => c.status === 'completed').length /
+                    (acceptedItpCompletionCount /
                       Math.max(1, itpInstance.template.checklistItems.length)) *
                       100,
                   )

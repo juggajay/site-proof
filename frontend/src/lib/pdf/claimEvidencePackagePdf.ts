@@ -291,7 +291,9 @@ export async function generateClaimEvidencePackagePDF(
         doc.setFontSize(9);
         doc.text(`Template: ${lot.itp.templateName}`, margin, yPos);
         yPos += 4;
-        const completedItems = (lot.itp.completions ?? []).filter((c) => c.isCompleted).length;
+        const completedItems = (lot.itp.completions ?? []).filter(
+          (c) => c.isCompleted || c.isNotApplicable,
+        ).length;
         const totalItems = (lot.itp.checklistItems ?? []).length;
         doc.text(
           `Completion: ${completedItems}/${totalItems} items (${lot.summary.itpCompletionPercentage}%)`,

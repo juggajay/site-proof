@@ -75,6 +75,7 @@ describe('buildLotListSelect', () => {
           select: {
             checklistItemId: true,
             status: true,
+            verificationStatus: true,
           },
         },
         template: {

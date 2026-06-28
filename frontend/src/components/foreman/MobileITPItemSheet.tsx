@@ -98,8 +98,15 @@ export function MobileITPItemSheet({
     }
   };
 
-  const isCompleted = completion?.isCompleted;
-  const isNA = completion?.isNotApplicable;
+  const isRejected =
+    completion?.isRejected || completion?.verificationStatus === 'rejected' || false;
+  const isPendingVerification =
+    !isRejected &&
+    (completion?.isPendingVerification ||
+      completion?.verificationStatus === 'pending_verification');
+  const isAcceptedCompletion = !isRejected && !isPendingVerification;
+  const isCompleted = completion?.isCompleted && isAcceptedCompletion;
+  const isNA = completion?.isNotApplicable && isAcceptedCompletion;
   const isFailed = completion?.isFailed;
   const photos = completion?.attachments || [];
   const isReleaseGated = isReleaseGatedChecklistItem(item);
@@ -140,6 +147,35 @@ export function MobileITPItemSheet({
                 {releaseRequired
                   ? 'This item must be released through the hold-point flow before it can pass.'
                   : 'Contact head contractor for completion access'}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {isRejected && (
+          <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-3">
+            <div>
+              <p className="text-sm font-medium text-destructive">Rejected by head contractor</p>
+              <p className="text-xs text-muted-foreground">
+                {completion?.verificationNotes || 'Update the item and resubmit it for review.'}
+              </p>
+              {completion?.verificationNotes && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Update the item and resubmit it for review.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {isPendingVerification && (
+          <div className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 p-3">
+            <div>
+              <p className="text-sm font-medium text-warning-foreground">
+                Awaiting head-contractor verification
+              </p>
+              <p className="text-xs text-muted-foreground">
+                This item has been submitted and is waiting for review.
               </p>
             </div>
           </div>

@@ -13,13 +13,13 @@ import {
 } from './MobileITPChecklistSections';
 import {
   calculateItpProgressPercent,
-  countCompletedItpItems,
   countItpPhotoRequiredItems,
   findFirstIncompleteItpCategory,
   findItpCompletion,
   getItpCategoryStats,
   getItpItemStatus,
   groupItpItemsByCategory,
+  type ItpItemStatus,
 } from './mobileItpChecklistHelpers';
 
 export type { ITPChecklistItem, ITPCompletion } from '@/pages/lots/types';
@@ -27,9 +27,9 @@ export type { ITPChecklistItem, ITPCompletion } from '@/pages/lots/types';
 function isReleaseRequired(
   item: ITPChecklistItem | null,
   completion: ITPCompletion | undefined,
-  status: 'pending' | 'completed' | 'na' | 'failed',
+  status: ItpItemStatus,
 ): boolean {
-  if (!item || status !== 'pending') return false;
+  if (!item || status === 'completed' || status === 'na' || status === 'failed') return false;
   return isReleaseGatedChecklistItem(item) && !completion?.holdPointRelease?.releasedByName;
 }
 
@@ -79,8 +79,7 @@ export function MobileITPChecklist({
 
   const getCompletion = (itemId: string) => findItpCompletion(completions, itemId);
 
-  const getItemStatus = (itemId: string): 'pending' | 'completed' | 'na' | 'failed' =>
-    getItpItemStatus(getCompletion(itemId));
+  const getItemStatus = (itemId: string): ItpItemStatus => getItpItemStatus(getCompletion(itemId));
 
   // Group items by category
   const categorizedItems = useMemo(() => groupItpItemsByCategory(checklistItems), [checklistItems]);
@@ -104,7 +103,7 @@ export function MobileITPChecklist({
     });
   };
 
-  const completedCount = countCompletedItpItems(completions);
+  const completedCount = getItpCategoryStats(checklistItems, completions).completed;
   const totalCount = checklistItems.length;
   const progress = calculateItpProgressPercent(completedCount, totalCount);
   const selectedCompletion = selectedItem ? getCompletion(selectedItem.id) : undefined;
@@ -170,6 +169,7 @@ export function MobileITPChecklist({
                       isUpdating={updatingItem === item.id}
                       canComplete={canCompleteItem}
                       releaseRequired={releaseRequired}
+                      verificationReason={completion?.verificationNotes}
                       onTap={() => {
                         trigger('light');
                         setSelectedItem(item);

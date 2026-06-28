@@ -16,13 +16,34 @@ export interface ItpCategoryProgress {
   isCategoryComplete: boolean;
 }
 
+export function isItpCompletionAcceptedForProgress(completion: ITPCompletion | undefined): boolean {
+  if (!completion) return false;
+  const status = completion.verificationStatus;
+  if (completion.isRejected || completion.isPendingVerification) return false;
+  if (status === 'rejected' || status === 'pending_verification') return false;
+  return completion.isCompleted || Boolean(completion.isNotApplicable);
+}
+
+function isCompletionForItem(
+  completion: ITPCompletion,
+  checklistItemIds: ReadonlySet<string>,
+): boolean {
+  return checklistItemIds.has(completion.checklistItemId);
+}
+
 export function getItpChecklistProgress(
   checklistItems: ITPChecklistItem[],
   completions: ITPCompletion[],
 ): ItpChecklistProgress {
   const totalItems = checklistItems.length;
-  const completedItems = completions.filter((completion) => completion.isCompleted).length;
-  const naItems = completions.filter((completion) => completion.isNotApplicable).length;
+  const checklistItemIds = new Set(checklistItems.map((item) => item.id));
+  const acceptedCompletions = completions.filter(
+    (completion) =>
+      isCompletionForItem(completion, checklistItemIds) &&
+      isItpCompletionAcceptedForProgress(completion),
+  );
+  const completedItems = acceptedCompletions.filter((completion) => completion.isCompleted).length;
+  const naItems = acceptedCompletions.filter((completion) => completion.isNotApplicable).length;
   const finishedItems = completedItems + naItems;
   const percentage = totalItems > 0 ? Math.round((finishedItems / totalItems) * 100) : 0;
 
@@ -51,10 +72,11 @@ export function filterItpChecklistItems(
 ): ITPChecklistItem[] {
   return checklistItems.filter((item) => {
     const completion = completions.find((entry) => entry.checklistItemId === item.id);
-    const isCompleted = completion?.isCompleted || false;
-    const isNotApplicable = completion?.isNotApplicable || false;
+    const isAccepted = isItpCompletionAcceptedForProgress(completion);
+    const isCompleted = isAccepted && (completion?.isCompleted || false);
+    const isNotApplicable = isAccepted && (completion?.isNotApplicable || false);
     const isFailed = completion?.isFailed || false;
-    const isPending = !isCompleted && !isNotApplicable && !isFailed;
+    const isPending = !isAccepted && !isFailed;
 
     if (statusFilter === 'pending' && !isPending) return false;
     if (statusFilter === 'completed' && !isCompleted) return false;
@@ -143,7 +165,7 @@ export function getItpCategoryProgress(
 ): ItpCategoryProgress {
   const completedInCategory = checklistItems.filter((item) => {
     const completion = completions.find((entry) => entry.checklistItemId === item.id);
-    return completion?.isCompleted || completion?.isNotApplicable;
+    return isItpCompletionAcceptedForProgress(completion);
   }).length;
   const totalInCategory = checklistItems.length;
   const isCategoryComplete = completedInCategory === totalInCategory;

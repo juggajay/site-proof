@@ -89,6 +89,10 @@ const STATE_DOT_CLASS: Record<ItpDotState, string> = {
   failed: 'bg-[hsl(var(--destructive))] text-[hsl(var(--destructive-foreground))]',
   na: 'bg-secondary text-muted-foreground border border-[hsl(var(--muted-foreground)/0.5)] opacity-60',
   hold: 'bg-secondary text-[hsl(var(--warning))] border-[1.5px] border-[hsl(var(--warning))]',
+  review:
+    'bg-[hsl(var(--warning)/0.12)] text-[hsl(var(--warning))] border-[1.5px] border-[hsl(var(--warning))]',
+  rejected:
+    'bg-[hsl(var(--destructive)/0.12)] text-[hsl(var(--destructive))] border-[1.5px] border-[hsl(var(--destructive))]',
   open: 'bg-card text-foreground border-[1.5px] border-border',
 };
 

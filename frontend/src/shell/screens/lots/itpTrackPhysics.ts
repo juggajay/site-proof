@@ -467,7 +467,7 @@ export function trackShiftPx(frac: number, count: number, scrubbing: boolean): n
 
 // ── Per-dot run state (colour/semantics) ─────────────────────────────────────
 
-export type ItpDotState = 'done' | 'failed' | 'na' | 'hold' | 'open';
+export type ItpDotState = 'done' | 'failed' | 'na' | 'hold' | 'open' | 'review' | 'rejected';
 
 /**
  * Derive the on-track visual state for an item from the run's EXISTING data —
@@ -482,6 +482,8 @@ export function dotStateFor(
   completion: ITPCompletion | undefined,
 ): ItpDotState {
   const disposition = itpCompletionDisposition(completion);
+  if (disposition === 'rejected') return 'rejected';
+  if (disposition === 'review') return 'review';
   if (disposition === 'completed') return 'done';
   if (disposition === 'failed') return 'failed';
   if (disposition === 'na') return 'na';
@@ -502,6 +504,10 @@ export function dotStateLabel(state: ItpDotState): string {
       return 'N/A';
     case 'hold':
       return 'HOLD';
+    case 'review':
+      return 'REVIEW';
+    case 'rejected':
+      return 'REJECTED';
     case 'open':
     default:
       return 'OPEN';
@@ -522,7 +528,12 @@ export function trackAriaValueText(
   state: ItpDotState,
 ): string {
   const pos = snapFrac(index, count) + 1;
-  const label = state === 'na' ? 'not applicable' : dotStateLabel(state).toLowerCase();
+  const label =
+    state === 'na'
+      ? 'not applicable'
+      : state === 'review'
+        ? 'awaiting verification'
+        : dotStateLabel(state).toLowerCase();
   const desc = description.trim();
   return desc
     ? `Check ${pos} of ${count}, ${desc} — ${label}`

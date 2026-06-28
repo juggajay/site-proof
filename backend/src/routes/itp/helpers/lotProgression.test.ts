@@ -92,6 +92,26 @@ describe('updateLotStatusFromITP', () => {
     expect(mocks.instanceUpdate).not.toHaveBeenCalled();
   });
 
+  it('does not count a pending-verification completion toward auto-progression', async () => {
+    mocks.instanceFindUnique.mockResolvedValue(
+      makeInstance({
+        items: [{ id: 'item-1', evidenceRequired: 'none', testType: null }],
+        completions: [
+          {
+            checklistItemId: 'item-1',
+            status: 'completed',
+            verificationStatus: 'pending_verification',
+          },
+        ],
+      }),
+    );
+
+    await updateLotStatusFromITP('itp-1');
+
+    expect(mocks.lotUpdate).not.toHaveBeenCalled();
+    expect(mocks.instanceUpdate).not.toHaveBeenCalled();
+  });
+
   it('moves a partially completed not-started ITP to in progress', async () => {
     mocks.instanceFindUnique.mockResolvedValue(
       makeInstance({

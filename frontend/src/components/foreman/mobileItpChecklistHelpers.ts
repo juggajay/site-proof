@@ -3,12 +3,15 @@
 // are structural/generic so the component's private ITPChecklistItem and
 // ITPCompletion interfaces keep flowing through unchanged.
 
-export type ItpItemStatus = 'pending' | 'completed' | 'na' | 'failed';
+export type ItpItemStatus = 'pending' | 'completed' | 'na' | 'failed' | 'review' | 'rejected';
 
 export interface ItpCompletionStatusFlags {
   isCompleted: boolean;
   isNotApplicable?: boolean;
   isFailed?: boolean;
+  isPendingVerification?: boolean;
+  isRejected?: boolean;
+  verificationStatus?: string | null;
 }
 
 export function findItpCompletion<T extends { checklistItemId: string }>(
@@ -18,9 +21,21 @@ export function findItpCompletion<T extends { checklistItemId: string }>(
   return completions.find((c) => c.checklistItemId === itemId);
 }
 
-/** Failed beats N/A, which beats completed; anything else is pending. */
+function isRejectedCompletion(completion: ItpCompletionStatusFlags): boolean {
+  return Boolean(completion.isRejected || completion.verificationStatus === 'rejected');
+}
+
+function isPendingVerificationCompletion(completion: ItpCompletionStatusFlags): boolean {
+  return Boolean(
+    completion.isPendingVerification || completion.verificationStatus === 'pending_verification',
+  );
+}
+
+/** Verification states beat accepted outcomes; anything else is pending. */
 export function getItpItemStatus(completion: ItpCompletionStatusFlags | undefined): ItpItemStatus {
   if (!completion) return 'pending';
+  if (isRejectedCompletion(completion)) return 'rejected';
+  if (isPendingVerificationCompletion(completion)) return 'review';
   if (completion.isFailed) return 'failed';
   if (completion.isNotApplicable) return 'na';
   if (completion.isCompleted) return 'completed';
@@ -41,14 +56,14 @@ export function groupItpItemsByCategory<T extends { category: string }>(
 }
 
 /**
- * A completion counts toward progress when passed or marked N/A. Failed items
- * do not count because their completion records carry isCompleted: false —
- * deliberately the same predicate the component has always used.
+ * A completion counts toward progress only once the outcome is accepted. Pending
+ * verification and rejected records may still carry completed/N/A flags from the
+ * user's last submission, but they are not complete for conformance.
  */
-export function countsTowardItpProgress(completion: {
-  isCompleted: boolean;
-  isNotApplicable?: boolean;
-}): boolean {
+export function countsTowardItpProgress(completion: ItpCompletionStatusFlags): boolean {
+  if (isRejectedCompletion(completion) || isPendingVerificationCompletion(completion)) {
+    return false;
+  }
   return Boolean(completion.isCompleted || completion.isNotApplicable);
 }
 

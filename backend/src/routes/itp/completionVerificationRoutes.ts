@@ -17,6 +17,7 @@ import {
   parseCompletionRouteParam,
   parseRequiredCompletionQueryString,
 } from './completionValidation.js';
+import { updateLotStatusFromITP } from './helpers/lotProgression.js';
 
 const ITP_COMPLETION_REJECTION_REASON_MAX_LENGTH = 3000;
 
@@ -132,6 +133,8 @@ completionVerificationRoutes.post(
       },
       include: completionVerificationResponseInclude,
     });
+
+    await updateLotStatusFromITP(completion.itpInstanceId);
 
     // Create notification for the user who completed the item (Feature #633)
     if (completion.completedById && completion.completedById !== user.userId) {

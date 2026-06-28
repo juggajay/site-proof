@@ -103,21 +103,35 @@ export function sortLotsForShell(metas: LotShellMeta[]): LotShellMeta[] {
 
 // ── ITP run item ordering + advance ─────────────────────────────────────────────
 
-export type ItpItemDisposition = 'pending' | 'completed' | 'na' | 'failed';
+export type ItpItemDisposition = 'pending' | 'completed' | 'na' | 'failed' | 'review' | 'rejected';
 
 export function itpCompletionDisposition(
   completion: ITPCompletion | undefined,
 ): ItpItemDisposition {
   if (!completion) return 'pending';
+  if (completion.isRejected || completion.verificationStatus === 'rejected') return 'rejected';
+  if (
+    completion.isPendingVerification ||
+    completion.verificationStatus === 'pending_verification'
+  ) {
+    return 'review';
+  }
   if (completion.isCompleted) return 'completed';
   if (completion.isNotApplicable) return 'na';
   if (completion.isFailed) return 'failed';
   return 'pending';
 }
 
-/** An item is "resolved" (no longer in the run) once it is completed, N/A, or failed. */
+/** An item is "resolved" only once the submitted outcome is accepted or failed. */
 export function isItpItemResolved(completion: ITPCompletion | undefined): boolean {
-  return itpCompletionDisposition(completion) !== 'pending';
+  const disposition = itpCompletionDisposition(completion);
+  return disposition === 'completed' || disposition === 'na' || disposition === 'failed';
+}
+
+/** Items the runner can still act on now. Pending review is incomplete, not actionable. */
+export function isItpItemActionable(completion: ITPCompletion | undefined): boolean {
+  const disposition = itpCompletionDisposition(completion);
+  return disposition === 'pending' || disposition === 'rejected';
 }
 
 /**
@@ -140,37 +154,76 @@ function completionFor(completions: ITPCompletion[], itemId: string): ITPComplet
   return completions.find((c) => c.checklistItemId === itemId);
 }
 
+function firstMatchingIndex(
+  orderedItems: ITPChecklistItem[],
+  completions: ITPCompletion[],
+  predicate: (completion: ITPCompletion | undefined) => boolean,
+): number {
+  return orderedItems.findIndex((item) => predicate(completionFor(completions, item.id)));
+}
+
+function nextMatchingIndex(
+  orderedItems: ITPChecklistItem[],
+  completions: ITPCompletion[],
+  currentIndex: number,
+  predicate: (completion: ITPCompletion | undefined) => boolean,
+): number {
+  const n = orderedItems.length;
+  if (n === 0) return -1;
+
+  for (let step = 1; step <= n; step += 1) {
+    const idx = (currentIndex + step) % n;
+    if (predicate(completionFor(completions, orderedItems[idx].id))) return idx;
+  }
+  return -1;
+}
+
 /**
- * Index (into `orderedItems`) of the first item that is still pending, or -1 when
- * every item is resolved. The run opens here and advances from here.
+ * Index (into `orderedItems`) of the first item that can be worked now.
+ * Pending-review rows are still incomplete, but they should not steal focus
+ * while open/rejected rows remain. If review is the only unresolved work left,
+ * the run lands there so the wait state is visible.
  */
 export function firstIncompleteIndex(
   orderedItems: ITPChecklistItem[],
   completions: ITPCompletion[],
 ): number {
-  return orderedItems.findIndex((item) => !isItpItemResolved(completionFor(completions, item.id)));
+  const firstActionable = firstMatchingIndex(orderedItems, completions, isItpItemActionable);
+  if (firstActionable >= 0) return firstActionable;
+  return firstMatchingIndex(
+    orderedItems,
+    completions,
+    (completion) => !isItpItemResolved(completion),
+  );
 }
 
 /**
- * Given the index just acted on, find the next still-pending item index, wrapping
- * to earlier pending items if the tail is done. Returns -1 when the run is fully
- * resolved (caller shows the "All checks complete" finished state).
+ * Given the index just acted on, find the next actionable item index, wrapping
+ * to earlier rows if the tail is done. Pending-review rows are skipped while
+ * any open/rejected rows remain, then selected as the final visible wait state.
+ * Returns -1 when the run is fully resolved.
  */
 export function advanceToNextIncomplete(
   orderedItems: ITPChecklistItem[],
   completions: ITPCompletion[],
   currentIndex: number,
 ): number {
-  const n = orderedItems.length;
-  if (n === 0) return -1;
-
   // Look forward first (current+1 .. end), then wrap (0 .. current) so a foreman
   // who jumped back to fix an item is still carried to whatever remains.
-  for (let step = 1; step <= n; step += 1) {
-    const idx = (currentIndex + step) % n;
-    if (!isItpItemResolved(completionFor(completions, orderedItems[idx].id))) return idx;
-  }
-  return -1;
+  const nextActionable = nextMatchingIndex(
+    orderedItems,
+    completions,
+    currentIndex,
+    isItpItemActionable,
+  );
+  if (nextActionable >= 0) return nextActionable;
+
+  return nextMatchingIndex(
+    orderedItems,
+    completions,
+    currentIndex,
+    (completion) => !isItpItemResolved(completion),
+  );
 }
 
 export interface RunProgress {
