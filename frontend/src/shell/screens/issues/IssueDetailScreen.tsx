@@ -108,7 +108,10 @@ export function IssueDetailScreen() {
 
   const canRespond = canForemanRespond(ncr, user?.id);
 
-  const handleAddPhotoClick = () => photoInputRef.current?.click();
+  const handleAddPhotoClick = () => {
+    if (!isOnline || uploading) return;
+    photoInputRef.current?.click();
+  };
   const handlePhotoSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
@@ -281,7 +284,7 @@ export function IssueDetailScreen() {
           <button
             type="button"
             onClick={handleAddPhotoClick}
-            disabled={uploading}
+            disabled={!isOnline || uploading}
             className="flex items-center gap-1.5 text-[13px] font-semibold text-foreground underline underline-offset-2 touch-manipulation disabled:opacity-50"
           >
             {uploading ? (
@@ -292,6 +295,11 @@ export function IssueDetailScreen() {
             Add photo
           </button>
         </div>
+        {!isOnline && (
+          <p className="mt-2 text-[13px] font-semibold text-warning" role="status">
+            Photo evidence needs signal: reconnect to upload.
+          </p>
+        )}
         <input
           ref={photoInputRef}
           type="file"

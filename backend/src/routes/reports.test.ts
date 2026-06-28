@@ -677,7 +677,8 @@ describe('Reports API - NCR Report', () => {
         projectId,
         ncrNumber: 'NCR-001',
         description: 'Test NCR 1',
-        category: 'minor',
+        category: 'workmanship',
+        severity: 'minor',
         status: 'open',
         raisedAt: new Date(),
         raisedById: userId,
@@ -693,7 +694,8 @@ describe('Reports API - NCR Report', () => {
         projectId,
         ncrNumber: 'NCR-002',
         description: 'Test NCR 2',
-        category: 'major',
+        category: 'materials',
+        severity: 'major',
         status: 'closed',
         raisedAt: yesterday,
         raisedById: userId,
@@ -759,8 +761,10 @@ describe('Reports API - NCR Report', () => {
       .query({ projectId });
 
     expect(res.status).toBe(200);
-    expect(res.body.categoryCounts.minor).toBe(1);
-    expect(res.body.categoryCounts.major).toBe(1);
+    expect(res.body.categoryCounts.workmanship).toBe(1);
+    expect(res.body.categoryCounts.materials).toBe(1);
+    expect(res.body.severityCounts.minor).toBe(1);
+    expect(res.body.severityCounts.major).toBe(1);
     expect(res.body.summary.minor).toBe(1);
     expect(res.body.summary.major).toBe(1);
   });

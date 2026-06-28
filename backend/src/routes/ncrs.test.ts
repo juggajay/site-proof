@@ -184,6 +184,7 @@ describe('NCR API', () => {
     // Clean up in reverse order
     await prisma.notification.deleteMany({ where: { projectId } });
     await prisma.nCREvidence.deleteMany({ where: { ncr: { projectId } } });
+    await prisma.document.deleteMany({ where: { projectId } });
     await prisma.nCRLot.deleteMany({ where: { ncr: { projectId } } });
     await prisma.nCR.deleteMany({ where: { projectId } });
     await prisma.lot.deleteMany({ where: { projectId } });
@@ -1345,6 +1346,16 @@ describe('NCR API', () => {
   describe('Route parameter validation', () => {
     it('should reject oversized NCR route parameters before lookups', async () => {
       const longId = 'n'.repeat(121);
+      const routeParamEvidenceDocument = await prisma.document.create({
+        data: {
+          projectId,
+          documentType: 'ncr_evidence',
+          category: 'ncr_evidence',
+          filename: 'route-param-evidence.jpg',
+          fileUrl: '/uploads/documents/route-param-evidence.jpg',
+          uploadedById: userId,
+        },
+      });
       const checks = [
         {
           label: 'GET analytics projectId',
@@ -1440,8 +1451,7 @@ describe('NCR API', () => {
             .post(`/api/ncrs/${longId}/evidence`)
             .set('Authorization', `Bearer ${authToken}`)
             .send({
-              filename: 'route-param-evidence.jpg',
-              fileUrl: '/uploads/documents/route-param-evidence.jpg',
+              documentId: routeParamEvidenceDocument.id,
             }),
         },
         {
@@ -3522,9 +3532,7 @@ describe('NCR Access Hardening', () => {
         .set('Authorization', `Bearer ${viewer.token}`)
         .send({
           evidenceType: 'photo',
-          filename: `viewer-evidence-${Date.now()}.jpg`,
-          fileUrl: `/uploads/documents/viewer-evidence-${Date.now()}.jpg`,
-          mimeType: 'image/jpeg',
+          documentId: sameProjectDocumentId,
         });
       expect(addRes.status).toBe(403);
 
@@ -3610,14 +3618,24 @@ describe('NCR Access Hardening', () => {
         existingEvidence.id,
       );
 
+      const newDocument = await prisma.document.create({
+        data: {
+          projectId,
+          documentType: 'ncr_evidence',
+          category: 'ncr_evidence',
+          filename: newFilename,
+          fileUrl: `/uploads/documents/${newFilename}`,
+          mimeType: 'image/jpeg',
+          uploadedById: subcontractor.userId,
+        },
+      });
+
       const addRes = await request(app)
         .post(`/api/ncrs/${responsibleNcr.id}/evidence`)
         .set('Authorization', `Bearer ${subcontractor.token}`)
         .send({
           evidenceType: 'photo',
-          filename: newFilename,
-          fileUrl: `/uploads/documents/${newFilename}`,
-          mimeType: 'image/jpeg',
+          documentId: newDocument.id,
         });
       expect(addRes.status).toBe(201);
       expect(addRes.body.evidence.document.filename).toBe(newFilename);
@@ -3804,6 +3822,17 @@ describe('NCR Access Hardening', () => {
           role: 'user',
         },
       });
+      const deniedDocument = await prisma.document.create({
+        data: {
+          projectId,
+          documentType: 'ncr_evidence',
+          category: 'ncr_evidence',
+          filename: deniedFilename,
+          fileUrl: `/uploads/documents/${deniedFilename}`,
+          mimeType: 'image/jpeg',
+          uploadedById: unrelatedSubcontractor.userId,
+        },
+      });
 
       const listRes = await request(app)
         .get(`/api/ncrs/${responsibleNcr.id}/evidence`)
@@ -3815,18 +3844,17 @@ describe('NCR Access Hardening', () => {
         .set('Authorization', `Bearer ${unrelatedSubcontractor.token}`)
         .send({
           evidenceType: 'photo',
-          filename: deniedFilename,
-          fileUrl: `/uploads/documents/${deniedFilename}`,
-          mimeType: 'image/jpeg',
+          documentId: deniedDocument.id,
         });
       expect(addRes.status).toBe(403);
 
-      const deniedDocument = await prisma.document.findFirst({
-        where: { projectId, filename: deniedFilename },
+      const deniedEvidence = await prisma.nCREvidence.findFirst({
+        where: { ncrId: responsibleNcr.id, documentId: deniedDocument.id },
         select: { id: true },
       });
-      expect(deniedDocument).toBeNull();
+      expect(deniedEvidence).toBeNull();
     } finally {
+      await prisma.document.deleteMany({ where: { projectId, filename: deniedFilename } });
       await prisma.nCR.delete({ where: { id: responsibleNcr.id } }).catch(() => {});
       await prisma.subcontractorUser.deleteMany({
         where: { userId: unrelatedSubcontractor.userId },
@@ -4075,6 +4103,7 @@ describe('NCR Access Hardening', () => {
           where: { userId: subUser.userId, projectId, type: 'ncr_assigned' },
         });
         expect(notification).not.toBeNull();
+        expect(notification?.linkUrl).toBe(`/subcontractor-portal/ncrs?ncr=${createdNcrId}`);
       } finally {
         await prisma.notification.deleteMany({ where: { userId: subUser.userId } });
         if (createdNcrId) {
@@ -4153,6 +4182,14 @@ describe('NCR Access Hardening', () => {
           },
         });
         expect(notificationCount).toBeGreaterThan(0);
+        const notification = await prisma.notification.findFirst({
+          where: {
+            userId: subUser.userId,
+            projectId,
+            type: { in: ['ncr_assigned', 'ncr_redirect'] },
+          },
+        });
+        expect(notification?.linkUrl).toBe(`/subcontractor-portal/ncrs?ncr=${createdNcrId}`);
       } finally {
         await prisma.notification.deleteMany({ where: { userId: subUser.userId } });
         if (createdNcrId) {
@@ -4523,15 +4560,12 @@ describe('NCR Access Hardening', () => {
     expect(linkedEvidence).toHaveLength(1);
   });
 
-  it('should normalize public Supabase document URLs before creating NCR evidence documents', async () => {
+  it('should reject public Supabase document URLs and require documentId evidence attach', async () => {
     const previousSupabaseUrl = process.env.SUPABASE_URL;
     process.env.SUPABASE_URL = 'https://fixture-project.supabase.co';
 
     const filename = `supabase-public-ncr-evidence-${Date.now()}.jpg`;
     const fileUrl = `https://fixture-project.supabase.co/storage/v1/object/public/documents/${projectId}/${filename}`;
-    const expectedFileUrl = `supabase://documents/${projectId}/${filename}`;
-    let createdDocumentId: string | undefined;
-
     try {
       const res = await request(app)
         .post(`/api/ncrs/${ncrId}/evidence`)
@@ -4543,20 +4577,14 @@ describe('NCR Access Hardening', () => {
           mimeType: 'image/jpeg',
         });
 
-      expect(res.status).toBe(201);
-      expect(res.body.evidence.document.fileUrl).toBeUndefined();
-      createdDocumentId = res.body.evidence.documentId;
-
-      const storedDocument = await prisma.document.findUniqueOrThrow({
-        where: { id: createdDocumentId },
-        select: { fileUrl: true },
+      expect(res.status).toBe(400);
+      expect(JSON.stringify(res.body.error.details)).toContain('documentId');
+      const createdDocument = await prisma.document.findFirst({
+        where: { projectId, filename },
+        select: { id: true },
       });
-      expect(storedDocument.fileUrl).toBe(expectedFileUrl);
+      expect(createdDocument).toBeNull();
     } finally {
-      if (createdDocumentId) {
-        await prisma.nCREvidence.deleteMany({ where: { ncrId, documentId: createdDocumentId } });
-        await prisma.document.deleteMany({ where: { id: createdDocumentId } });
-      }
       if (previousSupabaseUrl === undefined) {
         delete process.env.SUPABASE_URL;
       } else {
@@ -4576,7 +4604,7 @@ describe('NCR Access Hardening', () => {
       });
 
     expect(res.status).toBe(400);
-    expect(res.body.error.details.issues[0].message).toContain('Inline data URLs');
+    expect(JSON.stringify(res.body.error.details)).toContain('Inline data URLs');
   });
 
   it('should reject non-finite evidence file sizes without creating documents', async () => {
@@ -4696,7 +4724,7 @@ describe('NCR Access Hardening', () => {
     }
   });
 
-  it('should create evidence only from stored document upload paths', async () => {
+  it('should reject caller-supplied stored document upload paths', async () => {
     const filename = `new-ncr-evidence-${Date.now()}.jpg`;
     const fileUrl = `/uploads/documents/${filename}`;
 
@@ -4710,14 +4738,14 @@ describe('NCR Access Hardening', () => {
         mimeType: 'image/jpeg',
       });
 
-    expect(res.status).toBe(201);
-    expect(res.body.evidence.document.fileUrl).toBeUndefined();
+    expect(res.status).toBe(400);
+    expect(JSON.stringify(res.body.error.details)).toContain('documentId');
 
-    const storedDocument = await prisma.document.findUniqueOrThrow({
-      where: { id: res.body.evidence.documentId },
-      select: { fileUrl: true },
+    const storedDocument = await prisma.document.findFirst({
+      where: { projectId, filename },
+      select: { id: true },
     });
-    expect(storedDocument.fileUrl).toBe(fileUrl);
+    expect(storedDocument).toBeNull();
   });
 
   it('should write audit logs when adding and removing NCR evidence', async () => {
@@ -4732,14 +4760,23 @@ describe('NCR Access Hardening', () => {
 
     const filename = `audited-ncr-evidence-${Date.now()}.jpg`;
     const fileUrl = `/uploads/documents/${filename}`;
+    const document = await prisma.document.create({
+      data: {
+        projectId,
+        documentType: 'ncr_evidence',
+        category: 'ncr_evidence',
+        filename,
+        fileUrl,
+        mimeType: 'image/jpeg',
+        uploadedById: userId,
+      },
+    });
     const addRes = await request(app)
       .post(`/api/ncrs/${ncrId}/evidence`)
       .set('Authorization', `Bearer ${authToken}`)
       .send({
+        documentId: document.id,
         evidenceType: 'photo',
-        filename,
-        fileUrl,
-        mimeType: 'image/jpeg',
         caption: 'Caption should stay out of the audit log',
       });
 
@@ -4800,7 +4837,7 @@ describe('NCR Access Hardening', () => {
     });
   });
 
-  it('should reject evidence file URLs outside stored document uploads', async () => {
+  it('should reject evidence file URLs instead of minting documents', async () => {
     const filename = `comment-upload-reference-${Date.now()}.jpg`;
 
     const res = await request(app)
@@ -4814,7 +4851,7 @@ describe('NCR Access Hardening', () => {
       });
 
     expect(res.status).toBe(400);
-    expect(res.body.error.message).toContain('uploaded document file');
+    expect(JSON.stringify(res.body.error.details)).toContain('documentId');
 
     const createdDocument = await prisma.document.findFirst({
       where: { projectId, filename },
@@ -4823,7 +4860,7 @@ describe('NCR Access Hardening', () => {
     expect(createdDocument).toBeNull();
   });
 
-  it('should reject evidence Supabase document references from a different project', async () => {
+  it('should reject evidence Supabase document references instead of minting documents', async () => {
     const filename = `cross-project-supabase-reference-${Date.now()}.jpg`;
 
     const res = await request(app)
@@ -4837,7 +4874,7 @@ describe('NCR Access Hardening', () => {
       });
 
     expect(res.status).toBe(400);
-    expect(res.body.error.message).toContain('uploaded document file');
+    expect(JSON.stringify(res.body.error.details)).toContain('documentId');
 
     const createdDocument = await prisma.document.findFirst({
       where: { projectId, filename },
@@ -4846,41 +4883,26 @@ describe('NCR Access Hardening', () => {
     expect(createdDocument).toBeNull();
   });
 
-  it('should accept evidence file URLs from Supabase document storage references', async () => {
+  it('should reject Supabase document storage references without documentId', async () => {
     const filename = `supabase-ref-evidence-${Date.now()}.jpg`;
     const fileUrl = `supabase://documents/${projectId}/${filename}`;
-    let evidenceId: string | undefined;
-    let documentId: string | undefined;
-
-    try {
-      const res = await request(app)
-        .post(`/api/ncrs/${ncrId}/evidence`)
-        .set('Authorization', `Bearer ${authToken}`)
-        .send({
-          evidenceType: 'photo',
-          filename,
-          fileUrl,
-          mimeType: 'image/jpeg',
-        });
-
-      expect(res.status).toBe(201);
-      expect(res.body.evidence.document.fileUrl).toBeUndefined();
-      evidenceId = res.body.evidence.id;
-      documentId = res.body.evidence.documentId;
-
-      const storedDocument = await prisma.document.findUniqueOrThrow({
-        where: { id: documentId },
-        select: { fileUrl: true },
+    const res = await request(app)
+      .post(`/api/ncrs/${ncrId}/evidence`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        evidenceType: 'photo',
+        filename,
+        fileUrl,
+        mimeType: 'image/jpeg',
       });
-      expect(storedDocument.fileUrl).toBe(fileUrl);
-    } finally {
-      if (evidenceId) {
-        await prisma.nCREvidence.deleteMany({ where: { id: evidenceId } });
-      }
-      if (documentId) {
-        await prisma.document.deleteMany({ where: { id: documentId } });
-      }
-    }
+
+    expect(res.status).toBe(400);
+    expect(JSON.stringify(res.body.error.details)).toContain('documentId');
+    const storedDocument = await prisma.document.findFirst({
+      where: { projectId, filename },
+      select: { id: true },
+    });
+    expect(storedDocument).toBeNull();
   });
 
   it('should not delete evidence from a different NCR', async () => {

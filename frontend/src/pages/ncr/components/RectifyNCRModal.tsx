@@ -10,6 +10,7 @@ import { ResponsiveSheet } from '@/components/ui/ResponsiveSheet';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { NCREvidenceList } from './NCREvidenceList';
 
 const rectifyNCRSchema = z.object({
   rectificationNotes: z.string().trim().optional().default(''),
@@ -137,6 +138,9 @@ function RectifyNCRModalInner({
 
   if (!isOpen || !ncr) return null;
 
+  const existingEvidenceCount = ncr.ncrEvidence?.length ?? 0;
+  const hasEvidence = existingEvidenceCount > 0 || evidenceFiles.length > 0;
+
   const footer = (
     <>
       <Button
@@ -152,11 +156,9 @@ function RectifyNCRModalInner({
         type="submit"
         form="rectify-ncr-form"
         className="min-h-[44px]"
-        disabled={submittingRectification || evidenceFiles.length === 0}
+        disabled={submittingRectification || !hasEvidence}
         title={
-          evidenceFiles.length === 0
-            ? 'Please upload at least one piece of evidence'
-            : 'Submit for verification'
+          !hasEvidence ? 'Please upload at least one piece of evidence' : 'Submit for verification'
         }
       >
         {submittingRectification ? 'Submitting...' : 'Submit for Verification'}
@@ -175,6 +177,10 @@ function RectifyNCRModalInner({
       <div className="mb-4 p-3 bg-muted/50 border border-border rounded-lg">
         <p className="text-sm font-medium text-foreground">{ncr.ncrNumber}</p>
         <p className="text-sm text-muted-foreground mt-1">{ncr.description}</p>
+      </div>
+
+      <div className="mb-4">
+        <NCREvidenceList evidence={ncr.ncrEvidence ?? []} title="Existing Evidence" />
       </div>
 
       {/* Evidence Upload Section */}
@@ -255,8 +261,8 @@ function RectifyNCRModalInner({
 
         <div className="bg-warning/10 border border-warning/30 rounded-lg p-3">
           <p className="text-sm text-warning">
-            <strong>Note:</strong> Please upload at least one piece of evidence (photo or re-test
-            certificate) before submitting for verification.
+            <strong>Note:</strong> Please upload or link at least one piece of evidence (photo or
+            re-test certificate) before submitting for verification.
           </p>
         </div>
       </form>

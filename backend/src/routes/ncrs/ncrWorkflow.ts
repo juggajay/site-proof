@@ -66,8 +66,8 @@ ncrWorkflowRouter.post(
       throw AppError.badRequest('NCR is not in open status');
     }
 
-    const updatedNcr = await prisma.nCR.update({
-      where: { id },
+    const responseUpdate = await prisma.nCR.updateMany({
+      where: { id, status: 'open' },
       data: {
         status: 'investigating',
         rootCauseCategory,
@@ -75,6 +75,13 @@ ncrWorkflowRouter.post(
         proposedCorrectiveAction,
         responseSubmittedAt: new Date(),
       },
+    });
+    if (responseUpdate.count !== 1) {
+      throw AppError.badRequest('NCR is not in open status');
+    }
+
+    const updatedNcr = await prisma.nCR.findUniqueOrThrow({
+      where: { id },
     });
 
     await createAuditLog({
@@ -239,8 +246,8 @@ ncrWorkflowRouter.post(
       );
     } else {
       // Request revision - send back to responsible party
-      const updatedNcr = await prisma.nCR.update({
-        where: { id },
+      const revisionUpdate = await prisma.nCR.updateMany({
+        where: { id, status: 'investigating' },
         data: {
           status: 'open', // Reset to open for revision
           qmReviewedAt: new Date(),
@@ -255,6 +262,13 @@ ncrWorkflowRouter.post(
           proposedCorrectiveAction: null,
           responseSubmittedAt: null,
         },
+      });
+      if (revisionUpdate.count !== 1) {
+        throw AppError.badRequest('NCR must be in investigating status to review');
+      }
+
+      const updatedNcr = await prisma.nCR.findUniqueOrThrow({
+        where: { id },
         include: {
           project: { select: { name: true } },
           raisedBy: { select: { fullName: true, email: true } },
@@ -423,8 +437,8 @@ ncrWorkflowRouter.post(
     const reviewerName = reviewer?.fullName || reviewer?.email || 'QM';
 
     // Return NCR to rectification status
-    const updatedNcr = await prisma.nCR.update({
-      where: { id },
+    const rejectUpdate = await prisma.nCR.updateMany({
+      where: { id, status: 'verification' },
       data: {
         status: 'rectification',
         verificationNotes: feedback,
@@ -434,6 +448,13 @@ ncrWorkflowRouter.post(
         revisionRequestedAt: new Date(),
         revisionCount: { increment: 1 },
       },
+    });
+    if (rejectUpdate.count !== 1) {
+      throw AppError.badRequest('NCR must be in verification status to reject rectification');
+    }
+
+    const updatedNcr = await prisma.nCR.findUniqueOrThrow({
+      where: { id },
       include: {
         project: { select: { name: true } },
         raisedBy: { select: { fullName: true, email: true } },

@@ -56,10 +56,16 @@ describe('NCRMobileDetailSheet (H7)', () => {
     expect(screen.queryByText(/NCR-001/)).not.toBeInTheDocument();
   });
 
-  it('shows the detail and Respond for an open NCR, and fires onRespond', () => {
+  it('shows the detail and Respond for the responsible user on an open NCR, and fires onRespond', () => {
     const h = handlers();
     render(
-      <NCRMobileDetailSheet isOpen ncr={makeNcr({ status: 'open' })} userRole={role()} {...h} />,
+      <NCRMobileDetailSheet
+        isOpen
+        ncr={makeNcr({ status: 'open', responsibleUserId: 'user-1' })}
+        userRole={role({ role: 'foreman' })}
+        currentUserId="user-1"
+        {...h}
+      />,
     );
 
     expect(screen.getByText('Cracked slab')).toBeInTheDocument();

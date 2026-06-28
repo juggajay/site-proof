@@ -521,6 +521,9 @@ ncrClosureWorkflowRouter.post(
 
     const ncr = await prisma.nCR.findUnique({
       where: { id },
+      include: {
+        ncrLots: { select: { lotId: true } },
+      },
     });
 
     if (!ncr) {
@@ -559,6 +562,17 @@ ncrClosureWorkflowRouter.post(
     const updatedNcr = await prisma.nCR.findUniqueOrThrow({
       where: { id },
     });
+
+    if (ncr.ncrLots.length > 0) {
+      await prisma.lot.updateMany({
+        where: {
+          id: { in: ncr.ncrLots.map((ncrLot) => ncrLot.lotId) },
+          projectId: ncr.projectId,
+          status: { notIn: ['conformed', 'claimed'] },
+        },
+        data: { status: 'ncr_raised' },
+      });
+    }
 
     await createAuditLog({
       projectId: ncr.projectId,

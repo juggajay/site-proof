@@ -50,7 +50,7 @@ export function NCRPage() {
   const { projectId } = useParams();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  useAuth();
+  const { user } = useAuth();
   const token = getAuthToken();
   const isMobile = useIsMobile();
 
@@ -265,6 +265,7 @@ export function NCRPage() {
         <NCRTable
           ncrs={displayedNcrs}
           userRole={userRole}
+          currentUserId={user?.id}
           actionLoading={actionLoading}
           copiedNcrId={copiedNcrId}
           highlightedNcrId={deepLinkedNcrId}
@@ -361,6 +362,7 @@ export function NCRPage() {
         isOpen={activeModal === 'detail'}
         ncr={selectedNcr}
         userRole={userRole}
+        currentUserId={user?.id}
         actionLoading={actionLoading}
         onClose={closeModal}
         onAssign={(ncr) => openModal('assign', ncr)}

@@ -30,9 +30,9 @@ function role(overrides: Partial<UserRole> = {}): UserRole {
 }
 
 describe('getAvailableNcrActions', () => {
-  it('offers only Respond on an open NCR (status-gated, no role needed) and Assign to managers', () => {
+  it('offers Respond on an open NCR to managers or the responsible user, and Assign to managers', () => {
     const viewer = getAvailableNcrActions(makeNcr({ status: 'open' }), role());
-    expect(viewer.respond).toBe(true);
+    expect(viewer.respond).toBe(false);
     expect(viewer.assign).toBe(false);
     expect(viewer.rectify).toBe(false);
     expect(viewer.close).toBe(false);
@@ -43,9 +43,16 @@ describe('getAvailableNcrActions', () => {
     );
     expect(pm.respond).toBe(true);
     expect(pm.assign).toBe(true);
+
+    const responsible = getAvailableNcrActions(
+      makeNcr({ status: 'open', responsibleUserId: 'user-1' }),
+      role({ role: 'foreman' }),
+      'user-1',
+    );
+    expect(responsible.respond).toBe(true);
   });
 
-  it('allows QM/PM/admin to review a response while investigating, and anyone to submit rectification', () => {
+  it('allows management roles to review a response while investigating, and responsible users to submit rectification', () => {
     const qm = getAvailableNcrActions(
       makeNcr({ status: 'investigating' }),
       role({ role: 'quality_manager', isQualityManager: true }),
@@ -58,12 +65,24 @@ describe('getAvailableNcrActions', () => {
       role({ role: 'foreman' }),
     );
     expect(foreman.reviewResponse).toBe(false);
-    // Rectify is status-only on the desktop (backend enforces the real permission).
-    expect(foreman.rectify).toBe(true);
+    expect(foreman.rectify).toBe(false);
+
+    const responsible = getAvailableNcrActions(
+      makeNcr({ status: 'investigating', responsibleUserId: 'user-1' }),
+      role({ role: 'foreman' }),
+      'user-1',
+    );
+    expect(responsible.rectify).toBe(true);
   });
 
   it('exposes rectify in the rectification status too', () => {
-    expect(getAvailableNcrActions(makeNcr({ status: 'rectification' }), role()).rectify).toBe(true);
+    expect(
+      getAvailableNcrActions(
+        makeNcr({ status: 'rectification', responsibleUserId: 'user-1' }),
+        role({ role: 'foreman' }),
+        'user-1',
+      ).rectify,
+    ).toBe(true);
   });
 
   it('lets closure roles close or concede a minor NCR in verification, with reject available to QM/PM/admin', () => {
@@ -78,11 +97,10 @@ describe('getAvailableNcrActions', () => {
 
     const siteManager = getAvailableNcrActions(
       makeNcr({ status: 'verification', severity: 'minor' }),
-      role({ role: 'site_manager' }),
+      role({ role: 'site_manager', isQualityManager: true }),
     );
     expect(siteManager.close).toBe(true);
-    // site_manager is not a reject-rectification role.
-    expect(siteManager.rejectRectification).toBe(false);
+    expect(siteManager.rejectRectification).toBe(true);
 
     const viewer = getAvailableNcrActions(
       makeNcr({ status: 'verification', severity: 'minor' }),
@@ -111,6 +129,12 @@ describe('getAvailableNcrActions', () => {
     );
     expect(qmApproved.qmApprove).toBe(false); // already approved
     expect(qmApproved.closeBlockedPendingQmApproval).toBe(false);
+
+    const adminUnapproved = getAvailableNcrActions(
+      makeNcr({ status: 'verification', severity: 'major', qmApprovedAt: null }),
+      role({ role: 'admin', isQualityManager: true }),
+    );
+    expect(adminUnapproved.qmApprove).toBe(false);
   });
 
   it('offers Notify Client only for an un-notified major NCR that requires it, to the right roles', () => {

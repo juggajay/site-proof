@@ -280,6 +280,20 @@ ncrListRouter.get(
               lot: { select: { lotNumber: true, description: true } },
             },
           },
+          ncrEvidence: {
+            include: {
+              document: {
+                select: {
+                  id: true,
+                  filename: true,
+                  fileUrl: true,
+                  mimeType: true,
+                  uploadedAt: true,
+                },
+              },
+            },
+            orderBy: { uploadedAt: 'desc' },
+          },
           qmApprovedBy: { select: { fullName: true, email: true } },
         },
         orderBy: validatedSortBy ? { [validatedSortBy]: sortOrder } : { createdAt: 'desc' },
