@@ -13,6 +13,7 @@ import {
 } from './scheduledReports/core.js';
 import { createTextPdf } from './scheduledReports/pdf.js';
 import { buildScheduledReportDocument } from './scheduledReports/reportDocument.js';
+import { projectTimeZoneFromState } from './projectTimeZone.js';
 
 export {
   calculateNextScheduledReportRunAt,
@@ -433,6 +434,7 @@ async function buildPreDeliverySkipResult(
       schedule.dayOfMonth,
       schedule.timeOfDay,
       now,
+      projectTimeZoneFromState(schedule.project.state),
     );
 
     return markScheduledReportSkipped(
@@ -462,6 +464,7 @@ async function deliverClaimedScheduledReport(
     schedule.dayOfMonth,
     schedule.timeOfDay,
     now,
+    projectTimeZoneFromState(schedule.project.state),
   );
   const { immediateRecipients, digestRecipientUserIds, suppressedRecipients } =
     await resolveScheduledReportRecipients(schedule, recipients);
@@ -572,7 +575,12 @@ export async function processDueScheduledReports(
     },
     include: {
       project: {
-        select: { name: true, companyId: true, company: { select: { subscriptionTier: true } } },
+        select: {
+          name: true,
+          companyId: true,
+          state: true,
+          company: { select: { subscriptionTier: true } },
+        },
       },
     },
     orderBy: [{ nextRunAt: 'asc' }, { createdAt: 'asc' }],

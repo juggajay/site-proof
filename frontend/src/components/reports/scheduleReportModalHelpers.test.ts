@@ -174,4 +174,12 @@ describe('schedule report modal helpers', () => {
     expect(nextRun).toContain('6 Jun');
     expect(nextRun).toMatch(/\d{1,2}:\d{2}/);
   });
+
+  it('formats next-run dates in the project timezone when supplied', () => {
+    const nextRun = formatNextRun('2026-06-15T01:00:00.000Z', 'Australia/Perth');
+
+    expect(nextRun).toContain('Mon');
+    expect(nextRun).toContain('15');
+    expect(nextRun).toContain('09:00');
+  });
 });

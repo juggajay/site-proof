@@ -70,7 +70,7 @@ async function requireScheduledReportAccess(
   user: AuthUser | undefined,
   projectId: string,
   options: { requireWritable?: boolean } = {},
-): Promise<void> {
+): Promise<string | null> {
   const effectiveRole = await requireReportProjectAccess(user, projectId);
 
   if (!SCHEDULED_REPORT_MANAGER_ROLES.includes(effectiveRole)) {
@@ -80,6 +80,7 @@ async function requireScheduledReportAccess(
   const project = await prisma.project.findUnique({
     where: { id: projectId },
     select: {
+      state: true,
       company: {
         select: { subscriptionTier: true },
       },
@@ -94,6 +95,8 @@ async function requireScheduledReportAccess(
   if (options.requireWritable) {
     await assertProjectAllowsWrite(projectId);
   }
+
+  return project?.state ?? null;
 }
 
 function groupedCountsToRecord<T extends { _count: number }, K extends keyof T>(

@@ -398,29 +398,50 @@ describe('Audit Log API', () => {
       expect(res.body.logs.map((log: any) => log.id)).toContain(lowercaseLotLog.id);
     });
 
-    it('should filter by action (contains)', async () => {
+    it('should filter by action exactly', async () => {
+      const exactAction = await prisma.auditLog.create({
+        data: {
+          action: 'user_login',
+          entityType: 'User',
+          entityId: userId,
+          userId,
+          projectId,
+          changes: JSON.stringify({ result: 'success' }),
+        },
+      });
+      const nearMatchAction = await prisma.auditLog.create({
+        data: {
+          action: 'user_login_failed',
+          entityType: 'User',
+          entityId: userId,
+          userId,
+          projectId,
+          changes: JSON.stringify({ result: 'failed' }),
+        },
+      });
+      auditLogIds.push(exactAction.id, nearMatchAction.id);
+
       const res = await request(app)
         .get('/api/audit-logs')
         .set('Authorization', `Bearer ${authToken}`)
-        .query({ action: 'created' });
+        .query({ action: 'user_login' });
 
       expect(res.status).toBe(200);
-      expect(res.body.logs.length).toBeGreaterThan(0);
-      res.body.logs.forEach((log: any) => {
-        expect(log.action.toLowerCase()).toContain('created');
-      });
+      expect(res.body.logs.map((log: any) => log.id)).toContain(exactAction.id);
+      expect(res.body.logs.map((log: any) => log.id)).not.toContain(nearMatchAction.id);
+      expect(res.body.logs.every((log: any) => log.action === 'user_login')).toBe(true);
     });
 
     it('should filter by action case-insensitively', async () => {
       const res = await request(app)
         .get('/api/audit-logs')
         .set('Authorization', `Bearer ${authToken}`)
-        .query({ action: 'CREATED' });
+        .query({ action: 'PROJECT.CREATED' });
 
       expect(res.status).toBe(200);
       expect(res.body.logs.length).toBeGreaterThan(0);
       res.body.logs.forEach((log: any) => {
-        expect(log.action.toLowerCase()).toContain('created');
+        expect(log.action.toLowerCase()).toBe('project.created');
       });
     });
 

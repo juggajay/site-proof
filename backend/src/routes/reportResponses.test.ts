@@ -15,10 +15,29 @@ describe('reportResponses', () => {
     });
   });
 
+  it('includes project timezone metadata when provided for scheduled reports', () => {
+    const schedules = [{ id: 'schedule-1', reportType: 'lot-status' }];
+
+    expect(buildScheduledReportsResponse(schedules, 5, 'Australia/Perth')).toEqual({
+      schedules,
+      maxSchedules: 5,
+      projectTimeZone: 'Australia/Perth',
+    });
+  });
+
   it('builds the single scheduled report envelope', () => {
     const schedule = { id: 'schedule-1', enabled: true };
 
     expect(buildScheduledReportResponse(schedule)).toEqual({ schedule });
+  });
+
+  it('includes project timezone metadata when provided for a scheduled report mutation', () => {
+    const schedule = { id: 'schedule-1', enabled: true };
+
+    expect(buildScheduledReportResponse(schedule, 'Australia/Brisbane')).toEqual({
+      schedule,
+      projectTimeZone: 'Australia/Brisbane',
+    });
   });
 
   it('builds the scheduled report deletion success response', () => {

@@ -220,7 +220,7 @@ auditLogRouter.get(
     }
 
     if (actionFilter) {
-      filters.action = containsInsensitive(actionFilter);
+      filters.action = equalsInsensitive(actionFilter);
     }
 
     if (userIdFilter) {

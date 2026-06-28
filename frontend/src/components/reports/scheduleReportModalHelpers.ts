@@ -95,7 +95,7 @@ export function getScheduleFailureMessage(schedule: ScheduledReport): string | n
   return `Last delivery failed after ${attemptLabel}; the next retry is scheduled. Error: ${reason}`;
 }
 
-export function formatNextRun(dateStr: string | null): string {
+export function formatNextRun(dateStr: string | null, timeZone?: string): string {
   if (!dateStr) return 'Not scheduled';
   const date = new Date(dateStr);
   return date.toLocaleString('en-AU', {
@@ -104,6 +104,7 @@ export function formatNextRun(dateStr: string | null): string {
     month: 'short',
     hour: '2-digit',
     minute: '2-digit',
+    ...(timeZone ? { timeZone } : {}),
   });
 }
 

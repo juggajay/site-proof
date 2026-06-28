@@ -42,6 +42,7 @@ interface ScheduleReportModalProps {
 export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalProps) {
   const [schedules, setSchedules] = useState<ScheduledReport[]>([]);
   const [maxSchedules, setMaxSchedules] = useState(DEFAULT_MAX_SCHEDULED_REPORTS);
+  const [projectTimeZone, setProjectTimeZone] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -82,10 +83,13 @@ export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalP
 
     try {
       const queryParams = new URLSearchParams({ projectId });
-      const data = await apiFetch<{ schedules: ScheduledReport[]; maxSchedules?: number }>(
-        `/api/reports/schedules?${queryParams.toString()}`,
-      );
+      const data = await apiFetch<{
+        schedules: ScheduledReport[];
+        maxSchedules?: number;
+        projectTimeZone?: string;
+      }>(`/api/reports/schedules?${queryParams.toString()}`);
       setSchedules(data.schedules || []);
+      setProjectTimeZone(data.projectTimeZone);
       setMaxSchedules(
         Number.isInteger(data.maxSchedules) && Number(data.maxSchedules) > 0
           ? Number(data.maxSchedules)
@@ -94,6 +98,7 @@ export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalP
     } catch (err) {
       logError('Error loading schedules:', err);
       setSchedules([]);
+      setProjectTimeZone(undefined);
       setLoadError(extractErrorMessage(err, 'Failed to load scheduled reports'));
     } finally {
       setLoading(false);
@@ -307,7 +312,7 @@ export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalP
                             {schedule.recipients.split(',').length} recipient(s)
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            Next: {formatNextRun(schedule.nextRunAt)}
+                            Next: {formatNextRun(schedule.nextRunAt, projectTimeZone)}
                           </p>
                           {failureMessage && (
                             <p className="mt-2 flex items-start gap-2 text-xs text-warning">
