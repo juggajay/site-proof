@@ -180,7 +180,12 @@ projectManagerDashboardRouter.get(
       prisma.project.findUnique({ where: { id: projectId }, select: { contractValue: true } }),
       prisma.dailyDocket.findMany({
         where: { projectId, status: 'approved' },
-        select: { totalLabourSubmitted: true, totalPlantSubmitted: true },
+        select: {
+          totalLabourSubmitted: true,
+          totalPlantSubmitted: true,
+          totalLabourApprovedCost: true,
+          totalPlantApprovedCost: true,
+        },
       }),
       // 6. Attention Items
       prisma.nCR.findMany({

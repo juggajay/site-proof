@@ -1428,6 +1428,161 @@ describe('Projects API', () => {
         await prisma.user.delete({ where: { id: viewerId } }).catch(() => {});
       }
     });
+
+    it('uses approved docket costs and prorates split lot allocations', async () => {
+      const suffix = Date.now();
+      const costProject = await prisma.project.create({
+        data: {
+          companyId,
+          name: 'Project Cost Approved Dockets',
+          projectNumber: `COST-${suffix}`,
+          state: 'NSW',
+          specificationSet: 'TfNSW',
+          contractValue: 2000,
+        },
+      });
+
+      try {
+        const subcontractorCompany = await prisma.subcontractorCompany.create({
+          data: {
+            projectId: costProject.id,
+            companyName: `Cost Civil ${suffix}`,
+            status: 'approved',
+          },
+        });
+
+        const [lotA, lotB] = await Promise.all([
+          prisma.lot.create({
+            data: {
+              projectId: costProject.id,
+              lotNumber: `COST-A-${suffix}`,
+              lotType: 'earthworks',
+              activityType: 'Bulk earthworks',
+              budgetAmount: 1000,
+            },
+          }),
+          prisma.lot.create({
+            data: {
+              projectId: costProject.id,
+              lotNumber: `COST-B-${suffix}`,
+              lotType: 'earthworks',
+              activityType: 'Bulk earthworks',
+              budgetAmount: 1000,
+            },
+          }),
+        ]);
+
+        const [employee, plant] = await Promise.all([
+          prisma.employeeRoster.create({
+            data: {
+              subcontractorCompanyId: subcontractorCompany.id,
+              name: 'Cost Tester',
+              role: 'Operator',
+              hourlyRate: 100,
+              status: 'approved',
+            },
+          }),
+          prisma.plantRegister.create({
+            data: {
+              subcontractorCompanyId: subcontractorCompany.id,
+              type: 'Excavator',
+              description: '20t excavator',
+              dryRate: 75,
+              wetRate: 100,
+              status: 'approved',
+            },
+          }),
+        ]);
+
+        await prisma.dailyDocket.create({
+          data: {
+            projectId: costProject.id,
+            subcontractorCompanyId: subcontractorCompany.id,
+            date: new Date('2032-08-15T00:00:00.000Z'),
+            status: 'approved',
+            submittedById: userId,
+            submittedAt: new Date('2032-08-15T08:00:00.000Z'),
+            approvedById: userId,
+            approvedAt: new Date('2032-08-15T09:00:00.000Z'),
+            totalLabourSubmitted: 800,
+            totalPlantSubmitted: 300,
+            totalLabourApproved: 6,
+            totalPlantApproved: 2,
+            totalLabourApprovedCost: 600,
+            totalPlantApprovedCost: 200,
+            labourEntries: {
+              create: {
+                employeeId: employee.id,
+                startTime: '07:00',
+                finishTime: '15:00',
+                submittedHours: 8,
+                approvedHours: 6,
+                hourlyRate: 100,
+                submittedCost: 800,
+                approvedCost: 600,
+                lotAllocations: {
+                  create: [
+                    { lotId: lotA.id, hours: 3 },
+                    { lotId: lotB.id, hours: 5 },
+                  ],
+                },
+              },
+            },
+            plantEntries: {
+              create: {
+                plantId: plant.id,
+                hoursOperated: 4,
+                wetOrDry: 'dry',
+                hourlyRate: 75,
+                submittedCost: 300,
+                approvedCost: 200,
+                lotAllocations: {
+                  create: [
+                    { lotId: lotA.id, hours: 1 },
+                    { lotId: lotB.id, hours: 3 },
+                  ],
+                },
+              },
+            },
+          },
+        });
+
+        const res = await request(app)
+          .get(`/api/projects/${costProject.id}/costs`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.summary).toMatchObject({
+          totalLabourCost: 600,
+          totalPlantCost: 200,
+          totalCost: 800,
+          budgetTotal: 2000,
+          budgetVariance: 1200,
+          approvedDockets: 1,
+          pendingDockets: 0,
+        });
+        expect(res.body.subcontractorCosts).toEqual([
+          expect.objectContaining({
+            id: subcontractorCompany.id,
+            labourCost: 600,
+            plantCost: 200,
+            totalCost: 800,
+            approvedDockets: 1,
+          }),
+        ]);
+
+        const costByLot = new Map(
+          res.body.lotCosts.map((lot: { id: string; actualCost: number }) => [
+            lot.id,
+            lot.actualCost,
+          ]),
+        );
+        expect(costByLot.get(lotA.id)).toBeCloseTo(275, 5);
+        expect(costByLot.get(lotB.id)).toBeCloseTo(525, 5);
+      } finally {
+        await prisma.project.delete({ where: { id: costProject.id } }).catch(() => {});
+      }
+    });
   });
 
   describe('PATCH /api/projects/:id', () => {
