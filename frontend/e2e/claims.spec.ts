@@ -22,6 +22,10 @@ function buildClaim(
   disputeNotes: string | null = null,
   paidAmount = status === 'paid' ? 90000 : status === 'partially_paid' ? 25000 : 0,
   certifiedAmount: number | null = status === 'draft' ? null : 90000,
+  certification: {
+    variationNotes?: string | null;
+    certificationDocumentId?: string | null;
+  } | null = null,
 ) {
   return {
     id: E2E_CLAIM_ID,
@@ -37,6 +41,13 @@ function buildClaim(
     disputedAt: status === 'disputed' ? '2026-05-09' : null,
     lotCount: 3,
     paymentDueDate: status === 'draft' ? null : '2026-05-29',
+    certification: certification
+      ? {
+          certifiedByName: 'E2E Admin',
+          variationNotes: certification.variationNotes ?? null,
+          certificationDocumentId: certification.certificationDocumentId ?? null,
+        }
+      : null,
   };
 }
 
@@ -52,9 +63,14 @@ async function mockSeededClaimsApi(page: Page, options: SeededClaimsApiOptions =
   let paidAmount =
     options.initialPaidAmount ??
     (claimStatus === 'paid' ? 90000 : claimStatus === 'partially_paid' ? 25000 : 0);
+  let certificationDocumentId: string | null = null;
+  let certificationVariationNotes: string | null = null;
   const updateRequests: unknown[] = [];
   const certificationRequests: unknown[] = [];
   const paymentRequests: unknown[] = [];
+  const evidencePackageRequests: string[] = [];
+  const documentUploadRequests: string[] = [];
+  let signedUrlRequestCount = 0;
   let claimLoadCount = 0;
   let createClaimRequest: unknown;
   const claimReadinessLots = options.claimReadinessLots ?? [
@@ -80,6 +96,13 @@ async function mockSeededClaimsApi(page: Page, options: SeededClaimsApiOptions =
       },
     },
   ];
+  const buildCertificationReadBack = () =>
+    certificationDocumentId || certificationVariationNotes
+      ? {
+          certificationDocumentId,
+          variationNotes: certificationVariationNotes,
+        }
+      : null;
 
   await page.route('**/api/**', async (route) => {
     const url = new URL(route.request().url());
@@ -138,7 +161,17 @@ async function mockSeededClaimsApi(page: Page, options: SeededClaimsApiOptions =
         await json({ message: 'Unable to load progress claims' }, 500);
         return;
       }
-      await json({ claims: [buildClaim(claimStatus, disputeNotes, paidAmount, certifiedAmount)] });
+      await json({
+        claims: [
+          buildClaim(
+            claimStatus,
+            disputeNotes,
+            paidAmount,
+            certifiedAmount,
+            buildCertificationReadBack(),
+          ),
+        ],
+      });
       return;
     }
 
@@ -200,13 +233,83 @@ async function mockSeededClaimsApi(page: Page, options: SeededClaimsApiOptions =
       url.pathname === `/api/projects/${E2E_PROJECT_ID}/claims/${E2E_CLAIM_ID}/certify` &&
       route.request().method() === 'POST'
     ) {
-      const requestBody = route.request().postDataJSON() as { certifiedAmount?: number };
+      const requestBody = route.request().postDataJSON() as {
+        certifiedAmount?: number;
+        certificationDocumentId?: string;
+        variationNotes?: string;
+      };
       certificationRequests.push(requestBody);
       certifiedAmount = requestBody.certifiedAmount ?? 0;
+      certificationDocumentId =
+        typeof requestBody.certificationDocumentId === 'string'
+          ? requestBody.certificationDocumentId
+          : null;
+      certificationVariationNotes =
+        typeof requestBody.variationNotes === 'string' ? requestBody.variationNotes : null;
       claimStatus = 'certified';
       await json({
-        claim: buildClaim(claimStatus, disputeNotes, paidAmount, certifiedAmount),
+        claim: buildClaim(claimStatus, disputeNotes, paidAmount, certifiedAmount, {
+          certificationDocumentId,
+          variationNotes: certificationVariationNotes,
+        }),
         message: 'Claim certified successfully',
+      });
+      return;
+    }
+
+    if (
+      url.pathname === `/api/projects/${E2E_PROJECT_ID}/claims/${E2E_CLAIM_ID}/evidence-package` &&
+      route.request().method() === 'GET'
+    ) {
+      evidencePackageRequests.push(url.pathname);
+      await json({
+        project: {
+          name: 'E2E Highway Upgrade',
+          projectNumber: 'E2E-001',
+          state: 'NSW',
+        },
+        claim: {
+          claimNumber: 7,
+          periodStart: '2026-04-01',
+          periodEnd: '2026-04-30',
+          status: claimStatus,
+          preparedBy: { name: 'E2E Admin' },
+          preparedAt: '2026-05-01T00:00:00.000Z',
+        },
+        summary: {
+          totalLots: 0,
+          totalClaimedAmount: 120000,
+          totalTestResults: 0,
+          totalPassedTests: 0,
+          totalNCRs: 0,
+          totalOpenNCRs: 0,
+          totalPhotos: 0,
+          conformedLots: 0,
+        },
+        lots: [],
+        generatedAt: '2026-05-21T00:00:00.000Z',
+        generationTimeMs: 12,
+      });
+      return;
+    }
+
+    if (url.pathname === '/api/documents/upload' && route.request().method() === 'POST') {
+      documentUploadRequests.push(route.request().headers()['content-type'] ?? '');
+      await json({
+        id: 'doc-cert-1',
+        filename: 'e2e-certification.pdf',
+      });
+      return;
+    }
+
+    if (
+      url.pathname === '/api/documents/doc-cert-1/signed-url' &&
+      route.request().method() === 'POST'
+    ) {
+      signedUrlRequestCount += 1;
+      await json({
+        signedUrl: 'https://example.test/e2e-certification.pdf',
+        expiresAt: '2026-05-21T00:15:00.000Z',
       });
       return;
     }
@@ -288,7 +391,10 @@ async function mockSeededClaimsApi(page: Page, options: SeededClaimsApiOptions =
       paidAmount += requestBody.paidAmount ?? 0;
       claimStatus = paidAmount >= (certifiedAmount ?? 0) ? 'paid' : 'partially_paid';
       await json({
-        claim: buildClaim(claimStatus, disputeNotes, paidAmount, certifiedAmount),
+        claim: buildClaim(claimStatus, disputeNotes, paidAmount, certifiedAmount, {
+          certificationDocumentId,
+          variationNotes: certificationVariationNotes,
+        }),
         message: claimStatus === 'paid' ? 'Claim fully paid' : 'Partial payment recorded.',
       });
       return;
@@ -303,6 +409,9 @@ async function mockSeededClaimsApi(page: Page, options: SeededClaimsApiOptions =
     getUpdateRequests: () => updateRequests,
     getCertificationRequests: () => certificationRequests,
     getPaymentRequests: () => paymentRequests,
+    getEvidencePackageRequestCount: () => evidencePackageRequests.length,
+    getDocumentUploadRequestCount: () => documentUploadRequests.length,
+    getSignedUrlRequestCount: () => signedUrlRequestCount,
     getClaimLoadCount: () => claimLoadCount,
     getCreateClaimRequest: () => createClaimRequest,
   };
@@ -603,7 +712,9 @@ test.describe('Claims seeded commercial contract', () => {
 
     const claimRow = page.getByRole('row').filter({ hasText: 'Claim 7' });
     await expect(claimRow).toBeVisible();
-    await expect(claimRow.getByText('Certified')).toBeVisible();
+    await expect(
+      claimRow.locator('td').nth(2).getByText('Certified', { exact: true }),
+    ).toBeVisible();
     await expect(claimRow.getByText('$25,000')).toBeVisible();
 
     await claimRow.getByRole('button', { name: 'Record Payment' }).click();
@@ -626,6 +737,120 @@ test.describe('Claims seeded commercial contract', () => {
         paymentReference: 'PAY-E2E-001',
         paymentNotes: 'Final payment received.',
       });
+    await expect(page.getByText('Claim fully paid')).toBeVisible();
+    await expect(claimRow.getByText('Paid')).toBeVisible();
+    await expect(claimRow.locator('td').nth(8)).toHaveText('$90,000');
+  });
+
+  test('generates a claim evidence package PDF download', async ({ page }) => {
+    const api = await mockSeededClaimsApi(page);
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/claims`);
+
+    const claimRow = page.getByRole('row').filter({ hasText: 'Claim 7' });
+    await expect(claimRow).toBeVisible();
+    await claimRow.getByRole('button', { name: 'Generate Evidence Package' }).click();
+
+    const packageModal = page.getByRole('dialog').filter({ hasText: 'Customize Evidence Package' });
+    await expect(
+      packageModal.getByRole('heading', { name: 'Customize Evidence Package' }),
+    ).toBeVisible();
+    await packageModal.getByRole('button', { name: 'Clear All' }).click();
+
+    const downloadPromise = page.waitForEvent('download');
+    await packageModal.getByRole('button', { name: 'Generate Package' }).click();
+    const download = await downloadPromise;
+
+    expect(download.suggestedFilename()).toMatch(
+      /^Claim-7-Evidence-Package-\d{4}-\d{2}-\d{2}\.pdf$/,
+    );
+    await download.delete();
+    await expect(page.getByText('Evidence package generated')).toBeVisible();
+    expect(api.getEvidencePackageRequestCount()).toBe(1);
+  });
+
+  test('certifies a claim with an uploaded certificate and opens its read-back link', async ({
+    page,
+  }) => {
+    const api = await mockSeededClaimsApi(page, {
+      initialStatus: 'submitted',
+      initialCertifiedAmount: null,
+      initialPaidAmount: 0,
+    });
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/claims`);
+
+    const claimRow = page.getByRole('row').filter({ hasText: 'Claim 7' });
+    await expect(claimRow).toBeVisible();
+    await claimRow.getByRole('button', { name: 'Record Payment Schedule' }).click();
+
+    const certificationModal = page
+      .getByRole('dialog')
+      .filter({ hasText: 'Record certification received' });
+    await certificationModal.getByLabel('Certified Amount').fill('88000');
+    await certificationModal.getByLabel('Variation Notes').fill('Certified less retention.');
+    await certificationModal.locator('#certification-document-upload').setInputFiles({
+      name: 'e2e-certification.pdf',
+      mimeType: 'application/pdf',
+      buffer: Buffer.from('%PDF-1.4\n% e2e certificate\n%%EOF'),
+    });
+    await expect(certificationModal.getByText('e2e-certification.pdf')).toBeVisible();
+    await certificationModal.getByRole('button', { name: 'Record Payment Schedule' }).click();
+
+    await expect
+      .poll(() => api.getCertificationRequests())
+      .toContainEqual({
+        certifiedAmount: 88000,
+        certificationDate: expect.any(String),
+        variationNotes: 'Certified less retention.',
+        certificationDocumentId: 'doc-cert-1',
+      });
+    expect(api.getDocumentUploadRequestCount()).toBe(1);
+    await expect(claimRow.getByRole('button', { name: 'View certificate' })).toBeVisible();
+
+    const popupPromise = page.waitForEvent('popup');
+    await claimRow.getByRole('button', { name: 'View certificate' }).click();
+    const popup = await popupPromise;
+    await expect.poll(() => api.getSignedUrlRequestCount()).toBe(1);
+    await popup.close();
+  });
+
+  test('records a partial payment and then the final payment', async ({ page }) => {
+    const api = await mockSeededClaimsApi(page, {
+      initialStatus: 'certified',
+      initialPaidAmount: 0,
+    });
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/claims`);
+
+    const claimRow = page.getByRole('row').filter({ hasText: 'Claim 7' });
+    await expect(claimRow).toBeVisible();
+    await claimRow.getByRole('button', { name: 'Record Payment' }).click();
+
+    const firstPaymentModal = page.getByRole('dialog').filter({ hasText: 'Record Payment' });
+    await expect(firstPaymentModal.getByText('Outstanding $90,000')).toBeVisible();
+    await firstPaymentModal.getByLabel('Payment Amount').fill('25000');
+    await firstPaymentModal.getByLabel('Payment Date').fill('2026-05-10');
+    await firstPaymentModal.getByLabel('Payment Reference').fill('PAY-E2E-PARTIAL');
+    await firstPaymentModal.getByRole('button', { name: 'Record Payment' }).click();
+
+    await expect(page.getByText('Partial payment recorded.')).toBeVisible();
+    await expect(claimRow.getByText('Partially Paid')).toBeVisible();
+    await expect(claimRow.locator('td').nth(8)).toHaveText('$25,000');
+
+    await claimRow.getByRole('button', { name: 'Record Payment' }).click();
+    const finalPaymentModal = page.getByRole('dialog').filter({ hasText: 'Record Payment' });
+    await expect(finalPaymentModal.getByText('Outstanding $65,000')).toBeVisible();
+    await finalPaymentModal.getByLabel('Payment Date').fill('2026-05-12');
+    await finalPaymentModal.getByLabel('Payment Reference').fill('PAY-E2E-FINAL');
+    await finalPaymentModal.getByRole('button', { name: 'Record Payment' }).click();
+
+    await expect
+      .poll(() => api.getPaymentRequests())
+      .toEqual([
+        expect.objectContaining({ paidAmount: 25000, paymentReference: 'PAY-E2E-PARTIAL' }),
+        expect.objectContaining({ paidAmount: 65000, paymentReference: 'PAY-E2E-FINAL' }),
+      ]);
     await expect(page.getByText('Claim fully paid')).toBeVisible();
     await expect(claimRow.getByText('Paid')).toBeVisible();
     await expect(claimRow.locator('td').nth(8)).toHaveText('$90,000');
@@ -668,7 +893,9 @@ test.describe('Claims seeded commercial contract', () => {
         variationNotes: 'Certified less retention.',
       });
     await expect(page.getByText('Claim certified successfully')).toBeVisible();
-    await expect(claimRow.getByText('Certified')).toBeVisible();
+    await expect(
+      claimRow.locator('td').nth(2).getByText('Certified', { exact: true }),
+    ).toBeVisible();
     await expect(claimRow.locator('td').nth(7)).toHaveText('$88,000');
     await expect(claimRow.getByRole('button', { name: 'Record Payment' })).toBeVisible();
   });
