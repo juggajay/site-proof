@@ -1,6 +1,8 @@
 import { beforeAll, afterAll, beforeEach } from 'vitest';
+import dotenv from 'dotenv';
 import { assertSafeTestDatabaseUrl } from './databaseSafety.js';
 
+dotenv.config();
 assertSafeTestDatabaseUrl();
 
 const { prisma } = await import('../lib/prisma.js');
