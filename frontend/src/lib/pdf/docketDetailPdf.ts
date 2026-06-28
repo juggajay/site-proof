@@ -240,17 +240,21 @@ export async function generateDocketDetailPDF(data: DocketDetailPDFData): Promis
 
   const drawCostRow = (
     label: string,
-    submitted: number,
+    submitted: number | null,
     approved: number | null,
     isTotal = false,
   ): void => {
     doc.setFont('helvetica', isTotal ? 'bold' : 'normal');
     doc.setTextColor(0, 0, 0);
     doc.text(label, margin + 5, yPos + 5);
-    doc.text(formatCurrency(submitted), margin + 70, yPos + 5);
-    doc.text(approved === null ? '-' : formatCurrency(approved), margin + 110, yPos + 5);
+    doc.text(submitted === null ? 'Restricted' : formatCurrency(submitted), margin + 70, yPos + 5);
+    doc.text(
+      approved === null ? (submitted === null ? 'Restricted' : '-') : formatCurrency(approved),
+      margin + 110,
+      yPos + 5,
+    );
 
-    const variance = approved === null ? null : approved - submitted;
+    const variance = approved === null || submitted === null ? null : approved - submitted;
     if (variance !== null && variance !== 0) {
       doc.setTextColor(variance < 0 ? 239 : 34, variance < 0 ? 68 : 197, variance < 0 ? 68 : 94);
       doc.text(formatCurrencyDelta(variance), margin + 150, yPos + 5);
@@ -261,9 +265,16 @@ export async function generateDocketDetailPDF(data: DocketDetailPDFData): Promis
     yPos += 7;
   };
 
-  const submittedLabourCost = moneyValue(data.docket.totalLabourSubmitted);
-  const submittedPlantCost = moneyValue(data.docket.totalPlantSubmitted);
-  const submittedTotalCost = submittedLabourCost + submittedPlantCost;
+  const submittedLabourCost = hasMoneyValue(data.docket.totalLabourSubmitted)
+    ? moneyValue(data.docket.totalLabourSubmitted)
+    : null;
+  const submittedPlantCost = hasMoneyValue(data.docket.totalPlantSubmitted)
+    ? moneyValue(data.docket.totalPlantSubmitted)
+    : null;
+  const submittedTotalCost =
+    submittedLabourCost === null && submittedPlantCost === null
+      ? null
+      : (submittedLabourCost ?? 0) + (submittedPlantCost ?? 0);
   const approvedLabourCost =
     data.docket.status === 'approved' && hasMoneyValue(data.docket.totalLabourApprovedCost)
       ? moneyValue(data.docket.totalLabourApprovedCost)
@@ -275,7 +286,8 @@ export async function generateDocketDetailPDF(data: DocketDetailPDFData): Promis
   const approvedTotalCost =
     approvedLabourCost === null && approvedPlantCost === null
       ? null
-      : (approvedLabourCost ?? submittedLabourCost) + (approvedPlantCost ?? submittedPlantCost);
+      : (approvedLabourCost ?? submittedLabourCost ?? 0) +
+        (approvedPlantCost ?? submittedPlantCost ?? 0);
 
   drawCostRow('Labour Cost', submittedLabourCost, approvedLabourCost);
   drawCostRow('Plant Cost', submittedPlantCost, approvedPlantCost);

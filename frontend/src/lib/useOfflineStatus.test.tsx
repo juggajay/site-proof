@@ -589,19 +589,22 @@ describe('diary dispatch', () => {
 // Invariant 2/3/9/10 — docket_create / docket_submit
 // ===========================================================================
 describe('docket dispatch', () => {
+  const docketSyncDisabledMessage =
+    'Offline docket sync is disabled until labour, plant, rates, and lot allocations can be replayed safely. Recreate or finish this docket online.';
   const docketItem = (type: 'docket_create' | 'docket_submit', data: Record<string, unknown>) =>
     queueItem({ id: 31, type, attempts: 0, data });
 
-  it('docket_create: drafts the docket, removes the item, and marks it synced with the server id', async () => {
+  it('docket_create: marks an explanatory error instead of replaying a lossy draft', async () => {
     getPendingSyncItemsMock.mockResolvedValue([docketItem('docket_create', { docketId: 'dk-1' })]);
     docketsGetMock.mockResolvedValue({ id: 'dk-1' });
-    syncOfflineDocketDraftMock.mockResolvedValue('server-dk-1');
 
     await runSync();
 
-    expect(syncOfflineDocketDraftMock).toHaveBeenCalledWith({ id: 'dk-1' });
-    expect(removeSyncQueueItemMock).toHaveBeenCalledWith(31);
-    expect(markDocketSyncedMock).toHaveBeenCalledWith('dk-1', 'server-dk-1');
+    expect(markSyncItemErrorMock).toHaveBeenCalledWith(31, docketSyncDisabledMessage);
+    expect(markDocketSyncErrorMock).toHaveBeenCalledWith('dk-1');
+    expect(syncOfflineDocketDraftMock).not.toHaveBeenCalled();
+    expect(removeSyncQueueItemMock).not.toHaveBeenCalled();
+    expect(markDocketSyncedMock).not.toHaveBeenCalled();
   });
 
   it('docket_create: guards double-sync — an already-synced docket (serverId) is error-marked, not re-created', async () => {
@@ -621,19 +624,16 @@ describe('docket dispatch', () => {
     expect(markDocketSyncedMock).not.toHaveBeenCalled();
   });
 
-  it('docket_submit: deliberately does NOT auto-submit — it stores the server id and marks an explanatory error', async () => {
+  it('docket_submit: marks an explanatory error instead of replaying a lossy submit', async () => {
     getPendingSyncItemsMock.mockResolvedValue([docketItem('docket_submit', { docketId: 'dk-3' })]);
     docketsGetMock.mockResolvedValue({ id: 'dk-3' });
-    syncOfflineDocketDraftMock.mockResolvedValue('server-dk-3');
 
     const { onSyncComplete } = await runSync();
 
-    expect(markDocketServerIdMock).toHaveBeenCalledWith('dk-3', 'server-dk-3');
-    expect(markSyncItemErrorMock).toHaveBeenCalledWith(
-      31,
-      'Offline docket draft synced. Submission requires online review so labour, plant, and lot allocations can be validated before approval.',
-    );
+    expect(markSyncItemErrorMock).toHaveBeenCalledWith(31, docketSyncDisabledMessage);
     expect(markDocketSyncErrorMock).toHaveBeenCalledWith('dk-3');
+    expect(syncOfflineDocketDraftMock).not.toHaveBeenCalled();
+    expect(markDocketServerIdMock).not.toHaveBeenCalled();
     // Intentionally treated as not-synced: no removal, no synced mark, no
     // completion callback.
     expect(removeSyncQueueItemMock).not.toHaveBeenCalled();
@@ -651,14 +651,15 @@ describe('docket dispatch', () => {
     expect(syncOfflineDocketDraftMock).not.toHaveBeenCalled();
   });
 
-  it('catches a thrown draft error and marks both the item and the docket error', async () => {
+  it('does not call the legacy draft sync path, so draft post failures cannot drop entry data', async () => {
     getPendingSyncItemsMock.mockResolvedValue([docketItem('docket_create', { docketId: 'dk-4' })]);
     docketsGetMock.mockResolvedValue({ id: 'dk-4' });
     syncOfflineDocketDraftMock.mockRejectedValue(new Error('docket post failed'));
 
     await runSync();
 
-    expect(markSyncItemErrorMock).toHaveBeenCalledWith(31, 'docket post failed');
+    expect(syncOfflineDocketDraftMock).not.toHaveBeenCalled();
+    expect(markSyncItemErrorMock).toHaveBeenCalledWith(31, docketSyncDisabledMessage);
     expect(markDocketSyncErrorMock).toHaveBeenCalledWith('dk-4');
   });
 });

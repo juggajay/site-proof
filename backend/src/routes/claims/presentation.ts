@@ -81,6 +81,14 @@ function formatClaimDateKey(date: Date): string {
   return date.toISOString().split('T')[0];
 }
 
+function amountOrZero(value: unknown): number {
+  return value === null || value === undefined ? 0 : Number(value);
+}
+
+function amountOrNull(value: unknown): number | null {
+  return value === null || value === undefined ? null : Number(value);
+}
+
 /**
  * The id, variation notes, and certifier of an external certificate parsed out
  * of the JSON that the certify workflow stores in the `disputeNotes` column.
@@ -205,10 +213,10 @@ export function mapClaimListItem(
     periodStart: formatClaimDateKey(claim.claimPeriodStart),
     periodEnd: formatClaimDateKey(claim.claimPeriodEnd),
     status: claim.status,
-    totalClaimedAmount: claim.totalClaimedAmount ? Number(claim.totalClaimedAmount) : 0,
-    certifiedAmount: claim.certifiedAmount ? Number(claim.certifiedAmount) : null,
+    totalClaimedAmount: amountOrZero(claim.totalClaimedAmount),
+    certifiedAmount: amountOrNull(claim.certifiedAmount),
     certifiedAt: claim.certifiedAt ? claim.certifiedAt.toISOString() : null,
-    paidAmount: claim.paidAmount ? Number(claim.paidAmount) : null,
+    paidAmount: amountOrNull(claim.paidAmount),
     submittedAt: claim.submittedAt ? formatClaimDateKey(claim.submittedAt) : null,
     disputeNotes: getClaimReadDisputeNotes(claim.disputeNotes),
     disputedAt: claim.disputedAt ? formatClaimDateKey(claim.disputedAt) : null,
@@ -230,7 +238,7 @@ export function mapClaimCreateItem(claim: ClaimCreateItem) {
     periodStart: formatClaimDateKey(claim.claimPeriodStart),
     periodEnd: formatClaimDateKey(claim.claimPeriodEnd),
     status: claim.status,
-    totalClaimedAmount: claim.totalClaimedAmount ? Number(claim.totalClaimedAmount) : 0,
+    totalClaimedAmount: amountOrZero(claim.totalClaimedAmount),
     certifiedAmount: null,
     paidAmount: null,
     submittedAt: null,
@@ -292,10 +300,10 @@ export function mapClaimCertificationItem(
     periodStart: formatClaimDateKey(claim.claimPeriodStart),
     periodEnd: formatClaimDateKey(claim.claimPeriodEnd),
     status: claim.status,
-    totalClaimedAmount: claim.totalClaimedAmount ? Number(claim.totalClaimedAmount) : 0,
-    certifiedAmount: claim.certifiedAmount ? Number(claim.certifiedAmount) : null,
+    totalClaimedAmount: amountOrZero(claim.totalClaimedAmount),
+    certifiedAmount: amountOrNull(claim.certifiedAmount),
     certifiedAt: claim.certifiedAt?.toISOString() || null,
-    paidAmount: claim.paidAmount ? Number(claim.paidAmount) : null,
+    paidAmount: amountOrNull(claim.paidAmount),
     lotCount: claim.claimedLots.length,
     variationNotes: variationNotes || null,
     certificationDocumentId,
@@ -322,9 +330,9 @@ export function mapClaimPaymentItem(claim: ClaimPaymentItem) {
     periodStart: formatClaimDateKey(claim.claimPeriodStart),
     periodEnd: formatClaimDateKey(claim.claimPeriodEnd),
     status: claim.status,
-    totalClaimedAmount: claim.totalClaimedAmount ? Number(claim.totalClaimedAmount) : 0,
-    certifiedAmount: claim.certifiedAmount ? Number(claim.certifiedAmount) : null,
-    paidAmount: claim.paidAmount ? Number(claim.paidAmount) : null,
+    totalClaimedAmount: amountOrZero(claim.totalClaimedAmount),
+    certifiedAmount: amountOrNull(claim.certifiedAmount),
+    paidAmount: amountOrNull(claim.paidAmount),
     paidAt: claim.paidAt?.toISOString() || null,
     paymentReference: claim.paymentReference || null,
     lotCount: claim.claimedLots.length,

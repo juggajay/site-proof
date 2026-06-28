@@ -18,6 +18,7 @@ import {
   getDocketSubmittedTotalCost,
   hasDocketApprovedLabourCost,
   hasDocketApprovedPlantCost,
+  hasDocketCommercialAmounts,
   type Docket,
 } from '../docketApprovalsData';
 import {
@@ -46,6 +47,14 @@ interface DocketActionModalProps {
   // Run after a successful approve/reject/query (the page closes the modal,
   // clears the selected docket, and refetches the list).
   onActionComplete: () => Promise<void> | void;
+}
+
+function formatRestrictedCurrency(value: number | null | undefined): string {
+  return value === null || value === undefined ? 'Restricted' : formatDocketCurrency(value);
+}
+
+function formatEntryCurrency(value: number | null | undefined): string {
+  return value === null || value === undefined ? 'Restricted' : `$${value.toFixed(2)}`;
 }
 
 export function DocketActionModal({
@@ -91,6 +100,7 @@ export function DocketActionModal({
   const submittedLabourCost = getDocketSubmittedLabourCost(docket);
   const submittedPlantCost = getDocketSubmittedPlantCost(docket);
   const submittedTotalCost = getDocketSubmittedTotalCost(docket);
+  const canViewDocketCosts = hasDocketCommercialAmounts(docket);
   const approvedLabourCost = hasDocketApprovedLabourCost(docket)
     ? getDocketDisplayLabourCost(docket)
     : null;
@@ -242,23 +252,21 @@ export function DocketActionModal({
           </p>
           <p className="text-sm">
             <strong>Labour Hours:</strong> {docket.labourHours}h
-            {hasDocketApprovedLabourCost(docket) &&
-              docket.totalLabourApproved !== docket.labourHours && (
-                <span className="text-muted-foreground">
-                  {' '}
-                  (approved: {docket.totalLabourApproved}h)
-                </span>
-              )}
+            {docket.status === 'approved' && docket.totalLabourApproved !== docket.labourHours && (
+              <span className="text-muted-foreground">
+                {' '}
+                (approved: {docket.totalLabourApproved}h)
+              </span>
+            )}
           </p>
           <p className="text-sm">
             <strong>Plant Hours:</strong> {docket.plantHours}h
-            {hasDocketApprovedPlantCost(docket) &&
-              docket.totalPlantApproved !== docket.plantHours && (
-                <span className="text-muted-foreground">
-                  {' '}
-                  (approved: {docket.totalPlantApproved}h)
-                </span>
-              )}
+            {docket.status === 'approved' && docket.totalPlantApproved !== docket.plantHours && (
+              <span className="text-muted-foreground">
+                {' '}
+                (approved: {docket.totalPlantApproved}h)
+              </span>
+            )}
           </p>
           <div className="mt-3 overflow-hidden rounded-md border bg-background text-sm">
             <div className="grid grid-cols-3 bg-muted/50 px-3 py-2 text-xs font-medium uppercase text-muted-foreground">
@@ -268,23 +276,29 @@ export function DocketActionModal({
             </div>
             <div className="grid grid-cols-3 px-3 py-2">
               <span>Labour</span>
-              <span className="text-right">{formatDocketCurrency(submittedLabourCost)}</span>
               <span className="text-right">
-                {approvedLabourCost === null ? '-' : formatDocketCurrency(approvedLabourCost)}
+                {canViewDocketCosts ? formatDocketCurrency(submittedLabourCost) : 'Restricted'}
+              </span>
+              <span className="text-right">
+                {canViewDocketCosts ? formatRestrictedCurrency(approvedLabourCost) : 'Restricted'}
               </span>
             </div>
             <div className="grid grid-cols-3 border-t px-3 py-2">
               <span>Plant</span>
-              <span className="text-right">{formatDocketCurrency(submittedPlantCost)}</span>
               <span className="text-right">
-                {approvedPlantCost === null ? '-' : formatDocketCurrency(approvedPlantCost)}
+                {canViewDocketCosts ? formatDocketCurrency(submittedPlantCost) : 'Restricted'}
+              </span>
+              <span className="text-right">
+                {canViewDocketCosts ? formatRestrictedCurrency(approvedPlantCost) : 'Restricted'}
               </span>
             </div>
             <div className="grid grid-cols-3 border-t px-3 py-2 font-medium">
               <span>Total</span>
-              <span className="text-right">{formatDocketCurrency(submittedTotalCost)}</span>
               <span className="text-right">
-                {approvedTotalCost === null ? '-' : formatDocketCurrency(approvedTotalCost)}
+                {canViewDocketCosts ? formatDocketCurrency(submittedTotalCost) : 'Restricted'}
+              </span>
+              <span className="text-right">
+                {canViewDocketCosts ? formatRestrictedCurrency(approvedTotalCost) : 'Restricted'}
               </span>
             </div>
           </div>
@@ -339,7 +353,7 @@ export function DocketActionModal({
                           <td className="px-3 py-2">{entry.employee.name}</td>
                           <td className="px-3 py-2 text-muted-foreground">{entry.employee.role}</td>
                           <td className="px-3 py-2 text-right">
-                            {hasDocketApprovedLabourCost(docket) &&
+                            {docket.status === 'approved' &&
                             entry.approvedHours !== entry.submittedHours ? (
                               <span>
                                 <span className="font-medium">{entry.approvedHours}h</span>
@@ -352,18 +366,20 @@ export function DocketActionModal({
                             )}
                           </td>
                           <td className="px-3 py-2 text-right">
-                            {hasDocketApprovedLabourCost(docket) &&
+                            {docket.status === 'approved' &&
+                            entry.approvedCost !== null &&
+                            entry.submittedCost !== null &&
                             entry.approvedCost !== entry.submittedCost ? (
                               <span>
                                 <span className="font-medium">
-                                  ${entry.approvedCost.toFixed(2)}
+                                  {formatEntryCurrency(entry.approvedCost)}
                                 </span>
                                 <span className="text-muted-foreground line-through ml-1 text-xs">
-                                  ${entry.submittedCost.toFixed(2)}
+                                  {formatEntryCurrency(entry.submittedCost)}
                                 </span>
                               </span>
                             ) : (
-                              <>${entry.submittedCost.toFixed(2)}</>
+                              <>{formatEntryCurrency(entry.submittedCost)}</>
                             )}
                           </td>
                         </tr>
@@ -399,18 +415,20 @@ export function DocketActionModal({
                           </td>
                           <td className="px-3 py-2 text-right">{entry.hoursOperated}h</td>
                           <td className="px-3 py-2 text-right">
-                            {hasDocketApprovedPlantCost(docket) &&
+                            {docket.status === 'approved' &&
+                            entry.approvedCost !== null &&
+                            entry.submittedCost !== null &&
                             entry.approvedCost !== entry.submittedCost ? (
                               <span>
                                 <span className="font-medium">
-                                  ${entry.approvedCost.toFixed(2)}
+                                  {formatEntryCurrency(entry.approvedCost)}
                                 </span>
                                 <span className="text-muted-foreground line-through ml-1 text-xs">
-                                  ${entry.submittedCost.toFixed(2)}
+                                  {formatEntryCurrency(entry.submittedCost)}
                                 </span>
                               </span>
                             ) : (
-                              <>${entry.submittedCost.toFixed(2)}</>
+                              <>{formatEntryCurrency(entry.submittedCost)}</>
                             )}
                           </td>
                         </tr>

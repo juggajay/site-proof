@@ -186,6 +186,55 @@ describe('DocketActionModal', () => {
     expect(screen.getAllByText('$600.00').length).toBeGreaterThan(0);
   });
 
+  it('shows approved-hour adjustments even when approved cost totals are absent', () => {
+    renderModal(
+      makeDocket({
+        status: 'approved',
+        labourHours: 8,
+        plantHours: 4,
+        totalLabourApproved: 6,
+        totalPlantApproved: 3,
+        totalLabourApprovedCost: null,
+        totalPlantApprovedCost: null,
+      }),
+      { initialActionType: 'view' },
+    );
+
+    expect(screen.getByText(/\(approved:\s*6h\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/\(approved:\s*3h\)/i)).toBeInTheDocument();
+  });
+
+  it('shows restricted cost values when docket detail amounts are redacted', () => {
+    const docket = makeDocket({
+      status: 'approved',
+      totalLabourSubmitted: null,
+      totalPlantSubmitted: null,
+      totalLabourApprovedCost: null,
+      totalPlantApprovedCost: null,
+    });
+    const { queryClient } = renderModal(docket, { initialActionType: 'view' });
+    queryClient.setQueryData(['docket-detail', docket.id], {
+      adjustmentReason: null,
+      labourEntries: [
+        {
+          id: 'labour-1',
+          employee: { name: 'Tommy Vella', role: 'Pipe Layer' },
+          startTime: '07:00',
+          finishTime: '15:00',
+          submittedHours: 8,
+          approvedHours: 8,
+          hourlyRate: null,
+          submittedCost: null,
+          approvedCost: null,
+        },
+      ],
+      plantEntries: [],
+    });
+
+    expect(screen.getAllByText('Restricted').length).toBeGreaterThanOrEqual(4);
+    expect(screen.queryByText('$0.00')).not.toBeInTheDocument();
+  });
+
   it('shows view-mode action buttons when initialActionType is view and docket is pending', () => {
     renderModal(makeDocket(), { initialActionType: 'view' });
 

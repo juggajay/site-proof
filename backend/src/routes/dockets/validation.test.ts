@@ -33,7 +33,7 @@ describe('dockets validation helpers', () => {
       }
     });
 
-    it('accepts a full valid payload', () => {
+    it('strips legacy create-time hour totals because entries are the source of truth', () => {
       const result = createDocketSchema.safeParse({
         projectId: 'p1',
         date: '2026-01-15',
@@ -42,6 +42,13 @@ describe('dockets validation helpers', () => {
         notes: 'all good',
       });
       expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data).toEqual({
+          projectId: 'p1',
+          date: '2026-01-15',
+          notes: 'all good',
+        });
+      }
     });
 
     it('requires projectId (missing -> zod default, blank -> custom message)', () => {
@@ -58,10 +65,12 @@ describe('dockets validation helpers', () => {
       expect(firstMessage(result)).toBe('Date must be valid');
     });
 
-    it('rejects negative labour totals', () => {
+    it('ignores invalid legacy hour totals instead of accepting them into the create contract', () => {
       const result = createDocketSchema.safeParse({ projectId: 'p1', labourHours: -1 });
-      expect(result.success).toBe(false);
-      expect(firstMessage(result)).toBe('Labour total cannot be negative');
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect('labourHours' in result.data).toBe(false);
+      }
     });
   });
 

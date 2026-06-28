@@ -3,6 +3,7 @@ import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import {
+  canViewDocketAmounts,
   isDocketEntryEditable,
   requireApprovedDocketResource,
   requireDocketReadAccess,
@@ -58,13 +59,14 @@ plantDocketEntriesRouter.get(
       throw AppError.notFound('Docket');
     }
     await requireDocketReadAccess(req.user!, docket);
+    const includeCommercialAmounts = await canViewDocketAmounts(req.user!, docket.projectId);
 
     // Format plant entries
     const plantEntries = docket.plantEntries.map((entry) =>
-      mapDocketPlantEntry(entry, { includeAdjustmentReason: true }),
+      mapDocketPlantEntry(entry, { includeAdjustmentReason: true, includeCommercialAmounts }),
     );
 
-    res.json(buildDocketPlantEntriesResponse(plantEntries));
+    res.json(buildDocketPlantEntriesResponse(plantEntries, { includeCommercialAmounts }));
   }),
 );
 

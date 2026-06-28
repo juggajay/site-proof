@@ -1,4 +1,5 @@
 import { formatDocketNumber } from './formatting.js';
+import { roundDocketAmountToCents } from './entryCalculations.js';
 
 type ApprovedTotalInput<TSubmittedLabourHours, TSubmittedPlantHours> = {
   adjustedLabourHours?: number;
@@ -54,7 +55,7 @@ function numericValue(value: NumericLike): number {
 }
 
 function roundMoney(value: number): number {
-  return Math.round(value * 100) / 100;
+  return roundDocketAmountToCents(value);
 }
 
 function prorateApprovedCost(params: {

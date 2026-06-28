@@ -74,6 +74,24 @@ type ClaimReportAmounts = {
   outstanding: number | null;
 };
 
+type ClaimReportFinancialSummaryInput = {
+  status: string | null;
+  totalClaimedAmount: unknown;
+  certifiedAmount: unknown;
+  paidAmount: unknown;
+  lotCount: number;
+};
+
+type ClaimReportFinancialSummary = {
+  totalClaimed: number;
+  totalCertified: number;
+  totalPaid: number;
+  outstanding: number;
+  certificationRate: string;
+  collectionRate: string;
+  totalLots: number;
+};
+
 function hasReportAmount(value: unknown): boolean {
   return value !== null && value !== undefined;
 }
@@ -105,6 +123,41 @@ export function buildClaimReportAmounts({
         : null,
     outstanding:
       reportedCertifiedAmount === null ? null : reportedCertifiedAmount - (reportedPaidAmount ?? 0),
+  };
+}
+
+export function buildClaimReportFinancialSummary(
+  claims: ClaimReportFinancialSummaryInput[],
+): ClaimReportFinancialSummary {
+  let totalClaimed = 0;
+  let totalCertified = 0;
+  let totalPaid = 0;
+  let totalNonDisputedPaid = 0;
+  let totalLots = 0;
+
+  for (const claim of claims) {
+    totalClaimed += reportAmountOrZero(claim.totalClaimedAmount);
+    totalPaid += reportAmountOrZero(claim.paidAmount);
+    totalLots += claim.lotCount;
+
+    if (claim.status !== 'disputed') {
+      totalCertified += reportAmountOrZero(claim.certifiedAmount);
+      totalNonDisputedPaid += reportAmountOrZero(claim.paidAmount);
+    }
+  }
+
+  const outstanding = Math.max(0, totalCertified - totalNonDisputedPaid);
+
+  return {
+    totalClaimed,
+    totalCertified,
+    totalPaid,
+    outstanding,
+    certificationRate:
+      totalClaimed > 0 ? ((totalCertified / totalClaimed) * 100).toFixed(1) : '0.0',
+    collectionRate:
+      totalCertified > 0 ? ((totalNonDisputedPaid / totalCertified) * 100).toFixed(1) : '0.0',
+    totalLots,
   };
 }
 
@@ -177,24 +230,15 @@ export function createClaimReportRouter({
         return acc;
       }, {});
 
-      // Calculate financial summary
-      let totalClaimed = 0;
-      let totalCertified = 0;
-      let totalPaid = 0;
-      let totalLots = 0;
-
-      for (const claim of claims) {
-        totalClaimed += reportAmountOrZero(claim.totalClaimedAmount);
-        totalCertified += reportAmountOrZero(claim.certifiedAmount);
-        totalPaid += reportAmountOrZero(claim.paidAmount);
-        totalLots += claim.claimedLots.length;
-      }
-
-      const outstanding = totalCertified - totalPaid;
-      const certificationRate =
-        totalClaimed > 0 ? ((totalCertified / totalClaimed) * 100).toFixed(1) : '0.0';
-      const collectionRate =
-        totalCertified > 0 ? ((totalPaid / totalCertified) * 100).toFixed(1) : '0.0';
+      const financialSummary = buildClaimReportFinancialSummary(
+        claims.map((claim) => ({
+          status: claim.status,
+          totalClaimedAmount: claim.totalClaimedAmount,
+          certifiedAmount: claim.certifiedAmount,
+          paidAmount: claim.paidAmount,
+          lotCount: claim.claimedLots.length,
+        })),
+      );
 
       // Calculate monthly breakdown
       const monthlyData: Record<
@@ -263,13 +307,13 @@ export function createClaimReportRouter({
         totalClaims: claims.length,
         statusCounts,
         financialSummary: {
-          totalClaimed,
-          totalCertified,
-          totalPaid,
-          outstanding,
-          certificationRate,
-          collectionRate,
-          totalLots,
+          totalClaimed: financialSummary.totalClaimed,
+          totalCertified: financialSummary.totalCertified,
+          totalPaid: financialSummary.totalPaid,
+          outstanding: financialSummary.outstanding,
+          certificationRate: financialSummary.certificationRate,
+          collectionRate: financialSummary.collectionRate,
+          totalLots: financialSummary.totalLots,
         },
         monthlyBreakdown,
         claims: claimsData,

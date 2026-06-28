@@ -13,9 +13,9 @@ export interface Docket {
   notes: string | null;
   labourHours: number;
   plantHours: number;
-  totalLabourSubmitted: number;
+  totalLabourSubmitted: number | null;
   totalLabourApproved: number;
-  totalPlantSubmitted: number;
+  totalPlantSubmitted: number | null;
   totalPlantApproved: number;
   totalLabourApprovedCost?: number | null;
   totalPlantApprovedCost?: number | null;
@@ -32,9 +32,9 @@ export interface LabourEntry {
   finishTime: string | null;
   submittedHours: number;
   approvedHours: number;
-  hourlyRate: number;
-  submittedCost: number;
-  approvedCost: number;
+  hourlyRate: number | null;
+  submittedCost: number | null;
+  approvedCost: number | null;
 }
 
 export interface PlantEntry {
@@ -42,9 +42,9 @@ export interface PlantEntry {
   plant: { type: string; description: string; idRego?: string };
   hoursOperated: number;
   wetOrDry: string;
-  hourlyRate: number;
-  submittedCost: number;
-  approvedCost: number;
+  hourlyRate: number | null;
+  submittedCost: number | null;
+  approvedCost: number | null;
 }
 
 export type DocketsResponse = Docket[] | { dockets?: Docket[] };
@@ -122,6 +122,14 @@ export function hasDocketApprovedPlantCost(docket: Docket): boolean {
 
 export function hasDocketApprovedCost(docket: Docket): boolean {
   return hasDocketApprovedLabourCost(docket) || hasDocketApprovedPlantCost(docket);
+}
+
+export function hasDocketCommercialAmounts(docket: Docket): boolean {
+  return (
+    hasMoneyValue(docket.totalLabourSubmitted) ||
+    hasMoneyValue(docket.totalPlantSubmitted) ||
+    hasDocketApprovedCost(docket)
+  );
 }
 
 export function getDocketDisplayLabourCost(docket: Docket): number {

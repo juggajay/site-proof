@@ -226,6 +226,10 @@ export const ClaimsTable = React.memo(function ClaimsTable({
                 (claim.status === 'certified' || claim.status === 'partially_paid') &&
                 outstandingAmount > 0;
               const canCertifyClaim = claim.status === 'submitted' || claim.status === 'disputed';
+              const canDisputeClaim =
+                claim.status === 'submitted' ||
+                claim.status === 'certified' ||
+                claim.status === 'partially_paid';
               return (
                 <tr
                   key={claim.id}
@@ -274,7 +278,7 @@ export const ClaimsTable = React.memo(function ClaimsTable({
                           <Send className="h-4 w-4" />
                         </button>
                       )}
-                      {(claim.status === 'submitted' || claim.status === 'certified') && (
+                      {canDisputeClaim && (
                         <button
                           onClick={() => onDisputeClaim(claim.id)}
                           className="p-2 hover:bg-destructive/10 rounded-lg text-destructive"

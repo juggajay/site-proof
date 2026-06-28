@@ -505,9 +505,9 @@ export interface DocketDetailPDFData {
     notes: string | null;
     labourHours: number;
     plantHours: number;
-    totalLabourSubmitted: number;
+    totalLabourSubmitted: number | null;
     totalLabourApproved: number;
-    totalPlantSubmitted: number;
+    totalPlantSubmitted: number | null;
     totalPlantApproved: number;
     totalLabourApprovedCost?: number | null;
     totalPlantApprovedCost?: number | null;

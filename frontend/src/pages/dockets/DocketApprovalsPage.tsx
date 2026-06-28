@@ -19,15 +19,11 @@ import {
   getDocketApprovedTotalCost,
   getDocketDisplayTotalCost,
   getDocketSubmittedTotalCost,
+  hasDocketCommercialAmounts,
   useDocketApprovalsQuery,
   useDocketProjectQuery,
 } from './docketApprovalsData';
-import {
-  type DocketActionType,
-  HOURS_INPUT_ERROR,
-  parseHoursInput,
-  statusLabels,
-} from './docketActionData';
+import { type DocketActionType, statusLabels } from './docketActionData';
 import { DocketActionModal } from './components/DocketActionModal';
 import { CreateDocketModal } from './components/CreateDocketModal';
 import { DocketApprovalsTable } from './components/DocketApprovalsTable';
@@ -48,8 +44,6 @@ export function DocketApprovalsPage() {
   // State for create docket modal
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [newDocketDate, setNewDocketDate] = useState('');
-  const [newDocketLabourHours, setNewDocketLabourHours] = useState('');
-  const [newDocketPlantHours, setNewDocketPlantHours] = useState('');
   const [newDocketNotes, setNewDocketNotes] = useState('');
   const [creating, setCreating] = useState(false);
 
@@ -131,8 +125,16 @@ export function DocketApprovalsPage() {
   }, [filteredDockets]);
 
   const totalDisplayedCost = useMemo(() => {
-    return filteredDockets.reduce((sum, d) => sum + getDocketDisplayTotalCost(d), 0);
+    return filteredDockets.reduce(
+      (sum, d) => sum + (hasDocketCommercialAmounts(d) ? getDocketDisplayTotalCost(d) : 0),
+      0,
+    );
   }, [filteredDockets]);
+
+  const canShowTotalDisplayedCost = useMemo(
+    () => filteredDockets.some((docket) => hasDocketCommercialAmounts(docket)),
+    [filteredDockets],
+  );
 
   // Create a new docket
   const handleCreateDocket = async () => {
@@ -140,13 +142,6 @@ export function DocketApprovalsPage() {
 
     if (!newDocketDate) {
       toast({ variant: 'error', description: 'Date is required' });
-      return;
-    }
-
-    const labourHours = parseHoursInput(newDocketLabourHours);
-    const plantHours = parseHoursInput(newDocketPlantHours);
-    if (labourHours === null || plantHours === null) {
-      toast({ variant: 'warning', description: HOURS_INPUT_ERROR });
       return;
     }
 
@@ -159,8 +154,6 @@ export function DocketApprovalsPage() {
         body: JSON.stringify({
           projectId,
           date: newDocketDate,
-          labourHours,
-          plantHours,
           notes: newDocketNotes.trim() || null,
         }),
       });
@@ -168,8 +161,6 @@ export function DocketApprovalsPage() {
       toast({ variant: 'success', description: 'Docket created successfully' });
       setCreateModalOpen(false);
       setNewDocketDate('');
-      setNewDocketLabourHours('');
-      setNewDocketPlantHours('');
       setNewDocketNotes('');
       await refetchDockets();
     } catch (error) {
@@ -231,6 +222,7 @@ export function DocketApprovalsPage() {
     ];
     const rows = filteredDockets.map((docket) => {
       const approvedTotalCost = getDocketApprovedTotalCost(docket);
+      const canViewAmounts = hasDocketCommercialAmounts(docket);
       return [
         docket.docketNumber,
         docket.subcontractor,
@@ -238,9 +230,9 @@ export function DocketApprovalsPage() {
         docket.notes || '-',
         docket.labourHours,
         docket.plantHours,
-        getDocketSubmittedTotalCost(docket).toFixed(2),
-        approvedTotalCost === null ? '-' : approvedTotalCost.toFixed(2),
-        getDocketDisplayTotalCost(docket).toFixed(2),
+        canViewAmounts ? getDocketSubmittedTotalCost(docket).toFixed(2) : 'Restricted',
+        canViewAmounts && approvedTotalCost !== null ? approvedTotalCost.toFixed(2) : '-',
+        canViewAmounts ? getDocketDisplayTotalCost(docket).toFixed(2) : 'Restricted',
         statusLabels[docket.status] || docket.status,
         docket.submittedAt ? new Date(docket.submittedAt).toLocaleDateString('en-AU') : '-',
         docket.approvedAt ? new Date(docket.approvedAt).toLocaleDateString('en-AU') : '-',
@@ -425,7 +417,11 @@ export function DocketApprovalsPage() {
               </div>
               <div>
                 <span className="text-sm text-muted-foreground">Total Cost</span>
-                <p className="text-2xl font-bold">{formatDocketCurrency(totalDisplayedCost)}</p>
+                <p className="text-2xl font-bold">
+                  {canShowTotalDisplayedCost
+                    ? formatDocketCurrency(totalDisplayedCost)
+                    : 'Restricted'}
+                </p>
               </div>
             </div>
           </div>
@@ -437,10 +433,6 @@ export function DocketApprovalsPage() {
         <CreateDocketModal
           date={newDocketDate}
           onDateChange={setNewDocketDate}
-          labourHours={newDocketLabourHours}
-          onLabourHoursChange={setNewDocketLabourHours}
-          plantHours={newDocketPlantHours}
-          onPlantHoursChange={setNewDocketPlantHours}
           notes={newDocketNotes}
           onNotesChange={setNewDocketNotes}
           creating={creating}
