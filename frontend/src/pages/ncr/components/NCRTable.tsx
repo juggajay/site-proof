@@ -4,7 +4,7 @@ import { Link2, Check, Printer } from 'lucide-react';
 import { toast } from '@/components/ui/toaster';
 import type { NCRDetailData } from '@/lib/pdfGenerator';
 import { getStatusBadgeColor } from '../constants';
-import { canManageNcrClosure } from '../ncrClosureAccess';
+import { getAvailableNcrActions } from '../ncrActions';
 import type { NcrSortDirection, NcrSortField } from '../ncrRegisterSort';
 import type { NCR, UserRole } from '../types';
 import { logError } from '@/lib/logger';
@@ -13,6 +13,7 @@ import { formatStatusLabel } from '@/lib/statusLabels';
 interface NCRTableProps {
   ncrs: NCR[];
   userRole: UserRole | null;
+  currentUserId?: string | null;
   actionLoading: boolean;
   copiedNcrId: string | null;
   /** Deep-linked NCR (?ncr=<id>) to scroll to and highlight. */
@@ -36,6 +37,7 @@ interface NCRTableProps {
 function NCRTableInner({
   ncrs,
   userRole,
+  currentUserId,
   actionLoading,
   copiedNcrId,
   highlightedNcrId,
@@ -53,8 +55,6 @@ function NCRTableInner({
   onClose,
   onConcession,
 }: NCRTableProps) {
-  const canCloseNcr = canManageNcrClosure(userRole);
-
   const handlePrintPdf = async (ncr: NCR) => {
     const pdfData: NCRDetailData = {
       ncr: {
@@ -189,6 +189,7 @@ function NCRTableInner({
           {rowVirtualizer.getVirtualItems().map((virtualRow) => {
             const ncr = ncrs[virtualRow.index];
             if (!ncr) return null;
+            const actions = getAvailableNcrActions(ncr, userRole, currentUserId);
             const ageInDays = Math.floor(
               (Date.now() - new Date(ncr.createdAt).getTime()) / (1000 * 60 * 60 * 24),
             );
@@ -299,7 +300,7 @@ function NCRTableInner({
                       </button>
                     )}
                     {/* Respond Button for open NCRs */}
-                    {ncr.status === 'open' && (
+                    {actions.respond && (
                       <button
                         onClick={() => onRespond(ncr)}
                         disabled={actionLoading}
@@ -310,51 +311,39 @@ function NCRTableInner({
                     )}
 
                     {/* QM Review Button for NCRs in investigating status */}
-                    {ncr.status === 'investigating' &&
-                      (userRole?.isQualityManager ||
-                        userRole?.role === 'project_manager' ||
-                        userRole?.role === 'admin') && (
-                        <button
-                          onClick={() => onReviewResponse(ncr)}
-                          disabled={actionLoading}
-                          className="px-3 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50"
-                          title="Review the submitted response"
-                        >
-                          Review Response
-                        </button>
-                      )}
+                    {actions.reviewResponse && (
+                      <button
+                        onClick={() => onReviewResponse(ncr)}
+                        disabled={actionLoading}
+                        className="px-3 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50"
+                        title="Review the submitted response"
+                      >
+                        Review Response
+                      </button>
+                    )}
 
                     {/* QM Approval Button for major NCRs */}
-                    {ncr.severity === 'major' &&
-                      !ncr.qmApprovedAt &&
-                      ncr.status === 'verification' &&
-                      userRole?.isQualityManager && (
-                        <button
-                          onClick={() => onQmApprove(ncr.id)}
-                          disabled={actionLoading}
-                          className="px-3 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50"
-                        >
-                          QM Approve
-                        </button>
-                      )}
+                    {actions.qmApprove && (
+                      <button
+                        onClick={() => onQmApprove(ncr.id)}
+                        disabled={actionLoading}
+                        className="px-3 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50"
+                      >
+                        QM Approve
+                      </button>
+                    )}
 
                     {/* Notify Client Button for major NCRs */}
-                    {ncr.severity === 'major' &&
-                      ncr.clientNotificationRequired &&
-                      !ncr.clientNotifiedAt &&
-                      (userRole?.role === 'project_manager' ||
-                        userRole?.role === 'quality_manager' ||
-                        userRole?.role === 'admin' ||
-                        userRole?.role === 'owner') && (
-                        <button
-                          onClick={() => onNotifyClient(ncr)}
-                          disabled={actionLoading}
-                          className="px-3 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50"
-                          title="Notify client about this major NCR"
-                        >
-                          Notify Client
-                        </button>
-                      )}
+                    {actions.notifyClient && (
+                      <button
+                        onClick={() => onNotifyClient(ncr)}
+                        disabled={actionLoading}
+                        className="px-3 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50"
+                        title="Notify client about this major NCR"
+                      >
+                        Notify Client
+                      </button>
+                    )}
 
                     {/* Client Notified Badge */}
                     {ncr.clientNotifiedAt && (
@@ -367,7 +356,7 @@ function NCRTableInner({
                     )}
 
                     {/* Rectify Button */}
-                    {(ncr.status === 'investigating' || ncr.status === 'rectification') && (
+                    {actions.rectify && (
                       <button
                         onClick={() => onRectify(ncr)}
                         disabled={actionLoading}
@@ -378,22 +367,19 @@ function NCRTableInner({
                     )}
 
                     {/* Reject Rectification Button */}
-                    {ncr.status === 'verification' &&
-                      (userRole?.isQualityManager ||
-                        userRole?.role === 'project_manager' ||
-                        userRole?.role === 'admin') && (
-                        <button
-                          onClick={() => onRejectRectification(ncr)}
-                          disabled={actionLoading}
-                          className="px-3 py-1 text-xs bg-destructive text-destructive-foreground rounded hover:bg-destructive/90 disabled:opacity-50"
-                          title="Reject rectification and return to responsible party"
-                        >
-                          Reject
-                        </button>
-                      )}
+                    {actions.rejectRectification && (
+                      <button
+                        onClick={() => onRejectRectification(ncr)}
+                        disabled={actionLoading}
+                        className="px-3 py-1 text-xs bg-destructive text-destructive-foreground rounded hover:bg-destructive/90 disabled:opacity-50"
+                        title="Reject rectification and return to responsible party"
+                      >
+                        Reject
+                      </button>
+                    )}
 
                     {/* Close Button */}
-                    {ncr.status === 'verification' && canCloseNcr && (
+                    {actions.close && (
                       <button
                         onClick={() => onClose(ncr)}
                         disabled={actionLoading || (ncr.severity === 'major' && !ncr.qmApprovedAt)}
@@ -413,7 +399,7 @@ function NCRTableInner({
                     )}
 
                     {/* Close with Concession Button */}
-                    {ncr.status === 'verification' && canCloseNcr && (
+                    {actions.concession && (
                       <button
                         onClick={() => onConcession(ncr)}
                         disabled={actionLoading || (ncr.severity === 'major' && !ncr.qmApprovedAt)}

@@ -10,6 +10,7 @@ import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Moda
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { NCREvidenceList } from './NCREvidenceList';
 
 const qmReviewSchema = z.object({
   qmReviewComments: z.string().trim().optional().default(''),
@@ -120,6 +121,13 @@ function QMReviewModalInner({ isOpen, ncr, onClose, onSuccess }: QMReviewModalPr
               </p>
             </div>
           )}
+        </div>
+
+        <div className="mb-4">
+          <NCREvidenceList
+            evidence={ncr.ncrEvidence ?? []}
+            emptyLabel="No rectification evidence has been uploaded yet."
+          />
         </div>
 
         <div className="mb-4">

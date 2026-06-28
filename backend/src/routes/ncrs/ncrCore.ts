@@ -185,11 +185,12 @@ async function enableSubcontractorNcrPortalAccessOnAssignment(
 async function notifySubcontractorAssignment(options: {
   projectId: string;
   subcontractorCompanyId: string;
+  ncrId: string;
   type: 'ncr_assigned' | 'ncr_redirect';
   title: string;
   message: string;
 }): Promise<void> {
-  const { projectId, subcontractorCompanyId, type, title, message } = options;
+  const { projectId, subcontractorCompanyId, ncrId, type, title, message } = options;
 
   // Gate the fan-out on the company's NCRs portal module, using the SAME
   // portalAccess.ncrs check the read side (canReadNcr ->
@@ -222,7 +223,7 @@ async function notifySubcontractorAssignment(options: {
       type,
       title,
       message,
-      linkUrl: `/projects/${projectId}/ncr`,
+      linkUrl: `/subcontractor-portal/ncrs?ncr=${encodeURIComponent(ncrId)}`,
     })),
   });
 }
@@ -453,6 +454,7 @@ ncrCoreRouter.post(
           await notifySubcontractorAssignment({
             projectId,
             subcontractorCompanyId: responsibleSubcontractorId,
+            ncrId: ncr.id,
             type: 'ncr_assigned',
             title: 'NCR Assigned to Your Company',
             message: `${ncr.ncrNumber} has been assigned to your company: ${description.substring(0, 100)}${description.length > 100 ? '...' : ''}`,
@@ -664,6 +666,7 @@ ncrCoreRouter.patch(
           await notifySubcontractorAssignment({
             projectId: ncr.projectId,
             subcontractorCompanyId: responsibleSubcontractorId,
+            ncrId: ncr.id,
             type: 'ncr_redirect',
             title: 'NCR Redirected to Your Company',
             message: `NCR #${ncr.ncrNumber} "${ncr.description.substring(0, 50)}..." has been redirected to your company for response`,

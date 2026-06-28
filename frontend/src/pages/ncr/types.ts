@@ -33,6 +33,18 @@ export interface NCR {
   lessonsLearned?: string | null;
   closedAt?: string | null;
   verificationNotes?: string | null;
+  ncrEvidence?: Array<{
+    id: string;
+    evidenceType: string;
+    uploadedAt?: string | null;
+    document: {
+      id: string;
+      filename: string;
+      fileUrl?: string | null;
+      mimeType?: string | null;
+      uploadedAt?: string | null;
+    } | null;
+  }>;
 }
 
 export interface UserRole {

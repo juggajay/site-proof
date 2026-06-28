@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { NCREvidenceList } from './NCREvidenceList';
 
 const concessionSchema = z.object({
   justification: z.string().trim().min(1, 'Concession justification is required'),
@@ -116,6 +117,13 @@ function ConcessionModalInner({ isOpen, ncr, onClose, onSubmit, loading }: Conce
               {ncr.severity.toUpperCase()}
             </span>
           </div>
+        </div>
+
+        <div className="mb-4">
+          <NCREvidenceList
+            evidence={ncr.ncrEvidence ?? []}
+            emptyLabel="No rectification evidence has been uploaded yet."
+          />
         </div>
 
         {/* Warning for Major NCRs */}

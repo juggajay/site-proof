@@ -55,6 +55,7 @@ export function createNcrReportRouter({
         ncrs,
         statusGroups,
         categoryGroups,
+        severityGroups,
         rootCauseGroups,
         overdueCount,
         closedThisMonth,
@@ -69,6 +70,7 @@ export function createNcrReportRouter({
             ncrNumber: true,
             description: true,
             category: true,
+            severity: true,
             status: true,
             raisedAt: true,
             closedAt: true,
@@ -86,6 +88,11 @@ export function createNcrReportRouter({
         }),
         prisma.nCR.groupBy({
           by: ['category'],
+          where,
+          _count: true,
+        }),
+        prisma.nCR.groupBy({
+          by: ['severity'],
           where,
           _count: true,
         }),
@@ -128,12 +135,18 @@ export function createNcrReportRouter({
                 email: true,
               },
             },
+            responsibleSubcontractor: {
+              select: {
+                companyName: true,
+              },
+            },
           },
         }),
       ]);
 
       const statusCounts = groupedCountsToRecord(statusGroups, 'status', 'open');
-      const categoryCounts = groupedCountsToRecord(categoryGroups, 'category', 'minor');
+      const categoryCounts = groupedCountsToRecord(categoryGroups, 'category', 'Uncategorized');
+      const severityCounts = groupedCountsToRecord(severityGroups, 'severity', 'minor');
       const rootCauseCounts = groupedCountsToRecord(
         rootCauseGroups,
         'rootCauseCategory',
@@ -158,7 +171,10 @@ export function createNcrReportRouter({
       const responsiblePartyCounts = ncrsWithResponsible.reduce(
         (acc: Record<string, number>, ncr) => {
           const responsible =
-            ncr.responsibleUser?.fullName || ncr.responsibleUser?.email || 'Unassigned';
+            ncr.responsibleUser?.fullName ||
+            ncr.responsibleUser?.email ||
+            ncr.responsibleSubcontractor?.companyName ||
+            'Unassigned';
           acc[responsible] = (acc[responsible] || 0) + 1;
           return acc;
         },
@@ -175,6 +191,7 @@ export function createNcrReportRouter({
         totalNCRs: total,
         statusCounts,
         categoryCounts,
+        severityCounts,
         rootCauseCounts,
         responsiblePartyCounts,
         overdueCount,
@@ -189,8 +206,8 @@ export function createNcrReportRouter({
           verification: statusCounts['verification'] || 0,
           closed: statusCounts['closed'] || 0,
           closedConcession: statusCounts['closed_concession'] || 0,
-          minor: categoryCounts['minor'] || 0,
-          major: categoryCounts['major'] || 0,
+          minor: severityCounts['minor'] || 0,
+          major: severityCounts['major'] || 0,
         },
         pagination: {
           page: pageNum,

@@ -7,6 +7,7 @@ import { ResponsiveSheet } from '@/components/ui/ResponsiveSheet';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { NCREvidenceList } from './NCREvidenceList';
 
 const closeNCRSchema = z.object({
   verificationNotes: z.string().trim().optional().default(''),
@@ -83,6 +84,13 @@ function CloseNCRModalInner({ isOpen, ncr, onClose, onSubmit, loading }: CloseNC
           QM Approval granted by {ncr.qmApprovedBy?.fullName || 'Quality Manager'}
         </div>
       )}
+
+      <div className="mb-4">
+        <NCREvidenceList
+          evidence={ncr.ncrEvidence ?? []}
+          emptyLabel="No rectification evidence has been uploaded yet."
+        />
+      </div>
 
       <form id="close-ncr-form" onSubmit={handleSubmit(onFormSubmit)} className="space-y-4">
         <div>

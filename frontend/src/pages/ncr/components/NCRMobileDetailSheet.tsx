@@ -10,11 +10,13 @@ import { formatStatusLabel } from '@/lib/statusLabels';
 import { getStatusBadgeColor } from '../constants';
 import { getAvailableNcrActions } from '../ncrActions';
 import type { NCR, UserRole } from '../types';
+import { NCREvidenceList } from './NCREvidenceList';
 
 interface NCRMobileDetailSheetProps {
   isOpen: boolean;
   ncr: NCR | null;
   userRole: UserRole | null;
+  currentUserId?: string | null;
   actionLoading?: boolean;
   onClose: () => void;
   onAssign: (ncr: NCR) => void;
@@ -35,6 +37,7 @@ export function NCRMobileDetailSheet({
   isOpen,
   ncr,
   userRole,
+  currentUserId,
   actionLoading = false,
   onClose,
   onAssign,
@@ -49,7 +52,7 @@ export function NCRMobileDetailSheet({
 }: NCRMobileDetailSheetProps) {
   if (!ncr) return null;
 
-  const actions = getAvailableNcrActions(ncr, userRole);
+  const actions = getAvailableNcrActions(ncr, userRole, currentUserId);
   const closeDisabled = actionLoading || actions.closeBlockedPendingQmApproval;
   const qmApprovalHint = actions.closeBlockedPendingQmApproval
     ? 'Requires QM approval first'
@@ -94,6 +97,8 @@ export function NCRMobileDetailSheet({
         </div>
 
         <p className="text-sm whitespace-pre-wrap">{ncr.description}</p>
+
+        <NCREvidenceList evidence={ncr.ncrEvidence ?? []} />
 
         <dl className="text-xs text-muted-foreground space-y-1">
           <div>
