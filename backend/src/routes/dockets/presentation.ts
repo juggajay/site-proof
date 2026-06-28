@@ -225,6 +225,8 @@ export function mapDocketListItem(
       (sum, entry) => sum + numericValue(entry.hoursOperated),
       0,
     ),
+    labourEntryCount: docket.labourEntries.length,
+    plantEntryCount: docket.plantEntries.length,
     totalLabourSubmitted: commercialNumericValue(docket.totalLabourSubmitted, options),
     totalLabourApproved: numericValue(docket.totalLabourApproved),
     totalPlantSubmitted: commercialNumericValue(docket.totalPlantSubmitted, options),
