@@ -66,6 +66,31 @@ function safeUrlForLog(url: string): string {
   }
 }
 
+function getRecordProperty(value: unknown, property: string): unknown {
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+
+  return (value as Record<string, unknown>)[property];
+}
+
+function getStringProperty(value: unknown, property: string): string | null {
+  const propertyValue = getRecordProperty(value, property);
+  return typeof propertyValue === 'string' && propertyValue ? propertyValue : null;
+}
+
+function describeNetworkError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  const cause = getRecordProperty(error, 'cause');
+  const details = [
+    getStringProperty(cause, 'code'),
+    getStringProperty(cause, 'syscall'),
+    getStringProperty(cause, 'hostname'),
+  ].filter(Boolean);
+
+  return details.length > 0 ? `${message} (${details.join(', ')})` : message;
+}
+
 function getSupabaseStorageHeaders(serviceRoleKey: string, extra: Record<string, string> = {}) {
   return {
     apikey: serviceRoleKey,
@@ -82,7 +107,7 @@ async function runNetworkRequest(
   try {
     return await request();
   } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error);
+    const reason = describeNetworkError(error);
     throw new Error(`${label} request failed for ${safeUrlForLog(url)}: ${reason}`);
   }
 }
