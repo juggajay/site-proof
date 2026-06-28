@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import type { Page, Route } from '@playwright/test';
 
 export const E2E_PASSWORD = 'testpassword123';
 export const ADMIN_EMAIL = 'test@example.com';
@@ -13,6 +13,17 @@ export const E2E_ADMIN_USER = {
   companyId: 'e2e-company',
   hasPassword: true,
 };
+
+export type JsonResponder = (body: unknown, status?: number) => Promise<void>;
+
+export function createJsonResponder(route: Route): JsonResponder {
+  return (body: unknown, status = 200) =>
+    route.fulfill({
+      status,
+      contentType: 'application/json',
+      body: JSON.stringify(body),
+    });
+}
 
 export async function mockAuthenticatedUserState(
   page: Page,

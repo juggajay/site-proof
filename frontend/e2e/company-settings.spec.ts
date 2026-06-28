@@ -1,5 +1,13 @@
-import { test, expect, type Page } from '@playwright/test';
-import { E2E_ADMIN_USER, mockAuthenticatedUserState } from './helpers';
+import { test, expect, type Page, type Route } from '@playwright/test';
+import type { Company, CompanyMember } from '../src/pages/company/companySettingsData';
+import type { CompanyApiKey } from '../src/pages/company/companyApiKeysData';
+import type { CompanyWebhook } from '../src/pages/company/companyWebhooksData';
+import {
+  createJsonResponder,
+  E2E_ADMIN_USER,
+  mockAuthenticatedUserState,
+  type JsonResponder,
+} from './helpers';
 
 const E2E_OWNER_USER = {
   ...E2E_ADMIN_USER,
@@ -8,22 +16,7 @@ const E2E_OWNER_USER = {
   roleInCompany: 'owner',
 };
 
-type MockCompany = {
-  id: string;
-  name: string;
-  abn: string | null;
-  address: string | null;
-  logoUrl: string | null;
-  subscriptionTier: string;
-  projectCount: number;
-  projectLimit: number | null;
-  userCount: number;
-  userLimit: number | null;
-  createdAt: string;
-  updatedAt: string;
-};
-
-const seededCompany: MockCompany = {
+const seededCompany: Company = {
   id: 'e2e-company',
   name: 'E2E Civil Pty Ltd',
   abn: '12 345 678 901',
@@ -38,10 +31,83 @@ const seededCompany: MockCompany = {
   updatedAt: '2026-05-08T00:00:00.000Z',
 };
 
+const seededMembers: CompanyMember[] = [
+  {
+    id: E2E_OWNER_USER.id,
+    email: E2E_OWNER_USER.email,
+    fullName: E2E_OWNER_USER.fullName,
+    roleInCompany: 'owner',
+    hasPassword: true,
+    status: 'active',
+  },
+  {
+    id: 'e2e-company-admin',
+    email: 'company.admin@example.com',
+    fullName: 'E2E Company Admin',
+    roleInCompany: 'admin',
+    hasPassword: true,
+    status: 'active',
+  },
+  {
+    id: 'e2e-site-engineer',
+    email: 'site.engineer@example.com',
+    fullName: 'E2E Site Engineer',
+    roleInCompany: 'site_engineer',
+    hasPassword: true,
+    status: 'active',
+  },
+];
+
+const seededApiKeys: CompanyApiKey[] = [
+  {
+    id: 'e2e-api-key-own',
+    name: 'Owner reporting key',
+    keyPrefix: 'sp_e2eown',
+    scopes: 'read',
+    lastUsedAt: null,
+    expiresAt: null,
+    isActive: true,
+    createdAt: '2026-05-05T00:00:00.000Z',
+    owner: {
+      id: E2E_OWNER_USER.id,
+      fullName: E2E_OWNER_USER.fullName,
+      email: E2E_OWNER_USER.email,
+    },
+  },
+  {
+    id: 'e2e-api-key-other',
+    name: 'Estimator integration',
+    keyPrefix: 'sp_e2eoth',
+    scopes: 'write',
+    lastUsedAt: '2026-05-08T00:00:00.000Z',
+    expiresAt: null,
+    isActive: true,
+    createdAt: '2026-05-06T00:00:00.000Z',
+    owner: {
+      id: 'e2e-company-admin',
+      fullName: 'E2E Company Admin',
+      email: 'company.admin@example.com',
+    },
+  },
+];
+
+const seededWebhooks: CompanyWebhook[] = [
+  {
+    id: 'e2e-webhook-1',
+    url: 'https://hooks.example.com/siteproof',
+    events: ['*'],
+    enabled: true,
+    createdAt: '2026-05-07T00:00:00.000Z',
+  },
+];
+
 type MockCompanySettingsApiOptions = {
   failCompanyLoadsUntil?: number;
   failMemberLoadsUntil?: number;
-  companyOverride?: Partial<MockCompany>;
+  companyOverride?: Partial<Company>;
+  membersOverride?: CompanyMember[];
+  apiKeysOverride?: CompanyApiKey[];
+  webhooksOverride?: CompanyWebhook[];
   patchDelayMs?: number;
   transferDelayMs?: number;
   logoUploadFailure?: boolean;
@@ -49,38 +115,39 @@ type MockCompanySettingsApiOptions = {
 
 const delay = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
-async function mockCompanySettingsApi(page: Page, options: MockCompanySettingsApiOptions = {}) {
-  let company: MockCompany = { ...structuredClone(seededCompany), ...options.companyOverride };
-  const patchRequests: unknown[] = [];
-  const transferRequests: unknown[] = [];
-  let companyLoadCount = 0;
-  let memberLoadCount = 0;
+type CompanySettingsApiState = {
+  company: Company;
+  members: CompanyMember[];
+  apiKeys: CompanyApiKey[];
+  webhooks: CompanyWebhook[];
+  patchRequests: unknown[];
+  transferRequests: unknown[];
+  inviteRequests: unknown[];
+  roleChangeRequests: unknown[];
+  removeMemberRequests: string[];
+  apiKeyCreateRequests: unknown[];
+  apiKeyRevokeRequests: string[];
+  webhookCreateRequests: unknown[];
+  webhookPatchRequests: unknown[];
+  webhookDeleteRequests: string[];
+  webhookTestRequests: string[];
+  webhookRegenerateRequests: string[];
+  companyLoadCount: number;
+  memberLoadCount: number;
+};
 
-  await page.route('**/api/**', async (route) => {
-    const url = new URL(route.request().url());
-    const json = (body: unknown, status = 200) =>
-      route.fulfill({
-        status,
-        contentType: 'application/json',
-        body: JSON.stringify(body),
-      });
-
-    if (url.pathname === '/api/auth/me') {
+async function respondStaticSettingsRoute(url: URL, json: JsonResponder): Promise<boolean> {
+  switch (url.pathname) {
+    case '/api/auth/me':
       await json({ user: E2E_OWNER_USER });
-      return;
-    }
-
-    if (url.pathname === '/api/notifications') {
+      return true;
+    case '/api/notifications':
       await json({ notifications: [], unreadCount: 0 });
-      return;
-    }
-
-    if (url.pathname === '/api/projects') {
+      return true;
+    case '/api/projects':
       await json({ projects: [] });
-      return;
-    }
-
-    if (url.pathname === '/api/support/contact') {
+      return true;
+    case '/api/support/contact':
       await json({
         email: 'configured-support@example.com',
         phone: null,
@@ -94,88 +161,499 @@ async function mockCompanySettingsApi(page: Page, options: MockCompanySettingsAp
           general: 'Within 48 hours',
         },
       });
-      return;
-    }
+      return true;
+    default:
+      return false;
+  }
+}
 
-    if (url.pathname === '/api/company') {
-      if (route.request().method() === 'GET') {
-        companyLoadCount += 1;
-        if (companyLoadCount <= (options.failCompanyLoadsUntil ?? 0)) {
-          await json({ message: 'Company service unavailable' }, 500);
-          return;
-        }
+async function handleCompanyProfileRoute(
+  route: Route,
+  url: URL,
+  json: JsonResponder,
+  state: CompanySettingsApiState,
+  options: MockCompanySettingsApiOptions,
+): Promise<boolean> {
+  return (
+    (await respondCompanyRead(route, url, json, state, options)) ||
+    (await respondCompanyUpdate(route, url, json, state, options)) ||
+    (await respondCompanyLogoUpload(route, url, json, state, options))
+  );
+}
 
-        await json({ company });
-        return;
-      }
+async function respondCompanyRead(
+  route: Route,
+  url: URL,
+  json: JsonResponder,
+  state: CompanySettingsApiState,
+  options: MockCompanySettingsApiOptions,
+): Promise<boolean> {
+  if (url.pathname !== '/api/company' || route.request().method() !== 'GET') {
+    return false;
+  }
 
-      if (route.request().method() === 'PATCH') {
-        if (options.patchDelayMs) {
-          await delay(options.patchDelayMs);
-        }
+  state.companyLoadCount += 1;
+  if (state.companyLoadCount <= (options.failCompanyLoadsUntil ?? 0)) {
+    await json({ message: 'Company service unavailable' }, 500);
+    return true;
+  }
 
-        const body = route.request().postDataJSON();
-        patchRequests.push(body);
-        company = {
-          ...company,
-          ...(body as Partial<typeof seededCompany>),
-          updatedAt: '2026-05-09T00:00:00.000Z',
-        };
-        await json({ company, message: 'Company updated successfully' });
-        return;
-      }
-    }
+  await json({ company: state.company });
+  return true;
+}
 
-    if (url.pathname === '/api/company/logo' && route.request().method() === 'POST') {
-      if (options.logoUploadFailure) {
-        await json({ error: { message: 'Logo rejected by server' } }, 400);
-        return;
-      }
+async function respondCompanyUpdate(
+  route: Route,
+  url: URL,
+  json: JsonResponder,
+  state: CompanySettingsApiState,
+  options: MockCompanySettingsApiOptions,
+): Promise<boolean> {
+  if (url.pathname !== '/api/company' || route.request().method() !== 'PATCH') {
+    return false;
+  }
 
-      company = {
-        ...company,
-        logoUrl: '/uploads/logos/e2e-logo.png',
-        updatedAt: '2026-05-09T00:00:00.000Z',
-      };
-      await json({ company, logoUrl: company.logoUrl });
-      return;
-    }
+  if (options.patchDelayMs) {
+    await delay(options.patchDelayMs);
+  }
 
-    if (url.pathname === '/api/company/members') {
-      memberLoadCount += 1;
-      if (memberLoadCount <= (options.failMemberLoadsUntil ?? 0)) {
-        await json({ message: 'Company members service unavailable' }, 500);
-        return;
-      }
+  const body = route.request().postDataJSON();
+  state.patchRequests.push(body);
+  state.company = {
+    ...state.company,
+    ...(body as Partial<Company>),
+    updatedAt: '2026-05-09T00:00:00.000Z',
+  };
+  await json({ company: state.company, message: 'Company updated successfully' });
+  return true;
+}
 
-      await json({
-        members: [
-          {
-            id: E2E_OWNER_USER.id,
-            email: E2E_OWNER_USER.email,
-            fullName: E2E_OWNER_USER.fullName,
-            roleInCompany: 'owner',
-          },
-          {
-            id: 'e2e-company-admin',
-            email: 'company.admin@example.com',
-            fullName: 'E2E Company Admin',
-            roleInCompany: 'admin',
-          },
-        ],
-      });
-      return;
-    }
+async function respondCompanyLogoUpload(
+  route: Route,
+  url: URL,
+  json: JsonResponder,
+  state: CompanySettingsApiState,
+  options: MockCompanySettingsApiOptions,
+): Promise<boolean> {
+  if (url.pathname !== '/api/company/logo' || route.request().method() !== 'POST') {
+    return false;
+  }
 
-    if (url.pathname === '/api/company/transfer-ownership') {
-      if (options.transferDelayMs) {
-        await delay(options.transferDelayMs);
-      }
+  if (options.logoUploadFailure) {
+    await json({ error: { message: 'Logo rejected by server' } }, 400);
+    return true;
+  }
 
-      transferRequests.push(route.request().postDataJSON());
-      await json({ success: true });
-      return;
-    }
+  state.company = {
+    ...state.company,
+    logoUrl: '/uploads/logos/e2e-logo.png',
+    updatedAt: '2026-05-09T00:00:00.000Z',
+  };
+  await json({ company: state.company, logoUrl: state.company.logoUrl });
+  return true;
+}
+
+async function handleCompanyMembersRoute(
+  route: Route,
+  url: URL,
+  json: JsonResponder,
+  state: CompanySettingsApiState,
+  options: MockCompanySettingsApiOptions,
+): Promise<boolean> {
+  return (
+    (await respondMemberInvite(route, url, json, state)) ||
+    (await respondMemberRoleUpdate(route, url, json, state)) ||
+    (await respondMemberDelete(route, url, json, state)) ||
+    (await respondMemberList(route, url, json, state, options))
+  );
+}
+
+async function respondMemberInvite(
+  route: Route,
+  url: URL,
+  json: JsonResponder,
+  state: CompanySettingsApiState,
+): Promise<boolean> {
+  if (url.pathname !== '/api/company/members/invite' || route.request().method() !== 'POST') {
+    return false;
+  }
+
+  const body = route.request().postDataJSON() as {
+    email: string;
+    fullName?: string;
+    roleInCompany: string;
+  };
+  state.inviteRequests.push(body);
+  const member: CompanyMember = {
+    id: `e2e-invited-${state.inviteRequests.length}`,
+    email: body.email,
+    fullName: body.fullName ?? null,
+    roleInCompany: body.roleInCompany,
+    hasPassword: false,
+    status: 'pending',
+  };
+  state.members = [...state.members.filter((entry) => entry.email !== member.email), member];
+  await json({
+    message: 'Company invitation sent successfully',
+    member,
+    invitation: {
+      setupRequired: true,
+      expiresAt: '2026-06-30T00:00:00.000Z',
+    },
+  });
+  return true;
+}
+
+async function respondMemberRoleUpdate(
+  route: Route,
+  url: URL,
+  json: JsonResponder,
+  state: CompanySettingsApiState,
+): Promise<boolean> {
+  if (!url.pathname.startsWith('/api/company/members/') || route.request().method() !== 'PATCH') {
+    return false;
+  }
+
+  const memberId = decodeURIComponent(url.pathname.replace('/api/company/members/', ''));
+  const body = route.request().postDataJSON() as { roleInCompany: string };
+  const previous = state.members.find((member) => member.id === memberId);
+  state.roleChangeRequests.push({ memberId, ...body });
+  state.members = state.members.map((member) =>
+    member.id === memberId ? { ...member, roleInCompany: body.roleInCompany } : member,
+  );
+  await json({
+    message: 'Company member role updated successfully',
+    member: { id: memberId, roleInCompany: body.roleInCompany },
+    previousRole: previous?.roleInCompany ?? null,
+  });
+  return true;
+}
+
+async function respondMemberDelete(
+  route: Route,
+  url: URL,
+  json: JsonResponder,
+  state: CompanySettingsApiState,
+): Promise<boolean> {
+  if (!url.pathname.startsWith('/api/company/members/') || route.request().method() !== 'DELETE') {
+    return false;
+  }
+
+  const memberId = decodeURIComponent(url.pathname.replace('/api/company/members/', ''));
+  const target = state.members.find((member) => member.id === memberId);
+  state.removeMemberRequests.push(memberId);
+  state.members = state.members.filter((member) => member.id !== memberId);
+  await json({
+    memberId,
+    status: target?.status === 'pending' || target?.hasPassword === false ? 'cancelled' : 'removed',
+  });
+  return true;
+}
+
+async function respondMemberList(
+  route: Route,
+  url: URL,
+  json: JsonResponder,
+  state: CompanySettingsApiState,
+  options: MockCompanySettingsApiOptions,
+): Promise<boolean> {
+  if (url.pathname !== '/api/company/members' || route.request().method() !== 'GET') {
+    return false;
+  }
+
+  state.memberLoadCount += 1;
+  if (state.memberLoadCount <= (options.failMemberLoadsUntil ?? 0)) {
+    await json({ message: 'Company members service unavailable' }, 500);
+    return true;
+  }
+
+  await json({ members: state.members });
+  return true;
+}
+
+async function handleCompanyApiKeyRoute(
+  route: Route,
+  url: URL,
+  json: JsonResponder,
+  state: CompanySettingsApiState,
+): Promise<boolean> {
+  return (
+    (await respondApiKeyInventory(route, url, json, state)) ||
+    (await respondApiKeyCreate(route, url, json, state)) ||
+    (await respondApiKeyRevoke(route, url, json, state))
+  );
+}
+
+async function respondApiKeyInventory(
+  route: Route,
+  url: URL,
+  json: JsonResponder,
+  state: CompanySettingsApiState,
+): Promise<boolean> {
+  if (url.pathname !== '/api/company/api-keys' || route.request().method() !== 'GET') {
+    return false;
+  }
+
+  await json({ apiKeys: state.apiKeys, count: state.apiKeys.length });
+  return true;
+}
+
+async function respondApiKeyCreate(
+  route: Route,
+  url: URL,
+  json: JsonResponder,
+  state: CompanySettingsApiState,
+): Promise<boolean> {
+  if (url.pathname !== '/api/api-keys' || route.request().method() !== 'POST') {
+    return false;
+  }
+
+  const body = route.request().postDataJSON() as { name: string; scopes?: string };
+  state.apiKeyCreateRequests.push(body);
+  const apiKey: CompanyApiKey = {
+    id: `e2e-api-key-created-${state.apiKeyCreateRequests.length}`,
+    name: body.name,
+    keyPrefix: `sp_e2enew${state.apiKeyCreateRequests.length}`,
+    scopes: body.scopes ?? 'read',
+    lastUsedAt: null,
+    expiresAt: null,
+    isActive: true,
+    createdAt: '2026-05-09T00:00:00.000Z',
+    owner: {
+      id: E2E_OWNER_USER.id,
+      fullName: E2E_OWNER_USER.fullName,
+      email: E2E_OWNER_USER.email,
+    },
+  };
+  state.apiKeys = [...state.apiKeys, apiKey];
+  await json({
+    message: 'created',
+    apiKey: {
+      ...apiKey,
+      key: 'sp_e2e_full_key_revealed_once',
+    },
+  });
+  return true;
+}
+
+async function respondApiKeyRevoke(
+  route: Route,
+  url: URL,
+  json: JsonResponder,
+  state: CompanySettingsApiState,
+): Promise<boolean> {
+  if (!url.pathname.startsWith('/api/api-keys/') || route.request().method() !== 'DELETE') {
+    return false;
+  }
+
+  const keyId = decodeURIComponent(url.pathname.replace('/api/api-keys/', ''));
+  state.apiKeyRevokeRequests.push(keyId);
+  state.apiKeys = state.apiKeys.map((key) =>
+    key.id === keyId ? { ...key, isActive: false } : key,
+  );
+  await json({ message: 'revoked' });
+  return true;
+}
+
+async function handleWebhookRoute(
+  route: Route,
+  url: URL,
+  json: JsonResponder,
+  state: CompanySettingsApiState,
+): Promise<boolean> {
+  return (
+    (await respondWebhookList(route, url, json, state)) ||
+    (await respondWebhookCreate(route, url, json, state)) ||
+    (await respondWebhookRegenerate(route, url, json, state)) ||
+    (await respondWebhookTest(route, url, json, state)) ||
+    (await respondWebhookPatch(route, url, json, state)) ||
+    (await respondWebhookDelete(route, url, json, state))
+  );
+}
+
+function getWebhookPathParts(url: URL): { webhookId: string; action: string | undefined } | null {
+  if (!url.pathname.startsWith('/api/webhooks/')) {
+    return null;
+  }
+  const pathParts = url.pathname.split('/').filter(Boolean);
+  return { webhookId: decodeURIComponent(pathParts[2]), action: pathParts[3] };
+}
+
+async function respondWebhookList(
+  route: Route,
+  url: URL,
+  json: JsonResponder,
+  state: CompanySettingsApiState,
+): Promise<boolean> {
+  if (url.pathname !== '/api/webhooks' || route.request().method() !== 'GET') {
+    return false;
+  }
+
+  await json({ webhooks: state.webhooks });
+  return true;
+}
+
+async function respondWebhookCreate(
+  route: Route,
+  url: URL,
+  json: JsonResponder,
+  state: CompanySettingsApiState,
+): Promise<boolean> {
+  if (url.pathname !== '/api/webhooks' || route.request().method() !== 'POST') {
+    return false;
+  }
+
+  const body = route.request().postDataJSON() as { url: string; events: string[] };
+  state.webhookCreateRequests.push(body);
+  const webhook: CompanyWebhook = {
+    id: `e2e-webhook-created-${state.webhookCreateRequests.length}`,
+    url: body.url,
+    events: body.events,
+    enabled: true,
+    createdAt: '2026-05-09T00:00:00.000Z',
+  };
+  state.webhooks = [...state.webhooks, webhook];
+  await json({
+    ...webhook,
+    message: 'created',
+    secret: 'whsec_e2e_revealed_once',
+  });
+  return true;
+}
+
+async function respondWebhookRegenerate(
+  route: Route,
+  url: URL,
+  json: JsonResponder,
+  state: CompanySettingsApiState,
+): Promise<boolean> {
+  const parts = getWebhookPathParts(url);
+  if (!parts || parts.action !== 'regenerate-secret' || route.request().method() !== 'POST') {
+    return false;
+  }
+
+  state.webhookRegenerateRequests.push(parts.webhookId);
+  await json({
+    id: parts.webhookId,
+    secret: 'whsec_e2e_regenerated_once',
+    message: 'rotated',
+  });
+  return true;
+}
+
+async function respondWebhookTest(
+  route: Route,
+  url: URL,
+  json: JsonResponder,
+  state: CompanySettingsApiState,
+): Promise<boolean> {
+  const parts = getWebhookPathParts(url);
+  if (!parts || parts.action !== 'test' || route.request().method() !== 'POST') {
+    return false;
+  }
+
+  state.webhookTestRequests.push(parts.webhookId);
+  await json({
+    success: true,
+    deliveryId: 'e2e-delivery-1',
+    responseStatus: 200,
+    responseBody: null,
+    error: null,
+  });
+  return true;
+}
+
+async function respondWebhookPatch(
+  route: Route,
+  url: URL,
+  json: JsonResponder,
+  state: CompanySettingsApiState,
+): Promise<boolean> {
+  const parts = getWebhookPathParts(url);
+  if (!parts || route.request().method() !== 'PATCH') {
+    return false;
+  }
+
+  const body = route.request().postDataJSON() as { enabled?: boolean };
+  state.webhookPatchRequests.push({ webhookId: parts.webhookId, ...body });
+  state.webhooks = state.webhooks.map((webhook) =>
+    webhook.id === parts.webhookId && typeof body.enabled === 'boolean'
+      ? { ...webhook, enabled: body.enabled }
+      : webhook,
+  );
+  await json(state.webhooks.find((webhook) => webhook.id === parts.webhookId));
+  return true;
+}
+
+async function respondWebhookDelete(
+  route: Route,
+  url: URL,
+  json: JsonResponder,
+  state: CompanySettingsApiState,
+): Promise<boolean> {
+  const parts = getWebhookPathParts(url);
+  if (!parts || route.request().method() !== 'DELETE') {
+    return false;
+  }
+
+  state.webhookDeleteRequests.push(parts.webhookId);
+  state.webhooks = state.webhooks.filter((webhook) => webhook.id !== parts.webhookId);
+  await json({ message: 'deleted' });
+  return true;
+}
+
+async function handleTransferOwnershipRoute(
+  route: Route,
+  url: URL,
+  json: JsonResponder,
+  state: CompanySettingsApiState,
+  options: MockCompanySettingsApiOptions,
+): Promise<boolean> {
+  if (url.pathname !== '/api/company/transfer-ownership') {
+    return false;
+  }
+
+  if (options.transferDelayMs) {
+    await delay(options.transferDelayMs);
+  }
+
+  state.transferRequests.push(route.request().postDataJSON());
+  await json({ success: true });
+  return true;
+}
+
+async function mockCompanySettingsApi(page: Page, options: MockCompanySettingsApiOptions = {}) {
+  const state: CompanySettingsApiState = {
+    company: { ...structuredClone(seededCompany), ...options.companyOverride },
+    members: structuredClone(options.membersOverride ?? seededMembers),
+    apiKeys: structuredClone(options.apiKeysOverride ?? seededApiKeys),
+    webhooks: structuredClone(options.webhooksOverride ?? seededWebhooks),
+    patchRequests: [],
+    transferRequests: [],
+    inviteRequests: [],
+    roleChangeRequests: [],
+    removeMemberRequests: [],
+    apiKeyCreateRequests: [],
+    apiKeyRevokeRequests: [],
+    webhookCreateRequests: [],
+    webhookPatchRequests: [],
+    webhookDeleteRequests: [],
+    webhookTestRequests: [],
+    webhookRegenerateRequests: [],
+    companyLoadCount: 0,
+    memberLoadCount: 0,
+  };
+
+  await page.route('**/api/**', async (route) => {
+    const url = new URL(route.request().url());
+    const json = createJsonResponder(route);
+
+    if (await respondStaticSettingsRoute(url, json)) return;
+    if (await handleCompanyProfileRoute(route, url, json, state, options)) return;
+    if (await handleCompanyMembersRoute(route, url, json, state, options)) return;
+    if (await handleCompanyApiKeyRoute(route, url, json, state)) return;
+    if (await handleWebhookRoute(route, url, json, state)) return;
+    if (await handleTransferOwnershipRoute(route, url, json, state, options)) return;
 
     await json({ message: `Unhandled E2E API route: ${url.pathname}` }, 404);
   });
@@ -183,10 +661,20 @@ async function mockCompanySettingsApi(page: Page, options: MockCompanySettingsAp
   await mockAuthenticatedUserState(page, E2E_OWNER_USER);
 
   return {
-    getPatchRequests: () => patchRequests,
-    getTransferRequests: () => transferRequests,
-    getCompanyLoadCount: () => companyLoadCount,
-    getMemberLoadCount: () => memberLoadCount,
+    getPatchRequests: () => state.patchRequests,
+    getTransferRequests: () => state.transferRequests,
+    getInviteRequests: () => state.inviteRequests,
+    getRoleChangeRequests: () => state.roleChangeRequests,
+    getRemoveMemberRequests: () => state.removeMemberRequests,
+    getApiKeyCreateRequests: () => state.apiKeyCreateRequests,
+    getApiKeyRevokeRequests: () => state.apiKeyRevokeRequests,
+    getWebhookCreateRequests: () => state.webhookCreateRequests,
+    getWebhookPatchRequests: () => state.webhookPatchRequests,
+    getWebhookDeleteRequests: () => state.webhookDeleteRequests,
+    getWebhookTestRequests: () => state.webhookTestRequests,
+    getWebhookRegenerateRequests: () => state.webhookRegenerateRequests,
+    getCompanyLoadCount: () => state.companyLoadCount,
+    getMemberLoadCount: () => state.memberLoadCount,
   };
 }
 
@@ -302,6 +790,130 @@ test.describe('Company settings seeded owner contract', () => {
     expect(api.getTransferRequests()[0]).toMatchObject({
       newOwnerId: 'e2e-company-admin',
     });
+  });
+
+  test('manages team members from the owner company settings page', async ({ page }) => {
+    const api = await mockCompanySettingsApi(page);
+
+    await page.goto('/company-settings');
+
+    await expect(page.getByRole('heading', { name: 'Team Members' })).toBeVisible();
+    await page.getByRole('button', { name: 'Invite Member' }).click();
+
+    const inviteDialog = page.getByRole('dialog').filter({ hasText: 'Invite Company Member' });
+    await inviteDialog.getByLabel('Email *').fill('New.QM@Example.com');
+    await inviteDialog.getByLabel('Full Name').fill('New Quality Manager');
+    await inviteDialog.getByLabel('Company Role').selectOption('quality_manager');
+    await inviteDialog.getByRole('button', { name: 'Send Invite' }).click();
+
+    await expect(
+      page.getByText(
+        "Invitation sent to new.qm@example.com. They'll appear as pending until they set a password.",
+      ),
+    ).toBeVisible();
+    await expect(page.getByText('New Quality Manager')).toBeVisible();
+    expect(api.getInviteRequests()).toHaveLength(1);
+    expect(api.getInviteRequests()[0]).toMatchObject({
+      email: 'new.qm@example.com',
+      fullName: 'New Quality Manager',
+      roleInCompany: 'quality_manager',
+    });
+    await inviteDialog.getByRole('button', { name: 'Close' }).first().click();
+
+    await page.getByLabel('Change role for E2E Site Engineer').selectOption('site_manager');
+    await expect
+      .poll(() => api.getRoleChangeRequests())
+      .toContainEqual({ memberId: 'e2e-site-engineer', roleInCompany: 'site_manager' });
+
+    const siteEngineerRow = page
+      .getByText('E2E Site Engineer')
+      .locator(
+        'xpath=ancestor::div[contains(@class, "grid") and contains(@class, "items-center")][1]',
+      );
+    await siteEngineerRow.getByRole('button', { name: 'Remove' }).click();
+    const removeDialog = page.getByRole('dialog').filter({ hasText: 'Remove Company Member' });
+    await removeDialog.getByRole('button', { name: 'Remove Member' }).click();
+
+    await expect(page.getByText('E2E Site Engineer was removed from the company.')).toBeVisible();
+    await expect(page.getByLabel('Change role for E2E Site Engineer')).toHaveCount(0);
+    expect(api.getRemoveMemberRequests()).toContain('e2e-site-engineer');
+
+    const pendingInviteRow = page
+      .getByText('New Quality Manager')
+      .locator(
+        'xpath=ancestor::div[contains(@class, "grid") and contains(@class, "items-center")][1]',
+      );
+    await pendingInviteRow.getByRole('button', { name: 'Cancel' }).click();
+    const cancelDialog = page.getByRole('dialog').filter({ hasText: 'Cancel Company Invitation' });
+    await cancelDialog.getByRole('button', { name: 'Cancel Invitation' }).click();
+
+    await expect(page.getByText('Invitation cancelled for new.qm@example.com.')).toBeVisible();
+    await expect(page.getByText('New Quality Manager')).toHaveCount(0);
+    expect(api.getRemoveMemberRequests()).toContain('e2e-invited-1');
+  });
+
+  test('manages owner integrations from the company settings page', async ({ page }) => {
+    const api = await mockCompanySettingsApi(page);
+
+    await page.goto('/company-settings');
+
+    await expect(page.getByRole('heading', { name: 'API keys' })).toBeVisible();
+    await expect(page.getByText('Owner reporting key')).toBeVisible();
+    await page.getByRole('button', { name: 'Create API key' }).click();
+
+    const createKeyDialog = page.getByRole('dialog').filter({ hasText: 'Create API key' });
+    await createKeyDialog.getByLabel('Name').fill('Power BI export');
+    await createKeyDialog.getByLabel('Access').selectOption('write');
+    await createKeyDialog.getByRole('button', { name: 'Create key' }).click();
+
+    await expect(page.getByText('sp_e2e_full_key_revealed_once')).toBeVisible();
+    expect(api.getApiKeyCreateRequests()).toContainEqual({
+      name: 'Power BI export',
+      scopes: 'write',
+    });
+    await page.getByRole('button', { name: 'Done' }).click();
+    await expect(page.getByText('Power BI export')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Revoke' }).first().click();
+    expect(api.getApiKeyRevokeRequests()).toContain('e2e-api-key-own');
+    await expect(page.getByText('Revoked')).toBeVisible();
+
+    await expect(page.getByRole('heading', { name: 'Webhooks' })).toBeVisible();
+    await expect(page.getByText('https://hooks.example.com/siteproof')).toBeVisible();
+    await page.getByRole('button', { name: 'Test' }).click();
+    await expect(page.getByText('Test delivered (HTTP 200)')).toBeVisible();
+    expect(api.getWebhookTestRequests()).toContain('e2e-webhook-1');
+
+    await page.getByRole('button', { name: 'Disable' }).click();
+    await expect(page.getByRole('button', { name: 'Enable' })).toBeVisible();
+    expect(api.getWebhookPatchRequests()).toContainEqual({
+      webhookId: 'e2e-webhook-1',
+      enabled: false,
+    });
+
+    await page.getByRole('button', { name: 'Regenerate secret' }).click();
+    await expect(page.getByText('whsec_e2e_regenerated_once')).toBeVisible();
+    expect(api.getWebhookRegenerateRequests()).toContain('e2e-webhook-1');
+    await page.getByRole('button', { name: 'Done' }).click();
+
+    await page.getByRole('button', { name: 'Delete' }).click();
+    await expect(page.getByText('https://hooks.example.com/siteproof')).toHaveCount(0);
+    expect(api.getWebhookDeleteRequests()).toContain('e2e-webhook-1');
+
+    await page.getByRole('button', { name: 'Add webhook' }).click();
+    const createWebhookDialog = page.getByRole('dialog').filter({ hasText: 'Endpoint URL' });
+    await createWebhookDialog
+      .getByLabel('Endpoint URL')
+      .fill('https://hooks.example.com/siteproof-new');
+    await createWebhookDialog.getByRole('button', { name: 'Add webhook' }).click();
+
+    await expect(page.getByText('whsec_e2e_revealed_once')).toBeVisible();
+    expect(api.getWebhookCreateRequests()).toContainEqual({
+      url: 'https://hooks.example.com/siteproof-new',
+      events: ['*'],
+    });
+    await page.getByRole('button', { name: 'Done' }).click();
+    await expect(page.getByText('https://hooks.example.com/siteproof-new')).toBeVisible();
   });
 
   test('prevents duplicate ownership transfer submissions', async ({ page }) => {
