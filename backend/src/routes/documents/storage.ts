@@ -1,6 +1,6 @@
 import fs from 'fs';
 
-import { AppError } from '../../lib/AppError.js';
+import { AppError, ErrorCodes } from '../../lib/AppError.js';
 import { sanitizeUrlValueForLog } from '../../lib/logSanitization.js';
 import { logError, logWarn } from '../../lib/serverLogger.js';
 import {
@@ -134,7 +134,11 @@ export async function uploadToSupabase(
 
   if (error) {
     logError('Supabase document upload failed:', error);
-    throw AppError.internal('Failed to upload document');
+    throw new AppError(
+      503,
+      'File storage is unavailable. Please try again later.',
+      ErrorCodes.UPLOAD_FAILED,
+    );
   }
 
   const url = getSupabaseStorageReference(DOCUMENTS_BUCKET, storagePath);
