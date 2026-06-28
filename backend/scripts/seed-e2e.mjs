@@ -62,6 +62,13 @@ const ids = {
   itpChecklistItem: 'e2e-itp-checklist-item',
   itpInstance: 'e2e-itp-instance',
   holdPoint: 'e2e-hold-point',
+  outcomeLot: 'e2e-itp-outcomes-lot',
+  outcomeLotSubcontractorAssignment: 'e2e-itp-outcomes-assignment',
+  outcomeItpTemplate: '8e580001-15c7-4f8b-9a2a-000000000001',
+  outcomeItpInstance: '8e580001-15c7-4f8b-9a2a-000000000002',
+  outcomePassItem: '8e580001-15c7-4f8b-9a2a-000000000003',
+  outcomeNaItem: '8e580001-15c7-4f8b-9a2a-000000000004',
+  outcomeFailItem: '8e580001-15c7-4f8b-9a2a-000000000005',
   diary: 'e2e-diary',
   docket: 'e2e-docket',
 };
@@ -75,7 +82,22 @@ async function upsertItpCompletion(itpInstanceId, checklistItemId) {
   if (existing) {
     return prisma.iTPCompletion.update({
       where: { id: existing.id },
-      data: { status: 'pending', verificationStatus: 'none' },
+      data: {
+        status: 'pending',
+        verificationStatus: 'none',
+        completedById: null,
+        completedAt: null,
+        notes: null,
+        signatureUrl: null,
+        witnessPresent: null,
+        witnessName: null,
+        witnessCompany: null,
+        verifiedById: null,
+        verifiedAt: null,
+        verificationNotes: null,
+        gpsLatitude: null,
+        gpsLongitude: null,
+      },
     });
   }
 
@@ -402,6 +424,142 @@ async function main() {
       status: 'pending',
     },
   });
+
+  const outcomeTemplate = await prisma.iTPTemplate.upsert({
+    where: { id: ids.outcomeItpTemplate },
+    update: {
+      projectId: project.id,
+      name: 'E2E Standard Outcomes ITP',
+      activityType: 'Earthworks',
+      stateSpec: 'TfNSW',
+      isActive: true,
+    },
+    create: {
+      id: ids.outcomeItpTemplate,
+      projectId: project.id,
+      name: 'E2E Standard Outcomes ITP',
+      activityType: 'Earthworks',
+      stateSpec: 'TfNSW',
+      isActive: true,
+    },
+  });
+
+  const outcomeItems = await Promise.all(
+    [
+      {
+        id: ids.outcomePassItem,
+        sequenceNumber: 1,
+        description: 'Subcontractor PASS ordinary item',
+      },
+      {
+        id: ids.outcomeNaItem,
+        sequenceNumber: 2,
+        description: 'Subcontractor N/A ordinary item',
+      },
+      {
+        id: ids.outcomeFailItem,
+        sequenceNumber: 3,
+        description: 'Subcontractor FAIL ordinary item',
+      },
+    ].map((item) =>
+      prisma.iTPChecklistItem.upsert({
+        where: { id: item.id },
+        update: {
+          templateId: outcomeTemplate.id,
+          sequenceNumber: item.sequenceNumber,
+          description: item.description,
+          acceptanceCriteria: 'Ordinary subcontractor check',
+          pointType: 'standard',
+          responsibleParty: 'subcontractor',
+          evidenceRequired: 'none',
+        },
+        create: {
+          id: item.id,
+          templateId: outcomeTemplate.id,
+          sequenceNumber: item.sequenceNumber,
+          description: item.description,
+          acceptanceCriteria: 'Ordinary subcontractor check',
+          pointType: 'standard',
+          responsibleParty: 'subcontractor',
+          evidenceRequired: 'none',
+        },
+      }),
+    ),
+  );
+
+  const outcomeLot = await prisma.lot.upsert({
+    where: { id: ids.outcomeLot },
+    update: {
+      projectId: project.id,
+      lotNumber: 'LOT-ITP-STD',
+      lotType: 'roadworks',
+      description: 'E2E standard ITP outcome lot',
+      status: 'in_progress',
+      activityType: 'Earthworks',
+      itpTemplateId: outcomeTemplate.id,
+      assignedSubcontractorId: subcontractorCompany.id,
+      conformedAt: null,
+      conformedById: null,
+    },
+    create: {
+      id: ids.outcomeLot,
+      projectId: project.id,
+      lotNumber: 'LOT-ITP-STD',
+      lotType: 'roadworks',
+      description: 'E2E standard ITP outcome lot',
+      status: 'in_progress',
+      activityType: 'Earthworks',
+      itpTemplateId: outcomeTemplate.id,
+      assignedSubcontractorId: subcontractorCompany.id,
+    },
+  });
+
+  await prisma.nCR.deleteMany({
+    where: { ncrLots: { some: { lotId: outcomeLot.id } } },
+  });
+
+  await prisma.lotSubcontractorAssignment.upsert({
+    where: {
+      lotId_subcontractorCompanyId: {
+        lotId: outcomeLot.id,
+        subcontractorCompanyId: subcontractorCompany.id,
+      },
+    },
+    update: {
+      projectId: project.id,
+      canCompleteITP: true,
+      itpRequiresVerification: true,
+      assignedById: adminUser.id,
+      status: 'active',
+    },
+    create: {
+      id: ids.outcomeLotSubcontractorAssignment,
+      lotId: outcomeLot.id,
+      subcontractorCompanyId: subcontractorCompany.id,
+      projectId: project.id,
+      canCompleteITP: true,
+      itpRequiresVerification: true,
+      assignedById: adminUser.id,
+      status: 'active',
+    },
+  });
+
+  const outcomeInstance = await prisma.iTPInstance.upsert({
+    where: { id: ids.outcomeItpInstance },
+    update: {
+      lotId: outcomeLot.id,
+      templateId: outcomeTemplate.id,
+      status: 'in_progress',
+    },
+    create: {
+      id: ids.outcomeItpInstance,
+      lotId: outcomeLot.id,
+      templateId: outcomeTemplate.id,
+      status: 'in_progress',
+    },
+  });
+
+  await Promise.all(outcomeItems.map((item) => upsertItpCompletion(outcomeInstance.id, item.id)));
 
   await prisma.dailyDiary.upsert({
     where: { id: ids.diary },

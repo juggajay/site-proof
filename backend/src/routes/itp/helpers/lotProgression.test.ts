@@ -112,6 +112,47 @@ describe('updateLotStatusFromITP', () => {
     expect(mocks.instanceUpdate).not.toHaveBeenCalled();
   });
 
+  it('counts an accepted N/A completion toward auto-progression', async () => {
+    mocks.instanceFindUnique.mockResolvedValue(
+      makeInstance({
+        items: [{ id: 'item-1', evidenceRequired: 'none', testType: null }],
+        completions: [
+          { checklistItemId: 'item-1', status: 'not_applicable', verificationStatus: 'none' },
+        ],
+      }),
+    );
+
+    await updateLotStatusFromITP('itp-1');
+
+    expect(mocks.lotUpdate).toHaveBeenCalledWith({
+      where: { id: 'lot-1' },
+      data: { status: 'completed' },
+    });
+    expect(mocks.instanceUpdate).toHaveBeenCalledWith({
+      where: { id: 'itp-1' },
+      data: { status: 'completed' },
+    });
+  });
+
+  it.each(['pending_verification', 'rejected'])(
+    'does not count an N/A completion with %s verification toward auto-progression',
+    async (verificationStatus) => {
+      mocks.instanceFindUnique.mockResolvedValue(
+        makeInstance({
+          items: [{ id: 'item-1', evidenceRequired: 'none', testType: null }],
+          completions: [
+            { checklistItemId: 'item-1', status: 'not_applicable', verificationStatus },
+          ],
+        }),
+      );
+
+      await updateLotStatusFromITP('itp-1');
+
+      expect(mocks.lotUpdate).not.toHaveBeenCalled();
+      expect(mocks.instanceUpdate).not.toHaveBeenCalled();
+    },
+  );
+
   it('moves a partially completed not-started ITP to in progress', async () => {
     mocks.instanceFindUnique.mockResolvedValue(
       makeInstance({
