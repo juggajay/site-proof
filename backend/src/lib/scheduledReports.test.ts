@@ -251,8 +251,11 @@ function expectSingleSentResult(
 
 function expectQueuedEmailRecipients(recipients: string[]) {
   const queuedEmails = getQueuedEmails();
-  expect(queuedEmails).toHaveLength(1);
-  expect(queuedEmails[0]!.to).toEqual(recipients);
+  expect(queuedEmails).toHaveLength(recipients.length);
+  expect(queuedEmails.map((email) => email.to)).toEqual(recipients);
+  for (const queuedEmail of queuedEmails) {
+    expect(Array.isArray(queuedEmail.to)).toBe(false);
+  }
   return queuedEmails[0]!;
 }
 
@@ -436,7 +439,7 @@ describe('processDueScheduledReports', () => {
         'second@example.com',
       ]);
       expect(queuedEmail.subject).toContain('Scheduled Report');
-      expect(queuedEmail.text).toContain('View report online:');
+      expect(queuedEmail.text).not.toContain('View report online:');
       expect(queuedEmail.attachments).toHaveLength(1);
       const attachment = queuedEmail.attachments![0]!;
       expect(attachment.filename).toContain('Lot_Status_Report');

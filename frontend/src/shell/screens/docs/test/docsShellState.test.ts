@@ -160,12 +160,12 @@ describe('filterDocsByLot', () => {
     expect(filterDocsByLot(items, '')).toHaveLength(3);
   });
 
-  it('keeps only items linked to the given lot', () => {
-    expect(filterDocsByLot(items, 'lot-1').map((i) => i.id)).toEqual(['a']);
+  it('keeps matching lot items and project-wide items for a lot deep-link', () => {
+    expect(filterDocsByLot(items, 'lot-1').map((i) => i.id)).toEqual(['a', 'c']);
   });
 
-  it('yields an empty set for a lot with no linked drawings (honest empty state)', () => {
-    expect(filterDocsByLot(items, 'lot-unknown')).toEqual([]);
+  it('keeps project-wide drawings even when no lot-linked drawings match', () => {
+    expect(filterDocsByLot(items, 'lot-unknown').map((i) => i.id)).toEqual(['c']);
   });
 
   it('does not mutate the input', () => {

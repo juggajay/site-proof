@@ -45,6 +45,16 @@ type CreateDocumentListRouterDependencies = {
   ) => Promise<void>;
 };
 
+const UNCATEGORIZED_DOCUMENT_CATEGORY = 'uncategorized';
+
+export function applyDocumentCategoryFilter(
+  where: Prisma.DocumentWhereInput,
+  category: string,
+): void {
+  where.category =
+    category.trim().toLowerCase() === UNCATEGORIZED_DOCUMENT_CATEGORY ? null : category;
+}
+
 export function createDocumentListRouter({
   prisma,
   maxCategoryLength,
@@ -94,7 +104,7 @@ export function createDocumentListRouter({
       const where: Prisma.DocumentWhereInput = { projectId };
       if (category) {
         await requireSubcontractorDocumentPortalAccess(user, projectId, category);
-        where.category = category;
+        applyDocumentCategoryFilter(where, category);
       }
       if (documentType) where.documentType = documentType;
       if (lotId) where.lotId = lotId;

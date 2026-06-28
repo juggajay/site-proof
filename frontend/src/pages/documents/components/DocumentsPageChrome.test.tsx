@@ -51,7 +51,7 @@ describe('DocumentsLoadErrorAlert', () => {
 });
 
 describe('DocumentCategorySummary', () => {
-  it('selects categories using the lower-case filter value', () => {
+  it('selects categories using the exact category filter value', () => {
     const onSelectCategory = vi.fn();
     render(
       <DocumentCategorySummary
@@ -62,7 +62,21 @@ describe('DocumentCategorySummary', () => {
 
     fireEvent.click(screen.getByText('Drawings: 3'));
 
-    expect(onSelectCategory).toHaveBeenCalledWith('drawings');
+    expect(onSelectCategory).toHaveBeenCalledWith('Drawings');
+  });
+
+  it('maps the Uncategorized summary bucket to the backend null-category filter', () => {
+    const onSelectCategory = vi.fn();
+    render(
+      <DocumentCategorySummary
+        categories={{ Uncategorized: 1 }}
+        onSelectCategory={onSelectCategory}
+      />,
+    );
+
+    fireEvent.click(screen.getByText('Uncategorized: 1'));
+
+    expect(onSelectCategory).toHaveBeenCalledWith('uncategorized');
   });
 });
 

@@ -99,7 +99,9 @@ export function DocumentCategorySummary({
       {Object.entries(categories).map(([category, count]) => (
         <span
           key={category}
-          onClick={() => onSelectCategory(category.toLowerCase())}
+          onClick={() =>
+            onSelectCategory(category === 'Uncategorized' ? 'uncategorized' : category)
+          }
           className="cursor-pointer rounded-full bg-muted px-3 py-1 text-sm hover:bg-primary hover:text-primary-foreground"
         >
           {category}: {count}

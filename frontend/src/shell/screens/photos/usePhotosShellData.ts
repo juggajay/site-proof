@@ -4,7 +4,7 @@
  * NEW PRESENTATION over EXISTING LOGIC. This is the one genuinely new shell
  * surface, but it ships ZERO new endpoints:
  *
- *   SERVER PHOTOS — `GET /api/documents/:projectId?documentType=photo` (the exact
+ *   SERVER PHOTOS — `GET /api/documents/:projectId?documentType=photo&limit=100` (the exact
  *   list endpoint + photo filter the desktop Documents page uses), under the same
  *   `queryKeys.documents(projectId)` cache so a re-file invalidation refreshes
  *   both surfaces. Each row already carries lotId/lot, caption, gps and fileUrl.
@@ -37,6 +37,7 @@ interface DocumentsResponse {
 }
 
 const PHOTOS_STALE_TIME_MS = 30_000;
+const PHOTOS_DOCUMENTS_PAGE_LIMIT = 100;
 // Pending captures live in IndexedDB; poll briefly so the grid reflects the sync
 // worker draining the queue without a manual reload. Cheap (local read only).
 const PENDING_REFETCH_INTERVAL_MS = 4_000;
@@ -60,7 +61,7 @@ export function usePhotosShellData(projectId: string | null): PhotosShellData {
     queryKey: [...queryKeys.documents(projectId ?? 'none'), 'photo', 'shell'] as const,
     queryFn: () =>
       apiFetch<DocumentsResponse>(
-        `/api/documents/${encodeURIComponent(projectId!)}?documentType=photo`,
+        `/api/documents/${encodeURIComponent(projectId!)}?documentType=photo&limit=${PHOTOS_DOCUMENTS_PAGE_LIMIT}`,
       ),
     enabled,
     staleTime: PHOTOS_STALE_TIME_MS,

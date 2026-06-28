@@ -232,6 +232,22 @@ describe('hold point request-release delivery failure', () => {
     });
   });
 
+  it('uses the secure external release link as the primary email CTA', async () => {
+    const res = await request(app).post('/api/holdpoints/request-release').send({
+      lotId: 'lot-1',
+      itpChecklistItemId: 'item-1',
+      notificationSentTo: 'superintendent@example.com',
+    });
+
+    expect(res.status).toBe(200);
+    expect(mocks.sendHPReleaseRequestEmail).toHaveBeenCalledOnce();
+    const emailPayload = mocks.sendHPReleaseRequestEmail.mock.calls[0][0];
+    expect(emailPayload.releaseUrl).toMatch(/^http:\/\/localhost:5174\/hp-release\/[a-f0-9]{64}$/);
+    expect(emailPayload.evidencePackageUrl).toBe(`${emailPayload.releaseUrl}#evidence-package`);
+    expect(emailPayload.releaseUrl).not.toContain('/projects/');
+    expect(emailPayload.secureReleaseUrl).toBeUndefined();
+  });
+
   it('does not re-notify a hold point that becomes released before the transaction writes', async () => {
     mocks.tx.holdPoint.updateMany.mockResolvedValueOnce({ count: 0 });
     mocks.tx.holdPoint.findUnique.mockResolvedValueOnce({

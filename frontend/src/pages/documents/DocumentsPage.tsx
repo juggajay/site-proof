@@ -61,6 +61,8 @@ interface LotsResponse {
   lots?: Lot[];
 }
 
+const DOCUMENTS_PAGE_LIMIT = 100;
+
 export function DocumentsPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const [searchParams] = useSearchParams();
@@ -129,6 +131,7 @@ export function DocumentsPage() {
     if (dateFrom) params.append('dateFrom', dateFrom);
     if (dateTo) params.append('dateTo', dateTo);
     if (committedSearch) params.append('search', committedSearch);
+    params.append('limit', String(DOCUMENTS_PAGE_LIMIT));
     if (params.toString()) path += `?${params.toString()}`;
     return path;
   })();
