@@ -24,6 +24,7 @@ import { SubmitClaimModal } from './components/SubmitClaimModal';
 import { DisputeModal } from './components/DisputeModal';
 import { RecordCertificationModal } from './components/RecordCertificationModal';
 import { RecordPaymentModal } from './components/RecordPaymentModal';
+import { DeleteDraftClaimModal } from './components/DeleteDraftClaimModal';
 import { CompletenessCheckModal } from './components/CompletenessCheckModal';
 import { EvidencePackageModal } from './components/EvidencePackageModal';
 import { logError } from '@/lib/logger';
@@ -49,6 +50,7 @@ export function ClaimsPage() {
   // Modal visibility state
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showSubmitModal, setShowSubmitModal] = useState<string | null>(null);
+  const [showDeleteDraftModal, setShowDeleteDraftModal] = useState<string | null>(null);
   const [showDisputeModal, setShowDisputeModal] = useState<string | null>(null);
   const [showCertificationModal, setShowCertificationModal] = useState<string | null>(null);
   const [showPaymentModal, setShowPaymentModal] = useState<string | null>(null);
@@ -61,6 +63,7 @@ export function ClaimsPage() {
   const [loadingCompleteness, setLoadingCompleteness] = useState(false);
   const [completenessData, setCompletenessData] = useState<CompletenessData | null>(null);
   const submittingClaimsRef = useRef(new Set<string>());
+  const deletingClaimsRef = useRef(new Set<string>());
   const disputingClaimsRef = useRef(new Set<string>());
   const certifyingClaimsRef = useRef(new Set<string>());
   const recordingPaymentsRef = useRef(new Set<string>());
@@ -110,6 +113,16 @@ export function ClaimsPage() {
       if (!projectId) return;
       queryClient.setQueryData<Claim[]>(queryKeys.claims(projectId), (prev) =>
         prev ? prev.map((claim) => (claim.id === claimId ? updater(claim) : claim)) : prev,
+      );
+    },
+    [projectId, queryClient],
+  );
+
+  const removeClaimFromCache = useCallback(
+    (claimId: string) => {
+      if (!projectId) return;
+      queryClient.setQueryData<Claim[]>(queryKeys.claims(projectId), (prev) =>
+        prev ? prev.filter((claim) => claim.id !== claimId) : prev,
       );
     },
     [projectId, queryClient],
@@ -249,6 +262,52 @@ export function ClaimsPage() {
       }
     },
     [claims, projectId, updateClaimInCache, invalidateClaimAdjacentProjectCaches],
+  );
+
+  const handleDeleteDraftClaim = useCallback(
+    async (claimId: string) => {
+      const claim = claims.find((c) => c.id === claimId);
+      if (!claim || !projectId || deletingClaimsRef.current.has(claimId)) return;
+
+      if (claim.status !== 'draft') {
+        toast({
+          title: 'Cannot delete claim',
+          description: 'Only draft claims can be deleted.',
+          variant: 'error',
+        });
+        setShowDeleteDraftModal(null);
+        return;
+      }
+
+      deletingClaimsRef.current.add(claimId);
+      try {
+        await apiFetch(
+          `/api/projects/${encodeURIComponent(projectId)}/claims/${encodeURIComponent(claimId)}`,
+          { method: 'DELETE' },
+        );
+        removeClaimFromCache(claimId);
+        invalidateClaimAdjacentProjectCaches();
+        toast({
+          title: 'Draft claim deleted',
+          description: `Claim ${claim.claimNumber} was deleted and its lots are available again.`,
+          variant: 'success',
+        });
+        setShowDeleteDraftModal(null);
+      } catch (error) {
+        logError('Error deleting draft claim:', error);
+        toast({
+          title: 'Delete failed',
+          description: extractErrorMessage(
+            error,
+            'Failed to delete draft claim. Please try again.',
+          ),
+          variant: 'error',
+        });
+      } finally {
+        deletingClaimsRef.current.delete(claimId);
+      }
+    },
+    [claims, projectId, removeClaimFromCache, invalidateClaimAdjacentProjectCaches],
   );
 
   const handleDisputeClaim = useCallback(
@@ -477,6 +536,10 @@ export function ClaimsPage() {
     () => findClaimById(claims, showSubmitModal),
     [claims, showSubmitModal],
   );
+  const deleteDraftClaim = useMemo(
+    () => findClaimById(claims, showDeleteDraftModal),
+    [claims, showDeleteDraftModal],
+  );
   const paymentClaim = useMemo(
     () => findClaimById(claims, showPaymentModal),
     [claims, showPaymentModal],
@@ -517,6 +580,7 @@ export function ClaimsPage() {
         onExportMonthlyData={handleExportMonthlyData}
         onCreateClaim={() => setShowCreateModal(true)}
         onSubmitClaim={setShowSubmitModal}
+        onDeleteDraftClaim={setShowDeleteDraftModal}
         onDisputeClaim={setShowDisputeModal}
         onCertifyClaim={setShowCertificationModal}
         onRecordPayment={setShowPaymentModal}
@@ -539,6 +603,13 @@ export function ClaimsPage() {
           claim={submitClaim}
           onClose={() => setShowSubmitModal(null)}
           onSubmitted={handleSubmitClaim}
+        />
+      )}
+      {deleteDraftClaim && (
+        <DeleteDraftClaimModal
+          claim={deleteDraftClaim}
+          onClose={() => setShowDeleteDraftModal(null)}
+          onDelete={handleDeleteDraftClaim}
         />
       )}
       {showDisputeModal && (
