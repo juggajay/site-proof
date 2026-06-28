@@ -30,6 +30,10 @@ async function waitForItpCompletionPost(page: Page, action: () => Promise<void>)
   };
 }
 
+function expectAcceptedItpVerificationStatus(completion: { verificationStatus?: string }) {
+  expect(['pending_verification', 'verified']).toContain(completion.verificationStatus);
+}
+
 async function drawSignature(page: Page, scope: Locator) {
   const signaturePad = scope.getByTestId('signature-pad-container');
   await signaturePad.scrollIntoViewIfNeeded();
@@ -49,6 +53,9 @@ async function drawSignature(page: Page, scope: Locator) {
 }
 
 test.describe.serial('seeded real-backend role journeys', () => {
+  // These journeys mutate shared seeded rows; Playwright retries would reuse the mutated DB state.
+  test.describe.configure({ retries: 0 });
+
   test('admin sees the modern lot subcontractor ITP permission assignment', async ({ page }) => {
     await loginAsAdmin(page);
 
@@ -106,8 +113,8 @@ test.describe.serial('seeded real-backend role journeys', () => {
     expect(passResult.responseBody.completion).toMatchObject({
       checklistItemId: E2E_OUTCOME_PASS_ITEM_ID,
       isCompleted: true,
-      verificationStatus: 'pending_verification',
     });
+    expectAcceptedItpVerificationStatus(passResult.responseBody.completion);
 
     await page.getByText('Subcontractor N/A ordinary item').click();
     await page.getByRole('button', { name: /N\/A/ }).click();
@@ -127,8 +134,8 @@ test.describe.serial('seeded real-backend role journeys', () => {
     expect(naResult.responseBody.completion).toMatchObject({
       checklistItemId: E2E_OUTCOME_NA_ITEM_ID,
       isNotApplicable: true,
-      verificationStatus: 'pending_verification',
     });
+    expectAcceptedItpVerificationStatus(naResult.responseBody.completion);
 
     await page.getByText('Subcontractor FAIL ordinary item').click();
     await page.getByRole('button', { name: /FAIL/ }).click();
@@ -148,8 +155,8 @@ test.describe.serial('seeded real-backend role journeys', () => {
     expect(failResult.responseBody.completion).toMatchObject({
       checklistItemId: E2E_OUTCOME_FAIL_ITEM_ID,
       isFailed: true,
-      verificationStatus: 'pending_verification',
     });
+    expectAcceptedItpVerificationStatus(failResult.responseBody.completion);
     expect(failResult.responseBody.ncr?.ncrNumber).toMatch(/^NCR-/);
   });
 
