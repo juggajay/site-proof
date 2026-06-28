@@ -524,14 +524,24 @@ describe('Full Workflow Integration', () => {
 
     // 5. Upload evidence before submitting rectification
     const evidenceFilename = `integration-ncr-evidence-${Date.now()}.jpg`;
+    const evidenceDocument = await prisma.document.create({
+      data: {
+        projectId,
+        documentType: 'ncr_evidence',
+        category: 'ncr_evidence',
+        filename: evidenceFilename,
+        fileUrl: `/uploads/documents/${evidenceFilename}`,
+        mimeType: 'image/jpeg',
+        uploadedById: adminId,
+      },
+    });
+
     const evidenceRes = await request(app)
       .post(`/api/ncrs/${ncrId}/evidence`)
       .set('Authorization', `Bearer ${adminToken}`)
       .send({
         evidenceType: 'photo',
-        filename: evidenceFilename,
-        fileUrl: `/uploads/documents/${evidenceFilename}`,
-        mimeType: 'image/jpeg',
+        documentId: evidenceDocument.id,
       });
 
     expect(evidenceRes.status).toBe(201);
