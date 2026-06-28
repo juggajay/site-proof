@@ -32,6 +32,40 @@ function getPostCalls() {
   return apiFetchMock.mock.calls.filter(([, options]) => options?.method === 'POST');
 }
 
+function mockProjectAreasApi() {
+  apiFetchMock.mockImplementation(async (path: string, options?: RequestInit) => {
+    if (path === '/api/projects/project-1') {
+      return {
+        project: {
+          id: 'project-1',
+          name: 'QA Project',
+          status: 'active',
+          currentUserRole: 'admin',
+        },
+      };
+    }
+
+    if (path === '/api/projects/project-1/areas' && options?.method === 'POST') {
+      return {
+        area: {
+          id: 'area-1',
+          name: 'Zone 1',
+          chainageStart: 10.5,
+          chainageEnd: 250.25,
+          colour: '#3B82F6',
+          createdAt: '2026-06-21T00:00:00.000Z',
+        },
+      };
+    }
+
+    if (path === '/api/projects/project-1/areas') {
+      return { areas: [] };
+    }
+
+    return {};
+  });
+}
+
 async function openAddAreaModal() {
   await screen.findByText('No areas defined');
   fireEvent.click(screen.getByRole('button', { name: 'Add Area' }));
@@ -42,7 +76,7 @@ describe('ProjectAreasPage', () => {
   beforeEach(() => {
     apiFetchMock.mockReset();
     toastMock.mockReset();
-    apiFetchMock.mockResolvedValue({ areas: [] });
+    mockProjectAreasApi();
   });
 
   it('blocks name-only area saves before sending a create request', async () => {
@@ -63,22 +97,6 @@ describe('ProjectAreasPage', () => {
   });
 
   it('posts parsed chainage bounds for a valid area', async () => {
-    apiFetchMock.mockImplementation(async (_path: string, options?: RequestInit) => {
-      if (options?.method === 'POST') {
-        return {
-          area: {
-            id: 'area-1',
-            name: 'Zone 1',
-            chainageStart: 10.5,
-            chainageEnd: 250.25,
-            colour: '#3B82F6',
-            createdAt: '2026-06-21T00:00:00.000Z',
-          },
-        };
-      }
-      return { areas: [] };
-    });
-
     renderPage();
 
     const dialog = await openAddAreaModal();

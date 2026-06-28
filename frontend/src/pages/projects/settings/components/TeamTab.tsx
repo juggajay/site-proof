@@ -13,6 +13,7 @@ import { logError } from '@/lib/logger';
 
 interface TeamTabProps {
   projectId: string;
+  readOnly?: boolean;
 }
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -28,7 +29,7 @@ function getProjectInviteErrorMessage(error: unknown): string {
   return message;
 }
 
-export function TeamTab({ projectId }: TeamTabProps) {
+export function TeamTab({ projectId, readOnly = false }: TeamTabProps) {
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [loadingTeam, setLoadingTeam] = useState(false);
   const [teamError, setTeamError] = useState('');
@@ -80,6 +81,8 @@ export function TeamTab({ projectId }: TeamTabProps) {
   }, []);
 
   const handleOpenInviteModal = () => {
+    if (readOnly) return;
+
     if (inviteCloseTimeoutRef.current) {
       clearTimeout(inviteCloseTimeoutRef.current);
       inviteCloseTimeoutRef.current = null;
@@ -103,6 +106,7 @@ export function TeamTab({ projectId }: TeamTabProps) {
   };
 
   const handleInviteTeamMember = async () => {
+    if (readOnly) return;
     if (invitingRef.current) return;
 
     const email = inviteEmail.trim().toLowerCase();
@@ -161,6 +165,11 @@ export function TeamTab({ projectId }: TeamTabProps) {
           <p className="text-sm text-muted-foreground mb-4">
             Manage team members and their roles on this project.
           </p>
+          {readOnly && (
+            <div role="status" className="mb-4 rounded-lg bg-warning/10 p-3 text-sm text-warning">
+              Team membership is read-only while this project is archived.
+            </div>
+          )}
           {loadingTeam ? (
             <div className="flex items-center justify-center py-8">
               <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
@@ -220,7 +229,12 @@ export function TeamTab({ projectId }: TeamTabProps) {
               )}
             </div>
           )}
-          <Button variant="outline" onClick={handleOpenInviteModal} className="mt-4">
+          <Button
+            variant="outline"
+            onClick={handleOpenInviteModal}
+            className="mt-4"
+            disabled={readOnly}
+          >
             <UserPlus className="h-4 w-4" />
             Invite Team Member
           </Button>

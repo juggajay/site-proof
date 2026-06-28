@@ -21,6 +21,11 @@ import {
 import { logError } from '@/lib/logger';
 import { Button } from '@/components/ui/button';
 import { extractErrorMessage } from '@/lib/errorHandling';
+import {
+  PROJECT_ADMIN_ROLES,
+  canManageProjectForRole,
+  isArchivedProject,
+} from './projectPageAccess';
 
 // Lazy-loaded tab components
 const GeneralSettingsTab = lazy(() =>
@@ -188,8 +193,6 @@ const TABS = [
   { id: 'modules' as SettingsTab, label: 'Modules', icon: Puzzle },
 ];
 
-const PROJECT_SETTINGS_ROLES = ['owner', 'admin', 'project_manager'];
-
 function isSettingsTab(value: string | null): value is SettingsTab {
   return TABS.some((tab) => tab.id === value);
 }
@@ -231,9 +234,12 @@ export function ProjectSettingsPage() {
 
   const userRole = user?.roleInCompany || user?.role || '';
   const projectScopedRole = project?.currentUserRole ?? getProjectScopedRole(user);
-  const canManageCurrentProjectSettings = PROJECT_SETTINGS_ROLES.includes(projectScopedRole);
-  const canViewContractValue = PROJECT_SETTINGS_ROLES.includes(projectScopedRole);
+  const canManageCurrentProjectSettings = canManageProjectForRole(projectScopedRole);
+  const canViewContractValue = PROJECT_ADMIN_ROLES.includes(
+    projectScopedRole as (typeof PROJECT_ADMIN_ROLES)[number],
+  );
   const canDeleteProject = canDeleteProjects(userRole);
+  const readOnly = isArchivedProject(project);
   const tabParam = searchParams.get('tab');
   const activeTab: SettingsTab = isSettingsTab(tabParam) ? tabParam : 'general';
 
@@ -367,6 +373,7 @@ export function ProjectSettingsPage() {
                   projectId={projectId}
                   project={project}
                   canViewContractValue={!!canViewContractValue}
+                  readOnly={readOnly}
                   onProjectUpdate={handleProjectUpdate}
                 />
                 <DangerZone
@@ -378,12 +385,16 @@ export function ProjectSettingsPage() {
               </>
             )}
 
-            {activeTab === 'team' && projectId && <TeamTab projectId={projectId} />}
+            {activeTab === 'team' && projectId && (
+              <TeamTab projectId={projectId} readOnly={readOnly} />
+            )}
 
-            {activeTab === 'areas' && projectId && <AreasTab projectId={projectId} />}
+            {activeTab === 'areas' && projectId && (
+              <AreasTab projectId={projectId} readOnly={readOnly} />
+            )}
 
             {activeTab === 'itp-templates' && projectId && (
-              <ITPTemplatesTab projectId={projectId} />
+              <ITPTemplatesTab projectId={projectId} readOnly={readOnly} />
             )}
 
             {activeTab === 'notifications' && projectId && (
@@ -395,11 +406,16 @@ export function ProjectSettingsPage() {
                 initialNotificationPreferences={notificationPreferences}
                 initialWitnessPointNotifications={witnessPointNotifications}
                 initialHpMinimumNoticeDays={hpMinimumNoticeDays}
+                readOnly={readOnly}
               />
             )}
 
             {activeTab === 'modules' && projectId && (
-              <ModulesTab projectId={projectId} initialEnabledModules={enabledModules} />
+              <ModulesTab
+                projectId={projectId}
+                initialEnabledModules={enabledModules}
+                readOnly={readOnly}
+              />
             )}
           </Suspense>
         )}

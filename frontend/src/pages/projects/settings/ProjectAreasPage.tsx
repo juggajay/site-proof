@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, useEffect } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { toast } from '@/components/ui/toaster';
 import { apiFetch } from '@/lib/api';
@@ -17,6 +17,12 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { logError } from '@/lib/logger';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { validateProjectAreaForm } from './projectAreaForm';
+import {
+  ProjectAdminLoadError,
+  ProjectAdminResourceGate,
+  ProjectAdminStatusBanners,
+} from './ProjectAdminPageState';
+import { useProjectAdminResource } from './projectPageAccess';
 
 interface ProjectArea {
   id: string;
@@ -39,11 +45,102 @@ const COLOUR_OPTIONS = [
   { value: '#6B7280', label: 'Gray' },
 ];
 
+function ProjectAreasEmptyState({ readOnly, onAdd }: { readOnly: boolean; onAdd: () => void }) {
+  return (
+    <div className="rounded-lg border p-12 text-center">
+      <MapPin className="mx-auto h-12 w-12 text-muted-foreground/50" />
+      <h3 className="mt-4 text-lg font-semibold">No areas defined</h3>
+      <p className="mt-2 text-muted-foreground">
+        Create areas to organize your project by chainage ranges.
+      </p>
+      <Button type="button" onClick={onAdd} className="mt-4" disabled={readOnly}>
+        Add First Area
+      </Button>
+    </div>
+  );
+}
+
+function ProjectAreasTable({
+  areas,
+  readOnly,
+  deletingId,
+  onEdit,
+  onRequestDelete,
+}: {
+  areas: ProjectArea[];
+  readOnly: boolean;
+  deletingId: string | null;
+  onEdit: (area: ProjectArea) => void;
+  onRequestDelete: (area: ProjectArea) => void;
+}) {
+  return (
+    <div className="rounded-lg border overflow-hidden">
+      <table className="w-full">
+        <thead className="border-b bg-muted/50">
+          <tr>
+            <th className="text-left px-4 py-3 text-sm font-medium">Colour</th>
+            <th className="text-left px-4 py-3 text-sm font-medium">Area Name</th>
+            <th className="text-left px-4 py-3 text-sm font-medium">Chainage Start</th>
+            <th className="text-left px-4 py-3 text-sm font-medium">Chainage End</th>
+            <th className="text-left px-4 py-3 text-sm font-medium">Actions</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y">
+          {areas.map((area) => (
+            <tr key={area.id} className="hover:bg-muted/25">
+              <td className="px-4 py-3">
+                <div
+                  className="h-6 w-6 rounded-full border"
+                  style={{ backgroundColor: area.colour || '#6B7280' }}
+                  title={area.colour || 'No colour'}
+                  role="img"
+                  aria-label={`${area.name} colour ${area.colour || '#6B7280'}`}
+                />
+              </td>
+              <td className="px-4 py-3 font-medium">{area.name}</td>
+              <td className="px-4 py-3 text-muted-foreground">
+                {area.chainageStart != null ? `${area.chainageStart.toLocaleString()}m` : '-'}
+              </td>
+              <td className="px-4 py-3 text-muted-foreground">
+                {area.chainageEnd != null ? `${area.chainageEnd.toLocaleString()}m` : '-'}
+              </td>
+              <td className="px-4 py-3">
+                {!readOnly && (
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => onEdit(area)}
+                      className="text-primary hover:bg-primary/5"
+                      aria-label={`Edit ${area.name}`}
+                      title="Edit"
+                    >
+                      <Edit2 className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => onRequestDelete(area)}
+                      disabled={deletingId === area.id}
+                      className="text-destructive hover:bg-destructive/10"
+                      aria-label={`Delete ${area.name}`}
+                      title="Delete"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export function ProjectAreasPage() {
   const { projectId } = useParams();
-  const [areas, setAreas] = useState<ProjectArea[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingArea, setEditingArea] = useState<ProjectArea | null>(null);
   const [saving, setSaving] = useState(false);
@@ -58,35 +155,27 @@ export function ProjectAreasPage() {
   const [formChainageEnd, setFormChainageEnd] = useState('');
   const [formColour, setFormColour] = useState('#3B82F6');
 
-  // Fetch areas
-  const fetchAreas = useCallback(async () => {
-    if (!projectId) {
-      setAreas([]);
-      setLoading(false);
-      setLoadError('Project not found');
-      return;
-    }
+  const loadProjectAreas = useCallback(async (id: string) => {
+    const data = await apiFetch<{ areas: ProjectArea[] }>(
+      `/api/projects/${encodeURIComponent(id)}/areas`,
+    );
+    return data.areas || [];
+  }, []);
 
-    setLoading(true);
-    setLoadError(null);
-
-    try {
-      const data = await apiFetch<{ areas: ProjectArea[] }>(
-        `/api/projects/${encodeURIComponent(projectId)}/areas`,
-      );
-      setAreas(data.areas || []);
-    } catch (err) {
-      logError('Failed to fetch project areas:', err);
-      setAreas([]);
-      setLoadError(extractErrorMessage(err, 'Could not load project areas. Please try again.'));
-    } finally {
-      setLoading(false);
-    }
-  }, [projectId]);
-
-  useEffect(() => {
-    fetchAreas();
-  }, [fetchAreas]);
+  const {
+    project,
+    items: areas,
+    setItems: setAreas,
+    loading,
+    loadError,
+    reload,
+    canManageProject: canManageAreas,
+    readOnly,
+  } = useProjectAdminResource<ProjectArea>({
+    projectId,
+    resourceLabel: 'project areas',
+    loadItems: loadProjectAreas,
+  });
 
   const resetForm = () => {
     setFormName('');
@@ -96,12 +185,16 @@ export function ProjectAreasPage() {
   };
 
   const openAddModal = () => {
+    if (readOnly) return;
+
     resetForm();
     setEditingArea(null);
     setShowAddModal(true);
   };
 
   const openEditModal = (area: ProjectArea) => {
+    if (readOnly) return;
+
     setFormName(area.name);
     setFormChainageStart(area.chainageStart != null ? String(area.chainageStart) : '');
     setFormChainageEnd(area.chainageEnd != null ? String(area.chainageEnd) : '');
@@ -117,6 +210,7 @@ export function ProjectAreasPage() {
   };
 
   const handleSave = async () => {
+    if (readOnly) return;
     if (!projectId || savingRef.current) return;
 
     const validation = validateProjectAreaForm({
@@ -182,6 +276,7 @@ export function ProjectAreasPage() {
   };
 
   const handleDelete = async (area: ProjectArea) => {
+    if (readOnly) return;
     if (!projectId || deletingAreasRef.current.has(area.id)) return;
 
     deletingAreasRef.current.add(area.id);
@@ -220,101 +315,37 @@ export function ProjectAreasPage() {
           <h1 className="text-2xl font-bold">Project Areas</h1>
           <p className="text-muted-foreground">Define areas or zones within the project chainage</p>
         </div>
-        <Button type="button" onClick={openAddModal}>
-          <Plus className="h-4 w-4" />
-          Add Area
-        </Button>
+        {canManageAreas && (
+          <Button type="button" onClick={openAddModal} disabled={readOnly}>
+            <Plus className="h-4 w-4" />
+            Add Area
+          </Button>
+        )}
       </div>
 
-      {loadError && (
-        <div
-          className="mb-6 flex items-center justify-between gap-3 rounded-md border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive"
-          role="alert"
-        >
-          <span>{loadError}</span>
-          <Button type="button" variant="outline" size="sm" onClick={() => void fetchAreas()}>
-            Try again
-          </Button>
-        </div>
-      )}
+      <ProjectAdminStatusBanners
+        project={project}
+        canManage={canManageAreas}
+        readOnly={readOnly}
+        deniedMessage="You don't have permission to manage areas for this project."
+        archivedMessage="Archived projects are read-only. Restore the project before editing areas."
+      />
 
-      {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-        </div>
-      ) : loadError ? null : areas.length === 0 ? (
-        <div className="rounded-lg border p-12 text-center">
-          <MapPin className="mx-auto h-12 w-12 text-muted-foreground/50" />
-          <h3 className="mt-4 text-lg font-semibold">No areas defined</h3>
-          <p className="mt-2 text-muted-foreground">
-            Create areas to organize your project by chainage ranges.
-          </p>
-          <Button type="button" onClick={openAddModal} className="mt-4">
-            Add First Area
-          </Button>
-        </div>
-      ) : (
-        <div className="rounded-lg border overflow-hidden">
-          <table className="w-full">
-            <thead className="border-b bg-muted/50">
-              <tr>
-                <th className="text-left px-4 py-3 text-sm font-medium">Colour</th>
-                <th className="text-left px-4 py-3 text-sm font-medium">Area Name</th>
-                <th className="text-left px-4 py-3 text-sm font-medium">Chainage Start</th>
-                <th className="text-left px-4 py-3 text-sm font-medium">Chainage End</th>
-                <th className="text-left px-4 py-3 text-sm font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {areas.map((area) => (
-                <tr key={area.id} className="hover:bg-muted/25">
-                  <td className="px-4 py-3">
-                    <div
-                      className="h-6 w-6 rounded-full border"
-                      style={{ backgroundColor: area.colour || '#6B7280' }}
-                      title={area.colour || 'No colour'}
-                      role="img"
-                      aria-label={`${area.name} colour ${area.colour || '#6B7280'}`}
-                    />
-                  </td>
-                  <td className="px-4 py-3 font-medium">{area.name}</td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    {area.chainageStart != null ? `${area.chainageStart.toLocaleString()}m` : '-'}
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    {area.chainageEnd != null ? `${area.chainageEnd.toLocaleString()}m` : '-'}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => openEditModal(area)}
-                        className="text-primary hover:bg-primary/5"
-                        aria-label={`Edit ${area.name}`}
-                        title="Edit"
-                      >
-                        <Edit2 className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setAreaPendingDelete(area)}
-                        disabled={deletingId === area.id}
-                        className="text-destructive hover:bg-destructive/10"
-                        aria-label={`Delete ${area.name}`}
-                        title="Delete"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <ProjectAdminLoadError message={loadError} onRetry={() => void reload()} />
+
+      <ProjectAdminResourceGate loading={loading} loadError={loadError} canManage={canManageAreas}>
+        {areas.length === 0 ? (
+          <ProjectAreasEmptyState readOnly={readOnly} onAdd={openAddModal} />
+        ) : (
+          <ProjectAreasTable
+            areas={areas}
+            readOnly={readOnly}
+            deletingId={deletingId}
+            onEdit={openEditModal}
+            onRequestDelete={setAreaPendingDelete}
+          />
+        )}
+      </ProjectAdminResourceGate>
 
       {/* Add/Edit Area Modal */}
       {showAddModal && (

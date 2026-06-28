@@ -1693,6 +1693,14 @@ describe('Projects API', () => {
         expect(editRes.status).toBe(409);
         expect(editRes.body.error.message).toBe(ARCHIVED_PROJECT_READ_ONLY_MESSAGE);
 
+        const completeRes = await request(app)
+          .patch(`/api/projects/${projectId}`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ status: 'completed' });
+
+        expect(completeRes.status).toBe(409);
+        expect(completeRes.body.error.message).toBe(ARCHIVED_PROJECT_READ_ONLY_MESSAGE);
+
         const reactivateRes = await request(app)
           .patch(`/api/projects/${projectId}`)
           .set('Authorization', `Bearer ${authToken}`)

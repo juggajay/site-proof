@@ -27,6 +27,7 @@ type MockProjectSettingsApiOptions = {
   patchDelayMs?: number;
   inviteDelayMs?: number;
   user?: typeof E2E_ADMIN_USER;
+  projectOverrides?: Partial<typeof seededProject>;
 };
 
 const seededProject = {
@@ -99,7 +100,7 @@ const seededItpTemplates = [
 const delay = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
 async function mockProjectSettingsApi(page: Page, options: MockProjectSettingsApiOptions = {}) {
-  let project = structuredClone(seededProject);
+  let project = { ...structuredClone(seededProject), ...(options.projectOverrides ?? {}) };
   const teamMembers = structuredClone(seededTeamMembers);
   const patchRequests: PatchRequest[] = [];
   const inviteRequests: InviteRequest[] = [];
@@ -491,5 +492,30 @@ test.describe('Project settings seeded admin contract', () => {
 
     await expect(page.getByText('Earthworks ITP')).toBeVisible();
     await expect.poll(() => api.getTemplateLoadCount()).toBeGreaterThan(2);
+  });
+
+  test('shows archived settings as read-only and only offers restore', async ({ page }) => {
+    const api = await mockProjectSettingsApi(page, {
+      projectOverrides: { status: 'archived' },
+    });
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/settings`);
+
+    await expect(
+      page.getByText('Archived projects are read-only. Restore the project before editing.'),
+    ).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Save Settings' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Restore Project' }).first()).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Mark as Completed' })).toHaveCount(0);
+
+    await page.getByRole('tab', { name: /Team/ }).click();
+    await expect(page.getByRole('button', { name: 'Invite Team Member' })).toBeDisabled();
+
+    await page.getByRole('tab', { name: /Areas/ }).click();
+    await expect(
+      page.getByText('Areas are read-only while this project is archived.'),
+    ).toBeVisible();
+    await expect(page.getByRole('link', { name: /Manage Areas/ })).toHaveCount(0);
+    expect(api.getPatchRequests()).toHaveLength(0);
   });
 });
