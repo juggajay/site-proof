@@ -23,6 +23,7 @@ import {
   assertClaimIncrementWithinRemaining,
   assertGenericClaimStatusTransition,
   assertReducedCertifiedAmountHasVariationNotes,
+  buildClaimCertificationSettlement,
   createClaimSchema,
   getRequestedClaimLots,
   getRequestedClaimPercentage,
@@ -445,8 +446,16 @@ export function createClaimWorkflowRouter({
             }
           }
           if (status === 'certified' && roundedCertifiedAmount !== undefined) {
+            const certifiedAt = new Date();
+            const certificationSettlement = buildClaimCertificationSettlement(
+              roundedCertifiedAmount,
+              certifiedAt,
+            );
             updateData.certifiedAmount = roundedCertifiedAmount;
-            updateData.certifiedAt = new Date();
+            updateData.certifiedAt = certifiedAt;
+            updateData.status = certificationSettlement.status;
+            updateData.paidAmount = certificationSettlement.paidAmount;
+            updateData.paidAt = certificationSettlement.paidAt;
             updateData.disputedAt = null;
             updateData.disputeNotes = serializeCertificationMetadataForStatusTransition({
               existingDisputeNotes: claim.disputeNotes,

@@ -339,7 +339,7 @@ export function ClaimsPage() {
           return {
             ...c,
             ...claimPatch,
-            status: 'certified',
+            status: claimPatch.status ?? 'certified',
             certification: certificationReadBack,
           };
         });

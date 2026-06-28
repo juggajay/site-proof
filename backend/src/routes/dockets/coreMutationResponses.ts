@@ -7,8 +7,6 @@ type DocketCreatedSource = {
   subcontractorCompany: { companyName: string };
   date: Date;
   status: string;
-  labourHours: NumericLike;
-  plantHours: NumericLike;
   totalLabourSubmitted: NumericLike;
   totalPlantSubmitted: NumericLike;
   notes: string | null;
@@ -31,8 +29,8 @@ export function buildDocketCreatedResponse(docket: DocketCreatedSource) {
       subcontractor: docket.subcontractorCompany.companyName,
       date: formatDocketDate(docket.date),
       status: docket.status,
-      labourHours: Number(docket.labourHours) || 0,
-      plantHours: Number(docket.plantHours) || 0,
+      labourHours: 0,
+      plantHours: 0,
       totalLabourSubmitted: Number(docket.totalLabourSubmitted) || 0,
       totalPlantSubmitted: Number(docket.totalPlantSubmitted) || 0,
       notes: docket.notes,

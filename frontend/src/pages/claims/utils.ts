@@ -10,6 +10,8 @@ import { downloadCsv } from '@/lib/csv';
 import { formatDateKey } from '@/lib/localDate';
 import { parseOptionalNonNegativeDecimalInput } from '@/lib/numericInput';
 
+const VIC_SOPA_REFORM_EFFECTIVE_DATE = '2026-04-15';
+
 /** Format a number as AUD currency, or return '-' for null */
 export function formatCurrency(amount: number | null): string {
   if (amount === null) return '-';
@@ -53,6 +55,43 @@ function isBeyondSopaHolidayCoverage(dueDate: Date): boolean {
   return dueDate.getFullYear() > SOPA_HOLIDAY_COVERAGE_THROUGH_YEAR;
 }
 
+function getSubmittedDateKey(submittedAt: string): string | null {
+  const match = submittedAt.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (match) {
+    return match[1];
+  }
+
+  const parsed = new Date(submittedAt);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, '0');
+  const day = String(parsed.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function getSopaTimeframeForClaim(
+  submittedAt: string,
+  state: string,
+): (typeof SOPA_TIMEFRAMES)[string] | null {
+  const timeframe = SOPA_TIMEFRAMES[state];
+  if (!timeframe) return null;
+
+  // VIC reforms commenced on 15 Apr 2026. Until the post-reform workflow is
+  // lawyer-signed, do not show stale pre-reform due-date chips for new VIC
+  // claims. This is safer than confidently displaying the wrong statutory date.
+  if (state === 'VIC') {
+    const submittedDateKey = getSubmittedDateKey(submittedAt);
+    if (submittedDateKey && submittedDateKey >= VIC_SOPA_REFORM_EFFECTIVE_DATE) {
+      return null;
+    }
+  }
+
+  return timeframe;
+}
+
 /**
  * Calculate payment-schedule response due date based on SOPA response timeframes.
  * `state` is the project's jurisdiction (e.g. 'WA'). A missing/undefined state
@@ -64,7 +103,7 @@ export function calculateCertificationDueDate(
   submittedAt: string,
   state: string = 'NSW',
 ): string | null {
-  const timeframe = SOPA_TIMEFRAMES[state];
+  const timeframe = getSopaTimeframeForClaim(submittedAt, state);
   if (!timeframe) return null;
   const submissionDate = new Date(submittedAt);
   const dueDate = addBusinessDays(submissionDate, timeframe.responseTime, state);
@@ -79,7 +118,7 @@ export function calculateCertificationDueDate(
  * calculateCertificationDueDate).
  */
 export function calculatePaymentDueDate(submittedAt: string, state: string = 'NSW'): string | null {
-  const timeframe = SOPA_TIMEFRAMES[state];
+  const timeframe = getSopaTimeframeForClaim(submittedAt, state);
   if (!timeframe) return null;
   const submissionDate = new Date(submittedAt);
   const dueDate = addBusinessDays(submissionDate, timeframe.paymentTime, state);
@@ -139,6 +178,14 @@ export function getCertificationDueStatus(claim: Claim): CertificationDueStatus 
 export function getPaymentDueStatus(claim: Claim): PaymentDueStatus | null {
   if (!claim.submittedAt || claim.status === 'draft' || claim.status === 'paid') {
     return null;
+  }
+
+  if (claim.status !== 'submitted') {
+    const certifiedAmount = claim.certifiedAmount ?? 0;
+    const paidAmount = claim.paidAmount ?? 0;
+    if (certifiedAmount <= 0 || certifiedAmount - paidAmount <= 0.000001) {
+      return null;
+    }
   }
 
   // Use the project's jurisdiction so e.g. WA claims get WA timeframes.

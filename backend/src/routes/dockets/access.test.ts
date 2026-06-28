@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  canRoleViewDocketAmounts,
   DOCKET_APPROVERS,
   isDocketEntryEditable,
   isSubcontractorUser,
@@ -30,6 +31,29 @@ describe('dockets access helpers (pure)', () => {
   describe('DOCKET_APPROVERS (M35)', () => {
     it('includes quality_manager so QMs can approve/query/reject dockets', () => {
       expect(DOCKET_APPROVERS).toContain('quality_manager');
+    });
+  });
+
+  describe('canRoleViewDocketAmounts', () => {
+    it('allows commercial internal roles and linked subcontractors to view docket money', () => {
+      for (const role of ['owner', 'admin', 'project_manager']) {
+        expect(canRoleViewDocketAmounts(role)).toBe(true);
+      }
+      expect(canRoleViewDocketAmounts('subcontractor', { isLinkedSubcontractor: true })).toBe(true);
+    });
+
+    it('redacts docket money for operational and read-only internal roles', () => {
+      for (const role of [
+        'quality_manager',
+        'site_manager',
+        'foreman',
+        'site_engineer',
+        'viewer',
+        'member',
+        null,
+      ]) {
+        expect(canRoleViewDocketAmounts(role)).toBe(false);
+      }
     });
   });
 

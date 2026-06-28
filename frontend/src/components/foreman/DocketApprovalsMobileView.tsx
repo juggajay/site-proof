@@ -9,6 +9,7 @@ import {
   formatDocketCurrency,
   getDocketDisplayTotalCost,
   getDocketSubmittedTotalCost,
+  hasDocketCommercialAmounts,
   hasDocketCostAdjustment,
   type Docket,
 } from '@/pages/dockets/docketApprovalsData';
@@ -68,6 +69,27 @@ function formatDateAU(dateStr: string): string {
   }
 }
 
+function DocketHoursValue({
+  submitted,
+  approved,
+  status,
+}: {
+  submitted: number;
+  approved: number;
+  status: Docket['status'];
+}) {
+  if (status === 'approved' && approved !== submitted) {
+    return (
+      <>
+        <span className="font-medium">{approved}h</span>
+        <span className="ml-1 text-xs text-muted-foreground line-through">{submitted}h</span>
+      </>
+    );
+  }
+
+  return <>{submitted}h</>;
+}
+
 function DocketCard({
   docket,
   onTap,
@@ -123,21 +145,39 @@ function DocketCard({
         </div>
         <div>
           <p className="text-xs text-muted-foreground uppercase tracking-wide">Labour</p>
-          <p className="font-medium text-sm">{docket.labourHours}h</p>
+          <p className="font-medium text-sm">
+            <DocketHoursValue
+              submitted={docket.labourHours}
+              approved={docket.totalLabourApproved}
+              status={docket.status}
+            />
+          </p>
         </div>
         <div>
           <p className="text-xs text-muted-foreground uppercase tracking-wide">Plant</p>
-          <p className="font-medium text-sm">{docket.plantHours}h</p>
+          <p className="font-medium text-sm">
+            <DocketHoursValue
+              submitted={docket.plantHours}
+              approved={docket.totalPlantApproved}
+              status={docket.status}
+            />
+          </p>
         </div>
         <div>
           <p className="text-xs text-muted-foreground uppercase tracking-wide">Cost</p>
-          <p className="font-medium text-sm">
-            {formatDocketCurrency(getDocketDisplayTotalCost(docket))}
-          </p>
-          {hasDocketCostAdjustment(docket) && (
-            <p className="text-xs text-muted-foreground line-through">
-              {formatDocketCurrency(getDocketSubmittedTotalCost(docket))}
-            </p>
+          {hasDocketCommercialAmounts(docket) ? (
+            <>
+              <p className="font-medium text-sm">
+                {formatDocketCurrency(getDocketDisplayTotalCost(docket))}
+              </p>
+              {hasDocketCostAdjustment(docket) && (
+                <p className="text-xs text-muted-foreground line-through">
+                  {formatDocketCurrency(getDocketSubmittedTotalCost(docket))}
+                </p>
+              )}
+            </>
+          ) : (
+            <p className="font-medium text-sm text-muted-foreground">Restricted</p>
           )}
         </div>
       </div>

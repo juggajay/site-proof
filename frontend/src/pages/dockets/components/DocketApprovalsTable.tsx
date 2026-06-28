@@ -6,6 +6,7 @@ import {
   formatDocketCurrency,
   getDocketDisplayTotalCost,
   getDocketSubmittedTotalCost,
+  hasDocketCommercialAmounts,
   hasDocketCostAdjustment,
   type Docket,
 } from '../docketApprovalsData';
@@ -146,7 +147,9 @@ export function DocketApprovalsTable({
                   )}
                 </td>
                 <td className="px-4 py-3 text-sm">
-                  {hasDocketCostAdjustment(docket) ? (
+                  {!hasDocketCommercialAmounts(docket) ? (
+                    <span className="text-muted-foreground">Restricted</span>
+                  ) : hasDocketCostAdjustment(docket) ? (
                     <span>
                       <span className="font-medium">
                         {formatDocketCurrency(getDocketDisplayTotalCost(docket))}

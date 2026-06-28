@@ -29,6 +29,38 @@ function hasNumericValue(value: DocketNumericLike): boolean {
   return Number.isFinite(Number(value));
 }
 
+function toCents(value: number): number {
+  return Math.round(value * 100);
+}
+
+function fromCents(cents: number): number {
+  return cents / 100;
+}
+
+function splitCostToCents(
+  totalCost: number,
+  allocations: LotAllocationSource[],
+  allocationWeight: (allocation: LotAllocationSource) => number,
+): Array<{ lotId: string; cost: number }> {
+  const totalCents = toCents(totalCost);
+  let assignedCents = 0;
+  const baseSplits = allocations.map((allocation) => {
+    const cents = Math.floor(allocationWeight(allocation) * totalCents);
+    assignedCents += cents;
+    return { lotId: allocation.lotId, cents };
+  });
+
+  let residualCents = totalCents - assignedCents;
+  return baseSplits.map((split) => {
+    const residual = residualCents > 0 ? 1 : 0;
+    residualCents -= residual;
+    return {
+      lotId: split.lotId,
+      cost: fromCents(split.cents + residual),
+    };
+  });
+}
+
 export function getApprovedOrSubmittedCost({
   approvedCost,
   submittedCost,
@@ -70,15 +102,13 @@ export function splitCostByLotAllocations({
   );
 
   if (totalAllocatedHours > 0) {
-    return allocations.map((allocation) => ({
-      lotId: allocation.lotId,
-      cost: totalCost * (Math.max(0, numericValue(allocation.hours)) / totalAllocatedHours),
-    }));
+    return splitCostToCents(
+      totalCost,
+      allocations,
+      (allocation) => Math.max(0, numericValue(allocation.hours)) / totalAllocatedHours,
+    );
   }
 
-  const equalShare = totalCost / allocations.length;
-  return allocations.map((allocation) => ({
-    lotId: allocation.lotId,
-    cost: equalShare,
-  }));
+  const equalWeight = 1 / allocations.length;
+  return splitCostToCents(totalCost, allocations, () => equalWeight);
 }

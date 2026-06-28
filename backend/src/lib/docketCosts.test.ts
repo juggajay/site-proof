@@ -56,4 +56,22 @@ describe('docket cost helpers', () => {
       { lotId: 'lot-c', cost: 30 },
     ]);
   });
+
+  it('rounds split costs to cents and allocates residual cents deterministically', () => {
+    const split = splitCostByLotAllocations({
+      cost: 100,
+      allocations: [
+        { lotId: 'lot-a', hours: 1 },
+        { lotId: 'lot-b', hours: 1 },
+        { lotId: 'lot-c', hours: 1 },
+      ],
+    });
+
+    expect(split).toEqual([
+      { lotId: 'lot-a', cost: 33.34 },
+      { lotId: 'lot-b', cost: 33.33 },
+      { lotId: 'lot-c', cost: 33.33 },
+    ]);
+    expect(split.reduce((sum, lot) => sum + lot.cost, 0)).toBe(100);
+  });
 });

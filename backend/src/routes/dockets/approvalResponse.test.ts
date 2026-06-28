@@ -126,6 +126,36 @@ describe('buildDocketApprovalEntryUpdates', () => {
       ],
     });
   });
+
+  it('rounds approved entry costs to cents with the docket money helper', () => {
+    expect(
+      buildDocketApprovalEntryUpdates({
+        labourEntries: [
+          { id: 'labour-1', submittedHours: 1, hourlyRate: 1.005, submittedCost: 1.005 },
+        ],
+        plantEntries: [{ id: 'plant-1', hoursOperated: 1, hourlyRate: 1.005, submittedCost: 0 }],
+        labourApprovedHours: 1,
+        plantApprovedHours: 1,
+        adjustmentReason: null,
+      }),
+    ).toEqual({
+      labour: [
+        {
+          id: 'labour-1',
+          approvedHours: 1,
+          approvedCost: 1.01,
+          adjustmentReason: null,
+        },
+      ],
+      plant: [
+        {
+          id: 'plant-1',
+          approvedCost: 1.01,
+          adjustmentReason: null,
+        },
+      ],
+    });
+  });
 });
 
 describe('buildDocketApprovedResponse', () => {

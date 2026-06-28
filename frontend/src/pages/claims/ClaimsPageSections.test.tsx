@@ -209,6 +209,35 @@ describe('ClaimsTable payment schedule wording', () => {
     ).toBeInTheDocument();
     expect(screen.queryByRole('columnheader', { name: 'Indicative Certification Due' })).toBeNull();
   });
+
+  it('allows a partially paid claim to be disputed as well as paid further', () => {
+    render(
+      <ClaimsTable
+        claims={[
+          {
+            ...SEEDED_CLAIM,
+            status: 'partially_paid',
+            certifiedAmount: 1000,
+            paidAmount: 400,
+            submittedAt: '2026-06-01T00:00:00.000Z',
+          },
+        ]}
+        loadingCompleteness={false}
+        showCompletenessModal={null}
+        generatingEvidence={null}
+        onCreateClaim={vi.fn()}
+        onSubmitClaim={vi.fn()}
+        onDisputeClaim={vi.fn()}
+        onCertifyClaim={vi.fn()}
+        onRecordPayment={vi.fn()}
+        onCompletenessCheck={vi.fn()}
+        onEvidencePackage={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Mark as Disputed' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Record Payment' })).toBeInTheDocument();
+  });
 });
 
 describe('ClaimsTable row CSV export', () => {

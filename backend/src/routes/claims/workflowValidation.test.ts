@@ -6,6 +6,7 @@ import {
   assertClaimIncrementWithinRemaining,
   assertGenericClaimStatusTransition,
   assertReducedCertifiedAmountHasVariationNotes,
+  buildClaimCertificationSettlement,
   certifyClaimSchema,
   createClaimSchema,
   isLotFullyClaimed,
@@ -81,6 +82,7 @@ describe('claims workflow validation', () => {
 
   it('preserves the generic claim status transition gate', () => {
     expect(() => assertGenericClaimStatusTransition('draft', 'submitted')).not.toThrow();
+    expect(() => assertGenericClaimStatusTransition('partially_paid', 'disputed')).not.toThrow();
     expect(() => assertGenericClaimStatusTransition('draft', 'paid')).toThrow(
       'Cannot change claim status from draft to paid',
     );
@@ -106,6 +108,21 @@ describe('claims workflow validation', () => {
     expect(() => assertReducedCertifiedAmountHasVariationNotes(90, '100', '   ')).toThrow(
       'Variation notes are required when the certified amount is less than the claimed amount',
     );
+  });
+
+  it('treats a nil certification as a terminal zero-paid claim', () => {
+    const certifiedAt = new Date('2026-06-28T01:02:03.000Z');
+
+    expect(buildClaimCertificationSettlement(0, certifiedAt)).toEqual({
+      status: 'paid',
+      paidAmount: 0,
+      paidAt: certifiedAt,
+    });
+    expect(buildClaimCertificationSettlement(100, certifiedAt)).toEqual({
+      status: 'certified',
+      paidAmount: undefined,
+      paidAt: undefined,
+    });
   });
 
   it('rejects legacy certification document URL payloads', () => {

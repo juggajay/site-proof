@@ -24,10 +24,6 @@ function renderModal(overrides: Partial<Parameters<typeof CreateDocketModal>[0]>
   const props = {
     date: '',
     onDateChange: vi.fn(),
-    labourHours: '',
-    onLabourHoursChange: vi.fn(),
-    plantHours: '',
-    onPlantHoursChange: vi.fn(),
     notes: '',
     onNotesChange: vi.fn(),
     creating: false,
@@ -46,8 +42,8 @@ describe('CreateDocketModal', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Create Docket' })).toBeInTheDocument();
     expect(screen.getByLabelText('Date *')).toBeInTheDocument();
-    expect(screen.getByLabelText('Labour Hours')).toBeInTheDocument();
-    expect(screen.getByLabelText('Plant Hours')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Labour Hours')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Plant Hours')).not.toBeInTheDocument();
     expect(screen.getByLabelText('Notes')).toBeInTheDocument();
   });
 
@@ -59,10 +55,6 @@ describe('CreateDocketModal', () => {
       <CreateDocketModal
         date="2026-06-04"
         onDateChange={vi.fn()}
-        labourHours=""
-        onLabourHoursChange={vi.fn()}
-        plantHours=""
-        onPlantHoursChange={vi.fn()}
         notes=""
         onNotesChange={vi.fn()}
         creating={false}
@@ -76,10 +68,6 @@ describe('CreateDocketModal', () => {
       <CreateDocketModal
         date="2026-06-04"
         onDateChange={vi.fn()}
-        labourHours=""
-        onLabourHoursChange={vi.fn()}
-        plantHours=""
-        onPlantHoursChange={vi.fn()}
         notes=""
         onNotesChange={vi.fn()}
         creating={true}
@@ -106,30 +94,8 @@ describe('CreateDocketModal', () => {
     fireEvent.change(screen.getByLabelText('Date *'), { target: { value: '2026-06-04' } });
     expect(props.onDateChange).toHaveBeenCalledWith('2026-06-04');
 
-    fireEvent.change(screen.getByLabelText('Labour Hours'), { target: { value: '8' } });
-    expect(props.onLabourHoursChange).toHaveBeenCalledWith('8');
-
-    fireEvent.change(screen.getByLabelText('Plant Hours'), { target: { value: '4.5' } });
-    expect(props.onPlantHoursChange).toHaveBeenCalledWith('4.5');
-
     fireEvent.change(screen.getByLabelText('Notes'), { target: { value: 'wet morning' } });
     expect(props.onNotesChange).toHaveBeenCalledWith('wet morning');
-  });
-
-  it('shows the over-24-hours warning and amber border for suspicious hours', () => {
-    renderModal({ labourHours: '25' });
-
-    expect(
-      screen.getByText('Warning: Hours exceed 24 - please verify this is correct'),
-    ).toBeInTheDocument();
-    expect(screen.getByLabelText('Labour Hours').className).toContain('border-warning');
-    expect(screen.getByLabelText('Plant Hours').className).not.toContain('border-warning');
-  });
-
-  it('shows the invalid-input warning for malformed plant hours', () => {
-    renderModal({ plantHours: '4x' });
-
-    expect(screen.getByText('Hours must be a non-negative decimal number.')).toBeInTheDocument();
   });
 
   it('appends voice transcripts to existing notes via a functional update', () => {

@@ -17,6 +17,7 @@ import {
   MAX_CERTIFICATION_DOCUMENT_ID_LENGTH,
   assertCertifiedAmountWithinClaimTotal,
   assertReducedCertifiedAmountHasVariationNotes,
+  buildClaimCertificationSettlement,
   certifyClaimSchema,
   normalizeOptionalCertificationString,
   parseOptionalClaimDate,
@@ -152,14 +153,20 @@ export function createClaimPostEvidenceWorkflowRouter({
           certificationDocumentId: certDocId || null,
           certifiedBy: userId,
         });
+        const certificationSettlement = buildClaimCertificationSettlement(
+          roundedCertifiedAmount,
+          certifiedAt,
+        );
 
         // Update the claim with certification details
         const updatedClaim = await tx.progressClaim.update({
           where: { id: claimId },
           data: {
-            status: 'certified',
+            status: certificationSettlement.status,
             certifiedAmount: roundedCertifiedAmount,
             certifiedAt,
+            paidAmount: certificationSettlement.paidAmount,
+            paidAt: certificationSettlement.paidAt,
             disputedAt: null,
             // Store variation notes and document reference in disputeNotes field as JSON.
             disputeNotes: certificationMetadata,

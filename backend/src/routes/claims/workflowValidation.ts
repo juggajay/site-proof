@@ -174,6 +174,29 @@ export function roundClaimAmountToCents(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+export function buildClaimCertificationSettlement(
+  certifiedAmount: number,
+  certifiedAt: Date,
+): {
+  status: 'certified' | 'paid';
+  paidAmount: number | undefined;
+  paidAt: Date | undefined;
+} {
+  if (certifiedAmount <= CLAIM_AMOUNT_EPSILON) {
+    return {
+      status: 'paid',
+      paidAmount: 0,
+      paidAt: certifiedAt,
+    };
+  }
+
+  return {
+    status: 'certified',
+    paidAmount: undefined,
+    paidAt: undefined,
+  };
+}
+
 /**
  * Sum a lot's already-claimed percentage from its existing claim line items.
  * Deleting/voiding a draft claim cascades its ClaimedLot rows, so any rows that
@@ -227,6 +250,7 @@ const GENERIC_CLAIM_STATUS_TRANSITIONS: Record<string, readonly string[]> = {
   submitted: ['certified', 'disputed'],
   disputed: ['certified'],
   certified: ['paid', 'disputed'],
+  partially_paid: ['paid', 'disputed'],
 };
 
 export const CLAIM_NUMBER_RETRY_LIMIT = 5;

@@ -144,6 +144,16 @@ describe('SOPA due dates by project state', () => {
     );
   });
 
+  it('suppresses VIC due dates for claims submitted after the 15 Apr 2026 reforms', () => {
+    const preReform = '2026-04-14T00:00:00.000Z';
+    const postReform = '2026-04-15T00:00:00.000Z';
+
+    expect(calculateCertificationDueDate(preReform, 'VIC')).not.toBeNull();
+    expect(calculatePaymentDueDate(preReform, 'VIC')).not.toBeNull();
+    expect(calculateCertificationDueDate(postReform, 'VIC')).toBeNull();
+    expect(calculatePaymentDueDate(postReform, 'VIC')).toBeNull();
+  });
+
   it('defaults to NSW timeframes when the state is missing/undefined', () => {
     const nswCert = calculateCertificationDueDate(submittedAt, 'NSW');
     const nswPayment = calculatePaymentDueDate(submittedAt, 'NSW');
@@ -250,5 +260,37 @@ describe('due-date status helpers thread the project state', () => {
     // NSW certifies in 10 business days, WA in 15 -> NSW more overdue.
     expect(nswCert?.text).toMatch(/^Payment schedule overdue by \d+ days$/);
     expect(overdueDays(nswCert?.text)).toBeGreaterThan(overdueDays(waCert?.text));
+  });
+
+  it('does not show stale VIC due-status chips for post-reform submitted claims', () => {
+    const submittedAt = '2026-04-15T00:00:00.000Z';
+
+    expect(getCertificationDueStatus(makeClaim({ projectState: 'VIC', submittedAt }))).toBeNull();
+    expect(getPaymentDueStatus(makeClaim({ projectState: 'VIC', submittedAt }))).toBeNull();
+  });
+
+  it('does not show payment due chips when no certified balance is outstanding', () => {
+    const submittedAt = '2026-02-01T00:00:00.000Z';
+
+    expect(
+      getPaymentDueStatus(
+        makeClaim({
+          status: 'certified',
+          submittedAt,
+          certifiedAmount: 0,
+          paidAmount: 0,
+        }),
+      ),
+    ).toBeNull();
+    expect(
+      getPaymentDueStatus(
+        makeClaim({
+          status: 'certified',
+          submittedAt,
+          certifiedAmount: 1000,
+          paidAmount: 1000,
+        }),
+      ),
+    ).toBeNull();
   });
 });
