@@ -34,6 +34,8 @@ interface Docket {
   totalPlantSubmitted: number;
   totalLabourApprovedCost?: number | null;
   totalPlantApprovedCost?: number | null;
+  labourEntryCount?: number | null;
+  plantEntryCount?: number | null;
   labourEntries?: { id: string }[];
   plantEntries?: { id: string }[];
   foremanNotes?: string;
@@ -72,7 +74,9 @@ function matchesFilter(status: string, filter: FilterKey): boolean {
 }
 
 function entryCount(d: Docket): number {
-  return (d.labourEntries?.length ?? 0) + (d.plantEntries?.length ?? 0);
+  const labourCount = d.labourEntryCount ?? d.labourEntries?.length ?? 0;
+  const plantCount = d.plantEntryCount ?? d.plantEntries?.length ?? 0;
+  return labourCount + plantCount;
 }
 
 function docketTotal(d: Docket): number {

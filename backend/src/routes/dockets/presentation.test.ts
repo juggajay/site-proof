@@ -376,6 +376,8 @@ describe('dockets presentation helpers (pure)', () => {
         notes: 'site notes',
         labourHours: 12.5, // 8 + 4.5
         plantHours: 8, // 6 + 2
+        labourEntryCount: 2,
+        plantEntryCount: 2,
         totalLabourSubmitted: 600,
         totalLabourApproved: 550,
         totalPlantSubmitted: 800,
@@ -397,6 +399,8 @@ describe('dockets presentation helpers (pure)', () => {
         'notes',
         'labourHours',
         'plantHours',
+        'labourEntryCount',
+        'plantEntryCount',
         'totalLabourSubmitted',
         'totalLabourApproved',
         'totalPlantSubmitted',
@@ -435,6 +439,8 @@ describe('dockets presentation helpers (pure)', () => {
       });
       expect(result.labourHours).toBe(3); // 0 + 0 + 3 + 0
       expect(result.plantHours).toBe(2.5); // 0 + 2.5
+      expect(result.labourEntryCount).toBe(4);
+      expect(result.plantEntryCount).toBe(2);
       expect(result.totalLabourSubmitted).toBe(0);
       expect(result.totalLabourApproved).toBe(0);
       expect(result.totalPlantSubmitted).toBe(0);
@@ -466,6 +472,8 @@ describe('dockets presentation helpers (pure)', () => {
       expect(result).toMatchObject({
         labourHours: 12.5,
         plantHours: 8,
+        labourEntryCount: 2,
+        plantEntryCount: 2,
         totalLabourSubmitted: null,
         totalPlantSubmitted: null,
         totalLabourApproved: 550,

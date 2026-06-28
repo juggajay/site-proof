@@ -36,7 +36,20 @@ const now = new Date();
 const thisMonth = (day: number) =>
   `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
-const DOCKETS = [
+type DocketListTestRow = {
+  id: string;
+  date: string;
+  status: string;
+  totalLabourSubmitted: number;
+  totalPlantSubmitted: number;
+  labourEntryCount?: number;
+  plantEntryCount?: number;
+  labourEntries?: { id: string }[];
+  plantEntries?: { id: string }[];
+  foremanNotes?: string;
+};
+
+const DOCKETS: DocketListTestRow[] = [
   {
     id: 'd-draft',
     date: thisMonth(12),
@@ -153,6 +166,26 @@ describe('subbie shell DocketsListScreen', () => {
     expect(screen.getByText(/APPROVED/)).toBeInTheDocument();
     expect(screen.getByText(/REJECTED/)).toBeInTheDocument();
     expect(screen.getByText(/PENDING/)).toBeInTheDocument();
+  });
+
+  it('uses explicit entry counts from the list API when entry arrays are omitted', async () => {
+    setApi([
+      {
+        id: 'd-approved-counts',
+        date: thisMonth(10),
+        status: 'approved',
+        totalLabourSubmitted: 748,
+        totalPlantSubmitted: 1200,
+        labourEntryCount: 1,
+        plantEntryCount: 1,
+      },
+    ]);
+
+    renderList();
+
+    const row = await screen.findByRole('button', { name: /2 entries/ });
+    expect(within(row).getByText(/2 entries/)).toBeInTheDocument();
+    expect(within(row).getByText(/\$1,948/)).toBeInTheDocument();
   });
 
   it('Needs attention filter shows only queried + rejected', async () => {
