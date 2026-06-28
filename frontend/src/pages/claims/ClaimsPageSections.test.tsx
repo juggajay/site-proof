@@ -508,4 +508,39 @@ describe('ClaimsPage TanStack Query register', () => {
       ),
     );
   });
+
+  it('opens the recorded certification document when the view link succeeds', async () => {
+    openDocumentAccessUrlMock.mockResolvedValue(undefined);
+
+    render(
+      <ClaimsTable
+        claims={[
+          {
+            ...SEEDED_CLAIM,
+            status: 'certified',
+            certification: {
+              certifiedByName: 'Principal Rep',
+              variationNotes: null,
+              certificationDocumentId: 'doc-1',
+            },
+          },
+        ]}
+        loadingCompleteness={false}
+        showCompletenessModal={null}
+        generatingEvidence={null}
+        onCreateClaim={vi.fn()}
+        onSubmitClaim={vi.fn()}
+        onDisputeClaim={vi.fn()}
+        onCertifyClaim={vi.fn()}
+        onRecordPayment={vi.fn()}
+        onCompletenessCheck={vi.fn()}
+        onEvidencePackage={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'View certificate' }));
+
+    await waitFor(() => expect(openDocumentAccessUrlMock).toHaveBeenCalledWith('doc-1'));
+    expect(toastMock).not.toHaveBeenCalled();
+  });
 });

@@ -152,6 +152,25 @@ describe('project-scoped commercial routes', () => {
     expect(screen.queryByRole('heading', { name: 'Access Denied' })).not.toBeInTheDocument();
   });
 
+  it.each(['quality_manager', 'site_manager'])(
+    'blocks project-scoped %s users from opening progress claims',
+    async (dashboardRole) => {
+      authState.user = {
+        id: `project-${dashboardRole}-1`,
+        email: `${dashboardRole}@example.com`,
+        role: 'member',
+        roleInCompany: 'member',
+        dashboardRole,
+        companyId: 'company-1',
+      };
+
+      renderAppAt('/projects/project-1/claims');
+
+      expect(await screen.findByRole('heading', { name: 'Access Denied' })).toBeInTheDocument();
+      expect(screen.queryByText('Claims route reached')).not.toBeInTheDocument();
+    },
+  );
+
   it('allows project-scoped quality managers to open the audit log', async () => {
     authState.user = {
       id: 'project-qm-1',
