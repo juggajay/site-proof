@@ -22,13 +22,13 @@ vi.mock('../../middleware/authMiddleware.js', () => ({
 }));
 
 vi.mock('../../lib/auditLog.js', () => ({
-  AuditAction: { DOCUMENT_DELETED: 'DOCUMENT_DELETED' },
-  createAuditLog: vi.fn(),
+  AuditAction: { DOCUMENT_DELETED: 'document_deleted' },
+  writeAuditLogInTransaction: vi.fn(),
 }));
 
-import { createAuditLog } from '../../lib/auditLog.js';
+import { writeAuditLogInTransaction } from '../../lib/auditLog.js';
 
-const mockCreateAuditLog = vi.mocked(createAuditLog);
+const mockWriteAuditLogInTransaction = vi.mocked(writeAuditLogInTransaction);
 
 function buildApp(documentType: string) {
   const document = {
@@ -42,11 +42,21 @@ function buildApp(documentType: string) {
     fileUrl: 'data:application/pdf;base64,JVBERi0xLjQ=',
   };
 
+  const txDocumentDelete = vi.fn(async () => document);
+  const transactionClient = {
+    document: {
+      delete: txDocumentDelete,
+    },
+  };
+  const transaction = vi.fn(async (callback) => callback(transactionClient));
+  const rootDocumentDelete = vi.fn(async () => document);
+
   const prisma = {
     document: {
       findUnique: vi.fn(async () => document),
-      delete: vi.fn(async () => document),
+      delete: rootDocumentDelete,
     },
+    $transaction: transaction,
   } as unknown as PrismaClient;
 
   const app = express();
@@ -67,7 +77,7 @@ function buildApp(documentType: string) {
   );
   app.use(errorHandler);
 
-  return { app, prisma };
+  return { app, prisma, rootDocumentDelete, transaction, transactionClient, txDocumentDelete };
 }
 
 describe('createDocumentDeleteRouter', () => {
@@ -76,29 +86,33 @@ describe('createDocumentDeleteRouter', () => {
   });
 
   it('does not store raw document file locators in deletion audit changes', async () => {
-    const { app } = buildApp('photo');
+    const { app, transaction, transactionClient, txDocumentDelete } = buildApp('photo');
 
     const res = await request(app)
       .delete('/api/documents/document-1')
       .set('Authorization', 'Bearer valid-token');
 
     expect(res.status).toBe(204);
-    expect(mockCreateAuditLog).toHaveBeenCalledWith(
+    expect(transaction).toHaveBeenCalledTimes(1);
+    expect(mockWriteAuditLogInTransaction).toHaveBeenCalledWith(
+      transactionClient,
       expect.objectContaining({
+        action: 'document_deleted',
         changes: {
           filename: 'photo.pdf',
           storageKind: 'inline',
         },
       }),
     );
-    expect(mockCreateAuditLog.mock.calls[0][0].changes).not.toHaveProperty('fileUrl');
+    expect(mockWriteAuditLogInTransaction.mock.calls[0][1].changes).not.toHaveProperty('fileUrl');
+    expect(txDocumentDelete).toHaveBeenCalledWith({ where: { id: 'document-1' } });
   });
 
   it.each([
     ['test_certificate', 'test result workflow'],
     ['drawing', 'drawing register'],
   ])('rejects generic deletion of %s documents', async (documentType, expectedMessage) => {
-    const { app, prisma } = buildApp(documentType);
+    const { app, rootDocumentDelete, transaction } = buildApp(documentType);
 
     const res = await request(app)
       .delete('/api/documents/document-1')
@@ -107,6 +121,7 @@ describe('createDocumentDeleteRouter', () => {
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe('CONFLICT');
     expect(res.body.error.message).toContain(expectedMessage);
-    expect(prisma.document.delete).not.toHaveBeenCalled();
+    expect(transaction).not.toHaveBeenCalled();
+    expect(rootDocumentDelete).not.toHaveBeenCalled();
   });
 });
