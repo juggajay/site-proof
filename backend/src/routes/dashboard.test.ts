@@ -962,6 +962,28 @@ describe('Portfolio NCRs API', () => {
       await prisma.user.delete({ where: { id: noProjectUserId } }).catch(() => {});
     });
 
+    it('should reject active project viewers from portfolio NCRs', async () => {
+      const viewer = await registerDashboardUser(
+        'ncr-portfolio-viewer',
+        'NCR Portfolio Viewer',
+        companyId,
+        'viewer',
+      );
+      await prisma.projectUser.create({
+        data: { projectId, userId: viewer.userId, role: 'viewer', status: 'active' },
+      });
+
+      try {
+        const res = await request(app)
+          .get('/api/dashboard/portfolio-ncrs')
+          .set('Authorization', `Bearer ${viewer.token}`);
+
+        expect(res.status).toBe(403);
+      } finally {
+        await cleanupDashboardUser(viewer.userId);
+      }
+    });
+
     it('should reject unauthenticated requests', async () => {
       const res = await request(app).get('/api/dashboard/portfolio-ncrs');
 
@@ -1090,6 +1112,23 @@ describe('Portfolio Risks API', () => {
       // Cleanup
       await prisma.emailVerificationToken.deleteMany({ where: { userId: noProjectUserId } });
       await prisma.user.delete({ where: { id: noProjectUserId } }).catch(() => {});
+    });
+
+    it('should reject active project viewers from portfolio risks', async () => {
+      const viewer = await registerDashboardUser('risk-viewer', 'Risk Viewer', companyId, 'viewer');
+      await prisma.projectUser.create({
+        data: { projectId, userId: viewer.userId, role: 'viewer', status: 'active' },
+      });
+
+      try {
+        const res = await request(app)
+          .get('/api/dashboard/portfolio-risks')
+          .set('Authorization', `Bearer ${viewer.token}`);
+
+        expect(res.status).toBe(403);
+      } finally {
+        await cleanupDashboardUser(viewer.userId);
+      }
     });
 
     it('should reject unauthenticated requests', async () => {

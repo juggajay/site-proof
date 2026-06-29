@@ -495,7 +495,10 @@ function DefaultDashboard({ user }: { user: DashboardUser }) {
 
           {/* Quick Links Widget */}
           {isWidgetVisible('quickLinks') && (
-            <DashboardQuickLinks reportsQuickLink={reportsQuickLink} />
+            <DashboardQuickLinks
+              reportsQuickLink={reportsQuickLink}
+              quickActionProjectId={reportsProject?.id}
+            />
           )}
 
           {/* No widgets visible message */}

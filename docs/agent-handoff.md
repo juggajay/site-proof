@@ -624,6 +624,29 @@ Status: in PR from `qa/stage86-documents-drawings`.
   this worktree did not have one, so the ITP regression is expected to be
   proven by CI.
 
+### QA Loop Stage 87: Dashboard, Home, And Analytics
+
+Status: in PR from `qa/stage87-dashboard-analytics`.
+
+- Fixed portfolio dashboard access control: portfolio NCRs and project-risk
+  summaries now use the same commercial-role gate and role-filtered project set
+  as portfolio cash flow.
+- Added route regressions for active project viewers on portfolio NCR/risk
+  endpoints. Local DB-backed execution still requires a disposable
+  `DATABASE_URL`; CI is expected to prove those tests.
+- Replaced inert default-dashboard quick actions (`/projects?action=...`) with
+  working project-scoped Create Lot and Add Test links. Quick actions now stay
+  hidden until a real project target exists.
+- Made role-dashboard project selection user-scoped in local storage and synced
+  stale requested IDs to the backend-resolved project for PM, QM, and desktop
+  foreman dashboards.
+- Stopped the classic and mobile subcontractor dashboards from flashing a false
+  "No lots assigned yet" docket blocker before the assigned-lots query returns;
+  true empty responses still show the blocker.
+- Focused unit/type/lint and dashboard browser E2E passed locally. The dashboard
+  E2E needed a dedicated Vite server pinned to port 5174 because Playwright's
+  default reusable server path hit a transient connection-refused failure.
+
 ## Open Follow-Ups
 
 1. Re-run live sacrificial-data dogfood before the first paying customer and

@@ -367,7 +367,7 @@ export function HomeScreen() {
   const queriedCount = dockets.filter((d) => d.status === 'queried').length;
 
   // Assigned lots — existing portal key; count chip + prerequisite state.
-  const { data: assignedLots = [] } = useQuery({
+  const { data: assignedLotsData } = useQuery({
     queryKey: queryKeys.portalAssignedWork(user?.id, projectId, subcontractorCompanyId),
     queryFn: async () => {
       const res = await apiFetch<{ lots: Lot[] }>(
@@ -377,6 +377,8 @@ export function HomeScreen() {
     },
     enabled: !!user?.id && !!projectId && lotsEnabled,
   });
+  const assignedLots = assignedLotsData ?? [];
+  const hasAssignedLotsResponse = assignedLotsData !== undefined;
 
   // Notifications — existing portal key; feeds needs-attention.
   const { data: notifData } = useQuery({
@@ -415,7 +417,7 @@ export function HomeScreen() {
     approvedEmployeeCount: approvedEmployees.length,
     approvedPlantCount: approvedPlant.length,
     lotsModuleEnabled: lotsEnabled,
-    assignedLotCount: assignedLots.length,
+    assignedLotCount: hasAssignedLotsResponse ? assignedLots.length : 1,
   });
 
   const hero = computeHero(todaysDocket);
