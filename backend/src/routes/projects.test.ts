@@ -3124,6 +3124,75 @@ describe('Project Team Management', () => {
     }
   });
 
+  it('rejects stale project-admin invites after the actor is demoted', async () => {
+    const suffix = Date.now();
+    const staleAdmin = await registerTestUser(app, {
+      emailPrefix: `team-stale-admin-${suffix}`,
+      fullName: 'Team Stale Admin',
+      companyId,
+      roleInCompany: 'viewer',
+    });
+    const invitee = await registerTestUser(app, {
+      emailPrefix: `team-stale-invitee-${suffix}`,
+      fullName: 'Team Stale Invitee',
+      companyId,
+      roleInCompany: 'viewer',
+    });
+
+    await prisma.projectUser.upsert({
+      where: { projectId_userId: { projectId, userId: staleAdmin.userId } },
+      update: { role: 'admin', status: 'active' },
+      create: { projectId, userId: staleAdmin.userId, role: 'admin', status: 'active' },
+    });
+
+    let demoteAfterFirstAccessRead = true;
+    prisma.$use(async (params, next) => {
+      const result = await next(params);
+      const where = params.args?.where as { projectId?: string; userId?: string } | undefined;
+
+      if (
+        demoteAfterFirstAccessRead &&
+        params.model === 'ProjectUser' &&
+        params.action === 'findFirst' &&
+        where?.projectId === projectId &&
+        where?.userId === staleAdmin.userId
+      ) {
+        demoteAfterFirstAccessRead = false;
+        await prisma.projectUser.updateMany({
+          where: { projectId, userId: staleAdmin.userId },
+          data: { role: 'viewer' },
+        });
+      }
+
+      return result;
+    });
+
+    try {
+      const res = await request(app)
+        .post(`/api/projects/${projectId}/users`)
+        .set('Authorization', `Bearer ${staleAdmin.token}`)
+        .send({
+          email: invitee.email,
+          role: 'viewer',
+        });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.message).toContain('Only admins can invite users');
+      await expect(
+        prisma.projectUser.findFirst({ where: { projectId, userId: invitee.userId } }),
+      ).resolves.toBeNull();
+    } finally {
+      demoteAfterFirstAccessRead = false;
+      await prisma.projectUser.deleteMany({
+        where: { projectId, userId: { in: [staleAdmin.userId, invitee.userId] } },
+      });
+      await prisma.emailVerificationToken.deleteMany({
+        where: { userId: { in: [staleAdmin.userId, invitee.userId] } },
+      });
+      await prisma.user.deleteMany({ where: { id: { in: [staleAdmin.userId, invitee.userId] } } });
+    }
+  });
+
   it('should keep at least one active project admin', async () => {
     const companyAdminEmail = `team-company-admin-${Date.now()}@example.com`;
     const companyAdminRes = await request(app).post('/api/auth/register').send({

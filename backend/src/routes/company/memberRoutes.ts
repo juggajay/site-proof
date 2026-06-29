@@ -37,6 +37,7 @@ import {
   requireCompanyAdmin,
 } from './access.js';
 import {
+  invitedMemberHasCredentials,
   shouldMarkInvitedMemberVerified,
   shouldNotifyAttachedCompanyMember,
 } from './memberInvitation.js';
@@ -249,6 +250,7 @@ companyMemberRoutes.post(
       previousMemberState,
       previousActiveSetupTokenIds,
       notifyAttachedMember,
+      roleChangeAuditedInTransaction,
     } = await prisma.$transaction(async (tx) => {
       const currentUser = await tx.user.findUnique({
         where: { id: user.userId },
@@ -386,6 +388,7 @@ companyMemberRoutes.post(
 
       let member;
       if (existingUser) {
+        const mayUpdateExistingFullName = !invitedMemberHasCredentials(existingUser);
         const updated = await tx.user.updateMany({
           where: {
             id: existingUser.id,
@@ -399,7 +402,7 @@ companyMemberRoutes.post(
             ...(shouldMarkInvitedMemberVerified(existingUser)
               ? { emailVerified: true, emailVerifiedAt: new Date() }
               : {}),
-            ...(fullName !== undefined ? { fullName } : {}),
+            ...(fullName !== undefined && mayUpdateExistingFullName ? { fullName } : {}),
           },
         });
 
@@ -449,6 +452,30 @@ companyMemberRoutes.post(
         });
       }
 
+      const roleChangedExistingCompanyMember =
+        previousMemberState?.companyId === companyId &&
+        previousMemberState.roleInCompany !== roleInCompany;
+
+      if (roleChangedExistingCompanyMember) {
+        await writeAuditLogInTransaction(tx, {
+          userId: user.userId,
+          entityType: 'user',
+          entityId: member.id,
+          action: AuditAction.USER_ROLE_CHANGED,
+          changes: {
+            memberId: member.id,
+            memberEmail: member.email,
+            companyId,
+            source: 'company_member_invite',
+            roleInCompany: {
+              from: previousMemberState.roleInCompany,
+              to: roleInCompany,
+            },
+          },
+          req,
+        });
+      }
+
       return {
         company,
         member,
@@ -457,6 +484,7 @@ companyMemberRoutes.post(
         previousMemberState,
         previousActiveSetupTokenIds,
         notifyAttachedMember: shouldNotifyAttachedCompanyMember(existingUser, companyId),
+        roleChangeAuditedInTransaction: roleChangedExistingCompanyMember,
       };
     });
 
@@ -525,33 +553,35 @@ companyMemberRoutes.post(
       previousMemberState?.companyId === companyId &&
       previousMemberState.roleInCompany !== roleInCompany;
 
-    await createAuditLog({
-      userId: user.userId,
-      entityType: 'user',
-      entityId: member.id,
-      action: roleChangedExistingCompanyMember
-        ? AuditAction.USER_ROLE_CHANGED
-        : AuditAction.USER_INVITED,
-      changes: roleChangedExistingCompanyMember
-        ? {
-            memberId: member.id,
-            memberEmail: member.email,
-            companyId,
-            source: 'company_member_invite',
-            roleInCompany: {
-              from: previousMemberState.roleInCompany,
-              to: roleInCompany,
+    if (!roleChangeAuditedInTransaction) {
+      await createAuditLog({
+        userId: user.userId,
+        entityType: 'user',
+        entityId: member.id,
+        action: roleChangedExistingCompanyMember
+          ? AuditAction.USER_ROLE_CHANGED
+          : AuditAction.USER_INVITED,
+        changes: roleChangedExistingCompanyMember
+          ? {
+              memberId: member.id,
+              memberEmail: member.email,
+              companyId,
+              source: 'company_member_invite',
+              roleInCompany: {
+                from: previousMemberState.roleInCompany,
+                to: roleInCompany,
+              },
+            }
+          : {
+              invitedUserId: member.id,
+              invitedUserEmail: member.email,
+              roleInCompany,
+              companyId,
+              status: setupRequired ? 'pending' : 'active',
             },
-          }
-        : {
-            invitedUserId: member.id,
-            invitedUserEmail: member.email,
-            roleInCompany,
-            companyId,
-            status: setupRequired ? 'pending' : 'active',
-          },
-      req,
-    });
+        req,
+      });
+    }
 
     res.status(201).json(
       buildCompanyMemberInvitedResponse(member, {

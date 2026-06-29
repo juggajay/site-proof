@@ -127,8 +127,12 @@ function ProjectUsersTable({
   onRequestRemove: (user: ProjectUser) => void;
 }) {
   return (
-    <div className="rounded-lg border overflow-hidden">
-      <table className="w-full">
+    <div
+      className="overflow-x-auto rounded-lg border"
+      role="region"
+      aria-label="Project users table"
+    >
+      <table className="w-full min-w-[760px]">
         <thead className="border-b bg-muted/50">
           <tr>
             <th className="text-left px-4 py-3 text-sm font-medium">User</th>
@@ -528,6 +532,7 @@ export function ProjectUsersPage() {
                     onChange={(e) => setInviteEmail(e.target.value)}
                     placeholder="user@example.com"
                     className="flex-1"
+                    disabled={inviting}
                   />
                 </div>
               </div>
@@ -540,6 +545,7 @@ export function ProjectUsersPage() {
                   id="project-user-invite-role"
                   value={inviteRole}
                   onChange={(e) => setInviteRole(e.target.value)}
+                  disabled={inviting}
                 >
                   {assignableRoleOptions.map((role) => (
                     <option key={role.value} value={role.value}>
@@ -582,8 +588,10 @@ export function ProjectUsersPage() {
             <p>They will lose access to this project immediately.</p>
           </>
         }
-        confirmLabel="Remove"
+        confirmLabel={removingUserId === userPendingRemove?.id ? 'Removing...' : 'Remove'}
         variant="destructive"
+        confirmDisabled={removingUserId === userPendingRemove?.id}
+        cancelDisabled={removingUserId === userPendingRemove?.id}
         onCancel={() => setUserPendingRemove(null)}
         onConfirm={() => {
           if (userPendingRemove) void handleRemoveUser(userPendingRemove);
