@@ -3,7 +3,7 @@ import { Router, Request, Response } from 'express';
 import type { PrismaClient } from '@prisma/client';
 
 import { AppError } from '../../lib/AppError.js';
-import { AuditAction, createAuditLog } from '../../lib/auditLog.js';
+import { AuditAction, writeAuditLogInTransaction } from '../../lib/auditLog.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { sanitizeUrlValueForLog } from '../../lib/logSanitization.js';
 import { logWarn } from '../../lib/serverLogger.js';
@@ -113,22 +113,22 @@ export function createDocumentDeleteRouter({
         });
       }
 
-      // Audit log for document deletion
-      await createAuditLog({
-        projectId: document.projectId,
-        userId,
-        entityType: 'document',
-        entityId: documentId,
-        action: AuditAction.DOCUMENT_DELETED,
-        changes: {
-          filename: document.filename,
-          storageKind: getDocumentStorageKind(document.fileUrl),
-        },
-        req,
-      });
+      await prisma.$transaction(async (tx) => {
+        await writeAuditLogInTransaction(tx, {
+          projectId: document.projectId,
+          userId,
+          entityType: 'document',
+          entityId: documentId,
+          action: AuditAction.DOCUMENT_DELETED,
+          changes: {
+            filename: document.filename,
+            storageKind: getDocumentStorageKind(document.fileUrl),
+          },
+          req,
+        });
 
-      // Delete database record
-      await prisma.document.delete({ where: { id: documentId } });
+        await tx.document.delete({ where: { id: documentId } });
+      });
 
       try {
         if (

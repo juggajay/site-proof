@@ -6,6 +6,7 @@ import fs from 'fs';
 import { authRouter } from './auth.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
+import { AuditAction, parseAuditLogChanges } from '../lib/auditLog.js';
 
 vi.mock('../lib/supabase.js', async () => {
   const actual = await vi.importActual<typeof import('../lib/supabase.js')>('../lib/supabase.js');
@@ -157,6 +158,7 @@ describe('Drawings API', () => {
     // Cleanup
     await prisma.drawing.deleteMany({ where: { projectId } });
     await prisma.document.deleteMany({ where: { projectId } });
+    await prisma.auditLog.deleteMany({ where: { projectId } });
     await prisma.projectUser.deleteMany({ where: { projectId } });
     await prisma.project.delete({ where: { id: projectId } }).catch(() => {});
     await prisma.emailVerificationToken.deleteMany({ where: { userId } });
@@ -1136,6 +1138,23 @@ describe('Drawings API', () => {
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(res.status).toBe(204);
+
+      const auditLog = await prisma.auditLog.findFirst({
+        where: {
+          projectId,
+          userId,
+          entityType: 'drawing',
+          entityId: deleteDrawingId,
+          action: AuditAction.DRAWING_DELETED,
+        },
+      });
+      expect(auditLog).not.toBeNull();
+      const changes = parseAuditLogChanges(auditLog?.changes ?? null) as Record<string, unknown>;
+      expect(changes).toMatchObject({
+        drawingNumber: 'DRW-DELETE',
+        filename: 'to-delete.pdf',
+        storageKind: 'local',
+      });
     });
 
     it('should return 404 for non-existent drawing', async () => {

@@ -7,6 +7,7 @@ import crypto from 'crypto';
 import { authRouter } from './auth.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
+import { AuditAction, parseAuditLogChanges } from '../lib/auditLog.js';
 
 vi.mock('../lib/supabase.js', async () => {
   const actual = await vi.importActual<typeof import('../lib/supabase.js')>('../lib/supabase.js');
@@ -162,6 +163,7 @@ describe('Documents API', () => {
   afterAll(async () => {
     // Cleanup
     await prisma.document.deleteMany({ where: { projectId } });
+    await prisma.auditLog.deleteMany({ where: { projectId } });
     await prisma.lot.deleteMany({ where: { projectId } });
     await prisma.projectUser.deleteMany({ where: { projectId } });
     await prisma.project.delete({ where: { id: projectId } }).catch(() => {});
@@ -1548,6 +1550,36 @@ describe('Documents API', () => {
       }
     }
 
+    async function lockCompletionAsVerified() {
+      await prisma.iTPCompletion.update({
+        where: { id: completionId },
+        data: {
+          status: 'completed',
+          completedById: userId,
+          completedAt: new Date('2026-01-01T00:00:00.000Z'),
+          verificationStatus: 'verified',
+          verifiedAt: new Date('2026-01-02T00:00:00.000Z'),
+          verifiedById: userId,
+          verificationNotes: 'Verified evidence lock fixture',
+        },
+      });
+    }
+
+    async function resetCompletionForEvidenceUploads() {
+      await prisma.iTPCompletion.update({
+        where: { id: completionId },
+        data: {
+          status: 'pending',
+          completedById: null,
+          completedAt: null,
+          verificationStatus: 'none',
+          verifiedAt: null,
+          verifiedById: null,
+          verificationNotes: null,
+        },
+      });
+    }
+
     const expectSuccessfulUploadWithNoItpAttachment = async (res: {
       status: number;
       body: { id?: string } & Record<string, unknown>;
@@ -1585,6 +1617,122 @@ describe('Documents API', () => {
         expect(document?.lotId).toBe(lotId);
       } finally {
         await cleanupUploadedDocument(res.body);
+      }
+    });
+
+    it('rejects ITP evidence upload when the target completion is locked', async () => {
+      const filename = `itp-evidence-locked-upload-${Date.now()}.png`;
+      const beforeFiles = new Set(fs.readdirSync(uploadDir));
+
+      try {
+        await lockCompletionAsVerified();
+
+        const res = await uploadEvidence(
+          {
+            projectId,
+            documentType: 'photo',
+            category: 'itp_evidence',
+            entityType: 'itp',
+            entityId: completionId,
+            caption: 'Locked evidence should not store',
+          },
+          filename,
+        );
+
+        expect(res.status).toBe(409);
+        expect(res.body.error.message).toContain('ITP evidence cannot be changed');
+        await expect(prisma.document.findFirst({ where: { projectId, filename } })).resolves.toBe(
+          null,
+        );
+        await expect(
+          prisma.iTPCompletionAttachment.count({ where: { completionId } }),
+        ).resolves.toBe(0);
+        const leakedFiles = fs
+          .readdirSync(uploadDir)
+          .filter((file) => !beforeFiles.has(file) && file.includes(filename));
+        expect(leakedFiles).toHaveLength(0);
+      } finally {
+        await resetCompletionForEvidenceUploads();
+      }
+    });
+
+    it('rejects generic document mutations for evidence attached to a locked ITP completion', async () => {
+      const suffix = Date.now();
+      const lockedDocument = await prisma.document.create({
+        data: {
+          projectId,
+          lotId,
+          documentType: 'photo',
+          category: 'itp_evidence',
+          filename: `locked-itp-evidence-${suffix}.jpg`,
+          fileUrl: `/uploads/documents/locked-itp-evidence-${suffix}.jpg`,
+          fileSize: validPngBytes.length,
+          mimeType: 'image/png',
+          uploadedById: userId,
+          caption: 'Original locked ITP evidence',
+        },
+      });
+      const attachment = await prisma.iTPCompletionAttachment.create({
+        data: {
+          completionId,
+          documentId: lockedDocument.id,
+        },
+      });
+      const versionFilename = `locked-itp-evidence-version-${suffix}.png`;
+      const beforeFiles = new Set(fs.readdirSync(uploadDir));
+
+      try {
+        await lockCompletionAsVerified();
+
+        const patchRes = await request(app)
+          .patch(`/api/documents/${lockedDocument.id}`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ caption: 'Should not update locked ITP evidence' });
+        expect(patchRes.status).toBe(409);
+        expect(patchRes.body.error.message).toContain('ITP evidence cannot be changed');
+
+        const classificationRes = await request(app)
+          .post(`/api/documents/${lockedDocument.id}/save-classification`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ classification: 'Defect' });
+        expect(classificationRes.status).toBe(409);
+        expect(classificationRes.body.error.message).toContain('ITP evidence cannot be changed');
+
+        const versionRes = await request(app)
+          .post(`/api/documents/${lockedDocument.id}/version`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .attach('file', validPngBytes, { filename: versionFilename, contentType: 'image/png' });
+        expect(versionRes.status).toBe(409);
+        expect(versionRes.body.error.message).toContain('ITP evidence cannot be changed');
+
+        const deleteRes = await request(app)
+          .delete(`/api/documents/${lockedDocument.id}`)
+          .set('Authorization', `Bearer ${authToken}`);
+        expect(deleteRes.status).toBe(409);
+        expect(deleteRes.body.error.message).toContain('ITP evidence cannot be changed');
+
+        const afterDocument = await prisma.document.findUniqueOrThrow({
+          where: { id: lockedDocument.id },
+        });
+        expect(afterDocument.caption).toBe('Original locked ITP evidence');
+        expect(afterDocument.aiClassification).toBeNull();
+        await expect(
+          prisma.iTPCompletionAttachment.findUnique({ where: { id: attachment.id } }),
+        ).resolves.not.toBeNull();
+        await expect(
+          prisma.document.count({ where: { parentDocumentId: lockedDocument.id } }),
+        ).resolves.toBe(0);
+
+        const leakedFiles = fs
+          .readdirSync(uploadDir)
+          .filter((file) => !beforeFiles.has(file) && file.includes(versionFilename));
+        expect(leakedFiles).toHaveLength(0);
+      } finally {
+        await resetCompletionForEvidenceUploads();
+        await prisma.iTPCompletionAttachment.deleteMany({
+          where: { id: attachment.id },
+        });
+        await prisma.document.deleteMany({ where: { id: lockedDocument.id } });
       }
     });
 
@@ -3076,6 +3224,22 @@ describe('Documents API', () => {
 
       // API returns 204 No Content on successful deletion
       expect(res.status).toBe(204);
+
+      const auditLog = await prisma.auditLog.findFirst({
+        where: {
+          projectId,
+          userId,
+          entityType: 'document',
+          entityId: deleteDocId,
+          action: AuditAction.DOCUMENT_DELETED,
+        },
+      });
+      expect(auditLog).not.toBeNull();
+      const changes = parseAuditLogChanges(auditLog?.changes ?? null) as Record<string, unknown>;
+      expect(changes).toMatchObject({
+        filename: 'to-delete.jpg',
+        storageKind: 'local',
+      });
     });
 
     it('should return 404 for already deleted document', async () => {

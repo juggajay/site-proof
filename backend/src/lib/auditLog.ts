@@ -210,6 +210,7 @@ export const AuditAction = {
   HP_PUBLIC_RELEASED: 'hp_public_released',
   // Documents
   DOCUMENT_DELETED: 'document_deleted',
+  DRAWING_DELETED: 'drawing_deleted',
   // Test Results
   TEST_RESULT_CREATED: 'test_result_created',
   TEST_RESULT_UPDATED: 'test_result_updated',

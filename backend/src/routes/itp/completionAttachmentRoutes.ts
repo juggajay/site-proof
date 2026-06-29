@@ -31,6 +31,7 @@ import {
   resolveChecklistItemForInstance,
   type ChecklistItem,
 } from './helpers/templateSnapshot.js';
+import { assertItpCompletionEvidenceUnlocked } from './helpers/evidenceLock.js';
 
 const ITP_ATTACHMENT_FILENAME_MAX_LENGTH = 180;
 const ITP_ATTACHMENT_URL_MAX_LENGTH = 2048;
@@ -195,6 +196,7 @@ completionAttachmentRoutes.post(
       completion,
       'ITP attachment write access required',
     );
+    assertItpCompletionEvidenceUnlocked(completion);
 
     const parsedGpsLatitude = parseOptionalGpsCoordinate(gpsLatitude, 'gpsLatitude', -90, 90);
     const parsedGpsLongitude = parseOptionalGpsCoordinate(gpsLongitude, 'gpsLongitude', -180, 180);
@@ -414,6 +416,8 @@ completionAttachmentRoutes.delete(
       include: {
         completion: {
           select: {
+            status: true,
+            verificationStatus: true,
             checklistItemId: true,
             checklistItem: {
               select: {
@@ -481,6 +485,7 @@ completionAttachmentRoutes.delete(
       attachment.completion,
       'ITP attachment write access required',
     );
+    assertItpCompletionEvidenceUnlocked(attachment.completion);
 
     // Delete the attachment (document remains for record keeping)
     await prisma.iTPCompletionAttachment.delete({
