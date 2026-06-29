@@ -492,12 +492,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return null;
   };
 
-  // Feature #414: Set token from OAuth callback
-  const setToken = async (token: string, trustedUser?: User): Promise<User> => {
+  // Feature #414: Set token from OAuth/magic-link callbacks.
+  const setToken = async (token: string, _trustedUser?: User): Promise<User> => {
     try {
-      const result: CurrentUserResult = isStoredUser(trustedUser)
-        ? { status: 'ok', user: trustedUser }
-        : await fetchCurrentUser(token);
+      const result = await fetchCurrentUser(token);
 
       if (result.status === 'ok') {
         // Clear any existing auth from both storages

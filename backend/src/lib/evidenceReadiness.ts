@@ -4,6 +4,7 @@ import type {
   LotReadinessInput,
 } from './evidenceReadiness/core.js';
 import { bucketState, item, splitItems, summarize } from './evidenceReadiness/core.js';
+import { getClaimBlockingReasonsForConformedLot } from './conformancePrerequisites.js';
 
 export type {
   ClaimEvidenceReview,
@@ -33,7 +34,10 @@ function buildConformanceItems(input: LotReadinessInput): EvidenceReadinessItem[
     ];
   }
 
-  if (lot.status === 'conformed') {
+  if (
+    lot.status === 'conformed' &&
+    getClaimBlockingReasonsForConformedLot(conformStatus).length === 0
+  ) {
     return [
       item({
         code: 'lot_already_conformed',
@@ -151,7 +155,7 @@ function roundReadinessPercentage(value: number): number {
 }
 
 function buildClaimItems(input: LotReadinessInput): EvidenceReadinessItem[] {
-  const { lot, evidenceCounts, canViewCommercial } = input;
+  const { lot, evidenceCounts, canViewCommercial, conformStatus } = input;
   const items: EvidenceReadinessItem[] = [];
 
   const claimedPercentage = roundReadinessPercentage(lot.claimedPercentage ?? 0);
@@ -192,6 +196,21 @@ function buildClaimItems(input: LotReadinessInput): EvidenceReadinessItem[] {
         blocksAction: true,
       }),
     );
+  } else {
+    const currentConformanceBlockers = getClaimBlockingReasonsForConformedLot(conformStatus);
+    if (currentConformanceBlockers.length > 0) {
+      items.push(
+        item({
+          code: 'conformance_no_longer_current',
+          severity: 'blocker',
+          area: 'conformance',
+          title: 'Conformance needs review',
+          detail: currentConformanceBlockers.join('; '),
+          blocksAction: true,
+          actionLabel: 'Review conformance',
+        }),
+      );
+    }
   }
 
   if (canViewCommercial && lot.status === 'conformed' && lot.budgetAmount === null) {
@@ -304,7 +323,8 @@ export function buildLotReadinessFromInputs(input: LotReadinessInput): LotEviden
   const conformanceState =
     input.lot.status === 'claimed'
       ? 'already_claimed'
-      : input.lot.status === 'conformed'
+      : input.lot.status === 'conformed' &&
+          getClaimBlockingReasonsForConformedLot(input.conformStatus).length === 0
         ? 'already_conformed'
         : bucketState(conformanceItems);
 

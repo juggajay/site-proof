@@ -151,8 +151,10 @@ export function getExpressTrustProxySetting(
 
 function assertProductionTrustProxyConfig(): void {
   const normalizedValue = process.env.TRUST_PROXY?.trim().toLowerCase();
-  if (!normalizedValue) {
-    return;
+  if (!normalizedValue || ['0', 'false', 'no'].includes(normalizedValue)) {
+    throw new Error(
+      'FATAL: TRUST_PROXY must be set to a bounded proxy value in production (for example TRUST_PROXY=1 or a trusted proxy CIDR list).',
+    );
   }
 
   if (['true', 'yes'].includes(normalizedValue)) {

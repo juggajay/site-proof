@@ -5,6 +5,8 @@ import {
   type ChecklistItem,
 } from '../routes/itp/helpers/templateSnapshot.js';
 
+type ConformancePrismaClient = Pick<typeof prisma, 'holdPoint' | 'lot'>;
+
 // A checklist item counts as finished for conformance when its completion
 // status is 'completed' OR 'not_applicable'. Owner decision (2026-06-11):
 // legitimately N/A items satisfy conformance, consistent with how lot
@@ -120,6 +122,19 @@ interface ConformancePrerequisites {
   noNaHoldPointBypass: boolean;
 }
 
+interface ClaimConformancePrerequisites {
+  itpAssigned: boolean;
+  itpCompleted: boolean;
+  itpCompletedCount: number;
+  itpTotalCount: number;
+  testRequired: boolean;
+  hasPassingTest: boolean;
+  noOpenNcrs: boolean;
+  openNcrs: { id: string; ncrNumber: string; description: string; status: string }[];
+  naHoldPointBlockerCount?: number;
+  noNaHoldPointBypass?: boolean;
+}
+
 interface ConformanceCheckResult {
   error?: string;
   lot: {
@@ -131,6 +146,41 @@ interface ConformanceCheckResult {
   prerequisites?: ConformancePrerequisites;
   canConform?: boolean;
   blockingReasons?: string[];
+}
+
+export function getClaimBlockingReasonsForConformedLot(
+  conformance: { prerequisites?: ClaimConformancePrerequisites } | null | undefined,
+): string[] {
+  const prerequisites = conformance?.prerequisites;
+  if (!prerequisites) {
+    return ['Conformance prerequisites could not be verified'];
+  }
+
+  const reasons: string[] = [];
+  // A stored conformed lot without an ITP may be a legacy/imported or
+  // deliberately force-conformed record. Do not retroactively block claims for
+  // that historical state alone, but still enforce regressions like open NCRs.
+  if (prerequisites.itpAssigned) {
+    if (!prerequisites.itpCompleted) {
+      reasons.push(
+        `ITP checklist incomplete (${prerequisites.itpCompletedCount}/${prerequisites.itpTotalCount} items completed)`,
+      );
+    }
+    if (prerequisites.testRequired && !prerequisites.hasPassingTest) {
+      reasons.push('ITP requires a matching passing verified test result');
+    }
+  }
+  if (!prerequisites.noOpenNcrs) {
+    reasons.push(`${prerequisites.openNcrs.length} open NCR(s) must be closed`);
+  }
+  if (!(prerequisites.noNaHoldPointBypass ?? true)) {
+    const blockerCount = prerequisites.naHoldPointBlockerCount ?? 0;
+    reasons.push(
+      `${blockerCount} hold point item${blockerCount === 1 ? '' : 's'} marked N/A but not released`,
+    );
+  }
+
+  return reasons;
 }
 
 type NormalizedChecklistItem = ChecklistItem & {
@@ -394,7 +444,10 @@ export function computeConformanceResult(
 // Released-hold-point checklist-item ids for ONE lot (single path). Preserves
 // the original query shape and the skip-when-no-na-items behavior so the
 // single-lot gate stays byte-identical.
-async function fetchReleasedHoldPointItemIdsForLot(lot: LotForConformance): Promise<Set<string>> {
+async function fetchReleasedHoldPointItemIdsForLot(
+  lot: LotForConformance,
+  client: ConformancePrismaClient = prisma,
+): Promise<Set<string>> {
   if (!lot.itpInstance) return new Set();
   const checklistItems = getNormalizedChecklistItems(lot.itpInstance);
   const naSignoffItemIds = getNaHoldPointSignoffItemIds(
@@ -403,7 +456,7 @@ async function fetchReleasedHoldPointItemIdsForLot(lot: LotForConformance): Prom
   );
   if (naSignoffItemIds.length === 0) return new Set();
 
-  const releasedHoldPoints = await prisma.holdPoint.findMany({
+  const releasedHoldPoints = await client.holdPoint.findMany({
     where: {
       lotId: lot.id,
       itpChecklistItemId: { in: naSignoffItemIds },
@@ -419,8 +472,9 @@ async function fetchReleasedHoldPointItemIdsForLot(lot: LotForConformance): Prom
 
 export async function checkConformancePrerequisites(
   lotId: string,
+  client: ConformancePrismaClient = prisma,
 ): Promise<ConformanceCheckResult> {
-  const lot = await prisma.lot.findUnique({
+  const lot = await client.lot.findUnique({
     where: { id: lotId },
     include: CONFORMANCE_LOT_INCLUDE,
   });
@@ -429,7 +483,7 @@ export async function checkConformancePrerequisites(
     return { error: 'Lot not found', lot: null };
   }
 
-  const releasedHoldPointItemIds = await fetchReleasedHoldPointItemIdsForLot(lot);
+  const releasedHoldPointItemIds = await fetchReleasedHoldPointItemIdsForLot(lot, client);
   return computeConformanceResult(lot, releasedHoldPointItemIds);
 }
 
@@ -441,11 +495,12 @@ export async function checkConformancePrerequisites(
 // that require every lot should treat a missing key as not-found). (M39)
 export async function checkConformancePrerequisitesBatch(
   lotIds: string[],
+  client: ConformancePrismaClient = prisma,
 ): Promise<Map<string, ConformanceCheckResult>> {
   const results = new Map<string, ConformanceCheckResult>();
   if (lotIds.length === 0) return results;
 
-  const lots = await prisma.lot.findMany({
+  const lots = await client.lot.findMany({
     where: { id: { in: lotIds } },
     include: CONFORMANCE_LOT_INCLUDE,
   });
@@ -463,7 +518,7 @@ export async function checkConformancePrerequisitesBatch(
 
   const releasedByLot = new Map<string, Set<string>>();
   if (allNaSignoffItemIds.length > 0) {
-    const releasedHoldPoints = await prisma.holdPoint.findMany({
+    const releasedHoldPoints = await client.holdPoint.findMany({
       where: {
         lotId: { in: lotIds },
         itpChecklistItemId: { in: allNaSignoffItemIds },
