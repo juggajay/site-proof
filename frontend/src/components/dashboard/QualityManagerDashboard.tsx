@@ -1,5 +1,5 @@
 // Feature #293: Quality Manager Dashboard
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { useQuery } from '@tanstack/react-query';
@@ -118,7 +118,7 @@ export function QualityManagerDashboard() {
   const navigate = useNavigate();
   const [refreshing, setRefreshing] = useState(false);
 
-  const { requestedProjectId, setProjectId } = useDashboardProjectId();
+  const { requestedProjectId, setProjectId, syncResolvedProjectId } = useDashboardProjectId();
   const {
     data: dashboardData,
     isLoading: loading,
@@ -143,6 +143,10 @@ export function QualityManagerDashboard() {
       setRefreshing(false);
     });
   };
+
+  useEffect(() => {
+    syncResolvedProjectId(dashboardData?.project?.id);
+  }, [dashboardData?.project?.id, syncResolvedProjectId]);
 
   if (loading) {
     return (

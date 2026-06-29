@@ -1,11 +1,17 @@
 import { Link } from 'react-router-dom';
-import { Camera, FileText, FlaskConical, FolderKanban, Plus, Settings2 } from 'lucide-react';
+import { FileText, FlaskConical, FolderKanban, Plus, Settings2 } from 'lucide-react';
 
 interface DashboardQuickLinksProps {
   reportsQuickLink: string;
+  quickActionProjectId?: string;
 }
 
-export function DashboardQuickLinks({ reportsQuickLink }: DashboardQuickLinksProps) {
+export function DashboardQuickLinks({
+  reportsQuickLink,
+  quickActionProjectId,
+}: DashboardQuickLinksProps) {
+  const encodedProjectId = quickActionProjectId ? encodeURIComponent(quickActionProjectId) : null;
+
   return (
     <div className="bg-card rounded-lg border">
       <div className="border-b p-4">
@@ -41,35 +47,29 @@ export function DashboardQuickLinks({ reportsQuickLink }: DashboardQuickLinksPro
           <span className="text-sm font-medium">Settings</span>
         </Link>
       </div>
-      {/* Feature #500: Quick Actions */}
-      <div className="px-4 pb-4">
-        <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-          Quick Actions
-        </h3>
-        <div className="grid gap-3 sm:grid-cols-3">
-          <Link
-            to="/projects?action=photo"
-            className="flex items-center gap-3 rounded-md border p-3 transition-colors hover:border-foreground/20 hover:bg-muted"
-          >
-            <Camera className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm font-medium text-foreground">Quick Photo</span>
-          </Link>
-          <Link
-            to="/projects?action=create-lot"
-            className="flex items-center gap-3 rounded-md border p-3 transition-colors hover:border-foreground/20 hover:bg-muted"
-          >
-            <Plus className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm font-medium text-foreground">Create Lot</span>
-          </Link>
-          <Link
-            to="/projects?action=add-test"
-            className="flex items-center gap-3 rounded-md border p-3 transition-colors hover:border-foreground/20 hover:bg-muted"
-          >
-            <FlaskConical className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm font-medium text-foreground">Add Test</span>
-          </Link>
+      {encodedProjectId && (
+        <div className="px-4 pb-4">
+          <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Quick Actions
+          </h3>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Link
+              to={`/projects/${encodedProjectId}/lots`}
+              className="flex items-center gap-3 rounded-md border p-3 transition-colors hover:border-foreground/20 hover:bg-muted"
+            >
+              <Plus className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium text-foreground">Create Lot</span>
+            </Link>
+            <Link
+              to={`/projects/${encodedProjectId}/tests`}
+              className="flex items-center gap-3 rounded-md border p-3 transition-colors hover:border-foreground/20 hover:bg-muted"
+            >
+              <FlaskConical className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium text-foreground">Add Test</span>
+            </Link>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

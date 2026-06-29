@@ -89,10 +89,18 @@ portfolioDashboardRouter.get(
       throw AppError.unauthorized('User not found');
     }
 
-    // Get all projects the user has access to
+    // Get all commercial projects the user has access to
     const projectAccess = await getDashboardProjectAccess(req.user!);
 
-    const projectIds = projectAccess.map((pa) => pa.projectId);
+    requireDashboardRoleIfProjectMember(
+      projectAccess,
+      COMMERCIAL_DASHBOARD_ROLES,
+      'You do not have permission to view portfolio NCRs',
+    );
+
+    const projectIds = projectAccess
+      .filter((pa) => COMMERCIAL_DASHBOARD_ROLES.has(pa.role))
+      .map((pa) => pa.projectId);
 
     // If no projects, return empty list
     if (projectIds.length === 0) {
@@ -160,10 +168,18 @@ portfolioDashboardRouter.get(
       throw AppError.unauthorized('User not found');
     }
 
-    // Get all projects the user has access to
+    // Get all commercial projects the user has access to
     const projectAccess = await getDashboardProjectAccess(req.user!);
 
-    const projectIds = projectAccess.map((pa) => pa.projectId);
+    requireDashboardRoleIfProjectMember(
+      projectAccess,
+      COMMERCIAL_DASHBOARD_ROLES,
+      'You do not have permission to view portfolio risks',
+    );
+
+    const projectIds = projectAccess
+      .filter((pa) => COMMERCIAL_DASHBOARD_ROLES.has(pa.role))
+      .map((pa) => pa.projectId);
 
     if (projectIds.length === 0) {
       return res.json(buildProjectsAtRiskResponse([]));
