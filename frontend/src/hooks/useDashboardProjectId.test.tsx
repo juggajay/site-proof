@@ -6,9 +6,17 @@ import type { ReactNode } from 'react';
 vi.mock('@/lib/auth', () => ({ useAuth: vi.fn() }));
 
 import { useAuth } from '@/lib/auth';
+import {
+  readLocalStorageItem,
+  removeLocalStorageItem,
+  writeLocalStorageItem,
+} from '@/lib/storagePreferences';
 import { useDashboardProjectId } from './useDashboardProjectId';
 
 const useAuthMock = vi.mocked(useAuth);
+const USER_A_KEY = 'dashboardProjectId:user-a';
+const USER_B_KEY = 'dashboardProjectId:user-b';
+const LEGACY_GLOBAL_KEY = 'dashboardProjectId';
 
 function setUser(userId: string | null) {
   useAuthMock.mockReturnValue({
@@ -22,21 +30,27 @@ function createWrapper(initialEntry = '/dashboard') {
   );
 }
 
+function clearDashboardProjectStorage() {
+  removeLocalStorageItem(USER_A_KEY);
+  removeLocalStorageItem(USER_B_KEY);
+  removeLocalStorageItem(LEGACY_GLOBAL_KEY);
+}
+
 beforeEach(() => {
-  window.localStorage.clear();
+  clearDashboardProjectStorage();
   setUser('user-a');
 });
 
 afterEach(() => {
   vi.clearAllMocks();
-  window.localStorage.clear();
+  clearDashboardProjectStorage();
 });
 
 describe('useDashboardProjectId', () => {
   it('reads the remembered dashboard project from user-scoped storage', () => {
-    window.localStorage.setItem('dashboardProjectId:user-a', 'project-a');
-    window.localStorage.setItem('dashboardProjectId:user-b', 'project-b');
-    window.localStorage.setItem('dashboardProjectId', 'legacy-global-project');
+    writeLocalStorageItem(USER_A_KEY, 'project-a');
+    writeLocalStorageItem(USER_B_KEY, 'project-b');
+    writeLocalStorageItem(LEGACY_GLOBAL_KEY, 'legacy-global-project');
 
     const { result } = renderHook(() => useDashboardProjectId(), {
       wrapper: createWrapper(),
@@ -46,7 +60,7 @@ describe('useDashboardProjectId', () => {
   });
 
   it('ignores another user’s remembered project in the same browser', () => {
-    window.localStorage.setItem('dashboardProjectId:user-a', 'project-a');
+    writeLocalStorageItem(USER_A_KEY, 'project-a');
     setUser('user-b');
 
     const { result } = renderHook(() => useDashboardProjectId(), {
@@ -57,7 +71,7 @@ describe('useDashboardProjectId', () => {
   });
 
   it('prefers the URL project id over remembered storage', () => {
-    window.localStorage.setItem('dashboardProjectId:user-a', 'project-a');
+    writeLocalStorageItem(USER_A_KEY, 'project-a');
 
     const { result } = renderHook(() => useDashboardProjectId(), {
       wrapper: createWrapper('/dashboard?projectId=url-project'),
@@ -75,12 +89,12 @@ describe('useDashboardProjectId', () => {
       result.current.setProjectId('project-next');
     });
 
-    expect(window.localStorage.getItem('dashboardProjectId:user-a')).toBe('project-next');
-    expect(window.localStorage.getItem('dashboardProjectId')).toBeNull();
+    expect(readLocalStorageItem(USER_A_KEY)).toBe('project-next');
+    expect(readLocalStorageItem(LEGACY_GLOBAL_KEY)).toBeNull();
   });
 
   it('can sync a backend-resolved project over a stale remembered request', () => {
-    window.localStorage.setItem('dashboardProjectId:user-a', 'stale-project');
+    writeLocalStorageItem(USER_A_KEY, 'stale-project');
 
     const { result } = renderHook(() => useDashboardProjectId(), {
       wrapper: createWrapper(),
@@ -90,6 +104,6 @@ describe('useDashboardProjectId', () => {
       result.current.syncResolvedProjectId('canonical-project');
     });
 
-    expect(window.localStorage.getItem('dashboardProjectId:user-a')).toBe('canonical-project');
+    expect(readLocalStorageItem(USER_A_KEY)).toBe('canonical-project');
   });
 });
