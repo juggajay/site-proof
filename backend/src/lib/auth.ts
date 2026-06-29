@@ -37,6 +37,13 @@ interface TokenPayload {
 
 const MFA_CHALLENGE_TOKEN_TYPE = 'mfa_challenge';
 
+export class AuthVerificationError extends Error {
+  constructor(message = 'Authentication verification failed', options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = 'AuthVerificationError';
+  }
+}
+
 export function isRevokedAuthTokenStorageUnavailable(error: unknown): boolean {
   return (
     error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -64,12 +71,19 @@ export interface AuthUser {
 }
 
 export async function verifyToken(token: string): Promise<AuthUser | null> {
-  try {
-    const payload = jwt.verify(token, EFFECTIVE_JWT_SECRET) as TokenPayload;
-    if (payload.type && payload.type !== 'access') {
-      return null;
-    }
+  let payload: TokenPayload;
 
+  try {
+    payload = jwt.verify(token, EFFECTIVE_JWT_SECRET) as TokenPayload;
+  } catch {
+    return null;
+  }
+
+  if (payload.type && payload.type !== 'access') {
+    return null;
+  }
+
+  try {
     try {
       const tokenHash = hashAuthToken(token);
       const revokedToken = await prisma.revokedAuthToken.findUnique({
@@ -164,8 +178,8 @@ export async function verifyToken(token: string): Promise<AuthUser | null> {
         roleInCompany: user.role_in_company,
       }),
     };
-  } catch {
-    return null;
+  } catch (error) {
+    throw new AuthVerificationError('Authentication verification unavailable', { cause: error });
   }
 }
 

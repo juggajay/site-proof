@@ -431,7 +431,7 @@ export async function clearFailedAuthAttempts(
 }
 
 async function handleAuthRateLimit(req: Request, res: Response, next: NextFunction) {
-  if (req.method === 'GET' && req.path === '/me') {
+  if (isRoutineAuthEndpoint(req)) {
     next();
     return;
   }
@@ -460,6 +460,23 @@ async function handleAuthRateLimit(req: Request, res: Response, next: NextFuncti
   }
 
   next();
+}
+
+function isRoutineAuthEndpoint(req: Request): boolean {
+  const descriptor = `${req.method.toUpperCase()} ${req.path}`;
+  if (
+    descriptor === 'GET /me' ||
+    descriptor === 'POST /onboarding/complete' ||
+    descriptor === 'POST /logout' ||
+    descriptor === 'POST /logout-all-devices' ||
+    descriptor === 'PATCH /profile' ||
+    descriptor === 'POST /avatar' ||
+    descriptor === 'DELETE /avatar'
+  ) {
+    return true;
+  }
+
+  return req.method.toUpperCase() === 'GET' && req.path.startsWith('/avatar/file/');
 }
 
 /**

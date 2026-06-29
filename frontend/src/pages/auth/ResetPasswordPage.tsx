@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -11,17 +11,25 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 type ResetPasswordFormData = z.infer<typeof resetPasswordSchema>;
+type ResetTokenValidationResponse = {
+  valid: boolean;
+  message?: string;
+  requiresTosAcceptance?: boolean;
+};
 
 export function ResetPasswordPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const token = searchParams.get('token');
+  const [token] = useState(() => searchParams.get('token'));
 
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
   const [validating, setValidating] = useState(true);
   const [tokenValid, setTokenValid] = useState(false);
   const [tokenError, setTokenError] = useState('');
+  const [canRetryValidation, setCanRetryValidation] = useState(false);
+  const [requiresTosAcceptance, setRequiresTosAcceptance] = useState(false);
+  const [tosAccepted, setTosAccepted] = useState(false);
   const handledRef = useRef(false);
 
   const {
@@ -50,6 +58,39 @@ export function ResetPasswordPage() {
     [password],
   );
 
+  const validateToken = useCallback(async () => {
+    setValidating(true);
+    setTokenValid(false);
+    setTokenError('');
+    setCanRetryValidation(false);
+
+    if (!token) {
+      setTokenError('No reset token provided');
+      setValidating(false);
+      return;
+    }
+
+    try {
+      window.history.replaceState(null, document.title, '/reset-password');
+
+      const data = await apiFetch<ResetTokenValidationResponse>(
+        `/api/auth/validate-reset-token?token=${encodeURIComponent(token)}`,
+      );
+
+      if (data.valid) {
+        setTokenValid(true);
+        setRequiresTosAcceptance(data.requiresTosAcceptance === true);
+      } else {
+        setTokenError(data.message || 'Invalid or expired reset token');
+      }
+    } catch {
+      setTokenError('Failed to validate token. Please try again.');
+      setCanRetryValidation(true);
+    } finally {
+      setValidating(false);
+    }
+  }, [token]);
+
   // Validate token on mount
   useEffect(() => {
     if (handledRef.current) {
@@ -57,42 +98,27 @@ export function ResetPasswordPage() {
     }
     handledRef.current = true;
 
-    async function validateToken() {
-      if (!token) {
-        setTokenError('No reset token provided');
-        setValidating(false);
-        return;
-      }
-
-      try {
-        window.history.replaceState(null, document.title, '/reset-password');
-
-        const data = await apiFetch<{ valid: boolean; message?: string }>(
-          `/api/auth/validate-reset-token?token=${encodeURIComponent(token)}`,
-        );
-
-        if (data.valid) {
-          setTokenValid(true);
-        } else {
-          setTokenError(data.message || 'Invalid or expired reset token');
-        }
-      } catch {
-        setTokenError('Failed to validate token. Please try again.');
-      } finally {
-        setValidating(false);
-      }
-    }
-
     validateToken();
-  }, [token]);
+  }, [validateToken]);
 
   const onSubmit = async (data: ResetPasswordFormData) => {
+    if (requiresTosAcceptance && !tosAccepted) {
+      setError('root', {
+        message: 'You must accept the Terms of Service to activate your account.',
+      });
+      return;
+    }
+
     setLoading(true);
 
     try {
       await apiFetch('/api/auth/reset-password', {
         method: 'POST',
-        body: JSON.stringify({ token, password: data.password }),
+        body: JSON.stringify({
+          token,
+          password: data.password,
+          ...(requiresTosAcceptance ? { tosAccepted } : {}),
+        }),
       });
 
       setSuccess(true);
@@ -128,6 +154,11 @@ export function ResetPasswordPage() {
         <h2 className="text-2xl font-bold text-destructive">Invalid Reset Link</h2>
         <p className="text-muted-foreground">{tokenError}</p>
         <div className="space-y-2 pt-4">
+          {canRetryValidation && (
+            <Button type="button" onClick={validateToken} className="w-full">
+              Try Again
+            </Button>
+          )}
           <Link
             to="/forgot-password"
             className="block w-full rounded-lg bg-primary py-2 text-center text-primary-foreground hover:bg-primary/90"
@@ -263,6 +294,40 @@ export function ResetPasswordPage() {
           </p>
         )}
       </div>
+
+      {requiresTosAcceptance && (
+        <div className="rounded-lg border bg-muted/50 p-4">
+          <div className="flex items-start gap-3">
+            <input
+              id="tosAccepted"
+              type="checkbox"
+              checked={tosAccepted}
+              onChange={(event) => setTosAccepted(event.target.checked)}
+              className="mt-1 h-4 w-4 rounded border-border accent-primary text-primary focus:ring-primary"
+            />
+            <label htmlFor="tosAccepted" className="text-sm">
+              I accept the{' '}
+              <Link
+                to="/terms-of-service"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-foreground underline"
+              >
+                Terms of Service
+              </Link>{' '}
+              and{' '}
+              <Link
+                to="/privacy-policy"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-foreground underline"
+              >
+                Privacy Policy
+              </Link>
+            </label>
+          </div>
+        </div>
+      )}
 
       <Button type="submit" disabled={loading} className="w-full">
         {loading ? 'Resetting Password...' : 'Reset Password'}

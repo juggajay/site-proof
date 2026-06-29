@@ -1,24 +1,34 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import type { ReactElement } from 'react';
-import { Route, Routes } from 'react-router-dom';
+import { Route, Routes, useLocation } from 'react-router-dom';
 import { renderWithProviders, screen } from '@/test/renderWithProviders';
 
 const authState = vi.hoisted(() => ({
   user: null as Record<string, unknown> | null,
   loading: false,
+  sessionExpired: false,
 }));
 
 vi.mock('@/lib/auth', () => ({
-  useAuth: () => ({ user: authState.user, loading: authState.loading }),
+  useAuth: () => ({
+    user: authState.user,
+    loading: authState.loading,
+    sessionExpired: authState.sessionExpired,
+  }),
 }));
 
 import { RoleProtectedRoute } from './RoleProtectedRoute';
+
+function LoginProbe() {
+  const location = useLocation();
+  return <div>Login {location.state?.sessionExpired === true ? 'expired' : 'plain'}</div>;
+}
 
 function renderRoute(element: ReactElement) {
   return renderWithProviders(
     <Routes>
       <Route path="/" element={element} />
-      <Route path="/login" element={<div>Login</div>} />
+      <Route path="/login" element={<LoginProbe />} />
       <Route path="/dashboard" element={<div>Dashboard</div>} />
     </Routes>,
   );
@@ -26,6 +36,7 @@ function renderRoute(element: ReactElement) {
 
 beforeEach(() => {
   authState.loading = false;
+  authState.sessionExpired = false;
   authState.user = {
     id: 'u1',
     role: 'member',
@@ -75,5 +86,19 @@ describe('RoleProtectedRoute', () => {
     );
 
     expect(screen.getByRole('heading', { name: 'Access Denied' })).toBeInTheDocument();
+  });
+
+  it('preserves expired-session state when redirecting anonymous users to login', () => {
+    authState.user = null;
+    authState.sessionExpired = true;
+
+    renderRoute(
+      <RoleProtectedRoute allowedRoles={['foreman']} allowProjectScopedRole>
+        <div>Protected Content</div>
+      </RoleProtectedRoute>,
+    );
+
+    expect(screen.getByText('Login expired')).toBeInTheDocument();
+    expect(screen.queryByText('Protected Content')).not.toBeInTheDocument();
   });
 });

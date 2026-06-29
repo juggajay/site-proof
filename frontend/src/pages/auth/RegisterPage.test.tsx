@@ -1,10 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, renderWithProviders, screen, waitFor } from '@/test/renderWithProviders';
+import type { User } from '@/lib/auth';
 
 // RegisterPage only needs signUp from the auth context here.
 const signUpMock = vi.fn();
+let authUser: User | null = null;
+let authLoading = false;
 vi.mock('@/lib/auth', () => ({
-  useAuth: () => ({ signUp: signUpMock }),
+  useAuth: () => ({ signUp: signUpMock, user: authUser, loading: authLoading }),
 }));
 
 const navigateMock = vi.fn();
@@ -33,6 +36,34 @@ async function fillAndSubmitRegistration() {
 
 afterEach(() => {
   vi.clearAllMocks();
+  authUser = null;
+  authLoading = false;
+});
+
+describe('RegisterPage authenticated redirect', () => {
+  it('moves an already signed-in user out of the public registration form', async () => {
+    authUser = {
+      id: 'user-1',
+      email: 'owner@example.com',
+      role: 'owner',
+      companyId: 'company-1',
+    };
+
+    renderWithProviders(<RegisterPage />);
+
+    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/dashboard', { replace: true }));
+    expect(screen.queryByRole('heading', { name: 'Create Account' })).not.toBeInTheDocument();
+    expect(signUpMock).not.toHaveBeenCalled();
+  });
+
+  it('keeps the registration form hidden while the current session is loading', () => {
+    authLoading = true;
+
+    renderWithProviders(<RegisterPage />);
+
+    expect(screen.getByText('Checking your session...')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Create Account' })).not.toBeInTheDocument();
+  });
 });
 
 describe('RegisterPage auto sign-in', () => {

@@ -2108,6 +2108,113 @@ describe('Password Reset Flow', () => {
       await prisma.user.delete({ where: { id: userId } }).catch(() => {});
     }
   });
+
+  it('requires ToS acceptance when a pending company invite sets a password', async () => {
+    const company = await prisma.company.create({
+      data: { name: `Pending Reset ToS Company ${Date.now()}` },
+    });
+    const invitedUser = await prisma.user.create({
+      data: {
+        email: `pending-reset-no-tos-${Date.now()}@example.com`,
+        fullName: 'Pending Reset No ToS',
+        companyId: company.id,
+        roleInCompany: 'foreman',
+        emailVerified: true,
+        emailVerifiedAt: new Date(),
+      },
+    });
+    const resetToken = `pending_reset_no_tos_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    await prisma.passwordResetToken.create({
+      data: {
+        userId: invitedUser.id,
+        token: hashAuthTokenForTest(resetToken),
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      },
+    });
+
+    try {
+      const validateRes = await request(app)
+        .get('/api/auth/validate-reset-token')
+        .query({ token: resetToken });
+      expect(validateRes.status).toBe(200);
+      expect(validateRes.body).toMatchObject({ valid: true, requiresTosAcceptance: true });
+
+      const res = await request(app).post('/api/auth/reset-password').send({
+        token: resetToken,
+        password: 'NewPassword123!',
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toContain('Terms of Service');
+
+      const [userAfterReset, tokenAfterReset] = await Promise.all([
+        prisma.user.findUniqueOrThrow({ where: { id: invitedUser.id } }),
+        prisma.passwordResetToken.findFirstOrThrow({
+          where: { token: hashAuthTokenForTest(resetToken) },
+        }),
+      ]);
+      expect(userAfterReset.passwordHash).toBeNull();
+      expect(userAfterReset.tosAcceptedAt).toBeNull();
+      expect(tokenAfterReset.usedAt).toBeNull();
+    } finally {
+      await prisma.passwordResetToken.deleteMany({ where: { userId: invitedUser.id } });
+      await clearUserAuditLogs(invitedUser.id);
+      await prisma.user.delete({ where: { id: invitedUser.id } }).catch(() => {});
+      await prisma.company.delete({ where: { id: company.id } }).catch(() => {});
+    }
+  });
+
+  it('records ToS acceptance when a pending company invite sets a password', async () => {
+    const company = await prisma.company.create({
+      data: { name: `Pending Reset Accept ToS Company ${Date.now()}` },
+    });
+    const invitedUser = await prisma.user.create({
+      data: {
+        email: `pending-reset-accept-tos-${Date.now()}@example.com`,
+        fullName: 'Pending Reset Accept ToS',
+        companyId: company.id,
+        roleInCompany: 'foreman',
+        emailVerified: true,
+        emailVerifiedAt: new Date(),
+      },
+    });
+    const resetToken = `pending_reset_accept_tos_${Date.now()}_${Math.random()
+      .toString(16)
+      .slice(2)}`;
+    await prisma.passwordResetToken.create({
+      data: {
+        userId: invitedUser.id,
+        token: hashAuthTokenForTest(resetToken),
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      },
+    });
+
+    try {
+      const res = await request(app).post('/api/auth/reset-password').send({
+        token: resetToken,
+        password: 'NewPassword123!',
+        tosAccepted: true,
+      });
+
+      expect(res.status).toBe(200);
+
+      const [userAfterReset, tokenAfterReset] = await Promise.all([
+        prisma.user.findUniqueOrThrow({ where: { id: invitedUser.id } }),
+        prisma.passwordResetToken.findFirstOrThrow({
+          where: { token: hashAuthTokenForTest(resetToken) },
+        }),
+      ]);
+      expect(userAfterReset.passwordHash).toBeTruthy();
+      expect(userAfterReset.tosAcceptedAt).toBeInstanceOf(Date);
+      expect(userAfterReset.tosVersion).toBe('1.0');
+      expect(tokenAfterReset.usedAt).toBeInstanceOf(Date);
+    } finally {
+      await prisma.passwordResetToken.deleteMany({ where: { userId: invitedUser.id } });
+      await clearUserAuditLogs(invitedUser.id);
+      await prisma.user.delete({ where: { id: invitedUser.id } }).catch(() => {});
+      await prisma.company.delete({ where: { id: company.id } }).catch(() => {});
+    }
+  });
 });
 
 describe('Password Change', () => {
@@ -2463,6 +2570,60 @@ describe('Magic Link Authentication', () => {
     }
   });
 
+  it('does not create or send magic links for pending company invite users', async () => {
+    const company = await prisma.company.create({
+      data: { name: `Pending Magic Request Company ${Date.now()}` },
+    });
+    const invitedUser = await prisma.user.create({
+      data: {
+        email: `pending-magic-request-${Date.now()}@example.com`,
+        fullName: 'Pending Magic Request',
+        companyId: company.id,
+        roleInCompany: 'foreman',
+        emailVerified: true,
+        emailVerifiedAt: new Date(),
+      },
+    });
+    const sendSpy = vi.spyOn(emailService, 'sendMagicLinkEmail').mockResolvedValueOnce({
+      success: true,
+    });
+
+    try {
+      const res = await request(app)
+        .post('/api/auth/magic-link/request')
+        .send({ email: invitedUser.email });
+
+      expect(res.status).toBe(200);
+      expect(res.body.message).toContain('If an account exists');
+      expect(sendSpy).not.toHaveBeenCalled();
+      await expect(
+        prisma.passwordResetToken.count({
+          where: {
+            userId: invitedUser.id,
+            purpose: 'magic_link',
+            usedAt: null,
+            expiresAt: { gt: new Date() },
+          },
+        }),
+      ).resolves.toBe(0);
+      await expect(
+        prisma.auditLog.count({
+          where: {
+            entityType: 'user',
+            entityId: invitedUser.id,
+            action: AuditAction.MAGIC_LINK_REQUESTED,
+          },
+        }),
+      ).resolves.toBe(0);
+    } finally {
+      sendSpy.mockRestore();
+      await prisma.passwordResetToken.deleteMany({ where: { userId: invitedUser.id } });
+      await clearUserAuditLogs(invitedUser.id);
+      await prisma.user.delete({ where: { id: invitedUser.id } }).catch(() => {});
+      await prisma.company.delete({ where: { id: company.id } }).catch(() => {});
+    }
+  });
+
   it('does not leave an active magic link token when email delivery fails', async () => {
     const user = await prisma.user.findUnique({ where: { email: magicEmail } });
     expect(user).toBeDefined();
@@ -2554,6 +2715,49 @@ describe('Magic Link Authentication', () => {
       expect(JSON.stringify(changes)).not.toMatch(/password|token|secret|code/i);
     } finally {
       await prisma.passwordResetToken.deleteMany({ where: { token: hashAuthTokenForTest(token) } });
+    }
+  });
+
+  it('rejects magic link verification for pending company invite users', async () => {
+    const company = await prisma.company.create({
+      data: { name: `Pending Magic Verify Company ${Date.now()}` },
+    });
+    const invitedUser = await prisma.user.create({
+      data: {
+        email: `pending-magic-verify-${Date.now()}@example.com`,
+        fullName: 'Pending Magic Verify',
+        companyId: company.id,
+        roleInCompany: 'foreman',
+        emailVerified: true,
+        emailVerifiedAt: new Date(),
+      },
+    });
+    const token = `magic_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    await prisma.passwordResetToken.create({
+      data: {
+        userId: invitedUser.id,
+        token: hashAuthTokenForTest(token),
+        purpose: 'magic_link',
+        expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+      },
+    });
+
+    try {
+      const res = await request(app).post('/api/auth/magic-link/verify').send({ token });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.message).toContain('account setup');
+      expect(res.body.token).toBeUndefined();
+
+      const tokenAfterVerify = await prisma.passwordResetToken.findFirstOrThrow({
+        where: { token: hashAuthTokenForTest(token) },
+      });
+      expect(tokenAfterVerify.usedAt).toBeInstanceOf(Date);
+    } finally {
+      await prisma.passwordResetToken.deleteMany({ where: { userId: invitedUser.id } });
+      await clearUserAuditLogs(invitedUser.id);
+      await prisma.user.delete({ where: { id: invitedUser.id } }).catch(() => {});
+      await prisma.company.delete({ where: { id: company.id } }).catch(() => {});
     }
   });
 

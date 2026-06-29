@@ -626,7 +626,7 @@ Status: in PR from `qa/stage86-documents-drawings`.
 
 ### QA Loop Stage 87: Dashboard, Home, And Analytics
 
-Status: in PR from `qa/stage87-dashboard-analytics`.
+Status: merged via PR #1245.
 
 - Fixed portfolio dashboard access control: portfolio NCRs and project-risk
   summaries now use the same commercial-role gate and role-filtered project set
@@ -646,6 +646,42 @@ Status: in PR from `qa/stage87-dashboard-analytics`.
 - Focused unit/type/lint and dashboard browser E2E passed locally. The dashboard
   E2E needed a dedicated Vite server pinned to port 5174 because Playwright's
   default reusable server path hit a transient connection-refused failure.
+
+### QA Loop Stage 88: Auth, Onboarding, And First-Run Sessions
+
+Status: in progress from `qa/stage88-auth-onboarding`.
+
+- Fixed `/register` so already-authenticated users are redirected to their
+  normal app destination, and the registration form stays hidden while the
+  current session is still loading.
+- Hardened company onboarding after first-company creation: the page now stays
+  on setup with a clear error if the company is created but the refreshed user
+  state still lacks a company, instead of silently navigating into an onboarding
+  loop.
+- Added reset-link retry behavior after transient validation failures. The
+  one-time token remains scrubbed from the URL, but the component keeps it in
+  memory so the user can retry without requesting a new link immediately.
+- Preserved expired-session state through `RoleProtectedRoute` redirects so
+  `/m/*`, `/p/*`, and role-gated desktop pages show the same login-session
+  message as standard protected routes.
+- Blocked pending company-invite users from using magic-link login before
+  account setup is completed. Magic-link request stays enumeration-safe;
+  verification rejects the pending setup token before issuing a JWT.
+- Required Terms acceptance when a pending company invite sets its first
+  password, recorded `tosAcceptedAt`/`tosVersion`, and exposed
+  `requiresTosAcceptance` from reset-token validation so the frontend can show
+  the checkbox only for invite setup.
+- Split authentication verification failures from invalid tokens. Invalid or
+  expired JWTs remain 401; database/read-model failures during token
+  verification now surface as 500s for monitoring instead of looking like mass
+  sign-outs.
+- Widened the strict auth-attempt limiter exemption for routine authenticated
+  auth endpoints (`/me`, logout, onboarding completion, profile/avatar), while
+  keeping login and credential-generation routes on the strict limiter.
+- Local verification passed for focused frontend/backend unit tests, frontend
+  and backend type-check, touched-file ESLint, and auth/onboarding browser E2E
+  (`26 passed`). DB-backed `auth.test.ts` regressions could not run locally
+  because this shell has no disposable `DATABASE_URL`; CI must prove those.
 
 ## Open Follow-Ups
 
