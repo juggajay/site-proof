@@ -2097,6 +2097,73 @@ describe('ITP Completion Attachments', () => {
     }
   });
 
+  it.each(['pending', 'failed'] as const)(
+    'should reject verification when the completion status is %s',
+    async (status) => {
+      try {
+        await prisma.iTPCompletion.update({
+          where: { id: completionId },
+          data: {
+            status,
+            completedById: completionAuthorUserId,
+            completedAt: status === 'failed' ? new Date('2026-01-01T00:00:00.000Z') : null,
+            verificationStatus: 'pending_verification',
+            verifiedAt: null,
+            verifiedById: null,
+            verificationNotes: null,
+          },
+        });
+
+        const res = await request(app)
+          .post(`/api/itp/completions/${completionId}/verify`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(409);
+        expect(res.body.error.message).toContain('Only completed or not applicable');
+
+        const afterVerify = await prisma.iTPCompletion.findUniqueOrThrow({
+          where: { id: completionId },
+          select: { status: true, verificationStatus: true, verifiedAt: true, verifiedById: true },
+        });
+        expect(afterVerify).toEqual({
+          status,
+          verificationStatus: 'pending_verification',
+          verifiedAt: null,
+          verifiedById: null,
+        });
+      } finally {
+        await resetCompletionWorkflowState();
+      }
+    },
+  );
+
+  it('should allow verification when a not applicable completion is pending review', async () => {
+    try {
+      await prisma.iTPCompletion.update({
+        where: { id: completionId },
+        data: {
+          status: 'not_applicable',
+          completedById: completionAuthorUserId,
+          completedAt: new Date('2026-01-01T00:00:00.000Z'),
+          verificationStatus: 'pending_verification',
+          verifiedAt: null,
+          verifiedById: null,
+          verificationNotes: null,
+        },
+      });
+
+      const res = await request(app)
+        .post(`/api/itp/completions/${completionId}/verify`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.completion.status).toBe('not_applicable');
+      expect(res.body.completion.verificationStatus).toBe('verified');
+    } finally {
+      await resetCompletionWorkflowState();
+    }
+  });
+
   it('should write audit context when verifying a pending ITP completion', async () => {
     await prisma.auditLog.deleteMany({
       where: { entityId: completionId, action: AuditAction.ITP_ITEM_VERIFIED },

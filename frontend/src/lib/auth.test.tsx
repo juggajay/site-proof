@@ -55,11 +55,13 @@ import { AuthProvider, useAuth, type SignOutOptions } from './auth';
 
 let triggerSignOut: (options?: SignOutOptions) => Promise<void>;
 let triggerSignUp: ReturnType<typeof useAuth>['signUp'];
+let triggerSetToken: ReturnType<typeof useAuth>['setToken'];
 
 function AuthHarness() {
-  const { signOut, signUp } = useAuth();
+  const { signOut, signUp, setToken } = useAuth();
   triggerSignOut = signOut;
   triggerSignUp = signUp;
+  triggerSetToken = setToken;
   return null;
 }
 
@@ -193,6 +195,61 @@ describe('signUp auto sign-in', () => {
     // Registration still succeeded (no throw), but there is nothing to sign
     // in with — the caller shows the manual sign-in screen instead.
     expect(result).toBeNull();
+    expect(writeAuthToStorage).not.toHaveBeenCalled();
+    expect(clearAuthFromAllStorages).toHaveBeenCalled();
+  });
+});
+
+describe('setToken callback hydration', () => {
+  it('hydrates callback sessions from the current-user endpoint before storing them', async () => {
+    const callbackUser = {
+      id: 'user-1',
+      email: 'foreman@example.com',
+      role: 'member',
+    };
+    const hydratedUser = {
+      ...callbackUser,
+      roleInCompany: 'member',
+      dashboardRole: 'foreman',
+      hasSubcontractorPortalAccess: false,
+    };
+
+    fetchWithTimeout.mockResolvedValue(jsonResponse({ user: hydratedUser }, 200));
+
+    renderAuth();
+
+    let result: Awaited<ReturnType<typeof triggerSetToken>> | undefined;
+    await act(async () => {
+      result = await triggerSetToken('callback-token', callbackUser);
+    });
+
+    expect(result!).toEqual(hydratedUser);
+    expect(fetchWithTimeout).toHaveBeenCalledWith(
+      expect.stringContaining('/api/auth/me'),
+      expect.objectContaining({
+        headers: { Authorization: 'Bearer callback-token' },
+      }),
+    );
+    expect(writeAuthToStorage).toHaveBeenCalledWith(
+      'local',
+      expect.stringContaining('"dashboardRole":"foreman"'),
+    );
+  });
+
+  it('does not store the callback user when the token cannot be verified', async () => {
+    fetchWithTimeout.mockResolvedValue(jsonResponse({}, 401));
+
+    renderAuth();
+
+    await expect(
+      act(async () => {
+        await triggerSetToken('bad-callback-token', {
+          id: 'user-1',
+          email: 'foreman@example.com',
+        });
+      }),
+    ).rejects.toThrow('Invalid token');
+
     expect(writeAuthToStorage).not.toHaveBeenCalled();
     expect(clearAuthFromAllStorages).toHaveBeenCalled();
   });

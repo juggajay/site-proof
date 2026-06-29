@@ -105,6 +105,8 @@ describe('Progress Claims API', () => {
     await prisma.claimedLot.deleteMany({ where: { claim: { projectId } } });
     await prisma.progressClaim.deleteMany({ where: { projectId } });
     await prisma.document.deleteMany({ where: { projectId } });
+    await prisma.nCRLot.deleteMany({ where: { lot: { projectId } } });
+    await prisma.nCR.deleteMany({ where: { projectId } });
     await prisma.lot.deleteMany({ where: { projectId } });
     await prisma.projectUser.deleteMany({ where: { projectId } });
     await prisma.project.delete({ where: { id: projectId } }).catch(() => {});
@@ -656,6 +658,59 @@ describe('Progress Claims API', () => {
 
       // Cleanup
       await prisma.lot.delete({ where: { id: lotNoBudget.id } });
+    });
+
+    it('should reject a stored conformed lot when an open NCR now blocks conformance', async () => {
+      const staleLot = await createClaimableLot(`CLAIM-STALE-NCR-${Date.now()}`, 3200);
+      const ncr = await prisma.nCR.create({
+        data: {
+          projectId,
+          ncrNumber: `NCR-CLAIM-STALE-${Date.now()}`,
+          description: 'Reopened defect blocks claiming',
+          category: 'Workmanship',
+          severity: 'minor',
+          status: 'open',
+          raisedById: userId,
+          ncrLots: { create: { lotId: staleLot.id } },
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .post(`/api/projects/${projectId}/claims`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            periodStart: '2025-04-01',
+            periodEnd: '2025-04-30',
+            lots: [{ lotId: staleLot.id, percentageComplete: 100 }],
+          });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.message).toContain('no longer satisfy conformance');
+        expect(res.body.error.details).toMatchObject({
+          code: 'CONFORMANCE_STALE',
+          lots: [
+            {
+              id: staleLot.id,
+              lotNumber: staleLot.lotNumber,
+              blockingReasons: ['1 open NCR(s) must be closed'],
+            },
+          ],
+        });
+
+        const unchangedLot = await prisma.lot.findUnique({
+          where: { id: staleLot.id },
+          select: { status: true, claimedInId: true },
+        });
+        expect(unchangedLot).toEqual({ status: 'conformed', claimedInId: null });
+        await expect(
+          prisma.claimedLot.findFirst({ where: { lotId: staleLot.id } }),
+        ).resolves.toBeNull();
+      } finally {
+        await prisma.nCRLot.deleteMany({ where: { ncrId: ncr.id } });
+        await prisma.nCR.delete({ where: { id: ncr.id } }).catch(() => {});
+        await prisma.lot.delete({ where: { id: staleLot.id } }).catch(() => {});
+      }
     });
 
     it('should reject mixed valid and out-of-project lots without mutating either lot', async () => {

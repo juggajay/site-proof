@@ -29,6 +29,7 @@ function configureProductionBase() {
   process.env.EMAIL_FROM = 'noreply@siteproof.example';
   process.env.EMAIL_PROVIDER = 'resend';
   process.env.EMAIL_ENABLED = 'true';
+  process.env.TRUST_PROXY = '1';
   delete process.env.RATE_LIMIT_STORE;
   delete process.env.RATE_LIMIT_KEY_SALT;
   delete process.env.MFA_BACKUP_CODE_SECRET;
@@ -111,6 +112,21 @@ describe('runtimeConfig', () => {
 
     process.env.TRUST_PROXY = 'yes';
     expect(() => validateRuntimeConfig()).toThrow('TRUST_PROXY=true');
+  });
+
+  it('rejects missing or disabled trust proxy settings in production', () => {
+    configureProductionBase();
+    process.env.FRONTEND_URL = 'https://app.siteproof.example';
+    process.env.BACKEND_URL = 'https://api.siteproof.example';
+
+    delete process.env.TRUST_PROXY;
+    expect(() => validateRuntimeConfig()).toThrow('TRUST_PROXY must be set');
+
+    process.env.TRUST_PROXY = '0';
+    expect(() => validateRuntimeConfig()).toThrow('TRUST_PROXY must be set');
+
+    process.env.TRUST_PROXY = 'false';
+    expect(() => validateRuntimeConfig()).toThrow('TRUST_PROXY must be set');
   });
 
   it('accepts bounded trust proxy settings in production', () => {

@@ -72,6 +72,7 @@ completionVerificationRoutes.post(
       where: { id },
       select: {
         completedById: true,
+        status: true,
         verificationStatus: true,
         itpInstance: {
           select: {
@@ -97,6 +98,15 @@ completionVerificationRoutes.post(
       ITP_VERIFY_ROLES,
       'ITP verification access required',
     );
+
+    if (
+      completionForAccess.status !== 'completed' &&
+      completionForAccess.status !== 'not_applicable'
+    ) {
+      throw AppError.conflict('Only completed or not applicable ITP completions can be verified', {
+        status: completionForAccess.status,
+      });
+    }
 
     if (completionForAccess.verificationStatus === 'verified') {
       const completion = await prisma.iTPCompletion.findUniqueOrThrow({
