@@ -20,6 +20,14 @@ type ScheduledReportDocument = {
   viewReportUrl: string;
 };
 
+export function getScheduledReportTypeLabel(reportType: string): string {
+  if (!isScheduledReportType(reportType)) {
+    throw new Error(`Unsupported scheduled report type: ${reportType}`);
+  }
+
+  return REPORT_TYPE_LABELS[reportType];
+}
+
 function countGroupsToRecord(
   groups: Array<Record<string, unknown> & { _count: number }>,
   key: string,
@@ -301,19 +309,23 @@ async function buildDiaryLines(projectId: string): Promise<string[]> {
 export async function buildScheduledReportDocument(
   schedule: ScheduledReportForDelivery,
   now: Date,
+  options: { viewReportUrl?: string } = {},
 ): Promise<ScheduledReportDocument> {
   if (!isScheduledReportType(schedule.reportType)) {
     throw new Error(`Unsupported scheduled report type: ${schedule.reportType}`);
   }
 
-  const reportTypeLabel = REPORT_TYPE_LABELS[schedule.reportType];
+  const reportType = schedule.reportType;
+  const reportTypeLabel = REPORT_TYPE_LABELS[reportType];
   const reportName = `${reportTypeLabel} - ${schedule.project.name}`;
-  const viewReportUrl = buildFrontendUrl(
-    `/projects/${encodeURIComponent(schedule.projectId)}/reports?tab=${encodeURIComponent(schedule.reportType)}`,
-  );
+  const viewReportUrl =
+    options.viewReportUrl ??
+    buildFrontendUrl(
+      `/projects/${encodeURIComponent(schedule.projectId)}/reports?tab=${encodeURIComponent(schedule.reportType)}`,
+    );
 
   let reportLines: string[];
-  switch (schedule.reportType) {
+  switch (reportType) {
     case 'lot-status':
       reportLines = await buildLotStatusLines(schedule.projectId);
       break;

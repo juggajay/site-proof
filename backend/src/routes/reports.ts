@@ -311,5 +311,6 @@ reportsRouter.use(
   createScheduledReportRouter({
     parseRequiredString,
     requireScheduledReportAccess,
+    requireScheduledReportArtifactAccess: requireReportProjectAccess,
   }),
 );

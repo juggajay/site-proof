@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import express from 'express';
@@ -6,6 +8,8 @@ import { reportsRouter } from './reports.js';
 import { prisma } from '../lib/prisma.js';
 import { parseAuditLogChanges } from '../lib/auditLog.js';
 import { ARCHIVED_PROJECT_READ_ONLY_MESSAGE } from '../lib/projectAccess.js';
+import { calculateScheduledReportArtifactSha256 } from '../lib/scheduledReports/artifacts.js';
+import { ensureUploadSubdirectory } from '../lib/uploadPaths.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { registerTestUser } from '../test/routeTestHarness.js';
 
@@ -22,6 +26,44 @@ function reactivateSchedule(authToken: string, id: string) {
     .send({
       isActive: true,
     });
+}
+
+async function createLocalScheduledReportArtifactRun(params: {
+  projectId: string;
+  scheduleId: string;
+  reportType?: string;
+  pdfBytes?: Buffer;
+}) {
+  const runId = `artifact-run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const pdfBytes = params.pdfBytes ?? Buffer.from('%PDF-1.4\nscheduled report artifact\n');
+  const directory = ensureUploadSubdirectory(
+    `scheduled-reports/${params.projectId}/${params.scheduleId}`,
+  );
+  const filePath = path.join(directory, `${runId}.pdf`);
+  await fs.promises.writeFile(filePath, pdfBytes);
+
+  const run = await prisma.scheduledReportRun.create({
+    data: {
+      id: runId,
+      scheduleId: params.scheduleId,
+      projectId: params.projectId,
+      reportType: params.reportType ?? 'lot-status',
+      status: 'sent',
+      recipientCount: 1,
+      sentCount: 1,
+      generatedAt: new Date('2026-06-30T00:00:00.000Z'),
+      completedAt: new Date('2026-06-30T00:00:00.000Z'),
+      artifactFileUrl: `uploads/scheduled-reports/${params.projectId}/${params.scheduleId}/${runId}.pdf`,
+      artifactReportName: 'Lot Status Report - Access Project',
+      artifactFilename: 'Lot_Status_Report.pdf',
+      artifactMimeType: 'application/pdf',
+      artifactFileSize: pdfBytes.length,
+      artifactSha256: calculateScheduledReportArtifactSha256(pdfBytes),
+      artifactCreatedAt: new Date('2026-06-30T00:00:00.000Z'),
+    },
+  });
+
+  return { run, filePath, pdfBytes };
 }
 
 describe('Reports API - Project Access', () => {
@@ -227,6 +269,87 @@ describe('Reports API - Project Access', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.projectId).toBe(projectId);
+  });
+
+  it('should let project report users download scheduled report artifacts', async () => {
+    const { run, filePath, pdfBytes } = await createLocalScheduledReportArtifactRun({
+      projectId,
+      scheduleId,
+    });
+
+    try {
+      const adminRes = await request(app)
+        .get(`/api/reports/scheduled-runs/${run.id}/artifact`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(adminRes.status).toBe(200);
+      expect(adminRes.headers['content-type']).toContain('application/pdf');
+      expect(adminRes.headers['content-disposition']).toBe(
+        'attachment; filename="Lot_Status_Report.pdf"',
+      );
+      expect(adminRes.headers['x-content-type-options']).toBe('nosniff');
+      expect(adminRes.headers['cache-control']).toContain('no-store');
+      expect(adminRes.headers['content-length']).toBe(String(pdfBytes.length));
+
+      const internalRes = await request(app)
+        .get(`/api/reports/scheduled-runs/${run.id}/artifact`)
+        .set('Authorization', `Bearer ${nonCommercialToken}`);
+
+      expect(internalRes.status).toBe(200);
+    } finally {
+      await prisma.scheduledReportRun.deleteMany({ where: { id: run.id } });
+      await fs.promises.unlink(filePath).catch(() => {});
+    }
+  });
+
+  it('should deny scheduled report artifact downloads outside project report access', async () => {
+    const { run, filePath } = await createLocalScheduledReportArtifactRun({
+      projectId,
+      scheduleId,
+    });
+
+    try {
+      const outsiderRes = await request(app)
+        .get(`/api/reports/scheduled-runs/${run.id}/artifact`)
+        .set('Authorization', `Bearer ${outsiderToken}`);
+      const subcontractorRes = await request(app)
+        .get(`/api/reports/scheduled-runs/${run.id}/artifact`)
+        .set('Authorization', `Bearer ${subcontractorToken}`);
+      const pendingRes = await request(app)
+        .get(`/api/reports/scheduled-runs/${run.id}/artifact`)
+        .set('Authorization', `Bearer ${pendingToken}`);
+
+      expect(outsiderRes.status).toBe(403);
+      expect(subcontractorRes.status).toBe(403);
+      expect(pendingRes.status).toBe(403);
+    } finally {
+      await prisma.scheduledReportRun.deleteMany({ where: { id: run.id } });
+      await fs.promises.unlink(filePath).catch(() => {});
+    }
+  });
+
+  it('should return not found when a scheduled report run has no artifact', async () => {
+    const run = await prisma.scheduledReportRun.create({
+      data: {
+        scheduleId,
+        projectId,
+        reportType: 'lot-status',
+        status: 'sent',
+        recipientCount: 1,
+        sentCount: 1,
+        generatedAt: new Date('2026-06-30T00:00:00.000Z'),
+      },
+    });
+
+    try {
+      const res = await request(app)
+        .get(`/api/reports/scheduled-runs/${run.id}/artifact`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(404);
+    } finally {
+      await prisma.scheduledReportRun.deleteMany({ where: { id: run.id } });
+    }
   });
 
   it('should deny report access for pending project memberships', async () => {

@@ -67,6 +67,7 @@ import {
   RegisterPage,
   ReportsPage,
   ResetPasswordPage,
+  ScheduledReportArtifactPage,
   SettingsPage,
   SubcontractorDashboard,
   SubcontractorDocumentsPage,
@@ -414,6 +415,14 @@ function App() {
               />
 
               {/* Reports */}
+              <Route
+                path="/reports/scheduled-runs/:runId/artifact"
+                element={
+                  <RoleProtectedRoute allowedRoles={REPORT_ROLES} allowProjectScopedRole>
+                    <ScheduledReportArtifactPage />
+                  </RoleProtectedRoute>
+                }
+              />
               <Route
                 path="/projects/:projectId/reports"
                 element={
