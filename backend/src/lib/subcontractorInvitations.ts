@@ -1,4 +1,10 @@
+import crypto from 'crypto';
+
 const INVITATION_EXPIRY_MS = 14 * 24 * 60 * 60 * 1000;
+const INVITATION_TOKEN_PREFIX = 'sub_invite_';
+const INVITATION_TOKEN_BYTES = 32;
+const INVITATION_TOKEN_MAX_LENGTH = INVITATION_TOKEN_PREFIX.length + INVITATION_TOKEN_BYTES * 2;
+const INVITATION_TOKEN_HASH_PREFIX = 'sha256:';
 
 export function getSubcontractorInvitationExpiresAt(now = new Date()): Date {
   return new Date(now.getTime() + INVITATION_EXPIRY_MS);
@@ -13,6 +19,34 @@ export function isSubcontractorInvitationExpired(
 
 export function isSubcontractorInvitationAcceptableStatus(status: string): boolean {
   return status === 'pending_approval' || status === 'approved';
+}
+
+export function generateSubcontractorInvitationToken(): string {
+  return `${INVITATION_TOKEN_PREFIX}${crypto.randomBytes(INVITATION_TOKEN_BYTES).toString('hex')}`;
+}
+
+export function hashSubcontractorInvitationToken(token: string): string {
+  return `${INVITATION_TOKEN_HASH_PREFIX}${crypto.createHash('sha256').update(token).digest('hex')}`;
+}
+
+export function normalizeSubcontractorInvitationToken(value: unknown): string {
+  if (typeof value !== 'string') {
+    throw new Error('Invitation token must be a string');
+  }
+
+  const normalized = value.trim();
+  if (
+    !normalized.startsWith(INVITATION_TOKEN_PREFIX) ||
+    normalized.length !== INVITATION_TOKEN_MAX_LENGTH
+  ) {
+    throw new Error('Invalid invitation token');
+  }
+
+  return normalized;
+}
+
+export function isSubcontractorInvitationToken(value: string): boolean {
+  return value.startsWith(INVITATION_TOKEN_PREFIX);
 }
 
 /**

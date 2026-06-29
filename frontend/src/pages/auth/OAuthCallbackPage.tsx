@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useAuth } from '@/lib/auth';
+import { useAuth, type User } from '@/lib/auth';
 import { ApiError, apiFetch } from '@/lib/api';
 import { getDefaultPostLoginRedirect } from './postLoginRedirect';
 
@@ -56,12 +56,12 @@ export function OAuthCallbackPage() {
       window.history.replaceState(null, document.title, '/auth/oauth-callback');
 
       try {
-        const data = await apiFetch<{ token: string }>('/api/auth/oauth/exchange', {
+        const data = await apiFetch<{ token: string; user?: User }>('/api/auth/oauth/exchange', {
           method: 'POST',
           body: JSON.stringify({ code }),
         });
 
-        const signedInUser = await setToken(data.token);
+        const signedInUser = await setToken(data.token, data.user);
         navigate(getDefaultPostLoginRedirect(signedInUser), { replace: true });
       } catch (err) {
         setError(getApiErrorMessage(err));

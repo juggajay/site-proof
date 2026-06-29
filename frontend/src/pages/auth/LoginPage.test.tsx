@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
     roleInCompany: string;
     companyId: string;
   },
+  authLoading: false,
 }));
 
 vi.mock('@/lib/api', async (importOriginal) => {
@@ -23,7 +24,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
 });
 
 vi.mock('@/lib/auth', () => ({
-  useAuth: () => ({ signIn: mocks.signIn, user: mocks.user, loading: false }),
+  useAuth: () => ({ signIn: mocks.signIn, user: mocks.user, loading: mocks.authLoading }),
 }));
 
 vi.mock('react-router-dom', async (importOriginal) => {
@@ -36,6 +37,7 @@ import { LoginPage } from './LoginPage';
 afterEach(() => {
   vi.clearAllMocks();
   mocks.user = null;
+  mocks.authLoading = false;
 });
 
 describe('LoginPage authenticated redirect', () => {
@@ -81,5 +83,16 @@ describe('LoginPage authenticated redirect', () => {
         }),
       });
     });
+  });
+
+  it('does not flash the sign-in form while the existing session is still loading', () => {
+    mocks.authLoading = true;
+
+    renderWithProviders(<LoginPage />, { initialEntries: ['/login'] });
+
+    expect(screen.getByRole('status', { name: /checking existing session/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^sign in$/i })).not.toBeInTheDocument();
+    expect(mocks.signIn).not.toHaveBeenCalled();
+    expect(mocks.navigate).not.toHaveBeenCalled();
   });
 });

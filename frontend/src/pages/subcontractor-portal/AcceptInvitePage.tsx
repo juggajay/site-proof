@@ -4,9 +4,10 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Loader2, Check, Eye, EyeOff } from 'lucide-react';
-import { useAuth } from '@/lib/auth';
+import { useAuth, type User } from '@/lib/auth';
 import { apiFetch } from '@/lib/api';
 import { toast } from '@/components/ui/toaster';
+import { getDefaultPostLoginRedirect } from '@/pages/auth/postLoginRedirect';
 import {
   extractErrorCode,
   extractErrorDetails,
@@ -29,14 +30,9 @@ import {
 
 type AcceptInviteFormData = z.infer<typeof acceptInviteSchema>;
 
-interface RegisteredInviteUser {
+interface RegisteredInviteUser extends User {
   id: string;
   email: string;
-  fullName?: string | null;
-  role?: string;
-  roleInCompany?: string;
-  companyId?: string | null;
-  companyName?: string | null;
 }
 
 export interface Invitation {
@@ -178,6 +174,24 @@ export function AcceptInvitePage() {
     };
   }, [authLoading, explicitInvitationId, setValue, user]);
 
+  const finishAcceptedInvitation = async () => {
+    const refreshedUser = await refreshUser();
+    if (!refreshedUser?.hasSubcontractorPortalAccess) {
+      setFormError(
+        'Invitation accepted, but your session could not be refreshed. Please reload the page or sign in again.',
+      );
+      setAccepting(false);
+      return;
+    }
+
+    toast({
+      title: 'Welcome!',
+      description: `You've joined ${invitation?.companyName}. Let's get started!`,
+      variant: 'success',
+    });
+    navigate(getDefaultPostLoginRedirect(refreshedUser), { replace: true });
+  };
+
   // Handle accepting invitation for logged-in users.
   // `acknowledgeEmailMismatch` is sent on the second attempt after the user
   // confirms they want to use the account they're signed in with, even though
@@ -194,15 +208,7 @@ export function AcceptInvitePage() {
         body: JSON.stringify({ acknowledgeEmailMismatch }),
       });
 
-      // Refresh auth to get updated role
-      await refreshUser();
-
-      toast({
-        title: 'Welcome!',
-        description: `You've joined ${invitation?.companyName}. Let's get started!`,
-        variant: 'success',
-      });
-      navigate('/subcontractor-portal');
+      await finishAcceptedInvitation();
     } catch (err) {
       // The invite was sent to a different email. Possession of the link is the
       // real check, so offer to accept with the signed-in account instead of a
@@ -244,14 +250,14 @@ export function AcceptInvitePage() {
         }),
       });
 
-      await setToken(result.token);
+      const signedInUser = await setToken(result.token, result.user);
 
       toast({
         title: 'Account Created!',
         description: `You've joined ${result.company.companyName}.`,
         variant: 'success',
       });
-      navigate('/subcontractor-portal', { replace: true });
+      navigate(getDefaultPostLoginRedirect(signedInUser), { replace: true });
     } catch (err) {
       logError('Error registering:', err);
       setFormError(extractErrorMessage(err, 'Failed to create account. Please try again.'));

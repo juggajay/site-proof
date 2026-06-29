@@ -244,6 +244,21 @@ export function LoginPage() {
   const mfaCodeValue = mfaForm.watch('mfaCode');
   const canSubmitMfa = mfaCodeValue.length === 6 || mfaCodeValue.length === 10;
 
+  if (authLoading) {
+    return (
+      <div className="sp-auth">
+        <div className="stage">
+          <div className="auth">
+            <div className="card text-center" role="status" aria-label="Checking existing session">
+              <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+              <p className="card-sub mt-4">Checking your session...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   let cardLabel = 'AUTH / 01';
   let cardContent: React.ReactNode;
 

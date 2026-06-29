@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
-import { useAuth } from '@/lib/auth';
+import { useAuth, type User } from '@/lib/auth';
 import { ApiError, apiFetch } from '@/lib/api';
 import { getPostLoginRedirect } from './postLoginRedirect';
 
@@ -42,16 +42,15 @@ export function MagicLinkPage() {
 
     const verifyMagicLink = async () => {
       try {
-        window.history.replaceState(null, document.title, '/auth/magic-link');
-
-        const data = await apiFetch<{ token: string }>('/api/auth/magic-link/verify', {
+        const data = await apiFetch<{ token: string; user?: User }>('/api/auth/magic-link/verify', {
           method: 'POST',
           body: JSON.stringify({ token }),
         });
 
         if (data.token) {
+          window.history.replaceState(null, document.title, '/auth/magic-link');
           // Use the centralized setToken which handles storage properly
-          const signedInUser = await setToken(data.token);
+          const signedInUser = await setToken(data.token, data.user);
 
           setStatus('success');
 

@@ -2622,7 +2622,7 @@ test.describe('production readiness guardrails', () => {
     expect(acceptInviteSource).toContain('encodeURIComponent(invitationId)');
     expect(acceptInviteSource).toContain('readOnly={!!invitation.primaryContactEmail}');
     expect(acceptInviteSource).toContain('aria-readonly={!!invitation.primaryContactEmail}');
-    expect(acceptInviteSource).toContain('await setToken(result.token)');
+    expect(acceptInviteSource).toContain('await setToken(result.token, result.user)');
     expect(acceptInviteSource).not.toContain('disabled={!!invitation.primaryContactEmail}');
     expect(acceptInviteSource).not.toContain("window.location.href = '/subcontractor-portal'");
   });

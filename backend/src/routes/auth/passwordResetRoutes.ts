@@ -215,13 +215,12 @@ export function createPasswordResetRouter({
         throw AppError.badRequest(genericResetTokenValidationMessage);
       }
 
-      const consumedAt = new Date();
-
       // Hash the new password
       const newPasswordHash = hashPassword(normalizedPassword);
 
       // Update user password only if this request wins the one-time token consume.
       const apiKeyRevocation = await prisma.$transaction(async (tx) => {
+        const consumedAt = new Date();
         const consumeResult = await tx.passwordResetToken.updateMany({
           where: {
             id: resetToken.id,
@@ -235,11 +234,12 @@ export function createPasswordResetRouter({
           throw AppError.badRequest(genericResetTokenValidationMessage);
         }
 
+        const invalidatedAt = new Date(Date.now() + 1);
         await tx.user.update({
           where: { id: resetToken.userId },
           data: {
             passwordHash: newPasswordHash,
-            tokenInvalidatedAt: consumedAt,
+            tokenInvalidatedAt: invalidatedAt,
           },
         });
 
