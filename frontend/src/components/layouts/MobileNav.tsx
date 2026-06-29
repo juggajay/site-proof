@@ -31,7 +31,6 @@ import { useForemanMobileStore } from '@/stores/foremanMobileStore';
 import { queryKeys } from '@/lib/queryKeys';
 import {
   getCompanyRole,
-  getDashboardRole,
   getProjectScopedRole,
   hasSubcontractorPortalIdentity,
 } from '@/lib/subcontractorIdentity';
@@ -161,26 +160,27 @@ export function MobileNav() {
   const navRef = usePublishBottomNavHeight<HTMLElement>();
 
   const userRole = getCompanyRole(user);
-  const dashboardRole = getDashboardRole(user);
-  const projectScopedRole = getProjectScopedRole(user);
   const hasPortalIdentity = hasSubcontractorPortalIdentity(user);
-  const hasCommercial = hasCommercialAccess(projectScopedRole);
-  const hasAdmin = isAdminRole(userRole);
-  const hasManagement = hasRoleInGroup(projectScopedRole, ROLE_GROUPS.MANAGEMENT);
-  const hasProjectSettingsAccess = canManageProjectSettings(projectScopedRole);
-  const isForeman = dashboardRole === 'foreman';
-  const isSubcontractor = isSubcontractorRole(userRole) || hasPortalIdentity;
-  const isViewer = isViewerRole(projectScopedRole);
   const { setIsCameraOpen } = useForemanMobileStore();
 
   const { data: projectData } = useQuery({
     queryKey: queryKeys.projectModules(projectId!),
     queryFn: () =>
-      apiFetch<{ project?: { name?: string; settings?: unknown } }>(`/api/projects/${projectId}`),
+      apiFetch<{
+        project?: { name?: string; settings?: unknown; currentUserRole?: string | null };
+      }>(`/api/projects/${projectId}`),
     enabled: !!projectId,
   });
 
   const enabledModules = getEnabledProjectModules(projectData?.project?.settings);
+  const projectScopedRole = projectData?.project?.currentUserRole ?? getProjectScopedRole(user);
+  const hasCommercial = hasCommercialAccess(projectScopedRole);
+  const hasAdmin = isAdminRole(userRole);
+  const hasManagement = hasRoleInGroup(projectScopedRole, ROLE_GROUPS.MANAGEMENT);
+  const hasProjectSettingsAccess = canManageProjectSettings(projectScopedRole);
+  const isForeman = projectScopedRole === 'foreman';
+  const isSubcontractor = isSubcontractorRole(userRole) || hasPortalIdentity;
+  const isViewer = isViewerRole(projectScopedRole);
 
   const shouldShowItem = (item: NavigationItem): boolean => {
     if (item.requiresCommercialAccess && !hasCommercial) return false;

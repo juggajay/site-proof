@@ -1843,6 +1843,62 @@ describe('Company API', () => {
       expect(setupTokens[0].token).toMatch(/^sha256:/);
     });
 
+    it('audits existing same-company member role updates as role changes', async () => {
+      const email = `company-invite-existing-role-${Date.now()}@example.com`;
+      const existingMember = await prisma.user.create({
+        data: {
+          email,
+          fullName: 'Existing Company Member',
+          companyId,
+          roleInCompany: 'foreman',
+          passwordHash: 'already-set',
+          emailVerified: true,
+          emailVerifiedAt: new Date(),
+        },
+      });
+      invitedUserIds.push(existingMember.id);
+
+      const res = await request(app)
+        .post('/api/company/members/invite')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          email,
+          fullName: 'Existing Company Member',
+          roleInCompany: 'site_engineer',
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.member).toMatchObject({
+        id: existingMember.id,
+        roleInCompany: 'site_engineer',
+      });
+
+      const auditLog = await prisma.auditLog.findFirst({
+        where: {
+          entityType: 'user',
+          entityId: existingMember.id,
+          action: AuditAction.USER_ROLE_CHANGED,
+        },
+      });
+      expect(auditLog).toBeTruthy();
+      expect(parseAuditLogChanges(auditLog!.changes)).toMatchObject({
+        memberId: existingMember.id,
+        memberEmail: email,
+        companyId,
+        source: 'company_member_invite',
+        roleInCompany: { from: 'foreman', to: 'site_engineer' },
+      });
+
+      const inviteAudit = await prisma.auditLog.findFirst({
+        where: {
+          entityType: 'user',
+          entityId: existingMember.id,
+          action: AuditAction.USER_INVITED,
+        },
+      });
+      expect(inviteAudit).toBeNull();
+    });
+
     it('rejects new company member invites when the invitation email fails', async () => {
       const email = `company-invite-email-fail-${Date.now()}@example.com`;
       await expectFailedCompanyMemberInvite({

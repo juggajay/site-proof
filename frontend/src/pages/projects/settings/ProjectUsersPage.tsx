@@ -29,7 +29,7 @@ import {
   ProjectAdminResourceGate,
   ProjectAdminStatusBanners,
 } from './ProjectAdminPageState';
-import { useProjectAdminResource } from './projectPageAccess';
+import { canGrantProjectAdminRole, useProjectAdminResource } from './projectPageAccess';
 
 interface ProjectUser {
   id: string;
@@ -105,6 +105,7 @@ function ProjectUsersTable({
   saving,
   removingUserId,
   readOnly,
+  canManageProjectAdministrators,
   onEditRoleChange,
   onStartEditing,
   onSaveRole,
@@ -118,6 +119,7 @@ function ProjectUsersTable({
   saving: boolean;
   removingUserId: string | null;
   readOnly: boolean;
+  canManageProjectAdministrators: boolean;
   onEditRoleChange: (role: string) => void;
   onStartEditing: (user: ProjectUser) => void;
   onSaveRole: () => void;
@@ -139,8 +141,11 @@ function ProjectUsersTable({
         <tbody className="divide-y">
           {users.map((user) => {
             const lastActiveTeamLead = isLastActiveProjectTeamLead(user, users);
-            const roleOptions = ROLES.filter((role) =>
-              canAssignProjectRole(user, role.value, users),
+            const canManageThisUser = canManageProjectAdministrators || user.role !== 'admin';
+            const roleOptions = ROLES.filter(
+              (role) =>
+                canAssignProjectRole(user, role.value, users) &&
+                (canManageProjectAdministrators || role.value !== 'admin'),
             );
             const canRemove = canRemoveProjectUser(user, users);
             const teamLeadGuardCopy =
@@ -198,7 +203,7 @@ function ProjectUsersTable({
                   {formatProjectUserJoinedDate(user)}
                 </td>
                 <td className="px-4 py-3">
-                  {user.userId !== currentUserId && !readOnly && (
+                  {user.userId !== currentUserId && !readOnly && canManageThisUser && (
                     <div className="flex items-center gap-2">
                       {editingUser?.id === user.id ? (
                         <>
@@ -302,6 +307,13 @@ export function ProjectUsersPage() {
     resourceLabel: 'project team',
     loadItems: loadProjectUsers,
   });
+  const canManageProjectAdministrators = canGrantProjectAdminRole(
+    currentUser?.roleInCompany || currentUser?.role,
+    project?.currentUserRole,
+  );
+  const assignableRoleOptions = ROLES.filter(
+    (role) => canManageProjectAdministrators || role.value !== 'admin',
+  );
 
   const openInviteModal = () => {
     if (readOnly) return;
@@ -313,6 +325,7 @@ export function ProjectUsersPage() {
     const email = normalizeInviteEmail(inviteEmail);
     if (readOnly) return;
     if (!projectId || !email || invitingRef.current) return;
+    if (inviteRole === 'admin' && !canManageProjectAdministrators) return;
 
     invitingRef.current = true;
     setInviting(true);
@@ -359,6 +372,9 @@ export function ProjectUsersPage() {
   const handleUpdateRole = async () => {
     if (readOnly) return;
     if (!editingUser || !editRole || !projectId) return;
+    if (!canManageProjectAdministrators && (editingUser.role === 'admin' || editRole === 'admin')) {
+      return;
+    }
 
     const updateKey = `${editingUser.userId}:${editRole}`;
     if (savingRolesRef.current.has(updateKey)) return;
@@ -476,6 +492,7 @@ export function ProjectUsersPage() {
             saving={saving}
             removingUserId={removingUserId}
             readOnly={readOnly}
+            canManageProjectAdministrators={canManageProjectAdministrators}
             onEditRoleChange={setEditRole}
             onStartEditing={startEditing}
             onSaveRole={handleUpdateRole}
@@ -524,7 +541,7 @@ export function ProjectUsersPage() {
                   value={inviteRole}
                   onChange={(e) => setInviteRole(e.target.value)}
                 >
-                  {ROLES.map((role) => (
+                  {assignableRoleOptions.map((role) => (
                     <option key={role.value} value={role.value}>
                       {role.label} - {role.description}
                     </option>

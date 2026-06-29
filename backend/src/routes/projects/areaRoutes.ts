@@ -1,5 +1,6 @@
 import { Router, type Request } from 'express';
 import { prisma } from '../../lib/prisma.js';
+import { AuditAction, writeAuditLogInTransaction } from '../../lib/auditLog.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { requireBrowserSession } from '../../middleware/browserSession.js';
@@ -96,14 +97,33 @@ export function createProjectAreaRouter({
         throw AppError.badRequest('Chainage start must be less than chainage end.');
       }
 
-      const area = await prisma.projectArea.create({
-        data: {
+      const area = await prisma.$transaction(async (tx) => {
+        const createdArea = await tx.projectArea.create({
+          data: {
+            projectId,
+            name,
+            chainageStart,
+            chainageEnd,
+            colour: colour ?? null,
+          },
+        });
+
+        await writeAuditLogInTransaction(tx, {
           projectId,
-          name,
-          chainageStart,
-          chainageEnd,
-          colour: colour ?? null,
-        },
+          userId: user.id,
+          entityType: 'project_area',
+          entityId: createdArea.id,
+          action: AuditAction.PROJECT_AREA_CREATED,
+          changes: {
+            name,
+            chainageStart,
+            chainageEnd,
+            colour: colour ?? null,
+          },
+          req,
+        });
+
+        return createdArea;
       });
 
       res.status(201).json(buildProjectAreaResponse(area));
@@ -183,9 +203,40 @@ export function createProjectAreaRouter({
       if (chainageEnd !== undefined) updateData.chainageEnd = chainageEnd;
       if (colour !== undefined) updateData.colour = colour;
 
-      const area = await prisma.projectArea.update({
-        where: { id: areaId },
-        data: updateData,
+      const changedFields = Object.keys(updateData);
+      const area = await prisma.$transaction(async (tx) => {
+        const updatedArea = await tx.projectArea.update({
+          where: { id: areaId },
+          data: updateData,
+        });
+
+        if (changedFields.length > 0) {
+          await writeAuditLogInTransaction(tx, {
+            projectId,
+            userId: user.id,
+            entityType: 'project_area',
+            entityId: areaId,
+            action: AuditAction.PROJECT_AREA_UPDATED,
+            changes: {
+              changedFields,
+              previous: {
+                name: existingArea.name,
+                chainageStart: existingArea.chainageStart,
+                chainageEnd: existingArea.chainageEnd,
+                colour: existingArea.colour,
+              },
+              next: {
+                name: updatedArea.name,
+                chainageStart: updatedArea.chainageStart,
+                chainageEnd: updatedArea.chainageEnd,
+                colour: updatedArea.colour,
+              },
+            },
+            req,
+          });
+        }
+
+        return updatedArea;
       });
 
       res.json(buildProjectAreaResponse(area));
@@ -217,8 +268,25 @@ export function createProjectAreaRouter({
         throw AppError.notFound('Area');
       }
 
-      await prisma.projectArea.delete({
-        where: { id: areaId },
+      await prisma.$transaction(async (tx) => {
+        await tx.projectArea.delete({
+          where: { id: areaId },
+        });
+
+        await writeAuditLogInTransaction(tx, {
+          projectId,
+          userId: user.id,
+          entityType: 'project_area',
+          entityId: areaId,
+          action: AuditAction.PROJECT_AREA_DELETED,
+          changes: {
+            name: existingArea.name,
+            chainageStart: existingArea.chainageStart,
+            chainageEnd: existingArea.chainageEnd,
+            colour: existingArea.colour,
+          },
+          req,
+        });
       });
 
       res.json(buildProjectAreaDeletedResponse());

@@ -1,7 +1,7 @@
 import { Router, type Request } from 'express';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
-import { createAuditLog, AuditAction, writeAuditLogInTransaction } from '../../lib/auditLog.js';
+import { AuditAction, writeAuditLogInTransaction } from '../../lib/auditLog.js';
 import { createNotification } from '../../lib/notificationDispatch.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
@@ -133,63 +133,65 @@ export function createProjectTeamRouter({
         targetNewRole: role,
       });
 
-      // Project team assignment links an existing company member to a project;
-      // it does not create a new company seat.
-      const invitedUser = await prisma.user.findUnique({
-        where: { email },
-        select: { id: true, email: true, fullName: true, companyId: true },
-      });
-
-      if (!invitedUser) {
-        throw AppError.notFound('User');
-      }
-
-      if (invitedUser.companyId !== access.project.companyId) {
-        throw AppError.forbidden(
-          'User must belong to this company before they can be added to the project',
-        );
-      }
-
-      // Check if already a member
-      const existingMember = await prisma.projectUser.findFirst({
-        where: { projectId, userId: invitedUser.id },
-      });
-
-      if (existingMember) {
-        throw AppError.badRequest('User is already a member of this project');
-      }
-
-      // Create project user
-      const newProjectUser = await prisma.projectUser
-        .create({
-          data: {
-            projectId,
-            userId: invitedUser.id,
-            role,
-            status: 'active',
-            acceptedAt: new Date(), // Auto-accept for now
-          },
-        })
-        .catch((error: unknown) => {
-          if (isProjectUserUniqueConstraintError(error)) {
-            throw AppError.badRequest('User is already a member of this project');
-          }
-          throw error;
+      const { invitedUser, newProjectUser } = await prisma.$transaction(async (tx) => {
+        // Project team assignment links an existing company member to a project;
+        // it does not create a new company seat.
+        const invitedUser = await tx.user.findUnique({
+          where: { email },
+          select: { id: true, email: true, fullName: true, companyId: true },
         });
 
-      // Audit log
-      await createAuditLog({
-        projectId,
-        userId: currentUser.id,
-        entityType: 'project_user',
-        entityId: newProjectUser.id,
-        action: AuditAction.USER_INVITED,
-        changes: {
-          invitedUserId: invitedUser.id,
-          invitedUserEmail: invitedUser.email,
-          role,
-        },
-        req,
+        if (!invitedUser) {
+          throw AppError.notFound('User');
+        }
+
+        if (invitedUser.companyId !== access.project.companyId) {
+          throw AppError.forbidden(
+            'User must belong to this company before they can be added to the project',
+          );
+        }
+
+        // Check if already a member
+        const existingMember = await tx.projectUser.findFirst({
+          where: { projectId, userId: invitedUser.id },
+        });
+
+        if (existingMember) {
+          throw AppError.badRequest('User is already a member of this project');
+        }
+
+        const newProjectUser = await tx.projectUser
+          .create({
+            data: {
+              projectId,
+              userId: invitedUser.id,
+              role,
+              status: 'active',
+              acceptedAt: new Date(), // Auto-accept for now
+            },
+          })
+          .catch((error: unknown) => {
+            if (isProjectUserUniqueConstraintError(error)) {
+              throw AppError.badRequest('User is already a member of this project');
+            }
+            throw error;
+          });
+
+        await writeAuditLogInTransaction(tx, {
+          projectId,
+          userId: currentUser.id,
+          entityType: 'project_user',
+          entityId: newProjectUser.id,
+          action: AuditAction.USER_INVITED,
+          changes: {
+            invitedUserId: invitedUser.id,
+            invitedUserEmail: invitedUser.email,
+            role,
+          },
+          req,
+        });
+
+        return { invitedUser, newProjectUser };
       });
 
       // Feature #939 - Send team invitation notification to invited user

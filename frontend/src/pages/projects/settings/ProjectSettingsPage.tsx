@@ -24,6 +24,7 @@ import { Button } from '@/components/ui/button';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import {
   PROJECT_ADMIN_ROLES,
+  canGrantProjectAdminRole,
   canManageProjectForRole,
   isArchivedProject,
 } from './projectPageAccess';
@@ -197,10 +198,6 @@ const TABS = [
 
 function isSettingsTab(value: string | null): value is SettingsTab {
   return TABS.some((tab) => tab.id === value);
-}
-
-function canGrantProjectAdminRole(userRole: string, projectScopedRole: string): boolean {
-  return userRole === 'owner' || userRole === 'admin' || projectScopedRole === 'admin';
 }
 
 function TabSpinner() {

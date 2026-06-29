@@ -521,18 +521,35 @@ companyMemberRoutes.post(
       }
     }
 
+    const roleChangedExistingCompanyMember =
+      previousMemberState?.companyId === companyId &&
+      previousMemberState.roleInCompany !== roleInCompany;
+
     await createAuditLog({
       userId: user.userId,
       entityType: 'user',
       entityId: member.id,
-      action: AuditAction.USER_INVITED,
-      changes: {
-        invitedUserId: member.id,
-        invitedUserEmail: member.email,
-        roleInCompany,
-        companyId,
-        status: setupRequired ? 'pending' : 'active',
-      },
+      action: roleChangedExistingCompanyMember
+        ? AuditAction.USER_ROLE_CHANGED
+        : AuditAction.USER_INVITED,
+      changes: roleChangedExistingCompanyMember
+        ? {
+            memberId: member.id,
+            memberEmail: member.email,
+            companyId,
+            source: 'company_member_invite',
+            roleInCompany: {
+              from: previousMemberState.roleInCompany,
+              to: roleInCompany,
+            },
+          }
+        : {
+            invitedUserId: member.id,
+            invitedUserEmail: member.email,
+            roleInCompany,
+            companyId,
+            status: setupRequired ? 'pending' : 'active',
+          },
       req,
     });
 

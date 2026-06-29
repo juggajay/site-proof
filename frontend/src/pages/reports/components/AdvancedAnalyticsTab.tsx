@@ -4,11 +4,13 @@ import { BarChart3, Clock, Lock, Mail, Sparkles } from 'lucide-react';
 export interface AdvancedAnalyticsTabProps {
   hasAdvancedAnalytics: boolean;
   subscriptionTier: string;
+  canManageCompanySettings: boolean;
 }
 
 export const AdvancedAnalyticsTab = React.memo(function AdvancedAnalyticsTab({
   hasAdvancedAnalytics,
   subscriptionTier,
+  canManageCompanySettings,
 }: AdvancedAnalyticsTabProps) {
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
@@ -47,16 +49,24 @@ export const AdvancedAnalyticsTab = React.memo(function AdvancedAnalyticsTab({
               Your current plan:{' '}
               <span className="font-semibold capitalize">{subscriptionTier}</span>
             </p>
-            <a
-              href="/company-settings"
-              className="inline-flex items-center gap-2 px-6 py-3 bg-brand text-brand-foreground rounded-lg font-medium hover:bg-brand/90 transition-colors"
-            >
-              <Sparkles className="h-5 w-5" />
-              Upgrade to Professional
-            </a>
-            <p className="text-xs text-muted-foreground mt-2">
-              Contact support to upgrade your subscription
-            </p>
+            {canManageCompanySettings ? (
+              <>
+                <a
+                  href="/company-settings"
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-brand text-brand-foreground rounded-lg font-medium hover:bg-brand/90 transition-colors"
+                >
+                  <Sparkles className="h-5 w-5" />
+                  Upgrade to Professional
+                </a>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Contact support to upgrade your subscription
+                </p>
+              </>
+            ) : (
+              <p className="text-sm font-medium text-foreground">
+                Ask a company admin to upgrade this workspace.
+              </p>
+            )}
           </div>
         </div>
       ) : (
