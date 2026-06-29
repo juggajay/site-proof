@@ -4,9 +4,14 @@ import { useState } from 'react';
 import { UserCog, X, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth, getRoleOverride } from '@/lib/auth';
-import { removeLocalStorageItem, writeLocalStorageItem } from '@/lib/storagePreferences';
+import {
+  readLocalStorageItem,
+  removeLocalStorageItem,
+  writeLocalStorageItem,
+} from '@/lib/storagePreferences';
 
 const ROLE_OVERRIDE_KEY = 'siteproof_role_override';
+const HIDE_ROLE_SWITCHER_KEY = 'siteproof_hide_dev_role_switcher';
 
 const AVAILABLE_ROLES = [
   { id: 'owner', label: 'Owner', description: 'Full system access' },
@@ -31,6 +36,10 @@ function setRoleOverride(role: string | null) {
 export function RoleSwitcher() {
   const { user, actualRole: authActualRole } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
+
+  if (readLocalStorageItem(HIDE_ROLE_SWITCHER_KEY) === 'true') {
+    return null;
+  }
 
   const actualRole = authActualRole || '';
   const currentOverride = getRoleOverride();

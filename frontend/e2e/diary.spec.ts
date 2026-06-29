@@ -139,6 +139,7 @@ async function mockSeededDiaryApi(page: Page, options: SeededDiaryApiOptions = {
           id: E2E_PROJECT_ID,
           name: 'E2E Highway Upgrade',
           projectNumber: 'E2E-001',
+          currentUserRole: 'project_manager',
         },
       });
       return;

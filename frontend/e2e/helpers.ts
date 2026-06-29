@@ -78,6 +78,7 @@ export async function mockAuthenticatedUserState(
   await page.addInitScript((mockUser) => {
     localStorage.setItem('siteproof_remember_me', 'true');
     localStorage.setItem('siteproof_onboarding_completed', 'true');
+    localStorage.setItem('siteproof_hide_dev_role_switcher', 'true');
     localStorage.setItem('siteproof_last_seen_version', '1.3.0');
     localStorage.setItem(
       'cookie_consent',
