@@ -9,6 +9,8 @@ import {
   getFrequencyLabel,
   getRecipientValidationError,
   getScheduleFailureMessage,
+  getScheduleLatestRunClassName,
+  getScheduleLatestRunMessage,
   getScheduleStatusClassName,
   getScheduleStatusLabel,
   normalizeRecipientList,
@@ -164,6 +166,64 @@ describe('schedule report modal helpers', () => {
     expect(getScheduleFailureMessage(pausedSchedule)).toBe(
       'Paused after 3 failed delivery attempts. Last error: Provider rejected recipient',
     );
+  });
+
+  it('summarizes the latest scheduled report delivery run', () => {
+    const baseSchedule: ScheduledReport = {
+      id: 'schedule-1',
+      reportType: 'lot-status',
+      frequency: 'daily',
+      dayOfWeek: null,
+      dayOfMonth: null,
+      timeOfDay: '09:00',
+      recipients: 'owner@example.com,qa@example.com',
+      isActive: true,
+      nextRunAt: '2026-06-06T12:00:00.000Z',
+      lastSentAt: null,
+    };
+
+    expect(getScheduleLatestRunMessage(baseSchedule)).toBeNull();
+
+    expect(
+      getScheduleLatestRunMessage({
+        ...baseSchedule,
+        latestRun: {
+          id: 'run-1',
+          status: 'sent',
+          recipientCount: 3,
+          sentCount: 2,
+          failedCount: 0,
+          digestCount: 1,
+          suppressedCount: 1,
+          generatedAt: '2026-06-06T12:00:00.000Z',
+          completedAt: '2026-06-06T12:01:00.000Z',
+        },
+      }),
+    ).toBe(
+      'Latest run sent to 2 recipients, 1 queued for digest, 1 suppressed by preferences/access.',
+    );
+
+    const partialFailure = {
+      ...baseSchedule,
+      latestRun: {
+        id: 'run-2',
+        status: 'partial_failed',
+        recipientCount: 2,
+        sentCount: 1,
+        failedCount: 1,
+        digestCount: 0,
+        suppressedCount: 0,
+        errorReason: 'Provider rejected recipient',
+        generatedAt: '2026-06-06T12:00:00.000Z',
+        completedAt: '2026-06-06T12:01:00.000Z',
+        retryableFailedCount: 1,
+        nextRetryAt: '2026-06-06T12:16:00.000Z',
+      },
+    };
+    expect(getScheduleLatestRunMessage(partialFailure)).toBe(
+      'Latest run sent to 1 of 2 recipients; 1 failed. Error: Provider rejected recipient',
+    );
+    expect(getScheduleLatestRunClassName(partialFailure)).toContain('text-warning');
   });
 
   it('formats next-run dates without scheduling null values', () => {

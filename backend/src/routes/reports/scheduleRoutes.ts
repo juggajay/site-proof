@@ -65,6 +65,49 @@ type ScheduledReportAuditSource = {
   isActive: boolean;
 };
 
+type ScheduledReportRunSummarySource = {
+  id: string;
+  status: string;
+  recipientCount: number;
+  sentCount: number;
+  failedCount: number;
+  digestCount: number;
+  suppressedCount: number;
+  errorReason: string | null;
+  generatedAt: Date;
+  completedAt: Date | null;
+  deliveries?: Array<{
+    status: string;
+    retryable: boolean;
+    nextAttemptAt: Date | null;
+  }>;
+};
+
+function buildScheduledReportRunSummary(run: ScheduledReportRunSummarySource) {
+  const retryableFailedDeliveries =
+    run.deliveries?.filter((delivery) => delivery.status === 'failed' && delivery.retryable) ?? [];
+  const nextRetryAt =
+    retryableFailedDeliveries
+      .map((delivery) => delivery.nextAttemptAt)
+      .filter((value): value is Date => Boolean(value))
+      .sort((left, right) => left.getTime() - right.getTime())[0] ?? null;
+
+  return {
+    id: run.id,
+    status: run.status,
+    recipientCount: run.recipientCount,
+    sentCount: run.sentCount,
+    failedCount: run.failedCount,
+    digestCount: run.digestCount,
+    suppressedCount: run.suppressedCount,
+    errorReason: run.errorReason,
+    generatedAt: run.generatedAt,
+    completedAt: run.completedAt,
+    retryableFailedCount: retryableFailedDeliveries.length,
+    nextRetryAt,
+  };
+}
+
 function parseScheduleRouteId(
   value: unknown,
   parseRequiredString: ScheduledReportRouterDependencies['parseRequiredString'],
@@ -324,13 +367,46 @@ export function createScheduledReportRouter({
 
       const schedules = await prisma.scheduledReport.findMany({
         where: { projectId },
+        include: {
+          runs: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: {
+              id: true,
+              status: true,
+              recipientCount: true,
+              sentCount: true,
+              failedCount: true,
+              digestCount: true,
+              suppressedCount: true,
+              errorReason: true,
+              generatedAt: true,
+              completedAt: true,
+              deliveries: {
+                where: {
+                  status: 'failed',
+                  retryable: true,
+                },
+                select: {
+                  status: true,
+                  retryable: true,
+                  nextAttemptAt: true,
+                },
+              },
+            },
+          },
+        },
         orderBy: { createdAt: 'desc' },
         take: MAX_SCHEDULED_REPORTS_PER_PROJECT,
       });
+      const responseSchedules = schedules.map(({ runs, ...schedule }) => ({
+        ...schedule,
+        latestRun: runs[0] ? buildScheduledReportRunSummary(runs[0]) : null,
+      }));
 
       res.json(
         buildScheduledReportsResponse(
-          schedules,
+          responseSchedules,
           MAX_SCHEDULED_REPORTS_PER_PROJECT,
           projectTimeZone,
         ),
