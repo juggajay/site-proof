@@ -759,7 +759,8 @@ describe('processDueScheduledReports', () => {
       });
       expect(partialRun?.artifactFileUrl).toContain('scheduled-reports');
       expect(partialRun?.artifactReportName).toBe(`Lot Status Report - ${project.name}`);
-      expect(partialRun?.artifactFilename).toContain('Lot_Status_Report');
+      expect(partialRun?.artifactFilename).toContain('Lot Status Report');
+      expect(partialRun?.artifactFilename).toMatch(/\.pdf$/);
       expect(partialRun?.artifactMimeType).toBe('application/pdf');
       expect(partialRun?.artifactFileSize).toBe((firstAttemptPdf as Buffer).length);
       expect(partialRun?.artifactSha256).toBe(
