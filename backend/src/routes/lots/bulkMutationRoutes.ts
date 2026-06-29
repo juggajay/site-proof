@@ -26,6 +26,7 @@ import {
   bulkAssignSubcontractorSchema,
   assignSubcontractorSchema,
 } from './validation.js';
+import { buildSubcontractorPortalEntityLink } from '../notifications/links.js';
 import { emitLotWebhookEvent, emitLotWebhookEvents } from './webhookEvents.js';
 
 export const lotBulkMutationRouter = Router();
@@ -354,7 +355,9 @@ lotBulkMutationRouter.post(
             type: 'lot_assigned',
             title: 'Lot Assigned to Your Company',
             message: `${assignerName} assigned lot ${lot.lotNumber}${lot.description ? ` (${lot.description})` : ''} to your company.`,
-            linkUrl: `/projects/${lot.projectId}/lots/${lot.id}`,
+            linkUrl: buildSubcontractorPortalEntityLink('lot', lot.id, lot.projectId, {
+              subcontractorCompanyId: subcontractorId,
+            }),
           })),
         });
       }
