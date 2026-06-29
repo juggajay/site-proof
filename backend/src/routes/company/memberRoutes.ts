@@ -111,6 +111,7 @@ companyMemberRoutes.post(
   '/leave',
   asyncHandler(async (req, res) => {
     const user = req.user!;
+    requireBrowserSession(req, 'Company leave');
 
     if (!user.companyId) {
       throw AppError.badRequest('You are not a member of any company');

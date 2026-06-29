@@ -2,6 +2,7 @@ import { Router, type Request } from 'express';
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
+import { requireBrowserSession } from '../../middleware/browserSession.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
 import { assertProjectAllowsWrite } from '../../lib/projectAccess.js';
 import {
@@ -67,6 +68,7 @@ export function createProjectAreaRouter({
     asyncHandler(async (req, res) => {
       const projectId = parseProjectRouteParam(req.params.id, 'id');
       const user = req.user!;
+      requireBrowserSession(req, 'Project area creation');
       const name = parseRequiredTrimmedString(req.body.name, 'Area name', projectAreaNameMaxLength);
       const chainageStart = parseOptionalNonNegativeNumber(
         req.body.chainageStart,
@@ -115,6 +117,7 @@ export function createProjectAreaRouter({
       const projectId = parseProjectRouteParam(req.params.id, 'id');
       const areaId = parseProjectRouteParam(req.params.areaId, 'areaId');
       const user = req.user!;
+      requireBrowserSession(req, 'Project area update');
       const name =
         req.body.name === undefined
           ? undefined
@@ -196,6 +199,7 @@ export function createProjectAreaRouter({
       const projectId = parseProjectRouteParam(req.params.id, 'id');
       const areaId = parseProjectRouteParam(req.params.areaId, 'areaId');
       const user = req.user!;
+      requireBrowserSession(req, 'Project area deletion');
 
       const access = await getProjectAccessContext(projectId, user);
 

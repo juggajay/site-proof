@@ -5,6 +5,7 @@ import { AuditAction, createAuditLog } from '../../lib/auditLog.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { prisma } from '../../lib/prisma.js';
 import { isStandaloneSubcontractorPortalIdentity } from '../../lib/projectAccess.js';
+import { requireBrowserSession } from '../../middleware/browserSession.js';
 import {
   buildSubcontractorPortalAccessResponse,
   buildSubcontractorPortalAccessUpdatedResponse,
@@ -54,6 +55,7 @@ export function createSubcontractorPortalAccessRouter({
     '/:id/portal-access',
     asyncHandler(async (req, res) => {
       const user = req.user!;
+      requireBrowserSession(req, 'Subcontractor portal access update');
       const id = normalizeIdParam(req.params.id, 'Subcontractor ID');
       const { portalAccess } = req.body;
 

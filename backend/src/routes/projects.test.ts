@@ -1,8 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
+import crypto from 'crypto';
 import { projectsRouter } from './projects.js';
 import { authRouter } from './auth.js';
+import { authenticateApiKey } from './apiKeys.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { AuditAction, parseAuditLogChanges } from '../lib/auditLog.js';
@@ -11,9 +13,31 @@ import { ARCHIVED_PROJECT_READ_ONLY_MESSAGE } from '../lib/projectAccess.js';
 
 const app = express();
 app.use(express.json());
+app.use(authenticateApiKey);
 app.use('/api/auth', authRouter);
 app.use('/api/projects', projectsRouter);
 app.use(errorHandler);
+
+function hashApiKeyForTest(apiKey: string): string {
+  return crypto.createHash('sha256').update(apiKey).digest('hex');
+}
+
+async function createApiKeyForUser(userId: string, scopes = 'admin') {
+  const apiKey = `sp_${crypto.randomBytes(32).toString('hex')}`;
+  const record = await prisma.apiKey.create({
+    data: {
+      userId,
+      name: 'Project browser-session boundary test key',
+      keyHash: hashApiKeyForTest(apiKey),
+      keyPrefix: apiKey.substring(0, 11),
+      scopes,
+      isActive: true,
+    },
+    select: { id: true },
+  });
+
+  return { apiKey, keyId: record.id };
+}
 
 describe('Projects API', () => {
   let authToken: string;
@@ -84,6 +108,26 @@ describe('Projects API', () => {
         state: 'NSW',
         specificationSet: 'TfNSW',
       });
+    });
+
+    it('rejects API-key-authenticated project creation', async () => {
+      const { apiKey, keyId } = await createApiKeyForUser(userId, 'admin');
+      const projectNumber = `API-CREATE-BLOCKED-${Date.now()}`;
+
+      try {
+        const res = await request(app).post('/api/projects').set('x-api-key', apiKey).send({
+          name: 'Blocked API Key Project',
+          projectNumber,
+          state: 'NSW',
+          specificationSet: 'TfNSW',
+        });
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.message).toContain('browser session');
+        await expect(prisma.project.count({ where: { projectNumber } })).resolves.toBe(0);
+      } finally {
+        await prisma.apiKey.deleteMany({ where: { id: keyId } });
+      }
     });
 
     it('should reject project without name', async () => {
@@ -1765,6 +1809,29 @@ describe('Projects API', () => {
       expect(res.body.project.name).toBe('Updated Project Name');
     });
 
+    it('rejects API-key-authenticated project settings updates', async () => {
+      const { apiKey, keyId } = await createApiKeyForUser(userId, 'admin');
+      const existing = await prisma.project.findUniqueOrThrow({
+        where: { id: projectId },
+        select: { name: true },
+      });
+
+      try {
+        const res = await request(app)
+          .patch(`/api/projects/${projectId}`)
+          .set('x-api-key', apiKey)
+          .send({ name: `API Key Project Rename ${Date.now()}` });
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.message).toContain('browser session');
+        await expect(
+          prisma.project.findUnique({ where: { id: projectId }, select: { name: true } }),
+        ).resolves.toMatchObject({ name: existing.name });
+      } finally {
+        await prisma.apiKey.deleteMany({ where: { id: keyId } });
+      }
+    });
+
     it('should audit project settings updates', async () => {
       await prisma.auditLog.deleteMany({
         where: {
@@ -2034,6 +2101,42 @@ describe('Projects API', () => {
       }
     });
 
+    it('rejects API-key-authenticated project deletion before password validation', async () => {
+      const createRes = await request(app)
+        .post('/api/projects')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          name: 'API Delete Boundary Project',
+          projectNumber: `PROJ-API-DELETE-BLOCKED-${Date.now()}`,
+          state: 'NSW',
+          specificationSet: 'TfNSW',
+        });
+      expect(createRes.status).toBe(201);
+      const deleteProjectId = createRes.body.project.id as string;
+      const { apiKey, keyId } = await createApiKeyForUser(userId, 'admin');
+
+      try {
+        const res = await request(app)
+          .delete(`/api/projects/${deleteProjectId}`)
+          .set('x-api-key', apiKey)
+          .send({ password: TEST_USER_PASSWORD });
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.message).toContain('browser session');
+        const persistedProject = await prisma.project.findUnique({
+          where: { id: deleteProjectId },
+        });
+        expect(persistedProject).not.toBeNull();
+      } finally {
+        await prisma.apiKey.deleteMany({ where: { id: keyId } });
+        await prisma.auditLog.deleteMany({
+          where: { entityType: 'project', entityId: deleteProjectId },
+        });
+        await prisma.projectUser.deleteMany({ where: { projectId: deleteProjectId } });
+        await prisma.project.delete({ where: { id: deleteProjectId } }).catch(() => {});
+      }
+    });
+
     it('should reject permanent deletion when a project contains retained records', async () => {
       const createRes = await request(app)
         .post('/api/projects')
@@ -2269,6 +2372,31 @@ describe('Projects API', () => {
       areaIds.push(res.body.area.id);
     });
 
+    it('rejects API-key-authenticated project area creation', async () => {
+      const { apiKey, keyId } = await createApiKeyForUser(userId, 'admin');
+      const areaName = `API Area ${Date.now()}`;
+
+      try {
+        const res = await request(app)
+          .post(`/api/projects/${projectId}/areas`)
+          .set('x-api-key', apiKey)
+          .send({
+            name: areaName,
+            chainageStart: 0,
+            chainageEnd: 100,
+            colour: '#3B82F6',
+          });
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.message).toContain('browser session');
+        await expect(
+          prisma.projectArea.count({ where: { projectId, name: areaName } }),
+        ).resolves.toBe(0);
+      } finally {
+        await prisma.apiKey.deleteMany({ where: { id: keyId } });
+      }
+    });
+
     it('should reject malformed project area create fields', async () => {
       const malformedName = await request(app)
         .post(`/api/projects/${projectId}/areas`)
@@ -2358,6 +2486,43 @@ describe('Projects API', () => {
         .send({ chainageEnd: '1e2' });
 
       expect(encodedChainage.status).toBe(400);
+    });
+
+    it('rejects API-key-authenticated project area updates and deletions', async () => {
+      const area = await prisma.projectArea.create({
+        data: {
+          projectId,
+          name: 'API Guarded Area',
+          chainageStart: 0,
+          chainageEnd: 100,
+          colour: '#3B82F6',
+        },
+      });
+      areaIds.push(area.id);
+      const { apiKey, keyId } = await createApiKeyForUser(userId, 'admin');
+
+      try {
+        const updateRes = await request(app)
+          .patch(`/api/projects/${projectId}/areas/${area.id}`)
+          .set('x-api-key', apiKey)
+          .send({ name: 'API Updated Area' });
+
+        expect(updateRes.status).toBe(403);
+        expect(updateRes.body.error.message).toContain('browser session');
+
+        const deleteRes = await request(app)
+          .delete(`/api/projects/${projectId}/areas/${area.id}`)
+          .set('x-api-key', apiKey);
+
+        expect(deleteRes.status).toBe(403);
+        expect(deleteRes.body.error.message).toContain('browser session');
+
+        await expect(
+          prisma.projectArea.findUnique({ where: { id: area.id }, select: { name: true } }),
+        ).resolves.toMatchObject({ name: 'API Guarded Area' });
+      } finally {
+        await prisma.apiKey.deleteMany({ where: { id: keyId } });
+      }
     });
   });
 });
@@ -2451,6 +2616,70 @@ describe('Project Team Management', () => {
     expect(res.status).toBe(200);
     expect(res.body.users).toBeDefined();
     expect(Array.isArray(res.body.users)).toBe(true);
+  });
+
+  it('rejects API-key-authenticated project team invitations', async () => {
+    const suffix = Date.now();
+    const invitee = await registerTestUser(app, {
+      emailPrefix: `team-api-invitee-${suffix}`,
+      fullName: 'Team API Invitee',
+      companyId,
+      roleInCompany: 'viewer',
+    });
+    const { apiKey, keyId } = await createApiKeyForUser(userId, 'admin');
+
+    try {
+      const res = await request(app)
+        .post(`/api/projects/${projectId}/users`)
+        .set('x-api-key', apiKey)
+        .send({ email: invitee.email, role: 'viewer' });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.message).toContain('browser session');
+      await expect(
+        prisma.projectUser.count({ where: { projectId, userId: invitee.userId } }),
+      ).resolves.toBe(0);
+    } finally {
+      await prisma.apiKey.deleteMany({ where: { id: keyId } });
+      await prisma.emailVerificationToken.deleteMany({ where: { userId: invitee.userId } });
+      await prisma.user.delete({ where: { id: invitee.userId } }).catch(() => {});
+    }
+  });
+
+  it('rejects API-key-authenticated project team role changes and removals', async () => {
+    await prisma.projectUser.upsert({
+      where: { projectId_userId: { projectId, userId: secondUserId } },
+      update: { role: 'viewer', status: 'active' },
+      create: { projectId, userId: secondUserId, role: 'viewer', status: 'active' },
+    });
+    const { apiKey, keyId } = await createApiKeyForUser(userId, 'admin');
+
+    try {
+      const updateRes = await request(app)
+        .patch(`/api/projects/${projectId}/users/${secondUserId}`)
+        .set('x-api-key', apiKey)
+        .send({ role: 'foreman' });
+
+      expect(updateRes.status).toBe(403);
+      expect(updateRes.body.error.message).toContain('browser session');
+
+      const deleteRes = await request(app)
+        .delete(`/api/projects/${projectId}/users/${secondUserId}`)
+        .set('x-api-key', apiKey);
+
+      expect(deleteRes.status).toBe(403);
+      expect(deleteRes.body.error.message).toContain('browser session');
+
+      await expect(
+        prisma.projectUser.findFirst({
+          where: { projectId, userId: secondUserId },
+          select: { role: true, status: true },
+        }),
+      ).resolves.toMatchObject({ role: 'viewer', status: 'active' });
+    } finally {
+      await prisma.apiKey.deleteMany({ where: { id: keyId } });
+      await prisma.projectUser.deleteMany({ where: { projectId, userId: secondUserId } });
+    }
   });
 
   it('should reject admins from another company when reading project team members', async () => {

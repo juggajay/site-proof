@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
+import { requireBrowserSessionMiddleware } from '../middleware/browserSession.js';
 import { requireEmailVerified } from '../middleware/requireEmailVerified.js';
 import { getProjectLimitForTier, getUserLimitForTier } from '../lib/tierLimits.js';
 import { AppError } from '../lib/AppError.js';
@@ -343,6 +344,7 @@ companyRouter.use(companyApiKeyRoutes);
 // POST /api/company/logo - Upload and store a company logo file
 companyRouter.post(
   '/logo',
+  requireBrowserSessionMiddleware('Company logo update'),
   companyLogoUpload.single('logo'),
   asyncHandler(async (req, res) => {
     const user = req.user!;
@@ -436,6 +438,7 @@ companyRouter.patch(
   '/',
   asyncHandler(async (req, res) => {
     const user = req.user!;
+    requireBrowserSession(req, 'Company profile update');
     const name = normalizeCompanyString(req.body.name, 'Company name', COMPANY_NAME_MAX_LENGTH, {
       required: req.body.name !== undefined,
     });
