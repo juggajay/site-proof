@@ -756,6 +756,12 @@ test.describe('Claims seeded commercial contract', () => {
       packageModal.getByRole('heading', { name: 'Customize Evidence Package' }),
     ).toBeVisible();
     await packageModal.getByRole('button', { name: 'Clear All' }).click();
+    await expect(
+      packageModal.getByText('Select at least one section to generate an evidence package.'),
+    ).toBeVisible();
+    await expect(packageModal.getByRole('button', { name: 'Generate Package' })).toBeDisabled();
+    await packageModal.getByLabel(/Lot Summary Table/).check();
+    await expect(packageModal.getByRole('button', { name: 'Generate Package' })).toBeEnabled();
 
     const downloadPromise = page.waitForEvent('download');
     await packageModal.getByRole('button', { name: 'Generate Package' }).click();
