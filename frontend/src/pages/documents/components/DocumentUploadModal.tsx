@@ -17,6 +17,8 @@ import {
   type UploadDocumentForm,
 } from '../documentsUploadData';
 
+const DOCUMENT_UPLOAD_ACCEPT = '.pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.webp,.eml,.msg';
+
 interface DocumentUploadLot {
   id: string;
   lotNumber: string;
@@ -89,7 +91,7 @@ export function DocumentUploadModal({
                 type="file"
                 multiple
                 onChange={onFileSelect}
-                accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.webp"
+                accept={DOCUMENT_UPLOAD_ACCEPT}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
               />
               {selectedFiles.length > 0 ? (
@@ -149,7 +151,7 @@ export function DocumentUploadModal({
                     drop
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    PDF, DOC, XLS, JPG, PNG up to 50MB (select multiple files)
+                    PDF, DOC, XLS, JPG, PNG, EML, MSG up to 50MB (select multiple files)
                   </p>
                 </>
               )}
