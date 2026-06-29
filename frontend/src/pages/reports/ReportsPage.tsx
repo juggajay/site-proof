@@ -4,7 +4,14 @@ import { apiFetch, apiUrl } from '@/lib/api';
 import { Lock, Sparkles, Mail, RefreshCw } from 'lucide-react';
 import { ScheduleReportModal } from '../../components/reports/ScheduleReportModal';
 import { ContextHelp, HELP_CONTENT } from '@/components/ContextHelp';
-import type { LotStatusReport, NCRReport, TestReport, DiaryReport, ClaimsReport } from './types';
+import type {
+  LotStatusReport,
+  NCRReport,
+  TestReport,
+  DiaryReport,
+  ClaimsReport,
+  ReportPagination,
+} from './types';
 import { ADVANCED_ANALYTICS_TIERS } from './types';
 import { useAuth } from '@/lib/auth';
 import { ROLE_GROUPS, hasRoleInGroup } from '@/lib/roles';
@@ -37,9 +44,101 @@ const AdvancedAnalyticsTab = lazy(() =>
 
 const REPORT_DATA_TABS = ['lot-status', 'ncr', 'test', 'diary', 'claims'] as const;
 type ReportDataTab = (typeof REPORT_DATA_TABS)[number];
+type PaginatedReportDataTab = Exclude<ReportDataTab, 'claims'>;
+type PaginatedReport = LotStatusReport | NCRReport | TestReport | DiaryReport;
+
+const REPORT_DETAIL_PAGE_LIMIT = 500;
 
 function isReportDataTab(tab: string): tab is ReportDataTab {
   return REPORT_DATA_TABS.includes(tab as ReportDataTab);
+}
+
+function isPaginatedReportDataTab(tab: ReportDataTab): tab is PaginatedReportDataTab {
+  return tab !== 'claims';
+}
+
+function markReportAsFullyLoaded<T extends { pagination?: ReportPagination }>(
+  report: T,
+  rowCount: number,
+): T {
+  if (!report.pagination) {
+    return report;
+  }
+
+  return {
+    ...report,
+    pagination: {
+      ...report.pagination,
+      page: 1,
+      limit: rowCount,
+      totalPages: 1,
+    },
+  };
+}
+
+function mergePaginatedReportPages(
+  reportType: PaginatedReportDataTab,
+  firstPage: PaginatedReport,
+  nextPages: PaginatedReport[],
+): PaginatedReport {
+  switch (reportType) {
+    case 'lot-status': {
+      const first = firstPage as LotStatusReport;
+      const pages = nextPages as LotStatusReport[];
+      const lots = [...first.lots, ...pages.flatMap((page) => page.lots)];
+      return markReportAsFullyLoaded({ ...first, lots }, lots.length);
+    }
+    case 'ncr': {
+      const first = firstPage as NCRReport;
+      const pages = nextPages as NCRReport[];
+      const ncrs = [...first.ncrs, ...pages.flatMap((page) => page.ncrs)];
+      return markReportAsFullyLoaded({ ...first, ncrs }, ncrs.length);
+    }
+    case 'test': {
+      const first = firstPage as TestReport;
+      const pages = nextPages as TestReport[];
+      const tests = [...first.tests, ...pages.flatMap((page) => page.tests)];
+      return markReportAsFullyLoaded({ ...first, tests }, tests.length);
+    }
+    case 'diary': {
+      const first = firstPage as DiaryReport;
+      const pages = nextPages as DiaryReport[];
+      const diaries = [...first.diaries, ...pages.flatMap((page) => page.diaries)];
+      return markReportAsFullyLoaded({ ...first, diaries }, diaries.length);
+    }
+  }
+}
+
+async function fetchCompleteReport(
+  reportType: ReportDataTab,
+  endpoint: string,
+  queryParams: URLSearchParams,
+): Promise<unknown> {
+  if (!isPaginatedReportDataTab(reportType)) {
+    return apiFetch<unknown>(`/api/reports/${endpoint}?${queryParams.toString()}`);
+  }
+
+  queryParams.set('limit', String(REPORT_DETAIL_PAGE_LIMIT));
+  queryParams.set('page', '1');
+
+  const firstPage = await apiFetch<PaginatedReport>(
+    `/api/reports/${endpoint}?${queryParams.toString()}`,
+  );
+  const totalPages = firstPage.pagination?.totalPages ?? 1;
+
+  if (totalPages <= 1) {
+    return firstPage;
+  }
+
+  const nextPages = await Promise.all(
+    Array.from({ length: totalPages - 1 }, (_, index) => {
+      const pageParams = new URLSearchParams(queryParams);
+      pageParams.set('page', String(index + 2));
+      return apiFetch<PaginatedReport>(`/api/reports/${endpoint}?${pageParams.toString()}`);
+    }),
+  );
+
+  return mergePaginatedReportPages(reportType, firstPage, nextPages);
 }
 
 interface CompanyResponse {
@@ -253,6 +352,11 @@ export function ReportsPage() {
             break;
         }
 
+        if (isPaginatedReportDataTab(reportType)) {
+          queryParams.set('limit', String(REPORT_DETAIL_PAGE_LIMIT));
+          queryParams.set('page', '1');
+        }
+
         requestKey = `${endpoint}?${queryParams.toString()}`;
         if (inFlightReportRequestKeyRef.current === requestKey) {
           return;
@@ -265,7 +369,7 @@ export function ReportsPage() {
         setLoading(true);
         setError(null);
 
-        const data = await apiFetch<unknown>(`/api/reports/${endpoint}?${queryParams.toString()}`);
+        const data = await fetchCompleteReport(reportType, endpoint, queryParams);
         if (requestId !== reportRequestRef.current) return;
 
         switch (reportType) {
