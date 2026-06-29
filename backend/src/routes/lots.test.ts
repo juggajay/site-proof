@@ -63,7 +63,7 @@ async function waitForWebhookDeliveries(webhookId: string, expectedCount: number
       orderBy: { deliveredAt: 'asc' },
     });
 
-    if (deliveries.length >= expectedCount) {
+    if (deliveries.filter((delivery) => delivery.success).length >= expectedCount) {
       return deliveries;
     }
 
