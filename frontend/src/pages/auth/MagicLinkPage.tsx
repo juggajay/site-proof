@@ -17,6 +17,17 @@ function getMagicLinkErrorMessage(error: unknown): string {
   return 'Failed to verify magic link. Please try again.';
 }
 
+function scrubMagicLinkTokenFromUrl(searchParams: URLSearchParams) {
+  const safeParams = new URLSearchParams(searchParams);
+  safeParams.delete('token');
+  const safeQuery = safeParams.toString();
+  window.history.replaceState(
+    null,
+    document.title,
+    `/auth/magic-link${safeQuery ? `?${safeQuery}` : ''}`,
+  );
+}
+
 // Feature #415: Magic link verification page
 export function MagicLinkPage() {
   const [searchParams] = useSearchParams();
@@ -40,6 +51,8 @@ export function MagicLinkPage() {
       return;
     }
 
+    scrubMagicLinkTokenFromUrl(searchParams);
+
     const verifyMagicLink = async () => {
       try {
         const data = await apiFetch<{ token: string; user?: User }>('/api/auth/magic-link/verify', {
@@ -48,7 +61,6 @@ export function MagicLinkPage() {
         });
 
         if (data.token) {
-          window.history.replaceState(null, document.title, '/auth/magic-link');
           // Use the centralized setToken which handles storage properly
           const signedInUser = await setToken(data.token, data.user);
 

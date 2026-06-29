@@ -645,7 +645,11 @@ describe('route authentication coverage', () => {
       'POST /oauth/exchange',
       'POST /oauth/mock',
     ]);
+    expect(routeSourceForDescriptor(oauthSource, 'GET /google')).toContain('authRateLimiter');
     expect(routeSourceForDescriptor(oauthSource, 'GET /google')).toContain('createOAuthState');
+    expect(routeSourceForDescriptor(oauthSource, 'GET /google/callback')).toContain(
+      'authRateLimiter',
+    );
     expect(routeSourceForDescriptor(oauthSource, 'GET /google/callback')).toContain(
       'verifyOAuthState(callbackParams.state)',
     );

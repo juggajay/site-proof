@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import type { PrismaClient } from '@prisma/client';
 
-import { verifyPassword } from '../../lib/auth.js';
+import { getTokenAuthTime, verifyPassword } from '../../lib/auth.js';
 import { AuditAction } from '../../lib/auditLog.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
@@ -15,6 +15,21 @@ type CreateAccountDeletionRouterDependencies = {
   prisma: PrismaClient;
   normalizePasswordInput: NormalizePasswordInput;
 };
+
+const PASSWORDLESS_ACCOUNT_DELETE_MAX_TOKEN_AGE_MS = 5 * 60 * 1000;
+
+function assertFreshPasswordlessDeletionSession(token: string) {
+  const authTime = getTokenAuthTime(token);
+  const now = Date.now();
+
+  if (
+    authTime === null ||
+    authTime > now + 30 * 1000 ||
+    now - authTime > PASSWORDLESS_ACCOUNT_DELETE_MAX_TOKEN_AGE_MS
+  ) {
+    throw AppError.forbidden('Please sign in again before deleting this passwordless account.');
+  }
+}
 
 export function createAccountDeletionRouter({
   prisma,
@@ -87,6 +102,10 @@ export function createAccountDeletionRouter({
         if (!isValidPassword) {
           throw AppError.badRequest('Invalid password');
         }
+      }
+
+      if (!user.passwordHash) {
+        assertFreshPasswordlessDeletionSession(token);
       }
 
       await prisma.$transaction(async (tx) => {

@@ -8,6 +8,7 @@ import { removeStoredAvatar } from '../../lib/avatarStorage.js';
 import { createAccountDeletionRouter } from './accountDeletionRoutes.js';
 
 vi.mock('../../lib/auth.js', () => ({
+  getTokenAuthTime: vi.fn(() => Date.now()),
   verifyPassword: vi.fn(() => true),
   verifyToken: vi.fn(async () => ({ userId: 'deleted-user-id' })),
 }));
@@ -93,5 +94,66 @@ describe('createAccountDeletionRouter', () => {
       '/uploads/avatars/avatar-deleted-user-id-owned.png',
       'deleted-user-id',
     );
+  });
+
+  it('requires a fresh session before deleting a passwordless account', async () => {
+    const { getTokenAuthTime } = await import('../../lib/auth.js');
+    vi.mocked(getTokenAuthTime).mockReturnValue(Date.now() - 10 * 60 * 1000);
+
+    const tx = {
+      auditLog: {
+        create: vi.fn(),
+        updateMany: vi.fn(),
+      },
+      emailVerificationToken: {
+        deleteMany: vi.fn(),
+      },
+      iTPCompletion: {
+        updateMany: vi.fn(),
+      },
+      passwordResetToken: {
+        deleteMany: vi.fn(),
+      },
+      projectUser: {
+        deleteMany: vi.fn(),
+      },
+      user: {
+        delete: vi.fn(),
+      },
+    };
+    const prisma = {
+      $transaction: vi.fn(async (callback) => callback(tx)),
+      user: {
+        findUnique: vi.fn(async () => ({
+          id: 'deleted-user-id',
+          email: 'delete-user@example.com',
+          avatarUrl: null,
+          passwordHash: null,
+          companyId: null,
+          roleInCompany: null,
+        })),
+      },
+    } as unknown as PrismaClient;
+
+    const app = express();
+    app.use(express.json());
+    app.use(
+      '/api/auth',
+      createAccountDeletionRouter({
+        prisma,
+        normalizePasswordInput: (value) => String(value),
+      }),
+    );
+    app.use(errorHandler);
+
+    const res = await request(app)
+      .delete('/api/auth/delete-account')
+      .set('Authorization', 'Bearer stale-token')
+      .send({ confirmEmail: 'delete-user@example.com' });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error.message).toContain('sign in again');
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(tx.user.delete).not.toHaveBeenCalled();
   });
 });
