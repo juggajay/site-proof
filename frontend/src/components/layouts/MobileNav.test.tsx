@@ -148,6 +148,32 @@ describe('MobileNav menu trigger', () => {
     expect(screen.getByRole('link', { name: /project settings/i })).toBeInTheDocument();
   });
 
+  it('uses the loaded project role instead of aggregate dashboard role in the drawer', async () => {
+    apiFetchMock.mockResolvedValue({
+      project: {
+        name: 'Project One',
+        currentUserRole: 'viewer',
+        settings: { enabledModules: {} },
+      },
+    });
+    setUser({
+      role: 'member',
+      roleInCompany: 'member',
+      dashboardRole: 'project_manager',
+      companyId: 'c1',
+    });
+
+    renderNav();
+    fireEvent.click(screen.getByRole('button', { name: /open menu/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole('link', { name: /progress claims/i })).not.toBeInTheDocument();
+    });
+    expect(screen.queryByRole('link', { name: /project settings/i })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: /lots/i }).length).toBeGreaterThan(0);
+    expect(screen.getByRole('link', { name: /reports/i })).toBeInTheDocument();
+  });
+
   it('hides project settings for site managers in the mobile drawer', () => {
     setUser({ role: 'site_manager', roleInCompany: 'site_manager', companyId: 'c1' });
 

@@ -351,4 +351,53 @@ test.describe('Project users seeded admin contract', () => {
     await expect(page.getByRole('button', { name: 'Invite User' })).toHaveCount(0);
     expect(api.getUserLoadCount()).toBe(0);
   });
+
+  test('does not offer project admin actions to project managers', async ({ page }) => {
+    const projectManager = {
+      ...E2E_ADMIN_USER,
+      id: 'e2e-project-manager-user',
+      email: 'project.manager@example.com',
+      role: 'member',
+      roleInCompany: 'member',
+      dashboardRole: 'project_manager',
+    };
+    const api = await mockSeededProjectUsersApi(page, {
+      user: projectManager,
+      projectOverrides: { currentUserRole: 'project_manager' },
+    });
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/users`);
+
+    await expect(page.getByRole('heading', { name: 'Project Team' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Change role for E2E Admin' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Remove E2E Admin from project' })).toHaveCount(
+      0,
+    );
+
+    await page.getByRole('button', { name: 'Invite User' }).click();
+    const inviteDialog = page.getByRole('dialog').filter({ hasText: 'Invite User' });
+    await expect(
+      inviteDialog.locator('select#project-user-invite-role option[value="admin"]'),
+    ).toHaveCount(0);
+    await expect(
+      inviteDialog.locator('select#project-user-invite-role option[value="project_manager"]'),
+    ).toHaveCount(1);
+    await inviteDialog.getByRole('button', { name: 'Cancel' }).click();
+
+    await page.getByRole('button', { name: 'Change role for E2E Engineer' }).click();
+    const engineerRoleSelect = page.getByRole('combobox', { name: 'Role for E2E Engineer' });
+    await expect(engineerRoleSelect.locator('option[value="admin"]')).toHaveCount(0);
+    await expect(engineerRoleSelect.locator('option[value="project_manager"]')).toHaveCount(1);
+    await engineerRoleSelect.selectOption('foreman');
+    await page.getByRole('button', { name: 'Save role for E2E Engineer' }).click();
+
+    await expect
+      .poll(() => api.getUpdateRoleRequest())
+      .toEqual(
+        expect.objectContaining({
+          userId: 'e2e-engineer-user',
+          body: expect.objectContaining({ role: 'foreman' }),
+        }),
+      );
+  });
 });

@@ -14,7 +14,7 @@ import type {
 } from './types';
 import { ADVANCED_ANALYTICS_TIERS } from './types';
 import { useAuth } from '@/lib/auth';
-import { ROLE_GROUPS, hasRoleInGroup } from '@/lib/roles';
+import { ROLE_GROUPS, hasRoleInGroup, isAdminRole } from '@/lib/roles';
 import { getProjectScopedRole } from '@/lib/subcontractorIdentity';
 import { logError } from '@/lib/logger';
 import { extractErrorMessage } from '@/lib/errorHandling';
@@ -212,6 +212,7 @@ export function ReportsPage() {
     () => projectRoleResolved && hasRoleInGroup(projectScopedRole, ROLE_GROUPS.COMMERCIAL),
     [projectRoleResolved, projectScopedRole],
   );
+  const canManageCompanySettings = isAdminRole(user?.roleInCompany || user?.role || '');
   const canManageScheduledReports = canViewClaimsReport;
   const hasPrintableReport =
     (activeTab === 'lot-status' && Boolean(lotReport)) ||
@@ -684,6 +685,7 @@ export function ReportsPage() {
               <AdvancedAnalyticsTab
                 hasAdvancedAnalytics={hasAdvancedAnalytics}
                 subscriptionTier={subscriptionTierLabel}
+                canManageCompanySettings={canManageCompanySettings}
               />
             )}
           </div>

@@ -13,6 +13,13 @@ export function canManageProjectForRole(role: string | null | undefined): boolea
   return PROJECT_ADMIN_ROLES.includes(role as (typeof PROJECT_ADMIN_ROLES)[number]);
 }
 
+export function canGrantProjectAdminRole(
+  companyRole: string | null | undefined,
+  projectScopedRole: string | null | undefined,
+): boolean {
+  return companyRole === 'owner' || companyRole === 'admin' || projectScopedRole === 'admin';
+}
+
 export function isArchivedProject(project: Pick<Project, 'status'> | null | undefined): boolean {
   return project?.status === 'archived';
 }

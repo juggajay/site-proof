@@ -35,7 +35,6 @@ import {
   getCompanyRole,
   getProjectScopedRole,
   hasSubcontractorPortalIdentity,
-  isForemanDashboardUser,
 } from '@/lib/subcontractorIdentity';
 import {
   ROLE_GROUPS,
@@ -184,7 +183,9 @@ export function Sidebar() {
   const { data: projectData } = useQuery({
     queryKey: queryKeys.projectModules(projectId!),
     queryFn: () =>
-      apiFetch<{ project?: { name?: string; settings?: unknown } }>(`/api/projects/${projectId}`),
+      apiFetch<{
+        project?: { name?: string; settings?: unknown; currentUserRole?: string | null };
+      }>(`/api/projects/${projectId}`),
     enabled: !!projectId,
   });
 
@@ -199,7 +200,7 @@ export function Sidebar() {
   const toggleSidebar = zustandToggleSidebar;
 
   const userRole = getCompanyRole(user);
-  const projectScopedRole = getProjectScopedRole(user);
+  const projectScopedRole = projectData?.project?.currentUserRole ?? getProjectScopedRole(user);
   const hasPortalIdentity = hasSubcontractorPortalIdentity(user);
 
   // Role-based access checks
@@ -209,7 +210,7 @@ export function Sidebar() {
     hasAdmin || projectScopedRole === 'project_manager' || projectScopedRole === 'quality_manager';
   const hasManagement = hasRoleInGroup(projectScopedRole, ROLE_GROUPS.MANAGEMENT);
   const hasProjectSettingsAccess = canManageProjectSettings(projectScopedRole);
-  const isForeman = isForemanDashboardUser(user);
+  const isForeman = projectScopedRole === 'foreman';
   const isSubcontractor = isSubcontractorRole(userRole);
   const isViewer = isViewerRole(projectScopedRole);
 

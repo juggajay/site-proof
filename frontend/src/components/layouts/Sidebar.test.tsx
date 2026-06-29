@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Route, Routes } from 'react-router-dom';
+import { waitFor } from '@testing-library/react';
 import { renderWithProviders, screen } from '@/test/renderWithProviders';
 
 vi.mock('@/lib/auth', () => ({ useAuth: vi.fn() }));
@@ -121,6 +122,35 @@ describe('Sidebar project navigation', () => {
     expect(screen.getByRole('link', { name: /Costs/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Subcontractors/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Project Settings/i })).toBeInTheDocument();
+  });
+
+  it('uses the loaded project role instead of the aggregate dashboard role', async () => {
+    apiFetchMock.mockResolvedValue({
+      project: {
+        name: 'Project One',
+        currentUserRole: 'viewer',
+        settings: { enabledModules: {} },
+      },
+    });
+    useAuthMock.mockReturnValue({
+      user: {
+        id: 'mixed-role-1',
+        email: 'mixed-role@example.com',
+        role: 'member',
+        roleInCompany: 'member',
+        dashboardRole: 'project_manager',
+        companyId: 'company-1',
+      },
+    } as unknown as ReturnType<typeof useAuth>);
+
+    renderProjectSidebar();
+
+    await waitFor(() => {
+      expect(screen.queryByRole('link', { name: /Progress Claims/i })).not.toBeInTheDocument();
+    });
+    expect(screen.queryByRole('link', { name: /Project Settings/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Lots/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Reports/i })).toBeInTheDocument();
   });
 
   it('hides project settings for site managers because settings are project-admin only', () => {

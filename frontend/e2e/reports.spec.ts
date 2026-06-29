@@ -761,6 +761,32 @@ test.describe('Reports seeded analytics contract', () => {
     expect(api.getScheduleLoadCount()).toBe(0);
   });
 
+  test('does not route project managers to forbidden company settings from analytics upsell', async ({
+    page,
+  }) => {
+    const projectManager = {
+      ...E2E_ADMIN_USER,
+      id: 'e2e-basic-project-manager',
+      email: 'basic-project-manager@example.com',
+      fullName: 'E2E Project Manager',
+      role: 'member',
+      roleInCompany: 'member',
+      dashboardRole: 'project_manager' as const,
+    };
+    const api = await mockReportsApi(page, {
+      user: projectManager,
+      companyTier: 'basic',
+      projectCurrentUserRole: 'project_manager',
+    });
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/reports?tab=advanced`);
+
+    await expect(page.getByRole('heading', { name: 'Advanced Analytics' })).toBeVisible();
+    await expect(page.getByText('Ask a company admin to upgrade this workspace.')).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Upgrade to Professional' })).toHaveCount(0);
+    expect(api.getScheduleLoadCount()).toBe(0);
+  });
+
   test('shows a retryable report load error without stale synthetic report content', async ({
     page,
   }) => {

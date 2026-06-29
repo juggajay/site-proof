@@ -2372,6 +2372,107 @@ describe('Projects API', () => {
       areaIds.push(res.body.area.id);
     });
 
+    it('audits project area creation, updates, and deletion', async () => {
+      await prisma.auditLog.deleteMany({
+        where: {
+          projectId,
+          action: {
+            in: [
+              AuditAction.PROJECT_AREA_CREATED,
+              AuditAction.PROJECT_AREA_UPDATED,
+              AuditAction.PROJECT_AREA_DELETED,
+            ],
+          },
+        },
+      });
+
+      const createRes = await request(app)
+        .post(`/api/projects/${projectId}/areas`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          name: 'Audited Area',
+          chainageStart: 10,
+          chainageEnd: 110,
+          colour: '#3B82F6',
+        });
+
+      expect(createRes.status).toBe(201);
+      const areaId = createRes.body.area.id;
+
+      const createAudit = await prisma.auditLog.findFirst({
+        where: {
+          projectId,
+          userId,
+          entityType: 'project_area',
+          entityId: areaId,
+          action: AuditAction.PROJECT_AREA_CREATED,
+        },
+      });
+      expect(createAudit).toBeTruthy();
+      expect(parseAuditLogChanges(createAudit!.changes)).toMatchObject({
+        name: 'Audited Area',
+        chainageStart: 10,
+        chainageEnd: 110,
+        colour: '#3B82F6',
+      });
+
+      const updateRes = await request(app)
+        .patch(`/api/projects/${projectId}/areas/${areaId}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ name: 'Audited Area Updated', chainageEnd: 120 });
+
+      expect(updateRes.status).toBe(200);
+
+      const updateAudit = await prisma.auditLog.findFirst({
+        where: {
+          projectId,
+          userId,
+          entityType: 'project_area',
+          entityId: areaId,
+          action: AuditAction.PROJECT_AREA_UPDATED,
+        },
+      });
+      expect(updateAudit).toBeTruthy();
+      expect(parseAuditLogChanges(updateAudit!.changes)).toMatchObject({
+        changedFields: ['name', 'chainageEnd'],
+        previous: {
+          name: 'Audited Area',
+          chainageStart: 10,
+          chainageEnd: 110,
+          colour: '#3B82F6',
+        },
+        next: {
+          name: 'Audited Area Updated',
+          chainageStart: 10,
+          chainageEnd: 120,
+          colour: '#3B82F6',
+        },
+      });
+
+      const deleteRes = await request(app)
+        .delete(`/api/projects/${projectId}/areas/${areaId}`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(deleteRes.status).toBe(200);
+
+      const deleteAudit = await prisma.auditLog.findFirst({
+        where: {
+          projectId,
+          userId,
+          entityType: 'project_area',
+          entityId: areaId,
+          action: AuditAction.PROJECT_AREA_DELETED,
+        },
+      });
+      expect(deleteAudit).toBeTruthy();
+      expect(parseAuditLogChanges(deleteAudit!.changes)).toMatchObject({
+        name: 'Audited Area Updated',
+        chainageStart: 10,
+        chainageEnd: 120,
+        colour: '#3B82F6',
+      });
+    });
+
     it('rejects API-key-authenticated project area creation', async () => {
       const { apiKey, keyId } = await createApiKeyForUser(userId, 'admin');
       const areaName = `API Area ${Date.now()}`;
@@ -2718,6 +2819,21 @@ describe('Project Team Management', () => {
     const res = await postProjectTeamInvite(secondUserEmail);
 
     expect(res.status).toBe(201);
+    const auditLog = await prisma.auditLog.findFirst({
+      where: {
+        projectId,
+        userId,
+        entityType: 'project_user',
+        entityId: res.body.projectUser.id,
+        action: AuditAction.USER_INVITED,
+      },
+    });
+    expect(auditLog).toBeTruthy();
+    expect(parseAuditLogChanges(auditLog!.changes)).toMatchObject({
+      invitedUserId: secondUserId,
+      invitedUserEmail: secondUserEmail,
+      role: 'viewer',
+    });
   });
 
   it('should reject duplicate project team invites', async () => {
