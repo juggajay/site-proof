@@ -143,7 +143,7 @@ portfolioDashboardRouter.get(
         name: ncr.project.name,
         projectNumber: ncr.project.projectNumber,
       },
-      link: `/projects/${ncr.project.id}/ncr?ncrId=${ncr.id}`,
+      link: `/projects/${ncr.project.id}/ncr?ncr=${ncr.id}`,
     }));
 
     res.json(buildPortfolioNcrsResponse(formattedNCRs));

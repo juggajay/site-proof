@@ -1,5 +1,6 @@
 import { devLog } from '../logger';
 import { formatDateKey } from '../localDate';
+import { formatStatusLabel } from '../statusLabels';
 import { getJsPDF } from './jsPdfRuntime';
 import { savePdf } from './pdfSave';
 import { defaultPackageOptions } from './types';
@@ -375,7 +376,11 @@ export async function generateClaimEvidencePackagePDF(
         // List NCRs
         (lot.ncrs ?? []).slice(0, 3).forEach((ncr) => {
           checkPageBreak(6);
-          doc.text(`  ${ncr.ncrNumber} (${ncr.severity}): ${ncr.status}`, margin, yPos);
+          doc.text(
+            `  ${ncr.ncrNumber} (${ncr.severity}): ${formatStatusLabel(ncr.status)}`,
+            margin,
+            yPos,
+          );
           yPos += 4;
         });
         if ((lot.ncrs ?? []).length > 3) {

@@ -96,7 +96,12 @@ describe('NCRMobileDetailSheet (H7)', () => {
     render(
       <NCRMobileDetailSheet
         isOpen
-        ncr={makeNcr({ status: 'verification', severity: 'major', qmApprovedAt: null })}
+        ncr={makeNcr({
+          status: 'verification',
+          severity: 'major',
+          qmApprovalRequired: true,
+          qmApprovedAt: null,
+        })}
         userRole={role({ role: 'quality_manager', isQualityManager: true })}
         {...h}
       />,
@@ -108,6 +113,29 @@ describe('NCRMobileDetailSheet (H7)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'QM Approve' }));
     expect(h.onQmApprove).toHaveBeenCalledWith('ncr-1');
+  });
+
+  it('disables Close for the same user who granted major NCR QM approval', () => {
+    render(
+      <NCRMobileDetailSheet
+        isOpen
+        ncr={makeNcr({
+          status: 'verification',
+          severity: 'major',
+          qmApprovalRequired: true,
+          qmApprovedAt: '2026-06-01T10:00:00.000Z',
+          qmApprovedBy: { id: 'current-user', fullName: 'Current QM', email: 'qm@example.com' },
+        })}
+        userRole={role({ role: 'quality_manager', isQualityManager: true })}
+        currentUserId="current-user"
+        {...handlers()}
+      />,
+    );
+
+    const closeButton = screen.getByRole('button', { name: 'Close NCR' });
+    expect(closeButton).toBeDisabled();
+    expect(closeButton).toHaveAttribute('title', 'A different user must close after QM approval');
+    expect(screen.queryByRole('button', { name: 'QM Approve' })).not.toBeInTheDocument();
   });
 
   it('explains when no actions are available', () => {

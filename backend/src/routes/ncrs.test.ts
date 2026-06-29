@@ -1387,7 +1387,11 @@ describe('NCR API', () => {
           response: await request(app)
             .post(`/api/ncrs/${longId}/respond`)
             .set('Authorization', `Bearer ${authToken}`)
-            .send({ rootCauseCategory: 'Workmanship' }),
+            .send({
+              rootCauseCategory: 'Workmanship',
+              rootCauseDescription: 'Route parameter validation body',
+              proposedCorrectiveAction: 'Route parameter validation action',
+            }),
         },
         {
           label: 'POST QM review',
@@ -2008,6 +2012,50 @@ describe('NCR Workflow', () => {
     });
   });
 
+  it('should require response root cause and corrective action before investigation starts', async () => {
+    const createRes = await request(app)
+      .post('/api/ncrs')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        projectId,
+        description: 'Response should require real details',
+        category: 'Workmanship',
+        severity: 'minor',
+        responsibleUserId: userId,
+      });
+    expect(createRes.status).toBe(201);
+    const ncrId = createRes.body.ncr.id as string;
+
+    const res = await request(app)
+      .post(`/api/ncrs/${ncrId}/respond`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({});
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toBe('Validation failed');
+    expect(JSON.stringify(res.body.error.details)).toContain('Root cause category is required');
+    expect(JSON.stringify(res.body.error.details)).toContain('Root cause description is required');
+    expect(JSON.stringify(res.body.error.details)).toContain(
+      'Proposed corrective action is required',
+    );
+
+    const unchanged = await prisma.nCR.findUniqueOrThrow({
+      where: { id: ncrId },
+      select: {
+        status: true,
+        rootCauseCategory: true,
+        rootCauseDescription: true,
+        proposedCorrectiveAction: true,
+        responseSubmittedAt: true,
+      },
+    });
+    expect(unchanged.status).toBe('open');
+    expect(unchanged.rootCauseCategory).toBeNull();
+    expect(unchanged.rootCauseDescription).toBeNull();
+    expect(unchanged.proposedCorrectiveAction).toBeNull();
+    expect(unchanged.responseSubmittedAt).toBeNull();
+  });
+
   it('should reject response when NCR not in open status', async () => {
     // NCR is now in investigating status
     const res = await request(app)
@@ -2173,6 +2221,62 @@ describe('NCR Workflow', () => {
     const ncr = await prisma.nCR.findUniqueOrThrow({ where: { id: ncrId } });
     expect(ncr.status).toBe('rectification');
     expect(ncr.rectificationSubmittedAt).toBeNull();
+  });
+
+  it('should reject verification submission before QM accepts the response', async () => {
+    const ncrRes = await request(app)
+      .post('/api/ncrs')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        projectId,
+        description: 'Verification submission should wait for QM review',
+        category: 'Workmanship',
+        severity: 'minor',
+        responsibleUserId: userId,
+      });
+    expect(ncrRes.status).toBe(201);
+    const ncrId = ncrRes.body.ncr.id as string;
+
+    const respondRes = await request(app)
+      .post(`/api/ncrs/${ncrId}/respond`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        rootCauseCategory: 'Method',
+        rootCauseDescription: 'Incorrect procedure followed',
+        proposedCorrectiveAction: 'Retrain workers on correct method',
+      });
+    expect(respondRes.status).toBe(200);
+    expect(respondRes.body.ncr.status).toBe('investigating');
+
+    const rectifyRes = await request(app)
+      .post(`/api/ncrs/${ncrId}/rectify`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({ rectificationNotes: 'Trying to skip QM response review' });
+
+    expect(rectifyRes.status).toBe(400);
+    expect(rectifyRes.body.error.message).toContain('rectification status');
+
+    const submitRes = await request(app)
+      .post(`/api/ncrs/${ncrId}/submit-for-verification`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({ rectificationNotes: 'Trying the UI submit path too' });
+
+    expect(submitRes.status).toBe(400);
+    expect(submitRes.body.error.message).toContain('rectification status');
+
+    const unchanged = await prisma.nCR.findUniqueOrThrow({
+      where: { id: ncrId },
+      select: {
+        status: true,
+        qmReviewedAt: true,
+        rectificationNotes: true,
+        rectificationSubmittedAt: true,
+      },
+    });
+    expect(unchanged.status).toBe('investigating');
+    expect(unchanged.qmReviewedAt).toBeNull();
+    expect(unchanged.rectificationNotes).toBeNull();
+    expect(unchanged.rectificationSubmittedAt).toBeNull();
   });
 
   it('should submit rectification', async () => {
@@ -2472,6 +2576,56 @@ describe('NCR Workflow', () => {
       verificationNotesPresent: true,
       lessonsLearnedPresent: true,
     });
+  });
+
+  it('should reject adding evidence to a closed NCR', async () => {
+    const ncrId = await createVerificationNcr('Closed NCR should reject late evidence');
+
+    const closeRes = await request(app)
+      .post(`/api/ncrs/${ncrId}/close`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({ verificationNotes: 'Verified complete' });
+    expect(closeRes.status).toBe(200);
+    expect(closeRes.body.ncr.status).toBe('closed');
+
+    const evidenceDocument = await prisma.document.create({
+      data: {
+        projectId,
+        documentType: 'ncr_evidence',
+        category: 'ncr_evidence',
+        filename: `closed-ncr-evidence-${Date.now()}.jpg`,
+        fileUrl: `/uploads/documents/closed-ncr-evidence-${Date.now()}.jpg`,
+        uploadedById: userId,
+      },
+    });
+
+    const res = await request(app)
+      .post(`/api/ncrs/${ncrId}/evidence`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        documentId: evidenceDocument.id,
+        evidenceType: 'photo',
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toContain('closed NCR');
+
+    await expect(
+      prisma.nCREvidence.count({
+        where: { ncrId, documentId: evidenceDocument.id },
+      }),
+    ).resolves.toBe(0);
+
+    await expect(
+      prisma.auditLog.count({
+        where: {
+          projectId,
+          entityType: 'ncr_evidence',
+          action: AuditAction.NCR_EVIDENCE_ADDED,
+          changes: { contains: evidenceDocument.id },
+        },
+      }),
+    ).resolves.toBe(0);
   });
 
   it('should close only once when concurrent close requests race', async () => {
@@ -2898,6 +3052,65 @@ describe('Major NCR QM Approval', () => {
       await prisma.projectUser.deleteMany({ where: { userId: projectManager.userId } });
       await cleanupTestUser(projectManager.userId);
     }
+  });
+
+  it('should reject QM approval before the NCR is ready for verification', async () => {
+    const ncrRes = await request(app)
+      .post('/api/ncrs')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        projectId,
+        description: 'Major NCR approval should wait for rectification evidence',
+        category: 'Material',
+        severity: 'major',
+        responsibleUserId: userId,
+      });
+    expect(ncrRes.status).toBe(201);
+    const ncrId = ncrRes.body.ncr.id as string;
+
+    const respondRes = await request(app)
+      .post(`/api/ncrs/${ncrId}/respond`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        rootCauseCategory: 'Material',
+        rootCauseDescription: 'Defective material',
+        proposedCorrectiveAction: 'Replace material',
+      });
+    expect(respondRes.status).toBe(200);
+
+    const reviewRes = await request(app)
+      .post(`/api/ncrs/${ncrId}/qm-review`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({ action: 'accept' });
+    expect(reviewRes.status).toBe(200);
+    expect(reviewRes.body.ncr.status).toBe('rectification');
+
+    const approvalRes = await request(app)
+      .post(`/api/ncrs/${ncrId}/qm-approve`)
+      .set('Authorization', `Bearer ${authToken}`);
+
+    expect(approvalRes.status).toBe(400);
+    expect(approvalRes.body.error.message).toContain('verification status');
+
+    const ncr = await prisma.nCR.findUniqueOrThrow({
+      where: { id: ncrId },
+      select: { status: true, qmApprovedAt: true, qmApprovedById: true },
+    });
+    expect(ncr.status).toBe('rectification');
+    expect(ncr.qmApprovedAt).toBeNull();
+    expect(ncr.qmApprovedById).toBeNull();
+
+    await expect(
+      prisma.auditLog.count({
+        where: {
+          projectId,
+          userId,
+          entityType: 'ncr',
+          entityId: ncrId,
+          action: AuditAction.NCR_QM_APPROVED,
+        },
+      }),
+    ).resolves.toBe(0);
   });
 
   it('should allow company owners to review and approve major NCRs', async () => {
@@ -4029,6 +4242,76 @@ describe('NCR Access Hardening', () => {
           data: { responsibleUserId: null, responsibleSubcontractorId: null },
         })
         .catch(() => {});
+      await prisma.projectUser.deleteMany({ where: { projectId, userId: assignee.userId } });
+      await cleanupTestUser(assignee.userId);
+    }
+  });
+
+  it('should reject reassignment after an NCR is closed', async () => {
+    const assignee = await registerSharedTestUser(app, {
+      emailPrefix: 'ncr-closed-reassign',
+      fullName: 'NCR Closed Reassignment User',
+      companyId,
+      roleInCompany: 'quality_manager',
+    });
+
+    await prisma.projectUser.create({
+      data: {
+        projectId,
+        userId: assignee.userId,
+        role: 'quality_manager',
+        status: 'active',
+      },
+    });
+
+    const closedNcr = await prisma.nCR.create({
+      data: {
+        projectId,
+        ncrNumber: `NCR-CLOSED-REASSIGN-${Date.now()}`,
+        description: 'Closed NCR should not be reassigned',
+        category: 'Workmanship',
+        severity: 'minor',
+        status: 'closed',
+        raisedById: userId,
+        responsibleUserId: userId,
+        closedAt: new Date(),
+        closedById: userId,
+      },
+    });
+
+    try {
+      const res = await request(app)
+        .patch(`/api/ncrs/${closedNcr.id}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          responsibleUserId: assignee.userId,
+          comments: 'Trying to redirect after closure',
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toContain('closed NCR');
+
+      const unchanged = await prisma.nCR.findUniqueOrThrow({
+        where: { id: closedNcr.id },
+        select: { status: true, responsibleUserId: true, responsibleSubcontractorId: true },
+      });
+      expect(unchanged.status).toBe('closed');
+      expect(unchanged.responsibleUserId).toBe(userId);
+      expect(unchanged.responsibleSubcontractorId).toBeNull();
+
+      await expect(
+        prisma.auditLog.count({
+          where: {
+            projectId,
+            userId,
+            entityType: 'ncr',
+            entityId: closedNcr.id,
+            action: AuditAction.NCR_UPDATED,
+          },
+        }),
+      ).resolves.toBe(0);
+    } finally {
+      await prisma.nCR.delete({ where: { id: closedNcr.id } }).catch(() => {});
       await prisma.projectUser.deleteMany({ where: { projectId, userId: assignee.userId } });
       await cleanupTestUser(assignee.userId);
     }

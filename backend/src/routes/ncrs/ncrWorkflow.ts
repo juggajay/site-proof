@@ -371,8 +371,10 @@ ncrWorkflowRouter.post(
       'Only the responsible party or project quality roles can submit NCR rectification',
     );
 
-    if (ncr.status !== 'investigating' && ncr.status !== 'rectification') {
-      throw AppError.badRequest('NCR is not ready for rectification');
+    if (ncr.status !== 'rectification') {
+      throw AppError.badRequest('NCR must be in rectification status to submit for verification', {
+        currentStatus: ncr.status,
+      });
     }
 
     if (ncr.ncrEvidence.length === 0) {

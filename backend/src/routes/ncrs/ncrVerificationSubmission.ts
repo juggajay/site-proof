@@ -1,7 +1,7 @@
 import { AppError } from '../../lib/AppError.js';
 import { prisma } from '../../lib/prisma.js';
 
-const VERIFICATION_SUBMITTABLE_STATUSES = ['rectification', 'investigating'] as const;
+const VERIFICATION_SUBMITTABLE_STATUSES = ['rectification'] as const;
 
 export async function claimNcrVerificationSubmission(params: {
   ncrId: string;
@@ -38,10 +38,9 @@ export async function claimNcrVerificationSubmission(params: {
   }
 
   if (!(VERIFICATION_SUBMITTABLE_STATUSES as readonly string[]).includes(currentNcr.status)) {
-    throw AppError.badRequest(
-      'NCR must be in rectification or investigating status to submit for verification',
-      { currentStatus: currentNcr.status },
-    );
+    throw AppError.badRequest('NCR must be in rectification status to submit for verification', {
+      currentStatus: currentNcr.status,
+    });
   }
 
   if (currentNcr._count.ncrEvidence === 0) {

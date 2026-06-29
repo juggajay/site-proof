@@ -228,7 +228,7 @@ export function buildProjectManagerDashboardResponse({
       title: `NCR ${ncr.ncrNumber} overdue`,
       description: ncr.description,
       urgency: 'critical',
-      link: `/projects/${projectId}/ncr?ncrId=${ncr.id}`,
+      link: `/projects/${projectId}/ncr?ncr=${ncr.id}`,
     });
   });
 
@@ -239,7 +239,7 @@ export function buildProjectManagerDashboardResponse({
       title: `Major NCR: ${ncr.ncrNumber}`,
       description: ncr.description,
       urgency: 'warning',
-      link: `/projects/${projectId}/ncr?ncrId=${ncr.id}`,
+      link: `/projects/${projectId}/ncr?ncr=${ncr.id}`,
     });
   });
 
@@ -257,7 +257,7 @@ export function buildProjectManagerDashboardResponse({
         category: ncr.category,
         status: ncr.status,
         daysOpen: Math.floor((Date.now() - ncr.createdAt.getTime()) / (1000 * 60 * 60 * 24)),
-        link: `/projects/${projectId}/ncr?ncrId=${ncr.id}`,
+        link: `/projects/${projectId}/ncr?ncr=${ncr.id}`,
       })),
     },
     holdPointPipeline: {

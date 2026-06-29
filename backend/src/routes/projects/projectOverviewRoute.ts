@@ -248,7 +248,7 @@ export function createProjectOverviewRouter({
           type: 'ncr' as const,
           description: `NCR ${ncr.ncrNumber} — ${ncr.status.replace(/_/g, ' ')}`,
           timestamp: ncr.updatedAt.toISOString(),
-          link: `/projects/${projectId}/ncr?ncrId=${ncr.id}`,
+          link: `/projects/${projectId}/ncr?ncr=${ncr.id}`,
         })),
         ...recentLots.map((lot) => ({
           id: `lot-${lot.id}`,
@@ -284,7 +284,7 @@ export function createProjectOverviewRouter({
           daysOverdue: ncr.dueDate
             ? Math.ceil((today.getTime() - new Date(ncr.dueDate).getTime()) / (1000 * 60 * 60 * 24))
             : 0,
-          link: `/projects/${projectId}/ncr?ncrId=${ncr.id}`,
+          link: `/projects/${projectId}/ncr?ncr=${ncr.id}`,
         })),
         ...staleHoldPoints.map((hp) => ({
           id: `hp-${hp.id}`,

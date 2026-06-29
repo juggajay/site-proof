@@ -228,6 +228,10 @@ ncrEvidenceRouter.post(
       throw AppError.notFound('NCR');
     }
 
+    if (ncr.status === 'closed' || ncr.status === 'closed_concession') {
+      throw AppError.badRequest('Cannot add evidence to a closed NCR');
+    }
+
     await requireNcrResponsibleOrProjectRole(
       ncr,
       user,
