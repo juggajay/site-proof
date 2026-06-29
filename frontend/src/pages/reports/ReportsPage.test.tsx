@@ -285,6 +285,38 @@ describe('ReportsPage print action', () => {
   });
 });
 
+describe('ReportsPage subscription tier gates', () => {
+  beforeEach(() => {
+    apiFetchMock.mockReset();
+  });
+
+  it('normalizes the company tier before gating advanced reporting', async () => {
+    apiFetchMock.mockImplementation((path) => {
+      if (path === '/api/company') {
+        return Promise.resolve({
+          company: { subscriptionTier: ' Professional ', name: 'QA Company', logoUrl: null },
+        });
+      }
+
+      if (path === '/api/projects/project-1') {
+        return Promise.resolve({
+          project: { name: 'QA Project', currentUserRole: 'project_manager' },
+        });
+      }
+
+      return Promise.reject(new Error(`Unexpected API path: ${path}`));
+    });
+
+    renderReportsPage('/projects/project-1/reports?tab=advanced');
+
+    expect(await screen.findByText('Advanced Analytics Dashboard')).toBeInTheDocument();
+    expect(screen.getByText(/Your professional subscription includes/i)).toBeInTheDocument();
+    expect(
+      screen.queryByText(/requires a Professional or Enterprise subscription/i),
+    ).not.toBeInTheDocument();
+  });
+});
+
 describe('ReportsPage paginated report loading', () => {
   beforeEach(() => {
     apiFetchMock.mockReset();

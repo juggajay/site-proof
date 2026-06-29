@@ -197,11 +197,16 @@ export function ReportsPage() {
     [setSearchParams],
   );
 
-  const subscriptionTierLabel = subscriptionTier ?? 'basic';
+  const normalizedSubscriptionTier = useMemo(
+    () => (subscriptionTier ?? 'basic').trim().toLowerCase(),
+    [subscriptionTier],
+  );
+  const subscriptionTierLabel = normalizedSubscriptionTier;
   const subscriptionTierLoaded = subscriptionTier !== null;
   const hasAdvancedAnalytics = useMemo(
-    () => subscriptionTier !== null && ADVANCED_ANALYTICS_TIERS.includes(subscriptionTier),
-    [subscriptionTier],
+    () =>
+      subscriptionTier !== null && ADVANCED_ANALYTICS_TIERS.includes(normalizedSubscriptionTier),
+    [normalizedSubscriptionTier, subscriptionTier],
   );
   const projectRoleResolved = !projectId || currentProjectRole !== undefined;
   const projectScopedRole = useMemo(

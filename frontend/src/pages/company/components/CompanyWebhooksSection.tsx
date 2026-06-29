@@ -174,7 +174,7 @@ export function CompanyWebhooksSection() {
           <div>
             <h2 className="text-lg font-semibold">Webhooks</h2>
             <p className="text-sm text-muted-foreground">
-              Notify external systems when events happen in SiteProof.
+              Notify external systems for supported lot, hold point, and NCR events.
             </p>
           </div>
         </div>
@@ -294,7 +294,8 @@ export function CompanyWebhooksSection() {
                   placeholder="https://example.com/webhooks/siteproof"
                 />
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Subscribes to all events. We sign every delivery with the secret shown next.
+                  Subscribes to all supported lot, hold point, and NCR events. We sign every
+                  delivery with the secret shown next.
                 </p>
               </div>
               {createError ? <p className="text-sm text-destructive">{createError}</p> : null}
