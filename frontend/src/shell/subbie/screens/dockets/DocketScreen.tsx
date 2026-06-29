@@ -444,13 +444,18 @@ export function DocketScreen() {
     }
   };
 
+  const backPath = `/p${buildPortalCompanyQuery({
+    projectId: company?.projectId ?? requestedProjectId,
+    subcontractorCompanyId: company?.id ?? requestedSubcontractorCompanyId,
+  })}`;
+
   // ── Submit / respond (classic hook, /p redirect + in-shell confirmation) ─────
   const { submitting, respondingToQuery, submitDocket, respondToQuery } = useDocketSubmitActions({
     docket,
     queryResponse,
     saveDocketNotes,
     navigate,
-    redirectTo: '/p',
+    redirectTo: backPath,
     onSubmitted: () => {
       if (!docket) return;
       setSubmittedConfirm({
@@ -481,11 +486,6 @@ export function DocketScreen() {
   );
   const isQueried = docket?.status === 'queried';
   const isRejected = docket?.status === 'rejected';
-
-  const backPath = `/p${buildPortalCompanyQuery({
-    projectId: company?.projectId ?? requestedProjectId,
-    subcontractorCompanyId: company?.id ?? requestedSubcontractorCompanyId,
-  })}`;
 
   // ── Loading / error guards ──────────────────────────────────────────────────
   if (loading) {

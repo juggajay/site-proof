@@ -37,7 +37,7 @@ import {
 } from './reviewResponses.js';
 import { notifyDocketSubcontractorUsers } from './reviewNotificationDelivery.js';
 import { parseDocketReviewRequest, requireNonBlankReviewText } from './reviewRequest.js';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 
 export const docketReviewRouter = Router();
 
@@ -59,6 +59,33 @@ async function applyDocketStatusTransition(
 
   if (transition.count !== 1) {
     throw AppError.badRequest(failureMessage);
+  }
+}
+
+export async function getOrCreateDocketDiaryForSync(
+  tx: Prisma.TransactionClient,
+  projectId: string,
+  date: Date,
+) {
+  const where = { projectId_date: { projectId, date } };
+  const existingDiary = await tx.dailyDiary.findUnique({ where });
+  if (existingDiary) {
+    return existingDiary;
+  }
+
+  try {
+    return await tx.dailyDiary.create({
+      data: {
+        projectId,
+        date,
+        status: 'draft',
+      },
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return tx.dailyDiary.findUniqueOrThrow({ where });
+    }
+    throw error;
   }
 }
 
@@ -231,20 +258,7 @@ docketReviewRouter.post(
 
     try {
       await prisma.$transaction(async (tx) => {
-        // Find or create diary for this date
-        let diary = await tx.dailyDiary.findUnique({
-          where: { projectId_date: { projectId: docket.projectId, date: docket.date } },
-        });
-
-        if (!diary) {
-          diary = await tx.dailyDiary.create({
-            data: {
-              projectId: docket.projectId,
-              date: docket.date,
-              status: 'draft',
-            },
-          });
-        }
+        const diary = await getOrCreateDocketDiaryForSync(tx, docket.projectId, docket.date);
 
         await requireEditableDiaryForWrite(tx, user, diary.id);
 

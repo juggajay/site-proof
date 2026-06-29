@@ -20,7 +20,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
-import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { calculateHours } from '@/pages/subcontractor-portal/docketEditHelpers';
 
@@ -115,13 +115,18 @@ function renderDocket(initialPath: string) {
     <QueryClientProvider client={qc}>
       <MemoryRouter initialEntries={[initialPath]}>
         <Routes>
-          <Route path="/p" element={<div>home</div>} />
+          <Route path="/p" element={<HomeLocation />} />
           <Route path="/p/docket" element={<DocketScreen />} />
           <Route path="/p/docket/:docketId" element={<DocketScreen />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
   );
+}
+
+function HomeLocation() {
+  const location = useLocation();
+  return <div data-testid="home-location">home {location.search}</div>;
 }
 
 function makeDocket(over: Record<string, unknown> = {}) {
@@ -531,7 +536,7 @@ describe('subbie shell DocketScreen', () => {
       return Promise.resolve({});
     });
 
-    renderDocket('/p/docket/dk-1');
+    renderDocket('/p/docket/dk-1?projectId=proj-1&subcontractorCompanyId=c1');
     expect(await screen.findByText(/Confirm water cart hours/)).toBeInTheDocument();
 
     const answer = screen.getByLabelText('Your answer to the foreman');
@@ -540,6 +545,9 @@ describe('subbie shell DocketScreen', () => {
 
     await waitFor(() => expect(respondPost).toHaveBeenCalledTimes(1));
     expect(respondPost.mock.calls[0][0]).toEqual({ response: 'Cart left at 1:30pm — 6.5h.' });
+    await expect(screen.findByTestId('home-location')).resolves.toHaveTextContent(
+      'home ?projectId=proj-1&subcontractorCompanyId=c1',
+    );
   });
 
   it('rejected docket is editable and shows a Resubmit affordance', async () => {

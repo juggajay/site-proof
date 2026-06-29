@@ -457,6 +457,103 @@ describe('Daily Diary API', () => {
           .catch(() => {});
       }
     });
+
+    it('summarises approved docket plant hours from the approved total', async () => {
+      const dateKey = new Date(Date.now() + 1_900_800_000).toISOString().split('T')[0];
+      const docketDate = new Date(`${dateKey}T00:00:00.000Z`);
+      const subcontractorCompany = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `Diary Summary Subcontractor ${Date.now()}`,
+          status: 'approved',
+        },
+      });
+      const employee = await prisma.employeeRoster.create({
+        data: {
+          subcontractorCompanyId: subcontractorCompany.id,
+          name: 'Summary Worker',
+          role: 'Operator',
+          hourlyRate: 60,
+          status: 'approved',
+        },
+      });
+      const plant = await prisma.plantRegister.create({
+        data: {
+          subcontractorCompanyId: subcontractorCompany.id,
+          type: 'Excavator',
+          description: 'Summary CAT 320',
+          idRego: 'SUM-320',
+          dryRate: 150,
+          status: 'approved',
+        },
+      });
+      const docket = await prisma.dailyDocket.create({
+        data: {
+          projectId,
+          subcontractorCompanyId: subcontractorCompany.id,
+          date: docketDate,
+          status: 'approved',
+          submittedAt: new Date(),
+          approvedAt: new Date(),
+          approvedById: userId,
+          totalLabourApproved: 7,
+          totalPlantApproved: 2.5,
+        },
+      });
+
+      try {
+        await prisma.docketLabour.create({
+          data: {
+            docketId: docket.id,
+            employeeId: employee.id,
+            submittedHours: 8,
+            approvedHours: 7,
+            hourlyRate: 60,
+            submittedCost: 480,
+            approvedCost: 420,
+          },
+        });
+        await prisma.docketPlant.create({
+          data: {
+            docketId: docket.id,
+            plantId: plant.id,
+            hoursOperated: 3,
+            hourlyRate: 150,
+            submittedCost: 450,
+            approvedCost: 375,
+          },
+        });
+
+        const res = await request(app)
+          .get(`/api/diary/project/${projectId}/docket-summary/${dateKey}`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.approvedDockets).toHaveLength(1);
+        expect(res.body.approvedDockets[0]).toMatchObject({
+          id: docket.id,
+          totalPlantHours: 2.5,
+          totalLabourHours: 7,
+        });
+        expect(res.body.approvedDockets[0].machines[0]).toMatchObject({
+          type: 'Excavator',
+          hours: 2.5,
+        });
+        expect(res.body.totals).toMatchObject({
+          plantHours: 2.5,
+          labourHours: 7,
+        });
+      } finally {
+        await prisma.docketLabour.deleteMany({ where: { docketId: docket.id } });
+        await prisma.docketPlant.deleteMany({ where: { docketId: docket.id } });
+        await prisma.dailyDocket.delete({ where: { id: docket.id } }).catch(() => {});
+        await prisma.employeeRoster.delete({ where: { id: employee.id } }).catch(() => {});
+        await prisma.plantRegister.delete({ where: { id: plant.id } }).catch(() => {});
+        await prisma.subcontractorCompany
+          .delete({ where: { id: subcontractorCompany.id } })
+          .catch(() => {});
+      }
+    });
   });
 
   describe('GET /api/diary/:projectId/weather/:date', () => {

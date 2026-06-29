@@ -17,6 +17,7 @@ vi.mock('@/lib/api', () => ({
 }));
 vi.mock('@/components/ui/toaster', () => ({ toast: vi.fn() }));
 
+import { toast } from '@/components/ui/toaster';
 import { useDocketAction } from '../useDocketAction';
 
 let queryClient: QueryClient;
@@ -80,6 +81,28 @@ describe('useDocketAction — approve', () => {
     });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['dockets', 'proj-1'] });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['foreman-badges', 'proj-1'] });
+  });
+
+  it('shows the backend diary-sync warning when approval cannot update the diary', async () => {
+    apiFetch.mockResolvedValueOnce({
+      diarySync: {
+        status: 'skipped',
+        code: 'DIARY_SUBMITTED',
+        message:
+          'Docket approved, but diary auto-population was skipped because the daily diary has already been submitted.',
+      },
+    });
+
+    const { result } = renderHook(() => useDocketAction('proj-1'), { wrapper });
+    await act(async () => {
+      await result.current.runAction({ docketId: 'd1', actionType: 'approve' });
+    });
+
+    expect(toast).toHaveBeenCalledWith({
+      variant: 'warning',
+      description:
+        'Docket approved, but diary auto-population was skipped because the daily diary has already been submitted.',
+    });
   });
 });
 

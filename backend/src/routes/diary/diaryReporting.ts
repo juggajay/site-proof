@@ -384,31 +384,48 @@ router.get(
 
     const approved = dockets.filter((d) => d.status === 'approved');
     const pending = dockets.filter((d) => d.status === 'pending_approval');
+    const getSubmittedPlantHours = (docket: (typeof approved)[number]) =>
+      docket.plantEntries.reduce((sum, entry) => sum + (Number(entry.hoursOperated) || 0), 0);
+    const getApprovedPlantHours = (docket: (typeof approved)[number]) =>
+      docket.totalPlantApproved !== null && docket.totalPlantApproved !== undefined
+        ? Number(docket.totalPlantApproved) || 0
+        : getSubmittedPlantHours(docket);
+    const getApprovedLabourHours = (entry: (typeof approved)[number]['labourEntries'][number]) =>
+      entry.approvedHours !== null && entry.approvedHours !== undefined
+        ? Number(entry.approvedHours) || 0
+        : Number(entry.submittedHours) || 0;
 
     const summary = {
-      approvedDockets: approved.map((d) => ({
-        id: d.id,
-        subcontractor: d.subcontractorCompany.companyName,
-        subcontractorId: d.subcontractorCompany.id,
-        workerCount: d.labourEntries.length,
-        totalLabourHours: d.labourEntries.reduce(
-          (sum, e) => sum + (Number(e.approvedHours || e.submittedHours) || 0),
-          0,
-        ),
-        machineCount: d.plantEntries.length,
-        totalPlantHours: d.plantEntries.reduce((sum, e) => sum + (Number(e.hoursOperated) || 0), 0),
-        workers: d.labourEntries.map((e) => ({
-          name: e.employee.name,
-          role: e.employee.role,
-          hours: Number(e.approvedHours || e.submittedHours) || 0,
-        })),
-        machines: d.plantEntries.map((e) => ({
-          type: e.plant.type,
-          description: e.plant.description,
-          idRego: e.plant.idRego,
-          hours: Number(e.hoursOperated) || 0,
-        })),
-      })),
+      approvedDockets: approved.map((d) => {
+        const submittedPlantHours = getSubmittedPlantHours(d);
+        const approvedPlantHours = getApprovedPlantHours(d);
+        const plantHoursScale =
+          submittedPlantHours > 0 ? approvedPlantHours / submittedPlantHours : 0;
+
+        return {
+          id: d.id,
+          subcontractor: d.subcontractorCompany.companyName,
+          subcontractorId: d.subcontractorCompany.id,
+          workerCount: d.labourEntries.length,
+          totalLabourHours: d.labourEntries.reduce((sum, e) => sum + getApprovedLabourHours(e), 0),
+          machineCount: d.plantEntries.length,
+          totalPlantHours: approvedPlantHours,
+          workers: d.labourEntries.map((e) => ({
+            name: e.employee.name,
+            role: e.employee.role,
+            hours: getApprovedLabourHours(e),
+          })),
+          machines: d.plantEntries.map((e) => ({
+            type: e.plant.type,
+            description: e.plant.description,
+            idRego: e.plant.idRego,
+            hours:
+              submittedPlantHours > 0
+                ? (Number(e.hoursOperated) || 0) * plantHoursScale
+                : Number(e.hoursOperated) || 0,
+          })),
+        };
+      }),
       pendingCount: pending.length,
       pendingDockets: pending.map((d) => ({
         id: d.id,
@@ -417,19 +434,11 @@ router.get(
       totals: {
         workers: approved.reduce((sum, d) => sum + d.labourEntries.length, 0),
         labourHours: approved.reduce(
-          (sum, d) =>
-            sum +
-            d.labourEntries.reduce(
-              (s, e) => s + (Number(e.approvedHours || e.submittedHours) || 0),
-              0,
-            ),
+          (sum, d) => sum + d.labourEntries.reduce((s, e) => s + getApprovedLabourHours(e), 0),
           0,
         ),
         machines: approved.reduce((sum, d) => sum + d.plantEntries.length, 0),
-        plantHours: approved.reduce(
-          (sum, d) => sum + d.plantEntries.reduce((s, e) => s + (Number(e.hoursOperated) || 0), 0),
-          0,
-        ),
+        plantHours: approved.reduce((sum, d) => sum + getApprovedPlantHours(d), 0),
       },
     };
 
