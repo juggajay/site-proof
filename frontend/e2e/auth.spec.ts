@@ -412,6 +412,21 @@ test.describe('Authentication', () => {
 
     await page.route('**/api/**', async (route) => {
       const pathname = new URL(route.request().url()).pathname;
+      if (/^\/api\/projects\/[^/]+\/access$/.test(pathname)) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            access: {
+              hasProjectAccess: true,
+              role: 'project_manager',
+              isProjectAdmin: true,
+            },
+          }),
+        });
+        return;
+      }
+
       const mockedPaths = [
         '/api/auth/login',
         '/api/auth/me',
