@@ -1113,6 +1113,7 @@ model EmployeeRoster {
   role                   String?
   hourlyRate             Decimal   @map("hourly_rate")
   status                 String    @default("pending")
+  counterRate            Decimal?  @map("counter_rate")
   approvedById           String?   @map("approved_by")
   approvedAt             DateTime? @map("approved_at")
   createdAt              DateTime  @default(now()) @map("created_at")
@@ -1133,6 +1134,8 @@ model PlantRegister {
   dryRate                Decimal?  @map("dry_rate")
   wetRate                Decimal?  @map("wet_rate")
   status                 String    @default("pending")
+  counterDryRate         Decimal?  @map("counter_dry_rate")
+  counterWetRate         Decimal?  @map("counter_wet_rate")
   approvedById           String?   @map("approved_by")
   approvedAt             DateTime? @map("approved_at")
   createdAt              DateTime  @default(now()) @map("created_at")

@@ -1002,6 +1002,68 @@ describe('Subcontractors API', () => {
   });
 
   describe('DELETE /api/subcontractors/:id', () => {
+    it('should permanently delete removed subcontractors with an audit trail', async () => {
+      const suffix = Date.now();
+      const removedSubcontractor = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `Removed Delete Audit ${suffix}`,
+          primaryContactName: 'Removed Delete Audit',
+          primaryContactEmail: `removed-delete-audit-${suffix}@example.com`,
+          status: 'removed',
+          employeeRoster: {
+            create: {
+              name: 'Audit Employee',
+              role: 'Operator',
+              hourlyRate: 80,
+              status: 'pending',
+            },
+          },
+          plantRegister: {
+            create: {
+              type: 'Roller',
+              description: 'Audit Roller',
+              dryRate: 120,
+              status: 'pending',
+            },
+          },
+        },
+      });
+
+      const res = await request(app)
+        .delete(`/api/subcontractors/${removedSubcontractor.id}`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.deletedCounts).toEqual({ dockets: 0, employees: 1, plant: 1 });
+
+      await expect(
+        prisma.subcontractorCompany.findUnique({ where: { id: removedSubcontractor.id } }),
+      ).resolves.toBeNull();
+
+      const auditLog = await prisma.auditLog.findFirst({
+        where: {
+          projectId,
+          userId,
+          entityType: 'subcontractor',
+          entityId: removedSubcontractor.id,
+          action: AuditAction.SUBCONTRACTOR_PERMANENTLY_DELETED,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      expect(auditLog).toBeTruthy();
+      const changes = parseAuditLogChanges(auditLog!.changes) as {
+        companyName: string;
+        deletedCounts: { dockets: number; employees: number; plant: number };
+        previousStatus: string;
+      };
+      expect(changes).toEqual({
+        companyName: removedSubcontractor.companyName,
+        deletedCounts: { dockets: 0, employees: 1, plant: 1 },
+        previousStatus: 'removed',
+      });
+    });
+
     it('should reject permanent delete unless the subcontractor has been removed first', async () => {
       const activeSubcontractor = await prisma.subcontractorCompany.create({
         data: {
@@ -2194,6 +2256,71 @@ describe('Subcontractors API', () => {
           companyName: expect.stringContaining('Portal Test Co'),
         }),
       ]);
+    });
+
+    it('should keep counter-proposed roster rates visible after the subbie reloads my-company', async () => {
+      const suffix = Date.now();
+      const employee = await prisma.employeeRoster.create({
+        data: {
+          subcontractorCompanyId: portalSubId,
+          name: `Countered Employee ${suffix}`,
+          role: 'Operator',
+          hourlyRate: 91,
+          status: 'pending',
+        },
+      });
+      const plant = await prisma.plantRegister.create({
+        data: {
+          subcontractorCompanyId: portalSubId,
+          type: 'Excavator',
+          description: `Countered Plant ${suffix}`,
+          dryRate: 155,
+          wetRate: 190,
+          status: 'pending',
+        },
+      });
+
+      try {
+        const employeeCounterRes = await request(app)
+          .patch(`/api/subcontractors/${portalSubId}/employees/${employee.id}/status`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ status: 'counter', counterRate: 88 });
+        expect(employeeCounterRes.status).toBe(200);
+
+        const plantCounterRes = await request(app)
+          .patch(`/api/subcontractors/${portalSubId}/plant/${plant.id}/status`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ status: 'counter', counterDryRate: 145, counterWetRate: 175 });
+        expect(plantCounterRes.status).toBe(200);
+
+        const reloadRes = await request(app)
+          .get(`/api/subcontractors/my-company?projectId=${projectId}`)
+          .set('Authorization', `Bearer ${portalToken}`);
+
+        expect(reloadRes.status).toBe(200);
+        expect(reloadRes.body.company.employees).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              id: employee.id,
+              status: 'counter',
+              counterRate: 88,
+            }),
+          ]),
+        );
+        expect(reloadRes.body.company.plant).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              id: plant.id,
+              status: 'counter',
+              counterDryRate: 145,
+              counterWetRate: 175,
+            }),
+          ]),
+        );
+      } finally {
+        await prisma.employeeRoster.delete({ where: { id: employee.id } }).catch(() => {});
+        await prisma.plantRegister.delete({ where: { id: plant.id } }).catch(() => {});
+      }
     });
 
     it('should resolve my-company for requested and newest linked projects', async () => {

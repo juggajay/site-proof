@@ -66,6 +66,21 @@ beforeEach(() => {
 });
 
 describe('NotificationsPage', () => {
+  it('shows a retry action after notifications fail to load', async () => {
+    apiFetchMock.mockRejectedValueOnce(new Error('network down')).mockResolvedValueOnce({
+      notifications: [buildNotification({ title: 'Recovered notification' })],
+      unreadCount: 1,
+    });
+
+    renderPage();
+
+    expect(await screen.findByText('Notifications could not be loaded.')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /try again/i }));
+
+    expect(await screen.findByText('Recovered notification')).toBeInTheDocument();
+    expect(apiFetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it('M66: deletes a notification via DELETE /:id without navigating', async () => {
     apiFetchMock.mockImplementation((_path: string, options?: { method?: string }) => {
       if (options?.method === 'DELETE') {

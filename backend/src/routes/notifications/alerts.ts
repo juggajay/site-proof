@@ -35,7 +35,6 @@ import {
   requireAlertResolveAccess,
   requireNotificationAdmin,
   requireProjectNotificationAdminAccess,
-  requireProjectReadAccess,
 } from './access.js';
 import {
   generateAlertId,
@@ -105,7 +104,7 @@ notificationAlertsRouter.post(
     );
 
     if (alertProjectId) {
-      await requireProjectReadAccess(user, alertProjectId);
+      await requireProjectNotificationAdminAccess(user, alertProjectId);
       if (!(await canReceiveProjectAlert(assignedTo, alertProjectId, entityType))) {
         throw AppError.forbidden('Assigned user does not have project access');
       }

@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { NativeSelect } from '@/components/ui/native-select';
 import type {
   HpRecipient,
+  HpApprovalRequirement,
   ProjectNotificationPreferences,
   WitnessPointNotificationSettings,
   WitnessPointNotificationTrigger,
@@ -31,7 +32,7 @@ import {
 interface NotificationsTabProps {
   projectId: string;
   initialHpRecipients: HpRecipient[];
-  initialHpApprovalRequirement: 'any' | 'superintendent';
+  initialHpApprovalRequirement: HpApprovalRequirement;
   initialRequireSubcontractorVerification: boolean;
   initialNotificationPreferences: ProjectNotificationPreferences;
   initialWitnessPointNotifications: WitnessPointNotificationSettings;
@@ -55,7 +56,7 @@ export function NotificationsTab({
   const [newRecipientEmail, setNewRecipientEmail] = useState('');
   const [recipientError, setRecipientError] = useState('');
   const [savingRecipients, setSavingRecipients] = useState(false);
-  const [hpApprovalRequirement, setHpApprovalRequirement] = useState<'any' | 'superintendent'>(
+  const [hpApprovalRequirement, setHpApprovalRequirement] = useState<HpApprovalRequirement>(
     initialHpApprovalRequirement,
   );
   const [requireSubcontractorVerification, setRequireSubcontractorVerification] = useState(
@@ -143,7 +144,7 @@ export function NotificationsTab({
     );
   };
 
-  const handleApprovalRequirementChange = (value: 'any' | 'superintendent') => {
+  const handleApprovalRequirementChange = (value: HpApprovalRequirement) => {
     if (readOnly) return;
     if (savingSettingRef.current) return;
 
@@ -492,11 +493,12 @@ export function NotificationsTab({
                 id="hp-approval-requirement"
                 value={hpApprovalRequirement}
                 onChange={(event) =>
-                  handleApprovalRequirementChange(event.target.value as 'any' | 'superintendent')
+                  handleApprovalRequirementChange(event.target.value as HpApprovalRequirement)
                 }
                 disabled={readOnly || savingSetting !== null}
               >
                 <option value="any">Any Team Member</option>
+                <option value="none">Manual Release Not Required</option>
                 <option value="superintendent">Superintendent Only</option>
               </NativeSelect>
             </div>

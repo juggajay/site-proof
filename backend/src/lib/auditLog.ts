@@ -230,6 +230,7 @@ export const AuditAction = {
   SUBCONTRACTOR_STATUS_CHANGED: 'subcontractor_status_changed',
   SUBCONTRACTOR_EMPLOYEE_RATE_APPROVED: 'subcontractor_employee_rate_approved',
   SUBCONTRACTOR_PLANT_RATE_APPROVED: 'subcontractor_plant_rate_approved',
+  SUBCONTRACTOR_PERMANENTLY_DELETED: 'subcontractor_permanently_deleted',
   SUBCONTRACTOR_PORTAL_ACCESS_CHANGED: 'subcontractor_portal_access_changed',
   SUBCONTRACTOR_PORTAL_ACCESS_UPDATED: 'subcontractor_portal_access_changed',
 } as const;

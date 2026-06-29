@@ -1159,6 +1159,25 @@ describe('Notifications API', () => {
         expect(res.status).toBe(403);
       });
 
+      it('should reject project readers creating project alerts', async () => {
+        const res = await request(app)
+          .post('/api/notifications/alerts')
+          .set('Authorization', `Bearer ${secondUserToken}`)
+          .send({
+            type: 'overdue_ncr',
+            severity: 'high',
+            title: 'Reader-created alert',
+            message: 'Project read access should not create alerts',
+            entityId: 'reader-alert-attempt',
+            entityType: 'ncr',
+            projectId,
+            assignedTo: userId,
+          });
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.message).toContain('Notification administration access required');
+      });
+
       it('should reject assigning a project alert to a user without project access', async () => {
         const email = `notifications-alert-outsider-${Date.now()}@example.com`;
         const regRes = await request(app).post('/api/auth/register').send({

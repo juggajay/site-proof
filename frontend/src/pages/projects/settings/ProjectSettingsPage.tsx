@@ -7,6 +7,7 @@ import { apiFetch } from '@/lib/api';
 import { Settings, Users, ClipboardList, Bell, MapPin, Puzzle } from 'lucide-react';
 import type {
   EnabledModules,
+  HpApprovalRequirement,
   HpRecipient,
   Project,
   ProjectNotificationPreferences,
@@ -116,7 +117,7 @@ function toWitnessPointNotificationsPatch(
 
 type ProjectSettingsState = {
   hpRecipients: HpRecipient[];
-  hpApprovalRequirement: 'any' | 'superintendent';
+  hpApprovalRequirement: HpApprovalRequirement;
   requireSubcontractorVerification: boolean;
   enabledModules: EnabledModules;
   notificationPreferences: ProjectNotificationPreferences;
@@ -145,6 +146,7 @@ function getProjectSettingsState(project: Project | null): ProjectSettingsState 
   }
   if (
     settings.hpApprovalRequirement === 'any' ||
+    settings.hpApprovalRequirement === 'none' ||
     settings.hpApprovalRequirement === 'superintendent'
   ) {
     state.hpApprovalRequirement = settings.hpApprovalRequirement;
@@ -197,6 +199,10 @@ function isSettingsTab(value: string | null): value is SettingsTab {
   return TABS.some((tab) => tab.id === value);
 }
 
+function canGrantProjectAdminRole(userRole: string, projectScopedRole: string): boolean {
+  return userRole === 'owner' || userRole === 'admin' || projectScopedRole === 'admin';
+}
+
 function TabSpinner() {
   return (
     <div className="flex items-center justify-center py-12">
@@ -215,9 +221,7 @@ export function ProjectSettingsPage() {
 
   // Settings parsed from project data for child components
   const [hpRecipients, setHpRecipients] = useState<HpRecipient[]>([]);
-  const [hpApprovalRequirement, setHpApprovalRequirement] = useState<'any' | 'superintendent'>(
-    'any',
-  );
+  const [hpApprovalRequirement, setHpApprovalRequirement] = useState<HpApprovalRequirement>('any');
   const [requireSubcontractorVerification, setRequireSubcontractorVerification] = useState(false);
   const [enabledModules, setEnabledModules] = useState<EnabledModules>({
     ...DEFAULT_ENABLED_MODULES,
@@ -238,6 +242,7 @@ export function ProjectSettingsPage() {
   const canViewContractValue = PROJECT_ADMIN_ROLES.includes(
     projectScopedRole as (typeof PROJECT_ADMIN_ROLES)[number],
   );
+  const canGrantProjectAdmin = canGrantProjectAdminRole(userRole, projectScopedRole);
   const canDeleteProject = canDeleteProjects(userRole);
   const readOnly = isArchivedProject(project);
   const tabParam = searchParams.get('tab');
@@ -337,8 +342,8 @@ export function ProjectSettingsPage() {
       )}
 
       {/* Tab Navigation */}
-      <div className="border-b mb-6">
-        <nav className="flex gap-4" aria-label="Settings sections" role="tablist">
+      <div className="border-b mb-6 overflow-x-auto">
+        <nav className="flex min-w-max gap-4" aria-label="Settings sections" role="tablist">
           {TABS.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -347,7 +352,7 @@ export function ProjectSettingsPage() {
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                className={`flex items-center gap-2 whitespace-nowrap px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
                   isActive
                     ? 'border-primary text-primary'
                     : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/50'
@@ -386,7 +391,11 @@ export function ProjectSettingsPage() {
             )}
 
             {activeTab === 'team' && projectId && (
-              <TeamTab projectId={projectId} readOnly={readOnly} />
+              <TeamTab
+                projectId={projectId}
+                readOnly={readOnly}
+                canGrantProjectAdmin={canGrantProjectAdmin}
+              />
             )}
 
             {activeTab === 'areas' && projectId && (

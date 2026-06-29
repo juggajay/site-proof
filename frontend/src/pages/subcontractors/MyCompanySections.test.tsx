@@ -176,7 +176,9 @@ describe('EmployeeRosterSection', () => {
 
     expect(screen.getByText('Sam Operator')).toBeInTheDocument();
     expect(screen.getByText('$85/hr')).toBeInTheDocument();
-    fireEvent.click(screen.getByTitle('Delete'));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Sam Operator' }));
+    expect(onDeleteEmployee).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm delete Sam Operator' }));
     expect(onDeleteEmployee).toHaveBeenCalledWith('employee-1');
   });
 
@@ -212,7 +214,9 @@ describe('PlantRegisterSection', () => {
     expect(screen.getByText('Excavator')).toBeInTheDocument();
     expect(screen.getByText('30t Excavator')).toBeInTheDocument();
     expect(screen.getByText('$250/hr')).toBeInTheDocument();
-    fireEvent.click(screen.getByTitle('Delete'));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete 30t Excavator' }));
+    expect(onDeletePlant).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm delete 30t Excavator' }));
     expect(onDeletePlant).toHaveBeenCalledWith('plant-1');
   });
 

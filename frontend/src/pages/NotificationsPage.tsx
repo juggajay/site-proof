@@ -105,7 +105,7 @@ export function NotificationsPage() {
   // server-side equivalent, so they stay client-side over the loaded pages.
   const serverUnreadOnly = filter === 'unread';
 
-  const { data, isLoading, error, fetchNextPage, hasNextPage, isFetchingNextPage } =
+  const { data, isLoading, error, refetch, fetchNextPage, hasNextPage, isFetchingNextPage } =
     useInfiniteQuery({
       queryKey: [...queryKeys.notifications, { unreadOnly: serverUnreadOnly }],
       queryFn: ({ pageParam = 0 }) =>
@@ -223,7 +223,16 @@ export function NotificationsPage() {
           </div>
         ) : error ? (
           <div className="p-8 text-center text-sm text-destructive">
-            Notifications could not be loaded.
+            <p>Notifications could not be loaded.</p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-3"
+              onClick={() => void refetch()}
+            >
+              Try again
+            </Button>
           </div>
         ) : filteredNotifications.length === 0 ? (
           <div className="p-10 text-center">
