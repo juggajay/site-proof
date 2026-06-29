@@ -43,7 +43,9 @@ const AdvancedAnalyticsTab = lazy(() =>
 );
 
 const REPORT_DATA_TABS = ['lot-status', 'ncr', 'test', 'diary', 'claims'] as const;
+const REPORT_TABS = [...REPORT_DATA_TABS, 'advanced'] as const;
 type ReportDataTab = (typeof REPORT_DATA_TABS)[number];
+type ReportTab = (typeof REPORT_TABS)[number];
 type PaginatedReportDataTab = Exclude<ReportDataTab, 'claims'>;
 type PaginatedReport = LotStatusReport | NCRReport | TestReport | DiaryReport;
 
@@ -51,6 +53,10 @@ const REPORT_DETAIL_PAGE_LIMIT = 500;
 
 function isReportDataTab(tab: string): tab is ReportDataTab {
   return REPORT_DATA_TABS.includes(tab as ReportDataTab);
+}
+
+function isReportTab(tab: string): tab is ReportTab {
+  return REPORT_TABS.includes(tab as ReportTab);
 }
 
 function isPaginatedReportDataTab(tab: ReportDataTab): tab is PaginatedReportDataTab {
@@ -130,13 +136,12 @@ async function fetchCompleteReport(
     return firstPage;
   }
 
-  const nextPages = await Promise.all(
-    Array.from({ length: totalPages - 1 }, (_, index) => {
-      const pageParams = new URLSearchParams(queryParams);
-      pageParams.set('page', String(index + 2));
-      return apiFetch<PaginatedReport>(`/api/reports/${endpoint}?${pageParams.toString()}`);
-    }),
-  );
+  const nextPages: PaginatedReport[] = [];
+  for (let page = 2; page <= totalPages; page += 1) {
+    const pageParams = new URLSearchParams(queryParams);
+    pageParams.set('page', String(page));
+    nextPages.push(await apiFetch<PaginatedReport>(`/api/reports/${endpoint}?${pageParams}`));
+  }
 
   return mergePaginatedReportPages(reportType, firstPage, nextPages);
 }
@@ -163,7 +168,8 @@ export function ReportsPage() {
   const { dateFormat } = useDateFormat();
   const { timezone } = useTimezone();
   const { user } = useAuth();
-  const activeTab = searchParams.get('tab') || 'lot-status';
+  const requestedTab = searchParams.get('tab') || 'lot-status';
+  const activeTab: ReportTab = isReportTab(requestedTab) ? requestedTab : 'lot-status';
   const reportRequestRef = useRef(0);
   const inFlightReportRequestKeyRef = useRef<string | null>(null);
   const lastAutomaticReportRequestKeyRef = useRef<string | null>(null);
@@ -247,6 +253,12 @@ export function ReportsPage() {
       setClaimsReport(null);
     }
   }, []);
+
+  useEffect(() => {
+    if (!isReportTab(requestedTab)) {
+      setSearchParams({ tab: 'lot-status' }, { replace: true });
+    }
+  }, [requestedTab, setSearchParams]);
 
   useEffect(() => {
     reportRequestRef.current += 1;
@@ -632,6 +644,7 @@ export function ReportsPage() {
                 <img
                   src={companyLogo.startsWith('http') ? companyLogo : apiUrl(companyLogo)}
                   alt={companyName || 'Company Logo'}
+                  referrerPolicy="no-referrer"
                   className="h-12 w-auto object-contain"
                 />
               ) : null}

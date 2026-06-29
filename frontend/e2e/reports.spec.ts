@@ -21,6 +21,8 @@ type ReportsApiOptions = {
   failLotStatusUntil?: number;
   failSchedulesUntil?: number;
   createScheduleDelayMs?: number;
+  updateScheduleDelayMs?: number;
+  deleteScheduleDelayMs?: number;
   companyTier?: string;
   user?: typeof E2E_ADMIN_USER;
   projectCurrentUserRole?: string | null;
@@ -331,6 +333,8 @@ function claimsReport() {
 async function mockReportsApi(page: Page, options: ReportsApiOptions = {}) {
   const reportRequests: string[] = [];
   const createScheduleRequests: unknown[] = [];
+  const updateScheduleRequests: unknown[] = [];
+  const deleteScheduleRequests: string[] = [];
   let updateScheduleRequest: unknown;
   let deleteScheduleId: string | null = null;
   let lotStatusRequestCount = 0;
@@ -503,16 +507,24 @@ async function mockReportsApi(page: Page, options: ReportsApiOptions = {}) {
       route.request().method() === 'PUT'
     ) {
       updateScheduleRequest = route.request().postDataJSON();
+      updateScheduleRequests.push(updateScheduleRequest);
+      if (options.updateScheduleDelayMs) {
+        await delay(options.updateScheduleDelayMs);
+      }
       schedules[0].isActive = Boolean((updateScheduleRequest as { isActive?: boolean }).isActive);
       await json({ schedule: schedules[0] });
       return;
     }
 
     if (
-      url.pathname === '/api/reports/schedules/e2e-schedule-created' &&
+      url.pathname.startsWith('/api/reports/schedules/') &&
       route.request().method() === 'DELETE'
     ) {
-      deleteScheduleId = 'e2e-schedule-created';
+      deleteScheduleId = decodeURIComponent(url.pathname.replace('/api/reports/schedules/', ''));
+      deleteScheduleRequests.push(deleteScheduleId);
+      if (options.deleteScheduleDelayMs) {
+        await delay(options.deleteScheduleDelayMs);
+      }
       const index = schedules.findIndex((schedule) => schedule.id === deleteScheduleId);
       if (index >= 0) {
         schedules.splice(index, 1);
@@ -531,13 +543,31 @@ async function mockReportsApi(page: Page, options: ReportsApiOptions = {}) {
     getCreateScheduleRequest: () => createScheduleRequests.at(-1),
     getCreateScheduleRequests: () => createScheduleRequests,
     getUpdateScheduleRequest: () => updateScheduleRequest,
+    getUpdateScheduleRequests: () => updateScheduleRequests,
     getDeleteScheduleId: () => deleteScheduleId,
+    getDeleteScheduleRequests: () => deleteScheduleRequests,
     getLotStatusRequestCount: () => lotStatusRequestCount,
     getScheduleLoadCount: () => scheduleLoadCount,
   };
 }
 
 test.describe('Reports seeded analytics contract', () => {
+  test('normalizes an invalid reports tab URL back to lot status', async ({ page }) => {
+    const api = await mockReportsApi(page);
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/reports?tab=unknown`);
+
+    await expect(page).toHaveURL(/tab=lot-status/);
+    await expect(page.getByRole('tab', { name: 'Lot Status' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    await expect(page.getByText('LOT-RPT-001')).toBeVisible();
+    expect(api.getReportRequests()).toContain(
+      '/api/reports/lot-status?projectId=e2e-project&limit=500&page=1',
+    );
+  });
+
   test('renders reports, applies filters, and manages scheduled report emails', async ({
     page,
   }) => {
@@ -565,6 +595,13 @@ test.describe('Reports seeded analytics contract', () => {
       .toContain(
         '/api/reports/test?projectId=e2e-project&startDate=2026-05-01&endDate=2026-05-09&testTypes=Compaction&limit=500&page=1',
       );
+    await page.getByRole('button', { name: 'Clear filters' }).click();
+    await expect(page.getByLabel('Test report start date')).toHaveValue('');
+    await expect(page.getByLabel('Test report end date')).toHaveValue('');
+    await expect(page.getByText('TR-ALL')).toBeVisible();
+    await expect
+      .poll(() => api.getReportRequests())
+      .toContain('/api/reports/test?projectId=e2e-project&limit=500&page=1');
 
     await page.getByRole('tab', { name: 'Diary Report' }).click();
     await expect(page.getByText('Total Diaries')).toBeVisible();
@@ -601,6 +638,21 @@ test.describe('Reports seeded analytics contract', () => {
       .toContain(
         '/api/reports/claims?projectId=e2e-project&startDate=2026-04-01&endDate=2026-05-31&status=paid',
       );
+    const unfilteredClaimRequestsBeforeClear = api
+      .getReportRequests()
+      .filter((request) => request === '/api/reports/claims?projectId=e2e-project').length;
+    await page.getByRole('button', { name: 'Clear filters' }).click();
+    await expect(page.getByLabel('Claim report start date')).toHaveValue('');
+    await expect(page.getByLabel('Claim report end date')).toHaveValue('');
+    await expect(page.getByLabel('Status')).toHaveValue('');
+    await expect
+      .poll(
+        () =>
+          api
+            .getReportRequests()
+            .filter((request) => request === '/api/reports/claims?projectId=e2e-project').length,
+      )
+      .toBeGreaterThan(unfilteredClaimRequestsBeforeClear);
 
     const scheduleDialog = await openScheduleDialog(page);
     await expect(
@@ -866,6 +918,13 @@ test.describe('Reports seeded analytics contract', () => {
         button.click();
       });
 
+    await expect(scheduleDialog.getByRole('button', { name: 'Creating...' })).toBeDisabled();
+    await expect(scheduleDialog.getByLabel('Report Type')).toBeDisabled();
+    await expect(scheduleDialog.getByLabel('Frequency')).toBeDisabled();
+    await expect(scheduleDialog.getByLabel('Time')).toBeDisabled();
+    await expect(scheduleDialog.getByLabel('Recipients (comma-separated emails)')).toBeDisabled();
+    await expect(scheduleDialog.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+
     await expect(page.getByText('The report schedule was saved.')).toBeVisible();
     expect(api.getCreateScheduleRequests()).toHaveLength(1);
     expect(api.getCreateScheduleRequest()).toMatchObject({
@@ -875,5 +934,51 @@ test.describe('Reports seeded analytics contract', () => {
       timeOfDay: '06:30',
       recipients: ['reports@example.com', 'qa@example.com'],
     });
+  });
+
+  test('locks scheduled report row actions while update and delete requests are in flight', async ({
+    page,
+  }) => {
+    const api = await mockReportsApi(page, {
+      updateScheduleDelayMs: 250,
+      deleteScheduleDelayMs: 250,
+    });
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/reports`);
+
+    const scheduleDialog = await openScheduleDialog(page);
+    const existingSchedule = scheduleDialog
+      .locator('div')
+      .filter({ hasText: 'Lot Status Report' })
+      .filter({ hasText: 'Weekly on Monday at 09:00' })
+      .first();
+
+    await existingSchedule
+      .getByRole('button', { name: 'Pause' })
+      .evaluate((button: HTMLElement) => {
+        button.click();
+        button.click();
+      });
+
+    await expect(existingSchedule.getByRole('button', { name: 'Pausing...' })).toBeDisabled();
+    await expect(existingSchedule.getByRole('button', { name: 'Delete' })).toBeDisabled();
+    await expect(page.getByText('The scheduled report was updated.')).toBeVisible();
+    expect(api.getUpdateScheduleRequests()).toHaveLength(1);
+
+    await existingSchedule.getByRole('button', { name: 'Delete' }).click();
+    const deleteDialog = page
+      .getByRole('alertdialog')
+      .filter({ hasText: 'Delete Scheduled Report' });
+    await expect(deleteDialog).toBeVisible();
+
+    await deleteDialog.getByRole('button', { name: 'Delete' }).evaluate((button: HTMLElement) => {
+      button.click();
+      button.click();
+    });
+
+    await expect(deleteDialog.getByRole('button', { name: 'Deleting...' })).toBeDisabled();
+    await expect(deleteDialog.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+    await expect(deleteDialog).toBeHidden();
+    expect(api.getDeleteScheduleRequests()).toEqual(['e2e-schedule-existing']);
   });
 });

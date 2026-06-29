@@ -126,6 +126,33 @@ export function calculateScheduledReportArtifactSha256(pdfBuffer: Buffer): strin
   return crypto.createHash('sha256').update(pdfBuffer).digest('hex');
 }
 
+async function tryAdoptExistingSupabaseArtifact(
+  storagePath: string,
+  expectedSha256: string,
+): Promise<boolean> {
+  const { data, error } = await getSupabaseClient()
+    .storage.from(DOCUMENTS_BUCKET)
+    .download(storagePath);
+  if (error || !data) {
+    return false;
+  }
+
+  const existingBuffer = Buffer.from(await data.arrayBuffer());
+  return calculateScheduledReportArtifactSha256(existingBuffer) === expectedSha256;
+}
+
+async function tryAdoptExistingLocalArtifact(
+  filePath: string,
+  expectedSha256: string,
+): Promise<boolean> {
+  try {
+    const existingBuffer = await fs.promises.readFile(filePath);
+    return calculateScheduledReportArtifactSha256(existingBuffer) === expectedSha256;
+  } catch {
+    return false;
+  }
+}
+
 export async function storeScheduledReportArtifact(params: {
   projectId: string;
   scheduleId: string;
@@ -140,12 +167,13 @@ export async function storeScheduledReportArtifact(params: {
     params.runId,
   );
   const artifactFilename = normalizeArtifactFilename(`${params.reportName}.pdf`);
+  const artifactSha256 = calculateScheduledReportArtifactSha256(params.pdfBuffer);
   const metadata = {
     artifactReportName: params.reportName,
     artifactFilename,
     artifactMimeType: SCHEDULED_REPORT_ARTIFACT_MIME_TYPE,
     artifactFileSize: params.pdfBuffer.length,
-    artifactSha256: calculateScheduledReportArtifactSha256(params.pdfBuffer),
+    artifactSha256,
     artifactCreatedAt: params.now,
   };
 
@@ -158,6 +186,13 @@ export async function storeScheduledReportArtifact(params: {
       });
 
     if (error) {
+      if (await tryAdoptExistingSupabaseArtifact(storagePath, artifactSha256)) {
+        return {
+          ...metadata,
+          artifactFileUrl: getSupabaseStorageReference(DOCUMENTS_BUCKET, storagePath),
+        };
+      }
+
       logError('[Scheduled Reports] Artifact upload failed:', error);
       throw new AppError(
         503,
@@ -176,7 +211,28 @@ export async function storeScheduledReportArtifact(params: {
     `${SCHEDULED_REPORT_ARTIFACT_ROOT}/${params.projectId}/${params.scheduleId}`,
   );
   const filePath = path.join(artifactDirectory, `${params.runId}.pdf`);
-  await fs.promises.writeFile(filePath, params.pdfBuffer, { flag: 'wx' });
+  try {
+    await fs.promises.writeFile(filePath, params.pdfBuffer, { flag: 'wx' });
+  } catch (error) {
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      error.code === 'EEXIST' &&
+      (await tryAdoptExistingLocalArtifact(filePath, artifactSha256))
+    ) {
+      return {
+        ...metadata,
+        artifactFileUrl: getExpectedLocalArtifactPath(
+          params.projectId,
+          params.scheduleId,
+          params.runId,
+        ),
+      };
+    }
+
+    throw error;
+  }
 
   return {
     ...metadata,

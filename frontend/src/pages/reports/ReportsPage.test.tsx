@@ -283,6 +283,38 @@ describe('ReportsPage print action', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Print / Save PDF' }));
     expect(printMock).toHaveBeenCalledTimes(1);
   });
+
+  it('does not send a referrer when rendering an external company logo in the print header', async () => {
+    apiFetchMock.mockImplementation((path) => {
+      if (path === '/api/company') {
+        return Promise.resolve({
+          company: {
+            subscriptionTier: 'professional',
+            name: 'QA Company',
+            logoUrl: 'https://cdn.example.com/logo.png',
+          },
+        });
+      }
+
+      if (path === '/api/projects/project-1') {
+        return Promise.resolve({
+          project: { name: 'QA Project', currentUserRole: 'project_manager' },
+        });
+      }
+
+      if (path.startsWith('/api/reports/lot-status?')) {
+        return Promise.resolve(buildLotStatusReport());
+      }
+
+      return Promise.reject(new Error(`Unexpected API path: ${path}`));
+    });
+
+    renderReportsPage('/projects/project-1/reports?tab=lot-status');
+
+    const logo = await screen.findByAltText('QA Company');
+    expect(logo).toHaveAttribute('src', 'https://cdn.example.com/logo.png');
+    expect(logo).toHaveAttribute('referrerpolicy', 'no-referrer');
+  });
 });
 
 describe('ReportsPage subscription tier gates', () => {

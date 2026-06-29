@@ -262,11 +262,26 @@ async function buildScheduledReportAuditChanges(schedule: ScheduledReportAuditSo
   };
 }
 
-async function cancelIncompleteScheduledReportRuns(scheduleId: string): Promise<void> {
+async function lockScheduledReportForUpdate(
+  client: Prisma.TransactionClient,
+  scheduleId: string,
+): Promise<void> {
+  await client.$queryRaw`
+    SELECT id
+    FROM scheduled_reports
+    WHERE id = ${scheduleId}
+    FOR UPDATE
+  `;
+}
+
+async function cancelIncompleteScheduledReportRuns(
+  client: Prisma.TransactionClient,
+  scheduleId: string,
+): Promise<void> {
   const now = new Date();
   const reason = 'Schedule configuration changed before retry completed';
 
-  await prisma.scheduledReportRecipientDelivery.updateMany({
+  await client.scheduledReportRecipientDelivery.updateMany({
     where: {
       scheduleId,
       status: { in: INCOMPLETE_SCHEDULED_REPORT_DELIVERY_STATUSES },
@@ -280,7 +295,7 @@ async function cancelIncompleteScheduledReportRuns(scheduleId: string): Promise<
     },
   });
 
-  await prisma.scheduledReportRun.updateMany({
+  await client.scheduledReportRun.updateMany({
     where: {
       scheduleId,
       status: { in: INCOMPLETE_SCHEDULED_REPORT_RUN_STATUSES },
@@ -616,14 +631,18 @@ export function createScheduledReportRouter({
         );
       }
 
-      const schedule = await prisma.scheduledReport.update({
-        where: { id },
-        data: updateData,
-      });
+      const schedule = await prisma.$transaction(async (tx) => {
+        await lockScheduledReportForUpdate(tx, id);
 
-      if (shouldCancelIncompleteRuns) {
-        await cancelIncompleteScheduledReportRuns(id);
-      }
+        if (shouldCancelIncompleteRuns) {
+          await cancelIncompleteScheduledReportRuns(tx, id);
+        }
+
+        return tx.scheduledReport.update({
+          where: { id },
+          data: updateData,
+        });
+      });
 
       await createAuditLog({
         projectId: schedule.projectId,

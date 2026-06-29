@@ -162,14 +162,28 @@ export function getScheduleLatestRunClassName(schedule: ScheduledReport): string
 export function formatNextRun(dateStr: string | null, timeZone?: string): string {
   if (!dateStr) return 'Not scheduled';
   const date = new Date(dateStr);
-  return date.toLocaleString('en-AU', {
+  if (Number.isNaN(date.getTime())) return 'Not scheduled';
+
+  const options: Intl.DateTimeFormatOptions = {
     weekday: 'short',
     day: 'numeric',
     month: 'short',
     hour: '2-digit',
     minute: '2-digit',
-    ...(timeZone ? { timeZone } : {}),
-  });
+  };
+
+  try {
+    return date.toLocaleString('en-AU', {
+      ...options,
+      ...(timeZone ? { timeZone } : {}),
+    });
+  } catch (error) {
+    if (error instanceof RangeError && timeZone) {
+      return date.toLocaleString('en-AU', options);
+    }
+
+    throw error;
+  }
 }
 
 export function getFrequencyLabel(schedule: ScheduledReport): string {
