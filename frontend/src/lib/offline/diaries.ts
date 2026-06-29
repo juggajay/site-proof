@@ -66,6 +66,13 @@ export async function saveDiaryOffline(
 // Submit diary offline
 export async function submitDiaryOffline(projectId: string, date: string): Promise<void> {
   const id = generateDiaryId(projectId, date);
+  const existing = await offlineDb.diaries.get(id);
+
+  if (!existing) {
+    throw new Error(
+      'Offline diary snapshot not found. Reconnect and reload the diary before submitting.',
+    );
+  }
 
   // Update status to submitted
   await offlineDb.diaries.update(id, {

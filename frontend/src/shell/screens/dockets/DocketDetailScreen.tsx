@@ -20,7 +20,7 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useOfflineStatus } from '@/lib/useOfflineStatus';
-import { Loader2 } from 'lucide-react';
+import { AlertCircle, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ShellScreen } from '../../components/ShellScreen';
 import { withProjectQuery } from '../../shellPaths';
@@ -55,6 +55,8 @@ export function DocketDetailScreen() {
   const detailQuery = useDocketDetailEntriesQuery(docket ? docket.id : null);
   const labourEntries = detailQuery.data?.labourEntries ?? [];
   const plantEntries = detailQuery.data?.plantEntries ?? [];
+  const detailLoadError = detailQuery.isError;
+  const detailsReady = !detailQuery.isLoading && !detailLoadError;
 
   const backPath = withProjectQuery('/m/dockets', projectId);
   const withProject = (path: string) => withProjectQuery(path, projectId);
@@ -121,8 +123,11 @@ export function DocketDetailScreen() {
             <button
               type="button"
               onClick={handleApprove}
-              disabled={!isOnline || submitting}
-              className={cn('shell-cambar-btn', (!isOnline || submitting) && 'opacity-50')}
+              disabled={!isOnline || submitting || !detailsReady}
+              className={cn(
+                'shell-cambar-btn',
+                (!isOnline || submitting || !detailsReady) && 'opacity-50',
+              )}
               aria-label={approveButtonLabel(docket)}
             >
               {submitting ? (
@@ -138,6 +143,36 @@ export function DocketDetailScreen() {
         ) : undefined
       }
     >
+      {detailLoadError && (
+        <div
+          className="shell-card border-destructive/30 bg-destructive/10 text-destructive"
+          role="alert"
+        >
+          <div className="flex items-start gap-2">
+            <AlertCircle size={18} className="mt-0.5 shrink-0" aria-hidden="true" />
+            <div className="text-[13px] leading-relaxed">
+              <div className="font-semibold">Docket entries could not be loaded.</div>
+              <div className="mt-1">
+                Retry before actioning this docket so the labour and plant lines are visible.
+              </div>
+              <button
+                type="button"
+                onClick={() => void detailQuery.refetch()}
+                className="mt-2 font-semibold underline underline-offset-2"
+              >
+                Retry entries
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isPending && !detailLoadError && detailQuery.isLoading && (
+        <div className="text-center text-[12.5px] font-semibold text-muted-foreground">
+          Loading entries before approval…
+        </div>
+      )}
+
       {/* Status pill for non-pending dockets (read-only) */}
       {!isPending && (
         <div className="flex flex-wrap gap-[7px]">

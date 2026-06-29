@@ -61,16 +61,27 @@ function renderModal(
     canApprove?: boolean;
     onClose?: () => void;
     onActionComplete?: () => Promise<void>;
+    detailCache?:
+      | false
+      | {
+          adjustmentReason: string | null;
+          labourEntries: unknown[];
+          plantEntries: unknown[];
+        };
   } = {},
 ) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  // Pre-populate the cache so the detail query resolves immediately without
-  // triggering a real fetch.
-  queryClient.setQueryData(['docket-detail', docket.id], {
-    adjustmentReason: docket.adjustmentReason ?? null,
-    labourEntries: [],
-    plantEntries: [],
-  });
+  const detailCache =
+    overrides.detailCache === undefined
+      ? {
+          adjustmentReason: docket.adjustmentReason ?? null,
+          labourEntries: [],
+          plantEntries: [],
+        }
+      : overrides.detailCache;
+  if (detailCache !== false) {
+    queryClient.setQueryData(['docket-detail', docket.id], detailCache);
+  }
 
   const props = {
     docket,
@@ -80,6 +91,7 @@ function renderModal(
     onActionComplete: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
+  delete props.detailCache;
 
   const view = render(
     <QueryClientProvider client={queryClient}>
@@ -293,6 +305,14 @@ describe('DocketActionModal', () => {
     await waitFor(() => {
       expect(props.onActionComplete).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it('shows an error and disables actioning when docket entries fail to load', async () => {
+    apiFetchMock.mockRejectedValueOnce(new Error('detail unavailable'));
+    renderModal(makeDocket(), { detailCache: false });
+
+    expect(await screen.findByText('Docket entries could not be loaded.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled();
   });
 
   it('requires an adjustment reason when approve hours are changed', () => {

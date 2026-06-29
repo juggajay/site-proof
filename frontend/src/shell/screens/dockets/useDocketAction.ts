@@ -28,9 +28,11 @@ import { extractErrorMessage } from '@/lib/errorHandling';
 import { logError } from '@/lib/logger';
 import { queryKeys } from '@/lib/queryKeys';
 import {
+  type DocketActionResponse,
   type DocketActionType,
   buildDocketActionPath,
   buildDocketActionPayload,
+  getDocketApprovalDiarySyncWarning,
   resolveDocketActionEndpoint,
 } from '@/pages/dockets/docketActionData';
 
@@ -75,22 +77,33 @@ export function useDocketAction(projectId: string | null): UseDocketActionResult
 
       const endpoint = resolveDocketActionEndpoint(actionType);
       try {
-        await apiFetch(buildDocketActionPath(docketId, endpoint), {
-          method: 'POST',
-          body: JSON.stringify(
-            buildDocketActionPayload(actionType, {
-              actionNotes,
-              adjustedLabourHours,
-              adjustedPlantHours,
-              adjustmentReason,
-            }),
-          ),
-        });
+        const response = await apiFetch<DocketActionResponse>(
+          buildDocketActionPath(docketId, endpoint),
+          {
+            method: 'POST',
+            body: JSON.stringify(
+              buildDocketActionPayload(actionType, {
+                actionNotes,
+                adjustedLabourHours,
+                adjustedPlantHours,
+                adjustmentReason,
+              }),
+            ),
+          },
+        );
 
         toast({
           variant: 'success',
           description: `Docket ${PAST_TENSE[endpoint]} successfully`,
         });
+        const diarySyncWarning =
+          actionType === 'approve' ? getDocketApprovalDiarySyncWarning(response) : null;
+        if (diarySyncWarning) {
+          toast({
+            variant: 'warning',
+            description: diarySyncWarning,
+          });
+        }
 
         // Refresh every docket list (all statuses) + the foreman badge so the
         // Home "N waiting" tile and worklist update after the action.

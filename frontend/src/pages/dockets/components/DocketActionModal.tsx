@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { MessageSquare } from 'lucide-react';
+import { AlertCircle, MessageSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { VoiceInputButton } from '@/components/ui/VoiceInputButton';
@@ -76,6 +76,8 @@ export function DocketActionModal({
 
   const detailQuery = useDocketDetailEntriesQuery(docket.id);
   const detailLoading = detailQuery.isLoading;
+  const detailLoadError = detailQuery.isError;
+  const detailsReady = !detailLoading && !detailLoadError;
   const approvedAdjustmentReason =
     detailQuery.data?.adjustmentReason?.trim() || docket.adjustmentReason?.trim() || null;
   const labourEntries = detailQuery.data?.labourEntries ?? [];
@@ -200,6 +202,7 @@ export function DocketActionModal({
           onClick={handleAction}
           disabled={
             actionInProgress ||
+            !detailsReady ||
             approvalAdjustmentReasonRequired ||
             ((actionType === 'reject' || actionType === 'query') && !actionNotes.trim())
           }
@@ -332,6 +335,28 @@ export function DocketActionModal({
         {/* Labour & Plant entry details */}
         {detailLoading ? (
           <p className="text-sm text-muted-foreground text-center py-3">Loading entries...</p>
+        ) : detailLoadError ? (
+          <div
+            className="flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
+            role="alert"
+          >
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            <div>
+              <p className="font-medium">Docket entries could not be loaded.</p>
+              <p className="mt-1 text-destructive/90">
+                Retry before actioning this docket so the labour and plant lines are visible.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-2 border-destructive/40 text-destructive hover:bg-destructive/10"
+                onClick={() => void detailQuery.refetch()}
+              >
+                Retry entries
+              </Button>
+            </div>
+          </div>
         ) : (
           <>
             {labourEntries.length > 0 && (
@@ -446,32 +471,35 @@ export function DocketActionModal({
         )}
 
         {/* View mode: show approve/reject buttons if docket is pending */}
-        {actionType === 'view' && docket.status === 'pending_approval' && canApprove && (
-          <div className="flex gap-2">
-            <Button
-              variant="success"
-              className="flex-1 min-h-[44px]"
-              onClick={() => setActionType('approve')}
-            >
-              Approve
-            </Button>
-            <Button
-              variant="outline"
-              className="flex-1 min-h-[44px] border-warning text-warning hover:bg-warning/10"
-              onClick={() => setActionType('query')}
-            >
-              <MessageSquare className="mr-2 h-4 w-4" />
-              Query
-            </Button>
-            <Button
-              variant="destructive"
-              className="flex-1 min-h-[44px]"
-              onClick={() => setActionType('reject')}
-            >
-              Reject
-            </Button>
-          </div>
-        )}
+        {actionType === 'view' &&
+          docket.status === 'pending_approval' &&
+          canApprove &&
+          detailsReady && (
+            <div className="flex gap-2">
+              <Button
+                variant="success"
+                className="flex-1 min-h-[44px]"
+                onClick={() => setActionType('approve')}
+              >
+                Approve
+              </Button>
+              <Button
+                variant="outline"
+                className="flex-1 min-h-[44px] border-warning text-warning hover:bg-warning/10"
+                onClick={() => setActionType('query')}
+              >
+                <MessageSquare className="mr-2 h-4 w-4" />
+                Query
+              </Button>
+              <Button
+                variant="destructive"
+                className="flex-1 min-h-[44px]"
+                onClick={() => setActionType('reject')}
+              >
+                Reject
+              </Button>
+            </div>
+          )}
 
         {actionType === 'approve' && (
           <>

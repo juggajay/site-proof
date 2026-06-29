@@ -379,11 +379,22 @@ export function DocketEditPage() {
     }
   };
 
+  const portalPath = company
+    ? buildPortalCompanyScopedPath('/subcontractor-portal', {
+        projectId: company.projectId,
+        subcontractorCompanyId: company.id,
+      })
+    : buildPortalCompanyScopedPath('/subcontractor-portal', {
+        projectId: requestedProjectId,
+        subcontractorCompanyId: requestedSubcontractorCompanyId,
+      });
+
   const { submitting, respondingToQuery, submitDocket, respondToQuery } = useDocketSubmitActions({
     docket,
     queryResponse,
     saveDocketNotes,
     navigate,
+    redirectTo: portalPath,
   });
 
   // Get approved employees/plant only
@@ -395,15 +406,6 @@ export function DocketEditPage() {
         subcontractorCompanyId: company.id,
       })
     : buildPortalCompanyScopedPath('/my-company', {
-        projectId: requestedProjectId,
-        subcontractorCompanyId: requestedSubcontractorCompanyId,
-      });
-  const portalPath = company
-    ? buildPortalCompanyScopedPath('/subcontractor-portal', {
-        projectId: company.projectId,
-        subcontractorCompanyId: company.id,
-      })
-    : buildPortalCompanyScopedPath('/subcontractor-portal', {
         projectId: requestedProjectId,
         subcontractorCompanyId: requestedSubcontractorCompanyId,
       });
