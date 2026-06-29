@@ -16,6 +16,12 @@ const MAGIC_LINK_TOKEN_PURPOSE = 'magic_link';
 
 type MagicLinkPrismaClient = Pick<PrismaClient, 'user' | 'passwordResetToken'>;
 
+type MagicLinkUserSetupState = {
+  companyId: string | null;
+  passwordHash: string | null;
+  oauthProvider: string | null;
+};
+
 type OneTimeTokenLookup = (rawToken: string) => Prisma.PasswordResetTokenWhereInput;
 
 type MagicLinkRoutesDependencies = {
@@ -50,6 +56,10 @@ function normalizeMagicLinkRedirect(value: unknown): string | null {
   }
 }
 
+function isPendingCompanyInviteSetup(user: MagicLinkUserSetupState): boolean {
+  return Boolean(user.companyId && !user.passwordHash && !user.oauthProvider);
+}
+
 export function createMagicLinkRouter({
   prisma,
   normalizeEmailInput,
@@ -80,12 +90,31 @@ export function createMagicLinkRouter({
           id: true,
           email: true,
           fullName: true,
+          companyId: true,
+          passwordHash: true,
+          oauthProvider: true,
           twoFactorEnabled: true,
         },
       });
 
       // Always return success to prevent email enumeration
       if (!user) {
+        return res.json({
+          message: 'If an account exists with this email, a login link has been sent.',
+        });
+      }
+
+      if (isPendingCompanyInviteSetup(user)) {
+        await prisma.passwordResetToken.updateMany({
+          where: {
+            userId: user.id,
+            purpose: MAGIC_LINK_TOKEN_PURPOSE,
+            usedAt: null,
+            expiresAt: { gt: new Date() },
+          },
+          data: { usedAt: new Date() },
+        });
+
         return res.json({
           message: 'If an account exists with this email, a login link has been sent.',
         });
@@ -208,6 +237,7 @@ export function createMagicLinkRouter({
               roleInCompany: true,
               companyId: true,
               passwordHash: true,
+              oauthProvider: true,
               twoFactorEnabled: true,
               company: {
                 select: { name: true },
@@ -253,6 +283,10 @@ export function createMagicLinkRouter({
         throw AppError.forbidden(
           'MFA-enabled accounts must sign in with email, password, and MFA code',
         );
+      }
+
+      if (isPendingCompanyInviteSetup(tokenRecord.user)) {
+        throw AppError.forbidden('Complete account setup before using magic link sign-in');
       }
 
       // Generate JWT token for the user

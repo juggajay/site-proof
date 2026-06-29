@@ -7,6 +7,7 @@ import {
   generateMfaChallengeToken,
   generateToken,
   hashPassword,
+  AuthVerificationError,
   needsPasswordRehash,
   verifyPassword,
   verifyToken,
@@ -82,7 +83,15 @@ async function requireJwtAuth(req: Request, _res: Response, next: NextFunction) 
 
     next();
   } catch (error) {
-    next(error instanceof AppError ? error : AppError.unauthorized('Authentication failed.'));
+    if (error instanceof AppError) {
+      next(error);
+      return;
+    }
+    if (error instanceof AuthVerificationError) {
+      next(AppError.internal('Authentication service unavailable. Please try again.'));
+      return;
+    }
+    next(AppError.unauthorized('Authentication failed.'));
   }
 }
 

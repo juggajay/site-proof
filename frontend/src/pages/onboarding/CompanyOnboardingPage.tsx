@@ -19,6 +19,9 @@ interface CompanyOnboardingResponse {
   };
 }
 
+const COMPANY_CREATED_REFRESH_FAILED_MESSAGE =
+  "Company was created, but we couldn't refresh your session. Please reload and continue.";
+
 export function CompanyOnboardingPage() {
   const navigate = useNavigate();
   const { refreshUser } = useAuth();
@@ -52,7 +55,19 @@ export function CompanyOnboardingPage() {
           address: trimmedAddress,
         }),
       });
-      await refreshUser();
+
+      let refreshedUser = null;
+      try {
+        refreshedUser = await refreshUser();
+      } catch {
+        refreshedUser = null;
+      }
+
+      if (!refreshedUser?.companyId) {
+        setError(COMPANY_CREATED_REFRESH_FAILED_MESSAGE);
+        return;
+      }
+
       navigate('/projects', { replace: true });
     } catch (err) {
       setError(extractErrorMessage(err, 'Failed to create company'));

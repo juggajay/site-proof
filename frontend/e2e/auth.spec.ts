@@ -28,6 +28,11 @@ async function mockAdminPortfolioAccess(page: Page) {
       return;
     }
 
+    if (url.pathname === '/api/notifications/unread-count') {
+      await json({ count: 0 });
+      return;
+    }
+
     if (url.pathname === '/api/notifications') {
       await json({ notifications: [], unreadCount: 0 });
       return;
@@ -80,6 +85,11 @@ async function mockFreshAuthenticatedDashboard(page: Page) {
 
     if (url.pathname === '/api/auth/me') {
       await json({ user: freshUser });
+      return;
+    }
+
+    if (url.pathname === '/api/notifications/unread-count') {
+      await json({ count: 0 });
       return;
     }
 
@@ -164,6 +174,11 @@ async function mockOwnerWithRoleOverride(page: Page, roleOverride: string) {
 
     if (url.pathname === '/api/auth/me') {
       await json({ user: ownerUser });
+      return;
+    }
+
+    if (url.pathname === '/api/notifications/unread-count') {
+      await json({ count: 0 });
       return;
     }
 
@@ -388,6 +403,14 @@ test.describe('Authentication', () => {
       });
     });
 
+    await page.route('**/api/notifications/unread-count', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ count: 0 }),
+      });
+    });
+
     await page.route('**/api/projects', async (route) => {
       await route.fulfill({
         status: 200,
@@ -506,6 +529,11 @@ test.describe('Authentication', () => {
         return;
       }
 
+      if (url.pathname === '/api/notifications/unread-count') {
+        await json({ count: 0 });
+        return;
+      }
+
       if (url.pathname === '/api/notifications') {
         await json({ notifications: [], unreadCount: 0 });
         return;
@@ -559,6 +587,14 @@ test.describe('Authentication', () => {
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({ notifications: [], unreadCount: 0 }),
+      });
+    });
+
+    await page.route('**/api/notifications/unread-count', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ count: 0 }),
       });
     });
 
@@ -630,6 +666,11 @@ test.describe('Authentication', () => {
 
       if (url.pathname === '/api/auth/me') {
         await json({ user: E2E_ADMIN_USER });
+        return;
+      }
+
+      if (url.pathname === '/api/notifications/unread-count') {
+        await json({ count: 0 });
         return;
       }
 
@@ -809,6 +850,11 @@ test.describe('Registration Flow', () => {
           },
           201,
         );
+        return;
+      }
+
+      if (url.pathname === '/api/notifications/unread-count') {
+        await json({ count: 0 });
         return;
       }
 

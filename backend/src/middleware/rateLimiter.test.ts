@@ -120,6 +120,29 @@ describe('authRateLimiter', () => {
     }
   });
 
+  it.each([
+    ['POST', '/onboarding/complete', '198.51.100.101'],
+    ['POST', '/logout', '198.51.100.102'],
+    ['POST', '/logout-all-devices', '198.51.100.103'],
+    ['PATCH', '/profile', '198.51.100.104'],
+    ['POST', '/avatar', '198.51.100.105'],
+    ['DELETE', '/avatar', '198.51.100.106'],
+  ])(
+    'does not count routine authenticated %s %s requests against strict auth attempts',
+    async (method, path, ip) => {
+      const { authRateLimiter } = await loadProductionMemoryAuthRateLimiter();
+      const req = mockRateLimitRequest({
+        method,
+        path,
+        ip,
+      });
+
+      for (let i = 0; i < 4; i++) {
+        await expect(runMiddleware(authRateLimiter, req)).resolves.toBeUndefined();
+      }
+    },
+  );
+
   it('still rate limits login attempts', async () => {
     const { authRateLimiter } = await loadProductionMemoryAuthRateLimiter();
     const req = mockRateLimitRequest({

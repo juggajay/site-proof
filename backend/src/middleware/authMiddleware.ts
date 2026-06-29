@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { verifyToken } from '../lib/auth.js';
+import { AuthVerificationError, verifyToken } from '../lib/auth.js';
 import { AppError } from '../lib/AppError.js';
 import { ROLE_HIERARCHY, type Role } from '../lib/roles.js';
 
@@ -45,7 +45,15 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
 
     next();
   } catch (error) {
-    next(error instanceof AppError ? error : AppError.unauthorized('Authentication failed.'));
+    if (error instanceof AppError) {
+      next(error);
+      return;
+    }
+    if (error instanceof AuthVerificationError) {
+      next(AppError.internal('Authentication service unavailable. Please try again.'));
+      return;
+    }
+    next(AppError.unauthorized('Authentication failed.'));
   }
 }
 
@@ -76,8 +84,12 @@ export async function optionalAuth(req: Request, _res: Response, next: NextFunct
     }
 
     next();
-  } catch {
-    // Silently continue without auth
+  } catch (error) {
+    if (error instanceof AuthVerificationError) {
+      next(AppError.internal('Authentication service unavailable. Please try again.'));
+      return;
+    }
+    // Silently continue without auth for malformed or expired optional tokens.
     next();
   }
 }

@@ -22,7 +22,7 @@ export function RoleProtectedRoute({
   redirectTo: _redirectTo = '/dashboard',
   allowProjectScopedRole = false,
 }: RoleProtectedRouteProps) {
-  const { user, loading } = useAuth();
+  const { user, loading, sessionExpired } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -40,7 +40,7 @@ export function RoleProtectedRoute({
   }
 
   if (!user) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    return <Navigate to="/login" state={{ from: location, sessionExpired }} replace />;
   }
 
   // Check if user's role is in allowed roles
