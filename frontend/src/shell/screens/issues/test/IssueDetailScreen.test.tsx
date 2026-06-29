@@ -9,11 +9,15 @@
  * + respond hooks are mocked so the detail render is deterministic.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import type { NCR } from '@/pages/ncr/types';
 import type { IssuesShellData } from '../useIssuesShellData';
 import type { NcrEvidenceItem } from '../useNcrEvidence';
+
+vi.mock('@/lib/documentAccess', () => ({
+  openDocumentAccessUrl: vi.fn(async () => undefined),
+}));
 
 vi.mock('@/lib/useOfflineStatus', () => ({
   useOfflineStatus: () => ({ isOnline: true, pendingSyncCount: 0, isSyncing: false }),
@@ -46,8 +50,10 @@ vi.mock('@/components/documents/SecureDocumentImage', () => ({
 }));
 
 let _photos: NcrEvidenceItem[] = [];
+let _evidence: NcrEvidenceItem[] = [];
 vi.mock('../useNcrEvidence', () => ({
   useNcrEvidence: () => ({
+    evidence: _evidence,
     photos: _photos,
     evidenceLoading: false,
     uploading: false,
@@ -64,6 +70,7 @@ vi.mock('../issuesShellContext', () => ({
 }));
 
 import { IssueDetailScreen } from '../IssueDetailScreen';
+import { openDocumentAccessUrl } from '@/lib/documentAccess';
 
 function makeNcr(over: Partial<NCR>): NCR {
   return {
@@ -120,11 +127,25 @@ const photo = (over: Partial<NcrEvidenceItem> = {}): NcrEvidenceItem => ({
   ...over,
 });
 
+const documentEvidence = (over: Partial<NcrEvidenceItem> = {}): NcrEvidenceItem => ({
+  id: 'e-doc-1',
+  evidenceType: 'certificate',
+  document: {
+    id: 'doc-cert-1',
+    filename: 'compaction-cert.pdf',
+    fileUrl: null,
+    mimeType: 'application/pdf',
+    caption: null,
+  },
+  ...over,
+});
+
 describe('IssueDetailScreen', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     _userId = 'user-me';
     _photos = [];
+    _evidence = [];
   });
 
   it('renders the description, mono number and severity/status pills', () => {
@@ -138,6 +159,7 @@ describe('IssueDetailScreen', () => {
 
   it('renders the evidence photo strip from existing evidence data', () => {
     _photos = [photo()];
+    _evidence = _photos;
     _data = makeData(makeNcr({}));
     renderScreen();
     const img = screen.getByAltText('slump cone') as HTMLImageElement;
@@ -148,12 +170,35 @@ describe('IssueDetailScreen', () => {
 
   it('renders sanitized evidence photos using document id when raw fileUrl is omitted', () => {
     _photos = [photo({ document: { id: 'd2', filename: 'sanitized.jpg', caption: null } })];
+    _evidence = _photos;
     _data = makeData(makeNcr({}));
     renderScreen();
     const img = screen.getByAltText('sanitized.jpg') as HTMLImageElement;
     expect(img).toBeInTheDocument();
     expect(img).toHaveAttribute('src', '/secure-doc/d2');
     expect(img).not.toHaveAttribute('data-file-url');
+  });
+
+  it('opens sanitized evidence photos through the signed document helper', () => {
+    _photos = [photo({ document: { id: 'd3', filename: 'openable.jpg', caption: null } })];
+    _evidence = _photos;
+    _data = makeData(makeNcr({}));
+    renderScreen();
+
+    fireEvent.click(screen.getByRole('button', { name: /Open openable\.jpg/i }));
+
+    expect(openDocumentAccessUrl).toHaveBeenCalledWith('d3', undefined);
+  });
+
+  it('renders and opens non-photo evidence documents', () => {
+    _evidence = [documentEvidence()];
+    _data = makeData(makeNcr({}));
+    renderScreen();
+
+    fireEvent.click(screen.getByRole('button', { name: /compaction-cert\.pdf/i }));
+
+    expect(screen.getByText('certificate')).toBeInTheDocument();
+    expect(openDocumentAccessUrl).toHaveBeenCalledWith('doc-cert-1', null);
   });
 
   it('shows an Add photo affordance (foreman adds evidence)', () => {

@@ -16,9 +16,11 @@
  */
 import { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ImagePlus, Loader2 } from 'lucide-react';
+import { FileText, ImagePlus, Loader2 } from 'lucide-react';
 import { SecureDocumentImage } from '@/components/documents/SecureDocumentImage';
 import { useAuth } from '@/lib/auth';
+import { openDocumentAccessUrl } from '@/lib/documentAccess';
+import { handleApiError } from '@/lib/errorHandling';
 import { useOfflineStatus } from '@/lib/useOfflineStatus';
 import { cn } from '@/lib/utils';
 import { ROOT_CAUSE_CATEGORIES } from '@/pages/ncr/constants';
@@ -26,7 +28,7 @@ import { ShellScreen } from '../../components/ShellScreen';
 import { withProjectQuery } from '../../shellPaths';
 import { useIssuesShellContext } from './issuesShellContext';
 import { useShellNcrParam } from './useShellNcrParam';
-import { useNcrEvidence } from './useNcrEvidence';
+import { type NcrEvidenceItem, useNcrEvidence } from './useNcrEvidence';
 import { useNcrRespond } from './useNcrRespond';
 import {
   type IssuePillTone,
@@ -55,6 +57,17 @@ function formatDate(dateStr?: string | null): string {
   }).format(parsed);
 }
 
+function isPhotoEvidence(item: NcrEvidenceItem): boolean {
+  return (
+    item.evidenceType === 'photo' ||
+    Boolean(item.document?.mimeType?.toLowerCase().startsWith('image/'))
+  );
+}
+
+function evidenceFilename(item: NcrEvidenceItem): string {
+  return item.document?.caption || item.document?.filename || 'NCR evidence';
+}
+
 export function IssueDetailScreen() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -64,7 +77,7 @@ export function IssueDetailScreen() {
 
   const ncr = useMemo(() => ncrs.find((n) => n.id === ncrId) ?? null, [ncrs, ncrId]);
 
-  const { photos, evidenceLoading, uploading, addPhoto } = useNcrEvidence(
+  const { evidence, photos, evidenceLoading, uploading, addPhoto } = useNcrEvidence(
     ncr ? ncr.id : null,
     projectId,
   );
@@ -107,6 +120,9 @@ export function IssueDetailScreen() {
     'Unassigned';
 
   const canRespond = canForemanRespond(ncr, user?.id);
+  const visiblePhotos = photos.filter((item) => item.document?.id);
+  const documentEvidence = evidence.filter((item) => item.document?.id && !isPhotoEvidence(item));
+  const hasEvidence = visiblePhotos.length > 0 || documentEvidence.length > 0;
 
   const handleAddPhotoClick = () => {
     if (!isOnline || uploading) return;
@@ -117,6 +133,14 @@ export function IssueDetailScreen() {
     e.target.value = '';
     if (!file) return;
     await addPhoto(file);
+  };
+  const handleOpenEvidence = (item: NcrEvidenceItem) => {
+    const document = item.document;
+    if (!document?.id) return;
+
+    void openDocumentAccessUrl(document.id, document.fileUrl).catch((error) => {
+      handleApiError(error, 'Could not open evidence');
+    });
   };
 
   const respondValid =
@@ -277,10 +301,10 @@ export function IssueDetailScreen() {
         </p>
       </div>
 
-      {/* Evidence photo strip */}
+      {/* Evidence */}
       <div className="shell-card">
         <div className="flex items-center justify-between gap-2">
-          <div className="text-[15px] font-semibold text-foreground">Photos</div>
+          <div className="text-[15px] font-semibold text-foreground">Evidence</div>
           <button
             type="button"
             onClick={handleAddPhotoClick}
@@ -310,24 +334,53 @@ export function IssueDetailScreen() {
         />
 
         {evidenceLoading ? (
-          <div className="mt-2 text-[13px] text-muted-foreground">Loading photos…</div>
-        ) : photos.length === 0 ? (
+          <div className="mt-2 text-[13px] text-muted-foreground">Loading evidence…</div>
+        ) : !hasEvidence ? (
           <div className="mt-2 text-[13px] text-muted-foreground">
-            No photos yet. Add one from site.
+            No evidence yet. Add a photo from site.
           </div>
         ) : (
-          <div className="-mx-1 mt-2 flex gap-2 overflow-x-auto px-1 pb-1">
-            {photos.map((item) =>
-              item.document?.id ? (
-                <SecureDocumentImage
-                  key={item.id}
-                  documentId={item.document.id}
-                  fileUrl={item.document.fileUrl ?? null}
-                  alt={item.document.caption || item.document.filename || 'NCR evidence photo'}
-                  loading="lazy"
-                  className="h-[88px] w-[88px] flex-shrink-0 rounded-xl border border-border object-cover"
-                />
-              ) : null,
+          <div className="space-y-3">
+            {visiblePhotos.length > 0 && (
+              <div className="-mx-1 mt-2 flex gap-2 overflow-x-auto px-1 pb-1">
+                {visiblePhotos.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => handleOpenEvidence(item)}
+                    className="h-[88px] w-[88px] flex-shrink-0 overflow-hidden rounded-xl border border-border bg-muted touch-manipulation"
+                    aria-label={`Open ${evidenceFilename(item)}`}
+                  >
+                    <SecureDocumentImage
+                      documentId={item.document!.id}
+                      fileUrl={item.document!.fileUrl ?? null}
+                      alt={evidenceFilename(item)}
+                      loading="lazy"
+                      className="h-full w-full object-cover"
+                    />
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {documentEvidence.length > 0 && (
+              <ul className="space-y-2">
+                {documentEvidence.map((item) => (
+                  <li key={item.id}>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenEvidence(item)}
+                      className="flex w-full items-center gap-2 rounded-xl border border-border bg-background px-3 py-2.5 text-left text-[13px] font-semibold text-foreground touch-manipulation"
+                    >
+                      <FileText size={16} className="flex-shrink-0 text-muted-foreground" />
+                      <span className="min-w-0 flex-1 truncate">{evidenceFilename(item)}</span>
+                      <span className="text-[11px] uppercase tracking-normal text-muted-foreground">
+                        {item.evidenceType || 'file'}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
         )}

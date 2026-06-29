@@ -563,7 +563,7 @@ test.describe('Reports seeded analytics contract', () => {
     await expect
       .poll(() => api.getReportRequests())
       .toContain(
-        '/api/reports/test?projectId=e2e-project&startDate=2026-05-01&endDate=2026-05-09&testTypes=Compaction',
+        '/api/reports/test?projectId=e2e-project&startDate=2026-05-01&endDate=2026-05-09&testTypes=Compaction&limit=500&page=1',
       );
 
     await page.getByRole('tab', { name: 'Diary Report' }).click();
@@ -577,7 +577,7 @@ test.describe('Reports seeded analytics contract', () => {
     await expect
       .poll(() => api.getReportRequests())
       .toContain(
-        '/api/reports/diary?projectId=e2e-project&sections=weather%2Cpersonnel%2Cplant%2Cactivities&startDate=2026-05-03&endDate=2026-05-04',
+        '/api/reports/diary?projectId=e2e-project&sections=weather%2Cpersonnel%2Cplant%2Cactivities&startDate=2026-05-03&endDate=2026-05-04&limit=500&page=1',
       );
 
     await page.getByRole('tab', { name: 'Claims' }).click();
