@@ -6,6 +6,7 @@ import {
   calculateNextScheduledReportRunAt,
   processDueScheduledReports,
 } from './scheduledReports.js';
+import { buildScheduledReportDocument } from './scheduledReports/reportDocument.js';
 
 type ScheduledReportProjectOptions = {
   subscriptionTier?: string;
@@ -424,6 +425,47 @@ describe('calculateNextScheduledReportRunAt', () => {
 });
 
 describe('processDueScheduledReports', () => {
+  it('labels scheduled report row samples with the displayed and total counts', async () => {
+    const { company, project } = await createScheduledReportProject();
+
+    try {
+      await prisma.lot.createMany({
+        data: Array.from({ length: 51 }, (_, index) => ({
+          projectId: project.id,
+          lotNumber: `LOT-SAMPLE-${String(index + 1).padStart(3, '0')}`,
+          lotType: 'roadworks',
+          description: `Scheduled report lot ${index + 1}`,
+          status: 'conformed',
+          activityType: 'Earthworks',
+        })),
+      });
+
+      const document = await buildScheduledReportDocument(
+        {
+          id: 'schedule-sample-count',
+          projectId: project.id,
+          reportType: 'lot-status',
+          frequency: 'daily',
+          dayOfWeek: null,
+          dayOfMonth: null,
+          timeOfDay: '09:00',
+          recipients: 'recipient@example.com',
+          failureCount: 0,
+          project: {
+            name: project.name,
+            companyId: company.id,
+            company: { subscriptionTier: company.subscriptionTier },
+          },
+        },
+        new Date('2026-06-21T09:30:00.000Z'),
+      );
+
+      expect(document.lines).toContain('Lot sample (showing first 50 of 51 lots)');
+    } finally {
+      await cleanupProject(project.id, company.id);
+    }
+  });
+
   it('claims due schedules, sends a PDF report email, and advances nextRunAt', async () => {
     const { company, project } = await createScheduledReportProject();
     const now = new Date(2026, 4, 10, 9, 30, 0, 0);

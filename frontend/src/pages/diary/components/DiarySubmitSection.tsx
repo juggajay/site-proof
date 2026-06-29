@@ -111,8 +111,11 @@ export const DiarySubmitSection = React.memo(function DiarySubmitSection({
           `/api/projects/${encodeURIComponent(projectId)}`,
         );
         project = projectResponse.project;
+        if (!project?.name) {
+          throw new Error('Missing project metadata');
+        }
       } catch {
-        project = { name: 'Unknown Project', projectNumber: '' };
+        throw new Error('Project details could not be loaded. Please try again.');
       }
 
       const pdfData: DailyDiaryPDFData = {
@@ -183,7 +186,11 @@ export const DiarySubmitSection = React.memo(function DiarySubmitSection({
       toast({ title: 'Daily diary PDF downloaded', variant: 'success' });
     } catch (err) {
       logError('Error generating diary PDF:', err);
-      toast({ title: 'Failed to generate PDF', variant: 'error' });
+      toast({
+        title: 'Failed to generate PDF',
+        description: extractErrorMessage(err, 'Please try again.'),
+        variant: 'error',
+      });
     } finally {
       printingRef.current = false;
       setPrinting(false);

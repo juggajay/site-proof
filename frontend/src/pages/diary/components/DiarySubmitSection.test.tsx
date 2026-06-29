@@ -7,14 +7,17 @@ vi.mock('@/lib/api', async (importOriginal) => {
   return { ...actual, apiFetch: vi.fn() };
 });
 vi.mock('@/components/ui/toaster', () => ({ toast: vi.fn() }));
+vi.mock('@/lib/pdfGenerator', () => ({ generateDailyDiaryPDF: vi.fn() }));
 
 import { DiarySubmitSection } from './DiarySubmitSection';
 import { apiFetch } from '@/lib/api';
 import { toast } from '@/components/ui/toaster';
+import { generateDailyDiaryPDF } from '@/lib/pdfGenerator';
 import type { DailyDiary } from '../types';
 
 const apiFetchMock = vi.mocked(apiFetch);
 const toastMock = vi.mocked(toast);
+const generateDailyDiaryPDFMock = vi.mocked(generateDailyDiaryPDF);
 
 const draftDiary = {
   id: 'd1',
@@ -52,6 +55,7 @@ function renderSection(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
   apiFetchMock.mockReset();
   toastMock.mockReset();
+  generateDailyDiaryPDFMock.mockReset();
 });
 
 describe('DiarySubmitSection server-422 warning gate (M30)', () => {
@@ -104,5 +108,24 @@ describe('DiarySubmitSection server-422 warning gate (M30)', () => {
 
     await waitFor(() => expect(onDiaryUpdate).toHaveBeenCalled());
     expect(submitBodies).toEqual([undefined]);
+  });
+});
+
+describe('DiarySubmitSection PDF export', () => {
+  it('does not generate a PDF with placeholder project details when project metadata fails', async () => {
+    apiFetchMock.mockRejectedValue(new Error('Project unavailable'));
+
+    renderSection();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Print' }));
+
+    await waitFor(() => {
+      expect(toastMock).toHaveBeenCalledWith({
+        title: 'Failed to generate PDF',
+        description: 'Project details could not be loaded. Please try again.',
+        variant: 'error',
+      });
+    });
+    expect(generateDailyDiaryPDFMock).not.toHaveBeenCalled();
   });
 });

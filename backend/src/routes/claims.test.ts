@@ -2673,6 +2673,7 @@ describe('Progress Claims API', () => {
 
   describe('GET /api/projects/:projectId/claims/:claimId/evidence-package', () => {
     let evidenceClaimId: string;
+    let evidenceLotId: string;
 
     beforeAll(async () => {
       // Create a new lot and claim for evidence package test
@@ -2688,6 +2689,7 @@ describe('Progress Claims API', () => {
           conformedById: userId,
         },
       });
+      evidenceLotId = evidenceLot.id;
 
       await prisma.document.create({
         data: {
@@ -2777,6 +2779,61 @@ describe('Progress Claims API', () => {
           data: {
             amountClaimed: 2000,
             percentageComplete: 100,
+          },
+        });
+      }
+    });
+
+    it('preserves zero-valued claim, lot, and test evidence fields', async () => {
+      await prisma.progressClaim.update({
+        where: { id: evidenceClaimId },
+        data: { certifiedAmount: 0 },
+      });
+      await prisma.lot.update({
+        where: { id: evidenceLotId },
+        data: {
+          chainageStart: 0,
+          chainageEnd: 0,
+        },
+      });
+      const testResult = await prisma.testResult.create({
+        data: {
+          projectId,
+          lotId: evidenceLotId,
+          testType: 'Compaction',
+          resultValue: 0,
+          resultUnit: '%',
+          passFail: 'pass',
+          status: 'verified',
+          enteredById: userId,
+          enteredAt: new Date('2025-02-21T09:00:00.000Z'),
+          verifiedById: userId,
+          verifiedAt: new Date('2025-02-21T10:00:00.000Z'),
+          sampleDate: new Date('2025-02-21T08:00:00.000Z'),
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .get(`/api/projects/${projectId}/claims/${evidenceClaimId}/evidence-package`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.claim.certifiedAmount).toBe(0);
+        expect(res.body.lots[0].chainageStart).toBe(0);
+        expect(res.body.lots[0].chainageEnd).toBe(0);
+        expect(res.body.lots[0].testResults[0].resultValue).toBe(0);
+      } finally {
+        await prisma.testResult.delete({ where: { id: testResult.id } }).catch(() => {});
+        await prisma.progressClaim.update({
+          where: { id: evidenceClaimId },
+          data: { certifiedAmount: null },
+        });
+        await prisma.lot.update({
+          where: { id: evidenceLotId },
+          data: {
+            chainageStart: null,
+            chainageEnd: null,
           },
         });
       }

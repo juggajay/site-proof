@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { apiFetch, apiUrl } from '@/lib/api';
-import { Lock, Sparkles, Mail, RefreshCw } from 'lucide-react';
+import { Lock, Sparkles, Mail, Printer, RefreshCw } from 'lucide-react';
 import { ScheduleReportModal } from '../../components/reports/ScheduleReportModal';
 import { ContextHelp, HELP_CONTENT } from '@/components/ContextHelp';
 import type {
@@ -213,6 +213,12 @@ export function ReportsPage() {
     [projectRoleResolved, projectScopedRole],
   );
   const canManageScheduledReports = canViewClaimsReport;
+  const hasPrintableReport =
+    (activeTab === 'lot-status' && Boolean(lotReport)) ||
+    (activeTab === 'ncr' && Boolean(ncrReport)) ||
+    (activeTab === 'test' && Boolean(testReport)) ||
+    (activeTab === 'diary' && Boolean(diaryReport)) ||
+    (activeTab === 'claims' && Boolean(claimsReport));
   const printGeneratedAt = useMemo(
     () => formatReportDateTime(new Date(), dateFormat, timezone),
     [dateFormat, timezone],
@@ -501,9 +507,7 @@ export function ReportsPage() {
         </div>
         <div
           className={
-            canManageScheduledReports
-              ? 'grid grid-cols-2 gap-2 sm:flex sm:gap-3'
-              : 'flex gap-2 sm:gap-3'
+            canManageScheduledReports ? 'flex flex-wrap gap-2 sm:gap-3' : 'flex gap-2 sm:gap-3'
           }
         >
           {canManageScheduledReports && (
@@ -521,6 +525,16 @@ export function ReportsPage() {
               {hasAdvancedAnalytics ? <Mail className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
               <span className="hidden sm:inline">Schedule Reports</span>
               <span className="sm:hidden">Schedule</span>
+            </button>
+          )}
+          {hasPrintableReport && (
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted/50 sm:px-4"
+            >
+              <Printer className="h-4 w-4" />
+              <span>Print / Save PDF</span>
             </button>
           )}
           <button

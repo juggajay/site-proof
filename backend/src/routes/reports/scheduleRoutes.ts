@@ -5,6 +5,7 @@ import { prisma } from '../../lib/prisma.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
+import { AuditAction, createAuditLog } from '../../lib/auditLog.js';
 import {
   SCHEDULED_REPORT_FREQUENCIES,
   SCHEDULED_REPORT_TYPES,
@@ -50,6 +51,16 @@ type ScheduledReportRouterDependencies = {
     projectId: string,
     options?: { requireWritable?: boolean },
   ) => Promise<string | null>;
+};
+
+type ScheduledReportAuditSource = {
+  reportType: string;
+  frequency: string;
+  dayOfWeek: number | null;
+  dayOfMonth: number | null;
+  timeOfDay: string;
+  recipients: string;
+  isActive: boolean;
 };
 
 function parseScheduleRouteId(
@@ -158,6 +169,47 @@ function normalizeScheduledReportRecipients(value: unknown): string {
   }
 
   return uniqueRecipients.join(',');
+}
+
+function parseNormalizedRecipientEmails(recipients: string): string[] {
+  return recipients
+    .split(',')
+    .map((email) => email.trim().toLowerCase())
+    .filter((email) => email.length > 0);
+}
+
+function getRecipientDomains(emails: string[]): string[] {
+  return Array.from(
+    new Set(emails.map((email) => email.split('@')[1] ?? '').filter((domain) => domain.length > 0)),
+  ).sort((left, right) => left.localeCompare(right));
+}
+
+async function buildScheduledReportAuditChanges(schedule: ScheduledReportAuditSource) {
+  const recipientEmails = parseNormalizedRecipientEmails(schedule.recipients);
+  const appRecipients =
+    recipientEmails.length === 0
+      ? []
+      : await prisma.user.findMany({
+          where: { email: { in: recipientEmails } },
+          select: { email: true },
+        });
+  const appRecipientEmails = new Set(
+    appRecipients.map((recipient) => recipient.email.toLowerCase()),
+  );
+  const appRecipientCount = recipientEmails.filter((email) => appRecipientEmails.has(email)).length;
+
+  return {
+    reportType: schedule.reportType,
+    frequency: schedule.frequency,
+    dayOfWeek: schedule.dayOfWeek,
+    dayOfMonth: schedule.dayOfMonth,
+    timeOfDay: schedule.timeOfDay,
+    isActive: schedule.isActive,
+    recipientCount: recipientEmails.length,
+    appRecipientCount,
+    externalRecipientCount: recipientEmails.length - appRecipientCount,
+    recipientDomains: getRecipientDomains(recipientEmails),
+  };
 }
 
 function normalizeScheduleTiming(input: {
@@ -306,6 +358,16 @@ export function createScheduledReportRouter({
         });
       });
 
+      await createAuditLog({
+        projectId,
+        userId,
+        entityType: 'scheduled_report',
+        entityId: schedule.id,
+        action: AuditAction.SCHEDULED_REPORT_CREATED,
+        changes: await buildScheduledReportAuditChanges(schedule),
+        req,
+      });
+
       res
         .status(201)
         .json(buildScheduledReportResponse(schedule, projectTimeZoneFromState(projectState)));
@@ -414,6 +476,16 @@ export function createScheduledReportRouter({
         data: updateData,
       });
 
+      await createAuditLog({
+        projectId: schedule.projectId,
+        userId: req.user?.id,
+        entityType: 'scheduled_report',
+        entityId: schedule.id,
+        action: AuditAction.SCHEDULED_REPORT_UPDATED,
+        changes: await buildScheduledReportAuditChanges(schedule),
+        req,
+      });
+
       res.json(buildScheduledReportResponse(schedule, projectTimeZone));
     }),
   );
@@ -436,6 +508,16 @@ export function createScheduledReportRouter({
 
       await prisma.scheduledReport.delete({
         where: { id },
+      });
+
+      await createAuditLog({
+        projectId: existing.projectId,
+        userId: req.user?.id,
+        entityType: 'scheduled_report',
+        entityId: existing.id,
+        action: AuditAction.SCHEDULED_REPORT_DELETED,
+        changes: await buildScheduledReportAuditChanges(existing),
+        req,
       });
 
       res.json(buildScheduledReportDeletedResponse());

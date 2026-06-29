@@ -220,6 +220,10 @@ export const AuditAction = {
   CLAIM_DELETED: 'claim_deleted',
   CLAIM_CERTIFIED: 'claim_certified',
   CLAIM_PAYMENT_RECORDED: 'claim_payment_recorded',
+  // Scheduled reports
+  SCHEDULED_REPORT_CREATED: 'scheduled_report_created',
+  SCHEDULED_REPORT_UPDATED: 'scheduled_report_updated',
+  SCHEDULED_REPORT_DELETED: 'scheduled_report_deleted',
   // Subcontractors
   SUBCONTRACTOR_INVITED: 'subcontractor_invited',
   SUBCONTRACTOR_INVITATION_ACCEPTED: 'subcontractor_invitation_accepted',
