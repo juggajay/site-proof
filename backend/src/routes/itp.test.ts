@@ -2342,38 +2342,27 @@ describe('ITP Completion Attachments', () => {
     }
   });
 
-  it('should create new attachment records from stored document references', async () => {
+  it('should reject client-supplied local document upload paths for new attachment records', async () => {
     const filename = `stored-path-evidence-${Date.now()}.jpg`;
-    let createdDocumentId: string | undefined;
 
-    try {
-      const res = await request(app)
-        .post(`/api/itp/completions/${completionId}/attachments`)
-        .set('Authorization', `Bearer ${authToken}`)
-        .send({
-          filename,
-          fileUrl: `/uploads/documents/${filename}`,
-          mimeType: 'image/jpeg',
-          caption: 'Stored path evidence photo',
-        });
-
-      expect(res.status).toBe(201);
-      expect(res.body.attachment.document.fileUrl).toBeUndefined();
-      createdDocumentId = res.body.attachment.documentId;
-
-      const storedDocument = await prisma.document.findUniqueOrThrow({
-        where: { id: createdDocumentId },
-        select: { fileUrl: true },
+    const res = await request(app)
+      .post(`/api/itp/completions/${completionId}/attachments`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        filename,
+        fileUrl: `/uploads/documents/${filename}`,
+        mimeType: 'image/jpeg',
+        caption: 'Stored path evidence photo',
       });
-      expect(storedDocument.fileUrl).toBe(`/uploads/documents/${filename}`);
-    } finally {
-      if (createdDocumentId) {
-        await prisma.iTPCompletionAttachment.deleteMany({
-          where: { completionId, documentId: createdDocumentId },
-        });
-        await prisma.document.deleteMany({ where: { id: createdDocumentId } });
-      }
-    }
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toContain('documentId');
+
+    const createdDocument = await prisma.document.findFirst({
+      where: { projectId, filename },
+      select: { id: true },
+    });
+    expect(createdDocument).toBeNull();
   });
 
   it('should create new attachment records from Supabase document storage references', async () => {

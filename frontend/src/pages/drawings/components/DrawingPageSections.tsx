@@ -28,7 +28,11 @@ export function DrawingRegisterHeader({
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <div>
         <h1 className="text-2xl font-bold">Drawing Register</h1>
-        <p className="text-muted-foreground">Manage project drawings and revisions</p>
+        <p className="text-muted-foreground">
+          {canManageDrawings
+            ? 'Manage project drawings and revisions'
+            : 'View project drawings and revisions'}
+        </p>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <Button

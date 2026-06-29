@@ -57,6 +57,14 @@ describe('DrawingRegisterTable', () => {
     expect(screen.getByText('Upload your first drawing to get started.')).toBeInTheDocument();
   });
 
+  it('uses read-only empty-state copy for viewers', () => {
+    renderTable({ drawings: [], hasActiveFilters: false, canManageDrawings: false });
+
+    expect(screen.getByText('No drawings found')).toBeInTheDocument();
+    expect(screen.getByText('No project drawings are available yet.')).toBeInTheDocument();
+    expect(screen.queryByText(/upload/i)).not.toBeInTheDocument();
+  });
+
   it('shows the filtered empty state when filters are active', () => {
     renderTable({ drawings: [], hasActiveFilters: true });
 

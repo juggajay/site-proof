@@ -16,6 +16,7 @@ import {
 } from './helpers/access.js';
 import {
   isStoredDocumentReference,
+  isStoredDocumentUploadPath,
   normalizeStoredDocumentReference,
 } from '../../lib/uploadPaths.js';
 import { canReadDocument } from '../documents/access.js';
@@ -251,6 +252,10 @@ completionAttachmentRoutes.post(
     } else {
       if (!filename || !fileUrl) {
         throw AppError.badRequest('filename and fileUrl are required');
+      }
+
+      if (isStoredDocumentUploadPath(fileUrl)) {
+        throw AppError.badRequest('Local uploaded document paths must be attached by documentId');
       }
 
       if (!isStoredDocumentReference(fileUrl, documentProjectId)) {

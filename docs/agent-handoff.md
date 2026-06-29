@@ -603,6 +603,27 @@ Open low-risk polish candidates:
 - Re-run live dogfood after each activation batch using sacrificial data and
   compare against the latest merged PRs, not historical report text.
 
+### QA Loop Stage 86: Documents, Drawings, And ITP Evidence
+
+Status: in PR from `qa/stage86-documents-drawings`.
+
+- Documents/drawings browser E2E and focused unit coverage passed for document
+  listing, signed thumbnail refresh, download/open fallback, drawing role
+  controls, and subcontractor document access.
+- Fixed image document thumbnails that could stay hidden after a signed preview
+  URL arrived or refreshed.
+- Aligned general document upload UI with backend-supported email evidence
+  files (`.eml`, `.msg`).
+- Changed read-only drawing register copy so viewers are not told to upload or
+  manage drawings.
+- Tightened ITP completion attachment intake: local `/uploads/documents/...`
+  locators must now be attached by `documentId`, where project/lot/read-access
+  checks already run; project-scoped Supabase document references remain
+  supported for pre-uploaded files.
+- Local DB-backed ITP route tests require a disposable test `DATABASE_URL`;
+  this worktree did not have one, so the ITP regression is expected to be
+  proven by CI.
+
 ## Open Follow-Ups
 
 1. Re-run live sacrificial-data dogfood before the first paying customer and

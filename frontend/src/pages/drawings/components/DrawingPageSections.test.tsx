@@ -70,6 +70,23 @@ describe('DrawingRegisterHeader', () => {
     expect(screen.queryByRole('button', { name: 'Add Drawing' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Downloading...' })).toBeDisabled();
   });
+
+  it('uses read-only header copy for viewers', () => {
+    render(
+      <DrawingRegisterHeader
+        canManageDrawings={false}
+        downloadingCurrentSet={false}
+        loading={false}
+        hasDrawingError={false}
+        hasProjectId
+        onDownloadCurrentSet={vi.fn()}
+        onAddDrawing={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('View project drawings and revisions')).toBeInTheDocument();
+    expect(screen.queryByText(/manage project drawings/i)).not.toBeInTheDocument();
+  });
 });
 
 describe('DrawingStatsCards', () => {
