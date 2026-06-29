@@ -35,8 +35,42 @@ const MAX_SCHEDULED_REPORT_DELIVERY_FAILURES = 3;
 const MAX_FAILURE_REASON_LENGTH = 500;
 const SUBCONTRACTOR_REPORT_ROLES = new Set(['subcontractor', 'subcontractor_admin']);
 const COMPANY_REPORT_ADMIN_ROLES = new Set(['owner', 'admin']);
+const SCHEDULED_REPORT_RUN_INCOMPLETE_STATUSES = ['processing', 'failed', 'partial_failed'];
+const SCHEDULED_REPORT_DELIVERY_RETRYABLE_STATUSES = ['pending', 'failed'];
 
 type ScheduledReportDocument = Awaited<ReturnType<typeof buildScheduledReportDocument>>;
+
+type ScheduledReportRunRecord = {
+  id: string;
+  status: string;
+};
+
+type ScheduledReportRecipientDeliveryRecord = {
+  id: string;
+  recipient: string;
+  recipientKind: string;
+  status: string;
+  retryable: boolean;
+  attemptCount: number;
+  nextAttemptAt: Date | null;
+  lockedUntil: Date | null;
+};
+
+function dueScheduledReportDeliveryWhere(now: Date) {
+  return {
+    OR: [
+      {
+        retryable: true,
+        status: { in: SCHEDULED_REPORT_DELIVERY_RETRYABLE_STATUSES },
+        OR: [{ nextAttemptAt: { lte: now } }, { nextAttemptAt: null }],
+      },
+      {
+        status: 'sending',
+        lockedUntil: { lte: now },
+      },
+    ],
+  };
+}
 
 type ScheduledReportRecipientPreferences = {
   enabled: boolean;
@@ -267,24 +301,189 @@ async function resolveScheduledReportRecipients(
   return resolvedRecipients;
 }
 
-async function queueScheduledReportDigestItems(
+async function queueScheduledReportDigestItem(
   schedule: ScheduledReportForDelivery,
   document: ScheduledReportDocument,
-  userIds: string[],
+  userId: string,
+  deliveryId: string,
 ): Promise<void> {
-  if (userIds.length === 0) {
-    return;
+  await prisma.notificationDigestItem.createMany({
+    data: [
+      {
+        userId,
+        type: 'scheduledReports',
+        title: `Scheduled report ready: ${document.reportName}`,
+        message: `Your scheduled ${document.reportTypeLabel} for ${schedule.project.name} is ready.`,
+        projectName: schedule.project.name,
+        linkUrl: document.viewReportUrl,
+        sourceKey: `scheduled-report-delivery:${deliveryId}`,
+      },
+    ],
+    skipDuplicates: true,
+  });
+}
+
+async function findRetryableScheduledReportRun(
+  scheduleId: string,
+  now: Date,
+): Promise<
+  (ScheduledReportRunRecord & { deliveries: ScheduledReportRecipientDeliveryRecord[] }) | null
+> {
+  const dueDeliveryWhere = dueScheduledReportDeliveryWhere(now);
+
+  return prisma.scheduledReportRun.findFirst({
+    where: {
+      scheduleId,
+      status: { in: SCHEDULED_REPORT_RUN_INCOMPLETE_STATUSES },
+      deliveries: { some: dueDeliveryWhere },
+    },
+    select: {
+      id: true,
+      status: true,
+      deliveries: {
+        where: dueDeliveryWhere,
+        orderBy: { createdAt: 'asc' },
+        select: {
+          id: true,
+          recipient: true,
+          recipientKind: true,
+          status: true,
+          retryable: true,
+          attemptCount: true,
+          nextAttemptAt: true,
+          lockedUntil: true,
+        },
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+}
+
+async function createScheduledReportRun(
+  schedule: ScheduledReportForDelivery,
+  now: Date,
+  recipients: string[],
+  resolvedRecipients: ResolvedScheduledReportRecipients,
+): Promise<ScheduledReportRunRecord & { deliveries: ScheduledReportRecipientDeliveryRecord[] }> {
+  const run = await prisma.scheduledReportRun.create({
+    data: {
+      scheduleId: schedule.id,
+      projectId: schedule.projectId,
+      reportType: schedule.reportType,
+      status: 'processing',
+      recipientCount: recipients.length,
+      generatedAt: schedule.nextRunAt ?? now,
+    },
+    select: { id: true, status: true },
+  });
+
+  const deliveryRows = [
+    ...resolvedRecipients.immediateRecipients.map((recipient) => ({
+      runId: run.id,
+      scheduleId: schedule.id,
+      projectId: schedule.projectId,
+      recipient,
+      recipientKind: 'email',
+      status: 'pending',
+    })),
+    ...resolvedRecipients.digestRecipientUserIds.map((userId) => ({
+      runId: run.id,
+      scheduleId: schedule.id,
+      projectId: schedule.projectId,
+      recipient: userId,
+      recipientKind: 'digest',
+      status: 'pending',
+    })),
+    ...resolvedRecipients.suppressedRecipients.map((recipient) => ({
+      runId: run.id,
+      scheduleId: schedule.id,
+      projectId: schedule.projectId,
+      recipient,
+      recipientKind: 'suppressed',
+      status: 'suppressed',
+    })),
+  ];
+
+  if (deliveryRows.length > 0) {
+    await prisma.scheduledReportRecipientDelivery.createMany({
+      data: deliveryRows,
+      skipDuplicates: true,
+    });
   }
 
-  await prisma.notificationDigestItem.createMany({
-    data: userIds.map((userId) => ({
-      userId,
-      type: 'scheduledReports',
-      title: `Scheduled report ready: ${document.reportName}`,
-      message: `Your scheduled ${document.reportTypeLabel} for ${schedule.project.name} is ready.`,
-      projectName: schedule.project.name,
-      linkUrl: document.viewReportUrl,
-    })),
+  const deliveries = await prisma.scheduledReportRecipientDelivery.findMany({
+    where: { runId: run.id, status: { not: 'suppressed' } },
+    orderBy: { createdAt: 'asc' },
+    select: {
+      id: true,
+      recipient: true,
+      recipientKind: true,
+      status: true,
+      retryable: true,
+      attemptCount: true,
+      nextAttemptAt: true,
+      lockedUntil: true,
+    },
+  });
+
+  return { ...run, deliveries };
+}
+
+async function claimScheduledReportRecipientDelivery(
+  deliveryId: string,
+  now: Date,
+  lockMs: number,
+): Promise<boolean> {
+  const lockUntil = new Date(now.getTime() + lockMs);
+  const claim = await prisma.scheduledReportRecipientDelivery.updateMany({
+    where: {
+      id: deliveryId,
+      OR: [
+        { status: { in: SCHEDULED_REPORT_DELIVERY_RETRYABLE_STATUSES } },
+        { status: 'sending', lockedUntil: { lte: now } },
+      ],
+    },
+    data: {
+      status: 'sending',
+      retryable: false,
+      attemptCount: { increment: 1 },
+      lastAttemptAt: now,
+      lockedUntil: lockUntil,
+      nextAttemptAt: null,
+      errorReason: null,
+    },
+  });
+
+  return claim.count === 1;
+}
+
+async function markScheduledReportRecipientDeliverySent(deliveryId: string): Promise<void> {
+  await prisma.scheduledReportRecipientDelivery.update({
+    where: { id: deliveryId },
+    data: {
+      status: 'sent',
+      retryable: false,
+      lockedUntil: null,
+      nextAttemptAt: null,
+      errorReason: null,
+    },
+  });
+}
+
+async function markScheduledReportRecipientDeliveryFailed(
+  deliveryId: string,
+  errorMessage: string,
+  retryAt: Date,
+): Promise<void> {
+  await prisma.scheduledReportRecipientDelivery.update({
+    where: { id: deliveryId },
+    data: {
+      status: 'failed',
+      retryable: true,
+      lockedUntil: null,
+      nextAttemptAt: retryAt,
+      errorReason: truncateFailureReason(errorMessage),
+    },
   });
 }
 
@@ -349,19 +548,19 @@ async function sendImmediateScheduledReportEmail(
   document: ScheduledReportDocument,
   now: Date,
   pdfBuffer: Buffer,
-  recipients: string[],
-): Promise<{ sent: number; failed: number; firstError?: string }> {
-  if (recipients.length === 0) {
-    return { sent: 0, failed: 0 };
-  }
+  deliveries: ScheduledReportRecipientDeliveryRecord[],
+  options: Required<Pick<ProcessDueScheduledReportsOptions, 'lockMs' | 'retryDelayMs'>>,
+): Promise<void> {
+  const retryAt = new Date(now.getTime() + options.retryDelayMs);
 
-  let sent = 0;
-  let failed = 0;
-  let firstError: string | undefined;
+  for (const delivery of deliveries) {
+    const claimed = await claimScheduledReportRecipientDelivery(delivery.id, now, options.lockMs);
+    if (!claimed) {
+      continue;
+    }
 
-  for (const recipient of recipients) {
     const emailResult = await sendScheduledReportEmail({
-      to: recipient,
+      to: delivery.recipient,
       projectName: schedule.project.name,
       reportType: document.reportTypeLabel,
       reportName: document.reportName,
@@ -370,15 +569,126 @@ async function sendImmediateScheduledReportEmail(
     });
 
     if (!emailResult.success) {
-      failed += 1;
-      firstError ||= emailResult.error || 'Scheduled report email failed';
+      await markScheduledReportRecipientDeliveryFailed(
+        delivery.id,
+        emailResult.error || 'Scheduled report email failed',
+        retryAt,
+      );
       continue;
     }
 
-    sent += 1;
+    await markScheduledReportRecipientDeliverySent(delivery.id);
+  }
+}
+
+async function queueScheduledReportDigestDeliveries(
+  schedule: ScheduledReportForDelivery,
+  document: ScheduledReportDocument,
+  now: Date,
+  deliveries: ScheduledReportRecipientDeliveryRecord[],
+  options: Required<Pick<ProcessDueScheduledReportsOptions, 'lockMs' | 'retryDelayMs'>>,
+): Promise<void> {
+  const retryAt = new Date(now.getTime() + options.retryDelayMs);
+
+  for (const delivery of deliveries) {
+    const claimed = await claimScheduledReportRecipientDelivery(delivery.id, now, options.lockMs);
+    if (!claimed) {
+      continue;
+    }
+
+    try {
+      await queueScheduledReportDigestItem(schedule, document, delivery.recipient, delivery.id);
+      await markScheduledReportRecipientDeliverySent(delivery.id);
+    } catch (error) {
+      await markScheduledReportRecipientDeliveryFailed(
+        delivery.id,
+        error instanceof Error ? error.message : 'Scheduled report digest queue failed',
+        retryAt,
+      );
+    }
+  }
+}
+
+async function finalizeScheduledReportRun(
+  schedule: ScheduledReportForDelivery,
+  runId: string,
+  now: Date,
+  nextRunAt: Date,
+  retryDelayMs: number,
+  currentDeliveryIds: Set<string>,
+): Promise<ScheduledReportDeliveryResult> {
+  const deliveries = await prisma.scheduledReportRecipientDelivery.findMany({
+    where: { runId },
+    select: {
+      id: true,
+      status: true,
+      recipientKind: true,
+      errorReason: true,
+    },
+  });
+  const sentCount = deliveries.filter((delivery) => delivery.status === 'sent').length;
+  const currentSentCount = deliveries.filter(
+    (delivery) => currentDeliveryIds.has(delivery.id) && delivery.status === 'sent',
+  ).length;
+  const failedDeliveries = deliveries.filter((delivery) => delivery.status === 'failed');
+  const failedCount = failedDeliveries.length;
+  const digestCount = deliveries.filter(
+    (delivery) => delivery.recipientKind === 'digest' && delivery.status === 'sent',
+  ).length;
+  const suppressedCount = deliveries.filter((delivery) => delivery.status === 'suppressed').length;
+  const firstError =
+    failedDeliveries.find((delivery) => delivery.errorReason?.trim())?.errorReason ||
+    'Scheduled report delivery failed';
+
+  if (failedCount > 0) {
+    const runStatus = sentCount > 0 || suppressedCount > 0 ? 'partial_failed' : 'failed';
+    await prisma.scheduledReportRun.update({
+      where: { id: runId },
+      data: {
+        status: runStatus,
+        sentCount,
+        failedCount,
+        digestCount,
+        suppressedCount,
+        errorReason: truncateFailureReason(firstError),
+        completedAt: now,
+      },
+    });
+
+    const failure = await recordScheduledReportFailure(
+      schedule,
+      firstError,
+      schedule.id,
+      now,
+      retryDelayMs,
+    );
+
+    return {
+      scheduleId: schedule.id,
+      projectId: schedule.projectId,
+      reportType: schedule.reportType,
+      recipients: currentSentCount,
+      status: failure.status,
+      failureCount: failure.failureCount,
+      nextRunAt: failure.nextRunAt?.toISOString(),
+      error: firstError,
+    };
   }
 
-  return { sent, failed, firstError };
+  await prisma.scheduledReportRun.update({
+    where: { id: runId },
+    data: {
+      status: 'sent',
+      sentCount,
+      failedCount: 0,
+      digestCount,
+      suppressedCount,
+      errorReason: null,
+      completedAt: now,
+    },
+  });
+
+  return markScheduledReportSent(schedule, now, nextRunAt, currentSentCount);
 }
 
 async function markScheduledReportSent(
@@ -452,6 +762,7 @@ async function deliverClaimedScheduledReport(
   schedule: ScheduledReportForDelivery,
   now: Date,
   recipients: string[],
+  options: Required<Pick<ProcessDueScheduledReportsOptions, 'lockMs' | 'retryDelayMs'>>,
 ): Promise<ScheduledReportDeliveryResult> {
   assertScheduledReportFrequency(schedule.frequency);
   validateScheduledReportRecipients(recipients);
@@ -466,50 +777,63 @@ async function deliverClaimedScheduledReport(
     now,
     projectTimeZoneFromState(schedule.project.state),
   );
-  const { immediateRecipients, digestRecipientUserIds, suppressedRecipients } =
-    await resolveScheduledReportRecipients(schedule, recipients);
 
-  if (immediateRecipients.length === 0 && digestRecipientUserIds.length === 0) {
-    return markScheduledReportSkipped(
-      schedule,
-      nextRunAt,
-      recipients.length,
-      suppressedRecipients.length > 0
-        ? 'No eligible scheduled report recipients'
-        : 'Scheduled report has no recipients',
-    );
+  let run = await findRetryableScheduledReportRun(schedule.id, now);
+  if (!run) {
+    const resolvedRecipients = await resolveScheduledReportRecipients(schedule, recipients);
+    if (
+      resolvedRecipients.immediateRecipients.length === 0 &&
+      resolvedRecipients.digestRecipientUserIds.length === 0
+    ) {
+      return markScheduledReportSkipped(
+        schedule,
+        nextRunAt,
+        recipients.length,
+        resolvedRecipients.suppressedRecipients.length > 0
+          ? 'No eligible scheduled report recipients'
+          : 'Scheduled report has no recipients',
+      );
+    }
+
+    run = await createScheduledReportRun(schedule, now, recipients, resolvedRecipients);
   }
+  const currentDeliveryIds = new Set(run.deliveries.map((delivery) => delivery.id));
 
-  const immediateDelivery = await sendImmediateScheduledReportEmail(
+  await sendImmediateScheduledReportEmail(
     schedule,
     document,
     now,
     pdfBuffer,
-    immediateRecipients,
+    run.deliveries.filter((delivery) => delivery.recipientKind === 'email'),
+    options,
   );
-  await queueScheduledReportDigestItems(schedule, document, digestRecipientUserIds);
+  await queueScheduledReportDigestDeliveries(
+    schedule,
+    document,
+    now,
+    run.deliveries.filter((delivery) => delivery.recipientKind === 'digest'),
+    options,
+  );
 
-  if (immediateDelivery.failed > 0) {
-    if (immediateDelivery.sent === 0 && digestRecipientUserIds.length === 0) {
-      throw new Error(immediateDelivery.firstError || 'Scheduled report email failed');
-    }
+  const result = await finalizeScheduledReportRun(
+    schedule,
+    run.id,
+    now,
+    nextRunAt,
+    options.retryDelayMs,
+    currentDeliveryIds,
+  );
 
-    logError('[Scheduled Reports] Partial delivery failure', {
+  if (result.status === 'failed') {
+    logError('[Scheduled Reports] Delivery failure', {
       scheduleId: schedule.id,
       projectId: schedule.projectId,
       reportType: schedule.reportType,
-      sent: immediateDelivery.sent,
-      failed: immediateDelivery.failed,
-      error: immediateDelivery.firstError || 'Scheduled report email failed',
+      error: result.error || 'Scheduled report delivery failed',
     });
   }
 
-  return markScheduledReportSent(
-    schedule,
-    now,
-    nextRunAt,
-    immediateDelivery.sent + digestRecipientUserIds.length,
-  );
+  return result;
 }
 
 async function processScheduledReport(
@@ -529,7 +853,7 @@ async function processScheduledReport(
   }
 
   try {
-    return await deliverClaimedScheduledReport(schedule, now, recipients);
+    return await deliverClaimedScheduledReport(schedule, now, recipients, options);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown scheduled report error';
     const failure = await recordScheduledReportFailure(

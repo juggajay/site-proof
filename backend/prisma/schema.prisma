@@ -308,6 +308,7 @@ model NotificationDigestItem {
   message                   String
   projectName               String?   @map("project_name")
   linkUrl                   String?   @map("link_url")
+  sourceKey                 String?   @unique @map("source_key")
   createdAt                 DateTime  @default(now()) @map("created_at")
   deliveryFailureCount      Int       @default(0) @map("delivery_failure_count")
   lastDeliveryFailureAt     DateTime? @map("last_delivery_failure_at")
@@ -376,7 +377,7 @@ model Project {
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
 
-  company                     Company                      @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  company                     Company                            @relation(fields: [companyId], references: [id], onDelete: Restrict)
   projectUsers                ProjectUser[]
   projectAreas                ProjectArea[]
   lots                        Lot[]
@@ -394,6 +395,8 @@ model Project {
   testResults                 TestResult[]
   lotSubcontractorAssignments LotSubcontractorAssignment[]
   scheduledReports            ScheduledReport[]
+  scheduledReportRuns         ScheduledReportRun[]
+  scheduledReportDeliveries   ScheduledReportRecipientDelivery[]
 
   @@unique([companyId, projectNumber])
   @@index([companyId, status])
@@ -1539,13 +1542,70 @@ model ScheduledReport {
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
 
-  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  createdBy User?   @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  project    Project                            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy  User?                              @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  runs       ScheduledReportRun[]
+  deliveries ScheduledReportRecipientDelivery[]
 
   @@index([isActive, nextRunAt, createdAt])
   @@index([projectId, createdAt])
   @@index([createdById, createdAt])
   @@map("scheduled_reports")
+}
+
+model ScheduledReportRun {
+  id              String    @id @default(uuid())
+  scheduleId      String    @map("schedule_id")
+  projectId       String    @map("project_id")
+  reportType      String    @map("report_type")
+  status          String    @default("processing")
+  recipientCount  Int       @default(0) @map("recipient_count")
+  sentCount       Int       @default(0) @map("sent_count")
+  failedCount     Int       @default(0) @map("failed_count")
+  digestCount     Int       @default(0) @map("digest_count")
+  suppressedCount Int       @default(0) @map("suppressed_count")
+  errorReason     String?   @map("error_reason")
+  generatedAt     DateTime  @map("generated_at")
+  completedAt     DateTime? @map("completed_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  schedule   ScheduledReport                    @relation(fields: [scheduleId], references: [id], onDelete: Cascade, map: "scheduled_report_runs_schedule_id_fkey")
+  project    Project                            @relation(fields: [projectId], references: [id], onDelete: Cascade, map: "scheduled_report_runs_project_id_fkey")
+  deliveries ScheduledReportRecipientDelivery[]
+
+  @@index([scheduleId, createdAt], map: "scheduled_report_runs_schedule_created_idx")
+  @@index([projectId, createdAt], map: "scheduled_report_runs_project_created_idx")
+  @@index([status, createdAt], map: "scheduled_report_runs_status_created_idx")
+  @@map("scheduled_report_runs")
+}
+
+model ScheduledReportRecipientDelivery {
+  id            String    @id @default(uuid())
+  runId         String    @map("run_id")
+  scheduleId    String    @map("schedule_id")
+  projectId     String    @map("project_id")
+  recipient     String
+  recipientKind String    @map("recipient_kind")
+  status        String    @default("pending")
+  retryable     Boolean   @default(false)
+  attemptCount  Int       @default(0) @map("attempt_count")
+  lockedUntil   DateTime? @map("locked_until")
+  lastAttemptAt DateTime? @map("last_attempt_at")
+  nextAttemptAt DateTime? @map("next_attempt_at")
+  errorReason   String?   @map("error_reason")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  run      ScheduledReportRun @relation(fields: [runId], references: [id], onDelete: Cascade, map: "scheduled_report_deliveries_run_id_fkey")
+  schedule ScheduledReport    @relation(fields: [scheduleId], references: [id], onDelete: Cascade, map: "scheduled_report_deliveries_schedule_id_fkey")
+  project  Project            @relation(fields: [projectId], references: [id], onDelete: Cascade, map: "scheduled_report_deliveries_project_id_fkey")
+
+  @@unique([runId, recipient], map: "scheduled_report_delivery_run_recipient_key")
+  @@index([scheduleId, status, nextAttemptAt], map: "scheduled_report_delivery_schedule_status_next_idx")
+  @@index([scheduleId, recipient, retryable], map: "scheduled_report_delivery_schedule_recipient_retry_idx")
+  @@index([projectId, createdAt], map: "scheduled_report_delivery_project_created_idx")
+  @@map("scheduled_report_recipient_deliveries")
 }
 
 // ============================================================================
