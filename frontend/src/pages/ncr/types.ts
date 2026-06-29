@@ -12,7 +12,7 @@ export interface NCR {
   status: string;
   qmApprovalRequired: boolean;
   qmApprovedAt: string | null;
-  qmApprovedBy?: { fullName: string; email: string } | null;
+  qmApprovedBy?: { id?: string; fullName: string; email: string } | null;
   raisedBy: { fullName: string; email: string };
   responsibleUser?: { id?: string; fullName: string; email: string } | null;
   responsibleSubcontractor?: { id: string; companyName: string } | null;

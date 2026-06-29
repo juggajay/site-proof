@@ -1,4 +1,5 @@
 import { formatDateKey } from '../localDate';
+import { formatStatusLabel } from '../statusLabels';
 import { getJsPDF } from './jsPdfRuntime';
 import { savePdf } from './pdfSave';
 import { defaultConformanceOptions } from './types';
@@ -424,7 +425,7 @@ export async function generateConformanceReportPDF(
       doc.text(`  ${desc}`, margin, yPos);
       yPos += 5;
       doc.text(
-        `  Status: ${ncr.status.replace('_', ' ')} | Category: ${ncr.category}`,
+        `  Status: ${formatStatusLabel(ncr.status)} | Category: ${ncr.category}`,
         margin,
         yPos,
       );

@@ -142,7 +142,7 @@ describe('role dashboard response helpers', () => {
       });
       expect(response.openNCRs.items[0]).toMatchObject({
         daysOpen: 2,
-        link: '/projects/project-1/ncr?ncrId=ncr-1',
+        link: '/projects/project-1/ncr?ncr=ncr-1',
       });
       expect(response.holdPointPipeline.items[0]).toMatchObject({
         description: 'Hold Point',
@@ -170,7 +170,7 @@ describe('role dashboard response helpers', () => {
           title: 'NCR NCR-001 overdue',
           description: 'Overdue NCR',
           urgency: 'critical',
-          link: '/projects/project-1/ncr?ncrId=ncr-1',
+          link: '/projects/project-1/ncr?ncr=ncr-1',
         },
         {
           id: 'ncr-major-ncr-2',
@@ -178,7 +178,7 @@ describe('role dashboard response helpers', () => {
           title: 'Major NCR: NCR-002',
           description: 'Major NCR',
           urgency: 'warning',
-          link: '/projects/project-1/ncr?ncrId=ncr-2',
+          link: '/projects/project-1/ncr?ncr=ncr-2',
         },
       ]);
     } finally {

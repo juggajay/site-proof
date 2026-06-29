@@ -51,7 +51,7 @@ describe('pdfGenerator characterization', () => {
         'NCR Identification',
         'NCR Number:',
         'Status:',
-        'PENDING REVIEW',
+        'Pending Review',
         'Category:',
         'workmanship',
         'Severity:',
@@ -405,7 +405,7 @@ describe('pdfGenerator characterization', () => {
     expect(textContent).toContain('CBR: 45 %');
     expect(textContent).toContain('Concrete Slump: 80 mm');
     expect(textContent).toContain('Pipe Joint: pending');
-    expect(textContent).toContain('NCR-0021 (minor): open');
+    expect(textContent).toContain('NCR-0021 (minor): Open');
 
     expect(text).toEqual(
       expect.arrayContaining([
@@ -487,7 +487,7 @@ describe('pdfGenerator characterization', () => {
         'Non-Conformance Reports',
       ]),
     );
-    expect(textContent).toContain('NCR-0021 (minor): open');
+    expect(textContent).toContain('NCR-0021 (minor): Open');
     expect(textContent).not.toContain('Bulk earthworks to subgrade level');
     expect(textContent).not.toContain('Chainage: 100 - 350');
   });

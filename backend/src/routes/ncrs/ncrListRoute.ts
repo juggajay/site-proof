@@ -294,7 +294,7 @@ ncrListRouter.get(
             },
             orderBy: { uploadedAt: 'desc' },
           },
-          qmApprovedBy: { select: { fullName: true, email: true } },
+          qmApprovedBy: { select: { id: true, fullName: true, email: true } },
         },
         orderBy: validatedSortBy ? { [validatedSortBy]: sortOrder } : { createdAt: 'desc' },
       }),

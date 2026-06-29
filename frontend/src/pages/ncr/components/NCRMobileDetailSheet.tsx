@@ -53,10 +53,13 @@ export function NCRMobileDetailSheet({
   if (!ncr) return null;
 
   const actions = getAvailableNcrActions(ncr, userRole, currentUserId);
-  const closeDisabled = actionLoading || actions.closeBlockedPendingQmApproval;
-  const qmApprovalHint = actions.closeBlockedPendingQmApproval
+  const closeBlocked = actions.closeBlockedPendingQmApproval || actions.closeBlockedSameQmApprover;
+  const closeDisabled = actionLoading || closeBlocked;
+  const closeBlockedHint = actions.closeBlockedPendingQmApproval
     ? 'Requires QM approval first'
-    : undefined;
+    : actions.closeBlockedSameQmApprover
+      ? 'A different user must close after QM approval'
+      : undefined;
   const assignedTo =
     ncr.responsibleUser?.fullName ||
     ncr.responsibleUser?.email ||
@@ -195,7 +198,7 @@ export function NCRMobileDetailSheet({
               type="button"
               onClick={() => onCloseNcr(ncr)}
               disabled={closeDisabled}
-              title={qmApprovalHint}
+              title={closeBlockedHint}
               className="w-full rounded-lg px-3 py-2 text-sm font-medium bg-success text-success-foreground hover:bg-success/90 disabled:opacity-50"
             >
               Close NCR
@@ -206,7 +209,7 @@ export function NCRMobileDetailSheet({
               type="button"
               onClick={() => onConcession(ncr)}
               disabled={closeDisabled}
-              title={qmApprovalHint}
+              title={closeBlockedHint}
               className="w-full rounded-lg px-3 py-2 text-sm font-medium bg-warning text-warning-foreground hover:bg-warning/90 disabled:opacity-50"
             >
               Close with Concession

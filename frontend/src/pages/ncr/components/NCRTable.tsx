@@ -190,6 +190,13 @@ function NCRTableInner({
             const ncr = ncrs[virtualRow.index];
             if (!ncr) return null;
             const actions = getAvailableNcrActions(ncr, userRole, currentUserId);
+            const closeBlocked =
+              actions.closeBlockedPendingQmApproval || actions.closeBlockedSameQmApprover;
+            const closeBlockedTitle = actions.closeBlockedPendingQmApproval
+              ? 'Requires QM approval first'
+              : actions.closeBlockedSameQmApprover
+                ? 'A different user must close after QM approval'
+                : undefined;
             const ageInDays = Math.floor(
               (Date.now() - new Date(ncr.createdAt).getTime()) / (1000 * 60 * 60 * 24),
             );
@@ -382,17 +389,13 @@ function NCRTableInner({
                     {actions.close && (
                       <button
                         onClick={() => onClose(ncr)}
-                        disabled={actionLoading || (ncr.severity === 'major' && !ncr.qmApprovedAt)}
+                        disabled={actionLoading || closeBlocked}
                         className={`px-3 py-1 text-xs rounded disabled:opacity-50 ${
-                          ncr.severity === 'major' && !ncr.qmApprovedAt
+                          closeBlocked
                             ? 'bg-muted-foreground text-muted cursor-not-allowed'
                             : 'bg-success text-success-foreground hover:bg-success/90'
                         }`}
-                        title={
-                          ncr.severity === 'major' && !ncr.qmApprovedAt
-                            ? 'Requires QM approval first'
-                            : 'Close NCR'
-                        }
+                        title={closeBlockedTitle ?? 'Close NCR'}
                       >
                         Close
                       </button>
@@ -402,16 +405,15 @@ function NCRTableInner({
                     {actions.concession && (
                       <button
                         onClick={() => onConcession(ncr)}
-                        disabled={actionLoading || (ncr.severity === 'major' && !ncr.qmApprovedAt)}
+                        disabled={actionLoading || closeBlocked}
                         className={`px-3 py-1 text-xs rounded disabled:opacity-50 ${
-                          ncr.severity === 'major' && !ncr.qmApprovedAt
+                          closeBlocked
                             ? 'bg-muted-foreground text-muted cursor-not-allowed'
                             : 'bg-warning text-warning-foreground hover:bg-warning/90'
                         }`}
                         title={
-                          ncr.severity === 'major' && !ncr.qmApprovedAt
-                            ? 'Requires QM approval first'
-                            : 'Close with concession when full rectification is not possible'
+                          closeBlockedTitle ??
+                          'Close with concession when full rectification is not possible'
                         }
                       >
                         Concession

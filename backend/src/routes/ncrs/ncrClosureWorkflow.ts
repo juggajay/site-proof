@@ -142,9 +142,15 @@ ncrClosureWorkflowRouter.post(
       throw AppError.badRequest('This NCR has already been approved by QM');
     }
 
+    if (ncr.status !== 'verification') {
+      throw AppError.badRequest('NCR must be in verification status before QM approval', {
+        currentStatus: ncr.status,
+      });
+    }
+
     const qmApprovedAt = new Date();
     const approvalUpdate = await prisma.nCR.updateMany({
-      where: { id, qmApprovalRequired: true, qmApprovedAt: null },
+      where: { id, qmApprovalRequired: true, qmApprovedAt: null, status: 'verification' },
       data: {
         qmApprovedById: user.userId,
         qmApprovedAt,
@@ -155,7 +161,7 @@ ncrClosureWorkflowRouter.post(
     const updatedNcr = await prisma.nCR.findUniqueOrThrow({
       where: { id },
       include: {
-        qmApprovedBy: { select: { fullName: true, email: true } },
+        qmApprovedBy: { select: { id: true, fullName: true, email: true } },
       },
     });
 
@@ -290,7 +296,7 @@ ncrClosureWorkflowRouter.post(
       where: { id },
       include: {
         closedBy: { select: { fullName: true, email: true } },
-        qmApprovedBy: { select: { fullName: true, email: true } },
+        qmApprovedBy: { select: { id: true, fullName: true, email: true } },
       },
     });
 
@@ -624,11 +630,10 @@ ncrClosureWorkflowRouter.post(
     );
 
     // Check if NCR is in rectification status
-    if (ncr.status !== 'rectification' && ncr.status !== 'investigating') {
-      throw AppError.badRequest(
-        'NCR must be in rectification or investigating status to submit for verification',
-        { currentStatus: ncr.status },
-      );
+    if (ncr.status !== 'rectification') {
+      throw AppError.badRequest('NCR must be in rectification status to submit for verification', {
+        currentStatus: ncr.status,
+      });
     }
 
     // Check if evidence has been uploaded

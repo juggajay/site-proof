@@ -1,5 +1,6 @@
 import { devLog } from '../logger';
 import { formatDateKey } from '../localDate';
+import { formatStatusLabel } from '../statusLabels';
 import { getJsPDF } from './jsPdfRuntime';
 import { savePdf } from './pdfSave';
 import type { NCRDetailData } from './types';
@@ -101,7 +102,7 @@ export async function generateNCRDetailPDF(data: NCRDetailData): Promise<void> {
   drawSectionHeader('NCR Identification');
 
   addField('NCR Number', data.ncr.ncrNumber);
-  addField('Status', data.ncr.status.replace(/_/g, ' ').toUpperCase());
+  addField('Status', formatStatusLabel(data.ncr.status));
   addField('Category', data.ncr.category.replace(/_/g, ' '));
   addField('Severity', data.ncr.severity.toUpperCase());
   addField('Raised By', data.ncr.raisedBy?.fullName || data.ncr.raisedBy?.email || 'Unknown');

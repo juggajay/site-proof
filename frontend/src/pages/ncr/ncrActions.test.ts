@@ -52,13 +52,13 @@ describe('getAvailableNcrActions', () => {
     expect(responsible.respond).toBe(true);
   });
 
-  it('allows management roles to review a response while investigating, and responsible users to submit rectification', () => {
+  it('allows management roles to review a response while investigating', () => {
     const qm = getAvailableNcrActions(
       makeNcr({ status: 'investigating' }),
       role({ role: 'quality_manager', isQualityManager: true }),
     );
     expect(qm.reviewResponse).toBe(true);
-    expect(qm.rectify).toBe(true);
+    expect(qm.rectify).toBe(false);
 
     const foreman = getAvailableNcrActions(
       makeNcr({ status: 'investigating' }),
@@ -72,10 +72,10 @@ describe('getAvailableNcrActions', () => {
       role({ role: 'foreman' }),
       'user-1',
     );
-    expect(responsible.rectify).toBe(true);
+    expect(responsible.rectify).toBe(false);
   });
 
-  it('exposes rectify in the rectification status too', () => {
+  it('exposes rectify in the rectification status to responsible users', () => {
     expect(
       getAvailableNcrActions(
         makeNcr({ status: 'rectification', responsibleUserId: 'user-1' }),
@@ -112,7 +112,12 @@ describe('getAvailableNcrActions', () => {
 
   it('requires QM approval before a major NCR can be closed/conceded, and offers QM Approve to the QM', () => {
     const qmUnapproved = getAvailableNcrActions(
-      makeNcr({ status: 'verification', severity: 'major', qmApprovedAt: null }),
+      makeNcr({
+        status: 'verification',
+        severity: 'major',
+        qmApprovalRequired: true,
+        qmApprovedAt: null,
+      }),
       role({ role: 'quality_manager', isQualityManager: true }),
     );
     expect(qmUnapproved.qmApprove).toBe(true);
@@ -123,15 +128,39 @@ describe('getAvailableNcrActions', () => {
       makeNcr({
         status: 'verification',
         severity: 'major',
+        qmApprovalRequired: true,
         qmApprovedAt: '2026-06-10T00:00:00.000Z',
+        qmApprovedBy: { id: 'other-user', fullName: 'Other QM', email: 'qm@example.com' },
       }),
       role({ role: 'quality_manager', isQualityManager: true }),
+      'current-user',
     );
     expect(qmApproved.qmApprove).toBe(false); // already approved
     expect(qmApproved.closeBlockedPendingQmApproval).toBe(false);
+    expect(qmApproved.closeBlockedSameQmApprover).toBe(false);
+
+    const sameApprover = getAvailableNcrActions(
+      makeNcr({
+        status: 'verification',
+        severity: 'major',
+        qmApprovalRequired: true,
+        qmApprovedAt: '2026-06-10T00:00:00.000Z',
+        qmApprovedBy: { id: 'current-user', fullName: 'Current QM', email: 'current@example.com' },
+      }),
+      role({ role: 'quality_manager', isQualityManager: true }),
+      'current-user',
+    );
+    expect(sameApprover.close).toBe(true);
+    expect(sameApprover.closeBlockedPendingQmApproval).toBe(false);
+    expect(sameApprover.closeBlockedSameQmApprover).toBe(true);
 
     const adminUnapproved = getAvailableNcrActions(
-      makeNcr({ status: 'verification', severity: 'major', qmApprovedAt: null }),
+      makeNcr({
+        status: 'verification',
+        severity: 'major',
+        qmApprovalRequired: true,
+        qmApprovedAt: null,
+      }),
       role({ role: 'admin', isQualityManager: true }),
     );
     expect(adminUnapproved.qmApprove).toBe(false);

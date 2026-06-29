@@ -19,6 +19,8 @@ export interface NcrAvailableActions {
   concession: boolean;
   /** Close/Concession are offered but disabled until a major NCR is QM-approved. */
   closeBlockedPendingQmApproval: boolean;
+  /** Close/Concession are disabled when the current user granted the QM approval. */
+  closeBlockedSameQmApprover: boolean;
 }
 
 const ASSIGN_ROLES = ['project_manager', 'admin', 'owner', 'site_manager', 'quality_manager'];
@@ -36,6 +38,41 @@ function hasRole(userRole: UserRole | null, roles: string[]): boolean {
   return !!userRole && roles.includes(userRole.role);
 }
 
+function requiresQmApproval(ncr: NCR): boolean {
+  return ncr.severity === 'major' && ncr.qmApprovalRequired;
+}
+
+function getCloseBlockers(ncr: NCR, currentUserId?: string | null) {
+  const qmApprovalRequired = requiresQmApproval(ncr);
+
+  return {
+    closeBlockedPendingQmApproval: qmApprovalRequired && !ncr.qmApprovedAt,
+    closeBlockedSameQmApprover:
+      qmApprovalRequired &&
+      Boolean(currentUserId) &&
+      Boolean(ncr.qmApprovedBy?.id) &&
+      ncr.qmApprovedBy?.id === currentUserId,
+  };
+}
+
+function canApproveMajorNcr(ncr: NCR, userRole: UserRole | null, isVerification: boolean): boolean {
+  return (
+    requiresQmApproval(ncr) &&
+    !ncr.qmApprovedAt &&
+    isVerification &&
+    hasRole(userRole, QM_APPROVAL_ROLES)
+  );
+}
+
+function canNotifyClient(ncr: NCR, userRole: UserRole | null): boolean {
+  return (
+    ncr.severity === 'major' &&
+    !!ncr.clientNotificationRequired &&
+    !ncr.clientNotifiedAt &&
+    hasRole(userRole, NOTIFY_CLIENT_ROLES)
+  );
+}
+
 export function getAvailableNcrActions(
   ncr: NCR,
   userRole: UserRole | null,
@@ -46,29 +83,22 @@ export function getAvailableNcrActions(
   const canManageWorkflow = isQm || hasRole(userRole, QUALITY_MANAGEMENT_ROLES);
   const isVerification = ncr.status === 'verification';
   const canClose = canManageNcrClosure(userRole);
-  // H8: a major NCR cannot be closed/conceded until the QM has approved it.
-  const closeBlockedPendingQmApproval = ncr.severity === 'major' && !ncr.qmApprovedAt;
+  const { closeBlockedPendingQmApproval, closeBlockedSameQmApprover } = getCloseBlockers(
+    ncr,
+    currentUserId,
+  );
 
   return {
     assign: isQm || hasRole(userRole, ASSIGN_ROLES),
     respond: ncr.status === 'open' && (canManageWorkflow || isResponsibleUser),
     reviewResponse: ncr.status === 'investigating' && canManageWorkflow,
-    qmApprove:
-      ncr.severity === 'major' &&
-      !ncr.qmApprovedAt &&
-      isVerification &&
-      hasRole(userRole, QM_APPROVAL_ROLES),
-    notifyClient:
-      ncr.severity === 'major' &&
-      !!ncr.clientNotificationRequired &&
-      !ncr.clientNotifiedAt &&
-      hasRole(userRole, NOTIFY_CLIENT_ROLES),
-    rectify:
-      (ncr.status === 'investigating' || ncr.status === 'rectification') &&
-      (canManageWorkflow || isResponsibleUser),
+    qmApprove: canApproveMajorNcr(ncr, userRole, isVerification),
+    notifyClient: canNotifyClient(ncr, userRole),
+    rectify: ncr.status === 'rectification' && (canManageWorkflow || isResponsibleUser),
     rejectRectification: isVerification && canManageWorkflow,
     close: isVerification && canClose,
     concession: isVerification && canClose,
     closeBlockedPendingQmApproval,
+    closeBlockedSameQmApprover,
   };
 }

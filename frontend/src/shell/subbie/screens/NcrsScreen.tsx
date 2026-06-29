@@ -155,8 +155,7 @@ function NcrCard({
   const severity = SEVERITY_BADGE[ncr.severity] ?? SEVERITY_BADGE.minor;
   const status = statusBadge(ncr.status);
   const canRespond = responsible && ncr.status === 'open';
-  const canRectify =
-    responsible && (ncr.status === 'investigating' || ncr.status === 'rectification');
+  const canRectify = responsible && ncr.status === 'rectification';
 
   return (
     <div className="shell-card">
@@ -252,9 +251,7 @@ export function NcrsScreen() {
   });
   const accessRevoked = useModuleAccessRevoked(error);
 
-  const sub = (
-    <span className="text-muted-foreground">Read-only — non-conformances on your lots</span>
-  );
+  const sub = <span className="text-muted-foreground">Non-conformances shared with you</span>;
 
   if (!canViewNCRs) {
     return (

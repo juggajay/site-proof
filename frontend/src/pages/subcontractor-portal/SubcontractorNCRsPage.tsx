@@ -433,8 +433,7 @@ function NCRCard({
     .join(', ');
   const evidence = ncr.ncrEvidence ?? [];
   const canRespond = responsible && ncr.status === 'open';
-  const canRectify =
-    responsible && (ncr.status === 'investigating' || ncr.status === 'rectification');
+  const canRectify = responsible && ncr.status === 'rectification';
 
   return (
     <div className="border border-border rounded-lg bg-card">

@@ -376,7 +376,7 @@ export interface NCRDetailData {
     lessonsLearned?: string | null; // Feature #474
     qmApprovalRequired: boolean;
     qmApprovedAt: string | null;
-    qmApprovedBy?: { fullName: string; email: string } | null;
+    qmApprovedBy?: { id?: string; fullName: string; email: string } | null;
     raisedBy: { fullName: string; email: string };
     responsibleUser?: { fullName: string; email: string } | null;
     dueDate?: string | null;

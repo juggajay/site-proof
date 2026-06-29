@@ -4,6 +4,7 @@ import { useTimezone } from '@/lib/timezone';
 import type { NCRReport } from '../types';
 import { formatReportDateTime } from '../reportFormatting';
 import { buildReportPaginationCaption } from '../reportPagination';
+import { formatStatusLabel } from '@/lib/statusLabels';
 
 export interface NCRReportTabProps {
   report: NCRReport;
@@ -222,7 +223,9 @@ export const NCRReportTab = React.memo(function NCRReportTab({ report }: NCRRepo
                       {ncr.severity}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-sm text-muted-foreground">{ncr.status}</td>
+                  <td className="px-4 py-3 text-sm text-muted-foreground">
+                    {formatStatusLabel(ncr.status)}
+                  </td>
                   <td className="px-4 py-3 text-sm text-muted-foreground">
                     {new Date(ncr.raisedAt).toLocaleDateString('en-AU')}
                   </td>

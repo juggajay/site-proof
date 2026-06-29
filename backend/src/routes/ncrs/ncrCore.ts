@@ -170,7 +170,7 @@ ncrCoreRouter.get(
         },
         verifiedBy: { select: { fullName: true, email: true } },
         closedBy: { select: { fullName: true, email: true } },
-        qmApprovedBy: { select: { fullName: true, email: true } },
+        qmApprovedBy: { select: { id: true, fullName: true, email: true } },
         ncrLots: {
           include: {
             lot: { select: { id: true, lotNumber: true, description: true } },
@@ -468,6 +468,10 @@ ncrCoreRouter.patch(
       ['quality_manager', 'admin', 'owner', 'project_manager', 'site_manager'],
     );
     await assertProjectAllowsWrite(ncr.projectId);
+
+    if (ncr.status === 'closed' || ncr.status === 'closed_concession') {
+      throw AppError.badRequest('Cannot update assignments on a closed NCR. Reopen it first.');
+    }
 
     // Build update data
     const updateData: Prisma.NCRUncheckedUpdateInput = {};

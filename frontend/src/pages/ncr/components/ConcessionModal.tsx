@@ -233,7 +233,7 @@ function ConcessionModalInner({ isOpen, ncr, onClose, onSubmit, loading }: Conce
           {/* Status Info */}
           <div className="bg-muted/50 border border-border px-3 py-2 rounded-lg text-sm">
             <span className="text-muted-foreground">NCR will be closed with status: </span>
-            <span className="font-medium text-foreground">CLOSED_CONCESSION</span>
+            <span className="font-medium text-foreground">Closed with concession</span>
           </div>
         </form>
       </ModalBody>
