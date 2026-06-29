@@ -49,9 +49,9 @@ export function parseStoredEvents(events: string): string[] {
       return parsed;
     }
   } catch {
-    // Fall through to the safest subscription.
+    // Fall through to the safest subscription below.
   }
-  return ['*'];
+  return [];
 }
 
 export function normalizeEvents(events: unknown): string[] {

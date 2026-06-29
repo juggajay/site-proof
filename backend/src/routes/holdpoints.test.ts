@@ -545,10 +545,10 @@ describe('Hold Points API', () => {
         holdPointIdToDelete = res.body.holdPoint.id;
 
         const deliveries = await waitForWebhookDeliveries(webhook.id, 1, (delivery) =>
-          deliveryPayloadContains(delivery, holdPointIdToDelete ?? ''),
+          Boolean(delivery.success && deliveryPayloadContains(delivery, holdPointIdToDelete ?? '')),
         );
         const delivery = deliveries.find((item) =>
-          deliveryPayloadContains(item, holdPointIdToDelete ?? ''),
+          Boolean(item.success && deliveryPayloadContains(item, holdPointIdToDelete ?? '')),
         );
         expect(delivery).toBeDefined();
         expect(delivery).toMatchObject({
@@ -944,9 +944,11 @@ describe('Hold Points API', () => {
         expect(res.status).toBe(200);
 
         const deliveries = await waitForWebhookDeliveries(webhook.id, 1, (delivery) =>
-          deliveryPayloadContains(delivery, hp.id),
+          Boolean(delivery.success && deliveryPayloadContains(delivery, hp.id)),
         );
-        const delivery = deliveries.find((item) => deliveryPayloadContains(item, hp.id));
+        const delivery = deliveries.find((item) =>
+          Boolean(item.success && deliveryPayloadContains(item, hp.id)),
+        );
         expect(delivery).toBeDefined();
         expect(delivery).toMatchObject({
           event: 'hold_point.released',
@@ -2759,10 +2761,10 @@ describe('Hold Point Token Release', () => {
       expect(res.body.holdPoint.status).toBe('released');
 
       const deliveries = await waitForWebhookDeliveries(webhook.id, 1, (delivery) =>
-        deliveryPayloadContains(delivery, webhookHoldPoint.id),
+        Boolean(delivery.success && deliveryPayloadContains(delivery, webhookHoldPoint.id)),
       );
       const delivery = deliveries.find((item) =>
-        deliveryPayloadContains(item, webhookHoldPoint.id),
+        Boolean(item.success && deliveryPayloadContains(item, webhookHoldPoint.id)),
       );
       expect(delivery).toBeDefined();
       expect(delivery).toMatchObject({

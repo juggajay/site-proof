@@ -107,6 +107,17 @@ describe('sendNotificationIfEnabled', () => {
     expect(sendNotificationEmail).not.toHaveBeenCalled();
   });
 
+  it('does not fall back to immediate email when digest timing is selected but daily digest is off', async () => {
+    getEmailPreferences.mockResolvedValue(makePrefs({ ncrAssignedTiming: 'digest' }));
+    findUnique.mockResolvedValue({ email: 'user@example.com' });
+
+    const result = await sendNotificationIfEnabled('user-1', 'ncrAssigned', data);
+
+    expect(result).toEqual({ sent: false, queued: false });
+    expect(addDigestItem).not.toHaveBeenCalled();
+    expect(sendNotificationEmail).not.toHaveBeenCalled();
+  });
+
   it('sends immediately and reports sent on success', async () => {
     getEmailPreferences.mockResolvedValue(makePrefs());
     findUnique.mockResolvedValue({ email: 'user@example.com' });

@@ -4,7 +4,7 @@ import type { Prisma, WebhookConfig as WebhookConfigRecord } from '@prisma/clien
 import { AppError } from '../../lib/AppError.js';
 import { prisma } from '../../lib/prisma.js';
 import { decrypt } from '../../lib/encryption.js';
-import { sanitizeUrlValueForLog } from '../../lib/logSanitization.js';
+import { sanitizeLogText, sanitizeUrlValueForLog } from '../../lib/logSanitization.js';
 import { logError } from '../../lib/serverLogger.js';
 import { sendWebhookDeliveryRequest } from './deliveryRequest.js';
 import {
@@ -20,6 +20,7 @@ const MAX_WEBHOOK_DELIVERY_MAX_ATTEMPTS = 5;
 const DEFAULT_WEBHOOK_DELIVERY_RETRY_DELAY_MS = 250;
 const MAX_WEBHOOK_DELIVERY_RETRY_DELAY_MS = 5000;
 const MAX_WEBHOOK_RESPONSE_BODY_CHARS = 4096;
+const PENDING_WEBHOOK_DELIVERY_ERROR = 'Delivery started but no final response has been recorded';
 
 export interface WebhookConfig {
   id: string;
@@ -114,11 +115,12 @@ function waitForRetryDelay(ms: number): Promise<void> {
 }
 
 function toResponseBodyPreview(responseBody: string): string {
-  if (responseBody.length <= MAX_WEBHOOK_RESPONSE_BODY_CHARS) {
-    return responseBody;
+  const sanitizedBody = sanitizeLogText(responseBody);
+  if (sanitizedBody.length <= MAX_WEBHOOK_RESPONSE_BODY_CHARS) {
+    return sanitizedBody;
   }
 
-  return `${responseBody.slice(0, MAX_WEBHOOK_RESPONSE_BODY_CHARS)}... [truncated]`;
+  return `${sanitizedBody.slice(0, MAX_WEBHOOK_RESPONSE_BODY_CHARS)}... [truncated]`;
 }
 
 function decryptWebhookSecret(storedSecret: string): string {
@@ -194,7 +196,7 @@ async function pruneOldDeliveries(webhookId: string): Promise<void> {
   }
 }
 
-async function recordWebhookDelivery(delivery: WebhookDelivery): Promise<void> {
+async function createWebhookDeliveryRecord(delivery: WebhookDelivery): Promise<void> {
   await prisma.webhookDelivery.create({
     data: {
       id: delivery.id,
@@ -210,6 +212,19 @@ async function recordWebhookDelivery(delivery: WebhookDelivery): Promise<void> {
   });
 
   await pruneOldDeliveries(delivery.webhookId);
+}
+
+async function updateWebhookDeliveryRecord(delivery: WebhookDelivery): Promise<void> {
+  await prisma.webhookDelivery.update({
+    where: { id: delivery.id },
+    data: {
+      responseStatus: delivery.responseStatus,
+      responseBody: delivery.responseBody,
+      error: delivery.error,
+      deliveredAt: delivery.deliveredAt,
+      success: delivery.success,
+    },
+  });
 }
 
 interface ClearWebhookStoresOptions {
@@ -274,10 +289,12 @@ export async function deliverWebhook(
     payload: JSON.parse(payload) as Prisma.JsonValue,
     responseStatus: null,
     responseBody: null,
-    error: null,
+    error: PENDING_WEBHOOK_DELIVERY_ERROR,
     deliveredAt: new Date(),
     success: false,
   };
+
+  await createWebhookDeliveryRecord(delivery);
 
   let deliveryUrl: string;
   try {
@@ -285,7 +302,8 @@ export async function deliverWebhook(
     await assertWebhookDestinationResolvesPublicly(deliveryUrl);
   } catch (error: unknown) {
     delivery.error = error instanceof Error ? error.message : 'Invalid webhook URL';
-    await recordWebhookDelivery(delivery);
+    delivery.deliveredAt = new Date();
+    await updateWebhookDeliveryRecord(delivery);
     return delivery;
   }
 
@@ -346,7 +364,8 @@ export async function deliverWebhook(
     await waitForRetryDelay(retryDelayMs);
   }
 
-  await recordWebhookDelivery(delivery);
+  delivery.deliveredAt = new Date();
+  await updateWebhookDeliveryRecord(delivery);
   return delivery;
 }
 

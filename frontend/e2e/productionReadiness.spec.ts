@@ -1227,7 +1227,8 @@ test.describe('production readiness guardrails', () => {
       'utf8',
     );
 
-    expect(notificationsDelivery).toContain("timing === 'digest' && preferences.dailyDigest");
+    expect(notificationsDelivery).toContain("timing === 'digest' && !preferences.dailyDigest");
+    expect(notificationsDelivery).toContain("timing === 'digest'");
     expect(notificationJobs).toContain('processDueNotificationDigests');
     expect(notificationJobs).toContain('sendDailyDigestEmail');
     expect(notificationJobs).toContain('NOTIFICATION_DIGEST_TIME_OF_DAY');

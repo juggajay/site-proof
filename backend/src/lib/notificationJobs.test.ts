@@ -293,6 +293,146 @@ describe('processDueNotificationDigests', () => {
     }
   });
 
+  it('backs off failed digest users so later due users are not starved by the batch limit', async () => {
+    const suffix = Date.now();
+    const failingUser = await createDigestUser(true, `digest-a-failing-${suffix}`);
+    const laterUser = await createDigestUser(true, `digest-b-later-${suffix}`);
+    const now = new Date(Date.UTC(2026, 4, 10, 17, 30, 0, 0));
+    const dueAt = new Date(Date.UTC(2026, 4, 10, 15, 0, 0, 0));
+    const retryDelayMs = 60 * 60 * 1000;
+    const digestSpy = vi.spyOn(email, 'sendDailyDigestEmail').mockImplementation(async (to) => {
+      if (to === failingUser.email) {
+        return { success: false, error: 'provider temporarily unavailable' };
+      }
+
+      return { success: true, messageId: 'sent-ok', provider: 'mock' };
+    });
+
+    await prisma.notificationDigestItem.createMany({
+      data: [failingUser, laterUser].map((user) => ({
+        userId: user.id,
+        type: 'mentions',
+        title: user.id === failingUser.id ? 'Failing digest item' : 'Later digest item',
+        message: 'Queued digest item',
+        createdAt: dueAt,
+      })),
+    });
+
+    try {
+      const firstRun = await processDueNotificationDigests({
+        now,
+        timeOfDay: '17:00',
+        userIds: [failingUser.id, laterUser.id],
+        limit: 1,
+        failureRetryDelayMs: retryDelayMs,
+      });
+
+      expect(firstRun.processed).toBe(1);
+      expect(firstRun.failed).toBe(1);
+      expect(firstRun.results[0]).toMatchObject({
+        userId: failingUser.id,
+        status: 'failed',
+        error: 'provider temporarily unavailable',
+      });
+
+      const backedOffItem = await prisma.notificationDigestItem.findFirstOrThrow({
+        where: { userId: failingUser.id },
+      });
+      expect(backedOffItem.deliveryFailureCount).toBe(1);
+      expect(backedOffItem.lastDeliveryFailureReason).toBe('provider temporarily unavailable');
+      expect(backedOffItem.nextAttemptAt?.toISOString()).toBe(
+        new Date(now.getTime() + retryDelayMs).toISOString(),
+      );
+
+      const secondRun = await processDueNotificationDigests({
+        now,
+        timeOfDay: '17:00',
+        userIds: [failingUser.id, laterUser.id],
+        limit: 1,
+        failureRetryDelayMs: retryDelayMs,
+      });
+
+      expect(secondRun.processed).toBe(1);
+      expect(secondRun.sent).toBe(1);
+      expect(secondRun.results[0]).toMatchObject({
+        userId: laterUser.id,
+        status: 'sent',
+      });
+      expect(digestSpy.mock.calls.map(([to]) => to)).toEqual([failingUser.email, laterUser.email]);
+    } finally {
+      digestSpy.mockRestore();
+      await cleanupDigestUser(failingUser.id);
+      await cleanupDigestUser(laterUser.id);
+    }
+  });
+
+  it('backs off only digest items included in the failed email attempt', async () => {
+    const user = await createDigestUser(true, `digest-item-limit-${Date.now()}`);
+    const now = new Date(Date.UTC(2026, 4, 10, 17, 30, 0, 0));
+    const firstDueAt = new Date(Date.UTC(2026, 4, 10, 15, 0, 0, 0));
+    const secondDueAt = new Date(Date.UTC(2026, 4, 10, 15, 5, 0, 0));
+    const digestSpy = vi
+      .spyOn(email, 'sendDailyDigestEmail')
+      .mockResolvedValue({ success: false, error: 'provider unavailable' });
+
+    await prisma.notificationDigestItem.createMany({
+      data: [
+        {
+          userId: user.id,
+          type: 'mentions',
+          title: 'Attempted item',
+          message: 'This item is inside the item limit',
+          createdAt: firstDueAt,
+        },
+        {
+          userId: user.id,
+          type: 'mentions',
+          title: 'Unattempted item',
+          message: 'This item is outside the item limit',
+          createdAt: secondDueAt,
+        },
+      ],
+    });
+
+    try {
+      const result = await processDueNotificationDigests({
+        now,
+        timeOfDay: '17:00',
+        userIds: [user.id],
+        itemLimit: 1,
+        failureRetryDelayMs: 60 * 60 * 1000,
+      });
+
+      expect(result.failed).toBe(1);
+      expect(digestSpy).toHaveBeenCalledWith(
+        user.email,
+        expect.arrayContaining([expect.objectContaining({ title: 'Attempted item' })]),
+      );
+      expect(digestSpy.mock.calls[0]?.[1]).toHaveLength(1);
+
+      const items = await prisma.notificationDigestItem.findMany({
+        where: { userId: user.id },
+        orderBy: { createdAt: 'asc' },
+      });
+      expect(items).toHaveLength(2);
+      expect(items[0]).toMatchObject({
+        title: 'Attempted item',
+        deliveryFailureCount: 1,
+        lastDeliveryFailureReason: 'provider unavailable',
+      });
+      expect(items[0]!.nextAttemptAt).toBeTruthy();
+      expect(items[1]).toMatchObject({
+        title: 'Unattempted item',
+        deliveryFailureCount: 0,
+        lastDeliveryFailureReason: null,
+        nextAttemptAt: null,
+      });
+    } finally {
+      digestSpy.mockRestore();
+      await cleanupDigestUser(user.id);
+    }
+  });
+
   it('does not send duplicate digest emails when a concurrent worker starts mid-send', async () => {
     const user = await createDigestUser(true);
     const now = new Date(Date.UTC(2026, 4, 10, 17, 30, 0, 0));

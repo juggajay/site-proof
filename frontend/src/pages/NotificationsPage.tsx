@@ -158,14 +158,7 @@ export function NotificationsPage() {
     const safeLinkUrl = getSafeInternalPath(notification.linkUrl);
 
     if (!notification.isRead) {
-      markReadMutation.mutate(notification.id, {
-        onSuccess: () => {
-          if (safeLinkUrl) {
-            navigate(safeLinkUrl);
-          }
-        },
-      });
-      return;
+      markReadMutation.mutate(notification.id);
     }
 
     if (safeLinkUrl) {

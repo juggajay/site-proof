@@ -111,6 +111,31 @@ describe('NotificationsPage', () => {
     expect(navigateMock).not.toHaveBeenCalled();
   });
 
+  it('opens a notification link even when marking it as read fails', async () => {
+    apiFetchMock.mockImplementation((_path: string, options?: { method?: string }) => {
+      if (options?.method === 'PUT') {
+        return Promise.reject(new Error('mark read failed'));
+      }
+      return Promise.resolve({
+        notifications: [
+          buildNotification({ id: 'n1', isRead: false, linkUrl: '/projects/p1/hold-points' }),
+        ],
+        unreadCount: 1,
+      });
+    });
+
+    renderPage();
+
+    await userEvent.click(await screen.findByRole('button', { name: /A notification/i }));
+
+    expect(navigateMock).toHaveBeenCalledWith('/projects/p1/hold-points');
+    await waitFor(() => {
+      expect(apiFetchMock).toHaveBeenCalledWith('/api/notifications/n1/read', {
+        method: 'PUT',
+      });
+    });
+  });
+
   it('M62: unread tab requests the server-side unreadOnly filter', async () => {
     apiFetchMock.mockResolvedValue({
       notifications: [buildNotification()],

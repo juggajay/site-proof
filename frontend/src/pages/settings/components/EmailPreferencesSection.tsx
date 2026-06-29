@@ -146,7 +146,9 @@ export function EmailPreferencesSection() {
                         data-testid={`timing-${pref.key}`}
                       >
                         <option value="immediate">Immediate</option>
-                        <option value="digest">Digest</option>
+                        <option value="digest" disabled={!preferences.dailyDigest}>
+                          Digest
+                        </option>
                       </NativeSelect>
                     )}
                     {/* Enable/disable toggle */}

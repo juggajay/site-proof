@@ -261,6 +261,13 @@ test.describe('Settings seeded account contract', () => {
       .poll(() => page.evaluate(() => localStorage.getItem('siteproof_timezone')))
       .toBe('UTC');
 
+    const dailyDigestSwitch = page.getByRole('switch', {
+      name: 'Daily Digest email notifications',
+    });
+    await expect(dailyDigestSwitch).not.toBeChecked();
+    await dailyDigestSwitch.click();
+    await expect(dailyDigestSwitch).toBeChecked();
+
     await page.getByLabel('Scheduled Reports notification timing').selectOption('digest');
     await expect(
       page.getByRole('status').filter({ hasText: 'Email preferences saved' }),
@@ -276,6 +283,7 @@ test.describe('Settings seeded account contract', () => {
     await expect
       .poll(() => api.getLastEmailPreferences())
       .toMatchObject({
+        dailyDigest: true,
         scheduledReportsTiming: 'digest',
         diaryReminder: true,
         diaryReminderTiming: 'digest',

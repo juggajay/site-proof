@@ -48,7 +48,7 @@ describe('webhook validation helpers', () => {
       expect(events).toEqual(['lot.created', 'hold_point.release_requested']);
       expect(serializeEvents(events)).toBe('["lot.created","hold_point.release_requested"]');
       expect(parseStoredEvents(serializeEvents(events))).toEqual(events);
-      expect(parseStoredEvents('not-json')).toEqual(['*']);
+      expect(parseStoredEvents('not-json')).toEqual([]);
     });
 
     it('rejects malformed and unsupported event names', () => {
