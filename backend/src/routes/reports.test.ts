@@ -1683,6 +1683,92 @@ describe('Reports API - Scheduled Reports', () => {
       expect(Array.isArray(res.body.schedules)).toBe(true);
       expect(res.body.maxSchedules).toBe(25);
     });
+
+    it('should include the latest scheduled report run summary without delivery recipients', async () => {
+      const schedule = await prisma.scheduledReport.create({
+        data: {
+          projectId,
+          reportType: 'ncr',
+          frequency: 'daily',
+          timeOfDay: '09:00',
+          recipients: 'owner-summary@example.com,failed-summary@example.com',
+          nextRunAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+          createdById: userId,
+          isActive: true,
+          failureCount: 1,
+          lastFailureAt: new Date('2026-06-29T09:00:00.000Z'),
+          lastFailureReason: 'Provider rejected recipient',
+        },
+      });
+      const run = await prisma.scheduledReportRun.create({
+        data: {
+          scheduleId: schedule.id,
+          projectId,
+          reportType: 'ncr',
+          status: 'partial_failed',
+          recipientCount: 2,
+          sentCount: 1,
+          failedCount: 1,
+          digestCount: 0,
+          suppressedCount: 0,
+          errorReason: 'Provider rejected recipient',
+          generatedAt: new Date('2026-06-29T09:00:00.000Z'),
+          completedAt: new Date('2026-06-29T09:01:00.000Z'),
+        },
+      });
+      await prisma.scheduledReportRecipientDelivery.createMany({
+        data: [
+          {
+            runId: run.id,
+            scheduleId: schedule.id,
+            projectId,
+            recipient: 'owner-summary@example.com',
+            recipientKind: 'email',
+            status: 'sent',
+          },
+          {
+            runId: run.id,
+            scheduleId: schedule.id,
+            projectId,
+            recipient: 'failed-summary@example.com',
+            recipientKind: 'email',
+            status: 'failed',
+            retryable: true,
+            errorReason: 'Provider rejected recipient',
+          },
+        ],
+      });
+
+      try {
+        const res = await request(app)
+          .get('/api/reports/schedules')
+          .set('Authorization', `Bearer ${authToken}`)
+          .query({ projectId });
+
+        expect(res.status).toBe(200);
+        const listedSchedule = res.body.schedules.find(
+          (candidate: { id: string }) => candidate.id === schedule.id,
+        );
+        expect(listedSchedule?.latestRun).toMatchObject({
+          id: run.id,
+          status: 'partial_failed',
+          recipientCount: 2,
+          sentCount: 1,
+          failedCount: 1,
+          digestCount: 0,
+          suppressedCount: 0,
+          errorReason: 'Provider rejected recipient',
+          generatedAt: '2026-06-29T09:00:00.000Z',
+          completedAt: '2026-06-29T09:01:00.000Z',
+          retryableFailedCount: 1,
+        });
+        expect(listedSchedule.latestRun.nextRetryAt).toBeNull();
+        expect(listedSchedule.latestRun).not.toHaveProperty('recipient');
+        expect(listedSchedule.latestRun).not.toHaveProperty('deliveries');
+      } finally {
+        await prisma.scheduledReport.delete({ where: { id: schedule.id } }).catch(() => {});
+      }
+    });
   });
 
   describe('POST /api/reports/schedules', () => {

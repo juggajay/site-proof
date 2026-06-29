@@ -27,6 +27,8 @@ import {
   getFrequencyLabel,
   normalizeRecipientList,
   getScheduleFailureMessage,
+  getScheduleLatestRunClassName,
+  getScheduleLatestRunMessage,
   getScheduleStatusClassName,
   getScheduleStatusLabel,
   scheduleFormSchema,
@@ -280,6 +282,7 @@ export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalP
               <div className="space-y-3">
                 {schedules.map((schedule) => {
                   const failureMessage = getScheduleFailureMessage(schedule);
+                  const latestRunMessage = getScheduleLatestRunMessage(schedule);
 
                   return (
                     <div
@@ -314,6 +317,13 @@ export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalP
                           <p className="text-xs text-muted-foreground">
                             Next: {formatNextRun(schedule.nextRunAt, projectTimeZone)}
                           </p>
+                          {latestRunMessage && (
+                            <p
+                              className={`mt-1 text-xs ${getScheduleLatestRunClassName(schedule)}`}
+                            >
+                              {latestRunMessage}
+                            </p>
+                          )}
                           {failureMessage && (
                             <p className="mt-2 flex items-start gap-2 text-xs text-warning">
                               <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
