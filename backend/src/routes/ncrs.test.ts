@@ -4386,7 +4386,9 @@ describe('NCR Access Hardening', () => {
           where: { userId: subUser.userId, projectId, type: 'ncr_assigned' },
         });
         expect(notification).not.toBeNull();
-        expect(notification?.linkUrl).toBe(`/subcontractor-portal/ncrs?ncr=${createdNcrId}`);
+        expect(notification?.linkUrl).toBe(
+          `/subcontractor-portal/ncrs?ncr=${createdNcrId}&projectId=${projectId}&subcontractorCompanyId=${subcontractor.id}`,
+        );
       } finally {
         await prisma.notification.deleteMany({ where: { userId: subUser.userId } });
         if (createdNcrId) {
@@ -4472,7 +4474,9 @@ describe('NCR Access Hardening', () => {
             type: { in: ['ncr_assigned', 'ncr_redirect'] },
           },
         });
-        expect(notification?.linkUrl).toBe(`/subcontractor-portal/ncrs?ncr=${createdNcrId}`);
+        expect(notification?.linkUrl).toBe(
+          `/subcontractor-portal/ncrs?ncr=${createdNcrId}&projectId=${projectId}&subcontractorCompanyId=${subcontractor.id}`,
+        );
       } finally {
         await prisma.notification.deleteMany({ where: { userId: subUser.userId } });
         if (createdNcrId) {
@@ -4546,7 +4550,7 @@ describe('NCR Access Hardening', () => {
           where: { userId: subUser.userId, projectId, type: 'ncr_response_accepted' },
         });
         expect(acceptedNotification?.linkUrl).toBe(
-          `/subcontractor-portal/ncrs?ncr=${acceptedNcrId}`,
+          `/subcontractor-portal/ncrs?ncr=${acceptedNcrId}&projectId=${projectId}&subcontractorCompanyId=${subcontractor.id}`,
         );
 
         const evidenceDocument = await prisma.document.create({
@@ -4586,7 +4590,7 @@ describe('NCR Access Hardening', () => {
           where: { userId: subUser.userId, projectId, type: 'ncr_rectification_rejected' },
         });
         expect(rejectedNotification?.linkUrl).toBe(
-          `/subcontractor-portal/ncrs?ncr=${acceptedNcrId}`,
+          `/subcontractor-portal/ncrs?ncr=${acceptedNcrId}&projectId=${projectId}&subcontractorCompanyId=${subcontractor.id}`,
         );
 
         const revisionCreateRes = await request(app)
@@ -4626,7 +4630,7 @@ describe('NCR Access Hardening', () => {
           where: { userId: subUser.userId, projectId, type: 'ncr_revision_requested' },
         });
         expect(revisionNotification?.linkUrl).toBe(
-          `/subcontractor-portal/ncrs?ncr=${revisionNcrId}`,
+          `/subcontractor-portal/ncrs?ncr=${revisionNcrId}&projectId=${projectId}&subcontractorCompanyId=${subcontractor.id}`,
         );
       } finally {
         await prisma.notification.deleteMany({ where: { userId: subUser.userId } });

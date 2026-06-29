@@ -6,6 +6,7 @@ import {
   ensureSubcontractorNcrPortalAccess,
   hasPortalModuleEnabled,
 } from '../../lib/projectAccess.js';
+import { buildSubcontractorPortalEntityLink } from '../notifications/links.js';
 
 type NcrNotificationType =
   | 'ncr_assigned'
@@ -77,7 +78,9 @@ export async function notifySubcontractorNcrPortalUsers(options: {
       type,
       title,
       message,
-      linkUrl: `/subcontractor-portal/ncrs?ncr=${encodeURIComponent(ncrId)}`,
+      linkUrl: buildSubcontractorPortalEntityLink('ncr', ncrId, projectId, {
+        subcontractorCompanyId,
+      }),
     })),
   });
 }

@@ -38,7 +38,7 @@ describe('CompanyWebhooksSection', () => {
 
     await screen.findByText('https://example.com/hook');
     expect(screen.getByText('Enabled')).toBeInTheDocument();
-    expect(screen.getByText('All events')).toBeInTheDocument();
+    expect(screen.getByText('All supported events')).toBeInTheDocument();
     expect(apiFetchMock).toHaveBeenCalledWith('/api/webhooks');
   });
 

@@ -64,7 +64,7 @@ export const DEFAULT_EMAIL_PREFERENCES: EmailPreferences = {
   ncrAssigned: true,
   ncrAssignedTiming: 'immediate',
   ncrStatusChange: true,
-  ncrStatusChangeTiming: 'digest',
+  ncrStatusChangeTiming: 'immediate',
   holdPointReminder: true,
   holdPointReminderTiming: 'immediate',
   holdPointRelease: true,

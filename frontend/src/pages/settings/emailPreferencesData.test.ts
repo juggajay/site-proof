@@ -31,7 +31,7 @@ describe('email preferences data helpers', () => {
       expect(result.dailyDigest).toBe(true);
       // Untouched keys fall back to their documented defaults.
       expect(result.mentions).toBe(true);
-      expect(result.ncrStatusChangeTiming).toBe('digest');
+      expect(result.ncrStatusChangeTiming).toBe('immediate');
     });
 
     it('lets explicit server values override the defaults', () => {
