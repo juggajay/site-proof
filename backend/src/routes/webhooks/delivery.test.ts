@@ -15,6 +15,7 @@ const prismaMock = vi.hoisted(() => ({
     create: vi.fn(),
     deleteMany: vi.fn(),
     findMany: vi.fn(),
+    update: vi.fn(),
   },
   webhookConfig: {
     deleteMany: vi.fn(),
@@ -46,6 +47,7 @@ beforeEach(() => {
   prismaMock.webhookDelivery.create.mockResolvedValue({});
   prismaMock.webhookDelivery.findMany.mockResolvedValue([]);
   prismaMock.webhookDelivery.deleteMany.mockResolvedValue({ count: 0 });
+  prismaMock.webhookDelivery.update.mockResolvedValue({});
 });
 
 afterEach(() => {
@@ -109,8 +111,48 @@ describe('webhook delivery helpers', () => {
     expect(prismaMock.webhookDelivery.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
+          error: 'Delivery started but no final response has been recorded',
+          success: false,
+        }),
+      }),
+    );
+    expect(prismaMock.webhookDelivery.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: delivery.id },
+        data: expect.objectContaining({
           error: expect.stringContaining('resolved to a private address'),
           success: false,
+        }),
+      }),
+    );
+  });
+
+  it('creates a visible pending delivery before sending and redacts sensitive response text', async () => {
+    process.env.NODE_ENV = 'test';
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('token=receiver-secret&ok=true', { status: 200 }),
+    );
+
+    const delivery = await deliverWebhook(makeWebhookConfig(), 'lot.updated', { lotId: 'lot-1' });
+
+    expect(delivery.success).toBe(true);
+    expect(prismaMock.webhookDelivery.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          id: delivery.id,
+          error: 'Delivery started but no final response has been recorded',
+          success: false,
+        }),
+      }),
+    );
+    expect(prismaMock.webhookDelivery.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: delivery.id },
+        data: expect.objectContaining({
+          responseStatus: 200,
+          responseBody: 'token=[REDACTED]&ok=true',
+          error: null,
+          success: true,
         }),
       }),
     );

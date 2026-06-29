@@ -471,7 +471,7 @@ router.post(
       timestamp: new Date().toISOString(),
       data: {
         message: 'This is a test webhook delivery',
-        triggeredBy: user.email,
+        triggeredByUserId: user.id,
       },
     };
 

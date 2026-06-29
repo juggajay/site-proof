@@ -301,18 +301,24 @@ model NotificationEmailPreference {
 }
 
 model NotificationDigestItem {
-  id          String   @id @default(uuid())
-  userId      String   @map("user_id")
-  type        String
-  title       String
-  message     String
-  projectName String?  @map("project_name")
-  linkUrl     String?  @map("link_url")
-  createdAt   DateTime @default(now()) @map("created_at")
+  id                        String    @id @default(uuid())
+  userId                    String    @map("user_id")
+  type                      String
+  title                     String
+  message                   String
+  projectName               String?   @map("project_name")
+  linkUrl                   String?   @map("link_url")
+  createdAt                 DateTime  @default(now()) @map("created_at")
+  deliveryFailureCount      Int       @default(0) @map("delivery_failure_count")
+  lastDeliveryFailureAt     DateTime? @map("last_delivery_failure_at")
+  lastDeliveryFailureReason String?   @map("last_delivery_failure_reason")
+  nextAttemptAt             DateTime? @map("next_attempt_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
+  @@index([userId, nextAttemptAt, createdAt], map: "digest_items_user_next_attempt_created_idx")
+  @@index([nextAttemptAt, createdAt], map: "digest_items_next_attempt_created_idx")
   @@map("notification_digest_items")
 }
 

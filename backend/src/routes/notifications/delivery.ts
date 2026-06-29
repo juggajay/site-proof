@@ -74,7 +74,11 @@ export async function sendNotificationIfEnabled(
       ? (preferences[timingKey] as NotificationTiming)
       : 'immediate';
 
-  if (timing === 'digest' && preferences.dailyDigest) {
+  if (timing === 'digest' && !preferences.dailyDigest) {
+    return { sent: false, queued: false };
+  }
+
+  if (timing === 'digest') {
     // Add to digest queue instead of sending immediately
     const digestItem: DigestItem = {
       type: notificationType,
