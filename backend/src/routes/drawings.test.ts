@@ -914,6 +914,7 @@ describe('Drawings API', () => {
 
     it('should update supersededById', async () => {
       // Create a new drawing to supersede the old one
+      const targetRevision = `SUPERSEDE-${Date.now()}`;
       const doc2 = await prisma.document.create({
         data: {
           projectId,
@@ -931,7 +932,7 @@ describe('Drawings API', () => {
           projectId,
           documentId: doc2.id,
           drawingNumber: 'DRW-001',
-          revision: 'B',
+          revision: targetRevision,
           status: 'for_construction',
         },
       });
@@ -989,6 +990,7 @@ describe('Drawings API', () => {
     });
 
     it('should reject supersededById that points to an already superseded revision', async () => {
+      const revisionSuffix = Date.now();
       const docs = await Promise.all([
         prisma.document.create({
           data: {
@@ -1019,7 +1021,7 @@ describe('Drawings API', () => {
           projectId,
           documentId: docs[1].id,
           drawingNumber: 'DRW-001',
-          revision: 'C',
+          revision: `CURRENT-${revisionSuffix}`,
           status: 'for_construction',
         },
       });
@@ -1028,7 +1030,7 @@ describe('Drawings API', () => {
           projectId,
           documentId: docs[0].id,
           drawingNumber: 'DRW-001',
-          revision: 'B',
+          revision: `OLD-${revisionSuffix}`,
           status: 'for_construction',
           supersededById: latest.id,
         },
