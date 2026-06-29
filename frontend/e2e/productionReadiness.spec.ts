@@ -33,9 +33,9 @@ function expectProjectRouteGuard(
   expect(appSource).toMatch(
     new RegExp(
       `<Route\\s+path="${escapeRegExp(routePath)}"\\s+element=\\{\\s*` +
-        `<RoleProtectedRoute\\s+allowedRoles=\\{${escapeRegExp(allowedRolesExpression)}\\}${routeGuardPropsPattern}>\\s*` +
+        `<ProjectProtectedRoute\\s+allowedRoles=\\{${escapeRegExp(allowedRolesExpression)}\\}${routeGuardPropsPattern}>\\s*` +
         `<${pageComponent}\\s*/>\\s*` +
-        `</RoleProtectedRoute>\\s*` +
+        `</ProjectProtectedRoute>\\s*` +
         `\\}\\s*/>`,
       's',
     ),
@@ -1018,21 +1018,13 @@ test.describe('production readiness guardrails', () => {
       '/projects/:projectId/hold-points',
       'HoldPointsPage',
       'INTERNAL_ROLES',
-      '\\s+allowProjectScopedRole',
     );
-    expectProjectRouteGuard(
-      appSource,
-      '/projects/:projectId/ncr',
-      'NCRPage',
-      'INTERNAL_ROLES',
-      '\\s+allowProjectScopedRole',
-    );
+    expectProjectRouteGuard(appSource, '/projects/:projectId/ncr', 'NCRPage', 'INTERNAL_ROLES');
     expectProjectRouteGuard(
       appSource,
       '/projects/:projectId/tests',
       'TestResultsPage',
       'INTERNAL_ROLES',
-      '\\s+allowProjectScopedRole',
     );
     expect(holdPointsPage).toContain(
       '/projects/${encodeURIComponent(projectId)}/hold-points?hp=${encodeURIComponent(hpId)}',
@@ -1066,20 +1058,13 @@ test.describe('production readiness guardrails', () => {
     ] as const;
 
     for (const [routePath, pageComponent] of internalProjectRoutes) {
-      expectProjectRouteGuard(
-        appSource,
-        routePath,
-        pageComponent,
-        'INTERNAL_ROLES',
-        '\\s+allowProjectScopedRole',
-      );
+      expectProjectRouteGuard(appSource, routePath, pageComponent, 'INTERNAL_ROLES');
     }
     expectProjectRouteGuard(
       appSource,
       '/projects/:projectId/dockets',
       'DocketApprovalsPage',
       'INTERNAL_ROLES',
-      '\\s+allowProjectScopedRole',
     );
   });
 
