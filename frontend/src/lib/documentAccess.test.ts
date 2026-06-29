@@ -99,6 +99,30 @@ describe('document access URLs', () => {
     expect(openSpy).toHaveBeenCalledTimes(1);
   });
 
+  it('passes inline disposition when opening a document for preview', async () => {
+    apiFetchMock.mockResolvedValue({
+      signedUrl: '/api/documents/download/document-1?token=inline-fixture',
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    });
+    const popup = {
+      closed: false,
+      close: vi.fn(),
+      location: { href: 'about:blank' },
+      opener: window,
+    } as unknown as Window;
+    vi.spyOn(window, 'open').mockReturnValue(popup);
+
+    await openDocumentAccessUrl('document-1', null, { disposition: 'inline' });
+
+    expect(apiFetchMock).toHaveBeenCalledWith('/api/documents/document-1/signed-url', {
+      method: 'POST',
+      body: JSON.stringify({ expiresInMinutes: 15, disposition: 'inline' }),
+    });
+    expect((popup.location as Location).href).toBe(
+      '/api/documents/download/document-1?token=inline-fixture',
+    );
+  });
+
   it('closes the pre-opened tab and rethrows when signed URL minting fails', async () => {
     const error = new Error('signed URL unavailable');
     apiFetchMock.mockRejectedValue(error);

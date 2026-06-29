@@ -4,6 +4,7 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '../../lib/api';
 import { queryKeys } from '@/lib/queryKeys';
+import { useCurrentProjectRole } from '@/hooks/useCurrentProjectRole';
 import { createMutationErrorHandler, extractErrorMessage } from '@/lib/errorHandling';
 import { toast } from '@/components/ui/toaster';
 import {
@@ -22,6 +23,7 @@ import {
   DeleteDocumentDialog,
   DocumentCategorySummary,
   DocumentDragOverlay,
+  DocumentsPagination,
   DocumentsLoadErrorAlert,
   DocumentsPageHeader,
 } from './components/DocumentsPageChrome';
@@ -55,12 +57,33 @@ interface Lot {
 interface DocumentsResponse {
   documents?: Document[];
   categories?: Record<string, number>;
+  pagination?: PaginationMeta | null;
 }
 
 interface LotsResponse {
   lots?: Lot[];
 }
 
+interface PaginationMeta {
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPrevPage: boolean;
+}
+
+const DOCUMENT_WRITE_ROLES = [
+  'owner',
+  'admin',
+  'project_manager',
+  'quality_manager',
+  'site_manager',
+  'site_engineer',
+  'foreman',
+  'subcontractor_admin',
+  'subcontractor',
+];
 const DOCUMENTS_PAGE_LIMIT = 100;
 
 export function DocumentsPage() {
@@ -72,8 +95,11 @@ export function DocumentsPage() {
   const queryLotId = searchParams.get('lotId') || '';
   const shouldOpenUploadFromQuery = searchParams.get('upload') === '1';
 
+  const currentProjectRole = useCurrentProjectRole(projectId);
+  const canManageDocuments = DOCUMENT_WRITE_ROLES.includes(currentProjectRole || '');
+
   // Upload workflow (modal state, drag/drop, multi-file progress, upload mutation)
-  const upload = useDocumentUpload(projectId);
+  const upload = useDocumentUpload(projectId, canManageDocuments);
 
   // Filters
   const [filterType, setFilterType] = useState('');
@@ -84,6 +110,7 @@ export function DocumentsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [committedSearch, setCommittedSearch] = useState('');
   const [showFavouritesOnly, setShowFavouritesOnly] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Viewer modal state
   const [viewerDoc, setViewerDoc] = useState<Document | null>(null);
@@ -97,7 +124,10 @@ export function DocumentsPage() {
   const viewerRef = useRef<HTMLDivElement>(null);
   const appliedUploadQueryRef = useRef<string | null>(null);
 
-  const triggerSearch = () => setCommittedSearch(searchQuery.trim());
+  const triggerSearch = () => {
+    setCurrentPage(1);
+    setCommittedSearch(searchQuery.trim());
+  };
   const uploadQueryKey = `${queryLotId}:${shouldOpenUploadFromQuery ? 'open' : 'closed'}`;
 
   const openUploadForCurrentLot = () => {
@@ -109,17 +139,19 @@ export function DocumentsPage() {
 
   useEffect(() => {
     setFilterLot(queryLotId);
+    setCurrentPage(1);
   }, [queryLotId]);
 
   useEffect(() => {
     if (!shouldOpenUploadFromQuery || appliedUploadQueryRef.current === uploadQueryKey) return;
+    if (!canManageDocuments) return;
 
     appliedUploadQueryRef.current = uploadQueryKey;
     if (queryLotId) {
       upload.updateUploadForm({ lotId: queryLotId });
     }
     upload.openUploadModal();
-  }, [queryLotId, shouldOpenUploadFromQuery, upload, uploadQueryKey]);
+  }, [canManageDocuments, queryLotId, shouldOpenUploadFromQuery, upload, uploadQueryKey]);
 
   // Build documents query path
   const docsQueryPath = (() => {
@@ -131,6 +163,7 @@ export function DocumentsPage() {
     if (dateFrom) params.append('dateFrom', dateFrom);
     if (dateTo) params.append('dateTo', dateTo);
     if (committedSearch) params.append('search', committedSearch);
+    params.append('page', String(currentPage));
     params.append('limit', String(DOCUMENTS_PAGE_LIMIT));
     if (params.toString()) path += `?${params.toString()}`;
     return path;
@@ -150,6 +183,7 @@ export function DocumentsPage() {
       dateFrom,
       dateTo,
       committedSearch,
+      currentPage,
     ] as const,
     queryFn: () => apiFetch<DocumentsResponse>(docsQueryPath),
     enabled: !!projectId,
@@ -160,6 +194,7 @@ export function DocumentsPage() {
     () => docsData?.categories || {},
     [docsData?.categories],
   );
+  const pagination = docsData?.pagination ?? null;
   const error = docsError ? extractErrorMessage(docsError, 'Failed to load documents') : null;
   const visibleDocuments = useMemo(
     () => documents.filter((doc) => !showFavouritesOnly || doc.isFavourite),
@@ -233,6 +268,33 @@ export function DocumentsPage() {
 
     return () => window.clearTimeout(timeoutId);
   }, [documentUrls]);
+
+  useEffect(() => {
+    if (pagination && pagination.totalPages > 0 && pagination.page > pagination.totalPages) {
+      setCurrentPage(pagination.totalPages);
+    }
+  }, [pagination]);
+
+  const updateFilterType = (value: string) => {
+    setCurrentPage(1);
+    setFilterType(value);
+  };
+  const updateFilterCategory = (value: string) => {
+    setCurrentPage(1);
+    setFilterCategory(value);
+  };
+  const updateFilterLot = (value: string) => {
+    setCurrentPage(1);
+    setFilterLot(value);
+  };
+  const updateDateFrom = (value: string) => {
+    setCurrentPage(1);
+    setDateFrom(value);
+  };
+  const updateDateTo = (value: string) => {
+    setCurrentPage(1);
+    setDateTo(value);
+  };
 
   const { data: lotsData } = useQuery({
     queryKey: queryKeys.lots(projectId!),
@@ -367,7 +429,10 @@ export function DocumentsPage() {
   return (
     <div ref={upload.dropZoneRef} className="space-y-6 relative" {...upload.containerDragHandlers}>
       <DocumentDragOverlay isDragging={upload.isDragging} />
-      <DocumentsPageHeader onUpload={openUploadForCurrentLot} />
+      <DocumentsPageHeader
+        canUploadDocuments={canManageDocuments}
+        onUpload={openUploadForCurrentLot}
+      />
 
       {/* Filters */}
       <DocumentFiltersPanel
@@ -379,11 +444,11 @@ export function DocumentsPage() {
         searchQuery={searchQuery}
         showFavouritesOnly={showFavouritesOnly}
         lots={lots}
-        onFilterTypeChange={setFilterType}
-        onFilterCategoryChange={setFilterCategory}
-        onFilterLotChange={setFilterLot}
-        onDateFromChange={setDateFrom}
-        onDateToChange={setDateTo}
+        onFilterTypeChange={updateFilterType}
+        onFilterCategoryChange={updateFilterCategory}
+        onFilterLotChange={updateFilterLot}
+        onDateFromChange={updateDateFrom}
+        onDateToChange={updateDateTo}
         onSearchQueryChange={setSearchQuery}
         onShowFavouritesOnlyChange={setShowFavouritesOnly}
         onTriggerSearch={triggerSearch}
@@ -396,6 +461,7 @@ export function DocumentsPage() {
           setSearchQuery('');
           setCommittedSearch('');
           setShowFavouritesOnly(false);
+          setCurrentPage(1);
         }}
       />
 
@@ -410,11 +476,19 @@ export function DocumentsPage() {
         documents={documents}
         visibleDocuments={visibleDocuments}
         showFavouritesOnly={showFavouritesOnly}
+        canManageDocuments={canManageDocuments}
         documentUrls={documentUrls}
         onToggleFavourite={toggleFavourite}
         onOpenViewer={(doc) => void openViewer(doc)}
         onDownload={(doc) => void handleDownload(doc)}
         onMarkPendingDelete={(doc) => setDocumentPendingDelete(doc)}
+      />
+
+      <DocumentsPagination
+        pagination={pagination}
+        visibleCount={visibleDocuments.length}
+        onPreviousPage={() => setCurrentPage((page) => Math.max(1, page - 1))}
+        onNextPage={() => setCurrentPage((page) => page + 1)}
       />
 
       {/* Upload Modal */}

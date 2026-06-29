@@ -1999,6 +1999,37 @@ describe('Progress Claims API', () => {
       }
     });
 
+    it('should reject same-project documents that are not certification documents', async () => {
+      const claim = await createSubmittedCertificationClaim();
+      const wrongDocument = await prisma.document.create({
+        data: {
+          projectId,
+          documentType: 'photo',
+          category: 'quality',
+          filename: 'site-photo-is-not-a-certificate.jpg',
+          fileUrl: '/uploads/documents/site-photo-is-not-a-certificate.jpg',
+          uploadedById: userId,
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .post(`/api/projects/${projectId}/claims/${claim.id}/certify`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            certifiedAmount: 1000,
+            certificationDocumentId: wrongDocument.id,
+          });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.message).toContain('certification document');
+        const unchangedClaim = await prisma.progressClaim.findUnique({ where: { id: claim.id } });
+        expect(unchangedClaim?.status).toBe('submitted');
+      } finally {
+        await prisma.document.delete({ where: { id: wrongDocument.id } }).catch(() => {});
+      }
+    });
+
     it('should certify with a project certification document id', async () => {
       const claim = await createSubmittedCertificationClaim();
       const fileUrl = `/uploads/documents/certification-${claim.claimNumber}.pdf`;

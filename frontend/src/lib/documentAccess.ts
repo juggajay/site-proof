@@ -111,6 +111,7 @@ export async function getDocumentAccessUrl(
 export async function openDocumentAccessUrl(
   documentId: string,
   fileUrl?: string | null,
+  options: number | DocumentAccessOptions = 15,
 ): Promise<void> {
   const openedWindow = window.open('about:blank', '_blank');
   if (openedWindow) {
@@ -118,7 +119,7 @@ export async function openDocumentAccessUrl(
   }
 
   try {
-    const url = await getDocumentAccessUrl(documentId, fileUrl, { disposition: 'attachment' });
+    const url = await getDocumentAccessUrl(documentId, fileUrl, options);
     if (openedWindow && !openedWindow.closed) {
       openedWindow.location.href = url;
       return;

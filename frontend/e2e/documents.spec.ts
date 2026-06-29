@@ -156,6 +156,7 @@ async function mockSeededDocumentsApi(
           id: E2E_PROJECT_ID,
           name: 'E2E Highway Upgrade',
           projectNumber: 'E2E-001',
+          currentUserRole: 'admin',
         },
       });
       return;
@@ -182,11 +183,21 @@ async function mockSeededDocumentsApi(
       }
 
       const documents = filterDocuments(buildSeedDocuments(pdfFavourite, includeUploaded), url);
+      const page = Number(url.searchParams.get('page') || '1');
+      const limit = Number(url.searchParams.get('limit') || '100');
       await json({
         documents,
         categories: {
           quality: documents.filter((doc) => doc.category === 'quality').length,
           design: documents.filter((doc) => doc.category === 'design').length,
+        },
+        pagination: {
+          total: documents.length,
+          page,
+          limit,
+          totalPages: Math.max(1, Math.ceil(documents.length / limit)),
+          hasPrevPage: page > 1,
+          hasNextPage: page < Math.ceil(documents.length / limit),
         },
       });
       return;
