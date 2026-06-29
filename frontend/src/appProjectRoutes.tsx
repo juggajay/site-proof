@@ -1,4 +1,4 @@
-import { Navigate, useParams } from 'react-router-dom';
+import { Navigate, useLocation, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ProjectProtectedRoute } from '@/components/auth/ProjectProtectedRoute';
 import { AccessDeniedState } from '@/components/AccessDeniedState';
@@ -13,13 +13,18 @@ import { PROJECT_WORKSPACE_ROLES } from './appRouteRoles';
 
 function SubcontractorProjectAccessRoute({ projectId }: { projectId?: string }) {
   const { user } = useAuth();
+  const location = useLocation();
   const subbieShellActive = useSubbieShellActive();
+  const subcontractorCompanyId = new URLSearchParams(location.search).get('subcontractorCompanyId');
   const { isLoading, error } = useQuery({
-    queryKey: ['subcontractor-project-route-access', user?.id, projectId],
+    queryKey: ['subcontractor-project-route-access', user?.id, projectId, subcontractorCompanyId],
     queryFn: async () => {
-      await apiFetch(
-        `/api/subcontractors/my-company?projectId=${encodeURIComponent(projectId || '')}`,
-      );
+      const params = new URLSearchParams({ projectId: projectId || '' });
+      if (subcontractorCompanyId) {
+        params.set('subcontractorCompanyId', subcontractorCompanyId);
+      }
+
+      await apiFetch(`/api/subcontractors/my-company?${params.toString()}`);
       return true;
     },
     enabled: !!user?.id && !!projectId,
@@ -49,7 +54,12 @@ function SubcontractorProjectAccessRoute({ projectId }: { projectId?: string }) 
     );
   }
 
-  return <Navigate to={`${assignedWorkPath}?projectId=${encodeURIComponent(projectId)}`} replace />;
+  const params = new URLSearchParams({ projectId });
+  if (subcontractorCompanyId) {
+    params.set('subcontractorCompanyId', subcontractorCompanyId);
+  }
+
+  return <Navigate to={`${assignedWorkPath}?${params.toString()}`} replace />;
 }
 
 export function ProjectDetailRoute() {

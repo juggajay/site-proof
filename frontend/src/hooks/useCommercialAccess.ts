@@ -1,6 +1,8 @@
+import { useParams } from 'react-router-dom';
 import { useAuth } from '@/lib/auth';
 import { ROLE_GROUPS, hasRoleInGroup } from '@/lib/roles';
 import { getProjectScopedRole } from '@/lib/subcontractorIdentity';
+import { useCurrentProjectRole } from './useCurrentProjectRole';
 
 /**
  * Hook to check if the current user has commercial access.
@@ -8,7 +10,9 @@ import { getProjectScopedRole } from '@/lib/subcontractorIdentity';
  */
 export function useCommercialAccess() {
   const { user } = useAuth();
-  const role = getProjectScopedRole(user);
+  const { projectId } = useParams();
+  const currentProjectRole = useCurrentProjectRole(projectId);
+  const role = projectId ? currentProjectRole : getProjectScopedRole(user);
 
   const hasCommercialAccess = hasRoleInGroup(role, ROLE_GROUPS.COMMERCIAL);
   const canViewSubcontractorRates = hasRoleInGroup(role, ROLE_GROUPS.RATE_VIEWERS);

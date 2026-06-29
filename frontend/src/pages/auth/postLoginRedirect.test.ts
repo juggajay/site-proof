@@ -80,6 +80,10 @@ describe('post-login shell redirects', () => {
     expect(mapLegacyRedirectToActiveShell('/subcontractor-portal/lots/lot-1/itp', subbieUser)).toBe(
       '/p/lots/lot-1/itp',
     );
+
+    expect(mapLegacyRedirectToActiveShell('/my-company?projectId=project-1', subbieUser)).toBe(
+      '/p/company?projectId=project-1',
+    );
   });
 
   it('lands mobile foreman users directly in the foreman shell', () => {
@@ -105,6 +109,25 @@ describe('post-login shell redirects', () => {
     const searchParams = new URLSearchParams({ redirect: '/subcontractor-portal/dockets' });
 
     expect(getPostLoginRedirect(searchParams, null, subbieUser)).toBe('/p/dockets');
+  });
+
+  it('rejects active shell redirects that do not match the logged-in user role', () => {
+    expect(
+      getPostLoginRedirect(new URLSearchParams({ redirect: '/p/work' }), null, foremanUser),
+    ).toBe('/m');
+
+    expect(getPostLoginRedirect(new URLSearchParams({ redirect: '/m' }), null, subbieUser)).toBe(
+      '/p',
+    );
+  });
+
+  it('keeps active shell redirects that match the logged-in user role', () => {
+    expect(
+      getPostLoginRedirect(new URLSearchParams({ redirect: '/p/work' }), null, subbieUser),
+    ).toBe('/p/work');
+    expect(getPostLoginRedirect(new URLSearchParams({ redirect: '/m' }), null, foremanUser)).toBe(
+      '/m',
+    );
   });
 
   it('preserves subcontractor invite redirects before the user has portal access', () => {

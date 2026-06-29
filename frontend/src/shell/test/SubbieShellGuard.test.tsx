@@ -28,7 +28,7 @@ function ShellHomeProbe() {
   return (
     <div data-testid="subbie-shell-home">
       Subbie Shell Home
-      <span data-testid="shell-location">{`${location.pathname}${location.search}`}</span>
+      <span data-testid="shell-location">{`${location.pathname}${location.search}${location.hash}`}</span>
     </div>
   );
 }
@@ -65,8 +65,10 @@ describe('SubbieShellGuard', () => {
   });
 
   it('preserves the selected project query when redirecting into the shell', () => {
-    renderWithRouter(true, '/subcontractor-portal?projectId=project-2');
-    expect(screen.getByTestId('shell-location')).toHaveTextContent('/p?projectId=project-2');
+    renderWithRouter(true, '/subcontractor-portal?projectId=project-2#quality');
+    expect(screen.getByTestId('shell-location')).toHaveTextContent(
+      '/p?projectId=project-2#quality',
+    );
   });
 
   it.each([

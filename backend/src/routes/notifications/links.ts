@@ -119,3 +119,55 @@ export function buildProjectEntityLink(
       return appendQueryParams(`/projects/${encodedProjectId}`, params);
   }
 }
+
+export function buildSubcontractorPortalEntityLink(
+  entityType: string,
+  entityId: string,
+  projectId?: string | null,
+  params?: Record<string, string | undefined>,
+): string {
+  if (!projectId) {
+    return '/subcontractor-portal';
+  }
+
+  const encodedEntityId = encodeURIComponent(entityId);
+  const normalizedType = entityType.toLowerCase().replace(/[\s-]/g, '_');
+  const portalParams = { projectId, ...params };
+
+  switch (normalizedType) {
+    case 'lot':
+      return appendQueryParams('/subcontractor-portal/work', { lot: entityId, ...portalParams });
+    case 'ncr':
+      return appendQueryParams('/subcontractor-portal/ncrs', { ncr: entityId, ...portalParams });
+    case 'test':
+    case 'test_result':
+    case 'testresult':
+      return appendQueryParams('/subcontractor-portal/tests', {
+        test: entityId,
+        ...portalParams,
+      });
+    case 'holdpoint':
+    case 'hold_point':
+      return appendQueryParams('/subcontractor-portal/holdpoints', {
+        holdPoint: entityId,
+        ...portalParams,
+      });
+    case 'document':
+      return appendQueryParams('/subcontractor-portal/documents', {
+        document: entityId,
+        ...portalParams,
+      });
+    case 'docket':
+    case 'daily_docket':
+    case 'dailydocket':
+      return appendQueryParams(`/subcontractor-portal/docket/${encodedEntityId}`, portalParams);
+    case 'itp':
+    case 'itp_instance':
+    case 'itpinstance':
+    case 'itp_completion':
+    case 'itpcompletion':
+      return appendQueryParams('/subcontractor-portal/itps', { itp: entityId, ...portalParams });
+    default:
+      return appendQueryParams('/subcontractor-portal', portalParams);
+  }
+}

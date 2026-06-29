@@ -200,7 +200,9 @@ export function Sidebar() {
   const toggleSidebar = zustandToggleSidebar;
 
   const userRole = getCompanyRole(user);
-  const projectScopedRole = projectData?.project?.currentUserRole ?? getProjectScopedRole(user);
+  const projectScopedRole = projectId
+    ? (projectData?.project?.currentUserRole ?? 'viewer')
+    : getProjectScopedRole(user);
   const hasPortalIdentity = hasSubcontractorPortalIdentity(user);
 
   // Role-based access checks

@@ -1141,6 +1141,39 @@ describe('Notifications API', () => {
         expect(afterCount).toBeGreaterThan(beforeCount);
       });
 
+      it('should create portal-safe notification links for assigned subcontractor users', async () => {
+        const title = `Subcontractor Portal Link Alert ${Date.now()}`;
+        const entityId = `sub-ncr-${Date.now()}`;
+
+        const res = await request(app)
+          .post('/api/notifications/alerts')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            type: 'overdue_ncr',
+            severity: 'medium',
+            title,
+            message: 'Assigned directly to the subcontractor portal user',
+            entityId,
+            entityType: 'ncr',
+            projectId,
+            assignedTo: subcontractorUserId,
+          });
+
+        expect(res.status).toBe(200);
+
+        const notification = await prisma.notification.findFirst({
+          where: {
+            userId: subcontractorUserId,
+            title,
+          },
+          orderBy: { createdAt: 'desc' },
+        });
+
+        expect(notification?.linkUrl).toBe(
+          `/subcontractor-portal/ncrs?ncr=${entityId}&projectId=${projectId}&subcontractorCompanyId=${subcontractorCompanyId}`,
+        );
+      });
+
       it('should reject subcontractor-created project alerts', async () => {
         const res = await request(app)
           .post('/api/notifications/alerts')
