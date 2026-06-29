@@ -5,6 +5,7 @@ import { createAuditLog, AuditAction, writeAuditLogInTransaction } from '../../l
 import { createNotification } from '../../lib/notificationDispatch.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
+import { requireBrowserSession } from '../../middleware/browserSession.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
 import { sendNotificationIfEnabled } from '../notifications.js';
 import { assertProjectAllowsWrite } from '../../lib/projectAccess.js';
@@ -115,9 +116,10 @@ export function createProjectTeamRouter({
     '/:id/users',
     asyncHandler(async (req, res) => {
       const projectId = parseProjectRouteParam(req.params.id, 'id');
+      const currentUser = req.user!;
+      requireBrowserSession(req, 'Project team invitation');
       const email = normalizeProjectUserEmail(req.body.email);
       const role = parseProjectTeamRole(req.body.role);
-      const currentUser = req.user!;
 
       const access = await getProjectAccessContext(projectId, currentUser);
 
@@ -235,8 +237,9 @@ export function createProjectTeamRouter({
     asyncHandler(async (req, res) => {
       const projectId = parseProjectRouteParam(req.params.id, 'id');
       const targetUserId = parseProjectRouteParam(req.params.userId, 'userId');
-      const role = parseProjectTeamRole(req.body.role);
       const currentUser = req.user!;
+      requireBrowserSession(req, 'Project team role change');
+      const role = parseProjectTeamRole(req.body.role);
 
       const access = await getProjectAccessContext(projectId, currentUser);
 
@@ -360,6 +363,7 @@ export function createProjectTeamRouter({
       const projectId = parseProjectRouteParam(req.params.id, 'id');
       const targetUserId = parseProjectRouteParam(req.params.userId, 'userId');
       const currentUser = req.user!;
+      requireBrowserSession(req, 'Project team member removal');
 
       const access = await getProjectAccessContext(projectId, currentUser);
 

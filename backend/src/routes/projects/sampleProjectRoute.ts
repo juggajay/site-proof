@@ -4,6 +4,7 @@ import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { createAuditLog, AuditAction } from '../../lib/auditLog.js';
+import { requireBrowserSession } from '../../middleware/browserSession.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
 import { buildProjectCreatedResponse } from './costResponses.js';
 import { assertCompanyProjectCapacity } from './projectCreationLimit.js';
@@ -269,6 +270,7 @@ export function createSampleProjectRouter({
     '/sample',
     asyncHandler(async (req, res) => {
       const user = req.user!;
+      requireBrowserSession(req, 'Sample project creation');
 
       if (await hasSubcontractorProjectIdentity(user)) {
         throw AppError.forbidden('Subcontractor portal users cannot create company projects');

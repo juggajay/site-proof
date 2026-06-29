@@ -46,6 +46,27 @@ function hashOneTimeTokenForTest(token: string): string {
   return `sha256:${crypto.createHash('sha256').update(token).digest('hex')}`;
 }
 
+function hashApiKeyForTest(apiKey: string): string {
+  return crypto.createHash('sha256').update(apiKey).digest('hex');
+}
+
+async function createApiKeyForUser(userId: string, scopes = 'admin') {
+  const apiKey = `sp_${crypto.randomBytes(32).toString('hex')}`;
+  const record = await prisma.apiKey.create({
+    data: {
+      userId,
+      name: 'Company browser-session boundary test key',
+      keyHash: hashApiKeyForTest(apiKey),
+      keyPrefix: apiKey.substring(0, 11),
+      scopes,
+      isActive: true,
+    },
+    select: { id: true },
+  });
+
+  return { apiKey, keyId: record.id };
+}
+
 function listCompanyLogoFiles(prefix: string) {
   if (!fs.existsSync(companyLogoUploadDir)) {
     return new Set<string>();
@@ -416,6 +437,29 @@ describe('Company API', () => {
       expect(res.body.company.name).toBe(newName);
     });
 
+    it('rejects API-key-authenticated company profile updates', async () => {
+      const { apiKey, keyId } = await createApiKeyForUser(userId, 'admin');
+      const existing = await prisma.company.findUniqueOrThrow({
+        where: { id: companyId },
+        select: { name: true },
+      });
+
+      try {
+        const res = await request(app)
+          .patch('/api/company')
+          .set('x-api-key', apiKey)
+          .send({ name: `API Key Company Rename ${Date.now()}` });
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.message).toContain('browser session');
+        await expect(
+          prisma.company.findUnique({ where: { id: companyId }, select: { name: true } }),
+        ).resolves.toMatchObject({ name: existing.name });
+      } finally {
+        await prisma.apiKey.deleteMany({ where: { id: keyId } });
+      }
+    });
+
     it('should update company ABN', async () => {
       const res = await request(app)
         .patch('/api/company')
@@ -505,6 +549,27 @@ describe('Company API', () => {
       expect(JSON.stringify(changes)).not.toContain('Company Test');
 
       fs.unlinkSync(logoPath);
+    });
+
+    it('rejects API-key-authenticated company logo uploads before storing a file', async () => {
+      const { apiKey, keyId } = await createApiKeyForUser(userId, 'admin');
+      const beforeFiles = listCompanyLogoFiles(`company-logo-${companyId}-`);
+
+      try {
+        const res = await request(app)
+          .post('/api/company/logo')
+          .set('x-api-key', apiKey)
+          .attach('logo', tinyPngBytes, {
+            filename: 'api-key-logo.png',
+            contentType: 'image/png',
+          });
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.message).toContain('browser session');
+        expect(listCompanyLogoFiles(`company-logo-${companyId}-`)).toEqual(beforeFiles);
+      } finally {
+        await prisma.apiKey.deleteMany({ where: { id: keyId } });
+      }
     });
 
     it('should not delete local company logo files referenced by untrusted external URLs', async () => {
@@ -3420,6 +3485,40 @@ describe('Company API', () => {
         await prisma.apiKey.deleteMany({ where: { userId: memberId } });
         await prisma.emailVerificationToken.deleteMany({ where: { userId: memberId } });
         await prisma.user.delete({ where: { id: memberId } }).catch(() => {});
+        await prisma.company.delete({ where: { id: company.id } }).catch(() => {});
+      }
+    });
+
+    it('rejects API-key-authenticated company leave', async () => {
+      const company = await prisma.company.create({
+        data: { name: `Leave API Key Co ${Date.now()}` },
+      });
+      const member = await registerTestUser(app, {
+        emailPrefix: 'leave-api-key-member',
+        fullName: 'Leave API Key Member',
+        companyId: company.id,
+        roleInCompany: 'admin',
+      });
+      const { apiKey, keyId } = await createApiKeyForUser(member.userId, 'admin');
+
+      try {
+        const res = await request(app).post('/api/company/leave').set('x-api-key', apiKey);
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.message).toContain('browser session');
+        await expect(
+          prisma.user.findUnique({
+            where: { id: member.userId },
+            select: { companyId: true, roleInCompany: true },
+          }),
+        ).resolves.toMatchObject({ companyId: company.id, roleInCompany: 'admin' });
+      } finally {
+        await prisma.apiKey.deleteMany({ where: { id: keyId } });
+        await prisma.auditLog.deleteMany({
+          where: { OR: [{ entityId: company.id }, { userId: member.userId }] },
+        });
+        await prisma.emailVerificationToken.deleteMany({ where: { userId: member.userId } });
+        await prisma.user.delete({ where: { id: member.userId } }).catch(() => {});
         await prisma.company.delete({ where: { id: company.id } }).catch(() => {});
       }
     });

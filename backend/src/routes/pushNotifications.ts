@@ -3,6 +3,7 @@ import webpush from 'web-push';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth, AuthRequest } from '../middleware/authMiddleware.js';
+import { requireBrowserSession } from '../middleware/browserSession.js';
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
 import { logError } from '../lib/serverLogger.js';
@@ -116,6 +117,7 @@ pushNotificationsRouter.get(
 pushNotificationsRouter.post(
   '/subscribe',
   asyncHandler(async (req: AuthRequest, res) => {
+    requireBrowserSession(req, 'Push subscription registration');
     const userId = req.user?.id;
     if (!userId) {
       throw AppError.unauthorized('Unauthorized');
@@ -162,6 +164,7 @@ pushNotificationsRouter.post(
 pushNotificationsRouter.delete(
   '/unsubscribe',
   asyncHandler(async (req: AuthRequest, res) => {
+    requireBrowserSession(req, 'Push subscription removal');
     const userId = req.user?.id;
     if (!userId) {
       throw AppError.unauthorized('Unauthorized');
@@ -219,6 +222,7 @@ pushNotificationsRouter.get(
 pushNotificationsRouter.post(
   '/test',
   asyncHandler(async (req: AuthRequest, res) => {
+    requireBrowserSession(req, 'Push notification test');
     const userId = req.user?.id;
     if (!userId) {
       throw AppError.unauthorized('Unauthorized');
@@ -307,6 +311,7 @@ pushNotificationsRouter.post(
 pushNotificationsRouter.post(
   '/send',
   asyncHandler(async (req: AuthRequest, res) => {
+    requireBrowserSession(req, 'Push notification send');
     const userId = req.user?.id;
     if (!userId) {
       throw AppError.unauthorized('Unauthorized');
@@ -389,6 +394,7 @@ pushNotificationsRouter.get(
 pushNotificationsRouter.get(
   '/generate-vapid-keys',
   asyncHandler(async (req: AuthRequest, res) => {
+    requireBrowserSession(req, 'Push notification configuration');
     // Only allow in development
     if (process.env.NODE_ENV === 'production') {
       throw AppError.forbidden('Not available in production');

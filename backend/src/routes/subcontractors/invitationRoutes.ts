@@ -9,6 +9,7 @@ import { prisma } from '../../lib/prisma.js';
 import { buildFrontendUrl } from '../../lib/runtimeConfig.js';
 import { logError } from '../../lib/serverLogger.js';
 import { requireEmailVerified } from '../../middleware/requireEmailVerified.js';
+import { requireBrowserSessionMiddleware } from '../../middleware/browserSession.js';
 import {
   generateSubcontractorInvitationToken,
   getSubcontractorInvitationExpiresAt,
@@ -212,6 +213,7 @@ export function createSubcontractorInvitationRouters({
   // Now supports selecting from global directory via globalSubcontractorId
   authenticatedRouter.post(
     '/invite',
+    requireBrowserSessionMiddleware('Subcontractor invitation'),
     requireEmailVerified,
     asyncHandler(async (req, res) => {
       const user = req.user!;
