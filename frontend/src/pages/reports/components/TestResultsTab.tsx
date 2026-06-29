@@ -55,7 +55,8 @@ export const TestResultsTab = React.memo(function TestResultsTab({
     setTestStartDate('');
     setTestEndDate('');
     setSelectedTestTypes([]);
-  }, []);
+    onRefresh('', '', []);
+  }, [onRefresh]);
 
   const hasFilters = testStartDate || testEndDate || selectedTestTypes.length > 0;
 
@@ -169,6 +170,7 @@ export const TestResultsTab = React.memo(function TestResultsTab({
             <button
               type="button"
               onClick={handleClearFilters}
+              disabled={loading}
               className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground"
             >
               Clear filters

@@ -51,6 +51,8 @@ export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalP
   const [actionError, setActionError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [schedulePendingDelete, setSchedulePendingDelete] = useState<ScheduledReport | null>(null);
+  const [togglingScheduleIds, setTogglingScheduleIds] = useState<Set<string>>(() => new Set());
+  const [deletingScheduleIds, setDeletingScheduleIds] = useState<Set<string>>(() => new Set());
   const creatingScheduleRef = useRef(false);
   const togglingSchedulesRef = useRef(new Set<string>());
   const deletingSchedulesRef = useRef(new Set<string>());
@@ -159,6 +161,7 @@ export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalP
     if (togglingSchedulesRef.current.has(schedule.id)) return;
 
     togglingSchedulesRef.current.add(schedule.id);
+    setTogglingScheduleIds((current) => new Set(current).add(schedule.id));
     setActionError(null);
     try {
       await apiFetch(`/api/reports/schedules/${encodeURIComponent(schedule.id)}`, {
@@ -180,6 +183,11 @@ export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalP
       setActionError(extractErrorMessage(err, 'Failed to update schedule'));
     } finally {
       togglingSchedulesRef.current.delete(schedule.id);
+      setTogglingScheduleIds((current) => {
+        const next = new Set(current);
+        next.delete(schedule.id);
+        return next;
+      });
     }
   };
 
@@ -187,6 +195,7 @@ export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalP
     if (deletingSchedulesRef.current.has(scheduleId)) return;
 
     deletingSchedulesRef.current.add(scheduleId);
+    setDeletingScheduleIds((current) => new Set(current).add(scheduleId));
     setActionError(null);
     try {
       await apiFetch(`/api/reports/schedules/${encodeURIComponent(scheduleId)}`, {
@@ -206,10 +215,17 @@ export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalP
       setActionError(extractErrorMessage(err, 'Failed to delete schedule'));
     } finally {
       deletingSchedulesRef.current.delete(scheduleId);
+      setDeletingScheduleIds((current) => {
+        const next = new Set(current);
+        next.delete(scheduleId);
+        return next;
+      });
     }
   };
 
   const displayError = actionError || loadError;
+  const pendingDeleteId = schedulePendingDelete?.id;
+  const pendingDeleteInFlight = pendingDeleteId ? deletingScheduleIds.has(pendingDeleteId) : false;
 
   return (
     <>
@@ -283,6 +299,8 @@ export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalP
                 {schedules.map((schedule) => {
                   const failureMessage = getScheduleFailureMessage(schedule);
                   const latestRunMessage = getScheduleLatestRunMessage(schedule);
+                  const isToggling = togglingScheduleIds.has(schedule.id);
+                  const isDeleting = deletingScheduleIds.has(schedule.id);
 
                   return (
                     <div
@@ -335,16 +353,24 @@ export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalP
                           <Button
                             variant="outline"
                             size="sm"
+                            disabled={isToggling || isDeleting}
                             onClick={() => handleToggleActive(schedule)}
                           >
-                            {schedule.isActive ? 'Pause' : 'Activate'}
+                            {isToggling
+                              ? schedule.isActive
+                                ? 'Pausing...'
+                                : 'Activating...'
+                              : schedule.isActive
+                                ? 'Pause'
+                                : 'Activate'}
                           </Button>
                           <Button
                             variant="destructive"
                             size="sm"
+                            disabled={isToggling || isDeleting}
                             onClick={() => setSchedulePendingDelete(schedule)}
                           >
-                            Delete
+                            {isDeleting ? 'Deleting...' : 'Delete'}
                           </Button>
                         </div>
                       </div>
@@ -368,6 +394,7 @@ export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalP
                   </Label>
                   <NativeSelect
                     id="schedule-report-type"
+                    disabled={saving}
                     {...register('reportType')}
                     className={formErrors.reportType ? 'border-destructive' : ''}
                   >
@@ -391,6 +418,7 @@ export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalP
                   </Label>
                   <NativeSelect
                     id="schedule-frequency"
+                    disabled={saving}
                     {...register('frequency')}
                     className={formErrors.frequency ? 'border-destructive' : ''}
                   >
@@ -415,6 +443,7 @@ export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalP
                     </Label>
                     <NativeSelect
                       id="schedule-day-of-week"
+                      disabled={saving}
                       {...register('dayOfWeek', { valueAsNumber: true })}
                     >
                       {DAYS_OF_WEEK.map((day) => (
@@ -434,6 +463,7 @@ export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalP
                     </Label>
                     <NativeSelect
                       id="schedule-day-of-month"
+                      disabled={saving}
                       {...register('dayOfMonth', { valueAsNumber: true })}
                     >
                       {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
@@ -453,6 +483,7 @@ export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalP
                   <Input
                     id="schedule-time"
                     type="time"
+                    disabled={saving}
                     {...register('timeOfDay')}
                     className={formErrors.timeOfDay ? 'border-destructive' : ''}
                   />
@@ -471,6 +502,7 @@ export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalP
                 </Label>
                 <Input
                   id="schedule-recipients"
+                  disabled={saving}
                   {...register('recipients')}
                   placeholder="email1@example.com, email2@example.com"
                   className={formErrors.recipients ? 'border-destructive' : ''}
@@ -487,6 +519,7 @@ export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalP
                 <Button
                   type="button"
                   variant="outline"
+                  disabled={saving}
                   onClick={() => {
                     setShowForm(false);
                     resetForm();
@@ -520,8 +553,10 @@ export function ScheduleReportModal({ projectId, onClose }: ScheduleReportModalP
             <p>Recipients will no longer receive it automatically.</p>
           </>
         }
-        confirmLabel="Delete"
         variant="destructive"
+        confirmLabel={pendingDeleteInFlight ? 'Deleting...' : 'Delete'}
+        confirmDisabled={pendingDeleteInFlight}
+        cancelDisabled={pendingDeleteInFlight}
         onCancel={() => setSchedulePendingDelete(null)}
         onConfirm={() => {
           if (schedulePendingDelete) void handleDeleteSchedule(schedulePendingDelete.id);

@@ -242,4 +242,15 @@ describe('schedule report modal helpers', () => {
     expect(nextRun).toContain('15');
     expect(nextRun).toContain('09:00');
   });
+
+  it('falls back safely when the project timezone is invalid', () => {
+    const nextRun = formatNextRun('2026-06-15T01:00:00.000Z', 'Not/AZone');
+
+    expect(nextRun).toContain('Mon');
+    expect(nextRun).toContain('15');
+  });
+
+  it('does not try to format invalid next-run dates', () => {
+    expect(formatNextRun('not-a-date', 'Australia/Perth')).toBe('Not scheduled');
+  });
 });

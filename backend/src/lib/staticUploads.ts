@@ -2,7 +2,13 @@ import path from 'path';
 import express from 'express';
 import type { Request, Response, NextFunction } from 'express';
 
-const PRIVATE_UPLOAD_DIRECTORIES = new Set(['certificates', 'comments', 'documents', 'drawings']);
+const PRIVATE_UPLOAD_DIRECTORIES = new Set([
+  'certificates',
+  'comments',
+  'documents',
+  'drawings',
+  'scheduled-reports',
+]);
 
 function getUploadDirectory(reqPath: string): string {
   let normalizedPath = reqPath;

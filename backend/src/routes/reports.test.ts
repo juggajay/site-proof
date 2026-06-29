@@ -2222,6 +2222,84 @@ describe('Reports API - Scheduled Reports', () => {
       expect(res.body.schedule.recipients).toBe('updated@example.com,other@example.com');
     });
 
+    it('should cancel retryable delivery runs before persisting schedule config changes', async () => {
+      const run = await prisma.scheduledReportRun.create({
+        data: {
+          scheduleId,
+          projectId,
+          reportType: 'lot-status',
+          status: 'partial_failed',
+          recipientCount: 2,
+          sentCount: 1,
+          failedCount: 1,
+          generatedAt: new Date('2026-06-30T01:00:00.000Z'),
+          deliveries: {
+            create: [
+              {
+                scheduleId,
+                projectId,
+                recipient: 'removed@example.com',
+                recipientKind: 'external',
+                status: 'failed',
+                retryable: true,
+                attemptCount: 1,
+                nextAttemptAt: new Date('2026-06-30T01:15:00.000Z'),
+                errorReason: 'Temporary provider error',
+              },
+              {
+                scheduleId,
+                projectId,
+                recipient: 'sending@example.com',
+                recipientKind: 'external',
+                status: 'sending',
+                retryable: false,
+                attemptCount: 1,
+                lockedUntil: new Date('2026-06-30T01:15:00.000Z'),
+              },
+            ],
+          },
+        },
+      });
+
+      const res = await request(app)
+        .put(`/api/reports/schedules/${scheduleId}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          recipients: 'new-recipient@example.com',
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.schedule.recipients).toBe('new-recipient@example.com');
+
+      const updatedRun = await prisma.scheduledReportRun.findUniqueOrThrow({
+        where: { id: run.id },
+        include: { deliveries: { orderBy: { recipient: 'asc' } } },
+      });
+      expect(updatedRun.status).toBe('cancelled');
+      expect(updatedRun.completedAt).toBeInstanceOf(Date);
+      expect(updatedRun.errorReason).toBe('Schedule configuration changed before retry completed');
+      expect(updatedRun.deliveries).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            recipient: 'removed@example.com',
+            status: 'cancelled',
+            retryable: false,
+            lockedUntil: null,
+            nextAttemptAt: null,
+            errorReason: 'Schedule configuration changed before retry completed',
+          }),
+          expect.objectContaining({
+            recipient: 'sending@example.com',
+            status: 'cancelled',
+            retryable: false,
+            lockedUntil: null,
+            nextAttemptAt: null,
+            errorReason: 'Schedule configuration changed before retry completed',
+          }),
+        ]),
+      );
+    });
+
     it('should reject invalid schedule update values', async () => {
       const invalidTimeRes = await request(app)
         .put(`/api/reports/schedules/${scheduleId}`)
