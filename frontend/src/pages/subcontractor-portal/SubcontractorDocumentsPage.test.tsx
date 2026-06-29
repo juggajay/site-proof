@@ -182,7 +182,9 @@ describe('SubcontractorDocumentsPage', () => {
       initialEntries: ['/subcontractor-portal/documents?projectId=project-2&shell=off'],
     });
 
-    await user.click(await screen.findByRole('button', { name: /view document/i }));
+    await user.click(
+      await screen.findByRole('button', { name: /open sanitised-specification\.pdf/i }),
+    );
 
     expect(openDocumentAccessUrl).toHaveBeenCalledWith('document-2', undefined);
   });

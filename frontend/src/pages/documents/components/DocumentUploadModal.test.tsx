@@ -4,12 +4,12 @@ import { describe, expect, it, vi } from 'vitest';
 import { EMPTY_UPLOAD_FORM } from '../documentsUploadData';
 import { DocumentUploadModal } from './DocumentUploadModal';
 
-function renderModal() {
+function renderModal({ uploading = false } = {}) {
   return render(
     <DocumentUploadModal
       selectedFiles={[]}
       uploadForm={EMPTY_UPLOAD_FORM}
-      uploading={false}
+      uploading={uploading}
       uploadProgress={0}
       uploadedCount={0}
       imageDimensions={null}
@@ -37,5 +37,15 @@ describe('DocumentUploadModal', () => {
     expect(
       screen.getByText('PDF, DOC, XLS, JPG, PNG, EML, MSG up to 50MB (select multiple files)'),
     ).toBeInTheDocument();
+  });
+
+  it('locks file and metadata inputs while uploading', () => {
+    renderModal({ uploading: true });
+
+    expect(screen.getByLabelText('Select Files')).toBeDisabled();
+    expect(screen.getByLabelText('Document Type *')).toBeDisabled();
+    expect(screen.getByLabelText('Category')).toBeDisabled();
+    expect(screen.getByLabelText('Link to Lot (optional)')).toBeDisabled();
+    expect(screen.getByLabelText('Description')).toBeDisabled();
   });
 });

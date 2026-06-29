@@ -86,7 +86,6 @@ export function buildDocumentVersionsResponse(documentId: string, versions: unkn
 
 export function buildDocumentSignedUrlResponse({
   signedUrl,
-  token,
   documentId,
   filename,
   mimeType,
@@ -95,7 +94,6 @@ export function buildDocumentSignedUrlResponse({
   expiresInMinutes,
 }: {
   signedUrl: string;
-  token: string;
   documentId: string;
   filename: string;
   mimeType: string | null;
@@ -105,7 +103,6 @@ export function buildDocumentSignedUrlResponse({
 }) {
   return {
     signedUrl,
-    token,
     documentId,
     filename,
     mimeType,

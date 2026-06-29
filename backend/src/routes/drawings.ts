@@ -34,22 +34,32 @@ router.use(drawingReadRoutes);
 
 async function requireSupersededByInProject(
   projectId: string,
-  drawingId: string,
+  drawing: { id: string; drawingNumber: string },
   supersededById?: string | null,
 ): Promise<void> {
   if (!supersededById) return;
 
-  if (supersededById === drawingId) {
+  if (supersededById === drawing.id) {
     throw AppError.badRequest('supersededById must reference another drawing in the same project');
   }
 
   const supersedingDrawing = await prisma.drawing.findFirst({
     where: { id: supersededById, projectId },
-    select: { id: true },
+    select: { id: true, drawingNumber: true, supersededById: true },
   });
 
   if (!supersedingDrawing) {
     throw AppError.badRequest('supersededById must reference a drawing in the same project');
+  }
+
+  if (supersedingDrawing.drawingNumber !== drawing.drawingNumber) {
+    throw AppError.badRequest(
+      'supersededById must reference a revision of the same drawing number',
+    );
+  }
+
+  if (supersedingDrawing.supersededById) {
+    throw AppError.badRequest('supersededById must reference a current drawing revision');
   }
 }
 
@@ -192,7 +202,7 @@ router.patch(
     }
 
     await requireDrawingWriteAccess(req.user!, drawing.projectId);
-    await requireSupersededByInProject(drawing.projectId, drawingId, supersededById);
+    await requireSupersededByInProject(drawing.projectId, drawing, supersededById);
 
     if (revision !== undefined) {
       const existingRevision = await prisma.drawing.findFirst({

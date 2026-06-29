@@ -91,9 +91,14 @@ function filterDocuments(documents: SeededDocument[], url: URL) {
     }
     if (url.searchParams.get('search')) {
       const query = url.searchParams.get('search')!.toLowerCase();
-      return (
-        doc.filename.toLowerCase().includes(query) || doc.caption?.toLowerCase().includes(query)
-      );
+      if (
+        !(doc.filename.toLowerCase().includes(query) || doc.caption?.toLowerCase().includes(query))
+      ) {
+        return false;
+      }
+    }
+    if (url.searchParams.get('favourite') === 'true' && !doc.isFavourite) {
+      return false;
     }
     return true;
   });

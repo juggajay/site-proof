@@ -47,6 +47,33 @@ type CreateDocumentListRouterDependencies = {
 
 const UNCATEGORIZED_DOCUMENT_CATEGORY = 'uncategorized';
 
+type DocumentCategoryGroup = {
+  category: string | null;
+  _count: number | { _all?: number | null } | null;
+};
+
+function getDocumentCategoryGroupCount(group: DocumentCategoryGroup): number {
+  if (typeof group._count === 'number') {
+    return group._count;
+  }
+
+  return group._count?._all ?? 0;
+}
+
+export function buildDocumentCategoryCounts(
+  categoryGroups: DocumentCategoryGroup[],
+): Record<string, number> {
+  const categories: Record<string, number> = {};
+  for (const group of categoryGroups) {
+    const category = group.category || 'Uncategorized';
+    const count = getDocumentCategoryGroupCount(group);
+    if (count > 0) {
+      categories[category] = (categories[category] || 0) + count;
+    }
+  }
+  return categories;
+}
+
 export function applyDocumentCategoryFilter(
   where: Prisma.DocumentWhereInput,
   category: string,
@@ -108,6 +135,9 @@ export function createDocumentListRouter({
       }
       if (documentType) where.documentType = documentType;
       if (lotId) where.lotId = lotId;
+      if (getOptionalQueryString(req.query, 'favourite', 16) === 'true') {
+        where.isFavourite = true;
+      }
 
       // Feature #249: Date range filtering
       if (dateFrom || dateTo) {
@@ -143,7 +173,7 @@ export function createDocumentListRouter({
       const pagination = parsePagination(req.query);
       const { skip, take } = getPrismaSkipTake(pagination.page, pagination.limit);
 
-      const [documents, total] = await Promise.all([
+      const [documents, total, categoryGroups] = await Promise.all([
         prisma.document.findMany({
           where,
           include: {
@@ -155,14 +185,14 @@ export function createDocumentListRouter({
           take,
         }),
         prisma.document.count({ where }),
+        prisma.document.groupBy({
+          by: ['category'],
+          where,
+          _count: { _all: true },
+        }),
       ]);
 
-      // Group by category for convenience
-      const categories: Record<string, number> = {};
-      for (const doc of documents) {
-        const cat = doc.category || 'Uncategorized';
-        categories[cat] = (categories[cat] || 0) + 1;
-      }
+      const categories = buildDocumentCategoryCounts(categoryGroups);
 
       res.json(
         buildDocumentsListResponse(

@@ -33,6 +33,19 @@ function getGenericDeleteBlockedMessage(documentType: string | null | undefined)
   return GENERIC_DELETE_BLOCKED_DOCUMENT_MESSAGES[documentType] ?? null;
 }
 
+function getDocumentStorageKind(fileUrl: string): 'supabase' | 'external' | 'inline' | 'local' {
+  if (fileUrl.startsWith('supabase://')) {
+    return 'supabase';
+  }
+  if (/^https?:\/\//i.test(fileUrl)) {
+    return 'external';
+  }
+  if (fileUrl.startsWith('data:')) {
+    return 'inline';
+  }
+  return 'local';
+}
+
 type CreateDocumentDeleteRouterDependencies = {
   prisma: PrismaClient;
   parseDocumentRouteParam: (value: unknown, fieldName: string) => string;
@@ -107,7 +120,10 @@ export function createDocumentDeleteRouter({
         entityType: 'document',
         entityId: documentId,
         action: AuditAction.DOCUMENT_DELETED,
-        changes: { filename: document.filename, fileUrl: document.fileUrl },
+        changes: {
+          filename: document.filename,
+          storageKind: getDocumentStorageKind(document.fileUrl),
+        },
         req,
       });
 

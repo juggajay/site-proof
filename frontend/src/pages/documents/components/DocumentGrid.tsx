@@ -31,7 +31,6 @@ export interface DocumentGridDoc {
 interface DocumentGridProps<TDoc extends DocumentGridDoc> {
   loading: boolean;
   error: string | null;
-  documents: TDoc[];
   visibleDocuments: TDoc[];
   showFavouritesOnly: boolean;
   canManageDocuments: boolean;
@@ -81,7 +80,6 @@ function ImageDocumentThumbnail({ src, alt }: { src: string | undefined; alt: st
 export function DocumentGrid<TDoc extends DocumentGridDoc>({
   loading,
   error,
-  documents,
   visibleDocuments,
   showFavouritesOnly,
   canManageDocuments,
@@ -111,12 +109,10 @@ export function DocumentGrid<TDoc extends DocumentGridDoc>({
             />
           </svg>
           <h3 className="mt-4 text-lg font-medium">
-            {showFavouritesOnly && documents.length > 0
-              ? 'No favourite documents found'
-              : 'No documents found'}
+            {showFavouritesOnly ? 'No favourite documents found' : 'No documents found'}
           </h3>
           <p className="mt-2 text-muted-foreground">
-            {showFavouritesOnly && documents.length > 0
+            {showFavouritesOnly
               ? 'Clear the favourites filter to view all documents.'
               : 'Drag and drop files here or click "Upload Document" to get started'}
           </p>

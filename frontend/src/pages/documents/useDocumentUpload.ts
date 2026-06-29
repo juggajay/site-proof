@@ -117,7 +117,7 @@ export function useDocumentUpload(
   const handleFileSelect = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = e.target.files;
-      if (!canUploadDocuments) return;
+      if (!canUploadDocuments || uploadingRef.current) return;
       if (files && files.length > 0) {
         revokeImageDimensionObjectUrl();
         const fileArray = Array.from(files);
@@ -151,7 +151,7 @@ export function useDocumentUpload(
     (e: React.DragEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      if (!canUploadDocuments) return;
+      if (!canUploadDocuments || uploadingRef.current) return;
       const files = e.dataTransfer.files;
       if (files && files.length > 0) {
         revokeImageDimensionObjectUrl();
@@ -248,7 +248,7 @@ export function useDocumentUpload(
     (e: React.DragEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      if (!canUploadDocuments) return;
+      if (!canUploadDocuments || uploadingRef.current) return;
       setIsDragging(true);
     },
     [canUploadDocuments],
@@ -258,7 +258,7 @@ export function useDocumentUpload(
     (e: React.DragEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      if (!canUploadDocuments) return;
+      if (!canUploadDocuments || uploadingRef.current) return;
       // Only stop dragging if leaving the drop zone entirely.
       if (dropZoneRef.current && !dropZoneRef.current.contains(e.relatedTarget as Node)) {
         setIsDragging(false);
@@ -277,7 +277,7 @@ export function useDocumentUpload(
       e.preventDefault();
       e.stopPropagation();
       setIsDragging(false);
-      if (!canUploadDocuments) return;
+      if (!canUploadDocuments || uploadingRef.current) return;
 
       const files = e.dataTransfer.files;
       if (files && files.length > 0) {

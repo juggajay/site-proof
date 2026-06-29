@@ -1,5 +1,5 @@
 import { Route, Routes } from 'react-router-dom';
-import { cleanup, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '@/test/renderWithProviders';
 import { apiFetch } from '@/lib/api';
@@ -13,6 +13,14 @@ vi.mock('@/lib/api', async (importOriginal) => {
 const apiFetchMock = vi.mocked(apiFetch);
 let projectRole = 'admin';
 let documentTotal = 0;
+
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((next) => {
+    resolve = next;
+  });
+  return { promise, resolve };
+}
 
 function renderDocumentsPage(initialEntry: string) {
   return renderWithProviders(
@@ -61,7 +69,7 @@ describe('DocumentsPage', () => {
                   },
                 ]
               : [],
-          categories: {},
+          categories: documentTotal > 0 ? { quality: documentTotal } : {},
           pagination: {
             total: documentTotal,
             page,
@@ -146,6 +154,121 @@ describe('DocumentsPage', () => {
 
     await waitFor(() => {
       expect(apiFetchMock).toHaveBeenCalledWith('/api/documents/project-1?page=2&limit=100');
+    });
+  });
+
+  it('resets to page 1 when a category chip is selected after pagination', async () => {
+    documentTotal = 101;
+    renderDocumentsPage('/projects/project-1/documents');
+
+    await waitFor(() => {
+      expect(screen.getByText('quality: 101')).toBeInTheDocument();
+    });
+
+    screen.getByRole('button', { name: 'Next' }).click();
+
+    await waitFor(() => {
+      expect(apiFetchMock).toHaveBeenCalledWith('/api/documents/project-1?page=2&limit=100');
+    });
+
+    screen.getByText('quality: 101').click();
+
+    await waitFor(() => {
+      expect(apiFetchMock).toHaveBeenCalledWith(
+        '/api/documents/project-1?category=quality&page=1&limit=100',
+      );
+    });
+  });
+
+  it('uses the backend favourites filter and resets pagination', async () => {
+    documentTotal = 101;
+    renderDocumentsPage('/projects/project-1/documents');
+
+    await waitFor(() => {
+      expect(screen.getByText('Showing 1-1 of 101 documents')).toBeInTheDocument();
+    });
+
+    screen.getByRole('button', { name: 'Next' }).click();
+
+    await waitFor(() => {
+      expect(apiFetchMock).toHaveBeenCalledWith('/api/documents/project-1?page=2&limit=100');
+    });
+
+    screen.getByRole('button', { name: 'Favourites' }).click();
+
+    await waitFor(() => {
+      expect(apiFetchMock).toHaveBeenCalledWith(
+        '/api/documents/project-1?favourite=true&page=1&limit=100',
+      );
+    });
+  });
+
+  it('ignores stale signed viewer URL responses after the viewer closes', async () => {
+    const signedUrl = createDeferred<{
+      signedUrl: string;
+      expiresAt: string;
+    }>();
+    documentTotal = 1;
+    apiFetchMock.mockImplementation(async (path: string) => {
+      if (path === '/api/projects/project-1') {
+        return { project: { currentUserRole: projectRole } };
+      }
+      if (path.endsWith('/signed-url')) {
+        return signedUrl.promise;
+      }
+      if (path.startsWith('/api/documents/project-1')) {
+        return {
+          documents: [
+            {
+              id: 'doc-page-1',
+              documentType: 'photo',
+              category: 'quality',
+              filename: 'document-page-1.jpg',
+              fileSize: 1024,
+              mimeType: 'image/jpeg',
+              uploadedAt: '2026-06-01T00:00:00.000Z',
+              uploadedBy: { id: 'user-1', fullName: 'QA User', email: 'qa@example.com' },
+              caption: null,
+              lot: null,
+              isFavourite: false,
+            },
+          ],
+          categories: { quality: 1 },
+          pagination: {
+            total: 1,
+            page: 1,
+            limit: 100,
+            totalPages: 1,
+            hasPrevPage: false,
+            hasNextPage: false,
+          },
+        };
+      }
+      if (path === '/api/lots?projectId=project-1') {
+        return { lots: [] };
+      }
+      throw new Error(`Unexpected apiFetch path in stale viewer test: ${path}`);
+    });
+
+    renderDocumentsPage('/projects/project-1/documents');
+
+    await waitFor(() => {
+      expect(screen.getByText('document-page-1.jpg')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'View document-page-1.jpg' }));
+    await waitFor(() => {
+      expect(screen.getByTestId('document-viewer-modal')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    signedUrl.resolve({
+      signedUrl: '/signed/stale-viewer-url',
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('document-viewer-modal')).not.toBeInTheDocument();
     });
   });
 });

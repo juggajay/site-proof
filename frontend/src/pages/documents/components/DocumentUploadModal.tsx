@@ -92,6 +92,7 @@ export function DocumentUploadModal({
                 multiple
                 onChange={onFileSelect}
                 accept={DOCUMENT_UPLOAD_ACCEPT}
+                disabled={uploading}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
               />
               {selectedFiles.length > 0 ? (
@@ -182,6 +183,7 @@ export function DocumentUploadModal({
               id="document-upload-type"
               value={uploadForm.documentType}
               onChange={(e) => onFormChange({ documentType: e.target.value })}
+              disabled={uploading}
             >
               <option value="">Select type...</option>
               {DOCUMENT_TYPES.map((type) => (
@@ -201,6 +203,7 @@ export function DocumentUploadModal({
               id="document-upload-category"
               value={uploadForm.category}
               onChange={(e) => onFormChange({ category: e.target.value })}
+              disabled={uploading}
             >
               <option value="">Select category...</option>
               {CATEGORIES.map((cat) => (
@@ -220,6 +223,7 @@ export function DocumentUploadModal({
               id="document-upload-lot"
               value={uploadForm.lotId}
               onChange={(e) => onFormChange({ lotId: e.target.value })}
+              disabled={uploading}
             >
               <option value="">No lot selected</option>
               {lots.map((lot) => (
@@ -241,6 +245,7 @@ export function DocumentUploadModal({
               onChange={(e) => onFormChange({ caption: e.target.value })}
               placeholder="Add a description..."
               rows={3}
+              disabled={uploading}
             />
           </div>
 

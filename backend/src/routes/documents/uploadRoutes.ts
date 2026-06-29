@@ -258,6 +258,7 @@ export function createDocumentUploadRouter({
       let fileUrl: string | null = null;
       let photoMetadata: PhotoMetadata = {};
       let createdDocumentId: string | null = null;
+      const effectiveLotId = itpEvidenceTarget?.lotId ?? lotId ?? null;
 
       try {
         // Upload to Supabase Storage if configured, otherwise use local filesystem
@@ -281,7 +282,7 @@ export function createDocumentUploadRouter({
         const document = await prisma.document.create({
           data: {
             projectId,
-            lotId: lotId || null,
+            lotId: effectiveLotId,
             documentType,
             category: category || null,
             filename: sanitizeUploadFilename(uploadedFile.originalname),
