@@ -5,6 +5,23 @@ import { getJsPDF } from './jsPdfRuntime';
 import { savePdf } from './pdfSave';
 import type { NCRDetailData } from './types';
 
+type NcrEvidenceItem = NonNullable<NCRDetailData['ncr']['evidence']>[number];
+type DateTimeFormatter = (dateStr: string | null | undefined) => string;
+
+function getEvidenceUploadDate(evidence: NcrEvidenceItem): string | null | undefined {
+  return evidence.uploadedAt || evidence.document?.uploadedAt;
+}
+
+function getEvidenceDetails(evidence: NcrEvidenceItem, formatDateTime: DateTimeFormatter): string {
+  const uploadedAt = getEvidenceUploadDate(evidence);
+  const details = [
+    `Type: ${formatStatusLabel(evidence.evidenceType || 'evidence')}`,
+    evidence.document?.mimeType ? `MIME: ${evidence.document.mimeType}` : null,
+    uploadedAt ? `Uploaded: ${formatDateTime(uploadedAt)}` : null,
+  ];
+  return details.filter((detail): detail is string => detail !== null).join(' | ');
+}
+
 /**
  * Generate a PDF detail report for a Non-Conformance Report (NCR)
  */
@@ -72,6 +89,18 @@ export async function generateNCRDetailPDF(data: NCRDetailData): Promise<void> {
     yPos += lines.length * 4 + 2;
   };
 
+  const addParagraph = (label: string, value: string): void => {
+    checkPageBreak(15);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.text(`${label}:`, margin, yPos);
+    yPos += 4;
+    doc.setFont('helvetica', 'normal');
+    const lines = doc.splitTextToSize(value, contentWidth - 5);
+    doc.text(lines, margin + 3, yPos);
+    yPos += lines.length * 4 + 4;
+  };
+
   // ========== HEADER ==========
   // Severity-based header color
   const severityColors: Record<string, [number, number, number]> = {
@@ -110,7 +139,10 @@ export async function generateNCRDetailPDF(data: NCRDetailData): Promise<void> {
   addField('Due Date', formatDate(data.ncr.dueDate));
   addField(
     'Responsible',
-    data.ncr.responsibleUser?.fullName || data.ncr.responsibleUser?.email || 'Unassigned',
+    data.ncr.responsibleUser?.fullName ||
+      data.ncr.responsibleUser?.email ||
+      data.ncr.responsibleSubcontractor?.companyName ||
+      'Unassigned',
   );
 
   yPos += 5;
@@ -153,76 +185,43 @@ export async function generateNCRDetailPDF(data: NCRDetailData): Promise<void> {
 
   // ========== ROOT CAUSE & ACTIONS ==========
   if (
+    data.ncr.rootCauseCategory ||
     data.ncr.rootCause ||
     data.ncr.proposedAction ||
     data.ncr.actionTaken ||
     data.ncr.preventativeMeasures ||
+    data.ncr.verificationNotes ||
     data.ncr.lessonsLearned
   ) {
     drawSectionHeader('Investigation & Resolution');
 
+    if (data.ncr.rootCauseCategory) {
+      addParagraph('Root Cause Category', data.ncr.rootCauseCategory);
+    }
+
     if (data.ncr.rootCause) {
-      checkPageBreak(15);
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(9);
-      doc.text('Root Cause:', margin, yPos);
-      yPos += 4;
-      doc.setFont('helvetica', 'normal');
-      const rootCauseLines = doc.splitTextToSize(data.ncr.rootCause, contentWidth - 5);
-      doc.text(rootCauseLines, margin + 3, yPos);
-      yPos += rootCauseLines.length * 4 + 4;
+      addParagraph('Root Cause', data.ncr.rootCause);
     }
 
     if (data.ncr.proposedAction) {
-      checkPageBreak(15);
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(9);
-      doc.text('Proposed Action:', margin, yPos);
-      yPos += 4;
-      doc.setFont('helvetica', 'normal');
-      const proposedLines = doc.splitTextToSize(data.ncr.proposedAction, contentWidth - 5);
-      doc.text(proposedLines, margin + 3, yPos);
-      yPos += proposedLines.length * 4 + 4;
+      addParagraph('Proposed Action', data.ncr.proposedAction);
     }
 
     if (data.ncr.actionTaken) {
-      checkPageBreak(15);
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(9);
-      doc.text('Action Taken:', margin, yPos);
-      yPos += 4;
-      doc.setFont('helvetica', 'normal');
-      const actionLines = doc.splitTextToSize(data.ncr.actionTaken, contentWidth - 5);
-      doc.text(actionLines, margin + 3, yPos);
-      yPos += actionLines.length * 4 + 4;
+      addParagraph('Action Taken', data.ncr.actionTaken);
     }
 
     if (data.ncr.preventativeMeasures) {
-      checkPageBreak(15);
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(9);
-      doc.text('Preventative Measures:', margin, yPos);
-      yPos += 4;
-      doc.setFont('helvetica', 'normal');
-      const preventativeLines = doc.splitTextToSize(
-        data.ncr.preventativeMeasures,
-        contentWidth - 5,
-      );
-      doc.text(preventativeLines, margin + 3, yPos);
-      yPos += preventativeLines.length * 4 + 4;
+      addParagraph('Preventative Measures', data.ncr.preventativeMeasures);
+    }
+
+    if (data.ncr.verificationNotes) {
+      addParagraph('Verification Notes', data.ncr.verificationNotes);
     }
 
     // Feature #474: Lessons Learned
     if (data.ncr.lessonsLearned) {
-      checkPageBreak(15);
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(9);
-      doc.text('Lessons Learned:', margin, yPos);
-      yPos += 4;
-      doc.setFont('helvetica', 'normal');
-      const lessonsLines = doc.splitTextToSize(data.ncr.lessonsLearned, contentWidth - 5);
-      doc.text(lessonsLines, margin + 3, yPos);
-      yPos += lessonsLines.length * 4 + 4;
+      addParagraph('Lessons Learned', data.ncr.lessonsLearned);
     }
 
     yPos += 3;
@@ -251,6 +250,32 @@ export async function generateNCRDetailPDF(data: NCRDetailData): Promise<void> {
 
     addField('Closed On', formatDateTime(data.ncr.closedAt));
     addField('Closed By', data.ncr.closedBy?.fullName || data.ncr.closedBy?.email || 'Unknown');
+    yPos += 3;
+  }
+
+  // ========== EVIDENCE ==========
+  if (data.ncr.evidence && data.ncr.evidence.length > 0) {
+    drawSectionHeader('Evidence Register');
+
+    data.ncr.evidence.forEach((evidence, index) => {
+      checkPageBreak(12);
+      const documentName = evidence.document?.filename || 'Document not available';
+      const evidenceLine = `${index + 1}. ${documentName}`;
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8);
+      doc.text(evidenceLine, margin, yPos);
+      yPos += 4;
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      const details = getEvidenceDetails(evidence, formatDateTime);
+      if (details) {
+        const detailLines = doc.splitTextToSize(`   ${details}`, contentWidth - 10);
+        doc.text(detailLines, margin, yPos);
+        yPos += detailLines.length * 3 + 2;
+      }
+    });
     yPos += 3;
   }
 

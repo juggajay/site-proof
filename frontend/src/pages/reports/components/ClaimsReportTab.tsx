@@ -6,6 +6,7 @@ import { applyDatePreset } from '../types';
 import { formatReportDateTime } from '../reportFormatting';
 import { formatStatusLabel } from '@/lib/statusLabels';
 import { NativeSelect } from '@/components/ui/native-select';
+import { getReportDateRangeError } from '../reportDateRange';
 
 export interface ClaimsReportTabProps {
   report: ClaimsReport | null;
@@ -45,10 +46,12 @@ export const ClaimsReportTab = React.memo(function ClaimsReportTab({
   const generatedAt = report
     ? formatReportDateTime(report.generatedAt, dateFormat, timezone)
     : null;
+  const dateRangeError = getReportDateRangeError(claimStartDate, claimEndDate);
 
   const handleGenerateReport = useCallback(() => {
+    if (dateRangeError) return;
     onGenerateReport(claimStartDate, claimEndDate, claimStatus ? [claimStatus] : []);
-  }, [claimEndDate, claimStartDate, claimStatus, onGenerateReport]);
+  }, [claimEndDate, claimStartDate, claimStatus, dateRangeError, onGenerateReport]);
 
   const handleClearFilters = useCallback(() => {
     setClaimStartDate('');
@@ -116,6 +119,11 @@ export const ClaimsReportTab = React.memo(function ClaimsReportTab({
                 This Month
               </button>
             </div>
+            {dateRangeError && (
+              <p className="mt-2 text-sm text-destructive" role="alert">
+                {dateRangeError}
+              </p>
+            )}
           </div>
 
           <div>
@@ -143,7 +151,7 @@ export const ClaimsReportTab = React.memo(function ClaimsReportTab({
             <button
               type="button"
               onClick={handleGenerateReport}
-              disabled={loading}
+              disabled={loading || Boolean(dateRangeError)}
               className="rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
               {loading ? 'Generating...' : 'Generate Report'}
@@ -288,6 +296,11 @@ export const ClaimsReportTab = React.memo(function ClaimsReportTab({
                   ))}
                 </tbody>
               </table>
+              {report.claims.length === 0 && (
+                <div className="py-8 text-center text-muted-foreground">
+                  No claims found for the selected criteria.
+                </div>
+              )}
             </div>
           </div>
         </>
