@@ -38,6 +38,7 @@ import {
   isSubcontractorVisibleChecklistItem,
   resolveChecklistItemForInstance,
 } from '../itp/helpers/templateSnapshot.js';
+import { assertItpCompletionEvidenceUnlocked } from '../itp/helpers/evidenceLock.js';
 
 export const ITP_EVIDENCE_ENTITY_TYPE = 'itp';
 
@@ -76,6 +77,8 @@ export async function resolveItpEvidenceAttachmentTarget(
     where: { id: entityId },
     select: {
       id: true,
+      status: true,
+      verificationStatus: true,
       checklistItemId: true,
       checklistItem: {
         select: {
@@ -170,6 +173,7 @@ export async function resolveItpEvidenceAttachmentTarget(
   if (isItpSubcontractorUser(user) && !isSubcontractorVisibleChecklistItem(checklistItem ?? {})) {
     throw AppError.forbidden('ITP attachment write access required');
   }
+  assertItpCompletionEvidenceUnlocked(completion);
 
   return { completionId: completion.id, lotId: completionLotId ?? null };
 }

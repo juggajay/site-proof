@@ -1474,6 +1474,117 @@ describe('ITP Completion Attachments', () => {
     expect(Number(updatedDocument.gpsLongitude)).toBeCloseTo(151.2099, 5);
   });
 
+  it('should reject evidence attachment changes once a completion is verified or not applicable', async () => {
+    const lockedStates = [
+      {
+        label: 'verified',
+        status: 'completed',
+        verificationStatus: 'verified',
+      },
+      {
+        label: 'not-applicable',
+        status: 'not_applicable',
+        verificationStatus: 'none',
+      },
+    ];
+
+    for (const lockedState of lockedStates) {
+      const suffix = `${lockedState.label}-${Date.now()}`;
+      const addDocument = await prisma.document.create({
+        data: {
+          projectId,
+          lotId,
+          documentType: 'photo',
+          category: 'itp_evidence',
+          filename: `locked-add-${suffix}.jpg`,
+          fileUrl: `/uploads/documents/locked-add-${suffix}.jpg`,
+          fileSize: 1024,
+          mimeType: 'image/jpeg',
+          uploadedById: userId,
+          caption: 'Original locked evidence caption',
+        },
+      });
+      const linkedDocument = await prisma.document.create({
+        data: {
+          projectId,
+          lotId,
+          documentType: 'photo',
+          category: 'itp_evidence',
+          filename: `locked-linked-${suffix}.jpg`,
+          fileUrl: `/uploads/documents/locked-linked-${suffix}.jpg`,
+          fileSize: 1024,
+          mimeType: 'image/jpeg',
+          uploadedById: userId,
+        },
+      });
+      const attachment = await prisma.iTPCompletionAttachment.create({
+        data: {
+          completionId,
+          documentId: linkedDocument.id,
+        },
+      });
+
+      try {
+        await prisma.iTPCompletion.update({
+          where: { id: completionId },
+          data: {
+            status: lockedState.status,
+            completedById: userId,
+            completedAt: new Date('2026-01-01T00:00:00.000Z'),
+            verificationStatus: lockedState.verificationStatus,
+            verifiedAt:
+              lockedState.verificationStatus === 'verified'
+                ? new Date('2026-01-02T00:00:00.000Z')
+                : null,
+            verifiedById: lockedState.verificationStatus === 'verified' ? userId : null,
+          },
+        });
+
+        const addRes = await request(app)
+          .post(`/api/itp/completions/${completionId}/attachments`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            documentId: addDocument.id,
+            caption: 'Should not change locked evidence',
+            gpsLatitude: -33.865143,
+          });
+
+        expect(addRes.status).toBe(409);
+        expect(addRes.body.error.message).toContain('ITP evidence cannot be changed');
+        await expect(
+          prisma.iTPCompletionAttachment.findFirst({
+            where: { completionId, documentId: addDocument.id },
+          }),
+        ).resolves.toBeNull();
+        const unchangedDocument = await prisma.document.findUniqueOrThrow({
+          where: { id: addDocument.id },
+        });
+        expect(unchangedDocument.caption).toBe('Original locked evidence caption');
+        expect(unchangedDocument.gpsLatitude).toBeNull();
+
+        const deleteRes = await request(app)
+          .delete(`/api/itp/completions/${completionId}/attachments/${attachment.id}`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(deleteRes.status).toBe(409);
+        expect(deleteRes.body.error.message).toContain('ITP evidence cannot be changed');
+        await expect(
+          prisma.iTPCompletionAttachment.findUnique({ where: { id: attachment.id } }),
+        ).resolves.not.toBeNull();
+      } finally {
+        await prisma.iTPCompletionAttachment.deleteMany({
+          where: {
+            OR: [{ id: attachment.id }, { documentId: addDocument.id }],
+          },
+        });
+        await prisma.document.deleteMany({
+          where: { id: { in: [addDocument.id, linkedDocument.id] } },
+        });
+        await resetCompletionWorkflowState();
+      }
+    }
+  });
+
   it('should enforce one attachment link per completion and document at the database level', async () => {
     const timestamp = Date.now();
     const duplicateGuardDocument = await prisma.document.create({

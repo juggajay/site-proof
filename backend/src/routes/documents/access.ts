@@ -14,6 +14,10 @@ import {
 } from '../../lib/projectAccess.js';
 import type { SubcontractorPortalAccessKey } from '../../lib/projectAccess.js';
 import { canReadNcr } from '../ncrs/ncrAccess.js';
+import {
+  LOCKED_ITP_EVIDENCE_MESSAGE,
+  isItpCompletionEvidenceLocked,
+} from '../itp/helpers/evidenceLock.js';
 
 type AuthUser = NonNullable<Express.Request['user']>;
 
@@ -82,6 +86,36 @@ function getDocumentPortalModule(category?: string | null): SubcontractorPortalA
   }
 
   return 'documents';
+}
+
+async function requireNoLockedItpEvidenceAttachment(document: DocumentAccessRecord): Promise<void> {
+  if (!document.id) {
+    return;
+  }
+
+  const lockedAttachment = await prisma.iTPCompletionAttachment.findFirst({
+    where: {
+      documentId: document.id,
+      completion: {
+        OR: [{ verificationStatus: 'verified' }, { status: 'not_applicable' }],
+      },
+    },
+    select: {
+      completion: {
+        select: {
+          status: true,
+          verificationStatus: true,
+        },
+      },
+    },
+  });
+
+  if (lockedAttachment && isItpCompletionEvidenceLocked(lockedAttachment.completion)) {
+    throw AppError.conflict(LOCKED_ITP_EVIDENCE_MESSAGE, {
+      status: lockedAttachment.completion.status,
+      verificationStatus: lockedAttachment.completion.verificationStatus,
+    });
+  }
 }
 
 async function canReadNcrEvidenceDocument(
@@ -549,6 +583,7 @@ export async function requireDocumentMutationAccess(
       documentType: document.documentType,
     });
   }
+  await requireNoLockedItpEvidenceAttachment(document);
 
   if (!isDocumentSubcontractorUser(user)) {
     return;
