@@ -23,6 +23,7 @@ const projectAccessState = vi.hoisted(() => ({
 vi.mock('@/lib/auth', () => ({
   AuthProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
   useAuth: () => ({ user: authState.user, loading: authState.loading }),
+  getAuthToken: vi.fn(() => 'test-token'),
 }));
 
 vi.mock('@/lib/api', async (importOriginal) => {

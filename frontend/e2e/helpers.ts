@@ -25,11 +25,48 @@ export function createJsonResponder(route: Route): JsonResponder {
     });
 }
 
+function hasSubcontractorProjectIdentity(user: typeof E2E_ADMIN_USER): boolean {
+  const roles = [
+    String(user.role ?? ''),
+    String(user.roleInCompany ?? ''),
+    'dashboardRole' in user
+      ? String((user as { dashboardRole?: unknown }).dashboardRole ?? '')
+      : '',
+  ];
+
+  return roles.some((role) => role.toLowerCase().startsWith('subcontractor'));
+}
+
 export async function mockAuthenticatedUserState(
   page: Page,
   user = E2E_ADMIN_USER,
   notificationUnreadCount = 0,
 ): Promise<void> {
+  await page.route('**/api/projects/*/access', async (route) => {
+    if (hasSubcontractorProjectIdentity(user)) {
+      await route.fulfill({
+        status: 403,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: { message: 'You do not have access to this project' },
+        }),
+      });
+      return;
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        access: {
+          hasProjectAccess: true,
+          role: 'project_manager',
+          isProjectAdmin: true,
+        },
+      }),
+    });
+  });
+
   await page.route('**/api/notifications/unread-count**', async (route) => {
     await route.fulfill({
       status: 200,

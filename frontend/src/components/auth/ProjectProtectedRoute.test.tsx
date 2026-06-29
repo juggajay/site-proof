@@ -15,6 +15,7 @@ const apiState = vi.hoisted(() => ({
 
 vi.mock('@/lib/auth', () => ({
   useAuth: () => ({ user: authState.user, loading: authState.loading, sessionExpired: false }),
+  getAuthToken: vi.fn(() => 'test-token'),
 }));
 
 vi.mock('@/lib/api', async (importOriginal) => {
