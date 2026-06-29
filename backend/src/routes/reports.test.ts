@@ -4,6 +4,7 @@ import express from 'express';
 import { authRouter } from './auth.js';
 import { reportsRouter } from './reports.js';
 import { prisma } from '../lib/prisma.js';
+import { parseAuditLogChanges } from '../lib/auditLog.js';
 import { ARCHIVED_PROJECT_READ_ONLY_MESSAGE } from '../lib/projectAccess.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { registerTestUser } from '../test/routeTestHarness.js';
@@ -1601,6 +1602,7 @@ describe('Reports API - Claims Report', () => {
 describe('Reports API - Scheduled Reports', () => {
   let authToken: string;
   let userId: string;
+  let scheduledUserEmail: string;
   let companyId: string;
   let projectId: string;
   let scheduleId: string;
@@ -1622,6 +1624,7 @@ describe('Reports API - Scheduled Reports', () => {
     });
     authToken = primaryUser.token;
     userId = primaryUser.userId;
+    scheduledUserEmail = primaryUser.email;
 
     const project = await prisma.project.create({
       data: {
@@ -1683,7 +1686,7 @@ describe('Reports API - Scheduled Reports', () => {
   });
 
   describe('POST /api/reports/schedules', () => {
-    it('should create a scheduled report', async () => {
+    it('should create a scheduled report and audit recipient exposure without raw emails', async () => {
       const res = await request(app)
         .post('/api/reports/schedules')
         .set('Authorization', `Bearer ${authToken}`)
@@ -1693,7 +1696,7 @@ describe('Reports API - Scheduled Reports', () => {
           frequency: 'weekly',
           dayOfWeek: 1,
           timeOfDay: '09:00',
-          recipients: 'test@example.com,test2@example.com',
+          recipients: `${scheduledUserEmail},external-schedule-recipient@example.net`,
         });
 
       expect(res.status).toBe(201);
@@ -1702,6 +1705,28 @@ describe('Reports API - Scheduled Reports', () => {
       expect(res.body.schedule.frequency).toBe('weekly');
       expect(res.body.schedule.isActive).toBe(true);
       scheduleId = res.body.schedule.id;
+
+      const auditLog = await prisma.auditLog.findFirst({
+        where: {
+          projectId,
+          entityType: 'scheduled_report',
+          entityId: scheduleId,
+          action: 'scheduled_report_created',
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      expect(auditLog).toBeTruthy();
+      const changes = parseAuditLogChanges(auditLog!.changes) as Record<string, unknown>;
+      expect(changes).toMatchObject({
+        reportType: 'lot-status',
+        frequency: 'weekly',
+        recipientCount: 2,
+        appRecipientCount: 1,
+        externalRecipientCount: 1,
+      });
+      expect(changes.recipientDomains).toEqual(['example.com', 'example.net']);
+      expect(JSON.stringify(changes)).not.toContain(scheduledUserEmail);
+      expect(JSON.stringify(changes)).not.toContain('external-schedule-recipient@example.net');
     });
 
     it('should reject scheduled report creation for archived projects', async () => {

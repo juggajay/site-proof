@@ -55,6 +55,25 @@ function truncate(value: string | null | undefined, maxLength: number): string {
   return `${normalized.slice(0, maxLength - 3)}...`;
 }
 
+function formatSampleHeading(
+  label: string,
+  displayedCount: number,
+  totalCount: number,
+  singularNoun: string,
+  pluralNoun = `${singularNoun}s`,
+): string {
+  if (totalCount === 0) {
+    return label;
+  }
+
+  const noun = totalCount === 1 ? singularNoun : pluralNoun;
+  if (displayedCount < totalCount) {
+    return `${label} (showing first ${displayedCount} of ${totalCount} ${noun})`;
+  }
+
+  return `${label} (showing ${displayedCount} of ${totalCount} ${noun})`;
+}
+
 async function buildLotStatusLines(projectId: string): Promise<string[]> {
   const [total, statusGroups, activityGroups, lots] = await Promise.all([
     prisma.lot.count({ where: { projectId } }),
@@ -92,7 +111,7 @@ async function buildLotStatusLines(projectId: string): Promise<string[]> {
     '',
     ...formatCountLines('Activity counts', activityCounts),
     '',
-    'Lot sample',
+    formatSampleHeading('Lot sample', lots.length, total, 'lot'),
     ...(lots.length === 0
       ? ['- No lots recorded']
       : lots.map(
@@ -161,7 +180,7 @@ async function buildNcrLines(projectId: string, now: Date): Promise<string[]> {
       countGroupsToRecord(rootCauseGroups, 'rootCauseCategory', 'Not specified'),
     ),
     '',
-    'NCR sample',
+    formatSampleHeading('NCR sample', ncrs.length, total, 'NCR', 'NCRs'),
     ...(ncrs.length === 0
       ? ['- No NCRs recorded']
       : ncrs.map(
@@ -222,7 +241,7 @@ async function buildTestLines(projectId: string): Promise<string[]> {
     '',
     ...formatCountLines('Status counts', countGroupsToRecord(statusGroups, 'status', 'requested')),
     '',
-    'Test sample',
+    formatSampleHeading('Test sample', tests.length, total, 'test'),
     ...(tests.length === 0
       ? ['- No tests recorded']
       : tests.map(
@@ -266,7 +285,7 @@ async function buildDiaryLines(projectId: string): Promise<string[]> {
     '',
     ...formatCountLines('Status counts', countGroupsToRecord(statusGroups, 'status', 'draft')),
     '',
-    'Diary sample',
+    formatSampleHeading('Diary sample', diaries.length, total, 'diary entry', 'diary entries'),
     ...(diaries.length === 0
       ? ['- No diaries recorded']
       : diaries.map(

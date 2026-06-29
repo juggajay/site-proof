@@ -244,6 +244,47 @@ describe('ReportsPage stale report handling', () => {
   });
 });
 
+describe('ReportsPage print action', () => {
+  beforeEach(() => {
+    apiFetchMock.mockReset();
+  });
+
+  it('shows a print/save PDF action when a report has loaded', async () => {
+    const printMock = vi.fn();
+    Object.defineProperty(window, 'print', {
+      configurable: true,
+      value: printMock,
+    });
+
+    apiFetchMock.mockImplementation((path) => {
+      if (path === '/api/company') {
+        return Promise.resolve({
+          company: { subscriptionTier: 'professional', name: 'QA Company', logoUrl: null },
+        });
+      }
+
+      if (path === '/api/projects/project-1') {
+        return Promise.resolve({
+          project: { name: 'QA Project', currentUserRole: 'project_manager' },
+        });
+      }
+
+      if (path.startsWith('/api/reports/lot-status?')) {
+        return Promise.resolve(buildLotStatusReport());
+      }
+
+      return Promise.reject(new Error(`Unexpected API path: ${path}`));
+    });
+
+    renderReportsPage('/projects/project-1/reports?tab=lot-status');
+
+    expect(await screen.findByText('LOT-STALE-001')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Print / Save PDF' }));
+    expect(printMock).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('ReportsPage paginated report loading', () => {
   beforeEach(() => {
     apiFetchMock.mockReset();
