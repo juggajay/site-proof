@@ -32,6 +32,7 @@ export interface NCR {
   clientNotifiedAt?: string | null;
   lessonsLearned?: string | null;
   closedAt?: string | null;
+  closedBy?: { fullName: string; email: string } | null;
   verificationNotes?: string | null;
   ncrEvidence?: Array<{
     id: string;

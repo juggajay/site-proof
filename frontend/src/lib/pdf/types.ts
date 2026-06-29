@@ -67,6 +67,7 @@ export interface DashboardPDFData {
 }
 
 export interface ITPChecklistItem {
+  id?: string;
   order: number;
   description: string;
   category: string;
@@ -79,6 +80,11 @@ export interface ITPChecklistItem {
 export interface ITPCompletion {
   checklistItemId: string;
   isCompleted: boolean;
+  isNotApplicable?: boolean;
+  isFailed?: boolean;
+  isPendingVerification?: boolean;
+  isRejected?: boolean;
+  verificationStatus?: string | null;
   notes: string | null;
   completedAt: string | null;
   completedBy: { fullName: string | null; email: string } | null;
@@ -369,20 +375,34 @@ export interface NCRDetailData {
     category: string;
     severity: 'minor' | 'major';
     status: string;
+    rootCauseCategory?: string | null;
     rootCause?: string | null;
     proposedAction?: string | null;
     actionTaken?: string | null;
     preventativeMeasures?: string | null;
+    verificationNotes?: string | null;
     lessonsLearned?: string | null; // Feature #474
     qmApprovalRequired: boolean;
     qmApprovedAt: string | null;
     qmApprovedBy?: { id?: string; fullName: string; email: string } | null;
     raisedBy: { fullName: string; email: string };
     responsibleUser?: { fullName: string; email: string } | null;
+    responsibleSubcontractor?: { companyName: string } | null;
     dueDate?: string | null;
     closedAt?: string | null;
     closedBy?: { fullName: string; email: string } | null;
     createdAt: string;
+    evidence?: Array<{
+      id: string;
+      evidenceType: string;
+      uploadedAt?: string | null;
+      document: {
+        id: string;
+        filename: string;
+        mimeType?: string | null;
+        uploadedAt?: string | null;
+      } | null;
+    }>;
   };
   project: {
     name: string;

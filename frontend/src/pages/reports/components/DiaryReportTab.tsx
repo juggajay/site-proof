@@ -5,6 +5,7 @@ import type { DiaryReport } from '../types';
 import { DIARY_SECTIONS, applyDatePreset } from '../types';
 import { formatReportDateTime } from '../reportFormatting';
 import { buildReportPaginationCaption } from '../reportPagination';
+import { getReportDateRangeError } from '../reportDateRange';
 
 export interface DiaryReportTabProps {
   report: DiaryReport | null;
@@ -38,6 +39,7 @@ export const DiaryReportTab = React.memo(function DiaryReportTab({
         'diary entries',
       )
     : null;
+  const dateRangeError = getReportDateRangeError(diaryStartDate, diaryEndDate);
 
   const toggleDiarySection = useCallback((sectionId: string) => {
     setDiarySections((prev) =>
@@ -46,8 +48,9 @@ export const DiaryReportTab = React.memo(function DiaryReportTab({
   }, []);
 
   const handleGenerateReport = useCallback(() => {
+    if (dateRangeError) return;
     onGenerateReport(diarySections, diaryStartDate, diaryEndDate);
-  }, [onGenerateReport, diarySections, diaryStartDate, diaryEndDate]);
+  }, [dateRangeError, onGenerateReport, diarySections, diaryStartDate, diaryEndDate]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
@@ -58,7 +61,7 @@ export const DiaryReportTab = React.memo(function DiaryReportTab({
           {/* Date Range */}
           <div>
             <span className="block text-sm font-medium text-foreground mb-2">Date Range</span>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <label htmlFor="diary-report-start-date" className="sr-only">
                 Diary report start date
               </label>
@@ -108,6 +111,11 @@ export const DiaryReportTab = React.memo(function DiaryReportTab({
                 This Month
               </button>
             </div>
+            {dateRangeError && (
+              <p className="mt-2 text-sm text-destructive" role="alert">
+                {dateRangeError}
+              </p>
+            )}
           </div>
 
           {/* Section Selection */}
@@ -138,7 +146,7 @@ export const DiaryReportTab = React.memo(function DiaryReportTab({
         <button
           type="button"
           onClick={handleGenerateReport}
-          disabled={loading || diarySections.length === 0}
+          disabled={loading || diarySections.length === 0 || Boolean(dateRangeError)}
           className="mt-4 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50"
         >
           {loading ? 'Generating...' : 'Generate Report'}

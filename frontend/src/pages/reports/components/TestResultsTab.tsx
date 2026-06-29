@@ -5,6 +5,7 @@ import type { TestReport } from '../types';
 import { applyDatePreset } from '../types';
 import { formatReportDateTime } from '../reportFormatting';
 import { buildReportPaginationCaption } from '../reportPagination';
+import { getReportDateRangeError } from '../reportDateRange';
 
 export interface TestResultsTabProps {
   report: TestReport | null;
@@ -32,6 +33,7 @@ export const TestResultsTab = React.memo(function TestResultsTab({
         'test results',
       )
     : null;
+  const dateRangeError = getReportDateRangeError(testStartDate, testEndDate);
 
   const availableTestTypes = useMemo(() => {
     if (!report) return [];
@@ -45,8 +47,9 @@ export const TestResultsTab = React.memo(function TestResultsTab({
   }, []);
 
   const handleGenerateReport = useCallback(() => {
+    if (dateRangeError) return;
     onRefresh(testStartDate, testEndDate, selectedTestTypes);
-  }, [onRefresh, testStartDate, testEndDate, selectedTestTypes]);
+  }, [dateRangeError, onRefresh, testStartDate, testEndDate, selectedTestTypes]);
 
   const handleClearFilters = useCallback(() => {
     setTestStartDate('');
@@ -67,7 +70,7 @@ export const TestResultsTab = React.memo(function TestResultsTab({
             <span className="block text-sm font-medium text-foreground mb-2">
               Date Range (Sample Date)
             </span>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <label htmlFor="test-report-start-date" className="sr-only">
                 Test report start date
               </label>
@@ -117,6 +120,11 @@ export const TestResultsTab = React.memo(function TestResultsTab({
                 This Month
               </button>
             </div>
+            {dateRangeError && (
+              <p className="mt-2 text-sm text-destructive" role="alert">
+                {dateRangeError}
+              </p>
+            )}
           </div>
 
           {/* Test Types Selection */}
@@ -152,7 +160,7 @@ export const TestResultsTab = React.memo(function TestResultsTab({
           <button
             type="button"
             onClick={handleGenerateReport}
-            disabled={loading}
+            disabled={loading || Boolean(dateRangeError)}
             className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50"
           >
             {loading ? 'Generating...' : 'Generate Report'}
@@ -171,17 +179,6 @@ export const TestResultsTab = React.memo(function TestResultsTab({
 
       {report && (
         <>
-          {/* Feature #208: Report Actions */}
-          <div className="flex justify-end gap-3 print:hidden">
-            <button
-              type="button"
-              onClick={() => window.print()}
-              className="px-4 py-2 text-sm font-medium rounded-md border border-border hover:bg-muted/50 flex items-center gap-2"
-            >
-              Print / Save PDF
-            </button>
-          </div>
-
           {/* Summary Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="bg-card border rounded-lg p-4">

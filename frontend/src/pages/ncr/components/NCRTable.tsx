@@ -2,8 +2,8 @@ import { memo, useEffect, useRef, type ReactNode } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Link2, Check, Printer } from 'lucide-react';
 import { toast } from '@/components/ui/toaster';
-import type { NCRDetailData } from '@/lib/pdfGenerator';
 import { getStatusBadgeColor } from '../constants';
+import { buildNcrDetailPdfData } from '../ncrDetailPdfData';
 import { getAvailableNcrActions } from '../ncrActions';
 import type { NcrSortDirection, NcrSortField } from '../ncrRegisterSort';
 import type { NCR, UserRole } from '../types';
@@ -56,31 +56,7 @@ function NCRTableInner({
   onConcession,
 }: NCRTableProps) {
   const handlePrintPdf = async (ncr: NCR) => {
-    const pdfData: NCRDetailData = {
-      ncr: {
-        ncrNumber: ncr.ncrNumber,
-        description: ncr.description,
-        category: ncr.category,
-        severity: ncr.severity,
-        status: ncr.status,
-        qmApprovalRequired: ncr.qmApprovalRequired,
-        qmApprovedAt: ncr.qmApprovedAt,
-        qmApprovedBy: ncr.qmApprovedBy,
-        raisedBy: ncr.raisedBy,
-        responsibleUser: ncr.responsibleUser,
-        dueDate: ncr.dueDate,
-        createdAt: ncr.createdAt,
-      },
-      project: {
-        name: ncr.project?.name || 'Unknown Project',
-        projectNumber: ncr.project?.projectNumber || 'N/A',
-      },
-      lots:
-        ncr.ncrLots?.map((nl) => ({
-          lotNumber: nl.lot.lotNumber,
-          description: nl.lot.description || null,
-        })) || [],
-    };
+    const pdfData = buildNcrDetailPdfData(ncr);
 
     try {
       const { generateNCRDetailPDF } = await import('@/lib/pdfGenerator');

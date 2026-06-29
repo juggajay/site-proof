@@ -237,6 +237,9 @@ export const LotStatusTab = React.memo(function LotStatusTab({ report }: LotStat
               ))}
             </tbody>
           </table>
+          <div hidden={report.lots.length > 0} className="text-center py-8 text-muted-foreground">
+            No lots found for this project.
+          </div>
         </div>
       </div>
     </div>

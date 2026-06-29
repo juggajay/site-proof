@@ -67,6 +67,8 @@ describe('pdfGenerator characterization', () => {
         'Non-Conformance Description',
         'Honeycombing identified on headwall concrete face after formwork strip.',
         'Investigation & Resolution',
+        'Root Cause Category:',
+        'Work method',
         'Root Cause:',
         'Insufficient vibration around congested reinforcement.',
         'Proposed Action:',
@@ -75,6 +77,8 @@ describe('pdfGenerator characterization', () => {
         'Repair methodology submitted for superintendent review.',
         'Preventative Measures:',
         'Brief crew on vibration pattern and add pre-pour checklist hold point.',
+        'Verification Notes:',
+        'QM requested photo evidence before final closure.',
         'Lessons Learned:',
         'Increase inspection frequency when reinforcement congestion is high.',
         'Quality Manager Approval',
@@ -82,11 +86,14 @@ describe('pdfGenerator characterization', () => {
         'Yes',
         'QM Approval Status:',
         'Pending',
+        'Evidence Register',
+        '1. headwall-repair-photo.jpg',
         'Activity Timeline',
         '1. NCR raised',
         'Civil Execution and Conformance Platform',
       ]),
     );
+    expect(textContent).toContain('Type: Rectification Photo | MIME: image/jpeg');
     expect(textContent).not.toContain('4200 hrs');
     expect(textContent).not.toContain('1800 hrs');
     expect(textContent).not.toContain('SiteProof v2');
