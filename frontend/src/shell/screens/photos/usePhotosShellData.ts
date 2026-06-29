@@ -4,10 +4,11 @@
  * NEW PRESENTATION over EXISTING LOGIC. This is the one genuinely new shell
  * surface, but it ships ZERO new endpoints:
  *
- *   SERVER PHOTOS — `GET /api/documents/:projectId?documentType=photo&limit=100` (the exact
- *   list endpoint + photo filter the desktop Documents page uses), under the same
- *   `queryKeys.documents(projectId)` cache so a re-file invalidation refreshes
- *   both surfaces. Each row already carries lotId/lot, caption, gps and fileUrl.
+ *   SERVER PHOTOS — `GET /api/documents/:projectId?documentType=photo&page=...&limit=100`
+ *   (the exact list endpoint + photo filter the desktop Documents page uses),
+ *   under the same `queryKeys.documents(projectId)` cache so a re-file
+ *   invalidation refreshes both surfaces. Each row already carries lotId/lot,
+ *   caption, gps and fileUrl.
  *
  *   OFFLINE-UNSYNCED PHOTOS — `getUnsyncedPhotos()` from the offline store
  *   (lib/offlineDb), so a just-captured photo or failed upload remains visible
@@ -34,6 +35,13 @@ import {
 
 interface DocumentsResponse {
   documents?: ServerPhotoDoc[];
+  pagination?: PaginationMeta | null;
+}
+
+interface PaginationMeta {
+  page: number;
+  totalPages: number;
+  hasNextPage: boolean;
 }
 
 const PHOTOS_STALE_TIME_MS = 30_000;
@@ -41,6 +49,27 @@ const PHOTOS_DOCUMENTS_PAGE_LIMIT = 100;
 // Pending captures live in IndexedDB; poll briefly so the grid reflects the sync
 // worker draining the queue without a manual reload. Cheap (local read only).
 const PENDING_REFETCH_INTERVAL_MS = 4_000;
+
+async function fetchAllServerPhotos(projectId: string): Promise<DocumentsResponse> {
+  const allDocuments: ServerPhotoDoc[] = [];
+  let page = 1;
+
+  for (;;) {
+    const response = await apiFetch<DocumentsResponse>(
+      `/api/documents/${encodeURIComponent(
+        projectId,
+      )}?documentType=photo&page=${page}&limit=${PHOTOS_DOCUMENTS_PAGE_LIMIT}`,
+    );
+    allDocuments.push(...(response.documents ?? []));
+
+    const pagination = response.pagination;
+    if (!pagination?.hasNextPage || page >= pagination.totalPages) {
+      return { documents: allDocuments };
+    }
+
+    page = pagination.page + 1;
+  }
+}
 
 export interface PhotosShellData {
   projectId: string | null;
@@ -58,11 +87,8 @@ export function usePhotosShellData(projectId: string | null): PhotosShellData {
   const enabled = Boolean(projectId) && Boolean(getAuthToken());
 
   const serverQuery = useQuery({
-    queryKey: [...queryKeys.documents(projectId ?? 'none'), 'photo', 'shell'] as const,
-    queryFn: () =>
-      apiFetch<DocumentsResponse>(
-        `/api/documents/${encodeURIComponent(projectId!)}?documentType=photo&limit=${PHOTOS_DOCUMENTS_PAGE_LIMIT}`,
-      ),
+    queryKey: [...queryKeys.documents(projectId ?? 'none'), 'photo', 'shell', 'all-pages'] as const,
+    queryFn: () => fetchAllServerPhotos(projectId!),
     enabled,
     staleTime: PHOTOS_STALE_TIME_MS,
     refetchOnWindowFocus: true,

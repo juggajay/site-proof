@@ -46,6 +46,13 @@ interface ClaimWorkflowRouterDependencies {
   ) => Promise<void>;
 }
 
+function isCertificationDocument(document: {
+  documentType: string | null;
+  category: string | null;
+}): boolean {
+  return document.documentType === 'certificate' && document.category === 'certification';
+}
+
 async function getProjectCertificationDocumentId(
   client: Pick<typeof prisma, 'document'>,
   projectId: string,
@@ -63,11 +70,17 @@ async function getProjectCertificationDocumentId(
 
   const document = await client.document.findFirst({
     where: { id: normalized, projectId },
-    select: { id: true },
+    select: { id: true, documentType: true, category: true },
   });
 
   if (!document) {
     throw AppError.badRequest('certificationDocumentId must reference a document in this project');
+  }
+
+  if (!isCertificationDocument(document)) {
+    throw AppError.badRequest(
+      'certificationDocumentId must reference a certification document in this project',
+    );
   }
 
   return document.id;

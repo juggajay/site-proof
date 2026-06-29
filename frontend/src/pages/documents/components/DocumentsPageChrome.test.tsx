@@ -11,7 +11,7 @@ import {
 describe('DocumentsPageHeader', () => {
   it('opens the upload modal', () => {
     const onUpload = vi.fn();
-    render(<DocumentsPageHeader onUpload={onUpload} />);
+    render(<DocumentsPageHeader canUploadDocuments onUpload={onUpload} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Upload Document' }));
 
@@ -19,7 +19,7 @@ describe('DocumentsPageHeader', () => {
   });
 
   it('renders the context help affordance', () => {
-    render(<DocumentsPageHeader onUpload={vi.fn()} />);
+    render(<DocumentsPageHeader canUploadDocuments onUpload={vi.fn()} />);
 
     expect(
       screen.getByRole('button', { name: 'Help for Document Management' }),

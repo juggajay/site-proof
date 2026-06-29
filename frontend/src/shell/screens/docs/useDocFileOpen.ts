@@ -31,7 +31,7 @@ export function useDocFileOpen(): DocFileOpener {
   const openDoc = useCallback(async (documentId: string, fileUrl?: string | null) => {
     setOpening(true);
     try {
-      await openDocumentAccessUrl(documentId, fileUrl);
+      await openDocumentAccessUrl(documentId, fileUrl, { disposition: 'inline' });
     } catch (err) {
       logError('Error opening drawing:', err);
       toast({

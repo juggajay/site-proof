@@ -966,6 +966,52 @@ describe('Documents API', () => {
       expect(validateRes.body.expiresAt).toBeDefined();
     });
 
+    it('marks signed URL tokens invalid after the token owner loses document access', async () => {
+      const scopedUser = await registerTestUser(app, {
+        emailPrefix: 'documents-token-access',
+        fullName: 'Documents Token Access User',
+        companyId,
+        roleInCompany: 'member',
+      });
+      await prisma.projectUser.create({
+        data: {
+          projectId,
+          userId: scopedUser.userId,
+          role: 'site_engineer',
+          status: 'active',
+        },
+      });
+
+      try {
+        const createRes = await request(app)
+          .post(`/api/documents/${documentId}/signed-url`)
+          .set('Authorization', `Bearer ${scopedUser.token}`);
+
+        expect(createRes.status).toBe(200);
+        expect(createRes.body.token).toBeDefined();
+
+        await prisma.projectUser.deleteMany({
+          where: { projectId, userId: scopedUser.userId },
+        });
+
+        const validateRes = await request(app).get(
+          `/api/documents/signed-url/validate?token=${createRes.body.token}&documentId=${documentId}`,
+        );
+
+        expect(validateRes.status).toBe(200);
+        expect(validateRes.body.valid).toBe(false);
+      } finally {
+        await prisma.projectUser.deleteMany({
+          where: { projectId, userId: scopedUser.userId },
+        });
+        await prisma.documentSignedUrlToken.deleteMany({
+          where: { userId: scopedUser.userId },
+        });
+        await prisma.emailVerificationToken.deleteMany({ where: { userId: scopedUser.userId } });
+        await prisma.user.delete({ where: { id: scopedUser.userId } }).catch(() => {});
+      }
+    });
+
     it('should reject and clean up expired signed URL tokens', async () => {
       const createRes = await request(app)
         .post(`/api/documents/${documentId}/signed-url`)

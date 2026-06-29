@@ -112,7 +112,7 @@ function readMultipartField(body: string, name: string): string {
 
 async function mockSeededDrawingsApi(
   page: Page,
-  options: { failList?: boolean; failCurrentSet?: boolean } = {},
+  options: { failList?: boolean; failCurrentSet?: boolean; projectRole?: string } = {},
 ) {
   const drawings: Drawing[] = [
     buildDrawing(
@@ -179,6 +179,7 @@ async function mockSeededDrawingsApi(
           id: E2E_PROJECT_ID,
           name: 'E2E Highway Upgrade',
           projectNumber: 'E2E-001',
+          currentUserRole: options.projectRole ?? 'admin',
         },
       });
       return;
@@ -498,5 +499,20 @@ test.describe('Drawings seeded register contract', () => {
     await expect(page.getByRole('button', { name: 'Download Current Set' })).toBeDisabled();
     await expect(page.getByRole('button', { name: 'Add Drawing' })).toBeDisabled();
     await expect(page.getByText('No drawings found')).toBeHidden();
+  });
+
+  test('uses current project role for drawing write controls', async ({ page }) => {
+    await mockSeededDrawingsApi(page, { projectRole: 'viewer' });
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/drawings`);
+
+    await expect(page.getByRole('heading', { name: 'Drawing Register' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Download Current Set' })).toBeEnabled();
+    await expect(page.getByRole('button', { name: 'Add Drawing' })).toBeHidden();
+    await expect(
+      page.getByRole('button', { name: 'Upload new revision for DRW-E2E-001' }),
+    ).toBeHidden();
+    await expect(page.getByRole('button', { name: 'Delete DRW-E2E-001' })).toBeHidden();
+    await expect(page.getByLabel('Status for DRW-E2E-001')).toBeHidden();
   });
 });
