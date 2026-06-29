@@ -10,7 +10,8 @@
  *   - lot numbers from ncrLots
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { SubbieShellData } from '../../subbieShellData';
@@ -37,6 +38,22 @@ vi.mock('../../subbieShellContext', () => ({ useSubbieShellContext: () => _ctx }
 
 import { NcrsScreen } from '../NcrsScreen';
 
+function mockMatchMedia() {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
+}
+
 function makeCtx(modules: Partial<PortalAccess> = {}): SubbieShellData {
   const portalAccess: PortalAccess = { ...DEFAULT_PORTAL_ACCESS, ...modules };
   return {
@@ -53,7 +70,10 @@ function makeCtx(modules: Partial<PortalAccess> = {}): SubbieShellData {
 
 function setApi({ ncrs = [] as unknown[] } = {}) {
   apiFetchMock.mockReset();
-  apiFetchMock.mockImplementation((url: string) => {
+  apiFetchMock.mockImplementation((url: string, options?: { method?: string }) => {
+    if (url === '/api/ncrs/ncr-shell-open/respond' && options?.method === 'POST') {
+      return Promise.resolve({ ncr: { id: 'ncr-shell-open', status: 'investigating' } });
+    }
     if (url.startsWith('/api/ncrs')) return Promise.resolve({ ncrs });
     return Promise.resolve({});
   });
@@ -73,6 +93,7 @@ function renderScreen() {
 describe('subbie shell NcrsScreen', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockMatchMedia();
     _ctx = makeCtx();
     setApi();
   });
@@ -149,5 +170,52 @@ describe('subbie shell NcrsScreen', () => {
     expect(screen.getByText('CRITICAL')).toBeInTheDocument();
     expect(screen.getByText(/Lot: LOT-014/)).toBeInTheDocument();
     expect(screen.getByText('rectification-photo.jpg')).toBeInTheDocument();
+  });
+
+  it('lets a responsible subcontractor submit an NCR response from the mobile shell', async () => {
+    const user = userEvent.setup();
+    _ctx = { ...makeCtx({ ncrs: true }), subcontractorCompanyId: 'sub-1' };
+    setApi({
+      ncrs: [
+        {
+          id: 'ncr-shell-open',
+          ncrNumber: 'NCR-101',
+          description: 'Open shell NCR',
+          category: 'workmanship',
+          status: 'open',
+          severity: 'minor',
+          raisedAt: '2026-06-09T00:00:00.000Z',
+          responsibleSubcontractorId: 'sub-1',
+          responsibleSubcontractor: { id: 'sub-1', companyName: 'Hargraves' },
+          ncrLots: [{ lot: { lotNumber: 'LOT-101' } }],
+        },
+      ],
+    });
+
+    renderScreen();
+    expect(await screen.findByText('NCR-101')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Respond' }));
+
+    await user.selectOptions(screen.getByLabelText(/Root Cause Category/i), 'process');
+    await user.type(screen.getByLabelText(/Root Cause Description/i), 'Sequence was missed.');
+    await user.type(
+      screen.getByLabelText(/Proposed Corrective Action/i),
+      'Rework and brief the crew.',
+    );
+    await user.click(screen.getByRole('button', { name: 'Submit Response' }));
+
+    await waitFor(() =>
+      expect(apiFetchMock).toHaveBeenCalledWith(
+        '/api/ncrs/ncr-shell-open/respond',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({
+            rootCauseCategory: 'process',
+            rootCauseDescription: 'Sequence was missed.',
+            proposedCorrectiveAction: 'Rework and brief the crew.',
+          }),
+        }),
+      ),
+    );
   });
 });

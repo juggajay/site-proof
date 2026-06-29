@@ -13,7 +13,15 @@ import type { NCR, UserRole } from '../types';
  * current without a background interval.
  */
 const NCR_REGISTER_STALE_TIME_MS = 30_000;
+const NCR_REGISTER_PAGE_LIMIT = 100;
 const EMPTY_NCR_REGISTER: NCR[] = [];
+
+interface NcrListResponse {
+  ncrs?: NCR[];
+  pagination?: {
+    totalPages?: number;
+  };
+}
 
 interface UseNCRDataOptions {
   projectId: string | undefined;
@@ -29,6 +37,28 @@ interface UseNCRDataReturn {
   fetchNcrs: () => Promise<void>;
 }
 
+function buildNcrRegisterPath(projectId: string | undefined, page: number) {
+  const params = new URLSearchParams();
+  if (projectId) params.set('projectId', projectId);
+  params.set('page', String(page));
+  params.set('limit', String(NCR_REGISTER_PAGE_LIMIT));
+  return `/api/ncrs?${params.toString()}`;
+}
+
+async function fetchNcrRegister(projectId: string | undefined): Promise<NCR[]> {
+  const firstPage = await apiFetch<NcrListResponse>(buildNcrRegisterPath(projectId, 1));
+  const pages = [firstPage.ncrs ?? []];
+  const rawTotalPages = firstPage.pagination?.totalPages ?? 1;
+  const totalPages = Number.isFinite(rawTotalPages) ? Math.max(1, Math.floor(rawTotalPages)) : 1;
+
+  for (let page = 2; page <= totalPages; page += 1) {
+    const nextPage = await apiFetch<NcrListResponse>(buildNcrRegisterPath(projectId, page));
+    pages.push(nextPage.ncrs ?? []);
+  }
+
+  return pages.flat();
+}
+
 export function useNCRData({ projectId, token }: UseNCRDataOptions): UseNCRDataReturn {
   const queryClient = useQueryClient();
   // Single error banner slot shared with useNCRActions: register load failures
@@ -37,11 +67,7 @@ export function useNCRData({ projectId, token }: UseNCRDataOptions): UseNCRDataR
 
   const ncrsQuery = useQuery({
     queryKey: queryKeys.ncrs(projectId),
-    queryFn: async () => {
-      const path = projectId ? `/api/ncrs?projectId=${encodeURIComponent(projectId)}` : `/api/ncrs`;
-      const data = await apiFetch<{ ncrs: NCR[] }>(path);
-      return data.ncrs ?? [];
-    },
+    queryFn: () => fetchNcrRegister(projectId),
     enabled: Boolean(token),
     staleTime: NCR_REGISTER_STALE_TIME_MS,
     refetchOnWindowFocus: true,

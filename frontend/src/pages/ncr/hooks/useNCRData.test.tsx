@@ -40,7 +40,9 @@ function buildNcr(id: string, overrides: Partial<NCR> = {}): NCR {
 function mockApi({ ncrs = [buildNcr('ncr-1')] }: { ncrs?: NCR[] } = {}) {
   apiFetchMock.mockImplementation(async (path: string): Promise<unknown> => {
     if (path.startsWith('/api/ncrs/check-role/')) return ROLE;
-    if (path.startsWith('/api/ncrs')) return { ncrs };
+    if (path.startsWith('/api/ncrs')) {
+      return { ncrs, pagination: { page: 1, limit: 100, total: ncrs.length, totalPages: 1 } };
+    }
     throw new Error(`Unexpected apiFetch path in test: ${path}`);
   });
 }
@@ -75,8 +77,34 @@ describe('useNCRData', () => {
     expect(result.current.ncrs.map((ncr) => ncr.id)).toEqual(['ncr-1']);
     await waitFor(() => expect(result.current.userRole).toEqual(ROLE));
     expect(result.current.error).toBeNull();
-    expect(apiFetchMock).toHaveBeenCalledWith('/api/ncrs?projectId=project-1');
+    expect(apiFetchMock).toHaveBeenCalledWith('/api/ncrs?projectId=project-1&page=1&limit=100');
     expect(apiFetchMock).toHaveBeenCalledWith('/api/ncrs/check-role/project-1');
+  });
+
+  it('loads every NCR register page when the first page reports more pages', async () => {
+    apiFetchMock.mockImplementation(async (path: string): Promise<unknown> => {
+      if (path.startsWith('/api/ncrs/check-role/')) return ROLE;
+      if (path === '/api/ncrs?projectId=project-1&page=1&limit=100') {
+        return {
+          ncrs: [buildNcr('ncr-1')],
+          pagination: { page: 1, limit: 100, total: 2, totalPages: 2 },
+        };
+      }
+      if (path === '/api/ncrs?projectId=project-1&page=2&limit=100') {
+        return {
+          ncrs: [buildNcr('ncr-2')],
+          pagination: { page: 2, limit: 100, total: 2, totalPages: 2 },
+        };
+      }
+      throw new Error(`Unexpected apiFetch path in test: ${path}`);
+    });
+
+    const { result } = renderNCRData('project-1');
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(result.current.ncrs.map((ncr) => ncr.id)).toEqual(['ncr-1', 'ncr-2']);
+    expect(apiFetchMock).toHaveBeenCalledWith('/api/ncrs?projectId=project-1&page=1&limit=100');
+    expect(apiFetchMock).toHaveBeenCalledWith('/api/ncrs?projectId=project-1&page=2&limit=100');
   });
 
   it('does not start the old 30-second register poll', async () => {
@@ -147,7 +175,7 @@ describe('useNCRData', () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     expect(result.current.userRole).toBeNull();
-    expect(apiFetchMock).toHaveBeenCalledWith('/api/ncrs');
+    expect(apiFetchMock).toHaveBeenCalledWith('/api/ncrs?page=1&limit=100');
     expect(
       apiFetchMock.mock.calls.filter(([path]) => String(path).includes('check-role')),
     ).toHaveLength(0);

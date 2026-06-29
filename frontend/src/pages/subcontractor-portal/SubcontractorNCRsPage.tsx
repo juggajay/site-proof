@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, AlertTriangle, AlertCircle, CheckCircle2, Clock, XCircle } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
@@ -5,21 +6,29 @@ import { queryKeys } from '@/lib/queryKeys';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { apiFetch } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { extractErrorMessage } from '@/lib/errorHandling';
+import { extractErrorMessage, handleApiError } from '@/lib/errorHandling';
 import { formatStatusLabel } from '@/lib/statusLabels';
+import { toast } from '@/components/ui/toaster';
 import { PortalAccessDenied } from './portalAccess';
 import { isPortalModuleEnabled, type PortalAccess } from './portalAccessModel';
 import { buildPortalCompanyQuery, buildPortalCompanyScopedPath } from './portalCompanyScope';
 import { NCREvidenceList } from '../ncr/components/NCREvidenceList';
+import { RespondNCRModal } from '../ncr/components/RespondNCRModal';
+import { RectifyNCRModal } from '../ncr/components/RectifyNCRModal';
+import type { NCR as WorkflowNCR } from '../ncr/types';
 
 interface NCR {
   id: string;
   ncrNumber: string;
   description: string;
+  category?: string;
   status: string;
   severity: 'minor' | 'major' | 'critical';
   raisedAt: string;
   raisedBy?: { fullName: string };
+  responsibleUserId?: string | null;
+  responsibleSubcontractorId?: string | null;
+  responsibleSubcontractor?: { id: string; companyName: string } | null;
   closedAt?: string;
   ncrLots?: Array<{
     lot?: {
@@ -47,6 +56,46 @@ interface SubcontractorCompany {
   projectId: string;
   projectName: string;
   portalAccess?: PortalAccess;
+}
+
+function isResponsibleNcr(ncr: NCR, companyId?: string, userId?: string) {
+  return (
+    (!!companyId &&
+      (ncr.responsibleSubcontractorId === companyId ||
+        ncr.responsibleSubcontractor?.id === companyId)) ||
+    (!!userId && ncr.responsibleUserId === userId)
+  );
+}
+
+function toWorkflowNcr(ncr: NCR, projectId?: string, projectName?: string): WorkflowNCR {
+  return {
+    id: ncr.id,
+    ncrNumber: ncr.ncrNumber,
+    description: ncr.description,
+    category: ncr.category ?? 'Workmanship',
+    severity: ncr.severity === 'major' || ncr.severity === 'critical' ? 'major' : 'minor',
+    status: ncr.status,
+    qmApprovalRequired: false,
+    qmApprovedAt: null,
+    raisedBy: {
+      fullName: ncr.raisedBy?.fullName ?? 'SiteProof',
+      email: '',
+    },
+    responsibleUser: null,
+    responsibleSubcontractor: ncr.responsibleSubcontractor ?? null,
+    responsibleUserId: ncr.responsibleUserId ?? null,
+    responsibleSubcontractorId: ncr.responsibleSubcontractorId ?? null,
+    createdAt: ncr.raisedAt,
+    project: { id: projectId, name: projectName ?? '', projectNumber: '' },
+    ncrLots:
+      ncr.ncrLots?.map((ncrLot) => ({
+        lot: {
+          lotNumber: ncrLot.lot?.lotNumber ?? '',
+          description: ncrLot.lot?.description ?? '',
+        },
+      })) ?? [],
+    ncrEvidence: ncr.ncrEvidence,
+  };
 }
 
 function getStatusBadge(status: string) {
@@ -118,6 +167,9 @@ function getSeverityBadge(severity: string) {
 
 export function SubcontractorNCRsPage() {
   const { user } = useAuth();
+  const [respondingNcr, setRespondingNcr] = useState<NCR | null>(null);
+  const [rectifyingNcr, setRectifyingNcr] = useState<NCR | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
   const [searchParams] = useSearchParams();
   const requestedProjectId = searchParams.get('projectId');
   const requestedSubcontractorCompanyId = searchParams.get('subcontractorCompanyId');
@@ -144,6 +196,7 @@ export function SubcontractorNCRsPage() {
     data: ncrs = [],
     isLoading: ncrsLoading,
     error,
+    refetch: refetchNcrs,
   } = useQuery({
     queryKey: queryKeys.portalNCRs(user?.id, company?.projectId, company?.id),
     queryFn: async () => {
@@ -167,6 +220,37 @@ export function SubcontractorNCRsPage() {
   const open = ncrs.filter((n) => isOpenStatus(n.status));
   const inProgress = ncrs.filter((n) => !isOpenStatus(n.status) && !isClosedStatus(n.status));
   const closed = ncrs.filter((n) => isClosedStatus(n.status));
+
+  const handleRespond = async (
+    ncrId: string,
+    responseData: {
+      rootCauseCategory: string;
+      rootCauseDescription: string;
+      proposedCorrectiveAction: string;
+    },
+  ) => {
+    setActionLoading(true);
+    try {
+      await apiFetch(`/api/ncrs/${encodeURIComponent(ncrId)}/respond`, {
+        method: 'POST',
+        body: JSON.stringify({
+          rootCauseCategory: responseData.rootCauseCategory,
+          rootCauseDescription: responseData.rootCauseDescription.trim(),
+          proposedCorrectiveAction: responseData.proposedCorrectiveAction.trim(),
+        }),
+      });
+      setRespondingNcr(null);
+      toast({
+        title: 'NCR response submitted',
+        description: 'The NCR has moved to investigating.',
+      });
+      await refetchNcrs();
+    } catch (err) {
+      handleApiError(err, 'Failed to submit NCR response');
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -250,7 +334,13 @@ export function SubcontractorNCRsPage() {
               <h2 className="text-sm font-medium text-destructive mb-2">Open ({open.length})</h2>
               <div className="space-y-2">
                 {open.map((ncr) => (
-                  <NCRCard key={ncr.id} ncr={ncr} />
+                  <NCRCard
+                    key={ncr.id}
+                    ncr={ncr}
+                    responsible={isResponsibleNcr(ncr, company?.id, user?.id)}
+                    onRespond={setRespondingNcr}
+                    onRectify={setRectifyingNcr}
+                  />
                 ))}
               </div>
             </div>
@@ -264,7 +354,13 @@ export function SubcontractorNCRsPage() {
               </h2>
               <div className="space-y-2">
                 {inProgress.map((ncr) => (
-                  <NCRCard key={ncr.id} ncr={ncr} />
+                  <NCRCard
+                    key={ncr.id}
+                    ncr={ncr}
+                    responsible={isResponsibleNcr(ncr, company?.id, user?.id)}
+                    onRespond={setRespondingNcr}
+                    onRectify={setRectifyingNcr}
+                  />
                 ))}
               </div>
             </div>
@@ -278,23 +374,67 @@ export function SubcontractorNCRsPage() {
               </h2>
               <div className="space-y-2">
                 {closed.map((ncr) => (
-                  <NCRCard key={ncr.id} ncr={ncr} />
+                  <NCRCard
+                    key={ncr.id}
+                    ncr={ncr}
+                    responsible={isResponsibleNcr(ncr, company?.id, user?.id)}
+                    onRespond={setRespondingNcr}
+                    onRectify={setRectifyingNcr}
+                  />
                 ))}
               </div>
             </div>
           )}
         </>
       )}
+      <RespondNCRModal
+        isOpen={!!respondingNcr}
+        ncr={
+          respondingNcr
+            ? toWorkflowNcr(respondingNcr, company?.projectId, company?.projectName)
+            : null
+        }
+        onClose={() => setRespondingNcr(null)}
+        onSubmit={handleRespond}
+        loading={actionLoading}
+      />
+      <RectifyNCRModal
+        isOpen={!!rectifyingNcr}
+        ncr={
+          rectifyingNcr
+            ? toWorkflowNcr(rectifyingNcr, company?.projectId, company?.projectName)
+            : null
+        }
+        projectId={company?.projectId}
+        onClose={() => setRectifyingNcr(null)}
+        onSuccess={async () => {
+          setRectifyingNcr(null);
+          await refetchNcrs();
+        }}
+      />
     </div>
   );
 }
 
-function NCRCard({ ncr }: { ncr: NCR }) {
+function NCRCard({
+  ncr,
+  responsible,
+  onRespond,
+  onRectify,
+}: {
+  ncr: NCR;
+  responsible: boolean;
+  onRespond: (ncr: NCR) => void;
+  onRectify: (ncr: NCR) => void;
+}) {
   const lotNumbers = ncr.ncrLots
     ?.map((ncrLot) => ncrLot.lot?.lotNumber)
     .filter(Boolean)
     .join(', ');
   const evidence = ncr.ncrEvidence ?? [];
+  const canRespond = responsible && ncr.status === 'open';
+  const canRectify =
+    responsible && (ncr.status === 'investigating' || ncr.status === 'rectification');
 
   return (
     <div className="border border-border rounded-lg bg-card">
@@ -322,6 +462,28 @@ function NCRCard({ ncr }: { ncr: NCR }) {
         {evidence.length > 0 && (
           <div className="mt-3">
             <NCREvidenceList evidence={evidence} title="Evidence" variant="inline" />
+          </div>
+        )}
+        {(canRespond || canRectify) && (
+          <div className="mt-3 flex flex-wrap gap-2 border-t border-border pt-3">
+            {canRespond && (
+              <button
+                type="button"
+                onClick={() => onRespond(ncr)}
+                className="min-h-[40px] rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+              >
+                Respond
+              </button>
+            )}
+            {canRectify && (
+              <button
+                type="button"
+                onClick={() => onRectify(ncr)}
+                className="min-h-[40px] rounded-lg border border-border px-3 py-2 text-sm font-medium text-foreground hover:bg-muted/50"
+              >
+                Submit Rectification
+              </button>
+            )}
           </div>
         )}
       </div>
