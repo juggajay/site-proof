@@ -60,7 +60,7 @@ describe('DocumentCategorySummary', () => {
       />,
     );
 
-    fireEvent.click(screen.getByText('Drawings: 3'));
+    fireEvent.click(screen.getByRole('button', { name: 'Drawings: 3' }));
 
     expect(onSelectCategory).toHaveBeenCalledWith('Drawings');
   });
@@ -74,7 +74,7 @@ describe('DocumentCategorySummary', () => {
       />,
     );
 
-    fireEvent.click(screen.getByText('Uncategorized: 1'));
+    fireEvent.click(screen.getByRole('button', { name: 'Uncategorized: 1' }));
 
     expect(onSelectCategory).toHaveBeenCalledWith('uncategorized');
   });

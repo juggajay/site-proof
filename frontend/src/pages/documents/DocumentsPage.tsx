@@ -9,7 +9,6 @@ import { createMutationErrorHandler, extractErrorMessage } from '@/lib/errorHand
 import { toast } from '@/components/ui/toaster';
 import {
   getDocumentAccess,
-  getDocumentAccessUrl,
   invalidateDocumentAccessUrl,
   openDocumentAccessUrl,
   type DocumentAccessUrl,
@@ -115,6 +114,7 @@ export function DocumentsPage() {
   // Viewer modal state
   const [viewerDoc, setViewerDoc] = useState<Document | null>(null);
   const [viewerUrl, setViewerUrl] = useState('');
+  const [viewerAccess, setViewerAccess] = useState<DocumentAccessUrl | null>(null);
   const [viewerUrlLoading, setViewerUrlLoading] = useState(false);
   const [viewerError, setViewerError] = useState<string | null>(null);
   const [documentUrls, setDocumentUrls] = useState<Record<string, DocumentAccessUrl>>({});
@@ -122,6 +122,7 @@ export function DocumentsPage() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [documentPendingDelete, setDocumentPendingDelete] = useState<Document | null>(null);
   const viewerRef = useRef<HTMLDivElement>(null);
+  const viewerRequestIdRef = useRef(0);
   const appliedUploadQueryRef = useRef<string | null>(null);
 
   const triggerSearch = () => {
@@ -163,6 +164,7 @@ export function DocumentsPage() {
     if (dateFrom) params.append('dateFrom', dateFrom);
     if (dateTo) params.append('dateTo', dateTo);
     if (committedSearch) params.append('search', committedSearch);
+    if (showFavouritesOnly) params.append('favourite', 'true');
     params.append('page', String(currentPage));
     params.append('limit', String(DOCUMENTS_PAGE_LIMIT));
     if (params.toString()) path += `?${params.toString()}`;
@@ -183,6 +185,7 @@ export function DocumentsPage() {
       dateFrom,
       dateTo,
       committedSearch,
+      showFavouritesOnly,
       currentPage,
     ] as const,
     queryFn: () => apiFetch<DocumentsResponse>(docsQueryPath),
@@ -196,10 +199,7 @@ export function DocumentsPage() {
   );
   const pagination = docsData?.pagination ?? null;
   const error = docsError ? extractErrorMessage(docsError, 'Failed to load documents') : null;
-  const visibleDocuments = useMemo(
-    () => documents.filter((doc) => !showFavouritesOnly || doc.isFavourite),
-    [documents, showFavouritesOnly],
-  );
+  const visibleDocuments = documents;
 
   useEffect(() => {
     const imageDocs = documents.filter((doc) => {
@@ -295,6 +295,10 @@ export function DocumentsPage() {
     setCurrentPage(1);
     setDateTo(value);
   };
+  const updateShowFavouritesOnly = (value: boolean) => {
+    setCurrentPage(1);
+    setShowFavouritesOnly(value);
+  };
 
   const { data: lotsData } = useQuery({
     queryKey: queryKeys.lots(projectId!),
@@ -360,29 +364,67 @@ export function DocumentsPage() {
   };
 
   const openViewer = async (doc: Document) => {
+    const requestId = viewerRequestIdRef.current + 1;
+    viewerRequestIdRef.current = requestId;
     setViewerDoc(doc);
     setViewerUrl('');
+    setViewerAccess(null);
     setViewerUrlLoading(true);
     setViewerError(null);
     setViewerZoom(100);
     try {
-      const url = await getDocumentAccessUrl(doc.id, doc.fileUrl, { disposition: 'inline' });
-      setViewerUrl(url);
+      const access = await getDocumentAccess(doc.id, doc.fileUrl, { disposition: 'inline' });
+      if (viewerRequestIdRef.current !== requestId) return;
+      setViewerUrl(access.url);
+      setViewerAccess(access);
     } catch (err) {
+      if (viewerRequestIdRef.current !== requestId) return;
       logError('Failed to load document URL:', err);
       setViewerError(extractErrorMessage(err, 'Failed to load document preview.'));
     } finally {
-      setViewerUrlLoading(false);
+      if (viewerRequestIdRef.current === requestId) {
+        setViewerUrlLoading(false);
+      }
     }
   };
 
   const closeViewer = () => {
+    viewerRequestIdRef.current += 1;
     setViewerDoc(null);
     setViewerUrl('');
+    setViewerAccess(null);
     setViewerUrlLoading(false);
     setViewerError(null);
     setViewerZoom(100);
   };
+
+  useEffect(() => {
+    if (!viewerDoc || !viewerAccess || !Number.isFinite(viewerAccess.refreshAt)) return;
+
+    const requestId = viewerRequestIdRef.current;
+    const timeoutId = window.setTimeout(
+      () => {
+        void (async () => {
+          if (viewerRequestIdRef.current !== requestId) return;
+          try {
+            const refreshedAccess = await getDocumentAccess(viewerDoc.id, viewerDoc.fileUrl, {
+              disposition: 'inline',
+            });
+            if (viewerRequestIdRef.current !== requestId) return;
+            setViewerUrl(refreshedAccess.url);
+            setViewerAccess(refreshedAccess);
+          } catch (err) {
+            if (viewerRequestIdRef.current !== requestId) return;
+            logError('Failed to refresh document preview URL:', err);
+            setViewerError(extractErrorMessage(err, 'Failed to refresh document preview.'));
+          }
+        })();
+      },
+      Math.max(1_000, viewerAccess.refreshAt - Date.now()),
+    );
+
+    return () => window.clearTimeout(timeoutId);
+  }, [viewerAccess, viewerDoc]);
 
   const handleDownload = async (doc: Document) => {
     try {
@@ -450,7 +492,7 @@ export function DocumentsPage() {
         onDateFromChange={updateDateFrom}
         onDateToChange={updateDateTo}
         onSearchQueryChange={setSearchQuery}
-        onShowFavouritesOnlyChange={setShowFavouritesOnly}
+        onShowFavouritesOnlyChange={updateShowFavouritesOnly}
         onTriggerSearch={triggerSearch}
         onClearAll={() => {
           setFilterType('');
@@ -467,13 +509,12 @@ export function DocumentsPage() {
 
       <DocumentsLoadErrorAlert error={error} onRetry={() => void refetchDocuments()} />
 
-      <DocumentCategorySummary categories={categories} onSelectCategory={setFilterCategory} />
+      <DocumentCategorySummary categories={categories} onSelectCategory={updateFilterCategory} />
 
       {/* Documents Grid */}
       <DocumentGrid
         loading={loading}
         error={error}
-        documents={documents}
         visibleDocuments={visibleDocuments}
         showFavouritesOnly={showFavouritesOnly}
         canManageDocuments={canManageDocuments}

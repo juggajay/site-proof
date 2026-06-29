@@ -260,6 +260,7 @@ function DocumentCard({ document }: { document: Document }) {
             onClick={() => void handleOpenDocument()}
             className="p-2 rounded-lg hover:bg-muted transition-colors"
             title="View document"
+            aria-label={`Open ${document.filename}`}
           >
             <ExternalLink className="h-4 w-4 text-muted-foreground" />
           </button>

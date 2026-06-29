@@ -106,7 +106,7 @@ describe('resolveItpEvidenceAttachmentTarget', () => {
       lotId: 'lot-1',
     });
 
-    expect(target).toEqual({ completionId: 'completion-1' });
+    expect(target).toEqual({ completionId: 'completion-1', lotId: 'lot-1' });
     expect(mocks.completionFindUnique).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: 'completion-1' } }),
     );
@@ -213,6 +213,19 @@ describe('resolveItpEvidenceAttachmentTarget', () => {
     });
   });
 
+  it('returns the completion lot when the queued upload omits lotId', async () => {
+    mocks.completionFindUnique.mockResolvedValue(completionRecord());
+
+    await expect(
+      resolveItpEvidenceAttachmentTarget(user, {
+        entityType: 'itp',
+        entityId: 'completion-1',
+        projectId: 'project-1',
+        lotId: null,
+      }),
+    ).resolves.toEqual({ completionId: 'completion-1', lotId: 'lot-1' });
+  });
+
   it('propagates the role gate rejection (authz failure on the lot)', async () => {
     mocks.completionFindUnique.mockResolvedValue(completionRecord());
     mocks.requireItpLotRole.mockRejectedValue(
@@ -306,7 +319,10 @@ describe('resolveItpEvidenceAttachmentTarget', () => {
 
 describe('attachDocumentToItpCompletion', () => {
   it('creates the same ITPCompletionAttachment row the attach endpoint creates', async () => {
-    await attachDocumentToItpCompletion({ completionId: 'completion-1' }, 'document-9');
+    await attachDocumentToItpCompletion(
+      { completionId: 'completion-1', lotId: 'lot-1' },
+      'document-9',
+    );
 
     expect(mocks.attachmentCreate).toHaveBeenCalledWith({
       data: { completionId: 'completion-1', documentId: 'document-9' },

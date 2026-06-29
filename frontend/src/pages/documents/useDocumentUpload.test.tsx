@@ -2,6 +2,19 @@ import { type ReactNode, createElement } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const apiMocks = vi.hoisted(() => ({
+  authFetch: vi.fn(),
+}));
+
+vi.mock('@/lib/api', () => ({
+  authFetch: apiMocks.authFetch,
+}));
+
+vi.mock('@/components/ui/toaster', () => ({
+  toast: vi.fn(),
+}));
+
 import { useDocumentUpload } from './useDocumentUpload';
 
 function createWrapper() {
@@ -25,6 +38,12 @@ function makeChangeEvent(files: File[]) {
   } as unknown as React.ChangeEvent<HTMLInputElement>;
 }
 
+function renderDocumentUploadHook(projectId = 'project-1') {
+  return renderHook(() => useDocumentUpload(projectId), {
+    wrapper: createWrapper(),
+  });
+}
+
 const originalCreateObjectURL = URL.createObjectURL;
 const originalRevokeObjectURL = URL.revokeObjectURL;
 const OriginalImage = window.Image;
@@ -43,6 +62,7 @@ class NonLoadingImage {
 
 describe('useDocumentUpload preview URL cleanup', () => {
   beforeEach(() => {
+    apiMocks.authFetch.mockReset();
     previewCount = 0;
     createObjectURLMock = vi.fn(() => `blob:document-preview-${++previewCount}`);
     revokeObjectURLMock = vi.fn();
@@ -59,9 +79,7 @@ describe('useDocumentUpload preview URL cleanup', () => {
   });
 
   it('revokes the pending image dimension URL when the selected image is replaced', () => {
-    const { result } = renderHook(() => useDocumentUpload('project-1'), {
-      wrapper: createWrapper(),
-    });
+    const { result } = renderDocumentUploadHook();
 
     act(() => {
       result.current.handleFileSelect(makeChangeEvent([makeImageFile('first.png')]));
@@ -75,9 +93,7 @@ describe('useDocumentUpload preview URL cleanup', () => {
   });
 
   it('revokes the pending image dimension URL when the upload modal closes', () => {
-    const { result } = renderHook(() => useDocumentUpload('project-1'), {
-      wrapper: createWrapper(),
-    });
+    const { result } = renderDocumentUploadHook();
 
     act(() => {
       result.current.handleFileSelect(makeChangeEvent([makeImageFile('plan.png')]));
@@ -90,9 +106,7 @@ describe('useDocumentUpload preview URL cleanup', () => {
   });
 
   it('revokes the pending image dimension URL on unmount', () => {
-    const { result, unmount } = renderHook(() => useDocumentUpload('project-1'), {
-      wrapper: createWrapper(),
-    });
+    const { result, unmount } = renderDocumentUploadHook();
 
     act(() => {
       result.current.handleFileSelect(makeChangeEvent([makeImageFile('photo.png')]));
@@ -101,5 +115,25 @@ describe('useDocumentUpload preview URL cleanup', () => {
     unmount();
 
     expect(revokeObjectURLMock).toHaveBeenCalledWith('blob:document-preview-1');
+  });
+
+  it('ignores file changes while an upload is in flight', async () => {
+    apiMocks.authFetch.mockReturnValue(new Promise(() => undefined));
+    const { result } = renderDocumentUploadHook();
+
+    act(() => {
+      result.current.handleFileSelect(makeChangeEvent([makeImageFile('first.png')]));
+      result.current.updateUploadForm({ documentType: 'photo' });
+    });
+
+    await act(async () => {
+      result.current.handleUpload();
+    });
+
+    act(() => {
+      result.current.handleFileSelect(makeChangeEvent([makeImageFile('second.png')]));
+    });
+
+    expect(result.current.selectedFiles.map((file) => file.name)).toEqual(['first.png']);
   });
 });

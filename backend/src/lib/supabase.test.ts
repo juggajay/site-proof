@@ -8,23 +8,48 @@ afterEach(() => {
   vi.resetModules();
 });
 
+function spyOnStorageWarning() {
+  return vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+}
+
+async function expectStorageNotConfigured() {
+  const storage = await import('./supabase.js');
+
+  expect(storage.isSupabaseConfigured()).toBe(false);
+  expect(() => storage.getSupabaseClient()).toThrow('Supabase storage is not configured');
+  return storage;
+}
+
+function expectServiceRoleWarning(warn: ReturnType<typeof spyOnStorageWarning>) {
+  expect(warn).toHaveBeenCalledWith(
+    'Supabase service-role storage credentials not configured. File storage will use local filesystem.',
+  );
+}
+
 describe('supabase storage client', () => {
   it('does not construct a Supabase client when credentials are missing', async () => {
     delete process.env.SUPABASE_URL;
     delete process.env.SUPABASE_SERVICE_ROLE_KEY;
     delete process.env.SUPABASE_ANON_KEY;
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const warn = spyOnStorageWarning();
 
-    const storage = await import('./supabase.js');
+    const storage = await expectStorageNotConfigured();
 
-    expect(storage.isSupabaseConfigured()).toBe(false);
-    expect(() => storage.getSupabaseClient()).toThrow('Supabase storage is not configured');
     expect(() => storage.getSupabasePublicUrl('documents', 'file.pdf')).toThrow(
       'Supabase storage is not configured',
     );
-    expect(warn).toHaveBeenCalledWith(
-      'Supabase credentials not configured. File storage will use local filesystem.',
-    );
+    expectServiceRoleWarning(warn);
+  });
+
+  it('does not configure backend storage with only an anon key', async () => {
+    process.env.SUPABASE_URL = 'https://siteproof.supabase.co/';
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    process.env.SUPABASE_ANON_KEY = 'anon-key-is-not-a-backend-storage-credential';
+    const warn = spyOnStorageWarning();
+
+    await expectStorageNotConfigured();
+
+    expectServiceRoleWarning(warn);
   });
 
   it('uses configured Supabase storage credentials', async () => {

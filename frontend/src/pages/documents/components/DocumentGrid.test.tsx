@@ -29,7 +29,6 @@ function renderGrid(documentUrls: Record<string, DocumentAccessUrl>) {
   const props = {
     loading: false,
     error: null,
-    documents: [imageDocument],
     visibleDocuments: [imageDocument],
     showFavouritesOnly: false,
     canManageDocuments: true,
@@ -74,5 +73,29 @@ describe('DocumentGrid thumbnails', () => {
       expect(image).toBeVisible();
       expect(image).toHaveAttribute('src', '/signed/fresh-photo.jpg');
     });
+  });
+});
+
+describe('DocumentGrid empty states', () => {
+  it('shows a favourites-specific empty state for server-filtered favourite results', () => {
+    render(
+      <DocumentGrid
+        loading={false}
+        error={null}
+        visibleDocuments={[]}
+        showFavouritesOnly
+        canManageDocuments
+        documentUrls={{}}
+        onToggleFavourite={vi.fn()}
+        onOpenViewer={vi.fn()}
+        onDownload={vi.fn()}
+        onMarkPendingDelete={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('No favourite documents found')).toBeInTheDocument();
+    expect(
+      screen.getByText('Clear the favourites filter to view all documents.'),
+    ).toBeInTheDocument();
   });
 });

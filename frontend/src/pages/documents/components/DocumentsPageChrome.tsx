@@ -114,15 +114,16 @@ export function DocumentCategorySummary({
   return (
     <div className="flex flex-wrap gap-2">
       {Object.entries(categories).map(([category, count]) => (
-        <span
+        <button
+          type="button"
           key={category}
           onClick={() =>
             onSelectCategory(category === 'Uncategorized' ? 'uncategorized' : category)
           }
-          className="cursor-pointer rounded-full bg-muted px-3 py-1 text-sm hover:bg-primary hover:text-primary-foreground"
+          className="cursor-pointer rounded-full bg-muted px-3 py-1 text-sm hover:bg-primary hover:text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           {category}: {count}
-        </span>
+        </button>
       ))}
     </div>
   );

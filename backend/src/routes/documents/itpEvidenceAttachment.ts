@@ -43,6 +43,7 @@ export const ITP_EVIDENCE_ENTITY_TYPE = 'itp';
 
 export interface ItpEvidenceAttachmentTarget {
   completionId: string;
+  lotId: string | null;
 }
 
 /**
@@ -170,7 +171,7 @@ export async function resolveItpEvidenceAttachmentTarget(
     throw AppError.forbidden('ITP attachment write access required');
   }
 
-  return { completionId: completion.id };
+  return { completionId: completion.id, lotId: completionLotId ?? null };
 }
 
 /**

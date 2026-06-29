@@ -78,6 +78,14 @@ function writeTestUpload(dir: string, filename: string, contents = validPdfBytes
   return filePath;
 }
 
+function getTokenFromSignedUrlResponse(body: { signedUrl?: unknown }): string {
+  expect(typeof body.signedUrl).toBe('string');
+  const signedUrl = new URL(String(body.signedUrl), 'https://siteproof.test');
+  const token = signedUrl.searchParams.get('token');
+  expect(token).toBeTruthy();
+  return token!;
+}
+
 describe('Documents API', () => {
   let authToken: string;
   let userId: string;
@@ -429,7 +437,10 @@ describe('Documents API', () => {
 
       expect(createRes.status).toBe(200);
 
-      const params = new URLSearchParams({ token: createRes.body.token, ...query });
+      const params = new URLSearchParams({
+        token: getTokenFromSignedUrlResponse(createRes.body),
+        ...query,
+      });
       return {
         createRes,
         res: await request(app).get(`/api/documents/download/${targetDocumentId}?${params}`),
@@ -571,8 +582,9 @@ describe('Documents API', () => {
           .post(`/api/documents/${localDocument.id}/signed-url`)
           .set('Authorization', `Bearer ${authToken}`);
 
+        const token = getTokenFromSignedUrlResponse(createRes.body);
         const res = await request(app).get(
-          `/api/documents/download/${localDocument.id}?token=${createRes.body.token}`,
+          `/api/documents/download/${localDocument.id}?token=${token}`,
         );
 
         expect(res.status).toBe(200);
@@ -614,8 +626,9 @@ describe('Documents API', () => {
         expect(createRes.status).toBe(200);
         expect(createRes.body.signedUrl).toContain('disposition=inline');
 
+        const token = getTokenFromSignedUrlResponse(createRes.body);
         const res = await request(app).get(
-          `/api/documents/download/${localDocument.id}?token=${createRes.body.token}&disposition=inline`,
+          `/api/documents/download/${localDocument.id}?token=${token}&disposition=inline`,
         );
 
         expect(res.status).toBe(200);
@@ -663,8 +676,9 @@ describe('Documents API', () => {
           .set('Authorization', `Bearer ${authToken}`)
           .send({ disposition: 'inline' });
 
+        const token = getTokenFromSignedUrlResponse(createRes.body);
         const res = await request(app).get(
-          `/api/documents/download/${externalDocument.id}?token=${createRes.body.token}&disposition=inline`,
+          `/api/documents/download/${externalDocument.id}?token=${token}&disposition=inline`,
         );
 
         expect(res.status).toBe(200);
@@ -725,8 +739,9 @@ describe('Documents API', () => {
             .post(`/api/documents/${localDocument.id}/signed-url`)
             .set('Authorization', `Bearer ${authToken}`);
 
+          const token = getTokenFromSignedUrlResponse(createRes.body);
           const res = await request(app).get(
-            `/api/documents/download/${localDocument.id}?token=${createRes.body.token}`,
+            `/api/documents/download/${localDocument.id}?token=${token}`,
           );
 
           expect(res.status).toBe(200);
@@ -938,7 +953,8 @@ describe('Documents API', () => {
       expect(res.status).toBe(200);
       expect(res.body.signedUrl).toBeDefined();
       expect(res.body.expiresAt).toBeDefined();
-      expect(res.body.token).toBeDefined();
+      expect(getTokenFromSignedUrlResponse(res.body)).toBeTruthy();
+      expect(res.body).not.toHaveProperty('token');
     });
 
     it('should validate generated signed URLs from persistent storage without storing raw tokens', async () => {
@@ -946,7 +962,7 @@ describe('Documents API', () => {
         .post(`/api/documents/${documentId}/signed-url`)
         .set('Authorization', `Bearer ${authToken}`);
 
-      const token = createRes.body.token;
+      const token = getTokenFromSignedUrlResponse(createRes.body);
       const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
       const storedToken = await prisma.documentSignedUrlToken.findUnique({
         where: { tokenHash },
@@ -988,14 +1004,15 @@ describe('Documents API', () => {
           .set('Authorization', `Bearer ${scopedUser.token}`);
 
         expect(createRes.status).toBe(200);
-        expect(createRes.body.token).toBeDefined();
+        const token = getTokenFromSignedUrlResponse(createRes.body);
+        expect(createRes.body).not.toHaveProperty('token');
 
         await prisma.projectUser.deleteMany({
           where: { projectId, userId: scopedUser.userId },
         });
 
         const validateRes = await request(app).get(
-          `/api/documents/signed-url/validate?token=${createRes.body.token}&documentId=${documentId}`,
+          `/api/documents/signed-url/validate?token=${token}&documentId=${documentId}`,
         );
 
         expect(validateRes.status).toBe(200);
@@ -1018,7 +1035,7 @@ describe('Documents API', () => {
         .set('Authorization', `Bearer ${authToken}`)
         .send({ expiresInMinutes: 1 });
 
-      const token = createRes.body.token;
+      const token = getTokenFromSignedUrlResponse(createRes.body);
       const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
       await prisma.documentSignedUrlToken.update({
         where: { tokenHash },
@@ -1542,11 +1559,10 @@ describe('Documents API', () => {
       expect(attachments).toBe(0);
     };
 
-    it('attaches the uploaded photo to the ITP completion when entityType is itp', async () => {
+    it('attaches ITP evidence and stores the completion lot when queued uploads omit lotId', async () => {
       const res = await uploadEvidence(
         {
           projectId,
-          lotId,
           documentType: 'photo',
           category: 'itp_evidence',
           entityType: 'itp',
@@ -1562,6 +1578,11 @@ describe('Documents API', () => {
           where: { completionId, documentId },
         });
         expect(attachment).not.toBeNull();
+        const document = await prisma.document.findUnique({
+          where: { id: documentId },
+          select: { lotId: true },
+        });
+        expect(document?.lotId).toBe(lotId);
       } finally {
         await cleanupUploadedDocument(res.body);
       }
@@ -2190,6 +2211,7 @@ describe('Documents API', () => {
           .set('Authorization', `Bearer ${subToken}`);
 
         expect(assignedSignedUrlRes.status).toBe(200);
+        const assignedSignedUrlToken = getTokenFromSignedUrlResponse(assignedSignedUrlRes.body);
 
         await prisma.subcontractorCompany.update({
           where: { id: subcontractorCompany.id },
@@ -2197,7 +2219,7 @@ describe('Documents API', () => {
         });
 
         const revokedDownloadRes = await request(app).get(
-          `/api/documents/download/${documentId}?token=${assignedSignedUrlRes.body.token}`,
+          `/api/documents/download/${documentId}?token=${assignedSignedUrlToken}`,
         );
         expect(revokedDownloadRes.status).toBe(403);
 

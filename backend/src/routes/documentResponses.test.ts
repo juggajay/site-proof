@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   buildDocumentResponse,
   buildDocumentsListResponse,
+  buildDocumentSignedUrlResponse,
   buildSavedDocumentClassificationResponse,
   buildDocumentSignedUrlTokenResponse,
   buildDocumentVersionsResponse,
@@ -51,6 +52,21 @@ describe('document response helpers', () => {
       createdAt: '2026-06-01T00:02:03.000Z',
       message: 'Token is valid',
     });
+  });
+
+  it('omits raw signed URL tokens from signed URL creation responses', () => {
+    const response = buildDocumentSignedUrlResponse({
+      signedUrl: 'https://api.example.test/api/documents/download/doc-1?token=secret-token',
+      documentId: 'doc-1',
+      filename: 'evidence.pdf',
+      mimeType: 'application/pdf',
+      disposition: 'attachment',
+      expiresAt: new Date('2026-06-01T01:02:03.000Z'),
+      expiresInMinutes: 15,
+    });
+
+    expect(response.signedUrl).toContain('token=secret-token');
+    expect(response).not.toHaveProperty('token');
   });
 
   it('normalizes owned legacy Supabase public document URLs to storage references', () => {

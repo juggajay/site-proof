@@ -1,7 +1,7 @@
 import type { PrismaClient } from '@prisma/client';
 import express from 'express';
 import request from 'supertest';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { errorHandler } from '../../middleware/errorHandler.js';
 import { createDocumentDeleteRouter } from './deleteRoutes.js';
@@ -25,6 +25,10 @@ vi.mock('../../lib/auditLog.js', () => ({
   AuditAction: { DOCUMENT_DELETED: 'DOCUMENT_DELETED' },
   createAuditLog: vi.fn(),
 }));
+
+import { createAuditLog } from '../../lib/auditLog.js';
+
+const mockCreateAuditLog = vi.mocked(createAuditLog);
 
 function buildApp(documentType: string) {
   const document = {
@@ -67,6 +71,29 @@ function buildApp(documentType: string) {
 }
 
 describe('createDocumentDeleteRouter', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('does not store raw document file locators in deletion audit changes', async () => {
+    const { app } = buildApp('photo');
+
+    const res = await request(app)
+      .delete('/api/documents/document-1')
+      .set('Authorization', 'Bearer valid-token');
+
+    expect(res.status).toBe(204);
+    expect(mockCreateAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        changes: {
+          filename: 'photo.pdf',
+          storageKind: 'inline',
+        },
+      }),
+    );
+    expect(mockCreateAuditLog.mock.calls[0][0].changes).not.toHaveProperty('fileUrl');
+  });
+
   it.each([
     ['test_certificate', 'test result workflow'],
     ['drawing', 'drawing register'],

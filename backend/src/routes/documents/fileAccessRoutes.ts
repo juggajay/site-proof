@@ -122,7 +122,6 @@ export function createDocumentFileAccessRouter({
       res.json(
         buildDocumentSignedUrlResponse({
           signedUrl,
-          token,
           documentId,
           filename: document.filename,
           mimeType: document.mimeType,
