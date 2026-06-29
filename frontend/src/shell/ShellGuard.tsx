@@ -13,7 +13,7 @@
  */
 
 import type { ReactNode } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useShellV2Enabled } from './shellFlag';
 
 interface ShellGuardProps {
@@ -22,9 +22,10 @@ interface ShellGuardProps {
 
 export function ShellGuard({ children }: ShellGuardProps) {
   const shellEnabled = useShellV2Enabled();
+  const location = useLocation();
 
   if (shellEnabled) {
-    return <Navigate to="/m" replace />;
+    return <Navigate to={`/m${location.search}${location.hash}`} replace />;
   }
 
   return <>{children}</>;

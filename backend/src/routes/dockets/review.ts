@@ -365,10 +365,12 @@ docketReviewRouter.post(
     const approverName = formatDocketUserName(user);
 
     const { inApp: approvedInApp, email: approvedEmail } = buildDocketApprovedNotifications({
+      docketId: docket.id,
       projectId: docket.projectId,
       projectName: docket.project.name,
       docketNumber,
       docketDate,
+      subcontractorCompanyId: docket.subcontractorCompanyId,
       approverName,
       foremanNotes,
       adjustmentReason,
@@ -455,10 +457,12 @@ docketReviewRouter.post(
     const rejectorName = formatDocketUserName(user);
 
     const { inApp: rejectedInApp, email: rejectedEmail } = buildDocketRejectedNotifications({
+      docketId: docket.id,
       projectId: docket.projectId,
       projectName: docket.project.name,
       docketNumber,
       docketDate,
+      subcontractorCompanyId: docket.subcontractorCompanyId,
       rejectorName,
       reason,
     });
@@ -544,10 +548,12 @@ docketReviewRouter.post(
     const querierName = formatDocketUserName(user);
 
     const { inApp: queriedInApp, email: queriedEmail } = buildDocketQueriedNotifications({
+      docketId: docket.id,
       projectId: docket.projectId,
       projectName: docket.project.name,
       docketNumber,
       docketDate,
+      subcontractorCompanyId: docket.subcontractorCompanyId,
       querierName,
       questions,
     });

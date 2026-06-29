@@ -173,7 +173,9 @@ export function MobileNav() {
   });
 
   const enabledModules = getEnabledProjectModules(projectData?.project?.settings);
-  const projectScopedRole = projectData?.project?.currentUserRole ?? getProjectScopedRole(user);
+  const projectScopedRole = projectId
+    ? (projectData?.project?.currentUserRole ?? 'viewer')
+    : getProjectScopedRole(user);
   const hasCommercial = hasCommercialAccess(projectScopedRole);
   const hasAdmin = isAdminRole(userRole);
   const hasManagement = hasRoleInGroup(projectScopedRole, ROLE_GROUPS.MANAGEMENT);

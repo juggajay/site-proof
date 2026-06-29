@@ -18,6 +18,7 @@ import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { getAlertEmailNotificationType } from '../../lib/notificationAlertConfig.js';
+import { isStandaloneSubcontractorPortalIdentity } from '../../lib/projectAccess.js';
 import {
   MAX_NOTIFICATION_FILTER_LENGTH,
   MAX_NOTIFICATION_MESSAGE_LENGTH,
@@ -26,7 +27,7 @@ import {
   parseOptionalString,
   parseRequiredString,
 } from './validation.js';
-import { buildProjectEntityLink } from './links.js';
+import { buildProjectEntityLink, buildSubcontractorPortalEntityLink } from './links.js';
 import {
   canReceiveProjectAlert,
   getAccessibleActiveProjectIds,
@@ -59,6 +60,46 @@ import { notificationSystemAlertsRouter } from './systemAlerts.js';
 
 export const notificationAlertsRouter = Router();
 export const MAX_ALERT_LIST_RESULTS = 500;
+
+async function buildAlertNotificationLinkForRecipient({
+  assignedTo,
+  entityType,
+  entityId,
+  projectId,
+}: {
+  assignedTo: string;
+  entityType: string;
+  entityId: string;
+  projectId: string | null | undefined;
+}): Promise<string> {
+  if (!projectId) {
+    return buildProjectEntityLink(entityType, entityId, projectId);
+  }
+
+  const assignedUser = await prisma.user.findUnique({
+    where: { id: assignedTo },
+    select: { companyId: true, roleInCompany: true },
+  });
+
+  if (!assignedUser || !isStandaloneSubcontractorPortalIdentity(assignedUser)) {
+    return buildProjectEntityLink(entityType, entityId, projectId);
+  }
+
+  const subcontractorUser = await prisma.subcontractorUser.findFirst({
+    where: {
+      userId: assignedTo,
+      subcontractorCompany: {
+        projectId,
+        status: 'approved',
+      },
+    },
+    select: { subcontractorCompanyId: true },
+  });
+
+  return buildSubcontractorPortalEntityLink(entityType, entityId, projectId, {
+    subcontractorCompanyId: subcontractorUser?.subcontractorCompanyId,
+  });
+}
 
 // ============================================================================
 // ALERT ESCALATION SYSTEM
@@ -127,6 +168,12 @@ notificationAlertsRouter.post(
     };
 
     const savedAlert = await createAlertRecord(alert);
+    const linkUrl = await buildAlertNotificationLinkForRecipient({
+      assignedTo,
+      entityType,
+      entityId,
+      projectId: alertProjectId,
+    });
 
     // Create in-app notification for assigned user
     await prisma.notification.create({
@@ -136,7 +183,7 @@ notificationAlertsRouter.post(
         type: `alert_${alertType}`,
         title,
         message,
-        linkUrl: buildProjectEntityLink(entityType, entityId, alertProjectId),
+        linkUrl,
       },
     });
 

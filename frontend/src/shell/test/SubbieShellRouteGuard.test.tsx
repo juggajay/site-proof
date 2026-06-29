@@ -20,6 +20,7 @@ function LocationProbe({ label }: { label: string }) {
     <div data-testid="location">
       {label}:{location.pathname}
       {location.search}
+      {location.hash}
     </div>
   );
 }
@@ -66,9 +67,9 @@ describe('SubbieShellRouteGuard', () => {
   });
 
   it('redirects inactive /p home back to the classic portal and preserves search', () => {
-    renderGuard('/p?shell=off&projectId=project-1', false);
+    renderGuard('/p?shell=off&projectId=project-1#docs', false);
     expect(screen.getByTestId('location')).toHaveTextContent(
-      'classic:/subcontractor-portal?shell=off&projectId=project-1',
+      'classic:/subcontractor-portal?shell=off&projectId=project-1#docs',
     );
   });
 
