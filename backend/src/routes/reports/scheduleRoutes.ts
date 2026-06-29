@@ -20,6 +20,7 @@ import {
   buildScheduledReportResponse,
   buildScheduledReportsResponse,
 } from '../reportResponses.js';
+import { sendScheduledReportArtifactFile } from '../../lib/scheduledReports/artifacts.js';
 
 const scheduledReportTypeSchema = z.enum(SCHEDULED_REPORT_TYPES);
 const scheduledReportFrequencySchema = z.enum(SCHEDULED_REPORT_FREQUENCIES);
@@ -53,6 +54,10 @@ type ScheduledReportRouterDependencies = {
     projectId: string,
     options?: { requireWritable?: boolean },
   ) => Promise<string | null>;
+  requireScheduledReportArtifactAccess: (
+    user: AuthUser | undefined,
+    projectId: string,
+  ) => Promise<unknown>;
 };
 
 type ScheduledReportAuditSource = {
@@ -349,10 +354,41 @@ export async function assertScheduledReportCapacity(
 export function createScheduledReportRouter({
   parseRequiredString,
   requireScheduledReportAccess,
+  requireScheduledReportArtifactAccess,
 }: ScheduledReportRouterDependencies) {
   const scheduledReportRouter = Router();
 
   scheduledReportRouter.use(requireAuth);
+
+  // GET /api/reports/scheduled-runs/:runId/artifact - Download an immutable run PDF
+  scheduledReportRouter.get(
+    '/scheduled-runs/:runId/artifact',
+    asyncHandler(async (req, res) => {
+      const runId = parseRequiredString(req.params.runId, 'runId', 128);
+
+      const run = await prisma.scheduledReportRun.findUnique({
+        where: { id: runId },
+        select: {
+          id: true,
+          scheduleId: true,
+          projectId: true,
+          artifactFileUrl: true,
+          artifactReportName: true,
+          artifactFilename: true,
+          artifactMimeType: true,
+          artifactFileSize: true,
+          artifactSha256: true,
+        },
+      });
+
+      if (!run || !run.artifactFileUrl) {
+        throw AppError.notFound('Scheduled report artifact');
+      }
+
+      await requireScheduledReportArtifactAccess(req.user, run.projectId);
+      await sendScheduledReportArtifactFile(run, res);
+    }),
+  );
 
   // GET /api/reports/schedules - List scheduled reports for a project
   scheduledReportRouter.get(

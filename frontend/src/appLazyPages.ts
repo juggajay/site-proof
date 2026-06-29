@@ -104,6 +104,11 @@ export const MyCompanyPage = lazy(() =>
 export const ReportsPage = lazy(() =>
   import('@/pages/reports/ReportsPage').then((m) => ({ default: m.ReportsPage })),
 );
+export const ScheduledReportArtifactPage = lazy(() =>
+  import('@/pages/reports/ScheduledReportArtifactPage').then((m) => ({
+    default: m.ScheduledReportArtifactPage,
+  })),
+);
 export const SettingsPage = lazy(() =>
   import('@/pages/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })),
 );

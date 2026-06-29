@@ -12,8 +12,17 @@ import {
   type ScheduledReportFrequency,
 } from './scheduledReports/core.js';
 import { createTextPdf } from './scheduledReports/pdf.js';
-import { buildScheduledReportDocument } from './scheduledReports/reportDocument.js';
+import {
+  buildScheduledReportDocument,
+  getScheduledReportTypeLabel,
+} from './scheduledReports/reportDocument.js';
+import {
+  buildScheduledReportArtifactFrontendPath,
+  loadScheduledReportArtifactBuffer,
+  storeScheduledReportArtifact,
+} from './scheduledReports/artifacts.js';
 import { projectTimeZoneFromState } from './projectTimeZone.js';
+import { buildFrontendUrl } from './runtimeConfig.js';
 
 export {
   calculateNextScheduledReportRunAt,
@@ -38,11 +47,40 @@ const COMPANY_REPORT_ADMIN_ROLES = new Set(['owner', 'admin']);
 const SCHEDULED_REPORT_RUN_INCOMPLETE_STATUSES = ['processing', 'failed', 'partial_failed'];
 const SCHEDULED_REPORT_DELIVERY_RETRYABLE_STATUSES = ['pending', 'failed'];
 
+const scheduledReportRunSelect = {
+  id: true,
+  scheduleId: true,
+  projectId: true,
+  reportType: true,
+  status: true,
+  artifactFileUrl: true,
+  artifactReportName: true,
+  artifactFilename: true,
+  artifactMimeType: true,
+  artifactFileSize: true,
+  artifactSha256: true,
+  artifactCreatedAt: true,
+} as const;
+
 type ScheduledReportDocument = Awaited<ReturnType<typeof buildScheduledReportDocument>>;
+type ScheduledReportDeliveryDocument = Pick<
+  ScheduledReportDocument,
+  'reportTypeLabel' | 'reportName' | 'viewReportUrl'
+>;
 
 type ScheduledReportRunRecord = {
   id: string;
+  scheduleId: string;
+  projectId: string;
+  reportType: string;
   status: string;
+  artifactFileUrl: string | null;
+  artifactReportName: string | null;
+  artifactFilename: string | null;
+  artifactMimeType: string | null;
+  artifactFileSize: number | null;
+  artifactSha256: string | null;
+  artifactCreatedAt: Date | null;
 };
 
 type ScheduledReportRecipientDeliveryRecord = {
@@ -303,7 +341,7 @@ async function resolveScheduledReportRecipients(
 
 async function queueScheduledReportDigestItem(
   schedule: ScheduledReportForDelivery,
-  document: ScheduledReportDocument,
+  document: ScheduledReportDeliveryDocument,
   userId: string,
   deliveryId: string,
 ): Promise<void> {
@@ -338,8 +376,7 @@ async function findRetryableScheduledReportRun(
       deliveries: { some: dueDeliveryWhere },
     },
     select: {
-      id: true,
-      status: true,
+      ...scheduledReportRunSelect,
       deliveries: {
         where: dueDeliveryWhere,
         orderBy: { createdAt: 'asc' },
@@ -374,7 +411,7 @@ async function createScheduledReportRun(
       recipientCount: recipients.length,
       generatedAt: schedule.nextRunAt ?? now,
     },
-    select: { id: true, status: true },
+    select: scheduledReportRunSelect,
   });
 
   const deliveryRows = [
@@ -543,9 +580,61 @@ async function markScheduledReportSkipped(
   };
 }
 
+function getScheduledReportArtifactUrl(runId: string): string {
+  return buildFrontendUrl(buildScheduledReportArtifactFrontendPath(runId));
+}
+
+function buildStoredScheduledReportDocumentSummary(
+  schedule: ScheduledReportForDelivery,
+  run: ScheduledReportRunRecord,
+): ScheduledReportDeliveryDocument {
+  const reportTypeLabel = getScheduledReportTypeLabel(run.reportType || schedule.reportType);
+  return {
+    reportTypeLabel,
+    reportName: run.artifactReportName || `${reportTypeLabel} - ${schedule.project.name}`,
+    viewReportUrl: getScheduledReportArtifactUrl(run.id),
+  };
+}
+
+async function ensureScheduledReportRunArtifact(
+  schedule: ScheduledReportForDelivery,
+  run: ScheduledReportRunRecord,
+  now: Date,
+): Promise<{ document: ScheduledReportDeliveryDocument; pdfBuffer: Buffer }> {
+  if (run.artifactFileUrl) {
+    return {
+      document: buildStoredScheduledReportDocumentSummary(schedule, run),
+      pdfBuffer: await loadScheduledReportArtifactBuffer(run),
+    };
+  }
+
+  const document = await buildScheduledReportDocument(schedule, now, {
+    viewReportUrl: getScheduledReportArtifactUrl(run.id),
+  });
+  const pdfBuffer = createTextPdf(document.lines);
+  const artifact = await storeScheduledReportArtifact({
+    projectId: run.projectId,
+    scheduleId: run.scheduleId,
+    runId: run.id,
+    reportName: document.reportName,
+    pdfBuffer,
+    now,
+  });
+
+  await prisma.scheduledReportRun.update({
+    where: { id: run.id },
+    data: artifact,
+  });
+
+  return {
+    document,
+    pdfBuffer,
+  };
+}
+
 async function sendImmediateScheduledReportEmail(
   schedule: ScheduledReportForDelivery,
-  document: ScheduledReportDocument,
+  document: ScheduledReportDeliveryDocument,
   now: Date,
   pdfBuffer: Buffer,
   deliveries: ScheduledReportRecipientDeliveryRecord[],
@@ -565,6 +654,7 @@ async function sendImmediateScheduledReportEmail(
       reportType: document.reportTypeLabel,
       reportName: document.reportName,
       generatedAt: now.toISOString(),
+      viewReportUrl: document.viewReportUrl,
       pdfBuffer,
     });
 
@@ -583,7 +673,7 @@ async function sendImmediateScheduledReportEmail(
 
 async function queueScheduledReportDigestDeliveries(
   schedule: ScheduledReportForDelivery,
-  document: ScheduledReportDocument,
+  document: ScheduledReportDeliveryDocument,
   now: Date,
   deliveries: ScheduledReportRecipientDeliveryRecord[],
   options: Required<Pick<ProcessDueScheduledReportsOptions, 'lockMs' | 'retryDelayMs'>>,
@@ -767,8 +857,6 @@ async function deliverClaimedScheduledReport(
   assertScheduledReportFrequency(schedule.frequency);
   validateScheduledReportRecipients(recipients);
 
-  const document = await buildScheduledReportDocument(schedule, now);
-  const pdfBuffer = createTextPdf(document.lines);
   const nextRunAt = calculateNextScheduledReportRunAt(
     schedule.frequency,
     schedule.dayOfWeek,
@@ -797,6 +885,7 @@ async function deliverClaimedScheduledReport(
 
     run = await createScheduledReportRun(schedule, now, recipients, resolvedRecipients);
   }
+  const { document, pdfBuffer } = await ensureScheduledReportRunArtifact(schedule, run, now);
   const currentDeliveryIds = new Set(run.deliveries.map((delivery) => delivery.id));
 
   await sendImmediateScheduledReportEmail(
