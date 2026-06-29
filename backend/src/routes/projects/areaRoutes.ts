@@ -14,6 +14,22 @@ import {
 
 type AuthenticatedUser = NonNullable<Request['user']>;
 
+type ProjectAreaAuditSnapshotInput = {
+  name: string;
+  chainageStart: unknown;
+  chainageEnd: unknown;
+  colour: string | null;
+};
+
+function buildProjectAreaAuditSnapshot(area: ProjectAreaAuditSnapshotInput) {
+  return {
+    name: area.name,
+    chainageStart: area.chainageStart == null ? null : Number(area.chainageStart),
+    chainageEnd: area.chainageEnd == null ? null : Number(area.chainageEnd),
+    colour: area.colour,
+  };
+}
+
 type ProjectAreaRouterDependencies = {
   getProjectAccessContext: (
     projectId: string,
@@ -219,18 +235,8 @@ export function createProjectAreaRouter({
             action: AuditAction.PROJECT_AREA_UPDATED,
             changes: {
               changedFields,
-              previous: {
-                name: existingArea.name,
-                chainageStart: existingArea.chainageStart,
-                chainageEnd: existingArea.chainageEnd,
-                colour: existingArea.colour,
-              },
-              next: {
-                name: updatedArea.name,
-                chainageStart: updatedArea.chainageStart,
-                chainageEnd: updatedArea.chainageEnd,
-                colour: updatedArea.colour,
-              },
+              previous: buildProjectAreaAuditSnapshot(existingArea),
+              next: buildProjectAreaAuditSnapshot(updatedArea),
             },
             req,
           });
@@ -279,12 +285,7 @@ export function createProjectAreaRouter({
           entityType: 'project_area',
           entityId: areaId,
           action: AuditAction.PROJECT_AREA_DELETED,
-          changes: {
-            name: existingArea.name,
-            chainageStart: existingArea.chainageStart,
-            chainageEnd: existingArea.chainageEnd,
-            colour: existingArea.colour,
-          },
+          changes: buildProjectAreaAuditSnapshot(existingArea),
           req,
         });
       });

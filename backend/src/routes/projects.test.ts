@@ -2437,14 +2437,14 @@ describe('Projects API', () => {
         changedFields: ['name', 'chainageEnd'],
         previous: {
           name: 'Audited Area',
-          chainageStart: '10',
-          chainageEnd: '110',
+          chainageStart: 10,
+          chainageEnd: 110,
           colour: '#3B82F6',
         },
         next: {
           name: 'Audited Area Updated',
-          chainageStart: '10',
-          chainageEnd: '120',
+          chainageStart: 10,
+          chainageEnd: 120,
           colour: '#3B82F6',
         },
       });
@@ -2467,8 +2467,8 @@ describe('Projects API', () => {
       expect(deleteAudit).toBeTruthy();
       expect(parseAuditLogChanges(deleteAudit!.changes)).toMatchObject({
         name: 'Audited Area Updated',
-        chainageStart: '10',
-        chainageEnd: '120',
+        chainageStart: 10,
+        chainageEnd: 120,
         colour: '#3B82F6',
       });
     });
