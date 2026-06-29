@@ -496,6 +496,12 @@ export function ReportsPage() {
     [fetchReport],
   );
 
+  const actionContainerClassName = canManageScheduledReports
+    ? hasPrintableReport
+      ? 'grid grid-cols-3 gap-2 sm:flex sm:gap-3'
+      : 'grid grid-cols-2 gap-2 sm:flex sm:gap-3'
+    : 'flex gap-2 sm:gap-3';
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -505,11 +511,7 @@ export function ReportsPage() {
           </h1>
           <ContextHelp title={HELP_CONTENT.reports.title} content={HELP_CONTENT.reports.content} />
         </div>
-        <div
-          className={
-            canManageScheduledReports ? 'flex flex-wrap gap-2 sm:gap-3' : 'flex gap-2 sm:gap-3'
-          }
-        >
+        <div className={actionContainerClassName}>
           {canManageScheduledReports && (
             <button
               type="button"
@@ -530,11 +532,13 @@ export function ReportsPage() {
           {hasPrintableReport && (
             <button
               type="button"
+              aria-label="Print / Save PDF"
               onClick={() => window.print()}
-              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted/50 sm:px-4"
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-border px-2 py-2 text-sm font-medium hover:bg-muted/50 sm:px-4"
             >
               <Printer className="h-4 w-4" />
-              <span>Print / Save PDF</span>
+              <span className="hidden sm:inline">Print / Save PDF</span>
+              <span className="sm:hidden">Print</span>
             </button>
           )}
           <button
