@@ -1,5 +1,5 @@
 /**
- * NcrsScreen — /p/ncrs — the subbie shell's read-only non-conformance surface.
+ * NcrsScreen — /p/ncrs — the subbie shell's non-conformance surface.
  *
  * MODULE-CONDITIONAL: the `ncrs` portal module defaults OFF (auto-enabled server
  * side on first NCR assignment), so the Home NCR tile + this route only matter
@@ -9,19 +9,24 @@
  * NEW PRESENTATION over EXISTING LOGIC. Reuses the SAME query the classic
  * SubcontractorNCRsPage uses (queryKeys.portalNCRs, cache shared):
  *   GET /api/ncrs?projectId=&subcontractorView=true
- * Read-only: severity minor/major/critical pills; statuses grouped Open / In
- * Progress / Closed (classic grouping); lot numbers from `ncrLots`.
+ * Responsible subcontractors can respond and submit rectification; lot-linked
+ * non-responsible NCRs remain read-only.
  */
+import { useState } from 'react';
 import { Flag, ShieldOff } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { ShellScreen } from '@/shell/components/ShellScreen';
 import { apiFetch } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 import { useAuth } from '@/lib/auth';
-import { extractErrorMessage } from '@/lib/errorHandling';
+import { extractErrorMessage, handleApiError } from '@/lib/errorHandling';
 import { formatStatusLabel } from '@/lib/statusLabels';
 import { cn } from '@/lib/utils';
+import { toast } from '@/components/ui/toaster';
 import { NCREvidenceList } from '@/pages/ncr/components/NCREvidenceList';
+import { RespondNCRModal } from '@/pages/ncr/components/RespondNCRModal';
+import { RectifyNCRModal } from '@/pages/ncr/components/RectifyNCRModal';
+import type { NCR as WorkflowNCR } from '@/pages/ncr/types';
 import { buildPortalCompanyQuery } from '@/pages/subcontractor-portal/portalCompanyScope';
 import { useSubbieShellContext } from '../subbieShellContext';
 import { useModuleAccessRevoked } from '../useModuleAccessRevoked';
@@ -31,11 +36,15 @@ interface NCR {
   id: string;
   ncrNumber: string;
   description: string;
+  category?: string;
   status: string;
   severity: 'minor' | 'major' | 'critical';
   raisedAt: string;
   raisedBy?: { fullName: string };
-  ncrLots?: Array<{ lot?: { lotNumber?: string } }>;
+  responsibleUserId?: string | null;
+  responsibleSubcontractorId?: string | null;
+  responsibleSubcontractor?: { id: string; companyName: string } | null;
+  ncrLots?: Array<{ lot?: { lotNumber?: string; description?: string | null } }>;
   ncrEvidence?: Array<{
     id: string;
     evidenceType: string;
@@ -48,6 +57,50 @@ interface NCR {
       uploadedAt?: string | null;
     } | null;
   }>;
+}
+
+function isResponsibleNcr(ncr: NCR, companyId?: string | null, userId?: string) {
+  return (
+    (!!companyId &&
+      (ncr.responsibleSubcontractorId === companyId ||
+        ncr.responsibleSubcontractor?.id === companyId)) ||
+    (!!userId && ncr.responsibleUserId === userId)
+  );
+}
+
+function toWorkflowNcr(
+  ncr: NCR,
+  projectId?: string | null,
+  projectName?: string | null,
+): WorkflowNCR {
+  return {
+    id: ncr.id,
+    ncrNumber: ncr.ncrNumber,
+    description: ncr.description,
+    category: ncr.category ?? 'Workmanship',
+    severity: ncr.severity === 'major' || ncr.severity === 'critical' ? 'major' : 'minor',
+    status: ncr.status,
+    qmApprovalRequired: false,
+    qmApprovedAt: null,
+    raisedBy: {
+      fullName: ncr.raisedBy?.fullName ?? 'SiteProof',
+      email: '',
+    },
+    responsibleUser: null,
+    responsibleSubcontractor: ncr.responsibleSubcontractor ?? null,
+    responsibleUserId: ncr.responsibleUserId ?? null,
+    responsibleSubcontractorId: ncr.responsibleSubcontractorId ?? null,
+    createdAt: ncr.raisedAt,
+    project: { id: projectId ?? undefined, name: projectName ?? '', projectNumber: '' },
+    ncrLots:
+      ncr.ncrLots?.map((ncrLot) => ({
+        lot: {
+          lotNumber: ncrLot.lot?.lotNumber ?? '',
+          description: ncrLot.lot?.description ?? '',
+        },
+      })) ?? [],
+    ncrEvidence: ncr.ncrEvidence,
+  };
 }
 
 // Classic grouping (SubcontractorNCRsPage): Open / In Progress / Closed.
@@ -83,7 +136,17 @@ function formatRaisedDate(dateStr: string): string {
   return new Intl.DateTimeFormat('en-AU', { day: 'numeric', month: 'short' }).format(parsed);
 }
 
-function NcrCard({ ncr }: { ncr: NCR }) {
+function NcrCard({
+  ncr,
+  responsible,
+  onRespond,
+  onRectify,
+}: {
+  ncr: NCR;
+  responsible: boolean;
+  onRespond: (ncr: NCR) => void;
+  onRectify: (ncr: NCR) => void;
+}) {
   const lotNumbers = ncr.ncrLots
     ?.map((l) => l.lot?.lotNumber)
     .filter(Boolean)
@@ -91,6 +154,9 @@ function NcrCard({ ncr }: { ncr: NCR }) {
   const evidence = ncr.ncrEvidence ?? [];
   const severity = SEVERITY_BADGE[ncr.severity] ?? SEVERITY_BADGE.minor;
   const status = statusBadge(ncr.status);
+  const canRespond = responsible && ncr.status === 'open';
+  const canRectify =
+    responsible && (ncr.status === 'investigating' || ncr.status === 'rectification');
 
   return (
     <div className="shell-card">
@@ -118,6 +184,28 @@ function NcrCard({ ncr }: { ncr: NCR }) {
               <NCREvidenceList evidence={evidence} title="Evidence" variant="inline" />
             </div>
           )}
+          {(canRespond || canRectify) && (
+            <div className="mt-3 flex flex-wrap gap-2 border-t border-border pt-3">
+              {canRespond && (
+                <button
+                  type="button"
+                  onClick={() => onRespond(ncr)}
+                  className="min-h-[40px] rounded-lg bg-primary px-3 py-2 text-[13px] font-semibold text-primary-foreground"
+                >
+                  Respond
+                </button>
+              )}
+              {canRectify && (
+                <button
+                  type="button"
+                  onClick={() => onRectify(ncr)}
+                  className="min-h-[40px] rounded-lg border border-border px-3 py-2 text-[13px] font-semibold text-foreground"
+                >
+                  Submit Rectification
+                </button>
+              )}
+            </div>
+          )}
         </div>
         <span className={cn('shell-badge', status.cls)}>{status.label}</span>
       </div>
@@ -138,7 +226,11 @@ function SectionLabel({ children, count }: { children: React.ReactNode; count: n
 
 export function NcrsScreen() {
   const { user } = useAuth();
-  const { projectId, subcontractorCompanyId, isModuleEnabled } = useSubbieShellContext();
+  const { projectId, subcontractorCompanyId, projectName, isModuleEnabled } =
+    useSubbieShellContext();
+  const [respondingNcr, setRespondingNcr] = useState<NCR | null>(null);
+  const [rectifyingNcr, setRectifyingNcr] = useState<NCR | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
   const canViewNCRs = isModuleEnabled('ncrs');
   const projectQuery = buildPortalCompanyQuery({ projectId, subcontractorCompanyId });
   const parentPath = `/p${projectQuery}`;
@@ -147,6 +239,7 @@ export function NcrsScreen() {
     data: ncrs = [],
     isLoading,
     error,
+    refetch: refetchNcrs,
   } = useQuery({
     queryKey: queryKeys.portalNCRs(user?.id, projectId, subcontractorCompanyId),
     queryFn: async () => {
@@ -180,6 +273,37 @@ export function NcrsScreen() {
   const inProgress = ncrs.filter((n) => !isOpenStatus(n.status) && !isClosedStatus(n.status));
   const closed = ncrs.filter((n) => isClosedStatus(n.status));
 
+  const handleRespond = async (
+    ncrId: string,
+    responseData: {
+      rootCauseCategory: string;
+      rootCauseDescription: string;
+      proposedCorrectiveAction: string;
+    },
+  ) => {
+    setActionLoading(true);
+    try {
+      await apiFetch(`/api/ncrs/${encodeURIComponent(ncrId)}/respond`, {
+        method: 'POST',
+        body: JSON.stringify({
+          rootCauseCategory: responseData.rootCauseCategory,
+          rootCauseDescription: responseData.rootCauseDescription.trim(),
+          proposedCorrectiveAction: responseData.proposedCorrectiveAction.trim(),
+        }),
+      });
+      setRespondingNcr(null);
+      toast({
+        title: 'NCR response submitted',
+        description: 'The NCR has moved to investigating.',
+      });
+      await refetchNcrs();
+    } catch (err) {
+      handleApiError(err, 'Failed to submit NCR response');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <ShellScreen variant="inner" title="NCRs" parent={parentPath} sub={sub}>
@@ -209,7 +333,13 @@ export function NcrsScreen() {
             <>
               <SectionLabel count={open.length}>OPEN</SectionLabel>
               {open.map((ncr) => (
-                <NcrCard key={ncr.id} ncr={ncr} />
+                <NcrCard
+                  key={ncr.id}
+                  ncr={ncr}
+                  responsible={isResponsibleNcr(ncr, subcontractorCompanyId, user?.id)}
+                  onRespond={setRespondingNcr}
+                  onRectify={setRectifyingNcr}
+                />
               ))}
             </>
           )}
@@ -217,7 +347,13 @@ export function NcrsScreen() {
             <>
               <SectionLabel count={inProgress.length}>IN PROGRESS</SectionLabel>
               {inProgress.map((ncr) => (
-                <NcrCard key={ncr.id} ncr={ncr} />
+                <NcrCard
+                  key={ncr.id}
+                  ncr={ncr}
+                  responsible={isResponsibleNcr(ncr, subcontractorCompanyId, user?.id)}
+                  onRespond={setRespondingNcr}
+                  onRectify={setRectifyingNcr}
+                />
               ))}
             </>
           )}
@@ -225,12 +361,35 @@ export function NcrsScreen() {
             <>
               <SectionLabel count={closed.length}>CLOSED</SectionLabel>
               {closed.map((ncr) => (
-                <NcrCard key={ncr.id} ncr={ncr} />
+                <NcrCard
+                  key={ncr.id}
+                  ncr={ncr}
+                  responsible={isResponsibleNcr(ncr, subcontractorCompanyId, user?.id)}
+                  onRespond={setRespondingNcr}
+                  onRectify={setRectifyingNcr}
+                />
               ))}
             </>
           )}
         </>
       )}
+      <RespondNCRModal
+        isOpen={!!respondingNcr}
+        ncr={respondingNcr ? toWorkflowNcr(respondingNcr, projectId, projectName) : null}
+        onClose={() => setRespondingNcr(null)}
+        onSubmit={handleRespond}
+        loading={actionLoading}
+      />
+      <RectifyNCRModal
+        isOpen={!!rectifyingNcr}
+        ncr={rectifyingNcr ? toWorkflowNcr(rectifyingNcr, projectId, projectName) : null}
+        projectId={projectId ?? undefined}
+        onClose={() => setRectifyingNcr(null)}
+        onSuccess={async () => {
+          setRectifyingNcr(null);
+          await refetchNcrs();
+        }}
+      />
     </ShellScreen>
   );
 }

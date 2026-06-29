@@ -25,6 +25,7 @@ import {
 } from './ncrWorkflowValidation.js';
 import { ncrClosureWorkflowRouter } from './ncrClosureWorkflow.js';
 import { claimNcrVerificationSubmission } from './ncrVerificationSubmission.js';
+import { notifySubcontractorNcrPortalUsers } from './ncrNotifications.js';
 
 const qmReviewedNcrInclude = {
   project: { select: { name: true } },
@@ -222,6 +223,16 @@ ncrWorkflowRouter.post(
           },
         });
       }
+      if (ncr.responsibleSubcontractorId) {
+        await notifySubcontractorNcrPortalUsers({
+          projectId: ncr.projectId,
+          subcontractorCompanyId: ncr.responsibleSubcontractorId,
+          ncrId: ncr.id,
+          type: 'ncr_response_accepted',
+          title: 'NCR Response Accepted',
+          message: `${reviewerName} has accepted your response for ${ncr.ncrNumber}. Please proceed with rectification.`,
+        });
+      }
 
       await createAuditLog({
         projectId: ncr.projectId,
@@ -287,6 +298,16 @@ ncrWorkflowRouter.post(
             message: `${reviewerName} has requested a revision for ${ncr.ncrNumber}. Feedback: ${comments || 'Please review and resubmit.'}`,
             linkUrl: `/projects/${ncr.projectId}/ncr`,
           },
+        });
+      }
+      if (ncr.responsibleSubcontractorId) {
+        await notifySubcontractorNcrPortalUsers({
+          projectId: ncr.projectId,
+          subcontractorCompanyId: ncr.responsibleSubcontractorId,
+          ncrId: ncr.id,
+          type: 'ncr_revision_requested',
+          title: 'NCR Revision Requested',
+          message: `${reviewerName} has requested a revision for ${ncr.ncrNumber}. Feedback: ${comments || 'Please review and resubmit.'}`,
         });
       }
 
@@ -473,6 +494,16 @@ ncrWorkflowRouter.post(
           message: `${reviewerName} has rejected the rectification for ${ncr.ncrNumber}. Feedback: ${feedback.substring(0, 100)}${feedback.length > 100 ? '...' : ''}`,
           linkUrl: `/projects/${ncr.projectId}/ncr`,
         },
+      });
+    }
+    if (ncr.responsibleSubcontractorId) {
+      await notifySubcontractorNcrPortalUsers({
+        projectId: ncr.projectId,
+        subcontractorCompanyId: ncr.responsibleSubcontractorId,
+        ncrId: ncr.id,
+        type: 'ncr_rectification_rejected',
+        title: 'Rectification Rejected',
+        message: `${reviewerName} has rejected the rectification for ${ncr.ncrNumber}. Feedback: ${feedback.substring(0, 100)}${feedback.length > 100 ? '...' : ''}`,
       });
     }
 

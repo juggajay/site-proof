@@ -4205,6 +4205,166 @@ describe('NCR Access Hardening', () => {
       }
     });
 
+    it('lets responsible subcontractors progress NCR workflow and receive portal follow-up notifications', async () => {
+      const subcontractor = await createActiveSubcontractor('N1 Workflow Sub');
+      const subUser = await registerTestUser('n1-workflow-sub-user', 'N1 Workflow Sub User');
+      await prisma.user.update({
+        where: { id: subUser.userId },
+        data: { companyId: null, roleInCompany: 'subcontractor' },
+      });
+      await prisma.subcontractorUser.create({
+        data: {
+          userId: subUser.userId,
+          subcontractorCompanyId: subcontractor.id,
+          role: 'user',
+        },
+      });
+
+      let acceptedNcrId: string | undefined;
+      let revisionNcrId: string | undefined;
+      const uploadedFilename = `n1-workflow-evidence-${Date.now()}.jpg`;
+
+      try {
+        const acceptedCreateRes = await request(app)
+          .post('/api/ncrs')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            projectId,
+            description: 'NCR assigned to a subcontractor for workflow acceptance',
+            category: 'Workmanship',
+            severity: 'minor',
+            responsibleSubcontractorId: subcontractor.id,
+          });
+        expect(acceptedCreateRes.status).toBe(201);
+        acceptedNcrId = acceptedCreateRes.body.ncr.id;
+
+        const respondRes = await request(app)
+          .post(`/api/ncrs/${acceptedNcrId}/respond`)
+          .set('Authorization', `Bearer ${subUser.token}`)
+          .send({
+            rootCauseCategory: 'process',
+            rootCauseDescription: 'Installation sequence was not followed',
+            proposedCorrectiveAction: 'Redo the affected area and brief the crew',
+          });
+        expect(respondRes.status).toBe(200);
+        expect(respondRes.body.ncr.status).toBe('investigating');
+
+        const acceptRes = await request(app)
+          .post(`/api/ncrs/${acceptedNcrId}/qm-review`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            action: 'accept',
+            comments: 'Accepted for rectification',
+          });
+        expect(acceptRes.status).toBe(200);
+        expect(acceptRes.body.ncr.status).toBe('rectification');
+
+        const acceptedNotification = await prisma.notification.findFirst({
+          where: { userId: subUser.userId, projectId, type: 'ncr_response_accepted' },
+        });
+        expect(acceptedNotification?.linkUrl).toBe(
+          `/subcontractor-portal/ncrs?ncr=${acceptedNcrId}`,
+        );
+
+        const evidenceDocument = await prisma.document.create({
+          data: {
+            projectId,
+            documentType: 'ncr_evidence',
+            category: 'ncr_evidence',
+            filename: uploadedFilename,
+            fileUrl: `/uploads/documents/${uploadedFilename}`,
+            mimeType: 'image/jpeg',
+            uploadedById: subUser.userId,
+          },
+        });
+        await prisma.nCREvidence.create({
+          data: {
+            ncrId: acceptedNcrId!,
+            documentId: evidenceDocument.id,
+            evidenceType: 'photo',
+          },
+        });
+
+        const submitRes = await request(app)
+          .post(`/api/ncrs/${acceptedNcrId}/submit-for-verification`)
+          .set('Authorization', `Bearer ${subUser.token}`)
+          .send({ rectificationNotes: 'Rectified and evidence attached' });
+        expect(submitRes.status).toBe(200);
+        expect(submitRes.body.ncr.status).toBe('verification');
+
+        const rejectRes = await request(app)
+          .post(`/api/ncrs/${acceptedNcrId}/reject-rectification`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ feedback: 'Photo is too close. Add a wider context photo.' });
+        expect(rejectRes.status).toBe(200);
+        expect(rejectRes.body.ncr.status).toBe('rectification');
+
+        const rejectedNotification = await prisma.notification.findFirst({
+          where: { userId: subUser.userId, projectId, type: 'ncr_rectification_rejected' },
+        });
+        expect(rejectedNotification?.linkUrl).toBe(
+          `/subcontractor-portal/ncrs?ncr=${acceptedNcrId}`,
+        );
+
+        const revisionCreateRes = await request(app)
+          .post('/api/ncrs')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            projectId,
+            description: 'NCR assigned to a subcontractor for response revision',
+            category: 'Workmanship',
+            severity: 'minor',
+            responsibleSubcontractorId: subcontractor.id,
+          });
+        expect(revisionCreateRes.status).toBe(201);
+        revisionNcrId = revisionCreateRes.body.ncr.id;
+
+        const revisionRespondRes = await request(app)
+          .post(`/api/ncrs/${revisionNcrId}/respond`)
+          .set('Authorization', `Bearer ${subUser.token}`)
+          .send({
+            rootCauseCategory: 'training',
+            rootCauseDescription: 'Crew was unclear on tolerance requirements',
+            proposedCorrectiveAction: 'Toolbox talk and rework',
+          });
+        expect(revisionRespondRes.status).toBe(200);
+
+        const revisionRes = await request(app)
+          .post(`/api/ncrs/${revisionNcrId}/qm-review`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            action: 'request_revision',
+            comments: 'Clarify the permanent corrective action',
+          });
+        expect(revisionRes.status).toBe(200);
+        expect(revisionRes.body.ncr.status).toBe('open');
+
+        const revisionNotification = await prisma.notification.findFirst({
+          where: { userId: subUser.userId, projectId, type: 'ncr_revision_requested' },
+        });
+        expect(revisionNotification?.linkUrl).toBe(
+          `/subcontractor-portal/ncrs?ncr=${revisionNcrId}`,
+        );
+      } finally {
+        await prisma.notification.deleteMany({ where: { userId: subUser.userId } });
+        if (acceptedNcrId) {
+          await prisma.nCREvidence.deleteMany({ where: { ncrId: acceptedNcrId } });
+          await prisma.nCR.delete({ where: { id: acceptedNcrId } }).catch(() => {});
+        }
+        if (revisionNcrId) {
+          await prisma.nCR.delete({ where: { id: revisionNcrId } }).catch(() => {});
+        }
+        await prisma.document.deleteMany({ where: { projectId, filename: uploadedFilename } });
+        await prisma.subcontractorUser.deleteMany({
+          where: { subcontractorCompanyId: subcontractor.id },
+        });
+        await prisma.subcontractorCompany
+          .delete({ where: { id: subcontractor.id } })
+          .catch(() => {});
+        await cleanupTestUser(subUser.userId);
+      }
+    });
+
     it('rejects creating an NCR assigned to both a user and a subcontractor', async () => {
       const subcontractor = await createActiveSubcontractor('N1 Exclusive Sub');
       try {
