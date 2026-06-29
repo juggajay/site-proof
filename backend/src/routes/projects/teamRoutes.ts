@@ -68,6 +68,10 @@ function assertActorMayManageProjectMemberRole(params: {
   }
 }
 
+function isCompanyAdminRole(role: string | null | undefined): boolean {
+  return role === 'admin' || role === 'owner';
+}
+
 export function createProjectTeamRouter({
   assertCanReduceProjectAdmin,
   getProjectAccessContext,
@@ -79,6 +83,46 @@ export function createProjectTeamRouter({
   const projectTeamRouter = Router();
 
   projectTeamRouter.use(requireAuth);
+
+  async function getActorManagementAccessInTransaction(
+    tx: Prisma.TransactionClient,
+    projectId: string,
+    user: AuthenticatedUser,
+    forbiddenMessage: string,
+  ) {
+    const [project, actorUser, actorProjectUser] = await Promise.all([
+      tx.project.findUnique({
+        where: { id: projectId },
+        select: { companyId: true },
+      }),
+      tx.user.findUnique({
+        where: { id: user.id },
+        select: { companyId: true, roleInCompany: true },
+      }),
+      tx.projectUser.findFirst({
+        where: { projectId, userId: user.id, status: 'active' },
+        select: { role: true },
+      }),
+    ]);
+
+    if (!project) {
+      throw AppError.notFound('Project');
+    }
+
+    const actorHasCompanyAdminAccess =
+      isCompanyAdminRole(actorUser?.roleInCompany) && actorUser?.companyId === project.companyId;
+    const actorProjectRole = actorProjectUser?.role ?? null;
+
+    if (!isProjectAdminRole(actorProjectRole) && !actorHasCompanyAdminAccess) {
+      throw AppError.forbidden(forbiddenMessage);
+    }
+
+    return {
+      actorProjectRole,
+      actorHasCompanyAdminAccess,
+      projectCompanyId: project.companyId,
+    };
+  }
 
   // GET /api/projects/:id/users - Get all users in a project
   projectTeamRouter.get(
@@ -134,6 +178,19 @@ export function createProjectTeamRouter({
       });
 
       const { invitedUser, newProjectUser } = await prisma.$transaction(async (tx) => {
+        await assertProjectAllowsWrite(projectId, tx);
+        const actorAccess = await getActorManagementAccessInTransaction(
+          tx,
+          projectId,
+          currentUser,
+          'Only admins can invite users',
+        );
+        assertActorMayManageProjectMemberRole({
+          actorProjectRole: actorAccess.actorProjectRole,
+          actorHasCompanyAdminAccess: actorAccess.actorHasCompanyAdminAccess,
+          targetNewRole: role,
+        });
+
         // Project team assignment links an existing company member to a project;
         // it does not create a new company seat.
         const invitedUser = await tx.user.findUnique({
@@ -145,7 +202,7 @@ export function createProjectTeamRouter({
           throw AppError.notFound('User');
         }
 
-        if (invitedUser.companyId !== access.project.companyId) {
+        if (invitedUser.companyId !== actorAccess.projectCompanyId) {
           throw AppError.forbidden(
             'User must belong to this company before they can be added to the project',
           );
@@ -271,10 +328,17 @@ export function createProjectTeamRouter({
           throw AppError.notFound('User in project');
         }
 
+        await assertProjectAllowsWrite(projectId, tx);
+        const actorAccess = await getActorManagementAccessInTransaction(
+          tx,
+          projectId,
+          currentUser,
+          'Only admins can change user roles',
+        );
         const oldRole = targetProjectUser.role;
         assertActorMayManageProjectMemberRole({
-          actorProjectRole: access.projectUser?.role,
-          actorHasCompanyAdminAccess: access.hasCompanyAdminAccess,
+          actorProjectRole: actorAccess.actorProjectRole,
+          actorHasCompanyAdminAccess: actorAccess.actorHasCompanyAdminAccess,
           targetCurrentRole: oldRole,
           targetNewRole: role,
         });
@@ -392,9 +456,16 @@ export function createProjectTeamRouter({
           throw AppError.notFound('User in project');
         }
 
+        await assertProjectAllowsWrite(projectId, tx);
+        const actorAccess = await getActorManagementAccessInTransaction(
+          tx,
+          projectId,
+          currentUser,
+          'Only admins can remove users',
+        );
         assertActorMayManageProjectMemberRole({
-          actorProjectRole: access.projectUser?.role,
-          actorHasCompanyAdminAccess: access.hasCompanyAdminAccess,
+          actorProjectRole: actorAccess.actorProjectRole,
+          actorHasCompanyAdminAccess: actorAccess.actorHasCompanyAdminAccess,
           targetCurrentRole: targetProjectUser.role,
         });
 

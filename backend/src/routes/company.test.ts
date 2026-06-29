@@ -1899,6 +1899,100 @@ describe('Company API', () => {
       expect(inviteAudit).toBeNull();
     });
 
+    it('does not overwrite an existing credentialed member profile name on re-invite', async () => {
+      const email = `company-invite-existing-name-${Date.now()}@example.com`;
+      const existingMember = await prisma.user.create({
+        data: {
+          email,
+          fullName: 'Existing Profile Name',
+          companyId,
+          roleInCompany: 'foreman',
+          passwordHash: 'already-set',
+          emailVerified: true,
+          emailVerifiedAt: new Date(),
+        },
+      });
+      invitedUserIds.push(existingMember.id);
+
+      const res = await request(app)
+        .post('/api/company/members/invite')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          email,
+          fullName: 'Admin Supplied Rename',
+          roleInCompany: 'site_engineer',
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.member).toMatchObject({
+        id: existingMember.id,
+        fullName: 'Existing Profile Name',
+        roleInCompany: 'site_engineer',
+      });
+
+      await expect(
+        prisma.user.findUnique({
+          where: { id: existingMember.id },
+          select: { fullName: true, roleInCompany: true },
+        }),
+      ).resolves.toMatchObject({
+        fullName: 'Existing Profile Name',
+        roleInCompany: 'site_engineer',
+      });
+    });
+
+    it('rolls back invite-path role updates if the audit write fails', async () => {
+      const email = `company-invite-audit-fail-${Date.now()}@example.com`;
+      const existingMember = await prisma.user.create({
+        data: {
+          email,
+          fullName: 'Existing Audit Member',
+          companyId,
+          roleInCompany: 'foreman',
+          passwordHash: 'already-set',
+          emailVerified: true,
+          emailVerifiedAt: new Date(),
+        },
+      });
+      invitedUserIds.push(existingMember.id);
+
+      let auditFailureActive = true;
+      prisma.$use(async (params, next) => {
+        if (
+          auditFailureActive &&
+          params.model === 'AuditLog' &&
+          params.action === 'create' &&
+          params.args?.data?.entityId === existingMember.id &&
+          params.args?.data?.action === AuditAction.USER_ROLE_CHANGED
+        ) {
+          throw new Error('Simulated audit write failure');
+        }
+
+        return next(params);
+      });
+
+      try {
+        const res = await request(app)
+          .post('/api/company/members/invite')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            email,
+            fullName: 'Existing Audit Member',
+            roleInCompany: 'site_engineer',
+          });
+
+        expect(res.status).toBe(500);
+        await expect(
+          prisma.user.findUnique({
+            where: { id: existingMember.id },
+            select: { roleInCompany: true },
+          }),
+        ).resolves.toMatchObject({ roleInCompany: 'foreman' });
+      } finally {
+        auditFailureActive = false;
+      }
+    });
+
     it('rejects new company member invites when the invitation email fails', async () => {
       const email = `company-invite-email-fail-${Date.now()}@example.com`;
       await expectFailedCompanyMemberInvite({

@@ -14,6 +14,7 @@ type ProjectUser = {
 type ProjectUsersApiOptions = {
   failUserLoadsUntil?: number;
   inviteDelayMs?: number;
+  removeDelayMs?: number;
   user?: typeof E2E_ADMIN_USER;
   projectOverrides?: Record<string, unknown>;
 };
@@ -194,6 +195,9 @@ async function mockSeededProjectUsersApi(page: Page, options: ProjectUsersApiOpt
 
     if (route.request().method() === 'DELETE') {
       removeUserId = userId;
+      if (options.removeDelayMs) {
+        await delay(options.removeDelayMs);
+      }
       const index = users.findIndex((item) => item.userId === userId);
       if (index >= 0) {
         users.splice(index, 1);
@@ -311,6 +315,8 @@ test.describe('Project users seeded admin contract', () => {
     await inviteDialog.getByLabel('Email Address').fill('QA.Manager@Example.com');
     await inviteDialog.getByLabel('Role').selectOption('quality_manager');
 
+    const emailInput = inviteDialog.getByLabel('Email Address');
+    const roleSelect = inviteDialog.getByLabel('Role');
     await inviteDialog
       .getByRole('button', { name: 'Send Invite' })
       .evaluate((button: HTMLElement) => {
@@ -318,6 +324,8 @@ test.describe('Project users seeded admin contract', () => {
         button.click();
       });
 
+    await expect(emailInput).toBeDisabled();
+    await expect(roleSelect).toBeDisabled();
     await expect(
       page.getByText('qa.manager@example.com has been added to the project.'),
     ).toBeVisible();
@@ -399,5 +407,61 @@ test.describe('Project users seeded admin contract', () => {
           body: expect.objectContaining({ role: 'foreman' }),
         }),
       );
+  });
+
+  test('keeps mobile project team actions reachable', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    const api = await mockSeededProjectUsersApi(page);
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/users`);
+
+    const usersRegion = page.getByRole('region', { name: 'Project users table' });
+    await expect(usersRegion).toBeVisible();
+    await usersRegion.evaluate((element) => {
+      element.scrollLeft = element.scrollWidth;
+    });
+
+    await page.getByRole('button', { name: 'Change role for E2E Engineer' }).click();
+    await page.getByRole('combobox', { name: 'Role for E2E Engineer' }).selectOption('foreman');
+    await page.getByRole('button', { name: 'Save role for E2E Engineer' }).click();
+
+    await expect
+      .poll(() => api.getUpdateRoleRequest())
+      .toEqual(
+        expect.objectContaining({
+          userId: 'e2e-engineer-user',
+          body: expect.objectContaining({ role: 'foreman' }),
+        }),
+      );
+
+    await usersRegion.evaluate((element) => {
+      element.scrollLeft = element.scrollWidth;
+    });
+    await page.getByRole('button', { name: 'Remove E2E Viewer from project' }).click();
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Remove' }).click();
+
+    expect(api.getRemoveUserId()).toBe('e2e-viewer-user');
+    await expect(page.getByText('E2E Viewer has been removed from the project.')).toBeVisible();
+    await expect(usersRegion.locator('tbody tr').filter({ hasText: 'E2E Viewer' })).toBeHidden();
+  });
+
+  test('locks the remove confirmation while project user removal is in flight', async ({
+    page,
+  }) => {
+    const api = await mockSeededProjectUsersApi(page, { removeDelayMs: 250 });
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/users`);
+
+    await page.getByRole('button', { name: 'Remove E2E Viewer from project' }).click();
+    const removeDialog = page.getByRole('alertdialog').filter({ hasText: 'Remove Project User' });
+    await removeDialog.getByRole('button', { name: 'Remove' }).click();
+
+    await expect(removeDialog).toBeVisible();
+    await expect(removeDialog.getByRole('button', { name: 'Removing...' })).toBeDisabled();
+    await expect(removeDialog.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+
+    expect(api.getRemoveUserId()).toBe('e2e-viewer-user');
+    await expect(page.getByText('E2E Viewer has been removed from the project.')).toBeVisible();
+    await expect(removeDialog).toBeHidden();
   });
 });
