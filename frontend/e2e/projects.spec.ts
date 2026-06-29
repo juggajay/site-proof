@@ -90,6 +90,10 @@ const projectDashboardData = {
   ],
 };
 
+function projectRoleFor(user: typeof projectsUser) {
+  return user.roleInCompany ?? user.role ?? 'viewer';
+}
+
 async function mockProjectsApi(
   page: Page,
   options: {
@@ -170,6 +174,7 @@ async function mockProjectsApi(
           ...seededProjects[0],
           clientName: 'Transport NSW',
           state: 'NSW',
+          currentUserRole: projectRoleFor(user),
         },
       });
       return;
@@ -184,6 +189,7 @@ async function mockProjectsApi(
           status: 'active',
           clientName: 'Transport NSW',
           state: 'QLD',
+          currentUserRole: projectRoleFor(user),
         },
       });
       return;
