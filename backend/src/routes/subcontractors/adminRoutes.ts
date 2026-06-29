@@ -1,7 +1,7 @@
 import { Router, type Request } from 'express';
 
 import { AppError } from '../../lib/AppError.js';
-import { AuditAction, createAuditLog } from '../../lib/auditLog.js';
+import { AuditAction, createAuditLog, writeAuditLogInTransaction } from '../../lib/auditLog.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { prisma } from '../../lib/prisma.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
@@ -151,6 +151,20 @@ export function createSubcontractorAdminRouter({
         // Delete the subcontractor company (Prisma cascade handles SubcontractorUser, EmployeeRoster, PlantRegister, DailyDocket)
         await tx.subcontractorCompany.delete({
           where: { id },
+        });
+
+        await writeAuditLogInTransaction(tx, {
+          projectId: subcontractor.projectId,
+          userId: user.id,
+          entityType: 'subcontractor',
+          entityId: id,
+          action: AuditAction.SUBCONTRACTOR_PERMANENTLY_DELETED,
+          changes: {
+            companyName: subcontractor.companyName,
+            deletedCounts,
+            previousStatus: subcontractor.status,
+          },
+          req,
         });
       });
 

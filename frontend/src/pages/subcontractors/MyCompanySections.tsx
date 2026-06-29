@@ -1,4 +1,5 @@
 import { Plus, Users, Truck, Trash2 } from 'lucide-react';
+import { useState } from 'react';
 import type { CompanyData, Employee, Plant } from './myCompanyData';
 import { StatusBadge } from './myCompanyDisplay';
 import { formatCompanyRate } from './myCompanyDisplayHelpers';
@@ -108,6 +109,48 @@ export function PendingApprovalsAlert({
   );
 }
 
+function ConfirmDeleteButton({
+  confirming,
+  disabled,
+  label,
+  onArm,
+  onCancel,
+  onConfirm,
+}: {
+  confirming: boolean;
+  disabled: boolean;
+  label: string;
+  onArm: () => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const actionLabel = confirming ? `Confirm delete ${label}` : `Delete ${label}`;
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        if (confirming) {
+          onConfirm();
+          return;
+        }
+        onArm();
+      }}
+      onBlur={onCancel}
+      disabled={disabled}
+      className="p-1 text-destructive hover:text-destructive/80 hover:bg-destructive/10 rounded"
+      title={actionLabel}
+      aria-label={actionLabel}
+    >
+      {confirming ? (
+        <span className="text-xs font-semibold">Confirm</span>
+      ) : (
+        <Trash2 className="h-4 w-4" />
+      )}
+    </button>
+  );
+}
+
 export function EmployeeRosterSection({
   employees,
   canManageRoster,
@@ -121,6 +164,8 @@ export function EmployeeRosterSection({
   onAddEmployee: () => void;
   onDeleteEmployee: (employeeId: string) => void;
 }) {
+  const [confirmingEmployeeId, setConfirmingEmployeeId] = useState<string | null>(null);
+
   return (
     <div className="rounded-lg border bg-card">
       <div className="flex items-center justify-between p-4 border-b">
@@ -179,15 +224,17 @@ export function EmployeeRosterSection({
                   {canManageRoster && (
                     <td className="p-3 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => onDeleteEmployee(employee.id)}
+                        <ConfirmDeleteButton
+                          confirming={confirmingEmployeeId === employee.id}
                           disabled={saving}
-                          className="p-1 text-destructive hover:text-destructive/80 hover:bg-destructive/10 rounded"
-                          title="Delete"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                          label={employee.name}
+                          onArm={() => setConfirmingEmployeeId(employee.id)}
+                          onCancel={() => setConfirmingEmployeeId(null)}
+                          onConfirm={() => {
+                            onDeleteEmployee(employee.id);
+                            setConfirmingEmployeeId(null);
+                          }}
+                        />
                       </div>
                     </td>
                   )}
@@ -214,6 +261,8 @@ export function PlantRegisterSection({
   onAddPlant: () => void;
   onDeletePlant: (plantId: string) => void;
 }) {
+  const [confirmingPlantId, setConfirmingPlantId] = useState<string | null>(null);
+
   return (
     <div className="rounded-lg border bg-card">
       <div className="flex items-center justify-between p-4 border-b">
@@ -276,15 +325,17 @@ export function PlantRegisterSection({
                   {canManageRoster && (
                     <td className="p-3 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => onDeletePlant(item.id)}
+                        <ConfirmDeleteButton
+                          confirming={confirmingPlantId === item.id}
                           disabled={saving}
-                          className="p-1 text-destructive hover:text-destructive/80 hover:bg-destructive/10 rounded"
-                          title="Delete"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                          label={item.description || item.type}
+                          onArm={() => setConfirmingPlantId(item.id)}
+                          onCancel={() => setConfirmingPlantId(null)}
+                          onConfirm={() => {
+                            onDeletePlant(item.id);
+                            setConfirmingPlantId(null);
+                          }}
+                        />
                       </div>
                     </td>
                   )}

@@ -59,9 +59,6 @@ const PLANT_TYPES = [
   'Other',
 ];
 
-// A roster row can in principle carry a counter status + countered rate; the
-// classic CompanyData types narrow status to pending|approved|inactive, so we
-// read the extra fields defensively without widening those exported types.
 interface CounterFields {
   counterRate?: number;
   counterDryRate?: number;

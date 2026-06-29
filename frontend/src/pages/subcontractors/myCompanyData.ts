@@ -20,7 +20,8 @@ export interface Employee {
   phone: string;
   role: string;
   hourlyRate: number;
-  status: 'pending' | 'approved' | 'inactive';
+  status: 'pending' | 'approved' | 'inactive' | 'counter';
+  counterRate?: number;
 }
 
 export interface Plant {
@@ -30,7 +31,9 @@ export interface Plant {
   idRego: string;
   dryRate: number;
   wetRate: number;
-  status: 'pending' | 'approved' | 'inactive';
+  status: 'pending' | 'approved' | 'inactive' | 'counter';
+  counterDryRate?: number;
+  counterWetRate?: number;
 }
 
 export interface CompanyData {

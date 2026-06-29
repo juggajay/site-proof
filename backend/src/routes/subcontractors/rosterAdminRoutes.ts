@@ -139,10 +139,16 @@ export function createSubcontractorRosterAdminRouter({
         throw AppError.notFound('Employee');
       }
 
-      const updateData: Prisma.EmployeeRosterUpdateInput = { status };
+      const updateData: Prisma.EmployeeRosterUpdateInput = {
+        status,
+        counterRate: status === 'counter' ? normalizedCounterRate : null,
+      };
       if (status === 'approved') {
         updateData.approvedById = userId;
         updateData.approvedAt = new Date();
+      } else {
+        updateData.approvedById = null;
+        updateData.approvedAt = null;
       }
 
       const updated = await prisma.employeeRoster.update({
@@ -362,10 +368,17 @@ export function createSubcontractorRosterAdminRouter({
         throw AppError.notFound('Plant');
       }
 
-      const updateData: Prisma.PlantRegisterUpdateInput = { status };
+      const updateData: Prisma.PlantRegisterUpdateInput = {
+        status,
+        counterDryRate: status === 'counter' ? normalizedCounterDryRate : null,
+        counterWetRate: status === 'counter' ? (normalizedCounterWetRate ?? null) : null,
+      };
       if (status === 'approved') {
         updateData.approvedById = userId;
         updateData.approvedAt = new Date();
+      } else {
+        updateData.approvedById = null;
+        updateData.approvedAt = null;
       }
 
       const updated = await prisma.plantRegister.update({

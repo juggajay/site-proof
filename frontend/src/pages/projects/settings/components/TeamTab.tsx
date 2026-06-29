@@ -14,6 +14,7 @@ import { logError } from '@/lib/logger';
 interface TeamTabProps {
   projectId: string;
   readOnly?: boolean;
+  canGrantProjectAdmin?: boolean;
 }
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -29,7 +30,11 @@ function getProjectInviteErrorMessage(error: unknown): string {
   return message;
 }
 
-export function TeamTab({ projectId, readOnly = false }: TeamTabProps) {
+export function TeamTab({
+  projectId,
+  readOnly = false,
+  canGrantProjectAdmin = true,
+}: TeamTabProps) {
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [loadingTeam, setLoadingTeam] = useState(false);
   const [teamError, setTeamError] = useState('');
@@ -41,6 +46,9 @@ export function TeamTab({ projectId, readOnly = false }: TeamTabProps) {
   const [inviteSuccess, setInviteSuccess] = useState('');
   const invitingRef = useRef(false);
   const inviteCloseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const assignableRoleOptions = canGrantProjectAdmin
+    ? ROLE_OPTIONS
+    : ROLE_OPTIONS.filter((role) => role.value !== 'admin');
 
   const fetchTeamMembers = useCallback(async () => {
     if (!projectId) {
@@ -292,7 +300,7 @@ export function TeamTab({ projectId, readOnly = false }: TeamTabProps) {
                   onChange={(e) => setInviteRole(e.target.value)}
                   disabled={inviting}
                 >
-                  {ROLE_OPTIONS.map((role) => (
+                  {assignableRoleOptions.map((role) => (
                     <option key={role.value} value={role.value}>
                       {role.label}
                     </option>

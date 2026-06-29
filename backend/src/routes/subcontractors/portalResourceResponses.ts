@@ -13,6 +13,7 @@ type PortalEmployeeSource = {
   role: string | null;
   hourlyRate: NumericLike;
   status?: string | null;
+  counterRate?: NumericLike;
 };
 
 type PortalPlantSource = {
@@ -23,6 +24,8 @@ type PortalPlantSource = {
   dryRate: NumericLike;
   wetRate: NumericLike;
   status?: string | null;
+  counterDryRate?: NumericLike;
+  counterWetRate?: NumericLike;
 };
 
 type PortalCompanySource = {
@@ -59,18 +62,42 @@ function numericValue(value: NumericLike): number {
   return Number(value) || 0;
 }
 
+function optionalNumericValue(value: NumericLike): number | undefined {
+  if (value === null || value === undefined) {
+    return undefined;
+  }
+
+  return numericValue(value);
+}
+
+function rosterStatus(
+  status: string | null | undefined,
+): 'approved' | 'counter' | 'inactive' | 'pending' {
+  if (status === 'approved' || status === 'counter' || status === 'inactive') {
+    return status;
+  }
+
+  return 'pending';
+}
+
 function mapPortalEmployee(employee: PortalEmployeeSource) {
+  const status = rosterStatus(employee.status);
+  const counterRate = optionalNumericValue(employee.counterRate);
   return {
     id: employee.id,
     name: employee.name,
     phone: employee.phone || '',
     role: employee.role || '',
     hourlyRate: numericValue(employee.hourlyRate),
-    status: employee.status === 'approved' ? 'approved' : 'pending',
+    status,
+    ...(status === 'counter' && counterRate !== undefined && { counterRate }),
   };
 }
 
 function mapPortalPlant(plant: PortalPlantSource) {
+  const status = rosterStatus(plant.status);
+  const counterDryRate = optionalNumericValue(plant.counterDryRate);
+  const counterWetRate = optionalNumericValue(plant.counterWetRate);
   return {
     id: plant.id,
     type: plant.type,
@@ -78,7 +105,12 @@ function mapPortalPlant(plant: PortalPlantSource) {
     idRego: plant.idRego || '',
     dryRate: numericValue(plant.dryRate),
     wetRate: numericValue(plant.wetRate),
-    status: plant.status === 'approved' ? 'approved' : 'pending',
+    status,
+    ...(status === 'counter' &&
+      counterDryRate !== undefined && {
+        counterDryRate,
+        ...(counterWetRate !== undefined && { counterWetRate }),
+      }),
   };
 }
 

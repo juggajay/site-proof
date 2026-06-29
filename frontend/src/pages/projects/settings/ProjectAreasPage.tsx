@@ -74,67 +74,69 @@ function ProjectAreasTable({
   onRequestDelete: (area: ProjectArea) => void;
 }) {
   return (
-    <div className="rounded-lg border overflow-hidden">
-      <table className="w-full">
-        <thead className="border-b bg-muted/50">
-          <tr>
-            <th className="text-left px-4 py-3 text-sm font-medium">Colour</th>
-            <th className="text-left px-4 py-3 text-sm font-medium">Area Name</th>
-            <th className="text-left px-4 py-3 text-sm font-medium">Chainage Start</th>
-            <th className="text-left px-4 py-3 text-sm font-medium">Chainage End</th>
-            <th className="text-left px-4 py-3 text-sm font-medium">Actions</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y">
-          {areas.map((area) => (
-            <tr key={area.id} className="hover:bg-muted/25">
-              <td className="px-4 py-3">
-                <div
-                  className="h-6 w-6 rounded-full border"
-                  style={{ backgroundColor: area.colour || '#6B7280' }}
-                  title={area.colour || 'No colour'}
-                  role="img"
-                  aria-label={`${area.name} colour ${area.colour || '#6B7280'}`}
-                />
-              </td>
-              <td className="px-4 py-3 font-medium">{area.name}</td>
-              <td className="px-4 py-3 text-muted-foreground">
-                {area.chainageStart != null ? `${area.chainageStart.toLocaleString()}m` : '-'}
-              </td>
-              <td className="px-4 py-3 text-muted-foreground">
-                {area.chainageEnd != null ? `${area.chainageEnd.toLocaleString()}m` : '-'}
-              </td>
-              <td className="px-4 py-3">
-                {!readOnly && (
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => onEdit(area)}
-                      className="text-primary hover:bg-primary/5"
-                      aria-label={`Edit ${area.name}`}
-                      title="Edit"
-                    >
-                      <Edit2 className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => onRequestDelete(area)}
-                      disabled={deletingId === area.id}
-                      className="text-destructive hover:bg-destructive/10"
-                      aria-label={`Delete ${area.name}`}
-                      title="Delete"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                )}
-              </td>
+    <div className="rounded-lg border">
+      <div className="overflow-x-auto">
+        <table className="min-w-[680px] w-full">
+          <thead className="border-b bg-muted/50">
+            <tr>
+              <th className="text-left px-4 py-3 text-sm font-medium">Colour</th>
+              <th className="text-left px-4 py-3 text-sm font-medium">Area Name</th>
+              <th className="text-left px-4 py-3 text-sm font-medium">Chainage Start</th>
+              <th className="text-left px-4 py-3 text-sm font-medium">Chainage End</th>
+              <th className="text-left px-4 py-3 text-sm font-medium">Actions</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody className="divide-y">
+            {areas.map((area) => (
+              <tr key={area.id} className="hover:bg-muted/25">
+                <td className="px-4 py-3">
+                  <div
+                    className="h-6 w-6 rounded-full border"
+                    style={{ backgroundColor: area.colour || '#6B7280' }}
+                    title={area.colour || 'No colour'}
+                    role="img"
+                    aria-label={`${area.name} colour ${area.colour || '#6B7280'}`}
+                  />
+                </td>
+                <td className="px-4 py-3 font-medium">{area.name}</td>
+                <td className="px-4 py-3 text-muted-foreground">
+                  {area.chainageStart != null ? `${area.chainageStart.toLocaleString()}m` : '-'}
+                </td>
+                <td className="px-4 py-3 text-muted-foreground">
+                  {area.chainageEnd != null ? `${area.chainageEnd.toLocaleString()}m` : '-'}
+                </td>
+                <td className="px-4 py-3">
+                  {!readOnly && (
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => onEdit(area)}
+                        className="text-primary hover:bg-primary/5"
+                        aria-label={`Edit ${area.name}`}
+                        title="Edit"
+                      >
+                        <Edit2 className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => onRequestDelete(area)}
+                        disabled={deletingId === area.id}
+                        className="text-destructive hover:bg-destructive/10"
+                        aria-label={`Delete ${area.name}`}
+                        title="Delete"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
