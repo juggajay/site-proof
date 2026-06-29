@@ -14,6 +14,7 @@ import {
   buildHoldPointEscalatedResponse,
   buildHoldPointEscalationResolvedResponse,
 } from './actionResponses.js';
+import { buildProjectEntityLink } from '../notifications/links.js';
 
 const HP_ESCALATION_ROLES = [
   'owner',
@@ -105,7 +106,7 @@ holdPointEscalationRouter.post(
       type: 'hold_point_escalation',
       title: 'Hold Point Escalated',
       message: `Hold point "${holdPoint.description}" on lot ${holdPoint.lot.lotNumber} has been escalated. Reason: ${holdPoint.escalationReason}`,
-      linkUrl: `/projects/${existingHP.lot.projectId}/holdpoints/${id}`,
+      linkUrl: buildProjectEntityLink('hold_point', id, existingHP.lot.projectId),
     }));
 
     if (notificationsToCreate.length > 0) {
