@@ -450,6 +450,7 @@ describe('processDueScheduledReports', () => {
           dayOfMonth: null,
           timeOfDay: '09:00',
           recipients: 'recipient@example.com',
+          nextRunAt: null,
           failureCount: 0,
           project: {
             name: project.name,
@@ -693,7 +694,7 @@ describe('processDueScheduledReports', () => {
     }
   });
 
-  it('does not retry recipients who already received a scheduled report before another recipient fails', async () => {
+  it('retries only recipients who missed a scheduled report after a partial delivery failure', async () => {
     const { company, project, now, schedule } = await createDueScheduleFixture(
       {},
       { recipients: 'sent-recipient@example.com,failed-recipient@example.com' },
@@ -709,18 +710,67 @@ describe('processDueScheduledReports', () => {
     try {
       const result = await processDueScheduledReports({ now, scheduleIds: [schedule.id] });
 
-      expectSingleSentResult(result, 1);
-      expect(result.results[0]?.error).toBeUndefined();
-      expect(sendSpy.mock.calls.map(([data]) => data.to)).toEqual([
-        'sent-recipient@example.com',
-        'failed-recipient@example.com',
+      expect(result.processed).toBe(1);
+      expect(result.sent).toBe(0);
+      expect(result.failed).toBe(1);
+      expect(result.results[0]?.status).toBe('failed');
+      expect(result.results[0]?.error).toContain('temporary provider failure');
+      const firstAttemptRecipients = sendSpy.mock.calls.map(([data]) => data.to);
+      expect(firstAttemptRecipients).toHaveLength(2);
+      expect(firstAttemptRecipients).toEqual(
+        expect.arrayContaining(['sent-recipient@example.com', 'failed-recipient@example.com']),
+      );
+      const partiallyDeliveredSchedule = await getScheduledReport(schedule.id);
+      expect(partiallyDeliveredSchedule?.lastSentAt).toBeNull();
+      expect(partiallyDeliveredSchedule?.failureCount).toBe(1);
+      expect(partiallyDeliveredSchedule?.nextRunAt?.getTime()).toBeGreaterThan(now.getTime());
+      const partialRun = await prisma.scheduledReportRun.findFirst({
+        where: { scheduleId: schedule.id },
+        include: { deliveries: { orderBy: { recipient: 'asc' } } },
+      });
+      expect(partialRun).toMatchObject({
+        status: 'partial_failed',
+        sentCount: 1,
+        failedCount: 1,
+      });
+      expect(
+        partialRun?.deliveries.map((delivery) => ({
+          recipient: delivery.recipient,
+          status: delivery.status,
+          retryable: delivery.retryable,
+        })),
+      ).toEqual([
+        { recipient: 'failed-recipient@example.com', status: 'failed', retryable: true },
+        { recipient: 'sent-recipient@example.com', status: 'sent', retryable: false },
       ]);
-      await expectScheduleAdvanced(schedule.id, now, true);
 
+      sendSpy.mockImplementation(async () => ({
+        success: true,
+        messageId: 'retry-ok',
+        provider: 'mock',
+      }));
       sendSpy.mockClear();
-      const secondRun = await processDueScheduledReports({ now, scheduleIds: [schedule.id] });
-      expect(secondRun.processed).toBe(0);
-      expect(sendSpy).not.toHaveBeenCalled();
+      const retryNow = partiallyDeliveredSchedule!.nextRunAt!;
+      const secondRun = await processDueScheduledReports({
+        now: retryNow,
+        scheduleIds: [schedule.id],
+      });
+      expectSingleSentResult(secondRun, 1);
+      expect(sendSpy.mock.calls.map(([data]) => data.to)).toEqual(['failed-recipient@example.com']);
+
+      const completedSchedule = await getScheduledReport(schedule.id);
+      expect(completedSchedule?.lastSentAt?.toISOString()).toBe(retryNow.toISOString());
+      expect(completedSchedule?.failureCount).toBe(0);
+      const completedRun = await prisma.scheduledReportRun.findFirst({
+        where: { scheduleId: schedule.id },
+        include: { deliveries: { orderBy: { recipient: 'asc' } } },
+      });
+      expect(completedRun).toMatchObject({
+        status: 'sent',
+        sentCount: 2,
+        failedCount: 0,
+      });
+      expect(completedRun?.deliveries.every((delivery) => delivery.status === 'sent')).toBe(true);
     } finally {
       sendSpy.mockRestore();
       await cleanupProject(project.id, company.id);

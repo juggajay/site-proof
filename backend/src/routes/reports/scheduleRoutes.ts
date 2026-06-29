@@ -33,6 +33,8 @@ const scheduledReportTimeOfDaySchema = z
   .string()
   .max(5)
   .regex(/^([01]\d|2[0-3]):[0-5]\d$/);
+const INCOMPLETE_SCHEDULED_REPORT_RUN_STATUSES = ['processing', 'failed', 'partial_failed'];
+const INCOMPLETE_SCHEDULED_REPORT_DELIVERY_STATUSES = ['pending', 'sending', 'failed'];
 
 type ScheduledReportFrequency = z.infer<typeof scheduledReportFrequencySchema>;
 type ScheduledReportType = z.infer<typeof scheduledReportTypeSchema>;
@@ -210,6 +212,37 @@ async function buildScheduledReportAuditChanges(schedule: ScheduledReportAuditSo
     externalRecipientCount: recipientEmails.length - appRecipientCount,
     recipientDomains: getRecipientDomains(recipientEmails),
   };
+}
+
+async function cancelIncompleteScheduledReportRuns(scheduleId: string): Promise<void> {
+  const now = new Date();
+  const reason = 'Schedule configuration changed before retry completed';
+
+  await prisma.scheduledReportRecipientDelivery.updateMany({
+    where: {
+      scheduleId,
+      status: { in: INCOMPLETE_SCHEDULED_REPORT_DELIVERY_STATUSES },
+    },
+    data: {
+      status: 'cancelled',
+      retryable: false,
+      lockedUntil: null,
+      nextAttemptAt: null,
+      errorReason: reason,
+    },
+  });
+
+  await prisma.scheduledReportRun.updateMany({
+    where: {
+      scheduleId,
+      status: { in: INCOMPLETE_SCHEDULED_REPORT_RUN_STATUSES },
+    },
+    data: {
+      status: 'cancelled',
+      completedAt: now,
+      errorReason: reason,
+    },
+  });
 }
 
 function normalizeScheduleTiming(input: {
@@ -409,14 +442,14 @@ export function createScheduledReportRouter({
         updateData.isActive = parseScheduleIsActive(isActive);
       }
 
-      const shouldResetFailureState =
+      const shouldCancelIncompleteRuns =
         reportType !== undefined ||
         frequency !== undefined ||
         dayOfWeek !== undefined ||
         dayOfMonth !== undefined ||
         timeOfDay !== undefined ||
-        recipients !== undefined ||
-        isActive === true;
+        recipients !== undefined;
+      const shouldResetFailureState = shouldCancelIncompleteRuns || isActive === true;
 
       if (
         frequency !== undefined ||
@@ -475,6 +508,10 @@ export function createScheduledReportRouter({
         where: { id },
         data: updateData,
       });
+
+      if (shouldCancelIncompleteRuns) {
+        await cancelIncompleteScheduledReportRuns(id);
+      }
 
       await createAuditLog({
         projectId: schedule.projectId,
