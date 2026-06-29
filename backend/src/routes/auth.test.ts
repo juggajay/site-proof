@@ -2063,6 +2063,22 @@ describe('Password Reset Flow', () => {
 
       expect(resetRes.status).toBe(200);
 
+      const [tokenRecord, resetUser] = await Promise.all([
+        prisma.passwordResetToken.findFirstOrThrow({
+          where: { token: hashAuthTokenForTest(resetToken) },
+          select: { usedAt: true },
+        }),
+        prisma.user.findUniqueOrThrow({
+          where: { id: userId },
+          select: { tokenInvalidatedAt: true },
+        }),
+      ]);
+      expect(tokenRecord.usedAt).toBeInstanceOf(Date);
+      expect(resetUser.tokenInvalidatedAt).toBeInstanceOf(Date);
+      expect(resetUser.tokenInvalidatedAt!.getTime()).toBeGreaterThan(
+        tokenRecord.usedAt!.getTime(),
+      );
+
       const oldSessionRes = await request(app)
         .get('/api/auth/me')
         .set('Authorization', `Bearer ${oldToken}`);

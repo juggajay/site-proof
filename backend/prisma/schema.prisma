@@ -33,32 +33,32 @@ model Company {
 }
 
 model User {
-  id                 String    @id @default(uuid())
-  email              String    @unique
-  passwordHash       String?   @map("password_hash")
-  fullName           String?   @map("full_name")
-  phone              String?
-  avatarUrl          String?   @map("avatar_url")
-  companyId          String?   @map("company_id")
-  roleInCompany      String    @default("member") @map("role_in_company")
-  emailVerified      Boolean   @default(false) @map("email_verified")
-  emailVerifiedAt    DateTime? @map("email_verified_at")
-  tosAcceptedAt      DateTime? @map("tos_accepted_at")
-  tosVersion         String?   @map("tos_version")
+  id                    String    @id @default(uuid())
+  email                 String    @unique
+  passwordHash          String?   @map("password_hash")
+  fullName              String?   @map("full_name")
+  phone                 String?
+  avatarUrl             String?   @map("avatar_url")
+  companyId             String?   @map("company_id")
+  roleInCompany         String    @default("member") @map("role_in_company")
+  emailVerified         Boolean   @default(false) @map("email_verified")
+  emailVerifiedAt       DateTime? @map("email_verified_at")
+  tosAcceptedAt         DateTime? @map("tos_accepted_at")
+  tosVersion            String?   @map("tos_version")
   // MFA fields (Feature #22, #420, #421)
-  twoFactorEnabled   Boolean   @default(false) @map("two_factor_enabled")
-  twoFactorSecret    String?   @map("two_factor_secret")
+  twoFactorEnabled      Boolean   @default(false) @map("two_factor_enabled")
+  twoFactorSecret       String?   @map("two_factor_secret")
   // OAuth fields (Feature #414, #1004)
-  oauthProvider      String?   @map("oauth_provider")
-  oauthProviderId    String?   @map("oauth_provider_id")
+  oauthProvider         String?   @map("oauth_provider")
+  oauthProviderId       String?   @map("oauth_provider_id")
   // Token invalidation for logout-all-devices feature
-  tokenInvalidatedAt DateTime? @map("token_invalidated_at")
+  tokenInvalidatedAt    DateTime? @map("token_invalidated_at")
   // Account-level product-tour completion. Durable across devices and storage
   // clears so an existing user is never re-shown the first-run onboarding tour
   // (the per-device localStorage marker is only a cache on top of this).
   onboardingCompletedAt DateTime? @map("onboarding_completed_at")
-  createdAt          DateTime  @default(now()) @map("created_at")
-  updatedAt          DateTime  @updatedAt @map("updated_at")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
 
   company                     Company?                     @relation(fields: [companyId], references: [id], onDelete: SetNull)
   projectUsers                ProjectUser[]
@@ -1039,6 +1039,7 @@ model SubcontractorCompany {
   primaryContactPhone   String?   @map("primary_contact_phone")
   status                String    @default("pending_approval")
   invitationExpiresAt   DateTime? @map("invitation_expires_at")
+  invitationTokenHash   String?   @unique @map("invitation_token_hash")
   approvedById          String?   @map("approved_by")
   approvedAt            DateTime? @map("approved_at")
   portalAccess          Json?     @map("portal_access")
@@ -1173,9 +1174,9 @@ model DailyDocket {
   diaryPersonnel DiaryPersonnel[]
   diaryPlant     DiaryPlant[]
 
+  @@unique([subcontractorCompanyId, projectId, date], map: "daily_dockets_subcontractor_company_id_project_id_date_key")
   @@index([projectId, date])
   @@index([projectId, status])
-  @@unique([subcontractorCompanyId, projectId, date], map: "daily_dockets_subcontractor_company_id_project_id_date_key")
   @@index([subcontractorCompanyId, date])
   @@index([subcontractorCompanyId, status])
   @@map("daily_dockets")

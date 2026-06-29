@@ -9,8 +9,10 @@ import { sendVerificationEmail } from '../../lib/email.js';
 import { buildFrontendUrl } from '../../lib/runtimeConfig.js';
 import { logError } from '../../lib/serverLogger.js';
 import {
+  hashSubcontractorInvitationToken,
   isSubcontractorInvitationAcceptableStatus,
   isSubcontractorInvitationExpired,
+  normalizeSubcontractorInvitationToken,
 } from '../../lib/subcontractorInvitations.js';
 
 type PasswordValidation = {
@@ -41,7 +43,6 @@ type CreateRegistrationRouterDependencies = {
 };
 
 const CURRENT_TOS_VERSION = '1.0';
-const SUBCONTRACTOR_INVITATION_ID_MAX_LENGTH = 120;
 const VERIFICATION_BYPASS_EMAIL_DOMAINS_ENV = 'VERIFICATION_BYPASS_EMAIL_DOMAINS';
 
 function getEmailDomain(email: string): string | null {
@@ -82,27 +83,11 @@ function shouldBypassEmailVerification(email: string): { bypass: boolean; domain
 }
 
 function normalizeSubcontractorInvitationId(value: unknown): string {
-  if (typeof value !== 'string') {
-    throw AppError.badRequest('Invitation ID must be a string');
+  try {
+    return normalizeSubcontractorInvitationToken(value);
+  } catch {
+    throw AppError.notFound('Invitation');
   }
-
-  const normalized = value.trim();
-  if (!normalized) {
-    throw AppError.badRequest('Invitation ID is required');
-  }
-
-  if (normalized.length > SUBCONTRACTOR_INVITATION_ID_MAX_LENGTH) {
-    throw AppError.badRequest('Invitation ID is too long');
-  }
-
-  for (let index = 0; index < normalized.length; index += 1) {
-    const code = normalized.charCodeAt(index);
-    if (code <= 31 || code === 127) {
-      throw AppError.badRequest('Invitation ID contains invalid characters');
-    }
-  }
-
-  return normalized;
 }
 
 function buildRegistrationDisplayName(
@@ -330,6 +315,7 @@ export function createRegistrationRouter({
       const normalizedEmail = normalizeEmailInput(email);
       const normalizedPassword = normalizePasswordInput(password);
       const normalizedInvitationId = normalizeSubcontractorInvitationId(invitationId);
+      const invitationTokenHash = hashSubcontractorInvitationToken(normalizedInvitationId);
       const normalizedFullName = normalizeProfileText(
         fullName,
         'Full name',
@@ -354,12 +340,12 @@ export function createRegistrationRouter({
         await tx.$queryRaw<Array<{ id: string }>>`
           SELECT id
           FROM subcontractor_companies
-          WHERE id = ${normalizedInvitationId}
+          WHERE invitation_token_hash = ${invitationTokenHash}
           FOR UPDATE
         `;
 
         const invitedSubcontractor = await tx.subcontractorCompany.findUnique({
-          where: { id: normalizedInvitationId },
+          where: { invitationTokenHash },
           include: {
             project: { select: { id: true, name: true } },
           },
@@ -467,6 +453,9 @@ export function createRegistrationRouter({
           email: user.email,
           fullName: user.fullName,
           role: user.roleInCompany,
+          roleInCompany: user.roleInCompany,
+          companyId: null,
+          hasSubcontractorPortalAccess: true,
           hasPassword: true,
         },
         company: {

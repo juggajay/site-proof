@@ -7,11 +7,13 @@ import { apiFetch } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { hasSubcontractorPortalIdentity } from '@/lib/subcontractorIdentity';
+import { useSubbieShellActive } from '@/shell/shellFlag';
 import { ProjectDetailPage } from './appLazyPages';
 import { PROJECT_WORKSPACE_ROLES } from './appRouteRoles';
 
 function SubcontractorProjectAccessRoute({ projectId }: { projectId?: string }) {
   const { user } = useAuth();
+  const subbieShellActive = useSubbieShellActive();
   const { isLoading, error } = useQuery({
     queryKey: ['subcontractor-project-route-access', user?.id, projectId],
     queryFn: async () => {
@@ -24,8 +26,10 @@ function SubcontractorProjectAccessRoute({ projectId }: { projectId?: string }) 
     retry: false,
   });
 
+  const assignedWorkPath = subbieShellActive ? '/p/work' : '/subcontractor-portal/work';
+
   if (!projectId) {
-    return <Navigate to="/subcontractor-portal/work" replace />;
+    return <Navigate to={assignedWorkPath} replace />;
   }
 
   if (isLoading) {
@@ -39,18 +43,13 @@ function SubcontractorProjectAccessRoute({ projectId }: { projectId?: string }) 
           error,
           'You do not have subcontractor portal access to this project.',
         )}
-        backTo="/subcontractor-portal/work"
+        backTo={assignedWorkPath}
         backLabel="Back to Assigned Work"
       />
     );
   }
 
-  return (
-    <Navigate
-      to={`/subcontractor-portal/work?projectId=${encodeURIComponent(projectId)}`}
-      replace
-    />
-  );
+  return <Navigate to={`${assignedWorkPath}?projectId=${encodeURIComponent(projectId)}`} replace />;
 }
 
 export function ProjectDetailRoute() {

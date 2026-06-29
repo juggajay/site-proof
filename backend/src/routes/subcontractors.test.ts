@@ -6,6 +6,10 @@ import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { AuditAction, parseAuditLogChanges } from '../lib/auditLog.js';
 import * as emailService from '../lib/email.js';
+import {
+  generateSubcontractorInvitationToken,
+  hashSubcontractorInvitationToken,
+} from '../lib/subcontractorInvitations.js';
 import { registerTestUser as registerSharedTestUser } from '../test/routeTestHarness.js';
 
 // Import subcontractors router
@@ -24,6 +28,11 @@ async function registerTestUser(prefix: string, fullName: string) {
 async function cleanupTestUser(userId: string) {
   await prisma.emailVerificationToken.deleteMany({ where: { userId } });
   await prisma.user.delete({ where: { id: userId } }).catch(() => {});
+}
+
+function createSubcontractorInvitationToken() {
+  const token = generateSubcontractorInvitationToken();
+  return { token, tokenHash: hashSubcontractorInvitationToken(token) };
 }
 
 describe('Subcontractors API', () => {
@@ -110,10 +119,11 @@ describe('Subcontractors API', () => {
 
       const storedInvitation = await prisma.subcontractorCompany.findUnique({
         where: { id: subcontractorCompanyId },
-        select: { invitationExpiresAt: true },
+        select: { invitationExpiresAt: true, invitationTokenHash: true },
       });
       expect(storedInvitation?.invitationExpiresAt).toBeInstanceOf(Date);
       expect(storedInvitation!.invitationExpiresAt!.getTime()).toBeGreaterThan(Date.now());
+      expect(storedInvitation?.invitationTokenHash).toMatch(/^sha256:/);
 
       const auditLog = await prisma.auditLog.findFirst({
         where: {
@@ -763,35 +773,56 @@ describe('Subcontractors API', () => {
       ];
 
       for (const { label, response } of checks) {
-        expect(response.status, label).toBe(400);
-        expect(response.body.error.message, label).toContain('characters or fewer');
+        const expectedStatus = label === 'GET public invitation' ? 404 : 400;
+        expect(response.status, label).toBe(expectedStatus);
+        if (expectedStatus === 400) {
+          expect(response.body.error.message, label).toContain('characters or fewer');
+        }
       }
     });
   });
 
   describe('GET /api/subcontractors/invitation/:id', () => {
     it('should get invitation details (public endpoint)', async () => {
-      const storedInvitation = await prisma.subcontractorCompany.findUniqueOrThrow({
-        where: { id: subcontractorCompanyId },
-        select: { primaryContactEmail: true, primaryContactName: true },
+      const inviteToken = createSubcontractorInvitationToken();
+      const publicSub = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `Public Token Invite ${Date.now()}`,
+          primaryContactName: 'Hidden Contact Name',
+          primaryContactEmail: `public-token-${Date.now()}@example.com`,
+          status: 'pending_approval',
+          invitationExpiresAt: new Date(Date.now() + 60_000),
+          invitationTokenHash: inviteToken.tokenHash,
+        },
       });
 
+      try {
+        const res = await request(app).get(`/api/subcontractors/invitation/${inviteToken.token}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.invitation).toBeDefined();
+        expect(res.body.invitation.companyName).toBe(publicSub.companyName);
+        expect(res.body.invitation.primaryContactEmail).toBe('');
+        expect(res.body.invitation.primaryContactName).toBe('');
+        expect(res.body.invitation.primaryContactEmailMasked).toMatch(/^\w\*\*\*@/);
+        expect(publicSub.primaryContactEmail).toBeTruthy();
+        expect(publicSub.primaryContactName).toBeTruthy();
+        const invitationPayload = JSON.stringify(res.body.invitation);
+        expect(invitationPayload).not.toContain(publicSub.primaryContactEmail!);
+        expect(invitationPayload).not.toContain(publicSub.primaryContactName!);
+        expect(res.body.invitation.expiresAt).toBeDefined();
+      } finally {
+        await prisma.subcontractorCompany.delete({ where: { id: publicSub.id } }).catch(() => {});
+      }
+    });
+
+    it('should not treat a subcontractor row id as a public invitation credential', async () => {
       const res = await request(app).get(
         `/api/subcontractors/invitation/${subcontractorCompanyId}`,
       );
 
-      expect(res.status).toBe(200);
-      expect(res.body.invitation).toBeDefined();
-      expect(res.body.invitation.companyName).toBe('Test Subcontractor Co');
-      expect(res.body.invitation.primaryContactEmail).toBe('');
-      expect(res.body.invitation.primaryContactName).toBe('');
-      expect(res.body.invitation.primaryContactEmailMasked).toMatch(/^\w\*\*\*@/);
-      expect(storedInvitation.primaryContactEmail).toBeTruthy();
-      expect(storedInvitation.primaryContactName).toBeTruthy();
-      const invitationPayload = JSON.stringify(res.body.invitation);
-      expect(invitationPayload).not.toContain(storedInvitation.primaryContactEmail!);
-      expect(invitationPayload).not.toContain(storedInvitation.primaryContactName!);
-      expect(res.body.invitation.expiresAt).toBeDefined();
+      expect(res.status).toBe(404);
     });
 
     it('should return 404 for non-existent invitation', async () => {
@@ -801,6 +832,7 @@ describe('Subcontractors API', () => {
     });
 
     it('should not disclose inactive invitation details publicly', async () => {
+      const inviteToken = createSubcontractorInvitationToken();
       const removedSub = await prisma.subcontractorCompany.create({
         data: {
           projectId,
@@ -808,11 +840,12 @@ describe('Subcontractors API', () => {
           primaryContactName: 'Removed Invite',
           primaryContactEmail: `removed-public-${Date.now()}@example.com`,
           status: 'removed',
+          invitationTokenHash: inviteToken.tokenHash,
         },
       });
 
       try {
-        const res = await request(app).get(`/api/subcontractors/invitation/${removedSub.id}`);
+        const res = await request(app).get(`/api/subcontractors/invitation/${inviteToken.token}`);
 
         expect(res.status).toBe(404);
         expect(JSON.stringify(res.body)).not.toContain(removedSub.companyName);
@@ -822,6 +855,7 @@ describe('Subcontractors API', () => {
     });
 
     it('should not disclose expired invitation details publicly', async () => {
+      const inviteToken = createSubcontractorInvitationToken();
       const expiredSub = await prisma.subcontractorCompany.create({
         data: {
           projectId,
@@ -830,11 +864,12 @@ describe('Subcontractors API', () => {
           primaryContactEmail: `expired-public-${Date.now()}@example.com`,
           status: 'pending_approval',
           invitationExpiresAt: new Date(Date.now() - 60_000),
+          invitationTokenHash: inviteToken.tokenHash,
         },
       });
 
       try {
-        const res = await request(app).get(`/api/subcontractors/invitation/${expiredSub.id}`);
+        const res = await request(app).get(`/api/subcontractors/invitation/${inviteToken.token}`);
 
         expect(res.status).toBe(404);
         expect(JSON.stringify(res.body)).not.toContain(expiredSub.companyName);
@@ -1386,7 +1421,7 @@ describe('Subcontractors API', () => {
       subcontractorUserId = acceptRes.body.user.id;
     });
 
-    it('should offer an email-mismatch confirmation instead of hard-blocking logged-in users', async () => {
+    it('should require the emailed invitation token before accepting with a mismatched logged-in email', async () => {
       const wrongUser = await registerTestUser('sub-wrong-invite', 'Wrong Invite User');
 
       try {
@@ -1394,8 +1429,8 @@ describe('Subcontractors API', () => {
           .post(`/api/subcontractors/invitation/${invitationSubId}/accept`)
           .set('Authorization', `Bearer ${wrongUser.token}`);
 
-        expect(res.status).toBe(409);
-        expect(res.body.error.code).toBe('EMAIL_MISMATCH');
+        expect(res.status).toBe(403);
+        expect(res.body.error.code).toBe('INVITATION_TOKEN_REQUIRED');
         // The invited address is masked so it is not leaked to a different account.
         expect(res.body.error.details.invitedEmailMasked).toBe(
           `${invitationContactEmail[0]}***@${invitationContactEmail.split('@')[1]}`,
@@ -1416,6 +1451,7 @@ describe('Subcontractors API', () => {
 
     it('should accept a mismatched-email invitation once the user acknowledges it', async () => {
       const ackEmail = `mismatch-ack-${Date.now()}@example.com`;
+      const inviteToken = createSubcontractorInvitationToken();
       const ackSub = await prisma.subcontractorCompany.create({
         data: {
           projectId,
@@ -1423,6 +1459,7 @@ describe('Subcontractors API', () => {
           primaryContactName: 'Mismatch Ack User',
           primaryContactEmail: ackEmail,
           status: 'pending_approval',
+          invitationTokenHash: inviteToken.tokenHash,
         },
       });
       // A logged-in account whose email differs from the invited contact email.
@@ -1430,7 +1467,7 @@ describe('Subcontractors API', () => {
 
       try {
         const res = await request(app)
-          .post(`/api/subcontractors/invitation/${ackSub.id}/accept`)
+          .post(`/api/subcontractors/invitation/${inviteToken.token}/accept`)
           .set('Authorization', `Bearer ${wrongUser.token}`)
           .send({ acknowledgeEmailMismatch: true });
 
@@ -1453,6 +1490,7 @@ describe('Subcontractors API', () => {
     it('should keep register-and-accept strict on email mismatch (no self-service override)', async () => {
       const invitedEmail = `register-mismatch-invited-${Date.now()}@example.com`;
       const typedEmail = `register-mismatch-typed-${Date.now()}@example.com`;
+      const inviteToken = createSubcontractorInvitationToken();
       const mismatchSub = await prisma.subcontractorCompany.create({
         data: {
           projectId,
@@ -1460,6 +1498,7 @@ describe('Subcontractors API', () => {
           primaryContactName: 'Register Mismatch User',
           primaryContactEmail: invitedEmail,
           status: 'pending_approval',
+          invitationTokenHash: inviteToken.tokenHash,
         },
       });
 
@@ -1468,7 +1507,7 @@ describe('Subcontractors API', () => {
           email: typedEmail,
           password: 'SecureP@ssword123!',
           fullName: 'Register Mismatch User',
-          invitationId: mismatchSub.id,
+          invitationId: inviteToken.token,
           tosAccepted: true,
         });
 
@@ -1480,6 +1519,44 @@ describe('Subcontractors API', () => {
       } finally {
         await prisma.user.deleteMany({ where: { email: typedEmail } });
         await prisma.subcontractorCompany.delete({ where: { id: mismatchSub.id } }).catch(() => {});
+      }
+    });
+
+    it('should not let a row id claim a public subcontractor invitation', async () => {
+      const invitedEmail = `row-id-claim-${Date.now()}@example.com`;
+      const inviteToken = createSubcontractorInvitationToken();
+      const rowIdSub = await prisma.subcontractorCompany.create({
+        data: {
+          projectId,
+          companyName: `Row ID Claim Invite ${Date.now()}`,
+          primaryContactName: 'Row ID Claim User',
+          primaryContactEmail: invitedEmail,
+          status: 'pending_approval',
+          invitationTokenHash: inviteToken.tokenHash,
+        },
+      });
+
+      try {
+        const res = await request(app).post('/api/auth/register-and-accept-invitation').send({
+          email: invitedEmail,
+          password: 'SecureP@ssword123!',
+          fullName: 'Row ID Claim User',
+          invitationId: rowIdSub.id,
+          tosAccepted: true,
+        });
+
+        expect(res.status).toBe(404);
+
+        const createdUser = await prisma.user.findUnique({ where: { email: invitedEmail } });
+        expect(createdUser).toBeNull();
+
+        const link = await prisma.subcontractorUser.findFirst({
+          where: { subcontractorCompanyId: rowIdSub.id },
+        });
+        expect(link).toBeNull();
+      } finally {
+        await prisma.user.deleteMany({ where: { email: invitedEmail } });
+        await prisma.subcontractorCompany.delete({ where: { id: rowIdSub.id } }).catch(() => {});
       }
     });
 
@@ -1555,6 +1632,7 @@ describe('Subcontractors API', () => {
 
     it('should reject new-account acceptance for inactive invitations', async () => {
       const suspendedEmail = `suspended-invite-${Date.now()}@example.com`;
+      const inviteToken = createSubcontractorInvitationToken();
       const suspendedSub = await prisma.subcontractorCompany.create({
         data: {
           projectId,
@@ -1562,6 +1640,7 @@ describe('Subcontractors API', () => {
           primaryContactName: 'Suspended Invite User',
           primaryContactEmail: suspendedEmail,
           status: 'suspended',
+          invitationTokenHash: inviteToken.tokenHash,
         },
       });
 
@@ -1570,7 +1649,7 @@ describe('Subcontractors API', () => {
           email: suspendedEmail,
           password: 'SecureP@ssword123!',
           fullName: 'Suspended Invite User',
-          invitationId: suspendedSub.id,
+          invitationId: inviteToken.token,
           tosAccepted: true,
         });
 
@@ -1587,6 +1666,7 @@ describe('Subcontractors API', () => {
 
     it('should reject new-account acceptance for expired invitations', async () => {
       const expiredEmail = `expired-new-invite-${Date.now()}@example.com`;
+      const inviteToken = createSubcontractorInvitationToken();
       const expiredSub = await prisma.subcontractorCompany.create({
         data: {
           projectId,
@@ -1595,6 +1675,7 @@ describe('Subcontractors API', () => {
           primaryContactEmail: expiredEmail,
           status: 'pending_approval',
           invitationExpiresAt: new Date(Date.now() - 60_000),
+          invitationTokenHash: inviteToken.tokenHash,
         },
       });
 
@@ -1603,7 +1684,7 @@ describe('Subcontractors API', () => {
           email: expiredEmail,
           password: 'SecureP@ssword123!',
           fullName: 'Expired New Invite User',
-          invitationId: expiredSub.id,
+          invitationId: inviteToken.token,
           tosAccepted: true,
         });
 
@@ -1619,6 +1700,7 @@ describe('Subcontractors API', () => {
     it('should accept already-approved invitations when no portal user is linked yet', async () => {
       const approvedEmail = `approved-invite-${Date.now()}@example.com`;
       const approvedNewAccountEmail = `approved-new-invite-${Date.now()}@example.com`;
+      const approvedNewAccountInviteToken = createSubcontractorInvitationToken();
       const approvedSub = await prisma.subcontractorCompany.create({
         data: {
           projectId,
@@ -1635,6 +1717,7 @@ describe('Subcontractors API', () => {
           primaryContactName: 'Approved New Account Invite User',
           primaryContactEmail: approvedNewAccountEmail,
           status: 'approved',
+          invitationTokenHash: approvedNewAccountInviteToken.tokenHash,
         },
       });
       const existingUserRes = await request(app).post('/api/auth/register').send({
@@ -1659,7 +1742,7 @@ describe('Subcontractors API', () => {
             email: approvedNewAccountEmail,
             password: 'SecureP@ssword123!',
             fullName: 'New Approved Invite User',
-            invitationId: approvedNewAccountSub.id,
+            invitationId: approvedNewAccountInviteToken.token,
             tosAccepted: true,
           });
 
@@ -1778,6 +1861,7 @@ describe('Subcontractors API', () => {
 
     it('allows only one concurrent new account to claim an approved invitation', async () => {
       const publicEmail = `approved-public-race-${Date.now()}@example.com`;
+      const inviteToken = createSubcontractorInvitationToken();
       const approvedSub = await prisma.subcontractorCompany.create({
         data: {
           projectId,
@@ -1785,6 +1869,7 @@ describe('Subcontractors API', () => {
           primaryContactName: 'Approved Public Race Invite User',
           primaryContactEmail: publicEmail,
           status: 'approved',
+          invitationTokenHash: inviteToken.tokenHash,
         },
       });
 
@@ -1814,14 +1899,14 @@ describe('Subcontractors API', () => {
             email: publicEmail,
             password: 'SecureP@ssword123!',
             fullName: 'Approved Public Race User',
-            invitationId: approvedSub.id,
+            invitationId: inviteToken.token,
             tosAccepted: true,
           }),
           request(app).post('/api/auth/register-and-accept-invitation').send({
             email: publicEmail,
             password: 'SecureP@ssword123!',
             fullName: 'Approved Public Race User',
-            invitationId: approvedSub.id,
+            invitationId: inviteToken.token,
             tosAccepted: true,
           }),
         ]);

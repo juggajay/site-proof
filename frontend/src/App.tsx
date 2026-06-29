@@ -3,6 +3,7 @@ import { requestPersistentStorage } from '@/lib/offline/storagePersistence';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from '@/components/ui/toaster';
 import { AuthProvider } from '@/lib/auth';
+import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { ProjectProtectedRoute } from '@/components/auth/ProjectProtectedRoute';
 import { RoleProtectedRoute } from '@/components/auth/RoleProtectedRoute';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
@@ -108,6 +109,7 @@ const ShellRoutes = lazy(() =>
   import('@/shell/ShellRoutes').then((m) => ({ default: m.ShellRoutes })),
 );
 import { ShellGuard } from '@/shell/ShellGuard';
+import { ShellRouteGuard } from '@/shell/ShellRouteGuard';
 // Subbie portal shell — /p/* subtree (lazy-loaded; default-ON for portal roles).
 const SubbieShellRoutes = lazy(() =>
   import('@/shell/subbie/SubbieShellRoutes').then((m) => ({ default: m.SubbieShellRoutes })),
@@ -157,6 +159,14 @@ function App() {
             {/* Subcontractor Portal - Accept Invite (public/hybrid auth) */}
             <Route path="/subcontractor-portal/accept-invite" element={<AcceptInvitePage />} />
             <Route path="/accept-invite" element={<AcceptInvitePage />} />
+            <Route
+              path="/invitations"
+              element={
+                <ProtectedRoute>
+                  <AcceptInvitePage />
+                </ProtectedRoute>
+              }
+            />
 
             {/* Public secure hold-point release link */}
             <Route path="/hp-release/:token" element={<PublicHoldPointReleasePage />} />
@@ -169,7 +179,9 @@ function App() {
               path="/m/*"
               element={
                 <RoleProtectedRoute allowedRoles={INTERNAL_ROLES} allowProjectScopedRole>
-                  <ShellRoutes />
+                  <ShellRouteGuard>
+                    <ShellRoutes />
+                  </ShellRouteGuard>
                 </RoleProtectedRoute>
               }
             />
@@ -430,9 +442,6 @@ function App() {
               {/* Notifications */}
               <Route path="/notifications" element={<NotificationsPage />} />
 
-              {/* In-app invitation acceptance */}
-              <Route path="/invitations" element={<AcceptInvitePage />} />
-
               {/* Support */}
               <Route path="/docs" element={<DocumentationPage />} />
               <Route path="/documentation" element={<Navigate to="/docs" replace />} />
@@ -453,7 +462,9 @@ function App() {
                 path="/my-company"
                 element={
                   <RoleProtectedRoute allowedRoles={SUBCONTRACTOR_ROLES}>
-                    <MyCompanyPage />
+                    <SubbieShellGuard>
+                      <MyCompanyPage />
+                    </SubbieShellGuard>
                   </RoleProtectedRoute>
                 }
               />
@@ -473,7 +484,9 @@ function App() {
                 path="/subcontractor-portal/docket/new"
                 element={
                   <RoleProtectedRoute allowedRoles={SUBCONTRACTOR_ROLES}>
-                    <DocketEditPage />
+                    <SubbieShellGuard>
+                      <DocketEditPage />
+                    </SubbieShellGuard>
                   </RoleProtectedRoute>
                 }
               />
@@ -481,7 +494,9 @@ function App() {
                 path="/subcontractor-portal/docket/:docketId"
                 element={
                   <RoleProtectedRoute allowedRoles={SUBCONTRACTOR_ROLES}>
-                    <DocketEditPage />
+                    <SubbieShellGuard>
+                      <DocketEditPage />
+                    </SubbieShellGuard>
                   </RoleProtectedRoute>
                 }
               />
@@ -489,7 +504,9 @@ function App() {
                 path="/subcontractor-portal/dockets"
                 element={
                   <RoleProtectedRoute allowedRoles={SUBCONTRACTOR_ROLES}>
-                    <DocketsListPage />
+                    <SubbieShellGuard>
+                      <DocketsListPage />
+                    </SubbieShellGuard>
                   </RoleProtectedRoute>
                 }
               />
@@ -497,7 +514,9 @@ function App() {
                 path="/subcontractor-portal/work"
                 element={
                   <RoleProtectedRoute allowedRoles={SUBCONTRACTOR_ROLES}>
-                    <AssignedWorkPage />
+                    <SubbieShellGuard>
+                      <AssignedWorkPage />
+                    </SubbieShellGuard>
                   </RoleProtectedRoute>
                 }
               />
@@ -505,7 +524,9 @@ function App() {
                 path="/subcontractor-portal/itps"
                 element={
                   <RoleProtectedRoute allowedRoles={SUBCONTRACTOR_ROLES}>
-                    <SubcontractorITPsPage />
+                    <SubbieShellGuard>
+                      <SubcontractorITPsPage />
+                    </SubbieShellGuard>
                   </RoleProtectedRoute>
                 }
               />
@@ -513,7 +534,9 @@ function App() {
                 path="/subcontractor-portal/lots/:lotId/itp"
                 element={
                   <RoleProtectedRoute allowedRoles={SUBCONTRACTOR_ROLES}>
-                    <SubcontractorLotITPPage />
+                    <SubbieShellGuard>
+                      <SubcontractorLotITPPage />
+                    </SubbieShellGuard>
                   </RoleProtectedRoute>
                 }
               />
@@ -521,7 +544,9 @@ function App() {
                 path="/subcontractor-portal/holdpoints"
                 element={
                   <RoleProtectedRoute allowedRoles={SUBCONTRACTOR_ROLES}>
-                    <SubcontractorHoldPointsPage />
+                    <SubbieShellGuard>
+                      <SubcontractorHoldPointsPage />
+                    </SubbieShellGuard>
                   </RoleProtectedRoute>
                 }
               />
@@ -529,7 +554,9 @@ function App() {
                 path="/subcontractor-portal/tests"
                 element={
                   <RoleProtectedRoute allowedRoles={SUBCONTRACTOR_ROLES}>
-                    <SubcontractorTestResultsPage />
+                    <SubbieShellGuard>
+                      <SubcontractorTestResultsPage />
+                    </SubbieShellGuard>
                   </RoleProtectedRoute>
                 }
               />
@@ -537,7 +564,9 @@ function App() {
                 path="/subcontractor-portal/ncrs"
                 element={
                   <RoleProtectedRoute allowedRoles={SUBCONTRACTOR_ROLES}>
-                    <SubcontractorNCRsPage />
+                    <SubbieShellGuard>
+                      <SubcontractorNCRsPage />
+                    </SubbieShellGuard>
                   </RoleProtectedRoute>
                 }
               />
@@ -545,7 +574,9 @@ function App() {
                 path="/subcontractor-portal/documents"
                 element={
                   <RoleProtectedRoute allowedRoles={SUBCONTRACTOR_ROLES}>
-                    <SubcontractorDocumentsPage />
+                    <SubbieShellGuard>
+                      <SubcontractorDocumentsPage />
+                    </SubbieShellGuard>
                   </RoleProtectedRoute>
                 }
               />

@@ -66,6 +66,9 @@ vi.mock('@/shell/shellFlag', () => ({ applyShellFlagFromUrl: vi.fn() }));
 vi.mock('@/shell/ShellGuard', () => ({
   ShellGuard: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
+vi.mock('@/shell/ShellRouteGuard', () => ({
+  ShellRouteGuard: ({ children }: { children: ReactNode }) => <>{children}</>,
+}));
 vi.mock('@/shell/ShellRoutes', () => ({ ShellRoutes: () => <div>Shell routes</div> }));
 vi.mock('@/shell/SubbieShellGuard', () => ({
   SubbieShellGuard: ({ children }: { children: ReactNode }) => <>{children}</>,
