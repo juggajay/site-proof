@@ -68,6 +68,13 @@ describe('LoginPage authenticated redirect', () => {
 
     renderWithProviders(<LoginPage />, { initialEntries: [`/login?redirect=${redirect}`] });
 
+    expect(screen.getByRole('link', { name: /continue with google/i })).toHaveAttribute(
+      'href',
+      expect.stringContaining(
+        `redirect=${encodeURIComponent('/subcontractor-portal/accept-invite?id=invite-1')}`,
+      ),
+    );
+
     fireEvent.click(screen.getByRole('button', { name: /email me a magic link/i }));
     fireEvent.change(screen.getByLabelText(/^email$/i), {
       target: { value: 'subbie@example.com' },
@@ -94,5 +101,20 @@ describe('LoginPage authenticated redirect', () => {
     expect(screen.queryByRole('button', { name: /^sign in$/i })).not.toBeInTheDocument();
     expect(mocks.signIn).not.toHaveBeenCalled();
     expect(mocks.navigate).not.toHaveBeenCalled();
+  });
+
+  it('shows a one-time success message passed from account deletion', () => {
+    renderWithProviders(<LoginPage />, {
+      initialEntries: [
+        {
+          pathname: '/login',
+          state: { message: 'Your account has been permanently deleted.' },
+        } as unknown as string,
+      ],
+    });
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      /your account has been permanently deleted/i,
+    );
   });
 });

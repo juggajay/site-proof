@@ -122,16 +122,23 @@ describe('MagicLinkPage', () => {
     );
   }, 8000);
 
-  it('keeps the one-time token in the URL when server verification fails', async () => {
+  it('scrubs the one-time token from the URL before server verification finishes', async () => {
     const replaceStateSpy = vi.spyOn(window.history, 'replaceState');
     mocks.apiFetch.mockRejectedValue(new Error('network failed'));
 
     renderWithProviders(<MagicLinkPage />, {
-      initialEntries: ['/auth/magic-link?token=magic_once'],
+      initialEntries: ['/auth/magic-link?token=magic_once&redirect=%2Fprojects'],
     });
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/failed to verify magic link/i);
     expect(mocks.setToken).not.toHaveBeenCalled();
-    expect(replaceStateSpy).not.toHaveBeenCalled();
+    expect(replaceStateSpy).toHaveBeenCalledWith(
+      null,
+      document.title,
+      '/auth/magic-link?redirect=%2Fprojects',
+    );
+    expect(window.location.pathname + window.location.search).toBe(
+      '/auth/magic-link?redirect=%2Fprojects',
+    );
   });
 });

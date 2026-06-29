@@ -3284,7 +3284,12 @@ describe('Company API', () => {
       try {
         await prisma.user.update({
           where: { id: ownerId },
-          data: { companyId: apiKeyCompany.id, roleInCompany: 'owner' },
+          data: {
+            companyId: apiKeyCompany.id,
+            roleInCompany: 'owner',
+            emailVerified: true,
+            emailVerifiedAt: new Date(),
+          },
         });
         await prisma.user.update({
           where: { id: targetId },

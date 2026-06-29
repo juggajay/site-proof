@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth, type User } from '@/lib/auth';
 import { ApiError, apiFetch } from '@/lib/api';
-import { getDefaultPostLoginRedirect } from './postLoginRedirect';
+import { getPostLoginRedirect } from './postLoginRedirect';
 
 function getOAuthErrorMessage(error: string | null): string {
   if (error === 'mfa_required') {
@@ -22,6 +22,18 @@ function getApiErrorMessage(error: unknown): string {
   }
 
   return 'Failed to complete OAuth sign in';
+}
+
+function scrubOAuthCallbackCodeFromUrl(searchParams: URLSearchParams) {
+  const safeParams = new URLSearchParams(searchParams);
+  safeParams.delete('code');
+  safeParams.delete('provider');
+  const safeQuery = safeParams.toString();
+  window.history.replaceState(
+    null,
+    document.title,
+    `/auth/oauth-callback${safeQuery ? `?${safeQuery}` : ''}`,
+  );
 }
 
 export function OAuthCallbackPage() {
@@ -53,7 +65,7 @@ export function OAuthCallbackPage() {
         return;
       }
 
-      window.history.replaceState(null, document.title, '/auth/oauth-callback');
+      scrubOAuthCallbackCodeFromUrl(searchParams);
 
       try {
         const data = await apiFetch<{ token: string; user?: User }>('/api/auth/oauth/exchange', {
@@ -62,7 +74,7 @@ export function OAuthCallbackPage() {
         });
 
         const signedInUser = await setToken(data.token, data.user);
-        navigate(getDefaultPostLoginRedirect(signedInUser), { replace: true });
+        navigate(getPostLoginRedirect(searchParams, null, signedInUser), { replace: true });
       } catch (err) {
         setError(getApiErrorMessage(err));
         setTimeout(() => navigate('/login'), 3000);

@@ -32,13 +32,38 @@ import {
 
 export const oauthRouter = Router();
 
+function normalizeOAuthAppRedirect(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+
+  const trimmed = value.trim();
+  if (!trimmed || !trimmed.startsWith('/') || trimmed.startsWith('//') || trimmed.includes('\\')) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(trimmed, 'https://siteproof.local');
+    if (parsed.origin !== 'https://siteproof.local') return null;
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return null;
+  }
+}
+
+function appendRedirectParam(url: string, redirect: string | undefined): string {
+  if (!redirect) return url;
+  const separator = url.includes('?') ? '&' : '?';
+  return `${url}${separator}redirect=${encodeURIComponent(redirect)}`;
+}
+
 // GET /api/auth/google - Initiate Google OAuth flow
 oauthRouter.get(
   '/google',
-  asyncHandler(async (_req, res) => {
+  authRateLimiter,
+  asyncHandler(async (req, res) => {
     const clientId = process.env.GOOGLE_CLIENT_ID;
     const frontendUrl = getFrontendUrl();
     const redirectUri = getGoogleRedirectUri();
+    const appRedirect = normalizeOAuthAppRedirect(req.query.redirect);
 
     if (!clientId || clientId === 'mock-google-client-id.apps.googleusercontent.com') {
       if (!isMockOAuthEnabled()) {
@@ -47,14 +72,14 @@ oauthRouter.get(
 
       // Development mode: Redirect to a mock OAuth flow
       // Generate a state token for security (using database storage)
-      const state = await createOAuthState();
+      const state = await createOAuthState(appRedirect ?? undefined);
 
       // Redirect to our mock callback with a test user
       return res.redirect(`${frontendUrl}/auth/oauth-mock?provider=google&state=${state}`);
     }
 
     // Production mode: Redirect to actual Google OAuth
-    const state = await createOAuthState();
+    const state = await createOAuthState(appRedirect ?? undefined);
 
     const params = new URLSearchParams({
       client_id: clientId,
@@ -73,6 +98,7 @@ oauthRouter.get(
 // GET /api/auth/google/callback - Handle Google OAuth callback
 oauthRouter.get(
   '/google/callback',
+  authRateLimiter,
   asyncHandler(async (req, res) => {
     const frontendUrl = getFrontendUrl();
     const callbackParams = parseGoogleCallbackRequest(req.query);
@@ -138,11 +164,20 @@ oauthRouter.get(
     }
 
     if (mfaEnabled) {
-      return res.redirect(`${frontendUrl}/login?error=mfa_required`);
+      return res.redirect(
+        appendRedirectParam(
+          `${frontendUrl}/login?error=mfa_required`,
+          stateVerification.redirectUri,
+        ),
+      );
     }
 
     const callbackCode = await createOAuthCallbackCode(user.id, 'google');
-    res.redirect(`${frontendUrl}/auth/oauth-callback?code=${callbackCode}&provider=google`);
+    const frontendCallbackParams = new URLSearchParams({ code: callbackCode, provider: 'google' });
+    if (stateVerification.redirectUri) {
+      frontendCallbackParams.set('redirect', stateVerification.redirectUri);
+    }
+    res.redirect(`${frontendUrl}/auth/oauth-callback?${frontendCallbackParams.toString()}`);
   }),
 );
 
