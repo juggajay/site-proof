@@ -40,11 +40,17 @@ function buildApp(documentType: string) {
     category: 'Quality',
     filename: `${documentType}.pdf`,
     fileUrl: 'data:application/pdf;base64,JVBERi0xLjQ=',
+    parentDocumentId: null,
+    isLatestVersion: false,
   };
 
   const txDocumentDelete = vi.fn(async () => document);
   const transactionClient = {
     document: {
+      findMany: vi.fn(async () => []),
+      findFirst: vi.fn(async () => null),
+      update: vi.fn(),
+      updateMany: vi.fn(),
       delete: txDocumentDelete,
     },
   };
