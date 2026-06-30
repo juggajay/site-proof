@@ -8,6 +8,10 @@ import { prisma } from '../../lib/prisma.js';
 import { logError } from '../../lib/serverLogger.js';
 import { sendNotificationIfEnabled } from '../notifications.js';
 import {
+  checkConformancePrerequisitesBatch,
+  getClaimBlockingReasonsForConformedLot,
+} from '../../lib/conformancePrerequisites.js';
+import {
   buildClaimCertificationView,
   buildClaimCreatedResponse,
   buildClaimDetailResponse,
@@ -23,6 +27,7 @@ import {
   assertClaimIncrementWithinRemaining,
   assertGenericClaimStatusTransition,
   assertReducedCertifiedAmountHasVariationNotes,
+  buildClaimCertificationSettlement,
   createClaimSchema,
   getRequestedClaimLots,
   getRequestedClaimPercentage,
@@ -172,6 +177,32 @@ export function createClaimWorkflowRouter({
             if (lots.length !== uniqueLotIds.length) {
               throw AppError.badRequest(
                 'All selected lots must be conformed, unclaimed, and belong to this project',
+              );
+            }
+
+            const conformanceByLotId = await checkConformancePrerequisitesBatch(uniqueLotIds, tx);
+            const staleConformanceLots = lots
+              .map((lot) => ({
+                lot,
+                conformance: conformanceByLotId.get(lot.id),
+              }))
+              .map(({ lot, conformance }) => ({
+                lot,
+                blockingReasons: getClaimBlockingReasonsForConformedLot(conformance),
+              }))
+              .filter(({ blockingReasons }) => blockingReasons.length > 0);
+
+            if (staleConformanceLots.length > 0) {
+              throw AppError.badRequest(
+                'One or more selected lots no longer satisfy conformance prerequisites',
+                {
+                  code: 'CONFORMANCE_STALE',
+                  lots: staleConformanceLots.map(({ lot, blockingReasons }) => ({
+                    id: lot.id,
+                    lotNumber: lot.lotNumber,
+                    blockingReasons,
+                  })),
+                },
               );
             }
 
@@ -445,8 +476,16 @@ export function createClaimWorkflowRouter({
             }
           }
           if (status === 'certified' && roundedCertifiedAmount !== undefined) {
+            const certifiedAt = new Date();
+            const certificationSettlement = buildClaimCertificationSettlement(
+              roundedCertifiedAmount,
+              certifiedAt,
+            );
             updateData.certifiedAmount = roundedCertifiedAmount;
-            updateData.certifiedAt = new Date();
+            updateData.certifiedAt = certifiedAt;
+            updateData.status = certificationSettlement.status;
+            updateData.paidAmount = certificationSettlement.paidAmount;
+            updateData.paidAt = certificationSettlement.paidAt;
             updateData.disputedAt = null;
             updateData.disputeNotes = serializeCertificationMetadataForStatusTransition({
               existingDisputeNotes: claim.disputeNotes,

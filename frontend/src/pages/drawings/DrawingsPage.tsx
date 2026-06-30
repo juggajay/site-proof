@@ -2,9 +2,9 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useAuth } from '../../lib/auth';
 import { apiFetch, authFetch } from '@/lib/api';
 import { useIsMobile } from '@/hooks/useMediaQuery';
+import { useCurrentProjectRole } from '@/hooks/useCurrentProjectRole';
 import { getDocumentAccessUrl, openDocumentAccessUrl } from '@/lib/documentAccess';
 import { queryKeys } from '@/lib/queryKeys';
 import { createMutationErrorHandler, extractErrorMessage } from '@/lib/errorHandling';
@@ -82,13 +82,28 @@ const DRAWING_WRITE_ROLES = [
 ];
 const DRAWINGS_PAGE_LIMIT = 50;
 
+function getDrawingLoadError(drawingsError: unknown): string | null {
+  return drawingsError ? 'Failed to load drawings. Please try again.' : null;
+}
+
+function getDrawingShowingRange(
+  pagination: PaginationMeta | null,
+  drawingCount: number,
+): { showingFrom: number; showingTo: number } {
+  if (!pagination) {
+    return { showingFrom: 0, showingTo: drawingCount };
+  }
+
+  return {
+    showingFrom: pagination.total > 0 ? (pagination.page - 1) * pagination.limit + 1 : 0,
+    showingTo: Math.min(pagination.page * pagination.limit, pagination.total),
+  };
+}
+
 export function DrawingsPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const queryClient = useQueryClient();
-  const { user } = useAuth();
   const isMobile = useIsMobile();
-  const userRole = user?.role || user?.roleInCompany || '';
-  const canManageDrawings = DRAWING_WRITE_ROLES.includes(userRole);
   const encodedProjectId = projectId ? encodeURIComponent(projectId) : '';
   const downloadCurrentSetInFlightRef = useRef(false);
 
@@ -116,6 +131,9 @@ export function DrawingsPage() {
 
   // Download current set state
   const [downloadingCurrentSet, setDownloadingCurrentSet] = useState(false);
+
+  const currentProjectRole = useCurrentProjectRole(projectId);
+  const canManageDrawings = DRAWING_WRITE_ROLES.includes(currentProjectRole || '');
 
   const triggerSearch = () => {
     setCurrentPage(1);
@@ -169,13 +187,9 @@ export function DrawingsPage() {
   const drawings: Drawing[] = drawingsData?.drawings || [];
   const stats: Stats | null = drawingsData?.stats || null;
   const pagination: PaginationMeta | null = drawingsData?.pagination || null;
-  const error = drawingsError ? 'Failed to load drawings. Please try again.' : null;
+  const error = getDrawingLoadError(drawingsError);
   const hasActiveFilters = Boolean(filterStatus || committedSearch);
-  const showingFrom =
-    pagination && pagination.total > 0 ? (pagination.page - 1) * pagination.limit + 1 : 0;
-  const showingTo = pagination
-    ? Math.min(pagination.page * pagination.limit, pagination.total)
-    : drawings.length;
+  const { showingFrom, showingTo } = getDrawingShowingRange(pagination, drawings.length);
 
   useEffect(() => {
     if (pagination && pagination.totalPages > 0 && pagination.page > pagination.totalPages) {

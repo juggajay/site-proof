@@ -9,7 +9,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { ShellGuard } from '../ShellGuard';
 
 // Mock useShellV2Enabled
@@ -43,6 +43,13 @@ function renderWithRouter(shellEnabled: boolean) {
   );
 }
 
+function LocationProbe() {
+  const location = useLocation();
+  return (
+    <div data-testid="shell-location">{`${location.pathname}${location.search}${location.hash}`}</div>
+  );
+}
+
 describe('ShellGuard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -52,6 +59,28 @@ describe('ShellGuard', () => {
     renderWithRouter(true);
     expect(screen.getByTestId('shell-home')).toBeInTheDocument();
     expect(screen.queryByTestId('dashboard')).not.toBeInTheDocument();
+  });
+
+  it('preserves project query and hash when redirecting to the shell', () => {
+    mockUseShellV2Enabled.mockReturnValue(true);
+
+    render(
+      <MemoryRouter initialEntries={['/dashboard?projectId=project-2#today']}>
+        <Routes>
+          <Route
+            path="/dashboard"
+            element={
+              <ShellGuard>
+                <div data-testid="dashboard">Dashboard</div>
+              </ShellGuard>
+            }
+          />
+          <Route path="/m" element={<LocationProbe />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByTestId('shell-location')).toHaveTextContent('/m?projectId=project-2#today');
   });
 
   it('renders children when shell is disabled', () => {

@@ -23,6 +23,7 @@ DATABASE_URL=postgresql://user:password@db.example.com:5432/siteproof
 JWT_SECRET=<32+ character random secret>
 ENCRYPTION_KEY=<64 hex characters from 32 random bytes>
 FRONTEND_URL=https://app.example.com
+CORS_ALLOWED_ORIGINS=https://app.example.com,https://www.example.com
 BACKEND_URL=https://api.example.com
 API_URL=https://api.example.com
 
@@ -101,6 +102,12 @@ trusted proxy HTTPS headers, and confirms plain HTTP redirects to `BACKEND_URL`.
 The integration preflight validates production configuration and performs
 read-only checks against configured Resend, Supabase Storage, Google OAuth, and
 VAPID push settings.
+
+`FRONTEND_URL` is the canonical public app URL used for generated links and is
+always allowed by backend CORS. The current first-party Vercel/custom-domain
+aliases are allowed automatically. If the same frontend is served from any
+extra domains, list those origins in comma-separated `CORS_ALLOWED_ORIGINS` in
+the backend runtime environment and GitHub production environment.
 
 The current production-readiness checklist and remaining live-verification
 blockers are tracked in [docs/production-readiness-audit.md](./docs/production-readiness-audit.md).

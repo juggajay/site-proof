@@ -51,7 +51,7 @@ describe('pdfGenerator characterization', () => {
         'NCR Identification',
         'NCR Number:',
         'Status:',
-        'PENDING REVIEW',
+        'Pending Review',
         'Category:',
         'workmanship',
         'Severity:',
@@ -67,6 +67,8 @@ describe('pdfGenerator characterization', () => {
         'Non-Conformance Description',
         'Honeycombing identified on headwall concrete face after formwork strip.',
         'Investigation & Resolution',
+        'Root Cause Category:',
+        'Work method',
         'Root Cause:',
         'Insufficient vibration around congested reinforcement.',
         'Proposed Action:',
@@ -75,6 +77,8 @@ describe('pdfGenerator characterization', () => {
         'Repair methodology submitted for superintendent review.',
         'Preventative Measures:',
         'Brief crew on vibration pattern and add pre-pour checklist hold point.',
+        'Verification Notes:',
+        'QM requested photo evidence before final closure.',
         'Lessons Learned:',
         'Increase inspection frequency when reinforcement congestion is high.',
         'Quality Manager Approval',
@@ -82,11 +86,14 @@ describe('pdfGenerator characterization', () => {
         'Yes',
         'QM Approval Status:',
         'Pending',
+        'Evidence Register',
+        '1. headwall-repair-photo.jpg',
         'Activity Timeline',
         '1. NCR raised',
         'Civil Execution and Conformance Platform',
       ]),
     );
+    expect(textContent).toContain('Type: Rectification Photo | MIME: image/jpeg');
     expect(textContent).not.toContain('4200 hrs');
     expect(textContent).not.toContain('1800 hrs');
     expect(textContent).not.toContain('SiteProof v2');
@@ -322,7 +329,7 @@ describe('pdfGenerator characterization', () => {
         'NCRs: 1 (1 open)',
         'Photos: 9',
         'Conformed Lots: 1',
-        'Status: SUBMITTED',
+        'Status: Submitted',
         'Prepared by: Morgan Estimator',
         'This evidence package supports your payment claim evidence record.',
         'State: NSW',
@@ -344,13 +351,13 @@ describe('pdfGenerator characterization', () => {
         'Claim Amount',
         'EW-001',
         'Earthworks',
-        'conformed',
+        'Conformed',
         '100%',
         '3/3',
         '$185,000',
         'DR-014',
         'Drainage',
-        'in_progres', // status.slice(0, 10) truncates 'in_progress'
+        'In Progress',
         '75%',
         '1/2',
         'TOTAL',
@@ -366,24 +373,24 @@ describe('pdfGenerator characterization', () => {
         'Activity: Earthworks',
         'Chainage: 100 - 350',
         'Layer: Subgrade',
-        'Status: conformed | Claim Amount: $185,000',
+        'Status: Conformed | Claim Amount: $185,000',
         'ITP Checklist',
         'Template: Earthworks ITP - Subgrade',
         'Completion: 4/4 items (100%)',
         'Hold Points: 2/2 released',
         'Test Results',
-        'Total: 3 | Passed: 3 | Failed: 0',
+        'Total: 3 | Passed: 3 | Pending: 0 | Failed: 0',
         'Conformance',
         'By: Jordan Surveyor',
         'Photos recorded: 6',
         'LOT: DR-014',
         'Stormwater drainage line and pits',
         'Activity: Drainage',
-        'Status: in_progress | Claim Amount: $63,500',
+        'Status: In Progress | Claim Amount: $63,500',
         'Template: Drainage ITP - Pipe Laying',
         'Completion: 3/4 items (75%)',
         'Hold Points: 1/2 released',
-        'Total: 2 | Passed: 1 | Failed: 1',
+        'Total: 2 | Passed: 1 | Pending: 0 | Failed: 1',
         'Non-Conformance Reports',
         'Total: 1 | Open: 1 | Closed: 0',
         'Photos recorded: 3',
@@ -405,7 +412,7 @@ describe('pdfGenerator characterization', () => {
     expect(textContent).toContain('CBR: 45 %');
     expect(textContent).toContain('Concrete Slump: 80 mm');
     expect(textContent).toContain('Pipe Joint: pending');
-    expect(textContent).toContain('NCR-0021 (minor): open');
+    expect(textContent).toContain('NCR-0021 (minor): Open');
 
     expect(text).toEqual(
       expect.arrayContaining([
@@ -422,6 +429,85 @@ describe('pdfGenerator characterization', () => {
     );
     expect(textContent).not.toContain('All lots included have been completed');
     expect(textContent).not.toContain('SiteProof v2');
+  });
+
+  it('includes ITP completion attachment documents in the claim evidence manifest', async () => {
+    const lotWithAttachmentOnlyEvidence = {
+      ...submittedClaimEvidencePackageFixture.lots[0],
+      lotNumber: 'ITP-ATTACH',
+      documents: [],
+      itp: {
+        ...submittedClaimEvidencePackageFixture.lots[0].itp!,
+        completions: [
+          {
+            isCompleted: true,
+            attachments: [
+              {
+                id: 'attachment-1',
+                documentId: 'doc-itp-attachment-1',
+                document: {
+                  id: 'doc-itp-attachment-1',
+                  filename: 'itp-completion-photo.jpg',
+                  documentType: 'photo',
+                  caption: 'Checklist item evidence photo',
+                  uploadedAt: '2026-05-20T05:10:00.000Z',
+                },
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    await generateClaimEvidencePackagePDF({
+      ...submittedClaimEvidencePackageFixture,
+      lots: [lotWithAttachmentOnlyEvidence],
+      summary: {
+        ...submittedClaimEvidencePackageFixture.summary,
+        totalLots: 1,
+      },
+    });
+
+    const textContent = renderedText(latestPdf()).join('\n');
+    expect(textContent).toContain('LOT ITP-ATTACH');
+    expect(textContent).toContain('itp-completion-photo.jpg');
+    expect(textContent).toContain('photo | Checklist item evidence photo');
+    expect(textContent).toContain('Document ID: doc-itp-attachment-1');
+  });
+
+  it('keeps claim evidence ITP detail counts aligned with accepted completion percentage', async () => {
+    const reviewSensitiveLot = {
+      ...submittedClaimEvidencePackageFixture.lots[1],
+      lotNumber: 'QA-REVIEW',
+      description: 'Verification-sensitive checklist',
+      itp: {
+        ...submittedClaimEvidencePackageFixture.lots[1].itp!,
+        checklistItems: [{}, {}, {}],
+        completions: [
+          { isCompleted: true },
+          { isCompleted: false },
+          { isCompleted: false, isNotApplicable: true },
+        ],
+      },
+      summary: {
+        ...submittedClaimEvidencePackageFixture.lots[1].summary,
+        itpCompletionPercentage: 67,
+      },
+    };
+
+    await generateClaimEvidencePackagePDF({
+      ...submittedClaimEvidencePackageFixture,
+      lots: [reviewSensitiveLot],
+      summary: {
+        ...submittedClaimEvidencePackageFixture.summary,
+        totalLots: 1,
+        conformedLots: 0,
+      },
+    });
+
+    const textContent = renderedText(latestPdf()).join('\n');
+    expect(textContent).toContain('Completion: 2/3 items (67%)');
+    expect(textContent).not.toContain('Completion: 3/3 items (67%)');
   });
 
   it('renders selected claim evidence sections when detailed lot metadata is excluded', async () => {
@@ -442,17 +528,17 @@ describe('pdfGenerator characterization', () => {
     expect(text).toEqual(
       expect.arrayContaining([
         'LOT: EW-001',
-        'Status: conformed | Claim Amount: $185,000',
+        'Status: Conformed | Claim Amount: $185,000',
         'Hold Points',
         'Hold Points: 2/2 released',
         'Test Results',
-        'Total: 3 | Passed: 3 | Failed: 0',
+        'Total: 3 | Passed: 3 | Pending: 0 | Failed: 0',
         'LOT: DR-014',
         'Hold Points: 1/2 released',
         'Non-Conformance Reports',
       ]),
     );
-    expect(textContent).toContain('NCR-0021 (minor): open');
+    expect(textContent).toContain('NCR-0021 (minor): Open');
     expect(textContent).not.toContain('Bulk earthworks to subgrade level');
     expect(textContent).not.toContain('Chainage: 100 - 350');
   });
@@ -475,7 +561,8 @@ describe('pdfGenerator characterization', () => {
         '1. Hold Point Identification',
         'STATUS: RELEASED',
         'Hold Point Description: Subgrade proof roll prior to pavement layer',
-        'Released By: Sam Supervisor',
+        'Released By: Sam Supervisor, Client Superintendent Org',
+        'Release Method: Secure Link',
         'Release Notes: Released after surveyor confirmed level tolerance.',
       ]),
     );

@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page, type Route } from '@playwright/test';
 import { E2E_ADMIN_USER, E2E_PROJECT_ID, mockAuthenticatedUserState } from './helpers';
 
 type ProjectUser = {
@@ -13,10 +13,22 @@ type ProjectUser = {
 
 type ProjectUsersApiOptions = {
   failUserLoadsUntil?: number;
+  failRemoveAttemptsUntil?: number;
   inviteDelayMs?: number;
+  removeDelayMs?: number;
+  user?: typeof E2E_ADMIN_USER;
+  projectOverrides?: Record<string, unknown>;
 };
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function fulfillJson(route: Route, body: unknown, status = 200) {
+  await route.fulfill({
+    status,
+    contentType: 'application/json',
+    body: JSON.stringify(body),
+  });
+}
 
 const adminUser: ProjectUser = {
   id: 'e2e-project-user-admin',
@@ -48,12 +60,56 @@ const viewerUser: ProjectUser = {
   joinedAt: '2026-05-03T00:00:00.000Z',
 };
 
-async function mockProjectShellApi(page: Page) {
+async function fulfillProjectUserRoleUpdate(route: Route, userId: string, users: ProjectUser[]) {
+  const body = route.request().postDataJSON();
+  const user = users.find((item) => item.userId === userId);
+  if (user) {
+    user.role = (body as { role?: string }).role || user.role;
+  }
+  await fulfillJson(route, { projectUser: user });
+  return { userId, body };
+}
+
+async function fulfillProjectUserRemoval({
+  route,
+  userId,
+  users,
+  options,
+  attempt,
+}: {
+  route: Route;
+  userId: string;
+  users: ProjectUser[];
+  options: ProjectUsersApiOptions;
+  attempt: number;
+}) {
+  if (attempt <= (options.failRemoveAttemptsUntil ?? 0)) {
+    await fulfillJson(route, { message: 'Remove service unavailable' }, 500);
+    return null;
+  }
+
+  if (options.removeDelayMs) {
+    await delay(options.removeDelayMs);
+  }
+  const index = users.findIndex((item) => item.userId === userId);
+  if (index >= 0) {
+    users.splice(index, 1);
+  }
+  await fulfillJson(route, { success: true });
+  return userId;
+}
+
+async function mockProjectShellApi(
+  page: Page,
+  options: { user?: typeof E2E_ADMIN_USER; projectOverrides?: Record<string, unknown> } = {},
+) {
+  const user = options.user ?? E2E_ADMIN_USER;
+
   await page.route('**/api/auth/me', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ user: E2E_ADMIN_USER }),
+      body: JSON.stringify({ user }),
     });
   });
 
@@ -92,6 +148,8 @@ async function mockProjectShellApi(page: Page) {
           name: 'E2E Highway Upgrade',
           projectNumber: 'E2E-001',
           status: 'active',
+          currentUserRole: 'admin',
+          ...(options.projectOverrides ?? {}),
         },
       }),
     });
@@ -108,8 +166,12 @@ async function mockSeededProjectUsersApi(page: Page, options: ProjectUsersApiOpt
   let updateRoleRequest: { userId: string; body: unknown } | null = null;
   let removeUserId: string | null = null;
   let userLoadCount = 0;
+  let removeAttemptCount = 0;
 
-  await mockProjectShellApi(page);
+  await mockProjectShellApi(page, {
+    user: options.user,
+    projectOverrides: options.projectOverrides,
+  });
 
   await page.route(`**/api/projects/${E2E_PROJECT_ID}/users`, async (route) => {
     if (route.request().method() === 'GET') {
@@ -166,30 +228,21 @@ async function mockSeededProjectUsersApi(page: Page, options: ProjectUsersApiOpt
     const userId = new URL(route.request().url()).pathname.split('/').at(-1) || '';
 
     if (route.request().method() === 'PATCH') {
-      const body = route.request().postDataJSON();
-      updateRoleRequest = { userId, body };
-      const user = users.find((item) => item.userId === userId);
-      if (user) {
-        user.role = (body as { role?: string }).role || user.role;
-      }
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ projectUser: user }),
-      });
+      updateRoleRequest = await fulfillProjectUserRoleUpdate(route, userId, users);
       return;
     }
 
     if (route.request().method() === 'DELETE') {
-      removeUserId = userId;
-      const index = users.findIndex((item) => item.userId === userId);
-      if (index >= 0) {
-        users.splice(index, 1);
+      removeAttemptCount += 1;
+      if (removeAttemptCount > (options.failRemoveAttemptsUntil ?? 0)) {
+        removeUserId = userId;
       }
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ success: true }),
+      await fulfillProjectUserRemoval({
+        route,
+        userId,
+        users,
+        options,
+        attempt: removeAttemptCount,
       });
       return;
     }
@@ -201,15 +254,27 @@ async function mockSeededProjectUsersApi(page: Page, options: ProjectUsersApiOpt
     });
   });
 
-  await mockAuthenticatedUserState(page);
+  await mockAuthenticatedUserState(page, options.user ?? E2E_ADMIN_USER);
 
   return {
     getInviteRequest: () => inviteRequests.at(-1),
     getInviteRequests: () => inviteRequests,
     getUpdateRoleRequest: () => updateRoleRequest,
     getRemoveUserId: () => removeUserId,
+    getRemoveAttemptCount: () => removeAttemptCount,
     getUserLoadCount: () => userLoadCount,
   };
+}
+
+async function openProjectUserRemoveDialog(page: Page, fullName = 'E2E Viewer') {
+  await page.getByRole('button', { name: `Remove ${fullName} from project` }).click();
+  return page.getByRole('alertdialog').filter({ hasText: 'Remove Project User' });
+}
+
+async function confirmProjectUserRemoval(page: Page, fullName = 'E2E Viewer') {
+  const removeDialog = await openProjectUserRemoveDialog(page, fullName);
+  await removeDialog.getByRole('button', { name: 'Remove' }).click();
+  return removeDialog;
 }
 
 test.describe('Project users seeded admin contract', () => {
@@ -259,8 +324,7 @@ test.describe('Project users seeded admin contract', () => {
     const engineerRow = page.locator('tbody tr').filter({ hasText: 'E2E Engineer' });
     await expect(engineerRow.getByText('Foreman')).toBeVisible();
 
-    await page.getByRole('button', { name: 'Remove E2E Viewer from project' }).click();
-    const removeDialog = page.getByRole('alertdialog').filter({ hasText: 'Remove Project User' });
+    const removeDialog = await openProjectUserRemoveDialog(page);
     await expect(
       removeDialog.getByText('They will lose access to this project immediately.'),
     ).toBeVisible();
@@ -299,6 +363,8 @@ test.describe('Project users seeded admin contract', () => {
     await inviteDialog.getByLabel('Email Address').fill('QA.Manager@Example.com');
     await inviteDialog.getByLabel('Role').selectOption('quality_manager');
 
+    const emailInput = inviteDialog.getByLabel('Email Address');
+    const roleSelect = inviteDialog.getByLabel('Role');
     await inviteDialog
       .getByRole('button', { name: 'Send Invite' })
       .evaluate((button: HTMLElement) => {
@@ -306,6 +372,8 @@ test.describe('Project users seeded admin contract', () => {
         button.click();
       });
 
+    await expect(emailInput).toBeDisabled();
+    await expect(roleSelect).toBeDisabled();
     await expect(
       page.getByText('qa.manager@example.com has been added to the project.'),
     ).toBeVisible();
@@ -314,5 +382,152 @@ test.describe('Project users seeded admin contract', () => {
       email: 'qa.manager@example.com',
       role: 'quality_manager',
     });
+  });
+
+  test('blocks direct team-admin route when this project role is not an admin role', async ({
+    page,
+  }) => {
+    const projectManagerElsewhere = {
+      ...E2E_ADMIN_USER,
+      role: 'member',
+      roleInCompany: 'member',
+      dashboardRole: 'project_manager',
+    };
+    const api = await mockSeededProjectUsersApi(page, {
+      user: projectManagerElsewhere,
+      projectOverrides: { currentUserRole: 'viewer' },
+    });
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/users`);
+
+    await expect(page.getByRole('heading', { name: 'Project Team' })).toBeVisible();
+    await expect(page.getByRole('alert')).toContainText(
+      "You don't have permission to manage users for this project.",
+    );
+    await expect(page.getByRole('button', { name: 'Invite User' })).toHaveCount(0);
+    expect(api.getUserLoadCount()).toBe(0);
+  });
+
+  test('does not offer project admin actions to project managers', async ({ page }) => {
+    const projectManager = {
+      ...E2E_ADMIN_USER,
+      id: 'e2e-project-manager-user',
+      email: 'project.manager@example.com',
+      role: 'member',
+      roleInCompany: 'member',
+      dashboardRole: 'project_manager',
+    };
+    const api = await mockSeededProjectUsersApi(page, {
+      user: projectManager,
+      projectOverrides: { currentUserRole: 'project_manager' },
+    });
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/users`);
+
+    await expect(page.getByRole('heading', { name: 'Project Team' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Change role for E2E Admin' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Remove E2E Admin from project' })).toHaveCount(
+      0,
+    );
+
+    await page.getByRole('button', { name: 'Invite User' }).click();
+    const inviteDialog = page.getByRole('dialog').filter({ hasText: 'Invite User' });
+    await expect(
+      inviteDialog.locator('select#project-user-invite-role option[value="admin"]'),
+    ).toHaveCount(0);
+    await expect(
+      inviteDialog.locator('select#project-user-invite-role option[value="project_manager"]'),
+    ).toHaveCount(0);
+    await inviteDialog.getByRole('button', { name: 'Cancel' }).click();
+
+    await page.getByRole('button', { name: 'Change role for E2E Engineer' }).click();
+    const engineerRoleSelect = page.getByRole('combobox', { name: 'Role for E2E Engineer' });
+    await expect(engineerRoleSelect.locator('option[value="admin"]')).toHaveCount(0);
+    await expect(engineerRoleSelect.locator('option[value="project_manager"]')).toHaveCount(0);
+    await engineerRoleSelect.selectOption('foreman');
+    await page.getByRole('button', { name: 'Save role for E2E Engineer' }).click();
+
+    await expect
+      .poll(() => api.getUpdateRoleRequest())
+      .toEqual(
+        expect.objectContaining({
+          userId: 'e2e-engineer-user',
+          body: expect.objectContaining({ role: 'foreman' }),
+        }),
+      );
+  });
+
+  test('keeps mobile project team actions reachable', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    const api = await mockSeededProjectUsersApi(page);
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/users`);
+
+    const usersRegion = page.getByRole('region', { name: 'Project users table' });
+    await expect(usersRegion).toBeVisible();
+    await usersRegion.evaluate((element) => {
+      element.scrollLeft = element.scrollWidth;
+    });
+
+    await page.getByRole('button', { name: 'Change role for E2E Engineer' }).click();
+    await page.getByRole('combobox', { name: 'Role for E2E Engineer' }).selectOption('foreman');
+    await page.getByRole('button', { name: 'Save role for E2E Engineer' }).click();
+
+    await expect
+      .poll(() => api.getUpdateRoleRequest())
+      .toEqual(
+        expect.objectContaining({
+          userId: 'e2e-engineer-user',
+          body: expect.objectContaining({ role: 'foreman' }),
+        }),
+      );
+
+    await usersRegion.evaluate((element) => {
+      element.scrollLeft = element.scrollWidth;
+    });
+    await confirmProjectUserRemoval(page);
+
+    expect(api.getRemoveUserId()).toBe('e2e-viewer-user');
+    await expect(page.getByText('E2E Viewer has been removed from the project.')).toBeVisible();
+    await expect(usersRegion.locator('tbody tr').filter({ hasText: 'E2E Viewer' })).toBeHidden();
+  });
+
+  test('locks the remove confirmation while project user removal is in flight', async ({
+    page,
+  }) => {
+    const api = await mockSeededProjectUsersApi(page, { removeDelayMs: 250 });
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/users`);
+
+    const removeDialog = await confirmProjectUserRemoval(page);
+
+    await expect(removeDialog).toBeVisible();
+    await expect(removeDialog.getByRole('button', { name: 'Removing...' })).toBeDisabled();
+    await expect(removeDialog.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+
+    expect(api.getRemoveUserId()).toBe('e2e-viewer-user');
+    await expect(page.getByText('E2E Viewer has been removed from the project.')).toBeVisible();
+    await expect(removeDialog).toBeHidden();
+  });
+
+  test('keeps the remove confirmation retryable when project user removal fails', async ({
+    page,
+  }) => {
+    const api = await mockSeededProjectUsersApi(page, { failRemoveAttemptsUntil: 1 });
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/users`);
+
+    const removeDialog = await confirmProjectUserRemoval(page);
+
+    await expect(removeDialog).toBeVisible();
+    await expect(removeDialog.getByRole('alert')).toContainText('Remove service unavailable');
+    await expect(removeDialog.getByRole('button', { name: 'Remove' })).toBeEnabled();
+
+    await removeDialog.getByRole('button', { name: 'Remove' }).click();
+
+    expect(api.getRemoveAttemptCount()).toBe(2);
+    expect(api.getRemoveUserId()).toBe('e2e-viewer-user');
+    await expect(page.getByText('E2E Viewer has been removed from the project.')).toBeVisible();
+    await expect(removeDialog).toBeHidden();
   });
 });

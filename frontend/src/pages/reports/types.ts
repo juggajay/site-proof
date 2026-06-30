@@ -56,6 +56,7 @@ export interface NCRReport {
   totalNCRs: number;
   statusCounts: Record<string, number>;
   categoryCounts: Record<string, number>;
+  severityCounts: Record<string, number>;
   rootCauseCounts: Record<string, number>;
   responsiblePartyCounts: Record<string, number>;
   overdueCount: number;
@@ -67,6 +68,7 @@ export interface NCRReport {
     ncrNumber: string;
     description: string;
     category: string;
+    severity: 'minor' | 'major';
     status: string;
     raisedAt: string;
     closedAt: string | null;
@@ -115,6 +117,7 @@ export interface TestReport {
     pending: number;
     passRate: string;
   };
+  pagination?: ReportPagination;
 }
 
 export interface DiaryReport {
@@ -190,6 +193,7 @@ export interface DiaryReport {
       byType: Record<string, { count: number; hours: number }>;
     };
   };
+  pagination?: ReportPagination;
 }
 
 export interface ClaimsReport {

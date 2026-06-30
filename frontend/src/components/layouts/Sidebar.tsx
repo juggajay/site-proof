@@ -35,7 +35,6 @@ import {
   getCompanyRole,
   getProjectScopedRole,
   hasSubcontractorPortalIdentity,
-  isForemanDashboardUser,
 } from '@/lib/subcontractorIdentity';
 import {
   ROLE_GROUPS,
@@ -71,6 +70,7 @@ interface NavigationItem {
   requiresProject?: boolean;
   requiresCommercialAccess?: boolean;
   requiresAdmin?: boolean;
+  requiresAuditLogAccess?: boolean;
   requiresManagement?: boolean;
   requiresProjectSettingsAccess?: boolean;
   allowedRoles?: readonly string[];
@@ -128,7 +128,7 @@ const settingsNavigation: NavigationItem[] = [
   { name: 'Documentation', href: '/docs', icon: BookOpen },
   { name: 'Help & Support', href: '/support', icon: HelpCircle },
   { name: 'Company Settings', href: '/company-settings', icon: Building2, requiresAdmin: true },
-  { name: 'Audit Log', href: '/audit-log', icon: ClipboardList, requiresAdmin: true },
+  { name: 'Audit Log', href: '/audit-log', icon: ClipboardList, requiresAuditLogAccess: true },
 ];
 
 // Subcontractor-specific navigation
@@ -183,7 +183,9 @@ export function Sidebar() {
   const { data: projectData } = useQuery({
     queryKey: queryKeys.projectModules(projectId!),
     queryFn: () =>
-      apiFetch<{ project?: { name?: string; settings?: unknown } }>(`/api/projects/${projectId}`),
+      apiFetch<{
+        project?: { name?: string; settings?: unknown; currentUserRole?: string | null };
+      }>(`/api/projects/${projectId}`),
     enabled: !!projectId,
   });
 
@@ -198,15 +200,19 @@ export function Sidebar() {
   const toggleSidebar = zustandToggleSidebar;
 
   const userRole = getCompanyRole(user);
-  const projectScopedRole = getProjectScopedRole(user);
+  const projectScopedRole = projectId
+    ? (projectData?.project?.currentUserRole ?? 'viewer')
+    : getProjectScopedRole(user);
   const hasPortalIdentity = hasSubcontractorPortalIdentity(user);
 
   // Role-based access checks
   const hasCommercial = hasCommercialAccess(projectScopedRole);
   const hasAdmin = isAdminRole(userRole);
+  const hasAuditLogAccess =
+    hasAdmin || projectScopedRole === 'project_manager' || projectScopedRole === 'quality_manager';
   const hasManagement = hasRoleInGroup(projectScopedRole, ROLE_GROUPS.MANAGEMENT);
   const hasProjectSettingsAccess = canManageProjectSettings(projectScopedRole);
-  const isForeman = isForemanDashboardUser(user);
+  const isForeman = projectScopedRole === 'foreman';
   const isSubcontractor = isSubcontractorRole(userRole);
   const isViewer = isViewerRole(projectScopedRole);
 
@@ -218,6 +224,9 @@ export function Sidebar() {
     }
     // Check admin access requirement
     if (item.requiresAdmin && !hasAdmin) {
+      return false;
+    }
+    if (item.requiresAuditLogAccess && !hasAuditLogAccess) {
       return false;
     }
     // Check management access requirement

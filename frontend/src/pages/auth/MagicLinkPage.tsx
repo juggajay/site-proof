@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
-import { useAuth } from '@/lib/auth';
+import { useAuth, type User } from '@/lib/auth';
 import { ApiError, apiFetch } from '@/lib/api';
 import { getPostLoginRedirect } from './postLoginRedirect';
 
@@ -15,6 +15,17 @@ function getMagicLinkErrorMessage(error: unknown): string {
   }
 
   return 'Failed to verify magic link. Please try again.';
+}
+
+function scrubMagicLinkTokenFromUrl(searchParams: URLSearchParams) {
+  const safeParams = new URLSearchParams(searchParams);
+  safeParams.delete('token');
+  const safeQuery = safeParams.toString();
+  window.history.replaceState(
+    null,
+    document.title,
+    `/auth/magic-link${safeQuery ? `?${safeQuery}` : ''}`,
+  );
 }
 
 // Feature #415: Magic link verification page
@@ -40,18 +51,18 @@ export function MagicLinkPage() {
       return;
     }
 
+    scrubMagicLinkTokenFromUrl(searchParams);
+
     const verifyMagicLink = async () => {
       try {
-        window.history.replaceState(null, document.title, '/auth/magic-link');
-
-        const data = await apiFetch<{ token: string }>('/api/auth/magic-link/verify', {
+        const data = await apiFetch<{ token: string; user?: User }>('/api/auth/magic-link/verify', {
           method: 'POST',
           body: JSON.stringify({ token }),
         });
 
         if (data.token) {
           // Use the centralized setToken which handles storage properly
-          const signedInUser = await setToken(data.token);
+          const signedInUser = await setToken(data.token, data.user);
 
           setStatus('success');
 

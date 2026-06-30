@@ -1,5 +1,5 @@
 import { AppError } from '../../lib/AppError.js';
-import { getEffectiveProjectRole } from '../../lib/projectAccess.js';
+import { assertProjectAllowsWrite, getEffectiveProjectRole } from '../../lib/projectAccess.js';
 
 const DRAWING_WRITE_ROLES = [
   'owner',
@@ -33,4 +33,6 @@ export async function requireDrawingWriteAccess(user: AuthUser, projectId: strin
   if (!DRAWING_WRITE_ROLES.includes(effectiveRole)) {
     throw AppError.forbidden('Drawing write access required');
   }
+
+  await assertProjectAllowsWrite(projectId);
 }

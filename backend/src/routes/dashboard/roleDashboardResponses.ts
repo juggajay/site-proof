@@ -1,4 +1,5 @@
 import type { DashboardProject } from './access.js';
+import { getDocketCommercialCosts, type DocketNumericLike } from '../../lib/docketCosts.js';
 
 // =============================================================================
 // Role dashboard response builders. These helpers keep the route modules focused
@@ -50,8 +51,10 @@ export type ProjectManagerProjectBudget = {
 } | null;
 
 export type ProjectManagerDocketCost = {
-  totalLabourSubmitted: unknown;
-  totalPlantSubmitted: unknown;
+  totalLabourSubmitted: DocketNumericLike;
+  totalPlantSubmitted: DocketNumericLike;
+  totalLabourApprovedCost?: DocketNumericLike;
+  totalPlantApprovedCost?: DocketNumericLike;
 };
 
 export type ProjectManagerAttentionNcr = {
@@ -205,8 +208,9 @@ export function buildProjectManagerDashboardResponse({
   let labourCost = 0;
   let plantCost = 0;
   dockets.forEach((docket) => {
-    labourCost += Number(docket.totalLabourSubmitted || 0);
-    plantCost += Number(docket.totalPlantSubmitted || 0);
+    const costs = getDocketCommercialCosts(docket);
+    labourCost += costs.labourCost;
+    plantCost += costs.plantCost;
   });
 
   const budgetTotal = Number(project?.contractValue || 0);
@@ -224,7 +228,7 @@ export function buildProjectManagerDashboardResponse({
       title: `NCR ${ncr.ncrNumber} overdue`,
       description: ncr.description,
       urgency: 'critical',
-      link: `/projects/${projectId}/ncr?ncrId=${ncr.id}`,
+      link: `/projects/${projectId}/ncr?ncr=${ncr.id}`,
     });
   });
 
@@ -235,7 +239,7 @@ export function buildProjectManagerDashboardResponse({
       title: `Major NCR: ${ncr.ncrNumber}`,
       description: ncr.description,
       urgency: 'warning',
-      link: `/projects/${projectId}/ncr?ncrId=${ncr.id}`,
+      link: `/projects/${projectId}/ncr?ncr=${ncr.id}`,
     });
   });
 
@@ -253,7 +257,7 @@ export function buildProjectManagerDashboardResponse({
         category: ncr.category,
         status: ncr.status,
         daysOpen: Math.floor((Date.now() - ncr.createdAt.getTime()) / (1000 * 60 * 60 * 24)),
-        link: `/projects/${projectId}/ncr?ncrId=${ncr.id}`,
+        link: `/projects/${projectId}/ncr?ncr=${ncr.id}`,
       })),
     },
     holdPointPipeline: {

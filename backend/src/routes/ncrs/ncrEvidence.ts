@@ -15,10 +15,6 @@ import {
   requireNcrResponsibleOrProjectRole,
 } from './ncrAccess.js';
 import {
-  isStoredDocumentReference,
-  normalizeStoredDocumentReference,
-} from '../../lib/uploadPaths.js';
-import {
   buildNcrEvidenceAddedResponse,
   buildNcrEvidenceAlreadyLinkedResponse,
   buildNcrEvidenceListResponse,
@@ -90,10 +86,18 @@ const addEvidenceSchema = z
     projectId: optionalNonEmptyEvidenceString('projectId', MAX_EVIDENCE_PROJECT_ID_LENGTH),
   })
   .superRefine((data, ctx) => {
-    if (!data.documentId && (!data.filename || !data.fileUrl)) {
+    if (!data.documentId) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'Either documentId or filename and fileUrl are required',
+        message: 'documentId is required',
+        path: ['documentId'],
+      });
+    }
+
+    if (data.filename || data.fileUrl || data.fileSize || data.mimeType) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Upload evidence first, then attach it by documentId',
         path: ['documentId'],
       });
     }
@@ -121,8 +125,7 @@ async function resolveNcrEvidenceDocumentId(
   user: RequestAuthUser,
   evidenceInput: AddEvidenceInput,
 ): Promise<string> {
-  const { documentId, evidenceType, filename, fileUrl, fileSize, mimeType, caption } =
-    evidenceInput;
+  const { documentId } = evidenceInput;
 
   if (documentId) {
     const existingDocument = await prisma.document.findFirst({
@@ -151,30 +154,7 @@ async function resolveNcrEvidenceDocumentId(
     return documentId;
   }
 
-  if (!filename || !fileUrl) {
-    throw AppError.badRequest('Either documentId or filename and fileUrl are required');
-  }
-
-  if (!isStoredDocumentReference(fileUrl, projectId)) {
-    throw AppError.badRequest('fileUrl must reference an uploaded document file');
-  }
-  const storedFileUrl = normalizeStoredDocumentReference(fileUrl, projectId);
-
-  const document = await prisma.document.create({
-    data: {
-      projectId,
-      documentType: evidenceType || 'ncr_evidence',
-      category: 'ncr_evidence',
-      filename,
-      fileUrl: storedFileUrl,
-      fileSize,
-      mimeType,
-      uploadedById: user.userId,
-      caption,
-    },
-  });
-
-  return document.id;
+  throw AppError.badRequest('documentId is required');
 }
 
 async function findNcrEvidenceLink(
@@ -246,6 +226,10 @@ ncrEvidenceRouter.post(
 
     if (!ncr) {
       throw AppError.notFound('NCR');
+    }
+
+    if (ncr.status === 'closed' || ncr.status === 'closed_concession') {
+      throw AppError.badRequest('Cannot add evidence to a closed NCR');
     }
 
     await requireNcrResponsibleOrProjectRole(

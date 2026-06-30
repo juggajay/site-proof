@@ -201,7 +201,7 @@ describe('mapClaimListItem', () => {
     ).toBeNull();
   });
 
-  it('preserves nullish optional commercial fields', () => {
+  it('preserves zero-value optional commercial fields', () => {
     const result = mapClaimListItem({
       id: 'claim-2',
       claimNumber: 8,
@@ -210,7 +210,7 @@ describe('mapClaimListItem', () => {
       status: 'draft',
       totalClaimedAmount: null,
       certifiedAmount: 0,
-      paidAmount: null,
+      paidAmount: 0,
       submittedAt: null,
       disputeNotes: '',
       disputedAt: null,
@@ -219,8 +219,8 @@ describe('mapClaimListItem', () => {
 
     expect(result).toMatchObject({
       totalClaimedAmount: 0,
-      certifiedAmount: null,
-      paidAmount: null,
+      certifiedAmount: 0,
+      paidAmount: 0,
       submittedAt: null,
       disputeNotes: null,
       disputedAt: null,
@@ -267,6 +267,33 @@ describe('mapClaimCreateItem', () => {
         _count: { claimedLots: 0 },
       }).totalClaimedAmount,
     ).toBe(0);
+  });
+});
+
+describe('mapClaimCertificationItem', () => {
+  it('preserves a nil-certified claim as zero certified and zero paid', () => {
+    const result = mapClaimCertificationItem(
+      {
+        id: 'claim-nil',
+        claimNumber: 14,
+        claimPeriodStart: new Date('2026-05-01T10:00:00.000Z'),
+        claimPeriodEnd: new Date('2026-05-31T10:00:00.000Z'),
+        status: 'paid',
+        totalClaimedAmount: '1000',
+        certifiedAmount: 0,
+        certifiedAt: new Date('2026-06-03T04:05:06.000Z'),
+        paidAmount: 0,
+        claimedLots: [],
+      },
+      'Nil certification',
+      null,
+    );
+
+    expect(result).toMatchObject({
+      status: 'paid',
+      certifiedAmount: 0,
+      paidAmount: 0,
+    });
   });
 });
 

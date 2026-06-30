@@ -48,7 +48,7 @@ export function formatWebhookEvents(events: string[] | undefined): string {
     return 'No events';
   }
   if (events.includes('*')) {
-    return 'All events';
+    return 'All supported events';
   }
   return events.join(', ');
 }

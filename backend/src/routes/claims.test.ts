@@ -105,6 +105,8 @@ describe('Progress Claims API', () => {
     await prisma.claimedLot.deleteMany({ where: { claim: { projectId } } });
     await prisma.progressClaim.deleteMany({ where: { projectId } });
     await prisma.document.deleteMany({ where: { projectId } });
+    await prisma.nCRLot.deleteMany({ where: { lot: { projectId } } });
+    await prisma.nCR.deleteMany({ where: { projectId } });
     await prisma.lot.deleteMany({ where: { projectId } });
     await prisma.projectUser.deleteMany({ where: { projectId } });
     await prisma.project.delete({ where: { id: projectId } }).catch(() => {});
@@ -656,6 +658,59 @@ describe('Progress Claims API', () => {
 
       // Cleanup
       await prisma.lot.delete({ where: { id: lotNoBudget.id } });
+    });
+
+    it('should reject a stored conformed lot when an open NCR now blocks conformance', async () => {
+      const staleLot = await createClaimableLot(`CLAIM-STALE-NCR-${Date.now()}`, 3200);
+      const ncr = await prisma.nCR.create({
+        data: {
+          projectId,
+          ncrNumber: `NCR-CLAIM-STALE-${Date.now()}`,
+          description: 'Reopened defect blocks claiming',
+          category: 'Workmanship',
+          severity: 'minor',
+          status: 'open',
+          raisedById: userId,
+          ncrLots: { create: { lotId: staleLot.id } },
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .post(`/api/projects/${projectId}/claims`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            periodStart: '2025-04-01',
+            periodEnd: '2025-04-30',
+            lots: [{ lotId: staleLot.id, percentageComplete: 100 }],
+          });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.message).toContain('no longer satisfy conformance');
+        expect(res.body.error.details).toMatchObject({
+          code: 'CONFORMANCE_STALE',
+          lots: [
+            {
+              id: staleLot.id,
+              lotNumber: staleLot.lotNumber,
+              blockingReasons: ['1 open NCR(s) must be closed'],
+            },
+          ],
+        });
+
+        const unchangedLot = await prisma.lot.findUnique({
+          where: { id: staleLot.id },
+          select: { status: true, claimedInId: true },
+        });
+        expect(unchangedLot).toEqual({ status: 'conformed', claimedInId: null });
+        await expect(
+          prisma.claimedLot.findFirst({ where: { lotId: staleLot.id } }),
+        ).resolves.toBeNull();
+      } finally {
+        await prisma.nCRLot.deleteMany({ where: { ncrId: ncr.id } });
+        await prisma.nCR.delete({ where: { id: ncr.id } }).catch(() => {});
+        await prisma.lot.delete({ where: { id: staleLot.id } }).catch(() => {});
+      }
     });
 
     it('should reject mixed valid and out-of-project lots without mutating either lot', async () => {
@@ -1999,6 +2054,37 @@ describe('Progress Claims API', () => {
       }
     });
 
+    it('should reject same-project documents that are not certification documents', async () => {
+      const claim = await createSubmittedCertificationClaim();
+      const wrongDocument = await prisma.document.create({
+        data: {
+          projectId,
+          documentType: 'photo',
+          category: 'quality',
+          filename: 'site-photo-is-not-a-certificate.jpg',
+          fileUrl: '/uploads/documents/site-photo-is-not-a-certificate.jpg',
+          uploadedById: userId,
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .post(`/api/projects/${projectId}/claims/${claim.id}/certify`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            certifiedAmount: 1000,
+            certificationDocumentId: wrongDocument.id,
+          });
+
+        expect(res.status).toBe(400);
+        expect(res.body.error.message).toContain('certification document');
+        const unchangedClaim = await prisma.progressClaim.findUnique({ where: { id: claim.id } });
+        expect(unchangedClaim?.status).toBe('submitted');
+      } finally {
+        await prisma.document.delete({ where: { id: wrongDocument.id } }).catch(() => {});
+      }
+    });
+
     it('should certify with a project certification document id', async () => {
       const claim = await createSubmittedCertificationClaim();
       const fileUrl = `/uploads/documents/certification-${claim.claimNumber}.pdf`;
@@ -2673,6 +2759,7 @@ describe('Progress Claims API', () => {
 
   describe('GET /api/projects/:projectId/claims/:claimId/evidence-package', () => {
     let evidenceClaimId: string;
+    let evidenceLotId: string;
 
     beforeAll(async () => {
       // Create a new lot and claim for evidence package test
@@ -2688,6 +2775,7 @@ describe('Progress Claims API', () => {
           conformedById: userId,
         },
       });
+      evidenceLotId = evidenceLot.id;
 
       await prisma.document.create({
         data: {
@@ -2778,6 +2866,259 @@ describe('Progress Claims API', () => {
             amountClaimed: 2000,
             percentageComplete: 100,
           },
+        });
+      }
+    });
+
+    it('preserves zero-valued claim, lot, and test evidence fields', async () => {
+      await prisma.progressClaim.update({
+        where: { id: evidenceClaimId },
+        data: { certifiedAmount: 0 },
+      });
+      await prisma.lot.update({
+        where: { id: evidenceLotId },
+        data: {
+          chainageStart: 0,
+          chainageEnd: 0,
+        },
+      });
+      const testResult = await prisma.testResult.create({
+        data: {
+          projectId,
+          lotId: evidenceLotId,
+          testType: 'Compaction',
+          resultValue: 0,
+          resultUnit: '%',
+          passFail: 'pass',
+          status: 'verified',
+          enteredById: userId,
+          enteredAt: new Date('2025-02-21T09:00:00.000Z'),
+          verifiedById: userId,
+          verifiedAt: new Date('2025-02-21T10:00:00.000Z'),
+          sampleDate: new Date('2025-02-21T08:00:00.000Z'),
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .get(`/api/projects/${projectId}/claims/${evidenceClaimId}/evidence-package`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.claim.certifiedAmount).toBe(0);
+        expect(res.body.lots[0].chainageStart).toBe(0);
+        expect(res.body.lots[0].chainageEnd).toBe(0);
+        expect(res.body.lots[0].testResults[0].resultValue).toBe(0);
+      } finally {
+        await prisma.testResult.delete({ where: { id: testResult.id } }).catch(() => {});
+        await prisma.progressClaim.update({
+          where: { id: evidenceClaimId },
+          data: { certifiedAmount: null },
+        });
+        await prisma.lot.update({
+          where: { id: evidenceLotId },
+          data: {
+            chainageStart: null,
+            chainageEnd: null,
+          },
+        });
+      }
+    });
+
+    it('uses the assigned ITP snapshot and counts N/A completions as accepted evidence', async () => {
+      const template = await prisma.iTPTemplate.create({
+        data: {
+          projectId,
+          name: `Evidence snapshot template ${Date.now()}`,
+          activityType: 'Earthworks',
+        },
+      });
+      const assignedItem = await prisma.iTPChecklistItem.create({
+        data: {
+          templateId: template.id,
+          sequenceNumber: 1,
+          description: 'Live description changed after assignment',
+          pointType: 'standard',
+          responsibleParty: 'contractor',
+          evidenceRequired: 'none',
+        },
+      });
+      const addedLaterItem = await prisma.iTPChecklistItem.create({
+        data: {
+          templateId: template.id,
+          sequenceNumber: 2,
+          description: 'Added after assignment',
+          pointType: 'standard',
+          responsibleParty: 'contractor',
+          evidenceRequired: 'none',
+        },
+      });
+      const instance = await prisma.iTPInstance.create({
+        data: {
+          lotId: evidenceLotId,
+          templateId: template.id,
+          status: 'in_progress',
+          templateSnapshot: JSON.stringify({
+            id: template.id,
+            name: template.name,
+            checklistItems: [
+              {
+                id: assignedItem.id,
+                sequenceNumber: 1,
+                description: 'Assigned snapshot description',
+                pointType: 'standard',
+                responsibleParty: 'contractor',
+                evidenceRequired: 'none',
+              },
+            ],
+          }),
+        },
+      });
+      const completion = await prisma.iTPCompletion.create({
+        data: {
+          itpInstanceId: instance.id,
+          checklistItemId: assignedItem.id,
+          status: 'not_applicable',
+          completedById: userId,
+          completedAt: new Date('2025-02-22T09:00:00.000Z'),
+        },
+      });
+      const attachmentDocument = await prisma.document.create({
+        data: {
+          projectId,
+          documentType: 'photo',
+          category: 'itp_evidence',
+          filename: 'itp-attachment-evidence.jpg',
+          fileUrl: '/uploads/documents/itp-attachment-evidence.jpg',
+          uploadedById: userId,
+          uploadedAt: new Date('2025-02-22T09:15:00.000Z'),
+          caption: 'ITP attachment evidence',
+        },
+      });
+      const attachment = await prisma.iTPCompletionAttachment.create({
+        data: {
+          completionId: completion.id,
+          documentId: attachmentDocument.id,
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .get(`/api/projects/${projectId}/claims/${evidenceClaimId}/evidence-package`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.lots[0].itp.checklistItems).toEqual([
+          expect.objectContaining({
+            id: assignedItem.id,
+            description: 'Assigned snapshot description',
+          }),
+        ]);
+        expect(res.body.lots[0].itp.checklistItems).not.toEqual(
+          expect.arrayContaining([expect.objectContaining({ id: addedLaterItem.id })]),
+        );
+        expect(res.body.lots[0].itp.completions).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              checklistItemId: assignedItem.id,
+              isCompleted: false,
+              isNotApplicable: true,
+              attachmentCount: 1,
+              attachments: [
+                expect.objectContaining({
+                  id: attachment.id,
+                  documentId: attachmentDocument.id,
+                  document: expect.objectContaining({
+                    id: attachmentDocument.id,
+                    filename: 'itp-attachment-evidence.jpg',
+                    documentType: 'photo',
+                    caption: 'ITP attachment evidence',
+                    uploadedAt: '2025-02-22T09:15:00.000Z',
+                  }),
+                }),
+              ],
+            }),
+          ]),
+        );
+        expect(res.body.lots[0].summary.itpCompletionPercentage).toBe(100);
+      } finally {
+        await prisma.iTPCompletionAttachment
+          .delete({ where: { id: attachment.id } })
+          .catch(() => {});
+        await prisma.document.delete({ where: { id: attachmentDocument.id } }).catch(() => {});
+        await prisma.iTPCompletion.delete({ where: { id: completion.id } }).catch(() => {});
+        await prisma.iTPInstance.delete({ where: { id: instance.id } }).catch(() => {});
+        await prisma.iTPChecklistItem.deleteMany({
+          where: { id: { in: [assignedItem.id, addedLaterItem.id] } },
+        });
+        await prisma.iTPTemplate.delete({ where: { id: template.id } }).catch(() => {});
+      }
+    });
+
+    it('counts only verified passing tests as passed claim evidence', async () => {
+      const verifiedPass = await prisma.testResult.create({
+        data: {
+          projectId,
+          lotId: evidenceLotId,
+          testType: 'Verified Compaction',
+          resultValue: 98.5,
+          resultUnit: '%',
+          passFail: 'pass',
+          status: 'verified',
+          enteredById: userId,
+          enteredAt: new Date('2025-02-23T09:00:00.000Z'),
+          verifiedById: userId,
+          verifiedAt: new Date('2025-02-23T10:00:00.000Z'),
+          sampleDate: new Date('2025-02-23T08:00:00.000Z'),
+        },
+      });
+      const unverifiedPass = await prisma.testResult.create({
+        data: {
+          projectId,
+          lotId: evidenceLotId,
+          testType: 'Unverified Compaction',
+          resultValue: 97,
+          resultUnit: '%',
+          passFail: 'pass',
+          status: 'entered',
+          enteredById: userId,
+          enteredAt: new Date('2025-02-24T09:00:00.000Z'),
+          sampleDate: new Date('2025-02-24T08:00:00.000Z'),
+        },
+      });
+      const failedTest = await prisma.testResult.create({
+        data: {
+          projectId,
+          lotId: evidenceLotId,
+          testType: 'Failed Compaction',
+          resultValue: 91,
+          resultUnit: '%',
+          passFail: 'fail',
+          status: 'verified',
+          enteredById: userId,
+          enteredAt: new Date('2025-02-25T09:00:00.000Z'),
+          verifiedById: userId,
+          verifiedAt: new Date('2025-02-25T10:00:00.000Z'),
+          sampleDate: new Date('2025-02-25T08:00:00.000Z'),
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .get(`/api/projects/${projectId}/claims/${evidenceClaimId}/evidence-package`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.lots[0].summary.testResultCount).toBeGreaterThanOrEqual(3);
+        expect(res.body.lots[0].summary.passedTestCount).toBe(1);
+        expect(res.body.lots[0].summary.failedTestCount).toBe(1);
+        expect(res.body.lots[0].summary.pendingTestCount).toBe(1);
+        expect(res.body.summary.totalPassedTests).toBe(1);
+        expect(res.body.summary.totalFailedTests).toBe(1);
+        expect(res.body.summary.totalPendingTests).toBe(1);
+      } finally {
+        await prisma.testResult.deleteMany({
+          where: { id: { in: [verifiedPass.id, unverifiedPass.id, failedTest.id] } },
         });
       }
     });

@@ -74,6 +74,7 @@ export function buildLotListSelect(includeITP: boolean): Prisma.LotSelect {
           select: {
             checklistItemId: true,
             status: true,
+            verificationStatus: true,
           },
         },
         template: {

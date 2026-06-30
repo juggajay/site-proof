@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { NativeSelect } from '@/components/ui/native-select';
 import type {
   HpRecipient,
+  HpApprovalRequirement,
   ProjectNotificationPreferences,
   WitnessPointNotificationSettings,
   WitnessPointNotificationTrigger,
@@ -31,11 +32,31 @@ import {
 interface NotificationsTabProps {
   projectId: string;
   initialHpRecipients: HpRecipient[];
-  initialHpApprovalRequirement: 'any' | 'superintendent';
+  initialHpApprovalRequirement: HpApprovalRequirement;
   initialRequireSubcontractorVerification: boolean;
   initialNotificationPreferences: ProjectNotificationPreferences;
   initialWitnessPointNotifications: WitnessPointNotificationSettings;
   initialHpMinimumNoticeDays: number;
+  readOnly?: boolean;
+  onSettingsSaved?: (settings: Record<string, unknown>) => void;
+}
+
+function getHpRecipientValidationError({
+  role,
+  email,
+  projectId,
+  hpRecipients,
+}: {
+  role: string;
+  email: string;
+  projectId: string;
+  hpRecipients: HpRecipient[];
+}) {
+  if (!role || !email) return 'Role and email are required.';
+  if (!isValidEmail(email)) return 'Enter a valid recipient email.';
+  if (!projectId) return 'Project not found';
+  if (isDuplicateHpRecipient(hpRecipients, { role, email })) return 'Recipient already exists.';
+  return '';
 }
 
 export function NotificationsTab({
@@ -46,6 +67,8 @@ export function NotificationsTab({
   initialNotificationPreferences,
   initialWitnessPointNotifications,
   initialHpMinimumNoticeDays,
+  readOnly = false,
+  onSettingsSaved,
 }: NotificationsTabProps) {
   const [hpRecipients, setHpRecipients] = useState<HpRecipient[]>(initialHpRecipients);
   const [showAddRecipientModal, setShowAddRecipientModal] = useState(false);
@@ -53,7 +76,7 @@ export function NotificationsTab({
   const [newRecipientEmail, setNewRecipientEmail] = useState('');
   const [recipientError, setRecipientError] = useState('');
   const [savingRecipients, setSavingRecipients] = useState(false);
-  const [hpApprovalRequirement, setHpApprovalRequirement] = useState<'any' | 'superintendent'>(
+  const [hpApprovalRequirement, setHpApprovalRequirement] = useState<HpApprovalRequirement>(
     initialHpApprovalRequirement,
   );
   const [requireSubcontractorVerification, setRequireSubcontractorVerification] = useState(
@@ -94,6 +117,7 @@ export function NotificationsTab({
     successMessage: string,
     rollback?: () => void,
   ) => {
+    if (readOnly) return false;
     if (savingSettingRef.current) return false;
     if (!projectId) {
       rollback?.();
@@ -112,6 +136,7 @@ export function NotificationsTab({
         method: 'PATCH',
         body: JSON.stringify({ settings }),
       });
+      onSettingsSaved?.(settings);
       setSettingsStatus(successMessage);
       return true;
     } catch (error) {
@@ -126,6 +151,7 @@ export function NotificationsTab({
   };
 
   const handleNotificationPreferenceChange = (key: keyof ProjectNotificationPreferences) => {
+    if (readOnly) return;
     if (savingSettingRef.current) return;
 
     const previous = notificationPreferences;
@@ -139,7 +165,8 @@ export function NotificationsTab({
     );
   };
 
-  const handleApprovalRequirementChange = (value: 'any' | 'superintendent') => {
+  const handleApprovalRequirementChange = (value: HpApprovalRequirement) => {
+    if (readOnly) return;
     if (savingSettingRef.current) return;
 
     const previous = hpApprovalRequirement;
@@ -153,6 +180,7 @@ export function NotificationsTab({
   };
 
   const handleMinimumNoticeChange = (value: number) => {
+    if (readOnly) return;
     if (savingSettingRef.current) return;
 
     const previous = hpMinimumNoticeDays;
@@ -166,6 +194,7 @@ export function NotificationsTab({
   };
 
   const handleVerificationToggle = () => {
+    if (readOnly) return;
     if (savingSettingRef.current) return;
 
     const previous = requireSubcontractorVerification;
@@ -180,6 +209,7 @@ export function NotificationsTab({
   };
 
   const handleSaveWitnessSettings = async () => {
+    if (readOnly) return;
     if (savingSettingRef.current) return;
 
     const contactEmail = witnessPointNotifications.clientEmail.trim();
@@ -189,17 +219,20 @@ export function NotificationsTab({
       return;
     }
 
-    await saveSettings(
-      {
-        witnessPointNotifications: {
-          ...witnessPointNotifications,
-          clientEmail: contactEmail,
-          clientName: witnessPointNotifications.clientName.trim(),
-        },
-      },
+    const nextWitnessPointNotifications = {
+      ...witnessPointNotifications,
+      clientEmail: contactEmail,
+      clientName: witnessPointNotifications.clientName.trim(),
+    };
+
+    const saved = await saveSettings(
+      { witnessPointNotifications: nextWitnessPointNotifications },
       'witnessPointNotifications',
       'Witness point notification settings saved.',
     );
+    if (saved) {
+      setWitnessPointNotifications(nextWitnessPointNotifications);
+    }
   };
 
   const closeRecipientModal = (force = false) => {
@@ -212,6 +245,7 @@ export function NotificationsTab({
   };
 
   const handleAddRecipient = async () => {
+    if (readOnly) return;
     if (savingRecipientsRef.current) return;
 
     const { role, email } = normalizeHpRecipient({
@@ -219,23 +253,14 @@ export function NotificationsTab({
       email: newRecipientEmail,
     });
 
-    if (!role || !email) {
-      setRecipientError('Role and email are required.');
-      return;
-    }
-
-    if (!isValidEmail(email)) {
-      setRecipientError('Enter a valid recipient email.');
-      return;
-    }
-
-    if (!projectId) {
-      setRecipientError('Project not found');
-      return;
-    }
-
-    if (isDuplicateHpRecipient(hpRecipients, { role, email })) {
-      setRecipientError('Recipient already exists.');
+    const validationError = getHpRecipientValidationError({
+      role,
+      email,
+      projectId,
+      hpRecipients,
+    });
+    if (validationError) {
+      setRecipientError(validationError);
       return;
     }
 
@@ -252,6 +277,7 @@ export function NotificationsTab({
         body: JSON.stringify({ settings: { hpRecipients: newRecipients } }),
       });
       setHpRecipients(newRecipients);
+      onSettingsSaved?.({ hpRecipients: newRecipients });
       setSettingsStatus('Hold point recipient added.');
       closeRecipientModal(true);
     } catch (error) {
@@ -264,23 +290,37 @@ export function NotificationsTab({
   };
 
   const handleRemoveRecipient = async (index: number) => {
+    if (readOnly) return;
     if (savingSettingRef.current) return;
+    if (savingRecipientsRef.current) return;
 
     const previous = hpRecipients;
     const newRecipients = hpRecipients.filter((_, i) => i !== index);
+    savingRecipientsRef.current = true;
+    setSavingRecipients(true);
     setHpRecipients(newRecipients);
-    await saveSettings(
-      { hpRecipients: newRecipients },
-      `removeRecipient-${index}`,
-      'Hold point recipient removed.',
-      () => setHpRecipients(previous),
-    );
+    try {
+      await saveSettings(
+        { hpRecipients: newRecipients },
+        `removeRecipient-${index}`,
+        'Hold point recipient removed.',
+        () => setHpRecipients(previous),
+      );
+    } finally {
+      savingRecipientsRef.current = false;
+      setSavingRecipients(false);
+    }
   };
 
   return (
     <>
       <div className="space-y-6">
         <SettingsFeedbackMessages error={settingsError} status={settingsStatus} />
+        {readOnly && (
+          <div role="status" className="rounded-lg bg-warning/10 p-3 text-sm text-warning">
+            Notification settings are read-only while this project is archived.
+          </div>
+        )}
 
         <div className="rounded-lg border p-4">
           <h2 className="text-lg font-semibold mb-2">Notification Preferences</h2>
@@ -303,7 +343,7 @@ export function NotificationsTab({
                   type="checkbox"
                   checked={notificationPreferences[preference.key]}
                   onChange={() => handleNotificationPreferenceChange(preference.key)}
-                  disabled={savingSetting !== null}
+                  disabled={readOnly || savingSetting !== null}
                   className="h-5 w-5 rounded border-border accent-primary"
                 />
               </label>
@@ -332,11 +372,12 @@ export function NotificationsTab({
                 type="checkbox"
                 checked={witnessPointNotifications.enabled}
                 onChange={() => {
+                  if (readOnly) return;
                   setWitnessPointNotifications((prev) => ({ ...prev, enabled: !prev.enabled }));
                   setSettingsError('');
                   setSettingsStatus('');
                 }}
-                disabled={savingSetting !== null}
+                disabled={readOnly || savingSetting !== null}
                 className="h-5 w-5 rounded border-border accent-primary"
               />
             </label>
@@ -356,7 +397,7 @@ export function NotificationsTab({
                   setSettingsError('');
                   setSettingsStatus('');
                 }}
-                disabled={savingSetting !== null}
+                disabled={readOnly || savingSetting !== null}
               >
                 {WITNESS_TRIGGER_OPTIONS.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -377,6 +418,7 @@ export function NotificationsTab({
                 type="email"
                 value={witnessPointNotifications.clientEmail}
                 onChange={(event) => {
+                  if (readOnly) return;
                   setWitnessPointNotifications((prev) => ({
                     ...prev,
                     clientEmail: event.target.value,
@@ -384,7 +426,7 @@ export function NotificationsTab({
                   setSettingsError('');
                   setSettingsStatus('');
                 }}
-                disabled={savingSetting !== null}
+                disabled={readOnly || savingSetting !== null}
                 placeholder="superintendent@client.com"
               />
             </div>
@@ -397,6 +439,7 @@ export function NotificationsTab({
                 type="text"
                 value={witnessPointNotifications.clientName}
                 onChange={(event) => {
+                  if (readOnly) return;
                   setWitnessPointNotifications((prev) => ({
                     ...prev,
                     clientName: event.target.value,
@@ -404,7 +447,7 @@ export function NotificationsTab({
                   setSettingsError('');
                   setSettingsStatus('');
                 }}
-                disabled={savingSetting !== null}
+                disabled={readOnly || savingSetting !== null}
                 placeholder="John Smith"
               />
             </div>
@@ -413,7 +456,7 @@ export function NotificationsTab({
                 type="button"
                 variant="outline"
                 onClick={() => void handleSaveWitnessSettings()}
-                disabled={savingSetting !== null}
+                disabled={readOnly || savingSetting !== null}
               >
                 {savingSetting === 'witnessPointNotifications'
                   ? 'Saving...'
@@ -442,7 +485,7 @@ export function NotificationsTab({
                 id="hp-minimum-notice-days"
                 value={String(hpMinimumNoticeDays)}
                 onChange={(event) => handleMinimumNoticeChange(Number(event.target.value))}
-                disabled={savingSetting !== null}
+                disabled={readOnly || savingSetting !== null}
               >
                 {NOTICE_DAY_OPTIONS.map((days) => (
                   <option key={days} value={days}>
@@ -474,11 +517,12 @@ export function NotificationsTab({
                 id="hp-approval-requirement"
                 value={hpApprovalRequirement}
                 onChange={(event) =>
-                  handleApprovalRequirementChange(event.target.value as 'any' | 'superintendent')
+                  handleApprovalRequirementChange(event.target.value as HpApprovalRequirement)
                 }
-                disabled={savingSetting !== null}
+                disabled={readOnly || savingSetting !== null}
               >
                 <option value="any">Any Team Member</option>
+                <option value="none">Manual Release Not Required</option>
                 <option value="superintendent">Superintendent Only</option>
               </NativeSelect>
             </div>
@@ -489,13 +533,17 @@ export function NotificationsTab({
           hpRecipients={hpRecipients}
           savingRecipients={savingRecipients}
           savingSetting={savingSetting}
-          onAddRecipient={() => setShowAddRecipientModal(true)}
+          readOnly={readOnly}
+          onAddRecipient={() => {
+            if (!readOnly) setShowAddRecipientModal(true);
+          }}
           onRemoveRecipient={(index) => void handleRemoveRecipient(index)}
         />
 
         <SubcontractorVerificationSection
           requireSubcontractorVerification={requireSubcontractorVerification}
           savingSetting={savingSetting}
+          readOnly={readOnly}
           onToggle={handleVerificationToggle}
         />
       </div>

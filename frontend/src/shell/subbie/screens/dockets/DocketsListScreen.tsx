@@ -14,10 +14,11 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronRight } from 'lucide-react';
+import { AlertTriangle, ChevronRight } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 import { queryKeys } from '@/lib/queryKeys';
 import { useAuth } from '@/lib/auth';
+import { extractErrorMessage } from '@/lib/errorHandling';
 import { cn } from '@/lib/utils';
 import { ShellScreen } from '@/shell/components/ShellScreen';
 import { formatCurrency } from '@/pages/subcontractor-portal/subcontractorDashboardHelpers';
@@ -33,6 +34,8 @@ interface Docket {
   totalPlantSubmitted: number;
   totalLabourApprovedCost?: number | null;
   totalPlantApprovedCost?: number | null;
+  labourEntryCount?: number | null;
+  plantEntryCount?: number | null;
   labourEntries?: { id: string }[];
   plantEntries?: { id: string }[];
   foremanNotes?: string;
@@ -71,7 +74,9 @@ function matchesFilter(status: string, filter: FilterKey): boolean {
 }
 
 function entryCount(d: Docket): number {
-  return (d.labourEntries?.length ?? 0) + (d.plantEntries?.length ?? 0);
+  const labourCount = d.labourEntryCount ?? d.labourEntries?.length ?? 0;
+  const plantCount = d.plantEntryCount ?? d.plantEntries?.length ?? 0;
+  return labourCount + plantCount;
 }
 
 function docketTotal(d: Docket): number {
@@ -95,7 +100,11 @@ export function DocketsListScreen() {
   const projectQuery = buildPortalCompanyQuery({ projectId, subcontractorCompanyId });
   const [filter, setFilter] = useState<FilterKey>('all');
 
-  const { data: dockets = [], isLoading } = useQuery({
+  const {
+    data: dockets = [],
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: queryKeys.portalDockets(user?.id, projectId, subcontractorCompanyId),
     queryFn: async () => {
       const res = await apiFetch<{ dockets: Docket[] }>(`/api/dockets${projectQuery}`);
@@ -172,36 +181,50 @@ export function DocketsListScreen() {
 
   return (
     <ShellScreen variant="inner" title="My Dockets" parent={`/p${projectQuery}`} sub={sub}>
-      {/* Filter chips */}
-      <div
-        className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1"
-        role="group"
-        aria-label="Filter dockets by status"
-      >
-        {FILTERS.map((f) => {
-          const active = filter === f.key;
-          const showCount = f.key === 'needs_attention' && needsAttentionCount > 0;
-          return (
-            <button
-              key={f.key}
-              type="button"
-              onClick={() => setFilter(f.key)}
-              aria-pressed={active}
-              className={cn(
-                'min-h-[40px] whitespace-nowrap rounded-full px-3.5 py-2 text-[13px] font-semibold touch-manipulation',
-                active
-                  ? 'bg-foreground text-[hsl(40_33%_98%)]'
-                  : 'bg-secondary text-muted-foreground',
-              )}
-            >
-              {f.label}
-              {showCount ? ` (${needsAttentionCount})` : ''}
-            </button>
-          );
-        })}
-      </div>
+      {error ? (
+        <div
+          role="alert"
+          className="rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-[13px] font-semibold text-destructive"
+        >
+          <div className="flex items-start gap-2">
+            <AlertTriangle size={18} className="mt-px shrink-0" aria-hidden="true" />
+            <span>{extractErrorMessage(error, 'Failed to load dockets')}</span>
+          </div>
+        </div>
+      ) : null}
 
-      {visible.length === 0 ? (
+      {/* Filter chips */}
+      {!error && (
+        <div
+          className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1"
+          role="group"
+          aria-label="Filter dockets by status"
+        >
+          {FILTERS.map((f) => {
+            const active = filter === f.key;
+            const showCount = f.key === 'needs_attention' && needsAttentionCount > 0;
+            return (
+              <button
+                key={f.key}
+                type="button"
+                onClick={() => setFilter(f.key)}
+                aria-pressed={active}
+                className={cn(
+                  'min-h-[40px] whitespace-nowrap rounded-full px-3.5 py-2 text-[13px] font-semibold touch-manipulation',
+                  active
+                    ? 'bg-foreground text-[hsl(40_33%_98%)]'
+                    : 'bg-secondary text-muted-foreground',
+                )}
+              >
+                {f.label}
+                {showCount ? ` (${needsAttentionCount})` : ''}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {!error && visible.length === 0 ? (
         <div className="py-16 text-center text-[14px] leading-relaxed text-muted-foreground">
           {filter === 'all' ? (
             <>No dockets yet.</>
@@ -215,7 +238,7 @@ export function DocketsListScreen() {
             <>No {filter} dockets here.</>
           )}
         </div>
-      ) : (
+      ) : !error ? (
         monthGroups.map((group) => (
           <div key={group.label} className="flex flex-col gap-2">
             <div className="shell-sect">
@@ -258,7 +281,7 @@ export function DocketsListScreen() {
             })}
           </div>
         ))
-      )}
+      ) : null}
     </ShellScreen>
   );
 }

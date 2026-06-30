@@ -15,6 +15,7 @@ export const RETENTION_POLICIES = {
 
   // Session/auth data (short-lived)
   expiredSessions: 30,
+  revokedAuthTokens: 1,
   passwordResetTokens: 1,
   emailVerificationTokens: 7,
   usedHoldPointReleaseTokens: 30,
@@ -54,6 +55,7 @@ export interface RetentionApplyResult {
   processedSyncItems: number;
   documentSignedUrlTokens: number;
   holdPointReleaseTokens: number;
+  revokedAuthTokens: number;
   totalDeleted: number;
 }
 
@@ -64,6 +66,7 @@ type RetentionPrismaClient = Pick<
   | 'syncQueue'
   | 'documentSignedUrlToken'
   | 'holdPointReleaseToken'
+  | 'revokedAuthToken'
 >;
 
 /**
@@ -105,17 +108,23 @@ export async function applyRetentionPolicies(
     })
   ).count;
 
+  const revokedAuthTokens = (
+    await client.revokedAuthToken.deleteMany({ where: { expiresAt: { lt: now } } })
+  ).count;
+
   return {
     passwordResetTokens,
     emailVerificationTokens,
     processedSyncItems,
     documentSignedUrlTokens,
     holdPointReleaseTokens,
+    revokedAuthTokens,
     totalDeleted:
       passwordResetTokens +
       emailVerificationTokens +
       processedSyncItems +
       documentSignedUrlTokens +
-      holdPointReleaseTokens,
+      holdPointReleaseTokens +
+      revokedAuthTokens,
   };
 }

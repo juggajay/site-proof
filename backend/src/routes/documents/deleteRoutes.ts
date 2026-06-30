@@ -3,7 +3,7 @@ import { Router, Request, Response } from 'express';
 import type { PrismaClient } from '@prisma/client';
 
 import { AppError } from '../../lib/AppError.js';
-import { AuditAction, createAuditLog } from '../../lib/auditLog.js';
+import { AuditAction, writeAuditLogInTransaction } from '../../lib/auditLog.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { sanitizeUrlValueForLog } from '../../lib/logSanitization.js';
 import { logWarn } from '../../lib/serverLogger.js';
@@ -31,6 +31,19 @@ function getGenericDeleteBlockedMessage(documentType: string | null | undefined)
   }
 
   return GENERIC_DELETE_BLOCKED_DOCUMENT_MESSAGES[documentType] ?? null;
+}
+
+function getDocumentStorageKind(fileUrl: string): 'supabase' | 'external' | 'inline' | 'local' {
+  if (fileUrl.startsWith('supabase://')) {
+    return 'supabase';
+  }
+  if (/^https?:\/\//i.test(fileUrl)) {
+    return 'external';
+  }
+  if (fileUrl.startsWith('data:')) {
+    return 'inline';
+  }
+  return 'local';
 }
 
 type CreateDocumentDeleteRouterDependencies = {
@@ -100,19 +113,65 @@ export function createDocumentDeleteRouter({
         });
       }
 
-      // Audit log for document deletion
-      await createAuditLog({
-        projectId: document.projectId,
-        userId,
-        entityType: 'document',
-        entityId: documentId,
-        action: AuditAction.DOCUMENT_DELETED,
-        changes: { filename: document.filename, fileUrl: document.fileUrl },
-        req,
-      });
+      await prisma.$transaction(async (tx) => {
+        let previousVersionId: string | null = null;
+        if (document.isLatestVersion) {
+          const rootDocumentId = document.parentDocumentId || document.id;
+          const previousVersion = await tx.document.findFirst({
+            where: {
+              id: { not: document.id },
+              OR: [{ id: rootDocumentId }, { parentDocumentId: rootDocumentId }],
+            },
+            orderBy: [{ version: 'desc' }, { uploadedAt: 'desc' }],
+            select: { id: true },
+          });
+          previousVersionId = previousVersion?.id ?? null;
+        }
 
-      // Delete database record
-      await prisma.document.delete({ where: { id: documentId } });
+        if (!document.parentDocumentId) {
+          const remainingVersions = await tx.document.findMany({
+            where: { parentDocumentId: document.id },
+            orderBy: [{ version: 'asc' }, { uploadedAt: 'asc' }],
+            select: { id: true },
+          });
+          const replacementRoot = remainingVersions[0];
+          if (replacementRoot) {
+            await tx.document.update({
+              where: { id: replacementRoot.id },
+              data: { parentDocumentId: null },
+            });
+            await tx.document.updateMany({
+              where: {
+                parentDocumentId: document.id,
+                id: { not: replacementRoot.id },
+              },
+              data: { parentDocumentId: replacementRoot.id },
+            });
+          }
+        }
+
+        await writeAuditLogInTransaction(tx, {
+          projectId: document.projectId,
+          userId,
+          entityType: 'document',
+          entityId: documentId,
+          action: AuditAction.DOCUMENT_DELETED,
+          changes: {
+            filename: document.filename,
+            storageKind: getDocumentStorageKind(document.fileUrl),
+          },
+          req,
+        });
+
+        await tx.document.delete({ where: { id: documentId } });
+
+        if (previousVersionId) {
+          await tx.document.update({
+            where: { id: previousVersionId },
+            data: { isLatestVersion: true },
+          });
+        }
+      });
 
       try {
         if (

@@ -7,6 +7,7 @@ import { apiFetch } from '@/lib/api';
 import { Settings, Users, ClipboardList, Bell, MapPin, Puzzle } from 'lucide-react';
 import type {
   EnabledModules,
+  HpApprovalRequirement,
   HpRecipient,
   Project,
   ProjectNotificationPreferences,
@@ -21,6 +22,12 @@ import {
 import { logError } from '@/lib/logger';
 import { Button } from '@/components/ui/button';
 import { extractErrorMessage } from '@/lib/errorHandling';
+import {
+  PROJECT_ADMIN_ROLES,
+  canGrantProjectAdminRole,
+  canManageProjectForRole,
+  isArchivedProject,
+} from './projectPageAccess';
 
 // Lazy-loaded tab components
 const GeneralSettingsTab = lazy(() =>
@@ -111,13 +118,15 @@ function toWitnessPointNotificationsPatch(
 
 type ProjectSettingsState = {
   hpRecipients: HpRecipient[];
-  hpApprovalRequirement: 'any' | 'superintendent';
+  hpApprovalRequirement: HpApprovalRequirement;
   requireSubcontractorVerification: boolean;
   enabledModules: EnabledModules;
   notificationPreferences: ProjectNotificationPreferences;
   witnessPointNotifications: WitnessPointNotificationSettings;
   hpMinimumNoticeDays: number;
 };
+
+type ProjectSettingsPatch = Record<string, unknown>;
 
 function getProjectSettingsState(project: Project | null): ProjectSettingsState {
   const state: ProjectSettingsState = {
@@ -140,6 +149,7 @@ function getProjectSettingsState(project: Project | null): ProjectSettingsState 
   }
   if (
     settings.hpApprovalRequirement === 'any' ||
+    settings.hpApprovalRequirement === 'none' ||
     settings.hpApprovalRequirement === 'superintendent'
   ) {
     state.hpApprovalRequirement = settings.hpApprovalRequirement;
@@ -188,8 +198,6 @@ const TABS = [
   { id: 'modules' as SettingsTab, label: 'Modules', icon: Puzzle },
 ];
 
-const PROJECT_SETTINGS_ROLES = ['owner', 'admin', 'project_manager'];
-
 function isSettingsTab(value: string | null): value is SettingsTab {
   return TABS.some((tab) => tab.id === value);
 }
@@ -212,9 +220,7 @@ export function ProjectSettingsPage() {
 
   // Settings parsed from project data for child components
   const [hpRecipients, setHpRecipients] = useState<HpRecipient[]>([]);
-  const [hpApprovalRequirement, setHpApprovalRequirement] = useState<'any' | 'superintendent'>(
-    'any',
-  );
+  const [hpApprovalRequirement, setHpApprovalRequirement] = useState<HpApprovalRequirement>('any');
   const [requireSubcontractorVerification, setRequireSubcontractorVerification] = useState(false);
   const [enabledModules, setEnabledModules] = useState<EnabledModules>({
     ...DEFAULT_ENABLED_MODULES,
@@ -231,9 +237,13 @@ export function ProjectSettingsPage() {
 
   const userRole = user?.roleInCompany || user?.role || '';
   const projectScopedRole = project?.currentUserRole ?? getProjectScopedRole(user);
-  const canManageCurrentProjectSettings = PROJECT_SETTINGS_ROLES.includes(projectScopedRole);
-  const canViewContractValue = PROJECT_SETTINGS_ROLES.includes(projectScopedRole);
+  const canManageCurrentProjectSettings = canManageProjectForRole(projectScopedRole);
+  const canViewContractValue = PROJECT_ADMIN_ROLES.includes(
+    projectScopedRole as (typeof PROJECT_ADMIN_ROLES)[number],
+  );
+  const canGrantProjectAdmin = canGrantProjectAdminRole(userRole, projectScopedRole);
   const canDeleteProject = canDeleteProjects(userRole);
+  const readOnly = isArchivedProject(project);
   const tabParam = searchParams.get('tab');
   const activeTab: SettingsTab = isSettingsTab(tabParam) ? tabParam : 'general';
 
@@ -241,9 +251,7 @@ export function ProjectSettingsPage() {
     setSearchParams({ tab });
   };
 
-  const applyProjectState = useCallback((nextProject: Project | null) => {
-    const nextSettings = getProjectSettingsState(nextProject);
-    setProject(nextProject);
+  const applySettingsState = useCallback((nextSettings: ProjectSettingsState) => {
     setHpRecipients(nextSettings.hpRecipients);
     setHpApprovalRequirement(nextSettings.hpApprovalRequirement);
     setRequireSubcontractorVerification(nextSettings.requireSubcontractorVerification);
@@ -252,6 +260,32 @@ export function ProjectSettingsPage() {
     setWitnessPointNotifications(nextSettings.witnessPointNotifications);
     setHpMinimumNoticeDays(nextSettings.hpMinimumNoticeDays);
   }, []);
+
+  const applyProjectState = useCallback(
+    (nextProject: Project | null) => {
+      setProject(nextProject);
+      applySettingsState(getProjectSettingsState(nextProject));
+    },
+    [applySettingsState],
+  );
+
+  const applyProjectSettingsPatch = useCallback(
+    (settingsPatch: ProjectSettingsPatch) => {
+      setProject((currentProject) => {
+        if (!currentProject) return currentProject;
+
+        const currentSettings = parseProjectSettings(currentProject.settings) ?? {};
+        const nextProject = {
+          ...currentProject,
+          settings: { ...currentSettings, ...settingsPatch },
+        };
+        applySettingsState(getProjectSettingsState(nextProject));
+
+        return nextProject;
+      });
+    },
+    [applySettingsState],
+  );
 
   // Fetch project data
   const fetchProject = useCallback(async () => {
@@ -331,8 +365,8 @@ export function ProjectSettingsPage() {
       )}
 
       {/* Tab Navigation */}
-      <div className="border-b mb-6">
-        <nav className="flex gap-4" aria-label="Settings sections" role="tablist">
+      <div className="border-b mb-6 overflow-x-auto">
+        <nav className="flex min-w-max gap-4" aria-label="Settings sections" role="tablist">
           {TABS.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -341,7 +375,7 @@ export function ProjectSettingsPage() {
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                className={`flex items-center gap-2 whitespace-nowrap px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
                   isActive
                     ? 'border-primary text-primary'
                     : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/50'
@@ -367,6 +401,7 @@ export function ProjectSettingsPage() {
                   projectId={projectId}
                   project={project}
                   canViewContractValue={!!canViewContractValue}
+                  readOnly={readOnly}
                   onProjectUpdate={handleProjectUpdate}
                 />
                 <DangerZone
@@ -378,12 +413,20 @@ export function ProjectSettingsPage() {
               </>
             )}
 
-            {activeTab === 'team' && projectId && <TeamTab projectId={projectId} />}
+            {activeTab === 'team' && projectId && (
+              <TeamTab
+                projectId={projectId}
+                readOnly={readOnly}
+                canGrantProjectAdmin={canGrantProjectAdmin}
+              />
+            )}
 
-            {activeTab === 'areas' && projectId && <AreasTab projectId={projectId} />}
+            {activeTab === 'areas' && projectId && (
+              <AreasTab projectId={projectId} readOnly={readOnly} />
+            )}
 
             {activeTab === 'itp-templates' && projectId && (
-              <ITPTemplatesTab projectId={projectId} />
+              <ITPTemplatesTab projectId={projectId} readOnly={readOnly} />
             )}
 
             {activeTab === 'notifications' && projectId && (
@@ -395,11 +438,18 @@ export function ProjectSettingsPage() {
                 initialNotificationPreferences={notificationPreferences}
                 initialWitnessPointNotifications={witnessPointNotifications}
                 initialHpMinimumNoticeDays={hpMinimumNoticeDays}
+                readOnly={readOnly}
+                onSettingsSaved={applyProjectSettingsPatch}
               />
             )}
 
             {activeTab === 'modules' && projectId && (
-              <ModulesTab projectId={projectId} initialEnabledModules={enabledModules} />
+              <ModulesTab
+                projectId={projectId}
+                initialEnabledModules={enabledModules}
+                readOnly={readOnly}
+                onSettingsSaved={applyProjectSettingsPatch}
+              />
             )}
           </Suspense>
         )}

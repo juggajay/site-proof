@@ -27,7 +27,7 @@ import {
 import { isRecord, readLocalStorageItem } from './storagePreferences';
 
 // Simple user type for local development
-interface User {
+export interface User {
   id: string;
   email: string;
   fullName?: string;
@@ -112,8 +112,8 @@ interface AuthContextType {
   signUp: (email: string, password: string, metadata?: object) => Promise<User | null>;
   signOut: (options?: SignOutOptions) => Promise<void>;
   handleSessionExpired: () => void;
-  refreshUser: () => Promise<void>;
-  setToken: (token: string) => Promise<User>; // Feature #414: OAuth callback support
+  refreshUser: () => Promise<User | null>;
+  setToken: (token: string, trustedUser?: User) => Promise<User>; // Feature #414: OAuth callback support
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -464,9 +464,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener(AUTH_SESSION_EXPIRED_EVENT, handleSessionExpired);
   }, [handleSessionExpired]);
 
-  const refreshUser = async () => {
+  const refreshUser = async (): Promise<User | null> => {
     const storedAuth = readStoredAuth();
-    if (!storedAuth) return;
+    if (!storedAuth) return null;
 
     try {
       const result = await fetchCurrentUser(storedAuth.auth.token);
@@ -478,20 +478,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           user: result.user,
         });
         setActualUser(result.user);
+        return result.user;
       } else if (result.status === 'unauthorized' || result.status === 'invalid') {
         clearClientAuthState();
         setActualUser(null);
         setSessionExpired(true);
+        return null;
       }
     } catch (e) {
       logError('Failed to refresh user:', e);
     }
+
+    return null;
   };
 
-  // Feature #414: Set token from OAuth callback
-  const setToken = async (token: string): Promise<User> => {
+  // Feature #414: Set token from OAuth/magic-link callbacks.
+  const setToken = async (token: string, _trustedUser?: User): Promise<User> => {
     try {
-      // Verify the token and get user info
       const result = await fetchCurrentUser(token);
 
       if (result.status === 'ok') {

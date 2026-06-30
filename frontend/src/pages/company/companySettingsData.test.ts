@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { ApiError } from '@/lib/api';
 import {
   buildCompanyPath,
+  canCompanyActorManageMember,
   formatLimit,
   getCompanyLoadErrorMessage,
+  getCompanyMemberRoleOptionsForActor,
   getPlanBillingLabel,
   getPlanStorageLabel,
   hasFiniteLimit,
@@ -152,6 +154,48 @@ describe('company settings data helpers', () => {
       expect(isOwnershipTransferEligibleMember({ hasPassword: false })).toBe(false);
       expect(isOwnershipTransferEligibleMember({ hasPassword: true })).toBe(true);
       expect(isOwnershipTransferEligibleMember({})).toBe(true);
+    });
+  });
+
+  describe('company member role management helpers', () => {
+    it('allows owners to grant admin but filters admin from non-owner admin choices', () => {
+      expect(getCompanyMemberRoleOptionsForActor('owner').map((option) => option.value)).toContain(
+        'admin',
+      );
+      expect(
+        getCompanyMemberRoleOptionsForActor('admin').map((option) => option.value),
+      ).not.toContain('admin');
+    });
+
+    it('mirrors the backend owner/admin rank rule for member actions', () => {
+      expect(
+        canCompanyActorManageMember({
+          actorRole: 'owner',
+          targetRole: 'admin',
+          isCurrentUser: false,
+        }),
+      ).toBe(true);
+      expect(
+        canCompanyActorManageMember({
+          actorRole: 'admin',
+          targetRole: 'admin',
+          isCurrentUser: false,
+        }),
+      ).toBe(false);
+      expect(
+        canCompanyActorManageMember({
+          actorRole: 'admin',
+          targetRole: 'foreman',
+          isCurrentUser: false,
+        }),
+      ).toBe(true);
+      expect(
+        canCompanyActorManageMember({
+          actorRole: 'owner',
+          targetRole: 'site_engineer',
+          isCurrentUser: true,
+        }),
+      ).toBe(false);
     });
   });
 });

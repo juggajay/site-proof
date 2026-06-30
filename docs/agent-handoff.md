@@ -603,6 +603,86 @@ Open low-risk polish candidates:
 - Re-run live dogfood after each activation batch using sacrificial data and
   compare against the latest merged PRs, not historical report text.
 
+### QA Loop Stage 86: Documents, Drawings, And ITP Evidence
+
+Status: in PR from `qa/stage86-documents-drawings`.
+
+- Documents/drawings browser E2E and focused unit coverage passed for document
+  listing, signed thumbnail refresh, download/open fallback, drawing role
+  controls, and subcontractor document access.
+- Fixed image document thumbnails that could stay hidden after a signed preview
+  URL arrived or refreshed.
+- Aligned general document upload UI with backend-supported email evidence
+  files (`.eml`, `.msg`).
+- Changed read-only drawing register copy so viewers are not told to upload or
+  manage drawings.
+- Tightened ITP completion attachment intake: local `/uploads/documents/...`
+  locators must now be attached by `documentId`, where project/lot/read-access
+  checks already run; project-scoped Supabase document references remain
+  supported for pre-uploaded files.
+- Local DB-backed ITP route tests require a disposable test `DATABASE_URL`;
+  this worktree did not have one, so the ITP regression is expected to be
+  proven by CI.
+
+### QA Loop Stage 87: Dashboard, Home, And Analytics
+
+Status: merged via PR #1245.
+
+- Fixed portfolio dashboard access control: portfolio NCRs and project-risk
+  summaries now use the same commercial-role gate and role-filtered project set
+  as portfolio cash flow.
+- Added route regressions for active project viewers on portfolio NCR/risk
+  endpoints. Local DB-backed execution still requires a disposable
+  `DATABASE_URL`; CI is expected to prove those tests.
+- Replaced inert default-dashboard quick actions (`/projects?action=...`) with
+  working project-scoped Create Lot and Add Test links. Quick actions now stay
+  hidden until a real project target exists.
+- Made role-dashboard project selection user-scoped in local storage and synced
+  stale requested IDs to the backend-resolved project for PM, QM, and desktop
+  foreman dashboards.
+- Stopped the classic and mobile subcontractor dashboards from flashing a false
+  "No lots assigned yet" docket blocker before the assigned-lots query returns;
+  true empty responses still show the blocker.
+- Focused unit/type/lint and dashboard browser E2E passed locally. The dashboard
+  E2E needed a dedicated Vite server pinned to port 5174 because Playwright's
+  default reusable server path hit a transient connection-refused failure.
+
+### QA Loop Stage 88: Auth, Onboarding, And First-Run Sessions
+
+Status: in progress from `qa/stage88-auth-onboarding`.
+
+- Fixed `/register` so already-authenticated users are redirected to their
+  normal app destination, and the registration form stays hidden while the
+  current session is still loading.
+- Hardened company onboarding after first-company creation: the page now stays
+  on setup with a clear error if the company is created but the refreshed user
+  state still lacks a company, instead of silently navigating into an onboarding
+  loop.
+- Added reset-link retry behavior after transient validation failures. The
+  one-time token remains scrubbed from the URL, but the component keeps it in
+  memory so the user can retry without requesting a new link immediately.
+- Preserved expired-session state through `RoleProtectedRoute` redirects so
+  `/m/*`, `/p/*`, and role-gated desktop pages show the same login-session
+  message as standard protected routes.
+- Blocked pending company-invite users from using magic-link login before
+  account setup is completed. Magic-link request stays enumeration-safe;
+  verification rejects the pending setup token before issuing a JWT.
+- Required Terms acceptance when a pending company invite sets its first
+  password, recorded `tosAcceptedAt`/`tosVersion`, and exposed
+  `requiresTosAcceptance` from reset-token validation so the frontend can show
+  the checkbox only for invite setup.
+- Split authentication verification failures from invalid tokens. Invalid or
+  expired JWTs remain 401; database/read-model failures during token
+  verification now surface as 500s for monitoring instead of looking like mass
+  sign-outs.
+- Widened the strict auth-attempt limiter exemption for routine authenticated
+  auth endpoints (`/me`, logout, onboarding completion, profile/avatar), while
+  keeping login and credential-generation routes on the strict limiter.
+- Local verification passed for focused frontend/backend unit tests, frontend
+  and backend type-check, touched-file ESLint, and auth/onboarding browser E2E
+  (`26 passed`). DB-backed `auth.test.ts` regressions could not run locally
+  because this shell has no disposable `DATABASE_URL`; CI must prove those.
+
 ## Open Follow-Ups
 
 1. Re-run live sacrificial-data dogfood before the first paying customer and

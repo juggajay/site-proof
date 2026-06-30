@@ -7,8 +7,7 @@ function getNormalizedSupabaseUrl(): string {
 }
 
 const supabaseUrl = process.env.SUPABASE_URL?.trim() || '';
-const supabaseServiceKey =
-  process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || process.env.SUPABASE_ANON_KEY?.trim() || '';
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || '';
 const hasSupabaseCredentials = Boolean(
   supabaseUrl && supabaseServiceKey && supabaseUrl !== 'http://localhost:54321',
 );
@@ -16,7 +15,9 @@ const normalizedSupabaseUrl = getNormalizedSupabaseUrl();
 const UNSAFE_STORAGE_PATH_SEGMENT_PATTERN = /(?:^|\/)(?:\.|%2e)(?:\.|%2e)?(?:\/|$)/i;
 
 if (!hasSupabaseCredentials) {
-  logWarn('Supabase credentials not configured. File storage will use local filesystem.');
+  logWarn(
+    'Supabase service-role storage credentials not configured. File storage will use local filesystem.',
+  );
 }
 
 export const supabase = hasSupabaseCredentials

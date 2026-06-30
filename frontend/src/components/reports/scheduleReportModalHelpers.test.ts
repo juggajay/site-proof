@@ -9,6 +9,8 @@ import {
   getFrequencyLabel,
   getRecipientValidationError,
   getScheduleFailureMessage,
+  getScheduleLatestRunClassName,
+  getScheduleLatestRunMessage,
   getScheduleStatusClassName,
   getScheduleStatusLabel,
   normalizeRecipientList,
@@ -166,6 +168,64 @@ describe('schedule report modal helpers', () => {
     );
   });
 
+  it('summarizes the latest scheduled report delivery run', () => {
+    const baseSchedule: ScheduledReport = {
+      id: 'schedule-1',
+      reportType: 'lot-status',
+      frequency: 'daily',
+      dayOfWeek: null,
+      dayOfMonth: null,
+      timeOfDay: '09:00',
+      recipients: 'owner@example.com,qa@example.com',
+      isActive: true,
+      nextRunAt: '2026-06-06T12:00:00.000Z',
+      lastSentAt: null,
+    };
+
+    expect(getScheduleLatestRunMessage(baseSchedule)).toBeNull();
+
+    expect(
+      getScheduleLatestRunMessage({
+        ...baseSchedule,
+        latestRun: {
+          id: 'run-1',
+          status: 'sent',
+          recipientCount: 3,
+          sentCount: 2,
+          failedCount: 0,
+          digestCount: 1,
+          suppressedCount: 1,
+          generatedAt: '2026-06-06T12:00:00.000Z',
+          completedAt: '2026-06-06T12:01:00.000Z',
+        },
+      }),
+    ).toBe(
+      'Latest run sent to 2 recipients, 1 queued for digest, 1 suppressed by preferences/access.',
+    );
+
+    const partialFailure = {
+      ...baseSchedule,
+      latestRun: {
+        id: 'run-2',
+        status: 'partial_failed',
+        recipientCount: 2,
+        sentCount: 1,
+        failedCount: 1,
+        digestCount: 0,
+        suppressedCount: 0,
+        errorReason: 'Provider rejected recipient',
+        generatedAt: '2026-06-06T12:00:00.000Z',
+        completedAt: '2026-06-06T12:01:00.000Z',
+        retryableFailedCount: 1,
+        nextRetryAt: '2026-06-06T12:16:00.000Z',
+      },
+    };
+    expect(getScheduleLatestRunMessage(partialFailure)).toBe(
+      'Latest run sent to 1 of 2 recipients; 1 failed. Error: Provider rejected recipient',
+    );
+    expect(getScheduleLatestRunClassName(partialFailure)).toContain('text-warning');
+  });
+
   it('formats next-run dates without scheduling null values', () => {
     expect(formatNextRun(null)).toBe('Not scheduled');
 
@@ -173,5 +233,24 @@ describe('schedule report modal helpers', () => {
     expect(nextRun).toContain('Sat');
     expect(nextRun).toContain('6 Jun');
     expect(nextRun).toMatch(/\d{1,2}:\d{2}/);
+  });
+
+  it('formats next-run dates in the project timezone when supplied', () => {
+    const nextRun = formatNextRun('2026-06-15T01:00:00.000Z', 'Australia/Perth');
+
+    expect(nextRun).toContain('Mon');
+    expect(nextRun).toContain('15');
+    expect(nextRun).toContain('09:00');
+  });
+
+  it('falls back safely when the project timezone is invalid', () => {
+    const nextRun = formatNextRun('2026-06-15T01:00:00.000Z', 'Not/AZone');
+
+    expect(nextRun).toContain('Mon');
+    expect(nextRun).toContain('15');
+  });
+
+  it('does not try to format invalid next-run dates', () => {
+    expect(formatNextRun('not-a-date', 'Australia/Perth')).toBe('Not scheduled');
   });
 });

@@ -237,7 +237,7 @@ describe('useMfaSettings', () => {
 
     act(() => {
       result.current.openDisableMfa();
-      result.current.setDisableMfaPassword('CorrectHorse123!');
+      result.current.setDisableMfaCredential('CorrectHorse123!');
     });
     expect(result.current.showDisableMfa).toBe(true);
 
@@ -254,11 +254,36 @@ describe('useMfaSettings', () => {
     });
     expect(result.current.mfaEnabled).toBe(false);
     expect(result.current.showDisableMfa).toBe(false);
-    expect(result.current.disableMfaPassword).toBe('');
+    expect(result.current.disableMfaCredential).toBe('');
     expect(result.current.mfaMessage).toEqual({
       type: 'success',
       text: 'Two-factor authentication disabled',
     });
+  });
+
+  it('disables MFA with an authenticator code for passwordless accounts', async () => {
+    mockMfaApi({
+      '/api/mfa/status': () => Promise.resolve({ mfaEnabled: true }),
+    });
+    const { result } = await renderLoadedHook();
+
+    act(() => {
+      result.current.openDisableMfa();
+      result.current.setDisableMfaCredential('654321');
+    });
+
+    mockMfaApi({
+      '/api/mfa/disable': () => Promise.resolve({}),
+    });
+    await act(async () => {
+      await result.current.handleMfaDisable();
+    });
+
+    expect(apiFetchMock).toHaveBeenCalledWith('/api/mfa/disable', {
+      method: 'POST',
+      body: JSON.stringify({ code: '654321' }),
+    });
+    expect(result.current.mfaEnabled).toBe(false);
   });
 
   it('refuses to close the setup dialog while a request is in flight', async () => {

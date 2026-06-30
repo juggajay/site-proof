@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { buildProjectEntityLink, getSubcontractorAlertPortalTarget } from './links.js';
+import {
+  buildProjectEntityLink,
+  buildSubcontractorPortalEntityLink,
+  getSubcontractorAlertPortalTarget,
+} from './links.js';
 
 /**
  * Characterizes the pure notification link / portal-target helpers extracted
@@ -141,6 +145,47 @@ describe('buildProjectEntityLink', () => {
     );
     expect(buildProjectEntityLink('mystery', 'x', 'p1', { source: 'digest' })).toBe(
       '/projects/p1?source=digest',
+    );
+  });
+});
+
+describe('buildSubcontractorPortalEntityLink', () => {
+  it('returns the subcontractor portal home when projectId is missing', () => {
+    expect(buildSubcontractorPortalEntityLink('lot', 'lot-1')).toBe('/subcontractor-portal');
+  });
+
+  it('links subcontractor-visible entity types to portal routes with project scope', () => {
+    expect(buildSubcontractorPortalEntityLink('lot', 'lot-1', 'p1')).toBe(
+      '/subcontractor-portal/work?lot=lot-1&projectId=p1',
+    );
+    expect(buildSubcontractorPortalEntityLink('ncr', 'n1', 'p1')).toBe(
+      '/subcontractor-portal/ncrs?ncr=n1&projectId=p1',
+    );
+    expect(buildSubcontractorPortalEntityLink('test_result', 't1', 'p1')).toBe(
+      '/subcontractor-portal/tests?test=t1&projectId=p1',
+    );
+    expect(buildSubcontractorPortalEntityLink('hold_point', 'h1', 'p1')).toBe(
+      '/subcontractor-portal/holdpoints?holdPoint=h1&projectId=p1',
+    );
+    expect(buildSubcontractorPortalEntityLink('document', 'd1', 'p1')).toBe(
+      '/subcontractor-portal/documents?document=d1&projectId=p1',
+    );
+    expect(buildSubcontractorPortalEntityLink('itp_completion', 'i1', 'p1')).toBe(
+      '/subcontractor-portal/itps?itp=i1&projectId=p1',
+    );
+  });
+
+  it('links docket alerts directly to the subcontractor docket detail route', () => {
+    expect(
+      buildSubcontractorPortalEntityLink('daily_docket', 'docket/1', 'p1', {
+        subcontractorCompanyId: 'subbie-1',
+      }),
+    ).toBe('/subcontractor-portal/docket/docket%2F1?projectId=p1&subcontractorCompanyId=subbie-1');
+  });
+
+  it('falls back to the portal home for unknown entity types while preserving project scope', () => {
+    expect(buildSubcontractorPortalEntityLink('mystery', 'x', 'p1')).toBe(
+      '/subcontractor-portal?projectId=p1',
     );
   });
 });

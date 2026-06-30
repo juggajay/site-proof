@@ -28,6 +28,11 @@ async function mockOnboardingApi(page: Page) {
       return;
     }
 
+    if (url.pathname === '/api/notifications/unread-count') {
+      await json({ count: 0 });
+      return;
+    }
+
     if (url.pathname === '/api/notifications') {
       await json({ notifications: [], unreadCount: 0 });
       return;

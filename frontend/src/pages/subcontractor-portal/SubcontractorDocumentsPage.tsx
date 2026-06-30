@@ -32,6 +32,8 @@ interface SubcontractorCompany {
   portalAccess?: PortalAccess;
 }
 
+const SUBCONTRACTOR_DOCUMENTS_PAGE_LIMIT = 100;
+
 function formatFileSize(bytes?: number): string {
   if (!bytes) return '';
   if (bytes < 1024) return `${bytes} B`;
@@ -96,7 +98,9 @@ export function SubcontractorDocumentsPage() {
       const res = await apiFetch<{ documents: Document[] }>(
         `/api/documents/${encodeURIComponent(
           company!.projectId,
-        )}?subcontractorView=true&subcontractorCompanyId=${encodeURIComponent(company!.id)}`,
+        )}?subcontractorView=true&subcontractorCompanyId=${encodeURIComponent(
+          company!.id,
+        )}&limit=${SUBCONTRACTOR_DOCUMENTS_PAGE_LIMIT}`,
       );
       return res.documents || [];
     },
@@ -256,6 +260,7 @@ function DocumentCard({ document }: { document: Document }) {
             onClick={() => void handleOpenDocument()}
             className="p-2 rounded-lg hover:bg-muted transition-colors"
             title="View document"
+            aria-label={`Open ${document.filename}`}
           >
             <ExternalLink className="h-4 w-4 text-muted-foreground" />
           </button>

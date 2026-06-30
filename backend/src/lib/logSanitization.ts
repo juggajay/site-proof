@@ -37,8 +37,17 @@ function containsSensitiveLogText(value: string): boolean {
 
 export function sanitizeLogText(value: string): string {
   return value
+    .replace(
+      /(["'])(token|access_token|refresh_token|id_token|secret|password|api[-_]?key|code|state|credential|signature)\1\s*:\s*(["'])(.*?)\3/gi,
+      (_match, quote, key, valueQuote) =>
+        `${quote}${key}${quote}:${valueQuote}${REDACTED_LOG_VALUE}${valueQuote}`,
+    )
+    .replace(
+      /\b(authorization)\s*[:=]\s*(?:(?:Bearer|ApiKey)\s+)?[^,\s;]+/gi,
+      `$1=${REDACTED_LOG_VALUE}`,
+    )
     .replace(/\b(Bearer|ApiKey)\s+[A-Za-z0-9._~+/=-]+/gi, `$1 ${REDACTED_LOG_VALUE}`)
-    .replace(/\b(authorization|cookie|set-cookie)\s*[:=]\s*[^,\s;]+/gi, `$1=${REDACTED_LOG_VALUE}`)
+    .replace(/\b(cookie|set-cookie)\s*[:=]\s*[^,\s;]+/gi, `$1=${REDACTED_LOG_VALUE}`)
     .replace(
       /\b(token|access_token|refresh_token|id_token|secret|password|api[-_]?key|code|state|credential|signature)=([^&\s]+)/gi,
       (_match, key) => `${key}=${REDACTED_LOG_VALUE}`,

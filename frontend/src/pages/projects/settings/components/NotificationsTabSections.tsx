@@ -27,6 +27,7 @@ interface HoldPointRecipientsSectionProps {
   hpRecipients: HpRecipient[];
   savingRecipients: boolean;
   savingSetting: string | null;
+  readOnly?: boolean;
   onAddRecipient: () => void;
   onRemoveRecipient: (index: number) => void;
 }
@@ -35,6 +36,7 @@ export function HoldPointRecipientsSection({
   hpRecipients,
   savingRecipients,
   savingSetting,
+  readOnly = false,
   onAddRecipient,
   onRemoveRecipient,
 }: HoldPointRecipientsSectionProps) {
@@ -64,9 +66,11 @@ export function HoldPointRecipientsSection({
                 size="sm"
                 className="text-destructive hover:text-destructive/80 text-xs h-auto p-1"
                 onClick={() => onRemoveRecipient(index)}
-                disabled={savingSetting === `removeRecipient-${index}`}
+                disabled={readOnly || savingRecipients || savingSetting !== null}
               >
-                Remove {recipient.role}
+                {savingSetting === `removeRecipient-${index}`
+                  ? `Removing ${recipient.role}...`
+                  : `Remove ${recipient.role}`}
               </Button>
             </div>
           ))
@@ -77,7 +81,7 @@ export function HoldPointRecipientsSection({
         variant="outline"
         onClick={onAddRecipient}
         className="mt-4"
-        disabled={savingRecipients}
+        disabled={readOnly || savingRecipients}
       >
         Add Recipient
       </Button>
@@ -88,12 +92,14 @@ export function HoldPointRecipientsSection({
 interface SubcontractorVerificationSectionProps {
   requireSubcontractorVerification: boolean;
   savingSetting: string | null;
+  readOnly?: boolean;
   onToggle: () => void;
 }
 
 export function SubcontractorVerificationSection({
   requireSubcontractorVerification,
   savingSetting,
+  readOnly = false,
   onToggle,
 }: SubcontractorVerificationSectionProps) {
   return (
@@ -120,7 +126,7 @@ export function SubcontractorVerificationSection({
             type="checkbox"
             checked={requireSubcontractorVerification}
             onChange={onToggle}
-            disabled={savingSetting !== null}
+            disabled={readOnly || savingSetting !== null}
             className="h-5 w-5 cursor-pointer accent-primary"
           />
         </label>

@@ -20,9 +20,10 @@ vi.mock('@/lib/api', async (importOriginal) => {
   return { ...actual, apiFetch: apiFetchMock };
 });
 
-vi.mock('@/lib/csv', () => ({
-  downloadCsv: downloadCsvMock,
-}));
+vi.mock('@/lib/csv', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/csv')>();
+  return { ...actual, downloadCsv: downloadCsvMock };
+});
 
 vi.mock('@/lib/documentAccess', () => ({
   openDocumentAccessUrl: openDocumentAccessUrlMock,
@@ -117,6 +118,7 @@ describe('ClaimsTable empty state', () => {
         generatingEvidence={null}
         onCreateClaim={onCreateClaim}
         onSubmitClaim={vi.fn()}
+        onDeleteDraftClaim={vi.fn()}
         onDisputeClaim={vi.fn()}
         onCertifyClaim={vi.fn()}
         onRecordPayment={vi.fn()}
@@ -131,6 +133,44 @@ describe('ClaimsTable empty state', () => {
 
     await user.click(screen.getByRole('button', { name: 'Create Claim' }));
     expect(onCreateClaim).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('ClaimsTable draft delete action', () => {
+  it('shows a delete action for drafts only', async () => {
+    const onDeleteDraftClaim = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <ClaimsTable
+        claims={[
+          SEEDED_CLAIM,
+          {
+            ...SEEDED_CLAIM,
+            id: 'claim-2',
+            claimNumber: 8,
+            status: 'submitted',
+            submittedAt: '2026-06-01T00:00:00.000Z',
+          },
+        ]}
+        loadingCompleteness={false}
+        showCompletenessModal={null}
+        generatingEvidence={null}
+        onCreateClaim={vi.fn()}
+        onSubmitClaim={vi.fn()}
+        onDeleteDraftClaim={onDeleteDraftClaim}
+        onDisputeClaim={vi.fn()}
+        onCertifyClaim={vi.fn()}
+        onRecordPayment={vi.fn()}
+        onCompletenessCheck={vi.fn()}
+        onEvidencePackage={vi.fn()}
+      />,
+    );
+
+    expect(screen.getAllByRole('button', { name: 'Delete Draft Claim' })).toHaveLength(1);
+    await user.click(screen.getByRole('button', { name: 'Delete Draft Claim' }));
+
+    expect(onDeleteDraftClaim).toHaveBeenCalledWith('claim-1');
   });
 });
 
@@ -196,6 +236,7 @@ describe('ClaimsTable payment schedule wording', () => {
         generatingEvidence={null}
         onCreateClaim={vi.fn()}
         onSubmitClaim={vi.fn()}
+        onDeleteDraftClaim={vi.fn()}
         onDisputeClaim={vi.fn()}
         onCertifyClaim={vi.fn()}
         onRecordPayment={vi.fn()}
@@ -208,6 +249,36 @@ describe('ClaimsTable payment schedule wording', () => {
       screen.getByRole('columnheader', { name: 'Indicative Payment Schedule Due' }),
     ).toBeInTheDocument();
     expect(screen.queryByRole('columnheader', { name: 'Indicative Certification Due' })).toBeNull();
+  });
+
+  it('allows a partially paid claim to be disputed as well as paid further', () => {
+    render(
+      <ClaimsTable
+        claims={[
+          {
+            ...SEEDED_CLAIM,
+            status: 'partially_paid',
+            certifiedAmount: 1000,
+            paidAmount: 400,
+            submittedAt: '2026-06-01T00:00:00.000Z',
+          },
+        ]}
+        loadingCompleteness={false}
+        showCompletenessModal={null}
+        generatingEvidence={null}
+        onCreateClaim={vi.fn()}
+        onSubmitClaim={vi.fn()}
+        onDeleteDraftClaim={vi.fn()}
+        onDisputeClaim={vi.fn()}
+        onCertifyClaim={vi.fn()}
+        onRecordPayment={vi.fn()}
+        onCompletenessCheck={vi.fn()}
+        onEvidencePackage={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Mark as Disputed' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Record Payment' })).toBeInTheDocument();
   });
 });
 
@@ -238,6 +309,7 @@ describe('ClaimsTable row CSV export', () => {
         generatingEvidence={null}
         onCreateClaim={vi.fn()}
         onSubmitClaim={vi.fn()}
+        onDeleteDraftClaim={vi.fn()}
         onDisputeClaim={vi.fn()}
         onCertifyClaim={vi.fn()}
         onRecordPayment={vi.fn()}
@@ -360,6 +432,46 @@ describe('ClaimsPage TanStack Query register', () => {
     );
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.claimReadiness('p1') });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.lots('p1') });
+  });
+
+  it('deletes a draft claim and releases related register caches', async () => {
+    const queryClient = createTestQueryClient();
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
+    let claimsResponse: Claim[] = [SEEDED_CLAIM];
+    apiFetchMock.mockImplementation((path: string, options?: RequestInit) => {
+      if (path === '/api/projects/p1/claims/claim-1' && options?.method === 'DELETE') {
+        claimsResponse = [];
+        return Promise.resolve({ message: 'Draft claim deleted' });
+      }
+      if (path === '/api/projects/p1/claims') {
+        return Promise.resolve({ claims: claimsResponse });
+      }
+      return Promise.reject(new Error(`Unexpected apiFetch path: ${path}`));
+    });
+
+    renderClaimsPage(queryClient);
+    expect(await screen.findByText('Claim 7')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Draft Claim' }));
+    const modal = await screen.findByRole('dialog');
+    fireEvent.click(within(modal).getByRole('button', { name: 'Delete draft' }));
+
+    await waitFor(() =>
+      expect(apiFetchMock).toHaveBeenCalledWith('/api/projects/p1/claims/claim-1', {
+        method: 'DELETE',
+      }),
+    );
+    expect(await screen.findByRole('heading', { name: 'No claims yet' })).toBeInTheDocument();
+    expect(queryClient.getQueryData<Claim[]>(queryKeys.claims('p1'))).toEqual([]);
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.claims('p1') });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.claimReadiness('p1') });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: queryKeys.lots('p1') });
+    expect(toastMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Draft claim deleted',
+        variant: 'success',
+      }),
+    );
   });
 
   it('uses the server submittedAt when optimistically updating a submitted claim', async () => {
@@ -489,6 +601,7 @@ describe('ClaimsPage TanStack Query register', () => {
         generatingEvidence={null}
         onCreateClaim={vi.fn()}
         onSubmitClaim={vi.fn()}
+        onDeleteDraftClaim={vi.fn()}
         onDisputeClaim={vi.fn()}
         onCertifyClaim={vi.fn()}
         onRecordPayment={vi.fn()}
@@ -507,5 +620,45 @@ describe('ClaimsPage TanStack Query register', () => {
         }),
       ),
     );
+  });
+
+  it('opens the recorded certification document when the view link succeeds', async () => {
+    openDocumentAccessUrlMock.mockResolvedValue(undefined);
+
+    render(
+      <ClaimsTable
+        claims={[
+          {
+            ...SEEDED_CLAIM,
+            status: 'certified',
+            certification: {
+              certifiedByName: 'Principal Rep',
+              variationNotes: null,
+              certificationDocumentId: 'doc-1',
+            },
+          },
+        ]}
+        loadingCompleteness={false}
+        showCompletenessModal={null}
+        generatingEvidence={null}
+        onCreateClaim={vi.fn()}
+        onSubmitClaim={vi.fn()}
+        onDeleteDraftClaim={vi.fn()}
+        onDisputeClaim={vi.fn()}
+        onCertifyClaim={vi.fn()}
+        onRecordPayment={vi.fn()}
+        onCompletenessCheck={vi.fn()}
+        onEvidencePackage={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'View certificate' }));
+
+    await waitFor(() =>
+      expect(openDocumentAccessUrlMock).toHaveBeenCalledWith('doc-1', null, {
+        disposition: 'inline',
+      }),
+    );
+    expect(toastMock).not.toHaveBeenCalled();
   });
 });

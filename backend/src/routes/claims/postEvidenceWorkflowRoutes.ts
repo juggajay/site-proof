@@ -17,6 +17,7 @@ import {
   MAX_CERTIFICATION_DOCUMENT_ID_LENGTH,
   assertCertifiedAmountWithinClaimTotal,
   assertReducedCertifiedAmountHasVariationNotes,
+  buildClaimCertificationSettlement,
   certifyClaimSchema,
   normalizeOptionalCertificationString,
   parseOptionalClaimDate,
@@ -45,6 +46,13 @@ interface ClaimWorkflowRouterDependencies {
   ) => Promise<void>;
 }
 
+function isCertificationDocument(document: {
+  documentType: string | null;
+  category: string | null;
+}): boolean {
+  return document.documentType === 'certificate' && document.category === 'certification';
+}
+
 async function getProjectCertificationDocumentId(
   client: Pick<typeof prisma, 'document'>,
   projectId: string,
@@ -62,11 +70,17 @@ async function getProjectCertificationDocumentId(
 
   const document = await client.document.findFirst({
     where: { id: normalized, projectId },
-    select: { id: true },
+    select: { id: true, documentType: true, category: true },
   });
 
   if (!document) {
     throw AppError.badRequest('certificationDocumentId must reference a document in this project');
+  }
+
+  if (!isCertificationDocument(document)) {
+    throw AppError.badRequest(
+      'certificationDocumentId must reference a certification document in this project',
+    );
   }
 
   return document.id;
@@ -152,14 +166,20 @@ export function createClaimPostEvidenceWorkflowRouter({
           certificationDocumentId: certDocId || null,
           certifiedBy: userId,
         });
+        const certificationSettlement = buildClaimCertificationSettlement(
+          roundedCertifiedAmount,
+          certifiedAt,
+        );
 
         // Update the claim with certification details
         const updatedClaim = await tx.progressClaim.update({
           where: { id: claimId },
           data: {
-            status: 'certified',
+            status: certificationSettlement.status,
             certifiedAmount: roundedCertifiedAmount,
             certifiedAt,
+            paidAmount: certificationSettlement.paidAmount,
+            paidAt: certificationSettlement.paidAt,
             disputedAt: null,
             // Store variation notes and document reference in disputeNotes field as JSON.
             disputeNotes: certificationMetadata,

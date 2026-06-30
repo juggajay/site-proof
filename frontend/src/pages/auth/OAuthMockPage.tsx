@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { apiUrl } from '@/lib/api';
-import { useAuth } from '@/lib/auth';
+import { useAuth, type User } from '@/lib/auth';
 import { fetchWithTimeout } from '@/lib/fetchWithTimeout';
 import { devLog, logError } from '@/lib/logger';
 import { getDefaultPostLoginRedirect } from './postLoginRedirect';
@@ -42,11 +42,11 @@ export function OAuthMockPage() {
         }),
       });
 
-      const data = await response.json();
+      const data = (await response.json()) as { token?: string; user?: User; message?: string };
 
       if (response.ok && data.token) {
-        const signedInUser = await setToken(data.token);
-        devLog(`[OAuth Mock] Successfully signed in as ${data.user.email}`);
+        const signedInUser = await setToken(data.token, data.user);
+        devLog(`[OAuth Mock] Successfully signed in as ${signedInUser.email}`);
         // Small delay to ensure auth state propagates before navigation
         await new Promise((resolve) => setTimeout(resolve, 100));
         navigate(getDefaultPostLoginRedirect(signedInUser), { replace: true });

@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { Users, UserPlus } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 import { extractErrorMessage } from '@/lib/errorHandling';
@@ -10,9 +11,12 @@ import { Modal, ModalHeader, ModalBody, ModalFooter } from '@/components/ui/Moda
 import type { TeamMember } from '../types';
 import { ROLE_OPTIONS } from '../types';
 import { logError } from '@/lib/logger';
+import { isProtectedProjectManagementRole } from '../projectPageAccess';
 
 interface TeamTabProps {
   projectId: string;
+  readOnly?: boolean;
+  canGrantProjectAdmin?: boolean;
 }
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -28,7 +32,11 @@ function getProjectInviteErrorMessage(error: unknown): string {
   return message;
 }
 
-export function TeamTab({ projectId }: TeamTabProps) {
+export function TeamTab({
+  projectId,
+  readOnly = false,
+  canGrantProjectAdmin = true,
+}: TeamTabProps) {
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [loadingTeam, setLoadingTeam] = useState(false);
   const [teamError, setTeamError] = useState('');
@@ -40,6 +48,9 @@ export function TeamTab({ projectId }: TeamTabProps) {
   const [inviteSuccess, setInviteSuccess] = useState('');
   const invitingRef = useRef(false);
   const inviteCloseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const assignableRoleOptions = canGrantProjectAdmin
+    ? ROLE_OPTIONS
+    : ROLE_OPTIONS.filter((role) => !isProtectedProjectManagementRole(role.value));
 
   const fetchTeamMembers = useCallback(async () => {
     if (!projectId) {
@@ -80,6 +91,8 @@ export function TeamTab({ projectId }: TeamTabProps) {
   }, []);
 
   const handleOpenInviteModal = () => {
+    if (readOnly) return;
+
     if (inviteCloseTimeoutRef.current) {
       clearTimeout(inviteCloseTimeoutRef.current);
       inviteCloseTimeoutRef.current = null;
@@ -103,6 +116,7 @@ export function TeamTab({ projectId }: TeamTabProps) {
   };
 
   const handleInviteTeamMember = async () => {
+    if (readOnly) return;
     if (invitingRef.current) return;
 
     const email = inviteEmail.trim().toLowerCase();
@@ -157,10 +171,24 @@ export function TeamTab({ projectId }: TeamTabProps) {
     <>
       <div className="space-y-6">
         <div className="rounded-lg border p-4">
-          <h2 className="text-lg font-semibold mb-2">Team Members</h2>
-          <p className="text-sm text-muted-foreground mb-4">
-            Manage team members and their roles on this project.
-          </p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold mb-2">Team Members</h2>
+              <p className="text-sm text-muted-foreground mb-4">
+                Review this project team. Use Project Users for role changes and removals.
+              </p>
+            </div>
+            <Button asChild variant="outline" size="sm">
+              <Link to={`/projects/${encodeURIComponent(projectId)}/users`}>
+                Manage project team
+              </Link>
+            </Button>
+          </div>
+          {readOnly && (
+            <div role="status" className="mb-4 rounded-lg bg-warning/10 p-3 text-sm text-warning">
+              Team membership is read-only while this project is archived.
+            </div>
+          )}
           {loadingTeam ? (
             <div className="flex items-center justify-center py-8">
               <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
@@ -220,7 +248,12 @@ export function TeamTab({ projectId }: TeamTabProps) {
               )}
             </div>
           )}
-          <Button variant="outline" onClick={handleOpenInviteModal} className="mt-4">
+          <Button
+            variant="outline"
+            onClick={handleOpenInviteModal}
+            className="mt-4"
+            disabled={readOnly}
+          >
             <UserPlus className="h-4 w-4" />
             Invite Team Member
           </Button>
@@ -228,7 +261,8 @@ export function TeamTab({ projectId }: TeamTabProps) {
         <div className="rounded-lg border p-4">
           <h2 className="text-lg font-semibold mb-2">Role Permissions</h2>
           <p className="text-sm text-muted-foreground">
-            Configure what each role can access and modify in this project.
+            Project role permissions are fixed by role. Change a person's project role from Project
+            Users.
           </p>
         </div>
       </div>
@@ -278,7 +312,7 @@ export function TeamTab({ projectId }: TeamTabProps) {
                   onChange={(e) => setInviteRole(e.target.value)}
                   disabled={inviting}
                 >
-                  {ROLE_OPTIONS.map((role) => (
+                  {assignableRoleOptions.map((role) => (
                     <option key={role.value} value={role.value}>
                       {role.label}
                     </option>

@@ -22,7 +22,9 @@ export const CLAIM_PAYMENT_NOTES_MAX_LENGTH = 3000;
 // jurisdictions until their Acts are verified; Tier 2/3 civil buyers are
 // overwhelmingly NSW/VIC/QLD/WA/SA.
 // Still to do in later PRs: NSW/WA sub-contract payment tiers (need claim
-// direction), and the VIC post-15-Apr-2026 reform keyed by claim service date.
+// direction), and the VIC post-15-Apr-2026 reform. The utils layer intentionally
+// suppresses due-date output for new VIC claims until the post-reform workflow
+// is verified.
 export const SOPA_TIMEFRAMES: Record<
   string,
   { responseTime: number; paymentTime: number; label: string }
@@ -33,6 +35,8 @@ export const SOPA_TIMEFRAMES: Record<
     label: 'NSW (Building and Construction Industry Security of Payment Act 1999)',
   },
   VIC: {
+    // Pre-reform fallback only. Claims submitted on/after 15 Apr 2026 are
+    // suppressed in utils.ts until VIC's amended regime is lawyer-signed.
     responseTime: 10,
     paymentTime: 15,
     label: 'VIC (Building and Construction Industry Security of Payment Act 2002)',

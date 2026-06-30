@@ -8,6 +8,12 @@ const SECRET_PLACEHOLDER_MARKERS = [
   'dev-secret',
   'mock-',
 ];
+const FIRST_PARTY_PRODUCTION_FRONTEND_ORIGINS = [
+  'https://site-proof.vercel.app',
+  'https://site-proof-juggajays-projects.vercel.app',
+  'https://www.civos.com.au',
+  'https://civos.com.au',
+];
 
 function isProduction(): boolean {
   return process.env.NODE_ENV === 'production';
@@ -27,6 +33,17 @@ function normalizePublicUrl(name: string, rawValue: string): string {
     const reason = error instanceof Error ? error.message : 'Invalid URL';
     throw new Error(`FATAL: ${name} must be an absolute public URL (${reason})`);
   }
+}
+
+function normalizePublicOrigin(name: string, rawValue: string): string {
+  const normalizedUrl = normalizePublicUrl(name, rawValue);
+  const url = new URL(normalizedUrl);
+
+  if (url.pathname !== '/' || url.search || url.hash) {
+    throw new Error(`FATAL: ${name} entries must be origins only, not paths`);
+  }
+
+  return url.origin;
 }
 
 function assertProductionPublicUrl(name: string, urlValue: string): void {
@@ -151,8 +168,10 @@ export function getExpressTrustProxySetting(
 
 function assertProductionTrustProxyConfig(): void {
   const normalizedValue = process.env.TRUST_PROXY?.trim().toLowerCase();
-  if (!normalizedValue) {
-    return;
+  if (!normalizedValue || ['0', 'false', 'no'].includes(normalizedValue)) {
+    throw new Error(
+      'FATAL: TRUST_PROXY must be set to a bounded proxy value in production (for example TRUST_PROXY=1 or a trusted proxy CIDR list).',
+    );
   }
 
   if (['true', 'yes'].includes(normalizedValue)) {
@@ -318,8 +337,45 @@ function assertProductionGoogleOAuthConfig(): void {
 
 const LOCAL_DEVELOPMENT_ORIGIN = /^http:\/\/(localhost|127\.0\.0\.1):\d+$/;
 
+function getConfiguredCorsOrigins(): string[] {
+  const value = process.env.CORS_ALLOWED_ORIGINS?.trim();
+  if (!value) {
+    return [];
+  }
+
+  return value
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean)
+    .map((origin) => normalizePublicOrigin('CORS_ALLOWED_ORIGINS', origin));
+}
+
+function getFirstPartyCorsOrigins(frontendOrigin: string): string[] {
+  if (!FIRST_PARTY_PRODUCTION_FRONTEND_ORIGINS.includes(frontendOrigin)) {
+    return [];
+  }
+
+  return FIRST_PARTY_PRODUCTION_FRONTEND_ORIGINS;
+}
+
 export function getFrontendUrl(): string {
   return envUrl('FRONTEND_URL', DEFAULT_FRONTEND_URL);
+}
+
+export function getAllowedCorsOrigins(): string[] {
+  if (!isProduction()) {
+    return [];
+  }
+
+  const frontendOrigin = normalizePublicOrigin('FRONTEND_URL', getFrontendUrl());
+
+  return Array.from(
+    new Set([
+      frontendOrigin,
+      ...getFirstPartyCorsOrigins(frontendOrigin),
+      ...getConfiguredCorsOrigins(),
+    ]),
+  );
 }
 
 export function getBackendUrl(): string {
@@ -346,6 +402,10 @@ export function getGoogleRedirectUri(): string {
 }
 
 export function buildFrontendUrl(path: string): string {
+  if (/^https?:\/\//i.test(path)) {
+    return path;
+  }
+
   return appendPath(getFrontendUrl(), path);
 }
 
@@ -367,7 +427,7 @@ export function isCorsOriginAllowed(origin: string | undefined): boolean {
   }
 
   if (isProduction()) {
-    return origin === getFrontendUrl();
+    return getAllowedCorsOrigins().includes(origin);
   }
 
   return LOCAL_DEVELOPMENT_ORIGIN.test(origin);
@@ -435,6 +495,9 @@ export function validateRuntimeConfig(): void {
   const backendUrl = getBackendUrl();
 
   assertProductionPublicUrl('FRONTEND_URL', frontendUrl);
+  for (const origin of getConfiguredCorsOrigins()) {
+    assertProductionPublicUrl('CORS_ALLOWED_ORIGINS', origin);
+  }
   assertProductionPublicUrl('BACKEND_URL/API_URL', backendUrl);
   assertProductionStorageConfig();
   assertProductionSentryConfig();

@@ -9,7 +9,21 @@ const DEFAULT_DIGEST_WORKER_INTERVAL_MS = 15 * 60 * 1000;
 const DEFAULT_DIGEST_USER_LIMIT = 100;
 const DEFAULT_DIGEST_ITEM_LIMIT = 200;
 const DEFAULT_DIGEST_RETENTION_DAYS = 30;
+const DEFAULT_DIGEST_FAILURE_RETRY_DELAY_MS = 30 * 60 * 1000;
+const MAX_DIGEST_FAILURE_RETRY_DELAY_MS = 24 * 60 * 60 * 1000;
+const MAX_DIGEST_FAILURE_REASON_LENGTH = 500;
 const NOTIFICATION_DIGEST_WORKER_LOCK_ID = 731_452_020;
+
+const DIGEST_ITEM_PREFERENCE_KEYS = {
+  mentions: 'mentions',
+  ncrAssigned: 'ncrAssigned',
+  ncrStatusChange: 'ncrStatusChange',
+  holdPointReminder: 'holdPointReminder',
+  holdPointRelease: 'holdPointRelease',
+  commentReply: 'commentReply',
+  scheduledReports: 'scheduledReports',
+  diaryReminder: 'diaryReminder',
+} as const;
 
 type NotificationDigestItemRecord = {
   id: string;
@@ -20,6 +34,14 @@ type NotificationDigestItemRecord = {
   linkUrl: string | null;
   createdAt: Date;
 };
+
+type DigestItemPreferenceKey =
+  (typeof DIGEST_ITEM_PREFERENCE_KEYS)[keyof typeof DIGEST_ITEM_PREFERENCE_KEYS];
+
+type NotificationDigestPreferences = {
+  enabled: boolean;
+  dailyDigest: boolean;
+} & Partial<Record<DigestItemPreferenceKey, boolean>>;
 
 export type NotificationDigestDeliveryStatus = 'sent' | 'failed' | 'skipped';
 
@@ -46,6 +68,7 @@ export type ProcessDueNotificationDigestsOptions = {
   itemLimit?: number;
   timeOfDay?: string;
   retentionDays?: number;
+  failureRetryDelayMs?: number;
   userIds?: string[];
 };
 
@@ -58,6 +81,23 @@ function parsePositiveInteger(value: unknown, fallback: number): number {
     typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
 
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function parseDigestFailureRetryDelayMs(value: unknown): number {
+  const parsed =
+    typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
+
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    return DEFAULT_DIGEST_FAILURE_RETRY_DELAY_MS;
+  }
+
+  return Math.min(parsed, MAX_DIGEST_FAILURE_RETRY_DELAY_MS);
+}
+
+function truncateDigestFailureReason(reason: string): string {
+  return reason.length <= MAX_DIGEST_FAILURE_REASON_LENGTH
+    ? reason
+    : `${reason.slice(0, MAX_DIGEST_FAILURE_REASON_LENGTH - 3)}...`;
 }
 
 function parseTimeOfDay(value: string | undefined): { hours: number; minutes: number } {
@@ -99,6 +139,18 @@ function toDigestItem(record: NotificationDigestItemRecord): DigestItem {
   };
 }
 
+function getDigestItemPreferenceKey(type: string): DigestItemPreferenceKey | null {
+  return DIGEST_ITEM_PREFERENCE_KEYS[type as keyof typeof DIGEST_ITEM_PREFERENCE_KEYS] ?? null;
+}
+
+function isDigestItemEnabledForPreferences(
+  item: NotificationDigestItemRecord,
+  preferences: NotificationDigestPreferences,
+): boolean {
+  const preferenceKey = getDigestItemPreferenceKey(item.type);
+  return preferenceKey ? preferences[preferenceKey] !== false : true;
+}
+
 async function cleanupExpiredDigestItems(now: Date, retentionDays: number): Promise<number> {
   const cutoff = new Date(now.getTime() - retentionDays * 24 * 60 * 60 * 1000);
   const deleted = await prisma.notificationDigestItem.deleteMany({
@@ -112,6 +164,8 @@ async function processUserDigest(
   userId: string,
   cutoffAt: Date,
   itemLimit: number,
+  now: Date,
+  failureRetryDelayMs: number,
 ): Promise<NotificationDigestDeliveryResult> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -133,6 +187,13 @@ async function processUserDigest(
 
   const preferences = user.notificationEmailPreference;
   if (!preferences?.enabled || !preferences.dailyDigest) {
+    await prisma.notificationDigestItem.deleteMany({
+      where: {
+        userId,
+        createdAt: { lte: cutoffAt },
+      },
+    });
+
     return {
       userId,
       itemCount: 0,
@@ -145,6 +206,7 @@ async function processUserDigest(
     where: {
       userId,
       createdAt: { lte: cutoffAt },
+      OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: now } }],
     },
     orderBy: { createdAt: 'asc' },
     take: itemLimit,
@@ -159,11 +221,47 @@ async function processUserDigest(
     };
   }
 
-  const emailResult = await sendDailyDigestEmail(user.email, itemRecords.map(toDigestItem));
-  if (!emailResult.success) {
+  const enabledItemRecords = itemRecords.filter((item) =>
+    isDigestItemEnabledForPreferences(item, preferences),
+  );
+  const disabledItemIds = itemRecords
+    .filter((item) => !isDigestItemEnabledForPreferences(item, preferences))
+    .map((item) => item.id);
+
+  if (disabledItemIds.length > 0) {
+    await prisma.notificationDigestItem.deleteMany({
+      where: { id: { in: disabledItemIds } },
+    });
+  }
+
+  if (enabledItemRecords.length === 0) {
     return {
       userId,
-      itemCount: itemRecords.length,
+      itemCount: 0,
+      status: 'skipped',
+      error: 'No digest items enabled by current preferences',
+    };
+  }
+
+  const emailResult = await sendDailyDigestEmail(user.email, enabledItemRecords.map(toDigestItem));
+  if (!emailResult.success) {
+    await prisma.notificationDigestItem.updateMany({
+      where: {
+        id: { in: enabledItemRecords.map((item) => item.id) },
+      },
+      data: {
+        deliveryFailureCount: { increment: 1 },
+        lastDeliveryFailureAt: now,
+        lastDeliveryFailureReason: truncateDigestFailureReason(
+          emailResult.error || 'Digest email failed',
+        ),
+        nextAttemptAt: new Date(now.getTime() + failureRetryDelayMs),
+      },
+    });
+
+    return {
+      userId,
+      itemCount: enabledItemRecords.length,
       status: 'failed',
       error: emailResult.error || 'Digest email failed',
     };
@@ -171,13 +269,13 @@ async function processUserDigest(
 
   await prisma.notificationDigestItem.deleteMany({
     where: {
-      id: { in: itemRecords.map((item) => item.id) },
+      id: { in: enabledItemRecords.map((item) => item.id) },
     },
   });
 
   return {
     userId,
-    itemCount: itemRecords.length,
+    itemCount: enabledItemRecords.length,
     status: 'sent',
   };
 }
@@ -212,19 +310,34 @@ async function processDueNotificationDigestsUnlocked(
 
   const limit = parsePositiveInteger(options.limit, DEFAULT_DIGEST_USER_LIMIT);
   const itemLimit = parsePositiveInteger(options.itemLimit, DEFAULT_DIGEST_ITEM_LIMIT);
-  const userGroups = await prisma.notificationDigestItem.groupBy({
-    by: ['userId'],
+  const failureRetryDelayMs = parseDigestFailureRetryDelayMs(
+    options.failureRetryDelayMs ?? process.env.NOTIFICATION_DIGEST_FAILURE_RETRY_DELAY_MS,
+  );
+  const dueUsers = await prisma.notificationDigestItem.findMany({
     where: {
       ...(options.userIds ? { userId: { in: options.userIds } } : {}),
       createdAt: { lte: cutoffAt },
+      OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: now } }],
+      user: {
+        notificationEmailPreference: {
+          is: {
+            enabled: true,
+            dailyDigest: true,
+          },
+        },
+      },
     },
+    select: { userId: true },
+    distinct: ['userId'],
     orderBy: { userId: 'asc' },
     take: limit,
   });
 
   const results: NotificationDigestDeliveryResult[] = [];
-  for (const group of userGroups) {
-    results.push(await processUserDigest(group.userId, cutoffAt, itemLimit));
+  for (const user of dueUsers) {
+    results.push(
+      await processUserDigest(user.userId, cutoffAt, itemLimit, now, failureRetryDelayMs),
+    );
   }
 
   const sent = results.filter((result) => result.status === 'sent').length;

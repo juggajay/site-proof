@@ -37,11 +37,19 @@ let _entries: {
   labourEntries: Array<Record<string, unknown>>;
   plantEntries: Array<Record<string, unknown>>;
 };
+let _detailLoading = false;
+let _detailError = false;
+const refetchEntries = vi.fn();
 vi.mock('@/pages/dockets/docketActionData', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/pages/dockets/docketActionData')>();
   return {
     ...actual,
-    useDocketDetailEntriesQuery: () => ({ data: _entries, isLoading: false }),
+    useDocketDetailEntriesQuery: () => ({
+      data: _entries,
+      isLoading: _detailLoading,
+      isError: _detailError,
+      refetch: refetchEntries,
+    }),
   };
 });
 
@@ -95,6 +103,8 @@ function renderScreen(docketId = 'd1') {
 beforeEach(() => {
   vi.clearAllMocks();
   _online = true;
+  _detailLoading = false;
+  _detailError = false;
   _entries = {
     labourEntries: [
       {
@@ -158,6 +168,15 @@ describe('DocketDetailScreen', () => {
     const approve = screen.getByRole('button', { name: 'Approve — 48 labour + 16 plant' });
     expect(approve).toBeDisabled();
     expect(screen.getByText(/Approvals need signal/i)).toBeInTheDocument();
+  });
+
+  it('shows a load error and disables approval when entries cannot be fetched', () => {
+    _detailError = true;
+    _data = makeData([makeDocket({})]);
+    renderScreen();
+
+    expect(screen.getByText('Docket entries could not be loaded.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Approve — 48 labour + 16 plant' })).toBeDisabled();
   });
 
   it('exposes quiet Query / Reject / Adjust affordances while pending', () => {

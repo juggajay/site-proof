@@ -69,12 +69,29 @@ describe('PrivacyDataSection', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Export My Data' }));
     expect(onExportData).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole('status')).toHaveTextContent('Data exported successfully');
+    expect(screen.getByRole('status')).toHaveTextContent('Your data export download has started');
     expect(screen.getByRole('alert')).toHaveTextContent('Export failed');
     expect(screen.getByText(/Project records that must be retained/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete My Account' }));
     expect(onDeleteAccountClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('explains when account deletion is blocked for a company owner', () => {
+    const onDeleteAccountClick = vi.fn();
+    render(
+      <PrivacyDataSection
+        isExporting={false}
+        exportSuccess={false}
+        exportError={null}
+        onExportData={vi.fn()}
+        onDeleteAccountClick={onDeleteAccountClick}
+        deleteAccountBlockedReason="Transfer company ownership first."
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Delete My Account' })).toBeDisabled();
+    expect(screen.getByText('Transfer company ownership first.')).toBeInTheDocument();
   });
 });
 
@@ -91,6 +108,20 @@ describe('CompanyMembershipSection', () => {
     expect(screen.getByText('Acme Civil')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Leave Company' }));
     expect(onLeaveCompanyClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('explains when leaving is blocked for a company owner', () => {
+    const onLeaveCompanyClick = vi.fn();
+    render(
+      <CompanyMembershipSection
+        companyName="Acme Civil"
+        onLeaveCompanyClick={onLeaveCompanyClick}
+        leaveCompanyBlockedReason="Transfer company ownership first."
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Leave Company' })).toBeDisabled();
+    expect(screen.getByText('Transfer company ownership first.')).toBeInTheDocument();
   });
 });
 

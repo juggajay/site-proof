@@ -1,10 +1,11 @@
 import { Router, type Request } from 'express';
 
 import { AppError } from '../../lib/AppError.js';
-import { AuditAction, createAuditLog } from '../../lib/auditLog.js';
+import { AuditAction, createAuditLog, writeAuditLogInTransaction } from '../../lib/auditLog.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { prisma } from '../../lib/prisma.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
+import { requireBrowserSession } from '../../middleware/browserSession.js';
 import {
   buildSubcontractorDeletedResponse,
   buildSubcontractorStatusUpdatedResponse,
@@ -36,6 +37,7 @@ export function createSubcontractorAdminRouter({
     '/:id/status',
     asyncHandler(async (req, res) => {
       const user = req.user!;
+      requireBrowserSession(req, 'Subcontractor status update');
       const id = normalizeIdParam(req.params.id, 'Subcontractor ID');
       const { status } = req.body;
 
@@ -102,6 +104,7 @@ export function createSubcontractorAdminRouter({
     '/:id',
     asyncHandler(async (req, res) => {
       const user = req.user!;
+      requireBrowserSession(req, 'Subcontractor deletion');
       const id = normalizeIdParam(req.params.id, 'Subcontractor ID');
 
       // Find the subcontractor company with counts
@@ -151,6 +154,20 @@ export function createSubcontractorAdminRouter({
         // Delete the subcontractor company (Prisma cascade handles SubcontractorUser, EmployeeRoster, PlantRegister, DailyDocket)
         await tx.subcontractorCompany.delete({
           where: { id },
+        });
+
+        await writeAuditLogInTransaction(tx, {
+          projectId: subcontractor.projectId,
+          userId: user.id,
+          entityType: 'subcontractor',
+          entityId: id,
+          action: AuditAction.SUBCONTRACTOR_PERMANENTLY_DELETED,
+          changes: {
+            companyName: subcontractor.companyName,
+            deletedCounts,
+            previousStatus: subcontractor.status,
+          },
+          req,
         });
       });
 

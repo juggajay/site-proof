@@ -111,7 +111,12 @@ describe('role dashboard response helpers', () => {
         ],
         project: { contractValue: '1000' },
         dockets: [
-          { totalLabourSubmitted: '600', totalPlantSubmitted: '455' },
+          {
+            totalLabourSubmitted: '600',
+            totalPlantSubmitted: '455',
+            totalLabourApprovedCost: '500',
+            totalPlantApprovedCost: '400',
+          },
           { totalLabourSubmitted: null, totalPlantSubmitted: '0' },
         ],
         overdueNCRList: [{ id: 'ncr-1', ncrNumber: 'NCR-001', description: 'Overdue NCR' }],
@@ -137,7 +142,7 @@ describe('role dashboard response helpers', () => {
       });
       expect(response.openNCRs.items[0]).toMatchObject({
         daysOpen: 2,
-        link: '/projects/project-1/ncr?ncrId=ncr-1',
+        link: '/projects/project-1/ncr?ncr=ncr-1',
       });
       expect(response.holdPointPipeline.items[0]).toMatchObject({
         description: 'Hold Point',
@@ -153,10 +158,10 @@ describe('role dashboard response helpers', () => {
       });
       expect(response.costTracking).toMatchObject({
         budgetTotal: 1000,
-        actualSpend: 1055,
-        variance: 55,
-        variancePercentage: 5.5,
-        trend: 'over',
+        actualSpend: 900,
+        variance: -100,
+        variancePercentage: -10,
+        trend: 'under',
       });
       expect(response.attentionItems).toEqual([
         {
@@ -165,7 +170,7 @@ describe('role dashboard response helpers', () => {
           title: 'NCR NCR-001 overdue',
           description: 'Overdue NCR',
           urgency: 'critical',
-          link: '/projects/project-1/ncr?ncrId=ncr-1',
+          link: '/projects/project-1/ncr?ncr=ncr-1',
         },
         {
           id: 'ncr-major-ncr-2',
@@ -173,7 +178,7 @@ describe('role dashboard response helpers', () => {
           title: 'Major NCR: NCR-002',
           description: 'Major NCR',
           urgency: 'warning',
-          link: '/projects/project-1/ncr?ncrId=ncr-2',
+          link: '/projects/project-1/ncr?ncr=ncr-2',
         },
       ]);
     } finally {

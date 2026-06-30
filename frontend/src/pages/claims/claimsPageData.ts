@@ -54,7 +54,7 @@ export function buildClaimSummaryTotals(claims: Claim[]): ClaimSummaryTotals {
     totalClaimed,
     totalCertified,
     totalPaid,
-    outstanding: totalCertified - nonDisputedPaid,
+    outstanding: Math.max(0, totalCertified - nonDisputedPaid),
   };
 }
 

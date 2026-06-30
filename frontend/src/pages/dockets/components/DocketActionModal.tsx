@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { MessageSquare } from 'lucide-react';
+import { AlertCircle, MessageSquare } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { VoiceInputButton } from '@/components/ui/VoiceInputButton';
@@ -18,6 +18,7 @@ import {
   getDocketSubmittedTotalCost,
   hasDocketApprovedLabourCost,
   hasDocketApprovedPlantCost,
+  hasDocketCommercialAmounts,
   type Docket,
 } from '../docketApprovalsData';
 import {
@@ -48,6 +49,14 @@ interface DocketActionModalProps {
   onActionComplete: () => Promise<void> | void;
 }
 
+function formatRestrictedCurrency(value: number | null | undefined): string {
+  return value === null || value === undefined ? 'Restricted' : formatDocketCurrency(value);
+}
+
+function formatEntryCurrency(value: number | null | undefined): string {
+  return value === null || value === undefined ? 'Restricted' : `$${value.toFixed(2)}`;
+}
+
 export function DocketActionModal({
   docket,
   initialActionType,
@@ -67,6 +76,8 @@ export function DocketActionModal({
 
   const detailQuery = useDocketDetailEntriesQuery(docket.id);
   const detailLoading = detailQuery.isLoading;
+  const detailLoadError = detailQuery.isError;
+  const detailsReady = !detailLoading && !detailLoadError;
   const approvedAdjustmentReason =
     detailQuery.data?.adjustmentReason?.trim() || docket.adjustmentReason?.trim() || null;
   const labourEntries = detailQuery.data?.labourEntries ?? [];
@@ -91,6 +102,7 @@ export function DocketActionModal({
   const submittedLabourCost = getDocketSubmittedLabourCost(docket);
   const submittedPlantCost = getDocketSubmittedPlantCost(docket);
   const submittedTotalCost = getDocketSubmittedTotalCost(docket);
+  const canViewDocketCosts = hasDocketCommercialAmounts(docket);
   const approvedLabourCost = hasDocketApprovedLabourCost(docket)
     ? getDocketDisplayLabourCost(docket)
     : null;
@@ -190,6 +202,7 @@ export function DocketActionModal({
           onClick={handleAction}
           disabled={
             actionInProgress ||
+            !detailsReady ||
             approvalAdjustmentReasonRequired ||
             ((actionType === 'reject' || actionType === 'query') && !actionNotes.trim())
           }
@@ -242,23 +255,21 @@ export function DocketActionModal({
           </p>
           <p className="text-sm">
             <strong>Labour Hours:</strong> {docket.labourHours}h
-            {hasDocketApprovedLabourCost(docket) &&
-              docket.totalLabourApproved !== docket.labourHours && (
-                <span className="text-muted-foreground">
-                  {' '}
-                  (approved: {docket.totalLabourApproved}h)
-                </span>
-              )}
+            {docket.status === 'approved' && docket.totalLabourApproved !== docket.labourHours && (
+              <span className="text-muted-foreground">
+                {' '}
+                (approved: {docket.totalLabourApproved}h)
+              </span>
+            )}
           </p>
           <p className="text-sm">
             <strong>Plant Hours:</strong> {docket.plantHours}h
-            {hasDocketApprovedPlantCost(docket) &&
-              docket.totalPlantApproved !== docket.plantHours && (
-                <span className="text-muted-foreground">
-                  {' '}
-                  (approved: {docket.totalPlantApproved}h)
-                </span>
-              )}
+            {docket.status === 'approved' && docket.totalPlantApproved !== docket.plantHours && (
+              <span className="text-muted-foreground">
+                {' '}
+                (approved: {docket.totalPlantApproved}h)
+              </span>
+            )}
           </p>
           <div className="mt-3 overflow-hidden rounded-md border bg-background text-sm">
             <div className="grid grid-cols-3 bg-muted/50 px-3 py-2 text-xs font-medium uppercase text-muted-foreground">
@@ -268,23 +279,29 @@ export function DocketActionModal({
             </div>
             <div className="grid grid-cols-3 px-3 py-2">
               <span>Labour</span>
-              <span className="text-right">{formatDocketCurrency(submittedLabourCost)}</span>
               <span className="text-right">
-                {approvedLabourCost === null ? '-' : formatDocketCurrency(approvedLabourCost)}
+                {canViewDocketCosts ? formatDocketCurrency(submittedLabourCost) : 'Restricted'}
+              </span>
+              <span className="text-right">
+                {canViewDocketCosts ? formatRestrictedCurrency(approvedLabourCost) : 'Restricted'}
               </span>
             </div>
             <div className="grid grid-cols-3 border-t px-3 py-2">
               <span>Plant</span>
-              <span className="text-right">{formatDocketCurrency(submittedPlantCost)}</span>
               <span className="text-right">
-                {approvedPlantCost === null ? '-' : formatDocketCurrency(approvedPlantCost)}
+                {canViewDocketCosts ? formatDocketCurrency(submittedPlantCost) : 'Restricted'}
+              </span>
+              <span className="text-right">
+                {canViewDocketCosts ? formatRestrictedCurrency(approvedPlantCost) : 'Restricted'}
               </span>
             </div>
             <div className="grid grid-cols-3 border-t px-3 py-2 font-medium">
               <span>Total</span>
-              <span className="text-right">{formatDocketCurrency(submittedTotalCost)}</span>
               <span className="text-right">
-                {approvedTotalCost === null ? '-' : formatDocketCurrency(approvedTotalCost)}
+                {canViewDocketCosts ? formatDocketCurrency(submittedTotalCost) : 'Restricted'}
+              </span>
+              <span className="text-right">
+                {canViewDocketCosts ? formatRestrictedCurrency(approvedTotalCost) : 'Restricted'}
               </span>
             </div>
           </div>
@@ -318,6 +335,28 @@ export function DocketActionModal({
         {/* Labour & Plant entry details */}
         {detailLoading ? (
           <p className="text-sm text-muted-foreground text-center py-3">Loading entries...</p>
+        ) : detailLoadError ? (
+          <div
+            className="flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
+            role="alert"
+          >
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+            <div>
+              <p className="font-medium">Docket entries could not be loaded.</p>
+              <p className="mt-1 text-destructive/90">
+                Retry before actioning this docket so the labour and plant lines are visible.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-2 border-destructive/40 text-destructive hover:bg-destructive/10"
+                onClick={() => void detailQuery.refetch()}
+              >
+                Retry entries
+              </Button>
+            </div>
+          </div>
         ) : (
           <>
             {labourEntries.length > 0 && (
@@ -339,7 +378,7 @@ export function DocketActionModal({
                           <td className="px-3 py-2">{entry.employee.name}</td>
                           <td className="px-3 py-2 text-muted-foreground">{entry.employee.role}</td>
                           <td className="px-3 py-2 text-right">
-                            {hasDocketApprovedLabourCost(docket) &&
+                            {docket.status === 'approved' &&
                             entry.approvedHours !== entry.submittedHours ? (
                               <span>
                                 <span className="font-medium">{entry.approvedHours}h</span>
@@ -352,18 +391,20 @@ export function DocketActionModal({
                             )}
                           </td>
                           <td className="px-3 py-2 text-right">
-                            {hasDocketApprovedLabourCost(docket) &&
+                            {docket.status === 'approved' &&
+                            entry.approvedCost !== null &&
+                            entry.submittedCost !== null &&
                             entry.approvedCost !== entry.submittedCost ? (
                               <span>
                                 <span className="font-medium">
-                                  ${entry.approvedCost.toFixed(2)}
+                                  {formatEntryCurrency(entry.approvedCost)}
                                 </span>
                                 <span className="text-muted-foreground line-through ml-1 text-xs">
-                                  ${entry.submittedCost.toFixed(2)}
+                                  {formatEntryCurrency(entry.submittedCost)}
                                 </span>
                               </span>
                             ) : (
-                              <>${entry.submittedCost.toFixed(2)}</>
+                              <>{formatEntryCurrency(entry.submittedCost)}</>
                             )}
                           </td>
                         </tr>
@@ -399,18 +440,20 @@ export function DocketActionModal({
                           </td>
                           <td className="px-3 py-2 text-right">{entry.hoursOperated}h</td>
                           <td className="px-3 py-2 text-right">
-                            {hasDocketApprovedPlantCost(docket) &&
+                            {docket.status === 'approved' &&
+                            entry.approvedCost !== null &&
+                            entry.submittedCost !== null &&
                             entry.approvedCost !== entry.submittedCost ? (
                               <span>
                                 <span className="font-medium">
-                                  ${entry.approvedCost.toFixed(2)}
+                                  {formatEntryCurrency(entry.approvedCost)}
                                 </span>
                                 <span className="text-muted-foreground line-through ml-1 text-xs">
-                                  ${entry.submittedCost.toFixed(2)}
+                                  {formatEntryCurrency(entry.submittedCost)}
                                 </span>
                               </span>
                             ) : (
-                              <>${entry.submittedCost.toFixed(2)}</>
+                              <>{formatEntryCurrency(entry.submittedCost)}</>
                             )}
                           </td>
                         </tr>
@@ -428,32 +471,35 @@ export function DocketActionModal({
         )}
 
         {/* View mode: show approve/reject buttons if docket is pending */}
-        {actionType === 'view' && docket.status === 'pending_approval' && canApprove && (
-          <div className="flex gap-2">
-            <Button
-              variant="success"
-              className="flex-1 min-h-[44px]"
-              onClick={() => setActionType('approve')}
-            >
-              Approve
-            </Button>
-            <Button
-              variant="outline"
-              className="flex-1 min-h-[44px] border-warning text-warning hover:bg-warning/10"
-              onClick={() => setActionType('query')}
-            >
-              <MessageSquare className="mr-2 h-4 w-4" />
-              Query
-            </Button>
-            <Button
-              variant="destructive"
-              className="flex-1 min-h-[44px]"
-              onClick={() => setActionType('reject')}
-            >
-              Reject
-            </Button>
-          </div>
-        )}
+        {actionType === 'view' &&
+          docket.status === 'pending_approval' &&
+          canApprove &&
+          detailsReady && (
+            <div className="flex gap-2">
+              <Button
+                variant="success"
+                className="flex-1 min-h-[44px]"
+                onClick={() => setActionType('approve')}
+              >
+                Approve
+              </Button>
+              <Button
+                variant="outline"
+                className="flex-1 min-h-[44px] border-warning text-warning hover:bg-warning/10"
+                onClick={() => setActionType('query')}
+              >
+                <MessageSquare className="mr-2 h-4 w-4" />
+                Query
+              </Button>
+              <Button
+                variant="destructive"
+                className="flex-1 min-h-[44px]"
+                onClick={() => setActionType('reject')}
+              >
+                Reject
+              </Button>
+            </div>
+          )}
 
         {actionType === 'approve' && (
           <>

@@ -17,6 +17,7 @@ export function EmailPreferencesSection() {
     changePreferenceTiming,
     sendTestEmail,
   } = useEmailPreferences();
+  const childControlsDisabled = isSaving || !preferences.enabled;
 
   return (
     <div className="rounded-lg border bg-card p-6 space-y-4">
@@ -140,20 +141,22 @@ export function EmailPreferencesSection() {
                             e.target.value as NotificationTiming,
                           )
                         }
-                        disabled={isSaving}
+                        disabled={childControlsDisabled}
                         className="text-xs px-2 py-1 h-auto min-w-[90px]"
                         aria-label={`${pref.label} notification timing`}
                         data-testid={`timing-${pref.key}`}
                       >
                         <option value="immediate">Immediate</option>
-                        <option value="digest">Digest</option>
+                        <option value="digest" disabled={!preferences.dailyDigest}>
+                          Digest
+                        </option>
                       </NativeSelect>
                     )}
                     {/* Enable/disable toggle */}
                     <button
                       type="button"
                       onClick={() => togglePreference(pref.key)}
-                      disabled={isSaving}
+                      disabled={childControlsDisabled}
                       role="switch"
                       aria-checked={preferences[pref.key]}
                       aria-label={`${pref.label} email notifications`}

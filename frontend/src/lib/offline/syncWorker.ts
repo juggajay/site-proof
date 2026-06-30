@@ -32,8 +32,6 @@ import {
   markDeliverySyncError,
   markEventSynced,
   markEventSyncError,
-  markDocketSynced,
-  markDocketServerId,
   markDocketSyncError,
   getOfflinePhoto,
   markPhotoSynced,
@@ -47,7 +45,8 @@ import {
   type OfflineDailyDiary,
   type SyncQueueItem,
 } from '../offlineDb';
-import { readResponseError, syncOfflineDiarySnapshot, syncOfflineDocketDraft } from './syncClient';
+import { MISSING_OFFLINE_DIARY_SUBMIT_SNAPSHOT_MESSAGE } from './diaryMessages';
+import { readResponseError, syncOfflineDiarySnapshot } from './syncClient';
 import { buildOfflineLotEditPayload } from './syncPayloads';
 
 // Outcome of dispatching a single queue item.
@@ -357,6 +356,11 @@ async function syncDiary(item: DiaryItem, itemId: number): Promise<SyncItemResul
       const diary = await offlineDb.diaries.get(diaryId);
 
       if (!diary) {
+        if (item.type === 'diary_submit') {
+          await markSyncItemTerminalError(itemId, MISSING_OFFLINE_DIARY_SUBMIT_SNAPSHOT_MESSAGE);
+          return HANDLED;
+        }
+
         // Diary was deleted, remove from queue
         await removeSyncQueueItem(itemId);
         return HANDLED;
@@ -533,23 +537,12 @@ async function syncDocket(item: DocketItem, itemId: number): Promise<SyncItemRes
         return HANDLED;
       }
 
-      const serverId = await syncOfflineDocketDraft(docket);
-
-      if (item.type === 'docket_create') {
-        // Remove from sync queue
-        await removeSyncQueueItem(itemId);
-        // Mark docket as synced
-        await markDocketSynced(docketId, serverId);
-        return SYNCED;
-      } else {
-        await markDocketServerId(docketId, serverId);
-        await markSyncItemError(
-          itemId,
-          'Offline docket draft synced. Submission requires online review so labour, plant, and lot allocations can be validated before approval.',
-        );
-        await markDocketSyncError(docketId);
-        return HANDLED;
-      }
+      await markSyncItemError(
+        itemId,
+        'Offline docket sync is disabled until labour, plant, rates, and lot allocations can be replayed safely. Recreate or finish this docket online.',
+      );
+      await markDocketSyncError(docketId);
+      return HANDLED;
     },
     async () => {
       if (item.data?.docketId) {

@@ -1,18 +1,42 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import express from 'express';
+import crypto from 'crypto';
 import { authRouter } from './auth.js';
+import { authenticateApiKey } from './apiKeys.js';
 import { consentRouter } from './consent.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 
 const app = express();
 app.use(express.json());
+app.use(authenticateApiKey);
 app.use('/api/auth', authRouter);
 
 // Consent router now has auth middleware built-in
 app.use('/api/consent', consentRouter);
 app.use(errorHandler);
+
+function hashApiKeyForTest(apiKey: string): string {
+  return crypto.createHash('sha256').update(apiKey).digest('hex');
+}
+
+async function createApiKeyForUser(userId: string, scopes = 'admin') {
+  const apiKey = `sp_${crypto.randomBytes(32).toString('hex')}`;
+  const record = await prisma.apiKey.create({
+    data: {
+      userId,
+      name: 'Consent browser-session boundary test key',
+      keyHash: hashApiKeyForTest(apiKey),
+      keyPrefix: apiKey.substring(0, 11),
+      scopes,
+      isActive: true,
+    },
+    select: { id: true },
+  });
+
+  return { apiKey, keyId: record.id };
+}
 
 describe('Consent API', () => {
   let authToken: string;
@@ -160,6 +184,24 @@ describe('Consent API', () => {
       expect(res.body.message).toContain('Consent granted');
     });
 
+    it('rejects API-key-authenticated consent recording', async () => {
+      const { apiKey, keyId } = await createApiKeyForUser(userId, 'admin');
+
+      try {
+        const beforeCount = await prisma.consentRecord.count({ where: { userId } });
+        const res = await request(app).post('/api/consent').set('x-api-key', apiKey).send({
+          consentType: 'marketing',
+          granted: true,
+        });
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.message).toContain('browser session');
+        await expect(prisma.consentRecord.count({ where: { userId } })).resolves.toBe(beforeCount);
+      } finally {
+        await prisma.apiKey.deleteMany({ where: { id: keyId } });
+      }
+    });
+
     it('should record consent withdrawal', async () => {
       const res = await request(app)
         .post('/api/consent')
@@ -296,6 +338,26 @@ describe('Consent API', () => {
         (r: any) => r.consentType === 'analytics',
       );
       expect(analyticsRecord.granted).toBe(false);
+    });
+
+    it('rejects API-key-authenticated bulk consent recording', async () => {
+      const { apiKey, keyId } = await createApiKeyForUser(userId, 'admin');
+
+      try {
+        const beforeCount = await prisma.consentRecord.count({ where: { userId } });
+        const res = await request(app)
+          .post('/api/consent/bulk')
+          .set('x-api-key', apiKey)
+          .send({
+            consents: [{ consentType: 'analytics', granted: true }],
+          });
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.message).toContain('browser session');
+        await expect(prisma.consentRecord.count({ where: { userId } })).resolves.toBe(beforeCount);
+      } finally {
+        await prisma.apiKey.deleteMany({ where: { id: keyId } });
+      }
     });
 
     it('should accept empty consents array', async () => {
@@ -493,6 +555,21 @@ describe('Consent API', () => {
       expect(res.body.message).toContain('All consents withdrawn');
       expect(res.body.withdrawnCount).toBe(6); // 6 consent types
       expect(res.body.withdrawnAt).toBeDefined();
+    });
+
+    it('rejects API-key-authenticated consent withdrawal', async () => {
+      const { apiKey, keyId } = await createApiKeyForUser(userId, 'admin');
+
+      try {
+        const beforeCount = await prisma.consentRecord.count({ where: { userId } });
+        const res = await request(app).post('/api/consent/withdraw-all').set('x-api-key', apiKey);
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.message).toContain('browser session');
+        await expect(prisma.consentRecord.count({ where: { userId } })).resolves.toBe(beforeCount);
+      } finally {
+        await prisma.apiKey.deleteMany({ where: { id: keyId } });
+      }
     });
 
     it('should verify all consents are withdrawn', async () => {

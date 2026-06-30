@@ -11,6 +11,7 @@ import {
   Loader2,
   ClipboardCheck,
   Plus,
+  Trash2,
 } from 'lucide-react';
 import type { Claim } from '../types';
 import {
@@ -31,6 +32,7 @@ interface ClaimsTableProps {
   generatingEvidence: string | null;
   onCreateClaim: () => void;
   onSubmitClaim: (claimId: string) => void;
+  onDeleteDraftClaim: (claimId: string) => void;
   onDisputeClaim: (claimId: string) => void;
   onCertifyClaim: (claimId: string) => void;
   onRecordPayment: (claimId: string) => void;
@@ -110,7 +112,9 @@ function CertificationReadBack({ claim }: { claim: Claim }) {
         <button
           type="button"
           onClick={() => {
-            void openDocumentAccessUrl(certificationDocumentId).catch((error) => {
+            void openDocumentAccessUrl(certificationDocumentId, null, {
+              disposition: 'inline',
+            }).catch((error) => {
               logError('Failed to open certification document', error);
               toast({
                 title: 'Certificate unavailable',
@@ -170,6 +174,7 @@ export const ClaimsTable = React.memo(function ClaimsTable({
   generatingEvidence,
   onCreateClaim,
   onSubmitClaim,
+  onDeleteDraftClaim,
   onDisputeClaim,
   onCertifyClaim,
   onRecordPayment,
@@ -226,6 +231,10 @@ export const ClaimsTable = React.memo(function ClaimsTable({
                 (claim.status === 'certified' || claim.status === 'partially_paid') &&
                 outstandingAmount > 0;
               const canCertifyClaim = claim.status === 'submitted' || claim.status === 'disputed';
+              const canDisputeClaim =
+                claim.status === 'submitted' ||
+                claim.status === 'certified' ||
+                claim.status === 'partially_paid';
               return (
                 <tr
                   key={claim.id}
@@ -265,16 +274,26 @@ export const ClaimsTable = React.memo(function ClaimsTable({
                   <td className="p-4 text-right">
                     <div className="flex items-center justify-end gap-1">
                       {claim.status === 'draft' && (
-                        <button
-                          onClick={() => onSubmitClaim(claim.id)}
-                          className="p-2 hover:bg-primary/10 rounded-lg text-primary"
-                          aria-label="Submit Claim"
-                          title="Submit Claim"
-                        >
-                          <Send className="h-4 w-4" />
-                        </button>
+                        <>
+                          <button
+                            onClick={() => onSubmitClaim(claim.id)}
+                            className="p-2 hover:bg-primary/10 rounded-lg text-primary"
+                            aria-label="Submit Claim"
+                            title="Submit Claim"
+                          >
+                            <Send className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => onDeleteDraftClaim(claim.id)}
+                            className="p-2 hover:bg-destructive/10 rounded-lg text-destructive"
+                            aria-label="Delete Draft Claim"
+                            title="Delete Draft Claim"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </>
                       )}
-                      {(claim.status === 'submitted' || claim.status === 'certified') && (
+                      {canDisputeClaim && (
                         <button
                           onClick={() => onDisputeClaim(claim.id)}
                           className="p-2 hover:bg-destructive/10 rounded-lg text-destructive"

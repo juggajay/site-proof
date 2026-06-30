@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
 import { ADMIN_EMAIL, E2E_ADMIN_USER, E2E_PROJECT_ID, mockAuthenticatedUserState } from './helpers';
 
 const settingsUser = {
@@ -41,7 +42,10 @@ type MockSettingsApiOptions = {
   exportContentType?: string;
   exportFilename?: string;
   exportBody?: string;
+  exportStatus?: number;
   deleteDelayMs?: number;
+  deleteStatus?: number;
+  deleteBody?: unknown;
 };
 
 const delay = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -52,6 +56,8 @@ async function mockSettingsApi(page: Page, options: MockSettingsApiOptions = {})
   let testEmailRequestCount = 0;
   let mfaSetupRequestCount = 0;
   const mfaVerifyRequests: unknown[] = [];
+  let mfaEnabled = options.mfaEnabled ?? false;
+  const mfaDisableRequests: unknown[] = [];
   let exportRequestCount = 0;
   let deleteRequest: unknown = null;
   const deleteRequests: unknown[] = [];
@@ -132,7 +138,7 @@ async function mockSettingsApi(page: Page, options: MockSettingsApiOptions = {})
         return;
       }
 
-      await json({ mfaEnabled: options.mfaEnabled ?? false });
+      await json({ mfaEnabled });
       return;
     }
 
@@ -156,11 +162,19 @@ async function mockSettingsApi(page: Page, options: MockSettingsApiOptions = {})
       }
 
       mfaVerifyRequests.push(route.request().postDataJSON());
+      mfaEnabled = true;
       await json({
         success: true,
         message: 'Two-factor authentication has been enabled successfully.',
         backupCodes: ['SP-0001', 'SP-0002', 'SP-0003', 'SP-0004'],
       });
+      return;
+    }
+
+    if (url.pathname === '/api/mfa/disable') {
+      mfaDisableRequests.push(route.request().postDataJSON());
+      mfaEnabled = false;
+      await json({ message: 'Two-factor authentication disabled' });
       return;
     }
 
@@ -186,7 +200,7 @@ async function mockSettingsApi(page: Page, options: MockSettingsApiOptions = {})
       exportRequestCount += 1;
       const exportBody = options.exportBody ?? JSON.stringify({ user: settingsUser, projects: [] });
       await route.fulfill({
-        status: 200,
+        status: options.exportStatus ?? 200,
         headers: {
           'Content-Type': options.exportContentType ?? 'application/json',
           'Content-Disposition': `attachment; filename="${options.exportFilename ?? 'siteproof-export-e2e.json'}"`,
@@ -204,7 +218,10 @@ async function mockSettingsApi(page: Page, options: MockSettingsApiOptions = {})
 
       deleteRequest = route.request().postDataJSON();
       deleteRequests.push(deleteRequest);
-      await json({ message: 'Account deleted successfully' });
+      await json(
+        options.deleteBody ?? { message: 'Account deleted successfully' },
+        options.deleteStatus,
+      );
       return;
     }
 
@@ -227,6 +244,7 @@ async function mockSettingsApi(page: Page, options: MockSettingsApiOptions = {})
     getMfaSetupRequestCount: () => mfaSetupRequestCount,
     getMfaVerifyRequest: () => mfaVerifyRequests.at(-1) ?? null,
     getMfaVerifyRequests: () => mfaVerifyRequests,
+    getMfaDisableRequest: () => mfaDisableRequests.at(-1) ?? null,
     getExportRequested: () => exportRequestCount > 0,
     getExportRequestCount: () => exportRequestCount,
     getDeleteRequest: () => deleteRequest,
@@ -261,6 +279,13 @@ test.describe('Settings seeded account contract', () => {
       .poll(() => page.evaluate(() => localStorage.getItem('siteproof_timezone')))
       .toBe('UTC');
 
+    const dailyDigestSwitch = page.getByRole('switch', {
+      name: 'Daily Digest email notifications',
+    });
+    await expect(dailyDigestSwitch).not.toBeChecked();
+    await dailyDigestSwitch.click();
+    await expect(dailyDigestSwitch).toBeChecked();
+
     await page.getByLabel('Scheduled Reports notification timing').selectOption('digest');
     await expect(
       page.getByRole('status').filter({ hasText: 'Email preferences saved' }),
@@ -276,6 +301,7 @@ test.describe('Settings seeded account contract', () => {
     await expect
       .poll(() => api.getLastEmailPreferences())
       .toMatchObject({
+        dailyDigest: true,
         scheduledReportsTiming: 'digest',
         diaryReminder: true,
         diaryReminderTiming: 'digest',
@@ -393,10 +419,23 @@ test.describe('Settings seeded account contract', () => {
     const download = await downloadPromise;
 
     expect(download.suggestedFilename()).toBe('siteproof-export-e2e.json');
+    const downloadPath = await download.path();
+    expect(downloadPath).toBeTruthy();
+    const exportedJson = JSON.parse(await readFile(downloadPath!, 'utf8')) as Record<
+      string,
+      unknown
+    >;
+    expect(exportedJson.user).toMatchObject({ email: ADMIN_EMAIL });
+    const exportedText = JSON.stringify(exportedJson);
+    expect(exportedText).not.toContain('keyHash');
+    expect(exportedText).not.toContain('tokenHash');
+    expect(exportedText).not.toContain('p256dh');
+    expect(exportedText).not.toContain('secret');
     expect(api.getExportRequested()).toBe(true);
     await expect(
-      page.getByRole('status').filter({ hasText: 'Data exported successfully' }),
+      page.getByRole('status').filter({ hasText: 'Your data export download has started' }),
     ).toBeVisible();
+    await download.delete();
   });
 
   test('sanitizes exported account data filenames', async ({ page }) => {
@@ -411,6 +450,31 @@ test.describe('Settings seeded account contract', () => {
     const download = await downloadPromise;
 
     expect(download.suggestedFilename()).toBe('unsafe-export-.json');
+  });
+
+  test('disables MFA with an authenticator code', async ({ page }) => {
+    const api = await mockSettingsApi(page, { mfaEnabled: true });
+
+    await page.goto('/settings');
+
+    await expect(
+      page.getByText('Two-Factor Authentication Enabled', { exact: true }),
+    ).toBeVisible();
+    await page.getByRole('button', { name: 'Disable 2FA' }).click();
+
+    const disableDialog = page
+      .getByRole('alertdialog')
+      .filter({ hasText: 'Disable Two-Factor Authentication' });
+    await disableDialog.getByLabel('Password or 2FA code').fill('654321');
+    await disableDialog.getByRole('button', { name: 'Disable 2FA' }).click();
+
+    await expect.poll(() => api.getMfaDisableRequest()).toMatchObject({ code: '654321' });
+    await expect(
+      page.getByText('Two-factor authentication disabled', { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'Enable Two-Factor Authentication' }),
+    ).toBeVisible();
   });
 
   test('rejects unexpected exported account data content types', async ({ page }) => {
@@ -429,6 +493,26 @@ test.describe('Settings seeded account contract', () => {
 
     await expect(
       page.getByRole('alert').filter({ hasText: 'Export returned an unexpected file type' }),
+    ).toBeVisible();
+    expect(api.getExportRequestCount()).toBe(1);
+    expect(downloads).toHaveLength(0);
+  });
+
+  test('surfaces account export API failures without downloading a file', async ({ page }) => {
+    const downloads: string[] = [];
+    page.on('download', (download) => downloads.push(download.suggestedFilename()));
+
+    const api = await mockSettingsApi(page, {
+      exportStatus: 500,
+      exportBody: JSON.stringify({ error: { message: 'Export service unavailable' } }),
+    });
+
+    await page.goto('/settings');
+
+    await page.getByRole('button', { name: 'Export My Data' }).click();
+
+    await expect(
+      page.getByRole('alert').filter({ hasText: 'Export service unavailable' }),
     ).toBeVisible();
     expect(api.getExportRequestCount()).toBe(1);
     expect(downloads).toHaveLength(0);
@@ -562,5 +646,36 @@ test.describe('Settings seeded account contract', () => {
         password: 'CorrectHorse123!',
       });
     await expect(page).toHaveURL(/\/login/);
+  });
+
+  test('keeps account deletion modal open and retryable when the API rejects deletion', async ({
+    page,
+  }) => {
+    const api = await mockSettingsApi(page, {
+      deleteStatus: 500,
+      deleteBody: { error: { message: 'Delete service unavailable' } },
+      deleteDelayMs: 250,
+    });
+
+    await page.goto('/settings');
+
+    await page.getByRole('button', { name: 'Delete My Account' }).click();
+    const deleteDialog = page.getByRole('alertdialog').filter({ hasText: 'Delete Account' });
+    await deleteDialog.getByLabel(/Type your email to confirm/).fill(ADMIN_EMAIL);
+    await deleteDialog.getByLabel('Enter your password').fill('CorrectHorse123!');
+
+    const deleteButton = deleteDialog.getByRole('button', { name: 'Permanently Delete' });
+    await deleteButton.evaluate((button: HTMLElement) => {
+      button.click();
+      button.click();
+    });
+
+    await expect(
+      deleteDialog.getByRole('alert').filter({ hasText: 'Delete service unavailable' }),
+    ).toBeVisible();
+    await expect(deleteDialog).toBeVisible();
+    await expect(deleteButton).toBeEnabled();
+    await expect(page).not.toHaveURL(/\/login/);
+    expect(api.getDeleteRequests()).toHaveLength(1);
   });
 });

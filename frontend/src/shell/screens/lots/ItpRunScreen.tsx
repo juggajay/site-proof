@@ -33,7 +33,9 @@ import { useShellLotParam } from './useShellLotParam';
 import {
   advanceToNextIncomplete,
   firstIncompleteIndex,
+  formatItpFinishedCopy,
   holdPointGateDecision,
+  itpCompletionDisposition,
   runItemOrder,
   runProgress,
 } from './lotsShellState';
@@ -68,6 +70,8 @@ const STRIP_STATE_LINE: Record<string, string> = {
   failed: '✕ Failed — needs attention',
   na: 'N/A — reason recorded',
   hold: 'Awaiting hold point release',
+  review: 'Awaiting head-contractor verification',
+  rejected: 'Rejected — update and resubmit',
   open: 'Not started',
 };
 
@@ -123,6 +127,9 @@ export function ItpRunScreen() {
   const progress = runProgress(orderedItems, completions, currentIndex);
   const currentItem = currentIndex >= 0 ? orderedItems[currentIndex] : undefined;
   const currentCompletion = currentItem ? run.completionFor(currentItem.id) : undefined;
+  const currentDisposition = itpCompletionDisposition(currentCompletion);
+  const awaitingVerification = currentDisposition === 'review';
+  const wasRejected = currentDisposition === 'rejected';
   const gate = currentItem
     ? holdPointGateDecision(currentItem, currentCompletion)
     : { kind: 'open' as const };
@@ -183,6 +190,7 @@ export function ItpRunScreen() {
 
   const handlePass = async () => {
     if (!currentItem || submitting) return;
+    if (awaitingVerification) return;
     if (gate.kind === 'awaiting-release') return; // never complete an un-released hold point
     setSubmitting(true);
     const ok = await run.pass(currentItem.id, currentCompletion?.notes ?? null);
@@ -256,14 +264,20 @@ export function ItpRunScreen() {
 
   // ── Finished state ────────────────────────────────────────────────────────
   if (currentIndex < 0 || progress.allDone) {
+    const finishedCopy = formatItpFinishedCopy(progress);
+    const FinishedIcon = finishedCopy.hasFailures ? AlertTriangle : Check;
     return (
       <ShellScreen
         variant="inner"
         title="Inspection"
         parent={`/m/lots/${lotId}`}
         sub={
-          <span className="shell-mono text-[12px] font-semibold uppercase tracking-[0.1em] text-success">
-            ALL CHECKS DONE
+          <span
+            className={`shell-mono text-[12px] font-semibold uppercase tracking-[0.1em] ${
+              finishedCopy.hasFailures ? 'text-warning' : 'text-success'
+            }`}
+          >
+            {finishedCopy.eyebrow}
           </span>
         }
         bottom={
@@ -279,12 +293,15 @@ export function ItpRunScreen() {
         }
       >
         <div className="flex flex-1 flex-col items-center justify-center gap-4 py-12 text-center">
-          <div className="shell-bigtick" aria-hidden>
-            <Check size={54} strokeWidth={2.4} />
+          <div
+            className={finishedCopy.hasFailures ? 'shell-bigtick text-warning' : 'shell-bigtick'}
+            aria-hidden
+          >
+            <FinishedIcon size={54} strokeWidth={2.4} />
           </div>
-          <div className="shell-display-title">All checks complete</div>
+          <div className="shell-display-title">{finishedCopy.title}</div>
           <div className="shell-mono text-[12.5px] text-muted-foreground">
-            {progress.total} OF {progress.total} DONE
+            {finishedCopy.detail}
           </div>
         </div>
       </ShellScreen>
@@ -400,78 +417,77 @@ export function ItpRunScreen() {
   // Tri-state PASS / FAIL / N-A — pinned at the bottom of the content zone,
   // ABOVE the fixed bar: the natural thumb range for one-handed use (owner
   // refinement). Hold points still never offer Pass.
-  const triStateCluster =
-    gate.kind === 'awaiting-release' ? (
-      <div className="grid grid-cols-2 gap-3">
-        <button
-          type="button"
-          className="shell-tri-btn shell-tri-na min-h-[58px]"
-          disabled={busy}
-          onClick={() => {
-            setReasonMode('na');
-            setReason('');
-            setReasonError(null);
-          }}
-          aria-label="Mark not applicable"
-        >
-          N/A
-        </button>
-        <button
-          type="button"
-          className="shell-tri-btn shell-tri-fail min-h-[58px]"
-          disabled={busy}
-          onClick={() => {
-            setReasonMode('fail');
-            setReason('');
-            setReasonError(null);
-          }}
-          aria-label="Fail this check"
-        >
-          <AlertTriangle size={20} aria-hidden />
-          Fail
-        </button>
-      </div>
-    ) : (
-      <div className="grid grid-cols-3 gap-3">
-        <button
-          type="button"
-          className="shell-tri-pass shell-tri-btn min-h-[58px]"
-          disabled={busy}
-          onClick={handlePass}
-          aria-label="Pass this check"
-        >
-          <Check size={22} strokeWidth={2.4} aria-hidden />
-          Pass
-        </button>
-        <button
-          type="button"
-          className="shell-tri-fail shell-tri-btn min-h-[58px]"
-          disabled={busy}
-          onClick={() => {
-            setReasonMode('fail');
-            setReason('');
-            setReasonError(null);
-          }}
-          aria-label="Fail this check"
-        >
-          <AlertTriangle size={22} aria-hidden />
-          Fail
-        </button>
-        <button
-          type="button"
-          className="shell-tri-na shell-tri-btn min-h-[58px]"
-          disabled={busy}
-          onClick={() => {
-            setReasonMode('na');
-            setReason('');
-            setReasonError(null);
-          }}
-          aria-label="Mark not applicable"
-        >
-          N/A
-        </button>
-      </div>
-    );
+  const triStateCluster = awaitingVerification ? null : gate.kind === 'awaiting-release' ? (
+    <div className="grid grid-cols-2 gap-3">
+      <button
+        type="button"
+        className="shell-tri-btn shell-tri-na min-h-[58px]"
+        disabled={busy}
+        onClick={() => {
+          setReasonMode('na');
+          setReason('');
+          setReasonError(null);
+        }}
+        aria-label="Mark not applicable"
+      >
+        N/A
+      </button>
+      <button
+        type="button"
+        className="shell-tri-btn shell-tri-fail min-h-[58px]"
+        disabled={busy}
+        onClick={() => {
+          setReasonMode('fail');
+          setReason('');
+          setReasonError(null);
+        }}
+        aria-label="Fail this check"
+      >
+        <AlertTriangle size={20} aria-hidden />
+        Fail
+      </button>
+    </div>
+  ) : (
+    <div className="grid grid-cols-3 gap-3">
+      <button
+        type="button"
+        className="shell-tri-pass shell-tri-btn min-h-[58px]"
+        disabled={busy}
+        onClick={handlePass}
+        aria-label="Pass this check"
+      >
+        <Check size={22} strokeWidth={2.4} aria-hidden />
+        Pass
+      </button>
+      <button
+        type="button"
+        className="shell-tri-fail shell-tri-btn min-h-[58px]"
+        disabled={busy}
+        onClick={() => {
+          setReasonMode('fail');
+          setReason('');
+          setReasonError(null);
+        }}
+        aria-label="Fail this check"
+      >
+        <AlertTriangle size={22} aria-hidden />
+        Fail
+      </button>
+      <button
+        type="button"
+        className="shell-tri-na shell-tri-btn min-h-[58px]"
+        disabled={busy}
+        onClick={() => {
+          setReasonMode('na');
+          setReason('');
+          setReasonError(null);
+        }}
+        aria-label="Mark not applicable"
+      >
+        N/A
+      </button>
+    </div>
+  );
 
   return (
     <ShellScreen
@@ -539,13 +555,25 @@ export function ItpRunScreen() {
                       ? 'text-success'
                       : cellState === 'failed'
                         ? 'text-destructive'
-                        : cellState === 'hold'
-                          ? 'text-warning'
-                          : 'text-muted-foreground',
+                        : cellState === 'rejected'
+                          ? 'text-destructive'
+                          : cellState === 'hold' || cellState === 'review'
+                            ? 'text-warning'
+                            : 'text-muted-foreground',
                   ].join(' ')}
                 >
                   {STRIP_STATE_LINE[cellState]}
                 </p>
+                {cellState === 'review' && (
+                  <p className="text-[12px] text-muted-foreground">
+                    Awaiting head-contractor verification.
+                  </p>
+                )}
+                {cellState === 'rejected' && trackEntries[i]?.completion?.verificationNotes && (
+                  <p className="text-[12px] text-destructive">
+                    Rejected: {trackEntries[i]?.completion?.verificationNotes}
+                  </p>
+                )}
               </>
             );
           }}
@@ -557,6 +585,26 @@ export function ItpRunScreen() {
             at the top and the actions at the bottom. They belong to the LANDED
             item; a scrub preview above doesn't change them until release. */}
         <div className="flex flex-col gap-3 pt-3">
+          {awaitingVerification && (
+            <div className="rounded-2xl border border-warning/40 bg-warning/10 p-4">
+              <div className="flex items-center gap-2 text-[14px] font-semibold text-warning">
+                Awaiting head-contractor verification
+              </div>
+              <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">
+                This check has been submitted and is waiting for review.
+              </p>
+            </div>
+          )}
+          {wasRejected && (
+            <div className="rounded-2xl border border-destructive/30 bg-destructive/10 p-4">
+              <div className="flex items-center gap-2 text-[14px] font-semibold text-destructive">
+                Rejected by head contractor
+              </div>
+              <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">
+                {currentCompletion?.verificationNotes || 'Update the check and resubmit it.'}
+              </p>
+            </div>
+          )}
           {gate.kind === 'awaiting-release' && (
             <div className="rounded-2xl border border-warning/40 bg-warning/10 p-4">
               <div className="flex items-center gap-2 text-[14px] font-semibold text-warning">

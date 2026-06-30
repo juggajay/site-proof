@@ -147,4 +147,30 @@ describe('ItpDotTrack', () => {
     render(<ItpDotTrack entries={entries} currentIndex={1} onCommit={vi.fn()} />);
     expect(screen.getByRole('slider').getAttribute('aria-valuetext')).toMatch(/hold/);
   });
+
+  it('reflects pending verification in its aria text when focused', () => {
+    const entries = makeEntries(3);
+    entries[1] = {
+      ...entries[1],
+      completion: {
+        id: 'completion-1',
+        checklistItemId: entries[1].item.id,
+        isCompleted: true,
+        isPendingVerification: true,
+        verificationStatus: 'pending_verification',
+        notes: null,
+        completedAt: null,
+        completedBy: null,
+        isVerified: false,
+        verifiedAt: null,
+        verifiedBy: null,
+        attachments: [],
+      },
+      state: 'review',
+    };
+    render(<ItpDotTrack entries={entries} currentIndex={1} onCommit={vi.fn()} />);
+    expect(screen.getByRole('slider').getAttribute('aria-valuetext')).toMatch(
+      /awaiting verification/,
+    );
+  });
 });

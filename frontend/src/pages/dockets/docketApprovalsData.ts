@@ -13,9 +13,9 @@ export interface Docket {
   notes: string | null;
   labourHours: number;
   plantHours: number;
-  totalLabourSubmitted: number;
+  totalLabourSubmitted: number | null;
   totalLabourApproved: number;
-  totalPlantSubmitted: number;
+  totalPlantSubmitted: number | null;
   totalPlantApproved: number;
   totalLabourApprovedCost?: number | null;
   totalPlantApprovedCost?: number | null;
@@ -32,9 +32,9 @@ export interface LabourEntry {
   finishTime: string | null;
   submittedHours: number;
   approvedHours: number;
-  hourlyRate: number;
-  submittedCost: number;
-  approvedCost: number;
+  hourlyRate: number | null;
+  submittedCost: number | null;
+  approvedCost: number | null;
 }
 
 export interface PlantEntry {
@@ -42,12 +42,21 @@ export interface PlantEntry {
   plant: { type: string; description: string; idRego?: string };
   hoursOperated: number;
   wetOrDry: string;
-  hourlyRate: number;
-  submittedCost: number;
-  approvedCost: number;
+  hourlyRate: number | null;
+  submittedCost: number | null;
+  approvedCost: number | null;
 }
 
-export type DocketsResponse = Docket[] | { dockets?: Docket[] };
+interface DocketPagination {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
+export type DocketsResponse =
+  | Docket[]
+  | { dockets?: Docket[]; data?: Docket[]; pagination?: DocketPagination };
 
 export interface DocketDetailResponse {
   docket?: {
@@ -65,14 +74,21 @@ export interface ProjectResponse {
   };
 }
 
-const DOCKET_APPROVER_ROLES = ['owner', 'admin', 'project_manager', 'site_manager', 'foreman'];
+const DOCKET_APPROVER_ROLES = [
+  'owner',
+  'admin',
+  'project_manager',
+  'site_manager',
+  'foreman',
+  'quality_manager',
+];
 
 export function canApproveDocketsForProjectRole(role: string | null | undefined): boolean {
   return Boolean(role && DOCKET_APPROVER_ROLES.includes(role));
 }
 
 export const normalizeDockets = (data: DocketsResponse): Docket[] =>
-  Array.isArray(data) ? data : data.dockets || [];
+  Array.isArray(data) ? data : data.dockets || data.data || [];
 
 function moneyValue(value: number | null | undefined): number {
   return Number.isFinite(Number(value)) ? Number(value) : 0;
@@ -117,6 +133,14 @@ export function hasDocketApprovedCost(docket: Docket): boolean {
   return hasDocketApprovedLabourCost(docket) || hasDocketApprovedPlantCost(docket);
 }
 
+export function hasDocketCommercialAmounts(docket: Docket): boolean {
+  return (
+    hasMoneyValue(docket.totalLabourSubmitted) ||
+    hasMoneyValue(docket.totalPlantSubmitted) ||
+    hasDocketApprovedCost(docket)
+  );
+}
+
 export function getDocketDisplayLabourCost(docket: Docket): number {
   if (hasDocketApprovedLabourCost(docket)) {
     return moneyValue(docket.totalLabourApprovedCost);
@@ -145,22 +169,47 @@ export function hasDocketCostAdjustment(docket: Docket): boolean {
   return approvedTotal !== null && centsDiffer(approvedTotal, getDocketSubmittedTotalCost(docket));
 }
 
-export function buildDocketApprovalsPath(projectId: string | undefined, statusFilter: string) {
+const DOCKET_APPROVALS_PAGE_LIMIT = 100;
+
+export function buildDocketApprovalsPath(
+  projectId: string | undefined,
+  statusFilter: string,
+  page?: number,
+  limit?: number,
+) {
   const queryParams = new URLSearchParams();
   if (projectId) queryParams.append('projectId', projectId);
   if (statusFilter !== 'all') queryParams.append('status', statusFilter);
+  if (page !== undefined) queryParams.append('page', String(page));
+  if (limit !== undefined) queryParams.append('limit', String(limit));
 
   const queryString = queryParams.toString();
   return queryString ? `/api/dockets?${queryString}` : '/api/dockets';
 }
 
-async function fetchDocketApprovals(
+export async function fetchDocketApprovals(
   projectId: string | undefined,
   statusFilter: string,
 ): Promise<Docket[]> {
   try {
-    const data = await apiFetch<DocketsResponse>(buildDocketApprovalsPath(projectId, statusFilter));
-    return normalizeDockets(data);
+    const firstPage = await apiFetch<DocketsResponse>(
+      buildDocketApprovalsPath(projectId, statusFilter, 1, DOCKET_APPROVALS_PAGE_LIMIT),
+    );
+    const firstPageDockets = normalizeDockets(firstPage);
+
+    if (Array.isArray(firstPage) || !firstPage.pagination || firstPage.pagination.totalPages <= 1) {
+      return firstPageDockets;
+    }
+
+    const nextPages = await Promise.all(
+      Array.from({ length: firstPage.pagination.totalPages - 1 }, (_, index) =>
+        apiFetch<DocketsResponse>(
+          buildDocketApprovalsPath(projectId, statusFilter, index + 2, DOCKET_APPROVALS_PAGE_LIMIT),
+        ),
+      ),
+    );
+
+    return [...firstPageDockets, ...nextPages.flatMap(normalizeDockets)];
   } catch (error) {
     logError('Error fetching dockets:', error);
     throw error;

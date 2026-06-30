@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
+import crypto from 'crypto';
 import { authRouter } from './auth.js';
+import { authenticateApiKey } from './apiKeys.js';
 import { notificationsRouter } from './notifications.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
@@ -11,9 +13,30 @@ import * as emailService from '../lib/email.js';
 
 const app = express();
 app.use(express.json());
+app.use(authenticateApiKey);
 app.use('/api/auth', authRouter);
 app.use('/api/notifications', notificationsRouter);
 app.use(errorHandler);
+
+function hashApiKeyForTest(apiKey: string): string {
+  return crypto.createHash('sha256').update(apiKey).digest('hex');
+}
+
+async function createApiKeyForUser(userId: string, scopes = 'admin') {
+  const apiKey = `sp_${crypto.randomBytes(32).toString('hex')}`;
+  const record = await prisma.apiKey.create({
+    data: {
+      userId,
+      name: 'Notifications API Key',
+      keyHash: hashApiKeyForTest(apiKey),
+      keyPrefix: apiKey.substring(0, 11),
+      scopes,
+      isActive: true,
+    },
+  });
+
+  return { apiKey, keyId: record.id };
+}
 
 describe('Notifications API', () => {
   let authToken: string;
@@ -802,6 +825,21 @@ describe('Notifications API', () => {
 
       expect(res.status).toBe(401);
     });
+
+    it('rejects API-key-authenticated test emails', async () => {
+      const { apiKey, keyId } = await createApiKeyForUser(userId, 'admin');
+
+      try {
+        const res = await request(app)
+          .post('/api/notifications/send-test-email')
+          .set('x-api-key', apiKey);
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.message).toContain('browser session');
+      } finally {
+        await prisma.apiKey.deleteMany({ where: { id: keyId } });
+      }
+    });
   });
 
   describe('GET /api/notifications/email-service-status', () => {
@@ -1141,6 +1179,39 @@ describe('Notifications API', () => {
         expect(afterCount).toBeGreaterThan(beforeCount);
       });
 
+      it('should create portal-safe notification links for assigned subcontractor users', async () => {
+        const title = `Subcontractor Portal Link Alert ${Date.now()}`;
+        const entityId = `sub-ncr-${Date.now()}`;
+
+        const res = await request(app)
+          .post('/api/notifications/alerts')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            type: 'overdue_ncr',
+            severity: 'medium',
+            title,
+            message: 'Assigned directly to the subcontractor portal user',
+            entityId,
+            entityType: 'ncr',
+            projectId,
+            assignedTo: subcontractorUserId,
+          });
+
+        expect(res.status).toBe(200);
+
+        const notification = await prisma.notification.findFirst({
+          where: {
+            userId: subcontractorUserId,
+            title,
+          },
+          orderBy: { createdAt: 'desc' },
+        });
+
+        expect(notification?.linkUrl).toBe(
+          `/subcontractor-portal/ncrs?ncr=${entityId}&projectId=${projectId}&subcontractorCompanyId=${subcontractorCompanyId}`,
+        );
+      });
+
       it('should reject subcontractor-created project alerts', async () => {
         const res = await request(app)
           .post('/api/notifications/alerts')
@@ -1157,6 +1228,25 @@ describe('Notifications API', () => {
           });
 
         expect(res.status).toBe(403);
+      });
+
+      it('should reject project readers creating project alerts', async () => {
+        const res = await request(app)
+          .post('/api/notifications/alerts')
+          .set('Authorization', `Bearer ${secondUserToken}`)
+          .send({
+            type: 'overdue_ncr',
+            severity: 'high',
+            title: 'Reader-created alert',
+            message: 'Project read access should not create alerts',
+            entityId: 'reader-alert-attempt',
+            entityType: 'ncr',
+            projectId,
+            assignedTo: userId,
+          });
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.message).toContain('Notification administration access required');
       });
 
       it('should reject assigning a project alert to a user without project access', async () => {
@@ -1645,6 +1735,102 @@ describe('Notifications API', () => {
         const alert = res.body.alerts.find((item: any) => item.title === escalatedTitle);
         expect(alert).toBeDefined();
         expect(alert.escalatedTo).toContain(subcontractorUserId);
+      });
+
+      it('should not let unrelated escalated alerts hide an older alert escalated to the user', async () => {
+        const prefix = `alert-escalated-flood-${Date.now()}`;
+        let otherCompanyId: string | undefined;
+        let otherProjectId: string | undefined;
+        let otherAssigneeId: string | undefined;
+
+        try {
+          const otherCompany = await prisma.company.create({
+            data: { name: `${prefix} Company` },
+          });
+          otherCompanyId = otherCompany.id;
+          const otherProject = await prisma.project.create({
+            data: {
+              name: `${prefix} Project`,
+              projectNumber: `AEF-${Date.now()}`,
+              companyId: otherCompany.id,
+              status: 'active',
+              state: 'NSW',
+              specificationSet: 'TfNSW',
+            },
+          });
+          otherProjectId = otherProject.id;
+          const otherAssignee = await prisma.user.create({
+            data: {
+              email: `${prefix}@example.com`,
+              passwordHash: 'hash',
+              fullName: `${prefix} Assignee`,
+              companyId: otherCompany.id,
+              roleInCompany: 'admin',
+              emailVerified: true,
+            },
+          });
+          otherAssigneeId = otherAssignee.id;
+
+          const olderCreatedAt = new Date('2032-04-01T00:00:00.000Z');
+          const visibleTitle = `${prefix} escalated to current user`;
+          await prisma.notificationAlert.create({
+            data: {
+              id: `${prefix}-match`,
+              type: 'overdue_ncr',
+              severity: 'high',
+              title: visibleTitle,
+              message: 'This older inaccessible-project alert is visible via escalatedTo.',
+              entityId: `${prefix}-match-entity`,
+              entityType: 'ncr',
+              projectId: otherProject.id,
+              assignedToId: otherAssignee.id,
+              createdAt: olderCreatedAt,
+              escalationLevel: 1,
+              escalatedAt: olderCreatedAt,
+              escalatedTo: [userId],
+            },
+          });
+
+          await prisma.notificationAlert.createMany({
+            data: Array.from({ length: MAX_ALERT_LIST_RESULTS + 5 }, (_, index) => {
+              const createdAt = new Date(olderCreatedAt.getTime() + (index + 1) * 1000);
+              return {
+                id: `${prefix}-noise-${index}`,
+                type: 'overdue_ncr',
+                severity: 'medium',
+                title: `${prefix} unrelated escalated alert ${index}`,
+                message: 'Unrelated escalated alert from an inaccessible project',
+                entityId: `${prefix}-noise-entity-${index}`,
+                entityType: 'ncr',
+                projectId: otherProject.id,
+                assignedToId: otherAssignee.id,
+                createdAt,
+                escalationLevel: 1,
+                escalatedAt: createdAt,
+                escalatedTo: [otherAssignee.id],
+              };
+            }),
+          });
+
+          const res = await request(app)
+            .get('/api/notifications/alerts')
+            .set('Authorization', `Bearer ${authToken}`);
+
+          expect(res.status).toBe(200);
+          expect(res.body.alerts.map((alert: any) => alert.title)).toContain(visibleTitle);
+        } finally {
+          await prisma.notificationAlert.deleteMany({ where: { id: { startsWith: prefix } } });
+          if (otherAssigneeId) {
+            await prisma.emailVerificationToken.deleteMany({ where: { userId: otherAssigneeId } });
+            await prisma.user.delete({ where: { id: otherAssigneeId } }).catch(() => {});
+          }
+          if (otherProjectId) {
+            await prisma.project.delete({ where: { id: otherProjectId } }).catch(() => {});
+          }
+          if (otherCompanyId) {
+            await prisma.company.delete({ where: { id: otherCompanyId } }).catch(() => {});
+          }
+        }
       });
 
       it('should reject unauthorized requests', async () => {

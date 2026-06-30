@@ -7,6 +7,15 @@ interface DeleteDocument {
   filename: string;
 }
 
+interface PaginationMeta {
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPrevPage: boolean;
+}
+
 export function DocumentDragOverlay({ isDragging }: { isDragging: boolean }) {
   if (!isDragging) return null;
 
@@ -33,7 +42,13 @@ export function DocumentDragOverlay({ isDragging }: { isDragging: boolean }) {
   );
 }
 
-export function DocumentsPageHeader({ onUpload }: { onUpload: () => void }) {
+export function DocumentsPageHeader({
+  canUploadDocuments,
+  onUpload,
+}: {
+  canUploadDocuments: boolean;
+  onUpload: () => void;
+}) {
   return (
     <div className="flex items-center justify-between">
       <div>
@@ -46,17 +61,19 @@ export function DocumentsPageHeader({ onUpload }: { onUpload: () => void }) {
         </div>
         <p className="text-muted-foreground">Upload and manage project documents and photos</p>
       </div>
-      <Button onClick={onUpload}>
-        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
-          />
-        </svg>
-        Upload Document
-      </Button>
+      {canUploadDocuments && (
+        <Button onClick={onUpload}>
+          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+            />
+          </svg>
+          Upload Document
+        </Button>
+      )}
     </div>
   );
 }
@@ -97,13 +114,16 @@ export function DocumentCategorySummary({
   return (
     <div className="flex flex-wrap gap-2">
       {Object.entries(categories).map(([category, count]) => (
-        <span
+        <button
+          type="button"
           key={category}
-          onClick={() => onSelectCategory(category.toLowerCase())}
-          className="cursor-pointer rounded-full bg-muted px-3 py-1 text-sm hover:bg-primary hover:text-primary-foreground"
+          onClick={() =>
+            onSelectCategory(category === 'Uncategorized' ? 'uncategorized' : category)
+          }
+          className="cursor-pointer rounded-full bg-muted px-3 py-1 text-sm hover:bg-primary hover:text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           {category}: {count}
-        </span>
+        </button>
       ))}
     </div>
   );
@@ -143,5 +163,53 @@ export function DeleteDocumentDialog({
         }
       }}
     />
+  );
+}
+
+export function DocumentsPagination({
+  pagination,
+  visibleCount,
+  onPreviousPage,
+  onNextPage,
+}: {
+  pagination: PaginationMeta | null | undefined;
+  visibleCount: number;
+  onPreviousPage: () => void;
+  onNextPage: () => void;
+}) {
+  if (!pagination || pagination.total <= pagination.limit) return null;
+
+  const showingFrom = pagination.total > 0 ? (pagination.page - 1) * pagination.limit + 1 : 0;
+  const showingTo = Math.min(showingFrom + Math.max(visibleCount - 1, 0), pagination.total);
+
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border bg-card p-4 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+      <span>
+        Showing {showingFrom}-{showingTo} of {pagination.total} documents
+      </span>
+      <div className="flex items-center gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={!pagination.hasPrevPage}
+          onClick={onPreviousPage}
+        >
+          Previous
+        </Button>
+        <span className="px-2">
+          Page {pagination.page} of {pagination.totalPages}
+        </span>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={!pagination.hasNextPage}
+          onClick={onNextPage}
+        >
+          Next
+        </Button>
+      </div>
+    </div>
   );
 }

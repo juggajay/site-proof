@@ -66,6 +66,23 @@ beforeEach(() => {
 });
 
 describe('NotificationsPage', () => {
+  it('shows a retry action after notifications fail to load', async () => {
+    apiFetchMock.mockRejectedValueOnce(new Error('network down')).mockResolvedValueOnce({
+      notifications: [buildNotification({ title: 'Recovered notification' })],
+      unreadCount: 1,
+    });
+
+    renderPage();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Notifications could not be loaded.',
+    );
+    await userEvent.click(screen.getByRole('button', { name: /try again/i }));
+
+    expect(await screen.findByText('Recovered notification')).toBeInTheDocument();
+    expect(apiFetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it('M66: deletes a notification via DELETE /:id without navigating', async () => {
     apiFetchMock.mockImplementation((_path: string, options?: { method?: string }) => {
       if (options?.method === 'DELETE') {
@@ -94,6 +111,56 @@ describe('NotificationsPage', () => {
       );
     });
     expect(navigateMock).not.toHaveBeenCalled();
+  });
+
+  it('opens a notification link even when marking it as read fails', async () => {
+    apiFetchMock.mockImplementation((_path: string, options?: { method?: string }) => {
+      if (options?.method === 'PUT') {
+        return Promise.reject(new Error('mark read failed'));
+      }
+      return Promise.resolve({
+        notifications: [
+          buildNotification({ id: 'n1', isRead: false, linkUrl: '/projects/p1/hold-points' }),
+        ],
+        unreadCount: 1,
+      });
+    });
+
+    renderPage();
+
+    await userEvent.click(await screen.findByRole('button', { name: /A notification/i }));
+
+    expect(navigateMock).toHaveBeenCalledWith('/projects/p1/hold-points');
+    await waitFor(() => {
+      expect(apiFetchMock).toHaveBeenCalledWith('/api/notifications/n1/read', {
+        method: 'PUT',
+      });
+    });
+  });
+
+  it('does not navigate to notification links containing control characters', async () => {
+    apiFetchMock.mockImplementation((_path: string, options?: { method?: string }) => {
+      if (options?.method === 'PUT') {
+        return Promise.resolve({ success: true });
+      }
+      return Promise.resolve({
+        notifications: [
+          buildNotification({ id: 'n1', isRead: false, linkUrl: '/projects/p1\n/hold-points' }),
+        ],
+        unreadCount: 1,
+      });
+    });
+
+    renderPage();
+
+    await userEvent.click(await screen.findByRole('button', { name: /A notification/i }));
+
+    expect(navigateMock).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(apiFetchMock).toHaveBeenCalledWith('/api/notifications/n1/read', {
+        method: 'PUT',
+      });
+    });
   });
 
   it('M62: unread tab requests the server-side unreadOnly filter', async () => {
@@ -134,5 +201,45 @@ describe('NotificationsPage', () => {
         ),
       ).toBe(true);
     });
+  });
+
+  it('keeps Load more available when a client-side filter has no matches on the loaded page', async () => {
+    const fullPage = Array.from({ length: 100 }, (_, i) =>
+      buildNotification({ id: `n${i}`, title: `General notification ${i}`, type: 'info' }),
+    );
+    apiFetchMock.mockResolvedValue({ notifications: fullPage, unreadCount: 100 });
+
+    renderPage();
+    await screen.findByText('General notification 0');
+
+    await userEvent.click(screen.getByRole('button', { name: /@mentions/i }));
+
+    expect(await screen.findByText('No notifications')).toBeInTheDocument();
+    expect(screen.getByText(/No mention notifications in the loaded results/i)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /load more/i }));
+
+    await waitFor(() => {
+      expect(
+        apiFetchMock.mock.calls.some(
+          ([path]) => typeof path === 'string' && path.includes('offset=100'),
+        ),
+      ).toBe(true);
+    });
+  });
+
+  it('exposes the selected notification filter state to assistive technology', async () => {
+    apiFetchMock.mockResolvedValue({
+      notifications: [buildNotification()],
+      unreadCount: 1,
+    });
+
+    renderPage();
+    await screen.findByText('A notification');
+
+    expect(screen.getByRole('button', { name: /^all$/i })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /^unread$/i })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
   });
 });

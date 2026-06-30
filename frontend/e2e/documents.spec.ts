@@ -91,9 +91,14 @@ function filterDocuments(documents: SeededDocument[], url: URL) {
     }
     if (url.searchParams.get('search')) {
       const query = url.searchParams.get('search')!.toLowerCase();
-      return (
-        doc.filename.toLowerCase().includes(query) || doc.caption?.toLowerCase().includes(query)
-      );
+      if (
+        !(doc.filename.toLowerCase().includes(query) || doc.caption?.toLowerCase().includes(query))
+      ) {
+        return false;
+      }
+    }
+    if (url.searchParams.get('favourite') === 'true' && !doc.isFavourite) {
+      return false;
     }
     return true;
   });
@@ -114,6 +119,7 @@ async function mockSeededDocumentsApi(
   let deleteRequestId: string | null = null;
   let uploadBody = '';
   let documentLoadCount = 0;
+  const deletedDocumentIds = new Set<string>();
   const signedUrlRequestCounts = new Map<string, number>();
   const signedUrlRequests = new Map<string, unknown[]>();
 
@@ -156,6 +162,7 @@ async function mockSeededDocumentsApi(
           id: E2E_PROJECT_ID,
           name: 'E2E Highway Upgrade',
           projectNumber: 'E2E-001',
+          currentUserRole: 'admin',
         },
       });
       return;
@@ -181,12 +188,27 @@ async function mockSeededDocumentsApi(
         return;
       }
 
-      const documents = filterDocuments(buildSeedDocuments(pdfFavourite, includeUploaded), url);
+      const documents = filterDocuments(
+        buildSeedDocuments(pdfFavourite, includeUploaded).filter(
+          (doc) => !deletedDocumentIds.has(doc.id),
+        ),
+        url,
+      );
+      const page = Number(url.searchParams.get('page') || '1');
+      const limit = Number(url.searchParams.get('limit') || '100');
       await json({
         documents,
         categories: {
           quality: documents.filter((doc) => doc.category === 'quality').length,
           design: documents.filter((doc) => doc.category === 'design').length,
+        },
+        pagination: {
+          total: documents.length,
+          page,
+          limit,
+          totalPages: Math.max(1, Math.ceil(documents.length / limit)),
+          hasPrevPage: page > 1,
+          hasNextPage: page < Math.ceil(documents.length / limit),
         },
       });
       return;
@@ -232,6 +254,7 @@ async function mockSeededDocumentsApi(
       route.request().method() === 'DELETE'
     ) {
       deleteRequestId = E2E_PDF_DOC_ID;
+      deletedDocumentIds.add(E2E_PDF_DOC_ID);
       await json({ success: true });
       return;
     }
@@ -270,10 +293,21 @@ test.describe('Documents seeded evidence contract', () => {
     });
     await page.addInitScript(() => {
       window.open = (url?: string | URL) => {
-        void (
+        const recordOpenedUrl = (
           window as typeof window & { recordOpenedUrl?: (openedUrl: string) => void }
-        ).recordOpenedUrl?.(String(url || ''));
-        return null;
+        ).recordOpenedUrl;
+        recordOpenedUrl?.(String(url || ''));
+        const location = {};
+        Object.defineProperty(location, 'href', {
+          get: () => String(url || ''),
+          set: (nextUrl: string) => recordOpenedUrl?.(String(nextUrl || '')),
+        });
+        return {
+          opener: null,
+          closed: false,
+          location,
+          close: () => undefined,
+        } as unknown as Window;
       };
     });
 
@@ -376,6 +410,7 @@ test.describe('Documents seeded evidence contract', () => {
     await expect(deleteDialog.getByText('Delete "e2e-drawing.pdf"?')).toBeVisible();
     await deleteDialog.getByRole('button', { name: 'Delete' }).click();
     expect(api.getDeleteRequestId()).toBe(E2E_PDF_DOC_ID);
+    await expect(pdfItem).toBeHidden();
   });
 
   test('surfaces load failures with retry and no false empty state', async ({ page }) => {

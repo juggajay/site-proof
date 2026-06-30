@@ -2,6 +2,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
+import { requireEmailVerified } from '../middleware/requireEmailVerified.js';
 import { AppError } from '../lib/AppError.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
 import { AuditAction, writeAuditLogInTransaction } from '../lib/auditLog.js';
@@ -163,6 +164,7 @@ router.use(rejectApiKeyManagement);
 // POST /api/api-keys - Create a new API key
 router.post(
   '/',
+  requireEmailVerified,
   asyncHandler(async (req: Request, res: Response) => {
     const userId = req.user!.id;
 

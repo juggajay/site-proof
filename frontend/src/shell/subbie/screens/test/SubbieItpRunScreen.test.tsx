@@ -148,6 +148,124 @@ describe('SubbieItpRunScreen', () => {
     ).toBeInTheDocument();
   });
 
+  it('shows awaiting-verification state without completion actions', () => {
+    _run = makeRun(
+      makeInstance(
+        [makeItem({ id: 'a' })],
+        [
+          {
+            id: 'comp-a',
+            checklistItemId: 'a',
+            isCompleted: true,
+            isPendingVerification: true,
+            verificationStatus: 'pending_verification',
+            notes: null,
+            completedAt: null,
+            completedBy: null,
+            isVerified: false,
+            verifiedAt: null,
+            verifiedBy: null,
+            attachments: [],
+          },
+        ],
+      ),
+    );
+
+    renderRun();
+
+    expect(screen.getAllByText('Awaiting head-contractor verification').length).toBeGreaterThan(0);
+    expect(screen.getByText(/submitted and is waiting for review/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Pass this check/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Mark not applicable/i })).not.toBeInTheDocument();
+  });
+
+  it('shows rejected state and allows the subbie to resubmit', async () => {
+    _run = makeRun(
+      makeInstance(
+        [makeItem({ id: 'a' })],
+        [
+          {
+            id: 'comp-a',
+            checklistItemId: 'a',
+            isCompleted: true,
+            isRejected: true,
+            verificationStatus: 'rejected',
+            verificationNotes: 'Photo does not show the bedding depth.',
+            notes: null,
+            completedAt: null,
+            completedBy: null,
+            isVerified: false,
+            verifiedAt: null,
+            verifiedBy: null,
+            attachments: [],
+          },
+        ],
+      ),
+    );
+
+    renderRun();
+
+    expect(screen.getByText('Rejected by head contractor')).toBeInTheDocument();
+    expect(screen.getAllByText(/Photo does not show the bedding depth/i).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: /Pass this check/i }));
+    await waitFor(() => expect(pass).toHaveBeenCalledWith('a', null));
+  });
+
+  it('does not call failed checks complete in the finished state', () => {
+    _run = makeRun(
+      makeInstance(
+        [makeItem({ id: 'a' }), makeItem({ id: 'b' }), makeItem({ id: 'c' })],
+        [
+          {
+            id: 'comp-a',
+            checklistItemId: 'a',
+            isCompleted: true,
+            notes: null,
+            completedAt: null,
+            completedBy: null,
+            isVerified: false,
+            verifiedAt: null,
+            verifiedBy: null,
+            attachments: [],
+          },
+          {
+            id: 'comp-b',
+            checklistItemId: 'b',
+            isCompleted: true,
+            notes: null,
+            completedAt: null,
+            completedBy: null,
+            isVerified: false,
+            verifiedAt: null,
+            verifiedBy: null,
+            attachments: [],
+          },
+          {
+            id: 'comp-c',
+            checklistItemId: 'c',
+            isCompleted: false,
+            isFailed: true,
+            notes: 'Out of tolerance',
+            completedAt: null,
+            completedBy: null,
+            isVerified: false,
+            verifiedAt: null,
+            verifiedBy: null,
+            attachments: [],
+          },
+        ],
+      ),
+    );
+
+    renderRun();
+
+    expect(screen.getByText('CHECKS REVIEWED')).toBeInTheDocument();
+    expect(screen.getByText('Issues need attention')).toBeInTheDocument();
+    expect(screen.getByText(/2 passed checks/i)).toBeInTheDocument();
+    expect(screen.getByText(/1 failed check/i)).toBeInTheDocument();
+    expect(screen.queryByText('All checks complete')).not.toBeInTheDocument();
+  });
+
   it('passes the right per-item states to the dot track', () => {
     const items = [
       makeItem({ id: 'a' }),

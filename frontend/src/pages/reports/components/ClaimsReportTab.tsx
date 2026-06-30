@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useDateFormat } from '@/lib/dateFormat';
 import { useTimezone } from '@/lib/timezone';
 import type { ClaimsReport } from '../types';
@@ -6,11 +6,13 @@ import { applyDatePreset } from '../types';
 import { formatReportDateTime } from '../reportFormatting';
 import { formatStatusLabel } from '@/lib/statusLabels';
 import { NativeSelect } from '@/components/ui/native-select';
+import { getReportDateRangeError } from '../reportDateRange';
 
 export interface ClaimsReportTabProps {
   report: ClaimsReport | null;
   loading: boolean;
   onGenerateReport: (startDate: string, endDate: string, statuses: string[]) => void;
+  onFiltersChange?: (startDate: string, endDate: string, statuses: string[]) => void;
 }
 
 const CLAIM_REPORT_STATUSES = [
@@ -32,10 +34,15 @@ function formatCurrency(value: number | null | undefined): string {
   return currencyFormatter.format(value ?? 0);
 }
 
+function formatNullableCurrency(value: number | null | undefined): string {
+  return value === null || value === undefined ? '-' : formatCurrency(value);
+}
+
 export const ClaimsReportTab = React.memo(function ClaimsReportTab({
   report,
   loading,
   onGenerateReport,
+  onFiltersChange,
 }: ClaimsReportTabProps) {
   const { dateFormat, formatDate } = useDateFormat();
   const { timezone } = useTimezone();
@@ -45,16 +52,23 @@ export const ClaimsReportTab = React.memo(function ClaimsReportTab({
   const generatedAt = report
     ? formatReportDateTime(report.generatedAt, dateFormat, timezone)
     : null;
+  const dateRangeError = getReportDateRangeError(claimStartDate, claimEndDate);
+
+  useEffect(() => {
+    onFiltersChange?.(claimStartDate, claimEndDate, claimStatus ? [claimStatus] : []);
+  }, [claimEndDate, claimStartDate, claimStatus, onFiltersChange]);
 
   const handleGenerateReport = useCallback(() => {
+    if (dateRangeError) return;
     onGenerateReport(claimStartDate, claimEndDate, claimStatus ? [claimStatus] : []);
-  }, [claimEndDate, claimStartDate, claimStatus, onGenerateReport]);
+  }, [claimEndDate, claimStartDate, claimStatus, dateRangeError, onGenerateReport]);
 
   const handleClearFilters = useCallback(() => {
     setClaimStartDate('');
     setClaimEndDate('');
     setClaimStatus('');
-  }, []);
+    onGenerateReport('', '', []);
+  }, [onGenerateReport]);
 
   const hasFilters = claimStartDate || claimEndDate || claimStatus;
 
@@ -116,6 +130,11 @@ export const ClaimsReportTab = React.memo(function ClaimsReportTab({
                 This Month
               </button>
             </div>
+            {dateRangeError && (
+              <p className="mt-2 text-sm text-destructive" role="alert">
+                {dateRangeError}
+              </p>
+            )}
           </div>
 
           <div>
@@ -143,7 +162,7 @@ export const ClaimsReportTab = React.memo(function ClaimsReportTab({
             <button
               type="button"
               onClick={handleGenerateReport}
-              disabled={loading}
+              disabled={loading || Boolean(dateRangeError)}
               className="rounded-md bg-primary px-4 py-2 text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
               {loading ? 'Generating...' : 'Generate Report'}
@@ -152,6 +171,7 @@ export const ClaimsReportTab = React.memo(function ClaimsReportTab({
               <button
                 type="button"
                 onClick={handleClearFilters}
+                disabled={loading}
                 className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground"
               >
                 Clear filters
@@ -276,10 +296,10 @@ export const ClaimsReportTab = React.memo(function ClaimsReportTab({
                         {formatCurrency(claim.totalClaimedAmount)}
                       </td>
                       <td className="px-4 py-3 text-right text-sm text-muted-foreground">
-                        {formatCurrency(claim.certifiedAmount)}
+                        {formatNullableCurrency(claim.certifiedAmount)}
                       </td>
                       <td className="px-4 py-3 text-right text-sm text-muted-foreground">
-                        {formatCurrency(claim.outstanding)}
+                        {formatNullableCurrency(claim.outstanding)}
                       </td>
                       <td className="px-4 py-3 text-right text-sm text-muted-foreground">
                         {claim.lotCount}
@@ -288,6 +308,11 @@ export const ClaimsReportTab = React.memo(function ClaimsReportTab({
                   ))}
                 </tbody>
               </table>
+              {report.claims.length === 0 && (
+                <div className="py-8 text-center text-muted-foreground">
+                  No claims found for the selected criteria.
+                </div>
+              )}
             </div>
           </div>
         </>

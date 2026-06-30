@@ -1,9 +1,13 @@
-export function buildScheduledReportsResponse(schedules: unknown[], maxSchedules: number) {
-  return { schedules, maxSchedules };
+export function buildScheduledReportsResponse(
+  schedules: unknown[],
+  maxSchedules: number,
+  projectTimeZone?: string,
+) {
+  return { schedules, maxSchedules, ...(projectTimeZone ? { projectTimeZone } : {}) };
 }
 
-export function buildScheduledReportResponse(schedule: unknown) {
-  return { schedule };
+export function buildScheduledReportResponse(schedule: unknown, projectTimeZone?: string) {
+  return { schedule, ...(projectTimeZone ? { projectTimeZone } : {}) };
 }
 
 export function buildScheduledReportDeletedResponse() {

@@ -35,9 +35,12 @@ import {
   buildDocketQueryResponseSubmittedResponse,
   buildDocketRejectedResponse,
 } from './reviewResponses.js';
-import { notifyDocketSubcontractorUsers } from './reviewNotificationDelivery.js';
+import {
+  notifyDocketApproverUsers,
+  notifyDocketSubcontractorUsers,
+} from './reviewNotificationDelivery.js';
 import { parseDocketReviewRequest, requireNonBlankReviewText } from './reviewRequest.js';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 
 export const docketReviewRouter = Router();
 
@@ -59,6 +62,33 @@ async function applyDocketStatusTransition(
 
   if (transition.count !== 1) {
     throw AppError.badRequest(failureMessage);
+  }
+}
+
+export async function getOrCreateDocketDiaryForSync(
+  tx: Prisma.TransactionClient,
+  projectId: string,
+  date: Date,
+) {
+  const where = { projectId_date: { projectId, date } };
+  const existingDiary = await tx.dailyDiary.findUnique({ where });
+  if (existingDiary) {
+    return existingDiary;
+  }
+
+  try {
+    return await tx.dailyDiary.create({
+      data: {
+        projectId,
+        date,
+        status: 'draft',
+      },
+    });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return tx.dailyDiary.findUniqueOrThrow({ where });
+    }
+    throw error;
   }
 }
 
@@ -231,20 +261,7 @@ docketReviewRouter.post(
 
     try {
       await prisma.$transaction(async (tx) => {
-        // Find or create diary for this date
-        let diary = await tx.dailyDiary.findUnique({
-          where: { projectId_date: { projectId: docket.projectId, date: docket.date } },
-        });
-
-        if (!diary) {
-          diary = await tx.dailyDiary.create({
-            data: {
-              projectId: docket.projectId,
-              date: docket.date,
-              status: 'draft',
-            },
-          });
-        }
+        const diary = await getOrCreateDocketDiaryForSync(tx, docket.projectId, docket.date);
 
         await requireEditableDiaryForWrite(tx, user, diary.id);
 
@@ -351,10 +368,12 @@ docketReviewRouter.post(
     const approverName = formatDocketUserName(user);
 
     const { inApp: approvedInApp, email: approvedEmail } = buildDocketApprovedNotifications({
+      docketId: docket.id,
       projectId: docket.projectId,
       projectName: docket.project.name,
       docketNumber,
       docketDate,
+      subcontractorCompanyId: docket.subcontractorCompanyId,
       approverName,
       foremanNotes,
       adjustmentReason,
@@ -411,8 +430,8 @@ docketReviewRouter.post(
         'pending_approval',
         {
           status: 'rejected',
-          approvedById: user.id,
-          approvedAt: new Date(),
+          approvedById: null,
+          approvedAt: null,
           foremanNotes: reason,
         },
         'Only pending dockets can be rejected',
@@ -441,10 +460,12 @@ docketReviewRouter.post(
     const rejectorName = formatDocketUserName(user);
 
     const { inApp: rejectedInApp, email: rejectedEmail } = buildDocketRejectedNotifications({
+      docketId: docket.id,
       projectId: docket.projectId,
       projectName: docket.project.name,
       docketNumber,
       docketDate,
+      subcontractorCompanyId: docket.subcontractorCompanyId,
       rejectorName,
       reason,
     });
@@ -530,10 +551,12 @@ docketReviewRouter.post(
     const querierName = formatDocketUserName(user);
 
     const { inApp: queriedInApp, email: queriedEmail } = buildDocketQueriedNotifications({
+      docketId: docket.id,
       projectId: docket.projectId,
       projectName: docket.project.name,
       docketNumber,
       docketDate,
+      subcontractorCompanyId: docket.subcontractorCompanyId,
       querierName,
       questions,
     });
@@ -620,35 +643,22 @@ docketReviewRouter.post(
     const docketDate = formatDocketDate(docket.date);
     const responderName = formatDocketUserName(user);
 
-    const projectUsers = await prisma.projectUser.findMany({
-      where: {
+    const { inApp: queryResponseInApp, email: queryResponseEmail } =
+      buildDocketQueryResponseNotification({
         projectId: docket.projectId,
-        role: { in: DOCKET_APPROVERS },
-        status: 'active',
-      },
-      include: {
-        user: { select: { id: true, email: true, fullName: true } },
-      },
-    });
-
-    const { inApp: queryResponseInApp } = buildDocketQueryResponseNotification({
-      projectId: docket.projectId,
-      docketNumber,
-      docketDate,
-      responderName,
-      response,
-    });
-
-    const notificationsToCreate = projectUsers.map((pu) => ({
-      userId: pu.userId,
-      ...queryResponseInApp,
-    }));
-
-    if (notificationsToCreate.length > 0) {
-      await prisma.notification.createMany({
-        data: notificationsToCreate,
+        projectName: docket.project.name,
+        docketNumber,
+        docketDate,
+        responderName,
+        response,
       });
-    }
+
+    await notifyDocketApproverUsers({
+      projectId: docket.projectId,
+      roles: DOCKET_APPROVERS,
+      inApp: queryResponseInApp,
+      email: queryResponseEmail,
+    });
 
     res.json(buildDocketQueryResponseSubmittedResponse(updatedDocket));
   }),

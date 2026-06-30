@@ -29,6 +29,7 @@ export const DOCKET_APPROVERS = [
   'foreman',
   'quality_manager',
 ];
+export const DOCKET_AMOUNT_VIEWERS = ['owner', 'admin', 'project_manager'];
 export const DOCKET_ENTRY_EDIT_STATUSES = new Set(['draft', 'queried', 'rejected']);
 
 export type AuthUser = NonNullable<Express.Request['user']>;
@@ -46,6 +47,29 @@ export function isSubcontractorUser(user: AuthUser): boolean {
 
 export function isDocketEntryEditable(status: string): boolean {
   return DOCKET_ENTRY_EDIT_STATUSES.has(status);
+}
+
+export function canRoleViewDocketAmounts(
+  role: string | null | undefined,
+  { isLinkedSubcontractor = false }: { isLinkedSubcontractor?: boolean } = {},
+): boolean {
+  return isLinkedSubcontractor || Boolean(role && DOCKET_AMOUNT_VIEWERS.includes(role));
+}
+
+export async function canViewDocketAmounts(user: AuthUser, projectId: string): Promise<boolean> {
+  if (isSubcontractorUser(user)) {
+    return true;
+  }
+
+  if (isSubcontractorPortalRole(user.roleInCompany)) {
+    return false;
+  }
+
+  const role = await getEffectiveProjectRole(user, projectId, {
+    excludeSubcontractorProjectMemberships: true,
+    throwIfProjectMissing: true,
+  });
+  return canRoleViewDocketAmounts(role);
 }
 
 export function requireApprovedDocketResource(

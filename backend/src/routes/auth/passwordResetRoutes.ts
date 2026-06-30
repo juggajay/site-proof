@@ -11,12 +11,20 @@ import { buildFrontendUrl } from '../../lib/runtimeConfig.js';
 import { logError, logWarn } from '../../lib/serverLogger.js';
 
 const PASSWORD_RESET_TOKEN_PURPOSE = 'password_reset';
+const TERMS_OF_SERVICE_VERSION = '1.0';
 
 type PasswordResetPrismaClient = Pick<PrismaClient, 'user' | 'passwordResetToken' | '$transaction'>;
 
 type PasswordValidation = {
   valid: boolean;
   errors: string[];
+};
+
+type PasswordResetSetupUser = {
+  companyId: string | null;
+  passwordHash: string | null;
+  oauthProvider: string | null;
+  tosAcceptedAt: Date | null;
 };
 
 type CreatePasswordResetRouterDependencies = {
@@ -45,6 +53,10 @@ function rejectMagicLinkTokenForPasswordReset(
   if (isMagicLinkToken(token)) {
     throw AppError.badRequest('Invalid or expired reset token');
   }
+}
+
+function isPendingCompanyInviteSetup(user: PasswordResetSetupUser): boolean {
+  return Boolean(user.companyId && !user.passwordHash && !user.oauthProvider);
 }
 
 function respondInvalidResetTokenValidation(
@@ -198,6 +210,14 @@ export function createPasswordResetRouter({
           token: true,
           usedAt: true,
           expiresAt: true,
+          user: {
+            select: {
+              companyId: true,
+              passwordHash: true,
+              oauthProvider: true,
+              tosAcceptedAt: true,
+            },
+          },
         },
       });
 
@@ -215,13 +235,19 @@ export function createPasswordResetRouter({
         throw AppError.badRequest(genericResetTokenValidationMessage);
       }
 
-      const consumedAt = new Date();
+      const requiresTosAcceptance =
+        isPendingCompanyInviteSetup(resetToken.user) && !resetToken.user.tosAcceptedAt;
+      if (requiresTosAcceptance && req.body.tosAccepted !== true) {
+        throw AppError.badRequest('You must accept the Terms of Service to activate your account');
+      }
 
       // Hash the new password
       const newPasswordHash = hashPassword(normalizedPassword);
+      const tosAcceptedAt = requiresTosAcceptance ? new Date() : null;
 
       // Update user password only if this request wins the one-time token consume.
       const apiKeyRevocation = await prisma.$transaction(async (tx) => {
+        const consumedAt = new Date();
         const consumeResult = await tx.passwordResetToken.updateMany({
           where: {
             id: resetToken.id,
@@ -235,11 +261,13 @@ export function createPasswordResetRouter({
           throw AppError.badRequest(genericResetTokenValidationMessage);
         }
 
+        const invalidatedAt = new Date(Date.now() + 1);
         await tx.user.update({
           where: { id: resetToken.userId },
           data: {
             passwordHash: newPasswordHash,
-            tokenInvalidatedAt: consumedAt,
+            tokenInvalidatedAt: invalidatedAt,
+            ...(tosAcceptedAt ? { tosAcceptedAt, tosVersion: TERMS_OF_SERVICE_VERSION } : {}),
           },
         });
 
@@ -285,6 +313,18 @@ export function createPasswordResetRouter({
           ...oneTimeTokenLookup(normalizedToken),
           purpose: PASSWORD_RESET_TOKEN_PURPOSE,
         },
+        select: {
+          usedAt: true,
+          expiresAt: true,
+          user: {
+            select: {
+              companyId: true,
+              passwordHash: true,
+              oauthProvider: true,
+              tosAcceptedAt: true,
+            },
+          },
+        },
       });
 
       if (!resetToken) {
@@ -311,7 +351,11 @@ export function createPasswordResetRouter({
         );
       }
 
-      res.json({ valid: true });
+      res.json({
+        valid: true,
+        requiresTosAcceptance:
+          isPendingCompanyInviteSetup(resetToken.user) && !resetToken.user.tosAcceptedAt,
+      });
     }),
   );
 

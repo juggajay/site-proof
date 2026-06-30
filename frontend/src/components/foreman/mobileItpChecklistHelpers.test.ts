@@ -11,7 +11,14 @@ import {
 
 const completion = (
   checklistItemId: string,
-  flags: Partial<{ isCompleted: boolean; isNotApplicable: boolean; isFailed: boolean }> = {},
+  flags: Partial<{
+    isCompleted: boolean;
+    isNotApplicable: boolean;
+    isFailed: boolean;
+    isPendingVerification: boolean;
+    isRejected: boolean;
+    verificationStatus: string | null;
+  }> = {},
 ) => ({
   checklistItemId,
   isCompleted: false,
@@ -40,6 +47,26 @@ describe('getItpItemStatus', () => {
     expect(getItpItemStatus({ isCompleted: true, isNotApplicable: true, isFailed: true })).toBe(
       'failed',
     );
+  });
+
+  it('returns review for pending verification even when the item was submitted as complete', () => {
+    expect(
+      getItpItemStatus({
+        isCompleted: true,
+        isPendingVerification: true,
+        verificationStatus: 'pending_verification',
+      }),
+    ).toBe('review');
+  });
+
+  it('returns rejected before accepted completion flags', () => {
+    expect(
+      getItpItemStatus({
+        isCompleted: true,
+        isRejected: true,
+        verificationStatus: 'rejected',
+      }),
+    ).toBe('rejected');
   });
 
   it('N/A beats completed', () => {
@@ -94,12 +121,20 @@ describe('progress', () => {
     expect(countsTowardItpProgress({ isCompleted: true })).toBe(true);
     expect(countsTowardItpProgress({ isCompleted: false, isNotApplicable: true })).toBe(true);
     expect(countsTowardItpProgress({ isCompleted: false })).toBe(false);
+    expect(
+      countsTowardItpProgress({ isCompleted: true, verificationStatus: 'pending_verification' }),
+    ).toBe(false);
+    expect(countsTowardItpProgress({ isCompleted: true, verificationStatus: 'rejected' })).toBe(
+      false,
+    );
 
     const completions = [
       completion('a', { isCompleted: true }),
       completion('b', { isNotApplicable: true }),
       completion('c', { isFailed: true }),
       completion('d'),
+      completion('e', { isCompleted: true, verificationStatus: 'pending_verification' }),
+      completion('f', { isCompleted: true, verificationStatus: 'rejected' }),
     ];
     expect(countCompletedItpItems(completions)).toBe(2);
   });

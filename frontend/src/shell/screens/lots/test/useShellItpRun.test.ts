@@ -122,6 +122,67 @@ describe('useShellItpRun', () => {
     await waitFor(() => expect(result.current.completionFor('item-1')?.isCompleted).toBe(true));
   });
 
+  it('PASS resubmits a rejected completed item instead of treating it as done', async () => {
+    mockApiFetch.mockResolvedValueOnce({
+      instance: {
+        ...instance,
+        completions: [
+          {
+            id: 'c-rejected',
+            checklistItemId: 'item-1',
+            isCompleted: true,
+            isRejected: true,
+            verificationStatus: 'rejected',
+            verificationNotes: 'Redo this check',
+            notes: 'old pass',
+            completedAt: '2026-06-10',
+            completedBy: null,
+            isVerified: false,
+            verifiedAt: null,
+            verifiedBy: null,
+            attachments: [],
+          },
+        ],
+      },
+    });
+    writeItpCompletionToggle.mockResolvedValueOnce({
+      status: 'saved',
+      completion: {
+        id: 'c-rejected',
+        checklistItemId: 'item-1',
+        isCompleted: true,
+        isRejected: false,
+        verificationStatus: 'pending_verification',
+        verificationNotes: null,
+        notes: 'resubmitted',
+        completedAt: '2026-06-11',
+        completedBy: null,
+        isVerified: false,
+        verifiedAt: null,
+        verifiedBy: null,
+        attachments: [],
+      },
+    });
+
+    const { result } = renderShellHook();
+    await waitFor(() => expect(result.current.instance).not.toBeNull());
+
+    let ok = false;
+    await act(async () => {
+      ok = await result.current.pass('item-1', 'resubmitted');
+    });
+
+    expect(ok).toBe(true);
+    expect(writeItpCompletionToggle).toHaveBeenCalledWith(
+      expect.objectContaining({
+        itpInstanceId: 'inst-1',
+        checklistItemId: 'item-1',
+        currentlyCompleted: false,
+        existingNotes: 'resubmitted',
+      }),
+    );
+  });
+
   it('markNA / markFailed delegate to the existing mobile actions', async () => {
     mockApiFetch.mockResolvedValueOnce({ instance });
     const { result } = renderShellHook();

@@ -4,6 +4,7 @@
 import { Router, type Request } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { verifyPassword } from '../lib/auth.js';
+import { requireBrowserSession } from '../middleware/browserSession.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
 import { authRateLimiter } from '../middleware/rateLimiter.js';
 import { generateSecret, verify as verifyOtp, generateURI } from 'otplib';
@@ -37,12 +38,6 @@ function getAuthenticatedUser(req: Request) {
   }
 
   return req.user;
-}
-
-function requireBrowserSession(req: Request, action: string): void {
-  if (req.apiKey) {
-    throw AppError.forbidden(`${action} requires an authenticated browser session`);
-  }
 }
 
 function normalizeTotpCode(value: unknown): string {

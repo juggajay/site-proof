@@ -4,6 +4,7 @@ import { useTimezone } from '@/lib/timezone';
 import type { NCRReport } from '../types';
 import { formatReportDateTime } from '../reportFormatting';
 import { buildReportPaginationCaption } from '../reportPagination';
+import { formatStatusLabel } from '@/lib/statusLabels';
 
 export interface NCRReportTabProps {
   report: NCRReport;
@@ -160,10 +161,10 @@ export const NCRReportTab = React.memo(function NCRReportTab({ report }: NCRRepo
         <h3 className="text-lg font-medium mb-3">By Severity</h3>
         <div className="flex gap-4">
           <span className="px-4 py-2 bg-warning/10 text-warning rounded-lg">
-            Minor: <strong>{report.summary.minor}</strong>
+            Minor: <strong>{report.severityCounts.minor ?? report.summary.minor ?? 0}</strong>
           </span>
           <span className="px-4 py-2 bg-destructive/10 text-destructive rounded-lg">
-            Major: <strong>{report.summary.major}</strong>
+            Major: <strong>{report.severityCounts.major ?? report.summary.major ?? 0}</strong>
           </span>
         </div>
       </div>
@@ -191,6 +192,9 @@ export const NCRReportTab = React.memo(function NCRReportTab({ report }: NCRRepo
                   Category
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                  Severity
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
                   Status
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
@@ -204,17 +208,24 @@ export const NCRReportTab = React.memo(function NCRReportTab({ report }: NCRRepo
                   <td className="px-4 py-3 text-sm font-medium text-foreground">{ncr.ncrNumber}</td>
                   <td className="px-4 py-3 text-sm text-muted-foreground">{ncr.description}</td>
                   <td className="px-4 py-3 text-sm">
+                    <span className="px-2 py-1 rounded-full text-xs bg-muted text-muted-foreground">
+                      {ncr.category.replace(/_/g, ' ')}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-sm">
                     <span
                       className={`px-2 py-1 rounded-full text-xs ${
-                        ncr.category === 'major'
+                        ncr.severity === 'major'
                           ? 'bg-destructive/10 text-destructive'
                           : 'bg-warning/10 text-warning'
                       }`}
                     >
-                      {ncr.category}
+                      {ncr.severity}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-sm text-muted-foreground">{ncr.status}</td>
+                  <td className="px-4 py-3 text-sm text-muted-foreground">
+                    {formatStatusLabel(ncr.status)}
+                  </td>
                   <td className="px-4 py-3 text-sm text-muted-foreground">
                     {new Date(ncr.raisedAt).toLocaleDateString('en-AU')}
                   </td>

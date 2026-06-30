@@ -1,5 +1,5 @@
 // Feature #443: React Hook Form with Zod validation
-import { useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -33,7 +33,7 @@ export function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [registrationSuccess, setRegistrationSuccess] = useState(false);
   const [registeredEmail, setRegisteredEmail] = useState('');
-  const { signUp } = useAuth();
+  const { signUp, user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
   // React Hook Form with Zod resolver
@@ -71,6 +71,12 @@ export function RegisterPage() {
     [password],
   );
 
+  useEffect(() => {
+    if (!authLoading && user) {
+      navigate(getDefaultPostLoginRedirect(user), { replace: true });
+    }
+  }, [authLoading, navigate, user]);
+
   const onSubmit = async (data: RegisterFormData) => {
     setLoading(true);
 
@@ -100,6 +106,15 @@ export function RegisterPage() {
       setLoading(false);
     }
   };
+
+  if (authLoading || user) {
+    return (
+      <div className="space-y-4 text-center" role="status" aria-label="Checking existing session">
+        <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+        <p className="text-sm text-muted-foreground">Checking your session...</p>
+      </div>
+    );
+  }
 
   // Show success message after registration
   if (registrationSuccess) {

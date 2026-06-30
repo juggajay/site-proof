@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api';
@@ -31,6 +31,18 @@ interface AuditLogResponse {
   };
 }
 
+function getAuditLogFiltersFromSearchParams(searchParams: URLSearchParams): AuditLogFilterState {
+  return {
+    projectId: searchParams.get('projectId') || '',
+    entityType: searchParams.get('entityType') || '',
+    action: searchParams.get('action') || '',
+    userId: searchParams.get('userId') || '',
+    search: searchParams.get('search') || '',
+    startDate: searchParams.get('startDate') || '',
+    endDate: searchParams.get('endDate') || '',
+  };
+}
+
 export function AuditLogPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const exportInFlightRef = useRef(false);
@@ -41,15 +53,9 @@ export function AuditLogPage() {
   const exportLimit = 100;
 
   // Filter state
-  const [filters, setFilters] = useState<AuditLogFilterState>({
-    projectId: searchParams.get('projectId') || '',
-    entityType: searchParams.get('entityType') || '',
-    action: searchParams.get('action') || '',
-    userId: searchParams.get('userId') || '',
-    search: searchParams.get('search') || '',
-    startDate: searchParams.get('startDate') || '',
-    endDate: searchParams.get('endDate') || '',
-  });
+  const [filters, setFilters] = useState<AuditLogFilterState>(() =>
+    getAuditLogFiltersFromSearchParams(searchParams),
+  );
 
   const [showFilters, setShowFilters] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -57,6 +63,11 @@ export function AuditLogPage() {
 
   // Selected log for detail view
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
+
+  useEffect(() => {
+    setFilters(getAuditLogFiltersFromSearchParams(searchParams));
+    setPage(1);
+  }, [searchParams]);
 
   // Filter options from API
   const {

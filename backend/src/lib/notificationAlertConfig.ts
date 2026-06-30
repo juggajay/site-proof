@@ -3,6 +3,8 @@
  * routes and scheduled notification automation.
  */
 
+import type { NotificationTypeWithTiming } from './notificationAutomation/preferences.js';
+
 export type AlertType = 'overdue_ncr' | 'stale_hold_point' | 'pending_approval' | 'overdue_test';
 
 export type AlertEscalationConfig = {
@@ -45,3 +47,35 @@ export const ALERT_ESCALATION_CONFIG: Record<AlertType, AlertEscalationConfig> =
     escalationRoles: ['quality_manager', 'project_manager'],
   },
 };
+
+function normalizeAlertEntityType(entityType: string | null | undefined): string {
+  return (entityType ?? '').toLowerCase().replace(/[\s-]/g, '_');
+}
+
+export function getAlertEmailNotificationType(alert: {
+  type: string;
+  entityType?: string | null;
+}): NotificationTypeWithTiming {
+  const normalizedEntityType = normalizeAlertEntityType(alert.entityType);
+
+  if (alert.type === 'overdue_ncr' || normalizedEntityType === 'ncr') {
+    return 'ncrAssigned';
+  }
+
+  if (alert.type === 'stale_hold_point' || normalizedEntityType === 'hold_point') {
+    return 'holdPointReminder';
+  }
+
+  if (
+    normalizedEntityType === 'diary' ||
+    normalizedEntityType === 'daily_diary' ||
+    normalizedEntityType === 'dailydiary'
+  ) {
+    return 'diaryReminder';
+  }
+
+  // There is no docket/test-specific preference yet. Keep those operational
+  // backlog/escalation emails under the existing field reminder bucket instead
+  // of incorrectly tying them to NCR assignment preferences.
+  return 'holdPointReminder';
+}

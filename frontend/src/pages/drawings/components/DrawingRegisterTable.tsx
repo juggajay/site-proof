@@ -105,7 +105,9 @@ export function DrawingRegisterTable({
         <p className="mt-2 text-muted-foreground">
           {hasActiveFilters
             ? 'No drawings match the current filters.'
-            : 'Upload your first drawing to get started.'}
+            : canManageDrawings
+              ? 'Upload your first drawing to get started.'
+              : 'No project drawings are available yet.'}
         </p>
       </div>
     );

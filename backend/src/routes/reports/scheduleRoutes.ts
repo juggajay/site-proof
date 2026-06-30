@@ -5,6 +5,7 @@ import { prisma } from '../../lib/prisma.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
+import { AuditAction, createAuditLog } from '../../lib/auditLog.js';
 import {
   SCHEDULED_REPORT_FREQUENCIES,
   SCHEDULED_REPORT_TYPES,
@@ -13,11 +14,13 @@ import {
   MAX_SCHEDULED_REPORTS_PER_PROJECT,
   calculateNextScheduledReportRunAt,
 } from '../../lib/scheduledReports.js';
+import { projectTimeZoneFromState } from '../../lib/projectTimeZone.js';
 import {
   buildScheduledReportDeletedResponse,
   buildScheduledReportResponse,
   buildScheduledReportsResponse,
 } from '../reportResponses.js';
+import { sendScheduledReportArtifactFile } from '../../lib/scheduledReports/artifacts.js';
 
 const scheduledReportTypeSchema = z.enum(SCHEDULED_REPORT_TYPES);
 const scheduledReportFrequencySchema = z.enum(SCHEDULED_REPORT_FREQUENCIES);
@@ -31,6 +34,8 @@ const scheduledReportTimeOfDaySchema = z
   .string()
   .max(5)
   .regex(/^([01]\d|2[0-3]):[0-5]\d$/);
+const INCOMPLETE_SCHEDULED_REPORT_RUN_STATUSES = ['processing', 'failed', 'partial_failed'];
+const INCOMPLETE_SCHEDULED_REPORT_DELIVERY_STATUSES = ['pending', 'sending', 'failed'];
 
 type ScheduledReportFrequency = z.infer<typeof scheduledReportFrequencySchema>;
 type ScheduledReportType = z.infer<typeof scheduledReportTypeSchema>;
@@ -48,8 +53,65 @@ type ScheduledReportRouterDependencies = {
     user: AuthUser | undefined,
     projectId: string,
     options?: { requireWritable?: boolean },
-  ) => Promise<void>;
+  ) => Promise<string | null>;
+  requireScheduledReportArtifactAccess: (
+    user: AuthUser | undefined,
+    projectId: string,
+  ) => Promise<unknown>;
 };
+
+type ScheduledReportAuditSource = {
+  reportType: string;
+  frequency: string;
+  dayOfWeek: number | null;
+  dayOfMonth: number | null;
+  timeOfDay: string;
+  recipients: string;
+  isActive: boolean;
+};
+
+type ScheduledReportRunSummarySource = {
+  id: string;
+  status: string;
+  recipientCount: number;
+  sentCount: number;
+  failedCount: number;
+  digestCount: number;
+  suppressedCount: number;
+  errorReason: string | null;
+  generatedAt: Date;
+  completedAt: Date | null;
+  deliveries?: Array<{
+    status: string;
+    retryable: boolean;
+    nextAttemptAt: Date | null;
+  }>;
+};
+
+function buildScheduledReportRunSummary(run: ScheduledReportRunSummarySource) {
+  const retryableFailedDeliveries =
+    run.deliveries?.filter((delivery) => delivery.status === 'failed' && delivery.retryable) ?? [];
+  const nextRetryAt =
+    retryableFailedDeliveries
+      .map((delivery) => delivery.nextAttemptAt)
+      .filter((value): value is Date => Boolean(value))
+      .sort((left, right) => left.getTime() - right.getTime())[0] ?? null;
+
+  return {
+    id: run.id,
+    status: run.status,
+    recipientCount: run.recipientCount,
+    sentCount: run.sentCount,
+    failedCount: run.failedCount,
+    digestCount: run.digestCount,
+    suppressedCount: run.suppressedCount,
+    errorReason: run.errorReason,
+    generatedAt: run.generatedAt,
+    completedAt: run.completedAt,
+    retryableFailedCount: retryableFailedDeliveries.length,
+    nextRetryAt,
+  };
+}
 
 function parseScheduleRouteId(
   value: unknown,
@@ -159,6 +221,93 @@ function normalizeScheduledReportRecipients(value: unknown): string {
   return uniqueRecipients.join(',');
 }
 
+function parseNormalizedRecipientEmails(recipients: string): string[] {
+  return recipients
+    .split(',')
+    .map((email) => email.trim().toLowerCase())
+    .filter((email) => email.length > 0);
+}
+
+function getRecipientDomains(emails: string[]): string[] {
+  return Array.from(
+    new Set(emails.map((email) => email.split('@')[1] ?? '').filter((domain) => domain.length > 0)),
+  ).sort((left, right) => left.localeCompare(right));
+}
+
+async function buildScheduledReportAuditChanges(schedule: ScheduledReportAuditSource) {
+  const recipientEmails = parseNormalizedRecipientEmails(schedule.recipients);
+  const appRecipients =
+    recipientEmails.length === 0
+      ? []
+      : await prisma.user.findMany({
+          where: { email: { in: recipientEmails } },
+          select: { email: true },
+        });
+  const appRecipientEmails = new Set(
+    appRecipients.map((recipient) => recipient.email.toLowerCase()),
+  );
+  const appRecipientCount = recipientEmails.filter((email) => appRecipientEmails.has(email)).length;
+
+  return {
+    reportType: schedule.reportType,
+    frequency: schedule.frequency,
+    dayOfWeek: schedule.dayOfWeek,
+    dayOfMonth: schedule.dayOfMonth,
+    timeOfDay: schedule.timeOfDay,
+    isActive: schedule.isActive,
+    recipientCount: recipientEmails.length,
+    appRecipientCount,
+    externalRecipientCount: recipientEmails.length - appRecipientCount,
+    recipientDomains: getRecipientDomains(recipientEmails),
+  };
+}
+
+async function lockScheduledReportForUpdate(
+  client: Prisma.TransactionClient,
+  scheduleId: string,
+): Promise<void> {
+  await client.$queryRaw`
+    SELECT id
+    FROM scheduled_reports
+    WHERE id = ${scheduleId}
+    FOR UPDATE
+  `;
+}
+
+async function cancelIncompleteScheduledReportRuns(
+  client: Prisma.TransactionClient,
+  scheduleId: string,
+): Promise<void> {
+  const now = new Date();
+  const reason = 'Schedule configuration changed before retry completed';
+
+  await client.scheduledReportRecipientDelivery.updateMany({
+    where: {
+      scheduleId,
+      status: { in: INCOMPLETE_SCHEDULED_REPORT_DELIVERY_STATUSES },
+    },
+    data: {
+      status: 'cancelled',
+      retryable: false,
+      lockedUntil: null,
+      nextAttemptAt: null,
+      errorReason: reason,
+    },
+  });
+
+  await client.scheduledReportRun.updateMany({
+    where: {
+      scheduleId,
+      status: { in: INCOMPLETE_SCHEDULED_REPORT_RUN_STATUSES },
+    },
+    data: {
+      status: 'cancelled',
+      completedAt: now,
+      errorReason: reason,
+    },
+  });
+}
+
 function normalizeScheduleTiming(input: {
   frequency: ScheduledReportFrequency;
   dayOfWeek: unknown;
@@ -220,10 +369,41 @@ export async function assertScheduledReportCapacity(
 export function createScheduledReportRouter({
   parseRequiredString,
   requireScheduledReportAccess,
+  requireScheduledReportArtifactAccess,
 }: ScheduledReportRouterDependencies) {
   const scheduledReportRouter = Router();
 
   scheduledReportRouter.use(requireAuth);
+
+  // GET /api/reports/scheduled-runs/:runId/artifact - Download an immutable run PDF
+  scheduledReportRouter.get(
+    '/scheduled-runs/:runId/artifact',
+    asyncHandler(async (req, res) => {
+      const runId = parseRequiredString(req.params.runId, 'runId', 128);
+
+      const run = await prisma.scheduledReportRun.findUnique({
+        where: { id: runId },
+        select: {
+          id: true,
+          scheduleId: true,
+          projectId: true,
+          artifactFileUrl: true,
+          artifactReportName: true,
+          artifactFilename: true,
+          artifactMimeType: true,
+          artifactFileSize: true,
+          artifactSha256: true,
+        },
+      });
+
+      if (!run || !run.artifactFileUrl) {
+        throw AppError.notFound('Scheduled report artifact');
+      }
+
+      await requireScheduledReportArtifactAccess(req.user, run.projectId);
+      await sendScheduledReportArtifactFile(run, res);
+    }),
+  );
 
   // GET /api/reports/schedules - List scheduled reports for a project
   scheduledReportRouter.get(
@@ -231,15 +411,57 @@ export function createScheduledReportRouter({
     asyncHandler(async (req, res) => {
       const projectId = parseRequiredString(req.query.projectId, 'projectId');
 
-      await requireScheduledReportAccess(req.user, projectId, { requireWritable: true });
+      const projectState = await requireScheduledReportAccess(req.user, projectId, {
+        requireWritable: true,
+      });
+      const projectTimeZone = projectTimeZoneFromState(projectState);
 
       const schedules = await prisma.scheduledReport.findMany({
         where: { projectId },
+        include: {
+          runs: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: {
+              id: true,
+              status: true,
+              recipientCount: true,
+              sentCount: true,
+              failedCount: true,
+              digestCount: true,
+              suppressedCount: true,
+              errorReason: true,
+              generatedAt: true,
+              completedAt: true,
+              deliveries: {
+                where: {
+                  status: 'failed',
+                  retryable: true,
+                },
+                select: {
+                  status: true,
+                  retryable: true,
+                  nextAttemptAt: true,
+                },
+              },
+            },
+          },
+        },
         orderBy: { createdAt: 'desc' },
         take: MAX_SCHEDULED_REPORTS_PER_PROJECT,
       });
+      const responseSchedules = schedules.map(({ runs, ...schedule }) => ({
+        ...schedule,
+        latestRun: runs[0] ? buildScheduledReportRunSummary(runs[0]) : null,
+      }));
 
-      res.json(buildScheduledReportsResponse(schedules, MAX_SCHEDULED_REPORTS_PER_PROJECT));
+      res.json(
+        buildScheduledReportsResponse(
+          responseSchedules,
+          MAX_SCHEDULED_REPORTS_PER_PROJECT,
+          projectTimeZone,
+        ),
+      );
     }),
   );
 
@@ -254,7 +476,9 @@ export function createScheduledReportRouter({
       if (reportType === undefined || frequency === undefined || recipients === undefined) {
         throw AppError.badRequest('projectId, reportType, frequency, and recipients are required');
       }
-      await requireScheduledReportAccess(req.user, projectId, { requireWritable: true });
+      const projectState = await requireScheduledReportAccess(req.user, projectId, {
+        requireWritable: true,
+      });
 
       const normalizedReportType = parseScheduledReportType(reportType);
       const normalizedFrequency = parseScheduledReportFrequency(frequency);
@@ -271,6 +495,8 @@ export function createScheduledReportRouter({
         scheduleTiming.dayOfWeek,
         scheduleTiming.dayOfMonth,
         scheduleTiming.timeOfDay,
+        new Date(),
+        projectTimeZoneFromState(projectState),
       );
 
       const schedule = await prisma.$transaction(async (tx) => {
@@ -292,7 +518,19 @@ export function createScheduledReportRouter({
         });
       });
 
-      res.status(201).json(buildScheduledReportResponse(schedule));
+      await createAuditLog({
+        projectId,
+        userId,
+        entityType: 'scheduled_report',
+        entityId: schedule.id,
+        action: AuditAction.SCHEDULED_REPORT_CREATED,
+        changes: await buildScheduledReportAuditChanges(schedule),
+        req,
+      });
+
+      res
+        .status(201)
+        .json(buildScheduledReportResponse(schedule, projectTimeZoneFromState(projectState)));
     }),
   );
 
@@ -312,7 +550,10 @@ export function createScheduledReportRouter({
       if (!existing) {
         throw AppError.notFound('Scheduled report');
       }
-      await requireScheduledReportAccess(req.user, existing.projectId, { requireWritable: true });
+      const projectState = await requireScheduledReportAccess(req.user, existing.projectId, {
+        requireWritable: true,
+      });
+      const projectTimeZone = projectTimeZoneFromState(projectState);
 
       const updateData: Prisma.ScheduledReportUpdateInput = {};
 
@@ -328,14 +569,14 @@ export function createScheduledReportRouter({
         updateData.isActive = parseScheduleIsActive(isActive);
       }
 
-      const shouldResetFailureState =
+      const shouldCancelIncompleteRuns =
         reportType !== undefined ||
         frequency !== undefined ||
         dayOfWeek !== undefined ||
         dayOfMonth !== undefined ||
         timeOfDay !== undefined ||
-        recipients !== undefined ||
-        isActive === true;
+        recipients !== undefined;
+      const shouldResetFailureState = shouldCancelIncompleteRuns || isActive === true;
 
       if (
         frequency !== undefined ||
@@ -363,6 +604,8 @@ export function createScheduledReportRouter({
           scheduleTiming.dayOfWeek,
           scheduleTiming.dayOfMonth,
           scheduleTiming.timeOfDay,
+          new Date(),
+          projectTimeZone,
         );
       }
 
@@ -383,15 +626,35 @@ export function createScheduledReportRouter({
           existing.dayOfWeek,
           existing.dayOfMonth,
           existing.timeOfDay,
+          new Date(),
+          projectTimeZone,
         );
       }
 
-      const schedule = await prisma.scheduledReport.update({
-        where: { id },
-        data: updateData,
+      const schedule = await prisma.$transaction(async (tx) => {
+        await lockScheduledReportForUpdate(tx, id);
+
+        if (shouldCancelIncompleteRuns) {
+          await cancelIncompleteScheduledReportRuns(tx, id);
+        }
+
+        return tx.scheduledReport.update({
+          where: { id },
+          data: updateData,
+        });
       });
 
-      res.json(buildScheduledReportResponse(schedule));
+      await createAuditLog({
+        projectId: schedule.projectId,
+        userId: req.user?.id,
+        entityType: 'scheduled_report',
+        entityId: schedule.id,
+        action: AuditAction.SCHEDULED_REPORT_UPDATED,
+        changes: await buildScheduledReportAuditChanges(schedule),
+        req,
+      });
+
+      res.json(buildScheduledReportResponse(schedule, projectTimeZone));
     }),
   );
 
@@ -413,6 +676,16 @@ export function createScheduledReportRouter({
 
       await prisma.scheduledReport.delete({
         where: { id },
+      });
+
+      await createAuditLog({
+        projectId: existing.projectId,
+        userId: req.user?.id,
+        entityType: 'scheduled_report',
+        entityId: existing.id,
+        action: AuditAction.SCHEDULED_REPORT_DELETED,
+        changes: await buildScheduledReportAuditChanges(existing),
+        req,
       });
 
       res.json(buildScheduledReportDeletedResponse());

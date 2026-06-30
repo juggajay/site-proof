@@ -33,32 +33,32 @@ model Company {
 }
 
 model User {
-  id                 String    @id @default(uuid())
-  email              String    @unique
-  passwordHash       String?   @map("password_hash")
-  fullName           String?   @map("full_name")
-  phone              String?
-  avatarUrl          String?   @map("avatar_url")
-  companyId          String?   @map("company_id")
-  roleInCompany      String    @default("member") @map("role_in_company")
-  emailVerified      Boolean   @default(false) @map("email_verified")
-  emailVerifiedAt    DateTime? @map("email_verified_at")
-  tosAcceptedAt      DateTime? @map("tos_accepted_at")
-  tosVersion         String?   @map("tos_version")
+  id                    String    @id @default(uuid())
+  email                 String    @unique
+  passwordHash          String?   @map("password_hash")
+  fullName              String?   @map("full_name")
+  phone                 String?
+  avatarUrl             String?   @map("avatar_url")
+  companyId             String?   @map("company_id")
+  roleInCompany         String    @default("member") @map("role_in_company")
+  emailVerified         Boolean   @default(false) @map("email_verified")
+  emailVerifiedAt       DateTime? @map("email_verified_at")
+  tosAcceptedAt         DateTime? @map("tos_accepted_at")
+  tosVersion            String?   @map("tos_version")
   // MFA fields (Feature #22, #420, #421)
-  twoFactorEnabled   Boolean   @default(false) @map("two_factor_enabled")
-  twoFactorSecret    String?   @map("two_factor_secret")
+  twoFactorEnabled      Boolean   @default(false) @map("two_factor_enabled")
+  twoFactorSecret       String?   @map("two_factor_secret")
   // OAuth fields (Feature #414, #1004)
-  oauthProvider      String?   @map("oauth_provider")
-  oauthProviderId    String?   @map("oauth_provider_id")
+  oauthProvider         String?   @map("oauth_provider")
+  oauthProviderId       String?   @map("oauth_provider_id")
   // Token invalidation for logout-all-devices feature
-  tokenInvalidatedAt DateTime? @map("token_invalidated_at")
+  tokenInvalidatedAt    DateTime? @map("token_invalidated_at")
   // Account-level product-tour completion. Durable across devices and storage
   // clears so an existing user is never re-shown the first-run onboarding tour
   // (the per-device localStorage marker is only a cache on top of this).
   onboardingCompletedAt DateTime? @map("onboarding_completed_at")
-  createdAt          DateTime  @default(now()) @map("created_at")
-  updatedAt          DateTime  @updatedAt @map("updated_at")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
 
   company                     Company?                     @relation(fields: [companyId], references: [id], onDelete: SetNull)
   projectUsers                ProjectUser[]
@@ -100,6 +100,7 @@ model User {
   notificationEmailPreference NotificationEmailPreference?
   notificationDigestItems     NotificationDigestItem[]
   assignedNotificationAlerts  NotificationAlert[]          @relation("AssignedNotificationAlerts")
+  revokedAuthTokens           RevokedAuthToken[]
 
   @@index([companyId])
   @@map("users")
@@ -135,6 +136,20 @@ model ApiKey {
 
   @@index([userId, createdAt])
   @@map("api_keys")
+}
+
+model RevokedAuthToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  tokenHash String   @unique @map("token_hash")
+  expiresAt DateTime @map("expires_at")
+  revokedAt DateTime @default(now()) @map("revoked_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
+  @@map("revoked_auth_tokens")
 }
 
 // Feature #776: Privacy Consent Tracking
@@ -286,18 +301,25 @@ model NotificationEmailPreference {
 }
 
 model NotificationDigestItem {
-  id          String   @id @default(uuid())
-  userId      String   @map("user_id")
-  type        String
-  title       String
-  message     String
-  projectName String?  @map("project_name")
-  linkUrl     String?  @map("link_url")
-  createdAt   DateTime @default(now()) @map("created_at")
+  id                        String    @id @default(uuid())
+  userId                    String    @map("user_id")
+  type                      String
+  title                     String
+  message                   String
+  projectName               String?   @map("project_name")
+  linkUrl                   String?   @map("link_url")
+  sourceKey                 String?   @unique @map("source_key")
+  createdAt                 DateTime  @default(now()) @map("created_at")
+  deliveryFailureCount      Int       @default(0) @map("delivery_failure_count")
+  lastDeliveryFailureAt     DateTime? @map("last_delivery_failure_at")
+  lastDeliveryFailureReason String?   @map("last_delivery_failure_reason")
+  nextAttemptAt             DateTime? @map("next_attempt_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
+  @@index([userId, nextAttemptAt, createdAt], map: "digest_items_user_next_attempt_created_idx")
+  @@index([nextAttemptAt, createdAt], map: "digest_items_next_attempt_created_idx")
   @@map("notification_digest_items")
 }
 
@@ -355,7 +377,7 @@ model Project {
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
 
-  company                     Company                      @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  company                     Company                            @relation(fields: [companyId], references: [id], onDelete: Restrict)
   projectUsers                ProjectUser[]
   projectAreas                ProjectArea[]
   lots                        Lot[]
@@ -373,6 +395,8 @@ model Project {
   testResults                 TestResult[]
   lotSubcontractorAssignments LotSubcontractorAssignment[]
   scheduledReports            ScheduledReport[]
+  scheduledReportRuns         ScheduledReportRun[]
+  scheduledReportDeliveries   ScheduledReportRecipientDelivery[]
 
   @@unique([companyId, projectNumber])
   @@index([companyId, status])
@@ -470,6 +494,7 @@ model Lot {
   @@index([projectId])
   @@index([projectId, status])
   @@index([projectId, conformedAt])
+  @@index([createdById, createdAt], map: "lots_created_by_created_at_idx")
   @@map("lots")
 }
 
@@ -565,6 +590,7 @@ model ITPCompletion {
   @@unique([itpInstanceId, checklistItemId])
   @@index([itpInstanceId])
   @@index([verificationStatus])
+  @@index([completedById, completedAt], map: "itp_completions_completed_by_completed_at_idx")
   @@map("itp_completions")
 }
 
@@ -696,6 +722,7 @@ model TestResult {
   @@index([projectId, status])
   @@index([lotId])
   @@index([projectId, passFail])
+  @@index([enteredById, createdAt], map: "test_results_entered_by_created_at_idx")
   @@map("test_results")
 }
 
@@ -783,6 +810,8 @@ model NCR {
   @@index([projectId, dueDate])
   @@index([projectId, category, status])
   @@index([linkedTestResultId])
+  @@index([raisedById, raisedAt], map: "ncrs_raised_by_raised_at_idx")
+  @@index([responsibleUserId, raisedAt], map: "ncrs_responsible_user_raised_at_idx")
   @@map("ncrs")
 }
 
@@ -849,6 +878,7 @@ model DailyDiary {
 
   @@unique([projectId, date])
   @@index([projectId, date])
+  @@index([submittedById, createdAt], map: "daily_diaries_submitted_by_created_at_idx")
   @@map("daily_diaries")
 }
 
@@ -1024,6 +1054,7 @@ model SubcontractorCompany {
   primaryContactPhone   String?   @map("primary_contact_phone")
   status                String    @default("pending_approval")
   invitationExpiresAt   DateTime? @map("invitation_expires_at")
+  invitationTokenHash   String?   @unique @map("invitation_token_hash")
   approvedById          String?   @map("approved_by")
   approvedAt            DateTime? @map("approved_at")
   portalAccess          Json?     @map("portal_access")
@@ -1097,6 +1128,7 @@ model EmployeeRoster {
   role                   String?
   hourlyRate             Decimal   @map("hourly_rate")
   status                 String    @default("pending")
+  counterRate            Decimal?  @map("counter_rate")
   approvedById           String?   @map("approved_by")
   approvedAt             DateTime? @map("approved_at")
   createdAt              DateTime  @default(now()) @map("created_at")
@@ -1117,6 +1149,8 @@ model PlantRegister {
   dryRate                Decimal?  @map("dry_rate")
   wetRate                Decimal?  @map("wet_rate")
   status                 String    @default("pending")
+  counterDryRate         Decimal?  @map("counter_dry_rate")
+  counterWetRate         Decimal?  @map("counter_wet_rate")
   approvedById           String?   @map("approved_by")
   approvedAt             DateTime? @map("approved_at")
   createdAt              DateTime  @default(now()) @map("created_at")
@@ -1158,9 +1192,9 @@ model DailyDocket {
   diaryPersonnel DiaryPersonnel[]
   diaryPlant     DiaryPlant[]
 
+  @@unique([subcontractorCompanyId, projectId, date], map: "daily_dockets_subcontractor_company_id_project_id_date_key")
   @@index([projectId, date])
   @@index([projectId, status])
-  @@unique([subcontractorCompanyId, projectId, date], map: "daily_dockets_subcontractor_company_id_project_id_date_key")
   @@index([subcontractorCompanyId, date])
   @@index([subcontractorCompanyId, status])
   @@map("daily_dockets")
@@ -1514,13 +1548,77 @@ model ScheduledReport {
   createdAt         DateTime  @default(now()) @map("created_at")
   updatedAt         DateTime  @updatedAt @map("updated_at")
 
-  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  createdBy User?   @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  project    Project                            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy  User?                              @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  runs       ScheduledReportRun[]
+  deliveries ScheduledReportRecipientDelivery[]
 
   @@index([isActive, nextRunAt, createdAt])
   @@index([projectId, createdAt])
   @@index([createdById, createdAt])
   @@map("scheduled_reports")
+}
+
+model ScheduledReportRun {
+  id                 String    @id @default(uuid())
+  scheduleId         String    @map("schedule_id")
+  projectId          String    @map("project_id")
+  reportType         String    @map("report_type")
+  status             String    @default("processing")
+  recipientCount     Int       @default(0) @map("recipient_count")
+  sentCount          Int       @default(0) @map("sent_count")
+  failedCount        Int       @default(0) @map("failed_count")
+  digestCount        Int       @default(0) @map("digest_count")
+  suppressedCount    Int       @default(0) @map("suppressed_count")
+  errorReason        String?   @map("error_reason")
+  generatedAt        DateTime  @map("generated_at")
+  completedAt        DateTime? @map("completed_at")
+  artifactFileUrl    String?   @map("artifact_file_url")
+  artifactReportName String?   @map("artifact_report_name")
+  artifactFilename   String?   @map("artifact_filename")
+  artifactMimeType   String?   @map("artifact_mime_type")
+  artifactFileSize   Int?      @map("artifact_file_size")
+  artifactSha256     String?   @map("artifact_sha256")
+  artifactCreatedAt  DateTime? @map("artifact_created_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  schedule   ScheduledReport                    @relation(fields: [scheduleId], references: [id], onDelete: Cascade, map: "scheduled_report_runs_schedule_id_fkey")
+  project    Project                            @relation(fields: [projectId], references: [id], onDelete: Cascade, map: "scheduled_report_runs_project_id_fkey")
+  deliveries ScheduledReportRecipientDelivery[]
+
+  @@index([scheduleId, createdAt], map: "scheduled_report_runs_schedule_created_idx")
+  @@index([projectId, createdAt], map: "scheduled_report_runs_project_created_idx")
+  @@index([status, createdAt], map: "scheduled_report_runs_status_created_idx")
+  @@map("scheduled_report_runs")
+}
+
+model ScheduledReportRecipientDelivery {
+  id            String    @id @default(uuid())
+  runId         String    @map("run_id")
+  scheduleId    String    @map("schedule_id")
+  projectId     String    @map("project_id")
+  recipient     String
+  recipientKind String    @map("recipient_kind")
+  status        String    @default("pending")
+  retryable     Boolean   @default(false)
+  attemptCount  Int       @default(0) @map("attempt_count")
+  lockedUntil   DateTime? @map("locked_until")
+  lastAttemptAt DateTime? @map("last_attempt_at")
+  nextAttemptAt DateTime? @map("next_attempt_at")
+  errorReason   String?   @map("error_reason")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  run      ScheduledReportRun @relation(fields: [runId], references: [id], onDelete: Cascade, map: "scheduled_report_deliveries_run_id_fkey")
+  schedule ScheduledReport    @relation(fields: [scheduleId], references: [id], onDelete: Cascade, map: "scheduled_report_deliveries_schedule_id_fkey")
+  project  Project            @relation(fields: [projectId], references: [id], onDelete: Cascade, map: "scheduled_report_deliveries_project_id_fkey")
+
+  @@unique([runId, recipient], map: "scheduled_report_delivery_run_recipient_key")
+  @@index([scheduleId, status, nextAttemptAt], map: "scheduled_report_delivery_schedule_status_next_idx")
+  @@index([scheduleId, recipient, retryable], map: "scheduled_report_delivery_schedule_recipient_retry_idx")
+  @@index([projectId, createdAt], map: "scheduled_report_delivery_project_created_idx")
+  @@map("scheduled_report_recipient_deliveries")
 }
 
 // ============================================================================
@@ -1546,6 +1644,7 @@ model Comment {
   attachments CommentAttachment[]
 
   @@index([entityType, entityId])
+  @@index([authorId, createdAt], map: "comments_author_created_at_idx")
   @@map("comments")
 }
 

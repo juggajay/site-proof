@@ -13,6 +13,7 @@ describe('staticUploads', () => {
     expect(isPrivateUploadPath('/drawings/drawing.pdf')).toBe(true);
     expect(isPrivateUploadPath('/certificates/cert.pdf')).toBe(true);
     expect(isPrivateUploadPath('/comments/attachment.png')).toBe(true);
+    expect(isPrivateUploadPath('/scheduled-reports/project/schedule/run.pdf')).toBe(true);
     expect(isPrivateUploadPath('/avatars/avatar.png')).toBe(false);
     expect(isPrivateUploadPath('/company-logos/logo.png')).toBe(false);
   });
@@ -21,12 +22,13 @@ describe('staticUploads', () => {
     expect(isPrivateUploadPath('/documents%2Fprivate.pdf')).toBe(true);
     expect(isPrivateUploadPath('/drawings%5Cprivate.pdf')).toBe(true);
     expect(isPrivateUploadPath('/comments%252Fprivate.pdf')).toBe(true);
+    expect(isPrivateUploadPath('/scheduled-reports%2Fprivate.pdf')).toBe(true);
     expect(isPrivateUploadPath('/company-logos%2Flogo.png')).toBe(false);
   });
 
   it('denies protected uploads in production', () => {
     process.env.NODE_ENV = 'production';
-    const req = { path: '/documents/private.pdf' };
+    const req = { path: '/scheduled-reports/project/schedule/run.pdf' };
     const res = {
       statusCode: 0,
       headers: {} as Record<string, string>,

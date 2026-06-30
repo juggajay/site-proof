@@ -103,6 +103,14 @@ function setApi({ dockets = [] as DocketSeed[] } = {}) {
   });
 }
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
+
 function renderHome() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -229,6 +237,34 @@ describe('subbie shell HomeScreen', () => {
     renderHome();
     fireEvent.click(screen.getByRole('button', { name: "Add today's hours" }));
     expect(screen.getByText('docket editor')).toBeInTheDocument();
+  });
+
+  it('does not show the no-lots warning before assigned lots finish loading', async () => {
+    const lotsDeferred = createDeferred<{ lots: [] }>();
+    _ctx = makeCtx({
+      company: {
+        ...makeCtx().company!,
+        employees: [{ id: 'e1', name: 'Mick Hargraves', status: 'approved' }],
+      },
+    });
+    apiFetchMock.mockReset();
+    apiFetchMock.mockImplementation((url: string) => {
+      if (url.startsWith('/api/dockets')) return Promise.resolve({ dockets: [] });
+      if (url.startsWith('/api/lots')) return lotsDeferred.promise;
+      if (url.startsWith('/api/notifications')) return Promise.resolve({ notifications: [] });
+      return Promise.resolve({});
+    });
+
+    renderHome();
+
+    expect(screen.getByText("Start today's docket")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(apiFetchMock).toHaveBeenCalledWith(expect.stringMatching(/^\/api\/lots/)),
+    );
+    expect(screen.queryByText(/no lots assigned yet/i)).not.toBeInTheDocument();
+
+    lotsDeferred.resolve({ lots: [] });
+    expect(await screen.findByText(/no lots assigned yet/i)).toBeInTheDocument();
   });
 });
 

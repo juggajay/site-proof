@@ -301,6 +301,11 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
                   const supportItems = lot.readinessItems.filter(
                     (item) => item.severity === 'support',
                   );
+                  const percentageInputId = `claim-percent-${lot.id}`;
+                  const percentageError = getSelectedLotClaimIncrementError(
+                    lot.percentComplete,
+                    lot.remainingPercentage,
+                  );
 
                   return (
                     <div key={lot.id} className="p-3 hover:bg-muted/30">
@@ -354,45 +359,43 @@ export const CreateClaimModal = React.memo(function CreateClaimModal({
                           </p>
                         )}
                       {lot.selected && (
-                        <div className="mt-2 ml-7 flex items-center gap-3">
-                          <label className="text-sm text-muted-foreground">
+                        <div className="mt-2 ml-7 flex flex-wrap items-center gap-3">
+                          <label
+                            htmlFor={percentageInputId}
+                            className="text-sm text-muted-foreground"
+                          >
                             % to claim this time:
+                            <span className="sr-only"> for {lot.lotNumber}</span>
                           </label>
                           <Input
+                            id={percentageInputId}
                             type="number"
                             min={0.01}
                             max={lot.remainingPercentage}
                             step="0.01"
                             required
-                            aria-label="% to claim this time:"
+                            aria-invalid={Boolean(percentageError)}
+                            aria-describedby={
+                              percentageError ? `${percentageInputId}-error` : undefined
+                            }
                             value={lot.percentComplete}
                             onChange={(e) => updateLotPercentage(lot.id, e.target.value)}
                             className={`w-20 h-8 text-sm text-center ${
-                              getSelectedLotClaimIncrementError(
-                                lot.percentComplete,
-                                lot.remainingPercentage,
-                              )
-                                ? 'border-destructive'
-                                : ''
+                              percentageError ? 'border-destructive' : ''
                             }`}
                           />
                           <span className="text-sm">%</span>
                           <span className="ml-auto font-semibold text-primary">
                             {formatCurrency(calculateLotClaimAmount(lot))}
                           </span>
-                          {getSelectedLotClaimIncrementError(
-                            lot.percentComplete,
-                            lot.remainingPercentage,
-                          ) && (
+                          {percentageError && (
                             <span
+                              id={`${percentageInputId}-error`}
                               className="text-sm text-destructive"
                               role="alert"
                               aria-live="assertive"
                             >
-                              {getSelectedLotClaimIncrementError(
-                                lot.percentComplete,
-                                lot.remainingPercentage,
-                              )}
+                              {percentageError}
                             </span>
                           )}
                         </div>

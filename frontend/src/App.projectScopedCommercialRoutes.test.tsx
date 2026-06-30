@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { MemoryRouter, Outlet } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
 
 const authState = vi.hoisted(() => ({
@@ -15,10 +16,29 @@ const authState = vi.hoisted(() => ({
   loading: false,
 }));
 
+const projectAccessState = vi.hoisted(() => ({
+  role: 'project_manager',
+}));
+
 vi.mock('@/lib/auth', () => ({
   AuthProvider: ({ children }: { children: ReactNode }) => <>{children}</>,
   useAuth: () => ({ user: authState.user, loading: authState.loading }),
+  getAuthToken: vi.fn(() => 'test-token'),
 }));
+
+vi.mock('@/lib/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/api')>();
+  return {
+    ...actual,
+    apiFetch: vi.fn(async () => ({
+      access: {
+        hasProjectAccess: true,
+        role: projectAccessState.role,
+        isProjectAdmin: projectAccessState.role === 'project_manager',
+      },
+    })),
+  };
+});
 
 vi.mock('@/lib/offline/storagePersistence', () => ({
   requestPersistentStorage: vi.fn(),
@@ -45,6 +65,9 @@ vi.mock('@/components/dev/RoleSwitcher', () => ({ RoleSwitcher: () => null }));
 vi.mock('@/shell/shellFlag', () => ({ applyShellFlagFromUrl: vi.fn() }));
 vi.mock('@/shell/ShellGuard', () => ({
   ShellGuard: ({ children }: { children: ReactNode }) => <>{children}</>,
+}));
+vi.mock('@/shell/ShellRouteGuard', () => ({
+  ShellRouteGuard: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 vi.mock('@/shell/ShellRoutes', () => ({ ShellRoutes: () => <div>Shell routes</div> }));
 vi.mock('@/shell/SubbieShellGuard', () => ({
@@ -90,6 +113,7 @@ vi.mock('./appLazyPages', () => ({
   SubcontractorsPage: () => <div>Subcontractors</div>,
   MyCompanyPage: () => <div>My company</div>,
   ReportsPage: () => <div>Reports</div>,
+  ScheduledReportArtifactPage: () => <div>Scheduled report artifact</div>,
   SettingsPage: () => <div>Settings</div>,
   ProfilePage: () => <div>Profile</div>,
   NotificationsPage: () => <div>Notifications</div>,
@@ -120,10 +144,18 @@ vi.mock('./appLazyPages', () => ({
 import App from './App';
 
 function renderAppAt(path: string) {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+    },
+  });
+
   return render(
-    <MemoryRouter initialEntries={[path]}>
-      <App />
-    </MemoryRouter>,
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={[path]}>
+        <App />
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 
@@ -137,6 +169,7 @@ beforeEach(() => {
     dashboardRole: 'project_manager',
     companyId: 'company-1',
   };
+  projectAccessState.role = 'project_manager';
 });
 
 describe('project-scoped commercial routes', () => {
@@ -149,6 +182,60 @@ describe('project-scoped commercial routes', () => {
     renderAppAt(path);
 
     expect(await screen.findByText(expectedText)).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Access Denied' })).not.toBeInTheDocument();
+  });
+
+  it('blocks commercial project routes when this project only resolves to viewer access', async () => {
+    projectAccessState.role = 'viewer';
+
+    renderAppAt('/projects/project-1/claims');
+
+    expect(await screen.findByRole('heading', { name: 'Access Denied' })).toBeInTheDocument();
+    expect(screen.queryByText('Claims route reached')).not.toBeInTheDocument();
+  });
+
+  it('allows project-scoped viewers to open project documents read-only', async () => {
+    projectAccessState.role = 'viewer';
+
+    renderAppAt('/projects/project-1/documents');
+
+    expect(await screen.findByText('Documents')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Access Denied' })).not.toBeInTheDocument();
+  });
+
+  it.each(['quality_manager', 'site_manager'])(
+    'blocks project-scoped %s users from opening progress claims',
+    async (dashboardRole) => {
+      authState.user = {
+        id: `project-${dashboardRole}-1`,
+        email: `${dashboardRole}@example.com`,
+        role: 'member',
+        roleInCompany: 'member',
+        dashboardRole,
+        companyId: 'company-1',
+      };
+      projectAccessState.role = dashboardRole;
+
+      renderAppAt('/projects/project-1/claims');
+
+      expect(await screen.findByRole('heading', { name: 'Access Denied' })).toBeInTheDocument();
+      expect(screen.queryByText('Claims route reached')).not.toBeInTheDocument();
+    },
+  );
+
+  it('allows project-scoped quality managers to open the audit log', async () => {
+    authState.user = {
+      id: 'project-qm-1',
+      email: 'project-qm@example.com',
+      role: 'member',
+      roleInCompany: 'member',
+      dashboardRole: 'quality_manager',
+      companyId: 'company-1',
+    };
+
+    renderAppAt('/audit-log');
+
+    expect(await screen.findByText('Audit log')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Access Denied' })).not.toBeInTheDocument();
   });
 });

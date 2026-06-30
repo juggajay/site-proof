@@ -131,7 +131,11 @@ async function sendNotificationIfEnabled(
   }
 
   const timing = getNotificationTiming(preferences, notificationType);
-  if (timing === 'digest' && preferences.dailyDigest) {
+  if (timing === 'digest' && !preferences.dailyDigest) {
+    return { sent: false, queued: false, failed: false };
+  }
+
+  if (timing === 'digest') {
     await prisma.notificationDigestItem.create({
       data: {
         userId,

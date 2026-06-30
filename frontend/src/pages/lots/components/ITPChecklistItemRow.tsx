@@ -4,6 +4,7 @@ import type { ITPInstance, ITPAttachment, ITPCompletion } from '../types';
 import {
   canReviewItpItem,
   getItpVerificationDisplay,
+  isItpCompletionAcceptedForProgress,
   type ItpVerificationTone,
 } from './itpChecklistTabHelpers';
 
@@ -70,9 +71,12 @@ export function ITPChecklistItemRow({
   onVerifyCompletion,
   onRequestReject,
 }: ITPChecklistItemRowProps) {
-  const isCompleted = completion?.isCompleted || false;
-  const isNotApplicable = completion?.isNotApplicable || false;
+  const isAcceptedCompletion = isItpCompletionAcceptedForProgress(completion);
+  const isCompleted = isAcceptedCompletion && (completion?.isCompleted || false);
+  const isNotApplicable = isAcceptedCompletion && (completion?.isNotApplicable || false);
   const isFailed = completion?.isFailed || false;
+  const isPendingVerification =
+    completion?.isPendingVerification || completion?.verificationStatus === 'pending_verification';
   const notes = completion?.notes || '';
   // I1-core: a hold-point item cannot be ticked complete via the bare checkbox —
   // it must go through the hold-point release flow (which records attribution).
@@ -95,23 +99,36 @@ export function ITPChecklistItemRow({
           onClick={() =>
             !isNotApplicable &&
             !isFailed &&
+            !isPendingVerification &&
             !isHoldPointLocked &&
             onToggleCompletion(item.id, isCompleted, notes)
           }
           disabled={
-            updatingCompletion === item.id || isNotApplicable || isFailed || isHoldPointLocked
+            updatingCompletion === item.id ||
+            isNotApplicable ||
+            isFailed ||
+            isPendingVerification ||
+            isHoldPointLocked
           }
-          title={isHoldPointLocked ? 'Release this hold point to complete it' : undefined}
+          title={
+            isPendingVerification
+              ? 'Awaiting head-contractor verification'
+              : isHoldPointLocked
+                ? 'Release this hold point to complete it'
+                : undefined
+          }
           aria-label={
             isFailed
               ? 'Failed'
               : isNotApplicable
                 ? 'Not Applicable'
-                : isHoldPointLocked
-                  ? `Release the hold point "${item.description}" to complete it`
-                  : isCompleted
-                    ? `Mark "${item.description}" as incomplete`
-                    : `Mark "${item.description}" as complete`
+                : isPendingVerification
+                  ? `Awaiting verification for "${item.description}"`
+                  : isHoldPointLocked
+                    ? `Release the hold point "${item.description}" to complete it`
+                    : isCompleted
+                      ? `Mark "${item.description}" as incomplete`
+                      : `Mark "${item.description}" as complete`
           }
           className={`mt-0.5 flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
             isFailed
@@ -120,9 +137,11 @@ export function ITPChecklistItemRow({
                 ? 'bg-muted-foreground border-muted-foreground text-background cursor-not-allowed'
                 : isHoldPointLocked
                   ? 'border-border bg-muted/50 cursor-not-allowed'
-                  : isCompleted
-                    ? 'bg-primary border-primary text-primary-foreground'
-                    : 'border-border hover:border-primary'
+                  : isPendingVerification
+                    ? 'border-warning bg-warning/10 cursor-not-allowed'
+                    : isCompleted
+                      ? 'bg-primary border-primary text-primary-foreground'
+                      : 'border-border hover:border-primary'
           } ${updatingCompletion === item.id ? 'opacity-50' : ''}`}
         >
           {isFailed ? (
@@ -399,7 +418,7 @@ export function ITPChecklistItemRow({
             )}
 
             {/* Mark as N/A and Mark as Failed Buttons - only show for pending items */}
-            {!isCompleted && !isNotApplicable && !isFailed && (
+            {!isCompleted && !isNotApplicable && !isFailed && !isPendingVerification && (
               <div className="flex items-center gap-2 ml-3">
                 <button
                   onClick={() => onMarkAsNA(item.id, item.description)}

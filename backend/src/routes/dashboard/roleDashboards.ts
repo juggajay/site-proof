@@ -416,7 +416,7 @@ dashboardRoleDashboardsRouter.get(
       status: ncr.status,
       dueDate: ncr.dueDate?.toISOString() || null,
       daysOpen: Math.floor((Date.now() - ncr.createdAt.getTime()) / (1000 * 60 * 60 * 24)),
-      link: `/projects/${projectId}/ncr?ncrId=${ncr.id}`,
+      link: `/projects/${projectId}/ncr?ncr=${ncr.id}`,
     }));
 
     const pendingVerificationItems = pendingVerifications.map((pv) => ({

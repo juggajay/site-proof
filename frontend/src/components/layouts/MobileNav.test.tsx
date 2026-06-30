@@ -41,6 +41,15 @@ function setUser(user: TestUser | null) {
   useAuthMock.mockReturnValue({ user } as unknown as ReturnType<typeof useAuth>);
 }
 
+function mockProjectDetail(
+  currentUserRole: string | null = 'project_manager',
+  settings: Record<string, unknown> = { enabledModules: {} },
+) {
+  apiFetchMock.mockResolvedValue({
+    project: { name: 'Project One', currentUserRole, settings },
+  });
+}
+
 // Render MobileNav under a real route so useParams() resolves :projectId the same
 // way it does inside the app's project routes.
 function renderNav(initialPath = '/projects/p1/lots') {
@@ -61,9 +70,7 @@ afterEach(() => {
 
 describe('MobileNav menu trigger', () => {
   beforeEach(() => {
-    apiFetchMock.mockResolvedValue({
-      project: { name: 'Project One', settings: { enabledModules: {} } },
-    });
+    mockProjectDetail();
   });
 
   it('shows a Menu trigger for an admin on mobile', () => {
@@ -74,7 +81,7 @@ describe('MobileNav menu trigger', () => {
     expect(screen.getByRole('button', { name: /open menu/i })).toBeInTheDocument();
   });
 
-  it('opens the slide-out drawer with management entries when tapped (PM)', () => {
+  it('opens the slide-out drawer with management entries when tapped (PM)', async () => {
     setUser({ role: 'project_manager', companyId: 'c1' });
 
     renderNav();
@@ -84,17 +91,17 @@ describe('MobileNav menu trigger', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /open menu/i }));
 
-    expect(screen.getByRole('link', { name: /test results/i })).toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: /test results/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /documents/i })).toBeInTheDocument();
   });
 
-  it('closes the drawer when a drawer entry is navigated', () => {
+  it('closes the drawer when a drawer entry is navigated', async () => {
     setUser({ role: 'admin', companyId: 'c1' });
 
     renderNav();
 
     fireEvent.click(screen.getByRole('button', { name: /open menu/i }));
-    const documentsLink = screen.getByRole('link', { name: /documents/i });
+    const documentsLink = await screen.findByRole('link', { name: /documents/i });
     expect(documentsLink).toBeInTheDocument();
 
     fireEvent.click(documentsLink);
@@ -121,16 +128,17 @@ describe('MobileNav menu trigger', () => {
     expect(screen.queryByRole('button', { name: /open menu/i })).not.toBeInTheDocument();
   });
 
-  it('renders foreman bottom nav for project-role foremen whose company role is member', () => {
+  it('renders foreman bottom nav for project-role foremen whose company role is member', async () => {
+    mockProjectDetail('foreman');
     setUser({ role: 'member', roleInCompany: 'member', dashboardRole: 'foreman', companyId: 'c1' });
 
     renderNav();
 
-    expect(screen.getByText('Foreman bottom nav')).toBeInTheDocument();
+    expect(await screen.findByText('Foreman bottom nav')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /open menu/i })).not.toBeInTheDocument();
   });
 
-  it('shows commercial drawer links for project-scoped project managers', () => {
+  it('shows commercial drawer links for project-scoped project managers', async () => {
     setUser({
       role: 'member',
       roleInCompany: 'member',
@@ -142,19 +150,65 @@ describe('MobileNav menu trigger', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /open menu/i }));
 
-    expect(screen.getByRole('link', { name: /progress claims/i })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole('link', { name: /progress claims/i })).toBeInTheDocument();
+    });
     expect(screen.getByRole('link', { name: /costs/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /subcontractors/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /project settings/i })).toBeInTheDocument();
   });
 
-  it('hides project settings for site managers in the mobile drawer', () => {
+  it('does not expose aggregate project-manager drawer links while the project role is loading', () => {
+    apiFetchMock.mockReturnValue(new Promise(() => {}) as ReturnType<typeof apiFetch>);
+    setUser({
+      role: 'member',
+      roleInCompany: 'member',
+      dashboardRole: 'project_manager',
+      companyId: 'c1',
+    });
+
+    renderNav();
+    fireEvent.click(screen.getByRole('button', { name: /open menu/i }));
+
+    expect(screen.getAllByRole('link', { name: /lots/i }).length).toBeGreaterThan(0);
+    expect(screen.getByRole('link', { name: /reports/i })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /progress claims/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /costs/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /subcontractors/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /project settings/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /documents/i })).not.toBeInTheDocument();
+  });
+
+  it('uses the loaded project role instead of aggregate dashboard role in the drawer', async () => {
+    mockProjectDetail('viewer');
+    setUser({
+      role: 'member',
+      roleInCompany: 'member',
+      dashboardRole: 'project_manager',
+      companyId: 'c1',
+    });
+
+    renderNav();
+    fireEvent.click(screen.getByRole('button', { name: /open menu/i }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole('link', { name: /progress claims/i })).not.toBeInTheDocument();
+    });
+    expect(screen.queryByRole('link', { name: /project settings/i })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: /lots/i }).length).toBeGreaterThan(0);
+    expect(screen.getByRole('link', { name: /reports/i })).toBeInTheDocument();
+  });
+
+  it('hides project settings for site managers in the mobile drawer', async () => {
+    mockProjectDetail('site_manager');
     setUser({ role: 'site_manager', roleInCompany: 'site_manager', companyId: 'c1' });
 
     renderNav();
     fireEvent.click(screen.getByRole('button', { name: /open menu/i }));
 
-    expect(screen.getByRole('link', { name: /subcontractors/i })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole('link', { name: /subcontractors/i })).toBeInTheDocument();
+    });
     expect(screen.queryByRole('link', { name: /project settings/i })).not.toBeInTheDocument();
   });
 
@@ -187,6 +241,7 @@ describe('MobileNav menu trigger', () => {
     apiFetchMock.mockResolvedValue({
       project: {
         name: 'Project One',
+        currentUserRole: 'project_manager',
         settings: {
           enabledModules: {
             dailyDiary: false,
@@ -214,6 +269,7 @@ describe('MobileNav menu trigger', () => {
   });
 
   it('limits viewer project drawer links to lots and reports', () => {
+    mockProjectDetail('viewer');
     setUser({
       role: 'member',
       roleInCompany: 'member',

@@ -256,6 +256,32 @@ describe('OAuth Routes', () => {
       });
       expect(storedState).toBeDefined();
     });
+
+    it('should store only safe app redirects with the OAuth state', async () => {
+      const res = await request(app)
+        .get('/api/auth/google')
+        .query({ redirect: '/projects/project-1/ncr?ncrId=ncr-123' });
+      const state = new URL(res.headers.location, 'http://example.com').searchParams.get('state');
+
+      expect(state).toBeDefined();
+
+      const storedState = await prisma.oauthState.findUnique({
+        where: { stateHash: hashOAuthStateForTest(state!) },
+      });
+      expect(storedState?.redirectUri).toBe('/projects/project-1/ncr?ncrId=ncr-123');
+
+      const unsafeRes = await request(app)
+        .get('/api/auth/google')
+        .query({ redirect: 'https://evil.example/projects/project-1' });
+      const unsafeState = new URL(
+        unsafeRes.headers.location,
+        'http://example.com',
+      ).searchParams.get('state');
+      const unsafeStoredState = await prisma.oauthState.findUnique({
+        where: { stateHash: hashOAuthStateForTest(unsafeState!) },
+      });
+      expect(unsafeStoredState?.redirectUri).toBeNull();
+    });
   });
 
   describe('GET /api/auth/google/callback', () => {
@@ -405,7 +431,12 @@ describe('OAuth Routes', () => {
     });
 
     it('should redirect with a one-time code instead of a JWT and exchange it once', async () => {
-      const state = await createValidOAuthStateForTest();
+      const state = crypto.randomBytes(16).toString('hex');
+      await createStoredOAuthState({
+        state,
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+        redirectUri: '/projects/project-1/ncr?ncrId=ncr-123',
+      });
       const email = `oauth-callback-${Date.now()}@example.com`;
       const googleSub = `google-callback-${Date.now()}`;
       const idToken = createGoogleIdTokenForTest({
@@ -438,6 +469,9 @@ describe('OAuth Routes', () => {
         const callbackUrl = new URL(res.headers.location, 'http://localhost:5174');
         const callbackCode = callbackUrl.searchParams.get('code');
         expect(callbackCode).toBeDefined();
+        expect(callbackUrl.searchParams.get('redirect')).toBe(
+          '/projects/project-1/ncr?ncrId=ncr-123',
+        );
 
         const rawMatches = await prisma.$queryRaw<Array<{ id: string }>>`
           SELECT id FROM oauth_callback_codes WHERE code_hash = ${callbackCode}

@@ -287,7 +287,7 @@ describe('Dockets API', () => {
       }
     });
 
-    it('returns legacy create-hour fields but never seeds the submitted-cost columns with hours', async () => {
+    it('ignores legacy create-hour fields and never seeds submitted-cost columns with hours', async () => {
       const date = '2031-05-21';
       let createdDocketId: string | undefined;
 
@@ -305,13 +305,12 @@ describe('Dockets API', () => {
 
         expect(res.status).toBe(201);
         createdDocketId = res.body.docket.id;
-        // Legacy create-hour echo fields are returned verbatim from the request...
-        expect(res.body.docket.labourHours).toBe(3.25);
-        expect(res.body.docket.plantHours).toBe(2);
-        // ...but totalLabourSubmitted/totalPlantSubmitted are dollar COSTS (see
+        // totalLabourSubmitted/totalPlantSubmitted are dollar COSTS (see
         // refreshLabourSubmittedTotals), not hours, and are recomputed from
-        // entries. A freshly created docket has no entries, so they must be 0 —
-        // create must never persist the submitted hours into the cost columns.
+        // entries. A freshly created docket has no entries, so both the public
+        // hour fields and persisted cost columns must start at zero.
+        expect(res.body.docket.labourHours).toBe(0);
+        expect(res.body.docket.plantHours).toBe(0);
         expect(res.body.docket.totalLabourSubmitted).toBe(0);
         expect(res.body.docket.totalPlantSubmitted).toBe(0);
 
@@ -2219,6 +2218,14 @@ describe('Dockets API', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.docket.status).toBe('rejected');
+
+      const stored = await prisma.dailyDocket.findUniqueOrThrow({
+        where: { id: rejectableDocketId },
+        select: { status: true, approvedById: true, approvedAt: true },
+      });
+      expect(stored.status).toBe('rejected');
+      expect(stored.approvedById).toBeNull();
+      expect(stored.approvedAt).toBeNull();
 
       const auditLog = await prisma.auditLog.findFirst({
         where: {

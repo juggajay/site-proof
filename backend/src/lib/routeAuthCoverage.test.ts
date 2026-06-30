@@ -480,13 +480,13 @@ describe('route authentication coverage', () => {
       'Logged out successfully',
     );
     expect(routeSourceForDescriptor(sessionRoutesSource, 'POST /logout')).toContain(
-      'invalidateBearerSession(req)',
+      'revokeCurrentBearerSession(req)',
     );
     expect(routeSourceForDescriptor(sessionRoutesSource, 'POST /logout')).toContain(
       'AuditAction.USER_LOGOUT',
     );
     expect(routeSourceForDescriptor(sessionRoutesSource, 'POST /logout-all-devices')).toContain(
-      'invalidateBearerSession(req)',
+      'invalidateAllBearerSessions(req)',
     );
     expect(routeSourceForDescriptor(sessionRoutesSource, 'POST /logout-all-devices')).toContain(
       'AuditAction.USER_LOGOUT',
@@ -645,7 +645,11 @@ describe('route authentication coverage', () => {
       'POST /oauth/exchange',
       'POST /oauth/mock',
     ]);
+    expect(routeSourceForDescriptor(oauthSource, 'GET /google')).toContain('authRateLimiter');
     expect(routeSourceForDescriptor(oauthSource, 'GET /google')).toContain('createOAuthState');
+    expect(routeSourceForDescriptor(oauthSource, 'GET /google/callback')).toContain(
+      'authRateLimiter',
+    );
     expect(routeSourceForDescriptor(oauthSource, 'GET /google/callback')).toContain(
       'verifyOAuthState(callbackParams.state)',
     );

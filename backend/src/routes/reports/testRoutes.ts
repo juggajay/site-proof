@@ -26,6 +26,7 @@ type TestReportRouterDependencies = {
     value: unknown,
     fieldName: string,
     endOfDay?: boolean,
+    timeZone?: string,
   ) => ParsedDateQuery | undefined;
   parseOptionalCommaSeparatedQuery: (value: unknown, fieldName: string) => string[];
   validateDateRange: (
@@ -33,6 +34,7 @@ type TestReportRouterDependencies = {
     endDate: ParsedDateQuery | undefined,
   ) => void;
   requireReportProjectAccess: (user: AuthUser | undefined, projectId: string) => Promise<string>;
+  resolveReportProjectTimeZone: (projectId: string) => Promise<string>;
   groupedCountsToRecord: (
     groups: GroupedCount[],
     key: string,
@@ -47,6 +49,7 @@ export function createTestReportRouter({
   parseOptionalCommaSeparatedQuery,
   validateDateRange,
   requireReportProjectAccess,
+  resolveReportProjectTimeZone,
   groupedCountsToRecord,
 }: TestReportRouterDependencies): Router {
   const router = Router();
@@ -61,6 +64,7 @@ export function createTestReportRouter({
       const projectId = parseRequiredString(req.query.projectId, 'projectId');
 
       await requireReportProjectAccess(req.user, projectId);
+      const projectTimeZone = await resolveReportProjectTimeZone(projectId);
 
       // Pagination parameters
       const { pageNum, limitNum, skip } = parseReportPagination(page, limit);
@@ -69,8 +73,13 @@ export function createTestReportRouter({
       const whereClause: Prisma.TestResultWhereInput = { projectId };
 
       // Filter by date range (using sample date)
-      const parsedStartDate = parseOptionalDateQuery(startDate, 'startDate');
-      const parsedEndDate = parseOptionalDateQuery(endDate, 'endDate', true);
+      const parsedStartDate = parseOptionalDateQuery(
+        startDate,
+        'startDate',
+        false,
+        projectTimeZone,
+      );
+      const parsedEndDate = parseOptionalDateQuery(endDate, 'endDate', true, projectTimeZone);
       validateDateRange(parsedStartDate, parsedEndDate);
       if (parsedStartDate || parsedEndDate) {
         const sampleDate: Prisma.DateTimeNullableFilter = {};

@@ -76,5 +76,46 @@ describe('DocketApprovalsMobileView skeleton loading state', () => {
 
     expect(screen.getByText('$1,100.00')).toBeInTheDocument();
     expect(screen.getByText('$1,500.00').className).toContain('line-through');
+    expect(screen.getByText('6h')).toBeInTheDocument();
+    expect(screen.getByText('8h').className).toContain('line-through');
+    expect(screen.getByText('3h')).toBeInTheDocument();
+    expect(screen.getByText('4h').className).toContain('line-through');
+  });
+
+  it('shows restricted instead of zero when docket costs are redacted', () => {
+    const docket: Props['filteredDockets'][number] = {
+      id: 'docket-1',
+      docketNumber: 'DKT-001',
+      subcontractor: 'Ryox Carpentry',
+      subcontractorId: 'sub-1',
+      date: '2026-06-04',
+      status: 'pending_approval',
+      notes: null,
+      labourHours: 8,
+      plantHours: 4,
+      totalLabourSubmitted: null,
+      totalLabourApproved: 8,
+      totalPlantSubmitted: null,
+      totalPlantApproved: 4,
+      totalLabourApprovedCost: null,
+      totalPlantApprovedCost: null,
+      submittedAt: '2026-06-04T08:00:00.000Z',
+      approvedAt: null,
+      foremanNotes: null,
+    };
+
+    renderWithProviders(
+      <DocketApprovalsMobileView
+        {...buildProps({
+          dockets: [docket],
+          filteredDockets: [docket],
+          totalLabourHours: 8,
+          totalPlantHours: 4,
+        })}
+      />,
+    );
+
+    expect(screen.getByText('Restricted')).toBeInTheDocument();
+    expect(screen.queryByText('$0.00')).not.toBeInTheDocument();
   });
 });

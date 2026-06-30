@@ -17,6 +17,8 @@ import { type Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
+import { getAlertEmailNotificationType } from '../../lib/notificationAlertConfig.js';
+import { isStandaloneSubcontractorPortalIdentity } from '../../lib/projectAccess.js';
 import {
   MAX_NOTIFICATION_FILTER_LENGTH,
   MAX_NOTIFICATION_MESSAGE_LENGTH,
@@ -25,7 +27,7 @@ import {
   parseOptionalString,
   parseRequiredString,
 } from './validation.js';
-import { buildProjectEntityLink } from './links.js';
+import { buildProjectEntityLink, buildSubcontractorPortalEntityLink } from './links.js';
 import {
   canReceiveProjectAlert,
   getAccessibleActiveProjectIds,
@@ -34,7 +36,6 @@ import {
   requireAlertResolveAccess,
   requireNotificationAdmin,
   requireProjectNotificationAdminAccess,
-  requireProjectReadAccess,
 } from './access.js';
 import {
   generateAlertId,
@@ -59,6 +60,46 @@ import { notificationSystemAlertsRouter } from './systemAlerts.js';
 
 export const notificationAlertsRouter = Router();
 export const MAX_ALERT_LIST_RESULTS = 500;
+
+async function buildAlertNotificationLinkForRecipient({
+  assignedTo,
+  entityType,
+  entityId,
+  projectId,
+}: {
+  assignedTo: string;
+  entityType: string;
+  entityId: string;
+  projectId: string | null | undefined;
+}): Promise<string> {
+  if (!projectId) {
+    return buildProjectEntityLink(entityType, entityId, projectId);
+  }
+
+  const assignedUser = await prisma.user.findUnique({
+    where: { id: assignedTo },
+    select: { companyId: true, roleInCompany: true },
+  });
+
+  if (!assignedUser || !isStandaloneSubcontractorPortalIdentity(assignedUser)) {
+    return buildProjectEntityLink(entityType, entityId, projectId);
+  }
+
+  const subcontractorUser = await prisma.subcontractorUser.findFirst({
+    where: {
+      userId: assignedTo,
+      subcontractorCompany: {
+        projectId,
+        status: 'approved',
+      },
+    },
+    select: { subcontractorCompanyId: true },
+  });
+
+  return buildSubcontractorPortalEntityLink(entityType, entityId, projectId, {
+    subcontractorCompanyId: subcontractorUser?.subcontractorCompanyId,
+  });
+}
 
 // ============================================================================
 // ALERT ESCALATION SYSTEM
@@ -104,7 +145,7 @@ notificationAlertsRouter.post(
     );
 
     if (alertProjectId) {
-      await requireProjectReadAccess(user, alertProjectId);
+      await requireProjectNotificationAdminAccess(user, alertProjectId);
       if (!(await canReceiveProjectAlert(assignedTo, alertProjectId, entityType))) {
         throw AppError.forbidden('Assigned user does not have project access');
       }
@@ -127,6 +168,12 @@ notificationAlertsRouter.post(
     };
 
     const savedAlert = await createAlertRecord(alert);
+    const linkUrl = await buildAlertNotificationLinkForRecipient({
+      assignedTo,
+      entityType,
+      entityId,
+      projectId: alertProjectId,
+    });
 
     // Create in-app notification for assigned user
     await prisma.notification.create({
@@ -136,7 +183,7 @@ notificationAlertsRouter.post(
         type: `alert_${alertType}`,
         title,
         message,
-        linkUrl: buildProjectEntityLink(entityType, entityId, alertProjectId),
+        linkUrl,
       },
     });
 
@@ -164,43 +211,60 @@ notificationAlertsRouter.get(
 
     const accessibleProjectIdList = await getAccessibleActiveProjectIds(user);
     const accessibleProjectIds = new Set(accessibleProjectIdList);
-    const alertFilters: Prisma.NotificationAlertWhereInput[] = [
+    const commonAlertFilters: Prisma.NotificationAlertWhereInput[] = [];
+
+    if (status === 'active') {
+      commonAlertFilters.push({ resolvedAt: null });
+    } else if (status === 'resolved') {
+      commonAlertFilters.push({ resolvedAt: { not: null } });
+    } else if (status === 'escalated') {
+      commonAlertFilters.push({ resolvedAt: null, escalationLevel: { gt: 0 } });
+    }
+
+    if (type) {
+      commonAlertFilters.push({ type });
+    }
+
+    const scopedAlertFilters: Prisma.NotificationAlertWhereInput[] = [
+      ...commonAlertFilters,
       {
         OR: [
           { assignedToId: userId },
           ...(accessibleProjectIdList.length > 0
             ? [{ projectId: { in: accessibleProjectIdList } }]
             : []),
-          // Keep escalated recipients visible even when they are not project members.
-          // JSON array contains filters are not portable across the test/runtime DBs.
-          { escalationLevel: { gt: 0 } },
         ],
       },
     ];
 
-    if (status === 'active') {
-      alertFilters.push({ resolvedAt: null });
-    } else if (status === 'resolved') {
-      alertFilters.push({ resolvedAt: { not: null } });
-    } else if (status === 'escalated') {
-      alertFilters.push({ resolvedAt: null, escalationLevel: { gt: 0 } });
-    }
-
-    if (type) {
-      alertFilters.push({ type });
-    }
-
     if (assignedTo) {
-      alertFilters.push({
-        OR: [{ assignedToId: assignedTo }, { escalationLevel: { gt: 0 } }],
-      });
+      scopedAlertFilters.push({ assignedToId: assignedTo });
     }
 
-    const alertRecords = await prisma.notificationAlert.findMany({
-      where: { AND: alertFilters },
+    const scopedAlertRecords = await prisma.notificationAlert.findMany({
+      where: { AND: scopedAlertFilters },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: MAX_ALERT_LIST_RESULTS,
     });
+
+    // Keep escalated recipients visible even when they are not project members.
+    // JSON array contains filters are not portable across the test/runtime DBs,
+    // so escalated alerts are scanned separately before the in-memory
+    // `escalatedTo` access filter is applied. This avoids unrelated escalated
+    // alerts crowding accessible alerts out of the capped scoped query.
+    const escalatedAlertRecords = await prisma.notificationAlert.findMany({
+      where: { AND: [...commonAlertFilters, { escalationLevel: { gt: 0 } }] },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    });
+
+    const alertRecords = Array.from(
+      new Map(
+        [...scopedAlertRecords, ...escalatedAlertRecords].map((alertRecord) => [
+          alertRecord.id,
+          alertRecord,
+        ]),
+      ).values(),
+    );
 
     let alerts = alertRecords
       .map(toAlert)
@@ -359,8 +423,9 @@ notificationAlertsRouter.post(
             },
           });
 
-          // Send email notification for escalation (always immediate for escalations)
-          await sendNotificationIfEnabled(escalationUser.id, 'ncrAssigned', {
+          const emailNotificationType = getAlertEmailNotificationType(alert);
+
+          await sendNotificationIfEnabled(escalationUser.id, emailNotificationType, {
             title: `ESCALATED ALERT: ${alert.title}`,
             message: `This alert has been escalated to you because it was not resolved within ${newLevel === 1 ? config.firstEscalationAfterHours : config.secondEscalationAfterHours} hours.\n\n${alert.message}`,
             linkUrl: buildProjectEntityLink(alert.entityType, alert.entityId, alert.projectId),

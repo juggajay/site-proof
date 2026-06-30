@@ -3,6 +3,7 @@ import { Router, Request, Response } from 'express';
 import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
 import { AppError } from '../lib/AppError.js';
+import { AuditAction, writeAuditLogInTransaction } from '../lib/auditLog.js';
 import { asyncHandler } from '../lib/asyncHandler.js';
 import { assertUploadedFileMatchesDeclaredType } from '../lib/imageValidation.js';
 import {
@@ -34,23 +35,46 @@ router.use(drawingReadRoutes);
 
 async function requireSupersededByInProject(
   projectId: string,
-  drawingId: string,
+  drawing: { id: string; drawingNumber: string },
   supersededById?: string | null,
 ): Promise<void> {
   if (!supersededById) return;
 
-  if (supersededById === drawingId) {
+  if (supersededById === drawing.id) {
     throw AppError.badRequest('supersededById must reference another drawing in the same project');
   }
 
   const supersedingDrawing = await prisma.drawing.findFirst({
     where: { id: supersededById, projectId },
-    select: { id: true },
+    select: { id: true, drawingNumber: true, supersededById: true },
   });
 
   if (!supersedingDrawing) {
     throw AppError.badRequest('supersededById must reference a drawing in the same project');
   }
+
+  if (supersedingDrawing.drawingNumber !== drawing.drawingNumber) {
+    throw AppError.badRequest(
+      'supersededById must reference a revision of the same drawing number',
+    );
+  }
+
+  if (supersedingDrawing.supersededById) {
+    throw AppError.badRequest('supersededById must reference a current drawing revision');
+  }
+}
+
+function getDrawingStorageKind(fileUrl: string): 'supabase' | 'external' | 'inline' | 'local' {
+  if (fileUrl.startsWith('supabase://')) {
+    return 'supabase';
+  }
+  if (/^https?:\/\//i.test(fileUrl)) {
+    return 'external';
+  }
+  if (fileUrl.startsWith('data:')) {
+    return 'inline';
+  }
+  return 'local';
 }
 
 // POST /api/drawings - Create a new drawing with file upload
@@ -192,7 +216,7 @@ router.patch(
     }
 
     await requireDrawingWriteAccess(req.user!, drawing.projectId);
-    await requireSupersededByInProject(drawing.projectId, drawingId, supersededById);
+    await requireSupersededByInProject(drawing.projectId, drawing, supersededById);
 
     if (revision !== undefined) {
       const existingRevision = await prisma.drawing.findFirst({
@@ -269,10 +293,26 @@ router.delete(
       drawing.projectId,
     );
 
-    await prisma.$transaction([
-      prisma.drawing.delete({ where: { id: drawingId } }),
-      prisma.document.delete({ where: { id: drawing.documentId } }),
-    ]);
+    await prisma.$transaction(async (tx) => {
+      await writeAuditLogInTransaction(tx, {
+        projectId: drawing.projectId,
+        userId,
+        entityType: 'drawing',
+        entityId: drawingId,
+        action: AuditAction.DRAWING_DELETED,
+        changes: {
+          documentId: drawing.documentId,
+          drawingNumber: drawing.drawingNumber,
+          revision: drawing.revision,
+          filename: drawing.document.filename,
+          storageKind: getDrawingStorageKind(drawing.document.fileUrl),
+        },
+        req,
+      });
+
+      await tx.drawing.delete({ where: { id: drawingId } });
+      await tx.document.delete({ where: { id: drawing.documentId } });
+    });
 
     await cleanupStoredFile();
 

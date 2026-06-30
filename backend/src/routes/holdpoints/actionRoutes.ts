@@ -25,6 +25,7 @@ import {
 } from './releaseNotifications.js';
 import {
   buildHoldPointReleaseConfirmationEmail,
+  selectImmediateHoldPointReleaseConfirmationRecipients,
   selectHoldPointReleaseContractors,
   selectHoldPointReleaseSuperintendents,
 } from './releaseConfirmationEmails.js';
@@ -35,6 +36,7 @@ import { isProjectNotificationEnabled } from '../../lib/projectNotificationPrefe
 import { SECURE_LINK_EXPIRY_HOURS, hashHoldPointReleaseToken } from './tokens.js';
 import { updateLotStatusFromITP } from '../itp/helpers/lotProgression.js';
 import { emitHoldPointWebhookEvent } from './webhookEvents.js';
+import { assertHoldPointCompletionCanBeReleased } from './releaseCompletionGuard.js';
 
 // =============================================================================
 // Authenticated hold point ACTION routes (release, chase, escalate,
@@ -398,6 +400,16 @@ holdPointActionRouter.post(
 
       if (itpInstance) {
         releasedItpInstanceId = itpInstance.id;
+        const completionKey = {
+          itpInstanceId: itpInstance.id,
+          checklistItemId: updatedHoldPoint.itpChecklistItemId,
+        };
+        const existingCompletion = await tx.iTPCompletion.findUnique({
+          where: { itpInstanceId_checklistItemId: completionKey },
+          select: { status: true },
+        });
+        assertHoldPointCompletionCanBeReleased(existingCompletion);
+
         // I1-core RECONCILE: releasing the hold point satisfies the ITP item.
         // Set status='completed' + completedAt (releasedAt) alongside the
         // verification fields, and CREATE the completion row if the hold point
@@ -414,15 +426,11 @@ holdPointActionRouter.post(
         };
         await tx.iTPCompletion.upsert({
           where: {
-            itpInstanceId_checklistItemId: {
-              itpInstanceId: itpInstance.id,
-              checklistItemId: updatedHoldPoint.itpChecklistItemId,
-            },
+            itpInstanceId_checklistItemId: completionKey,
           },
           update: completionData,
           create: {
-            itpInstanceId: itpInstance.id,
-            checklistItemId: updatedHoldPoint.itpChecklistItemId,
+            ...completionKey,
             ...completionData,
           },
         });
@@ -484,9 +492,17 @@ holdPointActionRouter.post(
         releaseMethod,
         releaseNotes,
       });
+      const immediateHoldPointReleaseEmailUserIds = new Set<string>();
       for (const pu of projectUsers) {
         try {
-          await sendNotificationIfEnabled(pu.userId, 'holdPointRelease', releaseEmailNotification);
+          const delivery = await sendNotificationIfEnabled(
+            pu.userId,
+            'holdPointRelease',
+            releaseEmailNotification,
+          );
+          if (delivery.sent) {
+            immediateHoldPointReleaseEmailUserIds.add(pu.userId);
+          }
         } catch (emailError) {
           logError(`[HP Release] Failed to send email to user ${pu.userId}:`, emailError);
           // Continue with other notifications even if one fails
@@ -527,7 +543,10 @@ holdPointActionRouter.post(
         };
 
         // Send to contractors (site_engineer, foreman roles)
-        const contractors = selectHoldPointReleaseContractors(projectUsers);
+        const contractors = selectImmediateHoldPointReleaseConfirmationRecipients(
+          selectHoldPointReleaseContractors(projectUsers),
+          immediateHoldPointReleaseEmailUserIds,
+        );
         for (const contractor of contractors) {
           await sendHPReleaseConfirmationEmail(
             buildHoldPointReleaseConfirmationEmail(contractor, 'contractor', confirmationContext),
@@ -535,7 +554,10 @@ holdPointActionRouter.post(
         }
 
         // Send to superintendents
-        const superintendents = selectHoldPointReleaseSuperintendents(projectUsers);
+        const superintendents = selectImmediateHoldPointReleaseConfirmationRecipients(
+          selectHoldPointReleaseSuperintendents(projectUsers),
+          immediateHoldPointReleaseEmailUserIds,
+        );
         for (const superintendent of superintendents) {
           await sendHPReleaseConfirmationEmail(
             buildHoldPointReleaseConfirmationEmail(

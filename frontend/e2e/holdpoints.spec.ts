@@ -124,6 +124,7 @@ async function mockSeededHoldPointsApi(page: Page, options: MockHoldPointsOption
   let evidenceUploadCount = 0;
   let chaseCount = 0;
   let holdPointLoadCount = 0;
+  const holdPointRegisterRequests: string[] = [];
 
   await page.route('**/api/**', async (route) => {
     const url = new URL(route.request().url());
@@ -171,6 +172,7 @@ async function mockSeededHoldPointsApi(page: Page, options: MockHoldPointsOption
 
     if (url.pathname === `/api/holdpoints/project/${E2E_PROJECT_ID}`) {
       holdPointLoadCount += 1;
+      holdPointRegisterRequests.push(url.search);
       if (holdPointLoadCount <= (options.failHoldPointLoadsUntil || 0)) {
         await json({ message: 'Hold point register unavailable' }, 503);
         return;
@@ -179,10 +181,13 @@ async function mockSeededHoldPointsApi(page: Page, options: MockHoldPointsOption
       const allHoldPoints =
         options.paginatedHoldPoints ||
         buildHoldPoints(pendingReleaseRequested, requestedScheduledDate, notifiedReleaseRecorded);
-      const pageNumber = Number(url.searchParams.get('page') || '1');
-      const limit = Number(url.searchParams.get('limit') || '20');
+      const returnAll = url.searchParams.get('all') === 'true';
+      const pageNumber = returnAll ? 1 : Number(url.searchParams.get('page') || '1');
+      const limit = returnAll ? 5000 : Number(url.searchParams.get('limit') || '20');
       const start = (pageNumber - 1) * limit;
-      const holdPoints = allHoldPoints.slice(start, start + limit);
+      const holdPoints = returnAll
+        ? allHoldPoints.slice(0, limit)
+        : allHoldPoints.slice(start, start + limit);
 
       await json({
         holdPoints,
@@ -311,6 +316,7 @@ async function mockSeededHoldPointsApi(page: Page, options: MockHoldPointsOption
     getRecordReleaseRequest: () => recordReleaseRequest,
     getEvidenceUploadCount: () => evidenceUploadCount,
     getChaseCount: () => chaseCount,
+    getHoldPointRegisterRequests: () => holdPointRegisterRequests,
   };
 }
 
@@ -333,6 +339,8 @@ function buildPublicReleasePackage({
         scheduledDate: '2026-03-02T00:00:00.000Z',
         releasedAt: released ? '2026-03-02T01:00:00.000Z' : null,
         releasedByName: released ? 'Already Released Superintendent' : null,
+        releasedByOrg: released ? 'Client Superintendent Org' : null,
+        releaseMethod: released ? 'secure_link' : null,
         releaseNotes: released ? 'Released before reopening the secure link' : null,
       },
       lot: {
@@ -434,6 +442,17 @@ async function mockPublicHoldPointReleaseApi(
   let releaseRequest: unknown;
   let releaseCount = 0;
 
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      'cookie_consent',
+      JSON.stringify({
+        version: 'v1',
+        accepted: true,
+        timestamp: '2026-01-15T00:00:00.000Z',
+      }),
+    );
+  });
+
   await page.route('**/api/holdpoints/public/e2e-public-token', async (route) => {
     if ((options.loadStatus || 200) !== 200) {
       await route.fulfill({
@@ -488,6 +507,7 @@ async function mockPublicHoldPointReleaseApi(
           releasedAt: '2026-03-02T01:20:00.000Z',
           releasedByName: requestBody.releasedByName || 'E2E Superintendent',
           releasedByOrg: 'Client Superintendent Org',
+          releaseMethod: 'secure_link',
           releaseNotes: 'Evidence reviewed and accepted',
         },
       }),
@@ -504,15 +524,16 @@ async function mockPublicHoldPointReleaseApi(
 // on the SignaturePad canvas so onChange fires a non-empty data URL and the
 // "Release Hold Point" button becomes enabled.
 async function drawReleaseSignature(page: Page) {
-  const canvas = page.locator('canvas');
+  const canvas = page.locator('canvas').first();
   await expect(canvas).toBeVisible();
   const box = await canvas.boundingBox();
   if (!box) throw new Error('Signature canvas was not rendered');
-  await page.mouse.move(box.x + box.width * 0.25, box.y + box.height * 0.5);
-  await page.mouse.down();
-  await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.35);
-  await page.mouse.move(box.x + box.width * 0.75, box.y + box.height * 0.6);
-  await page.mouse.up();
+  await canvas.dragTo(canvas, {
+    sourcePosition: { x: box.width * 0.25, y: box.height * 0.5 },
+    targetPosition: { x: box.width * 0.75, y: box.height * 0.6 },
+  });
+  await expect(page.getByText('Signature captured')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Release Hold Point' })).toBeEnabled();
 }
 
 test.describe('Hold points seeded release contract', () => {
@@ -650,15 +671,18 @@ test.describe('Hold points seeded release contract', () => {
     await expect(page.getByText('Total HPs')).toBeVisible();
   });
 
-  test('loads every backend page before treating the hold point register as complete', async ({
+  test('loads the bounded backend register before treating the hold point register as complete', async ({
     page,
   }) => {
-    await mockSeededHoldPointsApi(page, { paginatedHoldPoints: buildManyHoldPoints(25) });
+    const api = await mockSeededHoldPointsApi(page, {
+      paginatedHoldPoints: buildManyHoldPoints(25),
+    });
 
     await page.goto(`/projects/${E2E_PROJECT_ID}/hold-points`);
 
     await expect(page.getByText('LOT-HP-001')).toBeVisible();
     await expect(page.getByText('Total HPs').locator('..').getByText('25')).toBeVisible();
+    expect(api.getHoldPointRegisterRequests()).toEqual(['?all=true']);
   });
 
   test('guards duplicate chase notifications from rapid clicks', async ({ page }) => {
@@ -820,7 +844,10 @@ test.describe('Public hold point secure release page', () => {
       releaseNotes: 'Evidence reviewed and accepted',
     });
     await expect(page.getByRole('status')).toContainText('Hold Point Released');
-    await expect(page.getByText('Released by E2E Superintendent')).toBeVisible();
+    await expect(
+      page.getByText(/Released by E2E Superintendent, Client Superintendent Org/),
+    ).toBeVisible();
+    await expect(page.getByText(/Secure link/)).toBeVisible();
     await expect(page.getByText('1/1 checklist items')).toBeVisible();
     await expect(page.getByRole('row').filter({ hasText: 'Confirm formwork' })).toContainText(
       'Yes',
@@ -861,7 +888,10 @@ test.describe('Public hold point secure release page', () => {
 
     await page.goto('/hp-release/e2e-public-token');
 
-    await expect(page.getByText('Already Released Superintendent')).toBeVisible();
+    await expect(
+      page.getByText(/Already Released Superintendent, Client Superintendent Org/),
+    ).toBeVisible();
+    await expect(page.getByText(/Secure link/)).toBeVisible();
     await expect(page.getByText('Released before reopening the secure link')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Release Hold Point' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Download Evidence PDF' })).toBeVisible();
@@ -870,16 +900,6 @@ test.describe('Public hold point secure release page', () => {
   test('keeps the public secure release flow usable on mobile', async ({ page }) => {
     const api = await mockPublicHoldPointReleaseApi(page, { recipientName: null });
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.addInitScript(() => {
-      localStorage.setItem(
-        'cookie_consent',
-        JSON.stringify({
-          version: 'v1',
-          accepted: true,
-          timestamp: '2026-01-15T00:00:00.000Z',
-        }),
-      );
-    });
 
     await page.goto('/hp-release/e2e-public-token');
 

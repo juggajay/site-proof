@@ -2,9 +2,9 @@ import { memo, useEffect, useRef, type ReactNode } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Link2, Check, Printer } from 'lucide-react';
 import { toast } from '@/components/ui/toaster';
-import type { NCRDetailData } from '@/lib/pdfGenerator';
 import { getStatusBadgeColor } from '../constants';
-import { canManageNcrClosure } from '../ncrClosureAccess';
+import { buildNcrDetailPdfData } from '../ncrDetailPdfData';
+import { getAvailableNcrActions } from '../ncrActions';
 import type { NcrSortDirection, NcrSortField } from '../ncrRegisterSort';
 import type { NCR, UserRole } from '../types';
 import { logError } from '@/lib/logger';
@@ -13,6 +13,7 @@ import { formatStatusLabel } from '@/lib/statusLabels';
 interface NCRTableProps {
   ncrs: NCR[];
   userRole: UserRole | null;
+  currentUserId?: string | null;
   actionLoading: boolean;
   copiedNcrId: string | null;
   /** Deep-linked NCR (?ncr=<id>) to scroll to and highlight. */
@@ -36,6 +37,7 @@ interface NCRTableProps {
 function NCRTableInner({
   ncrs,
   userRole,
+  currentUserId,
   actionLoading,
   copiedNcrId,
   highlightedNcrId,
@@ -53,34 +55,8 @@ function NCRTableInner({
   onClose,
   onConcession,
 }: NCRTableProps) {
-  const canCloseNcr = canManageNcrClosure(userRole);
-
   const handlePrintPdf = async (ncr: NCR) => {
-    const pdfData: NCRDetailData = {
-      ncr: {
-        ncrNumber: ncr.ncrNumber,
-        description: ncr.description,
-        category: ncr.category,
-        severity: ncr.severity,
-        status: ncr.status,
-        qmApprovalRequired: ncr.qmApprovalRequired,
-        qmApprovedAt: ncr.qmApprovedAt,
-        qmApprovedBy: ncr.qmApprovedBy,
-        raisedBy: ncr.raisedBy,
-        responsibleUser: ncr.responsibleUser,
-        dueDate: ncr.dueDate,
-        createdAt: ncr.createdAt,
-      },
-      project: {
-        name: ncr.project?.name || 'Unknown Project',
-        projectNumber: ncr.project?.projectNumber || 'N/A',
-      },
-      lots:
-        ncr.ncrLots?.map((nl) => ({
-          lotNumber: nl.lot.lotNumber,
-          description: nl.lot.description || null,
-        })) || [],
-    };
+    const pdfData = buildNcrDetailPdfData(ncr);
 
     try {
       const { generateNCRDetailPDF } = await import('@/lib/pdfGenerator');
@@ -189,6 +165,14 @@ function NCRTableInner({
           {rowVirtualizer.getVirtualItems().map((virtualRow) => {
             const ncr = ncrs[virtualRow.index];
             if (!ncr) return null;
+            const actions = getAvailableNcrActions(ncr, userRole, currentUserId);
+            const closeBlocked =
+              actions.closeBlockedPendingQmApproval || actions.closeBlockedSameQmApprover;
+            const closeBlockedTitle = actions.closeBlockedPendingQmApproval
+              ? 'Requires QM approval first'
+              : actions.closeBlockedSameQmApprover
+                ? 'A different user must close after QM approval'
+                : undefined;
             const ageInDays = Math.floor(
               (Date.now() - new Date(ncr.createdAt).getTime()) / (1000 * 60 * 60 * 24),
             );
@@ -299,7 +283,7 @@ function NCRTableInner({
                       </button>
                     )}
                     {/* Respond Button for open NCRs */}
-                    {ncr.status === 'open' && (
+                    {actions.respond && (
                       <button
                         onClick={() => onRespond(ncr)}
                         disabled={actionLoading}
@@ -310,51 +294,39 @@ function NCRTableInner({
                     )}
 
                     {/* QM Review Button for NCRs in investigating status */}
-                    {ncr.status === 'investigating' &&
-                      (userRole?.isQualityManager ||
-                        userRole?.role === 'project_manager' ||
-                        userRole?.role === 'admin') && (
-                        <button
-                          onClick={() => onReviewResponse(ncr)}
-                          disabled={actionLoading}
-                          className="px-3 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50"
-                          title="Review the submitted response"
-                        >
-                          Review Response
-                        </button>
-                      )}
+                    {actions.reviewResponse && (
+                      <button
+                        onClick={() => onReviewResponse(ncr)}
+                        disabled={actionLoading}
+                        className="px-3 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50"
+                        title="Review the submitted response"
+                      >
+                        Review Response
+                      </button>
+                    )}
 
                     {/* QM Approval Button for major NCRs */}
-                    {ncr.severity === 'major' &&
-                      !ncr.qmApprovedAt &&
-                      ncr.status === 'verification' &&
-                      userRole?.isQualityManager && (
-                        <button
-                          onClick={() => onQmApprove(ncr.id)}
-                          disabled={actionLoading}
-                          className="px-3 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50"
-                        >
-                          QM Approve
-                        </button>
-                      )}
+                    {actions.qmApprove && (
+                      <button
+                        onClick={() => onQmApprove(ncr.id)}
+                        disabled={actionLoading}
+                        className="px-3 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50"
+                      >
+                        QM Approve
+                      </button>
+                    )}
 
                     {/* Notify Client Button for major NCRs */}
-                    {ncr.severity === 'major' &&
-                      ncr.clientNotificationRequired &&
-                      !ncr.clientNotifiedAt &&
-                      (userRole?.role === 'project_manager' ||
-                        userRole?.role === 'quality_manager' ||
-                        userRole?.role === 'admin' ||
-                        userRole?.role === 'owner') && (
-                        <button
-                          onClick={() => onNotifyClient(ncr)}
-                          disabled={actionLoading}
-                          className="px-3 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50"
-                          title="Notify client about this major NCR"
-                        >
-                          Notify Client
-                        </button>
-                      )}
+                    {actions.notifyClient && (
+                      <button
+                        onClick={() => onNotifyClient(ncr)}
+                        disabled={actionLoading}
+                        className="px-3 py-1 text-xs bg-primary text-primary-foreground rounded hover:bg-primary/90 disabled:opacity-50"
+                        title="Notify client about this major NCR"
+                      >
+                        Notify Client
+                      </button>
+                    )}
 
                     {/* Client Notified Badge */}
                     {ncr.clientNotifiedAt && (
@@ -367,7 +339,7 @@ function NCRTableInner({
                     )}
 
                     {/* Rectify Button */}
-                    {(ncr.status === 'investigating' || ncr.status === 'rectification') && (
+                    {actions.rectify && (
                       <button
                         onClick={() => onRectify(ncr)}
                         disabled={actionLoading}
@@ -378,54 +350,46 @@ function NCRTableInner({
                     )}
 
                     {/* Reject Rectification Button */}
-                    {ncr.status === 'verification' &&
-                      (userRole?.isQualityManager ||
-                        userRole?.role === 'project_manager' ||
-                        userRole?.role === 'admin') && (
-                        <button
-                          onClick={() => onRejectRectification(ncr)}
-                          disabled={actionLoading}
-                          className="px-3 py-1 text-xs bg-destructive text-destructive-foreground rounded hover:bg-destructive/90 disabled:opacity-50"
-                          title="Reject rectification and return to responsible party"
-                        >
-                          Reject
-                        </button>
-                      )}
+                    {actions.rejectRectification && (
+                      <button
+                        onClick={() => onRejectRectification(ncr)}
+                        disabled={actionLoading}
+                        className="px-3 py-1 text-xs bg-destructive text-destructive-foreground rounded hover:bg-destructive/90 disabled:opacity-50"
+                        title="Reject rectification and return to responsible party"
+                      >
+                        Reject
+                      </button>
+                    )}
 
                     {/* Close Button */}
-                    {ncr.status === 'verification' && canCloseNcr && (
+                    {actions.close && (
                       <button
                         onClick={() => onClose(ncr)}
-                        disabled={actionLoading || (ncr.severity === 'major' && !ncr.qmApprovedAt)}
+                        disabled={actionLoading || closeBlocked}
                         className={`px-3 py-1 text-xs rounded disabled:opacity-50 ${
-                          ncr.severity === 'major' && !ncr.qmApprovedAt
+                          closeBlocked
                             ? 'bg-muted-foreground text-muted cursor-not-allowed'
                             : 'bg-success text-success-foreground hover:bg-success/90'
                         }`}
-                        title={
-                          ncr.severity === 'major' && !ncr.qmApprovedAt
-                            ? 'Requires QM approval first'
-                            : 'Close NCR'
-                        }
+                        title={closeBlockedTitle ?? 'Close NCR'}
                       >
                         Close
                       </button>
                     )}
 
                     {/* Close with Concession Button */}
-                    {ncr.status === 'verification' && canCloseNcr && (
+                    {actions.concession && (
                       <button
                         onClick={() => onConcession(ncr)}
-                        disabled={actionLoading || (ncr.severity === 'major' && !ncr.qmApprovedAt)}
+                        disabled={actionLoading || closeBlocked}
                         className={`px-3 py-1 text-xs rounded disabled:opacity-50 ${
-                          ncr.severity === 'major' && !ncr.qmApprovedAt
+                          closeBlocked
                             ? 'bg-muted-foreground text-muted cursor-not-allowed'
                             : 'bg-warning text-warning-foreground hover:bg-warning/90'
                         }`}
                         title={
-                          ncr.severity === 'major' && !ncr.qmApprovedAt
-                            ? 'Requires QM approval first'
-                            : 'Close with concession when full rectification is not possible'
+                          closeBlockedTitle ??
+                          'Close with concession when full rectification is not possible'
                         }
                       >
                         Concession

@@ -4,11 +4,11 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '../../lib/api';
 import { queryKeys } from '@/lib/queryKeys';
+import { useCurrentProjectRole } from '@/hooks/useCurrentProjectRole';
 import { createMutationErrorHandler, extractErrorMessage } from '@/lib/errorHandling';
 import { toast } from '@/components/ui/toaster';
 import {
   getDocumentAccess,
-  getDocumentAccessUrl,
   invalidateDocumentAccessUrl,
   openDocumentAccessUrl,
   type DocumentAccessUrl,
@@ -22,6 +22,7 @@ import {
   DeleteDocumentDialog,
   DocumentCategorySummary,
   DocumentDragOverlay,
+  DocumentsPagination,
   DocumentsLoadErrorAlert,
   DocumentsPageHeader,
 } from './components/DocumentsPageChrome';
@@ -55,11 +56,34 @@ interface Lot {
 interface DocumentsResponse {
   documents?: Document[];
   categories?: Record<string, number>;
+  pagination?: PaginationMeta | null;
 }
 
 interface LotsResponse {
   lots?: Lot[];
 }
+
+interface PaginationMeta {
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPrevPage: boolean;
+}
+
+const DOCUMENT_WRITE_ROLES = [
+  'owner',
+  'admin',
+  'project_manager',
+  'quality_manager',
+  'site_manager',
+  'site_engineer',
+  'foreman',
+  'subcontractor_admin',
+  'subcontractor',
+];
+const DOCUMENTS_PAGE_LIMIT = 100;
 
 export function DocumentsPage() {
   const { projectId } = useParams<{ projectId: string }>();
@@ -70,8 +94,11 @@ export function DocumentsPage() {
   const queryLotId = searchParams.get('lotId') || '';
   const shouldOpenUploadFromQuery = searchParams.get('upload') === '1';
 
+  const currentProjectRole = useCurrentProjectRole(projectId);
+  const canManageDocuments = DOCUMENT_WRITE_ROLES.includes(currentProjectRole || '');
+
   // Upload workflow (modal state, drag/drop, multi-file progress, upload mutation)
-  const upload = useDocumentUpload(projectId);
+  const upload = useDocumentUpload(projectId, canManageDocuments);
 
   // Filters
   const [filterType, setFilterType] = useState('');
@@ -82,10 +109,12 @@ export function DocumentsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [committedSearch, setCommittedSearch] = useState('');
   const [showFavouritesOnly, setShowFavouritesOnly] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Viewer modal state
   const [viewerDoc, setViewerDoc] = useState<Document | null>(null);
   const [viewerUrl, setViewerUrl] = useState('');
+  const [viewerAccess, setViewerAccess] = useState<DocumentAccessUrl | null>(null);
   const [viewerUrlLoading, setViewerUrlLoading] = useState(false);
   const [viewerError, setViewerError] = useState<string | null>(null);
   const [documentUrls, setDocumentUrls] = useState<Record<string, DocumentAccessUrl>>({});
@@ -93,9 +122,13 @@ export function DocumentsPage() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [documentPendingDelete, setDocumentPendingDelete] = useState<Document | null>(null);
   const viewerRef = useRef<HTMLDivElement>(null);
+  const viewerRequestIdRef = useRef(0);
   const appliedUploadQueryRef = useRef<string | null>(null);
 
-  const triggerSearch = () => setCommittedSearch(searchQuery.trim());
+  const triggerSearch = () => {
+    setCurrentPage(1);
+    setCommittedSearch(searchQuery.trim());
+  };
   const uploadQueryKey = `${queryLotId}:${shouldOpenUploadFromQuery ? 'open' : 'closed'}`;
 
   const openUploadForCurrentLot = () => {
@@ -107,17 +140,19 @@ export function DocumentsPage() {
 
   useEffect(() => {
     setFilterLot(queryLotId);
+    setCurrentPage(1);
   }, [queryLotId]);
 
   useEffect(() => {
     if (!shouldOpenUploadFromQuery || appliedUploadQueryRef.current === uploadQueryKey) return;
+    if (!canManageDocuments) return;
 
     appliedUploadQueryRef.current = uploadQueryKey;
     if (queryLotId) {
       upload.updateUploadForm({ lotId: queryLotId });
     }
     upload.openUploadModal();
-  }, [queryLotId, shouldOpenUploadFromQuery, upload, uploadQueryKey]);
+  }, [canManageDocuments, queryLotId, shouldOpenUploadFromQuery, upload, uploadQueryKey]);
 
   // Build documents query path
   const docsQueryPath = (() => {
@@ -129,6 +164,9 @@ export function DocumentsPage() {
     if (dateFrom) params.append('dateFrom', dateFrom);
     if (dateTo) params.append('dateTo', dateTo);
     if (committedSearch) params.append('search', committedSearch);
+    if (showFavouritesOnly) params.append('favourite', 'true');
+    params.append('page', String(currentPage));
+    params.append('limit', String(DOCUMENTS_PAGE_LIMIT));
     if (params.toString()) path += `?${params.toString()}`;
     return path;
   })();
@@ -147,6 +185,8 @@ export function DocumentsPage() {
       dateFrom,
       dateTo,
       committedSearch,
+      showFavouritesOnly,
+      currentPage,
     ] as const,
     queryFn: () => apiFetch<DocumentsResponse>(docsQueryPath),
     enabled: !!projectId,
@@ -157,11 +197,9 @@ export function DocumentsPage() {
     () => docsData?.categories || {},
     [docsData?.categories],
   );
+  const pagination = docsData?.pagination ?? null;
   const error = docsError ? extractErrorMessage(docsError, 'Failed to load documents') : null;
-  const visibleDocuments = useMemo(
-    () => documents.filter((doc) => !showFavouritesOnly || doc.isFavourite),
-    [documents, showFavouritesOnly],
-  );
+  const visibleDocuments = documents;
 
   useEffect(() => {
     const imageDocs = documents.filter((doc) => {
@@ -231,6 +269,37 @@ export function DocumentsPage() {
     return () => window.clearTimeout(timeoutId);
   }, [documentUrls]);
 
+  useEffect(() => {
+    if (pagination && pagination.totalPages > 0 && pagination.page > pagination.totalPages) {
+      setCurrentPage(pagination.totalPages);
+    }
+  }, [pagination]);
+
+  const updateFilterType = (value: string) => {
+    setCurrentPage(1);
+    setFilterType(value);
+  };
+  const updateFilterCategory = (value: string) => {
+    setCurrentPage(1);
+    setFilterCategory(value);
+  };
+  const updateFilterLot = (value: string) => {
+    setCurrentPage(1);
+    setFilterLot(value);
+  };
+  const updateDateFrom = (value: string) => {
+    setCurrentPage(1);
+    setDateFrom(value);
+  };
+  const updateDateTo = (value: string) => {
+    setCurrentPage(1);
+    setDateTo(value);
+  };
+  const updateShowFavouritesOnly = (value: boolean) => {
+    setCurrentPage(1);
+    setShowFavouritesOnly(value);
+  };
+
   const { data: lotsData } = useQuery({
     queryKey: queryKeys.lots(projectId!),
     queryFn: () =>
@@ -295,29 +364,67 @@ export function DocumentsPage() {
   };
 
   const openViewer = async (doc: Document) => {
+    const requestId = viewerRequestIdRef.current + 1;
+    viewerRequestIdRef.current = requestId;
     setViewerDoc(doc);
     setViewerUrl('');
+    setViewerAccess(null);
     setViewerUrlLoading(true);
     setViewerError(null);
     setViewerZoom(100);
     try {
-      const url = await getDocumentAccessUrl(doc.id, doc.fileUrl, { disposition: 'inline' });
-      setViewerUrl(url);
+      const access = await getDocumentAccess(doc.id, doc.fileUrl, { disposition: 'inline' });
+      if (viewerRequestIdRef.current !== requestId) return;
+      setViewerUrl(access.url);
+      setViewerAccess(access);
     } catch (err) {
+      if (viewerRequestIdRef.current !== requestId) return;
       logError('Failed to load document URL:', err);
       setViewerError(extractErrorMessage(err, 'Failed to load document preview.'));
     } finally {
-      setViewerUrlLoading(false);
+      if (viewerRequestIdRef.current === requestId) {
+        setViewerUrlLoading(false);
+      }
     }
   };
 
   const closeViewer = () => {
+    viewerRequestIdRef.current += 1;
     setViewerDoc(null);
     setViewerUrl('');
+    setViewerAccess(null);
     setViewerUrlLoading(false);
     setViewerError(null);
     setViewerZoom(100);
   };
+
+  useEffect(() => {
+    if (!viewerDoc || !viewerAccess || !Number.isFinite(viewerAccess.refreshAt)) return;
+
+    const requestId = viewerRequestIdRef.current;
+    const timeoutId = window.setTimeout(
+      () => {
+        void (async () => {
+          if (viewerRequestIdRef.current !== requestId) return;
+          try {
+            const refreshedAccess = await getDocumentAccess(viewerDoc.id, viewerDoc.fileUrl, {
+              disposition: 'inline',
+            });
+            if (viewerRequestIdRef.current !== requestId) return;
+            setViewerUrl(refreshedAccess.url);
+            setViewerAccess(refreshedAccess);
+          } catch (err) {
+            if (viewerRequestIdRef.current !== requestId) return;
+            logError('Failed to refresh document preview URL:', err);
+            setViewerError(extractErrorMessage(err, 'Failed to refresh document preview.'));
+          }
+        })();
+      },
+      Math.max(1_000, viewerAccess.refreshAt - Date.now()),
+    );
+
+    return () => window.clearTimeout(timeoutId);
+  }, [viewerAccess, viewerDoc]);
 
   const handleDownload = async (doc: Document) => {
     try {
@@ -364,7 +471,10 @@ export function DocumentsPage() {
   return (
     <div ref={upload.dropZoneRef} className="space-y-6 relative" {...upload.containerDragHandlers}>
       <DocumentDragOverlay isDragging={upload.isDragging} />
-      <DocumentsPageHeader onUpload={openUploadForCurrentLot} />
+      <DocumentsPageHeader
+        canUploadDocuments={canManageDocuments}
+        onUpload={openUploadForCurrentLot}
+      />
 
       {/* Filters */}
       <DocumentFiltersPanel
@@ -376,13 +486,13 @@ export function DocumentsPage() {
         searchQuery={searchQuery}
         showFavouritesOnly={showFavouritesOnly}
         lots={lots}
-        onFilterTypeChange={setFilterType}
-        onFilterCategoryChange={setFilterCategory}
-        onFilterLotChange={setFilterLot}
-        onDateFromChange={setDateFrom}
-        onDateToChange={setDateTo}
+        onFilterTypeChange={updateFilterType}
+        onFilterCategoryChange={updateFilterCategory}
+        onFilterLotChange={updateFilterLot}
+        onDateFromChange={updateDateFrom}
+        onDateToChange={updateDateTo}
         onSearchQueryChange={setSearchQuery}
-        onShowFavouritesOnlyChange={setShowFavouritesOnly}
+        onShowFavouritesOnlyChange={updateShowFavouritesOnly}
         onTriggerSearch={triggerSearch}
         onClearAll={() => {
           setFilterType('');
@@ -393,25 +503,33 @@ export function DocumentsPage() {
           setSearchQuery('');
           setCommittedSearch('');
           setShowFavouritesOnly(false);
+          setCurrentPage(1);
         }}
       />
 
       <DocumentsLoadErrorAlert error={error} onRetry={() => void refetchDocuments()} />
 
-      <DocumentCategorySummary categories={categories} onSelectCategory={setFilterCategory} />
+      <DocumentCategorySummary categories={categories} onSelectCategory={updateFilterCategory} />
 
       {/* Documents Grid */}
       <DocumentGrid
         loading={loading}
         error={error}
-        documents={documents}
         visibleDocuments={visibleDocuments}
         showFavouritesOnly={showFavouritesOnly}
+        canManageDocuments={canManageDocuments}
         documentUrls={documentUrls}
         onToggleFavourite={toggleFavourite}
         onOpenViewer={(doc) => void openViewer(doc)}
         onDownload={(doc) => void handleDownload(doc)}
         onMarkPendingDelete={(doc) => setDocumentPendingDelete(doc)}
+      />
+
+      <DocumentsPagination
+        pagination={pagination}
+        visibleCount={visibleDocuments.length}
+        onPreviousPage={() => setCurrentPage((page) => Math.max(1, page - 1))}
+        onNextPage={() => setCurrentPage((page) => page + 1)}
       />
 
       {/* Upload Modal */}

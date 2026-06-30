@@ -7,6 +7,67 @@ import { extractErrorMessage } from '@/lib/errorHandling';
 import type { GlobalSubcontractor, Subcontractor } from '../types';
 import { logError } from '@/lib/logger';
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PHONE_PATTERN = /^[0-9+().\-\s]{3,40}$/;
+const EMAIL_ERROR = 'Enter a valid contact email.';
+const PHONE_ERROR = 'Phone must be 3 to 40 digits or phone symbols.';
+
+type InviteFormData = {
+  companyName: string;
+  abn: string;
+  contactName: string;
+  email: string;
+  phone: string;
+};
+
+function trimInviteData(data: InviteFormData): InviteFormData {
+  return {
+    companyName: data.companyName.trim(),
+    abn: data.abn.trim(),
+    contactName: data.contactName.trim(),
+    email: data.email.trim(),
+    phone: data.phone.trim(),
+  };
+}
+
+function getInviteFieldErrors(data: InviteFormData, selectedGlobalId: string | null) {
+  if (selectedGlobalId) {
+    return { emailError: '', phoneError: '' };
+  }
+
+  const trimmed = trimInviteData(data);
+  return {
+    emailError: trimmed.email && !EMAIL_PATTERN.test(trimmed.email) ? EMAIL_ERROR : '',
+    phoneError: trimmed.phone && !PHONE_PATTERN.test(trimmed.phone) ? PHONE_ERROR : '',
+  };
+}
+
+function hasMissingRequiredInviteFields(data: InviteFormData, abnError: string | null): boolean {
+  return !data.companyName || !data.contactName || !data.email || !!abnError;
+}
+
+function isInviteSubmitDisabled({
+  inviting,
+  selectedGlobalId,
+  inviteData,
+  abnError,
+  emailError,
+  phoneError,
+}: {
+  inviting: boolean;
+  selectedGlobalId: string | null;
+  inviteData: InviteFormData;
+  abnError: string | null;
+  emailError: string;
+  phoneError: string;
+}) {
+  if (inviting) return true;
+  if (selectedGlobalId) return false;
+
+  const trimmed = trimInviteData(inviteData);
+  return hasMissingRequiredInviteFields(trimmed, abnError) || !!emailError || !!phoneError;
+}
+
 export interface InviteSubcontractorModalProps {
   projectId: string;
   onClose: () => void;
@@ -27,6 +88,7 @@ export const InviteSubcontractorModal = React.memo(function InviteSubcontractorM
   });
   const [inviting, setInviting] = useState(false);
   const [abnError, setAbnError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
   const invitingRef = useRef(false);
 
   // Global subcontractor directory state
@@ -83,11 +145,13 @@ export const InviteSubcontractorModal = React.memo(function InviteSubcontractorM
         phone: globalSub.primaryContactPhone,
       });
       setAbnError(null);
+      setFormError(null);
     } else {
       // "Create New" selected
       setSelectedGlobalId(null);
       setInviteData({ companyName: '', abn: '', contactName: '', email: '', phone: '' });
       setAbnError(null);
+      setFormError(null);
     }
   }, []);
 
@@ -106,21 +170,10 @@ export const InviteSubcontractorModal = React.memo(function InviteSubcontractorM
   const inviteSubcontractor = useCallback(async () => {
     if (invitingRef.current) return;
 
-    const trimmedInviteData = {
-      companyName: inviteData.companyName.trim(),
-      abn: inviteData.abn.trim(),
-      contactName: inviteData.contactName.trim(),
-      email: inviteData.email.trim(),
-      phone: inviteData.phone.trim(),
-    };
+    const trimmedInviteData = trimInviteData(inviteData);
+    const { emailError, phoneError } = getInviteFieldErrors(trimmedInviteData, selectedGlobalId);
 
-    if (
-      !selectedGlobalId &&
-      (!trimmedInviteData.companyName ||
-        !trimmedInviteData.contactName ||
-        !trimmedInviteData.email ||
-        !!abnError)
-    ) {
+    if (!selectedGlobalId && hasMissingRequiredInviteFields(trimmedInviteData, abnError)) {
       toast({
         title: 'Missing required fields',
         description: 'Company name, contact name, email, and any entered ABN must be valid.',
@@ -129,8 +182,15 @@ export const InviteSubcontractorModal = React.memo(function InviteSubcontractorM
       return;
     }
 
+    const validationError = emailError || phoneError;
+    if (validationError) {
+      setFormError(validationError);
+      return;
+    }
+
     invitingRef.current = true;
     setInviting(true);
+    setFormError(null);
 
     try {
       const data = await apiFetch<{ subcontractor: Subcontractor }>('/api/subcontractors/invite', {
@@ -161,14 +221,15 @@ export const InviteSubcontractorModal = React.memo(function InviteSubcontractorM
     }
   }, [projectId, selectedGlobalId, inviteData, abnError, onInvited, onClose]);
 
-  const isSubmitDisabled =
-    inviting ||
-    (selectedGlobalId
-      ? false
-      : !inviteData.companyName.trim() ||
-        !inviteData.contactName.trim() ||
-        !inviteData.email.trim() ||
-        !!abnError);
+  const { emailError, phoneError } = getInviteFieldErrors(inviteData, selectedGlobalId);
+  const isSubmitDisabled = isInviteSubmitDisabled({
+    inviting,
+    selectedGlobalId,
+    inviteData,
+    abnError,
+    emailError,
+    phoneError,
+  });
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -200,6 +261,12 @@ export const InviteSubcontractorModal = React.memo(function InviteSubcontractorM
         </div>
 
         <div className="p-6 space-y-4">
+          {formError && (
+            <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+              {formError}
+            </div>
+          )}
+
           {/* Directory Selector */}
           <div>
             <label
@@ -372,13 +439,23 @@ export const InviteSubcontractorModal = React.memo(function InviteSubcontractorM
               id="subcontractor-invite-email"
               type="email"
               value={inviteData.email}
-              onChange={(e) => setInviteData((prev) => ({ ...prev, email: e.target.value }))}
+              onChange={(e) => {
+                setFormError(null);
+                setInviteData((prev) => ({ ...prev, email: e.target.value }));
+              }}
               className={`w-full px-3 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary ${
-                selectedGlobalId ? 'bg-muted/50 cursor-not-allowed' : ''
-              }`}
+                emailError ? 'border-destructive focus:ring-destructive' : ''
+              } ${selectedGlobalId ? 'bg-muted/50 cursor-not-allowed' : ''}`}
               placeholder="john@company.com.au"
               readOnly={!!selectedGlobalId}
+              aria-invalid={!!emailError}
+              aria-describedby={emailError ? 'subcontractor-invite-email-error' : undefined}
             />
+            {emailError && (
+              <p id="subcontractor-invite-email-error" className="text-sm text-destructive mt-1">
+                {emailError}
+              </p>
+            )}
           </div>
           <div>
             <label htmlFor="subcontractor-invite-phone" className="block text-sm font-medium mb-1">
@@ -388,13 +465,23 @@ export const InviteSubcontractorModal = React.memo(function InviteSubcontractorM
               id="subcontractor-invite-phone"
               type="tel"
               value={inviteData.phone}
-              onChange={(e) => setInviteData((prev) => ({ ...prev, phone: e.target.value }))}
+              onChange={(e) => {
+                setFormError(null);
+                setInviteData((prev) => ({ ...prev, phone: e.target.value }));
+              }}
               className={`w-full px-3 py-2 border rounded-lg bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary ${
-                selectedGlobalId ? 'bg-muted/50 cursor-not-allowed' : ''
-              }`}
+                phoneError ? 'border-destructive focus:ring-destructive' : ''
+              } ${selectedGlobalId ? 'bg-muted/50 cursor-not-allowed' : ''}`}
               placeholder="0412 345 678"
               readOnly={!!selectedGlobalId}
+              aria-invalid={!!phoneError}
+              aria-describedby={phoneError ? 'subcontractor-invite-phone-error' : undefined}
             />
+            {phoneError && (
+              <p id="subcontractor-invite-phone-error" className="text-sm text-destructive mt-1">
+                {phoneError}
+              </p>
+            )}
           </div>
         </div>
 

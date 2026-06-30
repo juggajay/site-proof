@@ -23,6 +23,7 @@ export type LotListAssignment = { subcontractorCompanyId: string };
 type LotListItpCompletion = {
   checklistItemId?: string | null;
   status?: string | null;
+  verificationStatus?: string | null;
 };
 
 type LotListItpTemplate = {
@@ -40,6 +41,7 @@ type LotListItpInstance = {
 
 const DONE_COMPLETION_STATUSES = new Set(['completed', 'not_applicable']);
 const STARTED_COMPLETION_STATUSES = new Set(['completed', 'not_applicable', 'failed']);
+const UNACCEPTED_VERIFICATION_STATUSES = new Set(['pending_verification', 'rejected']);
 
 export interface PresentLotListOptions {
   /** When false, `budgetAmount` is nulled out for the caller. */
@@ -54,6 +56,13 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
+function isAcceptedListCompletion(completion: LotListItpCompletion): boolean {
+  return (
+    DONE_COMPLETION_STATUSES.has(completion.status ?? '') &&
+    !UNACCEPTED_VERIFICATION_STATUSES.has(completion.verificationStatus ?? '')
+  );
+}
+
 function deriveItpListProgress(instance: LotListItpInstance): {
   status: 'not_started' | 'in_progress' | 'completed';
   completionPercentage: number;
@@ -64,7 +73,7 @@ function deriveItpListProgress(instance: LotListItpInstance): {
 
   const doneItemIds = new Set(
     completions
-      .filter((completion) => DONE_COMPLETION_STATUSES.has(completion.status ?? ''))
+      .filter((completion) => isAcceptedListCompletion(completion))
       .map((completion) => completion.checklistItemId)
       .filter((id): id is string => typeof id === 'string' && id.length > 0),
   );

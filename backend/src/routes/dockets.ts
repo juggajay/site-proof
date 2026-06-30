@@ -8,6 +8,7 @@ import { asyncHandler } from '../lib/asyncHandler.js';
 import { createAuditLog, AuditAction } from '../lib/auditLog.js';
 import { assertProjectAllowsWrite } from '../lib/projectAccess.js';
 import {
+  canViewDocketAmounts,
   getLinkedSubcontractorCompanyIdsForProject,
   isDocketEntryEditable,
   isSubcontractorUser,
@@ -127,8 +128,10 @@ docketsRouter.get(
       prisma.dailyDocket.count({ where: whereClause }),
     ]);
 
-    // Format dockets for response
-    const formattedDockets = dockets.map((docket) => mapDocketListItem(docket));
+    const includeCommercialAmounts = await canViewDocketAmounts(user, projectId);
+    const formattedDockets = dockets.map((docket) =>
+      mapDocketListItem(docket, { includeCommercialAmounts }),
+    );
 
     res.json(buildDocketListResponse(formattedDockets, getPaginationMeta(total, page, limit)));
   }),
@@ -146,8 +149,7 @@ docketsRouter.post(
       throw AppError.badRequest(parseResult.error.errors[0]?.message || 'Invalid request body');
     }
 
-    const { projectId, subcontractorCompanyId, date, labourHours, plantHours, notes } =
-      parseResult.data;
+    const { projectId, subcontractorCompanyId, date, notes } = parseResult.data;
 
     if (!isSubcontractorUser(user)) {
       throw AppError.forbidden('Only subcontractors can create dockets');
@@ -226,13 +228,7 @@ docketsRouter.post(
       });
     });
 
-    res.status(201).json(
-      buildDocketCreatedResponse({
-        ...docket,
-        labourHours: labourHours || 0,
-        plantHours: plantHours || 0,
-      }),
-    );
+    res.status(201).json(buildDocketCreatedResponse(docket));
   }),
 );
 
@@ -279,6 +275,7 @@ docketsRouter.get(
       throw AppError.notFound('Docket');
     }
     await requireDocketReadAccess(req.user!, docket);
+    const includeCommercialAmounts = await canViewDocketAmounts(req.user!, docket.projectId);
 
     const canViewDiaryComparison = !isSubcontractorUser(req.user!);
 
@@ -344,6 +341,7 @@ docketsRouter.get(
         approvedBy,
         foremanDiary,
         discrepancies,
+        includeCommercialAmounts,
       }),
     );
   }),

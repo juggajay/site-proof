@@ -40,17 +40,20 @@ function requiredTrimmedWorkflowString(
 }
 
 export const respondNcrSchema = z.object({
-  rootCauseCategory: optionalTrimmedWorkflowString(
+  rootCauseCategory: requiredTrimmedWorkflowString(
     'Root cause category',
     NCR_WORKFLOW_SHORT_TEXT_MAX_LENGTH,
+    'Root cause category is required',
   ),
-  rootCauseDescription: optionalTrimmedWorkflowString(
+  rootCauseDescription: requiredTrimmedWorkflowString(
     'Root cause description',
     NCR_WORKFLOW_TEXT_MAX_LENGTH,
+    'Root cause description is required',
   ),
-  proposedCorrectiveAction: optionalTrimmedWorkflowString(
+  proposedCorrectiveAction: requiredTrimmedWorkflowString(
     'Proposed corrective action',
     NCR_WORKFLOW_TEXT_MAX_LENGTH,
+    'Proposed corrective action is required',
   ),
 });
 

@@ -56,7 +56,10 @@ export interface UseDocumentUploadResult {
   containerDragHandlers: ContainerDragHandlers;
 }
 
-export function useDocumentUpload(projectId: string | undefined): UseDocumentUploadResult {
+export function useDocumentUpload(
+  projectId: string | undefined,
+  canUploadDocuments = true,
+): UseDocumentUploadResult {
   const queryClient = useQueryClient();
   const uploadingRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -97,7 +100,10 @@ export function useDocumentUpload(projectId: string | undefined): UseDocumentUpl
     return firstFile;
   }, []);
 
-  const openUploadModal = useCallback(() => setShowUploadModal(true), []);
+  const openUploadModal = useCallback(() => {
+    if (!canUploadDocuments) return;
+    setShowUploadModal(true);
+  }, [canUploadDocuments]);
 
   const closeUploadModal = useCallback(() => {
     revokeImageDimensionObjectUrl();
@@ -111,6 +117,7 @@ export function useDocumentUpload(projectId: string | undefined): UseDocumentUpl
   const handleFileSelect = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = e.target.files;
+      if (!canUploadDocuments || uploadingRef.current) return;
       if (files && files.length > 0) {
         revokeImageDimensionObjectUrl();
         const fileArray = Array.from(files);
@@ -137,20 +144,21 @@ export function useDocumentUpload(projectId: string | undefined): UseDocumentUpl
         }
       }
     },
-    [applySelectedFiles, revokeImageDimensionObjectUrl],
+    [applySelectedFiles, canUploadDocuments, revokeImageDimensionObjectUrl],
   );
 
   const handleModalDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
       e.stopPropagation();
+      if (!canUploadDocuments || uploadingRef.current) return;
       const files = e.dataTransfer.files;
       if (files && files.length > 0) {
         revokeImageDimensionObjectUrl();
         applySelectedFiles(Array.from(files));
       }
     },
-    [applySelectedFiles, revokeImageDimensionObjectUrl],
+    [applySelectedFiles, canUploadDocuments, revokeImageDimensionObjectUrl],
   );
 
   const uploadDocsMutation = useMutation({
@@ -216,6 +224,7 @@ export function useDocumentUpload(projectId: string | undefined): UseDocumentUpl
   });
 
   const handleUpload = useCallback(() => {
+    if (!canUploadDocuments) return;
     if (uploadingRef.current) return;
 
     if (selectedFiles.length === 0 || !uploadForm.documentType) {
@@ -232,23 +241,31 @@ export function useDocumentUpload(projectId: string | undefined): UseDocumentUpl
     setUploadProgress(0);
     setUploadedCount(0);
     uploadDocsMutation.mutate({ files: selectedFiles, form: uploadForm });
-  }, [selectedFiles, uploadForm, uploadDocsMutation]);
+  }, [canUploadDocuments, selectedFiles, uploadForm, uploadDocsMutation]);
 
   // Page-level drag/drop: dropping a file anywhere opens the modal preloaded.
-  const handleDragEnter = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(true);
-  }, []);
+  const handleDragEnter = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!canUploadDocuments || uploadingRef.current) return;
+      setIsDragging(true);
+    },
+    [canUploadDocuments],
+  );
 
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    // Only stop dragging if leaving the drop zone entirely.
-    if (dropZoneRef.current && !dropZoneRef.current.contains(e.relatedTarget as Node)) {
-      setIsDragging(false);
-    }
-  }, []);
+  const handleDragLeave = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!canUploadDocuments || uploadingRef.current) return;
+      // Only stop dragging if leaving the drop zone entirely.
+      if (dropZoneRef.current && !dropZoneRef.current.contains(e.relatedTarget as Node)) {
+        setIsDragging(false);
+      }
+    },
+    [canUploadDocuments],
+  );
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -260,6 +277,7 @@ export function useDocumentUpload(projectId: string | undefined): UseDocumentUpl
       e.preventDefault();
       e.stopPropagation();
       setIsDragging(false);
+      if (!canUploadDocuments || uploadingRef.current) return;
 
       const files = e.dataTransfer.files;
       if (files && files.length > 0) {
@@ -268,7 +286,7 @@ export function useDocumentUpload(projectId: string | undefined): UseDocumentUpl
         setShowUploadModal(true);
       }
     },
-    [applySelectedFiles, revokeImageDimensionObjectUrl],
+    [applySelectedFiles, canUploadDocuments, revokeImageDimensionObjectUrl],
   );
 
   return {
@@ -287,7 +305,7 @@ export function useDocumentUpload(projectId: string | undefined): UseDocumentUpl
     handleUpload,
     imageDimensions,
     dimensionWarning,
-    isDragging,
+    isDragging: canUploadDocuments && isDragging,
     dropZoneRef,
     containerDragHandlers: {
       onDragEnter: handleDragEnter,

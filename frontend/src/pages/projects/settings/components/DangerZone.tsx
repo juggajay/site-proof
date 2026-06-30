@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, Archive, CheckCircle2 } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
-import { extractErrorMessage, isUnauthorized } from '@/lib/errorHandling';
+import { extractErrorMessage } from '@/lib/errorHandling';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -29,6 +29,7 @@ export function DangerZone({
   canDeleteProject,
 }: DangerZoneProps) {
   const navigate = useNavigate();
+  const isArchived = project?.status === 'archived';
 
   // Delete dialog state
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -90,11 +91,7 @@ export function DangerZone({
       // Success - navigate to projects list
       navigate('/projects', { replace: true });
     } catch (error) {
-      if (isUnauthorized(error)) {
-        setDeleteError('Incorrect password');
-      } else {
-        setDeleteError(extractErrorMessage(error, 'Failed to delete project. Please try again.'));
-      }
+      setDeleteError(extractErrorMessage(error, 'Failed to delete project. Please try again.'));
     } finally {
       deletingRef.current = false;
       setDeleting(false);
@@ -187,36 +184,37 @@ export function DangerZone({
 
   return (
     <>
-      {/* Complete Project */}
-      <div className="rounded-lg border border-success/50 p-4 mt-8">
-        <div className="flex items-center gap-2 mb-2">
-          <CheckCircle2 className="h-5 w-5 text-success" />
-          <h2 className="text-lg font-semibold text-success">
-            {project?.status === 'completed' ? 'Reactivate Project' : 'Mark as Completed'}
-          </h2>
-        </div>
-        <p className="text-sm text-muted-foreground mb-4">
-          {project?.status === 'completed'
-            ? 'Reactivate this project to continue work. The project will become active again.'
-            : 'Mark this project as completed when all work is finished. Completed projects remain accessible.'}
-        </p>
-        {project?.status === 'completed' && (
-          <div className="mb-4 px-3 py-2 rounded-lg bg-success/10 text-success text-sm">
-            This project has been marked as completed
+      {!isArchived && (
+        <div className="rounded-lg border border-success/50 p-4 mt-8">
+          <div className="flex items-center gap-2 mb-2">
+            <CheckCircle2 className="h-5 w-5 text-success" />
+            <h2 className="text-lg font-semibold text-success">
+              {project?.status === 'completed' ? 'Reactivate Project' : 'Mark as Completed'}
+            </h2>
           </div>
-        )}
-        <Button
-          type="button"
-          onClick={handleCompleteClick}
-          className={
-            project?.status === 'completed'
-              ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-              : 'bg-success text-success-foreground hover:bg-success/90'
-          }
-        >
-          {project?.status === 'completed' ? 'Reactivate Project' : 'Mark as Completed'}
-        </Button>
-      </div>
+          <p className="text-sm text-muted-foreground mb-4">
+            {project?.status === 'completed'
+              ? 'Reactivate this project to continue work. The project will become active again.'
+              : 'Mark this project as completed when all work is finished. Completed projects remain accessible.'}
+          </p>
+          {project?.status === 'completed' && (
+            <div className="mb-4 px-3 py-2 rounded-lg bg-success/10 text-success text-sm">
+              This project has been marked as completed
+            </div>
+          )}
+          <Button
+            type="button"
+            onClick={handleCompleteClick}
+            className={
+              project?.status === 'completed'
+                ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+                : 'bg-success text-success-foreground hover:bg-success/90'
+            }
+          >
+            {project?.status === 'completed' ? 'Reactivate Project' : 'Mark as Completed'}
+          </Button>
+        </div>
+      )}
 
       {/* Archive Project */}
       <div className="rounded-lg border border-warning/50 p-4 mt-4">

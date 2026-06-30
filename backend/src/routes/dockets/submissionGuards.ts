@@ -4,7 +4,7 @@
 // from the inline checks in dockets.ts — same conditions, same error shapes:
 //   - non-draft/non-rejected status -> AppError.badRequest (VALIDATION_ERROR)
 //   - no labour and no plant entries -> new AppError(400, ..., 'ENTRY_REQUIRED')
-//   - labour entries with no lot allocation -> new AppError(400, ..., 'LOT_REQUIRED')
+//   - any labour entry with no lot allocation -> new AppError(400, ..., 'LOT_REQUIRED')
 // The 'ENTRY_REQUIRED'/'LOT_REQUIRED' codes are intentionally distinct from the
 // default VALIDATION_ERROR code and surface on the wire; preserve them exactly.
 // The route still owns request parsing, all Prisma reads/updates, the
@@ -39,16 +39,16 @@ export function assertDocketSubmittable(docket: DocketSubmissionSource): void {
     );
   }
 
-  // Feature #890: Require lot selection for docket submission
-  // Check if docket has labour entries that need lot allocation
+  // Feature #890: Require lot selection for every labour row. Lot-level cost and
+  // evidence rollups assume each labour entry is scoped to its worked lot.
   if (docket.labourEntries.length > 0) {
-    const hasAnyLotAllocation = docket.labourEntries.some(
+    const allLabourEntriesHaveLotAllocation = docket.labourEntries.every(
       (entry) => entry.lotAllocations && entry.lotAllocations.length > 0,
     );
-    if (!hasAnyLotAllocation) {
+    if (!allLabourEntriesHaveLotAllocation) {
       throw new AppError(
         400,
-        'At least one labour entry must be allocated to a lot before submitting the docket.',
+        'Every labour entry must be allocated to a lot before submitting the docket.',
         'LOT_REQUIRED',
       );
     }

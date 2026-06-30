@@ -47,7 +47,7 @@ function PathNode({ num, title, description, status, onPress }: PathNodeProps) {
       className={cn(
         'relative flex w-full items-center gap-3.5 rounded-2xl border px-4 py-[15px] text-left',
         'min-h-[78px] shadow-sm',
-        'transition-transform duration-[180ms] [transition-timing-function:cubic-bezier(.32,1.15,.35,1)]',
+        'transition-transform [transition-duration:180ms] [transition-timing-function:cubic-bezier(.32,1.15,.35,1)]',
         !isLocked && 'active:scale-[.98]',
         isDone && 'border-border bg-card',
         isNow && [

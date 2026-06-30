@@ -5,7 +5,11 @@ import { prisma } from '../../lib/prisma.js';
 import { type AuthUser } from '../../lib/auth.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
-import { parseNcrRouteParam, requireActiveProjectUser } from './ncrAccess.js';
+import {
+  NCR_QUALITY_MANAGEMENT_ROLES,
+  parseNcrRouteParam,
+  requireActiveProjectUser,
+} from './ncrAccess.js';
 import { AppError } from '../../lib/AppError.js';
 import {
   buildNcrAnalyticsResponse,
@@ -313,9 +317,7 @@ ncrAnalyticsRouter.get(
 
     const projectUser = await requireActiveProjectUser(projectId, user);
 
-    const isQualityManager = ['quality_manager', 'admin', 'project_manager'].includes(
-      projectUser.role,
-    );
+    const isQualityManager = NCR_QUALITY_MANAGEMENT_ROLES.includes(projectUser.role);
 
     res.json(buildNcrAnalyticsRoleResponse(projectUser.role, isQualityManager));
   }),

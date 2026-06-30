@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildHoldPointReleaseConfirmationEmail,
+  selectImmediateHoldPointReleaseConfirmationRecipients,
   selectHoldPointReleaseContractors,
   selectHoldPointReleaseSuperintendents,
   type HoldPointReleaseConfirmationContext,
@@ -69,6 +70,18 @@ describe('selectHoldPointReleaseSuperintendents', () => {
   it('includes only superintendent / project_manager roles', () => {
     const result = selectHoldPointReleaseSuperintendents(allRoles);
     expect(result.map((pu) => pu.role)).toEqual(['superintendent', 'project_manager']);
+  });
+});
+
+describe('selectImmediateHoldPointReleaseConfirmationRecipients', () => {
+  it('keeps only recipients whose hold-point release email was sent immediately', () => {
+    const contractors = selectHoldPointReleaseContractors(allRoles);
+    const immediateRecipients = selectImmediateHoldPointReleaseConfirmationRecipients(
+      contractors,
+      new Set(['uid-foreman']),
+    );
+
+    expect(immediateRecipients.map((pu) => pu.userId)).toEqual(['uid-foreman']);
   });
 });
 

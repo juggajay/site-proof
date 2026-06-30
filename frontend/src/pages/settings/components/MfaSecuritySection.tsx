@@ -46,7 +46,7 @@ type MfaSecuritySectionProps = {
   backupCodes: string[];
   showBackupCodes: boolean;
   showDisableMfa: boolean;
-  disableMfaPassword: string;
+  disableMfaCredential: string;
   showSecret: boolean;
   copiedSecret: boolean;
   onLoadMfaStatus: () => void;
@@ -57,7 +57,7 @@ type MfaSecuritySectionProps = {
   onMfaDisable: () => void;
   onDisableMfaOpen: () => void;
   onDisableMfaClose: () => void;
-  onDisableMfaPasswordChange: (password: string) => void;
+  onDisableMfaCredentialChange: (credential: string) => void;
   onBackupCodesClose: () => void;
   onBackupCodesCopy: () => void;
   onShowSecretToggle: () => void;
@@ -76,7 +76,7 @@ export function MfaSecuritySection({
   backupCodes,
   showBackupCodes,
   showDisableMfa,
-  disableMfaPassword,
+  disableMfaCredential,
   showSecret,
   copiedSecret,
   onLoadMfaStatus,
@@ -87,7 +87,7 @@ export function MfaSecuritySection({
   onMfaDisable,
   onDisableMfaOpen,
   onDisableMfaClose,
-  onDisableMfaPasswordChange,
+  onDisableMfaCredentialChange,
   onBackupCodesClose,
   onBackupCodesCopy,
   onShowSecretToggle,
@@ -357,7 +357,8 @@ export function MfaSecuritySection({
             </div>
           </AlertModalHeader>
           <AlertModalDescription>
-            Confirm your password before removing two-factor protection from this account.
+            Confirm with your password, authenticator code, or backup code before removing
+            two-factor protection from this account.
           </AlertModalDescription>
           <ModalBody>
             <div className="space-y-4">
@@ -369,17 +370,21 @@ export function MfaSecuritySection({
               </div>
 
               <div>
-                <Label htmlFor="disable-mfa-password" className="block mb-1">
-                  Enter your password to confirm:
+                <Label htmlFor="disable-mfa-credential" className="block mb-1">
+                  Password or 2FA code
                 </Label>
                 <Input
-                  id="disable-mfa-password"
+                  id="disable-mfa-credential"
                   type="password"
-                  value={disableMfaPassword}
-                  onChange={(event) => onDisableMfaPasswordChange(event.target.value)}
-                  placeholder="Your password"
+                  value={disableMfaCredential}
+                  onChange={(event) => onDisableMfaCredentialChange(event.target.value)}
+                  placeholder="Password, 6-digit code, or backup code"
+                  autoComplete="current-password"
                   disabled={isMfaLoading}
                 />
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Use a backup code if this account signs in with Google and has no password.
+                </p>
               </div>
 
               {mfaMessage?.type === 'error' && (
@@ -399,7 +404,7 @@ export function MfaSecuritySection({
             <Button
               variant="destructive"
               onClick={onMfaDisable}
-              disabled={isMfaLoading || !disableMfaPassword}
+              disabled={isMfaLoading || !disableMfaCredential.trim()}
             >
               {isMfaLoading ? (
                 <>

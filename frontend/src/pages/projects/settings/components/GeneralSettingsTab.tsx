@@ -20,6 +20,7 @@ interface GeneralSettingsTabProps {
   projectId: string;
   project: Project;
   canViewContractValue: boolean;
+  readOnly?: boolean;
   onProjectUpdate: (project: Project) => void;
 }
 
@@ -27,6 +28,7 @@ export function GeneralSettingsTab({
   projectId,
   project,
   canViewContractValue,
+  readOnly = false,
   onProjectUpdate,
 }: GeneralSettingsTabProps) {
   const [formData, setFormData] = useState<GeneralFormData>({ ...DEFAULT_FORM_DATA });
@@ -64,6 +66,8 @@ export function GeneralSettingsTab({
   }, [project]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    if (readOnly) return;
+
     const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
@@ -74,6 +78,7 @@ export function GeneralSettingsTab({
   };
 
   const handleSaveSettings = async () => {
+    if (readOnly) return;
     if (savingRef.current) return;
 
     setSaveError('');
@@ -213,251 +218,258 @@ export function GeneralSettingsTab({
           Settings saved successfully!
         </div>
       )}
+      {readOnly && (
+        <div role="status" className="rounded-lg bg-warning/10 p-3 text-sm text-warning mb-4">
+          Archived projects are read-only. Restore the project before editing.
+        </div>
+      )}
 
-      <div className="rounded-lg border p-4">
-        <h2 className="text-lg font-semibold mb-2">General Settings</h2>
-        <p className="text-sm text-muted-foreground mb-4">
-          Configure project name, number, and basic settings.
-        </p>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <Label htmlFor="project-settings-name" className="mb-1">
-              Project Name
-            </Label>
-            <Input
-              id="project-settings-name"
-              type="text"
-              name="name"
-              value={formData.name}
-              onChange={handleInputChange}
-              placeholder="Project name"
-            />
-          </div>
-          <div>
-            <Label htmlFor="project-settings-code" className="mb-1">
-              Project Code
-            </Label>
-            <Input
-              id="project-settings-code"
-              type="text"
-              name="code"
-              value={formData.code}
-              onChange={handleInputChange}
-              placeholder="PRJ-001"
-            />
-          </div>
-        </div>
-        <div className="mt-4">
-          <Label htmlFor="project-settings-specification-set" className="mb-1">
-            Specification Standard
-          </Label>
-          <select
-            id="project-settings-specification-set"
-            name="specificationSet"
-            value={formData.specificationSet}
-            onChange={handleInputChange}
-            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground disabled:bg-muted disabled:cursor-not-allowed"
-          >
-            {specificationOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <p className="mt-1 text-xs text-muted-foreground">{SPECIFICATION_SET_HELPER_TEXT}</p>
-        </div>
-        {(project?.startDate || project?.targetCompletion) && (
-          <div className="mt-4 pt-4 border-t grid gap-4 sm:grid-cols-2">
-            {project?.startDate && (
-              <div>
-                <Label className="mb-1">Start Date</Label>
-                <div className="text-sm text-muted-foreground">
-                  {new Date(project.startDate).toLocaleDateString('en-AU', {
-                    day: 'numeric',
-                    month: 'long',
-                    year: 'numeric',
-                  })}
-                </div>
-              </div>
-            )}
-            {project?.targetCompletion && (
-              <div>
-                <Label className="mb-1">Target Completion</Label>
-                <div className="text-sm text-muted-foreground">
-                  {new Date(project.targetCompletion).toLocaleDateString('en-AU', {
-                    day: 'numeric',
-                    month: 'long',
-                    year: 'numeric',
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-        {canViewContractValue && project?.contractValue && (
-          <div className="mt-4 pt-4 border-t">
-            <Label className="mb-1">Contract Value</Label>
-            <div className="text-sm text-muted-foreground">
-              $
-              {Number(project.contractValue).toLocaleString('en-AU', {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })}
+      <fieldset disabled={readOnly} className="space-y-4">
+        <div className="rounded-lg border p-4">
+          <h2 className="text-lg font-semibold mb-2">General Settings</h2>
+          <p className="text-sm text-muted-foreground mb-4">
+            Configure project name, number, and basic settings.
+          </p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <Label htmlFor="project-settings-name" className="mb-1">
+                Project Name
+              </Label>
+              <Input
+                id="project-settings-name"
+                type="text"
+                name="name"
+                value={formData.name}
+                onChange={handleInputChange}
+                placeholder="Project name"
+              />
+            </div>
+            <div>
+              <Label htmlFor="project-settings-code" className="mb-1">
+                Project Code
+              </Label>
+              <Input
+                id="project-settings-code"
+                type="text"
+                name="code"
+                value={formData.code}
+                onChange={handleInputChange}
+                placeholder="PRJ-001"
+              />
             </div>
           </div>
-        )}
-      </div>
-      <div className="rounded-lg border p-4">
-        <h2 className="text-lg font-semibold mb-2">Lot Numbering</h2>
-        <p className="text-sm text-muted-foreground mb-4">
-          Configure lot numbering convention and auto-increment settings.
-        </p>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <Label htmlFor="project-settings-lot-prefix" className="mb-1">
-              Lot Prefix
+          <div className="mt-4">
+            <Label htmlFor="project-settings-specification-set" className="mb-1">
+              Specification Standard
             </Label>
-            <Input
-              id="project-settings-lot-prefix"
-              type="text"
-              name="lotPrefix"
-              value={formData.lotPrefix}
+            <select
+              id="project-settings-specification-set"
+              name="specificationSet"
+              value={formData.specificationSet}
               onChange={handleInputChange}
-              placeholder="LOT-"
-            />
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-foreground disabled:bg-muted disabled:cursor-not-allowed"
+            >
+              {specificationOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-muted-foreground">{SPECIFICATION_SET_HELPER_TEXT}</p>
           </div>
-          <div>
-            <Label htmlFor="project-settings-lot-starting-number" className="mb-1">
-              Lot Starting Number
-            </Label>
-            <Input
-              id="project-settings-lot-starting-number"
-              type="number"
-              name="lotStartingNumber"
-              value={formData.lotStartingNumber}
-              onChange={handleInputChange}
-              placeholder="1"
-              min="1"
-              step="1"
-            />
+          {(project?.startDate || project?.targetCompletion) && (
+            <div className="mt-4 pt-4 border-t grid gap-4 sm:grid-cols-2">
+              {project?.startDate && (
+                <div>
+                  <Label className="mb-1">Start Date</Label>
+                  <div className="text-sm text-muted-foreground">
+                    {new Date(project.startDate).toLocaleDateString('en-AU', {
+                      day: 'numeric',
+                      month: 'long',
+                      year: 'numeric',
+                    })}
+                  </div>
+                </div>
+              )}
+              {project?.targetCompletion && (
+                <div>
+                  <Label className="mb-1">Target Completion</Label>
+                  <div className="text-sm text-muted-foreground">
+                    {new Date(project.targetCompletion).toLocaleDateString('en-AU', {
+                      day: 'numeric',
+                      month: 'long',
+                      year: 'numeric',
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          {canViewContractValue && project?.contractValue && (
+            <div className="mt-4 pt-4 border-t">
+              <Label className="mb-1">Contract Value</Label>
+              <div className="text-sm text-muted-foreground">
+                $
+                {Number(project.contractValue).toLocaleString('en-AU', {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="rounded-lg border p-4">
+          <h2 className="text-lg font-semibold mb-2">Lot Numbering</h2>
+          <p className="text-sm text-muted-foreground mb-4">
+            Configure lot numbering convention and auto-increment settings.
+          </p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <Label htmlFor="project-settings-lot-prefix" className="mb-1">
+                Lot Prefix
+              </Label>
+              <Input
+                id="project-settings-lot-prefix"
+                type="text"
+                name="lotPrefix"
+                value={formData.lotPrefix}
+                onChange={handleInputChange}
+                placeholder="LOT-"
+              />
+            </div>
+            <div>
+              <Label htmlFor="project-settings-lot-starting-number" className="mb-1">
+                Lot Starting Number
+              </Label>
+              <Input
+                id="project-settings-lot-starting-number"
+                type="number"
+                name="lotStartingNumber"
+                value={formData.lotStartingNumber}
+                onChange={handleInputChange}
+                placeholder="1"
+                min="1"
+                step="1"
+              />
+            </div>
           </div>
         </div>
-      </div>
-      <div className="rounded-lg border p-4">
-        <h2 className="text-lg font-semibold mb-2">NCR Numbering</h2>
-        <p className="text-sm text-muted-foreground mb-4">
-          Configure non-conformance report numbering convention.
-        </p>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <Label htmlFor="project-settings-ncr-prefix" className="mb-1">
-              NCR Prefix
-            </Label>
-            <Input
-              id="project-settings-ncr-prefix"
-              type="text"
-              name="ncrPrefix"
-              value={formData.ncrPrefix}
-              onChange={handleInputChange}
-              placeholder="NCR-"
-            />
-          </div>
-          <div>
-            <Label htmlFor="project-settings-ncr-starting-number" className="mb-1">
-              NCR Starting Number
-            </Label>
-            <Input
-              id="project-settings-ncr-starting-number"
-              type="number"
-              name="ncrStartingNumber"
-              value={formData.ncrStartingNumber}
-              onChange={handleInputChange}
-              placeholder="1"
-              min="1"
-              step="1"
-            />
-          </div>
-        </div>
-      </div>
-      <div className="rounded-lg border p-4">
-        <h2 className="text-lg font-semibold mb-2">Chainage Configuration</h2>
-        <p className="text-sm text-muted-foreground mb-4">
-          Configure the chainage range for this project. Lot chainages will be constrained to this
-          range.
-        </p>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <Label htmlFor="project-settings-chainage-start" className="mb-1">
-              Chainage Start (m)
-            </Label>
-            <Input
-              id="project-settings-chainage-start"
-              type="number"
-              name="chainageStart"
-              value={formData.chainageStart}
-              onChange={handleInputChange}
-              placeholder="0"
-              min="0"
-              step="0.001"
-            />
-          </div>
-          <div>
-            <Label htmlFor="project-settings-chainage-end" className="mb-1">
-              Chainage End (m)
-            </Label>
-            <Input
-              id="project-settings-chainage-end"
-              type="number"
-              name="chainageEnd"
-              value={formData.chainageEnd}
-              onChange={handleInputChange}
-              placeholder="10000"
-              min="0"
-              step="0.001"
-            />
+        <div className="rounded-lg border p-4">
+          <h2 className="text-lg font-semibold mb-2">NCR Numbering</h2>
+          <p className="text-sm text-muted-foreground mb-4">
+            Configure non-conformance report numbering convention.
+          </p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <Label htmlFor="project-settings-ncr-prefix" className="mb-1">
+                NCR Prefix
+              </Label>
+              <Input
+                id="project-settings-ncr-prefix"
+                type="text"
+                name="ncrPrefix"
+                value={formData.ncrPrefix}
+                onChange={handleInputChange}
+                placeholder="NCR-"
+              />
+            </div>
+            <div>
+              <Label htmlFor="project-settings-ncr-starting-number" className="mb-1">
+                NCR Starting Number
+              </Label>
+              <Input
+                id="project-settings-ncr-starting-number"
+                type="number"
+                name="ncrStartingNumber"
+                value={formData.ncrStartingNumber}
+                onChange={handleInputChange}
+                placeholder="1"
+                min="1"
+                step="1"
+              />
+            </div>
           </div>
         </div>
-      </div>
-      <div className="rounded-lg border p-4">
-        <h2 className="text-lg font-semibold mb-2">Working Hours</h2>
-        <p className="text-sm text-muted-foreground mb-4">
-          Configure the project's working hours for notifications and due date calculations.
-        </p>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <Label htmlFor="project-settings-working-hours-start" className="mb-1">
-              Start Time
-            </Label>
-            <Input
-              id="project-settings-working-hours-start"
-              type="time"
-              name="workingHoursStart"
-              value={formData.workingHoursStart}
-              onChange={handleInputChange}
-            />
-          </div>
-          <div>
-            <Label htmlFor="project-settings-working-hours-end" className="mb-1">
-              End Time
-            </Label>
-            <Input
-              id="project-settings-working-hours-end"
-              type="time"
-              name="workingHoursEnd"
-              value={formData.workingHoursEnd}
-              onChange={handleInputChange}
-            />
+        <div className="rounded-lg border p-4">
+          <h2 className="text-lg font-semibold mb-2">Chainage Configuration</h2>
+          <p className="text-sm text-muted-foreground mb-4">
+            Configure the chainage range for this project. Lot chainages will be constrained to this
+            range.
+          </p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <Label htmlFor="project-settings-chainage-start" className="mb-1">
+                Chainage Start (m)
+              </Label>
+              <Input
+                id="project-settings-chainage-start"
+                type="number"
+                name="chainageStart"
+                value={formData.chainageStart}
+                onChange={handleInputChange}
+                placeholder="0"
+                min="0"
+                step="0.001"
+              />
+            </div>
+            <div>
+              <Label htmlFor="project-settings-chainage-end" className="mb-1">
+                Chainage End (m)
+              </Label>
+              <Input
+                id="project-settings-chainage-end"
+                type="number"
+                name="chainageEnd"
+                value={formData.chainageEnd}
+                onChange={handleInputChange}
+                placeholder="10000"
+                min="0"
+                step="0.001"
+              />
+            </div>
           </div>
         </div>
-      </div>
+        <div className="rounded-lg border p-4">
+          <h2 className="text-lg font-semibold mb-2">Working Hours</h2>
+          <p className="text-sm text-muted-foreground mb-4">
+            Configure the project's working hours for notifications and due date calculations.
+          </p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <Label htmlFor="project-settings-working-hours-start" className="mb-1">
+                Start Time
+              </Label>
+              <Input
+                id="project-settings-working-hours-start"
+                type="time"
+                name="workingHoursStart"
+                value={formData.workingHoursStart}
+                onChange={handleInputChange}
+              />
+            </div>
+            <div>
+              <Label htmlFor="project-settings-working-hours-end" className="mb-1">
+                End Time
+              </Label>
+              <Input
+                id="project-settings-working-hours-end"
+                type="time"
+                name="workingHoursEnd"
+                value={formData.workingHoursEnd}
+                onChange={handleInputChange}
+              />
+            </div>
+          </div>
+        </div>
 
-      {/* Save Button */}
-      <div className="flex justify-end">
-        <Button type="button" onClick={handleSaveSettings} disabled={saving}>
-          <Save className="h-4 w-4" />
-          {saving ? 'Saving...' : 'Save Settings'}
-        </Button>
-      </div>
+        {/* Save Button */}
+        <div className="flex justify-end">
+          <Button type="button" onClick={handleSaveSettings} disabled={saving || readOnly}>
+            <Save className="h-4 w-4" />
+            {saving ? 'Saving...' : 'Save Settings'}
+          </Button>
+        </div>
+      </fieldset>
     </>
   );
 }

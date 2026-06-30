@@ -97,8 +97,13 @@ describe('saveDiaryOffline', () => {
 
 describe('submitDiaryOffline', () => {
   it('marks the diary submitted/pending and queues a diary_submit sync', async () => {
+    vi.mocked(offlineDb.diaries.get).mockResolvedValue({
+      id: 'diary-project-1-2026-06-05',
+    } as OfflineDailyDiary);
+
     await submitDiaryOffline('project-1', '2026-06-05');
 
+    expect(offlineDb.diaries.get).toHaveBeenCalledWith('diary-project-1-2026-06-05');
     expect(offlineDb.diaries.update).toHaveBeenCalledWith('diary-project-1-2026-06-05', {
       status: 'submitted',
       syncStatus: 'pending',
@@ -111,6 +116,17 @@ describe('submitDiaryOffline', () => {
       createdAt: expect.any(String),
       attempts: 0,
     });
+  });
+
+  it('rejects instead of queueing a submit when no offline snapshot exists', async () => {
+    vi.mocked(offlineDb.diaries.get).mockResolvedValue(undefined);
+
+    await expect(submitDiaryOffline('project-1', '2026-06-05')).rejects.toThrow(
+      'Offline diary snapshot not found',
+    );
+
+    expect(offlineDb.diaries.update).not.toHaveBeenCalled();
+    expect(offlineDb.syncQueue.add).not.toHaveBeenCalled();
   });
 });
 

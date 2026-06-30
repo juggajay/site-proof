@@ -38,6 +38,22 @@ describe('AuditLogHeader', () => {
     expect(onExport).toHaveBeenCalledTimes(1);
   });
 
+  it('describes scoped access instead of claiming every project is visible', () => {
+    render(
+      <AuditLogHeader
+        loading={false}
+        exporting={false}
+        hasError={false}
+        total={0}
+        onExport={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByText('View system activity and changes you have access to'),
+    ).toBeInTheDocument();
+  });
+
   it('disables export while unavailable', () => {
     render(
       <AuditLogHeader loading={false} exporting hasError={false} total={3} onExport={vi.fn()} />,

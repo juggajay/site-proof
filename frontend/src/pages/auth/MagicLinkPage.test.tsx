@@ -38,7 +38,14 @@ afterEach(() => {
 
 describe('MagicLinkPage', () => {
   it('consumes the one-time token only once when StrictMode reruns effects', async () => {
-    mocks.apiFetch.mockResolvedValue({ token: 'jwt-token' });
+    const trustedUser = {
+      id: 'user-1',
+      email: 'user@example.com',
+      role: 'owner',
+      roleInCompany: 'owner',
+      companyId: 'company-1',
+    };
+    mocks.apiFetch.mockResolvedValue({ token: 'jwt-token', user: trustedUser });
     mocks.setToken.mockResolvedValue({
       id: 'user-1',
       email: 'user@example.com',
@@ -55,7 +62,7 @@ describe('MagicLinkPage', () => {
     );
 
     await waitFor(() => {
-      expect(mocks.setToken).toHaveBeenCalledWith('jwt-token');
+      expect(mocks.setToken).toHaveBeenCalledWith('jwt-token', trustedUser);
     });
 
     expect(mocks.apiFetch).toHaveBeenCalledTimes(1);
@@ -76,7 +83,14 @@ describe('MagicLinkPage', () => {
   });
 
   it('preserves safe invite redirects after successful verification', async () => {
-    mocks.apiFetch.mockResolvedValue({ token: 'jwt-token' });
+    const trustedUser = {
+      id: 'user-1',
+      email: 'user@example.com',
+      role: 'member',
+      roleInCompany: 'member',
+      companyId: 'company-1',
+    };
+    mocks.apiFetch.mockResolvedValue({ token: 'jwt-token', user: trustedUser });
     mocks.setToken.mockResolvedValue({
       id: 'user-1',
       email: 'user@example.com',
@@ -92,7 +106,7 @@ describe('MagicLinkPage', () => {
     });
 
     await waitFor(() => {
-      expect(mocks.setToken).toHaveBeenCalledWith('jwt-token');
+      expect(mocks.setToken).toHaveBeenCalledWith('jwt-token', trustedUser);
     });
 
     await waitFor(
@@ -107,4 +121,24 @@ describe('MagicLinkPage', () => {
       { timeout: 3000 },
     );
   }, 8000);
+
+  it('scrubs the one-time token from the URL before server verification finishes', async () => {
+    const replaceStateSpy = vi.spyOn(window.history, 'replaceState');
+    mocks.apiFetch.mockRejectedValue(new Error('network failed'));
+
+    renderWithProviders(<MagicLinkPage />, {
+      initialEntries: ['/auth/magic-link?token=magic_once&redirect=%2Fprojects'],
+    });
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/failed to verify magic link/i);
+    expect(mocks.setToken).not.toHaveBeenCalled();
+    expect(replaceStateSpy).toHaveBeenCalledWith(
+      null,
+      document.title,
+      '/auth/magic-link?redirect=%2Fprojects',
+    );
+    expect(window.location.pathname + window.location.search).toBe(
+      '/auth/magic-link?redirect=%2Fprojects',
+    );
+  });
 });

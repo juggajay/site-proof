@@ -67,6 +67,22 @@ export interface ScheduledReport {
   failureCount?: number;
   lastFailureAt?: string | null;
   lastFailureReason?: string | null;
+  latestRun?: ScheduledReportLatestRun | null;
+}
+
+export interface ScheduledReportLatestRun {
+  id: string;
+  status: string;
+  recipientCount: number;
+  sentCount: number;
+  failedCount: number;
+  digestCount: number;
+  suppressedCount: number;
+  errorReason?: string | null;
+  generatedAt: string;
+  completedAt?: string | null;
+  retryableFailedCount?: number;
+  nextRetryAt?: string | null;
 }
 
 export function getScheduleStatusLabel(schedule: ScheduledReport): string {
@@ -95,16 +111,79 @@ export function getScheduleFailureMessage(schedule: ScheduledReport): string | n
   return `Last delivery failed after ${attemptLabel}; the next retry is scheduled. Error: ${reason}`;
 }
 
-export function formatNextRun(dateStr: string | null): string {
+function formatRecipientCount(count: number): string {
+  return `${count} recipient${count === 1 ? '' : 's'}`;
+}
+
+export function getScheduleLatestRunMessage(schedule: ScheduledReport): string | null {
+  const run = schedule.latestRun;
+  if (!run) return null;
+
+  const totalRecipients = Math.max(0, run.recipientCount);
+  const sentRecipients = Math.max(0, run.sentCount);
+  const failedRecipients = Math.max(0, run.failedCount);
+  const suppressedRecipients = Math.max(0, run.suppressedCount);
+  const digestRecipients = Math.max(0, run.digestCount);
+  const digestLabel = digestRecipients > 0 ? `, ${digestRecipients} queued for digest` : '';
+  const suppressedLabel =
+    suppressedRecipients > 0 ? `, ${suppressedRecipients} suppressed by preferences/access` : '';
+  const reason = run.errorReason?.trim();
+  const reasonLabel = reason ? ` Error: ${reason}` : '';
+
+  switch (run.status) {
+    case 'processing':
+      return `Latest run is sending to ${formatRecipientCount(totalRecipients)}.`;
+    case 'sent':
+      return `Latest run sent to ${formatRecipientCount(sentRecipients)}${digestLabel}${suppressedLabel}.`;
+    case 'partial_failed':
+      return `Latest run sent to ${sentRecipients} of ${totalRecipients} recipients; ${failedRecipients} failed${digestLabel}${suppressedLabel}.${reasonLabel}`;
+    case 'failed':
+      return `Latest run failed for ${formatRecipientCount(
+        failedRecipients || totalRecipients,
+      )}.${reasonLabel}`;
+    case 'cancelled':
+      return 'Latest run was cancelled after the schedule changed.';
+    default:
+      return `Latest run status: ${run.status}.`;
+  }
+}
+
+export function getScheduleLatestRunClassName(schedule: ScheduledReport): string {
+  const status = schedule.latestRun?.status;
+  if (status === 'failed' || status === 'partial_failed') {
+    return 'text-warning';
+  }
+  if (status === 'processing') {
+    return 'text-muted-foreground';
+  }
+  return 'text-muted-foreground';
+}
+
+export function formatNextRun(dateStr: string | null, timeZone?: string): string {
   if (!dateStr) return 'Not scheduled';
   const date = new Date(dateStr);
-  return date.toLocaleString('en-AU', {
+  if (Number.isNaN(date.getTime())) return 'Not scheduled';
+
+  const options: Intl.DateTimeFormatOptions = {
     weekday: 'short',
     day: 'numeric',
     month: 'short',
     hour: '2-digit',
     minute: '2-digit',
-  });
+  };
+
+  try {
+    return date.toLocaleString('en-AU', {
+      ...options,
+      ...(timeZone ? { timeZone } : {}),
+    });
+  } catch (error) {
+    if (error instanceof RangeError && timeZone) {
+      return date.toLocaleString('en-AU', options);
+    }
+
+    throw error;
+  }
 }
 
 export function getFrequencyLabel(schedule: ScheduledReport): string {

@@ -5,6 +5,7 @@ import { requireAuth } from '../../middleware/authMiddleware.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { escapeCsvFormulaValue } from '../../lib/csvSafe.js';
+import { roundClaimAmountToCents } from '../claims/workflowValidation.js';
 
 const CLAIM_REPORT_STATUSES = [
   'draft',
@@ -28,6 +29,7 @@ type ClaimReportRouterDependencies = {
     value: unknown,
     fieldName: string,
     endOfDay?: boolean,
+    timeZone?: string,
   ) => ParsedDateQuery | undefined;
   parseOptionalCommaSeparatedQuery: (value: unknown, fieldName: string) => string[];
   validateDateRange: (
@@ -35,6 +37,7 @@ type ClaimReportRouterDependencies = {
     endDate: ParsedDateQuery | undefined,
   ) => void;
   requireClaimsReportAccess: (user: AuthUser | undefined, projectId: string) => Promise<void>;
+  resolveReportProjectTimeZone: (projectId: string) => Promise<string>;
 };
 
 function escapeOptionalCsvExportValue(value: string | null | undefined): string | null | undefined {
@@ -74,16 +77,34 @@ type ClaimReportAmounts = {
   outstanding: number | null;
 };
 
+type ClaimReportFinancialSummaryInput = {
+  status: string | null;
+  totalClaimedAmount: unknown;
+  certifiedAmount: unknown;
+  paidAmount: unknown;
+  lotCount: number;
+};
+
+type ClaimReportFinancialSummary = {
+  totalClaimed: number;
+  totalCertified: number;
+  totalPaid: number;
+  outstanding: number;
+  certificationRate: string;
+  collectionRate: string;
+  totalLots: number;
+};
+
 function hasReportAmount(value: unknown): boolean {
   return value !== null && value !== undefined;
 }
 
 function reportAmountOrZero(value: unknown): number {
-  return hasReportAmount(value) ? Number(value) : 0;
+  return hasReportAmount(value) ? roundClaimAmountToCents(Number(value)) : 0;
 }
 
 function reportAmountOrNull(value: unknown): number | null {
-  return hasReportAmount(value) ? Number(value) : null;
+  return hasReportAmount(value) ? roundClaimAmountToCents(Number(value)) : null;
 }
 
 export function buildClaimReportAmounts({
@@ -101,10 +122,53 @@ export function buildClaimReportAmounts({
     paidAmount: reportedPaidAmount,
     variance:
       hasReportAmount(totalClaimedAmount) && hasReportAmount(certifiedAmount)
-        ? Number(totalClaimedAmount) - Number(certifiedAmount)
+        ? roundClaimAmountToCents(Number(totalClaimedAmount) - Number(certifiedAmount))
         : null,
     outstanding:
-      reportedCertifiedAmount === null ? null : reportedCertifiedAmount - (reportedPaidAmount ?? 0),
+      reportedCertifiedAmount === null
+        ? null
+        : roundClaimAmountToCents(reportedCertifiedAmount - (reportedPaidAmount ?? 0)),
+  };
+}
+
+export function buildClaimReportFinancialSummary(
+  claims: ClaimReportFinancialSummaryInput[],
+): ClaimReportFinancialSummary {
+  let totalClaimed = 0;
+  let totalCertified = 0;
+  let totalPaid = 0;
+  let totalNonDisputedPaid = 0;
+  let totalLots = 0;
+
+  for (const claim of claims) {
+    totalClaimed = roundClaimAmountToCents(
+      totalClaimed + reportAmountOrZero(claim.totalClaimedAmount),
+    );
+    totalPaid = roundClaimAmountToCents(totalPaid + reportAmountOrZero(claim.paidAmount));
+    totalLots += claim.lotCount;
+
+    if (claim.status !== 'disputed') {
+      totalCertified = roundClaimAmountToCents(
+        totalCertified + reportAmountOrZero(claim.certifiedAmount),
+      );
+      totalNonDisputedPaid = roundClaimAmountToCents(
+        totalNonDisputedPaid + reportAmountOrZero(claim.paidAmount),
+      );
+    }
+  }
+
+  const outstanding = Math.max(0, roundClaimAmountToCents(totalCertified - totalNonDisputedPaid));
+
+  return {
+    totalClaimed,
+    totalCertified,
+    totalPaid,
+    outstanding,
+    certificationRate:
+      totalClaimed > 0 ? ((totalCertified / totalClaimed) * 100).toFixed(1) : '0.0',
+    collectionRate:
+      totalCertified > 0 ? ((totalNonDisputedPaid / totalCertified) * 100).toFixed(1) : '0.0',
+    totalLots,
   };
 }
 
@@ -114,6 +178,7 @@ export function createClaimReportRouter({
   parseOptionalCommaSeparatedQuery,
   validateDateRange,
   requireClaimsReportAccess,
+  resolveReportProjectTimeZone,
 }: ClaimReportRouterDependencies): Router {
   const router = Router();
 
@@ -127,13 +192,19 @@ export function createClaimReportRouter({
       const projectId = parseRequiredString(req.query.projectId, 'projectId');
 
       await requireClaimsReportAccess(req.user, projectId);
+      const projectTimeZone = await resolveReportProjectTimeZone(projectId);
 
       // Build where clause with optional filters
       const whereClause: Prisma.ProgressClaimWhereInput = { projectId };
 
       // Filter by date range (using claimPeriodEnd)
-      const parsedStartDate = parseOptionalDateQuery(startDate, 'startDate');
-      const parsedEndDate = parseOptionalDateQuery(endDate, 'endDate', true);
+      const parsedStartDate = parseOptionalDateQuery(
+        startDate,
+        'startDate',
+        false,
+        projectTimeZone,
+      );
+      const parsedEndDate = parseOptionalDateQuery(endDate, 'endDate', true, projectTimeZone);
       validateDateRange(parsedStartDate, parsedEndDate);
       if (parsedStartDate || parsedEndDate) {
         const claimPeriodEnd: Prisma.DateTimeFilter = {};
@@ -177,24 +248,15 @@ export function createClaimReportRouter({
         return acc;
       }, {});
 
-      // Calculate financial summary
-      let totalClaimed = 0;
-      let totalCertified = 0;
-      let totalPaid = 0;
-      let totalLots = 0;
-
-      for (const claim of claims) {
-        totalClaimed += reportAmountOrZero(claim.totalClaimedAmount);
-        totalCertified += reportAmountOrZero(claim.certifiedAmount);
-        totalPaid += reportAmountOrZero(claim.paidAmount);
-        totalLots += claim.claimedLots.length;
-      }
-
-      const outstanding = totalCertified - totalPaid;
-      const certificationRate =
-        totalClaimed > 0 ? ((totalCertified / totalClaimed) * 100).toFixed(1) : '0.0';
-      const collectionRate =
-        totalCertified > 0 ? ((totalPaid / totalCertified) * 100).toFixed(1) : '0.0';
+      const financialSummary = buildClaimReportFinancialSummary(
+        claims.map((claim) => ({
+          status: claim.status,
+          totalClaimedAmount: claim.totalClaimedAmount,
+          certifiedAmount: claim.certifiedAmount,
+          paidAmount: claim.paidAmount,
+          lotCount: claim.claimedLots.length,
+        })),
+      );
 
       // Calculate monthly breakdown
       const monthlyData: Record<
@@ -206,9 +268,15 @@ export function createClaimReportRouter({
         if (!monthlyData[monthKey]) {
           monthlyData[monthKey] = { claimed: 0, certified: 0, paid: 0, count: 0 };
         }
-        monthlyData[monthKey].claimed += reportAmountOrZero(claim.totalClaimedAmount);
-        monthlyData[monthKey].certified += reportAmountOrZero(claim.certifiedAmount);
-        monthlyData[monthKey].paid += reportAmountOrZero(claim.paidAmount);
+        monthlyData[monthKey].claimed = roundClaimAmountToCents(
+          monthlyData[monthKey].claimed + reportAmountOrZero(claim.totalClaimedAmount),
+        );
+        monthlyData[monthKey].certified = roundClaimAmountToCents(
+          monthlyData[monthKey].certified + reportAmountOrZero(claim.certifiedAmount),
+        );
+        monthlyData[monthKey].paid = roundClaimAmountToCents(
+          monthlyData[monthKey].paid + reportAmountOrZero(claim.paidAmount),
+        );
         monthlyData[monthKey].count++;
       }
 
@@ -218,7 +286,7 @@ export function createClaimReportRouter({
         .map(([month, data]) => ({
           month,
           ...data,
-          variance: data.claimed - data.certified,
+          variance: roundClaimAmountToCents(data.claimed - data.certified),
         }));
 
       // Transform claims for export
@@ -263,13 +331,13 @@ export function createClaimReportRouter({
         totalClaims: claims.length,
         statusCounts,
         financialSummary: {
-          totalClaimed,
-          totalCertified,
-          totalPaid,
-          outstanding,
-          certificationRate,
-          collectionRate,
-          totalLots,
+          totalClaimed: financialSummary.totalClaimed,
+          totalCertified: financialSummary.totalCertified,
+          totalPaid: financialSummary.totalPaid,
+          outstanding: financialSummary.outstanding,
+          certificationRate: financialSummary.certificationRate,
+          collectionRate: financialSummary.collectionRate,
+          totalLots: financialSummary.totalLots,
         },
         monthlyBreakdown,
         claims: claimsData,

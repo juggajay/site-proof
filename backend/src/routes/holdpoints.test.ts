@@ -172,6 +172,21 @@ describe('Hold Points API', () => {
       expect(res.body.holdPoints).toBeDefined();
       expect(Array.isArray(res.body.holdPoints)).toBe(true);
     });
+
+    it('returns the bounded full register in one response when all=true', async () => {
+      const res = await request(app)
+        .get(`/api/holdpoints/project/${projectId}?all=true`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.holdPoints).toBeDefined();
+      expect(Array.isArray(res.body.holdPoints)).toBe(true);
+      expect(res.body.pagination).toMatchObject({
+        page: 1,
+        limit: 5000,
+        hasNextPage: false,
+      });
+    });
   });
 
   describe('GET /api/holdpoints/lot/:lotId/item/:itemId', () => {
@@ -545,10 +560,10 @@ describe('Hold Points API', () => {
         holdPointIdToDelete = res.body.holdPoint.id;
 
         const deliveries = await waitForWebhookDeliveries(webhook.id, 1, (delivery) =>
-          deliveryPayloadContains(delivery, holdPointIdToDelete ?? ''),
+          Boolean(delivery.success && deliveryPayloadContains(delivery, holdPointIdToDelete ?? '')),
         );
         const delivery = deliveries.find((item) =>
-          deliveryPayloadContains(item, holdPointIdToDelete ?? ''),
+          Boolean(item.success && deliveryPayloadContains(item, holdPointIdToDelete ?? '')),
         );
         expect(delivery).toBeDefined();
         expect(delivery).toMatchObject({
@@ -873,6 +888,44 @@ describe('Hold Points API', () => {
       expect(created.verifiedAt).toBeInstanceOf(Date);
     });
 
+    it('does not overwrite a failed ITP completion when recording hold point release', async () => {
+      const { holdPoint: hp, completion } = await createReleaseReadyHoldPoint();
+      await prisma.iTPCompletion.update({
+        where: { id: completion.id },
+        data: {
+          status: 'failed',
+          verificationStatus: 'none',
+          completedAt: null,
+          completedById: null,
+          verifiedAt: null,
+          verifiedById: null,
+        },
+      });
+
+      try {
+        const res = await postRelease(hp.id, emailReleasePayload());
+
+        expect(res.status).toBe(409);
+        expect(res.body.error.message).toContain('Failed ITP hold-point items must be resubmitted');
+
+        const unchangedCompletion = await prisma.iTPCompletion.findUniqueOrThrow({
+          where: { id: completion.id },
+        });
+        expect(unchangedCompletion.status).toBe('failed');
+        expect(unchangedCompletion.verificationStatus).toBe('none');
+        expect(unchangedCompletion.verifiedAt).toBeNull();
+
+        const unchangedHoldPoint = await prisma.holdPoint.findUniqueOrThrow({
+          where: { id: hp.id },
+        });
+        expect(unchangedHoldPoint.status).toBe('notified');
+        expect(unchangedHoldPoint.releasedAt).toBeNull();
+      } finally {
+        await prisma.holdPoint.delete({ where: { id: hp.id } }).catch(() => {});
+        await prisma.iTPCompletion.delete({ where: { id: completion.id } }).catch(() => {});
+      }
+    });
+
     it('should accept email confirmation release with no signature data', async () => {
       const { holdPoint: hp } = await createReleaseReadyHoldPoint();
 
@@ -906,9 +959,11 @@ describe('Hold Points API', () => {
         expect(res.status).toBe(200);
 
         const deliveries = await waitForWebhookDeliveries(webhook.id, 1, (delivery) =>
-          deliveryPayloadContains(delivery, hp.id),
+          Boolean(delivery.success && deliveryPayloadContains(delivery, hp.id)),
         );
-        const delivery = deliveries.find((item) => deliveryPayloadContains(item, hp.id));
+        const delivery = deliveries.find((item) =>
+          Boolean(item.success && deliveryPayloadContains(item, hp.id)),
+        );
         expect(delivery).toBeDefined();
         expect(delivery).toMatchObject({
           event: 'hold_point.released',
@@ -2288,6 +2343,154 @@ describe('Hold Point Token Release', () => {
     }
   });
 
+  it('does not overwrite a failed ITP completion when public token releases a hold point', async () => {
+    const rawFailedToken = `failed-public-token-${Date.now()}`;
+    const failedToken = await prisma.holdPointReleaseToken.create({
+      data: {
+        holdPointId,
+        token: hashHoldPointReleaseTokenForTest(rawFailedToken),
+        recipientEmail: 'failed-public-external@example.com',
+        recipientName: 'Failed Public Reviewer',
+        expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+      },
+    });
+
+    await prisma.iTPCompletion.update({
+      where: { id: completionId },
+      data: {
+        status: 'failed',
+        verificationStatus: 'none',
+        completedAt: null,
+        verifiedAt: null,
+        verifiedById: null,
+      },
+    });
+
+    try {
+      const res = await request(app).post(`/api/holdpoints/public/${rawFailedToken}/release`).send({
+        releasedByName: 'Failed Public Reviewer',
+        releasedByOrg: 'Client Company',
+        releaseNotes: 'Should not overwrite the failed ITP outcome',
+        signatureDataUrl: 'data:image/png;base64,ZmFrZS1zaWduYXR1cmU=',
+      });
+
+      expect(res.status).toBe(409);
+      expect(res.body.error.message).toContain('Failed ITP hold-point items must be resubmitted');
+
+      const unchangedCompletion = await prisma.iTPCompletion.findUniqueOrThrow({
+        where: { id: completionId },
+      });
+      expect(unchangedCompletion.status).toBe('failed');
+      expect(unchangedCompletion.verificationStatus).toBe('none');
+      expect(unchangedCompletion.verifiedAt).toBeNull();
+
+      const holdPoint = await prisma.holdPoint.findUniqueOrThrow({ where: { id: holdPointId } });
+      expect(holdPoint.status).not.toBe('released');
+
+      const storedToken = await prisma.holdPointReleaseToken.findUniqueOrThrow({
+        where: { id: failedToken.id },
+      });
+      expect(storedToken.usedAt).toBeNull();
+    } finally {
+      await prisma.holdPointReleaseToken.delete({ where: { id: failedToken.id } }).catch(() => {});
+      await prisma.holdPoint.update({
+        where: { id: holdPointId },
+        data: {
+          status: 'pending',
+          releasedAt: null,
+          releasedByName: null,
+          releasedByOrg: null,
+          releaseMethod: null,
+          releaseSignatureUrl: null,
+          releaseNotes: null,
+        },
+      });
+      await prisma.iTPCompletion.update({
+        where: { id: completionId },
+        data: {
+          status: 'completed',
+          verificationStatus: 'none',
+          verifiedAt: null,
+          verifiedById: null,
+        },
+      });
+    }
+  });
+
+  it('should reject a public release token that expires between lookup and consume', async () => {
+    const rawRaceToken = `expiry-race-token-${Date.now()}`;
+    const raceToken = await prisma.holdPointReleaseToken.create({
+      data: {
+        holdPointId,
+        token: hashHoldPointReleaseTokenForTest(rawRaceToken),
+        recipientEmail: 'expiry-race@example.com',
+        recipientName: 'Expiry Race Reviewer',
+        expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+      },
+    });
+    let middlewareActive = true;
+
+    prisma.$use(async (params, next) => {
+      if (
+        middlewareActive &&
+        params.model === 'HoldPointReleaseToken' &&
+        params.action === 'updateMany' &&
+        (params.args?.where as { id?: string } | undefined)?.id === raceToken.id
+      ) {
+        middlewareActive = false;
+        await prisma.holdPointReleaseToken.update({
+          where: { id: raceToken.id },
+          data: { expiresAt: new Date(Date.now() - 1000) },
+        });
+      }
+
+      return next(params);
+    });
+
+    try {
+      const res = await request(app).post(`/api/holdpoints/public/${rawRaceToken}/release`).send({
+        releasedByName: 'Expiry Race Reviewer',
+        releasedByOrg: 'Client Company',
+        releaseNotes: 'Should be rejected because the token expired during consume',
+        signatureDataUrl: 'data:image/png;base64,ZmFrZS1zaWduYXR1cmU=',
+      });
+
+      expect(res.status).toBe(410);
+      expect(res.body.error.code).toBe('TOKEN_EXPIRED');
+
+      const storedToken = await prisma.holdPointReleaseToken.findUniqueOrThrow({
+        where: { id: raceToken.id },
+      });
+      expect(storedToken.usedAt).toBeNull();
+
+      const holdPoint = await prisma.holdPoint.findUniqueOrThrow({ where: { id: holdPointId } });
+      expect(holdPoint.status).not.toBe('released');
+    } finally {
+      middlewareActive = false;
+      await prisma.holdPointReleaseToken.delete({ where: { id: raceToken.id } }).catch(() => {});
+      await prisma.holdPoint.update({
+        where: { id: holdPointId },
+        data: {
+          status: 'pending',
+          releasedAt: null,
+          releasedByName: null,
+          releasedByOrg: null,
+          releaseMethod: null,
+          releaseSignatureUrl: null,
+          releaseNotes: null,
+        },
+      });
+      await prisma.iTPCompletion.update({
+        where: { id: completionId },
+        data: {
+          verificationStatus: 'none',
+          verifiedAt: null,
+          verifiedById: null,
+        },
+      });
+    }
+  });
+
   it('should bind public release identity to the token recipient when present', async () => {
     const rawIdentityToken = `identity-token-${Date.now()}`;
     const identityToken = await prisma.holdPointReleaseToken.create({
@@ -2573,10 +2776,10 @@ describe('Hold Point Token Release', () => {
       expect(res.body.holdPoint.status).toBe('released');
 
       const deliveries = await waitForWebhookDeliveries(webhook.id, 1, (delivery) =>
-        deliveryPayloadContains(delivery, webhookHoldPoint.id),
+        Boolean(delivery.success && deliveryPayloadContains(delivery, webhookHoldPoint.id)),
       );
       const delivery = deliveries.find((item) =>
-        deliveryPayloadContains(item, webhookHoldPoint.id),
+        Boolean(item.success && deliveryPayloadContains(item, webhookHoldPoint.id)),
       );
       expect(delivery).toBeDefined();
       expect(delivery).toMatchObject({

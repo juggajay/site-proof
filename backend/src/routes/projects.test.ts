@@ -1,8 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
+import crypto from 'crypto';
 import { projectsRouter } from './projects.js';
 import { authRouter } from './auth.js';
+import { authenticateApiKey } from './apiKeys.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { AuditAction, parseAuditLogChanges } from '../lib/auditLog.js';
@@ -11,9 +13,31 @@ import { ARCHIVED_PROJECT_READ_ONLY_MESSAGE } from '../lib/projectAccess.js';
 
 const app = express();
 app.use(express.json());
+app.use(authenticateApiKey);
 app.use('/api/auth', authRouter);
 app.use('/api/projects', projectsRouter);
 app.use(errorHandler);
+
+function hashApiKeyForTest(apiKey: string): string {
+  return crypto.createHash('sha256').update(apiKey).digest('hex');
+}
+
+async function createApiKeyForUser(userId: string, scopes = 'admin') {
+  const apiKey = `sp_${crypto.randomBytes(32).toString('hex')}`;
+  const record = await prisma.apiKey.create({
+    data: {
+      userId,
+      name: 'Project browser-session boundary test key',
+      keyHash: hashApiKeyForTest(apiKey),
+      keyPrefix: apiKey.substring(0, 11),
+      scopes,
+      isActive: true,
+    },
+    select: { id: true },
+  });
+
+  return { apiKey, keyId: record.id };
+}
 
 describe('Projects API', () => {
   let authToken: string;
@@ -84,6 +108,26 @@ describe('Projects API', () => {
         state: 'NSW',
         specificationSet: 'TfNSW',
       });
+    });
+
+    it('rejects API-key-authenticated project creation', async () => {
+      const { apiKey, keyId } = await createApiKeyForUser(userId, 'admin');
+      const projectNumber = `API-CREATE-BLOCKED-${Date.now()}`;
+
+      try {
+        const res = await request(app).post('/api/projects').set('x-api-key', apiKey).send({
+          name: 'Blocked API Key Project',
+          projectNumber,
+          state: 'NSW',
+          specificationSet: 'TfNSW',
+        });
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.message).toContain('browser session');
+        await expect(prisma.project.count({ where: { projectNumber } })).resolves.toBe(0);
+      } finally {
+        await prisma.apiKey.deleteMany({ where: { id: keyId } });
+      }
     });
 
     it('should reject project without name', async () => {
@@ -1389,6 +1433,171 @@ describe('Projects API', () => {
     });
   });
 
+  describe('GET /api/projects/:id/access', () => {
+    it('returns the caller role for the specific project', async () => {
+      const adminRes = await request(app)
+        .get(`/api/projects/${projectId}/access`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(adminRes.status).toBe(200);
+      expect(adminRes.body.access).toEqual({
+        hasProjectAccess: true,
+        role: 'admin',
+        isProjectAdmin: true,
+      });
+    });
+
+    it('does not let a role on one project unlock another project', async () => {
+      const suffix = Date.now();
+      const otherProject = await prisma.project.create({
+        data: {
+          companyId,
+          name: `Project Access Cross Role ${suffix}`,
+          projectNumber: `ACCESS-CROSS-${suffix}`,
+          status: 'active',
+          state: 'NSW',
+          specificationSet: 'TfNSW',
+        },
+      });
+      const scopedUser = await registerTestUser(app, {
+        emailPrefix: 'projects-access-cross-role',
+        fullName: 'Projects Access Cross Role User',
+        companyId,
+        roleInCompany: 'member',
+      });
+
+      await prisma.projectUser.createMany({
+        data: [
+          {
+            projectId,
+            userId: scopedUser.userId,
+            role: 'viewer',
+            status: 'active',
+            acceptedAt: new Date(),
+          },
+          {
+            projectId: otherProject.id,
+            userId: scopedUser.userId,
+            role: 'project_manager',
+            status: 'active',
+            acceptedAt: new Date(),
+          },
+        ],
+      });
+
+      try {
+        const viewerProjectRes = await request(app)
+          .get(`/api/projects/${projectId}/access`)
+          .set('Authorization', `Bearer ${scopedUser.token}`);
+
+        expect(viewerProjectRes.status).toBe(200);
+        expect(viewerProjectRes.body.access.role).toBe('viewer');
+        expect(viewerProjectRes.body.access.isProjectAdmin).toBe(false);
+
+        const managerProjectRes = await request(app)
+          .get(`/api/projects/${otherProject.id}/access`)
+          .set('Authorization', `Bearer ${scopedUser.token}`);
+
+        expect(managerProjectRes.status).toBe(200);
+        expect(managerProjectRes.body.access.role).toBe('project_manager');
+        expect(managerProjectRes.body.access.isProjectAdmin).toBe(true);
+      } finally {
+        await prisma.projectUser.deleteMany({ where: { userId: scopedUser.userId } });
+        await prisma.emailVerificationToken.deleteMany({ where: { userId: scopedUser.userId } });
+        await prisma.user.delete({ where: { id: scopedUser.userId } }).catch(() => {});
+        await prisma.project.delete({ where: { id: otherProject.id } }).catch(() => {});
+      }
+    });
+
+    it('rejects same-company members without active access to the project', async () => {
+      const member = await registerTestUser(app, {
+        emailPrefix: 'projects-access-denied-member',
+        fullName: 'Projects Access Denied Member',
+        companyId,
+        roleInCompany: 'member',
+      });
+
+      try {
+        const res = await request(app)
+          .get(`/api/projects/${projectId}/access`)
+          .set('Authorization', `Bearer ${member.token}`);
+
+        expect(res.status).toBe(403);
+      } finally {
+        await prisma.emailVerificationToken.deleteMany({ where: { userId: member.userId } });
+        await prisma.user.delete({ where: { id: member.userId } }).catch(() => {});
+      }
+    });
+
+    it('rejects pending project memberships', async () => {
+      const pendingUser = await registerTestUser(app, {
+        emailPrefix: 'projects-access-pending-member',
+        fullName: 'Projects Access Pending Member',
+        companyId,
+        roleInCompany: 'member',
+      });
+
+      await prisma.projectUser.create({
+        data: {
+          projectId,
+          userId: pendingUser.userId,
+          role: 'project_manager',
+          status: 'pending',
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .get(`/api/projects/${projectId}/access`)
+          .set('Authorization', `Bearer ${pendingUser.token}`);
+
+        expect(res.status).toBe(403);
+      } finally {
+        await prisma.projectUser.deleteMany({ where: { userId: pendingUser.userId } });
+        await prisma.emailVerificationToken.deleteMany({ where: { userId: pendingUser.userId } });
+        await prisma.user.delete({ where: { id: pendingUser.userId } }).catch(() => {});
+      }
+    });
+
+    it('does not let subcontractor identities borrow internal project memberships', async () => {
+      const subcontractor = await registerTestUser(app, {
+        emailPrefix: 'projects-access-subcontractor',
+        fullName: 'Projects Access Subcontractor',
+        companyId,
+        roleInCompany: 'subcontractor',
+      });
+
+      await prisma.projectUser.create({
+        data: {
+          projectId,
+          userId: subcontractor.userId,
+          role: 'project_manager',
+          status: 'active',
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .get(`/api/projects/${projectId}/access`)
+          .set('Authorization', `Bearer ${subcontractor.token}`);
+
+        expect(res.status).toBe(403);
+      } finally {
+        await prisma.projectUser.deleteMany({ where: { userId: subcontractor.userId } });
+        await prisma.emailVerificationToken.deleteMany({ where: { userId: subcontractor.userId } });
+        await prisma.user.delete({ where: { id: subcontractor.userId } }).catch(() => {});
+      }
+    });
+
+    it('returns 404 when the project does not exist', async () => {
+      const res = await request(app)
+        .get('/api/projects/non-existent-id/access')
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(404);
+    });
+  });
+
   describe('GET /api/projects/:id/costs', () => {
     it('allows commercial roles and rejects active project viewers', async () => {
       const adminRes = await request(app)
@@ -1428,6 +1637,161 @@ describe('Projects API', () => {
         await prisma.user.delete({ where: { id: viewerId } }).catch(() => {});
       }
     });
+
+    it('uses approved docket costs and prorates split lot allocations', async () => {
+      const suffix = Date.now();
+      const costProject = await prisma.project.create({
+        data: {
+          companyId,
+          name: 'Project Cost Approved Dockets',
+          projectNumber: `COST-${suffix}`,
+          state: 'NSW',
+          specificationSet: 'TfNSW',
+          contractValue: 2000,
+        },
+      });
+
+      try {
+        const subcontractorCompany = await prisma.subcontractorCompany.create({
+          data: {
+            projectId: costProject.id,
+            companyName: `Cost Civil ${suffix}`,
+            status: 'approved',
+          },
+        });
+
+        const [lotA, lotB] = await Promise.all([
+          prisma.lot.create({
+            data: {
+              projectId: costProject.id,
+              lotNumber: `COST-A-${suffix}`,
+              lotType: 'earthworks',
+              activityType: 'Bulk earthworks',
+              budgetAmount: 1000,
+            },
+          }),
+          prisma.lot.create({
+            data: {
+              projectId: costProject.id,
+              lotNumber: `COST-B-${suffix}`,
+              lotType: 'earthworks',
+              activityType: 'Bulk earthworks',
+              budgetAmount: 1000,
+            },
+          }),
+        ]);
+
+        const [employee, plant] = await Promise.all([
+          prisma.employeeRoster.create({
+            data: {
+              subcontractorCompanyId: subcontractorCompany.id,
+              name: 'Cost Tester',
+              role: 'Operator',
+              hourlyRate: 100,
+              status: 'approved',
+            },
+          }),
+          prisma.plantRegister.create({
+            data: {
+              subcontractorCompanyId: subcontractorCompany.id,
+              type: 'Excavator',
+              description: '20t excavator',
+              dryRate: 75,
+              wetRate: 100,
+              status: 'approved',
+            },
+          }),
+        ]);
+
+        await prisma.dailyDocket.create({
+          data: {
+            projectId: costProject.id,
+            subcontractorCompanyId: subcontractorCompany.id,
+            date: new Date('2032-08-15T00:00:00.000Z'),
+            status: 'approved',
+            submittedById: userId,
+            submittedAt: new Date('2032-08-15T08:00:00.000Z'),
+            approvedById: userId,
+            approvedAt: new Date('2032-08-15T09:00:00.000Z'),
+            totalLabourSubmitted: 800,
+            totalPlantSubmitted: 300,
+            totalLabourApproved: 6,
+            totalPlantApproved: 2,
+            totalLabourApprovedCost: 600,
+            totalPlantApprovedCost: 200,
+            labourEntries: {
+              create: {
+                employeeId: employee.id,
+                startTime: '07:00',
+                finishTime: '15:00',
+                submittedHours: 8,
+                approvedHours: 6,
+                hourlyRate: 100,
+                submittedCost: 800,
+                approvedCost: 600,
+                lotAllocations: {
+                  create: [
+                    { lotId: lotA.id, hours: 3 },
+                    { lotId: lotB.id, hours: 5 },
+                  ],
+                },
+              },
+            },
+            plantEntries: {
+              create: {
+                plantId: plant.id,
+                hoursOperated: 4,
+                wetOrDry: 'dry',
+                hourlyRate: 75,
+                submittedCost: 300,
+                approvedCost: 200,
+                lotAllocations: {
+                  create: [
+                    { lotId: lotA.id, hours: 1 },
+                    { lotId: lotB.id, hours: 3 },
+                  ],
+                },
+              },
+            },
+          },
+        });
+
+        const res = await request(app)
+          .get(`/api/projects/${costProject.id}/costs`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.summary).toMatchObject({
+          totalLabourCost: 600,
+          totalPlantCost: 200,
+          totalCost: 800,
+          budgetTotal: 2000,
+          budgetVariance: 1200,
+          approvedDockets: 1,
+          pendingDockets: 0,
+        });
+        expect(res.body.subcontractorCosts).toEqual([
+          expect.objectContaining({
+            id: subcontractorCompany.id,
+            labourCost: 600,
+            plantCost: 200,
+            totalCost: 800,
+            approvedDockets: 1,
+          }),
+        ]);
+
+        const costByLot = new Map(
+          res.body.lotCosts.map((lot: { id: string; actualCost: number }) => [
+            lot.id,
+            lot.actualCost,
+          ]),
+        );
+        expect(costByLot.get(lotA.id)).toBeCloseTo(275, 5);
+        expect(costByLot.get(lotB.id)).toBeCloseTo(525, 5);
+      } finally {
+        await prisma.project.delete({ where: { id: costProject.id } }).catch(() => {});
+      }
+    });
   });
 
   describe('PATCH /api/projects/:id', () => {
@@ -1443,6 +1807,29 @@ describe('Projects API', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.project.name).toBe('Updated Project Name');
+    });
+
+    it('rejects API-key-authenticated project settings updates', async () => {
+      const { apiKey, keyId } = await createApiKeyForUser(userId, 'admin');
+      const existing = await prisma.project.findUniqueOrThrow({
+        where: { id: projectId },
+        select: { name: true },
+      });
+
+      try {
+        const res = await request(app)
+          .patch(`/api/projects/${projectId}`)
+          .set('x-api-key', apiKey)
+          .send({ name: `API Key Project Rename ${Date.now()}` });
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.message).toContain('browser session');
+        await expect(
+          prisma.project.findUnique({ where: { id: projectId }, select: { name: true } }),
+        ).resolves.toMatchObject({ name: existing.name });
+      } finally {
+        await prisma.apiKey.deleteMany({ where: { id: keyId } });
+      }
     });
 
     it('should audit project settings updates', async () => {
@@ -1537,6 +1924,14 @@ describe('Projects API', () => {
 
         expect(editRes.status).toBe(409);
         expect(editRes.body.error.message).toBe(ARCHIVED_PROJECT_READ_ONLY_MESSAGE);
+
+        const completeRes = await request(app)
+          .patch(`/api/projects/${projectId}`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ status: 'completed' });
+
+        expect(completeRes.status).toBe(409);
+        expect(completeRes.body.error.message).toBe(ARCHIVED_PROJECT_READ_ONLY_MESSAGE);
 
         const reactivateRes = await request(app)
           .patch(`/api/projects/${projectId}`)
@@ -1698,6 +2093,42 @@ describe('Projects API', () => {
         const changes = parseAuditLogChanges(deleteAudit!.changes) as Record<string, unknown>;
         expect(changes.deletionType).toBe('empty_project_hard_delete');
       } finally {
+        await prisma.auditLog.deleteMany({
+          where: { entityType: 'project', entityId: deleteProjectId },
+        });
+        await prisma.projectUser.deleteMany({ where: { projectId: deleteProjectId } });
+        await prisma.project.delete({ where: { id: deleteProjectId } }).catch(() => {});
+      }
+    });
+
+    it('rejects API-key-authenticated project deletion before password validation', async () => {
+      const createRes = await request(app)
+        .post('/api/projects')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          name: 'API Delete Boundary Project',
+          projectNumber: `PROJ-API-DELETE-BLOCKED-${Date.now()}`,
+          state: 'NSW',
+          specificationSet: 'TfNSW',
+        });
+      expect(createRes.status).toBe(201);
+      const deleteProjectId = createRes.body.project.id as string;
+      const { apiKey, keyId } = await createApiKeyForUser(userId, 'admin');
+
+      try {
+        const res = await request(app)
+          .delete(`/api/projects/${deleteProjectId}`)
+          .set('x-api-key', apiKey)
+          .send({ password: TEST_USER_PASSWORD });
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.message).toContain('browser session');
+        const persistedProject = await prisma.project.findUnique({
+          where: { id: deleteProjectId },
+        });
+        expect(persistedProject).not.toBeNull();
+      } finally {
+        await prisma.apiKey.deleteMany({ where: { id: keyId } });
         await prisma.auditLog.deleteMany({
           where: { entityType: 'project', entityId: deleteProjectId },
         });
@@ -1941,6 +2372,132 @@ describe('Projects API', () => {
       areaIds.push(res.body.area.id);
     });
 
+    it('audits project area creation, updates, and deletion', async () => {
+      await prisma.auditLog.deleteMany({
+        where: {
+          projectId,
+          action: {
+            in: [
+              AuditAction.PROJECT_AREA_CREATED,
+              AuditAction.PROJECT_AREA_UPDATED,
+              AuditAction.PROJECT_AREA_DELETED,
+            ],
+          },
+        },
+      });
+
+      const createRes = await request(app)
+        .post(`/api/projects/${projectId}/areas`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          name: 'Audited Area',
+          chainageStart: 10,
+          chainageEnd: 110,
+          colour: '#3B82F6',
+        });
+
+      expect(createRes.status).toBe(201);
+      const areaId = createRes.body.area.id;
+
+      const createAudit = await prisma.auditLog.findFirst({
+        where: {
+          projectId,
+          userId,
+          entityType: 'project_area',
+          entityId: areaId,
+          action: AuditAction.PROJECT_AREA_CREATED,
+        },
+      });
+      expect(createAudit).toBeTruthy();
+      expect(parseAuditLogChanges(createAudit!.changes)).toMatchObject({
+        name: 'Audited Area',
+        chainageStart: 10,
+        chainageEnd: 110,
+        colour: '#3B82F6',
+      });
+
+      const updateRes = await request(app)
+        .patch(`/api/projects/${projectId}/areas/${areaId}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ name: 'Audited Area Updated', chainageEnd: 120 });
+
+      expect(updateRes.status).toBe(200);
+
+      const updateAudit = await prisma.auditLog.findFirst({
+        where: {
+          projectId,
+          userId,
+          entityType: 'project_area',
+          entityId: areaId,
+          action: AuditAction.PROJECT_AREA_UPDATED,
+        },
+      });
+      expect(updateAudit).toBeTruthy();
+      expect(parseAuditLogChanges(updateAudit!.changes)).toMatchObject({
+        changedFields: ['name', 'chainageEnd'],
+        previous: {
+          name: 'Audited Area',
+          chainageStart: 10,
+          chainageEnd: 110,
+          colour: '#3B82F6',
+        },
+        next: {
+          name: 'Audited Area Updated',
+          chainageStart: 10,
+          chainageEnd: 120,
+          colour: '#3B82F6',
+        },
+      });
+
+      const deleteRes = await request(app)
+        .delete(`/api/projects/${projectId}/areas/${areaId}`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(deleteRes.status).toBe(200);
+
+      const deleteAudit = await prisma.auditLog.findFirst({
+        where: {
+          projectId,
+          userId,
+          entityType: 'project_area',
+          entityId: areaId,
+          action: AuditAction.PROJECT_AREA_DELETED,
+        },
+      });
+      expect(deleteAudit).toBeTruthy();
+      expect(parseAuditLogChanges(deleteAudit!.changes)).toMatchObject({
+        name: 'Audited Area Updated',
+        chainageStart: 10,
+        chainageEnd: 120,
+        colour: '#3B82F6',
+      });
+    });
+
+    it('rejects API-key-authenticated project area creation', async () => {
+      const { apiKey, keyId } = await createApiKeyForUser(userId, 'admin');
+      const areaName = `API Area ${Date.now()}`;
+
+      try {
+        const res = await request(app)
+          .post(`/api/projects/${projectId}/areas`)
+          .set('x-api-key', apiKey)
+          .send({
+            name: areaName,
+            chainageStart: 0,
+            chainageEnd: 100,
+            colour: '#3B82F6',
+          });
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.message).toContain('browser session');
+        await expect(
+          prisma.projectArea.count({ where: { projectId, name: areaName } }),
+        ).resolves.toBe(0);
+      } finally {
+        await prisma.apiKey.deleteMany({ where: { id: keyId } });
+      }
+    });
+
     it('should reject malformed project area create fields', async () => {
       const malformedName = await request(app)
         .post(`/api/projects/${projectId}/areas`)
@@ -2030,6 +2587,43 @@ describe('Projects API', () => {
         .send({ chainageEnd: '1e2' });
 
       expect(encodedChainage.status).toBe(400);
+    });
+
+    it('rejects API-key-authenticated project area updates and deletions', async () => {
+      const area = await prisma.projectArea.create({
+        data: {
+          projectId,
+          name: 'API Guarded Area',
+          chainageStart: 0,
+          chainageEnd: 100,
+          colour: '#3B82F6',
+        },
+      });
+      areaIds.push(area.id);
+      const { apiKey, keyId } = await createApiKeyForUser(userId, 'admin');
+
+      try {
+        const updateRes = await request(app)
+          .patch(`/api/projects/${projectId}/areas/${area.id}`)
+          .set('x-api-key', apiKey)
+          .send({ name: 'API Updated Area' });
+
+        expect(updateRes.status).toBe(403);
+        expect(updateRes.body.error.message).toContain('browser session');
+
+        const deleteRes = await request(app)
+          .delete(`/api/projects/${projectId}/areas/${area.id}`)
+          .set('x-api-key', apiKey);
+
+        expect(deleteRes.status).toBe(403);
+        expect(deleteRes.body.error.message).toContain('browser session');
+
+        await expect(
+          prisma.projectArea.findUnique({ where: { id: area.id }, select: { name: true } }),
+        ).resolves.toMatchObject({ name: 'API Guarded Area' });
+      } finally {
+        await prisma.apiKey.deleteMany({ where: { id: keyId } });
+      }
     });
   });
 });
@@ -2125,6 +2719,70 @@ describe('Project Team Management', () => {
     expect(Array.isArray(res.body.users)).toBe(true);
   });
 
+  it('rejects API-key-authenticated project team invitations', async () => {
+    const suffix = Date.now();
+    const invitee = await registerTestUser(app, {
+      emailPrefix: `team-api-invitee-${suffix}`,
+      fullName: 'Team API Invitee',
+      companyId,
+      roleInCompany: 'viewer',
+    });
+    const { apiKey, keyId } = await createApiKeyForUser(userId, 'admin');
+
+    try {
+      const res = await request(app)
+        .post(`/api/projects/${projectId}/users`)
+        .set('x-api-key', apiKey)
+        .send({ email: invitee.email, role: 'viewer' });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.message).toContain('browser session');
+      await expect(
+        prisma.projectUser.count({ where: { projectId, userId: invitee.userId } }),
+      ).resolves.toBe(0);
+    } finally {
+      await prisma.apiKey.deleteMany({ where: { id: keyId } });
+      await prisma.emailVerificationToken.deleteMany({ where: { userId: invitee.userId } });
+      await prisma.user.delete({ where: { id: invitee.userId } }).catch(() => {});
+    }
+  });
+
+  it('rejects API-key-authenticated project team role changes and removals', async () => {
+    await prisma.projectUser.upsert({
+      where: { projectId_userId: { projectId, userId: secondUserId } },
+      update: { role: 'viewer', status: 'active' },
+      create: { projectId, userId: secondUserId, role: 'viewer', status: 'active' },
+    });
+    const { apiKey, keyId } = await createApiKeyForUser(userId, 'admin');
+
+    try {
+      const updateRes = await request(app)
+        .patch(`/api/projects/${projectId}/users/${secondUserId}`)
+        .set('x-api-key', apiKey)
+        .send({ role: 'foreman' });
+
+      expect(updateRes.status).toBe(403);
+      expect(updateRes.body.error.message).toContain('browser session');
+
+      const deleteRes = await request(app)
+        .delete(`/api/projects/${projectId}/users/${secondUserId}`)
+        .set('x-api-key', apiKey);
+
+      expect(deleteRes.status).toBe(403);
+      expect(deleteRes.body.error.message).toContain('browser session');
+
+      await expect(
+        prisma.projectUser.findFirst({
+          where: { projectId, userId: secondUserId },
+          select: { role: true, status: true },
+        }),
+      ).resolves.toMatchObject({ role: 'viewer', status: 'active' });
+    } finally {
+      await prisma.apiKey.deleteMany({ where: { id: keyId } });
+      await prisma.projectUser.deleteMany({ where: { projectId, userId: secondUserId } });
+    }
+  });
+
   it('should reject admins from another company when reading project team members', async () => {
     const otherCompany = await prisma.company.create({
       data: { name: `Other Team Company ${Date.now()}` },
@@ -2161,6 +2819,21 @@ describe('Project Team Management', () => {
     const res = await postProjectTeamInvite(secondUserEmail);
 
     expect(res.status).toBe(201);
+    const auditLog = await prisma.auditLog.findFirst({
+      where: {
+        projectId,
+        userId,
+        entityType: 'project_user',
+        entityId: res.body.projectUser.id,
+        action: AuditAction.USER_INVITED,
+      },
+    });
+    expect(auditLog).toBeTruthy();
+    expect(parseAuditLogChanges(auditLog!.changes)).toMatchObject({
+      invitedUserId: secondUserId,
+      invitedUserEmail: secondUserEmail,
+      role: 'viewer',
+    });
   });
 
   it('should reject duplicate project team invites', async () => {
@@ -2366,6 +3039,208 @@ describe('Project Team Management', () => {
 
     expect(res.status).toBe(400);
     expect(res.body.error.message).toContain('own project role');
+  });
+
+  it('should reject project managers managing project administrators', async () => {
+    const suffix = Date.now();
+    const managerEmail = `team-project-manager-${suffix}@example.com`;
+    const inviteeEmail = `team-project-admin-invitee-${suffix}@example.com`;
+    const managerRes = await request(app).post('/api/auth/register').send({
+      email: managerEmail,
+      password: 'SecureP@ssword123!',
+      fullName: 'Team Project Manager',
+      tosAccepted: true,
+    });
+    const inviteeRes = await request(app).post('/api/auth/register').send({
+      email: inviteeEmail,
+      password: 'SecureP@ssword123!',
+      fullName: 'Team Admin Invitee',
+      tosAccepted: true,
+    });
+    const managerToken = managerRes.body.token;
+    const managerId = managerRes.body.user.id;
+    const inviteeId = inviteeRes.body.user.id;
+
+    await prisma.user.updateMany({
+      where: { id: { in: [managerId, inviteeId] } },
+      data: { companyId, roleInCompany: 'viewer' },
+    });
+    await prisma.projectUser.upsert({
+      where: { projectId_userId: { projectId, userId } },
+      update: { role: 'admin', status: 'active' },
+      create: { projectId, userId, role: 'admin', status: 'active' },
+    });
+    await prisma.projectUser.upsert({
+      where: { projectId_userId: { projectId, userId: managerId } },
+      update: { role: 'project_manager', status: 'active' },
+      create: { projectId, userId: managerId, role: 'project_manager', status: 'active' },
+    });
+
+    try {
+      const inviteAdminRes = await request(app)
+        .post(`/api/projects/${projectId}/users`)
+        .set('Authorization', `Bearer ${managerToken}`)
+        .send({
+          email: inviteeEmail,
+          role: 'admin',
+        });
+
+      expect(inviteAdminRes.status).toBe(403);
+      expect(inviteAdminRes.body.error.message).toContain(
+        'grant project administrator and project manager roles',
+      );
+      await expect(
+        prisma.projectUser.findFirst({ where: { projectId, userId: inviteeId } }),
+      ).resolves.toBeNull();
+
+      const inviteProjectManagerRes = await request(app)
+        .post(`/api/projects/${projectId}/users`)
+        .set('Authorization', `Bearer ${managerToken}`)
+        .send({
+          email: inviteeEmail,
+          role: 'project_manager',
+        });
+
+      expect(inviteProjectManagerRes.status).toBe(403);
+      expect(inviteProjectManagerRes.body.error.message).toContain(
+        'grant project administrator and project manager roles',
+      );
+      await expect(
+        prisma.projectUser.findFirst({ where: { projectId, userId: inviteeId } }),
+      ).resolves.toBeNull();
+
+      await prisma.projectUser.create({
+        data: {
+          projectId,
+          userId: inviteeId,
+          role: 'viewer',
+          status: 'active',
+          acceptedAt: new Date(),
+        },
+      });
+
+      const promoteProjectManagerRes = await request(app)
+        .patch(`/api/projects/${projectId}/users/${inviteeId}`)
+        .set('Authorization', `Bearer ${managerToken}`)
+        .send({
+          role: 'project_manager',
+        });
+
+      expect(promoteProjectManagerRes.status).toBe(403);
+      expect(promoteProjectManagerRes.body.error.message).toContain(
+        'grant project administrator and project manager roles',
+      );
+      await expect(
+        prisma.projectUser.findFirst({
+          where: { projectId, userId: inviteeId },
+          select: { role: true, status: true },
+        }),
+      ).resolves.toMatchObject({ role: 'viewer', status: 'active' });
+
+      const demoteAdminRes = await request(app)
+        .patch(`/api/projects/${projectId}/users/${userId}`)
+        .set('Authorization', `Bearer ${managerToken}`)
+        .send({
+          role: 'viewer',
+        });
+
+      expect(demoteAdminRes.status).toBe(403);
+      expect(demoteAdminRes.body.error.message).toContain(
+        'manage project administrators and project managers',
+      );
+
+      const removeAdminRes = await request(app)
+        .delete(`/api/projects/${projectId}/users/${userId}`)
+        .set('Authorization', `Bearer ${managerToken}`);
+
+      expect(removeAdminRes.status).toBe(403);
+      expect(removeAdminRes.body.error.message).toContain(
+        'manage project administrators and project managers',
+      );
+      await expect(
+        prisma.projectUser.findFirst({
+          where: { projectId, userId },
+          select: { role: true, status: true },
+        }),
+      ).resolves.toMatchObject({ role: 'admin', status: 'active' });
+    } finally {
+      await prisma.projectUser.deleteMany({
+        where: { projectId, userId: { in: [managerId, inviteeId] } },
+      });
+      await prisma.emailVerificationToken.deleteMany({
+        where: { userId: { in: [managerId, inviteeId] } },
+      });
+      await prisma.user.deleteMany({ where: { id: { in: [managerId, inviteeId] } } });
+    }
+  });
+
+  it('rejects stale project-admin invites after the actor is demoted', async () => {
+    const suffix = Date.now();
+    const staleAdmin = await registerTestUser(app, {
+      emailPrefix: `team-stale-admin-${suffix}`,
+      fullName: 'Team Stale Admin',
+      companyId,
+      roleInCompany: 'viewer',
+    });
+    const invitee = await registerTestUser(app, {
+      emailPrefix: `team-stale-invitee-${suffix}`,
+      fullName: 'Team Stale Invitee',
+      companyId,
+      roleInCompany: 'viewer',
+    });
+
+    await prisma.projectUser.upsert({
+      where: { projectId_userId: { projectId, userId: staleAdmin.userId } },
+      update: { role: 'admin', status: 'active' },
+      create: { projectId, userId: staleAdmin.userId, role: 'admin', status: 'active' },
+    });
+
+    let demoteAfterFirstAccessRead = true;
+    prisma.$use(async (params, next) => {
+      const result = await next(params);
+      const where = params.args?.where as { projectId?: string; userId?: string } | undefined;
+
+      if (
+        demoteAfterFirstAccessRead &&
+        params.model === 'ProjectUser' &&
+        params.action === 'findFirst' &&
+        where?.projectId === projectId &&
+        where?.userId === staleAdmin.userId
+      ) {
+        demoteAfterFirstAccessRead = false;
+        await prisma.projectUser.updateMany({
+          where: { projectId, userId: staleAdmin.userId },
+          data: { role: 'viewer' },
+        });
+      }
+
+      return result;
+    });
+
+    try {
+      const res = await request(app)
+        .post(`/api/projects/${projectId}/users`)
+        .set('Authorization', `Bearer ${staleAdmin.token}`)
+        .send({
+          email: invitee.email,
+          role: 'viewer',
+        });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.message).toContain('Only admins can invite users');
+      await expect(
+        prisma.projectUser.findFirst({ where: { projectId, userId: invitee.userId } }),
+      ).resolves.toBeNull();
+    } finally {
+      demoteAfterFirstAccessRead = false;
+      await prisma.projectUser.deleteMany({
+        where: { projectId, userId: { in: [staleAdmin.userId, invitee.userId] } },
+      });
+      await prisma.emailVerificationToken.deleteMany({
+        where: { userId: { in: [staleAdmin.userId, invitee.userId] } },
+      });
+      await prisma.user.deleteMany({ where: { id: { in: [staleAdmin.userId, invitee.userId] } } });
+    }
   });
 
   it('should keep at least one active project admin', async () => {

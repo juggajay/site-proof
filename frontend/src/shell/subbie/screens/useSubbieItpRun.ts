@@ -80,6 +80,10 @@ export function useSubbieItpRun(
   const [loadError, setLoadError] = useState<string | null>(null);
   const [canComplete, setCanComplete] = useState(false);
   const [updatingItemId, setUpdatingItemId] = useState<string | null>(null);
+  const hasExplicitScope =
+    Object.prototype.hasOwnProperty.call(scope, 'projectId') ||
+    Object.prototype.hasOwnProperty.call(scope, 'subcontractorCompanyId');
+  const scopeReady = !hasExplicitScope || (!!scope.projectId && !!scope.subcontractorCompanyId);
   const scopeQuery = buildPortalCompanyQuery({
     projectId: scope.projectId,
     subcontractorCompanyId: scope.subcontractorCompanyId,
@@ -88,7 +92,15 @@ export function useSubbieItpRun(
   // Classic SubcontractorLotITPPage fetch: lot (with assignments) + instance
   // (subcontractor view). Identical URLs + query params.
   const fetchData = useCallback(async () => {
-    if (!lotId) return;
+    if (!lotId) {
+      setLoading(false);
+      return;
+    }
+    if (!scopeReady) {
+      setLoading(true);
+      setLoadError(null);
+      return;
+    }
     try {
       const encodedLotId = encodeURIComponent(lotId);
       const lotData = await apiFetch<{ lot: SubbieLot }>(
@@ -114,7 +126,7 @@ export function useSubbieItpRun(
     } finally {
       setLoading(false);
     }
-  }, [lotId, scopeQuery]);
+  }, [lotId, scopeQuery, scopeReady]);
 
   useEffect(() => {
     void fetchData();
@@ -162,7 +174,8 @@ export function useSubbieItpRun(
   const pass = useCallback(
     async (checklistItemId: string, notes: string | null): Promise<boolean> => {
       const existing = instance?.completions.find((c) => c.checklistItemId === checklistItemId);
-      if (existing?.isCompleted) return true; // idempotent advance
+      const wasRejected = existing?.isRejected || existing?.verificationStatus === 'rejected';
+      if (existing?.isCompleted && !wasRejected) return true; // idempotent advance
       try {
         return await handleToggleCompletion(checklistItemId, true, notes);
       } catch {

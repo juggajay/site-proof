@@ -50,7 +50,7 @@ vi.mock('@/lib/api', () => ({
 
     if (
       url ===
-      '/api/documents/project-1?subcontractorView=true&subcontractorCompanyId=subbie-company-1'
+      '/api/documents/project-1?subcontractorView=true&subcontractorCompanyId=subbie-company-1&limit=100'
     ) {
       return {
         documents: [
@@ -69,7 +69,7 @@ vi.mock('@/lib/api', () => ({
 
     if (
       url ===
-      '/api/documents/project-2?subcontractorView=true&subcontractorCompanyId=subbie-company-1'
+      '/api/documents/project-2?subcontractorView=true&subcontractorCompanyId=subbie-company-1&limit=100'
     ) {
       return {
         documents: [
@@ -125,7 +125,7 @@ describe('SubcontractorDocumentsPage', () => {
     expect(screen.getByText('sanitised-specification.pdf')).toBeInTheDocument();
     expect(apiFetch).toHaveBeenCalledWith('/api/subcontractors/my-company?projectId=project-2');
     expect(apiFetch).toHaveBeenCalledWith(
-      '/api/documents/project-2?subcontractorView=true&subcontractorCompanyId=subbie-company-1',
+      '/api/documents/project-2?subcontractorView=true&subcontractorCompanyId=subbie-company-1&limit=100',
     );
   });
 
@@ -141,7 +141,7 @@ describe('SubcontractorDocumentsPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Selected project is unavailable');
     expect(screen.queryByText('No documents available')).not.toBeInTheDocument();
     expect(apiFetch).not.toHaveBeenCalledWith(
-      '/api/documents/project-2?subcontractorView=true&subcontractorCompanyId=subbie-company-1',
+      '/api/documents/project-2?subcontractorView=true&subcontractorCompanyId=subbie-company-1&limit=100',
     );
     expect(screen.getByRole('link', { name: /back to portal/i })).toHaveAttribute(
       'href',
@@ -168,7 +168,7 @@ describe('SubcontractorDocumentsPage', () => {
       'Documents portal access is not enabled for your company.',
     );
     expect(apiFetch).not.toHaveBeenCalledWith(
-      '/api/documents/project-2?subcontractorView=true&subcontractorCompanyId=subbie-company-1',
+      '/api/documents/project-2?subcontractorView=true&subcontractorCompanyId=subbie-company-1&limit=100',
     );
     expect(screen.getByRole('link', { name: /back to portal/i })).toHaveAttribute(
       'href',
@@ -182,7 +182,9 @@ describe('SubcontractorDocumentsPage', () => {
       initialEntries: ['/subcontractor-portal/documents?projectId=project-2&shell=off'],
     });
 
-    await user.click(await screen.findByRole('button', { name: /view document/i }));
+    await user.click(
+      await screen.findByRole('button', { name: /open sanitised-specification\.pdf/i }),
+    );
 
     expect(openDocumentAccessUrl).toHaveBeenCalledWith('document-2', undefined);
   });

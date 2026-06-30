@@ -10,11 +10,13 @@ import { formatStatusLabel } from '@/lib/statusLabels';
 import { getStatusBadgeColor } from '../constants';
 import { getAvailableNcrActions } from '../ncrActions';
 import type { NCR, UserRole } from '../types';
+import { NCREvidenceList } from './NCREvidenceList';
 
 interface NCRMobileDetailSheetProps {
   isOpen: boolean;
   ncr: NCR | null;
   userRole: UserRole | null;
+  currentUserId?: string | null;
   actionLoading?: boolean;
   onClose: () => void;
   onAssign: (ncr: NCR) => void;
@@ -35,6 +37,7 @@ export function NCRMobileDetailSheet({
   isOpen,
   ncr,
   userRole,
+  currentUserId,
   actionLoading = false,
   onClose,
   onAssign,
@@ -49,11 +52,14 @@ export function NCRMobileDetailSheet({
 }: NCRMobileDetailSheetProps) {
   if (!ncr) return null;
 
-  const actions = getAvailableNcrActions(ncr, userRole);
-  const closeDisabled = actionLoading || actions.closeBlockedPendingQmApproval;
-  const qmApprovalHint = actions.closeBlockedPendingQmApproval
+  const actions = getAvailableNcrActions(ncr, userRole, currentUserId);
+  const closeBlocked = actions.closeBlockedPendingQmApproval || actions.closeBlockedSameQmApprover;
+  const closeDisabled = actionLoading || closeBlocked;
+  const closeBlockedHint = actions.closeBlockedPendingQmApproval
     ? 'Requires QM approval first'
-    : undefined;
+    : actions.closeBlockedSameQmApprover
+      ? 'A different user must close after QM approval'
+      : undefined;
   const assignedTo =
     ncr.responsibleUser?.fullName ||
     ncr.responsibleUser?.email ||
@@ -94,6 +100,8 @@ export function NCRMobileDetailSheet({
         </div>
 
         <p className="text-sm whitespace-pre-wrap">{ncr.description}</p>
+
+        <NCREvidenceList evidence={ncr.ncrEvidence ?? []} />
 
         <dl className="text-xs text-muted-foreground space-y-1">
           <div>
@@ -190,7 +198,7 @@ export function NCRMobileDetailSheet({
               type="button"
               onClick={() => onCloseNcr(ncr)}
               disabled={closeDisabled}
-              title={qmApprovalHint}
+              title={closeBlockedHint}
               className="w-full rounded-lg px-3 py-2 text-sm font-medium bg-success text-success-foreground hover:bg-success/90 disabled:opacity-50"
             >
               Close NCR
@@ -201,7 +209,7 @@ export function NCRMobileDetailSheet({
               type="button"
               onClick={() => onConcession(ncr)}
               disabled={closeDisabled}
-              title={qmApprovalHint}
+              title={closeBlockedHint}
               className="w-full rounded-lg px-3 py-2 text-sm font-medium bg-warning text-warning-foreground hover:bg-warning/90 disabled:opacity-50"
             >
               Close with Concession

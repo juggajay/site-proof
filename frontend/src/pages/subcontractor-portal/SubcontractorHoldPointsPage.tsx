@@ -6,21 +6,15 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { apiFetch } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { extractErrorMessage } from '@/lib/errorHandling';
+import { getReleaseIdentityParts } from '@/pages/holdpoints/holdPointReleaseIdentity';
 import { PortalAccessDenied } from './portalAccess';
 import { isPortalModuleEnabled, type PortalAccess } from './portalAccessModel';
 import { buildPortalCompanyQuery, buildPortalCompanyScopedPath } from './portalCompanyScope';
-
-interface HoldPoint {
-  id: string;
-  lotId: string;
-  lotNumber: string;
-  description: string;
-  status: 'pending' | 'notified' | 'released' | 'rejected';
-  requestedAt?: string;
-  releasedAt?: string;
-  releasedBy?: { fullName: string };
-  checklistItemDescription?: string;
-}
+import {
+  normalizeSubcontractorHoldPoint,
+  type ApiSubcontractorHoldPoint,
+  type SubcontractorHoldPoint,
+} from './subcontractorHoldPointData';
 
 interface SubcontractorCompany {
   id: string;
@@ -28,34 +22,6 @@ interface SubcontractorCompany {
   projectId: string;
   projectName: string;
   portalAccess?: PortalAccess;
-}
-
-interface ApiHoldPoint {
-  id: string;
-  lotId: string;
-  lotNumber: string;
-  description: string;
-  status: HoldPoint['status'];
-  notificationSentAt?: string | null;
-  scheduledDate?: string | null;
-  releasedAt?: string | null;
-  releasedByName?: string | null;
-  createdAt?: string | null;
-}
-
-function normalizeHoldPoint(holdPoint: ApiHoldPoint): HoldPoint {
-  return {
-    id: holdPoint.id,
-    lotId: holdPoint.lotId,
-    lotNumber: holdPoint.lotNumber,
-    description: holdPoint.description,
-    checklistItemDescription: holdPoint.description,
-    status: holdPoint.status,
-    requestedAt:
-      holdPoint.notificationSentAt || holdPoint.scheduledDate || holdPoint.createdAt || undefined,
-    releasedAt: holdPoint.releasedAt || undefined,
-    releasedBy: holdPoint.releasedByName ? { fullName: holdPoint.releasedByName } : undefined,
-  };
 }
 
 function getStatusBadge(status: string) {
@@ -115,12 +81,12 @@ export function SubcontractorHoldPointsPage() {
   } = useQuery({
     queryKey: queryKeys.portalHoldPoints(user?.id, company?.projectId, company?.id),
     queryFn: async () => {
-      const res = await apiFetch<{ holdPoints: ApiHoldPoint[] }>(
+      const res = await apiFetch<{ holdPoints: ApiSubcontractorHoldPoint[] }>(
         `/api/holdpoints/project/${encodeURIComponent(
           company!.projectId,
         )}?subcontractorView=true&subcontractorCompanyId=${encodeURIComponent(company!.id)}`,
       );
-      return (res.holdPoints || []).map(normalizeHoldPoint);
+      return (res.holdPoints || []).map(normalizeSubcontractorHoldPoint);
     },
     enabled: !!user?.id && !!company?.projectId && canViewHoldPoints,
   });
@@ -258,7 +224,13 @@ export function SubcontractorHoldPointsPage() {
   );
 }
 
-function HoldPointCard({ holdPoint }: { holdPoint: HoldPoint }) {
+function HoldPointCard({ holdPoint }: { holdPoint: SubcontractorHoldPoint }) {
+  const releaseIdentity = holdPoint.releasedAt ? getReleaseIdentityParts(holdPoint) : null;
+  const releaseLabel =
+    releaseIdentity?.primary && releaseIdentity.primary !== 'Release recorded'
+      ? `Released by ${releaseIdentity.primary}`
+      : 'Release recorded';
+
   return (
     <div className="border border-border rounded-lg bg-card">
       <div className="p-4">
@@ -272,11 +244,13 @@ function HoldPointCard({ holdPoint }: { holdPoint: HoldPoint }) {
               <p className="text-sm text-muted-foreground">
                 {holdPoint.checklistItemDescription || holdPoint.description}
               </p>
-              {holdPoint.releasedAt && holdPoint.releasedBy && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  Released by {holdPoint.releasedBy.fullName} on{' '}
-                  {new Date(holdPoint.releasedAt).toLocaleDateString('en-AU')}
-                </p>
+              {holdPoint.releasedAt && releaseIdentity && (
+                <div className="mt-1 text-xs text-muted-foreground">
+                  <p>
+                    {releaseLabel} on {new Date(holdPoint.releasedAt).toLocaleDateString('en-AU')}
+                  </p>
+                  {releaseIdentity.secondary && <p>{releaseIdentity.secondary}</p>}
+                </div>
               )}
             </div>
           </div>

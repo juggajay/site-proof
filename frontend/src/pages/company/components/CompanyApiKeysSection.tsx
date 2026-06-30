@@ -4,12 +4,22 @@ import { extractErrorMessage } from '@/lib/errorHandling';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Modal, ModalBody, ModalFooter, ModalHeader } from '@/components/ui/Modal';
 import {
+  AlertModalDescription,
+  AlertModalFooter,
+  AlertModalHeader,
+  Modal,
+  ModalBody,
+  ModalFooter,
+  ModalHeader,
+} from '@/components/ui/Modal';
+import {
+  API_KEY_EXPIRY_OPTIONS,
   API_KEY_SCOPE_OPTIONS,
   canRevokeApiKey,
   createApiKey,
   describeApiKeyStatus,
+  formatApiKeyExpiry,
   fetchCompanyApiKeys,
   formatApiKeyLastUsed,
   revokeApiKey,
@@ -21,7 +31,7 @@ interface CompanyApiKeysSectionProps {
   currentUserId?: string;
 }
 
-const defaultCreateForm = { name: '', scopes: 'read' };
+const defaultCreateForm = { name: '', scopes: 'read', expiresInDays: '90' };
 
 export function CompanyApiKeysSection({ currentUserId }: CompanyApiKeysSectionProps) {
   const [keys, setKeys] = useState<CompanyApiKey[]>([]);
@@ -34,6 +44,7 @@ export function CompanyApiKeysSection({ currentUserId }: CompanyApiKeysSectionPr
   const [revealedKey, setRevealedKey] = useState<CreatedApiKey | null>(null);
   const [copied, setCopied] = useState(false);
   const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [revokeTarget, setRevokeTarget] = useState<CompanyApiKey | null>(null);
   const [revokeError, setRevokeError] = useState('');
   const creatingRef = useRef(false);
 
@@ -67,7 +78,11 @@ export function CompanyApiKeysSection({ currentUserId }: CompanyApiKeysSectionPr
     setCreating(true);
     setCreateError('');
     try {
-      const data = await createApiKey({ name, scopes: createForm.scopes });
+      const data = await createApiKey({
+        name,
+        scopes: createForm.scopes,
+        expiresInDays: Number(createForm.expiresInDays),
+      });
       setShowCreateModal(false);
       setCreateForm(defaultCreateForm);
       setCopied(false);
@@ -102,6 +117,7 @@ export function CompanyApiKeysSection({ currentUserId }: CompanyApiKeysSectionPr
       setKeys((current) =>
         current.map((entry) => (entry.id === key.id ? { ...entry, isActive: false } : entry)),
       );
+      setRevokeTarget(null);
     } catch (err) {
       setRevokeError(extractErrorMessage(err, 'Failed to revoke API key'));
     } finally {
@@ -144,7 +160,7 @@ export function CompanyApiKeysSection({ currentUserId }: CompanyApiKeysSectionPr
         </p>
       ) : (
         <div className="overflow-hidden rounded-lg border">
-          <div className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(96px,0.6fr)_minmax(96px,0.5fr)_minmax(80px,0.4fr)] bg-muted/50 px-4 py-2 text-xs font-medium uppercase text-muted-foreground">
+          <div className="hidden grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(96px,0.6fr)_minmax(96px,0.5fr)_minmax(112px,0.45fr)] bg-muted/50 px-4 py-2 text-xs font-medium uppercase text-muted-foreground md:grid">
             <span>Key</span>
             <span>Owner</span>
             <span>Last used</span>
@@ -155,21 +171,35 @@ export function CompanyApiKeysSection({ currentUserId }: CompanyApiKeysSectionPr
             {keys.map((key) => (
               <div
                 key={key.id}
-                className="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(96px,0.6fr)_minmax(96px,0.5fr)_minmax(80px,0.4fr)] items-center gap-3 px-4 py-3 text-sm"
+                className="grid gap-3 px-4 py-3 text-sm md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(96px,0.6fr)_minmax(96px,0.5fr)_minmax(112px,0.45fr)] md:items-center"
               >
                 <div className="min-w-0">
                   <div className="truncate font-medium">{key.name}</div>
                   <div className="truncate font-mono text-xs text-muted-foreground">
                     {key.keyPrefix}… · {key.scopes}
                   </div>
+                  <div className="text-xs text-muted-foreground">
+                    {formatApiKeyExpiry(key.expiresAt)}
+                  </div>
                 </div>
-                <div className="min-w-0 truncate text-xs text-muted-foreground">
-                  {key.owner ? key.owner.fullName || key.owner.email : 'Unknown'}
+                <div className="min-w-0 text-xs text-muted-foreground">
+                  <span className="mb-1 block font-medium uppercase text-muted-foreground md:hidden">
+                    Owner
+                  </span>
+                  <span className="block truncate">
+                    {key.owner ? key.owner.fullName || key.owner.email : 'Unknown'}
+                  </span>
                 </div>
                 <div className="text-xs text-muted-foreground">
+                  <span className="mb-1 block font-medium uppercase text-muted-foreground md:hidden">
+                    Last used
+                  </span>
                   {formatApiKeyLastUsed(key.lastUsedAt)}
                 </div>
                 <div>
+                  <span className="mb-1 block text-xs font-medium uppercase text-muted-foreground md:hidden">
+                    Status
+                  </span>
                   <span
                     className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${
                       key.isActive ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'
@@ -178,20 +208,22 @@ export function CompanyApiKeysSection({ currentUserId }: CompanyApiKeysSectionPr
                     {describeApiKeyStatus(key)}
                   </span>
                 </div>
-                <div className="flex justify-end">
+                <div className="flex md:justify-end">
                   {canRevokeApiKey(key, currentUserId) ? (
                     <Button
                       type="button"
                       variant="destructive"
                       size="sm"
                       disabled={revokingId === key.id}
-                      onClick={() => handleRevoke(key)}
+                      onClick={() => setRevokeTarget(key)}
                       title="Revoke this API key"
                     >
                       <Trash2 className="h-4 w-4" />
                       Revoke
                     </Button>
-                  ) : null}
+                  ) : (
+                    <span className="text-xs text-muted-foreground">Already revoked</span>
+                  )}
                 </div>
               </div>
             ))}
@@ -241,6 +273,27 @@ export function CompanyApiKeysSection({ currentUserId }: CompanyApiKeysSectionPr
                   ))}
                 </select>
               </div>
+              <div>
+                <Label htmlFor="api-key-expiry">Expires after</Label>
+                <select
+                  id="api-key-expiry"
+                  value={createForm.expiresInDays}
+                  onChange={(event) =>
+                    setCreateForm((form) => ({ ...form, expiresInDays: event.target.value }))
+                  }
+                  className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"
+                >
+                  {API_KEY_EXPIRY_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  New browser-created keys expire automatically. Rotate external integrations before
+                  this date.
+                </p>
+              </div>
               {createError ? <p className="text-sm text-destructive">{createError}</p> : null}
             </div>
           </ModalBody>
@@ -260,6 +313,38 @@ export function CompanyApiKeysSection({ currentUserId }: CompanyApiKeysSectionPr
         </Modal>
       )}
 
+      {revokeTarget && (
+        <Modal
+          alert
+          onClose={() => (revokingId ? undefined : setRevokeTarget(null))}
+          className="max-w-md"
+        >
+          <AlertModalHeader>Revoke API key</AlertModalHeader>
+          <AlertModalDescription>
+            Revoke {revokeTarget.name} ({revokeTarget.keyPrefix})? This immediately stops API
+            requests that use this key.
+          </AlertModalDescription>
+          <AlertModalFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={revokingId === revokeTarget.id}
+              onClick={() => setRevokeTarget(null)}
+            >
+              Keep key
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={revokingId === revokeTarget.id}
+              onClick={() => void handleRevoke(revokeTarget)}
+            >
+              {revokingId === revokeTarget.id ? 'Revoking...' : 'Revoke API key'}
+            </Button>
+          </AlertModalFooter>
+        </Modal>
+      )}
+
       {revealedKey && (
         <Modal onClose={() => setRevealedKey(null)} className="max-w-lg">
           <ModalHeader>API key created</ModalHeader>
@@ -273,6 +358,9 @@ export function CompanyApiKeysSection({ currentUserId }: CompanyApiKeysSectionPr
               <div className="break-all rounded-md border bg-muted/50 p-3 font-mono text-sm">
                 {revealedKey.key}
               </div>
+              <p className="text-xs text-muted-foreground">
+                {formatApiKeyExpiry(revealedKey.expiresAt)}
+              </p>
               <Button type="button" variant="outline" size="sm" onClick={handleCopy}>
                 {copied ? 'Copied' : 'Copy to clipboard'}
               </Button>

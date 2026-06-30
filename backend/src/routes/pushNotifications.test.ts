@@ -8,6 +8,7 @@ import {
   broadcastPushNotification,
 } from './pushNotifications.js';
 import { authRouter } from './auth.js';
+import { authenticateApiKey } from './apiKeys.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import webpush from 'web-push';
@@ -15,12 +16,34 @@ import { registerTestUser } from '../test/routeTestHarness.js';
 
 const app = express();
 app.use(express.json());
+app.use(authenticateApiKey);
 app.use('/api/auth', authRouter);
 app.use('/api/push', pushNotificationsRouter);
 app.use(errorHandler);
 
 const getSubscriptionId = (endpoint: string) =>
   crypto.createHash('sha256').update(endpoint).digest('hex');
+
+function hashApiKeyForTest(apiKey: string): string {
+  return crypto.createHash('sha256').update(apiKey).digest('hex');
+}
+
+async function createApiKeyForUser(userId: string, scopes = 'admin') {
+  const apiKey = `sp_${crypto.randomBytes(32).toString('hex')}`;
+  const record = await prisma.apiKey.create({
+    data: {
+      userId,
+      name: 'Push browser-session boundary test key',
+      keyHash: hashApiKeyForTest(apiKey),
+      keyPrefix: apiKey.substring(0, 11),
+      scopes,
+      isActive: true,
+    },
+    select: { id: true },
+  });
+
+  return { apiKey, keyId: record.id };
+}
 
 describe('Push Notifications API', () => {
   let authToken: string;
@@ -83,6 +106,29 @@ describe('Push Notifications API', () => {
       expect(res.body.success).toBe(true);
       expect(res.body.message).toContain('registered');
       expect(res.body.subscriptionId).toBeDefined();
+    });
+
+    it('rejects API-key-authenticated push subscription registration', async () => {
+      const { apiKey, keyId } = await createApiKeyForUser(userId, 'admin');
+      const endpoint = `https://fcm.googleapis.com/fcm/send/api-key-blocked-${Date.now()}`;
+
+      try {
+        const res = await request(app)
+          .post('/api/push/subscribe')
+          .set('x-api-key', apiKey)
+          .send({
+            subscription: {
+              endpoint,
+              keys: mockSubscription.keys,
+            },
+          });
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.message).toContain('browser session');
+        await expect(prisma.pushSubscription.count({ where: { endpoint } })).resolves.toBe(0);
+      } finally {
+        await prisma.apiKey.deleteMany({ where: { id: keyId } });
+      }
     });
 
     it('should reject subscription without authentication', async () => {
@@ -479,6 +525,19 @@ describe('Push Notifications API', () => {
       expect(Array.isArray(res.body.results)).toBe(true);
     });
 
+    it('rejects API-key-authenticated push test sends', async () => {
+      const { apiKey, keyId } = await createApiKeyForUser(userId, 'admin');
+
+      try {
+        const res = await request(app).post('/api/push/test').set('x-api-key', apiKey);
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.message).toContain('browser session');
+      } finally {
+        await prisma.apiKey.deleteMany({ where: { id: keyId } });
+      }
+    });
+
     it('should return error when user has no subscriptions', async () => {
       // Create a new user without subscriptions
       const newUserEmail = `no-sub-${Date.now()}@example.com`;
@@ -545,6 +604,23 @@ describe('Push Notifications API', () => {
       expect(res.body.success).toBeDefined();
       expect(res.body.sent).toBeDefined();
       expect(res.body.failed).toBeDefined();
+    });
+
+    it('rejects API-key-authenticated push sends', async () => {
+      const { apiKey, keyId } = await createApiKeyForUser(userId, 'admin');
+
+      try {
+        const res = await request(app).post('/api/push/send').set('x-api-key', apiKey).send({
+          targetUserId: userId,
+          title: 'API key blocked',
+          body: 'This should not send',
+        });
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.message).toContain('browser session');
+      } finally {
+        await prisma.apiKey.deleteMany({ where: { id: keyId } });
+      }
     });
 
     it('should reject request without required fields', async () => {
@@ -1012,6 +1088,34 @@ describe('Push Notifications API', () => {
       expect(res.body.message).toContain('Unsubscribed');
     });
 
+    it('rejects API-key-authenticated push unsubscription', async () => {
+      const { apiKey, keyId } = await createApiKeyForUser(userId, 'admin');
+      const endpoint = `https://fcm.googleapis.com/fcm/send/api-key-unsub-${Date.now()}`;
+      await prisma.pushSubscription.create({
+        data: {
+          id: getSubscriptionId(endpoint),
+          userId,
+          endpoint,
+          p256dh: mockSubscription.keys.p256dh,
+          auth: mockSubscription.keys.auth,
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .delete('/api/push/unsubscribe')
+          .set('x-api-key', apiKey)
+          .send({ endpoint });
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.message).toContain('browser session');
+        await expect(prisma.pushSubscription.count({ where: { endpoint } })).resolves.toBe(1);
+      } finally {
+        await prisma.apiKey.deleteMany({ where: { id: keyId } });
+        await prisma.pushSubscription.deleteMany({ where: { endpoint } });
+      }
+    });
+
     it('should reject request without endpoint', async () => {
       const res = await request(app)
         .delete('/api/push/unsubscribe')
@@ -1093,6 +1197,24 @@ describe('Push Notifications API', () => {
       expect(res.body.error.message).toContain('Not available in production');
 
       process.env.NODE_ENV = originalEnv;
+    });
+
+    it('rejects API-key-authenticated VAPID key generation before environment checks', async () => {
+      const { apiKey, keyId } = await createApiKeyForUser(userId, 'admin');
+      const originalEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'development';
+
+      try {
+        const res = await request(app)
+          .get('/api/push/generate-vapid-keys')
+          .set('x-api-key', apiKey);
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.message).toContain('browser session');
+      } finally {
+        process.env.NODE_ENV = originalEnv;
+        await prisma.apiKey.deleteMany({ where: { id: keyId } });
+      }
     });
 
     it('should reject VAPID key generation for non-admin users in non-production', async () => {

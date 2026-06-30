@@ -206,6 +206,7 @@ interface PrivacyDataSectionProps {
   exportError: string | null;
   onExportData: () => void;
   onDeleteAccountClick: () => void;
+  deleteAccountBlockedReason?: string;
 }
 
 export function PrivacyDataSection({
@@ -214,6 +215,7 @@ export function PrivacyDataSection({
   exportError,
   onExportData,
   onDeleteAccountClick,
+  deleteAccountBlockedReason,
 }: PrivacyDataSectionProps) {
   return (
     <div className="rounded-lg border bg-card p-6 space-y-4">
@@ -269,7 +271,7 @@ export function PrivacyDataSection({
           {exportSuccess && (
             <div role="status" className="flex items-center gap-2 text-sm text-success">
               <Check className="h-4 w-4" />
-              Data exported successfully! Check your downloads folder.
+              Your data export download has started.
             </div>
           )}
 
@@ -298,10 +300,17 @@ export function PrivacyDataSection({
           This action cannot be undone. Before deleting, we recommend exporting your data above.
         </p>
 
-        <Button variant="destructive" onClick={onDeleteAccountClick}>
+        <Button
+          variant="destructive"
+          onClick={onDeleteAccountClick}
+          disabled={Boolean(deleteAccountBlockedReason)}
+        >
           <Trash2 className="h-4 w-4" />
           Delete My Account
         </Button>
+        {deleteAccountBlockedReason ? (
+          <p className="mt-2 text-sm text-muted-foreground">{deleteAccountBlockedReason}</p>
+        ) : null}
       </div>
     </div>
   );
@@ -310,11 +319,13 @@ export function PrivacyDataSection({
 interface CompanyMembershipSectionProps {
   companyName?: string | null;
   onLeaveCompanyClick: () => void;
+  leaveCompanyBlockedReason?: string;
 }
 
 export function CompanyMembershipSection({
   companyName,
   onLeaveCompanyClick,
+  leaveCompanyBlockedReason,
 }: CompanyMembershipSectionProps) {
   return (
     <div className="rounded-lg border bg-card p-6 space-y-4">
@@ -351,11 +362,15 @@ export function CompanyMembershipSection({
         <Button
           variant="outline"
           onClick={onLeaveCompanyClick}
+          disabled={Boolean(leaveCompanyBlockedReason)}
           className="border-warning/40 text-warning hover:bg-warning/10"
         >
           <LogOut className="h-4 w-4" />
           Leave Company
         </Button>
+        {leaveCompanyBlockedReason ? (
+          <p className="mt-2 text-sm text-muted-foreground">{leaveCompanyBlockedReason}</p>
+        ) : null}
       </div>
     </div>
   );

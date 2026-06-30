@@ -1,14 +1,20 @@
+import fs from 'fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import * as email from './email.js';
 import { clearEmailQueue, getQueuedEmails } from './email.js';
 import { prisma } from './prisma.js';
 import {
   calculateNextScheduledReportRunAt,
   processDueScheduledReports,
 } from './scheduledReports.js';
+import { calculateScheduledReportArtifactSha256 } from './scheduledReports/artifacts.js';
+import { buildScheduledReportDocument } from './scheduledReports/reportDocument.js';
+import { resolveUploadPath } from './uploadPaths.js';
 
 type ScheduledReportProjectOptions = {
   subscriptionTier?: string;
   projectStatus?: string;
+  projectState?: string;
 };
 
 type DueScheduleOverrides = {
@@ -46,6 +52,7 @@ const SCHEDULE_RETRY_DELAY_MS = 5 * 60 * 1000;
 async function createScheduledReportProject({
   subscriptionTier = 'professional',
   projectStatus = 'active',
+  projectState = 'NSW',
 }: ScheduledReportProjectOptions = {}) {
   const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const company = await prisma.company.create({
@@ -60,7 +67,7 @@ async function createScheduledReportProject({
       projectNumber: `SCHPROC-${suffix}`,
       companyId: company.id,
       status: projectStatus,
-      state: 'NSW',
+      state: projectState,
       specificationSet: 'TfNSW',
     },
   });
@@ -69,6 +76,23 @@ async function createScheduledReportProject({
 }
 
 async function cleanupProject(projectId: string, companyId: string) {
+  const artifactRuns = await prisma.scheduledReportRun.findMany({
+    where: { projectId, artifactFileUrl: { not: null } },
+    select: { artifactFileUrl: true },
+  });
+
+  await Promise.all(
+    artifactRuns.map(async ({ artifactFileUrl }) => {
+      if (!artifactFileUrl?.startsWith('uploads/')) return;
+
+      try {
+        await fs.promises.unlink(resolveUploadPath(artifactFileUrl, 'scheduled-reports'));
+      } catch {
+        // Best-effort cleanup for local test artifacts.
+      }
+    }),
+  );
+
   await prisma.scheduledReport.deleteMany({ where: { projectId } });
   await prisma.lot.deleteMany({ where: { projectId } });
   await prisma.project.delete({ where: { id: projectId } }).catch(() => {});
@@ -251,8 +275,11 @@ function expectSingleSentResult(
 
 function expectQueuedEmailRecipients(recipients: string[]) {
   const queuedEmails = getQueuedEmails();
-  expect(queuedEmails).toHaveLength(1);
-  expect(queuedEmails[0]!.to).toEqual(recipients);
+  expect(queuedEmails).toHaveLength(recipients.length);
+  expect(queuedEmails.map((email) => email.to)).toEqual(recipients);
+  for (const queuedEmail of queuedEmails) {
+    expect(Array.isArray(queuedEmail.to)).toBe(false);
+  }
   return queuedEmails[0]!;
 }
 
@@ -357,39 +384,109 @@ afterEach(async () => {
 
 describe('calculateNextScheduledReportRunAt', () => {
   it('schedules daily reports later today or tomorrow', () => {
-    const beforeRun = new Date(2026, 4, 10, 8, 0, 0, 0);
-    const afterRun = new Date(2026, 4, 10, 10, 0, 0, 0);
+    const beforeRun = new Date('2026-05-10T08:00:00.000Z');
+    const afterRun = new Date('2026-05-10T10:00:00.000Z');
 
-    const today = calculateNextScheduledReportRunAt('daily', null, null, '09:00', beforeRun);
-    const tomorrow = calculateNextScheduledReportRunAt('daily', null, null, '09:00', afterRun);
+    const today = calculateNextScheduledReportRunAt('daily', null, null, '09:00', beforeRun, 'UTC');
+    const tomorrow = calculateNextScheduledReportRunAt(
+      'daily',
+      null,
+      null,
+      '09:00',
+      afterRun,
+      'UTC',
+    );
 
-    expect(today.getDate()).toBe(10);
-    expect(today.getHours()).toBe(9);
-    expect(today.getMinutes()).toBe(0);
-    expect(tomorrow.getDate()).toBe(11);
-    expect(tomorrow.getHours()).toBe(9);
-    expect(tomorrow.getMinutes()).toBe(0);
+    expect(today.toISOString()).toBe('2026-05-10T09:00:00.000Z');
+    expect(tomorrow.toISOString()).toBe('2026-05-11T09:00:00.000Z');
+  });
+
+  it('schedules reports from the project timezone rather than the server timezone', () => {
+    const perthMorning = new Date('2026-06-15T00:30:00.000Z'); // 08:30 in Perth
+    const nextRun = calculateNextScheduledReportRunAt(
+      'daily',
+      null,
+      null,
+      '09:00',
+      perthMorning,
+      'Australia/Perth',
+    );
+
+    expect(nextRun.toISOString()).toBe('2026-06-15T01:00:00.000Z');
+  });
+
+  it('uses the project timezone DST offset for summer schedules', () => {
+    const sydneySummerMorning = new Date('2026-01-14T21:00:00.000Z'); // 08:00 AEDT
+    const nextRun = calculateNextScheduledReportRunAt(
+      'daily',
+      null,
+      null,
+      '09:00',
+      sydneySummerMorning,
+      'Australia/Sydney',
+    );
+
+    expect(nextRun.toISOString()).toBe('2026-01-14T22:00:00.000Z');
   });
 
   it('clamps monthly runs to the last day of shorter months', () => {
-    const afterJanuaryRun = new Date(2026, 0, 31, 10, 0, 0, 0);
+    const afterJanuaryRun = new Date('2026-01-31T10:00:00.000Z');
     const nextRun = calculateNextScheduledReportRunAt(
       'monthly',
       null,
       31,
       '09:00',
       afterJanuaryRun,
+      'UTC',
     );
 
-    expect(nextRun.getFullYear()).toBe(2026);
-    expect(nextRun.getMonth()).toBe(1);
-    expect(nextRun.getDate()).toBe(28);
-    expect(nextRun.getHours()).toBe(9);
-    expect(nextRun.getMinutes()).toBe(0);
+    expect(nextRun.toISOString()).toBe('2026-02-28T09:00:00.000Z');
   });
 });
 
 describe('processDueScheduledReports', () => {
+  it('labels scheduled report row samples with the displayed and total counts', async () => {
+    const { company, project } = await createScheduledReportProject();
+
+    try {
+      await prisma.lot.createMany({
+        data: Array.from({ length: 51 }, (_, index) => ({
+          projectId: project.id,
+          lotNumber: `LOT-SAMPLE-${String(index + 1).padStart(3, '0')}`,
+          lotType: 'roadworks',
+          description: `Scheduled report lot ${index + 1}`,
+          status: 'conformed',
+          activityType: 'Earthworks',
+        })),
+      });
+
+      const document = await buildScheduledReportDocument(
+        {
+          id: 'schedule-sample-count',
+          projectId: project.id,
+          reportType: 'lot-status',
+          frequency: 'daily',
+          dayOfWeek: null,
+          dayOfMonth: null,
+          timeOfDay: '09:00',
+          recipients: 'recipient@example.com',
+          nextRunAt: null,
+          failureCount: 0,
+          project: {
+            name: project.name,
+            companyId: company.id,
+            company: { subscriptionTier: company.subscriptionTier },
+          },
+        },
+        new Date('2026-06-21T09:30:00.000Z'),
+      );
+
+      expect(document.lines).toContain('Lot sample (showing first 50 of 51 lots)');
+    } finally {
+      await cleanupProject(project.id, company.id);
+    }
+  });
+
   it('claims due schedules, sends a PDF report email, and advances nextRunAt', async () => {
     const { company, project } = await createScheduledReportProject();
     const now = new Date(2026, 4, 10, 9, 30, 0, 0);
@@ -437,6 +534,9 @@ describe('processDueScheduledReports', () => {
       ]);
       expect(queuedEmail.subject).toContain('Scheduled Report');
       expect(queuedEmail.text).toContain('View report online:');
+      expect(queuedEmail.text).toContain('/reports/scheduled-runs/');
+      expect(queuedEmail.text).not.toContain('uploads/scheduled-reports');
+      expect(queuedEmail.text).not.toContain('supabase://');
       expect(queuedEmail.attachments).toHaveLength(1);
       const attachment = queuedEmail.attachments![0]!;
       expect(attachment.filename).toContain('Lot_Status_Report');
@@ -519,9 +619,8 @@ describe('processDueScheduledReports', () => {
         title: `Scheduled report ready: Lot Status Report - ${project.name}`,
         projectName: project.name,
       });
-      expect(digestItems[0]!.linkUrl).toContain(
-        `/projects/${encodeURIComponent(project.id)}/reports`,
-      );
+      expect(digestItems[0]!.linkUrl).toContain('/reports/scheduled-runs/');
+      expect(digestItems[0]!.linkUrl).toContain('/artifact');
 
       await expectScheduleAdvanced(schedule.id, now, true);
     } finally {
@@ -593,6 +692,141 @@ describe('processDueScheduledReports', () => {
       expect(result.failed).toBe(0);
       expect(getQueuedEmails()).toHaveLength(1);
     } finally {
+      await cleanupProject(project.id, company.id);
+    }
+  });
+
+  it('advances delivered schedules using the project state timezone', async () => {
+    const { company, project } = await createScheduledReportProject({ projectState: 'WA' });
+    const now = new Date('2026-06-15T01:30:00.000Z'); // 09:30 in Perth
+    const schedule = await createDueSchedule(project.id, new Date(now.getTime() - 60_000), {
+      recipients: 'perth-recipient@example.com',
+    });
+
+    try {
+      const result = await processDueScheduledReports({ now, scheduleIds: [schedule.id] });
+
+      expectSingleSentResult(result);
+      expect(result.results[0]?.nextRunAt).toBe('2026-06-16T01:00:00.000Z');
+
+      const updatedSchedule = await getScheduledReport(schedule.id);
+      expect(updatedSchedule?.nextRunAt?.toISOString()).toBe('2026-06-16T01:00:00.000Z');
+    } finally {
+      await cleanupProject(project.id, company.id);
+    }
+  });
+
+  it('retries only recipients who missed a scheduled report after a partial delivery failure', async () => {
+    const { company, project, now, schedule } = await createDueScheduleFixture(
+      {},
+      { recipients: 'sent-recipient@example.com,failed-recipient@example.com' },
+    );
+    const sendSpy = vi
+      .spyOn(email, 'sendScheduledReportEmail')
+      .mockImplementation(async ({ to }) =>
+        to === 'failed-recipient@example.com'
+          ? { success: false, error: 'temporary provider failure' }
+          : { success: true, messageId: 'sent-ok', provider: 'mock' },
+      );
+
+    try {
+      const result = await processDueScheduledReports({ now, scheduleIds: [schedule.id] });
+
+      expect(result.processed).toBe(1);
+      expect(result.sent).toBe(0);
+      expect(result.failed).toBe(1);
+      expect(result.results[0]?.status).toBe('failed');
+      expect(result.results[0]?.error).toContain('temporary provider failure');
+      const firstAttemptRecipients = sendSpy.mock.calls.map(([data]) => data.to);
+      expect(firstAttemptRecipients).toHaveLength(2);
+      expect(firstAttemptRecipients).toEqual(
+        expect.arrayContaining(['sent-recipient@example.com', 'failed-recipient@example.com']),
+      );
+      const firstAttemptPdf = sendSpy.mock.calls[0]?.[0].pdfBuffer;
+      expect(Buffer.isBuffer(firstAttemptPdf)).toBe(true);
+      const partiallyDeliveredSchedule = await getScheduledReport(schedule.id);
+      expect(partiallyDeliveredSchedule?.lastSentAt).toBeNull();
+      expect(partiallyDeliveredSchedule?.failureCount).toBe(1);
+      expect(partiallyDeliveredSchedule?.nextRunAt?.getTime()).toBeGreaterThan(now.getTime());
+      const partialRun = await prisma.scheduledReportRun.findFirst({
+        where: { scheduleId: schedule.id },
+        include: { deliveries: { orderBy: { recipient: 'asc' } } },
+      });
+      expect(partialRun).toMatchObject({
+        status: 'partial_failed',
+        sentCount: 1,
+        failedCount: 1,
+      });
+      expect(partialRun?.artifactFileUrl).toContain('scheduled-reports');
+      expect(partialRun?.artifactReportName).toBe(`Lot Status Report - ${project.name}`);
+      expect(partialRun?.artifactFilename).toContain('Lot Status Report');
+      expect(partialRun?.artifactFilename).toMatch(/\.pdf$/);
+      expect(partialRun?.artifactMimeType).toBe('application/pdf');
+      expect(partialRun?.artifactFileSize).toBe((firstAttemptPdf as Buffer).length);
+      expect(partialRun?.artifactSha256).toBe(
+        calculateScheduledReportArtifactSha256(firstAttemptPdf as Buffer),
+      );
+      expect(
+        partialRun?.deliveries.map((delivery) => ({
+          recipient: delivery.recipient,
+          status: delivery.status,
+          retryable: delivery.retryable,
+        })),
+      ).toEqual([
+        { recipient: 'failed-recipient@example.com', status: 'failed', retryable: true },
+        { recipient: 'sent-recipient@example.com', status: 'sent', retryable: false },
+      ]);
+
+      await prisma.lot.create({
+        data: {
+          projectId: project.id,
+          lotNumber: 'LOT-CHANGED-BEFORE-RETRY',
+          lotType: 'roadworks',
+          status: 'conforming',
+          activityType: 'Changed live data',
+        },
+      });
+
+      sendSpy.mockImplementation(async () => ({
+        success: true,
+        messageId: 'retry-ok',
+        provider: 'mock',
+      }));
+      sendSpy.mockClear();
+      const retryNow = partiallyDeliveredSchedule!.nextRunAt!;
+      const secondRun = await processDueScheduledReports({
+        now: retryNow,
+        scheduleIds: [schedule.id],
+      });
+      expectSingleSentResult(secondRun, 1);
+      expect(sendSpy.mock.calls.map(([data]) => data.to)).toEqual(['failed-recipient@example.com']);
+      const retryPdf = sendSpy.mock.calls[0]?.[0].pdfBuffer;
+      expect(Buffer.isBuffer(retryPdf)).toBe(true);
+      expect(Buffer.compare(retryPdf as Buffer, firstAttemptPdf as Buffer)).toBe(0);
+      expect(calculateScheduledReportArtifactSha256(retryPdf as Buffer)).toBe(
+        partialRun?.artifactSha256,
+      );
+      expect(sendSpy.mock.calls[0]?.[0].viewReportUrl).toContain(
+        `/reports/scheduled-runs/${partialRun?.id}/artifact`,
+      );
+
+      const completedSchedule = await getScheduledReport(schedule.id);
+      expect(completedSchedule?.lastSentAt?.toISOString()).toBe(retryNow.toISOString());
+      expect(completedSchedule?.failureCount).toBe(0);
+      const completedRun = await prisma.scheduledReportRun.findFirst({
+        where: { scheduleId: schedule.id },
+        include: { deliveries: { orderBy: { recipient: 'asc' } } },
+      });
+      expect(completedRun).toMatchObject({
+        status: 'sent',
+        sentCount: 2,
+        failedCount: 0,
+        artifactFileUrl: partialRun?.artifactFileUrl,
+        artifactSha256: partialRun?.artifactSha256,
+      });
+      expect(completedRun?.deliveries.every((delivery) => delivery.status === 'sent')).toBe(true);
+    } finally {
+      sendSpy.mockRestore();
       await cleanupProject(project.id, company.id);
     }
   });

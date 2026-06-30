@@ -1,3 +1,9 @@
+import {
+  DEFAULT_PROJECT_TIME_ZONE,
+  zonedDateParts,
+  zonedWallClockToUtc,
+} from '../projectTimeZone.js';
+
 export const SCHEDULED_REPORT_TYPES = ['lot-status', 'ncr', 'test', 'diary'] as const;
 export const SCHEDULED_REPORT_FREQUENCIES = ['daily', 'weekly', 'monthly'] as const;
 export const MAX_SCHEDULED_REPORTS_PER_PROJECT = 25;
@@ -16,10 +22,12 @@ export type ScheduledReportForDelivery = {
   dayOfMonth: number | null;
   timeOfDay: string;
   recipients: string;
+  nextRunAt: Date | null;
   failureCount: number;
   project: {
     name: string;
     companyId?: string | null;
+    state?: string | null;
     company?: {
       subscriptionTier: string | null;
     };
@@ -45,20 +53,53 @@ function dayCountInMonth(year: number, monthIndex: number): number {
   return new Date(year, monthIndex + 1, 0).getDate();
 }
 
-function dateAtTime(base: Date, timeOfDay: string): Date {
+function parseTimeOfDayParts(timeOfDay: string): { hours: number; minutes: number } {
   const [hours = 9, minutes = 0] = timeOfDay.split(':').map(Number);
-  const date = new Date(base);
-  date.setHours(hours, minutes, 0, 0);
-  return date;
+  return { hours, minutes };
 }
 
-function monthlyDateAtTime(base: Date, dayOfMonth: number, timeOfDay: string): Date {
-  const [hours = 9, minutes = 0] = timeOfDay.split(':').map(Number);
-  const date = new Date(base);
-  const clampedDay = Math.min(dayOfMonth, dayCountInMonth(date.getFullYear(), date.getMonth()));
-  date.setDate(clampedDay);
-  date.setHours(hours, minutes, 0, 0);
-  return date;
+function localDayOfWeek(parts: { year: number; month: number; day: number }): number {
+  return new Date(Date.UTC(parts.year, parts.month - 1, parts.day)).getUTCDay();
+}
+
+function addLocalDays(
+  parts: { year: number; month: number; day: number },
+  days: number,
+): { year: number; month: number; day: number } {
+  const shifted = new Date(Date.UTC(parts.year, parts.month - 1, parts.day + days));
+  return {
+    year: shifted.getUTCFullYear(),
+    month: shifted.getUTCMonth() + 1,
+    day: shifted.getUTCDate(),
+  };
+}
+
+function nextLocalMonth(parts: { year: number; month: number }): { year: number; month: number } {
+  const shifted = new Date(Date.UTC(parts.year, parts.month, 1));
+  return {
+    year: shifted.getUTCFullYear(),
+    month: shifted.getUTCMonth() + 1,
+  };
+}
+
+function zonedDateAtTime(
+  parts: { year: number; month: number; day: number },
+  timeOfDay: string,
+  timeZone: string,
+): Date {
+  const { hours, minutes } = parseTimeOfDayParts(timeOfDay);
+  return zonedWallClockToUtc(parts.year, parts.month, parts.day, hours, minutes, timeZone);
+}
+
+function monthlyZonedDateAtTime(
+  year: number,
+  month: number,
+  dayOfMonth: number,
+  timeOfDay: string,
+  timeZone: string,
+): Date {
+  const clampedDay = Math.min(dayOfMonth, dayCountInMonth(year, month - 1));
+  return zonedDateAtTime({ year, month, day: clampedDay }, timeOfDay, timeZone);
 }
 
 export function calculateNextScheduledReportRunAt(
@@ -67,38 +108,52 @@ export function calculateNextScheduledReportRunAt(
   dayOfMonth: number | null,
   timeOfDay: string,
   from = new Date(),
+  timeZone = DEFAULT_PROJECT_TIME_ZONE,
 ): Date {
+  const localToday = zonedDateParts(from, timeZone);
+
   switch (frequency) {
     case 'daily': {
-      const nextRun = dateAtTime(from, timeOfDay);
+      let nextRun = zonedDateAtTime(localToday, timeOfDay, timeZone);
       if (nextRun <= from) {
-        nextRun.setDate(nextRun.getDate() + 1);
+        nextRun = zonedDateAtTime(addLocalDays(localToday, 1), timeOfDay, timeZone);
       }
       return nextRun;
     }
 
     case 'weekly': {
       const targetDay = dayOfWeek ?? 1;
-      const nextRun = dateAtTime(from, timeOfDay);
-      const currentDay = nextRun.getDay();
+      const currentDay = localDayOfWeek(localToday);
       let daysUntil = targetDay - currentDay;
+      let nextRun = zonedDateAtTime(addLocalDays(localToday, daysUntil), timeOfDay, timeZone);
       if (daysUntil < 0 || (daysUntil === 0 && nextRun <= from)) {
         daysUntil += 7;
+        nextRun = zonedDateAtTime(addLocalDays(localToday, daysUntil), timeOfDay, timeZone);
       }
-      nextRun.setDate(nextRun.getDate() + daysUntil);
       return nextRun;
     }
 
     case 'monthly': {
       const targetDay = dayOfMonth ?? 1;
-      const nextRun = monthlyDateAtTime(from, targetDay, timeOfDay);
+      const nextRun = monthlyZonedDateAtTime(
+        localToday.year,
+        localToday.month,
+        targetDay,
+        timeOfDay,
+        timeZone,
+      );
       if (nextRun > from) {
         return nextRun;
       }
 
-      const nextMonth = new Date(from);
-      nextMonth.setMonth(nextMonth.getMonth() + 1, 1);
-      return monthlyDateAtTime(nextMonth, targetDay, timeOfDay);
+      const nextMonth = nextLocalMonth(localToday);
+      return monthlyZonedDateAtTime(
+        nextMonth.year,
+        nextMonth.month,
+        targetDay,
+        timeOfDay,
+        timeZone,
+      );
     }
   }
 }

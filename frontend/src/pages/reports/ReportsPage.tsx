@@ -1,13 +1,20 @@
 import { useRef, useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { apiFetch, apiUrl } from '@/lib/api';
-import { Lock, Sparkles, Mail, RefreshCw } from 'lucide-react';
+import { Lock, Sparkles, Mail, Printer, RefreshCw } from 'lucide-react';
 import { ScheduleReportModal } from '../../components/reports/ScheduleReportModal';
 import { ContextHelp, HELP_CONTENT } from '@/components/ContextHelp';
-import type { LotStatusReport, NCRReport, TestReport, DiaryReport, ClaimsReport } from './types';
+import type {
+  LotStatusReport,
+  NCRReport,
+  TestReport,
+  DiaryReport,
+  ClaimsReport,
+  ReportPagination,
+} from './types';
 import { ADVANCED_ANALYTICS_TIERS } from './types';
 import { useAuth } from '@/lib/auth';
-import { ROLE_GROUPS, hasRoleInGroup } from '@/lib/roles';
+import { ROLE_GROUPS, hasRoleInGroup, isAdminRole } from '@/lib/roles';
 import { getProjectScopedRole } from '@/lib/subcontractorIdentity';
 import { logError } from '@/lib/logger';
 import { extractErrorMessage } from '@/lib/errorHandling';
@@ -36,10 +43,157 @@ const AdvancedAnalyticsTab = lazy(() =>
 );
 
 const REPORT_DATA_TABS = ['lot-status', 'ncr', 'test', 'diary', 'claims'] as const;
+const REPORT_TABS = [...REPORT_DATA_TABS, 'advanced'] as const;
 type ReportDataTab = (typeof REPORT_DATA_TABS)[number];
+type ReportTab = (typeof REPORT_TABS)[number];
+type PaginatedReportDataTab = Exclude<ReportDataTab, 'claims'>;
+type PaginatedReport = LotStatusReport | NCRReport | TestReport | DiaryReport;
+type ReportQueryParams = Record<string, string>;
+type ReportFilterParams = Partial<Record<ReportDataTab, ReportQueryParams>>;
+
+const REPORT_DETAIL_PAGE_LIMIT = 500;
 
 function isReportDataTab(tab: string): tab is ReportDataTab {
   return REPORT_DATA_TABS.includes(tab as ReportDataTab);
+}
+
+function isReportTab(tab: string): tab is ReportTab {
+  return REPORT_TABS.includes(tab as ReportTab);
+}
+
+function isPaginatedReportDataTab(tab: ReportDataTab): tab is PaginatedReportDataTab {
+  return tab !== 'claims';
+}
+
+function areReportQueryParamsEqual(
+  left: ReportQueryParams | undefined,
+  right: ReportQueryParams,
+): boolean {
+  const leftEntries = Object.entries(left ?? {});
+  const rightEntries = Object.entries(right);
+  return (
+    leftEntries.length === rightEntries.length &&
+    rightEntries.every(([key, value]) => left?.[key] === value)
+  );
+}
+
+function buildTestReportParams(
+  startDate: string,
+  endDate: string,
+  testTypes: string[],
+): ReportQueryParams {
+  const extraParams: ReportQueryParams = {};
+  if (startDate) extraParams.startDate = startDate;
+  if (endDate) extraParams.endDate = endDate;
+  if (testTypes.length > 0) extraParams.testTypes = testTypes.join(',');
+  return extraParams;
+}
+
+function buildDiaryReportParams(
+  sections: string[],
+  startDate: string,
+  endDate: string,
+): ReportQueryParams {
+  const extraParams: ReportQueryParams = {};
+  if (sections.length > 0) extraParams.sections = sections.join(',');
+  if (startDate) extraParams.startDate = startDate;
+  if (endDate) extraParams.endDate = endDate;
+  return extraParams;
+}
+
+function buildClaimsReportParams(
+  startDate: string,
+  endDate: string,
+  statuses: string[],
+): ReportQueryParams {
+  const extraParams: ReportQueryParams = {};
+  if (startDate) extraParams.startDate = startDate;
+  if (endDate) extraParams.endDate = endDate;
+  if (statuses.length > 0) extraParams.status = statuses.join(',');
+  return extraParams;
+}
+
+function markReportAsFullyLoaded<T extends { pagination?: ReportPagination }>(
+  report: T,
+  rowCount: number,
+): T {
+  if (!report.pagination) {
+    return report;
+  }
+
+  return {
+    ...report,
+    pagination: {
+      ...report.pagination,
+      page: 1,
+      limit: rowCount,
+      totalPages: 1,
+    },
+  };
+}
+
+function mergePaginatedReportPages(
+  reportType: PaginatedReportDataTab,
+  firstPage: PaginatedReport,
+  nextPages: PaginatedReport[],
+): PaginatedReport {
+  switch (reportType) {
+    case 'lot-status': {
+      const first = firstPage as LotStatusReport;
+      const pages = nextPages as LotStatusReport[];
+      const lots = [...first.lots, ...pages.flatMap((page) => page.lots)];
+      return markReportAsFullyLoaded({ ...first, lots }, lots.length);
+    }
+    case 'ncr': {
+      const first = firstPage as NCRReport;
+      const pages = nextPages as NCRReport[];
+      const ncrs = [...first.ncrs, ...pages.flatMap((page) => page.ncrs)];
+      return markReportAsFullyLoaded({ ...first, ncrs }, ncrs.length);
+    }
+    case 'test': {
+      const first = firstPage as TestReport;
+      const pages = nextPages as TestReport[];
+      const tests = [...first.tests, ...pages.flatMap((page) => page.tests)];
+      return markReportAsFullyLoaded({ ...first, tests }, tests.length);
+    }
+    case 'diary': {
+      const first = firstPage as DiaryReport;
+      const pages = nextPages as DiaryReport[];
+      const diaries = [...first.diaries, ...pages.flatMap((page) => page.diaries)];
+      return markReportAsFullyLoaded({ ...first, diaries }, diaries.length);
+    }
+  }
+}
+
+async function fetchCompleteReport(
+  reportType: ReportDataTab,
+  endpoint: string,
+  queryParams: URLSearchParams,
+): Promise<unknown> {
+  if (!isPaginatedReportDataTab(reportType)) {
+    return apiFetch<unknown>(`/api/reports/${endpoint}?${queryParams.toString()}`);
+  }
+
+  queryParams.set('limit', String(REPORT_DETAIL_PAGE_LIMIT));
+  queryParams.set('page', '1');
+
+  const firstPage = await apiFetch<PaginatedReport>(
+    `/api/reports/${endpoint}?${queryParams.toString()}`,
+  );
+  const totalPages = firstPage.pagination?.totalPages ?? 1;
+
+  if (totalPages <= 1) {
+    return firstPage;
+  }
+
+  const nextPages: PaginatedReport[] = [];
+  for (let page = 2; page <= totalPages; page += 1) {
+    const pageParams = new URLSearchParams(queryParams);
+    pageParams.set('page', String(page));
+    nextPages.push(await apiFetch<PaginatedReport>(`/api/reports/${endpoint}?${pageParams}`));
+  }
+
+  return mergePaginatedReportPages(reportType, firstPage, nextPages);
 }
 
 interface CompanyResponse {
@@ -64,7 +218,8 @@ export function ReportsPage() {
   const { dateFormat } = useDateFormat();
   const { timezone } = useTimezone();
   const { user } = useAuth();
-  const activeTab = searchParams.get('tab') || 'lot-status';
+  const requestedTab = searchParams.get('tab') || 'lot-status';
+  const activeTab: ReportTab = isReportTab(requestedTab) ? requestedTab : 'lot-status';
   const reportRequestRef = useRef(0);
   const inFlightReportRequestKeyRef = useRef<string | null>(null);
   const lastAutomaticReportRequestKeyRef = useRef<string | null>(null);
@@ -80,6 +235,7 @@ export function ReportsPage() {
   // Feature #702: Company logo on reports
   const [companyLogo, setCompanyLogo] = useState<string | null>(null);
   const [companyName, setCompanyName] = useState<string>('');
+  const [reportFilterParams, setReportFilterParams] = useState<ReportFilterParams>({});
 
   // Schedule modal state
   const [showScheduleModal, setShowScheduleModal] = useState(false);
@@ -98,11 +254,16 @@ export function ReportsPage() {
     [setSearchParams],
   );
 
-  const subscriptionTierLabel = subscriptionTier ?? 'basic';
+  const normalizedSubscriptionTier = useMemo(
+    () => (subscriptionTier ?? 'basic').trim().toLowerCase(),
+    [subscriptionTier],
+  );
+  const subscriptionTierLabel = normalizedSubscriptionTier;
   const subscriptionTierLoaded = subscriptionTier !== null;
   const hasAdvancedAnalytics = useMemo(
-    () => subscriptionTier !== null && ADVANCED_ANALYTICS_TIERS.includes(subscriptionTier),
-    [subscriptionTier],
+    () =>
+      subscriptionTier !== null && ADVANCED_ANALYTICS_TIERS.includes(normalizedSubscriptionTier),
+    [normalizedSubscriptionTier, subscriptionTier],
   );
   const projectRoleResolved = !projectId || currentProjectRole !== undefined;
   const projectScopedRole = useMemo(
@@ -113,8 +274,34 @@ export function ReportsPage() {
     () => projectRoleResolved && hasRoleInGroup(projectScopedRole, ROLE_GROUPS.COMMERCIAL),
     [projectRoleResolved, projectScopedRole],
   );
+  const canManageCompanySettings = isAdminRole(user?.roleInCompany || user?.role || '');
   const canManageScheduledReports = canViewClaimsReport;
-  const printGeneratedAt = useMemo(
+  const hasPrintableReport =
+    (activeTab === 'lot-status' && Boolean(lotReport)) ||
+    (activeTab === 'ncr' && Boolean(ncrReport)) ||
+    (activeTab === 'test' && Boolean(testReport)) ||
+    (activeTab === 'diary' && Boolean(diaryReport)) ||
+    (activeTab === 'claims' && Boolean(claimsReport));
+  const activeReportGeneratedAt =
+    activeTab === 'lot-status'
+      ? lotReport?.generatedAt
+      : activeTab === 'ncr'
+        ? ncrReport?.generatedAt
+        : activeTab === 'test'
+          ? testReport?.generatedAt
+          : activeTab === 'diary'
+            ? diaryReport?.generatedAt
+            : activeTab === 'claims'
+              ? claimsReport?.generatedAt
+              : null;
+  const printReportGeneratedAt = useMemo(
+    () =>
+      activeReportGeneratedAt
+        ? formatReportDateTime(activeReportGeneratedAt, dateFormat, timezone)
+        : null,
+    [activeReportGeneratedAt, dateFormat, timezone],
+  );
+  const printPrintedAt = useMemo(
     () => formatReportDateTime(new Date(), dateFormat, timezone),
     [dateFormat, timezone],
   );
@@ -136,6 +323,12 @@ export function ReportsPage() {
       setClaimsReport(null);
     }
   }, []);
+
+  useEffect(() => {
+    if (!isReportTab(requestedTab)) {
+      setSearchParams({ tab: 'lot-status' }, { replace: true });
+    }
+  }, [requestedTab, setSearchParams]);
 
   useEffect(() => {
     reportRequestRef.current += 1;
@@ -205,7 +398,7 @@ export function ReportsPage() {
   }, [projectId]);
 
   const fetchReport = useCallback(
-    async (reportType: ReportDataTab, extraParams?: Record<string, string>) => {
+    async (reportType: ReportDataTab, extraParams?: ReportQueryParams) => {
       if (!projectId) {
         clearReportState();
         setError('Project not found');
@@ -253,6 +446,11 @@ export function ReportsPage() {
             break;
         }
 
+        if (isPaginatedReportDataTab(reportType)) {
+          queryParams.set('limit', String(REPORT_DETAIL_PAGE_LIMIT));
+          queryParams.set('page', '1');
+        }
+
         requestKey = `${endpoint}?${queryParams.toString()}`;
         if (inFlightReportRequestKeyRef.current === requestKey) {
           return;
@@ -265,7 +463,7 @@ export function ReportsPage() {
         setLoading(true);
         setError(null);
 
-        const data = await apiFetch<unknown>(`/api/reports/${endpoint}?${queryParams.toString()}`);
+        const data = await fetchCompleteReport(reportType, endpoint, queryParams);
         if (requestId !== reportRequestRef.current) return;
 
         switch (reportType) {
@@ -301,6 +499,19 @@ export function ReportsPage() {
     [projectId, canViewClaimsReport, clearReportState],
   );
 
+  const handleReportFilterParamsChange = useCallback(
+    (reportType: ReportDataTab, extraParams: ReportQueryParams) => {
+      setReportFilterParams((prev) => {
+        if (areReportQueryParamsEqual(prev[reportType], extraParams)) {
+          return prev;
+        }
+
+        return { ...prev, [reportType]: extraParams };
+      });
+    },
+    [],
+  );
+
   useEffect(() => {
     if (!projectRoleResolved) {
       return;
@@ -324,11 +535,11 @@ export function ReportsPage() {
   const handleRefreshReport = useCallback(() => {
     lastAutomaticReportRequestKeyRef.current = null;
     if (isReportDataTab(activeTab)) {
-      fetchReport(activeTab);
+      fetchReport(activeTab, reportFilterParams[activeTab]);
     } else if (!projectId) {
       setError('Project not found');
     }
-  }, [fetchReport, activeTab, projectId]);
+  }, [fetchReport, activeTab, projectId, reportFilterParams]);
 
   const handleOpenScheduleModal = useCallback(() => {
     if (!canManageScheduledReports) {
@@ -354,37 +565,61 @@ export function ReportsPage() {
   // Callback for TestResultsTab to refresh with filters
   const handleTestReportRefresh = useCallback(
     (startDate: string, endDate: string, testTypes: string[]) => {
-      const extraParams: Record<string, string> = {};
-      if (startDate) extraParams.startDate = startDate;
-      if (endDate) extraParams.endDate = endDate;
-      if (testTypes.length > 0) extraParams.testTypes = testTypes.join(',');
+      const extraParams = buildTestReportParams(startDate, endDate, testTypes);
+      handleReportFilterParamsChange('test', extraParams);
       fetchReport('test', extraParams);
     },
-    [fetchReport],
+    [fetchReport, handleReportFilterParamsChange],
+  );
+
+  const handleTestReportFiltersChange = useCallback(
+    (startDate: string, endDate: string, testTypes: string[]) => {
+      handleReportFilterParamsChange('test', buildTestReportParams(startDate, endDate, testTypes));
+    },
+    [handleReportFilterParamsChange],
   );
 
   // Callback for DiaryReportTab to generate report with options
   const handleDiaryReportGenerate = useCallback(
     (sections: string[], startDate: string, endDate: string) => {
-      const extraParams: Record<string, string> = {};
-      if (sections.length > 0) extraParams.sections = sections.join(',');
-      if (startDate) extraParams.startDate = startDate;
-      if (endDate) extraParams.endDate = endDate;
+      const extraParams = buildDiaryReportParams(sections, startDate, endDate);
+      handleReportFilterParamsChange('diary', extraParams);
       fetchReport('diary', extraParams);
     },
-    [fetchReport],
+    [fetchReport, handleReportFilterParamsChange],
+  );
+
+  const handleDiaryReportFiltersChange = useCallback(
+    (sections: string[], startDate: string, endDate: string) => {
+      handleReportFilterParamsChange('diary', buildDiaryReportParams(sections, startDate, endDate));
+    },
+    [handleReportFilterParamsChange],
   );
 
   const handleClaimsReportGenerate = useCallback(
     (startDate: string, endDate: string, statuses: string[]) => {
-      const extraParams: Record<string, string> = {};
-      if (startDate) extraParams.startDate = startDate;
-      if (endDate) extraParams.endDate = endDate;
-      if (statuses.length > 0) extraParams.status = statuses.join(',');
+      const extraParams = buildClaimsReportParams(startDate, endDate, statuses);
+      handleReportFilterParamsChange('claims', extraParams);
       fetchReport('claims', extraParams);
     },
-    [fetchReport],
+    [fetchReport, handleReportFilterParamsChange],
   );
+
+  const handleClaimsReportFiltersChange = useCallback(
+    (startDate: string, endDate: string, statuses: string[]) => {
+      handleReportFilterParamsChange(
+        'claims',
+        buildClaimsReportParams(startDate, endDate, statuses),
+      );
+    },
+    [handleReportFilterParamsChange],
+  );
+
+  const actionContainerClassName = canManageScheduledReports
+    ? hasPrintableReport
+      ? 'grid grid-cols-3 gap-2 sm:flex sm:gap-3'
+      : 'grid grid-cols-2 gap-2 sm:flex sm:gap-3'
+    : 'flex gap-2 sm:gap-3';
 
   return (
     <div className="space-y-6">
@@ -395,13 +630,7 @@ export function ReportsPage() {
           </h1>
           <ContextHelp title={HELP_CONTENT.reports.title} content={HELP_CONTENT.reports.content} />
         </div>
-        <div
-          className={
-            canManageScheduledReports
-              ? 'grid grid-cols-2 gap-2 sm:flex sm:gap-3'
-              : 'flex gap-2 sm:gap-3'
-          }
-        >
+        <div className={actionContainerClassName}>
           {canManageScheduledReports && (
             <button
               type="button"
@@ -417,6 +646,18 @@ export function ReportsPage() {
               {hasAdvancedAnalytics ? <Mail className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
               <span className="hidden sm:inline">Schedule Reports</span>
               <span className="sm:hidden">Schedule</span>
+            </button>
+          )}
+          {hasPrintableReport && (
+            <button
+              type="button"
+              aria-label="Print / Save PDF"
+              onClick={() => window.print()}
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-border px-2 py-2 text-sm font-medium hover:bg-muted/50 sm:px-4"
+            >
+              <Printer className="h-4 w-4" />
+              <span className="hidden sm:inline">Print / Save PDF</span>
+              <span className="sm:hidden">Print</span>
             </button>
           )}
           <button
@@ -504,6 +745,7 @@ export function ReportsPage() {
                 <img
                   src={companyLogo.startsWith('http') ? companyLogo : apiUrl(companyLogo)}
                   alt={companyName || 'Company Logo'}
+                  referrerPolicy="no-referrer"
                   className="h-12 w-auto object-contain"
                 />
               ) : null}
@@ -516,7 +758,11 @@ export function ReportsPage() {
             </div>
           </div>
           <div className="flex justify-between text-sm text-muted-foreground mt-3">
-            <span>Generated: {printGeneratedAt}</span>
+            <span>
+              Report data:{' '}
+              {printReportGeneratedAt ?? (hasPrintableReport ? 'Not available' : 'Not loaded')}
+            </span>
+            <span>Printed: {printPrintedAt}</span>
             <span>Report ID: {projectId?.slice(0, 8)}</span>
           </div>
         </div>
@@ -539,6 +785,7 @@ export function ReportsPage() {
                 report={testReport}
                 loading={loading}
                 onRefresh={handleTestReportRefresh}
+                onFiltersChange={handleTestReportFiltersChange}
               />
             )}
 
@@ -547,6 +794,7 @@ export function ReportsPage() {
                 report={diaryReport}
                 loading={loading}
                 onGenerateReport={handleDiaryReportGenerate}
+                onFiltersChange={handleDiaryReportFiltersChange}
               />
             )}
 
@@ -555,6 +803,7 @@ export function ReportsPage() {
                 report={claimsReport}
                 loading={loading}
                 onGenerateReport={handleClaimsReportGenerate}
+                onFiltersChange={handleClaimsReportFiltersChange}
               />
             )}
 
@@ -562,6 +811,7 @@ export function ReportsPage() {
               <AdvancedAnalyticsTab
                 hasAdvancedAnalytics={hasAdvancedAnalytics}
                 subscriptionTier={subscriptionTierLabel}
+                canManageCompanySettings={canManageCompanySettings}
               />
             )}
           </div>

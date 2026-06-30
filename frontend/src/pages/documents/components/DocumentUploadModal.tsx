@@ -17,6 +17,8 @@ import {
   type UploadDocumentForm,
 } from '../documentsUploadData';
 
+const DOCUMENT_UPLOAD_ACCEPT = '.pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.webp,.eml,.msg';
+
 interface DocumentUploadLot {
   id: string;
   lotNumber: string;
@@ -89,7 +91,8 @@ export function DocumentUploadModal({
                 type="file"
                 multiple
                 onChange={onFileSelect}
-                accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.webp"
+                accept={DOCUMENT_UPLOAD_ACCEPT}
+                disabled={uploading}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
               />
               {selectedFiles.length > 0 ? (
@@ -149,7 +152,7 @@ export function DocumentUploadModal({
                     drop
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    PDF, DOC, XLS, JPG, PNG up to 50MB (select multiple files)
+                    PDF, DOC, XLS, JPG, PNG, EML, MSG up to 50MB (select multiple files)
                   </p>
                 </>
               )}
@@ -180,6 +183,7 @@ export function DocumentUploadModal({
               id="document-upload-type"
               value={uploadForm.documentType}
               onChange={(e) => onFormChange({ documentType: e.target.value })}
+              disabled={uploading}
             >
               <option value="">Select type...</option>
               {DOCUMENT_TYPES.map((type) => (
@@ -199,6 +203,7 @@ export function DocumentUploadModal({
               id="document-upload-category"
               value={uploadForm.category}
               onChange={(e) => onFormChange({ category: e.target.value })}
+              disabled={uploading}
             >
               <option value="">Select category...</option>
               {CATEGORIES.map((cat) => (
@@ -218,6 +223,7 @@ export function DocumentUploadModal({
               id="document-upload-lot"
               value={uploadForm.lotId}
               onChange={(e) => onFormChange({ lotId: e.target.value })}
+              disabled={uploading}
             >
               <option value="">No lot selected</option>
               {lots.map((lot) => (
@@ -239,6 +245,7 @@ export function DocumentUploadModal({
               onChange={(e) => onFormChange({ caption: e.target.value })}
               placeholder="Add a description..."
               rows={3}
+              disabled={uploading}
             />
           </div>
 

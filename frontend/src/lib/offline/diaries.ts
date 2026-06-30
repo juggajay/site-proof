@@ -4,6 +4,7 @@
 // callers keep importing from '@/lib/offlineDb'.
 
 import { offlineDb, type OfflineDailyDiary } from './core';
+import { MISSING_OFFLINE_DIARY_SUBMIT_SNAPSHOT_MESSAGE } from './diaryMessages';
 
 type OfflineDailyDiaryServerData = Partial<
   Omit<
@@ -66,6 +67,11 @@ export async function saveDiaryOffline(
 // Submit diary offline
 export async function submitDiaryOffline(projectId: string, date: string): Promise<void> {
   const id = generateDiaryId(projectId, date);
+  const existing = await offlineDb.diaries.get(id);
+
+  if (!existing) {
+    throw new Error(MISSING_OFFLINE_DIARY_SUBMIT_SNAPSHOT_MESSAGE);
+  }
 
   // Update status to submitted
   await offlineDb.diaries.update(id, {

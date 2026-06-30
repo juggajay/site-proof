@@ -40,7 +40,11 @@ const PACKAGE_SECTIONS: { key: keyof ClaimPackageOptions; label: string; descrip
     description: 'NCR status and resolution details',
   },
   { key: 'includeHoldPoints', label: 'Hold Points', description: 'Hold point release information' },
-  { key: 'includePhotos', label: 'Photo Evidence', description: 'Photo counts and references' },
+  {
+    key: 'includePhotos',
+    label: 'Photos & Document Manifest',
+    description: 'Photo counts and supporting document references',
+  },
   {
     key: 'includeDeclaration',
     label: 'Declaration Page',
@@ -69,6 +73,14 @@ export const EvidencePackageModal = React.memo(function EvidencePackageModal({
   onGenerate,
 }: EvidencePackageModalProps) {
   const [options, setOptions] = useState<ClaimPackageOptions>({ ...DEFAULT_PACKAGE_OPTIONS });
+  const hasSelectedSections = Object.values(options).some(Boolean);
+  const handleGenerate = () => {
+    if (!hasSelectedSections || isGenerating) {
+      return;
+    }
+
+    onGenerate(claimId, options);
+  };
 
   return (
     <Modal onClose={onClose} className="max-w-md">
@@ -85,6 +97,15 @@ export const EvidencePackageModal = React.memo(function EvidencePackageModal({
               className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
             >
               {error}
+            </div>
+          )}
+
+          {!hasSelectedSections && (
+            <div
+              role="alert"
+              className="rounded-md border border-warning/30 bg-warning/10 p-3 text-sm text-warning"
+            >
+              Select at least one section to generate an evidence package.
             </div>
           )}
 
@@ -134,8 +155,8 @@ export const EvidencePackageModal = React.memo(function EvidencePackageModal({
         </Button>
         <Button
           variant="success"
-          onClick={() => onGenerate(claimId, options)}
-          disabled={isGenerating}
+          onClick={handleGenerate}
+          disabled={isGenerating || !hasSelectedSections}
         >
           {isGenerating ? (
             <Loader2 className="h-4 w-4 animate-spin" />

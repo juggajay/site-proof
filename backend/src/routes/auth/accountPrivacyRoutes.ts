@@ -3,6 +3,11 @@ import type { PrismaClient } from '@prisma/client';
 
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
+import {
+  REDACTED_LOG_VALUE,
+  sanitizeLogText,
+  sanitizeUrlValueForLog,
+} from '../../lib/logSanitization.js';
 import { createAccountDeletionRouter } from './accountDeletionRoutes.js';
 
 type NormalizePasswordInput = (value: unknown, fieldName?: string) => string;
@@ -13,6 +18,25 @@ type CreateAccountPrivacyRouterDependencies = {
 };
 
 const DATA_EXPORT_FILENAME_MAX_LENGTH = 180;
+const DATA_EXPORT_OPERATIONAL_RECORD_LIMIT = 1000;
+const DATA_EXPORT_SYNC_PAYLOAD_MAX_CHARS = 20_000;
+const SENSITIVE_EXPORT_KEY_PATTERNS = [
+  /password/i,
+  /token/i,
+  /secret/i,
+  /api[-_]?key/i,
+  /^key$/i,
+  /^code$/i,
+  /^state$/i,
+  /^credential$/i,
+  /^authorization$/i,
+  /^signature$/i,
+  /^auth$/i,
+  /^p256dh$/i,
+];
+const URL_EXPORT_KEY_PATTERN = /(^|_)(url|uri)$|urls?$|endpoint$/i;
+
+type JsonRecord = Record<string, unknown>;
 
 function sanitizeDownloadFilenameSegment(
   value: string,
@@ -40,6 +64,127 @@ export function getSafeDataExportFilename(email: string, date = new Date()): str
   const safeEmail = sanitizeDownloadFilenameSegment(email, maxEmailLength) || 'user';
 
   return `${prefix}${safeEmail}${suffix}`;
+}
+
+function isSensitiveExportKey(key: string): boolean {
+  return SENSITIVE_EXPORT_KEY_PATTERNS.some((pattern) => pattern.test(key));
+}
+
+function isUrlExportKey(key: string): boolean {
+  return key === 'fileUrl' || URL_EXPORT_KEY_PATTERN.test(key);
+}
+
+function sanitizeDataExportValue(key: string, value: unknown): unknown {
+  if (isSensitiveExportKey(key)) {
+    return REDACTED_LOG_VALUE;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeDataExportValue(key, item));
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as JsonRecord).map(([childKey, childValue]) => [
+        childKey,
+        sanitizeDataExportValue(childKey, childValue),
+      ]),
+    );
+  }
+
+  if (typeof value === 'string') {
+    if (isUrlExportKey(key)) {
+      return sanitizeUrlValueForLog(value);
+    }
+
+    return sanitizeLogText(value);
+  }
+
+  return value;
+}
+
+function sanitizeStoredPayload(payload: string): unknown {
+  if (payload.length > DATA_EXPORT_SYNC_PAYLOAD_MAX_CHARS) {
+    return {
+      truncated: true,
+      originalLength: payload.length,
+      maxExportedChars: DATA_EXPORT_SYNC_PAYLOAD_MAX_CHARS,
+    };
+  }
+
+  try {
+    const parsed = JSON.parse(payload) as unknown;
+    return sanitizeDataExportValue('payload', parsed);
+  } catch {
+    return sanitizeLogText(payload);
+  }
+}
+
+function limitOperationalRecords<T>(records: T[]) {
+  const truncated = records.length > DATA_EXPORT_OPERATIONAL_RECORD_LIMIT;
+
+  return {
+    records: truncated ? records.slice(0, DATA_EXPORT_OPERATIONAL_RECORD_LIMIT) : records,
+    truncated,
+  };
+}
+
+function buildCommentAttachmentDownloadUrl(attachmentId: string): string {
+  return `/api/comments/attachments/${encodeURIComponent(attachmentId)}/download`;
+}
+
+function buildDocumentDownloadUrl(documentId: string): string {
+  return `/api/documents/file/${encodeURIComponent(documentId)}`;
+}
+
+function buildCommentAttachmentExport(attachment: JsonRecord): JsonRecord {
+  const { fileUrl: _fileUrl, ...safeAttachment } = attachment;
+  return {
+    ...safeAttachment,
+    downloadUrl:
+      typeof safeAttachment.id === 'string'
+        ? buildCommentAttachmentDownloadUrl(safeAttachment.id)
+        : undefined,
+  };
+}
+
+function buildCommentExport(comment: JsonRecord): JsonRecord {
+  return {
+    ...comment,
+    attachments: Array.isArray(comment.attachments)
+      ? comment.attachments.map((attachment) =>
+          attachment && typeof attachment === 'object'
+            ? buildCommentAttachmentExport(attachment as JsonRecord)
+            : attachment,
+        )
+      : comment.attachments,
+  };
+}
+
+function buildDocumentExport(document: JsonRecord): JsonRecord {
+  const { fileUrl: _fileUrl, ...safeDocument } = document;
+  return {
+    ...safeDocument,
+    downloadUrl:
+      typeof safeDocument.id === 'string' ? buildDocumentDownloadUrl(safeDocument.id) : undefined,
+  };
+}
+
+function getUrlOrigin(value: string): string | null {
+  try {
+    const url = new URL(value);
+    return url.origin;
+  } catch {
+    return null;
+  }
+}
+
+function countDelimitedRecipients(value: string | null): number {
+  if (!value) return 0;
+  return value
+    .split(/[;,]/)
+    .map((recipient) => recipient.trim())
+    .filter(Boolean).length;
 }
 
 export function createAccountPrivacyRouter({
@@ -204,7 +349,7 @@ export function createAccountPrivacyRouter({
             createdAt: true,
           },
           orderBy: { createdAt: 'desc' },
-          take: 1000,
+          take: DATA_EXPORT_OPERATIONAL_RECORD_LIMIT + 1,
         }),
         prisma.comment.findMany({
           where: { authorId: userId },
@@ -272,6 +417,7 @@ export function createAccountPrivacyRouter({
             createdAt: true,
           },
           orderBy: { createdAt: 'desc' },
+          take: DATA_EXPORT_OPERATIONAL_RECORD_LIMIT + 1,
         }),
         prisma.notificationEmailPreference.findUnique({
           where: { userId },
@@ -310,6 +456,7 @@ export function createAccountPrivacyRouter({
             createdAt: true,
           },
           orderBy: { createdAt: 'desc' },
+          take: DATA_EXPORT_OPERATIONAL_RECORD_LIMIT + 1,
         }),
         prisma.notificationAlert.findMany({
           where: { assignedToId: userId },
@@ -329,6 +476,7 @@ export function createAccountPrivacyRouter({
             escalatedTo: true,
           },
           orderBy: { createdAt: 'desc' },
+          take: DATA_EXPORT_OPERATIONAL_RECORD_LIMIT + 1,
         }),
         prisma.consentRecord.findMany({
           where: { userId },
@@ -409,6 +557,7 @@ export function createAccountPrivacyRouter({
             createdAt: true,
           },
           orderBy: { createdAt: 'desc' },
+          take: DATA_EXPORT_OPERATIONAL_RECORD_LIMIT + 1,
         }),
         prisma.syncQueue.findMany({
           where: { userId },
@@ -425,19 +574,39 @@ export function createAccountPrivacyRouter({
             conflictResolution: true,
           },
           orderBy: { createdAt: 'desc' },
+          take: DATA_EXPORT_OPERATIONAL_RECORD_LIMIT + 1,
         }),
       ]);
+
+      const limitedAuditLogs = limitOperationalRecords(auditLogs);
+      const limitedNotifications = limitOperationalRecords(notifications);
+      const limitedNotificationDigestItems = limitOperationalRecords(notificationDigestItems);
+      const limitedNotificationAlerts = limitOperationalRecords(notificationAlerts);
+      const limitedDocumentSignedUrlTokens = limitOperationalRecords(documentSignedUrlTokens);
+      const limitedSyncQueueItems = limitOperationalRecords(syncQueueItems);
 
       // Build the export data structure
       const exportData = {
         exportedAt: new Date().toISOString(),
-        exportVersion: '1.1',
+        exportVersion: '1.2',
+        exportLimits: {
+          operationalRecordLimit: DATA_EXPORT_OPERATIONAL_RECORD_LIMIT,
+          syncPayloadMaxChars: DATA_EXPORT_SYNC_PAYLOAD_MAX_CHARS,
+          truncatedCollections: {
+            activityLog: limitedAuditLogs.truncated,
+            notifications: limitedNotifications.truncated,
+            notificationDigestItems: limitedNotificationDigestItems.truncated,
+            notificationAlerts: limitedNotificationAlerts.truncated,
+            documentSignedUrlTokens: limitedDocumentSignedUrlTokens.truncated,
+            syncQueueItems: limitedSyncQueueItems.truncated,
+          },
+        },
         user: {
           id: user.id,
           email: user.email,
           fullName: user.fullName,
           phone: user.phone,
-          avatarUrl: user.avatarUrl,
+          hasAvatar: Boolean(user.avatarUrl),
           role: user.roleInCompany,
           emailVerified: user.emailVerified,
           emailVerifiedAt: user.emailVerifiedAt,
@@ -485,24 +654,44 @@ export function createAccountPrivacyRouter({
         })),
         testResults: testResults,
         lotsCreated: lotsCreated,
-        commentsAuthored: commentsAuthored,
-        uploadedDocuments: uploadedDocuments,
-        notifications: notifications,
+        commentsAuthored: commentsAuthored.map((comment) =>
+          buildCommentExport(comment as JsonRecord),
+        ),
+        uploadedDocuments: uploadedDocuments.map((document) =>
+          buildDocumentExport(document as JsonRecord),
+        ),
+        notifications: limitedNotifications.records,
         notificationEmailPreference: notificationEmailPreference,
-        notificationDigestItems: notificationDigestItems,
-        notificationAlerts: notificationAlerts,
+        notificationDigestItems: limitedNotificationDigestItems.records,
+        notificationAlerts: limitedNotificationAlerts.records,
         consentRecords: consentRecords,
         apiKeys: apiKeys,
-        pushSubscriptions: pushSubscriptions,
-        scheduledReports: scheduledReports,
-        webhookConfigsCreated: webhookConfigsCreated,
-        documentSignedUrlTokens: documentSignedUrlTokens,
-        syncQueueItems: syncQueueItems,
-        activityLog: auditLogs,
+        pushSubscriptions: pushSubscriptions.map(({ endpoint, ...subscription }) => ({
+          ...subscription,
+          endpointOrigin: getUrlOrigin(endpoint),
+        })),
+        scheduledReports: scheduledReports.map(({ recipients, ...report }) => ({
+          ...report,
+          recipientCount: countDelimitedRecipients(recipients),
+        })),
+        webhookConfigsCreated: webhookConfigsCreated.map((webhookConfig) => ({
+          ...webhookConfig,
+          url: sanitizeUrlValueForLog(webhookConfig.url),
+        })),
+        documentSignedUrlTokens: limitedDocumentSignedUrlTokens.records,
+        syncQueueItems: limitedSyncQueueItems.records.map(({ payload, ...item }) => ({
+          ...item,
+          payload: sanitizeStoredPayload(payload),
+        })),
+        activityLog: limitedAuditLogs.records,
       };
 
       // Set headers for file download
       res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Cache-Control', 'private, no-store, max-age=0');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Referrer-Policy', 'no-referrer');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
       res.setHeader(
         'Content-Disposition',
         `attachment; filename="${getSafeDataExportFilename(user.email)}"`,

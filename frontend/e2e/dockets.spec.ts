@@ -2,6 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { E2E_ADMIN_USER, E2E_PROJECT_ID, mockAuthenticatedUserState } from './helpers';
 
 const E2E_DOCKET_ID = 'e2e-docket';
+type DocketStatus = 'draft' | 'pending_approval' | 'approved' | 'rejected' | 'queried';
 
 type SeededDocketsApiOptions = {
   failDocketLoadsUntil?: number;
@@ -20,7 +21,11 @@ const E2E_SUBCONTRACTOR_USER = {
   hasSubcontractorPortalAccess: true,
 };
 
-function buildDocket(status: 'pending_approval' | 'approved' = 'pending_approval') {
+function buildDocket(
+  status: DocketStatus = 'pending_approval',
+  overrides: { foremanNotes?: string | null; notes?: string | null } = {},
+) {
+  const isApproved = status === 'approved';
   return {
     id: E2E_DOCKET_ID,
     docketNumber: 'DKT-E2E-001',
@@ -28,26 +33,33 @@ function buildDocket(status: 'pending_approval' | 'approved' = 'pending_approval
     subcontractorId: 'e2e-subcontractor-company',
     date: '2026-01-15',
     status,
-    notes: 'E2E seeded docket',
+    notes: overrides.notes ?? 'E2E seeded docket',
     labourHours: 8,
     plantHours: 3,
     totalLabourSubmitted: 8,
-    totalLabourApproved: status === 'approved' ? 8 : 0,
+    totalLabourApproved: isApproved ? 8 : 0,
     totalPlantSubmitted: 3,
-    totalPlantApproved: status === 'approved' ? 3 : 0,
+    totalPlantApproved: isApproved ? 3 : 0,
     submittedAt: '2026-01-15T05:00:00.000Z',
-    approvedAt: status === 'approved' ? '2026-01-15T06:00:00.000Z' : null,
-    foremanNotes: status === 'approved' ? 'Approved in E2E' : null,
+    approvedAt: isApproved ? '2026-01-15T06:00:00.000Z' : null,
+    foremanNotes: overrides.foremanNotes ?? (isApproved ? 'Approved in E2E' : null),
   };
 }
 
 async function mockSeededDocketsApi(page: Page, options: SeededDocketsApiOptions = {}) {
-  let approved = false;
+  let docketStatus: DocketStatus = 'pending_approval';
+  let foremanNotes: string | null = null;
   let createRequest: unknown;
   let createRequestCount = 0;
   let approveRequest: unknown;
   let approveRequestCount = 0;
+  let rejectRequest: unknown;
+  let rejectRequestCount = 0;
+  let queryRequest: unknown;
+  let queryRequestCount = 0;
   let docketLoadCount = 0;
+  let projectRequestCount = 0;
+  let failNextProjectLookup = false;
 
   await page.route('**/api/**', async (route) => {
     const url = new URL(route.request().url());
@@ -70,7 +82,7 @@ async function mockSeededDocketsApi(page: Page, options: SeededDocketsApiOptions
         return;
       }
       await json({
-        dockets: options.dockets ?? [buildDocket(approved ? 'approved' : 'pending_approval')],
+        dockets: options.dockets ?? [buildDocket(docketStatus, { foremanNotes })],
       });
       return;
     }
@@ -90,6 +102,12 @@ async function mockSeededDocketsApi(page: Page, options: SeededDocketsApiOptions
     }
 
     if (url.pathname === `/api/projects/${E2E_PROJECT_ID}`) {
+      projectRequestCount += 1;
+      if (failNextProjectLookup) {
+        failNextProjectLookup = false;
+        await json({ message: 'Project metadata unavailable' }, 500);
+        return;
+      }
       await json({
         project: {
           id: E2E_PROJECT_ID,
@@ -113,9 +131,10 @@ async function mockSeededDocketsApi(page: Page, options: SeededDocketsApiOptions
     }
 
     if (url.pathname === `/api/dockets/${E2E_DOCKET_ID}`) {
+      const isApproved = docketStatus === 'approved';
       await json({
         docket: {
-          ...buildDocket(approved ? 'approved' : 'pending_approval'),
+          ...buildDocket(docketStatus, { foremanNotes }),
           labourEntries: [
             {
               id: 'e2e-labour-entry',
@@ -123,10 +142,10 @@ async function mockSeededDocketsApi(page: Page, options: SeededDocketsApiOptions
               startTime: '07:00',
               finishTime: '15:00',
               submittedHours: 8,
-              approvedHours: approved ? 8 : 0,
+              approvedHours: isApproved ? 8 : 0,
               hourlyRate: 90,
               submittedCost: 720,
-              approvedCost: approved ? 720 : 0,
+              approvedCost: isApproved ? 720 : 0,
             },
           ],
           plantEntries: [
@@ -137,7 +156,7 @@ async function mockSeededDocketsApi(page: Page, options: SeededDocketsApiOptions
               wetOrDry: 'wet',
               hourlyRate: 160,
               submittedCost: 480,
-              approvedCost: approved ? 480 : 0,
+              approvedCost: isApproved ? 480 : 0,
             },
           ],
         },
@@ -151,8 +170,28 @@ async function mockSeededDocketsApi(page: Page, options: SeededDocketsApiOptions
       if (options.approveDelayMs) {
         await delay(options.approveDelayMs);
       }
-      approved = true;
-      await json({ docket: buildDocket('approved') });
+      docketStatus = 'approved';
+      foremanNotes =
+        (approveRequest as { foremanNotes?: string | null } | null)?.foremanNotes ?? null;
+      await json({ docket: buildDocket('approved', { foremanNotes }) });
+      return;
+    }
+
+    if (url.pathname === `/api/dockets/${E2E_DOCKET_ID}/reject`) {
+      rejectRequest = route.request().postDataJSON();
+      rejectRequestCount += 1;
+      docketStatus = 'rejected';
+      foremanNotes = (rejectRequest as { reason?: string } | null)?.reason ?? null;
+      await json({ docket: buildDocket('rejected', { foremanNotes }) });
+      return;
+    }
+
+    if (url.pathname === `/api/dockets/${E2E_DOCKET_ID}/query`) {
+      queryRequest = route.request().postDataJSON();
+      queryRequestCount += 1;
+      docketStatus = 'queried';
+      foremanNotes = (queryRequest as { questions?: string } | null)?.questions ?? null;
+      await json({ docket: buildDocket('queried', { foremanNotes }) });
       return;
     }
 
@@ -166,13 +205,29 @@ async function mockSeededDocketsApi(page: Page, options: SeededDocketsApiOptions
     getCreateRequestCount: () => createRequestCount,
     getApproveRequest: () => approveRequest,
     getApproveRequestCount: () => approveRequestCount,
+    getRejectRequest: () => rejectRequest,
+    getRejectRequestCount: () => rejectRequestCount,
+    getQueryRequest: () => queryRequest,
+    getQueryRequestCount: () => queryRequestCount,
     getDocketLoadCount: () => docketLoadCount,
+    getProjectRequestCount: () => projectRequestCount,
+    failNextProjectLookup: () => {
+      failNextProjectLookup = true;
+    },
   };
 }
 
-async function mockSubcontractorDocketEditApi(page: Page) {
+async function mockSubcontractorDocketEditApi(
+  page: Page,
+  options: { status?: DocketStatus; foremanNotes?: string | null; notes?: string | null } = {},
+) {
+  let docketStatus = options.status ?? 'draft';
+  let docketNotes = options.notes ?? 'E2E seeded docket';
   let plantRequest: unknown;
   let plantRequestCount = 0;
+  let respondRequest: unknown;
+  let respondRequestCount = 0;
+  let submitRequestCount = 0;
 
   await page.route('**/api/**', async (route) => {
     const url = new URL(route.request().url());
@@ -243,17 +298,75 @@ async function mockSubcontractorDocketEditApi(page: Page) {
       return;
     }
 
+    if (url.pathname === '/api/dockets') {
+      await json({
+        dockets: [
+          buildDocket(docketStatus, { foremanNotes: options.foremanNotes, notes: docketNotes }),
+        ],
+      });
+      return;
+    }
+
     if (url.pathname === `/api/dockets/${E2E_DOCKET_ID}` && route.request().method() === 'GET') {
       await json({
         docket: {
-          ...buildDocket('pending_approval'),
-          status: 'draft',
-          labourEntries: [],
+          ...buildDocket(docketStatus, {
+            foremanNotes: options.foremanNotes,
+            notes: docketNotes,
+          }),
+          labourEntries:
+            docketStatus === 'queried' || docketStatus === 'rejected'
+              ? [
+                  {
+                    id: 'e2e-labour-entry',
+                    employee: { id: 'e2e-employee', name: 'E2E Labourer', role: 'Operator' },
+                    startTime: '07:00',
+                    finishTime: '15:00',
+                    submittedHours: 8,
+                    hourlyRate: 90,
+                    submittedCost: 720,
+                    lotAllocations: [{ lotId: 'e2e-lot', lotNumber: 'LOT-E2E-001', hours: 8 }],
+                  },
+                ]
+              : [],
           plantEntries: [],
-          totalLabourSubmitted: 0,
+          totalLabourSubmitted: docketStatus === 'queried' || docketStatus === 'rejected' ? 720 : 0,
           totalPlantSubmitted: 0,
         },
       });
+      return;
+    }
+
+    if (url.pathname === `/api/dockets/${E2E_DOCKET_ID}` && route.request().method() === 'PATCH') {
+      const body = route.request().postDataJSON() as { notes?: string };
+      docketNotes = body.notes ?? docketNotes;
+      await json({
+        docket: buildDocket(docketStatus, {
+          foremanNotes: options.foremanNotes,
+          notes: docketNotes,
+        }),
+      });
+      return;
+    }
+
+    if (
+      url.pathname === `/api/dockets/${E2E_DOCKET_ID}/respond` &&
+      route.request().method() === 'POST'
+    ) {
+      respondRequest = route.request().postDataJSON();
+      respondRequestCount += 1;
+      docketStatus = 'pending_approval';
+      await json({ docket: buildDocket('pending_approval', { notes: docketNotes }) });
+      return;
+    }
+
+    if (
+      url.pathname === `/api/dockets/${E2E_DOCKET_ID}/submit` &&
+      route.request().method() === 'POST'
+    ) {
+      submitRequestCount += 1;
+      docketStatus = 'pending_approval';
+      await json({ docket: buildDocket('pending_approval', { notes: docketNotes }) });
       return;
     }
 
@@ -302,6 +415,9 @@ async function mockSubcontractorDocketEditApi(page: Page) {
   return {
     getPlantRequest: () => plantRequest,
     getPlantRequestCount: () => plantRequestCount,
+    getRespondRequest: () => respondRequest,
+    getRespondRequestCount: () => respondRequestCount,
+    getSubmitRequestCount: () => submitRequestCount,
   };
 }
 
@@ -366,6 +482,60 @@ test.describe('Dockets seeded approval contract', () => {
     await expect(page.getByRole('dialog', { name: 'Approve Docket' })).toBeVisible();
   });
 
+  test('rejects a pending docket with a required reason and updates the row status', async ({
+    page,
+  }) => {
+    const api = await mockSeededDocketsApi(page);
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/dockets`);
+
+    const docketRow = page.getByRole('row').filter({ hasText: 'DKT-E2E-001' });
+    await expect(docketRow).toBeVisible();
+    await docketRow.getByRole('button', { name: 'Reject' }).click();
+
+    const modal = page.getByRole('dialog', { name: 'Reject Docket' });
+    await expect(modal).toBeVisible();
+    await expect(modal.getByRole('button', { name: 'Reject' })).toBeDisabled();
+
+    await modal.getByLabel(/Rejection Reason/).fill('  Missing signed dayworks docket  ');
+    await modal.getByRole('button', { name: 'Reject' }).click();
+
+    await expect.poll(() => api.getRejectRequestCount()).toBe(1);
+    expect(api.getRejectRequest()).toEqual({
+      reason: 'Missing signed dayworks docket',
+    });
+    await expect(page.getByRole('button', { name: 'Pending (0)' })).toBeVisible();
+    await expect(
+      page.getByRole('row').filter({ hasText: 'DKT-E2E-001' }).getByText('Rejected'),
+    ).toBeVisible();
+  });
+
+  test('queries a pending docket and records the foreman question payload', async ({ page }) => {
+    const api = await mockSeededDocketsApi(page);
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/dockets`);
+
+    const docketRow = page.getByRole('row').filter({ hasText: 'DKT-E2E-001' });
+    await expect(docketRow).toBeVisible();
+    await docketRow.getByRole('button', { name: 'Query' }).click();
+
+    const modal = page.getByRole('dialog', { name: 'Query Docket' });
+    await expect(modal).toBeVisible();
+    await expect(modal.getByRole('button', { name: 'Send Query' })).toBeDisabled();
+
+    await modal.getByLabel(/Query Details/).fill('  Please confirm the cartage hours  ');
+    await modal.getByRole('button', { name: 'Send Query' }).click();
+
+    await expect.poll(() => api.getQueryRequestCount()).toBe(1);
+    expect(api.getQueryRequest()).toEqual({
+      questions: 'Please confirm the cartage hours',
+    });
+    await expect(page.getByRole('button', { name: 'Pending (0)' })).toBeVisible();
+    await expect(
+      page.getByRole('row').filter({ hasText: 'DKT-E2E-001' }).getByText('Queried'),
+    ).toBeVisible();
+  });
+
   test('exports dockets with a project-name CSV filename', async ({ page }) => {
     await mockSeededDocketsApi(page);
 
@@ -381,6 +551,45 @@ test.describe('Dockets seeded approval contract', () => {
       /^dockets-e2e-highway-upgrade-\d{4}-\d{2}-\d{2}\.csv$/,
     );
     expect(download.suggestedFilename()).not.toContain(E2E_PROJECT_ID);
+    await download.delete();
+  });
+
+  test('downloads a docket PDF from the approvals table', async ({ page }) => {
+    await mockSeededDocketsApi(page);
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/dockets`);
+
+    const docketRow = page.getByRole('row').filter({ hasText: 'DKT-E2E-001' });
+    await expect(docketRow).toBeVisible();
+
+    const downloadPromise = page.waitForEvent('download');
+    await docketRow.getByRole('button', { name: 'Print docket' }).click();
+    const download = await downloadPromise;
+
+    expect(download.suggestedFilename()).toBe('Docket-DKT-E2E-001-pending_approval.pdf');
+    await expect(page.getByText('Docket PDF downloaded')).toBeVisible();
+    await download.delete();
+  });
+
+  test('still downloads a docket PDF when project metadata lookup fails during print', async ({
+    page,
+  }) => {
+    const api = await mockSeededDocketsApi(page);
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/dockets`);
+
+    const docketRow = page.getByRole('row').filter({ hasText: 'DKT-E2E-001' });
+    await expect(docketRow).toBeVisible();
+    const projectRequestsBeforePrint = api.getProjectRequestCount();
+    api.failNextProjectLookup();
+
+    const downloadPromise = page.waitForEvent('download');
+    await docketRow.getByRole('button', { name: 'Print docket' }).click();
+    const download = await downloadPromise;
+
+    expect(download.suggestedFilename()).toBe('Docket-DKT-E2E-001-pending_approval.pdf');
+    await expect(page.getByText('Docket PDF downloaded')).toBeVisible();
+    expect(api.getProjectRequestCount()).toBeGreaterThan(projectRequestsBeforePrint);
     await download.delete();
   });
 
@@ -482,6 +691,56 @@ test.describe('Dockets seeded approval contract', () => {
 });
 
 test.describe('Subcontractor portal docket editing', () => {
+  test('shows a rejected docket reason and lets the subcontractor resubmit it', async ({
+    page,
+  }) => {
+    const api = await mockSubcontractorDocketEditApi(page, {
+      status: 'rejected',
+      foremanNotes: 'Missing signed dayworks docket',
+    });
+
+    await page.goto(
+      `/subcontractor-portal/docket/${E2E_DOCKET_ID}?projectId=${E2E_PROJECT_ID}&subcontractorCompanyId=e2e-subcontractor-company`,
+    );
+
+    await expect(page.getByText(/Rejection reason/i)).toBeVisible();
+    await expect(page.getByText('Missing signed dayworks docket')).toBeVisible();
+
+    const resubmitButton = page.getByRole('button', { name: /Resubmit for Approval/i });
+    await expect(resubmitButton).toBeEnabled();
+    await resubmitButton.click();
+
+    await expect.poll(() => api.getSubmitRequestCount()).toBe(1);
+  });
+
+  test('responds to a queried docket and resubmits it for approval', async ({ page }) => {
+    const api = await mockSubcontractorDocketEditApi(page, {
+      status: 'queried',
+      foremanNotes: 'Please confirm the cartage hours',
+    });
+
+    await page.goto(
+      `/subcontractor-portal/docket/${E2E_DOCKET_ID}?projectId=${E2E_PROJECT_ID}&subcontractorCompanyId=e2e-subcontractor-company`,
+    );
+
+    await expect(page.getByText(/Query from foreman/i)).toBeVisible();
+    await expect(page.getByText('Please confirm the cartage hours')).toBeVisible();
+
+    const respondButton = page.getByRole('button', { name: /Respond & Resubmit/i });
+    await expect(respondButton).toBeDisabled();
+
+    await page
+      .getByPlaceholder('Type your response to the query...')
+      .fill('  Cartage hours corrected to 6.5.  ');
+    await expect(respondButton).toBeEnabled();
+    await respondButton.click();
+
+    await expect.poll(() => api.getRespondRequestCount()).toBe(1);
+    expect(api.getRespondRequest()).toEqual({
+      response: 'Cartage hours corrected to 6.5.',
+    });
+  });
+
   test('rejects encoded plant hours before adding docket entries', async ({ page }) => {
     const api = await mockSubcontractorDocketEditApi(page);
 

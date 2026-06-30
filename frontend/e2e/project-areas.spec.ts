@@ -13,6 +13,7 @@ type ProjectArea = {
 type ProjectAreasApiOptions = {
   failAreaLoadsUntil?: number;
   saveDelayMs?: number;
+  projectOverrides?: Record<string, unknown>;
 };
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -82,6 +83,8 @@ async function mockProjectAreasApi(page: Page, options: ProjectAreasApiOptions =
           name: 'E2E Highway Upgrade',
           projectNumber: 'E2E-001',
           status: 'active',
+          currentUserRole: 'admin',
+          ...(options.projectOverrides ?? {}),
         },
       });
       return;
@@ -302,5 +305,22 @@ test.describe('Project areas seeded admin contract', () => {
       chainageStart: 0,
       chainageEnd: 99.5,
     });
+  });
+
+  test('shows archived project areas as read-only', async ({ page }) => {
+    await mockProjectAreasApi(page, {
+      projectOverrides: { status: 'archived', currentUserRole: 'admin' },
+    });
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/areas`);
+
+    await expect(page.getByRole('heading', { name: 'Project Areas' })).toBeVisible();
+    await expect(
+      page.getByText('Archived projects are read-only. Restore the project before editing areas.'),
+    ).toBeVisible();
+    await expect(page.getByText('Central Works')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Add Area' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Edit Central Works' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Delete South Zone' })).toHaveCount(0);
   });
 });

@@ -6,8 +6,8 @@ import {
 } from './companyWebhooksData';
 
 describe('formatWebhookEvents', () => {
-  it('summarises the wildcard subscription as all events', () => {
-    expect(formatWebhookEvents(['*'])).toBe('All events');
+  it('summarises the wildcard subscription as all supported events', () => {
+    expect(formatWebhookEvents(['*'])).toBe('All supported events');
   });
 
   it('lists specific events', () => {

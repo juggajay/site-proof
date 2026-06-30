@@ -67,6 +67,7 @@ export interface DashboardPDFData {
 }
 
 export interface ITPChecklistItem {
+  id?: string;
   order: number;
   description: string;
   category: string;
@@ -79,6 +80,11 @@ export interface ITPChecklistItem {
 export interface ITPCompletion {
   checklistItemId: string;
   isCompleted: boolean;
+  isNotApplicable?: boolean;
+  isFailed?: boolean;
+  isPendingVerification?: boolean;
+  isRejected?: boolean;
+  verificationStatus?: string | null;
   notes: string | null;
   completedAt: string | null;
   completedBy: { fullName: string | null; email: string } | null;
@@ -113,6 +119,9 @@ export interface HoldPointRelease {
   checklistItemDescription: string;
   releasedAt: string;
   releasedBy: { fullName: string | null; email: string } | null;
+  releasedByName?: string | null;
+  releasedByOrg?: string | null;
+  releaseMethod?: string | null;
 }
 
 export interface ConformanceReportData {
@@ -170,6 +179,8 @@ export interface HPEvidencePackageData {
     scheduledDate: string | null;
     releasedAt: string | null;
     releasedByName: string | null;
+    releasedByOrg?: string | null;
+    releaseMethod?: string | null;
     releaseNotes: string | null;
   };
   lot: {
@@ -245,6 +256,12 @@ export interface HPEvidencePackageData {
 
 export interface ClaimItpCompletion {
   isCompleted?: boolean;
+  isNotApplicable?: boolean;
+  attachments?: {
+    id: string;
+    documentId: string;
+    document: ClaimEvidenceDocument | null;
+  }[];
 }
 
 export interface ClaimHoldPoint {
@@ -256,6 +273,7 @@ export interface ClaimTestResult {
   resultValue: number | string | null;
   resultUnit?: string | null;
   passFail?: string | null;
+  status?: string | null;
 }
 
 export interface ClaimNcr {
@@ -318,6 +336,8 @@ export interface ClaimEvidencePackageData {
     summary: {
       testResultCount: number;
       passedTestCount: number;
+      failedTestCount?: number;
+      pendingTestCount?: number;
       ncrCount: number;
       openNcrCount: number;
       photoCount: number;
@@ -329,6 +349,8 @@ export interface ClaimEvidencePackageData {
     totalClaimedAmount: number;
     totalTestResults: number;
     totalPassedTests: number;
+    totalFailedTests?: number;
+    totalPendingTests?: number;
     totalNCRs: number;
     totalOpenNCRs: number;
     totalPhotos: number;
@@ -368,20 +390,34 @@ export interface NCRDetailData {
     category: string;
     severity: 'minor' | 'major';
     status: string;
+    rootCauseCategory?: string | null;
     rootCause?: string | null;
     proposedAction?: string | null;
     actionTaken?: string | null;
     preventativeMeasures?: string | null;
+    verificationNotes?: string | null;
     lessonsLearned?: string | null; // Feature #474
     qmApprovalRequired: boolean;
     qmApprovedAt: string | null;
-    qmApprovedBy?: { fullName: string; email: string } | null;
+    qmApprovedBy?: { id?: string; fullName: string; email: string } | null;
     raisedBy: { fullName: string; email: string };
     responsibleUser?: { fullName: string; email: string } | null;
+    responsibleSubcontractor?: { companyName: string } | null;
     dueDate?: string | null;
     closedAt?: string | null;
     closedBy?: { fullName: string; email: string } | null;
     createdAt: string;
+    evidence?: Array<{
+      id: string;
+      evidenceType: string;
+      uploadedAt?: string | null;
+      document: {
+        id: string;
+        filename: string;
+        mimeType?: string | null;
+        uploadedAt?: string | null;
+      } | null;
+    }>;
   };
   project: {
     name: string;
@@ -504,9 +540,9 @@ export interface DocketDetailPDFData {
     notes: string | null;
     labourHours: number;
     plantHours: number;
-    totalLabourSubmitted: number;
+    totalLabourSubmitted: number | null;
     totalLabourApproved: number;
-    totalPlantSubmitted: number;
+    totalPlantSubmitted: number | null;
     totalPlantApproved: number;
     totalLabourApprovedCost?: number | null;
     totalPlantApprovedCost?: number | null;

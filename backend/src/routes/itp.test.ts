@@ -1474,6 +1474,180 @@ describe('ITP Completion Attachments', () => {
     expect(Number(updatedDocument.gpsLongitude)).toBeCloseTo(151.2099, 5);
   });
 
+  it('should list and delete unlocked attachment links without deleting the document', async () => {
+    const suffix = Date.now();
+    const attachmentDocument = await prisma.document.create({
+      data: {
+        projectId,
+        lotId,
+        documentType: 'photo',
+        category: 'itp_evidence',
+        filename: `list-delete-evidence-${suffix}.jpg`,
+        fileUrl: `/uploads/documents/list-delete-evidence-${suffix}.jpg`,
+        fileSize: 1024,
+        mimeType: 'image/jpeg',
+        uploadedById: userId,
+        caption: 'List/delete evidence photo',
+      },
+    });
+    let attachmentId: string | null = null;
+
+    try {
+      const attachRes = await request(app)
+        .post(`/api/itp/completions/${completionId}/attachments`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ documentId: attachmentDocument.id });
+
+      expect(attachRes.status).toBe(201);
+      attachmentId = String(attachRes.body.attachment.id);
+      const linkedAttachmentId = attachmentId;
+
+      const listRes = await request(app)
+        .get(`/api/itp/completions/${completionId}/attachments`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(listRes.status).toBe(200);
+      expect(listRes.body.attachments).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: linkedAttachmentId,
+            documentId: attachmentDocument.id,
+            document: expect.not.objectContaining({ fileUrl: expect.any(String) }),
+          }),
+        ]),
+      );
+
+      const deleteRes = await request(app)
+        .delete(`/api/itp/completions/${completionId}/attachments/${linkedAttachmentId}`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(deleteRes.status).toBe(200);
+      expect(deleteRes.body).toEqual({ success: true });
+      await expect(
+        prisma.iTPCompletionAttachment.findUnique({ where: { id: linkedAttachmentId } }),
+      ).resolves.toBeNull();
+      await expect(
+        prisma.document.findUnique({ where: { id: attachmentDocument.id } }),
+      ).resolves.not.toBeNull();
+    } finally {
+      if (attachmentId) {
+        await prisma.iTPCompletionAttachment.deleteMany({ where: { id: attachmentId } });
+      }
+      await prisma.document.deleteMany({ where: { id: attachmentDocument.id } });
+    }
+  });
+
+  it('should reject evidence attachment changes once a completion is verified or not applicable', async () => {
+    const lockedStates = [
+      {
+        label: 'verified',
+        status: 'completed',
+        verificationStatus: 'verified',
+      },
+      {
+        label: 'not-applicable',
+        status: 'not_applicable',
+        verificationStatus: 'none',
+      },
+    ];
+
+    for (const lockedState of lockedStates) {
+      const suffix = `${lockedState.label}-${Date.now()}`;
+      const addDocument = await prisma.document.create({
+        data: {
+          projectId,
+          lotId,
+          documentType: 'photo',
+          category: 'itp_evidence',
+          filename: `locked-add-${suffix}.jpg`,
+          fileUrl: `/uploads/documents/locked-add-${suffix}.jpg`,
+          fileSize: 1024,
+          mimeType: 'image/jpeg',
+          uploadedById: userId,
+          caption: 'Original locked evidence caption',
+        },
+      });
+      const linkedDocument = await prisma.document.create({
+        data: {
+          projectId,
+          lotId,
+          documentType: 'photo',
+          category: 'itp_evidence',
+          filename: `locked-linked-${suffix}.jpg`,
+          fileUrl: `/uploads/documents/locked-linked-${suffix}.jpg`,
+          fileSize: 1024,
+          mimeType: 'image/jpeg',
+          uploadedById: userId,
+        },
+      });
+      const attachment = await prisma.iTPCompletionAttachment.create({
+        data: {
+          completionId,
+          documentId: linkedDocument.id,
+        },
+      });
+
+      try {
+        await prisma.iTPCompletion.update({
+          where: { id: completionId },
+          data: {
+            status: lockedState.status,
+            completedById: userId,
+            completedAt: new Date('2026-01-01T00:00:00.000Z'),
+            verificationStatus: lockedState.verificationStatus,
+            verifiedAt:
+              lockedState.verificationStatus === 'verified'
+                ? new Date('2026-01-02T00:00:00.000Z')
+                : null,
+            verifiedById: lockedState.verificationStatus === 'verified' ? userId : null,
+          },
+        });
+
+        const addRes = await request(app)
+          .post(`/api/itp/completions/${completionId}/attachments`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            documentId: addDocument.id,
+            caption: 'Should not change locked evidence',
+            gpsLatitude: -33.865143,
+          });
+
+        expect(addRes.status).toBe(409);
+        expect(addRes.body.error.message).toContain('ITP evidence cannot be changed');
+        await expect(
+          prisma.iTPCompletionAttachment.findFirst({
+            where: { completionId, documentId: addDocument.id },
+          }),
+        ).resolves.toBeNull();
+        const unchangedDocument = await prisma.document.findUniqueOrThrow({
+          where: { id: addDocument.id },
+        });
+        expect(unchangedDocument.caption).toBe('Original locked evidence caption');
+        expect(unchangedDocument.gpsLatitude).toBeNull();
+
+        const deleteRes = await request(app)
+          .delete(`/api/itp/completions/${completionId}/attachments/${attachment.id}`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(deleteRes.status).toBe(409);
+        expect(deleteRes.body.error.message).toContain('ITP evidence cannot be changed');
+        await expect(
+          prisma.iTPCompletionAttachment.findUnique({ where: { id: attachment.id } }),
+        ).resolves.not.toBeNull();
+      } finally {
+        await prisma.iTPCompletionAttachment.deleteMany({
+          where: {
+            OR: [{ id: attachment.id }, { documentId: addDocument.id }],
+          },
+        });
+        await prisma.document.deleteMany({
+          where: { id: { in: [addDocument.id, linkedDocument.id] } },
+        });
+        await resetCompletionWorkflowState();
+      }
+    }
+  });
+
   it('should enforce one attachment link per completion and document at the database level', async () => {
     const timestamp = Date.now();
     const duplicateGuardDocument = await prisma.document.create({
@@ -2097,6 +2271,73 @@ describe('ITP Completion Attachments', () => {
     }
   });
 
+  it.each(['pending', 'failed'] as const)(
+    'should reject verification when the completion status is %s',
+    async (status) => {
+      try {
+        await prisma.iTPCompletion.update({
+          where: { id: completionId },
+          data: {
+            status,
+            completedById: completionAuthorUserId,
+            completedAt: status === 'failed' ? new Date('2026-01-01T00:00:00.000Z') : null,
+            verificationStatus: 'pending_verification',
+            verifiedAt: null,
+            verifiedById: null,
+            verificationNotes: null,
+          },
+        });
+
+        const res = await request(app)
+          .post(`/api/itp/completions/${completionId}/verify`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(409);
+        expect(res.body.error.message).toContain('Only completed or not applicable');
+
+        const afterVerify = await prisma.iTPCompletion.findUniqueOrThrow({
+          where: { id: completionId },
+          select: { status: true, verificationStatus: true, verifiedAt: true, verifiedById: true },
+        });
+        expect(afterVerify).toEqual({
+          status,
+          verificationStatus: 'pending_verification',
+          verifiedAt: null,
+          verifiedById: null,
+        });
+      } finally {
+        await resetCompletionWorkflowState();
+      }
+    },
+  );
+
+  it('should allow verification when a not applicable completion is pending review', async () => {
+    try {
+      await prisma.iTPCompletion.update({
+        where: { id: completionId },
+        data: {
+          status: 'not_applicable',
+          completedById: completionAuthorUserId,
+          completedAt: new Date('2026-01-01T00:00:00.000Z'),
+          verificationStatus: 'pending_verification',
+          verifiedAt: null,
+          verifiedById: null,
+          verificationNotes: null,
+        },
+      });
+
+      const res = await request(app)
+        .post(`/api/itp/completions/${completionId}/verify`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.completion.status).toBe('not_applicable');
+      expect(res.body.completion.verificationStatus).toBe('verified');
+    } finally {
+      await resetCompletionWorkflowState();
+    }
+  });
+
   it('should write audit context when verifying a pending ITP completion', async () => {
     await prisma.auditLog.deleteMany({
       where: { entityId: completionId, action: AuditAction.ITP_ITEM_VERIFIED },
@@ -2342,38 +2583,27 @@ describe('ITP Completion Attachments', () => {
     }
   });
 
-  it('should create new attachment records from stored document references', async () => {
+  it('should reject client-supplied local document upload paths for new attachment records', async () => {
     const filename = `stored-path-evidence-${Date.now()}.jpg`;
-    let createdDocumentId: string | undefined;
 
-    try {
-      const res = await request(app)
-        .post(`/api/itp/completions/${completionId}/attachments`)
-        .set('Authorization', `Bearer ${authToken}`)
-        .send({
-          filename,
-          fileUrl: `/uploads/documents/${filename}`,
-          mimeType: 'image/jpeg',
-          caption: 'Stored path evidence photo',
-        });
-
-      expect(res.status).toBe(201);
-      expect(res.body.attachment.document.fileUrl).toBeUndefined();
-      createdDocumentId = res.body.attachment.documentId;
-
-      const storedDocument = await prisma.document.findUniqueOrThrow({
-        where: { id: createdDocumentId },
-        select: { fileUrl: true },
+    const res = await request(app)
+      .post(`/api/itp/completions/${completionId}/attachments`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({
+        filename,
+        fileUrl: `/uploads/documents/${filename}`,
+        mimeType: 'image/jpeg',
+        caption: 'Stored path evidence photo',
       });
-      expect(storedDocument.fileUrl).toBe(`/uploads/documents/${filename}`);
-    } finally {
-      if (createdDocumentId) {
-        await prisma.iTPCompletionAttachment.deleteMany({
-          where: { completionId, documentId: createdDocumentId },
-        });
-        await prisma.document.deleteMany({ where: { id: createdDocumentId } });
-      }
-    }
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toContain('documentId');
+
+    const createdDocument = await prisma.document.findFirst({
+      where: { projectId, filename },
+      select: { id: true },
+    });
+    expect(createdDocument).toBeNull();
   });
 
   it('should create new attachment records from Supabase document storage references', async () => {
@@ -2507,6 +2737,111 @@ describe('ITP Completion Attachments', () => {
 
     expect(res.status).toBe(400);
     expect(res.body.error.message).toContain('same project');
+  });
+
+  it('should reject existing documents the user cannot normally read', async () => {
+    const suffix = Date.now();
+    const originalInstance = await prisma.iTPInstance.findUniqueOrThrow({
+      where: { id: instanceId },
+      select: { templateSnapshot: true },
+    });
+    const restrictedDocument = await prisma.document.create({
+      data: {
+        projectId,
+        lotId,
+        documentType: 'test_certificate',
+        category: 'test_results',
+        filename: `restricted-test-certificate-${suffix}.pdf`,
+        fileUrl: `/uploads/documents/restricted-test-certificate-${suffix}.pdf`,
+        fileSize: 1024,
+        mimeType: 'application/pdf',
+        uploadedById: userId,
+      },
+    });
+    const subcontractorCompany = await prisma.subcontractorCompany.create({
+      data: {
+        projectId,
+        companyName: `ITP Restricted Document Subcontractor ${suffix}`,
+        status: 'approved',
+        portalAccess: { itps: true, testResults: false },
+      },
+    });
+    const subcontractor = await registerTestUser(
+      'itp-restricted-document-subcontractor',
+      'ITP Restricted Document Subcontractor',
+    );
+
+    await prisma.user.update({
+      where: { id: subcontractor.userId },
+      data: { companyId: null, roleInCompany: 'subcontractor' },
+    });
+    await prisma.subcontractorUser.create({
+      data: {
+        userId: subcontractor.userId,
+        subcontractorCompanyId: subcontractorCompany.id,
+        role: 'user',
+      },
+    });
+    await prisma.lotSubcontractorAssignment.create({
+      data: {
+        projectId,
+        lotId,
+        subcontractorCompanyId: subcontractorCompany.id,
+        status: 'active',
+        canCompleteITP: true,
+      },
+    });
+
+    try {
+      await prisma.iTPInstance.update({
+        where: { id: instanceId },
+        data: {
+          templateSnapshot: JSON.stringify({
+            id: templateId,
+            name: 'Attachment Test ITP',
+            checklistItems: [
+              {
+                id: checklistItemId,
+                description: 'Upload evidence photo',
+                pointType: 'verification',
+                responsibleParty: 'contractor',
+                sequenceNumber: 1,
+              },
+            ],
+          }),
+        },
+      });
+
+      const res = await request(app)
+        .post(`/api/itp/completions/${completionId}/attachments`)
+        .set('Authorization', `Bearer ${subcontractor.token}`)
+        .send({ documentId: restrictedDocument.id });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.message).toContain('access to this ITP attachment document');
+      await expect(
+        prisma.iTPCompletionAttachment.count({
+          where: { completionId, documentId: restrictedDocument.id },
+        }),
+      ).resolves.toBe(0);
+    } finally {
+      await prisma.iTPCompletionAttachment.deleteMany({
+        where: { documentId: restrictedDocument.id },
+      });
+      await prisma.lotSubcontractorAssignment.deleteMany({
+        where: { subcontractorCompanyId: subcontractorCompany.id },
+      });
+      await prisma.subcontractorUser.deleteMany({ where: { userId: subcontractor.userId } });
+      await prisma.subcontractorCompany
+        .delete({ where: { id: subcontractorCompany.id } })
+        .catch(() => {});
+      await prisma.document.deleteMany({ where: { id: restrictedDocument.id } });
+      await prisma.iTPInstance.update({
+        where: { id: instanceId },
+        data: { templateSnapshot: originalInstance.templateSnapshot },
+      });
+      await cleanupTestUser(subcontractor.userId);
+    }
   });
 
   it('should reject malformed pending verification project query parameters', async () => {
@@ -3100,6 +3435,136 @@ describe('ITP Completion Decision Logic (characterization)', () => {
     });
     await prisma.lot.update({ where: { id: lotId }, data: { status: 'not_started' } });
   }
+
+  it('allows a foreman to save ordinary PASS, N/A, and FAIL outcomes without HC verification', async () => {
+    const foreman = await registerTestUser('itp-decision-foreman', 'ITP Decision Foreman');
+
+    await prisma.user.update({
+      where: { id: foreman.userId },
+      data: { companyId, roleInCompany: 'foreman' },
+    });
+    await prisma.projectUser.create({
+      data: { projectId, userId: foreman.userId, role: 'foreman', status: 'active' },
+    });
+
+    try {
+      for (const outcome of [
+        {
+          label: 'PASS',
+          expectedStatus: 'completed',
+          body: { isCompleted: true, notes: 'Foreman checked and passed' },
+          assertion: (completion: {
+            isCompleted?: boolean;
+            isNotApplicable?: boolean;
+            isFailed?: boolean;
+          }) => {
+            expect(completion.isCompleted).toBe(true);
+            expect(completion.isNotApplicable).toBe(false);
+            expect(completion.isFailed).toBe(false);
+          },
+          expectsNcr: false,
+        },
+        {
+          label: 'N/A',
+          expectedStatus: 'not_applicable',
+          body: { status: 'not_applicable', notes: 'Foreman confirmed item is not applicable' },
+          assertion: (completion: {
+            isCompleted?: boolean;
+            isNotApplicable?: boolean;
+            isFailed?: boolean;
+          }) => {
+            expect(completion.isCompleted).toBe(true);
+            expect(completion.isNotApplicable).toBe(true);
+            expect(completion.isFailed).toBe(false);
+          },
+          expectsNcr: false,
+        },
+        {
+          label: 'FAIL',
+          expectedStatus: 'failed',
+          body: {
+            status: 'failed',
+            ncrDescription: 'Foreman found ordinary ITP defect',
+            ncrCategory: 'workmanship',
+            ncrSeverity: 'minor',
+          },
+          assertion: (completion: {
+            isCompleted?: boolean;
+            isNotApplicable?: boolean;
+            isFailed?: boolean;
+          }) => {
+            expect(completion.isCompleted).toBe(false);
+            expect(completion.isNotApplicable).toBe(false);
+            expect(completion.isFailed).toBe(true);
+          },
+          expectsNcr: true,
+        },
+      ] as const) {
+        await resetContractorCompletion();
+        await prisma.nCRLot.deleteMany({ where: { lotId } });
+        await prisma.nCR.deleteMany({ where: { projectId, raisedById: foreman.userId } });
+        await prisma.auditLog.deleteMany({
+          where: { action: AuditAction.ITP_ITEM_COMPLETED, userId: foreman.userId },
+        });
+
+        const res = await request(app)
+          .post('/api/itp/completions')
+          .set('Authorization', `Bearer ${foreman.token}`)
+          .send({
+            itpInstanceId: instanceId,
+            checklistItemId: contractorItemId,
+            ...outcome.body,
+          });
+
+        expect(res.status, outcome.label).toBe(200);
+        expect(res.body.completion.status).toBe(outcome.expectedStatus);
+        expect(res.body.completion.verificationStatus).toBe('none');
+        expect(res.body.completion.isPendingVerification).toBe(false);
+        expect(res.body.completion.isVerified).toBe(false);
+        expect(res.body.subbieCompletionNotification).toBeNull();
+        outcome.assertion(res.body.completion);
+
+        if (outcome.expectsNcr) {
+          expect(res.body.ncr?.ncrNumber).toMatch(/^NCR-/);
+          const lotAfterFail = await prisma.lot.findUniqueOrThrow({
+            where: { id: lotId },
+            select: { status: true },
+          });
+          expect(lotAfterFail.status).toBe('ncr_raised');
+        } else {
+          expect(res.body.ncr).toBeNull();
+        }
+
+        const auditLog = await prisma.auditLog.findFirst({
+          where: {
+            entityId: res.body.completion.id,
+            action: AuditAction.ITP_ITEM_COMPLETED,
+            userId: foreman.userId,
+          },
+          orderBy: { createdAt: 'desc' },
+        });
+        expect(auditLog).toBeTruthy();
+        const auditChanges = parseAuditLogChanges(auditLog?.changes ?? null) as Record<
+          string,
+          unknown
+        >;
+        expect(auditChanges).toMatchObject({
+          status: outcome.expectedStatus,
+          checklistItemId: contractorItemId,
+        });
+        expect(auditChanges.verificationStatus ?? 'none').toBe('none');
+      }
+    } finally {
+      await resetContractorCompletion();
+      await prisma.nCRLot.deleteMany({ where: { lotId } });
+      await prisma.nCR.deleteMany({ where: { projectId, raisedById: foreman.userId } });
+      await prisma.auditLog.deleteMany({
+        where: { action: AuditAction.ITP_ITEM_COMPLETED, userId: foreman.userId },
+      });
+      await prisma.projectUser.deleteMany({ where: { projectId, userId: foreman.userId } });
+      await cleanupTestUser(foreman.userId);
+    }
+  });
 
   // I1-core: a hold-point (superintendent sign-off) item must go through the
   // hold-point release flow before it can be completed via the bare path.

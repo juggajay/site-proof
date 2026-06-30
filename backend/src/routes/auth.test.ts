@@ -630,10 +630,73 @@ describe('JWT invalidation precision', () => {
 
   it('invalidates normal logout immediately after login', async () => {
     await expectLogoutEndpointInvalidatesImmediateToken('/api/auth/logout', {
-      scope: 'all_devices',
-      requestedScope: 'current_session',
+      scope: 'current_session',
       sessionsInvalidated: true,
     });
+  });
+
+  it('keeps other active bearer sessions alive on normal logout', async () => {
+    const email = `current-session-logout-${Date.now()}@example.com`;
+    const password = 'SecureP@ssword123!';
+    const regRes = await request(app).post('/api/auth/register').send({
+      email,
+      password,
+      fullName: 'Current Session Logout User',
+      tosAccepted: true,
+    });
+
+    const firstToken = regRes.body.token as string;
+    const userId = regRes.body.user.id as string;
+
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      const loginRes = await request(app).post('/api/auth/login').send({ email, password });
+      expect(loginRes.status).toBe(200);
+      const secondToken = loginRes.body.token as string;
+      expect(secondToken).not.toBe(firstToken);
+
+      await clearUserAuditLogs(userId);
+
+      const logoutRes = await request(app)
+        .post('/api/auth/logout')
+        .set('Authorization', `Bearer ${firstToken}`);
+      expect(logoutRes.status).toBe(200);
+
+      const oldSessionRes = await request(app)
+        .get('/api/auth/me')
+        .set('Authorization', `Bearer ${firstToken}`);
+      expect(oldSessionRes.status).toBe(401);
+
+      const otherSessionRes = await request(app)
+        .get('/api/auth/me')
+        .set('Authorization', `Bearer ${secondToken}`);
+      expect(otherSessionRes.status).toBe(200);
+      expect(otherSessionRes.body.user.id).toBe(userId);
+
+      const revokedToken = await prisma.revokedAuthToken.findUnique({
+        where: { tokenHash: hashAuthTokenForTest(firstToken) },
+      });
+      expect(revokedToken?.userId).toBe(userId);
+      expect(revokedToken?.tokenHash).toBe(hashAuthTokenForTest(firstToken));
+
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { tokenInvalidatedAt: true },
+      });
+      expect(user?.tokenInvalidatedAt).toBeNull();
+
+      const { auditLog, changes } = await expectLatestUserAuditLog(userId, AuditAction.USER_LOGOUT);
+      expect(auditLog.userId).toBe(userId);
+      expect(changes).toEqual({
+        scope: 'current_session',
+        sessionsInvalidated: true,
+      });
+    } finally {
+      await prisma.revokedAuthToken.deleteMany({ where: { userId } });
+      await prisma.emailVerificationToken.deleteMany({ where: { userId } });
+      await clearUserAuditLogs(userId);
+      await prisma.user.delete({ where: { id: userId } }).catch(() => {});
+    }
   });
 
   it('invalidates logout-all-devices immediately after login', async () => {
@@ -2000,6 +2063,22 @@ describe('Password Reset Flow', () => {
 
       expect(resetRes.status).toBe(200);
 
+      const [tokenRecord, resetUser] = await Promise.all([
+        prisma.passwordResetToken.findFirstOrThrow({
+          where: { token: hashAuthTokenForTest(resetToken) },
+          select: { usedAt: true },
+        }),
+        prisma.user.findUniqueOrThrow({
+          where: { id: userId },
+          select: { tokenInvalidatedAt: true },
+        }),
+      ]);
+      expect(tokenRecord.usedAt).toBeInstanceOf(Date);
+      expect(resetUser.tokenInvalidatedAt).toBeInstanceOf(Date);
+      expect(resetUser.tokenInvalidatedAt!.getTime()).toBeGreaterThan(
+        tokenRecord.usedAt!.getTime(),
+      );
+
       const oldSessionRes = await request(app)
         .get('/api/auth/me')
         .set('Authorization', `Bearer ${oldToken}`);
@@ -2027,6 +2106,113 @@ describe('Password Reset Flow', () => {
       await prisma.emailVerificationToken.deleteMany({ where: { userId } });
       await clearUserAuditLogs(userId);
       await prisma.user.delete({ where: { id: userId } }).catch(() => {});
+    }
+  });
+
+  it('requires ToS acceptance when a pending company invite sets a password', async () => {
+    const company = await prisma.company.create({
+      data: { name: `Pending Reset ToS Company ${Date.now()}` },
+    });
+    const invitedUser = await prisma.user.create({
+      data: {
+        email: `pending-reset-no-tos-${Date.now()}@example.com`,
+        fullName: 'Pending Reset No ToS',
+        companyId: company.id,
+        roleInCompany: 'foreman',
+        emailVerified: true,
+        emailVerifiedAt: new Date(),
+      },
+    });
+    const resetToken = `pending_reset_no_tos_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    await prisma.passwordResetToken.create({
+      data: {
+        userId: invitedUser.id,
+        token: hashAuthTokenForTest(resetToken),
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      },
+    });
+
+    try {
+      const validateRes = await request(app)
+        .get('/api/auth/validate-reset-token')
+        .query({ token: resetToken });
+      expect(validateRes.status).toBe(200);
+      expect(validateRes.body).toMatchObject({ valid: true, requiresTosAcceptance: true });
+
+      const res = await request(app).post('/api/auth/reset-password').send({
+        token: resetToken,
+        password: 'NewPassword123!',
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toContain('Terms of Service');
+
+      const [userAfterReset, tokenAfterReset] = await Promise.all([
+        prisma.user.findUniqueOrThrow({ where: { id: invitedUser.id } }),
+        prisma.passwordResetToken.findFirstOrThrow({
+          where: { token: hashAuthTokenForTest(resetToken) },
+        }),
+      ]);
+      expect(userAfterReset.passwordHash).toBeNull();
+      expect(userAfterReset.tosAcceptedAt).toBeNull();
+      expect(tokenAfterReset.usedAt).toBeNull();
+    } finally {
+      await prisma.passwordResetToken.deleteMany({ where: { userId: invitedUser.id } });
+      await clearUserAuditLogs(invitedUser.id);
+      await prisma.user.delete({ where: { id: invitedUser.id } }).catch(() => {});
+      await prisma.company.delete({ where: { id: company.id } }).catch(() => {});
+    }
+  });
+
+  it('records ToS acceptance when a pending company invite sets a password', async () => {
+    const company = await prisma.company.create({
+      data: { name: `Pending Reset Accept ToS Company ${Date.now()}` },
+    });
+    const invitedUser = await prisma.user.create({
+      data: {
+        email: `pending-reset-accept-tos-${Date.now()}@example.com`,
+        fullName: 'Pending Reset Accept ToS',
+        companyId: company.id,
+        roleInCompany: 'foreman',
+        emailVerified: true,
+        emailVerifiedAt: new Date(),
+      },
+    });
+    const resetToken = `pending_reset_accept_tos_${Date.now()}_${Math.random()
+      .toString(16)
+      .slice(2)}`;
+    await prisma.passwordResetToken.create({
+      data: {
+        userId: invitedUser.id,
+        token: hashAuthTokenForTest(resetToken),
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      },
+    });
+
+    try {
+      const res = await request(app).post('/api/auth/reset-password').send({
+        token: resetToken,
+        password: 'NewPassword123!',
+        tosAccepted: true,
+      });
+
+      expect(res.status).toBe(200);
+
+      const [userAfterReset, tokenAfterReset] = await Promise.all([
+        prisma.user.findUniqueOrThrow({ where: { id: invitedUser.id } }),
+        prisma.passwordResetToken.findFirstOrThrow({
+          where: { token: hashAuthTokenForTest(resetToken) },
+        }),
+      ]);
+      expect(userAfterReset.passwordHash).toBeTruthy();
+      expect(userAfterReset.tosAcceptedAt).toBeInstanceOf(Date);
+      expect(userAfterReset.tosVersion).toBe('1.0');
+      expect(tokenAfterReset.usedAt).toBeInstanceOf(Date);
+    } finally {
+      await prisma.passwordResetToken.deleteMany({ where: { userId: invitedUser.id } });
+      await clearUserAuditLogs(invitedUser.id);
+      await prisma.user.delete({ where: { id: invitedUser.id } }).catch(() => {});
+      await prisma.company.delete({ where: { id: company.id } }).catch(() => {});
     }
   });
 });
@@ -2384,6 +2570,60 @@ describe('Magic Link Authentication', () => {
     }
   });
 
+  it('does not create or send magic links for pending company invite users', async () => {
+    const company = await prisma.company.create({
+      data: { name: `Pending Magic Request Company ${Date.now()}` },
+    });
+    const invitedUser = await prisma.user.create({
+      data: {
+        email: `pending-magic-request-${Date.now()}@example.com`,
+        fullName: 'Pending Magic Request',
+        companyId: company.id,
+        roleInCompany: 'foreman',
+        emailVerified: true,
+        emailVerifiedAt: new Date(),
+      },
+    });
+    const sendSpy = vi.spyOn(emailService, 'sendMagicLinkEmail').mockResolvedValueOnce({
+      success: true,
+    });
+
+    try {
+      const res = await request(app)
+        .post('/api/auth/magic-link/request')
+        .send({ email: invitedUser.email });
+
+      expect(res.status).toBe(200);
+      expect(res.body.message).toContain('If an account exists');
+      expect(sendSpy).not.toHaveBeenCalled();
+      await expect(
+        prisma.passwordResetToken.count({
+          where: {
+            userId: invitedUser.id,
+            purpose: 'magic_link',
+            usedAt: null,
+            expiresAt: { gt: new Date() },
+          },
+        }),
+      ).resolves.toBe(0);
+      await expect(
+        prisma.auditLog.count({
+          where: {
+            entityType: 'user',
+            entityId: invitedUser.id,
+            action: AuditAction.MAGIC_LINK_REQUESTED,
+          },
+        }),
+      ).resolves.toBe(0);
+    } finally {
+      sendSpy.mockRestore();
+      await prisma.passwordResetToken.deleteMany({ where: { userId: invitedUser.id } });
+      await clearUserAuditLogs(invitedUser.id);
+      await prisma.user.delete({ where: { id: invitedUser.id } }).catch(() => {});
+      await prisma.company.delete({ where: { id: company.id } }).catch(() => {});
+    }
+  });
+
   it('does not leave an active magic link token when email delivery fails', async () => {
     const user = await prisma.user.findUnique({ where: { email: magicEmail } });
     expect(user).toBeDefined();
@@ -2475,6 +2715,49 @@ describe('Magic Link Authentication', () => {
       expect(JSON.stringify(changes)).not.toMatch(/password|token|secret|code/i);
     } finally {
       await prisma.passwordResetToken.deleteMany({ where: { token: hashAuthTokenForTest(token) } });
+    }
+  });
+
+  it('rejects magic link verification for pending company invite users', async () => {
+    const company = await prisma.company.create({
+      data: { name: `Pending Magic Verify Company ${Date.now()}` },
+    });
+    const invitedUser = await prisma.user.create({
+      data: {
+        email: `pending-magic-verify-${Date.now()}@example.com`,
+        fullName: 'Pending Magic Verify',
+        companyId: company.id,
+        roleInCompany: 'foreman',
+        emailVerified: true,
+        emailVerifiedAt: new Date(),
+      },
+    });
+    const token = `magic_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    await prisma.passwordResetToken.create({
+      data: {
+        userId: invitedUser.id,
+        token: hashAuthTokenForTest(token),
+        purpose: 'magic_link',
+        expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+      },
+    });
+
+    try {
+      const res = await request(app).post('/api/auth/magic-link/verify').send({ token });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.message).toContain('account setup');
+      expect(res.body.token).toBeUndefined();
+
+      const tokenAfterVerify = await prisma.passwordResetToken.findFirstOrThrow({
+        where: { token: hashAuthTokenForTest(token) },
+      });
+      expect(tokenAfterVerify.usedAt).toBeInstanceOf(Date);
+    } finally {
+      await prisma.passwordResetToken.deleteMany({ where: { userId: invitedUser.id } });
+      await clearUserAuditLogs(invitedUser.id);
+      await prisma.user.delete({ where: { id: invitedUser.id } }).catch(() => {});
+      await prisma.company.delete({ where: { id: company.id } }).catch(() => {});
     }
   });
 
@@ -3138,6 +3421,21 @@ describe('Avatar Upload', () => {
 });
 
 describe('GET /api/auth/export-data', () => {
+  it('rejects missing bearer authentication', async () => {
+    const res = await request(app).get('/api/auth/export-data');
+
+    expect(res.status).toBe(401);
+  });
+
+  it('rejects invalid bearer authentication', async () => {
+    const res = await request(app)
+      .get('/api/auth/export-data')
+      .set('Authorization', 'Bearer not-a-valid-token');
+
+    expect(res.status).toBe(401);
+    expect(res.body.error.message).toContain('Invalid token');
+  });
+
   it('exports privacy-relevant account records without stored secrets', async () => {
     const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const email = `export-data-${suffix}@example.com`;
@@ -3171,7 +3469,7 @@ describe('GET /api/auth/export-data', () => {
         data: {
           companyId,
           roleInCompany: 'admin',
-          avatarUrl: '/uploads/avatars/export-avatar.png',
+          avatarUrl: `https://fixture-project.supabase.co/storage/v1/object/public/documents/avatars/${createdUserId}/export-avatar.png?token=secret-avatar-token`,
           emailVerified: true,
           emailVerifiedAt: new Date('2026-01-01T00:00:00.000Z'),
         },
@@ -3208,12 +3506,13 @@ describe('GET /api/auth/export-data', () => {
           attachments: {
             create: {
               filename: 'export-comment-photo.jpg',
-              fileUrl: '/uploads/comments/export-comment-photo.jpg',
+              fileUrl: `https://fixture-project.supabase.co/storage/v1/object/public/documents/comments/${projectId}/export-comment-photo.jpg?token=secret-comment-token`,
               fileSize: 1234,
               mimeType: 'image/jpeg',
             },
           },
         },
+        include: { attachments: true },
       });
 
       const document = await prisma.document.create({
@@ -3222,7 +3521,7 @@ describe('GET /api/auth/export-data', () => {
           documentType: 'photo',
           category: 'quality',
           filename: 'export-document.jpg',
-          fileUrl: '/uploads/documents/export-document.jpg',
+          fileUrl: `https://fixture-project.supabase.co/storage/v1/object/public/documents/${projectId}/export-document.jpg?X-Amz-Signature=secret-document-signature`,
           fileSize: 4567,
           mimeType: 'image/jpeg',
           uploadedById: createdUserId,
@@ -3303,7 +3602,7 @@ describe('GET /api/auth/export-data', () => {
         data: {
           id: `push-export-${suffix}`,
           userId: createdUserId,
-          endpoint: `https://push.example.com/export/${suffix}`,
+          endpoint: `https://push.example.com/export/${suffix}/secret-push-endpoint-token`,
           p256dh: 'secret-p256dh-should-not-export',
           auth: 'secret-push-auth-should-not-export',
           userAgent: 'Export Push Browser',
@@ -3318,7 +3617,7 @@ describe('GET /api/auth/export-data', () => {
           frequency: 'weekly',
           dayOfWeek: 1,
           timeOfDay: '09:00',
-          recipients: 'export@example.com',
+          recipients: 'export@example.com, third-party@example.com',
           isActive: true,
           nextRunAt: new Date('2026-01-05T09:00:00.000Z'),
         },
@@ -3328,7 +3627,7 @@ describe('GET /api/auth/export-data', () => {
         data: {
           companyId,
           createdById: createdUserId,
-          url: 'https://example.com/export-webhook',
+          url: 'https://example.com/export-webhook?token=secret-webhook-query&tenant=secret-tenant',
           secret: 'secret-webhook-value-should-not-export',
           events: JSON.stringify(['lot.updated']),
           enabled: true,
@@ -3352,7 +3651,28 @@ describe('GET /api/auth/export-data', () => {
           entityType: 'Lot',
           entityId: 'export-lot-id',
           action: 'update',
-          payload: JSON.stringify({ notes: 'offline export payload' }),
+          payload: JSON.stringify({
+            notes: 'offline export payload',
+            fileUrl: 'https://files.example.com/documents/sync.pdf?token=secret-sync-token',
+            nested: { auth: 'secret-sync-auth' },
+          }),
+          status: 'pending',
+        },
+      });
+      const oversizedSyncSecret = 'oversized-secret-sync-token-should-not-export';
+      const oversizedSyncBody = 'X'.repeat(25_000);
+      const oversizedSyncPayload = JSON.stringify({
+        notes: oversizedSyncSecret,
+        body: oversizedSyncBody,
+      });
+      await prisma.syncQueue.create({
+        data: {
+          userId: createdUserId,
+          deviceId: 'export-device-large',
+          entityType: 'Lot',
+          entityId: 'export-lot-large-payload',
+          action: 'update',
+          payload: oversizedSyncPayload,
           status: 'pending',
         },
       });
@@ -3362,12 +3682,30 @@ describe('GET /api/auth/export-data', () => {
         .set('Authorization', `Bearer ${regRes.body.token}`);
 
       expect(res.status).toBe(200);
+      expect(res.headers['cache-control']).toBe('private, no-store, max-age=0');
+      expect(res.headers.pragma).toBe('no-cache');
+      expect(res.headers['referrer-policy']).toBe('no-referrer');
+      expect(res.headers['x-content-type-options']).toBe('nosniff');
       expect(res.body.user).toMatchObject({
         id: createdUserId,
         email,
-        avatarUrl: '/uploads/avatars/export-avatar.png',
+        hasAvatar: true,
         twoFactorEnabled: false,
       });
+      expect(res.body.exportVersion).toBe('1.2');
+      expect(res.body.exportLimits).toMatchObject({
+        operationalRecordLimit: 1000,
+        syncPayloadMaxChars: 20000,
+        truncatedCollections: {
+          activityLog: false,
+          notifications: false,
+          notificationDigestItems: false,
+          notificationAlerts: false,
+          documentSignedUrlTokens: false,
+          syncQueueItems: false,
+        },
+      });
+      expect(res.body.user).not.toHaveProperty('avatarUrl');
       expect(res.body.projectMemberships).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
@@ -3385,7 +3723,7 @@ describe('GET /api/auth/export-data', () => {
             attachments: [
               expect.objectContaining({
                 filename: 'export-comment-photo.jpg',
-                fileUrl: '/uploads/comments/export-comment-photo.jpg',
+                downloadUrl: `/api/comments/attachments/${comment.attachments[0]!.id}/download`,
               }),
             ],
           }),
@@ -3396,7 +3734,7 @@ describe('GET /api/auth/export-data', () => {
           expect.objectContaining({
             id: document.id,
             filename: 'export-document.jpg',
-            fileUrl: '/uploads/documents/export-document.jpg',
+            downloadUrl: `/api/documents/file/${document.id}`,
             caption: 'Exported document caption',
           }),
         ]),
@@ -3454,7 +3792,7 @@ describe('GET /api/auth/export-data', () => {
         expect.arrayContaining([
           expect.objectContaining({
             id: `push-export-${suffix}`,
-            endpoint: `https://push.example.com/export/${suffix}`,
+            endpointOrigin: 'https://push.example.com',
             userAgent: 'Export Push Browser',
           }),
         ]),
@@ -3464,14 +3802,14 @@ describe('GET /api/auth/export-data', () => {
           expect.objectContaining({
             reportType: 'lot-status',
             frequency: 'weekly',
-            recipients: 'export@example.com',
+            recipientCount: 2,
           }),
         ]),
       );
       expect(res.body.webhookConfigsCreated).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
-            url: 'https://example.com/export-webhook',
+            url: 'https://example.com/export-webhook?token=[REDACTED]&tenant=[REDACTED]',
             events: JSON.stringify(['lot.updated']),
             enabled: true,
           }),
@@ -3488,13 +3826,41 @@ describe('GET /api/auth/export-data', () => {
         expect.arrayContaining([
           expect.objectContaining({
             deviceId: 'export-device',
-            payload: JSON.stringify({ notes: 'offline export payload' }),
+            payload: {
+              notes: 'offline export payload',
+              fileUrl: 'https://files.example.com/documents/sync.pdf?token=[REDACTED]',
+              nested: { auth: '[REDACTED]' },
+            },
+            status: 'pending',
+          }),
+        ]),
+      );
+      expect(res.body.syncQueueItems).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            deviceId: 'export-device-large',
+            payload: {
+              truncated: true,
+              originalLength: oversizedSyncPayload.length,
+              maxExportedChars: 20000,
+            },
             status: 'pending',
           }),
         ]),
       );
 
       const exportedJson = JSON.stringify(res.body);
+      expect(exportedJson).not.toContain('secret-avatar-token');
+      expect(exportedJson).not.toContain('secret-comment-token');
+      expect(exportedJson).not.toContain('secret-document-signature');
+      expect(exportedJson).not.toContain('secret-push-endpoint-token');
+      expect(exportedJson).not.toContain('third-party@example.com');
+      expect(exportedJson).not.toContain('secret-webhook-query');
+      expect(exportedJson).not.toContain('secret-tenant');
+      expect(exportedJson).not.toContain('secret-sync-token');
+      expect(exportedJson).not.toContain('secret-sync-auth');
+      expect(exportedJson).not.toContain(oversizedSyncSecret);
+      expect(exportedJson).not.toContain(oversizedSyncBody);
       expect(exportedJson).not.toContain('secret-api-key-hash-should-not-export');
       expect(exportedJson).not.toContain('secret-p256dh-should-not-export');
       expect(exportedJson).not.toContain('secret-push-auth-should-not-export');
@@ -3504,8 +3870,12 @@ describe('GET /api/auth/export-data', () => {
       expect(res.body.apiKeys[0]).not.toHaveProperty('keyHash');
       expect(res.body.pushSubscriptions[0]).not.toHaveProperty('p256dh');
       expect(res.body.pushSubscriptions[0]).not.toHaveProperty('auth');
+      expect(res.body.pushSubscriptions[0]).not.toHaveProperty('endpoint');
+      expect(res.body.scheduledReports[0]).not.toHaveProperty('recipients');
       expect(res.body.webhookConfigsCreated[0]).not.toHaveProperty('secret');
       expect(res.body.documentSignedUrlTokens[0]).not.toHaveProperty('tokenHash');
+      expect(res.body.commentsAuthored[0].attachments[0]).not.toHaveProperty('fileUrl');
+      expect(res.body.uploadedDocuments[0]).not.toHaveProperty('fileUrl');
     } finally {
       if (userId) {
         await prisma.auditLog.deleteMany({ where: { userId } });
@@ -3537,6 +3907,55 @@ describe('GET /api/auth/export-data', () => {
       if (companyId) {
         await prisma.webhookConfig.deleteMany({ where: { companyId } });
         await prisma.company.delete({ where: { id: companyId } }).catch(() => {});
+      }
+    }
+  });
+
+  it('caps operational export collections and reports truncation metadata', async () => {
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const email = `export-data-scale-${suffix}@example.com`;
+    const password = 'SecureP@ssword123!';
+    let userId: string | undefined;
+
+    try {
+      const regRes = await request(app).post('/api/auth/register').send({
+        email,
+        password,
+        fullName: 'Export Data Scale User',
+        tosAccepted: true,
+      });
+
+      expect(regRes.status).toBe(201);
+      userId = regRes.body.user.id as string;
+
+      await prisma.notification.createMany({
+        data: Array.from({ length: 1001 }, (_, index) => ({
+          userId: userId!,
+          type: 'mention',
+          title: `Bulk export notification ${index}`,
+          message: `Bulk export notification message ${index}`,
+          isRead: false,
+        })),
+      });
+
+      const res = await request(app)
+        .get('/api/auth/export-data')
+        .set('Authorization', `Bearer ${regRes.body.token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.notifications).toHaveLength(1000);
+      expect(res.body.exportLimits).toMatchObject({
+        operationalRecordLimit: 1000,
+        truncatedCollections: expect.objectContaining({
+          notifications: true,
+        }),
+      });
+    } finally {
+      if (userId) {
+        await prisma.notification.deleteMany({ where: { userId } });
+        await prisma.auditLog.deleteMany({ where: { userId } });
+        await prisma.emailVerificationToken.deleteMany({ where: { userId } });
+        await prisma.user.delete({ where: { id: userId } }).catch(() => {});
       }
     }
   });

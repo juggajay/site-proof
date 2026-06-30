@@ -1,8 +1,19 @@
 import { formatDateKey } from '../localDate';
+import { formatStatusLabel } from '../statusLabels';
 import { getJsPDF } from './jsPdfRuntime';
 import { savePdf } from './pdfSave';
 import { defaultConformanceOptions } from './types';
-import type { ConformanceFormat, ConformanceFormatOptions, ConformanceReportData } from './types';
+import type {
+  ConformanceFormat,
+  ConformanceFormatOptions,
+  ConformanceReportData,
+  ITPChecklistItem,
+  ITPCompletion,
+} from './types';
+
+function formatReleaseMethod(method: string): string {
+  return method.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
+}
 
 // Format-specific configurations
 const FORMAT_CONFIGS: Record<
@@ -57,6 +68,60 @@ const FORMAT_CONFIGS: Record<
     specPrefix: 'RD/ST',
   },
 };
+
+function isAcceptedItpCompletion(completion: ITPCompletion | undefined): boolean {
+  if (!completion) return false;
+  if (isRejectedItpCompletion(completion) || isPendingItpVerification(completion)) return false;
+  return completion.isCompleted || Boolean(completion.isNotApplicable);
+}
+
+function isRejectedItpCompletion(completion: ITPCompletion): boolean {
+  return completion.isRejected === true || completion.verificationStatus === 'rejected';
+}
+
+function isPendingItpVerification(completion: ITPCompletion): boolean {
+  return (
+    completion.isPendingVerification === true ||
+    completion.verificationStatus === 'pending_verification'
+  );
+}
+
+function getAcceptedItpStatusLabel(completion: ITPCompletion): string | null {
+  if (!isAcceptedItpCompletion(completion)) return null;
+  if (completion.isNotApplicable) return 'N/A';
+  if (completion.isCompleted) return 'Done';
+  return null;
+}
+
+function getItpCompletionStatusLabel(completion: ITPCompletion | undefined): string {
+  if (!completion) return 'Pending';
+  if (completion.isFailed) return 'Failed';
+  if (isRejectedItpCompletion(completion)) return 'Rejected';
+  if (isPendingItpVerification(completion)) return 'Pending Review';
+  return getAcceptedItpStatusLabel(completion) ?? 'Pending';
+}
+
+function findCompletionForItem(
+  item: ITPChecklistItem,
+  completions: ITPCompletion[],
+): ITPCompletion | undefined {
+  const itemId = item.id;
+  return completions.find(
+    (completion) =>
+      (itemId && completion.checklistItemId === itemId) ||
+      completion.checklistItemId === item.order.toString(),
+  );
+}
+
+function formatOptionalDateTime(dateStr: string | null | undefined, fallback = 'Not recorded') {
+  if (!dateStr) return fallback;
+  const date = new Date(dateStr);
+  if (Number.isNaN(date.getTime())) return fallback;
+  return date.toLocaleString('en-AU', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+  });
+}
 
 /**
  * Generate a PDF conformance report for a lot
@@ -211,14 +276,18 @@ export async function generateConformanceReportPDF(
 
   if (data.itp) {
     const totalItems = data.itp.checklistItems.length;
-    const completedItems = data.itp.completions.filter((c) => c.isCompleted).length;
+    const completedItems = data.itp.checklistItems.filter((item) =>
+      isAcceptedItpCompletion(findCompletionForItem(item, data.itp!.completions)),
+    ).length;
+    const completionPercentage =
+      totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
 
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     doc.text(`Template: ${data.itp.templateName}`, margin, yPos);
     yPos += 5;
     doc.text(
-      `Checklist Completion: ${completedItems} / ${totalItems} items (${Math.round((completedItems / totalItems) * 100)}%)`,
+      `Checklist Completion: ${completedItems} / ${totalItems} items (${completionPercentage}%)`,
       margin,
       yPos,
     );
@@ -244,10 +313,7 @@ export async function generateConformanceReportPDF(
     doc.setFont('helvetica', 'normal');
     data.itp.checklistItems.forEach((item) => {
       checkPageBreak(8);
-      const completion = data.itp!.completions.find(
-        (c) => c.checklistItemId === item.order.toString(),
-      );
-      const isCompleted = completion?.isCompleted || false;
+      const completion = findCompletionForItem(item, data.itp!.completions);
 
       xPos = margin + 2;
       doc.text(item.order.toString(), xPos, yPos + 4);
@@ -266,7 +332,7 @@ export async function generateConformanceReportPDF(
       );
       xPos += colWidths[2];
 
-      doc.text(isCompleted ? 'Done' : 'Pending', xPos, yPos + 4);
+      doc.text(getItpCompletionStatusLabel(completion), xPos, yPos + 4);
       xPos += colWidths[3];
 
       if (completion?.completedBy) {
@@ -369,15 +435,22 @@ export async function generateConformanceReportPDF(
       checkPageBreak(12);
       doc.text(`- ${hp.checklistItemDescription}`, margin, yPos);
       yPos += 5;
-      const releasedDate = new Date(hp.releasedAt).toLocaleString('en-AU', {
-        dateStyle: 'short',
-        timeStyle: 'short',
-      });
-      const releasedBy = hp.releasedBy ? hp.releasedBy.fullName || hp.releasedBy.email : 'Unknown';
+      const releasedDate = formatOptionalDateTime(hp.releasedAt);
+      const releasedByName =
+        hp.releasedByName || (hp.releasedBy ? hp.releasedBy.fullName || hp.releasedBy.email : '');
+      const releasedBy = hp.releasedByOrg
+        ? `${releasedByName || 'Unknown'}, ${hp.releasedByOrg}`
+        : releasedByName || 'Unknown';
       doc.setFont('helvetica', 'italic');
       doc.text(`  Released: ${releasedDate} by ${releasedBy}`, margin + 5, yPos);
       doc.setFont('helvetica', 'normal');
       yPos += 6;
+      if (hp.releaseMethod) {
+        doc.setFont('helvetica', 'italic');
+        doc.text(`  Method: ${formatReleaseMethod(hp.releaseMethod)}`, margin + 5, yPos);
+        doc.setFont('helvetica', 'normal');
+        yPos += 6;
+      }
     });
   } else {
     doc.setFontSize(10);
@@ -424,7 +497,7 @@ export async function generateConformanceReportPDF(
       doc.text(`  ${desc}`, margin, yPos);
       yPos += 5;
       doc.text(
-        `  Status: ${ncr.status.replace('_', ' ')} | Category: ${ncr.category}`,
+        `  Status: ${formatStatusLabel(ncr.status)} | Category: ${ncr.category}`,
         margin,
         yPos,
       );

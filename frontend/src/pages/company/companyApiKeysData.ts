@@ -2,10 +2,10 @@
  * Data + pure helpers for the company API-keys section (finding H22).
  *
  * The company-wide inventory comes from the admin endpoint
- * GET /api/company/api-keys (M72b). Create/revoke act on the per-user endpoints
- * (POST/DELETE /api/api-keys) — a user can only create and revoke their own
- * keys, so revoke is offered only on the current user's rows; departed members'
- * keys are revoked automatically (M72a).
+ * GET /api/company/api-keys (M72b). Create still uses the per-user endpoint
+ * because the raw key belongs to the current user, while company inventory
+ * revoke uses DELETE /api/company/api-keys/:keyId so company admins can retire
+ * active same-company keys owned by any member.
  */
 import { apiFetch } from '@/lib/api';
 
@@ -47,15 +47,18 @@ export const API_KEY_SCOPE_OPTIONS = [
   { value: 'write', label: 'Read & write' },
 ] as const;
 
-/**
- * A user may only revoke their own active keys (the backend DELETE endpoint is
- * self-scoped). Inventory rows for other members are visibility-only.
- */
+export const API_KEY_EXPIRY_OPTIONS = [
+  { value: '30', label: '30 days' },
+  { value: '90', label: '90 days' },
+  { value: '180', label: '180 days' },
+  { value: '365', label: '365 days' },
+] as const;
+
 export function canRevokeApiKey(
   key: Pick<CompanyApiKey, 'isActive' | 'owner'>,
-  currentUserId: string | null | undefined,
+  _currentUserId: string | null | undefined,
 ): boolean {
-  return key.isActive && !!currentUserId && key.owner?.id === currentUserId;
+  return key.isActive;
 }
 
 export function describeApiKeyStatus(key: Pick<CompanyApiKey, 'isActive'>): 'Active' | 'Revoked' {
@@ -67,6 +70,19 @@ export function formatApiKeyLastUsed(lastUsedAt: string | null): string {
     return 'Never used';
   }
   return new Date(lastUsedAt).toLocaleDateString('en-AU');
+}
+
+export function formatApiKeyExpiry(expiresAt: string | null): string {
+  if (!expiresAt) {
+    return 'No expiry';
+  }
+
+  const date = new Date(expiresAt);
+  if (Number.isNaN(date.getTime())) {
+    return 'Expiry unknown';
+  }
+
+  return `Expires ${date.toLocaleDateString('en-AU')}`;
 }
 
 export function fetchCompanyApiKeys() {
@@ -81,7 +97,7 @@ export function createApiKey(body: { name: string; scopes?: string; expiresInDay
 }
 
 export function revokeApiKey(id: string) {
-  return apiFetch<{ message: string }>(`/api/api-keys/${encodeURIComponent(id)}`, {
+  return apiFetch<{ message: string }>(`/api/company/api-keys/${encodeURIComponent(id)}`, {
     method: 'DELETE',
   });
 }

@@ -8,18 +8,35 @@ import {
 } from './ncrWorkflowValidation.js';
 
 describe('ncrWorkflowValidation', () => {
-  it('trims optional response fields and drops blank values', () => {
+  it('trims required response fields', () => {
     const result = respondNcrSchema.parse({
       rootCauseCategory: '  workmanship  ',
-      rootCauseDescription: '   ',
+      rootCauseDescription: '  Incorrect method  ',
       proposedCorrectiveAction: '  Rework affected section  ',
     });
 
     expect(result).toEqual({
       rootCauseCategory: 'workmanship',
-      rootCauseDescription: undefined,
+      rootCauseDescription: 'Incorrect method',
       proposedCorrectiveAction: 'Rework affected section',
     });
+  });
+
+  it('requires root cause and corrective action before an NCR response can progress', () => {
+    const result = respondNcrSchema.safeParse({
+      rootCauseCategory: '  ',
+      rootCauseDescription: '  ',
+      proposedCorrectiveAction: '  ',
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.map((issue) => issue.message)).toEqual([
+        'Root cause category is required',
+        'Root cause description is required',
+        'Proposed corrective action is required',
+      ]);
+    }
   });
 
   it('requires rejection feedback after trimming whitespace', () => {

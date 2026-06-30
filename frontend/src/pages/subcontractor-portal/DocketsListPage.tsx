@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
+  AlertCircle,
   Calendar,
   Clock,
   CheckCircle,
@@ -15,6 +16,7 @@ import { queryKeys } from '@/lib/queryKeys';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { apiFetch } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { extractErrorMessage } from '@/lib/errorHandling';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { formatDateKey } from '@/lib/localDate';
@@ -99,7 +101,11 @@ export function DocketsListPage() {
   const requestedSubcontractorCompanyId = searchParams.get('subcontractorCompanyId');
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
-  const { data: company } = useQuery({
+  const {
+    data: company,
+    isLoading: companyLoading,
+    error: companyError,
+  } = useQuery({
     queryKey: [
       ...queryKeys.portalCompanies(user?.id),
       ...portalCompanyQueryKeyParts({
@@ -119,7 +125,11 @@ export function DocketsListPage() {
     enabled: !!user?.id,
   });
 
-  const { data: dockets = [], isLoading: loading } = useQuery({
+  const {
+    data: dockets = [],
+    isLoading: docketsLoading,
+    error: docketsError,
+  } = useQuery({
     queryKey: queryKeys.portalDockets(user?.id, company?.projectId, company?.id),
     queryFn: async () => {
       const res = await apiFetch<{ dockets: Docket[] }>(
@@ -175,6 +185,9 @@ export function DocketsListPage() {
     queried: dockets.filter((d) => d.status === 'queried').length,
   };
 
+  const loading = companyLoading || (Boolean(company?.projectId) && docketsLoading);
+  const loadError = companyError ?? docketsError;
+
   if (loading) {
     return (
       <div className="container max-w-2xl mx-auto p-4 pb-20 md:pb-4 space-y-4">
@@ -186,6 +199,24 @@ export function DocketsListPage() {
         <Skeleton className="h-24 w-full rounded-lg" />
         <Skeleton className="h-24 w-full rounded-lg" />
         <Skeleton className="h-24 w-full rounded-lg" />
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="container max-w-2xl mx-auto p-4 pb-20 md:pb-4 space-y-4">
+        <div className="flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-destructive">
+          <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+          <p role="alert">{extractErrorMessage(loadError, 'Failed to load docket history')}</p>
+        </div>
+        <Link
+          to={portalBackLink}
+          className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-muted-foreground transition-colors hover:bg-muted/50"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to Portal
+        </Link>
       </div>
     );
   }

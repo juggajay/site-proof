@@ -1,4 +1,5 @@
 import { getActiveShellHomePath } from '@/shell/shellFlag';
+import { getSubbieShellPathForClassicPath } from '@/shell/subbieShellRoutes';
 import { hasSubcontractorPortalIdentity, type DashboardRole } from '@/lib/subcontractorIdentity';
 
 export type RedirectUser = {
@@ -46,25 +47,11 @@ function getRedirectPathname(redirect: string): string {
 }
 
 function mapLegacySubbiePortalPath(pathname: string): string | null {
-  if (pathname === '/' || pathname === '/dashboard' || pathname === '/subcontractor-portal') {
+  if (pathname === '/' || pathname === '/dashboard') {
     return '/p';
   }
-  if (pathname === '/subcontractor-portal/docket/new') return '/p/docket';
-  if (pathname === '/subcontractor-portal/dockets') return '/p/dockets';
-  if (pathname === '/subcontractor-portal/work') return '/p/work';
-  if (pathname === '/subcontractor-portal/itps') return '/p/itps';
-  if (pathname === '/subcontractor-portal/holdpoints') return '/p/quality';
-  if (pathname === '/subcontractor-portal/tests') return '/p/quality';
-  if (pathname === '/subcontractor-portal/ncrs') return '/p/ncrs';
-  if (pathname === '/subcontractor-portal/documents') return '/p/docs';
 
-  const docketMatch = pathname.match(/^\/subcontractor-portal\/docket\/([^/]+)$/);
-  if (docketMatch) return `/p/docket/${docketMatch[1]}`;
-
-  const lotItpMatch = pathname.match(/^\/subcontractor-portal\/lots\/([^/]+)\/itp$/);
-  if (lotItpMatch) return `/p/lots/${lotItpMatch[1]}/itp`;
-
-  return null;
+  return getSubbieShellPathForClassicPath(pathname);
 }
 
 function mapLegacyForemanPath(pathname: string): string | null {
@@ -103,6 +90,14 @@ function isAllowedPostLoginRedirect(redirect: string, user: RedirectUser): boole
 
   if (redirect === '/subcontractor-portal' || redirect.startsWith('/subcontractor-portal/')) {
     return hasSubcontractorPortalIdentity(user);
+  }
+
+  if (redirect === '/p' || redirect.startsWith('/p/')) {
+    return hasSubcontractorPortalIdentity(user);
+  }
+
+  if (redirect === '/m' || redirect.startsWith('/m/')) {
+    return getActiveShellHomePath(user) === '/m';
   }
 
   return true;

@@ -117,6 +117,14 @@ function EnvelopeMark() {
   );
 }
 
+function buildGoogleOAuthHref(redirect: string | null): string {
+  if (!redirect) {
+    return apiUrl('/api/auth/google');
+  }
+
+  return apiUrl(`/api/auth/google?redirect=${encodeURIComponent(redirect)}`);
+}
+
 export function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [magicLinkMode, setMagicLinkMode] = useState(false); // Feature #415: Magic link mode
@@ -133,6 +141,8 @@ export function LoginPage() {
 
   // Check if session expired
   const sessionExpired = location.state?.sessionExpired === true;
+  const stateMessage =
+    typeof location.state?.message === 'string' ? location.state.message.trim() : '';
 
   // Main login form
   const loginForm = useForm<LoginFormData>({
@@ -243,6 +253,23 @@ export function LoginPage() {
 
   const mfaCodeValue = mfaForm.watch('mfaCode');
   const canSubmitMfa = mfaCodeValue.length === 6 || mfaCodeValue.length === 10;
+  const requestedRedirect = getRequestedPostLoginRedirect(searchParams, location.state);
+  const googleOAuthHref = buildGoogleOAuthHref(requestedRedirect);
+
+  if (authLoading) {
+    return (
+      <div className="sp-auth">
+        <div className="stage">
+          <div className="auth">
+            <div className="card text-center" role="status" aria-label="Checking existing session">
+              <div className="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+              <p className="card-sub mt-4">Checking your session...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   let cardLabel = 'AUTH / 01';
   let cardContent: React.ReactNode;
@@ -418,6 +445,13 @@ export function LoginPage() {
             </div>
           )}
 
+          {stateMessage && !sessionExpired && (
+            <div className="note green" role="status" aria-live="polite">
+              <span className="ic">✓</span>
+              {stateMessage}
+            </div>
+          )}
+
           {loginForm.formState.errors.root?.message && (
             <div className="note red" role="alert" aria-live="assertive">
               <span className="ic">!</span>
@@ -491,7 +525,7 @@ export function LoginPage() {
             </button>
 
             {/* Feature #414, #1004: Google OAuth Sign In */}
-            <a className="btn" href={apiUrl('/api/auth/google')}>
+            <a className="btn" href={googleOAuthHref}>
               <GoogleMark />
               Continue with Google
             </a>

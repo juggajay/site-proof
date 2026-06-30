@@ -10,6 +10,7 @@ import {
   getItpChecklistProgress,
   getItpVerificationDisplay,
   groupItpChecklistItemsByCategory,
+  isItpCompletionAcceptedForProgress,
   isItpTemplateActivityMatch,
   sortItpTemplatesForLotActivity,
   toggleExpandedItpCategory,
@@ -101,7 +102,7 @@ describe('getItpChecklistProgress', () => {
     });
   });
 
-  it('preserves the current completion-count behavior even when completions exceed items', () => {
+  it('ignores completions that do not belong to a checklist item', () => {
     const progress = getItpChecklistProgress(
       [item({ id: 'item-1' })],
       [
@@ -110,12 +111,97 @@ describe('getItpChecklistProgress', () => {
       ],
     );
 
-    expect(progress.finishedItems).toBe(2);
-    expect(progress.percentage).toBe(200);
+    expect(progress.finishedItems).toBe(1);
+    expect(progress.percentage).toBe(100);
+  });
+
+  it('does not count pending-verification or rejected completions as finished', () => {
+    const progress = getItpChecklistProgress(
+      [
+        item({ id: 'accepted' }),
+        item({ id: 'pending-review' }),
+        item({ id: 'rejected' }),
+        item({ id: 'na-review' }),
+      ],
+      [
+        completion({ checklistItemId: 'accepted', isCompleted: true, isVerified: true }),
+        completion({
+          checklistItemId: 'pending-review',
+          isCompleted: true,
+          isPendingVerification: true,
+          verificationStatus: 'pending_verification',
+        }),
+        completion({
+          checklistItemId: 'rejected',
+          isCompleted: true,
+          isRejected: true,
+          verificationStatus: 'rejected',
+        }),
+        completion({
+          checklistItemId: 'na-review',
+          isNotApplicable: true,
+          verificationStatus: 'pending_verification',
+        }),
+      ],
+    );
+
+    expect(progress).toEqual({
+      totalItems: 4,
+      completedItems: 1,
+      naItems: 0,
+      finishedItems: 1,
+      percentage: 25,
+    });
+  });
+
+  it('counts backend N/A double-flag rows once, as N/A not completed', () => {
+    const progress = getItpChecklistProgress(
+      [item({ id: 'na' })],
+      [completion({ checklistItemId: 'na', isCompleted: true, isNotApplicable: true })],
+    );
+
+    expect(progress).toEqual({
+      totalItems: 1,
+      completedItems: 0,
+      naItems: 1,
+      finishedItems: 1,
+      percentage: 100,
+    });
   });
 
   it('returns zero percent when the template has no checklist items', () => {
     expect(getItpChecklistProgress([], [completion({ isCompleted: true })]).percentage).toBe(0);
+  });
+});
+
+describe('isItpCompletionAcceptedForProgress', () => {
+  it('accepts completed and N/A items that are not awaiting or rejected by verification', () => {
+    expect(
+      isItpCompletionAcceptedForProgress(completion({ isCompleted: true, isVerified: true })),
+    ).toBe(true);
+    expect(isItpCompletionAcceptedForProgress(completion({ isNotApplicable: true }))).toBe(true);
+  });
+
+  it('rejects pending-verification and rejected rows even when they have a finished status', () => {
+    expect(
+      isItpCompletionAcceptedForProgress(
+        completion({
+          isCompleted: true,
+          isPendingVerification: true,
+          verificationStatus: 'pending_verification',
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      isItpCompletionAcceptedForProgress(
+        completion({ isNotApplicable: true, verificationStatus: 'pending_verification' }),
+      ),
+    ).toBe(false);
+    expect(
+      isItpCompletionAcceptedForProgress(
+        completion({ isCompleted: true, isRejected: true, verificationStatus: 'rejected' }),
+      ),
+    ).toBe(false);
   });
 });
 
@@ -148,13 +234,53 @@ describe('filterItpChecklistItems', () => {
     completion({ checklistItemId: 'completed', isCompleted: true }),
     completion({ checklistItemId: 'na', isNotApplicable: true }),
     completion({ checklistItemId: 'failed', isFailed: true }),
+    completion({
+      checklistItemId: 'pending-verification',
+      isCompleted: true,
+      isPendingVerification: true,
+      verificationStatus: 'pending_verification',
+    }),
+    completion({
+      checklistItemId: 'rejected',
+      isCompleted: true,
+      isRejected: true,
+      verificationStatus: 'rejected',
+    }),
   ];
 
   it('keeps all items for the all filter unless incomplete-only is enabled', () => {
-    expect(filterItpChecklistItems(checklistItems, completions, 'all', false)).toHaveLength(4);
+    const itemsWithReviewStates = [
+      ...checklistItems,
+      item({ id: 'pending-verification' }),
+      item({ id: 'rejected' }),
+    ];
+    expect(filterItpChecklistItems(itemsWithReviewStates, completions, 'all', false)).toHaveLength(
+      6,
+    );
+    expect(filterItpChecklistItems(itemsWithReviewStates, completions, 'all', true)).toEqual([
+      expect.objectContaining({ id: 'pending' }),
+      expect.objectContaining({ id: 'pending-verification' }),
+      expect.objectContaining({ id: 'rejected' }),
+    ]);
+  });
+
+  it('does not treat pending-verification or rejected rows as completed filter matches', () => {
+    const itemsWithReviewStates = [
+      ...checklistItems,
+      item({ id: 'pending-verification' }),
+      item({ id: 'rejected' }),
+    ];
     expect(filterItpChecklistItems(checklistItems, completions, 'all', true)).toEqual([
       expect.objectContaining({ id: 'pending' }),
     ]);
+    expect(filterItpChecklistItems(itemsWithReviewStates, completions, 'pending', false)).toEqual([
+      expect.objectContaining({ id: 'pending' }),
+      expect.objectContaining({ id: 'pending-verification' }),
+      expect.objectContaining({ id: 'rejected' }),
+    ]);
+    expect(filterItpChecklistItems(itemsWithReviewStates, completions, 'completed', false)).toEqual(
+      [expect.objectContaining({ id: 'completed' })],
+    );
   });
 
   it('filters pending, completed, not-applicable, and failed states exactly', () => {
@@ -169,6 +295,20 @@ describe('filterItpChecklistItems', () => {
     ]);
     expect(filterItpChecklistItems(checklistItems, completions, 'failed', false)).toEqual([
       expect.objectContaining({ id: 'failed' }),
+    ]);
+  });
+
+  it('filters backend N/A double-flag rows as N/A only', () => {
+    const doubleFlagItems = [item({ id: 'na' })];
+    const doubleFlagCompletions = [
+      completion({ checklistItemId: 'na', isCompleted: true, isNotApplicable: true }),
+    ];
+
+    expect(
+      filterItpChecklistItems(doubleFlagItems, doubleFlagCompletions, 'completed', false),
+    ).toEqual([]);
+    expect(filterItpChecklistItems(doubleFlagItems, doubleFlagCompletions, 'na', false)).toEqual([
+      expect.objectContaining({ id: 'na' }),
     ]);
   });
 });
@@ -186,6 +326,33 @@ describe('getItpCategoryProgress', () => {
       ),
     ).toEqual({
       completedInCategory: 2,
+      totalInCategory: 3,
+      isCategoryComplete: false,
+    });
+  });
+
+  it('does not count pending-verification or rejected rows as category complete', () => {
+    expect(
+      getItpCategoryProgress(
+        [item({ id: 'accepted' }), item({ id: 'pending-review' }), item({ id: 'rejected' })],
+        [
+          completion({ checklistItemId: 'accepted', isCompleted: true }),
+          completion({
+            checklistItemId: 'pending-review',
+            isCompleted: true,
+            isPendingVerification: true,
+            verificationStatus: 'pending_verification',
+          }),
+          completion({
+            checklistItemId: 'rejected',
+            isCompleted: true,
+            isRejected: true,
+            verificationStatus: 'rejected',
+          }),
+        ],
+      ),
+    ).toEqual({
+      completedInCategory: 1,
       totalInCategory: 3,
       isCategoryComplete: false,
     });

@@ -27,6 +27,24 @@ function optionalNumericValue(value: NumericLike): number | null {
   return Number(value) || 0;
 }
 
+function includesCommercialAmounts(options: CommercialPresentationOptions = {}): boolean {
+  return options.includeCommercialAmounts !== false;
+}
+
+function commercialNumericValue(
+  value: NumericLike,
+  options: CommercialPresentationOptions = {},
+): number | null {
+  return includesCommercialAmounts(options) ? numericValue(value) : null;
+}
+
+function commercialOptionalNumericValue(
+  value: NumericLike,
+  options: CommercialPresentationOptions = {},
+): number | null {
+  return includesCommercialAmounts(options) ? optionalNumericValue(value) : null;
+}
+
 export type DocketLabourEntrySource = {
   id: string;
   employee: {
@@ -68,7 +86,8 @@ export type DocketPlantEntrySource = {
   adjustmentReason: string | null;
 };
 
-type PresentationOptions = { includeAdjustmentReason?: boolean };
+type CommercialPresentationOptions = { includeCommercialAmounts?: boolean };
+type PresentationOptions = CommercialPresentationOptions & { includeAdjustmentReason?: boolean };
 
 export function mapDocketLabourEntry(
   entry: DocketLabourEntrySource,
@@ -80,15 +99,15 @@ export function mapDocketLabourEntry(
       id: entry.employee.id,
       name: entry.employee.name,
       role: entry.employee.role,
-      hourlyRate: numericValue(entry.employee.hourlyRate),
+      hourlyRate: commercialNumericValue(entry.employee.hourlyRate, options),
     },
     startTime: entry.startTime,
     finishTime: entry.finishTime,
     submittedHours: numericValue(entry.submittedHours),
     approvedHours: numericValue(entry.approvedHours),
-    hourlyRate: numericValue(entry.hourlyRate),
-    submittedCost: numericValue(entry.submittedCost),
-    approvedCost: numericValue(entry.approvedCost),
+    hourlyRate: commercialNumericValue(entry.hourlyRate, options),
+    submittedCost: commercialNumericValue(entry.submittedCost, options),
+    approvedCost: commercialNumericValue(entry.approvedCost, options),
   };
 
   const lotAllocations = entry.lotAllocations.map((a) => ({
@@ -115,14 +134,14 @@ export function mapDocketPlantEntry(
       type: entry.plant.type,
       description: entry.plant.description,
       idRego: entry.plant.idRego,
-      dryRate: numericValue(entry.plant.dryRate),
-      wetRate: numericValue(entry.plant.wetRate),
+      dryRate: commercialNumericValue(entry.plant.dryRate, options),
+      wetRate: commercialNumericValue(entry.plant.wetRate, options),
     },
     hoursOperated: numericValue(entry.hoursOperated),
     wetOrDry: entry.wetOrDry || 'dry',
-    hourlyRate: numericValue(entry.hourlyRate),
-    submittedCost: numericValue(entry.submittedCost),
-    approvedCost: numericValue(entry.approvedCost),
+    hourlyRate: commercialNumericValue(entry.hourlyRate, options),
+    submittedCost: commercialNumericValue(entry.submittedCost, options),
+    approvedCost: commercialNumericValue(entry.approvedCost, options),
   };
 
   if (options.includeAdjustmentReason) {
@@ -135,26 +154,26 @@ export function mapDocketPlantEntry(
 export function sumDocketLabourTotals(
   entries: Array<{
     submittedHours: number;
-    submittedCost: number;
+    submittedCost: NumericLike;
     approvedHours: number;
-    approvedCost: number;
+    approvedCost: NumericLike;
   }>,
 ): { submittedHours: number; submittedCost: number; approvedHours: number; approvedCost: number } {
   return {
     submittedHours: entries.reduce((sum, e) => sum + e.submittedHours, 0),
-    submittedCost: entries.reduce((sum, e) => sum + e.submittedCost, 0),
+    submittedCost: entries.reduce((sum, e) => sum + numericValue(e.submittedCost), 0),
     approvedHours: entries.reduce((sum, e) => sum + e.approvedHours, 0),
-    approvedCost: entries.reduce((sum, e) => sum + e.approvedCost, 0),
+    approvedCost: entries.reduce((sum, e) => sum + numericValue(e.approvedCost), 0),
   };
 }
 
 export function sumDocketPlantTotals(
-  entries: Array<{ hoursOperated: number; submittedCost: number; approvedCost: number }>,
+  entries: Array<{ hoursOperated: number; submittedCost: NumericLike; approvedCost: NumericLike }>,
 ): { hours: number; submittedCost: number; approvedCost: number } {
   return {
     hours: entries.reduce((sum, e) => sum + e.hoursOperated, 0),
-    submittedCost: entries.reduce((sum, e) => sum + e.submittedCost, 0),
-    approvedCost: entries.reduce((sum, e) => sum + e.approvedCost, 0),
+    submittedCost: entries.reduce((sum, e) => sum + numericValue(e.submittedCost), 0),
+    approvedCost: entries.reduce((sum, e) => sum + numericValue(e.approvedCost), 0),
   };
 }
 
@@ -186,7 +205,10 @@ export type DocketListItemSource = {
   foremanNotes: string | null;
 };
 
-export function mapDocketListItem(docket: DocketListItemSource) {
+export function mapDocketListItem(
+  docket: DocketListItemSource,
+  options: CommercialPresentationOptions = {},
+) {
   return {
     id: docket.id,
     docketNumber: formatDocketNumber(docket.id),
@@ -203,12 +225,17 @@ export function mapDocketListItem(docket: DocketListItemSource) {
       (sum, entry) => sum + numericValue(entry.hoursOperated),
       0,
     ),
-    totalLabourSubmitted: numericValue(docket.totalLabourSubmitted),
+    labourEntryCount: docket.labourEntries.length,
+    plantEntryCount: docket.plantEntries.length,
+    totalLabourSubmitted: commercialNumericValue(docket.totalLabourSubmitted, options),
     totalLabourApproved: numericValue(docket.totalLabourApproved),
-    totalPlantSubmitted: numericValue(docket.totalPlantSubmitted),
+    totalPlantSubmitted: commercialNumericValue(docket.totalPlantSubmitted, options),
     totalPlantApproved: numericValue(docket.totalPlantApproved),
-    totalLabourApprovedCost: optionalNumericValue(docket.totalLabourApprovedCost),
-    totalPlantApprovedCost: optionalNumericValue(docket.totalPlantApprovedCost),
+    totalLabourApprovedCost: commercialOptionalNumericValue(
+      docket.totalLabourApprovedCost,
+      options,
+    ),
+    totalPlantApprovedCost: commercialOptionalNumericValue(docket.totalPlantApprovedCost, options),
     submittedAt: docket.submittedAt,
     approvedAt: docket.approvedAt,
     foremanNotes: docket.foremanNotes,
@@ -228,19 +255,36 @@ export function buildDocketListResponse(
 
 export function buildDocketLabourEntriesResponse(
   labourEntries: Array<ReturnType<typeof mapDocketLabourEntry>>,
+  options: CommercialPresentationOptions = {},
 ) {
+  const totals = sumDocketLabourTotals(labourEntries);
   return {
     labourEntries,
-    totals: sumDocketLabourTotals(labourEntries),
+    totals: includesCommercialAmounts(options)
+      ? totals
+      : {
+          submittedHours: totals.submittedHours,
+          submittedCost: null,
+          approvedHours: totals.approvedHours,
+          approvedCost: null,
+        },
   };
 }
 
 export function buildDocketPlantEntriesResponse(
   plantEntries: Array<ReturnType<typeof mapDocketPlantEntry>>,
+  options: CommercialPresentationOptions = {},
 ) {
+  const totals = sumDocketPlantTotals(plantEntries);
   return {
     plantEntries,
-    totals: sumDocketPlantTotals(plantEntries),
+    totals: includesCommercialAmounts(options)
+      ? totals
+      : {
+          hours: totals.hours,
+          submittedCost: null,
+          approvedCost: null,
+        },
   };
 }
 
@@ -295,8 +339,18 @@ export function buildDocketDetailResponse(input: {
   approvedBy: DocketUserSummary | null;
   foremanDiary: ForemanDiarySummary | null;
   discrepancies: string[];
+  includeCommercialAmounts?: boolean;
 }) {
-  const { docket, project, submittedBy, approvedBy, foremanDiary, discrepancies } = input;
+  const {
+    docket,
+    project,
+    submittedBy,
+    approvedBy,
+    foremanDiary,
+    discrepancies,
+    includeCommercialAmounts,
+  } = input;
+  const commercialOptions = { includeCommercialAmounts };
   return {
     docket: {
       id: docket.id,
@@ -315,14 +369,24 @@ export function buildDocketDetailResponse(input: {
       approvedAt: docket.approvedAt,
       approvedById: docket.approvedById,
       approvedBy,
-      totalLabourSubmitted: numericValue(docket.totalLabourSubmitted),
+      totalLabourSubmitted: commercialNumericValue(docket.totalLabourSubmitted, commercialOptions),
       totalLabourApproved: numericValue(docket.totalLabourApproved),
-      totalPlantSubmitted: numericValue(docket.totalPlantSubmitted),
+      totalPlantSubmitted: commercialNumericValue(docket.totalPlantSubmitted, commercialOptions),
       totalPlantApproved: numericValue(docket.totalPlantApproved),
-      totalLabourApprovedCost: optionalNumericValue(docket.totalLabourApprovedCost),
-      totalPlantApprovedCost: optionalNumericValue(docket.totalPlantApprovedCost),
-      labourEntries: docket.labourEntries.map((entry) => mapDocketLabourEntry(entry)),
-      plantEntries: docket.plantEntries.map((entry) => mapDocketPlantEntry(entry)),
+      totalLabourApprovedCost: commercialOptionalNumericValue(
+        docket.totalLabourApprovedCost,
+        commercialOptions,
+      ),
+      totalPlantApprovedCost: commercialOptionalNumericValue(
+        docket.totalPlantApprovedCost,
+        commercialOptions,
+      ),
+      labourEntries: docket.labourEntries.map((entry) =>
+        mapDocketLabourEntry(entry, commercialOptions),
+      ),
+      plantEntries: docket.plantEntries.map((entry) =>
+        mapDocketPlantEntry(entry, commercialOptions),
+      ),
     },
     foremanDiary,
     discrepancies: discrepancies.length > 0 ? discrepancies : null,

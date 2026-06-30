@@ -1,6 +1,7 @@
 // Feature #776: Privacy Consent Tracking
 import { Router, Request, Response } from 'express';
 import { Prisma } from '@prisma/client';
+import { requireBrowserSession } from '../middleware/browserSession.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
 import { prisma } from '../lib/prisma.js';
 import { AppError } from '../lib/AppError.js';
@@ -139,6 +140,7 @@ router.get(
 router.post(
   '/',
   asyncHandler(async (req: Request, res: Response) => {
+    requireBrowserSession(req, 'Consent recording');
     const userId = req.user!.id;
 
     const validation = recordConsentSchema.safeParse(req.body);
@@ -169,6 +171,7 @@ router.post(
 router.post(
   '/bulk',
   asyncHandler(async (req: Request, res: Response) => {
+    requireBrowserSession(req, 'Consent recording');
     const userId = req.user!.id;
 
     const validation = bulkConsentSchema.safeParse(req.body);
@@ -227,6 +230,7 @@ router.get(
 router.post(
   '/withdraw-all',
   asyncHandler(async (req: Request, res: Response) => {
+    requireBrowserSession(req, 'Consent withdrawal');
     const userId = req.user!.id;
 
     const ipAddress = req.ip || req.connection?.remoteAddress || null;

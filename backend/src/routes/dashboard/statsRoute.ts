@@ -185,7 +185,7 @@ dashboardStatsRouter.get(
         name: ncr.project.name,
         projectNumber: ncr.project.projectNumber,
       },
-      link: `/projects/${ncr.project.id}/ncr?ncrId=${ncr.id}`,
+      link: `/projects/${ncr.project.id}/ncr?ncr=${ncr.id}`,
     }));
 
     const formattedStaleHPs = staleHoldPoints.map((hp) => ({
@@ -249,7 +249,7 @@ dashboardStatsRouter.get(
         type: 'ncr' as const,
         description: `NCR ${ncr.ncrNumber} status: ${ncr.status}`,
         timestamp: ncr.updatedAt.toISOString(),
-        link: `/projects/${ncr.project.id}/ncr?ncrId=${ncr.id}`,
+        link: `/projects/${ncr.project.id}/ncr?ncr=${ncr.id}`,
       })),
       ...recentLots.map((lot) => ({
         id: `lot-${lot.id}`,

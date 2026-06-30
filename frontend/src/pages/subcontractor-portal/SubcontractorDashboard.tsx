@@ -212,7 +212,7 @@ export function SubcontractorDashboard() {
   const recentDockets = docketsData?.filter((d: Docket) => d.date !== today).slice(0, 5) ?? [];
   const canViewAssignedLots = isPortalModuleEnabled(company, 'lots');
 
-  const { data: assignedLots = [] } = useQuery({
+  const { data: assignedLotsData } = useQuery({
     queryKey: queryKeys.portalAssignedWork(user?.id, company?.projectId, company?.id),
     queryFn: async () => {
       const res = await apiFetch<{ lots: Lot[] }>(
@@ -225,6 +225,8 @@ export function SubcontractorDashboard() {
     },
     enabled: !!user?.id && !!company?.projectId && canViewAssignedLots,
   });
+  const assignedLots = assignedLotsData ?? [];
+  const hasAssignedLotsResponse = assignedLotsData !== undefined;
 
   const { data: notifData } = useQuery({
     queryKey: queryKeys.portalDashboard(user?.id),
@@ -265,7 +267,7 @@ export function SubcontractorDashboard() {
     approvedEmployeeCount: approvedEmployees.length,
     approvedPlantCount: approvedPlant.length,
     lotsModuleEnabled: canViewAssignedLots,
-    assignedLotCount: assignedLots.length,
+    assignedLotCount: hasAssignedLotsResponse ? assignedLots.length : 1,
   });
 
   const loading = companyLoading;
@@ -537,7 +539,12 @@ export function SubcontractorDashboard() {
             </div>
           </div>
           <div className="p-4 pt-2">
-            {assignedLots.length > 0 ? (
+            {!hasAssignedLotsResponse ? (
+              <div className="space-y-2 py-1" aria-label="Loading assigned lots">
+                <Skeleton className="h-9 w-full rounded-lg" />
+                <Skeleton className="h-9 w-full rounded-lg" />
+              </div>
+            ) : assignedLots.length > 0 ? (
               <div className="space-y-2">
                 {assignedLots.map((lot) => (
                   <div

@@ -25,6 +25,7 @@ function makeInstance({
   instanceStatus = 'not_started',
   items,
   completions,
+  holdPoints = [],
 }: {
   lotStatus?: string;
   instanceStatus?: string;
@@ -32,17 +33,23 @@ function makeInstance({
     id: string;
     evidenceRequired?: string | null;
     testType?: string | null;
+    pointType?: string | null;
+    responsibleParty?: string | null;
   }>;
   completions: Array<{
     checklistItemId: string;
     status: string;
     verificationStatus?: string | null;
   }>;
+  holdPoints?: Array<{
+    itpChecklistItemId: string;
+    status: string;
+  }>;
 }) {
   return {
     id: 'itp-1',
     status: instanceStatus,
-    lot: { id: 'lot-1', status: lotStatus },
+    lot: { id: 'lot-1', status: lotStatus, holdPoints },
     templateSnapshot: null,
     template: { checklistItems: items },
     completions,
@@ -90,6 +97,129 @@ describe('updateLotStatusFromITP', () => {
 
     expect(mocks.lotUpdate).not.toHaveBeenCalled();
     expect(mocks.instanceUpdate).not.toHaveBeenCalled();
+  });
+
+  it('does not count a pending-verification completion toward auto-progression', async () => {
+    mocks.instanceFindUnique.mockResolvedValue(
+      makeInstance({
+        items: [{ id: 'item-1', evidenceRequired: 'none', testType: null }],
+        completions: [
+          {
+            checklistItemId: 'item-1',
+            status: 'completed',
+            verificationStatus: 'pending_verification',
+          },
+        ],
+      }),
+    );
+
+    await updateLotStatusFromITP('itp-1');
+
+    expect(mocks.lotUpdate).not.toHaveBeenCalled();
+    expect(mocks.instanceUpdate).not.toHaveBeenCalled();
+  });
+
+  it('counts an accepted N/A completion toward auto-progression', async () => {
+    mocks.instanceFindUnique.mockResolvedValue(
+      makeInstance({
+        items: [{ id: 'item-1', evidenceRequired: 'none', testType: null }],
+        completions: [
+          { checklistItemId: 'item-1', status: 'not_applicable', verificationStatus: 'none' },
+        ],
+      }),
+    );
+
+    await updateLotStatusFromITP('itp-1');
+
+    expect(mocks.lotUpdate).toHaveBeenCalledWith({
+      where: { id: 'lot-1' },
+      data: { status: 'completed' },
+    });
+    expect(mocks.instanceUpdate).toHaveBeenCalledWith({
+      where: { id: 'itp-1' },
+      data: { status: 'completed' },
+    });
+  });
+
+  it.each(['pending_verification', 'rejected'])(
+    'does not count an N/A completion with %s verification toward auto-progression',
+    async (verificationStatus) => {
+      mocks.instanceFindUnique.mockResolvedValue(
+        makeInstance({
+          items: [{ id: 'item-1', evidenceRequired: 'none', testType: null }],
+          completions: [
+            { checklistItemId: 'item-1', status: 'not_applicable', verificationStatus },
+          ],
+        }),
+      );
+
+      await updateLotStatusFromITP('itp-1');
+
+      expect(mocks.lotUpdate).not.toHaveBeenCalled();
+      expect(mocks.instanceUpdate).not.toHaveBeenCalled();
+    },
+  );
+
+  it('does not count an N/A hold-point item before the hold point is released', async () => {
+    mocks.instanceFindUnique.mockResolvedValue(
+      makeInstance({
+        items: [
+          {
+            id: 'hold-point-1',
+            evidenceRequired: 'none',
+            testType: null,
+            pointType: 'hold_point',
+          },
+        ],
+        completions: [
+          {
+            checklistItemId: 'hold-point-1',
+            status: 'not_applicable',
+            verificationStatus: 'none',
+          },
+        ],
+        holdPoints: [{ itpChecklistItemId: 'hold-point-1', status: 'notified' }],
+      }),
+    );
+
+    await updateLotStatusFromITP('itp-1');
+
+    expect(mocks.lotUpdate).not.toHaveBeenCalled();
+    expect(mocks.instanceUpdate).not.toHaveBeenCalled();
+  });
+
+  it('counts an N/A hold-point item once the hold point is released', async () => {
+    mocks.instanceFindUnique.mockResolvedValue(
+      makeInstance({
+        items: [
+          {
+            id: 'hold-point-1',
+            evidenceRequired: 'none',
+            testType: null,
+            pointType: 'hold_point',
+          },
+        ],
+        completions: [
+          {
+            checklistItemId: 'hold-point-1',
+            status: 'not_applicable',
+            verificationStatus: 'none',
+          },
+        ],
+        holdPoints: [{ itpChecklistItemId: 'hold-point-1', status: 'released' }],
+      }),
+    );
+
+    await updateLotStatusFromITP('itp-1');
+
+    expect(mocks.lotUpdate).toHaveBeenCalledWith({
+      where: { id: 'lot-1' },
+      data: { status: 'completed' },
+    });
+    expect(mocks.instanceUpdate).toHaveBeenCalledWith({
+      where: { id: 'itp-1' },
+      data: { status: 'completed' },
+    });
   });
 
   it('moves a partially completed not-started ITP to in progress', async () => {

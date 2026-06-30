@@ -1,10 +1,15 @@
+import fs from 'fs';
+import path from 'path';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import { authRouter } from './auth.js';
 import { reportsRouter } from './reports.js';
 import { prisma } from '../lib/prisma.js';
+import { parseAuditLogChanges } from '../lib/auditLog.js';
 import { ARCHIVED_PROJECT_READ_ONLY_MESSAGE } from '../lib/projectAccess.js';
+import { calculateScheduledReportArtifactSha256 } from '../lib/scheduledReports/artifacts.js';
+import { ensureUploadSubdirectory } from '../lib/uploadPaths.js';
 import { errorHandler } from '../middleware/errorHandler.js';
 import { registerTestUser } from '../test/routeTestHarness.js';
 
@@ -21,6 +26,44 @@ function reactivateSchedule(authToken: string, id: string) {
     .send({
       isActive: true,
     });
+}
+
+async function createLocalScheduledReportArtifactRun(params: {
+  projectId: string;
+  scheduleId: string;
+  reportType?: string;
+  pdfBytes?: Buffer;
+}) {
+  const runId = `artifact-run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const pdfBytes = params.pdfBytes ?? Buffer.from('%PDF-1.4\nscheduled report artifact\n');
+  const directory = ensureUploadSubdirectory(
+    `scheduled-reports/${params.projectId}/${params.scheduleId}`,
+  );
+  const filePath = path.join(directory, `${runId}.pdf`);
+  await fs.promises.writeFile(filePath, pdfBytes);
+
+  const run = await prisma.scheduledReportRun.create({
+    data: {
+      id: runId,
+      scheduleId: params.scheduleId,
+      projectId: params.projectId,
+      reportType: params.reportType ?? 'lot-status',
+      status: 'sent',
+      recipientCount: 1,
+      sentCount: 1,
+      generatedAt: new Date('2026-06-30T00:00:00.000Z'),
+      completedAt: new Date('2026-06-30T00:00:00.000Z'),
+      artifactFileUrl: `uploads/scheduled-reports/${params.projectId}/${params.scheduleId}/${runId}.pdf`,
+      artifactReportName: 'Lot Status Report - Access Project',
+      artifactFilename: 'Lot_Status_Report.pdf',
+      artifactMimeType: 'application/pdf',
+      artifactFileSize: pdfBytes.length,
+      artifactSha256: calculateScheduledReportArtifactSha256(pdfBytes),
+      artifactCreatedAt: new Date('2026-06-30T00:00:00.000Z'),
+    },
+  });
+
+  return { run, filePath, pdfBytes };
 }
 
 describe('Reports API - Project Access', () => {
@@ -226,6 +269,87 @@ describe('Reports API - Project Access', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.projectId).toBe(projectId);
+  });
+
+  it('should let project report users download scheduled report artifacts', async () => {
+    const { run, filePath, pdfBytes } = await createLocalScheduledReportArtifactRun({
+      projectId,
+      scheduleId,
+    });
+
+    try {
+      const adminRes = await request(app)
+        .get(`/api/reports/scheduled-runs/${run.id}/artifact`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(adminRes.status).toBe(200);
+      expect(adminRes.headers['content-type']).toContain('application/pdf');
+      expect(adminRes.headers['content-disposition']).toBe(
+        'attachment; filename="Lot_Status_Report.pdf"',
+      );
+      expect(adminRes.headers['x-content-type-options']).toBe('nosniff');
+      expect(adminRes.headers['cache-control']).toContain('no-store');
+      expect(adminRes.headers['content-length']).toBe(String(pdfBytes.length));
+
+      const internalRes = await request(app)
+        .get(`/api/reports/scheduled-runs/${run.id}/artifact`)
+        .set('Authorization', `Bearer ${nonCommercialToken}`);
+
+      expect(internalRes.status).toBe(200);
+    } finally {
+      await prisma.scheduledReportRun.deleteMany({ where: { id: run.id } });
+      await fs.promises.unlink(filePath).catch(() => {});
+    }
+  });
+
+  it('should deny scheduled report artifact downloads outside project report access', async () => {
+    const { run, filePath } = await createLocalScheduledReportArtifactRun({
+      projectId,
+      scheduleId,
+    });
+
+    try {
+      const outsiderRes = await request(app)
+        .get(`/api/reports/scheduled-runs/${run.id}/artifact`)
+        .set('Authorization', `Bearer ${outsiderToken}`);
+      const subcontractorRes = await request(app)
+        .get(`/api/reports/scheduled-runs/${run.id}/artifact`)
+        .set('Authorization', `Bearer ${subcontractorToken}`);
+      const pendingRes = await request(app)
+        .get(`/api/reports/scheduled-runs/${run.id}/artifact`)
+        .set('Authorization', `Bearer ${pendingToken}`);
+
+      expect(outsiderRes.status).toBe(403);
+      expect(subcontractorRes.status).toBe(403);
+      expect(pendingRes.status).toBe(403);
+    } finally {
+      await prisma.scheduledReportRun.deleteMany({ where: { id: run.id } });
+      await fs.promises.unlink(filePath).catch(() => {});
+    }
+  });
+
+  it('should return not found when a scheduled report run has no artifact', async () => {
+    const run = await prisma.scheduledReportRun.create({
+      data: {
+        scheduleId,
+        projectId,
+        reportType: 'lot-status',
+        status: 'sent',
+        recipientCount: 1,
+        sentCount: 1,
+        generatedAt: new Date('2026-06-30T00:00:00.000Z'),
+      },
+    });
+
+    try {
+      const res = await request(app)
+        .get(`/api/reports/scheduled-runs/${run.id}/artifact`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(res.status).toBe(404);
+    } finally {
+      await prisma.scheduledReportRun.deleteMany({ where: { id: run.id } });
+    }
   });
 
   it('should deny report access for pending project memberships', async () => {
@@ -627,10 +751,17 @@ describe('Reports API - Lot Status Report', () => {
       .set('Authorization', `Bearer ${authToken}`)
       .query({ projectId, limit: 0 });
 
+    const oversizedPageRes = await request(app)
+      .get('/api/reports/lot-status')
+      .set('Authorization', `Bearer ${authToken}`)
+      .query({ projectId, page: 100_000, limit: 500 });
+
     expect(negativePageRes.status).toBe(400);
     expect(negativePageRes.body.error.message).toContain('page');
     expect(zeroLimitRes.status).toBe(400);
     expect(zeroLimitRes.body.error.message).toContain('limit');
+    expect(oversizedPageRes.status).toBe(400);
+    expect(oversizedPageRes.body.error.message).toContain('page is too large');
   });
 });
 
@@ -677,7 +808,8 @@ describe('Reports API - NCR Report', () => {
         projectId,
         ncrNumber: 'NCR-001',
         description: 'Test NCR 1',
-        category: 'minor',
+        category: 'workmanship',
+        severity: 'minor',
         status: 'open',
         raisedAt: new Date(),
         raisedById: userId,
@@ -693,7 +825,8 @@ describe('Reports API - NCR Report', () => {
         projectId,
         ncrNumber: 'NCR-002',
         description: 'Test NCR 2',
-        category: 'major',
+        category: 'materials',
+        severity: 'major',
         status: 'closed',
         raisedAt: yesterday,
         raisedById: userId,
@@ -759,8 +892,10 @@ describe('Reports API - NCR Report', () => {
       .query({ projectId });
 
     expect(res.status).toBe(200);
-    expect(res.body.categoryCounts.minor).toBe(1);
-    expect(res.body.categoryCounts.major).toBe(1);
+    expect(res.body.categoryCounts.workmanship).toBe(1);
+    expect(res.body.categoryCounts.materials).toBe(1);
+    expect(res.body.severityCounts.minor).toBe(1);
+    expect(res.body.severityCounts.major).toBe(1);
     expect(res.body.summary.minor).toBe(1);
     expect(res.body.summary.major).toBe(1);
   });
@@ -971,6 +1106,50 @@ describe('Reports API - Test Results Report', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.tests.length).toBe(2);
+  });
+
+  it('filters test report date-only ranges in the project timezone', async () => {
+    const inLocalDay = await prisma.testResult.create({
+      data: {
+        projectId,
+        lotId,
+        testRequestNumber: 'TR-QLD-IN-DAY',
+        testType: 'Timezone',
+        sampleDate: new Date('2026-05-01T13:30:00.000Z'),
+        status: 'completed',
+        passFail: 'pass',
+      },
+    });
+    const nextLocalDay = await prisma.testResult.create({
+      data: {
+        projectId,
+        lotId,
+        testRequestNumber: 'TR-QLD-NEXT-DAY',
+        testType: 'Timezone',
+        sampleDate: new Date('2026-05-01T14:30:00.000Z'),
+        status: 'completed',
+        passFail: 'pass',
+      },
+    });
+
+    try {
+      await prisma.project.update({ where: { id: projectId }, data: { state: 'QLD' } });
+
+      const res = await request(app)
+        .get('/api/reports/test')
+        .set('Authorization', `Bearer ${authToken}`)
+        .query({ projectId, startDate: '2026-05-01', endDate: '2026-05-01' });
+
+      expect(res.status).toBe(200);
+      expect(
+        res.body.tests.map((test: { testRequestNumber: string }) => test.testRequestNumber),
+      ).toEqual(['TR-QLD-IN-DAY']);
+    } finally {
+      await prisma.project.update({ where: { id: projectId }, data: { state: 'NSW' } });
+      await prisma.testResult.deleteMany({
+        where: { id: { in: [inLocalDay.id, nextLocalDay.id] } },
+      });
+    }
   });
 
   it('should reject invalid test report query filters', async () => {
@@ -1207,6 +1386,49 @@ describe('Reports API - Diary Report', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.diaries.length).toBe(1);
+  });
+
+  it('filters diary report date-only ranges in the project timezone', async () => {
+    const inLocalDay = await prisma.dailyDiary.create({
+      data: {
+        projectId,
+        date: new Date('2026-05-01T13:30:00.000Z'),
+        status: 'submitted',
+        weatherConditions: 'Fine',
+      },
+    });
+    const nextLocalDay = await prisma.dailyDiary.create({
+      data: {
+        projectId,
+        date: new Date('2026-05-01T14:30:00.000Z'),
+        status: 'submitted',
+        weatherConditions: 'Rain',
+      },
+    });
+
+    try {
+      await prisma.project.update({ where: { id: projectId }, data: { state: 'QLD' } });
+
+      const res = await request(app)
+        .get('/api/reports/diary')
+        .set('Authorization', `Bearer ${authToken}`)
+        .query({
+          projectId,
+          startDate: '2026-05-01',
+          endDate: '2026-05-01',
+          sections: 'weather',
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.diaries.map((diary: { id: string }) => diary.id)).toEqual([inLocalDay.id]);
+      expect(res.body.summary.weather.Fine).toBe(1);
+      expect(res.body.summary.weather.Rain).toBeUndefined();
+    } finally {
+      await prisma.project.update({ where: { id: projectId }, data: { state: 'NSW' } });
+      await prisma.dailyDiary.deleteMany({
+        where: { id: { in: [inLocalDay.id, nextLocalDay.id] } },
+      });
+    }
   });
 
   it('should support pagination', async () => {
@@ -1568,6 +1790,50 @@ describe('Reports API - Claims Report', () => {
     expect(res.body.claims.length).toBe(1);
   });
 
+  it('filters claim report date-only ranges in the project timezone', async () => {
+    const inLocalDay = await prisma.progressClaim.create({
+      data: {
+        projectId,
+        claimNumber: 9101,
+        claimPeriodStart: new Date('2026-04-01T00:00:00.000Z'),
+        claimPeriodEnd: new Date('2026-05-01T13:30:00.000Z'),
+        status: 'submitted',
+        preparedById: userId,
+        totalClaimedAmount: 100,
+      },
+    });
+    const nextLocalDay = await prisma.progressClaim.create({
+      data: {
+        projectId,
+        claimNumber: 9102,
+        claimPeriodStart: new Date('2026-04-01T00:00:00.000Z'),
+        claimPeriodEnd: new Date('2026-05-01T14:30:00.000Z'),
+        status: 'submitted',
+        preparedById: userId,
+        totalClaimedAmount: 100,
+      },
+    });
+
+    try {
+      await prisma.project.update({ where: { id: projectId }, data: { state: 'QLD' } });
+
+      const res = await request(app)
+        .get('/api/reports/claims')
+        .set('Authorization', `Bearer ${authToken}`)
+        .query({ projectId, startDate: '2026-05-01', endDate: '2026-05-01' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.claims.map((claim: { claimNumber: number }) => claim.claimNumber)).toEqual([
+        9101,
+      ]);
+    } finally {
+      await prisma.project.update({ where: { id: projectId }, data: { state: 'NSW' } });
+      await prisma.progressClaim.deleteMany({
+        where: { id: { in: [inLocalDay.id, nextLocalDay.id] } },
+      });
+    }
+  });
+
   it('should include export data', async () => {
     const res = await request(app)
       .get('/api/reports/claims')
@@ -1597,6 +1863,7 @@ describe('Reports API - Claims Report', () => {
 describe('Reports API - Scheduled Reports', () => {
   let authToken: string;
   let userId: string;
+  let scheduledUserEmail: string;
   let companyId: string;
   let projectId: string;
   let scheduleId: string;
@@ -1618,6 +1885,7 @@ describe('Reports API - Scheduled Reports', () => {
     });
     authToken = primaryUser.token;
     userId = primaryUser.userId;
+    scheduledUserEmail = primaryUser.email;
 
     const project = await prisma.project.create({
       data: {
@@ -1676,10 +1944,96 @@ describe('Reports API - Scheduled Reports', () => {
       expect(Array.isArray(res.body.schedules)).toBe(true);
       expect(res.body.maxSchedules).toBe(25);
     });
+
+    it('should include the latest scheduled report run summary without delivery recipients', async () => {
+      const schedule = await prisma.scheduledReport.create({
+        data: {
+          projectId,
+          reportType: 'ncr',
+          frequency: 'daily',
+          timeOfDay: '09:00',
+          recipients: 'owner-summary@example.com,failed-summary@example.com',
+          nextRunAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+          createdById: userId,
+          isActive: true,
+          failureCount: 1,
+          lastFailureAt: new Date('2026-06-29T09:00:00.000Z'),
+          lastFailureReason: 'Provider rejected recipient',
+        },
+      });
+      const run = await prisma.scheduledReportRun.create({
+        data: {
+          scheduleId: schedule.id,
+          projectId,
+          reportType: 'ncr',
+          status: 'partial_failed',
+          recipientCount: 2,
+          sentCount: 1,
+          failedCount: 1,
+          digestCount: 0,
+          suppressedCount: 0,
+          errorReason: 'Provider rejected recipient',
+          generatedAt: new Date('2026-06-29T09:00:00.000Z'),
+          completedAt: new Date('2026-06-29T09:01:00.000Z'),
+        },
+      });
+      await prisma.scheduledReportRecipientDelivery.createMany({
+        data: [
+          {
+            runId: run.id,
+            scheduleId: schedule.id,
+            projectId,
+            recipient: 'owner-summary@example.com',
+            recipientKind: 'email',
+            status: 'sent',
+          },
+          {
+            runId: run.id,
+            scheduleId: schedule.id,
+            projectId,
+            recipient: 'failed-summary@example.com',
+            recipientKind: 'email',
+            status: 'failed',
+            retryable: true,
+            errorReason: 'Provider rejected recipient',
+          },
+        ],
+      });
+
+      try {
+        const res = await request(app)
+          .get('/api/reports/schedules')
+          .set('Authorization', `Bearer ${authToken}`)
+          .query({ projectId });
+
+        expect(res.status).toBe(200);
+        const listedSchedule = res.body.schedules.find(
+          (candidate: { id: string }) => candidate.id === schedule.id,
+        );
+        expect(listedSchedule?.latestRun).toMatchObject({
+          id: run.id,
+          status: 'partial_failed',
+          recipientCount: 2,
+          sentCount: 1,
+          failedCount: 1,
+          digestCount: 0,
+          suppressedCount: 0,
+          errorReason: 'Provider rejected recipient',
+          generatedAt: '2026-06-29T09:00:00.000Z',
+          completedAt: '2026-06-29T09:01:00.000Z',
+          retryableFailedCount: 1,
+        });
+        expect(listedSchedule.latestRun.nextRetryAt).toBeNull();
+        expect(listedSchedule.latestRun).not.toHaveProperty('recipient');
+        expect(listedSchedule.latestRun).not.toHaveProperty('deliveries');
+      } finally {
+        await prisma.scheduledReport.delete({ where: { id: schedule.id } }).catch(() => {});
+      }
+    });
   });
 
   describe('POST /api/reports/schedules', () => {
-    it('should create a scheduled report', async () => {
+    it('should create a scheduled report and audit recipient exposure without raw emails', async () => {
       const res = await request(app)
         .post('/api/reports/schedules')
         .set('Authorization', `Bearer ${authToken}`)
@@ -1689,7 +2043,7 @@ describe('Reports API - Scheduled Reports', () => {
           frequency: 'weekly',
           dayOfWeek: 1,
           timeOfDay: '09:00',
-          recipients: 'test@example.com,test2@example.com',
+          recipients: `${scheduledUserEmail},external-schedule-recipient@example.net`,
         });
 
       expect(res.status).toBe(201);
@@ -1698,6 +2052,28 @@ describe('Reports API - Scheduled Reports', () => {
       expect(res.body.schedule.frequency).toBe('weekly');
       expect(res.body.schedule.isActive).toBe(true);
       scheduleId = res.body.schedule.id;
+
+      const auditLog = await prisma.auditLog.findFirst({
+        where: {
+          projectId,
+          entityType: 'scheduled_report',
+          entityId: scheduleId,
+          action: 'scheduled_report_created',
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      expect(auditLog).toBeTruthy();
+      const changes = parseAuditLogChanges(auditLog!.changes) as Record<string, unknown>;
+      expect(changes).toMatchObject({
+        reportType: 'lot-status',
+        frequency: 'weekly',
+        recipientCount: 2,
+        appRecipientCount: 1,
+        externalRecipientCount: 1,
+      });
+      expect(changes.recipientDomains).toEqual(['example.com', 'example.net']);
+      expect(JSON.stringify(changes)).not.toContain(scheduledUserEmail);
+      expect(JSON.stringify(changes)).not.toContain('external-schedule-recipient@example.net');
     });
 
     it('should reject scheduled report creation for archived projects', async () => {
@@ -1982,6 +2358,84 @@ describe('Reports API - Scheduled Reports', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.schedule.recipients).toBe('updated@example.com,other@example.com');
+    });
+
+    it('should cancel retryable delivery runs before persisting schedule config changes', async () => {
+      const run = await prisma.scheduledReportRun.create({
+        data: {
+          scheduleId,
+          projectId,
+          reportType: 'lot-status',
+          status: 'partial_failed',
+          recipientCount: 2,
+          sentCount: 1,
+          failedCount: 1,
+          generatedAt: new Date('2026-06-30T01:00:00.000Z'),
+          deliveries: {
+            create: [
+              {
+                scheduleId,
+                projectId,
+                recipient: 'removed@example.com',
+                recipientKind: 'external',
+                status: 'failed',
+                retryable: true,
+                attemptCount: 1,
+                nextAttemptAt: new Date('2026-06-30T01:15:00.000Z'),
+                errorReason: 'Temporary provider error',
+              },
+              {
+                scheduleId,
+                projectId,
+                recipient: 'sending@example.com',
+                recipientKind: 'external',
+                status: 'sending',
+                retryable: false,
+                attemptCount: 1,
+                lockedUntil: new Date('2026-06-30T01:15:00.000Z'),
+              },
+            ],
+          },
+        },
+      });
+
+      const res = await request(app)
+        .put(`/api/reports/schedules/${scheduleId}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          recipients: 'new-recipient@example.com',
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.schedule.recipients).toBe('new-recipient@example.com');
+
+      const updatedRun = await prisma.scheduledReportRun.findUniqueOrThrow({
+        where: { id: run.id },
+        include: { deliveries: { orderBy: { recipient: 'asc' } } },
+      });
+      expect(updatedRun.status).toBe('cancelled');
+      expect(updatedRun.completedAt).toBeInstanceOf(Date);
+      expect(updatedRun.errorReason).toBe('Schedule configuration changed before retry completed');
+      expect(updatedRun.deliveries).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            recipient: 'removed@example.com',
+            status: 'cancelled',
+            retryable: false,
+            lockedUntil: null,
+            nextAttemptAt: null,
+            errorReason: 'Schedule configuration changed before retry completed',
+          }),
+          expect.objectContaining({
+            recipient: 'sending@example.com',
+            status: 'cancelled',
+            retryable: false,
+            lockedUntil: null,
+            nextAttemptAt: null,
+            errorReason: 'Schedule configuration changed before retry completed',
+          }),
+        ]),
+      );
     });
 
     it('should reject invalid schedule update values', async () => {

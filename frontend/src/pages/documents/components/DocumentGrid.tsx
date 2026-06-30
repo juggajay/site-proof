@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import type { DocumentAccessUrl } from '@/lib/documentAccess';
 import {
@@ -30,9 +31,9 @@ export interface DocumentGridDoc {
 interface DocumentGridProps<TDoc extends DocumentGridDoc> {
   loading: boolean;
   error: string | null;
-  documents: TDoc[];
   visibleDocuments: TDoc[];
   showFavouritesOnly: boolean;
+  canManageDocuments: boolean;
   documentUrls: Record<string, DocumentAccessUrl>;
   onToggleFavourite: (doc: TDoc) => void;
   onOpenViewer: (doc: TDoc) => void;
@@ -40,12 +41,48 @@ interface DocumentGridProps<TDoc extends DocumentGridDoc> {
   onMarkPendingDelete: (doc: TDoc) => void;
 }
 
+function ImageDocumentIcon() {
+  return (
+    <svg
+      className="h-6 w-6 text-muted-foreground"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      data-testid="image-icon"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+      />
+    </svg>
+  );
+}
+
+function ImageDocumentThumbnail({ src, alt }: { src: string | undefined; alt: string }) {
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+
+  if (src && failedUrl !== src) {
+    return (
+      <img
+        src={src}
+        alt={alt}
+        className="h-full w-full object-cover"
+        onError={() => setFailedUrl(src)}
+      />
+    );
+  }
+
+  return <ImageDocumentIcon />;
+}
+
 export function DocumentGrid<TDoc extends DocumentGridDoc>({
   loading,
   error,
-  documents,
   visibleDocuments,
   showFavouritesOnly,
+  canManageDocuments,
   documentUrls,
   onToggleFavourite,
   onOpenViewer,
@@ -72,12 +109,10 @@ export function DocumentGrid<TDoc extends DocumentGridDoc>({
             />
           </svg>
           <h3 className="mt-4 text-lg font-medium">
-            {showFavouritesOnly && documents.length > 0
-              ? 'No favourite documents found'
-              : 'No documents found'}
+            {showFavouritesOnly ? 'No favourite documents found' : 'No documents found'}
           </h3>
           <p className="mt-2 text-muted-foreground">
-            {showFavouritesOnly && documents.length > 0
+            {showFavouritesOnly
               ? 'Clear the favourites filter to view all documents.'
               : 'Drag and drop files here or click "Upload Document" to get started'}
           </p>
@@ -92,32 +127,7 @@ export function DocumentGrid<TDoc extends DocumentGridDoc>({
                 data-testid={`file-icon-${doc.id}`}
               >
                 {isImage(doc.mimeType) ? (
-                  <img
-                    src={documentUrls[doc.id]?.url || ''}
-                    alt={doc.filename}
-                    className="h-full w-full object-cover"
-                    onError={(e) => {
-                      // Fallback to image icon if thumbnail fails
-                      e.currentTarget.style.display = 'none';
-                      e.currentTarget.nextElementSibling?.classList.remove('hidden');
-                    }}
-                  />
-                ) : null}
-                {isImage(doc.mimeType) ? (
-                  <svg
-                    className="h-6 w-6 text-muted-foreground hidden"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    data-testid="image-icon"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-                    />
-                  </svg>
+                  <ImageDocumentThumbnail src={documentUrls[doc.id]?.url} alt={doc.filename} />
                 ) : isPdf(doc.mimeType) ? (
                   <svg
                     className="h-6 w-6 text-muted-foreground"
@@ -215,36 +225,38 @@ export function DocumentGrid<TDoc extends DocumentGridDoc>({
 
               {/* Actions */}
               <div className="flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => onToggleFavourite(doc)}
-                  className={
-                    doc.isFavourite
-                      ? 'text-foreground hover:bg-muted'
-                      : 'text-muted-foreground hover:bg-muted'
-                  }
-                  title={doc.isFavourite ? 'Remove from Favourites' : 'Add to Favourites'}
-                  aria-label={
-                    doc.isFavourite
-                      ? `Remove ${doc.filename} from favourites`
-                      : `Add ${doc.filename} to favourites`
-                  }
-                >
-                  <svg
-                    className="h-5 w-5"
-                    fill={doc.isFavourite ? 'currentColor' : 'none'}
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
+                {canManageDocuments && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => onToggleFavourite(doc)}
+                    className={
+                      doc.isFavourite
+                        ? 'text-foreground hover:bg-muted'
+                        : 'text-muted-foreground hover:bg-muted'
+                    }
+                    title={doc.isFavourite ? 'Remove from Favourites' : 'Add to Favourites'}
+                    aria-label={
+                      doc.isFavourite
+                        ? `Remove ${doc.filename} from favourites`
+                        : `Add ${doc.filename} to favourites`
+                    }
                   >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"
-                    />
-                  </svg>
-                </Button>
+                    <svg
+                      className="h-5 w-5"
+                      fill={doc.isFavourite ? 'currentColor' : 'none'}
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"
+                      />
+                    </svg>
+                  </Button>
+                )}
                 {canPreview(doc.mimeType) && (
                   <Button
                     variant="ghost"
@@ -286,23 +298,25 @@ export function DocumentGrid<TDoc extends DocumentGridDoc>({
                     />
                   </svg>
                 </button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => onMarkPendingDelete(doc)}
-                  className="text-destructive hover:bg-destructive/10"
-                  title="Delete"
-                  aria-label={`Delete ${doc.filename}`}
-                >
-                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                    />
-                  </svg>
-                </Button>
+                {canManageDocuments && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => onMarkPendingDelete(doc)}
+                    className="text-destructive hover:bg-destructive/10"
+                    title="Delete"
+                    aria-label={`Delete ${doc.filename}`}
+                  >
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                      />
+                    </svg>
+                  </Button>
+                )}
               </div>
             </div>
           ))}

@@ -13,10 +13,16 @@ import {
   requireSubcontractorPortalModuleAccess,
 } from '../../lib/projectAccess.js';
 import type { SubcontractorPortalAccessKey } from '../../lib/projectAccess.js';
+import { canReadNcr } from '../ncrs/ncrAccess.js';
+import {
+  LOCKED_ITP_EVIDENCE_MESSAGE,
+  isItpCompletionEvidenceLocked,
+} from '../itp/helpers/evidenceLock.js';
 
 type AuthUser = NonNullable<Express.Request['user']>;
 
 export type DocumentAccessRecord = {
+  id?: string;
   projectId: string;
   lotId: string | null;
   uploadedById: string | null;
@@ -41,13 +47,18 @@ const DOCUMENT_WRITE_ROLES = [
   'subcontractor',
 ];
 
-const DOCUMENT_SPECIAL_PORTAL_CATEGORIES = ['itp_evidence', 'test_results'] as const;
+const DOCUMENT_SPECIAL_PORTAL_CATEGORIES = [
+  'itp_evidence',
+  'test_results',
+  'ncr_evidence',
+] as const;
 const DOCUMENT_CATEGORY_PORTAL_MODULES: Record<
   (typeof DOCUMENT_SPECIAL_PORTAL_CATEGORIES)[number],
   SubcontractorPortalAccessKey
 > = {
   itp_evidence: 'itps',
   test_results: 'testResults',
+  ncr_evidence: 'ncrs',
 };
 const GENERIC_DOCUMENT_MUTATION_BLOCKED_MESSAGES: Record<string, string> = {
   test_certificate:
@@ -63,6 +74,10 @@ function isDrawingBackedDocument(documentType?: string | null): boolean {
   return documentType === 'drawing';
 }
 
+function isNcrEvidenceCategory(category?: string | null): boolean {
+  return category === 'ncr_evidence';
+}
+
 function getDocumentPortalModule(category?: string | null): SubcontractorPortalAccessKey {
   if (category && Object.hasOwn(DOCUMENT_CATEGORY_PORTAL_MODULES, category)) {
     return DOCUMENT_CATEGORY_PORTAL_MODULES[
@@ -71,6 +86,69 @@ function getDocumentPortalModule(category?: string | null): SubcontractorPortalA
   }
 
   return 'documents';
+}
+
+async function requireNoLockedItpEvidenceAttachment(document: DocumentAccessRecord): Promise<void> {
+  if (!document.id) {
+    return;
+  }
+
+  const lockedAttachment = await prisma.iTPCompletionAttachment.findFirst({
+    where: {
+      documentId: document.id,
+      completion: {
+        OR: [{ verificationStatus: 'verified' }, { status: 'not_applicable' }],
+      },
+    },
+    select: {
+      completion: {
+        select: {
+          status: true,
+          verificationStatus: true,
+        },
+      },
+    },
+  });
+
+  if (lockedAttachment && isItpCompletionEvidenceLocked(lockedAttachment.completion)) {
+    throw AppError.conflict(LOCKED_ITP_EVIDENCE_MESSAGE, {
+      status: lockedAttachment.completion.status,
+      verificationStatus: lockedAttachment.completion.verificationStatus,
+    });
+  }
+}
+
+async function canReadNcrEvidenceDocument(
+  user: AuthUser,
+  document: DocumentAccessRecord,
+): Promise<boolean> {
+  if (document.uploadedById === user.id) {
+    return true;
+  }
+
+  if (!document.id) {
+    return false;
+  }
+
+  const evidenceLink = await prisma.nCREvidence.findFirst({
+    where: { documentId: document.id },
+    select: {
+      ncr: {
+        select: {
+          projectId: true,
+          responsibleUserId: true,
+          responsibleSubcontractorId: true,
+          ncrLots: { select: { lotId: true } },
+        },
+      },
+    },
+  });
+
+  if (!evidenceLink) {
+    return false;
+  }
+
+  return canReadNcr(evidenceLink.ncr, user);
 }
 
 function appendDocumentWhereClause(
@@ -325,6 +403,10 @@ export async function canReadDocument(
     return false;
   }
 
+  if (isNcrEvidenceCategory(document.category)) {
+    return canReadNcrEvidenceDocument(user, document);
+  }
+
   if (!document.lotId || document.uploadedById === user.id) {
     return true;
   }
@@ -452,6 +534,10 @@ async function requireSubcontractorAssignedLotWriteScope(
     return;
   }
 
+  if (isNcrEvidenceCategory(category)) {
+    return;
+  }
+
   if (!lotId) {
     throw AppError.forbidden(message);
   }
@@ -497,6 +583,7 @@ export async function requireDocumentMutationAccess(
       documentType: document.documentType,
     });
   }
+  await requireNoLockedItpEvidenceAttachment(document);
 
   if (!isDocumentSubcontractorUser(user)) {
     return;

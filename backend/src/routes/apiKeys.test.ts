@@ -56,6 +56,60 @@ describe('API Keys Management', () => {
   });
 
   describe('POST /api/api-keys', () => {
+    it('requires verified email before creating an API key', async () => {
+      const email = `apikeys-unverified-${Date.now()}@example.com`;
+      const registerRes = await request(app).post('/api/auth/register').send({
+        email,
+        password: 'SecureP@ssword123!',
+        fullName: 'Unverified API Key User',
+        tosAccepted: true,
+      });
+      const unverifiedToken = registerRes.body.token as string;
+      const unverifiedUserId = registerRes.body.user.id as string;
+
+      try {
+        const blockedRes = await request(app)
+          .post('/api/api-keys')
+          .set('Authorization', `Bearer ${unverifiedToken}`)
+          .send({
+            name: 'Blocked Key',
+            scopes: 'read',
+          });
+
+        expect(blockedRes.status).toBe(403);
+        expect(blockedRes.body.error.message).toContain('verify your email address');
+
+        const blockedKeys = await prisma.apiKey.findMany({ where: { userId: unverifiedUserId } });
+        expect(blockedKeys).toHaveLength(0);
+
+        await prisma.user.update({
+          where: { id: unverifiedUserId },
+          data: { emailVerified: true, emailVerifiedAt: new Date() },
+        });
+
+        const allowedRes = await request(app)
+          .post('/api/api-keys')
+          .set('Authorization', `Bearer ${unverifiedToken}`)
+          .send({
+            name: 'Allowed After Verification',
+            scopes: 'read',
+          });
+
+        expect(allowedRes.status).toBe(201);
+        expect(allowedRes.body.apiKey.name).toBe('Allowed After Verification');
+      } finally {
+        await prisma.auditLog.deleteMany({
+          where: {
+            OR: [{ userId: unverifiedUserId }, { entityType: 'api_key' }],
+          },
+        });
+        await prisma.apiKey.deleteMany({ where: { userId: unverifiedUserId } });
+        await prisma.emailVerificationToken.deleteMany({ where: { userId: unverifiedUserId } });
+        await prisma.passwordResetToken.deleteMany({ where: { userId: unverifiedUserId } });
+        await prisma.user.delete({ where: { id: unverifiedUserId } }).catch(() => {});
+      }
+    });
+
     it('should create a new API key with valid data', async () => {
       const res = await request(app)
         .post('/api/api-keys')
@@ -382,6 +436,10 @@ describe('API Keys Management', () => {
       });
       const otherUserId = otherUserRes.body.user.id;
       const otherToken = otherUserRes.body.token;
+      await prisma.user.update({
+        where: { id: otherUserId },
+        data: { emailVerified: true, emailVerifiedAt: new Date() },
+      });
 
       // Create API key for other user
       const otherKeyRes = await request(app)
@@ -489,6 +547,10 @@ describe('API Keys Management', () => {
       });
       const otherUserId = otherUserRes.body.user.id;
       const otherToken = otherUserRes.body.token;
+      await prisma.user.update({
+        where: { id: otherUserId },
+        data: { emailVerified: true, emailVerifiedAt: new Date() },
+      });
 
       // Create API key for other user
       const otherKeyRes = await request(app)

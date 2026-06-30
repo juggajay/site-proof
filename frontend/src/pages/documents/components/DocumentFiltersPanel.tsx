@@ -82,6 +82,7 @@ export function DocumentFiltersPanel({
             onChange={(e) => onFilterCategoryChange(e.target.value)}
           >
             <option value="">All Categories</option>
+            <option value="uncategorized">Uncategorized</option>
             {CATEGORIES.map((cat) => (
               <option key={cat.id} value={cat.id}>
                 {cat.label}

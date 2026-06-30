@@ -3,6 +3,8 @@ import { Router } from 'express';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { prisma } from '../../lib/prisma.js';
+import { isItpCompletionFinished } from '../../lib/conformancePrerequisites.js';
+import { getChecklistItemsForInstance } from '../itp/helpers/templateSnapshot.js';
 import {
   buildClaimEvidencePackageResponse,
   buildClaimEvidenceReviewResponse,
@@ -90,7 +92,19 @@ export function createClaimEvidenceRouter({
                           verifiedBy: {
                             select: { id: true, fullName: true, email: true },
                           },
-                          attachments: true,
+                          attachments: {
+                            include: {
+                              document: {
+                                select: {
+                                  id: true,
+                                  filename: true,
+                                  documentType: true,
+                                  caption: true,
+                                  uploadedAt: true,
+                                },
+                              },
+                            },
+                          },
                         },
                       },
                     },
@@ -144,6 +158,23 @@ export function createClaimEvidenceRouter({
         lots: claim.claimedLots.map((claimedLot) => {
           const lot = claimedLot.lot;
           const itpInstance = lot.itpInstance;
+          const checklistItems = itpInstance ? getChecklistItemsForInstance(itpInstance) : [];
+          const itpChecklistItemIds = new Set(checklistItems.map((item) => item.id));
+          const acceptedItpCompletionCount =
+            itpInstance?.completions.filter(
+              (completion) =>
+                itpChecklistItemIds.has(completion.checklistItemId) &&
+                isItpCompletionFinished(completion.status) &&
+                completion.verificationStatus !== 'pending_verification' &&
+                completion.verificationStatus !== 'rejected',
+            ).length ?? 0;
+          const verifiedPassingTestCount = lot.testResults.filter(
+            (test) => test.passFail === 'pass' && test.status === 'verified',
+          ).length;
+          const failedTestCount = lot.testResults.filter((test) => test.passFail === 'fail').length;
+          const pendingTestCount = lot.testResults.filter(
+            (test) => test.passFail !== 'fail' && test.status !== 'verified',
+          ).length;
 
           return {
             id: lot.id,
@@ -170,7 +201,7 @@ export function createClaimEvidenceRouter({
             itp: itpInstance
               ? {
                   templateName: itpInstance.template.name,
-                  checklistItems: itpInstance.template.checklistItems.map((item) => ({
+                  checklistItems: checklistItems.map((item) => ({
                     id: item.id,
                     sequenceNumber: item.sequenceNumber,
                     description: item.description,
@@ -180,27 +211,52 @@ export function createClaimEvidenceRouter({
                     isHoldPoint: item.pointType === 'hold_point',
                     evidenceRequired: item.evidenceRequired || '',
                   })),
-                  completions: itpInstance.completions.map((c) => ({
-                    checklistItemId: c.checklistItemId,
-                    isCompleted: c.status === 'completed',
-                    notes: c.notes || null,
-                    completedAt: c.completedAt?.toISOString() || null,
-                    completedBy: c.completedBy
-                      ? {
-                          name: c.completedBy.fullName || c.completedBy.email,
-                          email: c.completedBy.email,
-                        }
-                      : null,
-                    isVerified: c.verificationStatus === 'verified',
-                    verifiedAt: c.verifiedAt?.toISOString() || null,
-                    verifiedBy: c.verifiedBy
-                      ? {
-                          name: c.verifiedBy.fullName || c.verifiedBy.email,
-                          email: c.verifiedBy.email,
-                        }
-                      : null,
-                    attachmentCount: c.attachments?.length || 0,
-                  })),
+                  completions: itpInstance.completions.map((c) => {
+                    const isAcceptedCompletion =
+                      itpChecklistItemIds.has(c.checklistItemId) &&
+                      (c.status === 'completed' || c.status === 'not_applicable') &&
+                      c.verificationStatus !== 'pending_verification' &&
+                      c.verificationStatus !== 'rejected';
+
+                    return {
+                      checklistItemId: c.checklistItemId,
+                      isCompleted: isAcceptedCompletion && c.status === 'completed',
+                      isNotApplicable: isAcceptedCompletion && c.status === 'not_applicable',
+                      isPendingVerification: c.verificationStatus === 'pending_verification',
+                      isRejected: c.verificationStatus === 'rejected',
+                      verificationStatus: c.verificationStatus,
+                      verificationNotes: c.verificationNotes || null,
+                      notes: c.notes || null,
+                      completedAt: c.completedAt?.toISOString() || null,
+                      completedBy: c.completedBy
+                        ? {
+                            name: c.completedBy.fullName || c.completedBy.email,
+                            email: c.completedBy.email,
+                          }
+                        : null,
+                      isVerified: c.verificationStatus === 'verified',
+                      verifiedAt: c.verifiedAt?.toISOString() || null,
+                      verifiedBy: c.verifiedBy
+                        ? {
+                            name: c.verifiedBy.fullName || c.verifiedBy.email,
+                            email: c.verifiedBy.email,
+                          }
+                        : null,
+                      attachmentCount: c.attachments?.length || 0,
+                      attachments:
+                        c.attachments?.map((attachment) => ({
+                          id: attachment.id,
+                          documentId: attachment.documentId,
+                          document: {
+                            id: attachment.document.id,
+                            filename: attachment.document.filename,
+                            documentType: attachment.document.documentType,
+                            caption: attachment.document.caption || null,
+                            uploadedAt: attachment.document.uploadedAt?.toISOString() || null,
+                          },
+                        })) || [],
+                    };
+                  }),
                 }
               : null,
 
@@ -263,7 +319,9 @@ export function createClaimEvidenceRouter({
             // Summary stats
             summary: {
               testResultCount: lot.testResults.length,
-              passedTestCount: lot.testResults.filter((t) => t.passFail === 'pass').length,
+              passedTestCount: verifiedPassingTestCount,
+              failedTestCount,
+              pendingTestCount,
               ncrCount: lot.ncrLots.length,
               openNcrCount: lot.ncrLots.filter(
                 (nl) => !['closed', 'closed_concession'].includes(nl.ncr.status),
@@ -271,9 +329,7 @@ export function createClaimEvidenceRouter({
               photoCount: lot.documents.filter((d) => d.documentType === 'photo').length,
               itpCompletionPercentage: itpInstance
                 ? Math.round(
-                    (itpInstance.completions.filter((c) => c.status === 'completed').length /
-                      Math.max(1, itpInstance.template.checklistItems.length)) *
-                      100,
+                    (acceptedItpCompletionCount / Math.max(1, checklistItems.length)) * 100,
                   )
                 : 0,
             },
@@ -289,7 +345,21 @@ export function createClaimEvidenceRouter({
             0,
           ),
           totalPassedTests: claim.claimedLots.reduce(
-            (sum, cl) => sum + cl.lot.testResults.filter((t) => t.passFail === 'pass').length,
+            (sum, cl) =>
+              sum +
+              cl.lot.testResults.filter((t) => t.passFail === 'pass' && t.status === 'verified')
+                .length,
+            0,
+          ),
+          totalFailedTests: claim.claimedLots.reduce(
+            (sum, cl) => sum + cl.lot.testResults.filter((t) => t.passFail === 'fail').length,
+            0,
+          ),
+          totalPendingTests: claim.claimedLots.reduce(
+            (sum, cl) =>
+              sum +
+              cl.lot.testResults.filter((t) => t.passFail !== 'fail' && t.status !== 'verified')
+                .length,
             0,
           ),
           totalNCRs: claim.claimedLots.reduce((sum, cl) => sum + cl.lot.ncrLots.length, 0),

@@ -177,6 +177,56 @@ describe('evidence readiness helpers', () => {
     expect(readiness.summary.actionBlockerCount).toBe(0);
   });
 
+  it('blocks claim selection for a conformed lot whose current quality prerequisites regressed', () => {
+    const readiness = buildLotReadinessFromInputs(
+      baseInput({
+        lot: {
+          id: 'lot-stale',
+          lotNumber: 'LOT-STALE',
+          status: 'conformed',
+          budgetAmount: 5000,
+          claimedInId: null,
+        },
+        conformStatus: {
+          canConform: false,
+          blockingReasons: ['1 open NCR(s) must be closed'],
+          prerequisites: {
+            itpAssigned: true,
+            itpCompleted: true,
+            itpCompletedCount: 1,
+            itpTotalCount: 1,
+            itpIncompleteItems: [],
+            testRequired: false,
+            hasPassingTest: false,
+            testResults: [],
+            noOpenNcrs: false,
+            openNcrs: [
+              {
+                id: 'ncr-1',
+                ncrNumber: 'NCR-001',
+                description: 'Reopened defect',
+                status: 'open',
+              },
+            ],
+          },
+        },
+      }),
+    );
+
+    expect(readiness.conformance.state).toBe('blocked');
+    expect(readiness.conformance.blockers.map((blocker) => blocker.code)).toContain('open_ncrs');
+    expect(readiness.claim.state).toBe('blocked');
+    expect(readiness.claim.blockers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'conformance_no_longer_current',
+          blocksAction: true,
+        }),
+      ]),
+    );
+    expect(readiness.summary.actionBlockerCount).toBeGreaterThan(0);
+  });
+
   it('physically removes commercial readiness fields for subcontractor callers', () => {
     const readiness = buildLotReadinessFromInputs(
       baseInput({

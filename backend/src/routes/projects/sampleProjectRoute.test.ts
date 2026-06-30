@@ -1,8 +1,10 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import request from 'supertest';
 import express from 'express';
+import crypto from 'crypto';
 import { projectsRouter } from '../projects.js';
 import { authRouter } from '../auth.js';
+import { authenticateApiKey } from '../apiKeys.js';
 import { prisma } from '../../lib/prisma.js';
 import { errorHandler } from '../../middleware/errorHandler.js';
 import { AuditAction } from '../../lib/auditLog.js';
@@ -18,9 +20,31 @@ import {
 
 const app = express();
 app.use(express.json());
+app.use(authenticateApiKey);
 app.use('/api/auth', authRouter);
 app.use('/api/projects', projectsRouter);
 app.use(errorHandler);
+
+function hashApiKeyForTest(apiKey: string): string {
+  return crypto.createHash('sha256').update(apiKey).digest('hex');
+}
+
+async function createApiKeyForUser(userId: string, scopes = 'admin') {
+  const apiKey = `sp_${crypto.randomBytes(32).toString('hex')}`;
+  const record = await prisma.apiKey.create({
+    data: {
+      userId,
+      name: 'Sample project browser-session boundary test key',
+      keyHash: hashApiKeyForTest(apiKey),
+      keyPrefix: apiKey.substring(0, 11),
+      scopes,
+      isActive: true,
+    },
+    select: { id: true },
+  });
+
+  return { apiKey, keyId: record.id };
+}
 
 describe('POST /api/projects/sample', () => {
   let adminToken: string;
@@ -93,6 +117,22 @@ describe('POST /api/projects/sample', () => {
   it('rejects unauthenticated requests', async () => {
     const res = await request(app).post('/api/projects/sample');
     expect(res.status).toBe(401);
+  });
+
+  it('rejects API-key-authenticated sample project creation', async () => {
+    const { apiKey, keyId } = await createApiKeyForUser(adminUserId, 'admin');
+
+    try {
+      const res = await request(app).post('/api/projects/sample').set('x-api-key', apiKey);
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.message).toContain('browser session');
+      await expect(
+        prisma.project.count({ where: { companyId, projectNumber: SAMPLE_PROJECT_NUMBER } }),
+      ).resolves.toBe(0);
+    } finally {
+      await prisma.apiKey.deleteMany({ where: { id: keyId } });
+    }
   });
 
   it('rejects company members without project-creation roles', async () => {

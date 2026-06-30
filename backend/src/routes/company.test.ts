@@ -46,6 +46,27 @@ function hashOneTimeTokenForTest(token: string): string {
   return `sha256:${crypto.createHash('sha256').update(token).digest('hex')}`;
 }
 
+function hashApiKeyForTest(apiKey: string): string {
+  return crypto.createHash('sha256').update(apiKey).digest('hex');
+}
+
+async function createApiKeyForUser(userId: string, scopes = 'admin') {
+  const apiKey = `sp_${crypto.randomBytes(32).toString('hex')}`;
+  const record = await prisma.apiKey.create({
+    data: {
+      userId,
+      name: 'Company browser-session boundary test key',
+      keyHash: hashApiKeyForTest(apiKey),
+      keyPrefix: apiKey.substring(0, 11),
+      scopes,
+      isActive: true,
+    },
+    select: { id: true },
+  });
+
+  return { apiKey, keyId: record.id };
+}
+
 function listCompanyLogoFiles(prefix: string) {
   if (!fs.existsSync(companyLogoUploadDir)) {
     return new Set<string>();
@@ -416,6 +437,29 @@ describe('Company API', () => {
       expect(res.body.company.name).toBe(newName);
     });
 
+    it('rejects API-key-authenticated company profile updates', async () => {
+      const { apiKey, keyId } = await createApiKeyForUser(userId, 'admin');
+      const existing = await prisma.company.findUniqueOrThrow({
+        where: { id: companyId },
+        select: { name: true },
+      });
+
+      try {
+        const res = await request(app)
+          .patch('/api/company')
+          .set('x-api-key', apiKey)
+          .send({ name: `API Key Company Rename ${Date.now()}` });
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.message).toContain('browser session');
+        await expect(
+          prisma.company.findUnique({ where: { id: companyId }, select: { name: true } }),
+        ).resolves.toMatchObject({ name: existing.name });
+      } finally {
+        await prisma.apiKey.deleteMany({ where: { id: keyId } });
+      }
+    });
+
     it('should update company ABN', async () => {
       const res = await request(app)
         .patch('/api/company')
@@ -505,6 +549,27 @@ describe('Company API', () => {
       expect(JSON.stringify(changes)).not.toContain('Company Test');
 
       fs.unlinkSync(logoPath);
+    });
+
+    it('rejects API-key-authenticated company logo uploads before storing a file', async () => {
+      const { apiKey, keyId } = await createApiKeyForUser(userId, 'admin');
+      const beforeFiles = listCompanyLogoFiles(`company-logo-${companyId}-`);
+
+      try {
+        const res = await request(app)
+          .post('/api/company/logo')
+          .set('x-api-key', apiKey)
+          .attach('logo', tinyPngBytes, {
+            filename: 'api-key-logo.png',
+            contentType: 'image/png',
+          });
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.message).toContain('browser session');
+        expect(listCompanyLogoFiles(`company-logo-${companyId}-`)).toEqual(beforeFiles);
+      } finally {
+        await prisma.apiKey.deleteMany({ where: { id: keyId } });
+      }
     });
 
     it('should not delete local company logo files referenced by untrusted external URLs', async () => {
@@ -1217,6 +1282,19 @@ describe('Company API', () => {
       expect(member.roleInCompany).toBe('admin');
     });
 
+    it('rejects API-key-authenticated company member lists', async () => {
+      const { apiKey, keyId } = await createApiKeyForUser(userId, 'read');
+
+      try {
+        const res = await request(app).get('/api/company/members').set('x-api-key', apiKey);
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.message).toContain('requires an authenticated browser session');
+      } finally {
+        await prisma.apiKey.deleteMany({ where: { id: keyId } });
+      }
+    });
+
     it('should sort members by full name', async () => {
       const res = await request(app)
         .get('/api/company/members')
@@ -1530,6 +1608,161 @@ describe('Company API', () => {
       expect(res.body.error.message).toContain('Only company owners and admins');
     });
 
+    it('rejects API-key-authenticated company API key inventory', async () => {
+      const rawApiKey = 'sp_abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789';
+      const key = await prisma.apiKey.create({
+        data: {
+          userId,
+          name: 'Inventory browser-session-required key',
+          keyHash: hashApiKeyForTest(rawApiKey),
+          keyPrefix: rawApiKey.slice(0, 10),
+          scopes: 'admin',
+          isActive: true,
+        },
+      });
+      createdKeyIds.push(key.id);
+
+      const res = await request(app).get('/api/company/api-keys').set('x-api-key', rawApiKey);
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.message).toContain('requires an authenticated browser session');
+    });
+
+    it('lets an owner revoke an active same-company member API key', async () => {
+      const memberKey = await prisma.apiKey.create({
+        data: {
+          userId: memberId,
+          name: 'Member active key',
+          keyHash: `hash-inv-member-active-${Date.now()}`,
+          keyPrefix: 'sp_memact1',
+          scopes: 'read,write',
+          isActive: true,
+        },
+      });
+      createdKeyIds.push(memberKey.id);
+
+      try {
+        const res = await request(app)
+          .delete(`/api/company/api-keys/${memberKey.id}`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.message).toContain('revoked successfully');
+
+        await expect(
+          prisma.apiKey.findUnique({ where: { id: memberKey.id }, select: { isActive: true } }),
+        ).resolves.toMatchObject({ isActive: false });
+
+        const auditLog = await prisma.auditLog.findFirst({
+          where: {
+            userId,
+            entityType: 'api_key',
+            entityId: memberKey.id,
+            action: AuditAction.API_KEY_REVOKED,
+          },
+        });
+        expect(auditLog).not.toBeNull();
+
+        const changes = parseAuditLogChanges(auditLog?.changes ?? null) as Record<string, unknown>;
+        expect(changes).toMatchObject({
+          name: 'Member active key',
+          keyPrefix: 'sp_memact1',
+          ownerUserId: memberId,
+          revokedByCompanyAdmin: true,
+          isActive: { from: true, to: false },
+        });
+        expect(JSON.stringify(changes)).not.toContain(memberKey.keyHash);
+      } finally {
+        await prisma.auditLog.deleteMany({ where: { entityId: memberKey.id } });
+      }
+    });
+
+    it('rejects company API key revocation for field users', async () => {
+      const res = await request(app)
+        .delete(`/api/company/api-keys/${createdKeyIds[0]}`)
+        .set('Authorization', `Bearer ${memberToken}`);
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.message).toContain('Only company owners and admins');
+    });
+
+    it('does not let a company admin revoke another company API key', async () => {
+      const otherCompany = await prisma.company.create({
+        data: { name: `Other Revoke Co ${Date.now()}` },
+      });
+      const otherRes = await request(app)
+        .post('/api/auth/register')
+        .send({
+          email: `other-revoke-${Date.now()}@example.com`,
+          password: 'SecureP@ssword123!',
+          fullName: 'Other Revoke User',
+          tosAccepted: true,
+        });
+      const otherUserId = otherRes.body.user.id as string;
+      await prisma.user.update({
+        where: { id: otherUserId },
+        data: { companyId: otherCompany.id, roleInCompany: 'admin' },
+      });
+      const otherKey = await prisma.apiKey.create({
+        data: {
+          userId: otherUserId,
+          name: 'Other company active key',
+          keyHash: `hash-inv-other-revoke-${Date.now()}`,
+          keyPrefix: 'sp_othrev1',
+          scopes: 'read',
+          isActive: true,
+        },
+      });
+
+      try {
+        const res = await request(app)
+          .delete(`/api/company/api-keys/${otherKey.id}`)
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(404);
+        expect(res.body.error.message).toContain('not found');
+        await expect(
+          prisma.apiKey.findUnique({ where: { id: otherKey.id }, select: { isActive: true } }),
+        ).resolves.toMatchObject({ isActive: true });
+      } finally {
+        await prisma.apiKey.deleteMany({ where: { id: otherKey.id } });
+        await prisma.emailVerificationToken.deleteMany({ where: { userId: otherUserId } });
+        await prisma.user.delete({ where: { id: otherUserId } }).catch(() => {});
+        await prisma.company.delete({ where: { id: otherCompany.id } }).catch(() => {});
+      }
+    });
+
+    it('rejects API-key-authenticated company API key revocation', async () => {
+      const key = await prisma.apiKey.create({
+        data: {
+          userId,
+          name: 'Browser-session-required key',
+          keyHash: crypto
+            .createHash('sha256')
+            .update('sp_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef')
+            .digest('hex'),
+          keyPrefix: 'sp_0123456',
+          scopes: 'admin',
+          isActive: true,
+        },
+      });
+      createdKeyIds.push(key.id);
+
+      try {
+        const res = await request(app)
+          .delete(`/api/company/api-keys/${key.id}`)
+          .set('x-api-key', 'sp_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef');
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.message).toContain('requires an authenticated browser session');
+        await expect(
+          prisma.apiKey.findUnique({ where: { id: key.id }, select: { isActive: true } }),
+        ).resolves.toMatchObject({ isActive: true });
+      } finally {
+        await prisma.auditLog.deleteMany({ where: { entityId: key.id } });
+      }
+    });
+
     it('requires authentication', async () => {
       const res = await request(app).get('/api/company/api-keys');
       expect(res.status).toBe(401);
@@ -1641,6 +1874,156 @@ describe('Company API', () => {
       });
       expect(setupTokens).toHaveLength(1);
       expect(setupTokens[0].token).toMatch(/^sha256:/);
+    });
+
+    it('audits existing same-company member role updates as role changes', async () => {
+      const email = `company-invite-existing-role-${Date.now()}@example.com`;
+      const existingMember = await prisma.user.create({
+        data: {
+          email,
+          fullName: 'Existing Company Member',
+          companyId,
+          roleInCompany: 'foreman',
+          passwordHash: 'already-set',
+          emailVerified: true,
+          emailVerifiedAt: new Date(),
+        },
+      });
+      invitedUserIds.push(existingMember.id);
+
+      const res = await request(app)
+        .post('/api/company/members/invite')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          email,
+          fullName: 'Existing Company Member',
+          roleInCompany: 'site_engineer',
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.member).toMatchObject({
+        id: existingMember.id,
+        roleInCompany: 'site_engineer',
+      });
+
+      const auditLog = await prisma.auditLog.findFirst({
+        where: {
+          entityType: 'user',
+          entityId: existingMember.id,
+          action: AuditAction.USER_ROLE_CHANGED,
+        },
+      });
+      expect(auditLog).toBeTruthy();
+      expect(parseAuditLogChanges(auditLog!.changes)).toMatchObject({
+        memberId: existingMember.id,
+        memberEmail: email,
+        companyId,
+        source: 'company_member_invite',
+        roleInCompany: { from: 'foreman', to: 'site_engineer' },
+      });
+
+      const inviteAudit = await prisma.auditLog.findFirst({
+        where: {
+          entityType: 'user',
+          entityId: existingMember.id,
+          action: AuditAction.USER_INVITED,
+        },
+      });
+      expect(inviteAudit).toBeNull();
+    });
+
+    it('does not overwrite an existing credentialed member profile name on re-invite', async () => {
+      const email = `company-invite-existing-name-${Date.now()}@example.com`;
+      const existingMember = await prisma.user.create({
+        data: {
+          email,
+          fullName: 'Existing Profile Name',
+          companyId,
+          roleInCompany: 'foreman',
+          passwordHash: 'already-set',
+          emailVerified: true,
+          emailVerifiedAt: new Date(),
+        },
+      });
+      invitedUserIds.push(existingMember.id);
+
+      const res = await request(app)
+        .post('/api/company/members/invite')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          email,
+          fullName: 'Admin Supplied Rename',
+          roleInCompany: 'site_engineer',
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.member).toMatchObject({
+        id: existingMember.id,
+        fullName: 'Existing Profile Name',
+        roleInCompany: 'site_engineer',
+      });
+
+      await expect(
+        prisma.user.findUnique({
+          where: { id: existingMember.id },
+          select: { fullName: true, roleInCompany: true },
+        }),
+      ).resolves.toMatchObject({
+        fullName: 'Existing Profile Name',
+        roleInCompany: 'site_engineer',
+      });
+    });
+
+    it('rolls back invite-path role updates if the audit write fails', async () => {
+      const email = `company-invite-audit-fail-${Date.now()}@example.com`;
+      const existingMember = await prisma.user.create({
+        data: {
+          email,
+          fullName: 'Existing Audit Member',
+          companyId,
+          roleInCompany: 'foreman',
+          passwordHash: 'already-set',
+          emailVerified: true,
+          emailVerifiedAt: new Date(),
+        },
+      });
+      invitedUserIds.push(existingMember.id);
+
+      let auditFailureActive = true;
+      prisma.$use(async (params, next) => {
+        if (
+          auditFailureActive &&
+          params.model === 'AuditLog' &&
+          params.action === 'create' &&
+          params.args?.data?.entityId === existingMember.id &&
+          params.args?.data?.action === AuditAction.USER_ROLE_CHANGED
+        ) {
+          throw new Error('Simulated audit write failure');
+        }
+
+        return next(params);
+      });
+
+      try {
+        const res = await request(app)
+          .post('/api/company/members/invite')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({
+            email,
+            fullName: 'Existing Audit Member',
+            roleInCompany: 'site_engineer',
+          });
+
+        expect(res.status).toBe(500);
+        await expect(
+          prisma.user.findUnique({
+            where: { id: existingMember.id },
+            select: { roleInCompany: true },
+          }),
+        ).resolves.toMatchObject({ roleInCompany: 'foreman' });
+      } finally {
+        auditFailureActive = false;
+      }
     });
 
     it('rejects new company member invites when the invitation email fails', async () => {
@@ -2199,6 +2582,65 @@ describe('Company API', () => {
       }
     });
 
+    it('revokes pre-existing API keys when attaching a credentialed no-company user', async () => {
+      const existingUser = await registerTestUser(app, {
+        emailPrefix: 'company-invite-existing-key',
+        fullName: 'Existing Key User',
+      });
+      invitedUserIds.push(existingUser.userId);
+
+      const keyRes = await request(app)
+        .post('/api/api-keys')
+        .set('Authorization', `Bearer ${existingUser.token}`)
+        .send({ name: 'Pre-attach key', scopes: 'read' });
+      expect(keyRes.status).toBe(201);
+
+      const notifySpy = vi
+        .spyOn(emailService, 'sendNotificationEmail')
+        .mockResolvedValue({ success: true } as never);
+
+      try {
+        const inviteRes = await request(app)
+          .post('/api/company/members/invite')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ email: existingUser.email, roleInCompany: 'site_engineer' });
+
+        expect(inviteRes.status).toBe(201);
+        expect(inviteRes.body.member).toMatchObject({
+          id: existingUser.userId,
+          roleInCompany: 'site_engineer',
+          status: 'active',
+        });
+
+        await expect(
+          prisma.apiKey.findUnique({
+            where: { id: keyRes.body.apiKey.id },
+            select: { isActive: true },
+          }),
+        ).resolves.toMatchObject({ isActive: false });
+
+        const companyRes = await request(app)
+          .get('/api/company')
+          .set('x-api-key', keyRes.body.apiKey.key);
+        expect(companyRes.status).toBe(401);
+
+        const auditLog = await prisma.auditLog.findFirst({
+          where: {
+            entityType: 'user',
+            entityId: existingUser.userId,
+            action: AuditAction.USER_INVITED,
+          },
+          orderBy: { createdAt: 'desc' },
+        });
+        expect(parseAuditLogChanges(auditLog?.changes ?? null)).toMatchObject({
+          invitedUserId: existingUser.userId,
+          revokedKeyCount: 1,
+        });
+      } finally {
+        notifySpy.mockRestore();
+      }
+    });
+
     it('allows concurrent member invites past the seat limit while tier enforcement is disabled (G1)', async () => {
       const limitedCompany = await prisma.company.create({
         data: {
@@ -2294,6 +2736,97 @@ describe('Company API', () => {
         `;
         await prisma.$executeRaw`
           DROP FUNCTION IF EXISTS test_delay_company_member_invite_insert()
+        `;
+      }
+    });
+
+    it('prevents concurrent companies from claiming the same existing no-company user', async () => {
+      const suffix = Date.now();
+      const secondCompany = await prisma.company.create({
+        data: { name: `Invite Race Other Company ${suffix}` },
+      });
+      invitedCompanyIds.push(secondCompany.id);
+
+      const secondOwner = await registerTestUser(app, {
+        emailPrefix: 'company-invite-race-owner',
+        fullName: 'Company Invite Race Owner',
+        companyId: secondCompany.id,
+        roleInCompany: 'owner',
+      });
+      invitedUserIds.push(secondOwner.userId);
+
+      const targetEmail = `company-invite-race-${suffix}@example.com`;
+      const targetUser = await prisma.user.create({
+        data: {
+          email: targetEmail,
+          fullName: 'Invite Race Existing User',
+          companyId: null,
+          roleInCompany: 'member',
+          emailVerified: true,
+          emailVerifiedAt: new Date(),
+          passwordHash: 'hashed-password-value',
+        },
+      });
+      invitedUserIds.push(targetUser.id);
+
+      const notifySpy = vi
+        .spyOn(emailService, 'sendNotificationEmail')
+        .mockResolvedValue({ success: true } as never);
+
+      await prisma.$executeRaw`
+        CREATE OR REPLACE FUNCTION test_delay_company_member_invite_update()
+        RETURNS trigger AS $$
+        BEGIN
+          IF NEW.company_id IS DISTINCT FROM OLD.company_id
+             AND NEW.email LIKE 'company-invite-race-%' THEN
+            PERFORM pg_sleep(0.25);
+          END IF;
+          RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+      `;
+      await prisma.$executeRaw`
+        DROP TRIGGER IF EXISTS test_delay_company_member_invite_update_trigger ON users
+      `;
+      await prisma.$executeRaw`
+        CREATE TRIGGER test_delay_company_member_invite_update_trigger
+        BEFORE UPDATE OF company_id ON users
+        FOR EACH ROW
+        EXECUTE FUNCTION test_delay_company_member_invite_update();
+      `;
+
+      try {
+        const responses = await Promise.all([
+          request(app)
+            .post('/api/company/members/invite')
+            .set('Authorization', `Bearer ${authToken}`)
+            .send({ email: targetEmail, roleInCompany: 'site_engineer' }),
+          request(app)
+            .post('/api/company/members/invite')
+            .set('Authorization', `Bearer ${secondOwner.token}`)
+            .send({ email: targetEmail, roleInCompany: 'foreman' }),
+        ]);
+
+        expect(responses.map((res) => res.status).sort((a, b) => a - b)).toEqual([201, 409]);
+        const successfulResponse = responses.find((res) => res.status === 201);
+        const winningCompanyId = successfulResponse === responses[0] ? companyId : secondCompany.id;
+
+        await expect(
+          prisma.user.findUnique({
+            where: { id: targetUser.id },
+            select: { companyId: true, roleInCompany: true },
+          }),
+        ).resolves.toMatchObject({ companyId: winningCompanyId });
+
+        const losingResponse = responses.find((res) => res.status === 409);
+        expect(losingResponse?.body.error.message).toContain('already belongs to another company');
+      } finally {
+        notifySpy.mockRestore();
+        await prisma.$executeRaw`
+          DROP TRIGGER IF EXISTS test_delay_company_member_invite_update_trigger ON users
+        `;
+        await prisma.$executeRaw`
+          DROP FUNCTION IF EXISTS test_delay_company_member_invite_update()
         `;
       }
     });
@@ -2993,7 +3526,12 @@ describe('Company API', () => {
       try {
         await prisma.user.update({
           where: { id: ownerId },
-          data: { companyId: apiKeyCompany.id, roleInCompany: 'owner' },
+          data: {
+            companyId: apiKeyCompany.id,
+            roleInCompany: 'owner',
+            emailVerified: true,
+            emailVerifiedAt: new Date(),
+          },
         });
         await prisma.user.update({
           where: { id: targetId },
@@ -3194,6 +3732,40 @@ describe('Company API', () => {
         await prisma.apiKey.deleteMany({ where: { userId: memberId } });
         await prisma.emailVerificationToken.deleteMany({ where: { userId: memberId } });
         await prisma.user.delete({ where: { id: memberId } }).catch(() => {});
+        await prisma.company.delete({ where: { id: company.id } }).catch(() => {});
+      }
+    });
+
+    it('rejects API-key-authenticated company leave', async () => {
+      const company = await prisma.company.create({
+        data: { name: `Leave API Key Co ${Date.now()}` },
+      });
+      const member = await registerTestUser(app, {
+        emailPrefix: 'leave-api-key-member',
+        fullName: 'Leave API Key Member',
+        companyId: company.id,
+        roleInCompany: 'admin',
+      });
+      const { apiKey, keyId } = await createApiKeyForUser(member.userId, 'admin');
+
+      try {
+        const res = await request(app).post('/api/company/leave').set('x-api-key', apiKey);
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.message).toContain('browser session');
+        await expect(
+          prisma.user.findUnique({
+            where: { id: member.userId },
+            select: { companyId: true, roleInCompany: true },
+          }),
+        ).resolves.toMatchObject({ companyId: company.id, roleInCompany: 'admin' });
+      } finally {
+        await prisma.apiKey.deleteMany({ where: { id: keyId } });
+        await prisma.auditLog.deleteMany({
+          where: { OR: [{ entityId: company.id }, { userId: member.userId }] },
+        });
+        await prisma.emailVerificationToken.deleteMany({ where: { userId: member.userId } });
+        await prisma.user.delete({ where: { id: member.userId } }).catch(() => {});
         await prisma.company.delete({ where: { id: company.id } }).catch(() => {});
       }
     });

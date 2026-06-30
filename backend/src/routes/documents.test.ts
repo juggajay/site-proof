@@ -7,6 +7,7 @@ import crypto from 'crypto';
 import { authRouter } from './auth.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
+import { AuditAction, parseAuditLogChanges } from '../lib/auditLog.js';
 
 vi.mock('../lib/supabase.js', async () => {
   const actual = await vi.importActual<typeof import('../lib/supabase.js')>('../lib/supabase.js');
@@ -76,6 +77,14 @@ function writeTestUpload(dir: string, filename: string, contents = validPdfBytes
   const filePath = path.join(dir, filename);
   fs.writeFileSync(filePath, contents);
   return filePath;
+}
+
+function getTokenFromSignedUrlResponse(body: { signedUrl?: unknown }): string {
+  expect(typeof body.signedUrl).toBe('string');
+  const signedUrl = new URL(String(body.signedUrl), 'https://siteproof.test');
+  const token = signedUrl.searchParams.get('token');
+  expect(token).toBeTruthy();
+  return token!;
 }
 
 describe('Documents API', () => {
@@ -154,6 +163,7 @@ describe('Documents API', () => {
   afterAll(async () => {
     // Cleanup
     await prisma.document.deleteMany({ where: { projectId } });
+    await prisma.auditLog.deleteMany({ where: { projectId } });
     await prisma.lot.deleteMany({ where: { projectId } });
     await prisma.projectUser.deleteMany({ where: { projectId } });
     await prisma.project.delete({ where: { id: projectId } }).catch(() => {});
@@ -200,6 +210,171 @@ describe('Documents API', () => {
       expect(res.body.total).toBeGreaterThan(0);
       expect(res.body.categories).toBeDefined();
       expect(res.body.documents[0]).not.toHaveProperty('fileUrl');
+    });
+
+    it('should only list the latest version of each document', async () => {
+      const sourceDocument = await prisma.document.create({
+        data: {
+          projectId,
+          lotId,
+          documentType: 'certificate',
+          category: 'Versioned Register Test',
+          filename: 'versioned-register-source.pdf',
+          fileUrl: '/uploads/documents/versioned-register-source.pdf',
+          fileSize: validPdfBytes.length,
+          mimeType: 'application/pdf',
+          uploadedById: userId,
+        },
+      });
+
+      const versionRes = await request(app)
+        .post(`/api/documents/${sourceDocument.id}/version`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .attach('file', validPdfBytes, {
+          filename: 'versioned-register-latest.pdf',
+          contentType: 'application/pdf',
+        });
+
+      expect(versionRes.status).toBe(201);
+
+      const listRes = await request(app)
+        .get(`/api/documents/${projectId}?category=Versioned%20Register%20Test`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(listRes.status).toBe(200);
+      expect(listRes.body.total).toBe(1);
+      expect(listRes.body.documents).toHaveLength(1);
+      expect(listRes.body.documents[0].id).toBe(versionRes.body.id);
+
+      const versions = await prisma.document.findMany({
+        where: {
+          OR: [{ id: sourceDocument.id }, { parentDocumentId: sourceDocument.id }],
+        },
+        select: { fileUrl: true },
+      });
+      for (const version of versions) {
+        const storedPath = path.join(uploadDir, path.basename(version.fileUrl));
+        if (fs.existsSync(storedPath)) fs.unlinkSync(storedPath);
+      }
+      await prisma.document.deleteMany({
+        where: { OR: [{ id: sourceDocument.id }, { parentDocumentId: sourceDocument.id }] },
+      });
+    });
+
+    it('should reveal the previous version when the latest version is deleted', async () => {
+      const sourceDocument = await prisma.document.create({
+        data: {
+          projectId,
+          lotId,
+          documentType: 'certificate',
+          category: 'Version Delete Register Test',
+          filename: 'version-delete-source.pdf',
+          fileUrl: '/uploads/documents/version-delete-source.pdf',
+          fileSize: validPdfBytes.length,
+          mimeType: 'application/pdf',
+          uploadedById: userId,
+        },
+      });
+
+      const versionRes = await request(app)
+        .post(`/api/documents/${sourceDocument.id}/version`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .attach('file', validPdfBytes, {
+          filename: 'version-delete-latest.pdf',
+          contentType: 'application/pdf',
+        });
+      expect(versionRes.status).toBe(201);
+
+      const deleteRes = await request(app)
+        .delete(`/api/documents/${versionRes.body.id}`)
+        .set('Authorization', `Bearer ${authToken}`);
+      expect(deleteRes.status).toBe(204);
+
+      const listRes = await request(app)
+        .get(`/api/documents/${projectId}?category=Version%20Delete%20Register%20Test`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(listRes.status).toBe(200);
+      expect(listRes.body.total).toBe(1);
+      expect(listRes.body.documents).toHaveLength(1);
+      expect(listRes.body.documents[0].id).toBe(sourceDocument.id);
+
+      const sourceAfterDelete = await prisma.document.findUnique({
+        where: { id: sourceDocument.id },
+        select: { isLatestVersion: true },
+      });
+      expect(sourceAfterDelete?.isLatestVersion).toBe(true);
+
+      await prisma.document.deleteMany({
+        where: { OR: [{ id: sourceDocument.id }, { parentDocumentId: sourceDocument.id }] },
+      });
+    });
+
+    it('should preserve version history when the root version is deleted', async () => {
+      const sourceDocument = await prisma.document.create({
+        data: {
+          projectId,
+          lotId,
+          documentType: 'certificate',
+          category: 'Version Root Delete Test',
+          filename: 'version-root-source.pdf',
+          fileUrl: '/uploads/documents/version-root-source.pdf',
+          fileSize: validPdfBytes.length,
+          mimeType: 'application/pdf',
+          uploadedById: userId,
+        },
+      });
+
+      const v2Res = await request(app)
+        .post(`/api/documents/${sourceDocument.id}/version`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .attach('file', validPdfBytes, {
+          filename: 'version-root-v2.pdf',
+          contentType: 'application/pdf',
+        });
+      expect(v2Res.status).toBe(201);
+
+      const v3Res = await request(app)
+        .post(`/api/documents/${v2Res.body.id}/version`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .attach('file', validPdfBytes, {
+          filename: 'version-root-v3.pdf',
+          contentType: 'application/pdf',
+        });
+      expect(v3Res.status).toBe(201);
+
+      const deleteRes = await request(app)
+        .delete(`/api/documents/${sourceDocument.id}`)
+        .set('Authorization', `Bearer ${authToken}`);
+      expect(deleteRes.status).toBe(204);
+
+      const listRes = await request(app)
+        .get(`/api/documents/${projectId}?category=Version%20Root%20Delete%20Test`)
+        .set('Authorization', `Bearer ${authToken}`);
+      expect(listRes.status).toBe(200);
+      expect(listRes.body.total).toBe(1);
+      expect(listRes.body.documents[0].id).toBe(v3Res.body.id);
+
+      const versionsRes = await request(app)
+        .get(`/api/documents/${v3Res.body.id}/versions`)
+        .set('Authorization', `Bearer ${authToken}`);
+      expect(versionsRes.status).toBe(200);
+      expect(versionsRes.body.documentId).toBe(v2Res.body.id);
+      expect(versionsRes.body.versions.map((version: { id: string }) => version.id).sort()).toEqual(
+        [v2Res.body.id, v3Res.body.id].sort(),
+      );
+
+      const remainingVersions = await prisma.document.findMany({
+        where: { OR: [{ id: v2Res.body.id }, { parentDocumentId: v2Res.body.id }] },
+        select: { id: true, fileUrl: true },
+      });
+      for (const version of remainingVersions) {
+        const storedPath = path.join(uploadDir, path.basename(version.fileUrl));
+        if (fs.existsSync(storedPath)) fs.unlinkSync(storedPath);
+      }
+      await prisma.document.deleteMany({
+        where: { OR: [{ id: v2Res.body.id }, { parentDocumentId: v2Res.body.id }] },
+      });
     });
 
     it('should filter by category', async () => {
@@ -429,7 +604,10 @@ describe('Documents API', () => {
 
       expect(createRes.status).toBe(200);
 
-      const params = new URLSearchParams({ token: createRes.body.token, ...query });
+      const params = new URLSearchParams({
+        token: getTokenFromSignedUrlResponse(createRes.body),
+        ...query,
+      });
       return {
         createRes,
         res: await request(app).get(`/api/documents/download/${targetDocumentId}?${params}`),
@@ -571,8 +749,9 @@ describe('Documents API', () => {
           .post(`/api/documents/${localDocument.id}/signed-url`)
           .set('Authorization', `Bearer ${authToken}`);
 
+        const token = getTokenFromSignedUrlResponse(createRes.body);
         const res = await request(app).get(
-          `/api/documents/download/${localDocument.id}?token=${createRes.body.token}`,
+          `/api/documents/download/${localDocument.id}?token=${token}`,
         );
 
         expect(res.status).toBe(200);
@@ -614,8 +793,9 @@ describe('Documents API', () => {
         expect(createRes.status).toBe(200);
         expect(createRes.body.signedUrl).toContain('disposition=inline');
 
+        const token = getTokenFromSignedUrlResponse(createRes.body);
         const res = await request(app).get(
-          `/api/documents/download/${localDocument.id}?token=${createRes.body.token}&disposition=inline`,
+          `/api/documents/download/${localDocument.id}?token=${token}&disposition=inline`,
         );
 
         expect(res.status).toBe(200);
@@ -663,8 +843,9 @@ describe('Documents API', () => {
           .set('Authorization', `Bearer ${authToken}`)
           .send({ disposition: 'inline' });
 
+        const token = getTokenFromSignedUrlResponse(createRes.body);
         const res = await request(app).get(
-          `/api/documents/download/${externalDocument.id}?token=${createRes.body.token}&disposition=inline`,
+          `/api/documents/download/${externalDocument.id}?token=${token}&disposition=inline`,
         );
 
         expect(res.status).toBe(200);
@@ -725,8 +906,9 @@ describe('Documents API', () => {
             .post(`/api/documents/${localDocument.id}/signed-url`)
             .set('Authorization', `Bearer ${authToken}`);
 
+          const token = getTokenFromSignedUrlResponse(createRes.body);
           const res = await request(app).get(
-            `/api/documents/download/${localDocument.id}?token=${createRes.body.token}`,
+            `/api/documents/download/${localDocument.id}?token=${token}`,
           );
 
           expect(res.status).toBe(200);
@@ -938,7 +1120,8 @@ describe('Documents API', () => {
       expect(res.status).toBe(200);
       expect(res.body.signedUrl).toBeDefined();
       expect(res.body.expiresAt).toBeDefined();
-      expect(res.body.token).toBeDefined();
+      expect(getTokenFromSignedUrlResponse(res.body)).toBeTruthy();
+      expect(res.body).not.toHaveProperty('token');
     });
 
     it('should validate generated signed URLs from persistent storage without storing raw tokens', async () => {
@@ -946,7 +1129,7 @@ describe('Documents API', () => {
         .post(`/api/documents/${documentId}/signed-url`)
         .set('Authorization', `Bearer ${authToken}`);
 
-      const token = createRes.body.token;
+      const token = getTokenFromSignedUrlResponse(createRes.body);
       const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
       const storedToken = await prisma.documentSignedUrlToken.findUnique({
         where: { tokenHash },
@@ -966,13 +1149,60 @@ describe('Documents API', () => {
       expect(validateRes.body.expiresAt).toBeDefined();
     });
 
+    it('marks signed URL tokens invalid after the token owner loses document access', async () => {
+      const scopedUser = await registerTestUser(app, {
+        emailPrefix: 'documents-token-access',
+        fullName: 'Documents Token Access User',
+        companyId,
+        roleInCompany: 'member',
+      });
+      await prisma.projectUser.create({
+        data: {
+          projectId,
+          userId: scopedUser.userId,
+          role: 'site_engineer',
+          status: 'active',
+        },
+      });
+
+      try {
+        const createRes = await request(app)
+          .post(`/api/documents/${documentId}/signed-url`)
+          .set('Authorization', `Bearer ${scopedUser.token}`);
+
+        expect(createRes.status).toBe(200);
+        const token = getTokenFromSignedUrlResponse(createRes.body);
+        expect(createRes.body).not.toHaveProperty('token');
+
+        await prisma.projectUser.deleteMany({
+          where: { projectId, userId: scopedUser.userId },
+        });
+
+        const validateRes = await request(app).get(
+          `/api/documents/signed-url/validate?token=${token}&documentId=${documentId}`,
+        );
+
+        expect(validateRes.status).toBe(200);
+        expect(validateRes.body.valid).toBe(false);
+      } finally {
+        await prisma.projectUser.deleteMany({
+          where: { projectId, userId: scopedUser.userId },
+        });
+        await prisma.documentSignedUrlToken.deleteMany({
+          where: { userId: scopedUser.userId },
+        });
+        await prisma.emailVerificationToken.deleteMany({ where: { userId: scopedUser.userId } });
+        await prisma.user.delete({ where: { id: scopedUser.userId } }).catch(() => {});
+      }
+    });
+
     it('should reject and clean up expired signed URL tokens', async () => {
       const createRes = await request(app)
         .post(`/api/documents/${documentId}/signed-url`)
         .set('Authorization', `Bearer ${authToken}`)
         .send({ expiresInMinutes: 1 });
 
-      const token = createRes.body.token;
+      const token = getTokenFromSignedUrlResponse(createRes.body);
       const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
       await prisma.documentSignedUrlToken.update({
         where: { tokenHash },
@@ -1485,6 +1715,36 @@ describe('Documents API', () => {
       }
     }
 
+    async function lockCompletionAsVerified() {
+      await prisma.iTPCompletion.update({
+        where: { id: completionId },
+        data: {
+          status: 'completed',
+          completedById: userId,
+          completedAt: new Date('2026-01-01T00:00:00.000Z'),
+          verificationStatus: 'verified',
+          verifiedAt: new Date('2026-01-02T00:00:00.000Z'),
+          verifiedById: userId,
+          verificationNotes: 'Verified evidence lock fixture',
+        },
+      });
+    }
+
+    async function resetCompletionForEvidenceUploads() {
+      await prisma.iTPCompletion.update({
+        where: { id: completionId },
+        data: {
+          status: 'pending',
+          completedById: null,
+          completedAt: null,
+          verificationStatus: 'none',
+          verifiedAt: null,
+          verifiedById: null,
+          verificationNotes: null,
+        },
+      });
+    }
+
     const expectSuccessfulUploadWithNoItpAttachment = async (res: {
       status: number;
       body: { id?: string } & Record<string, unknown>;
@@ -1496,11 +1756,10 @@ describe('Documents API', () => {
       expect(attachments).toBe(0);
     };
 
-    it('attaches the uploaded photo to the ITP completion when entityType is itp', async () => {
+    it('attaches ITP evidence and stores the completion lot when queued uploads omit lotId', async () => {
       const res = await uploadEvidence(
         {
           projectId,
-          lotId,
           documentType: 'photo',
           category: 'itp_evidence',
           entityType: 'itp',
@@ -1516,8 +1775,129 @@ describe('Documents API', () => {
           where: { completionId, documentId },
         });
         expect(attachment).not.toBeNull();
+        const document = await prisma.document.findUnique({
+          where: { id: documentId },
+          select: { lotId: true },
+        });
+        expect(document?.lotId).toBe(lotId);
       } finally {
         await cleanupUploadedDocument(res.body);
+      }
+    });
+
+    it('rejects ITP evidence upload when the target completion is locked', async () => {
+      const filename = `itp-evidence-locked-upload-${Date.now()}.png`;
+      const beforeFiles = new Set(fs.readdirSync(uploadDir));
+
+      try {
+        await lockCompletionAsVerified();
+
+        const res = await uploadEvidence(
+          {
+            projectId,
+            documentType: 'photo',
+            category: 'itp_evidence',
+            entityType: 'itp',
+            entityId: completionId,
+            caption: 'Locked evidence should not store',
+          },
+          filename,
+        );
+
+        expect(res.status).toBe(409);
+        expect(res.body.error.message).toContain('ITP evidence cannot be changed');
+        await expect(prisma.document.findFirst({ where: { projectId, filename } })).resolves.toBe(
+          null,
+        );
+        await expect(
+          prisma.iTPCompletionAttachment.count({ where: { completionId } }),
+        ).resolves.toBe(0);
+        const leakedFiles = fs
+          .readdirSync(uploadDir)
+          .filter((file) => !beforeFiles.has(file) && file.includes(filename));
+        expect(leakedFiles).toHaveLength(0);
+      } finally {
+        await resetCompletionForEvidenceUploads();
+      }
+    });
+
+    it('rejects generic document mutations for evidence attached to a locked ITP completion', async () => {
+      const suffix = Date.now();
+      const lockedDocument = await prisma.document.create({
+        data: {
+          projectId,
+          lotId,
+          documentType: 'photo',
+          category: 'itp_evidence',
+          filename: `locked-itp-evidence-${suffix}.jpg`,
+          fileUrl: `/uploads/documents/locked-itp-evidence-${suffix}.jpg`,
+          fileSize: validPngBytes.length,
+          mimeType: 'image/png',
+          uploadedById: userId,
+          caption: 'Original locked ITP evidence',
+        },
+      });
+      const attachment = await prisma.iTPCompletionAttachment.create({
+        data: {
+          completionId,
+          documentId: lockedDocument.id,
+        },
+      });
+      const versionFilename = `locked-itp-evidence-version-${suffix}.png`;
+      const beforeFiles = new Set(fs.readdirSync(uploadDir));
+
+      try {
+        await lockCompletionAsVerified();
+
+        const patchRes = await request(app)
+          .patch(`/api/documents/${lockedDocument.id}`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ caption: 'Should not update locked ITP evidence' });
+        expect(patchRes.status).toBe(409);
+        expect(patchRes.body.error.message).toContain('ITP evidence cannot be changed');
+
+        const classificationRes = await request(app)
+          .post(`/api/documents/${lockedDocument.id}/save-classification`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ classification: 'Defect' });
+        expect(classificationRes.status).toBe(409);
+        expect(classificationRes.body.error.message).toContain('ITP evidence cannot be changed');
+
+        const versionRes = await request(app)
+          .post(`/api/documents/${lockedDocument.id}/version`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .attach('file', validPngBytes, { filename: versionFilename, contentType: 'image/png' });
+        expect(versionRes.status).toBe(409);
+        expect(versionRes.body.error.message).toContain('ITP evidence cannot be changed');
+
+        const deleteRes = await request(app)
+          .delete(`/api/documents/${lockedDocument.id}`)
+          .set('Authorization', `Bearer ${authToken}`);
+        expect(deleteRes.status).toBe(409);
+        expect(deleteRes.body.error.message).toContain('ITP evidence cannot be changed');
+
+        const afterDocument = await prisma.document.findUniqueOrThrow({
+          where: { id: lockedDocument.id },
+        });
+        expect(afterDocument.caption).toBe('Original locked ITP evidence');
+        expect(afterDocument.aiClassification).toBeNull();
+        await expect(
+          prisma.iTPCompletionAttachment.findUnique({ where: { id: attachment.id } }),
+        ).resolves.not.toBeNull();
+        await expect(
+          prisma.document.count({ where: { parentDocumentId: lockedDocument.id } }),
+        ).resolves.toBe(0);
+
+        const leakedFiles = fs
+          .readdirSync(uploadDir)
+          .filter((file) => !beforeFiles.has(file) && file.includes(versionFilename));
+        expect(leakedFiles).toHaveLength(0);
+      } finally {
+        await resetCompletionForEvidenceUploads();
+        await prisma.iTPCompletionAttachment.deleteMany({
+          where: { id: attachment.id },
+        });
+        await prisma.document.deleteMany({ where: { id: lockedDocument.id } });
       }
     });
 
@@ -1792,6 +2172,127 @@ describe('Documents API', () => {
         const storedPath = path.join(uploadDir, path.basename(version.fileUrl));
         if (fs.existsSync(storedPath)) fs.unlinkSync(storedPath);
       }
+    });
+
+    it('rejects uploads from a stale non-latest version', async () => {
+      const sourceDocument = await prisma.document.create({
+        data: {
+          projectId,
+          lotId,
+          documentType: 'certificate',
+          category: 'Quality Records',
+          filename: 'stale-version-source.pdf',
+          fileUrl: '/uploads/documents/stale-version-source.pdf',
+          fileSize: validPdfBytes.length,
+          mimeType: 'application/pdf',
+          uploadedById: userId,
+          caption: 'Original metadata',
+        },
+      });
+      const staleUploadFilename = `stale-version-rejected-${Date.now()}.pdf`;
+      const beforeFiles = new Set(fs.readdirSync(uploadDir));
+
+      const latestRes = await request(app)
+        .post(`/api/documents/${sourceDocument.id}/version`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .attach('file', validPdfBytes, {
+          filename: 'stale-version-latest.pdf',
+          contentType: 'application/pdf',
+        });
+      expect(latestRes.status).toBe(201);
+
+      await prisma.document.update({
+        where: { id: latestRes.body.id },
+        data: { category: 'Latest Metadata', caption: 'Current metadata' },
+      });
+
+      const staleRes = await request(app)
+        .post(`/api/documents/${sourceDocument.id}/version`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .attach('file', validPdfBytes, {
+          filename: staleUploadFilename,
+          contentType: 'application/pdf',
+        });
+
+      expect(staleRes.status).toBe(409);
+      expect(staleRes.body.error.message).toContain('current latest document');
+
+      const versions = await prisma.document.findMany({
+        where: {
+          OR: [{ id: sourceDocument.id }, { parentDocumentId: sourceDocument.id }],
+        },
+        orderBy: { version: 'asc' },
+      });
+      expect(versions).toHaveLength(2);
+      expect(versions.filter((version) => version.isLatestVersion)).toHaveLength(1);
+      expect(versions.find((version) => version.isLatestVersion)?.id).toBe(latestRes.body.id);
+      expect(
+        fs
+          .readdirSync(uploadDir)
+          .filter((file) => !beforeFiles.has(file) && file.includes(staleUploadFilename)),
+      ).toHaveLength(0);
+
+      for (const version of versions) {
+        const storedPath = path.join(uploadDir, path.basename(version.fileUrl));
+        if (fs.existsSync(storedPath)) fs.unlinkSync(storedPath);
+      }
+      await prisma.document.deleteMany({
+        where: { OR: [{ id: sourceDocument.id }, { parentDocumentId: sourceDocument.id }] },
+      });
+    });
+
+    it('serializes concurrent version uploads so only one request becomes latest', async () => {
+      const sourceDocument = await prisma.document.create({
+        data: {
+          projectId,
+          lotId,
+          documentType: 'certificate',
+          category: 'Quality Records',
+          filename: 'concurrent-version-source.pdf',
+          fileUrl: '/uploads/documents/concurrent-version-source.pdf',
+          fileSize: validPdfBytes.length,
+          mimeType: 'application/pdf',
+          uploadedById: userId,
+        },
+      });
+
+      const [firstRes, secondRes] = await Promise.all([
+        request(app)
+          .post(`/api/documents/${sourceDocument.id}/version`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .attach('file', validPdfBytes, {
+            filename: `concurrent-version-a-${Date.now()}.pdf`,
+            contentType: 'application/pdf',
+          }),
+        request(app)
+          .post(`/api/documents/${sourceDocument.id}/version`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .attach('file', validPdfBytes, {
+            filename: `concurrent-version-b-${Date.now()}.pdf`,
+            contentType: 'application/pdf',
+          }),
+      ]);
+
+      expect([firstRes.status, secondRes.status].sort()).toEqual([201, 409]);
+
+      const versions = await prisma.document.findMany({
+        where: {
+          OR: [{ id: sourceDocument.id }, { parentDocumentId: sourceDocument.id }],
+        },
+        select: { id: true, version: true, isLatestVersion: true, fileUrl: true },
+        orderBy: { version: 'asc' },
+      });
+      expect(versions.map((version) => version.version)).toEqual([1, 2]);
+      expect(versions.filter((version) => version.isLatestVersion)).toHaveLength(1);
+      expect(versions.find((version) => version.version === 2)?.isLatestVersion).toBe(true);
+
+      for (const version of versions) {
+        const storedPath = path.join(uploadDir, path.basename(version.fileUrl));
+        if (fs.existsSync(storedPath)) fs.unlinkSync(storedPath);
+      }
+      await prisma.document.deleteMany({
+        where: { OR: [{ id: sourceDocument.id }, { parentDocumentId: sourceDocument.id }] },
+      });
     });
 
     it('cleans up the uploaded version file when version creation fails', async () => {
@@ -2144,6 +2645,7 @@ describe('Documents API', () => {
           .set('Authorization', `Bearer ${subToken}`);
 
         expect(assignedSignedUrlRes.status).toBe(200);
+        const assignedSignedUrlToken = getTokenFromSignedUrlResponse(assignedSignedUrlRes.body);
 
         await prisma.subcontractorCompany.update({
           where: { id: subcontractorCompany.id },
@@ -2151,7 +2653,7 @@ describe('Documents API', () => {
         });
 
         const revokedDownloadRes = await request(app).get(
-          `/api/documents/download/${documentId}?token=${assignedSignedUrlRes.body.token}`,
+          `/api/documents/download/${documentId}?token=${assignedSignedUrlToken}`,
         );
         expect(revokedDownloadRes.status).toBe(403);
 
@@ -3008,6 +3510,22 @@ describe('Documents API', () => {
 
       // API returns 204 No Content on successful deletion
       expect(res.status).toBe(204);
+
+      const auditLog = await prisma.auditLog.findFirst({
+        where: {
+          projectId,
+          userId,
+          entityType: 'document',
+          entityId: deleteDocId,
+          action: AuditAction.DOCUMENT_DELETED,
+        },
+      });
+      expect(auditLog).not.toBeNull();
+      const changes = parseAuditLogChanges(auditLog?.changes ?? null) as Record<string, unknown>;
+      expect(changes).toMatchObject({
+        filename: 'to-delete.jpg',
+        storageKind: 'local',
+      });
     });
 
     it('should return 404 for already deleted document', async () => {

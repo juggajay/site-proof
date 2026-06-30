@@ -11,6 +11,8 @@ export const releasedHpEvidencePackageFixture: HPEvidencePackageData = {
     scheduledDate: '2026-05-27T00:00:00.000Z',
     releasedAt: '2026-05-27T06:30:00.000Z',
     releasedByName: 'Sam Supervisor',
+    releasedByOrg: 'Client Superintendent Org',
+    releaseMethod: 'secure_link',
     releaseNotes: 'Released after surveyor confirmed level tolerance.',
   },
   lot: {

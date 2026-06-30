@@ -3,6 +3,12 @@ import { prisma } from '../lib/prisma.js';
 import { requireAuth } from '../middleware/authMiddleware.js';
 import { AppError } from '../lib/AppError.js';
 import { assertProjectAllowsWrite, getEffectiveProjectRole } from '../lib/projectAccess.js';
+import {
+  DEFAULT_PROJECT_TIME_ZONE,
+  projectTimeZoneFromState,
+  zonedEndOfDayToUtc,
+  zonedStartOfDayToUtc,
+} from '../lib/projectTimeZone.js';
 import { normalizeSubscriptionTier } from '../lib/tierLimits.js';
 import { createClaimReportRouter } from './reports/claimRoutes.js';
 import { createDiaryReportRouter } from './reports/diaryRoutes.js';
@@ -23,9 +29,11 @@ const SCHEDULED_REPORT_MANAGER_ROLES = CLAIM_REPORT_ROLES;
 const SCHEDULED_REPORT_TIERS = new Set(['professional', 'enterprise', 'unlimited']);
 const DEFAULT_REPORT_PAGE_SIZE = 100;
 const MAX_REPORT_PAGE_SIZE = 500;
+const MAX_REPORT_SKIP = 50_000;
 const MAX_REPORT_ID_LENGTH = 128;
 const MAX_REPORT_QUERY_LENGTH = 2000;
 const MAX_REPORT_DATE_QUERY_LENGTH = 64;
+const DATE_ONLY_QUERY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 const DATE_COMPONENT_QUERY_PATTERN = /^(\d{4})-(\d{2})-(\d{2})(?:$|[T\s])/;
 
 type ParsedDateQuery = {
@@ -66,11 +74,20 @@ async function requireClaimsReportAccess(
   }
 }
 
+async function resolveReportProjectTimeZone(projectId: string): Promise<string> {
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { state: true },
+  });
+
+  return projectTimeZoneFromState(project?.state);
+}
+
 async function requireScheduledReportAccess(
   user: AuthUser | undefined,
   projectId: string,
   options: { requireWritable?: boolean } = {},
-): Promise<void> {
+): Promise<string | null> {
   const effectiveRole = await requireReportProjectAccess(user, projectId);
 
   if (!SCHEDULED_REPORT_MANAGER_ROLES.includes(effectiveRole)) {
@@ -80,6 +97,7 @@ async function requireScheduledReportAccess(
   const project = await prisma.project.findUnique({
     where: { id: projectId },
     select: {
+      state: true,
       company: {
         select: { subscriptionTier: true },
       },
@@ -94,6 +112,8 @@ async function requireScheduledReportAccess(
   if (options.requireWritable) {
     await assertProjectAllowsWrite(projectId);
   }
+
+  return project?.state ?? null;
 }
 
 function groupedCountsToRecord<T extends { _count: number }, K extends keyof T>(
@@ -145,7 +165,7 @@ function parseReportPagination(
   const limitNum = Math.min(requestedLimit, MAX_REPORT_PAGE_SIZE);
   const skip = (pageNum - 1) * limitNum;
 
-  if (!Number.isSafeInteger(skip)) {
+  if (!Number.isSafeInteger(skip) || skip > MAX_REPORT_SKIP) {
     throw AppError.badRequest('page is too large');
   }
 
@@ -189,13 +209,15 @@ function parseOptionalDateQuery(
   value: unknown,
   fieldName: string,
   endOfDay = false,
+  timeZone = DEFAULT_PROJECT_TIME_ZONE,
 ): ParsedDateQuery | undefined {
   const rawValue = parseOptionalStringQuery(value, fieldName, MAX_REPORT_DATE_QUERY_LENGTH);
   if (!rawValue) {
     return undefined;
   }
 
-  const dateComponentMatch = DATE_COMPONENT_QUERY_PATTERN.exec(rawValue);
+  const dateOnlyMatch = DATE_ONLY_QUERY_PATTERN.exec(rawValue);
+  const dateComponentMatch = dateOnlyMatch ?? DATE_COMPONENT_QUERY_PATTERN.exec(rawValue);
   if (dateComponentMatch) {
     const [, year, month, day] = dateComponentMatch;
     const dateComponent = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
@@ -205,6 +227,13 @@ function parseOptionalDateQuery(
       dateComponent.getUTCDate() !== Number(day)
     ) {
       throw AppError.badRequest(`${fieldName} must be a valid date`);
+    }
+
+    if (dateOnlyMatch) {
+      const date = endOfDay
+        ? zonedEndOfDayToUtc(Number(year), Number(month), Number(day), timeZone)
+        : zonedStartOfDayToUtc(Number(year), Number(month), Number(day), timeZone);
+      return { raw: rawValue, date };
     }
   }
 
@@ -255,6 +284,7 @@ reportsRouter.use(
     parseOptionalCommaSeparatedQuery,
     validateDateRange,
     requireReportProjectAccess,
+    resolveReportProjectTimeZone,
     groupedCountsToRecord,
   }),
 );
@@ -267,6 +297,7 @@ reportsRouter.use(
     parseOptionalCommaSeparatedQuery,
     validateDateRange,
     requireReportProjectAccess,
+    resolveReportProjectTimeZone,
   }),
 );
 
@@ -284,6 +315,7 @@ reportsRouter.use(
     parseOptionalCommaSeparatedQuery,
     validateDateRange,
     requireClaimsReportAccess,
+    resolveReportProjectTimeZone,
   }),
 );
 
@@ -308,5 +340,6 @@ reportsRouter.use(
   createScheduledReportRouter({
     parseRequiredString,
     requireScheduledReportAccess,
+    requireScheduledReportArtifactAccess: requireReportProjectAccess,
   }),
 );

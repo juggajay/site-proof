@@ -1,10 +1,11 @@
 /**
- * useNcrEvidence — read + add the photo evidence on one NCR for the detail screen.
+ * useNcrEvidence — read all evidence on one NCR and add photo evidence.
  *
  * READ: GET /api/ncrs/:id/evidence — the same endpoint the desktop evidence view
  * uses; returns { evidence, grouped, count } where each item carries its linked
- * document ({ id, filename, … }). We render the `photos` group as the
- * detail screen's photo strip.
+ * document ({ id, filename, … }). The detail screen renders the `photos` group
+ * visually, and exposes certificate/document evidence as signed-url document
+ * links.
  *
  * ADD: the existing two-step pipeline, VERBATIM from RectifyNCRModal —
  *   1. POST /api/documents/upload (multipart) → { id }
@@ -66,6 +67,7 @@ export function useNcrEvidence(ncrId: string | null, projectId: string | null) {
     enabled: Boolean(ncrId),
   });
 
+  const evidence = query.data?.grouped?.all ?? query.data?.evidence ?? [];
   const photos = query.data?.grouped?.photos ?? [];
 
   const addPhoto = useCallback(
@@ -109,6 +111,7 @@ export function useNcrEvidence(ncrId: string | null, projectId: string | null) {
   );
 
   return {
+    evidence,
     photos,
     evidenceLoading: query.isLoading,
     uploading,

@@ -27,6 +27,7 @@ import {
 } from './holdpoints/releaseNotifications.js';
 import {
   buildHoldPointReleaseConfirmationEmail,
+  selectImmediateHoldPointReleaseConfirmationRecipients,
   selectHoldPointReleaseContractors,
   selectHoldPointReleaseSuperintendents,
 } from './holdpoints/releaseConfirmationEmails.js';
@@ -38,6 +39,7 @@ import { isProjectNotificationEnabled } from '../lib/projectNotificationPreferen
 import { parseDocumentContentDisposition, sendDocumentFile } from './documents/fileHelpers.js';
 import { resolveHoldPointEvidenceInputs } from './holdpoints/evidencePackageInputs.js';
 import { emitHoldPointWebhookEvent } from './holdpoints/webhookEvents.js';
+import { assertHoldPointCompletionCanBeReleased } from './holdpoints/releaseCompletionGuard.js';
 
 const holdpointsRouter = Router();
 
@@ -133,6 +135,8 @@ function buildPublicHoldPointReleasePayload(releaseToken: PublicHoldPointRelease
       scheduledTime: holdPoint.scheduledTime,
       releasedAt: holdPoint.releasedAt,
       releasedByName: holdPoint.releasedByName,
+      releasedByOrg: holdPoint.releasedByOrg,
+      releaseMethod: holdPoint.releaseMethod,
       releaseNotes: holdPoint.releaseNotes,
     },
     lot,
@@ -330,6 +334,7 @@ holdpointsRouter.post(
         where: {
           id: releaseToken.id,
           usedAt: null,
+          expiresAt: { gt: releasedAt },
         },
         data: {
           usedAt: releasedAt,
@@ -341,10 +346,29 @@ holdpointsRouter.post(
       });
 
       if (tokenUpdate.count !== 1) {
+        const currentToken = await tx.holdPointReleaseToken.findUnique({
+          where: { id: releaseToken.id },
+          select: { usedAt: true, expiresAt: true, releasedByName: true },
+        });
+
+        if (!currentToken || currentToken.expiresAt <= releasedAt) {
+          throw new AppError(
+            410,
+            'This secure release link has expired. Please contact the site team for a new link.',
+            'TOKEN_EXPIRED',
+          );
+        }
+
         throw new AppError(
           410,
           'This hold point has already been released using this link.',
           'TOKEN_USED',
+          currentToken.usedAt
+            ? {
+                releasedAt: currentToken.usedAt as unknown as Record<string, unknown>,
+                releasedByName: currentToken.releasedByName as unknown as Record<string, unknown>,
+              }
+            : undefined,
         );
       }
 
@@ -388,6 +412,16 @@ holdpointsRouter.post(
 
       if (itpInstance) {
         releasedItpInstanceId = itpInstance.id;
+        const completionKey = {
+          itpInstanceId: itpInstance.id,
+          checklistItemId: updatedHoldPoint.itpChecklistItemId,
+        };
+        const existingCompletion = await tx.iTPCompletion.findUnique({
+          where: { itpInstanceId_checklistItemId: completionKey },
+          select: { status: true },
+        });
+        assertHoldPointCompletionCanBeReleased(existingCompletion);
+
         // I1-core RECONCILE: releasing the hold point satisfies the ITP item.
         // Set status='completed' + completedAt (releasedAt) alongside the
         // verification fields, and CREATE the completion row if the hold point
@@ -405,15 +439,11 @@ holdpointsRouter.post(
         };
         await tx.iTPCompletion.upsert({
           where: {
-            itpInstanceId_checklistItemId: {
-              itpInstanceId: itpInstance.id,
-              checklistItemId: updatedHoldPoint.itpChecklistItemId,
-            },
+            itpInstanceId_checklistItemId: completionKey,
           },
           update: completionData,
           create: {
-            itpInstanceId: itpInstance.id,
-            checklistItemId: updatedHoldPoint.itpChecklistItemId,
+            ...completionKey,
             ...completionData,
           },
         });
@@ -480,9 +510,17 @@ holdpointsRouter.post(
         releaseNotes,
       });
 
+      const immediateHoldPointReleaseEmailUserIds = new Set<string>();
       for (const pu of projectUsers) {
         try {
-          await sendNotificationIfEnabled(pu.userId, 'holdPointRelease', releaseEmailNotification);
+          const delivery = await sendNotificationIfEnabled(
+            pu.userId,
+            'holdPointRelease',
+            releaseEmailNotification,
+          );
+          if (delivery.sent) {
+            immediateHoldPointReleaseEmailUserIds.add(pu.userId);
+          }
         } catch (emailError) {
           logError(`[HP Secure Release] Failed to send email to user ${pu.userId}:`, emailError);
         }
@@ -516,14 +554,20 @@ holdpointsRouter.post(
           lotUrl,
         };
 
-        const contractors = selectHoldPointReleaseContractors(projectUsers);
+        const contractors = selectImmediateHoldPointReleaseConfirmationRecipients(
+          selectHoldPointReleaseContractors(projectUsers),
+          immediateHoldPointReleaseEmailUserIds,
+        );
         for (const contractor of contractors) {
           await sendHPReleaseConfirmationEmail(
             buildHoldPointReleaseConfirmationEmail(contractor, 'contractor', confirmationContext),
           );
         }
 
-        const superintendents = selectHoldPointReleaseSuperintendents(projectUsers);
+        const superintendents = selectImmediateHoldPointReleaseConfirmationRecipients(
+          selectHoldPointReleaseSuperintendents(projectUsers),
+          immediateHoldPointReleaseEmailUserIds,
+        );
         for (const superintendent of superintendents) {
           await sendHPReleaseConfirmationEmail(
             buildHoldPointReleaseConfirmationEmail(

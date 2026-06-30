@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { NCREvidenceList } from './NCREvidenceList';
 
 const concessionSchema = z.object({
   justification: z.string().trim().min(1, 'Concession justification is required'),
@@ -118,6 +119,13 @@ function ConcessionModalInner({ isOpen, ncr, onClose, onSubmit, loading }: Conce
           </div>
         </div>
 
+        <div className="mb-4">
+          <NCREvidenceList
+            evidence={ncr.ncrEvidence ?? []}
+            emptyLabel="No rectification evidence has been uploaded yet."
+          />
+        </div>
+
         {/* Warning for Major NCRs */}
         {isMajor && (
           <div className="mb-4 bg-warning/10 border border-warning/30 text-warning px-3 py-2 rounded-lg text-sm flex items-start gap-2">
@@ -225,7 +233,7 @@ function ConcessionModalInner({ isOpen, ncr, onClose, onSubmit, loading }: Conce
           {/* Status Info */}
           <div className="bg-muted/50 border border-border px-3 py-2 rounded-lg text-sm">
             <span className="text-muted-foreground">NCR will be closed with status: </span>
-            <span className="font-medium text-foreground">CLOSED_CONCESSION</span>
+            <span className="font-medium text-foreground">Closed with concession</span>
           </div>
         </form>
       </ModalBody>

@@ -8,9 +8,10 @@ import { logError } from '@/lib/logger';
 
 interface ITPTemplatesTabProps {
   projectId: string;
+  readOnly?: boolean;
 }
 
-export function ITPTemplatesTab({ projectId }: ITPTemplatesTabProps) {
+export function ITPTemplatesTab({ projectId, readOnly = false }: ITPTemplatesTabProps) {
   const navigate = useNavigate();
   const [itpTemplates, setItpTemplates] = useState<ITPTemplate[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(false);
@@ -64,12 +65,21 @@ export function ITPTemplatesTab({ projectId }: ITPTemplatesTabProps) {
             </p>
           </div>
           <button
-            onClick={() => navigate(projectItpPath)}
-            className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90"
+            type="button"
+            onClick={() => {
+              if (!readOnly) navigate(projectItpPath);
+            }}
+            disabled={readOnly}
+            className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Manage Templates
           </button>
         </div>
+        {readOnly && (
+          <div role="status" className="mb-4 rounded-lg bg-warning/10 p-3 text-sm text-warning">
+            ITP templates are read-only while this project is archived.
+          </div>
+        )}
         {loadingTemplates ? (
           <div className="flex justify-center p-8">
             <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
@@ -90,8 +100,12 @@ export function ITPTemplatesTab({ projectId }: ITPTemplatesTabProps) {
             <ClipboardList className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <p className="text-muted-foreground mb-4">No ITP templates found for this project.</p>
             <button
-              onClick={() => navigate(projectItpPath)}
-              className="rounded-lg border px-4 py-2 text-sm hover:bg-muted"
+              type="button"
+              onClick={() => {
+                if (!readOnly) navigate(projectItpPath);
+              }}
+              disabled={readOnly}
+              className="rounded-lg border px-4 py-2 text-sm hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
             >
               Create Your First Template
             </button>
@@ -133,8 +147,12 @@ export function ITPTemplatesTab({ projectId }: ITPTemplatesTabProps) {
           Import ITP templates from specification sets or other projects.
         </p>
         <button
-          onClick={() => navigate(projectItpPath)}
-          className="rounded-lg border px-4 py-2 text-sm hover:bg-muted"
+          type="button"
+          onClick={() => {
+            if (!readOnly) navigate(projectItpPath);
+          }}
+          disabled={readOnly}
+          className="rounded-lg border px-4 py-2 text-sm hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
         >
           Go to ITP Page to Import
         </button>

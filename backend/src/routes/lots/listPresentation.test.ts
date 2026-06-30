@@ -13,6 +13,15 @@ const makeLot = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
+function presentItpInstance(itpInstance: Record<string, unknown>): Record<string, unknown> {
+  const [lot] = presentLotList([makeLot({ itpInstance })], {
+    canViewBudgetAmount: true,
+    subcontractorCompanyIds: null,
+    includeITP: true,
+  });
+  return ((lot as Record<string, unknown>).itpInstances as Record<string, unknown>[])[0];
+}
+
 describe('presentLotList (pure)', () => {
   it('keeps budgetAmount when canViewBudgetAmount is true', () => {
     const [lot] = presentLotList([makeLot()], {
@@ -85,36 +94,24 @@ describe('presentLotList (pure)', () => {
   });
 
   it('derives in_progress ITP status from completed checklist rows even when the stored instance status is stale', () => {
-    const [lot] = presentLotList(
-      [
-        makeLot({
-          itpInstance: {
-            id: 'itp-1',
-            templateId: 't-1',
-            status: 'not_started',
-            templateSnapshot: JSON.stringify({
-              id: 't-1',
-              name: 'Earthworks ITP',
-              checklistItems: [{ id: 'item-1' }, { id: 'item-2' }],
-            }),
-            template: {
-              id: 't-1',
-              name: 'Earthworks ITP',
-              activityType: 'earthworks',
-              checklistItems: [{ id: 'live-item-ignored' }],
-            },
-            completions: [{ checklistItemId: 'item-1', status: 'completed' }],
-          },
-        }),
-      ],
-      {
-        canViewBudgetAmount: true,
-        subcontractorCompanyIds: null,
-        includeITP: true,
+    const itp = presentItpInstance({
+      id: 'itp-1',
+      templateId: 't-1',
+      status: 'not_started',
+      templateSnapshot: JSON.stringify({
+        id: 't-1',
+        name: 'Earthworks ITP',
+        checklistItems: [{ id: 'item-1' }, { id: 'item-2' }],
+      }),
+      template: {
+        id: 't-1',
+        name: 'Earthworks ITP',
+        activityType: 'earthworks',
+        checklistItems: [{ id: 'live-item-ignored' }],
       },
-    );
+      completions: [{ checklistItemId: 'item-1', status: 'completed' }],
+    });
 
-    const [itp] = (lot as Record<string, unknown>).itpInstances as Record<string, unknown>[];
     expect(itp.status).toBe('in_progress');
     expect(itp.completionPercentage).toBe(50);
     expect('completions' in itp).toBe(false);
@@ -123,79 +120,77 @@ describe('presentLotList (pure)', () => {
   });
 
   it('derives completed ITP status when every checklist item is completed or N/A', () => {
-    const [lot] = presentLotList(
-      [
-        makeLot({
-          itpInstance: {
-            id: 'itp-1',
-            templateId: 't-1',
-            status: 'not_started',
-            template: {
-              id: 't-1',
-              name: 'Earthworks ITP',
-              activityType: 'earthworks',
-              checklistItems: [{ id: 'item-1' }, { id: 'item-2' }],
-            },
-            completions: [
-              { checklistItemId: 'item-1', status: 'completed' },
-              { checklistItemId: 'item-2', status: 'not_applicable' },
-            ],
-          },
-        }),
-      ],
-      {
-        canViewBudgetAmount: true,
-        subcontractorCompanyIds: null,
-        includeITP: true,
+    const itp = presentItpInstance({
+      id: 'itp-1',
+      templateId: 't-1',
+      status: 'not_started',
+      template: {
+        id: 't-1',
+        name: 'Earthworks ITP',
+        activityType: 'earthworks',
+        checklistItems: [{ id: 'item-1' }, { id: 'item-2' }],
       },
-    );
+      completions: [
+        { checklistItemId: 'item-1', status: 'completed' },
+        { checklistItemId: 'item-2', status: 'not_applicable' },
+      ],
+    });
 
-    const [itp] = (lot as Record<string, unknown>).itpInstances as Record<string, unknown>[];
     expect(itp.status).toBe('completed');
     expect(itp.completionPercentage).toBe(100);
   });
 
-  it('treats failed ITP rows as started, but not complete', () => {
-    const [lot] = presentLotList(
-      [
-        makeLot({
-          itpInstance: {
-            id: 'itp-1',
-            templateId: 't-1',
-            status: 'not_started',
-            template: {
-              id: 't-1',
-              name: 'Earthworks ITP',
-              activityType: 'earthworks',
-              checklistItems: [{ id: 'item-1' }, { id: 'item-2' }],
-            },
-            completions: [{ checklistItemId: 'item-1', status: 'failed' }],
-          },
-        }),
-      ],
-      {
-        canViewBudgetAmount: true,
-        subcontractorCompanyIds: null,
-        includeITP: true,
+  it('does not count pending-review or rejected ITP rows as completed in the lot list', () => {
+    const itp = presentItpInstance({
+      id: 'itp-1',
+      templateId: 't-1',
+      status: 'not_started',
+      template: {
+        id: 't-1',
+        name: 'Earthworks ITP',
+        activityType: 'earthworks',
+        checklistItems: [{ id: 'item-1' }, { id: 'item-2' }, { id: 'item-3' }],
       },
-    );
+      completions: [
+        { checklistItemId: 'item-1', status: 'completed', verificationStatus: 'verified' },
+        {
+          checklistItemId: 'item-2',
+          status: 'completed',
+          verificationStatus: 'pending_verification',
+        },
+        {
+          checklistItemId: 'item-3',
+          status: 'not_applicable',
+          verificationStatus: 'rejected',
+        },
+      ],
+    });
 
-    const [itp] = (lot as Record<string, unknown>).itpInstances as Record<string, unknown>[];
+    expect(itp.status).toBe('in_progress');
+    expect(itp.completionPercentage).toBe(33);
+  });
+
+  it('treats failed ITP rows as started, but not complete', () => {
+    const itp = presentItpInstance({
+      id: 'itp-1',
+      templateId: 't-1',
+      status: 'not_started',
+      template: {
+        id: 't-1',
+        name: 'Earthworks ITP',
+        activityType: 'earthworks',
+        checklistItems: [{ id: 'item-1' }, { id: 'item-2' }],
+      },
+      completions: [{ checklistItemId: 'item-1', status: 'failed' }],
+    });
+
     expect(itp.status).toBe('in_progress');
     expect(itp.completionPercentage).toBe(0);
   });
 
   it('preserves a completed legacy instance when checklist shape is unavailable', () => {
-    const [lot] = presentLotList(
-      [makeLot({ itpInstance: { id: 'itp-1', templateId: 't-1', status: 'completed' } })],
-      {
-        canViewBudgetAmount: true,
-        subcontractorCompanyIds: null,
-        includeITP: true,
-      },
-    );
+    const itp = presentItpInstance({ id: 'itp-1', templateId: 't-1', status: 'completed' });
 
-    const [itp] = (lot as Record<string, unknown>).itpInstances as Record<string, unknown>[];
     expect(itp.status).toBe('completed');
     expect(itp.completionPercentage).toBe(100);
   });

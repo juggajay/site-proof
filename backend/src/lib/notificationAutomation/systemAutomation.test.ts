@@ -120,7 +120,7 @@ describe('processSystemAlerts missing-diary alert (M60: single alert that emails
     const [users, inApp, emailType] = notifyUsers.mock.calls[0];
     expect(users).toEqual([{ id: 'pm-1', email: 'pm@x.com', fullName: 'PM' }]);
     expect(inApp.type).toBe('alert_missing_diary');
-    expect(emailType).toBe('ncrAssigned');
+    expect(emailType).toBe('diaryReminder');
     expect(notificationCreateMany).not.toHaveBeenCalled();
   });
 });

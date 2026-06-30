@@ -1,5 +1,6 @@
 import { prisma } from '../../../lib/prisma.js';
 import { logError } from '../../../lib/serverLogger.js';
+import { isReleaseGatedChecklistItem } from '../../../lib/holdPointReleaseGating.js';
 import { getChecklistItemsForInstance, type ChecklistItem } from './templateSnapshot.js';
 
 /**
@@ -14,7 +15,16 @@ export async function updateLotStatusFromITP(itpInstanceId: string) {
     const instance = await prisma.iTPInstance.findUnique({
       where: { id: itpInstanceId },
       include: {
-        lot: true,
+        lot: {
+          include: {
+            holdPoints: {
+              select: {
+                itpChecklistItemId: true,
+                status: true,
+              },
+            },
+          },
+        },
         template: {
           include: {
             checklistItems: true,
@@ -43,15 +53,40 @@ export async function updateLotStatusFromITP(itpInstanceId: string) {
       return;
     }
 
-    // Count completed items (including N/A items as "finished"), but a rejected
-    // completion is not finished work and must not auto-progress the lot.
+    const releaseGatedItemIds = new Set(
+      checklistItems.filter(isReleaseGatedChecklistItem).map((item) => item.id),
+    );
+    const releasedHoldPointItemIds = new Set(
+      lot.holdPoints
+        .filter((holdPoint) => holdPoint.status === 'released')
+        .map((holdPoint) => holdPoint.itpChecklistItemId),
+    );
+
+    // Count completed items (including N/A items as "finished"), but work that
+    // is still awaiting review or has been rejected is not accepted yet and must
+    // not auto-progress the lot. N/A on a release-gated hold point is also not
+    // accepted until the hold-point release record exists.
     const completedItemIds = new Set(
       instance.completions
-        .filter(
-          (c) =>
-            (c.status === 'completed' || c.status === 'not_applicable') &&
-            c.verificationStatus !== 'rejected',
-        )
+        .filter((c) => {
+          if (c.status !== 'completed' && c.status !== 'not_applicable') {
+            return false;
+          }
+          if (
+            c.verificationStatus === 'pending_verification' ||
+            c.verificationStatus === 'rejected'
+          ) {
+            return false;
+          }
+          if (
+            c.status === 'not_applicable' &&
+            releaseGatedItemIds.has(c.checklistItemId) &&
+            !releasedHoldPointItemIds.has(c.checklistItemId)
+          ) {
+            return false;
+          }
+          return true;
+        })
         .map((c) => c.checklistItemId),
     );
 

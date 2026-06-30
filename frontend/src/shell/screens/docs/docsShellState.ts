@@ -22,6 +22,10 @@
  * deep-link is future-proof and tested, while honestly being a passthrough until
  * the register grows a lot link.
  *
+ * Lot-scoped deep-links include project-wide drawings because the drawing
+ * register is project-scoped today. Future lot-linked drawings are narrowed to
+ * the matching lot, while current project-wide rows remain visible.
+ *
  * The drawing FILE is opened via the existing signed-URL idiom in useDocFileOpen
  * (openDocumentAccessUrl), NOT here — this module never touches the network.
  */
@@ -131,14 +135,13 @@ export function sortDocsCurrentFirst(items: DocItem[]): DocItem[] {
 
 /**
  * Apply the optional ?lotId= deep-link filter. When `lotId` is null/empty, every
- * item passes. Otherwise only items linked to that lot pass. Drawings have no lot
- * link in the current data model, so a real lotId yields an empty set today — the
- * screen surfaces an honest "no drawings for this lot" empty state rather than
- * silently showing the whole register. Returns a new array; does not mutate.
+ * item passes. Otherwise lot-linked drawings must match that lot, and
+ * project-wide drawings remain visible because the drawing register is currently
+ * project-scoped. Returns a new array; does not mutate.
  */
 export function filterDocsByLot(items: DocItem[], lotId: string | null | undefined): DocItem[] {
   if (!lotId) return [...items];
-  return items.filter((i) => i.lotId === lotId);
+  return items.filter((i) => !i.lotId || i.lotId === lotId);
 }
 
 /** Count of current (non-superseded) revisions — drives the header sub-line. */

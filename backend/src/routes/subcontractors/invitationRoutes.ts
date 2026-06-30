@@ -9,11 +9,16 @@ import { prisma } from '../../lib/prisma.js';
 import { buildFrontendUrl } from '../../lib/runtimeConfig.js';
 import { logError } from '../../lib/serverLogger.js';
 import { requireEmailVerified } from '../../middleware/requireEmailVerified.js';
+import { requireBrowserSessionMiddleware } from '../../middleware/browserSession.js';
 import {
+  generateSubcontractorInvitationToken,
   getSubcontractorInvitationExpiresAt,
+  hashSubcontractorInvitationToken,
+  isSubcontractorInvitationToken,
   isSubcontractorInvitationAcceptableStatus,
   isSubcontractorInvitationExpired,
   maskInvitedEmail,
+  normalizeSubcontractorInvitationToken,
 } from '../../lib/subcontractorInvitations.js';
 import {
   buildEmptyPendingSubcontractorInvitationResponse,
@@ -51,6 +56,18 @@ export interface SubcontractorInvitationRouterDependencies {
 export interface SubcontractorInvitationRouters {
   publicRouter: Router;
   authenticatedRouter: Router;
+}
+
+function toInvitationTokenHash(value: string): string | null {
+  if (!isSubcontractorInvitationToken(value)) {
+    return null;
+  }
+
+  try {
+    return hashSubcontractorInvitationToken(normalizeSubcontractorInvitationToken(value));
+  } catch {
+    return null;
+  }
 }
 
 async function cleanupFailedSubcontractorInvitation(params: {
@@ -113,10 +130,14 @@ export function createSubcontractorInvitationRouters({
   publicRouter.get(
     '/invitation/:id',
     asyncHandler(async (req, res) => {
-      const id = normalizeIdParam(req.params.id, 'Invitation ID');
+      const invitationTokenHash = toInvitationTokenHash(req.params.id);
+
+      if (!invitationTokenHash) {
+        throw AppError.notFound('Invitation');
+      }
 
       const subcontractor = await prisma.subcontractorCompany.findUnique({
-        where: { id },
+        where: { invitationTokenHash },
         include: {
           project: { select: { id: true, name: true, companyId: true } },
           _count: { select: { users: true } },
@@ -192,6 +213,7 @@ export function createSubcontractorInvitationRouters({
   // Now supports selecting from global directory via globalSubcontractorId
   authenticatedRouter.post(
     '/invite',
+    requireBrowserSessionMiddleware('Subcontractor invitation'),
     requireEmailVerified,
     asyncHandler(async (req, res) => {
       const user = req.user!;
@@ -341,6 +363,7 @@ export function createSubcontractorInvitationRouters({
       }
 
       // Create the project-specific SubcontractorCompany linked to the global record
+      const invitationToken = generateSubcontractorInvitationToken();
       const subcontractor = await prisma.subcontractorCompany.create({
         data: {
           projectId,
@@ -352,6 +375,7 @@ export function createSubcontractorInvitationRouters({
           primaryContactPhone: finalContactPhone,
           status: 'pending_approval',
           invitationExpiresAt: getSubcontractorInvitationExpiresAt(),
+          invitationTokenHash: hashSubcontractorInvitationToken(invitationToken),
         },
       });
 
@@ -372,7 +396,7 @@ export function createSubcontractorInvitationRouters({
 
       // Feature #942 - Send subcontractor invitation email with setup link
       const inviteUrl = buildFrontendUrl(
-        `/subcontractor-portal/accept-invite?id=${subcontractor.id}`,
+        `/subcontractor-portal/accept-invite?id=${encodeURIComponent(invitationToken)}`,
       );
 
       let emailResult;
@@ -444,12 +468,13 @@ export function createSubcontractorInvitationRouters({
   authenticatedRouter.post(
     '/invitation/:id/accept',
     asyncHandler(async (req, res) => {
-      const id = normalizeIdParam(req.params.id, 'Invitation ID');
+      const invitationTokenHash = toInvitationTokenHash(req.params.id);
+      const id = invitationTokenHash ? null : normalizeIdParam(req.params.id, 'Invitation ID');
       const user = req.user!;
 
       // Find the subcontractor company
       const subcontractor = await prisma.subcontractorCompany.findUnique({
-        where: { id },
+        where: invitationTokenHash ? { invitationTokenHash } : { id: id! },
         include: {
           project: { select: { id: true, name: true } },
         },
@@ -480,6 +505,15 @@ export function createSubcontractorInvitationRouters({
         (req.body as { acknowledgeEmailMismatch?: unknown } | undefined)
           ?.acknowledgeEmailMismatch === true;
 
+      if (emailMismatch && !invitationTokenHash) {
+        throw new AppError(
+          403,
+          'Use the invitation link sent to the invited email address to accept this invitation with a different account.',
+          'INVITATION_TOKEN_REQUIRED',
+          { invitedEmailMasked: maskInvitedEmail(subcontractor.primaryContactEmail ?? '') },
+        );
+      }
+
       if (emailMismatch && !acknowledgeEmailMismatch) {
         throw new AppError(
           409,
@@ -493,12 +527,12 @@ export function createSubcontractorInvitationRouters({
         await tx.$queryRaw<Array<{ id: string }>>`
           SELECT id
           FROM subcontractor_companies
-          WHERE id = ${id}
+          WHERE id = ${subcontractor.id}
           FOR UPDATE
         `;
 
         const lockedSubcontractor = await tx.subcontractorCompany.findUnique({
-          where: { id },
+          where: { id: subcontractor.id },
           select: {
             id: true,
             status: true,
@@ -537,7 +571,7 @@ export function createSubcontractorInvitationRouters({
         }
 
         const existingLinks = await tx.subcontractorUser.findMany({
-          where: { subcontractorCompanyId: id },
+          where: { subcontractorCompanyId: lockedSubcontractor.id },
           select: { userId: true },
         });
         const existingLink = existingLinks.find((link) => link.userId === user.id);
@@ -587,7 +621,7 @@ export function createSubcontractorInvitationRouters({
         projectId: subcontractor.project.id,
         userId: user.id,
         entityType: 'subcontractor',
-        entityId: id,
+        entityId: subcontractor.id,
         action: AuditAction.SUBCONTRACTOR_INVITATION_ACCEPTED,
         changes: {
           companyName: subcontractor.companyName,

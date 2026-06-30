@@ -53,9 +53,21 @@ export const submittedClaimEvidencePackageFixture: ClaimEvidencePackageData = {
       },
       holdPoints: [{ status: 'released' }, { status: 'released' }],
       testResults: [
-        { testType: 'Compaction', resultValue: 98, resultUnit: '%', passFail: 'pass' },
-        { testType: 'Moisture', resultValue: 12, resultUnit: '%', passFail: 'pass' },
-        { testType: 'CBR', resultValue: 45, resultUnit: '%', passFail: 'pass' },
+        {
+          testType: 'Compaction',
+          resultValue: 98,
+          resultUnit: '%',
+          passFail: 'pass',
+          status: 'verified',
+        },
+        {
+          testType: 'Moisture',
+          resultValue: 12,
+          resultUnit: '%',
+          passFail: 'pass',
+          status: 'verified',
+        },
+        { testType: 'CBR', resultValue: 45, resultUnit: '%', passFail: 'pass', status: 'verified' },
       ],
       ncrs: [],
       documents: [
@@ -77,6 +89,8 @@ export const submittedClaimEvidencePackageFixture: ClaimEvidencePackageData = {
       summary: {
         testResultCount: 3,
         passedTestCount: 3,
+        failedTestCount: 0,
+        pendingTestCount: 0,
         ncrCount: 0,
         openNcrCount: 0,
         photoCount: 6,
@@ -109,8 +123,20 @@ export const submittedClaimEvidencePackageFixture: ClaimEvidencePackageData = {
       },
       holdPoints: [{ status: 'released' }, { status: 'pending' }],
       testResults: [
-        { testType: 'Concrete Slump', resultValue: 80, resultUnit: 'mm', passFail: 'pass' },
-        { testType: 'Pipe Joint', resultValue: null, resultUnit: null, passFail: 'fail' },
+        {
+          testType: 'Concrete Slump',
+          resultValue: 80,
+          resultUnit: 'mm',
+          passFail: 'pass',
+          status: 'verified',
+        },
+        {
+          testType: 'Pipe Joint',
+          resultValue: null,
+          resultUnit: null,
+          passFail: 'fail',
+          status: 'verified',
+        },
       ],
       ncrs: [{ ncrNumber: 'NCR-0021', severity: 'minor', status: 'open' }],
       documents: [
@@ -125,6 +151,8 @@ export const submittedClaimEvidencePackageFixture: ClaimEvidencePackageData = {
       summary: {
         testResultCount: 2,
         passedTestCount: 1,
+        failedTestCount: 1,
+        pendingTestCount: 0,
         ncrCount: 1,
         openNcrCount: 1,
         photoCount: 3,
@@ -137,6 +165,8 @@ export const submittedClaimEvidencePackageFixture: ClaimEvidencePackageData = {
     totalClaimedAmount: 248500,
     totalTestResults: 5,
     totalPassedTests: 4,
+    totalFailedTests: 1,
+    totalPendingTests: 0,
     totalNCRs: 1,
     totalOpenNCRs: 1,
     totalPhotos: 9,

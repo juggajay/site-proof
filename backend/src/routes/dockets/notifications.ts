@@ -25,6 +25,19 @@ export type DocketEmailNotification = {
 
 const docketsLink = (projectId: string): string => `/projects/${projectId}/dockets`;
 
+const subcontractorDocketLink = ({
+  docketId,
+  projectId,
+  subcontractorCompanyId,
+}: {
+  docketId: string;
+  projectId: string;
+  subcontractorCompanyId: string;
+}): string => {
+  const params = new URLSearchParams({ projectId, subcontractorCompanyId });
+  return `/subcontractor-portal/docket/${encodeURIComponent(docketId)}?${params.toString()}`;
+};
+
 export type DocketSubmittedNotificationContext = {
   projectId: string;
   projectName: string;
@@ -58,10 +71,12 @@ export function buildDocketSubmittedNotifications(ctx: DocketSubmittedNotificati
 }
 
 export type DocketApprovedNotificationContext = {
+  docketId: string;
   projectId: string;
   projectName: string;
   docketNumber: string;
   docketDate: string;
+  subcontractorCompanyId: string;
   approverName: string;
   foremanNotes: string | null | undefined;
   adjustmentReason: string | null | undefined;
@@ -72,15 +87,17 @@ export function buildDocketApprovedNotifications(ctx: DocketApprovedNotification
   email: DocketEmailNotification;
 } {
   const {
+    docketId,
     projectId,
     projectName,
     docketNumber,
     docketDate,
+    subcontractorCompanyId,
     approverName,
     foremanNotes,
     adjustmentReason,
   } = ctx;
-  const linkUrl = docketsLink(projectId);
+  const linkUrl = subcontractorDocketLink({ docketId, projectId, subcontractorCompanyId });
   return {
     inApp: {
       projectId,
@@ -99,10 +116,12 @@ export function buildDocketApprovedNotifications(ctx: DocketApprovedNotification
 }
 
 export type DocketRejectedNotificationContext = {
+  docketId: string;
   projectId: string;
   projectName: string;
   docketNumber: string;
   docketDate: string;
+  subcontractorCompanyId: string;
   rejectorName: string;
   reason: string;
 };
@@ -111,8 +130,17 @@ export function buildDocketRejectedNotifications(ctx: DocketRejectedNotification
   inApp: DocketInAppNotification;
   email: DocketEmailNotification;
 } {
-  const { projectId, projectName, docketNumber, docketDate, rejectorName, reason } = ctx;
-  const linkUrl = docketsLink(projectId);
+  const {
+    docketId,
+    projectId,
+    projectName,
+    docketNumber,
+    docketDate,
+    subcontractorCompanyId,
+    rejectorName,
+    reason,
+  } = ctx;
+  const linkUrl = subcontractorDocketLink({ docketId, projectId, subcontractorCompanyId });
   return {
     inApp: {
       projectId,
@@ -131,10 +159,12 @@ export function buildDocketRejectedNotifications(ctx: DocketRejectedNotification
 }
 
 export type DocketQueriedNotificationContext = {
+  docketId: string;
   projectId: string;
   projectName: string;
   docketNumber: string;
   docketDate: string;
+  subcontractorCompanyId: string;
   querierName: string;
   questions: string;
 };
@@ -143,8 +173,17 @@ export function buildDocketQueriedNotifications(ctx: DocketQueriedNotificationCo
   inApp: DocketInAppNotification;
   email: DocketEmailNotification;
 } {
-  const { projectId, projectName, docketNumber, docketDate, querierName, questions } = ctx;
-  const linkUrl = docketsLink(projectId);
+  const {
+    docketId,
+    projectId,
+    projectName,
+    docketNumber,
+    docketDate,
+    subcontractorCompanyId,
+    querierName,
+    questions,
+  } = ctx;
+  const linkUrl = subcontractorDocketLink({ docketId, projectId, subcontractorCompanyId });
   return {
     inApp: {
       projectId,
@@ -164,6 +203,7 @@ export function buildDocketQueriedNotifications(ctx: DocketQueriedNotificationCo
 
 export type DocketQueryResponseNotificationContext = {
   projectId: string;
+  projectName: string;
   docketNumber: string;
   docketDate: string;
   responderName: string;
@@ -172,15 +212,23 @@ export type DocketQueryResponseNotificationContext = {
 
 export function buildDocketQueryResponseNotification(ctx: DocketQueryResponseNotificationContext): {
   inApp: DocketInAppNotification;
+  email: DocketEmailNotification;
 } {
-  const { projectId, docketNumber, docketDate, responderName, response } = ctx;
+  const { projectId, projectName, docketNumber, docketDate, responderName, response } = ctx;
+  const linkUrl = docketsLink(projectId);
   return {
     inApp: {
       projectId,
       type: 'docket_query_response',
       title: 'Docket Query Response',
       message: `${responderName} has responded to the query on docket ${docketNumber} (${docketDate}).\n\nResponse: ${response.substring(0, 200)}${response.length > 200 ? '...' : ''}\n\nThe docket is ready for review.`,
-      linkUrl: docketsLink(projectId),
+      linkUrl,
+    },
+    email: {
+      title: 'Docket Query Response',
+      message: `${responderName} has responded to the query on docket ${docketNumber} (${docketDate}).\n\nProject: ${projectName}\n\nResponse:\n${response}\n\nThe docket is ready for review.`,
+      projectName,
+      linkUrl,
     },
   };
 }

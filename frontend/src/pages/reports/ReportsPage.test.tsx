@@ -196,6 +196,19 @@ describe('ReportsPage diary tab', () => {
     expect(apiFetchMock).toHaveBeenCalledWith(
       expect.stringContaining(`endDate=${selectedEndDate}`),
     );
+
+    apiFetchMock.mockClear();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh Report' }));
+
+    await waitFor(() => {
+      expect(apiFetchMock).toHaveBeenCalledWith(
+        expect.stringContaining(`startDate=${selectedStartDate}`),
+      );
+    });
+    expect(apiFetchMock).toHaveBeenCalledWith(
+      expect.stringContaining(`endDate=${selectedEndDate}`),
+    );
   });
 });
 
@@ -241,5 +254,172 @@ describe('ReportsPage stale report handling', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Report service unavailable');
     expect(screen.queryByText('LOT-STALE-001')).not.toBeInTheDocument();
+  });
+});
+
+describe('ReportsPage print action', () => {
+  beforeEach(() => {
+    apiFetchMock.mockReset();
+  });
+
+  it('shows a print/save PDF action when a report has loaded', async () => {
+    const printMock = vi.fn();
+    Object.defineProperty(window, 'print', {
+      configurable: true,
+      value: printMock,
+    });
+
+    apiFetchMock.mockImplementation((path) => {
+      if (path === '/api/company') {
+        return Promise.resolve({
+          company: { subscriptionTier: 'professional', name: 'QA Company', logoUrl: null },
+        });
+      }
+
+      if (path === '/api/projects/project-1') {
+        return Promise.resolve({
+          project: { name: 'QA Project', currentUserRole: 'project_manager' },
+        });
+      }
+
+      if (path.startsWith('/api/reports/lot-status?')) {
+        return Promise.resolve(buildLotStatusReport());
+      }
+
+      return Promise.reject(new Error(`Unexpected API path: ${path}`));
+    });
+
+    renderReportsPage('/projects/project-1/reports?tab=lot-status');
+
+    expect(await screen.findByText('LOT-STALE-001')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Print / Save PDF' }));
+    expect(printMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not send a referrer when rendering an external company logo in the print header', async () => {
+    apiFetchMock.mockImplementation((path) => {
+      if (path === '/api/company') {
+        return Promise.resolve({
+          company: {
+            subscriptionTier: 'professional',
+            name: 'QA Company',
+            logoUrl: 'https://cdn.example.com/logo.png',
+          },
+        });
+      }
+
+      if (path === '/api/projects/project-1') {
+        return Promise.resolve({
+          project: { name: 'QA Project', currentUserRole: 'project_manager' },
+        });
+      }
+
+      if (path.startsWith('/api/reports/lot-status?')) {
+        return Promise.resolve(buildLotStatusReport());
+      }
+
+      return Promise.reject(new Error(`Unexpected API path: ${path}`));
+    });
+
+    renderReportsPage('/projects/project-1/reports?tab=lot-status');
+
+    const logo = await screen.findByAltText('QA Company');
+    expect(logo).toHaveAttribute('src', 'https://cdn.example.com/logo.png');
+    expect(logo).toHaveAttribute('referrerpolicy', 'no-referrer');
+  });
+});
+
+describe('ReportsPage subscription tier gates', () => {
+  beforeEach(() => {
+    apiFetchMock.mockReset();
+  });
+
+  it('normalizes the company tier before gating advanced reporting', async () => {
+    apiFetchMock.mockImplementation((path) => {
+      if (path === '/api/company') {
+        return Promise.resolve({
+          company: { subscriptionTier: ' Professional ', name: 'QA Company', logoUrl: null },
+        });
+      }
+
+      if (path === '/api/projects/project-1') {
+        return Promise.resolve({
+          project: { name: 'QA Project', currentUserRole: 'project_manager' },
+        });
+      }
+
+      return Promise.reject(new Error(`Unexpected API path: ${path}`));
+    });
+
+    renderReportsPage('/projects/project-1/reports?tab=advanced');
+
+    expect(await screen.findByText('Advanced Analytics Dashboard')).toBeInTheDocument();
+    expect(screen.getByText(/Your professional subscription includes/i)).toBeInTheDocument();
+    expect(
+      screen.queryByText(/requires a Professional or Enterprise subscription/i),
+    ).not.toBeInTheDocument();
+  });
+});
+
+describe('ReportsPage paginated report loading', () => {
+  beforeEach(() => {
+    apiFetchMock.mockReset();
+  });
+
+  it('loads every page before rendering a paginated lot status report', async () => {
+    const baseLot = buildLotStatusReport().lots[0]!;
+    const firstPage: LotStatusReport = {
+      ...buildLotStatusReport(),
+      totalLots: 2,
+      lots: [
+        {
+          ...baseLot,
+          id: 'lot-page-1',
+          lotNumber: 'LOT-PAGE-001',
+        },
+      ],
+      pagination: { page: 1, limit: 500, total: 2, totalPages: 2 },
+    };
+    const secondPage: LotStatusReport = {
+      ...firstPage,
+      lots: [
+        {
+          ...baseLot,
+          id: 'lot-page-2',
+          lotNumber: 'LOT-PAGE-002',
+        },
+      ],
+      pagination: { page: 2, limit: 500, total: 2, totalPages: 2 },
+    };
+
+    apiFetchMock.mockImplementation((path) => {
+      if (path === '/api/company') {
+        return Promise.resolve({
+          company: { subscriptionTier: 'professional', name: 'QA Company', logoUrl: null },
+        });
+      }
+
+      if (path === '/api/projects/project-1') {
+        return Promise.resolve({
+          project: { name: 'QA Project', currentUserRole: 'project_manager' },
+        });
+      }
+
+      if (path.startsWith('/api/reports/lot-status?')) {
+        const requestUrl = new URL(path, 'https://siteproof.test');
+        const page = requestUrl.searchParams.get('page');
+        expect(requestUrl.searchParams.get('limit')).toBe('500');
+        return Promise.resolve(page === '2' ? secondPage : firstPage);
+      }
+
+      return Promise.reject(new Error(`Unexpected API path: ${path}`));
+    });
+
+    renderReportsPage('/projects/project-1/reports?tab=lot-status');
+
+    expect(await screen.findByText('LOT-PAGE-001')).toBeInTheDocument();
+    expect(await screen.findByText('LOT-PAGE-002')).toBeInTheDocument();
+    expect(screen.queryByText(/Showing first/i)).not.toBeInTheDocument();
   });
 });

@@ -16,8 +16,10 @@ import {
 } from './helpers/access.js';
 import {
   isStoredDocumentReference,
+  isStoredDocumentUploadPath,
   normalizeStoredDocumentReference,
 } from '../../lib/uploadPaths.js';
+import { canReadDocument } from '../documents/access.js';
 import {
   buildItpCompletionAttachmentDeletedResponse,
   buildItpCompletionAttachmentResponse,
@@ -29,6 +31,7 @@ import {
   resolveChecklistItemForInstance,
   type ChecklistItem,
 } from './helpers/templateSnapshot.js';
+import { assertItpCompletionEvidenceUnlocked } from './helpers/evidenceLock.js';
 
 const ITP_ATTACHMENT_FILENAME_MAX_LENGTH = 180;
 const ITP_ATTACHMENT_URL_MAX_LENGTH = 2048;
@@ -193,6 +196,7 @@ completionAttachmentRoutes.post(
       completion,
       'ITP attachment write access required',
     );
+    assertItpCompletionEvidenceUnlocked(completion);
 
     const parsedGpsLatitude = parseOptionalGpsCoordinate(gpsLatitude, 'gpsLatitude', -90, 90);
     const parsedGpsLongitude = parseOptionalGpsCoordinate(gpsLongitude, 'gpsLongitude', -180, 180);
@@ -218,6 +222,10 @@ completionAttachmentRoutes.post(
         existingDocument.lotId !== itpInstance.lotId
       ) {
         throw AppError.badRequest('Document must belong to the same lot as the ITP completion');
+      }
+
+      if (!(await canReadDocument(req.user!, existingDocument))) {
+        throw AppError.forbidden('You do not have access to this ITP attachment document');
       }
 
       const updateData: {
@@ -246,6 +254,10 @@ completionAttachmentRoutes.post(
     } else {
       if (!filename || !fileUrl) {
         throw AppError.badRequest('filename and fileUrl are required');
+      }
+
+      if (isStoredDocumentUploadPath(fileUrl)) {
+        throw AppError.badRequest('Local uploaded document paths must be attached by documentId');
       }
 
       if (!isStoredDocumentReference(fileUrl, documentProjectId)) {
@@ -404,6 +416,8 @@ completionAttachmentRoutes.delete(
       include: {
         completion: {
           select: {
+            status: true,
+            verificationStatus: true,
             checklistItemId: true,
             checklistItem: {
               select: {
@@ -471,6 +485,7 @@ completionAttachmentRoutes.delete(
       attachment.completion,
       'ITP attachment write access required',
     );
+    assertItpCompletionEvidenceUnlocked(attachment.completion);
 
     // Delete the attachment (document remains for record keeping)
     await prisma.iTPCompletionAttachment.delete({

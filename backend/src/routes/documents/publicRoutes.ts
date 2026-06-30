@@ -183,6 +183,28 @@ export function createDocumentPublicRouter({
         return res.json(buildInvalidDocumentSignedUrlTokenResponse(validation.expired));
       }
 
+      const document = await prisma.document.findUnique({
+        where: { id: documentId },
+      });
+
+      if (!document) {
+        return res.json(buildInvalidDocumentSignedUrlTokenResponse());
+      }
+
+      try {
+        await assertSignedUrlUserCanReadDocument({
+          prisma,
+          canReadDocument,
+          userId: validation.userId,
+          document,
+        });
+      } catch (error) {
+        if (error instanceof AppError && error.statusCode === 403) {
+          return res.json(buildInvalidDocumentSignedUrlTokenResponse());
+        }
+        throw error;
+      }
+
       res.json(buildDocumentSignedUrlTokenResponse({ documentId, ...validation }));
     }),
   );

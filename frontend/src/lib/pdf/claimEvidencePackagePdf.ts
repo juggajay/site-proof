@@ -1,5 +1,6 @@
 import { devLog } from '../logger';
 import { formatDateKey } from '../localDate';
+import { formatStatusLabel } from '../statusLabels';
 import { getJsPDF } from './jsPdfRuntime';
 import { savePdf } from './pdfSave';
 import { defaultPackageOptions } from './types';
@@ -47,15 +48,47 @@ export async function generateClaimEvidencePackagePDF(
     }).format(amount);
   };
 
-  const getLotDocuments = (lot: ClaimEvidencePackageData['lots'][number]) =>
-    Array.isArray(lot.documents)
-      ? lot.documents.filter(
-          (document) =>
-            document &&
-            typeof document.filename === 'string' &&
-            document.filename.trim().length > 0,
-        )
-      : [];
+  const isEvidenceDocument = (
+    document: unknown,
+  ): document is NonNullable<ClaimEvidencePackageData['lots'][number]['documents']>[number] =>
+    Boolean(
+      document &&
+      typeof document === 'object' &&
+      'filename' in document &&
+      typeof document.filename === 'string' &&
+      document.filename.trim().length > 0,
+    );
+
+  const getLotDocuments = (lot: ClaimEvidencePackageData['lots'][number]) => {
+    const documentsById = new Map<
+      string,
+      NonNullable<ClaimEvidencePackageData['lots'][number]['documents']>[number]
+    >();
+
+    const addDocument = (
+      document: NonNullable<ClaimEvidencePackageData['lots'][number]['documents']>[number],
+    ) => {
+      documentsById.set(
+        document.id || `${document.filename}:${document.uploadedAt ?? ''}`,
+        document,
+      );
+    };
+
+    if (Array.isArray(lot.documents)) {
+      lot.documents.filter(isEvidenceDocument).forEach(addDocument);
+    }
+
+    if (Array.isArray(lot.itp?.completions)) {
+      lot.itp.completions.forEach((completion) => {
+        completion.attachments
+          ?.map((attachment) => attachment.document)
+          .filter(isEvidenceDocument)
+          .forEach(addDocument);
+      });
+    }
+
+    return [...documentsById.values()];
+  };
 
   // ========== COVER PAGE ==========
   doc.setFontSize(24);
@@ -100,7 +133,7 @@ export async function generateClaimEvidencePackagePDF(
 
   doc.text(`Photos: ${data.summary.totalPhotos}`, margin + contentWidth / 2, 150);
   doc.text(`Conformed Lots: ${data.summary.conformedLots}`, margin + contentWidth / 2, 158);
-  doc.text(`Status: ${data.claim.status.toUpperCase()}`, margin + contentWidth / 2, 166);
+  doc.text(`Status: ${formatStatusLabel(data.claim.status)}`, margin + contentWidth / 2, 166);
 
   // Prepared by
   if (data.claim.preparedBy) {
@@ -181,7 +214,7 @@ export async function generateClaimEvidencePackagePDF(
       doc.text((lot.activityType || 'N/A').slice(0, 25), xPos, yPos + 4);
       xPos += colWidths[1];
 
-      doc.text(lot.status.slice(0, 10), xPos, yPos + 4);
+      doc.text(formatStatusLabel(lot.status), xPos, yPos + 4);
       xPos += colWidths[2];
 
       doc.text(`${lot.summary.itpCompletionPercentage}%`, xPos, yPos + 4);
@@ -273,7 +306,7 @@ export async function generateClaimEvidencePackagePDF(
 
       // Status badge
       doc.text(
-        `Status: ${lot.status} | Claim Amount: ${formatCurrency(lot.claimAmount)}`,
+        `Status: ${formatStatusLabel(lot.status)} | Claim Amount: ${formatCurrency(lot.claimAmount)}`,
         margin,
         yPos,
       );
@@ -291,7 +324,9 @@ export async function generateClaimEvidencePackagePDF(
         doc.setFontSize(9);
         doc.text(`Template: ${lot.itp.templateName}`, margin, yPos);
         yPos += 4;
-        const completedItems = (lot.itp.completions ?? []).filter((c) => c.isCompleted).length;
+        const completedItems = (lot.itp.completions ?? []).filter(
+          (c) => c.isCompleted || c.isNotApplicable,
+        ).length;
         const totalItems = (lot.itp.checklistItems ?? []).length;
         doc.text(
           `Completion: ${completedItems}/${totalItems} items (${lot.summary.itpCompletionPercentage}%)`,
@@ -322,6 +357,12 @@ export async function generateClaimEvidencePackagePDF(
 
       // Test Results Summary (conditional)
       if (options.includeTestResults && (lot.testResults ?? []).length > 0) {
+        const failedTestCount =
+          lot.summary.failedTestCount ??
+          (lot.testResults ?? []).filter((test) => test.passFail === 'fail').length;
+        const pendingTestCount =
+          lot.summary.pendingTestCount ??
+          Math.max(0, lot.summary.testResultCount - lot.summary.passedTestCount - failedTestCount);
         checkPageBreak(20);
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(10);
@@ -330,7 +371,7 @@ export async function generateClaimEvidencePackagePDF(
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(9);
         doc.text(
-          `Total: ${lot.summary.testResultCount} | Passed: ${lot.summary.passedTestCount} | Failed: ${lot.summary.testResultCount - lot.summary.passedTestCount}`,
+          `Total: ${lot.summary.testResultCount} | Passed: ${lot.summary.passedTestCount} | Pending: ${pendingTestCount} | Failed: ${failedTestCount}`,
           margin,
           yPos,
         );
@@ -339,7 +380,12 @@ export async function generateClaimEvidencePackagePDF(
         // List first few test results
         (lot.testResults ?? []).slice(0, 5).forEach((test) => {
           checkPageBreak(6);
-          const passFail = test.passFail === 'pass' ? '✓' : test.passFail === 'fail' ? '✗' : '-';
+          const passFail =
+            test.passFail === 'pass' && test.status === 'verified'
+              ? '✓'
+              : test.passFail === 'fail'
+                ? '✗'
+                : '-';
           const result =
             test.resultValue !== null ? `${test.resultValue} ${test.resultUnit || ''}` : 'pending';
           doc.text(`  ${passFail} ${test.testType}: ${result}`, margin, yPos);
@@ -373,7 +419,11 @@ export async function generateClaimEvidencePackagePDF(
         // List NCRs
         (lot.ncrs ?? []).slice(0, 3).forEach((ncr) => {
           checkPageBreak(6);
-          doc.text(`  ${ncr.ncrNumber} (${ncr.severity}): ${ncr.status}`, margin, yPos);
+          doc.text(
+            `  ${ncr.ncrNumber} (${ncr.severity}): ${formatStatusLabel(ncr.status)}`,
+            margin,
+            yPos,
+          );
           yPos += 4;
         });
         if ((lot.ncrs ?? []).length > 3) {

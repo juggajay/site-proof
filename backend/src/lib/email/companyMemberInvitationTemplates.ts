@@ -17,11 +17,18 @@ type RenderedCompanyMemberInvitationEmail = {
   text: string;
 };
 
+function sanitizeEmailSubjectLine(value: string): string {
+  return value
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 export function renderCompanyMemberInvitationEmail(
   data: CompanyMemberInvitationEmailData,
   { escapeEmailHtml }: CompanyMemberInvitationTemplateDependencies,
 ): RenderedCompanyMemberInvitationEmail {
-  const subject = `[SiteProof] Invitation to join ${data.companyName}`;
+  const subject = `[SiteProof] Invitation to join ${sanitizeEmailSubjectLine(data.companyName) || 'your company'}`;
   const safeSubject = escapeEmailHtml(subject);
   const safeUserName = data.userName ? escapeEmailHtml(data.userName) : '';
   const safeCompanyName = escapeEmailHtml(data.companyName);

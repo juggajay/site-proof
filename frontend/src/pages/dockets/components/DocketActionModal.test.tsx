@@ -61,16 +61,27 @@ function renderModal(
     canApprove?: boolean;
     onClose?: () => void;
     onActionComplete?: () => Promise<void>;
+    detailCache?:
+      | false
+      | {
+          adjustmentReason: string | null;
+          labourEntries: unknown[];
+          plantEntries: unknown[];
+        };
   } = {},
 ) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  // Pre-populate the cache so the detail query resolves immediately without
-  // triggering a real fetch.
-  queryClient.setQueryData(['docket-detail', docket.id], {
-    adjustmentReason: docket.adjustmentReason ?? null,
-    labourEntries: [],
-    plantEntries: [],
-  });
+  const detailCache =
+    overrides.detailCache === undefined
+      ? {
+          adjustmentReason: docket.adjustmentReason ?? null,
+          labourEntries: [],
+          plantEntries: [],
+        }
+      : overrides.detailCache;
+  if (detailCache !== false) {
+    queryClient.setQueryData(['docket-detail', docket.id], detailCache);
+  }
 
   const props = {
     docket,
@@ -80,6 +91,7 @@ function renderModal(
     onActionComplete: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
+  delete props.detailCache;
 
   const view = render(
     <QueryClientProvider client={queryClient}>
@@ -186,6 +198,55 @@ describe('DocketActionModal', () => {
     expect(screen.getAllByText('$600.00').length).toBeGreaterThan(0);
   });
 
+  it('shows approved-hour adjustments even when approved cost totals are absent', () => {
+    renderModal(
+      makeDocket({
+        status: 'approved',
+        labourHours: 8,
+        plantHours: 4,
+        totalLabourApproved: 6,
+        totalPlantApproved: 3,
+        totalLabourApprovedCost: null,
+        totalPlantApprovedCost: null,
+      }),
+      { initialActionType: 'view' },
+    );
+
+    expect(screen.getByText(/\(approved:\s*6h\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/\(approved:\s*3h\)/i)).toBeInTheDocument();
+  });
+
+  it('shows restricted cost values when docket detail amounts are redacted', () => {
+    const docket = makeDocket({
+      status: 'approved',
+      totalLabourSubmitted: null,
+      totalPlantSubmitted: null,
+      totalLabourApprovedCost: null,
+      totalPlantApprovedCost: null,
+    });
+    const { queryClient } = renderModal(docket, { initialActionType: 'view' });
+    queryClient.setQueryData(['docket-detail', docket.id], {
+      adjustmentReason: null,
+      labourEntries: [
+        {
+          id: 'labour-1',
+          employee: { name: 'Tommy Vella', role: 'Pipe Layer' },
+          startTime: '07:00',
+          finishTime: '15:00',
+          submittedHours: 8,
+          approvedHours: 8,
+          hourlyRate: null,
+          submittedCost: null,
+          approvedCost: null,
+        },
+      ],
+      plantEntries: [],
+    });
+
+    expect(screen.getAllByText('Restricted').length).toBeGreaterThanOrEqual(4);
+    expect(screen.queryByText('$0.00')).not.toBeInTheDocument();
+  });
+
   it('shows view-mode action buttons when initialActionType is view and docket is pending', () => {
     renderModal(makeDocket(), { initialActionType: 'view' });
 
@@ -244,6 +305,14 @@ describe('DocketActionModal', () => {
     await waitFor(() => {
       expect(props.onActionComplete).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it('shows an error and disables actioning when docket entries fail to load', async () => {
+    apiFetchMock.mockRejectedValueOnce(new Error('detail unavailable'));
+    renderModal(makeDocket(), { detailCache: false });
+
+    expect(await screen.findByText('Docket entries could not be loaded.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled();
   });
 
   it('requires an adjustment reason when approve hours are changed', () => {

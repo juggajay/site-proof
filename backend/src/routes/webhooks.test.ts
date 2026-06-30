@@ -26,6 +26,7 @@ app.use('/api/webhooks', webhooksRouter);
 app.use(errorHandler);
 
 const ORIGINAL_ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
+const ORIGINAL_NODE_ENV = process.env.NODE_ENV;
 const TEST_ENCRYPTION_KEY = 'a'.repeat(64);
 
 describe('Webhooks API', () => {
@@ -87,6 +88,11 @@ describe('Webhooks API', () => {
       delete process.env.ENCRYPTION_KEY;
     } else {
       process.env.ENCRYPTION_KEY = ORIGINAL_ENCRYPTION_KEY;
+    }
+    if (ORIGINAL_NODE_ENV === undefined) {
+      delete process.env.NODE_ENV;
+    } else {
+      process.env.NODE_ENV = ORIGINAL_NODE_ENV;
     }
   });
 
@@ -1438,6 +1444,7 @@ describe('Webhooks API', () => {
 
     describe('webhook delivery hardening', () => {
       it('should skip stale encrypted secrets without blocking other matching webhooks', async () => {
+        process.env.NODE_ENV = 'test';
         process.env.ENCRYPTION_KEY = TEST_ENCRYPTION_KEY;
         const staleRes = await request(app)
           .post('/api/webhooks')
@@ -1464,8 +1471,8 @@ describe('Webhooks API', () => {
         const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
         await triggerWebhooks(companyId, 'lot.updated', { lotId: 'lot-1' });
-        for (let attempt = 0; attempt < 10 && fetchMock.mock.calls.length === 0; attempt += 1) {
-          await new Promise((resolve) => setImmediate(resolve));
+        for (let attempt = 0; attempt < 80 && fetchMock.mock.calls.length === 0; attempt += 1) {
+          await new Promise((resolve) => setTimeout(resolve, 25));
         }
 
         expect(fetchMock).toHaveBeenCalledTimes(1);

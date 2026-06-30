@@ -11,7 +11,7 @@ import {
 describe('DocumentsPageHeader', () => {
   it('opens the upload modal', () => {
     const onUpload = vi.fn();
-    render(<DocumentsPageHeader onUpload={onUpload} />);
+    render(<DocumentsPageHeader canUploadDocuments onUpload={onUpload} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Upload Document' }));
 
@@ -19,7 +19,7 @@ describe('DocumentsPageHeader', () => {
   });
 
   it('renders the context help affordance', () => {
-    render(<DocumentsPageHeader onUpload={vi.fn()} />);
+    render(<DocumentsPageHeader canUploadDocuments onUpload={vi.fn()} />);
 
     expect(
       screen.getByRole('button', { name: 'Help for Document Management' }),
@@ -51,7 +51,7 @@ describe('DocumentsLoadErrorAlert', () => {
 });
 
 describe('DocumentCategorySummary', () => {
-  it('selects categories using the lower-case filter value', () => {
+  it('selects categories using the exact category filter value', () => {
     const onSelectCategory = vi.fn();
     render(
       <DocumentCategorySummary
@@ -60,9 +60,23 @@ describe('DocumentCategorySummary', () => {
       />,
     );
 
-    fireEvent.click(screen.getByText('Drawings: 3'));
+    fireEvent.click(screen.getByRole('button', { name: 'Drawings: 3' }));
 
-    expect(onSelectCategory).toHaveBeenCalledWith('drawings');
+    expect(onSelectCategory).toHaveBeenCalledWith('Drawings');
+  });
+
+  it('maps the Uncategorized summary bucket to the backend null-category filter', () => {
+    const onSelectCategory = vi.fn();
+    render(
+      <DocumentCategorySummary
+        categories={{ Uncategorized: 1 }}
+        onSelectCategory={onSelectCategory}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Uncategorized: 1' }));
+
+    expect(onSelectCategory).toHaveBeenCalledWith('uncategorized');
   });
 });
 

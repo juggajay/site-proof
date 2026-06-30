@@ -133,6 +133,19 @@ describe('DocketApprovalsTable', () => {
     expect(screen.getByText('$1,500.00').className).toContain('line-through');
   });
 
+  it('shows restricted instead of zero when docket costs are redacted', () => {
+    const docket = makeDocket({
+      totalLabourSubmitted: null,
+      totalPlantSubmitted: null,
+      totalLabourApprovedCost: null,
+      totalPlantApprovedCost: null,
+    });
+    renderTable({ filteredDockets: [docket], submittedDockets: [docket] });
+
+    expect(screen.getByText('Restricted')).toBeInTheDocument();
+    expect(screen.queryByText('$0.00')).not.toBeInTheDocument();
+  });
+
   it('gates approve/query/reject on pending status and approver role', () => {
     const docket = makeDocket();
     const { props, view } = renderTable({ filteredDockets: [docket], submittedDockets: [docket] });

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Route, Routes } from 'react-router-dom';
+import { waitFor } from '@testing-library/react';
 import { renderWithProviders, screen } from '@/test/renderWithProviders';
 
 vi.mock('@/lib/auth', () => ({ useAuth: vi.fn() }));
@@ -15,6 +16,15 @@ import { useUIStore } from '@/stores/uiStore';
 
 const useAuthMock = vi.mocked(useAuth);
 const apiFetchMock = vi.mocked(apiFetch);
+
+function mockProjectDetail(
+  currentUserRole: string | null = 'project_manager',
+  settings: Record<string, unknown> = { enabledModules: {} },
+) {
+  apiFetchMock.mockResolvedValue({
+    project: { name: 'Project One', currentUserRole, settings },
+  });
+}
 
 function renderProjectSidebar() {
   return renderWithProviders(
@@ -34,13 +44,12 @@ beforeEach(() => {
     },
     currentProjectId: null,
   });
-  apiFetchMock.mockResolvedValue({
-    project: { name: 'Project One', settings: { enabledModules: {} } },
-  });
+  mockProjectDetail();
 });
 
 describe('Sidebar project navigation', () => {
   it('hides internal-only project links for company-level viewers', () => {
+    mockProjectDetail('viewer');
     useAuthMock.mockReturnValue({
       user: {
         id: 'viewer-1',
@@ -66,6 +75,7 @@ describe('Sidebar project navigation', () => {
   });
 
   it('uses the project-scoped viewer role when the company role is only member', () => {
+    mockProjectDetail('viewer');
     useAuthMock.mockReturnValue({
       user: {
         id: 'viewer-2',
@@ -85,7 +95,8 @@ describe('Sidebar project navigation', () => {
     expect(screen.queryByRole('link', { name: /Documents/i })).not.toBeInTheDocument();
   });
 
-  it('keeps internal project links visible for non-viewer field roles', () => {
+  it('keeps internal project links visible for non-viewer field roles', async () => {
+    mockProjectDetail('foreman');
     useAuthMock.mockReturnValue({
       user: {
         id: 'foreman-1',
@@ -98,12 +109,14 @@ describe('Sidebar project navigation', () => {
 
     renderProjectSidebar();
 
-    expect(screen.getByRole('link', { name: /ITPs/i })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole('link', { name: /ITPs/i })).toBeInTheDocument();
+    });
     expect(screen.getByRole('link', { name: /Hold Points/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /NCRs/i })).toBeInTheDocument();
   });
 
-  it('shows commercial project links for project-scoped project managers', () => {
+  it('shows commercial project links for project-scoped project managers', async () => {
     useAuthMock.mockReturnValue({
       user: {
         id: 'project-pm-1',
@@ -117,13 +130,63 @@ describe('Sidebar project navigation', () => {
 
     renderProjectSidebar();
 
-    expect(screen.getByRole('link', { name: /Progress Claims/i })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole('link', { name: /Progress Claims/i })).toBeInTheDocument();
+    });
     expect(screen.getByRole('link', { name: /Costs/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Subcontractors/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Project Settings/i })).toBeInTheDocument();
   });
 
-  it('hides project settings for site managers because settings are project-admin only', () => {
+  it('does not expose aggregate project-manager links while the project role is loading', () => {
+    apiFetchMock.mockReturnValue(new Promise(() => {}) as ReturnType<typeof apiFetch>);
+    useAuthMock.mockReturnValue({
+      user: {
+        id: 'mixed-role-loading-1',
+        email: 'mixed-role-loading@example.com',
+        role: 'member',
+        roleInCompany: 'member',
+        dashboardRole: 'project_manager',
+        companyId: 'company-1',
+      },
+    } as unknown as ReturnType<typeof useAuth>);
+
+    renderProjectSidebar();
+
+    expect(screen.getByRole('link', { name: /Lots/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Reports/i })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Progress Claims/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Costs/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Subcontractors/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Project Settings/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Documents/i })).not.toBeInTheDocument();
+  });
+
+  it('uses the loaded project role instead of the aggregate dashboard role', async () => {
+    mockProjectDetail('viewer');
+    useAuthMock.mockReturnValue({
+      user: {
+        id: 'mixed-role-1',
+        email: 'mixed-role@example.com',
+        role: 'member',
+        roleInCompany: 'member',
+        dashboardRole: 'project_manager',
+        companyId: 'company-1',
+      },
+    } as unknown as ReturnType<typeof useAuth>);
+
+    renderProjectSidebar();
+
+    await waitFor(() => {
+      expect(screen.queryByRole('link', { name: /Progress Claims/i })).not.toBeInTheDocument();
+    });
+    expect(screen.queryByRole('link', { name: /Project Settings/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Lots/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Reports/i })).toBeInTheDocument();
+  });
+
+  it('hides project settings for site managers because settings are project-admin only', async () => {
+    mockProjectDetail('site_manager');
     useAuthMock.mockReturnValue({
       user: {
         id: 'site-manager-1',
@@ -136,7 +199,30 @@ describe('Sidebar project navigation', () => {
 
     renderProjectSidebar();
 
-    expect(screen.getByRole('link', { name: /Subcontractors/i })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole('link', { name: /Subcontractors/i })).toBeInTheDocument();
+    });
     expect(screen.queryByRole('link', { name: /Project Settings/i })).not.toBeInTheDocument();
+  });
+
+  it('shows audit log but not company settings for project-scoped quality managers', async () => {
+    mockProjectDetail('quality_manager');
+    useAuthMock.mockReturnValue({
+      user: {
+        id: 'project-qm-1',
+        email: 'project-qm@example.com',
+        role: 'member',
+        roleInCompany: 'member',
+        dashboardRole: 'quality_manager',
+        companyId: 'company-1',
+      },
+    } as unknown as ReturnType<typeof useAuth>);
+
+    renderProjectSidebar();
+
+    await waitFor(() => {
+      expect(screen.getByRole('link', { name: /Audit Log/i })).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('link', { name: /Company Settings/i })).not.toBeInTheDocument();
   });
 });

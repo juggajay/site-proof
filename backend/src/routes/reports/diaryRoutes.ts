@@ -30,6 +30,7 @@ type DiaryReportRouterDependencies = {
     value: unknown,
     fieldName: string,
     endOfDay?: boolean,
+    timeZone?: string,
   ) => ParsedDateQuery | undefined;
   parseOptionalCommaSeparatedQuery: (value: unknown, fieldName: string) => string[];
   validateDateRange: (
@@ -37,6 +38,7 @@ type DiaryReportRouterDependencies = {
     endDate: ParsedDateQuery | undefined,
   ) => void;
   requireReportProjectAccess: (user: AuthUser | undefined, projectId: string) => Promise<string>;
+  resolveReportProjectTimeZone: (projectId: string) => Promise<string>;
 };
 
 type CompanyHoursSummary = {
@@ -258,6 +260,7 @@ export function createDiaryReportRouter({
   parseOptionalCommaSeparatedQuery,
   validateDateRange,
   requireReportProjectAccess,
+  resolveReportProjectTimeZone,
 }: DiaryReportRouterDependencies): Router {
   const router = Router();
 
@@ -271,6 +274,7 @@ export function createDiaryReportRouter({
       const projectId = parseRequiredString(req.query.projectId, 'projectId');
 
       await requireReportProjectAccess(req.user, projectId);
+      const projectTimeZone = await resolveReportProjectTimeZone(projectId);
 
       // Pagination parameters
       const { pageNum, limitNum, skip } = parseReportPagination(page, limit);
@@ -281,8 +285,13 @@ export function createDiaryReportRouter({
       // Build date filter. endDate is parsed to end-of-day (23:59:59.999) so a
       // diary saved later on the end date is still included — matching the test
       // and claim reports (M70).
-      const parsedStartDate = parseOptionalDateQuery(startDate, 'startDate');
-      const parsedEndDate = parseOptionalDateQuery(endDate, 'endDate', true);
+      const parsedStartDate = parseOptionalDateQuery(
+        startDate,
+        'startDate',
+        false,
+        projectTimeZone,
+      );
+      const parsedEndDate = parseOptionalDateQuery(endDate, 'endDate', true, projectTimeZone);
       validateDateRange(parsedStartDate, parsedEndDate);
       const dateFilter: { gte?: Date; lte?: Date } = {};
       if (parsedStartDate) {

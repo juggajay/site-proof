@@ -15,6 +15,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor, act } from '@testing-library/react';
 import type { ITPCompletion, ITPInstance } from '@/pages/lots/types';
+import type { PortalCompanyScope } from '@/pages/subcontractor-portal/portalCompanyScope';
 
 vi.mock('@/lib/auth', () => ({
   useAuth: () => ({ user: { id: 'u1' } }),
@@ -85,7 +86,10 @@ function setApi({
 } = {}) {
   apiFetchMock.mockReset();
   apiFetchMock.mockImplementation((url: string, opts?: { method?: string }) => {
-    if (url === '/api/lots/lot-1?portalModule=itps') {
+    if (
+      url === '/api/lots/lot-1?portalModule=itps' ||
+      url === '/api/lots/lot-1?portalModule=itps&projectId=proj-1&subcontractorCompanyId=sub-1'
+    ) {
       return Promise.resolve({
         lot: {
           id: 'lot-1',
@@ -98,7 +102,11 @@ function setApi({
         },
       });
     }
-    if (url === '/api/itp/instances/lot/lot-1?subcontractorView=true') {
+    if (
+      url === '/api/itp/instances/lot/lot-1?subcontractorView=true' ||
+      url ===
+        '/api/itp/instances/lot/lot-1?subcontractorView=true&projectId=proj-1&subcontractorCompanyId=sub-1'
+    ) {
       return Promise.resolve({ instance: { ...instance, completions } });
     }
     if (url === '/api/itp/completions' && opts?.method === 'POST') {
@@ -116,6 +124,33 @@ describe('useSubbieItpRun', () => {
     handleMarkFailedMock.mockResolvedValue(true);
     handleUpdateNotesMock.mockResolvedValue(undefined);
     uploadMock.mockResolvedValue({ status: 'uploaded', attachment: { id: 'att-1' } });
+  });
+
+  it('waits for explicit portal scope before fetching', async () => {
+    setApi({ canComplete: true });
+    const { rerender, result } = renderHook<
+      ReturnType<typeof useSubbieItpRun>,
+      { scope: PortalCompanyScope }
+    >(({ scope }) => useSubbieItpRun('lot-1', scope), {
+      initialProps: {
+        scope: { projectId: 'proj-1', subcontractorCompanyId: null },
+      },
+    });
+
+    expect(result.current.loading).toBe(true);
+    expect(apiFetchMock).not.toHaveBeenCalled();
+
+    rerender({
+      scope: { projectId: 'proj-1', subcontractorCompanyId: 'sub-1' },
+    });
+
+    await waitFor(() => expect(result.current.instance).not.toBeNull());
+    expect(apiFetchMock).toHaveBeenCalledWith(
+      '/api/lots/lot-1?portalModule=itps&projectId=proj-1&subcontractorCompanyId=sub-1',
+    );
+    expect(apiFetchMock).toHaveBeenCalledWith(
+      '/api/itp/instances/lot/lot-1?subcontractorView=true&projectId=proj-1&subcontractorCompanyId=sub-1',
+    );
   });
 
   it('fetches the lot + instance with the exact subbie URLs and derives canComplete', async () => {
@@ -221,5 +256,34 @@ describe('useSubbieItpRun', () => {
 
     expect(saved).toBe(false);
     expect(handleToggleCompletionMock).toHaveBeenCalledWith('item-1', true, 'ready');
+  });
+
+  it('pass resubmits a rejected completed item instead of treating it as done', async () => {
+    const rejected: ITPCompletion = {
+      id: 'comp-rejected',
+      checklistItemId: 'item-1',
+      isCompleted: true,
+      isRejected: true,
+      verificationStatus: 'rejected',
+      verificationNotes: 'Redo this check',
+      notes: 'old pass',
+      completedAt: '2026-06-10',
+      completedBy: null,
+      isVerified: false,
+      verifiedAt: null,
+      verifiedBy: null,
+      attachments: [],
+    };
+    setApi({ canComplete: true, completions: [rejected] });
+    const { result } = renderHook(() => useSubbieItpRun('lot-1'));
+    await waitFor(() => expect(result.current.instance).not.toBeNull());
+
+    let saved: boolean | undefined;
+    await act(async () => {
+      saved = await result.current.pass('item-1', 'ready after rework');
+    });
+
+    expect(saved).toBe(true);
+    expect(handleToggleCompletionMock).toHaveBeenCalledWith('item-1', true, 'ready after rework');
   });
 });

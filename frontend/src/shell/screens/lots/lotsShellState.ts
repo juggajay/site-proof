@@ -103,21 +103,35 @@ export function sortLotsForShell(metas: LotShellMeta[]): LotShellMeta[] {
 
 // ── ITP run item ordering + advance ─────────────────────────────────────────────
 
-export type ItpItemDisposition = 'pending' | 'completed' | 'na' | 'failed';
+export type ItpItemDisposition = 'pending' | 'completed' | 'na' | 'failed' | 'review' | 'rejected';
 
 export function itpCompletionDisposition(
   completion: ITPCompletion | undefined,
 ): ItpItemDisposition {
   if (!completion) return 'pending';
-  if (completion.isCompleted) return 'completed';
-  if (completion.isNotApplicable) return 'na';
+  if (completion.isRejected || completion.verificationStatus === 'rejected') return 'rejected';
+  if (
+    completion.isPendingVerification ||
+    completion.verificationStatus === 'pending_verification'
+  ) {
+    return 'review';
+  }
   if (completion.isFailed) return 'failed';
+  if (completion.isNotApplicable) return 'na';
+  if (completion.isCompleted) return 'completed';
   return 'pending';
 }
 
-/** An item is "resolved" (no longer in the run) once it is completed, N/A, or failed. */
+/** An item is "resolved" only once the submitted outcome is accepted or failed. */
 export function isItpItemResolved(completion: ITPCompletion | undefined): boolean {
-  return itpCompletionDisposition(completion) !== 'pending';
+  const disposition = itpCompletionDisposition(completion);
+  return disposition === 'completed' || disposition === 'na' || disposition === 'failed';
+}
+
+/** Items the runner can still act on now. Pending review is incomplete, not actionable. */
+export function isItpItemActionable(completion: ITPCompletion | undefined): boolean {
+  const disposition = itpCompletionDisposition(completion);
+  return disposition === 'pending' || disposition === 'rejected';
 }
 
 /**
@@ -140,46 +154,143 @@ function completionFor(completions: ITPCompletion[], itemId: string): ITPComplet
   return completions.find((c) => c.checklistItemId === itemId);
 }
 
+function firstMatchingIndex(
+  orderedItems: ITPChecklistItem[],
+  completions: ITPCompletion[],
+  predicate: (completion: ITPCompletion | undefined) => boolean,
+): number {
+  return orderedItems.findIndex((item) => predicate(completionFor(completions, item.id)));
+}
+
+function nextMatchingIndex(
+  orderedItems: ITPChecklistItem[],
+  completions: ITPCompletion[],
+  currentIndex: number,
+  predicate: (completion: ITPCompletion | undefined) => boolean,
+): number {
+  const n = orderedItems.length;
+  if (n === 0) return -1;
+
+  for (let step = 1; step <= n; step += 1) {
+    const idx = (currentIndex + step) % n;
+    if (predicate(completionFor(completions, orderedItems[idx].id))) return idx;
+  }
+  return -1;
+}
+
 /**
- * Index (into `orderedItems`) of the first item that is still pending, or -1 when
- * every item is resolved. The run opens here and advances from here.
+ * Index (into `orderedItems`) of the first item that can be worked now.
+ * Pending-review rows are still incomplete, but they should not steal focus
+ * while open/rejected rows remain. If review is the only unresolved work left,
+ * the run lands there so the wait state is visible.
  */
 export function firstIncompleteIndex(
   orderedItems: ITPChecklistItem[],
   completions: ITPCompletion[],
 ): number {
-  return orderedItems.findIndex((item) => !isItpItemResolved(completionFor(completions, item.id)));
+  const firstActionable = firstMatchingIndex(orderedItems, completions, isItpItemActionable);
+  if (firstActionable >= 0) return firstActionable;
+  return firstMatchingIndex(
+    orderedItems,
+    completions,
+    (completion) => !isItpItemResolved(completion),
+  );
 }
 
 /**
- * Given the index just acted on, find the next still-pending item index, wrapping
- * to earlier pending items if the tail is done. Returns -1 when the run is fully
- * resolved (caller shows the "All checks complete" finished state).
+ * Given the index just acted on, find the next actionable item index, wrapping
+ * to earlier rows if the tail is done. Pending-review rows are skipped while
+ * any open/rejected rows remain, then selected as the final visible wait state.
+ * Returns -1 when the run is fully resolved.
  */
 export function advanceToNextIncomplete(
   orderedItems: ITPChecklistItem[],
   completions: ITPCompletion[],
   currentIndex: number,
 ): number {
-  const n = orderedItems.length;
-  if (n === 0) return -1;
-
   // Look forward first (current+1 .. end), then wrap (0 .. current) so a foreman
   // who jumped back to fix an item is still carried to whatever remains.
-  for (let step = 1; step <= n; step += 1) {
-    const idx = (currentIndex + step) % n;
-    if (!isItpItemResolved(completionFor(completions, orderedItems[idx].id))) return idx;
-  }
-  return -1;
+  const nextActionable = nextMatchingIndex(
+    orderedItems,
+    completions,
+    currentIndex,
+    isItpItemActionable,
+  );
+  if (nextActionable >= 0) return nextActionable;
+
+  return nextMatchingIndex(
+    orderedItems,
+    completions,
+    currentIndex,
+    (completion) => !isItpItemResolved(completion),
+  );
 }
 
 export interface RunProgress {
   /** Resolved items (completed + na + failed). */
   resolved: number;
+  /** Accepted for conformance-style progress: passed/completed + N/A. Failed does not count. */
+  accepted: number;
+  completed: number;
+  notApplicable: number;
+  failed: number;
+  pendingReview: number;
+  rejected: number;
+  pending: number;
   total: number;
   /** 1-based human counter for "CHECK n/m" — clamped to [1, total]. */
   checkNumber: number;
   allDone: boolean;
+}
+
+type ItpOutcomeCounts = Omit<RunProgress, 'checkNumber' | 'allDone'>;
+
+function countItpOutcomes(
+  orderedItems: ITPChecklistItem[],
+  completions: ITPCompletion[],
+): ItpOutcomeCounts {
+  const counts: ItpOutcomeCounts = {
+    total: orderedItems.length,
+    resolved: 0,
+    accepted: 0,
+    completed: 0,
+    notApplicable: 0,
+    failed: 0,
+    pendingReview: 0,
+    rejected: 0,
+    pending: 0,
+  };
+
+  for (const item of orderedItems) {
+    switch (itpCompletionDisposition(completionFor(completions, item.id))) {
+      case 'completed':
+        counts.completed += 1;
+        counts.accepted += 1;
+        counts.resolved += 1;
+        break;
+      case 'na':
+        counts.notApplicable += 1;
+        counts.accepted += 1;
+        counts.resolved += 1;
+        break;
+      case 'failed':
+        counts.failed += 1;
+        counts.resolved += 1;
+        break;
+      case 'review':
+        counts.pendingReview += 1;
+        break;
+      case 'rejected':
+        counts.rejected += 1;
+        break;
+      case 'pending':
+      default:
+        counts.pending += 1;
+        break;
+    }
+  }
+
+  return counts;
 }
 
 export function runProgress(
@@ -187,15 +298,13 @@ export function runProgress(
   completions: ITPCompletion[],
   currentIndex: number,
 ): RunProgress {
-  const total = orderedItems.length;
-  const resolved = orderedItems.reduce(
-    (acc, item) => acc + (isItpItemResolved(completionFor(completions, item.id)) ? 1 : 0),
-    0,
-  );
+  const counts = countItpOutcomes(orderedItems, completions);
+  const total = counts.total;
+  const resolved = counts.resolved;
   const allDone = total > 0 && resolved === total;
   // "CHECK n/m": the human position of the item on screen (1-based), clamped.
   const checkNumber = total === 0 ? 0 : Math.min(Math.max(currentIndex + 1, 1), total);
-  return { resolved, total, checkNumber, allDone };
+  return { ...counts, checkNumber, allDone };
 }
 
 // ── Hold-point gate ──────────────────────────────────────────────────────────────
@@ -246,6 +355,14 @@ export function canCompleteItem(
 export interface ItpHubSummary {
   total: number;
   resolved: number;
+  /** Accepted for conformance-style progress: passed/completed + N/A. Failed does not count. */
+  accepted: number;
+  completed: number;
+  notApplicable: number;
+  failed: number;
+  pendingReview: number;
+  rejected: number;
+  pending: number;
   due: number;
 }
 
@@ -255,13 +372,95 @@ export interface ItpHubSummary {
  * count for the lot (not derived from the instance, which has no due dates here).
  */
 export function itpHubSummary(instance: ITPInstance | null, checksDue: number): ItpHubSummary {
-  if (!instance) return { total: 0, resolved: 0, due: Math.max(checksDue, 0) };
-  const total = instance.template.checklistItems.length;
-  const resolved = instance.template.checklistItems.reduce(
-    (acc, item) => acc + (isItpItemResolved(completionFor(instance.completions, item.id)) ? 1 : 0),
-    0,
-  );
-  return { total, resolved, due: Math.max(checksDue, 0) };
+  if (!instance) {
+    return {
+      total: 0,
+      resolved: 0,
+      accepted: 0,
+      completed: 0,
+      notApplicable: 0,
+      failed: 0,
+      pendingReview: 0,
+      rejected: 0,
+      pending: 0,
+      due: Math.max(checksDue, 0),
+    };
+  }
+  return {
+    ...countItpOutcomes(instance.template.checklistItems, instance.completions),
+    due: Math.max(checksDue, 0),
+  };
+}
+
+function plural(count: number, singular: string, pluralLabel = `${singular}s`): string {
+  return `${count} ${count === 1 ? singular : pluralLabel}`;
+}
+
+function joinOutcomeParts(parts: string[]): string {
+  return parts.length > 0 ? parts.join(' · ') : 'No checks started';
+}
+
+export function formatItpOutcomeSummary(
+  summary: Pick<
+    ItpHubSummary,
+    | 'total'
+    | 'accepted'
+    | 'completed'
+    | 'notApplicable'
+    | 'failed'
+    | 'pendingReview'
+    | 'rejected'
+    | 'pending'
+  >,
+): string {
+  if (summary.total === 0) return 'No ITP assigned yet';
+
+  const allAccepted = summary.accepted === summary.total;
+  if (allAccepted) return `${summary.accepted} of ${summary.total} done`;
+
+  const parts: string[] = [];
+  if (summary.completed > 0) parts.push(plural(summary.completed, 'passed check'));
+  if (summary.notApplicable > 0) parts.push(`${summary.notApplicable} N/A`);
+  if (summary.failed > 0) parts.push(plural(summary.failed, 'failed check'));
+  if (summary.pendingReview > 0) {
+    parts.push(`${plural(summary.pendingReview, 'check')} awaiting review`);
+  }
+  if (summary.rejected > 0) parts.push(`${plural(summary.rejected, 'check')} rejected`);
+  if (summary.pending > 0) parts.push(`${plural(summary.pending, 'check')} not started`);
+
+  return joinOutcomeParts(parts);
+}
+
+export function formatItpFinishedCopy(progress: RunProgress): {
+  eyebrow: string;
+  title: string;
+  detail: string;
+  hasFailures: boolean;
+} {
+  if (progress.failed > 0) {
+    return {
+      eyebrow: 'CHECKS REVIEWED',
+      title: 'Issues need attention',
+      detail: formatItpOutcomeSummary(progress),
+      hasFailures: true,
+    };
+  }
+
+  if (progress.notApplicable > 0) {
+    return {
+      eyebrow: 'CHECKS ADDRESSED',
+      title: 'All checks addressed',
+      detail: formatItpOutcomeSummary(progress),
+      hasFailures: false,
+    };
+  }
+
+  return {
+    eyebrow: 'ALL CHECKS DONE',
+    title: 'All checks complete',
+    detail: `${progress.total} OF ${progress.total} DONE`,
+    hasFailures: false,
+  };
 }
 
 export interface LotReadinessLine {
@@ -280,7 +479,7 @@ export interface LotReadinessLine {
  * count. Conformance itself stays the office's call.
  */
 export function deriveLotReadinessLine(summary: ItpHubSummary, openNcrs: number): LotReadinessLine {
-  const remainingItp = Math.max(summary.total - summary.resolved, 0);
+  const remainingItp = Math.max(summary.total - summary.accepted, 0);
   const conformable = summary.total > 0 && remainingItp === 0 && openNcrs === 0;
 
   let line: string;
@@ -290,8 +489,21 @@ export function deriveLotReadinessLine(summary: ItpHubSummary, openNcrs: number)
     line = 'All checks done, no open issues — ready for the office to review.';
   } else {
     const parts: string[] = [];
-    if (remainingItp > 0) {
-      parts.push(`${remainingItp} check${remainingItp === 1 ? '' : 's'} left`);
+    if (summary.failed > 0) {
+      parts.push(`${plural(summary.failed, 'failed check')} to resolve`);
+    }
+    if (summary.pendingReview > 0) {
+      parts.push(`${plural(summary.pendingReview, 'check')} awaiting review`);
+    }
+    if (summary.rejected > 0) {
+      parts.push(`${plural(summary.rejected, 'check')} rejected`);
+    }
+    const remainingOpenChecks = Math.max(
+      remainingItp - summary.failed - summary.pendingReview - summary.rejected,
+      0,
+    );
+    if (remainingOpenChecks > 0) {
+      parts.push(`${plural(remainingOpenChecks, 'check')} left`);
     }
     if (openNcrs > 0) {
       parts.push(`${openNcrs} open issue${openNcrs === 1 ? '' : 's'}`);

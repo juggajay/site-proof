@@ -3,6 +3,8 @@ import { requestPersistentStorage } from '@/lib/offline/storagePersistence';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from '@/components/ui/toaster';
 import { AuthProvider, useAuth } from '@/lib/auth';
+import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
+import { ProjectProtectedRoute } from '@/components/auth/ProjectProtectedRoute';
 import { RoleProtectedRoute } from '@/components/auth/RoleProtectedRoute';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { DeferredOfflineIndicator } from '@/components/DeferredOfflineIndicator';
@@ -65,6 +67,7 @@ import {
   RegisterPage,
   ReportsPage,
   ResetPasswordPage,
+  ScheduledReportArtifactPage,
   SettingsPage,
   SubcontractorDashboard,
   SubcontractorDocumentsPage,
@@ -107,6 +110,7 @@ const ShellRoutes = lazy(() =>
   import('@/shell/ShellRoutes').then((m) => ({ default: m.ShellRoutes })),
 );
 import { ShellGuard } from '@/shell/ShellGuard';
+import { ShellRouteGuard } from '@/shell/ShellRouteGuard';
 // Subbie portal shell — /p/* subtree (lazy-loaded; default-ON for portal roles).
 const SubbieShellRoutes = lazy(() =>
   import('@/shell/subbie/SubbieShellRoutes').then((m) => ({ default: m.SubbieShellRoutes })),
@@ -172,6 +176,14 @@ function App() {
             {/* Subcontractor Portal - Accept Invite (public/hybrid auth) */}
             <Route path="/subcontractor-portal/accept-invite" element={<AcceptInvitePage />} />
             <Route path="/accept-invite" element={<AcceptInvitePage />} />
+            <Route
+              path="/invitations"
+              element={
+                <ProtectedRoute>
+                  <AcceptInvitePage />
+                </ProtectedRoute>
+              }
+            />
 
             {/* Public secure hold-point release link */}
             <Route path="/hp-release/:token" element={<PublicHoldPointReleasePage />} />
@@ -184,7 +196,9 @@ function App() {
               path="/m/*"
               element={
                 <RoleProtectedRoute allowedRoles={INTERNAL_ROLES} allowProjectScopedRole>
-                  <ShellRoutes />
+                  <ShellRouteGuard>
+                    <ShellRoutes />
+                  </ShellRouteGuard>
                 </RoleProtectedRoute>
               }
             />
@@ -236,9 +250,9 @@ function App() {
               <Route
                 path="/projects/:projectId/foreman"
                 element={
-                  <RoleProtectedRoute allowedRoles={INTERNAL_ROLES} allowProjectScopedRole>
+                  <ProjectProtectedRoute allowedRoles={INTERNAL_ROLES}>
                     <ForemanMobileShell />
-                  </RoleProtectedRoute>
+                  </ProjectProtectedRoute>
                 }
               >
                 <Route index element={<Navigate to="today" replace />} />
@@ -249,25 +263,25 @@ function App() {
               <Route
                 path="/projects/:projectId/settings"
                 element={
-                  <RoleProtectedRoute allowedRoles={ADMIN_ROLES} allowProjectScopedRole>
+                  <ProjectProtectedRoute allowedRoles={ADMIN_ROLES}>
                     <ProjectSettingsPage />
-                  </RoleProtectedRoute>
+                  </ProjectProtectedRoute>
                 }
               />
               <Route
                 path="/projects/:projectId/users"
                 element={
-                  <RoleProtectedRoute allowedRoles={ADMIN_ROLES} allowProjectScopedRole>
+                  <ProjectProtectedRoute allowedRoles={ADMIN_ROLES}>
                     <ProjectUsersPage />
-                  </RoleProtectedRoute>
+                  </ProjectProtectedRoute>
                 }
               />
               <Route
                 path="/projects/:projectId/areas"
                 element={
-                  <RoleProtectedRoute allowedRoles={ADMIN_ROLES} allowProjectScopedRole>
+                  <ProjectProtectedRoute allowedRoles={ADMIN_ROLES}>
                     <ProjectAreasPage />
-                  </RoleProtectedRoute>
+                  </ProjectProtectedRoute>
                 }
               />
 
@@ -275,25 +289,25 @@ function App() {
               <Route
                 path="/projects/:projectId/lots"
                 element={
-                  <RoleProtectedRoute allowedRoles={PROJECT_WORKSPACE_ROLES} allowProjectScopedRole>
+                  <ProjectProtectedRoute allowedRoles={PROJECT_WORKSPACE_ROLES}>
                     <LotsPage />
-                  </RoleProtectedRoute>
+                  </ProjectProtectedRoute>
                 }
               />
               <Route
                 path="/projects/:projectId/lots/:lotId"
                 element={
-                  <RoleProtectedRoute allowedRoles={PROJECT_WORKSPACE_ROLES} allowProjectScopedRole>
+                  <ProjectProtectedRoute allowedRoles={PROJECT_WORKSPACE_ROLES}>
                     <LotDetailPage />
-                  </RoleProtectedRoute>
+                  </ProjectProtectedRoute>
                 }
               />
               <Route
                 path="/projects/:projectId/lots/:lotId/edit"
                 element={
-                  <RoleProtectedRoute allowedRoles={LOT_EDITOR_ROLES} allowProjectScopedRole>
+                  <ProjectProtectedRoute allowedRoles={LOT_EDITOR_ROLES}>
                     <LotEditPage />
-                  </RoleProtectedRoute>
+                  </ProjectProtectedRoute>
                 }
               />
 
@@ -301,9 +315,9 @@ function App() {
               <Route
                 path="/projects/:projectId/itp"
                 element={
-                  <RoleProtectedRoute allowedRoles={INTERNAL_ROLES} allowProjectScopedRole>
+                  <ProjectProtectedRoute allowedRoles={INTERNAL_ROLES}>
                     <ITPPage />
-                  </RoleProtectedRoute>
+                  </ProjectProtectedRoute>
                 }
               />
 
@@ -311,9 +325,9 @@ function App() {
               <Route
                 path="/projects/:projectId/hold-points"
                 element={
-                  <RoleProtectedRoute allowedRoles={INTERNAL_ROLES} allowProjectScopedRole>
+                  <ProjectProtectedRoute allowedRoles={INTERNAL_ROLES}>
                     <HoldPointsPage />
-                  </RoleProtectedRoute>
+                  </ProjectProtectedRoute>
                 }
               />
 
@@ -321,9 +335,9 @@ function App() {
               <Route
                 path="/projects/:projectId/tests"
                 element={
-                  <RoleProtectedRoute allowedRoles={INTERNAL_ROLES} allowProjectScopedRole>
+                  <ProjectProtectedRoute allowedRoles={INTERNAL_ROLES}>
                     <TestResultsPage />
-                  </RoleProtectedRoute>
+                  </ProjectProtectedRoute>
                 }
               />
 
@@ -331,9 +345,9 @@ function App() {
               <Route
                 path="/projects/:projectId/ncr"
                 element={
-                  <RoleProtectedRoute allowedRoles={INTERNAL_ROLES} allowProjectScopedRole>
+                  <ProjectProtectedRoute allowedRoles={INTERNAL_ROLES}>
                     <NCRPage />
-                  </RoleProtectedRoute>
+                  </ProjectProtectedRoute>
                 }
               />
 
@@ -341,17 +355,17 @@ function App() {
               <Route
                 path="/projects/:projectId/diary"
                 element={
-                  <RoleProtectedRoute allowedRoles={INTERNAL_ROLES} allowProjectScopedRole>
+                  <ProjectProtectedRoute allowedRoles={INTERNAL_ROLES}>
                     <DailyDiaryPage />
-                  </RoleProtectedRoute>
+                  </ProjectProtectedRoute>
                 }
               />
               <Route
                 path="/projects/:projectId/delays"
                 element={
-                  <RoleProtectedRoute allowedRoles={INTERNAL_ROLES} allowProjectScopedRole>
+                  <ProjectProtectedRoute allowedRoles={INTERNAL_ROLES}>
                     <DelayRegisterPage />
-                  </RoleProtectedRoute>
+                  </ProjectProtectedRoute>
                 }
               />
 
@@ -359,9 +373,9 @@ function App() {
               <Route
                 path="/projects/:projectId/dockets"
                 element={
-                  <RoleProtectedRoute allowedRoles={INTERNAL_ROLES} allowProjectScopedRole>
+                  <ProjectProtectedRoute allowedRoles={INTERNAL_ROLES}>
                     <DocketApprovalsPage />
-                  </RoleProtectedRoute>
+                  </ProjectProtectedRoute>
                 }
               />
 
@@ -369,9 +383,9 @@ function App() {
               <Route
                 path="/projects/:projectId/claims"
                 element={
-                  <RoleProtectedRoute allowedRoles={COMMERCIAL_ROLES} allowProjectScopedRole>
+                  <ProjectProtectedRoute allowedRoles={COMMERCIAL_ROLES}>
                     <ClaimsPage />
-                  </RoleProtectedRoute>
+                  </ProjectProtectedRoute>
                 }
               />
 
@@ -379,9 +393,9 @@ function App() {
               <Route
                 path="/projects/:projectId/costs"
                 element={
-                  <RoleProtectedRoute allowedRoles={COMMERCIAL_ROLES} allowProjectScopedRole>
+                  <ProjectProtectedRoute allowedRoles={COMMERCIAL_ROLES}>
                     <CostsPage />
-                  </RoleProtectedRoute>
+                  </ProjectProtectedRoute>
                 }
               />
 
@@ -389,9 +403,9 @@ function App() {
               <Route
                 path="/projects/:projectId/documents"
                 element={
-                  <RoleProtectedRoute allowedRoles={INTERNAL_ROLES} allowProjectScopedRole>
+                  <ProjectProtectedRoute allowedRoles={PROJECT_WORKSPACE_ROLES}>
                     <DocumentsPage />
-                  </RoleProtectedRoute>
+                  </ProjectProtectedRoute>
                 }
               />
 
@@ -399,9 +413,9 @@ function App() {
               <Route
                 path="/projects/:projectId/drawings"
                 element={
-                  <RoleProtectedRoute allowedRoles={REPORT_ROLES} allowProjectScopedRole>
+                  <ProjectProtectedRoute allowedRoles={REPORT_ROLES}>
                     <DrawingsPage />
-                  </RoleProtectedRoute>
+                  </ProjectProtectedRoute>
                 }
               />
 
@@ -409,19 +423,27 @@ function App() {
               <Route
                 path="/projects/:projectId/subcontractors"
                 element={
-                  <RoleProtectedRoute allowedRoles={MANAGEMENT_ROLES} allowProjectScopedRole>
+                  <ProjectProtectedRoute allowedRoles={MANAGEMENT_ROLES}>
                     <SubcontractorsPage />
-                  </RoleProtectedRoute>
+                  </ProjectProtectedRoute>
                 }
               />
 
               {/* Reports */}
               <Route
-                path="/projects/:projectId/reports"
+                path="/reports/scheduled-runs/:runId/artifact"
                 element={
                   <RoleProtectedRoute allowedRoles={REPORT_ROLES} allowProjectScopedRole>
-                    <ReportsPage />
+                    <ScheduledReportArtifactPage />
                   </RoleProtectedRoute>
+                }
+              />
+              <Route
+                path="/projects/:projectId/reports"
+                element={
+                  <ProjectProtectedRoute allowedRoles={REPORT_ROLES}>
+                    <ReportsPage />
+                  </ProjectProtectedRoute>
                 }
               />
 
@@ -444,9 +466,6 @@ function App() {
               {/* Notifications */}
               <Route path="/notifications" element={<NotificationsPage />} />
 
-              {/* In-app invitation acceptance */}
-              <Route path="/invitations" element={<AcceptInvitePage />} />
-
               {/* Support */}
               <Route path="/docs" element={<DocumentationPage />} />
               <Route path="/documentation" element={<Navigate to="/docs" replace />} />
@@ -456,7 +475,7 @@ function App() {
               <Route
                 path="/audit-log"
                 element={
-                  <RoleProtectedRoute allowedRoles={AUDIT_LOG_PAGE_ROLES}>
+                  <RoleProtectedRoute allowedRoles={AUDIT_LOG_PAGE_ROLES} allowProjectScopedRole>
                     <AuditLogPage />
                   </RoleProtectedRoute>
                 }
@@ -467,7 +486,9 @@ function App() {
                 path="/my-company"
                 element={
                   <RoleProtectedRoute allowedRoles={SUBCONTRACTOR_ROLES}>
-                    <MyCompanyPage />
+                    <SubbieShellGuard>
+                      <MyCompanyPage />
+                    </SubbieShellGuard>
                   </RoleProtectedRoute>
                 }
               />
@@ -487,7 +508,9 @@ function App() {
                 path="/subcontractor-portal/docket/new"
                 element={
                   <RoleProtectedRoute allowedRoles={SUBCONTRACTOR_ROLES}>
-                    <DocketEditPage />
+                    <SubbieShellGuard>
+                      <DocketEditPage />
+                    </SubbieShellGuard>
                   </RoleProtectedRoute>
                 }
               />
@@ -495,7 +518,9 @@ function App() {
                 path="/subcontractor-portal/docket/:docketId"
                 element={
                   <RoleProtectedRoute allowedRoles={SUBCONTRACTOR_ROLES}>
-                    <DocketEditPage />
+                    <SubbieShellGuard>
+                      <DocketEditPage />
+                    </SubbieShellGuard>
                   </RoleProtectedRoute>
                 }
               />
@@ -503,7 +528,9 @@ function App() {
                 path="/subcontractor-portal/dockets"
                 element={
                   <RoleProtectedRoute allowedRoles={SUBCONTRACTOR_ROLES}>
-                    <DocketsListPage />
+                    <SubbieShellGuard>
+                      <DocketsListPage />
+                    </SubbieShellGuard>
                   </RoleProtectedRoute>
                 }
               />
@@ -511,7 +538,9 @@ function App() {
                 path="/subcontractor-portal/work"
                 element={
                   <RoleProtectedRoute allowedRoles={SUBCONTRACTOR_ROLES}>
-                    <AssignedWorkPage />
+                    <SubbieShellGuard>
+                      <AssignedWorkPage />
+                    </SubbieShellGuard>
                   </RoleProtectedRoute>
                 }
               />
@@ -519,7 +548,9 @@ function App() {
                 path="/subcontractor-portal/itps"
                 element={
                   <RoleProtectedRoute allowedRoles={SUBCONTRACTOR_ROLES}>
-                    <SubcontractorITPsPage />
+                    <SubbieShellGuard>
+                      <SubcontractorITPsPage />
+                    </SubbieShellGuard>
                   </RoleProtectedRoute>
                 }
               />
@@ -527,7 +558,9 @@ function App() {
                 path="/subcontractor-portal/lots/:lotId/itp"
                 element={
                   <RoleProtectedRoute allowedRoles={SUBCONTRACTOR_ROLES}>
-                    <SubcontractorLotITPPage />
+                    <SubbieShellGuard>
+                      <SubcontractorLotITPPage />
+                    </SubbieShellGuard>
                   </RoleProtectedRoute>
                 }
               />
@@ -535,7 +568,9 @@ function App() {
                 path="/subcontractor-portal/holdpoints"
                 element={
                   <RoleProtectedRoute allowedRoles={SUBCONTRACTOR_ROLES}>
-                    <SubcontractorHoldPointsPage />
+                    <SubbieShellGuard>
+                      <SubcontractorHoldPointsPage />
+                    </SubbieShellGuard>
                   </RoleProtectedRoute>
                 }
               />
@@ -543,7 +578,9 @@ function App() {
                 path="/subcontractor-portal/tests"
                 element={
                   <RoleProtectedRoute allowedRoles={SUBCONTRACTOR_ROLES}>
-                    <SubcontractorTestResultsPage />
+                    <SubbieShellGuard>
+                      <SubcontractorTestResultsPage />
+                    </SubbieShellGuard>
                   </RoleProtectedRoute>
                 }
               />
@@ -551,7 +588,9 @@ function App() {
                 path="/subcontractor-portal/ncrs"
                 element={
                   <RoleProtectedRoute allowedRoles={SUBCONTRACTOR_ROLES}>
-                    <SubcontractorNCRsPage />
+                    <SubbieShellGuard>
+                      <SubcontractorNCRsPage />
+                    </SubbieShellGuard>
                   </RoleProtectedRoute>
                 }
               />
@@ -559,7 +598,9 @@ function App() {
                 path="/subcontractor-portal/documents"
                 element={
                   <RoleProtectedRoute allowedRoles={SUBCONTRACTOR_ROLES}>
-                    <SubcontractorDocumentsPage />
+                    <SubbieShellGuard>
+                      <SubcontractorDocumentsPage />
+                    </SubbieShellGuard>
                   </RoleProtectedRoute>
                 }
               />

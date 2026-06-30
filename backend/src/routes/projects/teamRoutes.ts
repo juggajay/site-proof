@@ -1,10 +1,11 @@
 import { Router, type Request } from 'express';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
-import { createAuditLog, AuditAction, writeAuditLogInTransaction } from '../../lib/auditLog.js';
+import { AuditAction, writeAuditLogInTransaction } from '../../lib/auditLog.js';
 import { createNotification } from '../../lib/notificationDispatch.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
+import { requireBrowserSession } from '../../middleware/browserSession.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
 import { sendNotificationIfEnabled } from '../notifications.js';
 import { assertProjectAllowsWrite } from '../../lib/projectAccess.js';
@@ -22,7 +23,9 @@ type ProjectAccessContext = {
     id: string;
     companyId: string;
   };
+  projectUser: { role: string } | null;
   hasProjectAccess: boolean;
+  hasCompanyAdminAccess: boolean;
   isProjectAdmin: boolean;
 };
 
@@ -42,8 +45,41 @@ type ProjectTeamRouterDependencies = {
   parseProjectTeamRole: (value: unknown) => string;
 };
 
+const PROTECTED_PROJECT_MEMBER_ROLES = new Set(['admin', 'project_manager']);
+
 function isProjectUserUniqueConstraintError(error: unknown): boolean {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
+}
+
+function isProtectedProjectMemberRole(role: string | null | undefined): boolean {
+  return typeof role === 'string' && PROTECTED_PROJECT_MEMBER_ROLES.has(role);
+}
+
+function assertActorMayManageProjectMemberRole(params: {
+  actorProjectRole: string | null | undefined;
+  actorHasCompanyAdminAccess: boolean;
+  targetCurrentRole?: string | null;
+  targetNewRole?: string | null;
+}): void {
+  if (params.actorHasCompanyAdminAccess || params.actorProjectRole === 'admin') {
+    return;
+  }
+
+  if (isProtectedProjectMemberRole(params.targetCurrentRole)) {
+    throw AppError.forbidden(
+      'Only project admins can manage project administrators and project managers',
+    );
+  }
+
+  if (isProtectedProjectMemberRole(params.targetNewRole)) {
+    throw AppError.forbidden(
+      'Only project admins can grant project administrator and project manager roles',
+    );
+  }
+}
+
+function isCompanyAdminRole(role: string | null | undefined): boolean {
+  return role === 'admin' || role === 'owner';
 }
 
 export function createProjectTeamRouter({
@@ -57,6 +93,46 @@ export function createProjectTeamRouter({
   const projectTeamRouter = Router();
 
   projectTeamRouter.use(requireAuth);
+
+  async function getActorManagementAccessInTransaction(
+    tx: Prisma.TransactionClient,
+    projectId: string,
+    user: AuthenticatedUser,
+    forbiddenMessage: string,
+  ) {
+    const [project, actorUser, actorProjectUser] = await Promise.all([
+      tx.project.findUnique({
+        where: { id: projectId },
+        select: { companyId: true },
+      }),
+      tx.user.findUnique({
+        where: { id: user.id },
+        select: { companyId: true, roleInCompany: true },
+      }),
+      tx.projectUser.findFirst({
+        where: { projectId, userId: user.id, status: 'active' },
+        select: { role: true },
+      }),
+    ]);
+
+    if (!project) {
+      throw AppError.notFound('Project');
+    }
+
+    const actorHasCompanyAdminAccess =
+      isCompanyAdminRole(actorUser?.roleInCompany) && actorUser?.companyId === project.companyId;
+    const actorProjectRole = actorProjectUser?.role ?? null;
+
+    if (!isProjectAdminRole(actorProjectRole) && !actorHasCompanyAdminAccess) {
+      throw AppError.forbidden(forbiddenMessage);
+    }
+
+    return {
+      actorProjectRole,
+      actorHasCompanyAdminAccess,
+      projectCompanyId: project.companyId,
+    };
+  }
 
   // GET /api/projects/:id/users - Get all users in a project
   projectTeamRouter.get(
@@ -94,9 +170,10 @@ export function createProjectTeamRouter({
     '/:id/users',
     asyncHandler(async (req, res) => {
       const projectId = parseProjectRouteParam(req.params.id, 'id');
+      const currentUser = req.user!;
+      requireBrowserSession(req, 'Project team invitation');
       const email = normalizeProjectUserEmail(req.body.email);
       const role = parseProjectTeamRole(req.body.role);
-      const currentUser = req.user!;
 
       const access = await getProjectAccessContext(projectId, currentUser);
 
@@ -104,64 +181,84 @@ export function createProjectTeamRouter({
         throw AppError.forbidden('Only admins can invite users');
       }
       await assertProjectAllowsWrite(projectId);
-
-      // Project team assignment links an existing company member to a project;
-      // it does not create a new company seat.
-      const invitedUser = await prisma.user.findUnique({
-        where: { email },
-        select: { id: true, email: true, fullName: true, companyId: true },
+      assertActorMayManageProjectMemberRole({
+        actorProjectRole: access.projectUser?.role,
+        actorHasCompanyAdminAccess: access.hasCompanyAdminAccess,
+        targetNewRole: role,
       });
 
-      if (!invitedUser) {
-        throw AppError.notFound('User');
-      }
-
-      if (invitedUser.companyId !== access.project.companyId) {
-        throw AppError.forbidden(
-          'User must belong to this company before they can be added to the project',
+      const { invitedUser, newProjectUser } = await prisma.$transaction(async (tx) => {
+        await assertProjectAllowsWrite(projectId, tx);
+        const actorAccess = await getActorManagementAccessInTransaction(
+          tx,
+          projectId,
+          currentUser,
+          'Only admins can invite users',
         );
-      }
-
-      // Check if already a member
-      const existingMember = await prisma.projectUser.findFirst({
-        where: { projectId, userId: invitedUser.id },
-      });
-
-      if (existingMember) {
-        throw AppError.badRequest('User is already a member of this project');
-      }
-
-      // Create project user
-      const newProjectUser = await prisma.projectUser
-        .create({
-          data: {
-            projectId,
-            userId: invitedUser.id,
-            role,
-            status: 'active',
-            acceptedAt: new Date(), // Auto-accept for now
-          },
-        })
-        .catch((error: unknown) => {
-          if (isProjectUserUniqueConstraintError(error)) {
-            throw AppError.badRequest('User is already a member of this project');
-          }
-          throw error;
+        assertActorMayManageProjectMemberRole({
+          actorProjectRole: actorAccess.actorProjectRole,
+          actorHasCompanyAdminAccess: actorAccess.actorHasCompanyAdminAccess,
+          targetNewRole: role,
         });
 
-      // Audit log
-      await createAuditLog({
-        projectId,
-        userId: currentUser.id,
-        entityType: 'project_user',
-        entityId: newProjectUser.id,
-        action: AuditAction.USER_INVITED,
-        changes: {
-          invitedUserId: invitedUser.id,
-          invitedUserEmail: invitedUser.email,
-          role,
-        },
-        req,
+        // Project team assignment links an existing company member to a project;
+        // it does not create a new company seat.
+        const invitedUser = await tx.user.findUnique({
+          where: { email },
+          select: { id: true, email: true, fullName: true, companyId: true },
+        });
+
+        if (!invitedUser) {
+          throw AppError.notFound('User');
+        }
+
+        if (invitedUser.companyId !== actorAccess.projectCompanyId) {
+          throw AppError.forbidden(
+            'User must belong to this company before they can be added to the project',
+          );
+        }
+
+        // Check if already a member
+        const existingMember = await tx.projectUser.findFirst({
+          where: { projectId, userId: invitedUser.id },
+        });
+
+        if (existingMember) {
+          throw AppError.badRequest('User is already a member of this project');
+        }
+
+        const newProjectUser = await tx.projectUser
+          .create({
+            data: {
+              projectId,
+              userId: invitedUser.id,
+              role,
+              status: 'active',
+              acceptedAt: new Date(), // Auto-accept for now
+            },
+          })
+          .catch((error: unknown) => {
+            if (isProjectUserUniqueConstraintError(error)) {
+              throw AppError.badRequest('User is already a member of this project');
+            }
+            throw error;
+          });
+
+        await writeAuditLogInTransaction(tx, {
+          projectId,
+          userId: currentUser.id,
+          entityType: 'project_user',
+          entityId: newProjectUser.id,
+          action: AuditAction.USER_INVITED,
+          changes: {
+            invitedUserId: invitedUser.id,
+            invitedUserEmail: invitedUser.email,
+            role,
+          },
+          req,
+        });
+
+        return { invitedUser, newProjectUser };
       });
 
       // Feature #939 - Send team invitation notification to invited user
@@ -209,8 +306,9 @@ export function createProjectTeamRouter({
     asyncHandler(async (req, res) => {
       const projectId = parseProjectRouteParam(req.params.id, 'id');
       const targetUserId = parseProjectRouteParam(req.params.userId, 'userId');
-      const role = parseProjectTeamRole(req.body.role);
       const currentUser = req.user!;
+      requireBrowserSession(req, 'Project team role change');
+      const role = parseProjectTeamRole(req.body.role);
 
       const access = await getProjectAccessContext(projectId, currentUser);
 
@@ -240,7 +338,21 @@ export function createProjectTeamRouter({
           throw AppError.notFound('User in project');
         }
 
+        await assertProjectAllowsWrite(projectId, tx);
+        const actorAccess = await getActorManagementAccessInTransaction(
+          tx,
+          projectId,
+          currentUser,
+          'Only admins can change user roles',
+        );
         const oldRole = targetProjectUser.role;
+        assertActorMayManageProjectMemberRole({
+          actorProjectRole: actorAccess.actorProjectRole,
+          actorHasCompanyAdminAccess: actorAccess.actorHasCompanyAdminAccess,
+          targetCurrentRole: oldRole,
+          targetNewRole: role,
+        });
+
         if (!isProjectAdminRole(role)) {
           await assertCanReduceProjectAdmin(tx, projectId, targetProjectUser);
         }
@@ -327,6 +439,7 @@ export function createProjectTeamRouter({
       const projectId = parseProjectRouteParam(req.params.id, 'id');
       const targetUserId = parseProjectRouteParam(req.params.userId, 'userId');
       const currentUser = req.user!;
+      requireBrowserSession(req, 'Project team member removal');
 
       const access = await getProjectAccessContext(projectId, currentUser);
 
@@ -352,6 +465,19 @@ export function createProjectTeamRouter({
         if (!targetProjectUser) {
           throw AppError.notFound('User in project');
         }
+
+        await assertProjectAllowsWrite(projectId, tx);
+        const actorAccess = await getActorManagementAccessInTransaction(
+          tx,
+          projectId,
+          currentUser,
+          'Only admins can remove users',
+        );
+        assertActorMayManageProjectMemberRole({
+          actorProjectRole: actorAccess.actorProjectRole,
+          actorHasCompanyAdminAccess: actorAccess.actorHasCompanyAdminAccess,
+          targetCurrentRole: targetProjectUser.role,
+        });
 
         await assertCanReduceProjectAdmin(tx, projectId, targetProjectUser);
 

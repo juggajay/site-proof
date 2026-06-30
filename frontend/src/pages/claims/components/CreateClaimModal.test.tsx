@@ -100,6 +100,28 @@ describe('CreateClaimModal claim period validation', () => {
 });
 
 describe('CreateClaimModal create flow', () => {
+  it('gives each selected lot percentage input a lot-specific accessible name', async () => {
+    apiFetchMock.mockResolvedValue({
+      lots: [
+        READY_LOT_READINESS.lots[0],
+        {
+          ...READY_LOT_READINESS.lots[0],
+          lotId: 'lot-2',
+          lotNumber: 'LOT-002',
+        },
+      ],
+    });
+
+    renderModal();
+
+    expect(await screen.findByText('LOT-001')).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('Select LOT-001'));
+    fireEvent.click(screen.getByLabelText('Select LOT-002'));
+
+    expect(screen.getByLabelText(/claim this time.*LOT-001/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/claim this time.*LOT-002/i)).toBeInTheDocument();
+  });
+
   it('requires selected lot claim increments to be greater than zero', async () => {
     apiFetchMock.mockResolvedValue(READY_LOT_READINESS);
 
@@ -107,7 +129,7 @@ describe('CreateClaimModal create flow', () => {
 
     expect(await screen.findByText('LOT-001')).toBeInTheDocument();
     fireEvent.click(screen.getByLabelText('Select LOT-001'));
-    fireEvent.change(screen.getByLabelText('% to claim this time:'), {
+    fireEvent.change(screen.getByLabelText(/claim this time.*LOT-001/i), {
       target: { value: '0' },
     });
 

@@ -1,7 +1,9 @@
 import { Router, type Request } from 'express';
 import { prisma } from '../../lib/prisma.js';
+import { AuditAction, writeAuditLogInTransaction } from '../../lib/auditLog.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
+import { requireBrowserSession } from '../../middleware/browserSession.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
 import { assertProjectAllowsWrite } from '../../lib/projectAccess.js';
 import {
@@ -11,6 +13,22 @@ import {
 } from './areaResponses.js';
 
 type AuthenticatedUser = NonNullable<Request['user']>;
+
+type ProjectAreaAuditSnapshotInput = {
+  name: string;
+  chainageStart: unknown;
+  chainageEnd: unknown;
+  colour: string | null;
+};
+
+function buildProjectAreaAuditSnapshot(area: ProjectAreaAuditSnapshotInput) {
+  return {
+    name: area.name,
+    chainageStart: area.chainageStart == null ? null : Number(area.chainageStart),
+    chainageEnd: area.chainageEnd == null ? null : Number(area.chainageEnd),
+    colour: area.colour,
+  };
+}
 
 type ProjectAreaRouterDependencies = {
   getProjectAccessContext: (
@@ -67,6 +85,7 @@ export function createProjectAreaRouter({
     asyncHandler(async (req, res) => {
       const projectId = parseProjectRouteParam(req.params.id, 'id');
       const user = req.user!;
+      requireBrowserSession(req, 'Project area creation');
       const name = parseRequiredTrimmedString(req.body.name, 'Area name', projectAreaNameMaxLength);
       const chainageStart = parseOptionalNonNegativeNumber(
         req.body.chainageStart,
@@ -94,14 +113,33 @@ export function createProjectAreaRouter({
         throw AppError.badRequest('Chainage start must be less than chainage end.');
       }
 
-      const area = await prisma.projectArea.create({
-        data: {
+      const area = await prisma.$transaction(async (tx) => {
+        const createdArea = await tx.projectArea.create({
+          data: {
+            projectId,
+            name,
+            chainageStart,
+            chainageEnd,
+            colour: colour ?? null,
+          },
+        });
+
+        await writeAuditLogInTransaction(tx, {
           projectId,
-          name,
-          chainageStart,
-          chainageEnd,
-          colour: colour ?? null,
-        },
+          userId: user.id,
+          entityType: 'project_area',
+          entityId: createdArea.id,
+          action: AuditAction.PROJECT_AREA_CREATED,
+          changes: {
+            name,
+            chainageStart,
+            chainageEnd,
+            colour: colour ?? null,
+          },
+          req,
+        });
+
+        return createdArea;
       });
 
       res.status(201).json(buildProjectAreaResponse(area));
@@ -115,6 +153,7 @@ export function createProjectAreaRouter({
       const projectId = parseProjectRouteParam(req.params.id, 'id');
       const areaId = parseProjectRouteParam(req.params.areaId, 'areaId');
       const user = req.user!;
+      requireBrowserSession(req, 'Project area update');
       const name =
         req.body.name === undefined
           ? undefined
@@ -180,9 +219,30 @@ export function createProjectAreaRouter({
       if (chainageEnd !== undefined) updateData.chainageEnd = chainageEnd;
       if (colour !== undefined) updateData.colour = colour;
 
-      const area = await prisma.projectArea.update({
-        where: { id: areaId },
-        data: updateData,
+      const changedFields = Object.keys(updateData);
+      const area = await prisma.$transaction(async (tx) => {
+        const updatedArea = await tx.projectArea.update({
+          where: { id: areaId },
+          data: updateData,
+        });
+
+        if (changedFields.length > 0) {
+          await writeAuditLogInTransaction(tx, {
+            projectId,
+            userId: user.id,
+            entityType: 'project_area',
+            entityId: areaId,
+            action: AuditAction.PROJECT_AREA_UPDATED,
+            changes: {
+              changedFields,
+              previous: buildProjectAreaAuditSnapshot(existingArea),
+              next: buildProjectAreaAuditSnapshot(updatedArea),
+            },
+            req,
+          });
+        }
+
+        return updatedArea;
       });
 
       res.json(buildProjectAreaResponse(area));
@@ -196,6 +256,7 @@ export function createProjectAreaRouter({
       const projectId = parseProjectRouteParam(req.params.id, 'id');
       const areaId = parseProjectRouteParam(req.params.areaId, 'areaId');
       const user = req.user!;
+      requireBrowserSession(req, 'Project area deletion');
 
       const access = await getProjectAccessContext(projectId, user);
 
@@ -213,8 +274,20 @@ export function createProjectAreaRouter({
         throw AppError.notFound('Area');
       }
 
-      await prisma.projectArea.delete({
-        where: { id: areaId },
+      await prisma.$transaction(async (tx) => {
+        await tx.projectArea.delete({
+          where: { id: areaId },
+        });
+
+        await writeAuditLogInTransaction(tx, {
+          projectId,
+          userId: user.id,
+          entityType: 'project_area',
+          entityId: areaId,
+          action: AuditAction.PROJECT_AREA_DELETED,
+          changes: buildProjectAreaAuditSnapshot(existingArea),
+          req,
+        });
       });
 
       res.json(buildProjectAreaDeletedResponse());

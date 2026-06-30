@@ -68,6 +68,17 @@ function canCreateProjectForCompany(user: AuthenticatedUser): boolean {
   return PROJECT_CREATOR_ROLES.has(user.roleInCompany);
 }
 
+function getProjectAccessRole(
+  access: Awaited<ReturnType<typeof getProjectAccessContext>>,
+  user: AuthenticatedUser,
+): string | null {
+  if (access.hasCompanyAdminAccess) {
+    return user.roleInCompany;
+  }
+
+  return access.projectUser?.role ?? null;
+}
+
 async function hasSubcontractorProjectIdentity(user: AuthenticatedUser): Promise<boolean> {
   if (isSubcontractorUser(user)) {
     return true;
@@ -320,10 +331,38 @@ async function getProjectAccessContext(projectId: string, user: AuthenticatedUse
   return {
     project,
     projectUser,
+    hasCompanyAdminAccess,
     hasProjectAccess: Boolean(projectUser) || hasCompanyAdminAccess,
     isProjectAdmin,
   };
 }
+
+// GET /api/projects/:id/access - Resolve the caller's role for this exact project.
+projectsRouter.get(
+  '/:id/access',
+  asyncHandler(async (req, res) => {
+    const projectId = parseProjectRouteParam(req.params.id, 'id');
+    const user = req.user!;
+    const access = await getProjectAccessContext(projectId, user);
+
+    if (await hasSubcontractorProjectIdentity(user)) {
+      throw AppError.forbidden('Subcontractor portal users cannot access internal project routes');
+    }
+
+    const role = getProjectAccessRole(access, user);
+    if (!access.hasProjectAccess || !role) {
+      throw AppError.forbidden('Access denied to this project');
+    }
+
+    res.json({
+      access: {
+        hasProjectAccess: true,
+        role,
+        isProjectAdmin: access.isProjectAdmin,
+      },
+    });
+  }),
+);
 
 async function assertCanReduceProjectAdmin(
   client: ProjectTeamMutationClient,

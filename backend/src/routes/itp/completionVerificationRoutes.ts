@@ -17,6 +17,7 @@ import {
   parseCompletionRouteParam,
   parseRequiredCompletionQueryString,
 } from './completionValidation.js';
+import { updateLotStatusFromITP } from './helpers/lotProgression.js';
 
 const ITP_COMPLETION_REJECTION_REASON_MAX_LENGTH = 3000;
 
@@ -71,6 +72,7 @@ completionVerificationRoutes.post(
       where: { id },
       select: {
         completedById: true,
+        status: true,
         verificationStatus: true,
         itpInstance: {
           select: {
@@ -96,6 +98,15 @@ completionVerificationRoutes.post(
       ITP_VERIFY_ROLES,
       'ITP verification access required',
     );
+
+    if (
+      completionForAccess.status !== 'completed' &&
+      completionForAccess.status !== 'not_applicable'
+    ) {
+      throw AppError.conflict('Only completed or not applicable ITP completions can be verified', {
+        status: completionForAccess.status,
+      });
+    }
 
     if (completionForAccess.verificationStatus === 'verified') {
       const completion = await prisma.iTPCompletion.findUniqueOrThrow({
@@ -132,6 +143,8 @@ completionVerificationRoutes.post(
       },
       include: completionVerificationResponseInclude,
     });
+
+    await updateLotStatusFromITP(completion.itpInstanceId);
 
     // Create notification for the user who completed the item (Feature #633)
     if (completion.completedById && completion.completedById !== user.userId) {

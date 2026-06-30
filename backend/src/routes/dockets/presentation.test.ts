@@ -147,6 +147,23 @@ describe('dockets presentation helpers (pure)', () => {
       ]);
     });
 
+    it('redacts labour rates and costs for non-commercial docket readers', () => {
+      const result = mapDocketLabourEntry(labourSource, { includeCommercialAmounts: false });
+
+      expect(result).toMatchObject({
+        employee: { hourlyRate: null },
+        hourlyRate: null,
+        submittedCost: null,
+        approvedCost: null,
+        submittedHours: 8,
+        approvedHours: 7.5,
+        lotAllocations: [
+          { lotId: 'lot-1', lotNumber: 'L-100', hours: 5 },
+          { lotId: 'lot-2', lotNumber: 'L-200', hours: 3 },
+        ],
+      });
+    });
+
     it('coerces null/undefined numerics to 0 and passes nullable strings through', () => {
       const result = mapDocketLabourEntry({
         id: 'lab-2',
@@ -216,6 +233,19 @@ describe('dockets presentation helpers (pure)', () => {
       ]);
     });
 
+    it('redacts plant rates and costs for non-commercial docket readers', () => {
+      const result = mapDocketPlantEntry(plantSource, { includeCommercialAmounts: false });
+
+      expect(result).toMatchObject({
+        plant: { dryRate: null, wetRate: null },
+        hourlyRate: null,
+        submittedCost: null,
+        approvedCost: null,
+        hoursOperated: 6,
+        wetOrDry: 'wet',
+      });
+    });
+
     it('falls back wetOrDry to "dry" when null and coerces null/undefined numerics to 0', () => {
       const result = mapDocketPlantEntry({
         id: 'pl-2',
@@ -283,6 +313,24 @@ describe('dockets presentation helpers (pure)', () => {
         approvedCost: 375,
       });
     });
+
+    it('redacts cost totals while retaining hour totals in per-entry labour responses', () => {
+      const mapped = [labourSource].map((e) =>
+        mapDocketLabourEntry(e, { includeCommercialAmounts: false }),
+      );
+
+      expect(buildDocketLabourEntriesResponse(mapped, { includeCommercialAmounts: false })).toEqual(
+        {
+          labourEntries: mapped,
+          totals: {
+            submittedHours: 8,
+            approvedHours: 7.5,
+            submittedCost: null,
+            approvedCost: null,
+          },
+        },
+      );
+    });
   });
 
   describe('sumDocketPlantTotals', () => {
@@ -297,6 +345,21 @@ describe('dockets presentation helpers (pure)', () => {
 
     it('returns zeros for an empty list', () => {
       expect(sumDocketPlantTotals([])).toEqual({ hours: 0, submittedCost: 0, approvedCost: 0 });
+    });
+
+    it('redacts cost totals while retaining hour totals in per-entry plant responses', () => {
+      const mapped = [plantSource].map((e) =>
+        mapDocketPlantEntry(e, { includeCommercialAmounts: false }),
+      );
+
+      expect(buildDocketPlantEntriesResponse(mapped, { includeCommercialAmounts: false })).toEqual({
+        plantEntries: mapped,
+        totals: {
+          hours: 6,
+          submittedCost: null,
+          approvedCost: null,
+        },
+      });
     });
   });
 
@@ -313,6 +376,8 @@ describe('dockets presentation helpers (pure)', () => {
         notes: 'site notes',
         labourHours: 12.5, // 8 + 4.5
         plantHours: 8, // 6 + 2
+        labourEntryCount: 2,
+        plantEntryCount: 2,
         totalLabourSubmitted: 600,
         totalLabourApproved: 550,
         totalPlantSubmitted: 800,
@@ -334,6 +399,8 @@ describe('dockets presentation helpers (pure)', () => {
         'notes',
         'labourHours',
         'plantHours',
+        'labourEntryCount',
+        'plantEntryCount',
         'totalLabourSubmitted',
         'totalLabourApproved',
         'totalPlantSubmitted',
@@ -372,6 +439,8 @@ describe('dockets presentation helpers (pure)', () => {
       });
       expect(result.labourHours).toBe(3); // 0 + 0 + 3 + 0
       expect(result.plantHours).toBe(2.5); // 0 + 2.5
+      expect(result.labourEntryCount).toBe(4);
+      expect(result.plantEntryCount).toBe(2);
       expect(result.totalLabourSubmitted).toBe(0);
       expect(result.totalLabourApproved).toBe(0);
       expect(result.totalPlantSubmitted).toBe(0);
@@ -395,6 +464,23 @@ describe('dockets presentation helpers (pure)', () => {
       expect(result.subcontractorId).toBe('sc-1');
       expect(result.docketNumber).toBe('DKT-FF00AA');
       expect(result.date).toBe('2026-12-31'); // UTC-based, TZ-stable
+    });
+
+    it('redacts stored docket cost totals for non-commercial docket readers', () => {
+      const result = mapDocketListItem(listSource, { includeCommercialAmounts: false });
+
+      expect(result).toMatchObject({
+        labourHours: 12.5,
+        plantHours: 8,
+        labourEntryCount: 2,
+        plantEntryCount: 2,
+        totalLabourSubmitted: null,
+        totalPlantSubmitted: null,
+        totalLabourApproved: 550,
+        totalPlantApproved: 780,
+        totalLabourApprovedCost: null,
+        totalPlantApprovedCost: null,
+      });
     });
   });
 
@@ -562,6 +648,39 @@ describe('dockets presentation helpers (pure)', () => {
       expect(result.docket.totalPlantApproved).toBe(12.5);
       expect(result.docket.totalLabourApprovedCost).toBeNull();
       expect(result.docket.totalPlantApprovedCost).toBe(42.25);
+    });
+
+    it('redacts detail cost totals and entry rates for non-commercial docket readers', () => {
+      const result = buildDocketDetailResponse({
+        docket: detailDocket,
+        project: null,
+        submittedBy: null,
+        approvedBy: null,
+        foremanDiary: null,
+        discrepancies: [],
+        includeCommercialAmounts: false,
+      });
+
+      expect(result.docket).toMatchObject({
+        totalLabourSubmitted: null,
+        totalLabourApproved: 550,
+        totalPlantSubmitted: null,
+        totalPlantApproved: 780,
+        totalLabourApprovedCost: null,
+        totalPlantApprovedCost: null,
+      });
+      expect(result.docket.labourEntries[0]).toMatchObject({
+        employee: { hourlyRate: null },
+        hourlyRate: null,
+        submittedCost: null,
+        approvedCost: null,
+      });
+      expect(result.docket.plantEntries[0]).toMatchObject({
+        plant: { dryRate: null, wetRate: null },
+        hourlyRate: null,
+        submittedCost: null,
+        approvedCost: null,
+      });
     });
 
     it('reuses the labour/plant entry mappers (detail shape omits adjustmentReason)', () => {

@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import type { Page, Route } from '@playwright/test';
 
 export const E2E_PASSWORD = 'testpassword123';
 export const ADMIN_EMAIL = 'test@example.com';
@@ -14,11 +14,59 @@ export const E2E_ADMIN_USER = {
   hasPassword: true,
 };
 
+export type JsonResponder = (body: unknown, status?: number) => Promise<void>;
+
+export function createJsonResponder(route: Route): JsonResponder {
+  return (body: unknown, status = 200) =>
+    route.fulfill({
+      status,
+      contentType: 'application/json',
+      body: JSON.stringify(body),
+    });
+}
+
+function hasSubcontractorProjectIdentity(user: typeof E2E_ADMIN_USER): boolean {
+  const roles = [
+    String(user.role ?? ''),
+    String(user.roleInCompany ?? ''),
+    'dashboardRole' in user
+      ? String((user as { dashboardRole?: unknown }).dashboardRole ?? '')
+      : '',
+  ];
+
+  return roles.some((role) => role.toLowerCase().startsWith('subcontractor'));
+}
+
 export async function mockAuthenticatedUserState(
   page: Page,
   user = E2E_ADMIN_USER,
   notificationUnreadCount = 0,
 ): Promise<void> {
+  await page.route('**/api/projects/*/access', async (route) => {
+    if (hasSubcontractorProjectIdentity(user)) {
+      await route.fulfill({
+        status: 403,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: { message: 'You do not have access to this project' },
+        }),
+      });
+      return;
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        access: {
+          hasProjectAccess: true,
+          role: 'project_manager',
+          isProjectAdmin: true,
+        },
+      }),
+    });
+  });
+
   await page.route('**/api/notifications/unread-count**', async (route) => {
     await route.fulfill({
       status: 200,
@@ -30,6 +78,7 @@ export async function mockAuthenticatedUserState(
   await page.addInitScript((mockUser) => {
     localStorage.setItem('siteproof_remember_me', 'true');
     localStorage.setItem('siteproof_onboarding_completed', 'true');
+    localStorage.setItem('siteproof_hide_dev_role_switcher', 'true');
     localStorage.setItem('siteproof_last_seen_version', '1.3.0');
     localStorage.setItem(
       'cookie_consent',

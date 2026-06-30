@@ -51,9 +51,7 @@ export function AuditLogHeader({
           <ClipboardList className="h-8 w-8" />
           Audit Log
         </h1>
-        <p className="text-muted-foreground">
-          View system activity and changes across all projects
-        </p>
+        <p className="text-muted-foreground">View system activity and changes you have access to</p>
       </div>
       <Button
         type="button"

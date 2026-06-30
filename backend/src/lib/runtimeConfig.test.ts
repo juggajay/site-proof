@@ -4,6 +4,7 @@ import {
   buildBackendUrl,
   buildFrontendUrl,
   buildHttpsRedirectUrl,
+  getAllowedCorsOrigins,
   getExpressTrustProxySetting,
   getGoogleRedirectUri,
   isCorsOriginAllowed,
@@ -15,6 +16,12 @@ const VALID_JWT_SECRET = 'prod-jwt-secret-32-plus-chars-2026';
 const VALID_ENCRYPTION_KEY = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 const VALID_RESEND_API_KEY = 're_prod_valid_api_key_123456789';
 const VALID_SUPABASE_SERVICE_ROLE_KEY = 'prod-supabase-service-role-key-32-plus-chars';
+const FIRST_PARTY_PRODUCTION_CORS_ORIGINS = [
+  'https://site-proof.vercel.app',
+  'https://site-proof-juggajays-projects.vercel.app',
+  'https://www.civos.com.au',
+  'https://civos.com.au',
+];
 
 afterEach(() => {
   process.env = { ...ORIGINAL_ENV };
@@ -29,6 +36,7 @@ function configureProductionBase() {
   process.env.EMAIL_FROM = 'noreply@siteproof.example';
   process.env.EMAIL_PROVIDER = 'resend';
   process.env.EMAIL_ENABLED = 'true';
+  process.env.TRUST_PROXY = '1';
   delete process.env.RATE_LIMIT_STORE;
   delete process.env.RATE_LIMIT_KEY_SALT;
   delete process.env.MFA_BACKUP_CODE_SECRET;
@@ -78,6 +86,9 @@ describe('runtimeConfig', () => {
     delete process.env.GOOGLE_REDIRECT_URI;
 
     expect(buildFrontendUrl('/dashboard')).toBe('https://app.siteproof.example/dashboard');
+    expect(buildFrontendUrl('https://app.siteproof.example/projects/p1/reports')).toBe(
+      'https://app.siteproof.example/projects/p1/reports',
+    );
     expect(buildBackendUrl('/api/documents/1')).toBe(
       'https://api.siteproof.example/api/documents/1',
     );
@@ -108,6 +119,21 @@ describe('runtimeConfig', () => {
 
     process.env.TRUST_PROXY = 'yes';
     expect(() => validateRuntimeConfig()).toThrow('TRUST_PROXY=true');
+  });
+
+  it('rejects missing or disabled trust proxy settings in production', () => {
+    configureProductionBase();
+    process.env.FRONTEND_URL = 'https://app.siteproof.example';
+    process.env.BACKEND_URL = 'https://api.siteproof.example';
+
+    delete process.env.TRUST_PROXY;
+    expect(() => validateRuntimeConfig()).toThrow('TRUST_PROXY must be set');
+
+    process.env.TRUST_PROXY = '0';
+    expect(() => validateRuntimeConfig()).toThrow('TRUST_PROXY must be set');
+
+    process.env.TRUST_PROXY = 'false';
+    expect(() => validateRuntimeConfig()).toThrow('TRUST_PROXY must be set');
   });
 
   it('accepts bounded trust proxy settings in production', () => {
@@ -428,15 +454,69 @@ describe('runtimeConfig', () => {
     process.env.FRONTEND_URL = 'https://app.siteproof.example/';
     process.env.BACKEND_URL = 'https://api.siteproof.example';
 
+    expect(getAllowedCorsOrigins()).toEqual(['https://app.siteproof.example']);
     expect(isCorsOriginAllowed('https://app.siteproof.example')).toBe(true);
     expect(isCorsOriginAllowed('https://app.siteproof.example/')).toBe(false);
     expect(isCorsOriginAllowed('https://attacker.example')).toBe(false);
     expect(isCorsOriginAllowed(undefined)).toBe(false);
   });
 
+  it('allows known first-party production frontend aliases without extra env', () => {
+    configureProductionBase();
+    process.env.FRONTEND_URL = 'https://site-proof.vercel.app/';
+    process.env.BACKEND_URL = 'https://site-proof-production.up.railway.app';
+    delete process.env.CORS_ALLOWED_ORIGINS;
+
+    expect(getAllowedCorsOrigins()).toEqual(FIRST_PARTY_PRODUCTION_CORS_ORIGINS);
+    FIRST_PARTY_PRODUCTION_CORS_ORIGINS.forEach((origin) => {
+      expect(isCorsOriginAllowed(origin)).toBe(true);
+    });
+    expect(isCorsOriginAllowed('https://attacker.example')).toBe(false);
+    expect(() => validateRuntimeConfig()).not.toThrow();
+  });
+
+  it('allows explicit production CORS aliases for deployed frontend domains', () => {
+    configureProductionBase();
+    process.env.FRONTEND_URL = 'https://site-proof.vercel.app/';
+    process.env.BACKEND_URL = 'https://site-proof-production.up.railway.app';
+    process.env.CORS_ALLOWED_ORIGINS = [
+      'https://www.civos.com.au',
+      'https://civos.com.au/',
+      'https://site-proof-juggajays-projects.vercel.app',
+      'https://site-proof.vercel.app',
+      'https://portal.siteproof.example',
+    ].join(',');
+
+    expect(getAllowedCorsOrigins()).toEqual([
+      ...FIRST_PARTY_PRODUCTION_CORS_ORIGINS,
+      'https://portal.siteproof.example',
+    ]);
+    expect(isCorsOriginAllowed('https://portal.siteproof.example')).toBe(true);
+    expect(isCorsOriginAllowed('https://attacker.example')).toBe(false);
+    expect(() => validateRuntimeConfig()).not.toThrow();
+  });
+
+  it('rejects unsafe production CORS alias configuration', () => {
+    configureProductionBase();
+    process.env.FRONTEND_URL = 'https://site-proof.vercel.app';
+    process.env.BACKEND_URL = 'https://site-proof-production.up.railway.app';
+
+    process.env.CORS_ALLOWED_ORIGINS = 'http://www.civos.com.au';
+    expect(() => validateRuntimeConfig()).toThrow('CORS_ALLOWED_ORIGINS must use https');
+
+    process.env.CORS_ALLOWED_ORIGINS = 'https://www.civos.com.au/app';
+    expect(() => validateRuntimeConfig()).toThrow(
+      'CORS_ALLOWED_ORIGINS entries must be origins only',
+    );
+
+    process.env.CORS_ALLOWED_ORIGINS = 'https://localhost:5174';
+    expect(() => validateRuntimeConfig()).toThrow('CORS_ALLOWED_ORIGINS cannot point to localhost');
+  });
+
   it('allows local browser and no-origin requests only outside production', () => {
     process.env.NODE_ENV = 'development';
 
+    expect(getAllowedCorsOrigins()).toEqual([]);
     expect(isCorsOriginAllowed(undefined)).toBe(true);
     expect(isCorsOriginAllowed('http://localhost:5174')).toBe(true);
     expect(isCorsOriginAllowed('http://127.0.0.1:5174')).toBe(true);

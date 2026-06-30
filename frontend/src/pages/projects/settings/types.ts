@@ -71,6 +71,8 @@ export interface HpRecipient {
   email: string;
 }
 
+export type HpApprovalRequirement = 'any' | 'none' | 'superintendent';
+
 export interface ProjectNotificationPreferences {
   holdPointReleases: boolean;
   ncrAssignments: boolean;

@@ -7,6 +7,7 @@ import { asyncHandler } from '../../lib/asyncHandler.js';
 import { prisma } from '../../lib/prisma.js';
 import { logError } from '../../lib/serverLogger.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
+import { requireBrowserSession } from '../../middleware/browserSession.js';
 import {
   buildAdminEmployeeCreatedResponse,
   buildAdminEmployeeStatusResponse,
@@ -54,6 +55,7 @@ export function createSubcontractorRosterAdminRouter({
     '/:id/employees',
     asyncHandler(async (req, res) => {
       const user = req.user!;
+      requireBrowserSession(req, 'Subcontractor employee creation');
       const id = normalizeIdParam(req.params.id, 'Subcontractor ID');
       const { name, role, hourlyRate, phone } = req.body;
 
@@ -95,6 +97,7 @@ export function createSubcontractorRosterAdminRouter({
     '/:id/employees/:empId/status',
     asyncHandler(async (req, res) => {
       const user = req.user!;
+      requireBrowserSession(req, 'Subcontractor employee status update');
       const id = normalizeIdParam(req.params.id, 'Subcontractor ID');
       const empId = normalizeIdParam(req.params.empId, 'Employee ID');
       const { status, counterRate } = req.body;
@@ -139,10 +142,16 @@ export function createSubcontractorRosterAdminRouter({
         throw AppError.notFound('Employee');
       }
 
-      const updateData: Prisma.EmployeeRosterUpdateInput = { status };
+      const updateData: Prisma.EmployeeRosterUpdateInput = {
+        status,
+        counterRate: status === 'counter' ? normalizedCounterRate : null,
+      };
       if (status === 'approved') {
         updateData.approvedById = userId;
         updateData.approvedAt = new Date();
+      } else {
+        updateData.approvedById = null;
+        updateData.approvedAt = null;
       }
 
       const updated = await prisma.employeeRoster.update({
@@ -266,6 +275,7 @@ export function createSubcontractorRosterAdminRouter({
     '/:id/plant',
     asyncHandler(async (req, res) => {
       const user = req.user!;
+      requireBrowserSession(req, 'Subcontractor plant creation');
       const id = normalizeIdParam(req.params.id, 'Subcontractor ID');
       const { type, description, idRego, dryRate, wetRate } = req.body;
 
@@ -314,6 +324,7 @@ export function createSubcontractorRosterAdminRouter({
     '/:id/plant/:plantId/status',
     asyncHandler(async (req, res) => {
       const user = req.user!;
+      requireBrowserSession(req, 'Subcontractor plant status update');
       const id = normalizeIdParam(req.params.id, 'Subcontractor ID');
       const plantId = normalizeIdParam(req.params.plantId, 'Plant ID');
       const { status, counterDryRate, counterWetRate } = req.body;
@@ -362,10 +373,17 @@ export function createSubcontractorRosterAdminRouter({
         throw AppError.notFound('Plant');
       }
 
-      const updateData: Prisma.PlantRegisterUpdateInput = { status };
+      const updateData: Prisma.PlantRegisterUpdateInput = {
+        status,
+        counterDryRate: status === 'counter' ? normalizedCounterDryRate : null,
+        counterWetRate: status === 'counter' ? (normalizedCounterWetRate ?? null) : null,
+      };
       if (status === 'approved') {
         updateData.approvedById = userId;
         updateData.approvedAt = new Date();
+      } else {
+        updateData.approvedById = null;
+        updateData.approvedAt = null;
       }
 
       const updated = await prisma.plantRegister.update({

@@ -25,6 +25,7 @@ import {
 } from './ncrWorkflowValidation.js';
 import { ncrClosureWorkflowRouter } from './ncrClosureWorkflow.js';
 import { claimNcrVerificationSubmission } from './ncrVerificationSubmission.js';
+import { notifySubcontractorNcrPortalUsers } from './ncrNotifications.js';
 
 const qmReviewedNcrInclude = {
   project: { select: { name: true } },
@@ -66,8 +67,8 @@ ncrWorkflowRouter.post(
       throw AppError.badRequest('NCR is not in open status');
     }
 
-    const updatedNcr = await prisma.nCR.update({
-      where: { id },
+    const responseUpdate = await prisma.nCR.updateMany({
+      where: { id, status: 'open' },
       data: {
         status: 'investigating',
         rootCauseCategory,
@@ -75,6 +76,13 @@ ncrWorkflowRouter.post(
         proposedCorrectiveAction,
         responseSubmittedAt: new Date(),
       },
+    });
+    if (responseUpdate.count !== 1) {
+      throw AppError.badRequest('NCR is not in open status');
+    }
+
+    const updatedNcr = await prisma.nCR.findUniqueOrThrow({
+      where: { id },
     });
 
     await createAuditLog({
@@ -215,6 +223,16 @@ ncrWorkflowRouter.post(
           },
         });
       }
+      if (ncr.responsibleSubcontractorId) {
+        await notifySubcontractorNcrPortalUsers({
+          projectId: ncr.projectId,
+          subcontractorCompanyId: ncr.responsibleSubcontractorId,
+          ncrId: ncr.id,
+          type: 'ncr_response_accepted',
+          title: 'NCR Response Accepted',
+          message: `${reviewerName} has accepted your response for ${ncr.ncrNumber}. Please proceed with rectification.`,
+        });
+      }
 
       await createAuditLog({
         projectId: ncr.projectId,
@@ -239,8 +257,8 @@ ncrWorkflowRouter.post(
       );
     } else {
       // Request revision - send back to responsible party
-      const updatedNcr = await prisma.nCR.update({
-        where: { id },
+      const revisionUpdate = await prisma.nCR.updateMany({
+        where: { id, status: 'investigating' },
         data: {
           status: 'open', // Reset to open for revision
           qmReviewedAt: new Date(),
@@ -255,6 +273,13 @@ ncrWorkflowRouter.post(
           proposedCorrectiveAction: null,
           responseSubmittedAt: null,
         },
+      });
+      if (revisionUpdate.count !== 1) {
+        throw AppError.badRequest('NCR must be in investigating status to review');
+      }
+
+      const updatedNcr = await prisma.nCR.findUniqueOrThrow({
+        where: { id },
         include: {
           project: { select: { name: true } },
           raisedBy: { select: { fullName: true, email: true } },
@@ -273,6 +298,16 @@ ncrWorkflowRouter.post(
             message: `${reviewerName} has requested a revision for ${ncr.ncrNumber}. Feedback: ${comments || 'Please review and resubmit.'}`,
             linkUrl: `/projects/${ncr.projectId}/ncr`,
           },
+        });
+      }
+      if (ncr.responsibleSubcontractorId) {
+        await notifySubcontractorNcrPortalUsers({
+          projectId: ncr.projectId,
+          subcontractorCompanyId: ncr.responsibleSubcontractorId,
+          ncrId: ncr.id,
+          type: 'ncr_revision_requested',
+          title: 'NCR Revision Requested',
+          message: `${reviewerName} has requested a revision for ${ncr.ncrNumber}. Feedback: ${comments || 'Please review and resubmit.'}`,
         });
       }
 
@@ -336,8 +371,10 @@ ncrWorkflowRouter.post(
       'Only the responsible party or project quality roles can submit NCR rectification',
     );
 
-    if (ncr.status !== 'investigating' && ncr.status !== 'rectification') {
-      throw AppError.badRequest('NCR is not ready for rectification');
+    if (ncr.status !== 'rectification') {
+      throw AppError.badRequest('NCR must be in rectification status to submit for verification', {
+        currentStatus: ncr.status,
+      });
     }
 
     if (ncr.ncrEvidence.length === 0) {
@@ -423,8 +460,8 @@ ncrWorkflowRouter.post(
     const reviewerName = reviewer?.fullName || reviewer?.email || 'QM';
 
     // Return NCR to rectification status
-    const updatedNcr = await prisma.nCR.update({
-      where: { id },
+    const rejectUpdate = await prisma.nCR.updateMany({
+      where: { id, status: 'verification' },
       data: {
         status: 'rectification',
         verificationNotes: feedback,
@@ -434,6 +471,13 @@ ncrWorkflowRouter.post(
         revisionRequestedAt: new Date(),
         revisionCount: { increment: 1 },
       },
+    });
+    if (rejectUpdate.count !== 1) {
+      throw AppError.badRequest('NCR must be in verification status to reject rectification');
+    }
+
+    const updatedNcr = await prisma.nCR.findUniqueOrThrow({
+      where: { id },
       include: {
         project: { select: { name: true } },
         raisedBy: { select: { fullName: true, email: true } },
@@ -452,6 +496,16 @@ ncrWorkflowRouter.post(
           message: `${reviewerName} has rejected the rectification for ${ncr.ncrNumber}. Feedback: ${feedback.substring(0, 100)}${feedback.length > 100 ? '...' : ''}`,
           linkUrl: `/projects/${ncr.projectId}/ncr`,
         },
+      });
+    }
+    if (ncr.responsibleSubcontractorId) {
+      await notifySubcontractorNcrPortalUsers({
+        projectId: ncr.projectId,
+        subcontractorCompanyId: ncr.responsibleSubcontractorId,
+        ncrId: ncr.id,
+        type: 'ncr_rectification_rejected',
+        title: 'Rectification Rejected',
+        message: `${reviewerName} has rejected the rectification for ${ncr.ncrNumber}. Feedback: ${feedback.substring(0, 100)}${feedback.length > 100 ? '...' : ''}`,
       });
     }
 

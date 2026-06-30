@@ -33,9 +33,9 @@ function expectProjectRouteGuard(
   expect(appSource).toMatch(
     new RegExp(
       `<Route\\s+path="${escapeRegExp(routePath)}"\\s+element=\\{\\s*` +
-        `<RoleProtectedRoute\\s+allowedRoles=\\{${escapeRegExp(allowedRolesExpression)}\\}${routeGuardPropsPattern}>\\s*` +
+        `<ProjectProtectedRoute\\s+allowedRoles=\\{${escapeRegExp(allowedRolesExpression)}\\}${routeGuardPropsPattern}>\\s*` +
         `<${pageComponent}\\s*/>\\s*` +
-        `</RoleProtectedRoute>\\s*` +
+        `</ProjectProtectedRoute>\\s*` +
         `\\}\\s*/>`,
       's',
     ),
@@ -1018,21 +1018,13 @@ test.describe('production readiness guardrails', () => {
       '/projects/:projectId/hold-points',
       'HoldPointsPage',
       'INTERNAL_ROLES',
-      '\\s+allowProjectScopedRole',
     );
-    expectProjectRouteGuard(
-      appSource,
-      '/projects/:projectId/ncr',
-      'NCRPage',
-      'INTERNAL_ROLES',
-      '\\s+allowProjectScopedRole',
-    );
+    expectProjectRouteGuard(appSource, '/projects/:projectId/ncr', 'NCRPage', 'INTERNAL_ROLES');
     expectProjectRouteGuard(
       appSource,
       '/projects/:projectId/tests',
       'TestResultsPage',
       'INTERNAL_ROLES',
-      '\\s+allowProjectScopedRole',
     );
     expect(holdPointsPage).toContain(
       '/projects/${encodeURIComponent(projectId)}/hold-points?hp=${encodeURIComponent(hpId)}',
@@ -1062,24 +1054,22 @@ test.describe('production readiness guardrails', () => {
       ['/projects/:projectId/tests', 'TestResultsPage'],
       ['/projects/:projectId/ncr', 'NCRPage'],
       ['/projects/:projectId/diary', 'DailyDiaryPage'],
-      ['/projects/:projectId/documents', 'DocumentsPage'],
     ] as const;
 
     for (const [routePath, pageComponent] of internalProjectRoutes) {
-      expectProjectRouteGuard(
-        appSource,
-        routePath,
-        pageComponent,
-        'INTERNAL_ROLES',
-        '\\s+allowProjectScopedRole',
-      );
+      expectProjectRouteGuard(appSource, routePath, pageComponent, 'INTERNAL_ROLES');
     }
+    expectProjectRouteGuard(
+      appSource,
+      '/projects/:projectId/documents',
+      'DocumentsPage',
+      'PROJECT_WORKSPACE_ROLES',
+    );
     expectProjectRouteGuard(
       appSource,
       '/projects/:projectId/dockets',
       'DocketApprovalsPage',
       'INTERNAL_ROLES',
-      '\\s+allowProjectScopedRole',
     );
   });
 
@@ -1242,7 +1232,8 @@ test.describe('production readiness guardrails', () => {
       'utf8',
     );
 
-    expect(notificationsDelivery).toContain("timing === 'digest' && preferences.dailyDigest");
+    expect(notificationsDelivery).toContain("timing === 'digest' && !preferences.dailyDigest");
+    expect(notificationsDelivery).toContain("timing === 'digest'");
     expect(notificationJobs).toContain('processDueNotificationDigests');
     expect(notificationJobs).toContain('sendDailyDigestEmail');
     expect(notificationJobs).toContain('NOTIFICATION_DIGEST_TIME_OF_DAY');
@@ -2100,6 +2091,9 @@ test.describe('production readiness guardrails', () => {
       '/backend/src/lib/fetchWithTimeout.ts',
       '/backend/src/routes/webhooks.ts',
       '/backend/src/routes/webhooks/delivery.ts',
+      // Webhook deliveryRequest receives the AbortSignal created in
+      // delivery.ts; production delivery uses the pinned Node transport path.
+      '/backend/src/routes/webhooks/deliveryRequest.ts',
     ];
     const rawFetchOffenders: string[] = [];
 
@@ -2475,6 +2469,8 @@ test.describe('production readiness guardrails', () => {
     expect(cookieConsent).toContain('function readStoredConsent');
     expect(cookieConsent).toContain('function hasCurrentConsent');
     expect(cookieConsent).toContain('setConsent(hasCurrentConsent(storedConsent)');
+    expect(cookieConsent).toContain('z-40');
+    expect(cookieConsent).not.toContain('z-50 bg-card');
     expect(cookieConsent).not.toContain('setConsent(JSON.parse(consentData))');
     expect(cookieConsent).not.toContain('localStorage.getItem(CONSENT_KEY)');
     expect(cookieConsent).not.toContain('localStorage.setItem(CONSENT_KEY');
@@ -2632,7 +2628,7 @@ test.describe('production readiness guardrails', () => {
     expect(acceptInviteSource).toContain('encodeURIComponent(invitationId)');
     expect(acceptInviteSource).toContain('readOnly={!!invitation.primaryContactEmail}');
     expect(acceptInviteSource).toContain('aria-readonly={!!invitation.primaryContactEmail}');
-    expect(acceptInviteSource).toContain('await setToken(result.token)');
+    expect(acceptInviteSource).toContain('await setToken(result.token, result.user)');
     expect(acceptInviteSource).not.toContain('disabled={!!invitation.primaryContactEmail}');
     expect(acceptInviteSource).not.toContain("window.location.href = '/subcontractor-portal'");
   });

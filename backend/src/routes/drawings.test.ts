@@ -6,6 +6,7 @@ import fs from 'fs';
 import { authRouter } from './auth.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
+import { AuditAction, parseAuditLogChanges } from '../lib/auditLog.js';
 
 vi.mock('../lib/supabase.js', async () => {
   const actual = await vi.importActual<typeof import('../lib/supabase.js')>('../lib/supabase.js');
@@ -157,6 +158,7 @@ describe('Drawings API', () => {
     // Cleanup
     await prisma.drawing.deleteMany({ where: { projectId } });
     await prisma.document.deleteMany({ where: { projectId } });
+    await prisma.auditLog.deleteMany({ where: { projectId } });
     await prisma.projectUser.deleteMany({ where: { projectId } });
     await prisma.project.delete({ where: { id: projectId } }).catch(() => {});
     await prisma.emailVerificationToken.deleteMany({ where: { userId } });
@@ -914,6 +916,7 @@ describe('Drawings API', () => {
 
     it('should update supersededById', async () => {
       // Create a new drawing to supersede the old one
+      const targetRevision = `SUPERSEDE-${Date.now()}`;
       const doc2 = await prisma.document.create({
         data: {
           projectId,
@@ -930,8 +933,8 @@ describe('Drawings API', () => {
         data: {
           projectId,
           documentId: doc2.id,
-          drawingNumber: 'DRW-SUPERSEDE-TEST',
-          revision: 'B',
+          drawingNumber: 'DRW-001',
+          revision: targetRevision,
           status: 'for_construction',
         },
       });
@@ -949,6 +952,104 @@ describe('Drawings API', () => {
       // Cleanup
       await prisma.drawing.delete({ where: { id: drawing2.id } });
       await prisma.document.delete({ where: { id: doc2.id } });
+    });
+
+    it('should reject supersededById for a different drawing number', async () => {
+      const doc2 = await prisma.document.create({
+        data: {
+          projectId,
+          documentType: 'drawing',
+          filename: 'unrelated-drawing.pdf',
+          fileUrl: '/uploads/drawings/unrelated-drawing.pdf',
+          fileSize: 2048,
+          mimeType: 'application/pdf',
+          uploadedById: userId,
+        },
+      });
+
+      const drawing2 = await prisma.drawing.create({
+        data: {
+          projectId,
+          documentId: doc2.id,
+          drawingNumber: 'DRW-UNRELATED',
+          revision: 'B',
+          status: 'for_construction',
+        },
+      });
+
+      const res = await request(app)
+        .patch(`/api/drawings/${drawingId}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          supersededById: drawing2.id,
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toContain('same drawing number');
+
+      await prisma.drawing.delete({ where: { id: drawing2.id } });
+      await prisma.document.delete({ where: { id: doc2.id } });
+    });
+
+    it('should reject supersededById that points to an already superseded revision', async () => {
+      const revisionSuffix = Date.now();
+      const docs = await Promise.all([
+        prisma.document.create({
+          data: {
+            projectId,
+            documentType: 'drawing',
+            filename: 'superseded-middle.pdf',
+            fileUrl: '/uploads/drawings/superseded-middle.pdf',
+            fileSize: 2048,
+            mimeType: 'application/pdf',
+            uploadedById: userId,
+          },
+        }),
+        prisma.document.create({
+          data: {
+            projectId,
+            documentType: 'drawing',
+            filename: 'superseded-latest.pdf',
+            fileUrl: '/uploads/drawings/superseded-latest.pdf',
+            fileSize: 2048,
+            mimeType: 'application/pdf',
+            uploadedById: userId,
+          },
+        }),
+      ]);
+
+      const latest = await prisma.drawing.create({
+        data: {
+          projectId,
+          documentId: docs[1].id,
+          drawingNumber: 'DRW-001',
+          revision: `CURRENT-${revisionSuffix}`,
+          status: 'for_construction',
+        },
+      });
+      const superseded = await prisma.drawing.create({
+        data: {
+          projectId,
+          documentId: docs[0].id,
+          drawingNumber: 'DRW-001',
+          revision: `OLD-${revisionSuffix}`,
+          status: 'for_construction',
+          supersededById: latest.id,
+        },
+      });
+
+      const res = await request(app)
+        .patch(`/api/drawings/${drawingId}`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({
+          supersededById: superseded.id,
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toContain('current drawing revision');
+
+      await prisma.drawing.deleteMany({ where: { id: { in: [superseded.id, latest.id] } } });
+      await prisma.document.deleteMany({ where: { id: { in: docs.map((doc) => doc.id) } } });
     });
 
     it('should reject supersededById from another project', async () => {
@@ -1037,6 +1138,23 @@ describe('Drawings API', () => {
         .set('Authorization', `Bearer ${authToken}`);
 
       expect(res.status).toBe(204);
+
+      const auditLog = await prisma.auditLog.findFirst({
+        where: {
+          projectId,
+          userId,
+          entityType: 'drawing',
+          entityId: deleteDrawingId,
+          action: AuditAction.DRAWING_DELETED,
+        },
+      });
+      expect(auditLog).not.toBeNull();
+      const changes = parseAuditLogChanges(auditLog?.changes ?? null) as Record<string, unknown>;
+      expect(changes).toMatchObject({
+        drawingNumber: 'DRW-DELETE',
+        filename: 'to-delete.pdf',
+        storageKind: 'local',
+      });
     });
 
     it('should return 404 for non-existent drawing', async () => {

@@ -6,6 +6,7 @@
  */
 
 export { ShellGuard } from './ShellGuard';
+export { ShellRouteGuard } from './ShellRouteGuard';
 export { SubbieShellGuard } from './SubbieShellGuard';
 export {
   useShellV2Enabled,

@@ -10,7 +10,10 @@ import {
   deriveLotReadinessLine,
   deriveLotShellMeta,
   firstIncompleteIndex,
+  formatItpFinishedCopy,
+  formatItpOutcomeSummary,
   holdPointGateDecision,
+  isItpItemActionable,
   isItpItemResolved,
   itpCompletionDisposition,
   itpHubSummary,
@@ -18,6 +21,7 @@ import {
   runItemOrder,
   runProgress,
   sortLotsForShell,
+  type ItpHubSummary,
   type LotShellMeta,
 } from '../lotsShellState';
 import type { ITPChecklistItem, ITPCompletion, ITPInstance } from '@/pages/lots/types';
@@ -66,6 +70,22 @@ function makeCompletion(overrides: Partial<ITPCompletion> = {}): ITPCompletion {
     verifiedAt: null,
     verifiedBy: null,
     attachments: [],
+    ...overrides,
+  };
+}
+
+function makeSummary(overrides: Partial<ItpHubSummary> = {}): ItpHubSummary {
+  return {
+    total: 0,
+    resolved: 0,
+    accepted: 0,
+    completed: 0,
+    notApplicable: 0,
+    failed: 0,
+    pendingReview: 0,
+    rejected: 0,
+    pending: 0,
+    due: 0,
     ...overrides,
   };
 }
@@ -188,8 +208,35 @@ describe('itpCompletionDisposition / isItpItemResolved', () => {
     expect(isItpItemResolved(makeCompletion({ isNotApplicable: true }))).toBe(true);
     expect(isItpItemResolved(makeCompletion({ isFailed: true }))).toBe(true);
   });
+  it('N/A beats completed when backend returns both flags', () => {
+    const completion = makeCompletion({ isCompleted: true, isNotApplicable: true });
+    expect(itpCompletionDisposition(completion)).toBe('na');
+    const p = runProgress([makeItem({ id: 'item-1' })], [completion], 0);
+    expect(p.completed).toBe(0);
+    expect(p.notApplicable).toBe(1);
+    expect(p.accepted).toBe(1);
+  });
   it('a bare completion with no flags is pending', () => {
     expect(isItpItemResolved(makeCompletion())).toBe(false);
+  });
+  it('pending-verification and rejected submissions are not resolved', () => {
+    const pendingReview = makeCompletion({
+      isCompleted: true,
+      isPendingVerification: true,
+      verificationStatus: 'pending_verification',
+    });
+    const rejected = makeCompletion({
+      isCompleted: true,
+      isRejected: true,
+      verificationStatus: 'rejected',
+    });
+
+    expect(itpCompletionDisposition(pendingReview)).toBe('review');
+    expect(isItpItemResolved(pendingReview)).toBe(false);
+    expect(isItpItemActionable(pendingReview)).toBe(false);
+    expect(itpCompletionDisposition(rejected)).toBe('rejected');
+    expect(isItpItemResolved(rejected)).toBe(false);
+    expect(isItpItemActionable(rejected)).toBe(true);
   });
 });
 
@@ -231,6 +278,29 @@ describe('firstIncompleteIndex', () => {
     const completions = [makeCompletion({ checklistItemId: 'a', isCompleted: true })];
     expect(firstIncompleteIndex(items, completions)).toBe(1);
   });
+  it('skips an item awaiting verification when actionable work remains', () => {
+    const completions = [
+      makeCompletion({
+        checklistItemId: 'a',
+        isCompleted: true,
+        verificationStatus: 'pending_verification',
+      }),
+      makeCompletion({ checklistItemId: 'b', isCompleted: true }),
+    ];
+    expect(firstIncompleteIndex(items, completions)).toBe(2);
+  });
+  it('lands on an item awaiting verification when no actionable work remains', () => {
+    const completions = [
+      makeCompletion({
+        checklistItemId: 'a',
+        isCompleted: true,
+        verificationStatus: 'pending_verification',
+      }),
+      makeCompletion({ checklistItemId: 'b', isCompleted: true }),
+      makeCompletion({ checklistItemId: 'c', isCompleted: true }),
+    ];
+    expect(firstIncompleteIndex(items, completions)).toBe(0);
+  });
   it('returns -1 when all resolved', () => {
     const completions = items.map((i) =>
       makeCompletion({ checklistItemId: i.id, isCompleted: true }),
@@ -256,6 +326,28 @@ describe('advanceToNextIncomplete', () => {
     // From index 2 (just-resolved c), wrap to a (0).
     expect(advanceToNextIncomplete(items, completions, 2)).toBe(0);
   });
+  it('skips pending-review rows while actionable work remains', () => {
+    const completions = [
+      makeCompletion({
+        checklistItemId: 'b',
+        isCompleted: true,
+        verificationStatus: 'pending_verification',
+      }),
+    ];
+    expect(advanceToNextIncomplete(items, completions, 0)).toBe(2);
+  });
+  it('returns pending-review rows when they are the only unresolved work left', () => {
+    const completions = [
+      makeCompletion({ checklistItemId: 'a', isCompleted: true }),
+      makeCompletion({
+        checklistItemId: 'b',
+        isCompleted: true,
+        verificationStatus: 'pending_verification',
+      }),
+      makeCompletion({ checklistItemId: 'c', isCompleted: true }),
+    ];
+    expect(advanceToNextIncomplete(items, completions, 0)).toBe(1);
+  });
   it('returns -1 when everything is resolved', () => {
     const completions = items.map((i) =>
       makeCompletion({ checklistItemId: i.id, isCompleted: true }),
@@ -278,8 +370,26 @@ describe('runProgress', () => {
     );
     const p = runProgress(items, completions, 0);
     expect(p.resolved).toBe(3);
+    expect(p.accepted).toBe(3);
     expect(p.total).toBe(3);
     expect(p.allDone).toBe(true);
+  });
+  it('counts failed checks as resolved but not accepted', () => {
+    const completions = [
+      makeCompletion({ checklistItemId: 'a', isCompleted: true }),
+      makeCompletion({ checklistItemId: 'b', isFailed: true }),
+      makeCompletion({ checklistItemId: 'c', isNotApplicable: true }),
+    ];
+    const p = runProgress(items, completions, 0);
+    expect(p.resolved).toBe(3);
+    expect(p.accepted).toBe(2);
+    expect(p.failed).toBe(1);
+    expect(p.allDone).toBe(true);
+    expect(formatItpFinishedCopy(p)).toMatchObject({
+      eyebrow: 'CHECKS REVIEWED',
+      title: 'Issues need attention',
+      hasFailures: true,
+    });
   });
   it('checkNumber is 1-based and clamped', () => {
     expect(runProgress(items, [], 0).checkNumber).toBe(1);
@@ -356,15 +466,23 @@ describe('itpHubSummary', () => {
   }
 
   it('null instance → totals 0, due passed through', () => {
-    expect(itpHubSummary(null, 4)).toEqual({ total: 0, resolved: 0, due: 4 });
+    expect(itpHubSummary(null, 4)).toEqual(makeSummary({ due: 4 }));
   });
-  it('counts resolved out of total', () => {
+  it('counts accepted and failed separately', () => {
     const items = [makeItem({ id: 'a' }), makeItem({ id: 'b' }), makeItem({ id: 'c' })];
-    const completions = [makeCompletion({ checklistItemId: 'a', isCompleted: true })];
+    const completions = [
+      makeCompletion({ checklistItemId: 'a', isCompleted: true }),
+      makeCompletion({ checklistItemId: 'b', isFailed: true }),
+    ];
     const s = itpHubSummary(makeInstance(items, completions), 1);
     expect(s.total).toBe(3);
-    expect(s.resolved).toBe(1);
+    expect(s.resolved).toBe(2);
+    expect(s.accepted).toBe(1);
+    expect(s.failed).toBe(1);
     expect(s.due).toBe(1);
+    expect(formatItpOutcomeSummary(s)).toBe(
+      '1 passed check · 1 failed check · 1 check not started',
+    );
   });
   it('clamps negative due to 0', () => {
     expect(itpHubSummary(null, -3).due).toBe(0);
@@ -375,29 +493,39 @@ describe('itpHubSummary', () => {
 
 describe('deriveLotReadinessLine', () => {
   it('no ITP → honest "no ITP" line, not conformable', () => {
-    const r = deriveLotReadinessLine({ total: 0, resolved: 0, due: 0 }, 0);
+    const r = deriveLotReadinessLine(makeSummary(), 0);
     expect(r.conformable).toBe(false);
     expect(r.summary).toMatch(/No ITP/i);
   });
   it('all done + no issues → conformable', () => {
-    const r = deriveLotReadinessLine({ total: 5, resolved: 5, due: 0 }, 0);
+    const r = deriveLotReadinessLine(makeSummary({ total: 5, resolved: 5, accepted: 5 }), 0);
     expect(r.conformable).toBe(true);
     expect(r.remainingItp).toBe(0);
     expect(r.summary).toMatch(/ready for the office/i);
   });
   it('remaining ITP keeps it non-conformable', () => {
-    const r = deriveLotReadinessLine({ total: 5, resolved: 3, due: 0 }, 0);
+    const r = deriveLotReadinessLine(makeSummary({ total: 5, resolved: 3, accepted: 3 }), 0);
     expect(r.conformable).toBe(false);
     expect(r.remainingItp).toBe(2);
     expect(r.summary).toMatch(/2 checks left/i);
   });
+  it('failed ITP items remain blockers even though the run is resolved', () => {
+    const r = deriveLotReadinessLine(
+      makeSummary({ total: 3, resolved: 3, accepted: 2, completed: 2, failed: 1 }),
+      1,
+    );
+    expect(r.conformable).toBe(false);
+    expect(r.remainingItp).toBe(1);
+    expect(r.summary).toMatch(/1 failed check to resolve/i);
+    expect(r.summary).toMatch(/1 open issue/i);
+  });
   it('open issues block conformance even when ITP is done', () => {
-    const r = deriveLotReadinessLine({ total: 5, resolved: 5, due: 0 }, 2);
+    const r = deriveLotReadinessLine(makeSummary({ total: 5, resolved: 5, accepted: 5 }), 2);
     expect(r.conformable).toBe(false);
     expect(r.summary).toMatch(/2 open issues/i);
   });
   it('singular grammar for 1 check / 1 issue', () => {
-    const r = deriveLotReadinessLine({ total: 5, resolved: 4, due: 0 }, 1);
+    const r = deriveLotReadinessLine(makeSummary({ total: 5, resolved: 4, accepted: 4 }), 1);
     expect(r.summary).toMatch(/1 check left/);
     expect(r.summary).toMatch(/1 open issue/);
     expect(r.summary).not.toMatch(/checks left/);

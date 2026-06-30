@@ -1,5 +1,9 @@
 import type { PrismaClient } from '@prisma/client';
-import { ALERT_ESCALATION_CONFIG, type AlertType } from '../notificationAlertConfig.js';
+import {
+  ALERT_ESCALATION_CONFIG,
+  getAlertEmailNotificationType,
+  type AlertType,
+} from '../notificationAlertConfig.js';
 import { buildProjectEntityLink, parsePositiveInteger } from './helpers.js';
 import type { NotificationTypeWithTiming } from './preferences.js';
 
@@ -150,6 +154,7 @@ export async function processAlertEscalations(
     }
 
     const linkUrl = buildProjectEntityLink(alert.entityType, alert.entityId, alert.projectId);
+    const emailNotificationType = getAlertEmailNotificationType(alert);
     const delivery = await deps.notifyUsers(
       escalationUsers,
       {
@@ -160,7 +165,7 @@ export async function processAlertEscalations(
         linkUrl,
         createdAt: now,
       },
-      'ncrAssigned',
+      emailNotificationType,
       {
         title: `ESCALATED ALERT: ${alert.title}`,
         message: `This alert has been escalated to you because it was not resolved within ${newLevel === 1 ? config.firstEscalationAfterHours : config.secondEscalationAfterHours} hours.\n\n${alert.message}`,

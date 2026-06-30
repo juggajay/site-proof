@@ -264,8 +264,12 @@ hit a real Supabase project.
   Railway backend env (Variables tab).
 - Confirm the `documents` bucket exists in the Supabase project and the
   service role key has storage access.
-- Confirm the `documents` bucket is private. `npm run preflight:production`
-  fails if the bucket is public.
+- Confirm the `documents` bucket is private and writable by the service role.
+  `npm run preflight:production` now fails if the bucket is public or if a
+  real upload/delete probe cannot complete.
+- Confirm `SUPABASE_URL` points at an active Supabase project. A stale or
+  deprovisioned project ref will surface as DNS/connection failures during
+  the upload probe.
 - Check Railway logs for the error returned by `@supabase/supabase-js`.
 
 ### File link returns 404 / 400 from a stored Supabase URL

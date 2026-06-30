@@ -171,6 +171,9 @@ export const AuditAction = {
   PROJECT_CREATED: 'project_created',
   PROJECT_UPDATED: 'project_updated',
   PROJECT_DELETED: 'project_deleted',
+  PROJECT_AREA_CREATED: 'project_area_created',
+  PROJECT_AREA_UPDATED: 'project_area_updated',
+  PROJECT_AREA_DELETED: 'project_area_deleted',
   LOT_CREATED: 'lot_created',
   LOT_UPDATED: 'lot_updated',
   LOT_STATUS_CHANGED: 'lot_status_changed',
@@ -207,6 +210,7 @@ export const AuditAction = {
   HP_PUBLIC_RELEASED: 'hp_public_released',
   // Documents
   DOCUMENT_DELETED: 'document_deleted',
+  DRAWING_DELETED: 'drawing_deleted',
   // Test Results
   TEST_RESULT_CREATED: 'test_result_created',
   TEST_RESULT_UPDATED: 'test_result_updated',
@@ -220,12 +224,17 @@ export const AuditAction = {
   CLAIM_DELETED: 'claim_deleted',
   CLAIM_CERTIFIED: 'claim_certified',
   CLAIM_PAYMENT_RECORDED: 'claim_payment_recorded',
+  // Scheduled reports
+  SCHEDULED_REPORT_CREATED: 'scheduled_report_created',
+  SCHEDULED_REPORT_UPDATED: 'scheduled_report_updated',
+  SCHEDULED_REPORT_DELETED: 'scheduled_report_deleted',
   // Subcontractors
   SUBCONTRACTOR_INVITED: 'subcontractor_invited',
   SUBCONTRACTOR_INVITATION_ACCEPTED: 'subcontractor_invitation_accepted',
   SUBCONTRACTOR_STATUS_CHANGED: 'subcontractor_status_changed',
   SUBCONTRACTOR_EMPLOYEE_RATE_APPROVED: 'subcontractor_employee_rate_approved',
   SUBCONTRACTOR_PLANT_RATE_APPROVED: 'subcontractor_plant_rate_approved',
+  SUBCONTRACTOR_PERMANENTLY_DELETED: 'subcontractor_permanently_deleted',
   SUBCONTRACTOR_PORTAL_ACCESS_CHANGED: 'subcontractor_portal_access_changed',
   SUBCONTRACTOR_PORTAL_ACCESS_UPDATED: 'subcontractor_portal_access_changed',
 } as const;

@@ -164,8 +164,10 @@ export function useShellItpRun(
     async (checklistItemId: string, notes: string | null): Promise<boolean> => {
       if (!instance || updatingRef.current === checklistItemId) return false;
       const existing = instance.completions.find((c) => c.checklistItemId === checklistItemId);
-      // Already completed → nothing to do (idempotent advance).
-      if (existing?.isCompleted) return true;
+      const wasRejected = existing?.isRejected || existing?.verificationStatus === 'rejected';
+      // Already completed → nothing to do (idempotent advance). Rejected rows are
+      // still actionable rework and must be resubmitted.
+      if (existing?.isCompleted && !wasRejected) return true;
 
       updatingRef.current = checklistItemId;
       setUpdatingItemId(checklistItemId);

@@ -37,6 +37,7 @@ import {
   requireCompanyAdmin,
 } from './access.js';
 import {
+  invitedMemberHasCredentials,
   shouldMarkInvitedMemberVerified,
   shouldNotifyAttachedCompanyMember,
 } from './memberInvitation.js';
@@ -111,6 +112,7 @@ companyMemberRoutes.post(
   '/leave',
   asyncHandler(async (req, res) => {
     const user = req.user!;
+    requireBrowserSession(req, 'Company leave');
 
     if (!user.companyId) {
       throw AppError.badRequest('You are not a member of any company');
@@ -162,22 +164,22 @@ companyMemberRoutes.post(
       // Remove company association from user using raw SQL to avoid Prisma quirks
       // Set role_in_company to 'member' (default) since it's NOT NULL
       await tx.$executeRaw`UPDATE users SET company_id = NULL, role_in_company = 'member' WHERE id = ${user.userId}`;
-    });
 
-    await createAuditLog({
-      userId: user.userId,
-      entityType: 'company',
-      entityId: companyId,
-      action: AuditAction.COMPANY_MEMBER_LEFT,
-      changes: {
-        memberUserId: user.userId,
-        previousRole,
-        removedProjectMembershipCount,
-        // Field name avoids the audit redactor's /api[-_]?key/i pattern — a count
-        // of revoked keys is not sensitive and must stay readable in the log.
-        revokedKeyCount: revokedApiKeyCount,
-      },
-      req,
+      await writeAuditLogInTransaction(tx, {
+        userId: user.userId,
+        entityType: 'company',
+        entityId: companyId,
+        action: AuditAction.COMPANY_MEMBER_LEFT,
+        changes: {
+          memberUserId: user.userId,
+          previousRole,
+          removedProjectMembershipCount,
+          // Field name avoids the audit redactor's /api[-_]?key/i pattern — a count
+          // of revoked keys is not sensitive and must stay readable in the log.
+          revokedKeyCount: revokedApiKeyCount,
+        },
+        req,
+      });
     });
 
     res.json(buildCompanyLeftResponse(new Date()));
@@ -189,6 +191,7 @@ companyMemberRoutes.get(
   '/members',
   asyncHandler(async (req, res) => {
     const user = req.user!;
+    requireBrowserSession(req, 'Company member list');
 
     if (!user.companyId) {
       throw AppError.notFound('Company');
@@ -248,6 +251,8 @@ companyMemberRoutes.post(
       previousMemberState,
       previousActiveSetupTokenIds,
       notifyAttachedMember,
+      roleChangeAuditedInTransaction,
+      revokedKeyCount,
     } = await prisma.$transaction(async (tx) => {
       const currentUser = await tx.user.findUnique({
         where: { id: user.userId },
@@ -372,50 +377,71 @@ companyMemberRoutes.post(
         }
       }
 
-      const member = existingUser
-        ? await tx.user.update({
-            where: { id: existingUser.id },
-            data: {
-              companyId,
-              roleInCompany,
-              // Existing credentialed accounts keep their own emailVerified
-              // state; only accounts onboarding via the setup link are verified.
-              ...(shouldMarkInvitedMemberVerified(existingUser)
-                ? { emailVerified: true, emailVerifiedAt: new Date() }
-                : {}),
-              ...(fullName !== undefined ? { fullName } : {}),
-            },
-            select: {
-              id: true,
-              email: true,
-              fullName: true,
-              roleInCompany: true,
-              passwordHash: true,
-              oauthProvider: true,
-              createdAt: true,
-              updatedAt: true,
-            },
-          })
-        : await tx.user.create({
-            data: {
-              email,
-              fullName: fullName ?? null,
-              companyId,
-              roleInCompany,
-              emailVerified: true,
-              emailVerifiedAt: new Date(),
-            },
-            select: {
-              id: true,
-              email: true,
-              fullName: true,
-              roleInCompany: true,
-              passwordHash: true,
-              oauthProvider: true,
-              createdAt: true,
-              updatedAt: true,
-            },
+      const memberSelect = {
+        id: true,
+        email: true,
+        fullName: true,
+        roleInCompany: true,
+        passwordHash: true,
+        oauthProvider: true,
+        createdAt: true,
+        updatedAt: true,
+      } satisfies Parameters<typeof tx.user.findUnique>[0]['select'];
+
+      let member;
+      let revokedKeyCount = 0;
+      if (existingUser) {
+        if (existingUser.companyId !== companyId) {
+          const revokedKeys = await tx.apiKey.updateMany({
+            where: { userId: existingUser.id, isActive: true },
+            data: { isActive: false },
           });
+          revokedKeyCount = revokedKeys.count;
+        }
+
+        const mayUpdateExistingFullName = !invitedMemberHasCredentials(existingUser);
+        const updated = await tx.user.updateMany({
+          where: {
+            id: existingUser.id,
+            OR: [{ companyId: null }, { companyId }],
+          },
+          data: {
+            companyId,
+            roleInCompany,
+            // Existing credentialed accounts keep their own emailVerified
+            // state; only accounts onboarding via the setup link are verified.
+            ...(shouldMarkInvitedMemberVerified(existingUser)
+              ? { emailVerified: true, emailVerifiedAt: new Date() }
+              : {}),
+            ...(fullName !== undefined && mayUpdateExistingFullName ? { fullName } : {}),
+          },
+        });
+
+        if (updated.count !== 1) {
+          throw AppError.conflict('This user already belongs to another company');
+        }
+
+        member = await tx.user.findUnique({
+          where: { id: existingUser.id },
+          select: memberSelect,
+        });
+
+        if (!member) {
+          throw AppError.notFound('Company member');
+        }
+      } else {
+        member = await tx.user.create({
+          data: {
+            email,
+            fullName: fullName ?? null,
+            companyId,
+            roleInCompany,
+            emailVerified: true,
+            emailVerifiedAt: new Date(),
+          },
+          select: memberSelect,
+        });
+      }
 
       const setupRequired = !member.passwordHash && !member.oauthProvider;
       if (setupRequired) {
@@ -437,6 +463,30 @@ companyMemberRoutes.post(
         });
       }
 
+      const roleChangedExistingCompanyMember =
+        previousMemberState?.companyId === companyId &&
+        previousMemberState.roleInCompany !== roleInCompany;
+
+      if (roleChangedExistingCompanyMember) {
+        await writeAuditLogInTransaction(tx, {
+          userId: user.userId,
+          entityType: 'user',
+          entityId: member.id,
+          action: AuditAction.USER_ROLE_CHANGED,
+          changes: {
+            memberId: member.id,
+            memberEmail: member.email,
+            companyId,
+            source: 'company_member_invite',
+            roleInCompany: {
+              from: previousMemberState.roleInCompany,
+              to: roleInCompany,
+            },
+          },
+          req,
+        });
+      }
+
       return {
         company,
         member,
@@ -445,6 +495,8 @@ companyMemberRoutes.post(
         previousMemberState,
         previousActiveSetupTokenIds,
         notifyAttachedMember: shouldNotifyAttachedCompanyMember(existingUser, companyId),
+        roleChangeAuditedInTransaction: roleChangedExistingCompanyMember,
+        revokedKeyCount,
       };
     });
 
@@ -509,20 +561,40 @@ companyMemberRoutes.post(
       }
     }
 
-    await createAuditLog({
-      userId: user.userId,
-      entityType: 'user',
-      entityId: member.id,
-      action: AuditAction.USER_INVITED,
-      changes: {
-        invitedUserId: member.id,
-        invitedUserEmail: member.email,
-        roleInCompany,
-        companyId,
-        status: setupRequired ? 'pending' : 'active',
-      },
-      req,
-    });
+    const roleChangedExistingCompanyMember =
+      previousMemberState?.companyId === companyId &&
+      previousMemberState.roleInCompany !== roleInCompany;
+
+    if (!roleChangeAuditedInTransaction) {
+      await createAuditLog({
+        userId: user.userId,
+        entityType: 'user',
+        entityId: member.id,
+        action: roleChangedExistingCompanyMember
+          ? AuditAction.USER_ROLE_CHANGED
+          : AuditAction.USER_INVITED,
+        changes: roleChangedExistingCompanyMember
+          ? {
+              memberId: member.id,
+              memberEmail: member.email,
+              companyId,
+              source: 'company_member_invite',
+              roleInCompany: {
+                from: previousMemberState.roleInCompany,
+                to: roleInCompany,
+              },
+            }
+          : {
+              invitedUserId: member.id,
+              invitedUserEmail: member.email,
+              roleInCompany,
+              companyId,
+              status: setupRequired ? 'pending' : 'active',
+              ...(revokedKeyCount > 0 ? { revokedKeyCount } : {}),
+            },
+        req,
+      });
+    }
 
     res.status(201).json(
       buildCompanyMemberInvitedResponse(member, {

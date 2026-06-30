@@ -142,6 +142,56 @@ describe('MobileITPChecklistSections', () => {
     expect(onQuickComplete).not.toHaveBeenCalled();
   });
 
+  it('shows rejected rows as rework and still allows quick resubmit', () => {
+    const onQuickComplete = vi.fn();
+
+    render(
+      <MobileITPItem
+        item={checklistItem}
+        status="rejected"
+        hasNotes={false}
+        hasPhotos={false}
+        photoCount={0}
+        isUpdating={false}
+        canComplete={true}
+        verificationReason="Photo evidence was blurry"
+        onTap={vi.fn()}
+        onQuickComplete={onQuickComplete}
+      />,
+    );
+
+    expect(screen.getByText('Rejected')).toBeVisible();
+    expect(screen.getByText('Photo evidence was blurry')).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button'));
+
+    expect(onQuickComplete).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows pending verification rows without allowing quick-complete churn', () => {
+    const onQuickComplete = vi.fn();
+
+    render(
+      <MobileITPItem
+        item={checklistItem}
+        status="review"
+        hasNotes={false}
+        hasPhotos={false}
+        photoCount={0}
+        isUpdating={false}
+        canComplete={true}
+        onTap={vi.fn()}
+        onQuickComplete={onQuickComplete}
+      />,
+    );
+
+    expect(screen.getByText('Awaiting verification')).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button'));
+
+    expect(onQuickComplete).not.toHaveBeenCalled();
+  });
+
   it('labels release-gated superintendent items and blocks quick-complete while release is required', () => {
     const onQuickComplete = vi.fn();
 

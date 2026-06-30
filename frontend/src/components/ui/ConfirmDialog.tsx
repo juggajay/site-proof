@@ -20,6 +20,7 @@ interface ConfirmDialogProps {
   cancelLabel?: string;
   variant?: 'default' | 'destructive';
   confirmDisabled?: boolean;
+  cancelDisabled?: boolean;
   onCancel: () => void;
   onConfirm: () => void;
 }
@@ -32,6 +33,7 @@ export function ConfirmDialog({
   cancelLabel = 'Cancel',
   variant = 'default',
   confirmDisabled = false,
+  cancelDisabled = false,
   onCancel,
   onConfirm,
 }: ConfirmDialogProps) {
@@ -39,7 +41,7 @@ export function ConfirmDialog({
     <AlertDialog
       open={open}
       onOpenChange={(nextOpen) => {
-        if (!nextOpen) onCancel();
+        if (!nextOpen && !cancelDisabled) onCancel();
       }}
     >
       <AlertDialogContent>
@@ -50,7 +52,7 @@ export function ConfirmDialog({
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>{cancelLabel}</AlertDialogCancel>
+          <AlertDialogCancel disabled={cancelDisabled}>{cancelLabel}</AlertDialogCancel>
           <AlertDialogAction
             className={cn(buttonVariants({ variant }))}
             disabled={confirmDisabled}

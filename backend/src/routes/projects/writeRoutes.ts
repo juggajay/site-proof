@@ -4,6 +4,7 @@ import { createAuditLog, AuditAction } from '../../lib/auditLog.js';
 import { Prisma } from '@prisma/client';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
+import { requireBrowserSession } from '../../middleware/browserSession.js';
 import { requireAuth } from '../../middleware/authMiddleware.js';
 import { buildProjectDeletedResponse, buildProjectDetailResponse } from './listDetailResponses.js';
 import { buildProjectCreatedResponse } from './costResponses.js';
@@ -222,6 +223,7 @@ export function createProjectWriteRouter({
     '/',
     asyncHandler(async (req, res) => {
       const user = req.user!;
+      requireBrowserSession(req, 'Project creation');
       const name = parseRequiredTrimmedString(req.body.name, 'Name', projectNameMaxLength);
       const projectNumber = parseOptionalTrimmedString(
         req.body.projectNumber,
@@ -328,6 +330,7 @@ export function createProjectWriteRouter({
     asyncHandler(async (req, res) => {
       const id = parseProjectRouteParam(req.params.id, 'id');
       const user = req.user!;
+      requireBrowserSession(req, 'Project settings update');
       if (isSubcontractorUser(user)) {
         throw AppError.forbidden('Access denied. Only project admins can update settings.');
       }
@@ -432,7 +435,7 @@ export function createProjectWriteRouter({
           ? Object.keys(req.body)
           : [];
       const isStatusOnlyUpdate = requestKeys.length === 1 && requestKeys[0] === 'status';
-      if (project.status === 'archived' && !isStatusOnlyUpdate) {
+      if (project.status === 'archived' && (!isStatusOnlyUpdate || status !== 'active')) {
         throw AppError.conflict(ARCHIVED_PROJECT_READ_ONLY_MESSAGE);
       }
 
@@ -551,6 +554,7 @@ export function createProjectWriteRouter({
       const id = parseProjectRouteParam(req.params.id, 'id');
       const { password } = req.body;
       const user = req.user!;
+      requireBrowserSession(req, 'Project deletion');
 
       // Password is required for deletion
       if (typeof password !== 'string' || password.length === 0) {

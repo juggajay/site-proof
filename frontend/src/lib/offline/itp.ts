@@ -253,15 +253,6 @@ function serverCompletionStatus(
   if (!serverCompletion) {
     return 'pending';
   }
-  if (serverCompletion.isCompleted) {
-    return 'completed';
-  }
-  if (serverCompletion.isNotApplicable) {
-    return 'na';
-  }
-  if (serverCompletion.isFailed) {
-    return 'failed';
-  }
   if (serverCompletion.status === 'completed') {
     return 'completed';
   }
@@ -270,6 +261,15 @@ function serverCompletionStatus(
   }
   if (serverCompletion.status === 'failed') {
     return 'failed';
+  }
+  if (serverCompletion.isFailed) {
+    return 'failed';
+  }
+  if (serverCompletion.isNotApplicable) {
+    return 'na';
+  }
+  if (serverCompletion.isCompleted) {
+    return 'completed';
   }
   return 'pending';
 }

@@ -98,6 +98,12 @@ export function SettingsPage() {
   const exportSuccessTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const deletingAccountRef = useRef(false);
   const leavingCompanyRef = useRef(false);
+  const isCompanyOwner = Boolean(
+    user?.companyId && (user.roleInCompany === 'owner' || user.role === 'owner'),
+  );
+  const companyOwnerExitBlockReason = isCompanyOwner
+    ? 'Transfer company ownership before leaving the company or deleting this account.'
+    : undefined;
 
   const showExportSuccess = useCallback(() => {
     if (exportSuccessTimeoutRef.current) {
@@ -168,6 +174,11 @@ export function SettingsPage() {
   const handleDeleteAccount = async () => {
     if (deletingAccountRef.current) return;
 
+    if (companyOwnerExitBlockReason) {
+      setDeleteError(companyOwnerExitBlockReason);
+      return;
+    }
+
     if (!emailMatchesConfirmation(deleteConfirmEmail, user?.email)) {
       setDeleteError('Type your account email exactly to confirm deletion');
       return;
@@ -220,6 +231,11 @@ export function SettingsPage() {
   // Handle leaving company
   const handleLeaveCompany = async () => {
     if (leavingCompanyRef.current) return;
+
+    if (companyOwnerExitBlockReason) {
+      setLeaveCompanyError(companyOwnerExitBlockReason);
+      return;
+    }
 
     leavingCompanyRef.current = true;
     setIsLeavingCompany(true);
@@ -283,6 +299,7 @@ export function SettingsPage() {
         exportError={exportError}
         onExportData={handleExportData}
         onDeleteAccountClick={() => setShowDeleteModal(true)}
+        deleteAccountBlockedReason={companyOwnerExitBlockReason}
       />
 
       {/* Company Membership Section - only show if user has a company */}
@@ -290,6 +307,7 @@ export function SettingsPage() {
         <CompanyMembershipSection
           companyName={user.companyName}
           onLeaveCompanyClick={() => setShowLeaveCompanyModal(true)}
+          leaveCompanyBlockedReason={companyOwnerExitBlockReason}
         />
       )}
 

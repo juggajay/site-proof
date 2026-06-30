@@ -61,6 +61,7 @@ import {
 // =============================================================================
 
 export const holdPointReadRouter = Router();
+const HOLD_POINT_REGISTER_ALL_LIMIT = 5000;
 
 // Get all hold points for a project
 holdPointReadRouter.get(
@@ -156,8 +157,14 @@ holdPointReadRouter.get(
     // item; persisted row reused when present, otherwise a virtual entry).
     const holdPoints = buildHoldPointListItems(lots);
 
-    // Apply pagination
-    const { page, limit } = parsePagination(req.query);
+    // Apply pagination. The office register needs the full list for client-side
+    // stats, filters, and deep links; `all=true` returns the same bounded register
+    // in one response so clients do not force this route to rebuild the full
+    // project graph once per page.
+    const returnAll = req.query.all === 'true';
+    const { page, limit } = returnAll
+      ? { page: 1, limit: HOLD_POINT_REGISTER_ALL_LIMIT }
+      : parsePagination(req.query);
     const total = holdPoints.length;
     const start = (page - 1) * limit;
     const paginatedHoldPoints = holdPoints.slice(start, start + limit);
@@ -346,6 +353,8 @@ holdPointReadRouter.get(
         scheduledDate: holdPoint.scheduledDate,
         releasedAt: holdPoint.releasedAt,
         releasedByName: holdPoint.releasedByName,
+        releasedByOrg: holdPoint.releasedByOrg,
+        releaseMethod: holdPoint.releaseMethod,
         releaseNotes: holdPoint.releaseNotes,
       },
       lot,
@@ -512,6 +521,8 @@ holdPointReadRouter.post(
         scheduledDate: null,
         releasedAt: null,
         releasedByName: null,
+        releasedByOrg: null,
+        releaseMethod: null,
         releaseNotes: null,
       },
       lot,
