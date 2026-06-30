@@ -25,6 +25,7 @@ export const TestResultsTab = React.memo(function TestResultsTab({
   const [testStartDate, setTestStartDate] = useState<string>('');
   const [testEndDate, setTestEndDate] = useState<string>('');
   const [selectedTestTypes, setSelectedTestTypes] = useState<string[]>([]);
+  const [knownTestTypes, setKnownTestTypes] = useState<string[]>([]);
   const generatedAt = report
     ? formatReportDateTime(report.generatedAt, dateFormat, timezone)
     : null;
@@ -41,10 +42,18 @@ export const TestResultsTab = React.memo(function TestResultsTab({
     onFiltersChange?.(testStartDate, testEndDate, selectedTestTypes);
   }, [onFiltersChange, testStartDate, testEndDate, selectedTestTypes]);
 
-  const availableTestTypes = useMemo(() => {
-    if (!report) return [];
-    return Object.keys(report.testTypeCounts);
+  useEffect(() => {
+    if (!report) return;
+    const reportTypes = Object.keys(report.testTypeCounts);
+    if (reportTypes.length === 0) return;
+
+    setKnownTestTypes((current) => Array.from(new Set([...current, ...reportTypes])));
   }, [report]);
+
+  const availableTestTypes = useMemo(() => {
+    const reportTypes = report ? Object.keys(report.testTypeCounts) : [];
+    return Array.from(new Set([...knownTestTypes, ...reportTypes, ...selectedTestTypes]));
+  }, [knownTestTypes, report, selectedTestTypes]);
 
   const handleToggleTestType = useCallback((testType: string) => {
     setSelectedTestTypes((prev) =>

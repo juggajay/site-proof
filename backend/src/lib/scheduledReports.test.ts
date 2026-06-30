@@ -1,4 +1,5 @@
 import fs from 'fs';
+import path from 'path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as email from './email.js';
 import { clearEmailQueue, getQueuedEmails } from './email.js';
@@ -827,6 +828,94 @@ describe('processDueScheduledReports', () => {
       expect(completedRun?.deliveries.every((delivery) => delivery.status === 'sent')).toBe(true);
     } finally {
       sendSpy.mockRestore();
+      await cleanupProject(project.id, company.id);
+    }
+  });
+
+  it('adopts a stored run artifact after metadata persistence failed', async () => {
+    const { company, project } = await createScheduledReportProject();
+    const retryNow = new Date('2026-05-10T09:30:00.000Z');
+    const generatedAt = new Date('2026-05-10T09:00:00.000Z');
+    const schedule = await createDueSchedule(project.id, new Date(retryNow.getTime() - 60_000), {
+      recipients: 'artifact-retry@example.com',
+    });
+    const run = await prisma.scheduledReportRun.create({
+      data: {
+        scheduleId: schedule.id,
+        projectId: project.id,
+        reportType: 'lot-status',
+        status: 'processing',
+        recipientCount: 1,
+        generatedAt,
+        deliveries: {
+          create: {
+            scheduleId: schedule.id,
+            projectId: project.id,
+            recipient: 'artifact-retry@example.com',
+            recipientKind: 'email',
+            status: 'failed',
+            retryable: true,
+            attemptCount: 1,
+            nextAttemptAt: new Date(retryNow.getTime() - 60_000),
+            errorReason: 'Metadata update failed after artifact upload',
+          },
+        },
+      },
+    });
+    const artifactFileUrl = `uploads/scheduled-reports/${project.id}/${schedule.id}/${run.id}.pdf`;
+    const artifactPath = resolveUploadPath(artifactFileUrl, 'scheduled-reports');
+    const storedPdf = Buffer.from('%PDF-1.4\npreviously committed scheduled artifact\n%%EOF');
+    const sendSpy = vi.spyOn(email, 'sendScheduledReportEmail').mockResolvedValue({
+      success: true,
+      messageId: 'artifact-retry-ok',
+      provider: 'mock',
+    });
+
+    try {
+      await fs.promises.mkdir(path.dirname(artifactPath), { recursive: true });
+      await fs.promises.writeFile(artifactPath, storedPdf);
+
+      await prisma.lot.create({
+        data: {
+          projectId: project.id,
+          lotNumber: 'LOT-LIVE-DATA-CHANGED',
+          lotType: 'roadworks',
+          status: 'conforming',
+          activityType: 'Changed live data',
+        },
+      });
+
+      const result = await processDueScheduledReports({
+        now: retryNow,
+        scheduleIds: [schedule.id],
+      });
+
+      expectSingleSentResult(result, 1);
+      expect(sendSpy).toHaveBeenCalledTimes(1);
+      const emailPayload = sendSpy.mock.calls[0]?.[0];
+      expect(emailPayload).toBeDefined();
+      if (!emailPayload) {
+        throw new Error('Scheduled report email was not sent');
+      }
+      const emailPdfBuffer = emailPayload.pdfBuffer;
+      expect(emailPdfBuffer).toBeDefined();
+      if (!emailPdfBuffer) {
+        throw new Error('Scheduled report email did not include a PDF buffer');
+      }
+      expect(Buffer.compare(emailPdfBuffer, storedPdf)).toBe(0);
+
+      const completedRun = await prisma.scheduledReportRun.findUnique({
+        where: { id: run.id },
+      });
+      expect(completedRun).toMatchObject({
+        status: 'sent',
+        artifactFileUrl,
+        artifactFileSize: storedPdf.length,
+        artifactSha256: calculateScheduledReportArtifactSha256(storedPdf),
+      });
+    } finally {
+      sendSpy.mockRestore();
+      await fs.promises.unlink(artifactPath).catch(() => {});
       await cleanupProject(project.id, company.id);
     }
   });

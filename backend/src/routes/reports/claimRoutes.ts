@@ -5,6 +5,7 @@ import { requireAuth } from '../../middleware/authMiddleware.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
 import { escapeCsvFormulaValue } from '../../lib/csvSafe.js';
+import { zonedDateString, zonedMonthString } from '../../lib/projectTimeZone.js';
 import { roundClaimAmountToCents } from '../claims/workflowValidation.js';
 
 const CLAIM_REPORT_STATUSES = [
@@ -264,7 +265,7 @@ export function createClaimReportRouter({
         { claimed: number; certified: number; paid: number; count: number }
       > = {};
       for (const claim of claims) {
-        const monthKey = claim.claimPeriodEnd.toISOString().slice(0, 7); // YYYY-MM
+        const monthKey = zonedMonthString(claim.claimPeriodEnd, projectTimeZone); // YYYY-MM
         if (!monthlyData[monthKey]) {
           monthlyData[monthKey] = { claimed: 0, certified: 0, paid: 0, count: 0 };
         }
@@ -296,13 +297,17 @@ export function createClaimReportRouter({
         return {
           id: claim.id,
           claimNumber: claim.claimNumber,
-          periodStart: claim.claimPeriodStart.toISOString().split('T')[0],
-          periodEnd: claim.claimPeriodEnd.toISOString().split('T')[0],
+          periodStart: zonedDateString(claim.claimPeriodStart, projectTimeZone),
+          periodEnd: zonedDateString(claim.claimPeriodEnd, projectTimeZone),
           status: claim.status,
           ...amounts,
-          submittedAt: claim.submittedAt?.toISOString().split('T')[0] || null,
-          certifiedAt: claim.certifiedAt?.toISOString().split('T')[0] || null,
-          paidAt: claim.paidAt?.toISOString().split('T')[0] || null,
+          submittedAt: claim.submittedAt
+            ? zonedDateString(claim.submittedAt, projectTimeZone)
+            : null,
+          certifiedAt: claim.certifiedAt
+            ? zonedDateString(claim.certifiedAt, projectTimeZone)
+            : null,
+          paidAt: claim.paidAt ? zonedDateString(claim.paidAt, projectTimeZone) : null,
           paymentReference: claim.paymentReference || null,
           lotCount: claim.claimedLots.length,
           lots: claim.claimedLots.map((cl) => ({
@@ -317,7 +322,7 @@ export function createClaimReportRouter({
                 email: claim.preparedBy.email,
               }
             : null,
-          preparedAt: claim.preparedAt?.toISOString().split('T')[0] || null,
+          preparedAt: claim.preparedAt ? zonedDateString(claim.preparedAt, projectTimeZone) : null,
         };
       });
 

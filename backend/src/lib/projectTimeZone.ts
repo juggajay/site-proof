@@ -129,3 +129,17 @@ export function zonedDateParts(
   const get = (type: string) => Number(parts.find((part) => part.type === type)?.value ?? '0');
   return { year: get('year'), month: get('month'), day: get('day') };
 }
+
+function padDatePart(value: number): string {
+  return String(value).padStart(2, '0');
+}
+
+export function zonedDateString(date: Date, timeZone: string): string {
+  const parts = zonedDateParts(date, timeZone);
+  return `${parts.year}-${padDatePart(parts.month)}-${padDatePart(parts.day)}`;
+}
+
+export function zonedMonthString(date: Date, timeZone: string): string {
+  const parts = zonedDateParts(date, timeZone);
+  return `${parts.year}-${padDatePart(parts.month)}`;
+}

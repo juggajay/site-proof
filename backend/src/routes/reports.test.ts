@@ -1689,6 +1689,29 @@ describe('Reports API - Claims Report', () => {
     await prisma.company.delete({ where: { id: companyId } }).catch(() => {});
   });
 
+  async function createUnlinkedReportClaim(data: {
+    claimNumber: number;
+    claimPeriodStart: Date;
+    claimPeriodEnd: Date;
+    status?: string;
+    preparedAt?: Date;
+    submittedAt?: Date;
+    certifiedAt?: Date;
+    paidAt?: Date;
+    certifiedAmount?: number;
+    paidAmount?: number;
+  }) {
+    return prisma.progressClaim.create({
+      data: {
+        projectId,
+        preparedById: userId,
+        totalClaimedAmount: 100,
+        status: 'submitted',
+        ...data,
+      },
+    });
+  }
+
   it('should require projectId parameter', async () => {
     const res = await request(app)
       .get('/api/reports/claims')
@@ -1791,27 +1814,15 @@ describe('Reports API - Claims Report', () => {
   });
 
   it('filters claim report date-only ranges in the project timezone', async () => {
-    const inLocalDay = await prisma.progressClaim.create({
-      data: {
-        projectId,
-        claimNumber: 9101,
-        claimPeriodStart: new Date('2026-04-01T00:00:00.000Z'),
-        claimPeriodEnd: new Date('2026-05-01T13:30:00.000Z'),
-        status: 'submitted',
-        preparedById: userId,
-        totalClaimedAmount: 100,
-      },
+    const inLocalDay = await createUnlinkedReportClaim({
+      claimNumber: 9101,
+      claimPeriodStart: new Date('2026-04-01T00:00:00.000Z'),
+      claimPeriodEnd: new Date('2026-05-01T13:30:00.000Z'),
     });
-    const nextLocalDay = await prisma.progressClaim.create({
-      data: {
-        projectId,
-        claimNumber: 9102,
-        claimPeriodStart: new Date('2026-04-01T00:00:00.000Z'),
-        claimPeriodEnd: new Date('2026-05-01T14:30:00.000Z'),
-        status: 'submitted',
-        preparedById: userId,
-        totalClaimedAmount: 100,
-      },
+    const nextLocalDay = await createUnlinkedReportClaim({
+      claimNumber: 9102,
+      claimPeriodStart: new Date('2026-04-01T00:00:00.000Z'),
+      claimPeriodEnd: new Date('2026-05-01T14:30:00.000Z'),
     });
 
     try {
@@ -1831,6 +1842,57 @@ describe('Reports API - Claims Report', () => {
       await prisma.progressClaim.deleteMany({
         where: { id: { in: [inLocalDay.id, nextLocalDay.id] } },
       });
+    }
+  });
+
+  it('formats claim report dates and month buckets in the project timezone', async () => {
+    const localMayClaim = await createUnlinkedReportClaim({
+      claimNumber: 9103,
+      claimPeriodStart: new Date('2026-04-30T14:10:00.000Z'),
+      claimPeriodEnd: new Date('2026-04-30T14:30:00.000Z'),
+      status: 'paid',
+      preparedAt: new Date('2026-04-30T15:00:00.000Z'),
+      submittedAt: new Date('2026-04-30T15:10:00.000Z'),
+      certifiedAt: new Date('2026-04-30T15:20:00.000Z'),
+      paidAt: new Date('2026-04-30T15:30:00.000Z'),
+      certifiedAmount: 100,
+      paidAmount: 100,
+    });
+
+    try {
+      await prisma.project.update({ where: { id: projectId }, data: { state: 'QLD' } });
+
+      const res = await request(app)
+        .get('/api/reports/claims')
+        .set('Authorization', `Bearer ${authToken}`)
+        .query({ projectId, startDate: '2026-05-01', endDate: '2026-05-01' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.claims).toHaveLength(1);
+      expect(res.body.claims[0]).toMatchObject({
+        claimNumber: 9103,
+        periodStart: '2026-05-01',
+        periodEnd: '2026-05-01',
+        preparedAt: '2026-05-01',
+        submittedAt: '2026-05-01',
+        certifiedAt: '2026-05-01',
+        paidAt: '2026-05-01',
+      });
+      expect(res.body.monthlyBreakdown).toEqual([
+        expect.objectContaining({ month: '2026-05', count: 1 }),
+      ]);
+      expect(res.body.exportData[0]).toMatchObject({
+        'Claim #': 9103,
+        'Period Start': '2026-05-01',
+        'Period End': '2026-05-01',
+        'Submitted Date': '2026-05-01',
+        'Certified Date': '2026-05-01',
+        'Paid Date': '2026-05-01',
+        'Prepared By': "'@Claims Reports User",
+      });
+    } finally {
+      await prisma.project.update({ where: { id: projectId }, data: { state: 'NSW' } });
+      await prisma.progressClaim.deleteMany({ where: { id: localMayClaim.id } });
     }
   });
 
@@ -2487,6 +2549,30 @@ describe('Reports API - Scheduled Reports', () => {
           lastFailureReason: 'Scheduled report recipients must contain valid email addresses',
         },
       });
+      const staleRun = await prisma.scheduledReportRun.create({
+        data: {
+          scheduleId: failedSchedule.id,
+          projectId,
+          reportType: 'lot-status',
+          status: 'partial_failed',
+          recipientCount: 1,
+          failedCount: 1,
+          generatedAt: new Date('2026-06-01T09:00:00.000Z'),
+          deliveries: {
+            create: {
+              scheduleId: failedSchedule.id,
+              projectId,
+              recipient: 'recovered@example.com',
+              recipientKind: 'email',
+              status: 'failed',
+              retryable: true,
+              attemptCount: 3,
+              nextAttemptAt: new Date('2026-06-01T09:15:00.000Z'),
+              errorReason: 'Provider rejected recipient',
+            },
+          },
+        },
+      });
 
       try {
         const res = await reactivateSchedule(authToken, failedSchedule.id);
@@ -2497,6 +2583,21 @@ describe('Reports API - Scheduled Reports', () => {
         expect(res.body.schedule.lastFailureAt).toBeNull();
         expect(res.body.schedule.lastFailureReason).toBeNull();
         expect(res.body.schedule.nextRunAt).toBeTruthy();
+
+        const cancelledRun = await prisma.scheduledReportRun.findUniqueOrThrow({
+          where: { id: staleRun.id },
+          include: { deliveries: true },
+        });
+        expect(cancelledRun.status).toBe('cancelled');
+        expect(cancelledRun.errorReason).toBe(
+          'Schedule configuration changed before retry completed',
+        );
+        expect(cancelledRun.deliveries[0]).toMatchObject({
+          status: 'cancelled',
+          retryable: false,
+          lockedUntil: null,
+          nextAttemptAt: null,
+        });
       } finally {
         await prisma.scheduledReport.delete({ where: { id: failedSchedule.id } }).catch(() => {});
       }

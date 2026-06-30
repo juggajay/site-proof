@@ -61,7 +61,7 @@ export const DiaryReportTab = React.memo(function DiaryReportTab({
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
       {/* Section Selection */}
-      <div className="bg-card border rounded-lg p-6">
+      <div className="bg-card border rounded-lg p-6 print:hidden">
         <h3 className="text-lg font-medium mb-4">Report Options</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Date Range */}
