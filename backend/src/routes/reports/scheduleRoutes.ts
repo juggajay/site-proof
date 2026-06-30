@@ -575,7 +575,8 @@ export function createScheduledReportRouter({
         dayOfWeek !== undefined ||
         dayOfMonth !== undefined ||
         timeOfDay !== undefined ||
-        recipients !== undefined;
+        recipients !== undefined ||
+        (isActive === true && existing.isActive === false);
       const shouldResetFailureState = shouldCancelIncompleteRuns || isActive === true;
 
       if (

@@ -28,6 +28,10 @@ export type ScheduledReportArtifactMetadata = {
   artifactCreatedAt: Date;
 };
 
+export type StoredScheduledReportArtifact = ScheduledReportArtifactMetadata & {
+  storedPdfBuffer?: Buffer;
+};
+
 export type ScheduledReportArtifactRecord = {
   id: string;
   scheduleId: string;
@@ -126,30 +130,22 @@ export function calculateScheduledReportArtifactSha256(pdfBuffer: Buffer): strin
   return crypto.createHash('sha256').update(pdfBuffer).digest('hex');
 }
 
-async function tryAdoptExistingSupabaseArtifact(
-  storagePath: string,
-  expectedSha256: string,
-): Promise<boolean> {
+async function loadExistingSupabaseArtifact(storagePath: string): Promise<Buffer | null> {
   const { data, error } = await getSupabaseClient()
     .storage.from(DOCUMENTS_BUCKET)
     .download(storagePath);
   if (error || !data) {
-    return false;
+    return null;
   }
 
-  const existingBuffer = Buffer.from(await data.arrayBuffer());
-  return calculateScheduledReportArtifactSha256(existingBuffer) === expectedSha256;
+  return Buffer.from(await data.arrayBuffer());
 }
 
-async function tryAdoptExistingLocalArtifact(
-  filePath: string,
-  expectedSha256: string,
-): Promise<boolean> {
+async function loadExistingLocalArtifact(filePath: string): Promise<Buffer | null> {
   try {
-    const existingBuffer = await fs.promises.readFile(filePath);
-    return calculateScheduledReportArtifactSha256(existingBuffer) === expectedSha256;
+    return await fs.promises.readFile(filePath);
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -160,22 +156,23 @@ export async function storeScheduledReportArtifact(params: {
   reportName: string;
   pdfBuffer: Buffer;
   now: Date;
-}): Promise<ScheduledReportArtifactMetadata> {
+}): Promise<StoredScheduledReportArtifact> {
   const storagePath = getScheduledReportArtifactStoragePath(
     params.projectId,
     params.scheduleId,
     params.runId,
   );
   const artifactFilename = normalizeArtifactFilename(`${params.reportName}.pdf`);
-  const artifactSha256 = calculateScheduledReportArtifactSha256(params.pdfBuffer);
-  const metadata = {
+  const buildMetadata = (
+    pdfBuffer: Buffer,
+  ): Omit<ScheduledReportArtifactMetadata, 'artifactFileUrl'> => ({
     artifactReportName: params.reportName,
     artifactFilename,
     artifactMimeType: SCHEDULED_REPORT_ARTIFACT_MIME_TYPE,
-    artifactFileSize: params.pdfBuffer.length,
-    artifactSha256,
+    artifactFileSize: pdfBuffer.length,
+    artifactSha256: calculateScheduledReportArtifactSha256(pdfBuffer),
     artifactCreatedAt: params.now,
-  };
+  });
 
   if (isSupabaseConfigured()) {
     const { error } = await getSupabaseClient()
@@ -186,10 +183,12 @@ export async function storeScheduledReportArtifact(params: {
       });
 
     if (error) {
-      if (await tryAdoptExistingSupabaseArtifact(storagePath, artifactSha256)) {
+      const existingBuffer = await loadExistingSupabaseArtifact(storagePath);
+      if (existingBuffer) {
         return {
-          ...metadata,
+          ...buildMetadata(existingBuffer),
           artifactFileUrl: getSupabaseStorageReference(DOCUMENTS_BUCKET, storagePath),
+          storedPdfBuffer: existingBuffer,
         };
       }
 
@@ -202,7 +201,7 @@ export async function storeScheduledReportArtifact(params: {
     }
 
     return {
-      ...metadata,
+      ...buildMetadata(params.pdfBuffer),
       artifactFileUrl: getSupabaseStorageReference(DOCUMENTS_BUCKET, storagePath),
     };
   }
@@ -214,20 +213,20 @@ export async function storeScheduledReportArtifact(params: {
   try {
     await fs.promises.writeFile(filePath, params.pdfBuffer, { flag: 'wx' });
   } catch (error) {
-    if (
-      typeof error === 'object' &&
-      error !== null &&
-      'code' in error &&
-      error.code === 'EEXIST' &&
-      (await tryAdoptExistingLocalArtifact(filePath, artifactSha256))
-    ) {
+    if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'EEXIST') {
+      const existingBuffer = await loadExistingLocalArtifact(filePath);
+      if (!existingBuffer) {
+        throw error;
+      }
+
       return {
-        ...metadata,
+        ...buildMetadata(existingBuffer),
         artifactFileUrl: getExpectedLocalArtifactPath(
           params.projectId,
           params.scheduleId,
           params.runId,
         ),
+        storedPdfBuffer: existingBuffer,
       };
     }
 
@@ -235,7 +234,7 @@ export async function storeScheduledReportArtifact(params: {
   }
 
   return {
-    ...metadata,
+    ...buildMetadata(params.pdfBuffer),
     artifactFileUrl: getExpectedLocalArtifactPath(
       params.projectId,
       params.scheduleId,

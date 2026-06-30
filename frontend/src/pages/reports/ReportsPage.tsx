@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
+import { flushSync } from 'react-dom';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { apiFetch, apiUrl } from '@/lib/api';
 import { Lock, Sparkles, Mail, Printer, RefreshCw } from 'lucide-react';
@@ -236,6 +237,7 @@ export function ReportsPage() {
   const [companyLogo, setCompanyLogo] = useState<string | null>(null);
   const [companyName, setCompanyName] = useState<string>('');
   const [reportFilterParams, setReportFilterParams] = useState<ReportFilterParams>({});
+  const [printRequestedAt, setPrintRequestedAt] = useState(() => new Date());
 
   // Schedule modal state
   const [showScheduleModal, setShowScheduleModal] = useState(false);
@@ -302,9 +304,18 @@ export function ReportsPage() {
     [activeReportGeneratedAt, dateFormat, timezone],
   );
   const printPrintedAt = useMemo(
-    () => formatReportDateTime(new Date(), dateFormat, timezone),
-    [dateFormat, timezone],
+    () => formatReportDateTime(printRequestedAt, dateFormat, timezone),
+    [dateFormat, printRequestedAt, timezone],
   );
+
+  const refreshPrintTimestamp = useCallback(() => {
+    setPrintRequestedAt(new Date());
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener('beforeprint', refreshPrintTimestamp);
+    return () => window.removeEventListener('beforeprint', refreshPrintTimestamp);
+  }, [refreshPrintTimestamp]);
 
   const clearReportState = useCallback((reportType?: ReportDataTab) => {
     if (!reportType || reportType === 'lot-status') {
@@ -558,6 +569,13 @@ export function ReportsPage() {
     setShowScheduleModal(true);
   }, [canManageScheduledReports, hasAdvancedAnalytics, setActiveTab, subscriptionTierLoaded]);
 
+  const handlePrintReport = useCallback(() => {
+    flushSync(() => {
+      setPrintRequestedAt(new Date());
+    });
+    window.print();
+  }, []);
+
   const handleCloseScheduleModal = useCallback(() => {
     setShowScheduleModal(false);
   }, []);
@@ -652,7 +670,7 @@ export function ReportsPage() {
             <button
               type="button"
               aria-label="Print / Save PDF"
-              onClick={() => window.print()}
+              onClick={handlePrintReport}
               className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-border px-2 py-2 text-sm font-medium hover:bg-muted/50 sm:px-4"
             >
               <Printer className="h-4 w-4" />

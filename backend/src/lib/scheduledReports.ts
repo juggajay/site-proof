@@ -53,6 +53,7 @@ const scheduledReportRunSelect = {
   projectId: true,
   reportType: true,
   status: true,
+  generatedAt: true,
   artifactFileUrl: true,
   artifactReportName: true,
   artifactFilename: true,
@@ -74,6 +75,7 @@ type ScheduledReportRunRecord = {
   projectId: string;
   reportType: string;
   status: string;
+  generatedAt: Date | null;
   artifactFileUrl: string | null;
   artifactReportName: string | null;
   artifactFilename: string | null;
@@ -608,11 +610,12 @@ async function ensureScheduledReportRunArtifact(
     };
   }
 
-  const document = await buildScheduledReportDocument(schedule, now, {
+  const generatedAt = run.generatedAt ?? now;
+  const document = await buildScheduledReportDocument(schedule, generatedAt, {
     viewReportUrl: getScheduledReportArtifactUrl(run.id),
   });
   const pdfBuffer = createTextPdf(document.lines);
-  const artifact = await storeScheduledReportArtifact({
+  const { storedPdfBuffer, ...artifact } = await storeScheduledReportArtifact({
     projectId: run.projectId,
     scheduleId: run.scheduleId,
     runId: run.id,
@@ -628,7 +631,7 @@ async function ensureScheduledReportRunArtifact(
 
   return {
     document,
-    pdfBuffer,
+    pdfBuffer: storedPdfBuffer ?? pdfBuffer,
   };
 }
 

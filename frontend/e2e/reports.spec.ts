@@ -103,33 +103,42 @@ function lotStatusReport() {
 }
 
 function testResultsReport(url: URL) {
+  const selectedTestTypes =
+    url.searchParams
+      .get('testTypes')
+      ?.split(',')
+      .map((type) => type.trim())
+      .filter(Boolean) ?? [];
+  const visibleTestTypes =
+    selectedTestTypes.length > 0 ? selectedTestTypes : ['Compaction', 'Concrete'];
+  const testTypeCounts = Object.fromEntries(visibleTestTypes.map((type) => [type, 1]));
+
   return {
     generatedAt: '2026-05-09T01:00:00.000Z',
     projectId: E2E_PROJECT_ID,
-    totalTests: 1,
+    totalTests: visibleTestTypes.length,
     passFailCounts: { pass: 1 },
-    testTypeCounts: { Compaction: 1, Concrete: 0 },
+    testTypeCounts,
     statusCounts: { verified: 1 },
-    tests: [
-      {
-        id: 'e2e-report-test-1',
-        testRequestNumber: `TR-${url.searchParams.get('startDate') || 'ALL'}`,
-        testType: url.searchParams.get('testTypes') || 'Compaction',
-        laboratoryName: 'E2E Lab',
-        laboratoryReportNumber: 'LAB-RPT-001',
-        sampleDate: '2026-05-01',
-        resultDate: '2026-05-02',
-        resultValue: 98,
-        resultUnit: '%',
-        specificationMin: 95,
-        specificationMax: null,
-        passFail: 'pass',
-        status: 'verified',
-        lotId: 'e2e-report-lot-1',
-      },
-    ],
+    tests: visibleTestTypes.map((testType, index) => ({
+      id: `e2e-report-test-${index + 1}`,
+      testRequestNumber:
+        index === 0 ? `TR-${url.searchParams.get('startDate') || 'ALL'}` : `TR-${testType}`,
+      testType,
+      laboratoryName: 'E2E Lab',
+      laboratoryReportNumber: `LAB-RPT-${String(index + 1).padStart(3, '0')}`,
+      sampleDate: '2026-05-01',
+      resultDate: '2026-05-02',
+      resultValue: 98,
+      resultUnit: '%',
+      specificationMin: 95,
+      specificationMax: null,
+      passFail: 'pass',
+      status: 'verified',
+      lotId: 'e2e-report-lot-1',
+    })),
     summary: {
-      pass: 1,
+      pass: visibleTestTypes.length,
       fail: 0,
       pending: 0,
       passRate: '100',
@@ -804,6 +813,33 @@ test.describe('Reports seeded analytics contract', () => {
     await expect(
       page.getByText('Recipients will no longer receive this report automatically.'),
     ).toBeVisible();
+  });
+
+  test('keeps test type filters available after a narrowed report and hides diary filters in print', async ({
+    page,
+  }) => {
+    const api = await mockReportsApi(page);
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/reports`);
+
+    await page.getByRole('tab', { name: 'Test Results' }).click();
+    await expect(page.getByRole('button', { name: 'Concrete' })).toBeVisible();
+    await page.getByRole('button', { name: 'Compaction' }).click();
+    await page.getByRole('button', { name: 'Generate Report' }).click();
+
+    await expect
+      .poll(() => api.getReportRequests())
+      .toContain('/api/reports/test?projectId=e2e-project&testTypes=Compaction&limit=500&page=1');
+    await expect(page.getByRole('button', { name: 'Compaction' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Concrete' })).toBeVisible();
+
+    await page.getByRole('tab', { name: 'Diary Report' }).click();
+    const diaryOptions = page.locator('.print\\:hidden').filter({ hasText: 'Sections to Include' });
+    await expect(diaryOptions).toBeVisible();
+
+    await page.emulateMedia({ media: 'print' });
+    await expect(diaryOptions).toBeHidden();
+    await expect(page.getByText('Weather Summary')).toBeVisible();
   });
 
   test('keeps the mobile reports header compact with visible actions', async ({ page }) => {
