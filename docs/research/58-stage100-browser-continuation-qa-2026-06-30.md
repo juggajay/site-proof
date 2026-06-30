@@ -113,13 +113,21 @@ NCR:
 
 - Current browser coverage exercises the register, filter, respond, QM approve,
   load retry, duplicate QM approve guard, and create deep link.
+- Follow-up coverage added in PR branch `qa/ncr-lifecycle-browser-coverage`:
+  - QM review accept flow from an investigating NCR into rectification
+  - client notification modal and payload for a major NCR
+  - major NCR close modal and payload after QM approval/client notification
+  - quieter responsible-party option mocks for the create-dialog path
+- Verification:
+  `npx playwright test e2e/ncr.spec.ts --project=chromium --reporter=list`
+  passed 5/5.
 - Thin or missing browser coverage remains for:
   - NCR detail GET and assignment PATCH
   - evidence list/delete
-  - QM review accept/revision flow
+  - QM review request-revision branch
   - rectification with evidence upload/link and submit-for-verification
   - reject rectification and resubmit
-  - notify client and close/concession
+  - close with concession
   - reopen
 - Reopen currently has a backend route but no visible frontend action, so this
   is a product/UI gap rather than just a missing browser test.
