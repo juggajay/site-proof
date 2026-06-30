@@ -48,6 +48,8 @@ async function mockSeededDocketsApi(page: Page, options: SeededDocketsApiOptions
   let approveRequest: unknown;
   let approveRequestCount = 0;
   let docketLoadCount = 0;
+  let projectRequestCount = 0;
+  let failNextProjectLookup = false;
 
   await page.route('**/api/**', async (route) => {
     const url = new URL(route.request().url());
@@ -90,6 +92,12 @@ async function mockSeededDocketsApi(page: Page, options: SeededDocketsApiOptions
     }
 
     if (url.pathname === `/api/projects/${E2E_PROJECT_ID}`) {
+      projectRequestCount += 1;
+      if (failNextProjectLookup) {
+        failNextProjectLookup = false;
+        await json({ message: 'Project metadata unavailable' }, 500);
+        return;
+      }
       await json({
         project: {
           id: E2E_PROJECT_ID,
@@ -167,6 +175,10 @@ async function mockSeededDocketsApi(page: Page, options: SeededDocketsApiOptions
     getApproveRequest: () => approveRequest,
     getApproveRequestCount: () => approveRequestCount,
     getDocketLoadCount: () => docketLoadCount,
+    getProjectRequestCount: () => projectRequestCount,
+    failNextProjectLookup: () => {
+      failNextProjectLookup = true;
+    },
   };
 }
 
@@ -381,6 +393,45 @@ test.describe('Dockets seeded approval contract', () => {
       /^dockets-e2e-highway-upgrade-\d{4}-\d{2}-\d{2}\.csv$/,
     );
     expect(download.suggestedFilename()).not.toContain(E2E_PROJECT_ID);
+    await download.delete();
+  });
+
+  test('downloads a docket PDF from the approvals table', async ({ page }) => {
+    await mockSeededDocketsApi(page);
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/dockets`);
+
+    const docketRow = page.getByRole('row').filter({ hasText: 'DKT-E2E-001' });
+    await expect(docketRow).toBeVisible();
+
+    const downloadPromise = page.waitForEvent('download');
+    await docketRow.getByRole('button', { name: 'Print docket' }).click();
+    const download = await downloadPromise;
+
+    expect(download.suggestedFilename()).toBe('Docket-DKT-E2E-001-pending_approval.pdf');
+    await expect(page.getByText('Docket PDF downloaded')).toBeVisible();
+    await download.delete();
+  });
+
+  test('still downloads a docket PDF when project metadata lookup fails during print', async ({
+    page,
+  }) => {
+    const api = await mockSeededDocketsApi(page);
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/dockets`);
+
+    const docketRow = page.getByRole('row').filter({ hasText: 'DKT-E2E-001' });
+    await expect(docketRow).toBeVisible();
+    const projectRequestsBeforePrint = api.getProjectRequestCount();
+    api.failNextProjectLookup();
+
+    const downloadPromise = page.waitForEvent('download');
+    await docketRow.getByRole('button', { name: 'Print docket' }).click();
+    const download = await downloadPromise;
+
+    expect(download.suggestedFilename()).toBe('Docket-DKT-E2E-001-pending_approval.pdf');
+    await expect(page.getByText('Docket PDF downloaded')).toBeVisible();
+    expect(api.getProjectRequestCount()).toBeGreaterThan(projectRequestsBeforePrint);
     await download.delete();
   });
 

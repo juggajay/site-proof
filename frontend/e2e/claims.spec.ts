@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { promises as fs } from 'node:fs';
 import { E2E_ADMIN_USER, E2E_PROJECT_ID, mockAuthenticatedUserState } from './helpers';
 
 const E2E_CLAIM_ID = 'e2e-claim';
@@ -13,6 +14,7 @@ type SeededClaimsApiOptions = {
   initialPaidAmount?: number;
   initialCertifiedAmount?: number | null;
   claimReadinessLots?: unknown[];
+  extraClaims?: Array<Record<string, unknown>>;
 };
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -170,6 +172,7 @@ async function mockSeededClaimsApi(page: Page, options: SeededClaimsApiOptions =
             certifiedAmount,
             buildCertificationReadBack(),
           ),
+          ...(options.extraClaims ?? []),
         ],
       });
       return;
@@ -520,6 +523,81 @@ test.describe('Claims seeded commercial contract', () => {
     });
     await expect(page.getByText('The claim has been marked as disputed.')).toBeVisible();
     await expect(claimRow.getByText('Disputed')).toBeVisible();
+  });
+
+  test('exports the claims register and chart CSVs with safe user-facing filenames', async ({
+    page,
+  }) => {
+    await mockSeededClaimsApi(page, {
+      extraClaims: [
+        {
+          ...buildClaim('paid'),
+          id: 'e2e-claim-paid',
+          claimNumber: 8,
+          periodStart: '2026-05-01',
+          periodEnd: '2026-05-31',
+          totalClaimedAmount: 60000,
+          certifiedAmount: 55000,
+          paidAmount: 55000,
+          lotCount: 2,
+          submittedAt: '2026-06-01T00:00:00.000Z',
+          paymentDueDate: '2026-06-29',
+        },
+      ],
+    });
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/claims`);
+
+    await expect(page.getByRole('row').filter({ hasText: 'Claim 7' })).toBeVisible();
+    await expect(page.getByRole('row').filter({ hasText: 'Claim 8' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Cumulative Claims Over Time' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Monthly Claim Breakdown' })).toBeVisible();
+    const cumulativeChart = page
+      .locator('.rounded-lg.border.bg-card.p-6')
+      .filter({ hasText: 'Cumulative Claims Over Time' });
+    const monthlyChart = page
+      .locator('.rounded-lg.border.bg-card.p-6')
+      .filter({ hasText: 'Monthly Claim Breakdown' });
+
+    const registerDownloadPromise = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Export CSV' }).click();
+    const registerDownload = await registerDownloadPromise;
+    expect(registerDownload.suggestedFilename()).toMatch(
+      /^progress-claims-e2e-highway-upgrade-\d{4}-\d{2}-\d{2}\.csv$/,
+    );
+    expect(registerDownload.suggestedFilename()).not.toContain(E2E_PROJECT_ID);
+    const registerPath = await registerDownload.path();
+    expect(registerPath).toBeTruthy();
+    const registerCsv = await fs.readFile(registerPath!, 'utf8');
+    expect(registerCsv).toContain('"Claim 7"');
+    expect(registerCsv).toContain('"Claim 8"');
+    await registerDownload.delete();
+
+    const cumulativeDownloadPromise = page.waitForEvent('download');
+    await cumulativeChart.getByRole('button', { name: 'Export Data' }).click();
+    const cumulativeDownload = await cumulativeDownloadPromise;
+    expect(cumulativeDownload.suggestedFilename()).toMatch(
+      /^cumulative-claims-\d{4}-\d{2}-\d{2}\.csv$/,
+    );
+    const cumulativePath = await cumulativeDownload.path();
+    expect(cumulativePath).toBeTruthy();
+    const cumulativeCsv = await fs.readFile(cumulativePath!, 'utf8');
+    expect(cumulativeCsv).toContain('"Name","Claimed","Certified","Paid"');
+    expect(cumulativeCsv).toContain('"May 26"');
+    await cumulativeDownload.delete();
+
+    const monthlyDownloadPromise = page.waitForEvent('download');
+    await monthlyChart.getByRole('button', { name: 'Export Data' }).click();
+    const monthlyDownload = await monthlyDownloadPromise;
+    expect(monthlyDownload.suggestedFilename()).toMatch(
+      /^monthly-claims-breakdown-\d{4}-\d{2}-\d{2}\.csv$/,
+    );
+    const monthlyPath = await monthlyDownload.path();
+    expect(monthlyPath).toBeTruthy();
+    const monthlyCsv = await fs.readFile(monthlyPath!, 'utf8');
+    expect(monthlyCsv).toContain('"Name","Claimed","Certified","Paid"');
+    expect(monthlyCsv).toContain('"May 26"');
+    await monthlyDownload.delete();
   });
 
   test('shows a retryable load error instead of a false empty claims state', async ({ page }) => {
