@@ -4,6 +4,27 @@ import { savePdf } from './pdfSave';
 import { defaultHPPackageOptions } from './types';
 import type { HPEvidencePackageData, HPPackageOptions } from './types';
 
+function formatReleaseMethod(method: string): string {
+  return method.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function getReleaseDetailRows(data: HPEvidencePackageData['holdPoint']): string[] {
+  const rows: string[] = [];
+
+  if (data.releasedByName) {
+    const releasedBy = data.releasedByOrg
+      ? `${data.releasedByName}, ${data.releasedByOrg}`
+      : data.releasedByName;
+    rows.push(`Released By: ${releasedBy}`);
+  }
+
+  if (data.releaseMethod) {
+    rows.push(`Release Method: ${formatReleaseMethod(data.releaseMethod)}`);
+  }
+
+  return rows;
+}
+
 /**
  * Generate a PDF evidence package for a Hold Point release
  * @param data - The HP evidence package data
@@ -101,8 +122,8 @@ export async function generateHPEvidencePackagePDF(
     yPos += 6;
   }
 
-  if (data.holdPoint.releasedByName) {
-    doc.text(`Released By: ${data.holdPoint.releasedByName}`, margin, yPos);
+  for (const row of getReleaseDetailRows(data.holdPoint)) {
+    doc.text(row, margin, yPos);
     yPos += 6;
   }
 

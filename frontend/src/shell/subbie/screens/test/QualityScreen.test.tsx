@@ -153,12 +153,16 @@ describe('subbie shell QualityScreen', () => {
           status: 'released',
           releasedAt: '2026-06-09T00:00:00.000Z',
           releasedByName: 'Sarah M',
+          releasedByOrg: 'Council Superintendent',
+          releaseMethod: 'secure_link',
+          releaseRecipientEmail: 'sarah.super@example.com',
         },
       ],
     });
     renderScreen();
     expect(await screen.findByText('RELEASED')).toBeInTheDocument();
-    expect(screen.getByText(/Released by Sarah M/)).toBeInTheDocument();
+    expect(screen.getByText(/Released by Sarah M, Council Superintendent/)).toBeInTheDocument();
+    expect(screen.getByText(/Secure link .* sent to sarah.super@example.com/)).toBeInTheDocument();
   });
 
   it('renders a PASS test with mono value + requirement', async () => {

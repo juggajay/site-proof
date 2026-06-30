@@ -135,6 +135,8 @@ function buildPublicHoldPointReleasePayload(releaseToken: PublicHoldPointRelease
       scheduledTime: holdPoint.scheduledTime,
       releasedAt: holdPoint.releasedAt,
       releasedByName: holdPoint.releasedByName,
+      releasedByOrg: holdPoint.releasedByOrg,
+      releaseMethod: holdPoint.releaseMethod,
       releaseNotes: holdPoint.releaseNotes,
     },
     lot,

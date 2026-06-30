@@ -10,8 +10,7 @@
  * NEW PRESENTATION over EXISTING LOGIC. Reuses the SAME TanStack queries +
  * normalizers the classic portal pages use (cache shared, no double-fetch):
  *   - hold points: GET /api/holdpoints/project/:projectId?subcontractorView=true
- *     (queryKeys.portalHoldPoints). The classic page's `normalizeHoldPoint` is not
- *     exported, so it is replicated faithfully here (noted in the PR body).
+ *     (queryKeys.portalHoldPoints). Uses the classic portal's shared normalizer.
  *   - tests: GET /api/test-results?projectId=&subcontractorView=true
  *     (queryKeys.portalTestResults). `normalizeTestResult` likewise replicated.
  *
@@ -26,46 +25,16 @@ import { queryKeys } from '@/lib/queryKeys';
 import { useAuth } from '@/lib/auth';
 import { extractErrorMessage } from '@/lib/errorHandling';
 import { cn } from '@/lib/utils';
+import { getReleaseIdentityParts } from '@/pages/holdpoints/holdPointReleaseIdentity';
 import { buildPortalCompanyQuery } from '@/pages/subcontractor-portal/portalCompanyScope';
+import {
+  normalizeSubcontractorHoldPoint,
+  type ApiSubcontractorHoldPoint,
+  type SubcontractorHoldPoint,
+} from '@/pages/subcontractor-portal/subcontractorHoldPointData';
 import { useSubbieShellContext } from '../subbieShellContext';
 import { useModuleAccessRevoked } from '../useModuleAccessRevoked';
 import { ModuleAccessChangedNotice } from '../ModuleAccessChangedNotice';
-
-// ── Hold-point shapes (classic SubcontractorHoldPointsPage contract) ──────────
-
-interface HoldPoint {
-  id: string;
-  lotNumber: string;
-  description: string;
-  status: 'pending' | 'notified' | 'released' | 'rejected';
-  releasedAt?: string;
-  releasedBy?: { fullName: string };
-}
-
-interface ApiHoldPoint {
-  id: string;
-  lotId: string;
-  lotNumber: string;
-  description: string;
-  status: HoldPoint['status'];
-  notificationSentAt?: string | null;
-  scheduledDate?: string | null;
-  releasedAt?: string | null;
-  releasedByName?: string | null;
-  createdAt?: string | null;
-}
-
-// Faithful replica of the classic page's (un-exported) normalizeHoldPoint.
-function normalizeHoldPoint(holdPoint: ApiHoldPoint): HoldPoint {
-  return {
-    id: holdPoint.id,
-    lotNumber: holdPoint.lotNumber,
-    description: holdPoint.description,
-    status: holdPoint.status,
-    releasedAt: holdPoint.releasedAt || undefined,
-    releasedBy: holdPoint.releasedByName ? { fullName: holdPoint.releasedByName } : undefined,
-  };
-}
 
 // ── Test-result shapes (classic SubcontractorTestResultsPage contract) ────────
 
@@ -141,9 +110,14 @@ function SectionLabel({ children, count }: { children: React.ReactNode; count?: 
 
 // ── Hold-point card ───────────────────────────────────────────────────────────
 
-function HoldPointCard({ holdPoint }: { holdPoint: HoldPoint }) {
+function HoldPointCard({ holdPoint }: { holdPoint: SubcontractorHoldPoint }) {
   const released = holdPoint.status === 'released';
   const rejected = holdPoint.status === 'rejected';
+  const releaseIdentity = released ? getReleaseIdentityParts(holdPoint) : null;
+  const releaseLabel =
+    releaseIdentity?.primary && releaseIdentity.primary !== 'Release recorded'
+      ? `Released by ${releaseIdentity.primary}`
+      : 'Release recorded';
   // pending + notified → WAITING (mock); released / rejected distinct.
   const badge = released
     ? { label: 'RELEASED', cls: 'shell-badge-ok' }
@@ -155,9 +129,7 @@ function HoldPointCard({ holdPoint }: { holdPoint: HoldPoint }) {
 
   const meta =
     released && holdPoint.releasedAt
-      ? `Released${holdPoint.releasedBy ? ` by ${holdPoint.releasedBy.fullName}` : ''} · ${formatReleaseDate(
-          holdPoint.releasedAt,
-        )}`
+      ? `${releaseLabel} · ${formatReleaseDate(holdPoint.releasedAt)}`
       : rejected
         ? 'Released was rejected — check with the head contractor.'
         : "Waiting on release. Work past this point can't start yet.";
@@ -172,6 +144,11 @@ function HoldPointCard({ holdPoint }: { holdPoint: HoldPoint }) {
             {holdPoint.lotNumber ? ` — ${holdPoint.lotNumber}` : ''}
           </div>
           <div className="mt-[3px] text-[13px] leading-snug text-muted-foreground">{meta}</div>
+          {released && releaseIdentity?.secondary && (
+            <div className="mt-[2px] text-[12.5px] leading-snug text-muted-foreground">
+              {releaseIdentity.secondary}
+            </div>
+          )}
         </div>
         <span className={cn('shell-badge', badge.cls)}>{badge.label}</span>
       </div>
@@ -239,10 +216,10 @@ export function QualityScreen() {
     queryKey: queryKeys.portalHoldPoints(user?.id, projectId, subcontractorCompanyId),
     queryFn: async () => {
       const scopeQuery = buildPortalCompanyQuery({ subcontractorCompanyId });
-      const res = await apiFetch<{ holdPoints: ApiHoldPoint[] }>(
+      const res = await apiFetch<{ holdPoints: ApiSubcontractorHoldPoint[] }>(
         `/api/holdpoints/project/${encodedProjectId}${scopeQuery ? `${scopeQuery}&` : '?'}subcontractorView=true`,
       );
-      return (res.holdPoints || []).map(normalizeHoldPoint);
+      return (res.holdPoints || []).map(normalizeSubcontractorHoldPoint);
     },
     enabled: !!user?.id && !!projectId && holdsEnabled,
   });

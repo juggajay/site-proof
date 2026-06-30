@@ -11,6 +11,10 @@ import type {
   ITPCompletion,
 } from './types';
 
+function formatReleaseMethod(method: string): string {
+  return method.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
 // Format-specific configurations
 const FORMAT_CONFIGS: Record<
   ConformanceFormat,
@@ -432,11 +436,21 @@ export async function generateConformanceReportPDF(
       doc.text(`- ${hp.checklistItemDescription}`, margin, yPos);
       yPos += 5;
       const releasedDate = formatOptionalDateTime(hp.releasedAt);
-      const releasedBy = hp.releasedBy ? hp.releasedBy.fullName || hp.releasedBy.email : 'Unknown';
+      const releasedByName =
+        hp.releasedByName || (hp.releasedBy ? hp.releasedBy.fullName || hp.releasedBy.email : '');
+      const releasedBy = hp.releasedByOrg
+        ? `${releasedByName || 'Unknown'}, ${hp.releasedByOrg}`
+        : releasedByName || 'Unknown';
       doc.setFont('helvetica', 'italic');
       doc.text(`  Released: ${releasedDate} by ${releasedBy}`, margin + 5, yPos);
       doc.setFont('helvetica', 'normal');
       yPos += 6;
+      if (hp.releaseMethod) {
+        doc.setFont('helvetica', 'italic');
+        doc.text(`  Method: ${formatReleaseMethod(hp.releaseMethod)}`, margin + 5, yPos);
+        doc.setFont('helvetica', 'normal');
+        yPos += 6;
+      }
     });
   } else {
     doc.setFontSize(10);

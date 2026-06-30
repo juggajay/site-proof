@@ -15,6 +15,7 @@ import type { HPEvidencePackageData } from '@/lib/pdfGenerator';
 import { Button } from '@/components/ui/button';
 import { SignaturePad } from '@/components/ui/SignaturePad';
 import { formatStatusLabel } from '@/lib/statusLabels';
+import { getReleaseIdentityParts } from './holdPointReleaseIdentity';
 
 interface PublicReleaseResponse {
   evidencePackage: HPEvidencePackageData;
@@ -202,12 +203,18 @@ export function PublicHoldPointReleasePage() {
           itpChecklistItemId: evidencePackage.holdPoint.itpChecklistItemId,
           releasedAt: evidencePackage.holdPoint.releasedAt,
           releasedByName: evidencePackage.holdPoint.releasedByName,
-          releasedByOrg: null,
+          releasedByOrg: evidencePackage.holdPoint.releasedByOrg ?? null,
+          releaseMethod: evidencePackage.holdPoint.releaseMethod ?? null,
           releaseNotes: evidencePackage.holdPoint.releaseNotes,
         }
       : null);
   const canRelease =
     Boolean(data?.tokenInfo.canRelease) && currentStatus !== 'released' && !releaseResult;
+  const releasedIdentity = releasedHoldPoint ? getReleaseIdentityParts(releasedHoldPoint) : null;
+  const releasedIdentityLabel =
+    releasedIdentity?.primary && releasedIdentity.primary !== 'Release recorded'
+      ? `Released by ${releasedIdentity.primary}`
+      : 'Release recorded';
   const tokenRecipientName = data?.tokenInfo.recipientName?.trim() || '';
   const checklistStats = useMemo(() => {
     if (!evidencePackage) return null;
@@ -523,9 +530,11 @@ export function PublicHoldPointReleasePage() {
                 <h2 className="font-semibold">Hold Point Released</h2>
               </div>
               <p className="mt-3 text-sm text-muted-foreground">
-                Released by {releasedHoldPoint.releasedByName || releasedByName} at{' '}
-                {formatDateTime(releasedHoldPoint.releasedAt)}.
+                {releasedIdentityLabel} at {formatDateTime(releasedHoldPoint.releasedAt)}.
               </p>
+              {releasedIdentity?.secondary && (
+                <p className="mt-1 text-sm text-muted-foreground">{releasedIdentity.secondary}</p>
+              )}
               {releasedHoldPoint.releaseNotes && (
                 <p className="mt-2 text-sm text-muted-foreground">
                   {releasedHoldPoint.releaseNotes}

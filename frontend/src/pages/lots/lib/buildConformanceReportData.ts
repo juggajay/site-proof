@@ -8,6 +8,7 @@
  * type-only so this module never pulls the PDF generator into the bundle.
  */
 import type { ConformanceReportData } from '@/lib/pdfGenerator';
+import { isReleaseGatedChecklistItem } from '@/lib/itpReleaseGating';
 import type { ITPInstance, Lot } from '../types';
 
 export interface ConformanceReportSources {
@@ -16,6 +17,46 @@ export interface ConformanceReportSources {
   itpInstance: ITPInstance | null;
   testResults?: ConformanceReportData['testResults'];
   ncrs?: ConformanceReportData['ncrs'];
+}
+
+type HoldPointRelease = ConformanceReportData['holdPointReleases'][number];
+type ChecklistItem = NonNullable<ITPInstance['template']>['checklistItems'][number];
+type Completion = ITPInstance['completions'][number];
+
+function isVerifiedCompletionForItem(itemId: string) {
+  return (completion: Completion) => completion.checklistItemId === itemId && completion.isVerified;
+}
+
+function getReleaseTimestamp(completion: Completion): string {
+  const releaseTimestamp = completion.holdPointRelease?.releasedAt;
+  if (releaseTimestamp) return releaseTimestamp;
+  if (completion.verifiedAt) return completion.verifiedAt;
+  return completion.completedAt || '';
+}
+
+function getReleaseUser(completion: Completion): HoldPointRelease['releasedBy'] {
+  return completion.verifiedBy || completion.completedBy;
+}
+
+function buildHoldPointRelease(
+  item: ChecklistItem,
+  completions: Completion[],
+): HoldPointRelease | null {
+  const completion = completions.find(isVerifiedCompletionForItem(item.id));
+
+  if (!completion) {
+    return null;
+  }
+
+  const release = completion.holdPointRelease;
+  return {
+    checklistItemDescription: item.description,
+    releasedAt: getReleaseTimestamp(completion),
+    releasedBy: getReleaseUser(completion),
+    releasedByName: release?.releasedByName ?? null,
+    releasedByOrg: release?.releasedByOrg ?? null,
+    releaseMethod: release?.releaseMethod ?? null,
+  };
 }
 
 export function buildConformanceReportData({
@@ -35,25 +76,16 @@ export function buildConformanceReportData({
     });
   }
 
-  // Extract hold point releases (completions of hold_point items that are verified)
-  const holdPointReleases: ConformanceReportData['holdPointReleases'] = [];
-  if (itpInstance?.template?.checklistItems && itpInstance.completions) {
-    const holdPointItems = itpInstance.template.checklistItems.filter(
-      (item) => item.pointType === 'hold_point',
-    );
-    holdPointItems.forEach((item) => {
-      const completion = itpInstance.completions.find(
-        (c) => c.checklistItemId === item.id && c.isVerified,
-      );
-      if (completion) {
-        holdPointReleases.push({
-          checklistItemDescription: item.description,
-          releasedAt: completion.verifiedAt || completion.completedAt || '',
-          releasedBy: completion.verifiedBy || completion.completedBy,
-        });
-      }
-    });
-  }
+  // Extract hold point releases from release-gated ITP items that are verified.
+  // Public secure-link releases do not have a SiteProof user as completedBy /
+  // verifiedBy, so prefer the hold-point release attribution when present.
+  const holdPointReleases: ConformanceReportData['holdPointReleases'] =
+    itpInstance?.template?.checklistItems && itpInstance.completions
+      ? itpInstance.template.checklistItems
+          .filter(isReleaseGatedChecklistItem)
+          .map((item) => buildHoldPointRelease(item, itpInstance.completions))
+          .filter((release): release is HoldPointRelease => release !== null)
+      : [];
 
   // Prepare data for PDF
   return {
