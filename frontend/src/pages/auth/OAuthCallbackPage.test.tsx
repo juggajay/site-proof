@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderWithProviders, screen, waitFor } from '@/test/renderWithProviders';
+import { ApiError } from '@/lib/api';
 
 const mocks = vi.hoisted(() => ({
   apiFetch: vi.fn(),
@@ -72,5 +73,40 @@ describe('OAuthCallbackPage', () => {
       `/auth/oauth-callback?redirect=${encodeURIComponent(redirect)}`,
     );
     expect(mocks.navigate).toHaveBeenCalledWith(redirect, { replace: true });
+  });
+
+  it('shows provider callback errors without exchanging a code', async () => {
+    renderWithProviders(<OAuthCallbackPage />, {
+      initialEntries: ['/auth/oauth-callback?error=oauth_failed&provider=google'],
+    });
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Authentication failed: oauth_failed',
+    );
+    expect(mocks.apiFetch).not.toHaveBeenCalled();
+  });
+
+  it('shows missing-code errors without exchanging a code', async () => {
+    renderWithProviders(<OAuthCallbackPage />, {
+      initialEntries: ['/auth/oauth-callback?provider=google'],
+    });
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('No authentication code received');
+    expect(mocks.apiFetch).not.toHaveBeenCalled();
+  });
+
+  it('maps OAuth MFA exchange failures and scrubs the one-time code', async () => {
+    mocks.apiFetch.mockRejectedValue(
+      new ApiError(403, JSON.stringify({ error: { message: 'MFA verification required' } })),
+    );
+
+    renderWithProviders(<OAuthCallbackPage />, {
+      initialEntries: ['/auth/oauth-callback?code=oauth_once&provider=google'],
+    });
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'This account has two-factor authentication enabled',
+    );
+    expect(window.location.search).not.toContain('code=');
   });
 });

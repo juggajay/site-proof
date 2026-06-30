@@ -862,6 +862,37 @@ describe('Notifications API', () => {
     });
   });
 
+  describe('GET/DELETE /api/notifications/email-queue', () => {
+    it('should return and clear the email diagnostics queue outside production', async () => {
+      const listRes = await request(app)
+        .get('/api/notifications/email-queue')
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(listRes.status).toBe(200);
+      expect(listRes.body.emails).toBeDefined();
+      expect(Array.isArray(listRes.body.emails)).toBe(true);
+      expect(listRes.body.count).toBe(listRes.body.emails.length);
+
+      const clearRes = await request(app)
+        .delete('/api/notifications/email-queue')
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(clearRes.status).toBe(200);
+      expect(clearRes.body).toEqual({
+        success: true,
+        message: 'Email queue cleared',
+      });
+    });
+
+    it('should reject unauthorized email queue diagnostics', async () => {
+      const listRes = await request(app).get('/api/notifications/email-queue');
+      const clearRes = await request(app).delete('/api/notifications/email-queue');
+
+      expect(listRes.status).toBe(401);
+      expect(clearRes.status).toBe(401);
+    });
+  });
+
   describe('GET /api/notifications/digest-queue', () => {
     it('should return empty digest queue initially', async () => {
       const res = await request(app)
@@ -886,6 +917,12 @@ describe('Notifications API', () => {
 
       try {
         const requests = [
+          request(app)
+            .get('/api/notifications/email-queue')
+            .set('Authorization', `Bearer ${authToken}`),
+          request(app)
+            .delete('/api/notifications/email-queue')
+            .set('Authorization', `Bearer ${authToken}`),
           request(app)
             .get('/api/notifications/digest-queue')
             .set('Authorization', `Bearer ${authToken}`),
@@ -2088,6 +2125,67 @@ describe('Notifications API', () => {
 
       it('should reject unauthorized requests', async () => {
         const res = await request(app).get('/api/notifications/system-alerts/summary');
+
+        expect(res.status).toBe(401);
+      });
+    });
+
+    describe('POST /api/notifications/system-alerts/check', () => {
+      it('should run system alert checks for manageable projects', async () => {
+        const res = await request(app)
+          .post('/api/notifications/system-alerts/check')
+          .set('Authorization', `Bearer ${authToken}`)
+          .send({ projectId });
+
+        expect(res.status).toBe(200);
+        expect(res.body.success).toBe(true);
+        expect(res.body.projectsChecked).toBe(1);
+        expect(res.body.alertsGenerated).toBeDefined();
+        expect(res.body.summary).toBeDefined();
+        expect(Array.isArray(res.body.alerts)).toBe(true);
+      });
+
+      it('should reject non-admin project users from system alert checks', async () => {
+        const res = await request(app)
+          .post('/api/notifications/system-alerts/check')
+          .set('Authorization', `Bearer ${secondUserToken}`)
+          .send({ projectId });
+
+        expect(res.status).toBe(403);
+      });
+
+      it('should reject unauthorized system alert checks', async () => {
+        const res = await request(app)
+          .post('/api/notifications/system-alerts/check')
+          .send({ projectId });
+
+        expect(res.status).toBe(401);
+      });
+    });
+
+    describe('POST /api/notifications/alerts/check-escalations', () => {
+      it('should run escalation checks for notification admins', async () => {
+        const res = await request(app)
+          .post('/api/notifications/alerts/check-escalations')
+          .set('Authorization', `Bearer ${authToken}`);
+
+        expect(res.status).toBe(200);
+        expect(res.body.success).toBe(true);
+        expect(res.body.message).toContain('Escalation check complete');
+        expect(Array.isArray(res.body.escalatedAlerts)).toBe(true);
+        expect(res.body.totalActiveAlerts).toBeDefined();
+      });
+
+      it('should reject non-admin users from escalation checks', async () => {
+        const res = await request(app)
+          .post('/api/notifications/alerts/check-escalations')
+          .set('Authorization', `Bearer ${secondUserToken}`);
+
+        expect(res.status).toBe(403);
+      });
+
+      it('should reject unauthorized escalation checks', async () => {
+        const res = await request(app).post('/api/notifications/alerts/check-escalations');
 
         expect(res.status).toBe(401);
       });

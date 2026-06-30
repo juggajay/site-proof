@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, renderWithProviders, screen, waitFor } from '@/test/renderWithProviders';
+import userEvent from '@testing-library/user-event';
+import { MfaRequiredError } from '@/lib/authErrors';
 
 const mocks = vi.hoisted(() => ({
   apiFetch: vi.fn(),
@@ -116,5 +118,43 @@ describe('LoginPage authenticated redirect', () => {
     expect(screen.getByRole('status')).toHaveTextContent(
       /your account has been permanently deleted/i,
     );
+  });
+
+  it('keeps entered credentials and verifies the MFA challenge code', async () => {
+    const user = userEvent.setup();
+    const signedInUser = {
+      id: 'user-1',
+      email: 'owner@example.com',
+      role: 'owner',
+      roleInCompany: 'owner',
+      companyId: 'company-1',
+    };
+    mocks.signIn
+      .mockRejectedValueOnce(new MfaRequiredError('mfa-user-1'))
+      .mockResolvedValueOnce(signedInUser);
+
+    renderWithProviders(<LoginPage />, { initialEntries: ['/login?redirect=/dashboard'] });
+
+    await user.type(screen.getByLabelText(/^email$/i), 'owner@example.com');
+    await user.type(screen.getByLabelText(/^password$/i), 'StrongPass123!');
+    await user.click(screen.getByRole('button', { name: /^sign in$/i }));
+
+    await screen.findByRole('heading', { name: 'Two-factor code' });
+    const verifyButton = screen.getByRole('button', { name: /verify and sign in/i });
+    expect(verifyButton).toBeDisabled();
+
+    await user.type(screen.getByLabelText(/verification code/i), '123456');
+    expect(verifyButton).toBeEnabled();
+    await user.click(verifyButton);
+
+    await waitFor(() => {
+      expect(mocks.signIn).toHaveBeenLastCalledWith(
+        'owner@example.com',
+        'StrongPass123!',
+        true,
+        '123456',
+      );
+    });
+    expect(mocks.navigate).toHaveBeenCalledWith('/dashboard', { replace: true });
   });
 });
