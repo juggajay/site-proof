@@ -51,13 +51,14 @@ import { startNotificationDigestWorker } from './lib/notificationJobs.js';
 import { startNotificationAutomationWorker } from './lib/notificationAutomation.js';
 import { startDataRetentionWorker } from './lib/dataRetentionWorker.js';
 
-export async function startServer(): Promise<void> {
-  const app = express();
-  const PORT = process.env.PORT || 3001;
-  const TRUST_PROXY = process.env.TRUST_PROXY;
-  let isShuttingDown = false;
+interface CreateServerAppOptions {
+  isShuttingDown?: () => boolean;
+}
 
-  validateRuntimeConfig();
+export function createServerApp(options: CreateServerAppOptions = {}): express.Express {
+  const app = express();
+  const TRUST_PROXY = process.env.TRUST_PROXY;
+  const isShuttingDown = options.isShuttingDown ?? (() => false);
 
   const trustProxySetting = getExpressTrustProxySetting(TRUST_PROXY);
   if (trustProxySetting !== undefined) {
@@ -111,10 +112,7 @@ export async function startServer(): Promise<void> {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
 
-  app.get(
-    '/ready',
-    createReadinessHandler(() => isShuttingDown),
-  );
+  app.get('/ready', createReadinessHandler(isShuttingDown));
 
   // Feature #751: Performance metrics endpoint (admin only)
   app.get('/api/metrics', requireAuth, requireRole(['owner', 'admin']), (_req, res) => {
@@ -158,6 +156,16 @@ export async function startServer(): Promise<void> {
 
   // Error handling
   app.use(errorHandler);
+
+  return app;
+}
+
+export async function startServer(): Promise<void> {
+  const PORT = process.env.PORT || 3001;
+  let isShuttingDown = false;
+
+  validateRuntimeConfig();
+  const app = createServerApp({ isShuttingDown: () => isShuttingDown });
 
   // Start server
   const server = app.listen(PORT, () => {

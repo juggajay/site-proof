@@ -9,6 +9,7 @@ import {
   writeLocalStorageItem,
 } from '@/lib/storagePreferences';
 import { useAuth } from '@/lib/auth';
+import { recordCookiePolicyConsentDecision } from '@/lib/consentAudit';
 import { cn } from '@/lib/utils';
 
 const CONSENT_KEY = 'cookie_consent';
@@ -63,6 +64,10 @@ export function CookieConsentBanner() {
     };
     writeLocalStorageItem(CONSENT_KEY, JSON.stringify(consent));
     setShowBanner(false);
+
+    if (user) {
+      void recordCookiePolicyConsentDecision(accepted);
+    }
   };
 
   const handleAccept = () => {
