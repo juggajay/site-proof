@@ -2014,6 +2014,150 @@ describe('Hold Points API access control', () => {
     expect(holdPoint?.status).toBe('notified');
   });
 
+  it('escalates and resolves hold points with notifications and audit history', async () => {
+    const qualityManager = await registerTestUser('Hold Points Quality Manager', 'user', companyId);
+    createdUserIds.push(qualityManager.userId);
+    await prisma.projectUser.create({
+      data: {
+        projectId,
+        userId: qualityManager.userId,
+        role: 'quality_manager',
+        status: 'active',
+      },
+    });
+
+    const hp = await prisma.holdPoint.create({
+      data: {
+        lotId,
+        itpChecklistItemId: checklistItemId,
+        pointType: 'hold_point',
+        description: 'Escalation coverage hold point',
+        status: 'notified',
+      },
+    });
+
+    try {
+      const escalateRes = await request(app)
+        .post(`/api/holdpoints/${hp.id}/escalate`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          escalatedTo: 'quality_manager',
+          escalationReason: 'Release is blocking the lot.',
+        });
+
+      expect(escalateRes.status).toBe(200);
+      expect(escalateRes.body.message).toBe('Hold point escalated successfully');
+      expect(escalateRes.body.holdPoint).toMatchObject({
+        id: hp.id,
+        isEscalated: true,
+        escalatedById: adminUserId,
+        escalatedTo: 'quality_manager',
+        escalationReason: 'Release is blocking the lot.',
+      });
+      expect(
+        escalateRes.body.notifiedUsers.some(
+          (user: { email: string; role: string }) =>
+            user.email === qualityManager.email && user.role === 'quality_manager',
+        ),
+      ).toBe(true);
+
+      const notifications = await prisma.notification.findMany({
+        where: {
+          projectId,
+          type: 'hold_point_escalation',
+          linkUrl: { contains: hp.id },
+        },
+      });
+      expect(
+        notifications.some((notification) => notification.userId === qualityManager.userId),
+      ).toBe(true);
+
+      const escalateAudit = await prisma.auditLog.findFirst({
+        where: { entityId: hp.id, action: AuditAction.HP_ESCALATED },
+      });
+      expect(escalateAudit?.userId).toBe(adminUserId);
+      expect(parseAuditLogChanges(escalateAudit?.changes ?? null)).toMatchObject({
+        escalatedTo: 'quality_manager',
+        escalationReason: 'Release is blocking the lot.',
+      });
+
+      const resolveRes = await request(app)
+        .post(`/api/holdpoints/${hp.id}/resolve-escalation`)
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(resolveRes.status).toBe(200);
+      expect(resolveRes.body.message).toBe('Escalation resolved');
+      expect(resolveRes.body.holdPoint).toMatchObject({
+        id: hp.id,
+        isEscalated: true,
+        escalationResolved: true,
+      });
+
+      const resolvedHoldPoint = await prisma.holdPoint.findUniqueOrThrow({
+        where: { id: hp.id },
+      });
+      expect(resolvedHoldPoint.isEscalated).toBe(true);
+      expect(resolvedHoldPoint.escalationResolved).toBe(true);
+      expect(resolvedHoldPoint.escalationResolvedAt).not.toBeNull();
+
+      const resolveAudit = await prisma.auditLog.findFirst({
+        where: { entityId: hp.id, action: AuditAction.HP_ESCALATION_RESOLVED },
+      });
+      expect(resolveAudit?.userId).toBe(adminUserId);
+      expect(parseAuditLogChanges(resolveAudit?.changes ?? null)).toMatchObject({
+        escalationResolved: true,
+      });
+
+      const duplicateResolveRes = await request(app)
+        .post(`/api/holdpoints/${hp.id}/resolve-escalation`)
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(duplicateResolveRes.status).toBe(400);
+      expect(duplicateResolveRes.body.error.message).toContain('not currently escalated');
+      await expect(
+        prisma.auditLog.count({
+          where: { entityId: hp.id, action: AuditAction.HP_ESCALATION_RESOLVED },
+        }),
+      ).resolves.toBe(1);
+    } finally {
+      await prisma.notification.deleteMany({
+        where: { projectId, type: 'hold_point_escalation', linkUrl: { contains: hp.id } },
+      });
+      await prisma.auditLog.deleteMany({ where: { entityId: hp.id } });
+      await prisma.holdPoint.delete({ where: { id: hp.id } }).catch(() => {});
+    }
+  });
+
+  it('rejects resolving hold points that were never escalated', async () => {
+    const hp = await prisma.holdPoint.create({
+      data: {
+        lotId,
+        itpChecklistItemId: checklistItemId,
+        pointType: 'hold_point',
+        description: 'Never escalated hold point',
+        status: 'notified',
+      },
+    });
+
+    try {
+      const res = await request(app)
+        .post(`/api/holdpoints/${hp.id}/resolve-escalation`)
+        .set('Authorization', `Bearer ${adminToken}`);
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toContain('not currently escalated');
+
+      const unchangedHoldPoint = await prisma.holdPoint.findUniqueOrThrow({
+        where: { id: hp.id },
+      });
+      expect(unchangedHoldPoint.isEscalated).toBe(false);
+      expect(unchangedHoldPoint.escalationResolved).toBe(false);
+      expect(unchangedHoldPoint.escalationResolvedAt).toBeNull();
+    } finally {
+      await prisma.holdPoint.delete({ where: { id: hp.id } }).catch(() => {});
+    }
+  });
+
   it('rejects chasing or escalating released hold points', async () => {
     const releasedHoldPoint = await prisma.holdPoint.create({
       data: {
