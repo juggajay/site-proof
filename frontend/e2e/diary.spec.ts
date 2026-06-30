@@ -84,6 +84,10 @@ function buildDiary(status: 'draft' | 'submitted' = 'draft', date = E2E_DIARY_DA
   };
 }
 
+type SeededDiary = ReturnType<typeof buildDiary>;
+type SeededPersonnel = SeededDiary['personnel'][number];
+type SeededPlant = SeededDiary['plant'][number];
+
 async function mockSeededDiaryApi(page: Page, options: SeededDiaryApiOptions = {}) {
   let submitted = false;
   let diaryLoadCount = 0;
@@ -91,14 +95,22 @@ async function mockSeededDiaryApi(page: Page, options: SeededDiaryApiOptions = {
   let submitRequest: unknown;
   let weatherSaveRequest: unknown;
   let activityCreateRequest: unknown;
+  const personnelCreateRequests: unknown[] = [];
   let plantCreateRequest: unknown;
   let delayCreateRequest: unknown;
+  let personnelEntries: SeededPersonnel[] = [...buildDiary().personnel];
+  let plantEntries: SeededPlant[] = [...buildDiary().plant];
   let addendums: Array<{
     id: string;
     content: string;
     addedBy: typeof E2E_ADMIN_USER;
     addedAt: string;
   }> = [];
+  const currentDiary = (status: 'draft' | 'submitted' = submitted ? 'submitted' : 'draft') => ({
+    ...buildDiary(status),
+    personnel: personnelEntries,
+    plant: plantEntries,
+  });
 
   await page.route('**/api/**', async (route) => {
     const url = new URL(route.request().url());
@@ -157,13 +169,28 @@ async function mockSeededDiaryApi(page: Page, options: SeededDiaryApiOptions = {
       return;
     }
 
+    if (url.pathname.startsWith(`/api/diary/project/${E2E_PROJECT_ID}/docket-summary/`)) {
+      await json({
+        approvedDockets: [],
+        pendingCount: 0,
+        pendingDockets: [],
+        totals: {
+          workers: 0,
+          labourHours: 0,
+          machines: 0,
+          plantHours: 0,
+        },
+      });
+      return;
+    }
+
     if (url.pathname === `/api/diary/${E2E_PROJECT_ID}`) {
       if (url.searchParams.get('search')) {
-        await json([buildDiary(submitted ? 'submitted' : 'draft')]);
+        await json([currentDiary()]);
         return;
       }
 
-      await json({ data: [buildDiary(submitted ? 'submitted' : 'draft')] });
+      await json({ data: [currentDiary()] });
       return;
     }
 
@@ -181,7 +208,36 @@ async function mockSeededDiaryApi(page: Page, options: SeededDiaryApiOptions = {
         return;
       }
 
-      await json(buildDiary(submitted ? 'submitted' : 'draft', diaryDateMatch[1]));
+      await json({
+        ...buildDiary(submitted ? 'submitted' : 'draft', diaryDateMatch[1]),
+        personnel: personnelEntries,
+        plant: plantEntries,
+      });
+      return;
+    }
+
+    if (url.pathname === `/api/diary/${E2E_PROJECT_ID}/${E2E_DIARY_DATE}/previous-personnel`) {
+      await json({
+        previousDate: '2026-01-14',
+        personnel: [
+          {
+            name: ' e2e foreman ',
+            company: 'E2E Civil Pty Ltd',
+            role: 'Foreman',
+            startTime: '07:00',
+            finishTime: '15:00',
+            hours: '8',
+          },
+          {
+            name: 'E2E Surveyor',
+            company: 'E2E Survey',
+            role: 'Surveyor',
+            startTime: '08:00',
+            finishTime: '14:30',
+            hours: '6.5',
+          },
+        ],
+      });
       return;
     }
 
@@ -218,6 +274,40 @@ async function mockSeededDiaryApi(page: Page, options: SeededDiaryApiOptions = {
         weatherNotes: weatherSave.weatherNotes ?? null,
         generalNotes: weatherSave.generalNotes ?? null,
         date: `${E2E_DIARY_DATE}T00:00:00.000Z`,
+        personnel: personnelEntries,
+        plant: plantEntries,
+      });
+      return;
+    }
+
+    if (url.pathname === `/api/diary/${E2E_DIARY_ID}/timeline`) {
+      await json({
+        timeline: [
+          ...personnelEntries.map((person) => ({
+            id: person.id,
+            type: 'personnel',
+            createdAt: person.createdAt,
+            description: person.name,
+            lot: null,
+            data: {
+              company: person.company,
+              role: person.role,
+              hours: person.hours,
+            },
+          })),
+          ...plantEntries.map((plant) => ({
+            id: plant.id,
+            type: 'plant',
+            createdAt: plant.createdAt,
+            description: plant.description,
+            lot: null,
+            data: {
+              idRego: plant.idRego,
+              company: plant.company,
+              hoursOperated: plant.hoursOperated,
+            },
+          })),
+        ],
       });
       return;
     }
@@ -239,18 +329,33 @@ async function mockSeededDiaryApi(page: Page, options: SeededDiaryApiOptions = {
     }
 
     if (
+      url.pathname === `/api/diary/${E2E_DIARY_ID}/personnel` &&
+      route.request().method() === 'POST'
+    ) {
+      const request = route.request().postDataJSON();
+      personnelCreateRequests.push(request);
+      const created = {
+        id: `e2e-new-personnel-${personnelEntries.length + 1}`,
+        ...(request as object),
+        createdAt: `${E2E_DIARY_DATE}T01:00:00.000Z`,
+      } as SeededPersonnel;
+      personnelEntries = [...personnelEntries, created];
+      await json(created, 201);
+      return;
+    }
+
+    if (
       url.pathname === `/api/diary/${E2E_DIARY_ID}/plant` &&
       route.request().method() === 'POST'
     ) {
       plantCreateRequest = route.request().postDataJSON();
-      await json(
-        {
-          id: 'e2e-new-plant',
-          ...(plantCreateRequest as object),
-          createdAt: `${E2E_DIARY_DATE}T01:00:00.000Z`,
-        },
-        201,
-      );
+      const created = {
+        id: `e2e-new-plant-${plantEntries.length + 1}`,
+        ...(plantCreateRequest as object),
+        createdAt: `${E2E_DIARY_DATE}T01:00:00.000Z`,
+      } as SeededPlant;
+      plantEntries = [...plantEntries, created];
+      await json(created, 201);
       return;
     }
 
@@ -277,7 +382,7 @@ async function mockSeededDiaryApi(page: Page, options: SeededDiaryApiOptions = {
         await delay(options.submitDelayMs);
       }
       submitted = true;
-      await json({ diary: buildDiary('submitted') });
+      await json({ diary: currentDiary('submitted') });
       return;
     }
 
@@ -313,6 +418,7 @@ async function mockSeededDiaryApi(page: Page, options: SeededDiaryApiOptions = {
     getSubmitRequestCount: () => submitRequestCount,
     getWeatherSaveRequest: () => weatherSaveRequest,
     getActivityCreateRequest: () => activityCreateRequest,
+    getPersonnelCreateRequests: () => personnelCreateRequests,
     getPlantCreateRequest: () => plantCreateRequest,
     getDelayCreateRequest: () => delayCreateRequest,
   };
@@ -360,6 +466,34 @@ test.describe('Daily diary seeded UI contract', () => {
     await expect(delayRow.getByText('weather')).toBeVisible();
     await expect(delayRow.getByText('1h')).toBeVisible();
     await expect(delayRow.getByText('Crew stood down')).toBeVisible();
+  });
+
+  test('copying previous personnel skips current-day duplicates on desktop', async ({ page }) => {
+    const api = await mockSeededDiaryApi(page);
+
+    await page.goto(`/projects/${E2E_PROJECT_ID}/diary`);
+    await page.locator('#diary-date').fill(E2E_DIARY_DATE);
+
+    const tabNav = page.locator('nav');
+    await tabNav.getByRole('button', { name: /personnel/i }).click();
+
+    await page.getByRole('button', { name: 'Copy from Previous Day' }).click();
+
+    await expect
+      .poll(() => api.getPersonnelCreateRequests())
+      .toEqual([
+        {
+          name: 'E2E Surveyor',
+          company: 'E2E Survey',
+          role: 'Surveyor',
+          startTime: '08:00',
+          finishTime: '14:30',
+          hours: 6.5,
+        },
+      ]);
+    await expect(page.getByRole('row').filter({ hasText: 'E2E Foreman' })).toHaveCount(1);
+    await expect(page.getByRole('row').filter({ hasText: 'E2E Surveyor' })).toBeVisible();
+    await expect(page.getByText('2 people,')).toBeVisible();
   });
 
   test('shows a retryable load error without rendering a false empty state', async ({ page }) => {
