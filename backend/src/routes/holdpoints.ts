@@ -40,6 +40,7 @@ import { parseDocumentContentDisposition, sendDocumentFile } from './documents/f
 import { resolveHoldPointEvidenceInputs } from './holdpoints/evidencePackageInputs.js';
 import { emitHoldPointWebhookEvent } from './holdpoints/webhookEvents.js';
 import { assertHoldPointCompletionCanBeReleased } from './holdpoints/releaseCompletionGuard.js';
+import { projectTimeZoneFromState } from '../lib/projectTimeZone.js';
 
 const holdpointsRouter = Router();
 
@@ -152,9 +153,19 @@ function buildPublicHoldPointReleasePayload(releaseToken: PublicHoldPointRelease
       recipientEmail: releaseToken.recipientEmail,
       recipientName: releaseToken.recipientName,
       expiresAt: releaseToken.expiresAt,
-      canRelease: holdPoint.status !== 'released' && !releaseToken.usedAt,
+      canRelease: !['released', 'completed'].includes(holdPoint.status) && !releaseToken.usedAt,
     },
   };
+}
+
+function rejectTerminalPublicHoldPointRelease(status: string | null | undefined): void {
+  if (status === 'released') {
+    throw AppError.badRequest('This hold point has already been released.');
+  }
+
+  if (status === 'completed') {
+    throw AppError.badRequest('This hold point has already been completed.');
+  }
 }
 
 function getPublicEvidenceDocumentIds(
@@ -307,10 +318,7 @@ holdpointsRouter.post(
       );
     }
 
-    // Check if hold point is already released
-    if (releaseToken.holdPoint.status === 'released') {
-      throw AppError.badRequest('This hold point has already been released.');
-    }
+    rejectTerminalPublicHoldPointRelease(releaseToken.holdPoint.status);
 
     const projectSettings = parseHPProjectSettings(releaseToken.holdPoint.lot.project.settings);
     const tokenRecipientName = releaseToken.recipientName?.trim();
@@ -375,7 +383,7 @@ holdpointsRouter.post(
       const holdPointUpdate = await tx.holdPoint.updateMany({
         where: {
           id: releaseToken.holdPoint.id,
-          status: { not: 'released' },
+          status: { notIn: ['released', 'completed'] },
         },
         data: {
           status: 'released',
@@ -389,7 +397,12 @@ holdpointsRouter.post(
       });
 
       if (holdPointUpdate.count !== 1) {
-        throw AppError.badRequest('This hold point has already been released.');
+        const currentHoldPoint = await tx.holdPoint.findUnique({
+          where: { id: releaseToken.holdPoint.id },
+          select: { status: true },
+        });
+        rejectTerminalPublicHoldPointRelease(currentHoldPoint?.status);
+        throw AppError.badRequest('This hold point can no longer be released.');
       }
 
       const updatedHoldPoint = await tx.holdPoint.findUnique({
@@ -534,7 +547,9 @@ holdpointsRouter.post(
         // Format the instant we actually recorded on the hold point (above),
         // not a fresh new Date(), so the confirmation email always matches the
         // stored release time.
+        const projectTimeZone = projectTimeZoneFromState(releaseToken.holdPoint.lot.project.state);
         const releasedAtDisplay = releasedAt.toLocaleString('en-AU', {
+          timeZone: projectTimeZone,
           weekday: 'long',
           year: 'numeric',
           month: 'long',
