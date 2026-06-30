@@ -421,25 +421,30 @@ test.describe('Subbie mobile shell direct routes', () => {
       PROJECT_ID,
     )}&subcontractorCompanyId=${encodeURIComponent(SUBCONTRACTOR_COMPANY_ID)}`;
 
-    const directRoutes: Array<{ path: string; heading: string; text?: string | RegExp }> = [
-      { path: `/p${projectQuery}`, heading: 'Morning, Morgan', text: 'Mobile Shell Civil' },
-      { path: `/p/dockets${projectQuery}`, heading: 'My Dockets', text: '2 entries · $800' },
-      {
-        path: `/p/docket/${encodeURIComponent(docket.id)}${projectQuery}`,
-        heading: 'Docket DKT-SUB-001',
-        text: 'Worker One',
-      },
-      { path: `/p/itps${projectQuery}`, heading: 'Inspections', text: 'Drainage ITP' },
-      {
-        path: `/p/lots/${encodeURIComponent(assignedLot.id)}/itp${projectQuery}`,
-        heading: 'Inspection',
-        text: 'Confirm pipe bedding is compacted',
-      },
-      { path: `/p/quality${projectQuery}`, heading: 'Holds & Tests', text: 'Compaction' },
-      { path: `/p/ncrs${projectQuery}`, heading: 'NCRs', text: 'NCR-SUB-001' },
-      { path: `/p/docs${projectQuery}`, heading: 'Documents', text: 'SWMS-drainage.pdf' },
-      { path: `/p/company${projectQuery}`, heading: 'My Company', text: 'Worker One' },
-    ];
+    const directRoutes: Array<{ path: string; heading: string | RegExp; text?: string | RegExp }> =
+      [
+        {
+          path: `/p${projectQuery}`,
+          heading: /^(Morning|Afternoon|Evening), Morgan$/,
+          text: 'Mobile Shell Civil',
+        },
+        { path: `/p/dockets${projectQuery}`, heading: 'My Dockets', text: '2 entries · $800' },
+        {
+          path: `/p/docket/${encodeURIComponent(docket.id)}${projectQuery}`,
+          heading: 'Docket DKT-SUB-001',
+          text: 'Worker One',
+        },
+        { path: `/p/itps${projectQuery}`, heading: 'Inspections', text: 'Drainage ITP' },
+        {
+          path: `/p/lots/${encodeURIComponent(assignedLot.id)}/itp${projectQuery}`,
+          heading: 'Inspection',
+          text: 'Confirm pipe bedding is compacted',
+        },
+        { path: `/p/quality${projectQuery}`, heading: 'Holds & Tests', text: 'Compaction' },
+        { path: `/p/ncrs${projectQuery}`, heading: 'NCRs', text: 'NCR-SUB-001' },
+        { path: `/p/docs${projectQuery}`, heading: 'Documents', text: 'SWMS-drainage.pdf' },
+        { path: `/p/company${projectQuery}`, heading: 'My Company', text: 'Worker One' },
+      ];
 
     for (const route of directRoutes) {
       await page.goto(route.path);
