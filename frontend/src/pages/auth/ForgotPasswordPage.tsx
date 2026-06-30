@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -15,6 +15,7 @@ type ForgotPasswordFormData = z.infer<typeof forgotPasswordSchema>;
 export function ForgotPasswordPage() {
   const [sent, setSent] = useState(false);
   const [sentEmail, setSentEmail] = useState('');
+  const submittingRef = useRef(false);
 
   const {
     register,
@@ -28,6 +29,9 @@ export function ForgotPasswordPage() {
   });
 
   const onSubmit = async (data: ForgotPasswordFormData) => {
+    if (submittingRef.current) return;
+
+    submittingRef.current = true;
     try {
       await apiFetch('/api/auth/forgot-password', {
         method: 'POST',
@@ -38,6 +42,8 @@ export function ForgotPasswordPage() {
       setSent(true);
     } catch {
       setError('root', { message: 'Failed to send reset email. Please try again.' });
+    } finally {
+      submittingRef.current = false;
     }
   };
 

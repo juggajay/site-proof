@@ -17,7 +17,7 @@ export function MfaSettingsSection() {
     backupCodes,
     showBackupCodes,
     showDisableMfa,
-    disableMfaPassword,
+    disableMfaCredential,
     showSecret,
     copiedSecret,
     loadMfaStatus,
@@ -32,7 +32,7 @@ export function MfaSettingsSection() {
     openDisableMfa,
     toggleShowSecret,
     setMfaVerifyCode,
-    setDisableMfaPassword,
+    setDisableMfaCredential,
   } = useMfaSettings();
 
   return (
@@ -48,7 +48,7 @@ export function MfaSettingsSection() {
       backupCodes={backupCodes}
       showBackupCodes={showBackupCodes}
       showDisableMfa={showDisableMfa}
-      disableMfaPassword={disableMfaPassword}
+      disableMfaCredential={disableMfaCredential}
       showSecret={showSecret}
       copiedSecret={copiedSecret}
       onLoadMfaStatus={() => void loadMfaStatus()}
@@ -59,7 +59,7 @@ export function MfaSettingsSection() {
       onMfaDisable={handleMfaDisable}
       onDisableMfaOpen={openDisableMfa}
       onDisableMfaClose={closeDisableMfa}
-      onDisableMfaPasswordChange={setDisableMfaPassword}
+      onDisableMfaCredentialChange={setDisableMfaCredential}
       onBackupCodesClose={closeBackupCodes}
       onBackupCodesCopy={copyBackupCodes}
       onShowSecretToggle={toggleShowSecret}

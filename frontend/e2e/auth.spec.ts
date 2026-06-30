@@ -365,6 +365,184 @@ test.describe('Authentication', () => {
     );
   });
 
+  test('submits forgot-password without duplicate reset requests', async ({ page }) => {
+    let requestCount = 0;
+    const requests: unknown[] = [];
+
+    await page.route('**/api/auth/forgot-password', async (route) => {
+      requestCount += 1;
+      requests.push(route.request().postDataJSON());
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'If that account exists, a reset email has been sent.' }),
+      });
+    });
+
+    await page.goto('/forgot-password');
+    await page.getByLabel('Email').fill('reset-flow@example.com');
+    await page.getByRole('button', { name: 'Send Reset Link' }).evaluate((button: HTMLElement) => {
+      button.click();
+      button.click();
+    });
+
+    await expect(page.getByRole('heading', { name: 'Check Your Email' })).toBeVisible();
+    await expect(page.getByText(/reset-flow@example.com/)).toBeVisible();
+    expect(requestCount).toBe(1);
+    expect(requests[0]).toEqual({ email: 'reset-flow@example.com' });
+  });
+
+  test('resets password after validating and scrubbing the reset token', async ({ page }) => {
+    let validateRequestUrl = '';
+    let resetRequest: unknown;
+
+    await page.route('**/api/auth/validate-reset-token?**', async (route) => {
+      validateRequestUrl = route.request().url();
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ valid: true }),
+      });
+    });
+
+    await page.route('**/api/auth/reset-password', async (route) => {
+      resetRequest = route.request().postDataJSON();
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'Password reset successfully' }),
+      });
+    });
+
+    await page.goto('/reset-password?token=reset-browser-token');
+
+    await expect(page).toHaveURL('/reset-password');
+    expect(validateRequestUrl).toContain('token=reset-browser-token');
+
+    await page.getByLabel('New Password').fill(strongPassword);
+    await page.getByLabel('Confirm Password').fill(strongPassword);
+    await page.getByRole('button', { name: 'Reset Password' }).click();
+
+    await expect(page.getByRole('heading', { name: 'Password Reset Successfully!' })).toBeVisible();
+    expect(resetRequest).toEqual({
+      token: 'reset-browser-token',
+      password: strongPassword,
+    });
+  });
+
+  test('verifies email after scrubbing the verification token', async ({ page }) => {
+    const apiCalls: Array<{ path: string; body?: unknown }> = [];
+
+    await page.route('**/api/auth/**', async (route) => {
+      const url = new URL(route.request().url());
+      const json = (body: unknown, status = 200) =>
+        route.fulfill({
+          status,
+          contentType: 'application/json',
+          body: JSON.stringify(body),
+        });
+
+      if (url.pathname === '/api/auth/verify-email-status') {
+        apiCalls.push({ path: url.pathname, body: Object.fromEntries(url.searchParams) });
+        await json({ valid: true, email: 'verify-flow@example.com' });
+        return;
+      }
+
+      if (url.pathname === '/api/auth/verify-email') {
+        apiCalls.push({ path: url.pathname, body: route.request().postDataJSON() });
+        await json({ verified: true });
+        return;
+      }
+
+      await json({ message: `Unhandled auth route: ${url.pathname}` }, 404);
+    });
+
+    await page.goto('/verify-email?token=verify-browser-token');
+
+    await expect(page).toHaveURL('/verify-email');
+    await expect(page.getByRole('heading', { name: 'Email Verified!' })).toBeVisible();
+    expect(apiCalls).toEqual([
+      { path: '/api/auth/verify-email-status', body: { token: 'verify-browser-token' } },
+      { path: '/api/auth/verify-email', body: { token: 'verify-browser-token' } },
+    ]);
+  });
+
+  test('verifies magic-link tokens without leaving the token in browser storage or URL', async ({
+    page,
+  }) => {
+    let verifyRequest: unknown;
+    const magicUser = {
+      ...E2E_ADMIN_USER,
+      id: 'magic-link-user',
+      email: 'magic-e2e@example.com',
+      hasSubcontractorPortalAccess: true,
+    };
+
+    await page.route('**/api/auth/magic-link/verify', async (route) => {
+      verifyRequest = route.request().postDataJSON();
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ token: 'magic-session-token', user: magicUser }),
+      });
+    });
+
+    await page.route('**/api/auth/me', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ user: magicUser }),
+      });
+    });
+
+    await page.route('**/api/**', async (route) => {
+      const url = new URL(route.request().url());
+      const json = (body: unknown, status = 200) =>
+        route.fulfill({
+          status,
+          contentType: 'application/json',
+          body: JSON.stringify(body),
+        });
+
+      if (url.pathname === '/api/auth/magic-link/verify' || url.pathname === '/api/auth/me') {
+        await route.fallback();
+        return;
+      }
+
+      if (url.pathname === '/api/subcontractors/invitation/invite-1') {
+        await json({
+          invitation: {
+            id: 'invite-1',
+            companyName: 'Magic Civil Pty Ltd',
+            projectName: 'Magic Road Upgrade',
+            headContractorName: 'Head Contractor Co',
+            primaryContactEmail: magicUser.email,
+            status: 'pending_approval',
+          },
+        });
+        return;
+      }
+
+      await json({});
+    });
+
+    await page.goto(
+      '/auth/magic-link?token=magic-browser-token&redirect=%2Fsubcontractor-portal%2Faccept-invite%3Fid%3Dinvite-1',
+    );
+
+    await expect(page).toHaveURL(
+      '/auth/magic-link?redirect=%2Fsubcontractor-portal%2Faccept-invite%3Fid%3Dinvite-1',
+    );
+    await expect(page.getByRole('heading', { name: 'Success!' })).toBeVisible();
+    await page.waitForURL('**/subcontractor-portal/accept-invite?id=invite-1');
+
+    expect(verifyRequest).toEqual({ token: 'magic-browser-token' });
+    const storedAuth = await page.evaluate(() => localStorage.getItem('siteproof_auth'));
+    expect(storedAuth).not.toContain('magic-browser-token');
+    expect(JSON.parse(storedAuth as string).token).toBe('magic-session-token');
+  });
+
   test('should redirect unauthenticated users to login', async ({ page }) => {
     await page.goto('/projects');
 
