@@ -1474,6 +1474,69 @@ describe('ITP Completion Attachments', () => {
     expect(Number(updatedDocument.gpsLongitude)).toBeCloseTo(151.2099, 5);
   });
 
+  it('should list and delete unlocked attachment links without deleting the document', async () => {
+    const suffix = Date.now();
+    const attachmentDocument = await prisma.document.create({
+      data: {
+        projectId,
+        lotId,
+        documentType: 'photo',
+        category: 'itp_evidence',
+        filename: `list-delete-evidence-${suffix}.jpg`,
+        fileUrl: `/uploads/documents/list-delete-evidence-${suffix}.jpg`,
+        fileSize: 1024,
+        mimeType: 'image/jpeg',
+        uploadedById: userId,
+        caption: 'List/delete evidence photo',
+      },
+    });
+    let attachmentId: string | null = null;
+
+    try {
+      const attachRes = await request(app)
+        .post(`/api/itp/completions/${completionId}/attachments`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ documentId: attachmentDocument.id });
+
+      expect(attachRes.status).toBe(201);
+      attachmentId = String(attachRes.body.attachment.id);
+      const linkedAttachmentId = attachmentId;
+
+      const listRes = await request(app)
+        .get(`/api/itp/completions/${completionId}/attachments`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(listRes.status).toBe(200);
+      expect(listRes.body.attachments).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: linkedAttachmentId,
+            documentId: attachmentDocument.id,
+            document: expect.not.objectContaining({ fileUrl: expect.any(String) }),
+          }),
+        ]),
+      );
+
+      const deleteRes = await request(app)
+        .delete(`/api/itp/completions/${completionId}/attachments/${linkedAttachmentId}`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(deleteRes.status).toBe(200);
+      expect(deleteRes.body).toEqual({ success: true });
+      await expect(
+        prisma.iTPCompletionAttachment.findUnique({ where: { id: linkedAttachmentId } }),
+      ).resolves.toBeNull();
+      await expect(
+        prisma.document.findUnique({ where: { id: attachmentDocument.id } }),
+      ).resolves.not.toBeNull();
+    } finally {
+      if (attachmentId) {
+        await prisma.iTPCompletionAttachment.deleteMany({ where: { id: attachmentId } });
+      }
+      await prisma.document.deleteMany({ where: { id: attachmentDocument.id } });
+    }
+  });
+
   it('should reject evidence attachment changes once a completion is verified or not applicable', async () => {
     const lockedStates = [
       {

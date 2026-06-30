@@ -627,6 +627,62 @@ async function mockSubcontractorDashboardApi(
 
 async function mockPortalModuleAccessApi(page: Page, portalAccess?: PortalAccess) {
   let lotRequests = 0;
+  let notePatchRequest: unknown = null;
+  let completionNotes = 'Seeded compaction note';
+
+  const itpLot = {
+    id: 'e2e-itp-lot',
+    projectId: E2E_PROJECT_ID,
+    lotNumber: 'LOT-001',
+    status: 'in_progress',
+    subcontractorAssignments: [
+      {
+        id: 'e2e-itp-assignment',
+        canCompleteITP: true,
+        itpRequiresVerification: true,
+      },
+    ],
+  };
+
+  const itpInstance = () => ({
+    id: 'e2e-itp-instance',
+    status: 'in_progress',
+    template: {
+      id: 'e2e-itp-template',
+      name: 'Concrete ITP',
+      activityType: 'Concrete',
+      checklistItems: [
+        {
+          id: 'e2e-itp-item',
+          description: 'Check compaction proof',
+          category: 'Concrete',
+          responsibleParty: 'subcontractor',
+          isHoldPoint: false,
+          pointType: 'standard',
+          evidenceRequired: 'none',
+          order: 1,
+          acceptanceCriteria: 'Compaction records reviewed',
+          testType: null,
+        },
+      ],
+    },
+    completions: [
+      {
+        id: 'e2e-itp-completion',
+        checklistItemId: 'e2e-itp-item',
+        isCompleted: false,
+        isNotApplicable: false,
+        isFailed: false,
+        notes: completionNotes,
+        completedAt: null,
+        completedBy: null,
+        isVerified: false,
+        verifiedAt: null,
+        verifiedBy: null,
+        attachments: [],
+      },
+    ],
+  });
 
   await page.route('**/api/**', async (route) => {
     const url = new URL(route.request().url());
@@ -681,9 +737,7 @@ async function mockPortalModuleAccessApi(page: Page, portalAccess?: PortalAccess
       await json({
         lots: [
           {
-            id: 'e2e-itp-lot',
-            lotNumber: 'LOT-001',
-            status: 'in_progress',
+            ...itpLot,
             itpInstances: [
               {
                 id: 'e2e-itp-instance',
@@ -695,16 +749,29 @@ async function mockPortalModuleAccessApi(page: Page, portalAccess?: PortalAccess
                 },
               },
             ],
-            subcontractorAssignments: [
-              {
-                id: 'e2e-itp-assignment',
-                canCompleteITP: true,
-                itpRequiresVerification: true,
-              },
-            ],
           },
         ],
       });
+      return;
+    }
+
+    if (url.pathname === '/api/lots/e2e-itp-lot') {
+      await json({ lot: itpLot });
+      return;
+    }
+
+    if (url.pathname === '/api/itp/instances/lot/e2e-itp-lot') {
+      await json({ instance: itpInstance() });
+      return;
+    }
+
+    if (
+      url.pathname === '/api/itp/completions/e2e-itp-completion' &&
+      route.request().method() === 'PATCH'
+    ) {
+      notePatchRequest = route.request().postDataJSON();
+      completionNotes = (notePatchRequest as { notes?: string }).notes ?? completionNotes;
+      await json({ completion: itpInstance().completions[0] });
       return;
     }
 
@@ -735,6 +802,7 @@ async function mockPortalModuleAccessApi(page: Page, portalAccess?: PortalAccess
 
   return {
     getLotRequestCount: () => lotRequests,
+    getNotePatchRequest: () => notePatchRequest,
   };
 }
 
@@ -1254,6 +1322,28 @@ test.describe('Subcontractor portal module access', () => {
       page.getByText(/Released by Casey Reviewer, Client Superintendent Org/),
     ).toBeVisible();
     await expect(page.getByText(/Secure link .* sent to casey.super@example.com/)).toBeVisible();
+  });
+
+  test('saves classic subcontractor ITP item notes with PATCH on blur', async ({ page }) => {
+    const api = await mockPortalModuleAccessApi(page);
+
+    await page.goto(
+      `/subcontractor-portal/lots/e2e-itp-lot/itp?projectId=${E2E_PROJECT_ID}&shell=off`,
+    );
+
+    await expect(page.getByRole('heading', { name: 'LOT-001' }).first()).toBeVisible();
+    await page.getByText('Check compaction proof').click();
+
+    const notes = page.getByPlaceholder('Add notes about this item...');
+    await expect(notes).toHaveValue('Seeded compaction note');
+    await notes.fill('Updated from E2E classic portal');
+    await notes.blur();
+
+    await expect
+      .poll(() => api.getNotePatchRequest())
+      .toEqual({
+        notes: 'Updated from E2E classic portal',
+      });
   });
 
   test('shows only unread rate counter notifications in the dashboard attention list', async ({

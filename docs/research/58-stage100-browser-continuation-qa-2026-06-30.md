@@ -275,3 +275,40 @@ Continue filling the highest-value browser gaps from the scout map:
     `POST /api/diary/:diaryId/reopen`, but no visible diary-page UI action was
     found. Treat reopen as a product/UI decision before adding browser coverage.
   - The diary spec still intentionally emits the retry-test 500 console errors.
+
+## Stage 107 - ITP Notes And Attachment Endpoint Coverage
+
+- Branch: `qa/itp-attachment-edge-coverage-v2`.
+- Coverage added:
+  - Browser regression in `frontend/e2e/subcontractors.spec.ts` for the classic
+    subcontractor lot ITP path. It opens the actual mobile checklist sheet,
+    edits the `Notes` field, blurs it, and proves the page sends
+    `PATCH /api/itp/completions/:id { notes }`.
+  - Backend integration regression in `backend/src/routes/itp.test.ts` for the
+    standalone attachment endpoints. It attaches a stored document, lists
+    `GET /api/itp/completions/:completionId/attachments`, deletes the link with
+    `DELETE /api/itp/completions/:completionId/attachments/:attachmentId`, and
+    proves the source document record remains.
+- Verification:
+  - `npm run test:unit -- src/pages/subcontractor-portal/SubcontractorLotITPPage.test.tsx`
+    passed 7/7.
+  - `npx playwright test e2e/subcontractors.spec.ts --project=chromium --reporter=list`
+    passed 17/17.
+  - `npm test -- src/routes/itp.test.ts -t "list and delete unlocked attachment links"`
+    passed 89/89 against the safe local `siteproof_test` database.
+  - `npm run type-check` passed in both `frontend` and `backend`.
+  - `npm run lint` passed in `frontend` with the existing `theme.tsx`
+    fast-refresh warning.
+  - `npm run lint` passed in `backend`.
+  - `npx prettier --check ...` passed for the touched files.
+  - `git diff --check` passed for the touched files.
+- Findings:
+  - Positive attachment POST is already user-facing through lot detail and
+    subcontractor ITP photo flows.
+  - Positive attachment GET/DELETE are API-only today. The current UI displays
+    ITP evidence from the lot ITP instance payload and no visible remove-link
+    action was found.
+  - The mobile subbie shell (`/p/lots/:lotId/itp`) does not expose a freeform
+    notes editor, while the classic desktop/`?shell=off` path does. Shell files
+    are owned by the foreman/subbie shell workstream, so this pass records the
+    product gap rather than editing `frontend/src/shell/**`.
