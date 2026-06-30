@@ -114,6 +114,42 @@ export function createDocumentDeleteRouter({
       }
 
       await prisma.$transaction(async (tx) => {
+        let previousVersionId: string | null = null;
+        if (document.isLatestVersion) {
+          const rootDocumentId = document.parentDocumentId || document.id;
+          const previousVersion = await tx.document.findFirst({
+            where: {
+              id: { not: document.id },
+              OR: [{ id: rootDocumentId }, { parentDocumentId: rootDocumentId }],
+            },
+            orderBy: [{ version: 'desc' }, { uploadedAt: 'desc' }],
+            select: { id: true },
+          });
+          previousVersionId = previousVersion?.id ?? null;
+        }
+
+        if (!document.parentDocumentId) {
+          const remainingVersions = await tx.document.findMany({
+            where: { parentDocumentId: document.id },
+            orderBy: [{ version: 'asc' }, { uploadedAt: 'asc' }],
+            select: { id: true },
+          });
+          const replacementRoot = remainingVersions[0];
+          if (replacementRoot) {
+            await tx.document.update({
+              where: { id: replacementRoot.id },
+              data: { parentDocumentId: null },
+            });
+            await tx.document.updateMany({
+              where: {
+                parentDocumentId: document.id,
+                id: { not: replacementRoot.id },
+              },
+              data: { parentDocumentId: replacementRoot.id },
+            });
+          }
+        }
+
         await writeAuditLogInTransaction(tx, {
           projectId: document.projectId,
           userId,
@@ -128,6 +164,13 @@ export function createDocumentDeleteRouter({
         });
 
         await tx.document.delete({ where: { id: documentId } });
+
+        if (previousVersionId) {
+          await tx.document.update({
+            where: { id: previousVersionId },
+            data: { isLatestVersion: true },
+          });
+        }
       });
 
       try {

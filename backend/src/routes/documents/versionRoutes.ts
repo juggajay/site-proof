@@ -154,6 +154,21 @@ export function createDocumentVersionRouter({
             OR: [{ id: rootDocumentId }, { parentDocumentId: rootDocumentId }],
           };
 
+          await tx.$queryRaw`SELECT id FROM documents WHERE id = ${rootDocumentId} FOR UPDATE`;
+
+          const targetDocument = await tx.document.findUnique({
+            where: { id: originalDocument.id },
+            select: { isLatestVersion: true },
+          });
+          if (!targetDocument) {
+            throw AppError.notFound('Original document');
+          }
+          if (!targetDocument.isLatestVersion) {
+            throw AppError.conflict(
+              'New versions must be uploaded from the current latest document',
+            );
+          }
+
           const allVersions = await tx.document.findMany({
             where: versionScope,
             select: { version: true },

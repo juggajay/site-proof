@@ -128,7 +128,7 @@ export function createDocumentListRouter({
       const dateFrom = getOptionalDateQuery(req.query, 'dateFrom');
       const dateTo = getOptionalDateQuery(req.query, 'dateTo', true);
 
-      const where: Prisma.DocumentWhereInput = { projectId };
+      const where: Prisma.DocumentWhereInput = { projectId, isLatestVersion: true };
       if (category) {
         await requireSubcontractorDocumentPortalAccess(user, projectId, category);
         applyDocumentCategoryFilter(where, category);

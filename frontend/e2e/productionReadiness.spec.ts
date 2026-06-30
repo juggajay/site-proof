@@ -1054,12 +1054,17 @@ test.describe('production readiness guardrails', () => {
       ['/projects/:projectId/tests', 'TestResultsPage'],
       ['/projects/:projectId/ncr', 'NCRPage'],
       ['/projects/:projectId/diary', 'DailyDiaryPage'],
-      ['/projects/:projectId/documents', 'DocumentsPage'],
     ] as const;
 
     for (const [routePath, pageComponent] of internalProjectRoutes) {
       expectProjectRouteGuard(appSource, routePath, pageComponent, 'INTERNAL_ROLES');
     }
+    expectProjectRouteGuard(
+      appSource,
+      '/projects/:projectId/documents',
+      'DocumentsPage',
+      'PROJECT_WORKSPACE_ROLES',
+    );
     expectProjectRouteGuard(
       appSource,
       '/projects/:projectId/dockets',
