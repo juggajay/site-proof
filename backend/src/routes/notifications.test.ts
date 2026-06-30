@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
+import crypto from 'crypto';
 import { authRouter } from './auth.js';
+import { authenticateApiKey } from './apiKeys.js';
 import { notificationsRouter } from './notifications.js';
 import { prisma } from '../lib/prisma.js';
 import { errorHandler } from '../middleware/errorHandler.js';
@@ -11,9 +13,30 @@ import * as emailService from '../lib/email.js';
 
 const app = express();
 app.use(express.json());
+app.use(authenticateApiKey);
 app.use('/api/auth', authRouter);
 app.use('/api/notifications', notificationsRouter);
 app.use(errorHandler);
+
+function hashApiKeyForTest(apiKey: string): string {
+  return crypto.createHash('sha256').update(apiKey).digest('hex');
+}
+
+async function createApiKeyForUser(userId: string, scopes = 'admin') {
+  const apiKey = `sp_${crypto.randomBytes(32).toString('hex')}`;
+  const record = await prisma.apiKey.create({
+    data: {
+      userId,
+      name: 'Notifications API Key',
+      keyHash: hashApiKeyForTest(apiKey),
+      keyPrefix: apiKey.substring(0, 11),
+      scopes,
+      isActive: true,
+    },
+  });
+
+  return { apiKey, keyId: record.id };
+}
 
 describe('Notifications API', () => {
   let authToken: string;
@@ -801,6 +824,21 @@ describe('Notifications API', () => {
       const res = await request(app).post('/api/notifications/send-test-email');
 
       expect(res.status).toBe(401);
+    });
+
+    it('rejects API-key-authenticated test emails', async () => {
+      const { apiKey, keyId } = await createApiKeyForUser(userId, 'admin');
+
+      try {
+        const res = await request(app)
+          .post('/api/notifications/send-test-email')
+          .set('x-api-key', apiKey);
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.message).toContain('browser session');
+      } finally {
+        await prisma.apiKey.deleteMany({ where: { id: keyId } });
+      }
     });
   });
 

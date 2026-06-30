@@ -44,10 +44,29 @@ function buildNotificationsRequestUrl(offset: number, unreadOnly: boolean): stri
 
 function getSafeInternalPath(linkUrl: string | null): string | null {
   const trimmed = linkUrl?.trim();
-  if (!trimmed || !trimmed.startsWith('/') || trimmed.startsWith('//') || trimmed.includes('\\')) {
+  if (
+    !trimmed ||
+    !trimmed.startsWith('/') ||
+    trimmed.startsWith('//') ||
+    trimmed.includes('\\') ||
+    containsControlCharacter(trimmed)
+  ) {
     return null;
   }
   return trimmed;
+}
+
+function containsControlCharacter(value: string): boolean {
+  return Array.from(value).some((character) => {
+    const codePoint = character.codePointAt(0);
+    return codePoint !== undefined && (codePoint <= 31 || codePoint === 127);
+  });
+}
+
+function getFilterLabel(filter: NotificationFilter): string {
+  if (filter === 'mention') return 'mention';
+  if (filter === 'alert') return 'alert';
+  return filter;
 }
 
 function matchesFilter(notification: Notification, filter: NotificationFilter): boolean {
@@ -195,6 +214,7 @@ export function NotificationsPage() {
             <button
               key={nextFilter}
               onClick={() => setFilter(nextFilter)}
+              aria-pressed={filter === nextFilter}
               className={`rounded-md px-3 py-1.5 text-sm font-medium capitalize ${
                 filter === nextFilter
                   ? 'bg-primary text-primary-foreground'
@@ -215,7 +235,7 @@ export function NotificationsPage() {
             Loading notifications...
           </div>
         ) : error ? (
-          <div className="p-8 text-center text-sm text-destructive">
+          <div role="alert" className="p-8 text-center text-sm text-destructive">
             <p>Notifications could not be loaded.</p>
             <Button
               type="button"
@@ -234,7 +254,9 @@ export function NotificationsPage() {
             <p className="mt-1 text-sm text-muted-foreground">
               {filter === 'all'
                 ? 'You are caught up.'
-                : `No ${filter === 'mention' ? 'mention' : filter} notifications match this view.`}
+                : hasNextPage
+                  ? `No ${getFilterLabel(filter)} notifications in the loaded results. Load more to keep searching.`
+                  : `No ${getFilterLabel(filter)} notifications match this view.`}
             </p>
           </div>
         ) : (

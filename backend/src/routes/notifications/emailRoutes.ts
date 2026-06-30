@@ -18,6 +18,7 @@ import { Router } from 'express';
 import { prisma } from '../../lib/prisma.js';
 import { AppError } from '../../lib/AppError.js';
 import { asyncHandler } from '../../lib/asyncHandler.js';
+import { requireBrowserSession } from '../../middleware/browserSession.js';
 import { createEmailDeliveryFailureError } from '../../lib/emailDeliveryErrors.js';
 import {
   sendNotificationEmail,
@@ -86,6 +87,8 @@ notificationEmailRouter.put(
 notificationEmailRouter.post(
   '/send-test-email',
   asyncHandler(async (req, res) => {
+    requireBrowserSession(req, 'Sending test notification emails');
+
     const userId = req.user?.id;
     if (!userId) {
       throw AppError.unauthorized();
