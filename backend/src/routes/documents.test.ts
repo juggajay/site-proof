@@ -212,6 +212,171 @@ describe('Documents API', () => {
       expect(res.body.documents[0]).not.toHaveProperty('fileUrl');
     });
 
+    it('should only list the latest version of each document', async () => {
+      const sourceDocument = await prisma.document.create({
+        data: {
+          projectId,
+          lotId,
+          documentType: 'certificate',
+          category: 'Versioned Register Test',
+          filename: 'versioned-register-source.pdf',
+          fileUrl: '/uploads/documents/versioned-register-source.pdf',
+          fileSize: validPdfBytes.length,
+          mimeType: 'application/pdf',
+          uploadedById: userId,
+        },
+      });
+
+      const versionRes = await request(app)
+        .post(`/api/documents/${sourceDocument.id}/version`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .attach('file', validPdfBytes, {
+          filename: 'versioned-register-latest.pdf',
+          contentType: 'application/pdf',
+        });
+
+      expect(versionRes.status).toBe(201);
+
+      const listRes = await request(app)
+        .get(`/api/documents/${projectId}?category=Versioned%20Register%20Test`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(listRes.status).toBe(200);
+      expect(listRes.body.total).toBe(1);
+      expect(listRes.body.documents).toHaveLength(1);
+      expect(listRes.body.documents[0].id).toBe(versionRes.body.id);
+
+      const versions = await prisma.document.findMany({
+        where: {
+          OR: [{ id: sourceDocument.id }, { parentDocumentId: sourceDocument.id }],
+        },
+        select: { fileUrl: true },
+      });
+      for (const version of versions) {
+        const storedPath = path.join(uploadDir, path.basename(version.fileUrl));
+        if (fs.existsSync(storedPath)) fs.unlinkSync(storedPath);
+      }
+      await prisma.document.deleteMany({
+        where: { OR: [{ id: sourceDocument.id }, { parentDocumentId: sourceDocument.id }] },
+      });
+    });
+
+    it('should reveal the previous version when the latest version is deleted', async () => {
+      const sourceDocument = await prisma.document.create({
+        data: {
+          projectId,
+          lotId,
+          documentType: 'certificate',
+          category: 'Version Delete Register Test',
+          filename: 'version-delete-source.pdf',
+          fileUrl: '/uploads/documents/version-delete-source.pdf',
+          fileSize: validPdfBytes.length,
+          mimeType: 'application/pdf',
+          uploadedById: userId,
+        },
+      });
+
+      const versionRes = await request(app)
+        .post(`/api/documents/${sourceDocument.id}/version`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .attach('file', validPdfBytes, {
+          filename: 'version-delete-latest.pdf',
+          contentType: 'application/pdf',
+        });
+      expect(versionRes.status).toBe(201);
+
+      const deleteRes = await request(app)
+        .delete(`/api/documents/${versionRes.body.id}`)
+        .set('Authorization', `Bearer ${authToken}`);
+      expect(deleteRes.status).toBe(204);
+
+      const listRes = await request(app)
+        .get(`/api/documents/${projectId}?category=Version%20Delete%20Register%20Test`)
+        .set('Authorization', `Bearer ${authToken}`);
+
+      expect(listRes.status).toBe(200);
+      expect(listRes.body.total).toBe(1);
+      expect(listRes.body.documents).toHaveLength(1);
+      expect(listRes.body.documents[0].id).toBe(sourceDocument.id);
+
+      const sourceAfterDelete = await prisma.document.findUnique({
+        where: { id: sourceDocument.id },
+        select: { isLatestVersion: true },
+      });
+      expect(sourceAfterDelete?.isLatestVersion).toBe(true);
+
+      await prisma.document.deleteMany({
+        where: { OR: [{ id: sourceDocument.id }, { parentDocumentId: sourceDocument.id }] },
+      });
+    });
+
+    it('should preserve version history when the root version is deleted', async () => {
+      const sourceDocument = await prisma.document.create({
+        data: {
+          projectId,
+          lotId,
+          documentType: 'certificate',
+          category: 'Version Root Delete Test',
+          filename: 'version-root-source.pdf',
+          fileUrl: '/uploads/documents/version-root-source.pdf',
+          fileSize: validPdfBytes.length,
+          mimeType: 'application/pdf',
+          uploadedById: userId,
+        },
+      });
+
+      const v2Res = await request(app)
+        .post(`/api/documents/${sourceDocument.id}/version`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .attach('file', validPdfBytes, {
+          filename: 'version-root-v2.pdf',
+          contentType: 'application/pdf',
+        });
+      expect(v2Res.status).toBe(201);
+
+      const v3Res = await request(app)
+        .post(`/api/documents/${v2Res.body.id}/version`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .attach('file', validPdfBytes, {
+          filename: 'version-root-v3.pdf',
+          contentType: 'application/pdf',
+        });
+      expect(v3Res.status).toBe(201);
+
+      const deleteRes = await request(app)
+        .delete(`/api/documents/${sourceDocument.id}`)
+        .set('Authorization', `Bearer ${authToken}`);
+      expect(deleteRes.status).toBe(204);
+
+      const listRes = await request(app)
+        .get(`/api/documents/${projectId}?category=Version%20Root%20Delete%20Test`)
+        .set('Authorization', `Bearer ${authToken}`);
+      expect(listRes.status).toBe(200);
+      expect(listRes.body.total).toBe(1);
+      expect(listRes.body.documents[0].id).toBe(v3Res.body.id);
+
+      const versionsRes = await request(app)
+        .get(`/api/documents/${v3Res.body.id}/versions`)
+        .set('Authorization', `Bearer ${authToken}`);
+      expect(versionsRes.status).toBe(200);
+      expect(versionsRes.body.documentId).toBe(v2Res.body.id);
+      expect(versionsRes.body.versions.map((version: { id: string }) => version.id).sort()).toEqual(
+        [v2Res.body.id, v3Res.body.id].sort(),
+      );
+
+      const remainingVersions = await prisma.document.findMany({
+        where: { OR: [{ id: v2Res.body.id }, { parentDocumentId: v2Res.body.id }] },
+        select: { id: true, fileUrl: true },
+      });
+      for (const version of remainingVersions) {
+        const storedPath = path.join(uploadDir, path.basename(version.fileUrl));
+        if (fs.existsSync(storedPath)) fs.unlinkSync(storedPath);
+      }
+      await prisma.document.deleteMany({
+        where: { OR: [{ id: v2Res.body.id }, { parentDocumentId: v2Res.body.id }] },
+      });
+    });
+
     it('should filter by category', async () => {
       const res = await request(app)
         .get(`/api/documents/${projectId}?category=Site Photos`)
@@ -2007,6 +2172,127 @@ describe('Documents API', () => {
         const storedPath = path.join(uploadDir, path.basename(version.fileUrl));
         if (fs.existsSync(storedPath)) fs.unlinkSync(storedPath);
       }
+    });
+
+    it('rejects uploads from a stale non-latest version', async () => {
+      const sourceDocument = await prisma.document.create({
+        data: {
+          projectId,
+          lotId,
+          documentType: 'certificate',
+          category: 'Quality Records',
+          filename: 'stale-version-source.pdf',
+          fileUrl: '/uploads/documents/stale-version-source.pdf',
+          fileSize: validPdfBytes.length,
+          mimeType: 'application/pdf',
+          uploadedById: userId,
+          caption: 'Original metadata',
+        },
+      });
+      const staleUploadFilename = `stale-version-rejected-${Date.now()}.pdf`;
+      const beforeFiles = new Set(fs.readdirSync(uploadDir));
+
+      const latestRes = await request(app)
+        .post(`/api/documents/${sourceDocument.id}/version`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .attach('file', validPdfBytes, {
+          filename: 'stale-version-latest.pdf',
+          contentType: 'application/pdf',
+        });
+      expect(latestRes.status).toBe(201);
+
+      await prisma.document.update({
+        where: { id: latestRes.body.id },
+        data: { category: 'Latest Metadata', caption: 'Current metadata' },
+      });
+
+      const staleRes = await request(app)
+        .post(`/api/documents/${sourceDocument.id}/version`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .attach('file', validPdfBytes, {
+          filename: staleUploadFilename,
+          contentType: 'application/pdf',
+        });
+
+      expect(staleRes.status).toBe(409);
+      expect(staleRes.body.error.message).toContain('current latest document');
+
+      const versions = await prisma.document.findMany({
+        where: {
+          OR: [{ id: sourceDocument.id }, { parentDocumentId: sourceDocument.id }],
+        },
+        orderBy: { version: 'asc' },
+      });
+      expect(versions).toHaveLength(2);
+      expect(versions.filter((version) => version.isLatestVersion)).toHaveLength(1);
+      expect(versions.find((version) => version.isLatestVersion)?.id).toBe(latestRes.body.id);
+      expect(
+        fs
+          .readdirSync(uploadDir)
+          .filter((file) => !beforeFiles.has(file) && file.includes(staleUploadFilename)),
+      ).toHaveLength(0);
+
+      for (const version of versions) {
+        const storedPath = path.join(uploadDir, path.basename(version.fileUrl));
+        if (fs.existsSync(storedPath)) fs.unlinkSync(storedPath);
+      }
+      await prisma.document.deleteMany({
+        where: { OR: [{ id: sourceDocument.id }, { parentDocumentId: sourceDocument.id }] },
+      });
+    });
+
+    it('serializes concurrent version uploads so only one request becomes latest', async () => {
+      const sourceDocument = await prisma.document.create({
+        data: {
+          projectId,
+          lotId,
+          documentType: 'certificate',
+          category: 'Quality Records',
+          filename: 'concurrent-version-source.pdf',
+          fileUrl: '/uploads/documents/concurrent-version-source.pdf',
+          fileSize: validPdfBytes.length,
+          mimeType: 'application/pdf',
+          uploadedById: userId,
+        },
+      });
+
+      const [firstRes, secondRes] = await Promise.all([
+        request(app)
+          .post(`/api/documents/${sourceDocument.id}/version`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .attach('file', validPdfBytes, {
+            filename: `concurrent-version-a-${Date.now()}.pdf`,
+            contentType: 'application/pdf',
+          }),
+        request(app)
+          .post(`/api/documents/${sourceDocument.id}/version`)
+          .set('Authorization', `Bearer ${authToken}`)
+          .attach('file', validPdfBytes, {
+            filename: `concurrent-version-b-${Date.now()}.pdf`,
+            contentType: 'application/pdf',
+          }),
+      ]);
+
+      expect([firstRes.status, secondRes.status].sort()).toEqual([201, 409]);
+
+      const versions = await prisma.document.findMany({
+        where: {
+          OR: [{ id: sourceDocument.id }, { parentDocumentId: sourceDocument.id }],
+        },
+        select: { id: true, version: true, isLatestVersion: true, fileUrl: true },
+        orderBy: { version: 'asc' },
+      });
+      expect(versions.map((version) => version.version)).toEqual([1, 2]);
+      expect(versions.filter((version) => version.isLatestVersion)).toHaveLength(1);
+      expect(versions.find((version) => version.version === 2)?.isLatestVersion).toBe(true);
+
+      for (const version of versions) {
+        const storedPath = path.join(uploadDir, path.basename(version.fileUrl));
+        if (fs.existsSync(storedPath)) fs.unlinkSync(storedPath);
+      }
+      await prisma.document.deleteMany({
+        where: { OR: [{ id: sourceDocument.id }, { parentDocumentId: sourceDocument.id }] },
+      });
     });
 
     it('cleans up the uploaded version file when version creation fails', async () => {

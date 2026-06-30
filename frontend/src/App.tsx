@@ -388,7 +388,7 @@ function App() {
               <Route
                 path="/projects/:projectId/documents"
                 element={
-                  <ProjectProtectedRoute allowedRoles={INTERNAL_ROLES}>
+                  <ProjectProtectedRoute allowedRoles={PROJECT_WORKSPACE_ROLES}>
                     <DocumentsPage />
                   </ProjectProtectedRoute>
                 }

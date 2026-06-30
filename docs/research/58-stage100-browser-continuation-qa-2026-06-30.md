@@ -312,3 +312,56 @@ Continue filling the highest-value browser gaps from the scout map:
     notes editor, while the classic desktop/`?shell=off` path does. Shell files
     are owned by the foreman/subbie shell workstream, so this pass records the
     product gap rather than editing `frontend/src/shell/**`.
+
+## Stage 108 - Document Versioning And Register Access
+
+- Branch: `qa/documents-versioning-archive`.
+- Bugs fixed:
+  - The project document register now lists only the latest version in each
+    document version chain. Previously, uploading a new version left both old
+    and new rows visible.
+  - Deleting the current latest version now promotes the newest remaining
+    version so the document does not disappear from the register.
+  - Deleting the original root version now reparents remaining versions so
+    version history stays connected.
+  - Version uploads are serialized on the version root and stale/non-latest
+    upload targets are rejected with `409`, preventing duplicate version
+    numbers and multiple latest rows under concurrent submissions.
+  - Project viewers can now reach `/projects/:projectId/documents` read-only,
+    matching the existing DocumentsPage viewer behavior and backend read
+    permissions.
+- Coverage added:
+  - Backend regressions for latest-only listing, latest deletion fallback,
+    root deletion history preservation, stale version upload rejection, and
+    concurrent version upload serialization.
+  - App route regression proving a project-scoped `viewer` can open the
+    documents route.
+  - Browser regression strengthening the documents E2E delete flow so the mock
+    list updates and the deleted row must disappear after invalidation.
+- Verification:
+  - `npm test -- src/routes/documents.test.ts` passed 80/80 against the safe
+    local `siteproof_test` database.
+  - `npm run test:unit -- src/App.projectScopedCommercialRoutes.test.tsx`
+    passed 9/9.
+  - `npm run test:unit -- src/App.projectScopedCommercialRoutes.test.tsx src/pages/documents/DocumentsPage.test.tsx`
+    passed 16/16.
+  - `npx playwright test e2e/documents.spec.ts --project=chromium --reporter=list`
+    passed 5/5.
+  - `npm run type-check` passed in both `backend` and `frontend`.
+  - `npm run lint` passed in `backend`.
+  - `npm run lint` passed in `frontend` with the existing `theme.tsx`
+    fast-refresh warning.
+  - `npx prettier --check ...` passed for the touched files.
+  - `git diff --check ...` passed for the touched files.
+  - `fallow audit --base origin/master --format json --quiet` returned `warn`:
+    no dead code introduced, no new complexity, and five introduced
+    duplication findings from test-scaffolding patterns.
+- Notes:
+  - Document version upload/history endpoints remain API-only; no visible
+    upload-revision/history UI was found in the documents page.
+  - The documents E2E suite intentionally logs the mocked 503 in the retry test.
+    Browserslist/PostCSS warnings remain existing tooling cleanup.
+  - `docs/research/04-pricing-strategy.md` and
+    `docs/research/07-onboarding-implementation.md` may appear deleted locally
+    because Windows security software quarantines them. They are unrelated and
+    must not be staged in this PR.

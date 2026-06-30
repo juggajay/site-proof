@@ -194,6 +194,15 @@ describe('project-scoped commercial routes', () => {
     expect(screen.queryByText('Claims route reached')).not.toBeInTheDocument();
   });
 
+  it('allows project-scoped viewers to open project documents read-only', async () => {
+    projectAccessState.role = 'viewer';
+
+    renderAppAt('/projects/project-1/documents');
+
+    expect(await screen.findByText('Documents')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Access Denied' })).not.toBeInTheDocument();
+  });
+
   it.each(['quality_manager', 'site_manager'])(
     'blocks project-scoped %s users from opening progress claims',
     async (dashboardRole) => {
